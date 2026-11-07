@@ -1,5 +1,7 @@
 package anyparse.check.oracle;
 
+import anyparse.core.FileHash;
+
 /**
  * The persisted record of a successful generation. Every field is optional: a record of another scheme comes off disk
  * too, and it may carry any part of this one.

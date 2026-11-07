@@ -1,9 +1,9 @@
 package testkit;
 
 #if nodejs
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
+import anyparse.proc.ProcessRun;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleGeneration;
@@ -20,8 +20,8 @@ import devkit.RawJson;
  *
  *  - `prepare`: `OracleGeneration.prepare` over the configurations in the JSON file `APQ_TEST_CHILD_INPUT`, writing
  *    each resulting configuration's `unavailable` reason (or null) as JSON to `APQ_TEST_CHILD_OUTPUT`;
- *  - `spawn`: `HaxeSpawn.runAll` over the jobs in the JSON file `APQ_TEST_CHILD_INPUT`, two at a time;
- *  - `bounded-run` / `bounded-pending`: the same jobs through `HaxeSpawn.runAll` / `HaxeSpawn.startAll` + `await`,
+ *  - `spawn`: `ProcessSpawn.runAll` over the jobs in the JSON file `APQ_TEST_CHILD_INPUT`, two at a time;
+ *  - `bounded-run` / `bounded-pending`: the same jobs through `ProcessSpawn.runAll` / `ProcessSpawn.startAll` + `await`,
  *    the driver bounded by `APQ_TEST_CHILD_BOUND` ms, writing the runs as JSON to `APQ_TEST_CHILD_OUTPUT` - so a test
  *    can wedge a driver and still end, by killing this process, when the bound fails to;
  *  - `flood`: the content of `APQ_TEST_CHILD_INPUT` printed to stdout, then `Sys.exit` — the suite's own way out.
@@ -52,9 +52,9 @@ class TestChild {
 				];
 				sys.io.File.saveContent(Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '', RawJson.print(JArray(unavailable)));
 			case 'spawn':
-				HaxeSpawn.runAll(TestChildDocumentParser.parse(input).jobs ?? [], 1024 * 1024, 2);
+				ProcessSpawn.runAll(TestChildDocumentParser.parse(input).jobs ?? [], 1024 * 1024, 2);
 			case 'bounded-run':
-				final runs: Array<HaxeRun> = HaxeSpawn.runAll(
+				final runs: Array<ProcessRun> = ProcessSpawn.runAll(
 					TestChildDocumentParser.parse(input).jobs ?? [], 1024 * 1024, 2, false, childBound()
 				);
 				sys.io.File.saveContent(Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '', runsText(runs));
@@ -63,7 +63,7 @@ class TestChild {
 				Sys.print(input);
 				Sys.exit(0);
 			case 'bounded-pending':
-				final runs: Array<HaxeRun> = HaxeSpawn.startAll(
+				final runs: Array<ProcessRun> = ProcessSpawn.startAll(
 					TestChildDocumentParser.parse(input).jobs ?? [], 1024 * 1024, 2, childBound()
 				)
 					.await();
@@ -84,7 +84,7 @@ class TestChild {
 	 * `bound` ms, and answer the runs it wrote, or null when it wrote none before `WEDGE_DEADLINE` ms, when this process
 	 * kills it. A driver still stopped then is killed too, so nothing is left behind.
 	 */
-	public static function wedge(role: String, dir: String, bound: Int): Null<Array<HaxeRun>> {
+	public static function wedge(role: String, dir: String, bound: Int): Null<Array<ProcessRun>> {
 		sys.io.File.saveContent('$dir/jobs.json', jobsText([{ args: [], cwd: dir, shell: 'echo $$PPID > driver.txt; kill -STOP $$PPID' }]));
 		final env: Dynamic = js.Syntax.code('Object.assign({}, process.env)');
 		env.APQ_TEST_CHILD = role;
@@ -102,7 +102,7 @@ class TestChild {
 		if (driver != null && stopped(driver)) js.Syntax.code('process.kill({0}, "SIGKILL")', driver);
 		final written: Null<Array<ChildRun>> = try TestChildDocumentParser.parse(sys.io.File.getContent('$dir/runs.json'))
 			.runs catch (exception: haxe.Exception) null;
-		return written?.map(haxeRun);
+		return written?.map(processRun);
 	}
 
 	/** The input file of a `spawn`, `bounded-run` or `bounded-pending` child: the jobs it runs. */
@@ -116,7 +116,7 @@ class TestChild {
 	}
 
 	/** The output file of a `bounded-run` or `bounded-pending` child: the runs it answers. */
-	private static function runsText(runs: Array<HaxeRun>): String {
+	private static function runsText(runs: Array<ProcessRun>): String {
 		final written: Array<ChildRun> = runs.map(r -> {
 			status: r.status,
 			out: r.out,
@@ -130,7 +130,7 @@ class TestChild {
 	}
 
 	/** The run `r` was written as. */
-	private static function haxeRun(r: ChildRun): HaxeRun {
+	private static function processRun(r: ChildRun): ProcessRun {
 		return {
 			status: r.status,
 			out: r.out,

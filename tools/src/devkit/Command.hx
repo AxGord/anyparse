@@ -1,8 +1,8 @@
 package devkit;
 
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import haxe.DynamicAccess;
 import haxe.Exception;
@@ -12,7 +12,7 @@ import haxe.Exception;
  * split or expanded. Usually built by `Cmd.cmd`. A command is immutable: `at`, `env`, `timeout`, `input`, `pipe` and
  * `tethered` each answer a new one, so a command can be kept and reused as a template.
  *
- * Every run goes through `HaxeSpawn` (here and from `Pool`), the project's one process
+ * Every run goes through `ProcessSpawn` (here and from `Pool`), the project's one process
  * seam: a run ends at its process's exit, and whatever its process group still runs then — an
  * orphan holding its pipes included — is named in `err` (`orphan left running`) and killed.
  * A short program (`SHORT_PROGRAMS`) is the exception: it runs in this process, bounded by its own `timeout` alone.
@@ -164,7 +164,7 @@ final class Command {
 	 */
 	public function background(): PendingRuns {
 		if (_upstream != null || _input != null) throw new Exception('`${toString()}` is a pipeline or reads an input — run it with `run`');
-		return HaxeSpawn.startAll([job(null)], MAX_BUFFER, 1);
+		return ProcessSpawn.startAll([job(null)], MAX_BUFFER, 1);
 	}
 
 	/** The result of this command's `batch` (from `background`), waiting for it to end. */
@@ -184,14 +184,14 @@ final class Command {
 		return _upstream != null;
 	}
 
-	/** This command as one job of `HaxeSpawn`, reading the file `stdin` when given. */
+	/** This command as one job of `ProcessSpawn`, reading the file `stdin` when given. */
 	@:allow(devkit.Pool)
 	private function job(stdin: Null<String>): SpawnJob {
 		final job: SpawnJob = {
 			cmd: argv[0],
 			args: argv.slice(1),
 			cwd: _cwd,
-			env: HaxeSpawn.environment(_env),
+			env: ProcessSpawn.environment(_env),
 			timeout: _timeout,
 			reap: true
 		};
@@ -247,8 +247,8 @@ final class Command {
 	 * in the `err` (`orphan left running`) and killed, as it was when the caller's own group was reaped. The limit is the job's
 	 * `timeout` alone.
 	 */
-	private static function one(job: SpawnJob): HaxeRun {
-		return runsDirect(job) ? HaxeSpawn.exec(job, MAX_BUFFER) : HaxeSpawn.runDriven([job], MAX_BUFFER, 1)[0];
+	private static function one(job: SpawnJob): ProcessRun {
+		return runsDirect(job) ? ProcessSpawn.exec(job, MAX_BUFFER) : ProcessSpawn.runDriven([job], MAX_BUFFER, 1)[0];
 	}
 
 	/** `arg` as it would have to be written in a POSIX shell. */

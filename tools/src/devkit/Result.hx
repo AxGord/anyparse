@@ -1,6 +1,6 @@
 package devkit;
 
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 
 using StringTools;
 using Lambda;
@@ -23,7 +23,7 @@ final class Result {
 	public final err: String;
 	public final failure: String;
 
-	public function new(command: String, run: HaxeRun) {
+	public function new(command: String, run: ProcessRun) {
 		this.command = command;
 		status = run.status;
 		out = run.out;

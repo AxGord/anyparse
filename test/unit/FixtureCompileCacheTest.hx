@@ -198,7 +198,7 @@ class FixtureCompileCacheTest extends Test {
 	}
 
 	/**
-	 * `lookup`, the in-process ask `HaxeSpawn` makes before it starts a process, answers a recorded compile with exactly
+	 * `lookup`, the in-process ask `ProcessSpawn` makes before it starts a process, answers a recorded compile with exactly
 	 * the bytes and files the shim's `run` replays for it, counts it as a hit, and answers nothing for any other compile —
 	 * a changed input, a program that is not `haxe`, a compile that is no probe.
 	 */

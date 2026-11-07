@@ -3,7 +3,7 @@ package anyparse.check.oracle;
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
 import haxe.crypto.Md5;
 import haxe.io.Path;
@@ -245,7 +245,7 @@ final class CompilerServer {
 		#if nodejs
 		try {
 			final args: Array<String> = connectArgs(port, hxml, extra, defines ?? []);
-			final opts: Dynamic = { encoding: UTF8, env: HaxeSpawn.childEnv() };
+			final opts: Dynamic = { encoding: UTF8, env: ProcessSpawn.childEnv() };
 			if (cwd != null) Reflect.setField(opts, 'cwd', cwd);
 			if (stdin != null) Reflect.setField(opts, 'input', displayStdin(stdin));
 			final res: Dynamic = js.node.ChildProcess.spawnSync('haxe', args, opts);
@@ -339,12 +339,12 @@ final class CompilerServer {
 	/**
 	 * Spawn `haxe --wait <port>` DETACHED with its streams discarded — the shared server
 	 * outlives this process by design. Null when the spawn itself threw. A server that must
-	 * NOT outlive its run is a tethered `HaxeSpawn` job instead (`CompilerDisplayOracle`).
+	 * NOT outlive its run is a tethered `ProcessSpawn` job instead (`CompilerDisplayOracle`).
 	 */
 	private static function spawnServer(port: Int): Dynamic {
 		#if nodejs
 		try {
-			final opts: Dynamic = { detached: true, stdio: 'ignore', env: HaxeSpawn.childEnv() };
+			final opts: Dynamic = { detached: true, stdio: 'ignore', env: ProcessSpawn.childEnv() };
 			return js.node.ChildProcess.spawn('haxe', ['--wait', '$port'], opts);
 		} catch (exception: haxe.Exception) {
 			return null;

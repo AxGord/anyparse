@@ -479,16 +479,16 @@
 			"name": "M-POOL-SERVERS-NEED-PARALLELISM",
 			"type": "anyparse.check.oracle.OracleServerPool",
 			"method": "startTimed",
-			"find": "available.slice(0, HaxeSpawn.resident())",
-			"replace": "HaxeSpawn.parallelism() < available.length ? [] : available",
+			"find": "available.slice(0, ProcessSpawn.resident())",
+			"replace": "ProcessSpawn.parallelism() < available.length ? [] : available",
 			"note": "a compile budget smaller than the configurations starts no warm server at all, so every typecheck of a fix run compiles cold"
 		},
 		{
 			"name": "M-RUNMEMO-PROBE-RECOMPILES",
 			"type": "anyparse.check.oracle.OracleCoverage",
 			"method": "rememberedTimed",
-			"find": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
-			"replace": "final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) null];",
+			"find": "final held: Array<Null<ProcessRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];",
+			"replace": "final held: Array<Null<ProcessRun>> = [for (i in 0...asked.length) null];",
 			"note": "the coverage probe compiles the tree its baseline just compiled with -v, paying a second compile per configuration"
 		},
 		{

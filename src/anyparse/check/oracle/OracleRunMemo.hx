@@ -1,9 +1,10 @@
 package anyparse.check.oracle;
 
 import anyparse.core.ContentHash;
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
+import anyparse.util.Compare;
 
 /**
  * What the compiler already answered in THIS run, so a compile of a tree the run has already compiled is not paid twice.
@@ -38,7 +39,7 @@ final class OracleRunMemo {
 	 */
 	public final grammar: Null<GrammarPlugin>;
 
-	private final _runs: Map<String, HaxeRun> = [];
+	private final _runs: Map<String, ProcessRun> = [];
 
 	/** The build each `-v` compile of `_runs` reported (`ReachDefinesProbe.readRidden`), under that compile's key. */
 	private final _builds: Map<String, ReachConfiguration> = [];
@@ -67,7 +68,7 @@ final class OracleRunMemo {
 	 * for a configuration no `-v` compile of this run has shown to read only what its fingerprint sees (`file`): a source
 	 * the fingerprint cannot see can change with no fingerprint changing.
 	 */
-	public function run(oracle: OracleConfig, verbose: Bool, fingerprint: Null<String>): Null<HaxeRun> {
+	public function run(oracle: OracleConfig, verbose: Bool, fingerprint: Null<String>): Null<ProcessRun> {
 		final config: String = OracleDeclaration.oracleKey(oracle);
 		return fingerprint == null || !_seen.contains(config) || _blind.contains(config) ? null : _runs[key(oracle, verbose, fingerprint)];
 	}
@@ -85,7 +86,7 @@ final class OracleRunMemo {
 	 * `before` both before (`before`) and after (`after`) the compile: a tree that moved meanwhile produced a run about
 	 * neither state. A cancelled run, or one that never started, is no answer and is never filed.
 	 */
-	public function file(oracle: OracleConfig, verbose: Bool, before: Null<String>, after: Null<String>, run: HaxeRun): Void {
+	public function file(oracle: OracleConfig, verbose: Bool, before: Null<String>, after: Null<String>, run: ProcessRun): Void {
 		if (before == null || before != after || run.failure != '' || run.status == null || run.cancelled == true) return;
 		if (verbose) judgeReads(oracle, run);
 		_runs[key(oracle, verbose, before)] = run;
@@ -146,7 +147,7 @@ final class OracleRunMemo {
 	 * Record what the successful `-v` compile `run` of `oracle` read: every `Parsed` file inside a directory its fingerprint
 	 * walked makes the configuration answerable, one outside makes it blind for the rest of the run.
 	 */
-	private function judgeReads(oracle: OracleConfig, run: HaxeRun): Void {
+	private function judgeReads(oracle: OracleConfig, run: ProcessRun): Void {
 		final config: String = OracleDeclaration.oracleKey(oracle);
 		if (run.status != 0 || _blind.contains(config)) return;
 		final base: String = oracle.dir ?? Sys.getCwd();
@@ -193,7 +194,7 @@ final class OracleRunMemo {
 	/** One hash over every path of `paths` and its content now — `absent` for one that does not exist. */
 	private static function writtenDigest(paths: Array<String>): String {
 		final sorted: Array<String> = paths.copy();
-		sorted.sort(Reflect.compare);
+		sorted.sort(Compare.compareString);
 		final lines: Array<String> = [
 			for (path in sorted) {
 				final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;

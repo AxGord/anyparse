@@ -162,7 +162,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/oracle/OracleDeclaration.hx',
 			'src/anyparse/check/oracle/OracleGeneration.hx',
 			'src/anyparse/check/oracle/ReachDefinesProbe.hx',
-			'src/anyparse/proc/HaxeSpawn.hx',
+			'src/anyparse/proc/ProcessSpawn.hx',
 			'src/anyparse/proc/SpawnJob.hx',
 			'src/anyparse/query/FactNodeRecords.hx',
 			'src/anyparse/query/FactText.hx',

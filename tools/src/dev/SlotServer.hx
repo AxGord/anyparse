@@ -1,8 +1,8 @@
 package dev;
 
 import anyparse.check.oracle.CompilerServer;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessSpawn;
 import devkit.Cmd.cmd;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -55,7 +55,7 @@ final class SlotServer {
 			if (free == null) return null;
 			final port: Int = free;
 			if (FileSystem.exists(_groupFile)) FileSystem.deleteFile(_groupFile);
-			final batch: PendingRuns = HaxeSpawn.startAll([
+			final batch: PendingRuns = ProcessSpawn.startAll([
 				{
 					args: ['--wait', '127.0.0.1:$port'],
 					cwd: wt,

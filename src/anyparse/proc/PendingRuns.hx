@@ -1,14 +1,14 @@
 package anyparse.proc;
 
 import anyparse.core.PhaseTimings;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import haxe.Exception;
 #if nodejs
 import haxe.io.Path;
 #end
 
 /**
- * A `HaxeSpawn.runAll` batch running in the BACKGROUND (`HaxeSpawn.startAll`): the process driver is started
+ * A `ProcessSpawn.runAll` batch running in the BACKGROUND (`ProcessSpawn.startAll`): the process driver is started
  * at once and the caller goes on with its own work; `await` blocks until every job closed and answers
  * exactly what `runAll` would have, `cancel` ends the batch.
  *
@@ -16,7 +16,7 @@ import haxe.io.Path;
  * child's exit: the jobs go in through one, and the runs come back through the other, which exists only once it is
  * complete. A driver that died without an answer — found by probing its pid, as an exited child nobody reaped still
  * holds one — is answered like a failed `runAll` driver: every job a run that produced no verdict, and so is one
- * still without an answer past its bound (`HaxeSpawn.driverBound`), which is wedged and is killed. The driver already
+ * still without an answer past its bound (`ProcessSpawn.driverBound`), which is wedged and is killed. The driver already
  * ends every job it started when this process is gone, so an abandoned batch leaves nothing running.
  *
  * On a target without an asynchronous process API nothing starts before `await`, which then runs `runAll`.
@@ -34,10 +34,10 @@ final class PendingRuns {
 	private final _maxBuffer: Int;
 	private final _parallel: Int;
 
-	/** Milliseconds after the start past which a driver still without an answer counts as wedged (`HaxeSpawn.driverBound`). */
+	/** Milliseconds after the start past which a driver still without an answer counts as wedged (`ProcessSpawn.driverBound`). */
 	private final _bound: Int;
 
-	private var _answer: Null<Array<HaxeRun>> = null;
+	private var _answer: Null<Array<ProcessRun>> = null;
 
 	#if nodejs
 	/** When the driver was started, in milliseconds since the epoch. */
@@ -54,21 +54,21 @@ final class PendingRuns {
 		_jobs = jobs;
 		_maxBuffer = maxBuffer;
 		_parallel = parallel;
-		_bound = bound ?? HaxeSpawn.driverBound(jobs, parallel);
+		_bound = bound ?? ProcessSpawn.driverBound(jobs, parallel);
 		#if nodejs
 		if (jobs.length == 0) {
 			_answer = [];
 			return;
 		}
-		final batch: Null<DriverBatch> = HaxeSpawn.writeJobs(jobs, 'apq-pending-');
+		final batch: Null<DriverBatch> = ProcessSpawn.writeJobs(jobs, 'apq-pending-');
 		// a batch whose jobs could not be written leaves `_pid` null, and `await` runs it in the foreground
 		if (batch == null) return;
 		_dir = batch.dir;
 		_result = Path.join([_dir, 'runs.json']);
 		try {
 			final child: Dynamic = js.node.ChildProcess.spawn(
-				js.Node.process.execPath, HaxeSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: batch.jobs }),
-				{ stdio: 'ignore', env: HaxeSpawn.childEnv() }
+				js.Node.process.execPath, ProcessSpawn.driverArgs(parallel, maxBuffer, false, { result: _result, jobs: batch.jobs }),
+				{ stdio: 'ignore', env: ProcessSpawn.childEnv() }
 			);
 			// a batch nobody awaits must not keep this process alive: the driver ends its jobs once this process is gone
 			child.unref();
@@ -83,14 +83,14 @@ final class PendingRuns {
 	 * The runs of every job in job order, as `runAll` answers them — blocking until the batch ended. Asked again, the
 	 * same answer. A batch whose driver could not be started runs now, in the foreground.
 	 */
-	public function await(): Array<HaxeRun> {
-		final held: Null<Array<HaxeRun>> = _answer;
+	public function await(): Array<ProcessRun> {
+		final held: Null<Array<ProcessRun>> = _answer;
 		if (held != null) return held;
 		#if nodejs
 		final pid: Null<Int> = _pid;
-		final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);
+		final answer: Array<ProcessRun> = pid == null ? ProcessSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);
 		#else
-		final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);
+		final answer: Array<ProcessRun> = ProcessSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);
 		#end
 		_answer = answer;
 		return answer;
@@ -108,7 +108,7 @@ final class PendingRuns {
 			// a driver already gone has nothing left to end
 		} forget();
 		#end
-		_answer = HaxeSpawn.unanswered(_jobs.length, 'cancelled — the batch was abandoned', '', true);
+		_answer = ProcessSpawn.unanswered(_jobs.length, 'cancelled — the batch was abandoned', '', true);
 	}
 
 	/**
@@ -126,12 +126,12 @@ final class PendingRuns {
 
 	#if nodejs
 	/** Block until driver `pid` wrote its answer, or died without one, and read it. */
-	private function collect(pid: Int): Array<HaxeRun> {
+	private function collect(pid: Int): Array<ProcessRun> {
 		return PhaseTimings.measure('haxe await background batch', () -> collectTimed(pid));
 	}
 
 	/** `collect`, untimed. */
-	private function collectTimed(pid: Int): Array<HaxeRun> {
+	private function collectTimed(pid: Int): Array<ProcessRun> {
 		var polls: Int = 0;
 		while (!sys.FileSystem.exists(_result)) {
 			if (Date.now().getTime() - _started > _bound) {
@@ -140,7 +140,7 @@ final class PendingRuns {
 					// a driver gone meanwhile has nothing left to end
 				}
 				forget();
-				return HaxeSpawn.unanswered(
+				return ProcessSpawn.unanswered(
 					_jobs.length, 'the background process driver did not answer within $_bound ms and was killed', '', false
 				);
 			}
@@ -149,15 +149,15 @@ final class PendingRuns {
 		}
 		final text: Null<String> = try sys.io.File.getContent(_result) catch (exception: Exception) null;
 		forget();
-		final answer: Null<Array<HaxeRun>> = text == null ? null : HaxeSpawn.runsOf(text);
+		final answer: Null<Array<ProcessRun>> = text == null ? null : ProcessSpawn.runsOf(text);
 		return answer != null && answer.length == _jobs.length
 			? answer
-			: HaxeSpawn.unanswered(_jobs.length, 'the background process driver ended without an answer', '', false);
+			: ProcessSpawn.unanswered(_jobs.length, 'the background process driver ended without an answer', '', false);
 	}
 
 	/** Delete the batch's directory and what is left in it. */
 	private function forget(): Void {
-		if (_dir != '') HaxeSpawn.dropBatch(_dir);
+		if (_dir != '') ProcessSpawn.dropBatch(_dir);
 	}
 
 	/**

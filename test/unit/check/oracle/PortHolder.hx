@@ -1,8 +1,8 @@
 package unit.check.oracle;
 
 import anyparse.check.oracle.CompilerServer;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessSpawn;
 
 /**
  * A loopback port something other than a haxe server holds, for the tests of every starter that must keep off one. The one
@@ -47,7 +47,7 @@ final class PortHolder {
 		final dir: String = CliFixture.writeDir('apq_port_holder', []);
 		final said: String = '$dir/said';
 		final seen: String = '$said.seen';
-		final holder: PendingRuns = HaxeSpawn.startAll([
+		final holder: PendingRuns = ProcessSpawn.startAll([
 			{
 				cmd: js.Node.process.execPath,
 				args: ['-e', HOLDER, said, '$port'],

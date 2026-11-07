@@ -1,8 +1,8 @@
 package anyparse.query.cli.command;
 
 import anyparse.core.TempScratch;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.merge.KeyedMerge.MergeChoice;
 import anyparse.query.merge.StructuralMerge;
 import haxe.io.Path;
@@ -157,7 +157,7 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 		File.saveContent(files[0], base);
 		File.saveContent(files[1], ours);
 		File.saveContent(files[2], theirs);
-		final run: HaxeRun = HaxeSpawn.exec(
+		final run: ProcessRun = ProcessSpawn.exec(
 			{ cmd: 'git', args: [GIT_MERGE_FILE, '-p', '-q', files[1], files[0], files[2]], cwd: null }, GIT_BUFFER
 		);
 		for (file in files) FileSystem.deleteFile(file);
@@ -168,7 +168,7 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 	/** Git's own line merge of the three files, `why` the structural one did not serve; 0 when it left no conflict. */
 	private static function lineMerge(opts: MergeFileOpts, path: String, why: String): Int {
 		CliIo.stderr('merge-file: $path: $why — git\'s line merge instead\n');
-		final run: HaxeRun = HaxeSpawn.exec({
+		final run: ProcessRun = ProcessSpawn.exec({
 			cmd: 'git',
 			args: [
 				GIT_MERGE_FILE,

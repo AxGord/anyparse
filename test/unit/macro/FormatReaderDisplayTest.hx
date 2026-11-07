@@ -3,8 +3,8 @@ package unit.macro;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.OracleRunMemo;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import unit.cli.CliFixture;
 
 using StringTools;
@@ -46,7 +46,7 @@ final class FormatReaderDisplayTest extends Test {
 		#if (sys || nodejs)
 		final file: String = 'test/unit/macro/FormatReaderDisplayTest.hx';
 		final at: Int = sys.io.File.getContent(file).lastIndexOf('parsePositionResponse');
-		final run: HaxeRun = HaxeSpawn.run(['test-js.hxml', '--no-output', '--display', '$file@$at@position'], null, OUTPUT);
+		final run: ProcessRun = ProcessSpawn.run(['test-js.hxml', '--no-output', '--display', '$file@$at@position'], null, OUTPUT);
 		final position: Null<TypeReplyPosition> = CompilerDisplayOracle.parsePositionResponse('${run.out}${run.err}');
 		Assert.isTrue(position?.file.endsWith('CompilerDisplayOracle.hx'), '${run.out}${run.err}');
 		#else
@@ -142,7 +142,7 @@ final class FormatReaderDisplayTest extends Test {
 
 	/** What the run of `args` in `cwd` printed on its reading lines. */
 	private static function readings(args: Array<String>, cwd: String): Array<String> {
-		final run: HaxeRun = HaxeSpawn.run(args, cwd, OUTPUT);
+		final run: ProcessRun = ProcessSpawn.run(args, cwd, OUTPUT);
 		return [
 			for (line in '${run.out}\n${run.err}'.split('\n')) if (line.startsWith(READING)) line
 		];

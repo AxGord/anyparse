@@ -3,8 +3,8 @@ package unit.check.common.members;
 import anyparse.check.Severity;
 import anyparse.check.common.members.UnstoredProperty;
 import anyparse.check.scan.ReflectionScan.ScopeFile;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
@@ -245,14 +245,14 @@ class UnstoredPropertyCheckTest extends Test {
 	private function assertRunsTheSame(main: String, out: String, expected: String): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('unstoredproperty', [{ name: 'Main.hx', source: main }]);
-		final before: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+		final before: ProcessRun = ProcessSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		if (before.status != 0) {
 			CliFixture.removeDir(dir);
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
 			return;
 		}
 		File.saveContent('$dir/Main.hx', out);
-		final after: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+		final after: ProcessRun = ProcessSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		CliFixture.removeDir(dir);
 		Assert.equals(expected, before.out.trim(), before.err);
 		Assert.equals(0, after.status, after.err);

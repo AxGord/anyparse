@@ -6,7 +6,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.OracleServerPool;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.query.cli.command.LintFixSafeTrail;
@@ -164,7 +164,7 @@ final class OracleRunMemoTest extends Test {
 		});
 		final servers: Int = pool == null ? 0 : [for (_ in pool._servers) 1].length;
 		Assert.equals(
-			Std.int(Math.min(2, HaxeSpawn.resident())), servers, 'a compile budget of one started no server for two configurations'
+			Std.int(Math.min(2, ProcessSpawn.resident())), servers, 'a compile budget of one started no server for two configurations'
 		);
 		pool?.stop();
 		CliFixture.removeDir(dir);
@@ -269,7 +269,7 @@ final class OracleRunMemoTest extends Test {
 		], new OracleRunMemo(false, () -> ['$dir/Main.hx']));
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		pool?.start(oracles);
-		if (pool == null || HaxeSpawn.resident() < 2) {
+		if (pool == null || ProcessSpawn.resident() < 2) {
 			pool?.stop();
 			CliFixture.removeDir(dir);
 			Assert.pass('the machine holds one server only');

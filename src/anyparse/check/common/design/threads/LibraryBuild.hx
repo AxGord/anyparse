@@ -1,8 +1,8 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.HaxelibResolver;
 import haxe.io.Path;
 
@@ -243,7 +243,7 @@ final class LibraryBuild {
 
 	/** What `haxe -version` answers (`4.3.7`), or '' when it cannot be run. */
 	private static function compilerVersion(): String {
-		final run: HaxeRun = HaxeSpawn.run(['-version'], null, VERSION_BUFFER);
+		final run: ProcessRun = ProcessSpawn.run(['-version'], null, VERSION_BUFFER);
 		final text: String = (run.out.trim() == '' ? run.err : run.out).trim();
 		final cut: Int = text.indexOf('+');
 		return cut < 0 ? text : text.substring(0, cut);

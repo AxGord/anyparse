@@ -1,8 +1,9 @@
 package dev;
 
 import anyparse.core.PoolLease;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessSpawn;
+import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -462,7 +463,7 @@ final class MutationArm {
 		]);
 		return {
 			dir: dir,
-			batch: HaxeSpawn.startAll([
+			batch: ProcessSpawn.startAll([
 				{
 					cmd: build.argv[0],
 					args: build.argv.slice(1),
@@ -567,7 +568,7 @@ final class MutationArm {
 		final out: Map<String, String> = [];
 		for (key => list in table) {
 			final sorted: Array<String> = list.copy();
-			sorted.sort(Reflect.compare);
+			sorted.sort(Compare.compareString);
 			out[key] = sorted.join(',');
 		}
 		return out;

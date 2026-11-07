@@ -1,9 +1,9 @@
 package anyparse.check.oracle;
 
 import anyparse.core.PhaseTimings;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 
 /**
  * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
@@ -80,11 +80,11 @@ enum abstract ExclusionCause(String) to String {
  * WITHOUT a configured `compilerOracle` the compiler is never launched (see
  * `FixVerifier` / `Cli.runLint`).
  *
- * The spawn itself is `HaxeSpawn`, shared with the two `-v` probes — the target
+ * The spawn itself is `ProcessSpawn`, shared with the two `-v` probes — the target
  * conditional, the output buffer and the four ways a run can produce no verdict all
  * live there. `cwd` is honoured on nodejs; the native sys branch IGNORES it and runs
  * in the process CWD, so an hxml's own relative `-cp` entries resolve against the
- * wrong root there (`HaxeSpawn.honoursCwd`).
+ * wrong root there (`ProcessSpawn.honoursCwd`).
  */
 @:nullSafety(Strict)
 final class CompilerOracle {
@@ -113,12 +113,12 @@ final class CompilerOracle {
 	 */
 	public static function typecheck(hxml: String, ?cwd: String, ?defines: Array<String>): OracleOutcome {
 		invocations++;
-		return outcomeOf(HaxeSpawn.run(oracleArgs(hxml, defines ?? []), cwd, ORACLE_BUFFER));
+		return outcomeOf(ProcessSpawn.run(oracleArgs(hxml, defines ?? []), cwd, ORACLE_BUFFER));
 	}
 
 	/**
-	 * Every configuration of `oracles` typechecked, the compiles overlapping (`HaxeSpawn.runAll`,
-	 * bounded by `HaxeSpawn.parallelism`), one outcome per configuration in declared order. A
+	 * Every configuration of `oracles` typechecked, the compiles overlapping (`ProcessSpawn.runAll`,
+	 * bounded by `ProcessSpawn.parallelism`), one outcome per configuration in declared order. A
 	 * configuration marked `unavailable` is answered `Unavailable` without a spawn.
 	 *
 	 * With `stopAfterFailure` a configuration that does not confirm ends every later one still
@@ -134,9 +134,9 @@ final class CompilerOracle {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return [for (r in remembered(memo, oracles, stopAfterFailure, verbose)) r.outcome];
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
-		], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure);
+		], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<Null<OracleOutcome>> = [];
 		var next: Int = 0;
@@ -146,7 +146,7 @@ final class CompilerOracle {
 				out.push(Unavailable(unavailable));
 				continue;
 			}
-			final run: HaxeRun = runs[next++];
+			final run: ProcessRun = runs[next++];
 			out.push(run.cancelled == true ? null : outcomeOf(run));
 		}
 		return out;
@@ -157,7 +157,7 @@ final class CompilerOracle {
 	 * while each of them is a file it hashed (`OracleCache.storeIfUnchanged`). A failing `-v` compile is asked again plainly,
 	 * whose streams are what a rejection quotes, unless `decisive` accepts the diagnostics of the failing run (they blame a file the
 	 * caller just created), which stand as they are; the files are the `-v` compile's. `parallel` bounds how many compile at once
-	 * (default `HaxeSpawn.parallelism`).
+	 * (default `ProcessSpawn.parallelism`).
 	 */
 	public static function typecheckEachReading(
 		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
@@ -165,11 +165,11 @@ final class CompilerOracle {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
-		final bound: Int = parallel ?? HaxeSpawn.parallelism();
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final bound: Int = parallel ?? ProcessSpawn.parallelism();
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }
 		], ORACLE_BUFFER, bound, stopAfterFailure);
-		final plain: Map<Int, HaxeRun> = plainRetries(asked, runs, bound, decisive);
+		final plain: Map<Int, ProcessRun> = plainRetries(asked, runs, bound, decisive);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<OracleReading> = [];
 		var next: Int = 0;
@@ -180,8 +180,8 @@ final class CompilerOracle {
 				continue;
 			}
 			final k: Int = next++;
-			final run: HaxeRun = runs[k];
-			final again: Null<HaxeRun> = plain[k];
+			final run: ProcessRun = runs[k];
+			final again: Null<ProcessRun> = plain[k];
 			final outcome: Null<OracleOutcome> = if (run.cancelled == true)
 				null
 			else if (again != null)
@@ -292,7 +292,7 @@ final class CompilerOracle {
 	}
 
 	/** Whether `run` is a compile that ran to its own status — not cancelled, not a spawn that produced none. */
-	private static inline function answered(run: HaxeRun): Bool {
+	private static inline function answered(run: ProcessRun): Bool {
 		return run.cancelled != true && run.failure == '' && run.status != null;
 	}
 
@@ -321,21 +321,21 @@ final class CompilerOracle {
 		final out: Array<Null<OracleOutcome>> = heldOutcomes(memo, oracles, before);
 		final parsed: Array<Null<Array<String>>> = [
 			for (i in 0...oracles.length) {
-				final held: Null<HaxeRun> = out[i] == null ? null : memo.run(oracles[i], true, before[i]);
+				final held: Null<ProcessRun> = out[i] == null ? null : memo.run(oracles[i], true, before[i]);
 				held == null ? null : OracleCoverage.parsedPaths(held.out);
 			}
 		];
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
 		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
 		final asked: Array<OracleConfig> = [for (i in compiled) oracles[i]];
-		final runs: Array<HaxeRun> = compileAsked(memo, asked, stopAfterFailure, verbose);
-		final plain: Map<Int, HaxeRun> = verbose ? plainRetries(asked, runs) : [];
+		final runs: Array<ProcessRun> = compileAsked(memo, asked, stopAfterFailure, verbose);
+		final plain: Map<Int, ProcessRun> = verbose ? plainRetries(asked, runs) : [];
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final after: Array<Null<String>> = memo.fingerprints(asked);
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			memo.file(oracles[i], verbose, before[i], after[k], runs[k]);
-			final again: Null<HaxeRun> = plain[k];
+			final again: Null<ProcessRun> = plain[k];
 			if (again != null) {
 				memo.file(oracles[i], false, before[i], after[k], again);
 				out[i] = retriedOutcome(again);
@@ -352,14 +352,14 @@ final class CompilerOracle {
 	 * rejection quotes, and they carry no `-v` lines.
 	 */
 	private static function plainRetries(
-		asked: Array<OracleConfig>, runs: Array<HaxeRun>, ?parallel: Int, ?decisive: String -> Bool
-	): Map<Int, HaxeRun> {
+		asked: Array<OracleConfig>, runs: Array<ProcessRun>, ?parallel: Int, ?decisive: String -> Bool
+	): Map<Int, ProcessRun> {
 		final retried: Array<Int> = [
 			for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0 && decided(runs[k], decisive) == null) k
 		];
-		final plain: Array<HaxeRun> = HaxeSpawn.runAll([
+		final plain: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }
-		], ORACLE_BUFFER, parallel ?? HaxeSpawn.parallelism(), false);
+		], ORACLE_BUFFER, parallel ?? ProcessSpawn.parallelism(), false);
 		invocations += plain.length;
 		return [for (j in 0...retried.length) retried[j] => plain[j]];
 	}
@@ -385,11 +385,11 @@ final class CompilerOracle {
 	 */
 	private static function compileAsked(
 		memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
-	): Array<HaxeRun> {
+	): Array<ProcessRun> {
 		return verbose
-			? HaxeSpawn.runAll([
+			? ProcessSpawn.runAll([
 				for (o in asked) { args: argsOf(o, verbose), cwd: o.dir }
-			], ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure)
+			], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure)
 			: warmFirst(memo, asked, stopAfterFailure);
 	}
 
@@ -405,21 +405,21 @@ final class CompilerOracle {
 	 * verdict costs one cold compile alone instead of every configuration's at once. It is cancelled unread when the first
 	 * configuration answers green warm.
 	 */
-	private static function warmFirst(memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool): Array<HaxeRun> {
+	private static function warmFirst(memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool): Array<ProcessRun> {
 		final speculated: Null<PendingRuns> = stopAfterFailure && asked.length > 0 && memo.servers.running()
-			? HaxeSpawn.startAll([{ args: argsOf(asked[0], false), cwd: asked[0].dir }], ORACLE_BUFFER, 1)
+			? ProcessSpawn.startAll([{ args: argsOf(asked[0], false), cwd: asked[0].dir }], ORACLE_BUFFER, 1)
 			: null;
-		final warm: Array<Null<HaxeRun>> = memo.servers.compile(asked);
+		final warm: Array<Null<ProcessRun>> = memo.servers.compile(asked);
 		final cold: Array<Int> = [for (k in 0...asked.length) if (warm[k]?.status != 0) k];
-		final first: Null<HaxeRun> = speculated != null && cold.length > 0 && cold[0] == 0 ? speculated.await()[0] : null;
+		final first: Null<ProcessRun> = speculated != null && cold.length > 0 && cold[0] == 0 ? speculated.await()[0] : null;
 		if (first == null) speculated?.cancel();
 		final failedFirst: Bool = first != null && first.failure == '' && first.status != null && first.status != 0;
 		final rest: Array<Int> = first == null ? cold : cold.slice(1);
-		final restRuns: Array<HaxeRun> = failedFirst
+		final restRuns: Array<ProcessRun> = failedFirst
 			? [for (_ in rest) unstartedRun()]
-			: HaxeSpawn.runAll(
+			: ProcessSpawn.runAll(
 				[for (k in rest) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
-				ORACLE_BUFFER, HaxeSpawn.parallelism(), stopAfterFailure
+				ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
 			);
 		return [for (k in 0...asked.length) runOf(k, warm[k], rest, restRuns, first)];
 	}
@@ -428,7 +428,9 @@ final class CompilerOracle {
 	 * The run that answers the `k`-th configuration of `warmFirst`: its cold run when it was compiled cold among `rest`
 	 * (`restRuns`), the speculated cold compile `first` for the first one, its warm run `held` otherwise.
 	 */
-	private static function runOf(k: Int, held: Null<HaxeRun>, rest: Array<Int>, restRuns: Array<HaxeRun>, first: Null<HaxeRun>): HaxeRun {
+	private static function runOf(
+		k: Int, held: Null<ProcessRun>, rest: Array<Int>, restRuns: Array<ProcessRun>, first: Null<ProcessRun>
+	): ProcessRun {
 		final r: Int = rest.indexOf(k);
 		return if (r >= 0)
 			restRuns[r]
@@ -440,13 +442,13 @@ final class CompilerOracle {
 			throw new haxe.Exception('configuration $k has neither a warm nor a cold run');
 	}
 
-	/** The run of a job a failure before it left unstarted, as `HaxeSpawn.runAll` answers one under `stopAfterFailure`. */
-	private static function unstartedRun(): HaxeRun {
+	/** The run of a job a failure before it left unstarted, as `ProcessSpawn.runAll` answers one under `stopAfterFailure`. */
+	private static function unstartedRun(): ProcessRun {
 		return {
 			status: null,
 			out: '',
 			err: '',
-			failure: HaxeSpawn.NOT_STARTED,
+			failure: ProcessSpawn.NOT_STARTED,
 			overflowed: false,
 			cancelled: true,
 			unstarted: true
@@ -458,9 +460,9 @@ final class CompilerOracle {
 	 * compile that exited 0 — a failing `-v` compile answers nothing, since a rejection may not quote its streams.
 	 */
 	private static function heldVerdict(memo: OracleRunMemo, oracle: OracleConfig, fingerprint: Null<String>): Null<OracleOutcome> {
-		final plain: Null<HaxeRun> = memo.run(oracle, false, fingerprint);
+		final plain: Null<ProcessRun> = memo.run(oracle, false, fingerprint);
 		if (plain != null) return outcomeOf(plain);
-		final verbose: Null<HaxeRun> = memo.run(oracle, true, fingerprint);
+		final verbose: Null<ProcessRun> = memo.run(oracle, true, fingerprint);
 		return verbose != null && verbose.status == 0 ? Confirmed : null;
 	}
 
@@ -493,7 +495,7 @@ final class CompilerOracle {
 	 * The outcome of the plain compile that followed a failing `-v` one: its own, unless it CONFIRMED, since the two then
 	 * disagree and a confirm would let a phase proceed on configurations its cancellation left unasked.
 	 */
-	private static function retriedOutcome(plain: HaxeRun): OracleOutcome {
+	private static function retriedOutcome(plain: ProcessRun): OracleOutcome {
 		final outcome: OracleOutcome = outcomeOf(plain);
 		return outcome.match(Confirmed) ? Unavailable('the typecheck failed with -v and passed without it') : outcome;
 	}
@@ -503,7 +505,7 @@ final class CompilerOracle {
 	 * out-written the buffer; a build that verbose is failing, so it is a rejection carrying the
 	 * partial errors rather than unavailability. Every other launch failure means haxe never ran.
 	 */
-	private static function outcomeOf(run: HaxeRun): OracleOutcome {
+	private static function outcomeOf(run: ProcessRun): OracleOutcome {
 		if (run.overflowed) return Rejected((run.err + run.out).trim());
 		if (run.failure != '') return Unavailable(run.failure);
 		return switch (run.status) {
@@ -540,7 +542,7 @@ final class CompilerOracle {
 	 * The rejection a failing `-v` run makes when `decisive` accepts its diagnostics, which are its stderr (the `-v` stream
 	 * is stdout): they already blame what the caller wrote, so a plain run adds nothing, and only the diagnostics are quoted.
 	 */
-	private static function decided(run: HaxeRun, decisive: Null<String -> Bool>): Null<OracleOutcome> {
+	private static function decided(run: ProcessRun, decisive: Null<String -> Bool>): Null<OracleOutcome> {
 		if (decisive == null || !answered(run) || run.status == 0 || run.overflowed) return null;
 		final diagnostics: String = run.err.trim();
 		return diagnostics != '' && decisive(diagnostics) ? Rejected(diagnostics) : null;

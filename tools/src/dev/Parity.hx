@@ -2,7 +2,7 @@ package dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 import anyparse.query.cli.BatchAnswer;
 import anyparse.query.cli.BatchAnswersParser;
 import anyparse.query.cli.BatchCalls;
@@ -360,7 +360,7 @@ final class Parity {
 				: [];
 			for (k => i in shares[s]) {
 				final failure: String = 'apq ${BatchRun.FLAG} gave no answer: ${run.firstError()}';
-				final answer: HaxeRun = k < answers.length
+				final answer: ProcessRun = k < answers.length
 					? {
 						status: answers[k].status,
 						out: answers[k].out,

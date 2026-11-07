@@ -11,7 +11,7 @@ using Lambda;
 using StringTools;
 
 /**
- * `Pool` — commands as separate processes through `HaxeSpawn.runAll`'s process driver: results in the order given,
+ * `Pool` — commands as separate processes through `ProcessSpawn.runAll`'s process driver: results in the order given,
  * the commands really overlapping, and a timeout, an input or an environment honoured per command.
  */
 @:nullSafety(Strict)

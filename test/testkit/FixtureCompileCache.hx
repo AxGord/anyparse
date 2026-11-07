@@ -1,5 +1,6 @@
 package testkit;
 
+import anyparse.util.Compare;
 import haxe.DynamicAccess;
 import haxe.Json;
 import haxe.io.Path;
@@ -44,7 +45,7 @@ using Lambda;
  * an entry on every hit and dropping one unused for a week (`dev fixture-cache prune`). A cache that outlives a run
  * outlives the compiler install it recorded, so that runner's stamp names the binary by path, version, size and mtime.
  *
- * A hit needs no process of its own: `HaxeSpawn` asks `lookup` in-process through the module `APQ_SPAWN_ANSWER` names
+ * A hit needs no process of its own: `ProcessSpawn` asks `lookup` in-process through the module `APQ_SPAWN_ANSWER` names
  * (`devkit.FixtureCache` writes it beside the shim), and only a compile that is not a recorded hit reaches the shim.
  * Both read one key, so a hit is the same bytes either way.
  */
@@ -267,7 +268,7 @@ final class FixtureCompileCache {
 	}
 
 	/**
-	 * The answer a spawn would get from the shim, when it is recorded — asked by `HaxeSpawn` through the module the
+	 * The answer a spawn would get from the shim, when it is recorded — asked by `ProcessSpawn` through the module the
 	 * `APQ_SPAWN_ANSWER` variable names, so a hit costs no process. Lookup only: null for every compile that is not a
 	 * recorded hit (a miss, a pass, the live arm's own switch), which then runs through the shim and is recorded there,
 	 * counted there too — a hit alone is counted here. `stamp`, `dir` and `tally` are the shim's own.
@@ -441,7 +442,7 @@ final class FixtureCompileCache {
 		final described: Array<Array<String>> = [
 			for (files in contents) {
 				final names: Array<String> = [for (name in files.keys()) name];
-				names.sort(Reflect.compare);
+				names.sort(Compare.compareString);
 				names.map(name -> '$name\t${files[name]}');
 			}
 		];

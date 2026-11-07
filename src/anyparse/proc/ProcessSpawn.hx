@@ -15,15 +15,15 @@ import js.node.Fs;
 #end
 
 /**
- * One `haxe` child process — the single seam every compiler-oracle spawn in this
- * package goes through.
+ * One child process — `haxe` unless the job names another program — and the single seam every spawn of this
+ * package goes through, the compiler oracle's included.
  *
  * ## Why it exists
  *
  * There were THREE near-copies of this block: `CompilerOracle.typecheck` (the
  * project-wide typecheck), `OracleCoverage.probeOutput` (the `-v` compiled-set probe)
  * and `OracleCache.probeOutput` (the `-v --interp Std` toolchain probe). One question —
- * "run `haxe` with these arguments in this directory and tell me what happened" — with
+ * "run a program with these arguments in this directory and tell me what happened" — with
  * three independently drifted answers:
  *
  *  - the output BUFFER: 256 MiB in one, node's 1 MiB default in the other two, though
@@ -70,7 +70,7 @@ import js.node.Fs;
  * "O1"). The native `sys` branch runs in this process's environment as it is.
  */
 @:nullSafety(Strict)
-final class HaxeSpawn {
+final class ProcessSpawn {
 
 	/** The failure sentence of a job `runAll` never started because an earlier one failed under `stopAfterFailure`. */
 	public static inline final NOT_STARTED: String = 'not started — an earlier job failed';
@@ -291,7 +291,7 @@ final class HaxeSpawn {
 	 * disagree about what an overflow MEANS and a shared default would let one of them
 	 * inherit a limit it never chose — which is the drift this class was extracted to end.
 	 */
-	public static function run(args: Array<String>, cwd: Null<String>, maxBuffer: Int): HaxeRun {
+	public static function run(args: Array<String>, cwd: Null<String>, maxBuffer: Int): ProcessRun {
 		return exec({ args: args, cwd: cwd }, maxBuffer);
 	}
 
@@ -302,7 +302,7 @@ final class HaxeSpawn {
 	 * process driver (`runAll`) and is refused, and so is an `env`, `stdin` or `timeout` on a target without node's
 	 * process API.
 	 */
-	public static function exec(job: SpawnJob, maxBuffer: Int): HaxeRun {
+	public static function exec(job: SpawnJob, maxBuffer: Int): ProcessRun {
 		final program: String = job.cmd ?? 'haxe';
 		if (job.shell != null) return {
 			status: null,
@@ -312,7 +312,7 @@ final class HaxeSpawn {
 			overflowed: false
 		};
 		#if nodejs
-		final recorded: Null<HaxeRun> = recordedRun(job, maxBuffer);
+		final recorded: Null<ProcessRun> = recordedRun(job, maxBuffer);
 		if (recorded != null) return recorded;
 		final cwd: Null<String> = job.cwd;
 		final options: Dynamic = { env: childEnv() };
@@ -401,7 +401,7 @@ final class HaxeSpawn {
 	 */
 	public static function runAll(
 		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool, ?bound: Int
-	): Array<HaxeRun> {
+	): Array<ProcessRun> {
 		return PhaseTimings.measure('haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound, false));
 	}
 
@@ -413,7 +413,7 @@ final class HaxeSpawn {
 	 */
 	public static function runDriven(
 		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, ?stopAfterFailure: Bool, ?bound: Int
-	): Array<HaxeRun> {
+	): Array<ProcessRun> {
 		final sequential: Bool = (jobs.length <= 1 || parallel <= 1) && !jobs.exists(job -> job.tethered == true);
 		// jobs that run one after another, none tethered, are bounded by their own `timeout` alone, as a run in this process is
 		final open: Bool = sequential && jobs.exists(job -> (job.timeout ?? 0) <= 0);
@@ -428,7 +428,7 @@ final class HaxeSpawn {
 	 */
 	private static function runAllTimed(
 		jobs: Array<SpawnJob>, maxBuffer: Int, parallel: Int, stopAfterFailure: Null<Bool>, bound: Null<Int>, driven: Bool
-	): Array<HaxeRun> {
+	): Array<ProcessRun> {
 		final stop: Bool = stopAfterFailure ?? false;
 		#if nodejs
 		// a job that needs the driver always goes through it: only there does a kill reach its whole process group, and only
@@ -457,7 +457,7 @@ final class HaxeSpawn {
 		dropBatch(batch.dir);
 		final launchError: Null<Dynamic> = (res.error: Dynamic);
 		final status: Null<Int> = (res.status: Null<Int>);
-		final answer: Null<Array<HaxeRun>> = launchError != null || status != 0 ? null : runsOf(streamText(res.stdout));
+		final answer: Null<Array<ProcessRun>> = launchError != null || status != 0 ? null : runsOf(streamText(res.stdout));
 		if (answer != null && answer.length == jobs.length) return answer;
 		// the driver itself failed: every job is answered as a run that produced no verdict
 		final code: Null<Dynamic> = launchError == null ? null : Reflect.field(launchError, 'code');
@@ -489,7 +489,7 @@ final class HaxeSpawn {
 	 * native `sys` branch has no working directory, so a `cwd` other than the process one is refused rather than run in
 	 * the wrong place.
 	 */
-	private static function runShell(command: String, cwd: Null<String>): HaxeRun {
+	private static function runShell(command: String, cwd: Null<String>): ProcessRun {
 		return cwd != null && haxe.io.Path.normalize(cwd) != haxe.io.Path.normalize(Sys.getCwd()) ? {
 			status: null,
 			out: '',
@@ -505,7 +505,7 @@ final class HaxeSpawn {
 	 * deadlocks on exactly the runs this class exists to make. There is no byte cap here — the streams are read whole —
 	 * so an overflow is a nodejs-only outcome.
 	 */
-	private static function processRun(command: String, args: Null<Array<String>>, what: String): HaxeRun {
+	private static function processRun(command: String, args: Null<Array<String>>, what: String): ProcessRun {
 		try {
 			final process: sys.io.Process = new sys.io.Process(command, args);
 			final out: String = process.stdout.readAll().toString();
@@ -779,8 +779,8 @@ final class HaxeSpawn {
 	 * `jobs` one after another, and — with `stop` — every job after the first failure answered `NOT_STARTED`: the
 	 * sequential form of `runAll`, for the jobs that need no process group (`haxe` spawns on node; everything elsewhere).
 	 */
-	private static function runInOrder(jobs: Array<SpawnJob>, maxBuffer: Int, stop: Bool): Array<HaxeRun> {
-		final runs: Array<HaxeRun> = [];
+	private static function runInOrder(jobs: Array<SpawnJob>, maxBuffer: Int, stop: Bool): Array<ProcessRun> {
+		final runs: Array<ProcessRun> = [];
 		var failed: Bool = false;
 		for (job in jobs) {
 			if (failed) {
@@ -796,7 +796,7 @@ final class HaxeSpawn {
 				continue;
 			}
 			final shell: Null<String> = job.shell;
-			final result: HaxeRun = shell == null
+			final result: ProcessRun = shell == null
 				? exec(job, maxBuffer)
 				: #if (sys && !nodejs) runShell(shell, job.cwd) #else {
 					status: null,
@@ -859,7 +859,7 @@ final class HaxeSpawn {
 	 * Every job of a batch of `count` answered as a run that produced no verdict, for `failure`, with `err` as its stderr
 	 * and `cancelled` when the batch was ended on purpose.
 	 */
-	public static function unanswered(count: Int, failure: String, err: String, ?cancelled: Bool): Array<HaxeRun> {
+	public static function unanswered(count: Int, failure: String, err: String, ?cancelled: Bool): Array<ProcessRun> {
 		return [
 			for (_ in 0...count) {
 				status: null,
@@ -894,8 +894,8 @@ final class HaxeSpawn {
 	}
 
 	/** The runs the process driver answered in `text`; null when it is no answer of the driver's shape. */
-	public static function runsOf(text: String): Null<Array<HaxeRun>> {
-		return try HaxeRunsDocumentParser.parse(text).runs catch (exception: haxe.Exception) null;
+	public static function runsOf(text: String): Null<Array<ProcessRun>> {
+		return try ProcessRunsDocumentParser.parse(text).runs catch (exception: haxe.Exception) null;
 	}
 
 	/** The answer of `machineThreads`, once read. */
@@ -907,7 +907,7 @@ final class HaxeSpawn {
 	 * cannot be loaded, it has no answer, or an answer would not fit `maxBuffer` — the job is then spawned, as it always
 	 * was. Never throws.
 	 */
-	private static function recordedRun(job: SpawnJob, maxBuffer: Int): Null<HaxeRun> {
+	private static function recordedRun(job: SpawnJob, maxBuffer: Int): Null<ProcessRun> {
 		final module: String = Sys.getEnv(ANSWER_ENV) ?? '';
 		// a job with a program of its own or a standard input is not the compile a recording stands for
 		if (module == '' || job.cmd != null || job.stdin != null) return null;
@@ -947,13 +947,13 @@ final class HaxeSpawn {
 
 }
 
-/** A batch directory `HaxeSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
+/** A batch directory `ProcessSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
 typedef DriverBatch = {
 	var dir: String;
 	var jobs: String;
 }
 
-/** What `HaxeSpawn.capturedSpawn` left: the spawn's result, both streams read back and whether either was cut at the cap. */
+/** What `ProcessSpawn.capturedSpawn` left: the spawn's result, both streams read back and whether either was cut at the cap. */
 typedef CapturedRun = {
 	var status: Null<Int>;
 	var error: Null<Any>;
@@ -962,7 +962,7 @@ typedef CapturedRun = {
 	var overflowed: Bool;
 }
 
-/** What the module `HaxeSpawn.ANSWER_ENV` names answers for a job it has recorded. */
+/** What the module `ProcessSpawn.ANSWER_ENV` names answers for a job it has recorded. */
 typedef RecordedAnswer = {
 	var status: Int;
 	var out: String;

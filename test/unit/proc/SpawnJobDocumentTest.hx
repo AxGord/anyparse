@@ -4,12 +4,12 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 
-/** The file `HaxeSpawn.writeJobs` hands the process driver: a job's set fields under their own names, and nothing it left unset. */
+/** The file `ProcessSpawn.writeJobs` hands the process driver: a job's set fields under their own names, and nothing it left unset. */
 class SpawnJobDocumentTest extends Test {
 
 	#if nodejs
 	public function testEverySetFieldReachesTheDocument(): Void {
-		final batch: Null<DriverBatch> = HaxeSpawn.writeJobs([
+		final batch: Null<DriverBatch> = ProcessSpawn.writeJobs([
 			{
 				args: ['a"b', 'c\nd'],
 				cwd: 'here',
@@ -31,7 +31,7 @@ class SpawnJobDocumentTest extends Test {
 			return;
 		}
 		final text: String = sys.io.File.getContent(batch.jobs);
-		HaxeSpawn.dropBatch(batch.dir);
+		ProcessSpawn.dropBatch(batch.dir);
 		Assert.equals(-1, text.indexOf('\n'));
 		final job: JValue = soleJob(text);
 		Assert.isTrue(same(JArray([JString('a"b'), JString('c\nd')]), JValueTools.field(job, 'args')));
@@ -54,13 +54,13 @@ class SpawnJobDocumentTest extends Test {
 	}
 
 	public function testAnUnsetFieldIsAbsent(): Void {
-		final batch: Null<DriverBatch> = HaxeSpawn.writeJobs([{ args: [], cwd: null }, { args: ['x'] }], 'apq-job-document-');
+		final batch: Null<DriverBatch> = ProcessSpawn.writeJobs([{ args: [], cwd: null }, { args: ['x'] }], 'apq-job-document-');
 		if (batch == null) {
 			Assert.fail('no batch');
 			return;
 		}
 		final text: String = sys.io.File.getContent(batch.jobs);
-		HaxeSpawn.dropBatch(batch.dir);
+		ProcessSpawn.dropBatch(batch.dir);
 		switch JValueParser.parse(text) {
 			case JArray([JObject(first), JObject(second)]):
 				Assert.same(['args'], [for (entry in first) (entry.key: String)]);
@@ -76,7 +76,7 @@ class SpawnJobDocumentTest extends Test {
 		env['a"b'] = 'v';
 		env['GONE'] = null;
 		Assert.isTrue(JValueTools.equals(
-			JObject([JValueTools.entry('a"b', JString('v')), JValueTools.entry('GONE', JNull)]), HaxeSpawn.environment(env)
+			JObject([JValueTools.entry('a"b', JString('v')), JValueTools.entry('GONE', JNull)]), ProcessSpawn.environment(env)
 		));
 	}
 

@@ -2,7 +2,7 @@ package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.OracleServerPool;
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 
 /**
  * A warm server's green is believed only when every change the run made reached the server. `server/invalidate` reaches a
@@ -23,7 +23,7 @@ final class OracleServerStaleTest extends Test {
 	@:pin('control')
 	@:killer('M-POOL-INVALIDATION-REACHES-EVERYTHING')
 	public function testAnAmbientImportFileThatAppearsIsSeen(): Void {
-		final after: Null<HaxeRun> = compiledAfter([
+		final after: Null<ProcessRun> = compiledAfter([
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'Val.hx', source: INT_VAL },
 			{ name: 'other/Val.hx', source: 'package other;\n\n$STRING_VAL' },
@@ -34,7 +34,7 @@ final class OracleServerStaleTest extends Test {
 
 	@:pin('guard')
 	public function testAnAmbientImportFileThatVanishesIsSeen(): Void {
-		final after: Null<HaxeRun> = compiledAfter([
+		final after: Null<ProcessRun> = compiledAfter([
 			{ name: 'Main.hx', source: MAIN },
 			{ name: 'Val.hx', source: STRING_VAL },
 			{ name: 'other/Val.hx', source: 'package other;\n\n$INT_VAL' },
@@ -46,7 +46,7 @@ final class OracleServerStaleTest extends Test {
 
 	@:pin('guard')
 	public function testAModuleThatAppearsInFrontOfTheOneResolvedIsSeen(): Void {
-		final after: Null<HaxeRun> = compiledAfter([
+		final after: Null<ProcessRun> = compiledAfter([
 			{ name: 'front/Marker.hx', source: 'class Marker {}\n' },
 			{ name: 'back/Main.hx', source: MAIN },
 			{ name: 'back/Val.hx', source: INT_VAL },
@@ -58,7 +58,7 @@ final class OracleServerStaleTest extends Test {
 	@:pin('control')
 	@:killer('M-POOL-INVALIDATION-REACHES-EVERYTHING')
 	public function testAFileAMacroReadsThatMovesIsSeen(): Void {
-		final after: Null<HaxeRun> = compiledAfter([
+		final after: Null<ProcessRun> = compiledAfter([
 			{
 				name: 'Main.hx',
 				source: '@:build(Reader.check())\nclass Main {\n\tstatic function main() {\n\t\ttrace(1);\n\t}\n}\n'
@@ -81,12 +81,12 @@ final class OracleServerStaleTest extends Test {
 	 */
 	private static function compiledAfter(
 		files: Array<{ name: String, source: String }>, watched: Array<String>, change: (root:String) -> Void
-	): Null<HaxeRun> {
+	): Null<ProcessRun> {
 		#if nodejs
 		final root: String = CliFixture.writeTree('apq_stale', files);
 		final config: OracleConfig = { hxml: 'build.hxml', dir: root, defines: [] };
 		final pool: OracleServerPool = new OracleServerPool(() -> watched.map(path -> '$root/$path'));
-		var after: Null<HaxeRun> = null;
+		var after: Null<ProcessRun> = null;
 		CliFixture.always(() -> {
 			pool.stop();
 			CliFixture.removeDir(root);
@@ -103,7 +103,7 @@ final class OracleServerStaleTest extends Test {
 		#end
 	}
 
-	private static function assertRed(run: Null<HaxeRun>, why: String): Void {
+	private static function assertRed(run: Null<ProcessRun>, why: String): Void {
 		#if nodejs
 		Assert.notNull(run, 'a server answered');
 		Assert.isTrue(run != null && run.status != 0, why);

@@ -1,6 +1,6 @@
 package unit.ds;
 
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 
 /**
  * `anyparse.ds.Bits` where the suite does not run: the contract on the interpreter, whose bit scan is the portable one
@@ -19,7 +19,7 @@ class BitsTargetsTest extends Test {
 		+ 'enum abstract Shifted(Int) { final A = 1 << 2; }\nprivate enum Hidden { One; Two; }\n';
 
 	public function testContractOnTheInterpreter(): Void {
-		final run: Null<HaxeRun> = TargetCompile.compile(
+		final run: Null<ProcessRun> = TargetCompile.compile(
 			program(
 				'\tstatic function main() {\n\t\tvar hues = new Bits<Hue>(); hues.add(Blue); hues.add(Red);\n'
 				+ '\t\tvar narrow: Bits<Narrow> = Narrow.Top; narrow.add(Narrow.Low);\n'
@@ -82,7 +82,7 @@ class BitsTargetsTest extends Test {
 
 	/** `source` fails to compile, and the compiler's message says `reason`. */
 	private static function assertSourceRefused(source: String, reason: String): Void {
-		final run: Null<HaxeRun> = TargetCompile.compile(source, ['--interp']);
+		final run: Null<ProcessRun> = TargetCompile.compile(source, ['--interp']);
 		if (run == null) return;
 		Assert.notEquals(0, run.status, reason);
 		Assert.stringContains(reason, run.err, reason);

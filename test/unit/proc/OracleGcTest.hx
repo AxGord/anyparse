@@ -5,7 +5,7 @@ import anyparse.proc.SpawnJob;
 using StringTools;
 
 /**
- * Every `haxe` the compiler oracle starts runs under the tuned OCaml collector (`HaxeSpawn.gcSetting`): a single spawn,
+ * Every `haxe` the compiler oracle starts runs under the tuned OCaml collector (`ProcessSpawn.gcSetting`): a single spawn,
  * the jobs of the parallel driver and those of a batch started in the background alike. The probe is a compile that
  * prints the `OCAMLRUNPARAM` it was started with, so what is asserted is the environment the compiler really saw.
  */
@@ -65,21 +65,21 @@ final class OracleGcTest extends Test {
 	@:killer('M-GC-EMPTY-DECLARED-OFF')
 	@:killer('M-GC-INHERITED-OVERRIDDEN')
 	public function testTheParameters(): Void {
-		Assert.equals(HaxeSpawn.DEFAULT_GC, HaxeSpawn.gcParams(null, null), 'unset: the default');
-		Assert.equals(HaxeSpawn.DEFAULT_GC, HaxeSpawn.gcParams(' ', ''), 'empty is unset, the way a test restores a variable');
-		Assert.isNull(HaxeSpawn.gcParams('off', null), 'off: none');
-		Assert.equals('b', HaxeSpawn.gcParams('off', 'b'));
-		Assert.equals('s=4M', HaxeSpawn.gcParams('s=4M', null), 'a declared setting replaces the default');
-		Assert.equals('o=200,s=16M', HaxeSpawn.gcParams(null, 'o=200'), 'the caller keeps its own parameter');
-		Assert.equals('s=1M,o=80', HaxeSpawn.gcParams(null, 's=1M,o=80'), 'and adds none it set itself');
+		Assert.equals(ProcessSpawn.DEFAULT_GC, ProcessSpawn.gcParams(null, null), 'unset: the default');
+		Assert.equals(ProcessSpawn.DEFAULT_GC, ProcessSpawn.gcParams(' ', ''), 'empty is unset, the way a test restores a variable');
+		Assert.isNull(ProcessSpawn.gcParams('off', null), 'off: none');
+		Assert.equals('b', ProcessSpawn.gcParams('off', 'b'));
+		Assert.equals('s=4M', ProcessSpawn.gcParams('s=4M', null), 'a declared setting replaces the default');
+		Assert.equals('o=200,s=16M', ProcessSpawn.gcParams(null, 'o=200'), 'the caller keeps its own parameter');
+		Assert.equals('s=1M,o=80', ProcessSpawn.gcParams(null, 's=1M,o=80'), 'and adds none it set itself');
 	}
 
 	@:pin('guard')
 	@:killer('M-GC-MEMORY-UNCOUNTED')
 	public function testATunedCollectorCostsMemory(): Void {
-		Assert.equals(5, HaxeSpawn.parallelismFor(16, 10 * GIB, false), 'ten GiB hold five compiles at two each');
-		Assert.equals(4, HaxeSpawn.parallelismFor(16, 10 * GIB, true), 'and four at two and a half');
-		Assert.equals(15, HaxeSpawn.parallelismFor(15, 64 * GIB, true), 'the threads still bound a big machine');
+		Assert.equals(5, ProcessSpawn.parallelismFor(16, 10 * GIB, false), 'ten GiB hold five compiles at two each');
+		Assert.equals(4, ProcessSpawn.parallelismFor(16, 10 * GIB, true), 'and four at two and a half');
+		Assert.equals(15, ProcessSpawn.parallelismFor(15, 64 * GIB, true), 'the threads still bound a big machine');
 	}
 
 	#if (sys || nodejs)
@@ -91,16 +91,16 @@ final class OracleGcTest extends Test {
 		final dir: String = CliFixture.writeDir('oraclegc', [{ name: 'Main.hx', source: MAIN }]);
 		final args: Array<String> = ['-cp', dir, '--run', 'Main'];
 		final saved: Map<String, String> = [for (v in VARIABLES) v => Sys.getEnv(v) ?? ''];
-		var runs: Array<HaxeRun> = [];
+		var runs: Array<ProcessRun> = [];
 		CliFixture.always(() -> {
 			for (v => value in saved) Sys.putEnv(v, value);
 			CliFixture.removeDir(dir);
 		}, () -> {
 			for (v => value in env) Sys.putEnv(v, value);
 			final jobs: Array<SpawnJob> = [{ args: args, cwd: dir }, { args: args, cwd: dir }];
-			runs = [HaxeSpawn.run(
+			runs = [ProcessSpawn.run(
 				args, dir, BUFFER
-			)].concat(HaxeSpawn.runAll(jobs, BUFFER, 2)).concat(HaxeSpawn.startAll(jobs, BUFFER, 2).await());
+			)].concat(ProcessSpawn.runAll(jobs, BUFFER, 2)).concat(ProcessSpawn.startAll(jobs, BUFFER, 2).await());
 		});
 		if (runs[0].status == 0) return runs.map(r -> r.out.trim());
 		Assert.pass('haxe unavailable — skipped (${runs[0].failure}${runs[0].err})');

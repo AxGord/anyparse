@@ -1,6 +1,6 @@
 package testkit;
 
-/** One `HaxeRun` as a `TestChild` role writes it to its output file and the parent reads it back. */
+/** One `ProcessRun` as a `TestChild` role writes it to its output file and the parent reads it back. */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
 typedef ChildRun = {
 	@:optional var status: Null<Int>;

@@ -177,7 +177,7 @@ final class ShardPlan {
 		'unit.check.facts.FactsTypeOracleE2ETest' => { ms: 10521, tests: 3 },
 		'unit.proc.PendingRunsTest' => { ms: 7064, tests: 3 },
 		'unit.check.oracle.OracleConfigListE2ETest' => { ms: 6472, tests: 13 },
-		'unit.proc.HaxeSpawnTest' => { ms: 5261, tests: 9 },
+		'unit.proc.ProcessSpawnTest' => { ms: 5261, tests: 9 },
 		'unit.LexicalRegionAgreementTest' => { ms: 4402, tests: 12 },
 		'unit.check.oracle.OracleParallelVerdictTest' => { ms: 4355, tests: 1 },
 		'unit.check.oracle.CompilerOracleE2ETest' => { ms: 4132, tests: 13 },

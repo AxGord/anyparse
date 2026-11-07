@@ -12,8 +12,8 @@ import anyparse.check.oracle.GenerationRecordWriter;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.oracle.OracleGenerationLock;
 import anyparse.grammar.json.JsonFormat;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
 import anyparse.query.cli.command.LintFixVerify;
@@ -612,7 +612,7 @@ final class OracleGenerationTest extends Test {
 		final child: String = 'APQ_TEST_CHILD=prepare APQ_TEST_CHILD_INPUT=$dir/configs.json APQ_ORACLE_LOCK_WAIT=$lockWait '
 			+ '"${js.Node.process.execPath}" "${js.Syntax.code('process.argv[1]')}"';
 		final started: Float = Date.now().getTime();
-		final children: Array<HaxeRun> = HaxeSpawn.runAll([
+		final children: Array<ProcessRun> = ProcessSpawn.runAll([
 			{ args: [], cwd: dir, shell: 'APQ_TEST_CHILD_OUTPUT=$dir/a.json $child' },
 			{ args: [], cwd: dir, shell: 'APQ_TEST_CHILD_OUTPUT=$dir/b.json $child' }
 		], 1024 * 1024, 2);

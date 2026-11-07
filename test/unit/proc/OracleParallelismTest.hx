@@ -1,7 +1,7 @@
 package unit.proc;
 
 /**
- * `HaxeSpawn.parallelism`: how many compiles of one project run at once. A compile is a single-threaded process the
+ * `ProcessSpawn.parallelism`: how many compiles of one project run at once. A compile is a single-threaded process the
  * caller only waits on, so the budget is the threads — a pool lease's, or the machine's performance cores, or every core
  * but one — bounded by memory and by the hard cap.
  */
@@ -13,16 +13,16 @@ final class OracleParallelismTest extends Test {
 	@:pin('control')
 	@:killer('M-ORACLE-PARALLEL-HALF-THE-CORES')
 	public function testTheBudgetIsEveryCoreButOne(): Void {
-		Assert.equals(15, HaxeSpawn.threadsFor(16, 16), 'sixteen cores of one kind: fifteen compiles');
-		Assert.equals(3, HaxeSpawn.threadsFor(4, 4));
-		Assert.equals(15, HaxeSpawn.parallelismFor(15, 64 * GIB, false), 'room for all: every thread compiles');
+		Assert.equals(15, ProcessSpawn.threadsFor(16, 16), 'sixteen cores of one kind: fifteen compiles');
+		Assert.equals(3, ProcessSpawn.threadsFor(4, 4));
+		Assert.equals(15, ProcessSpawn.parallelismFor(15, 64 * GIB, false), 'room for all: every thread compiles');
 	}
 
 	@:pin('control')
 	@:killer('M-ORACLE-PARALLEL-COUNTS-SLOW-CORES')
 	public function testAMachineWithSlowerCoresBudgetsItsPerformanceCores(): Void {
-		Assert.equals(12, HaxeSpawn.threadsFor(16, 12), 'twelve performance cores beside four efficiency ones: twelve compiles');
-		Assert.equals(3, HaxeSpawn.threadsFor(4, 0), 'no performance cores reported: every core but one');
+		Assert.equals(12, ProcessSpawn.threadsFor(16, 12), 'twelve performance cores beside four efficiency ones: twelve compiles');
+		Assert.equals(3, ProcessSpawn.threadsFor(4, 0), 'no performance cores reported: every core but one');
 	}
 
 	@:pin('control')
@@ -37,26 +37,26 @@ final class OracleParallelismTest extends Test {
 		}, () -> {
 			Sys.putEnv('APQ_ORACLE_PARALLEL', '');
 			Sys.putEnv('WF_THREADS', '1');
-			parallel = HaxeSpawn.parallelism();
+			parallel = ProcessSpawn.parallelism();
 		});
 		Assert.equals(1, parallel, 'a lease of one thread runs one compile at a time');
 	}
 
 	@:pin('guard')
 	public function testMemoryTheCapAndOneBoundTheBudget(): Void {
-		Assert.equals(4, HaxeSpawn.parallelismFor(15, 8 * GIB, false), 'eight GiB hold four compiles at two each');
-		Assert.equals(16, HaxeSpawn.parallelismFor(63, 256 * GIB, false), 'never past the cap');
-		Assert.equals(1, HaxeSpawn.parallelismFor(0, 64 * GIB, false), 'never fewer than one');
-		Assert.equals(1, HaxeSpawn.parallelismFor(7, GIB, false), 'never fewer than one, whatever the memory');
-		Assert.equals(3, HaxeSpawn.residentFor(8 * GIB, true), 'a tuned collector budgets more memory per compile');
+		Assert.equals(4, ProcessSpawn.parallelismFor(15, 8 * GIB, false), 'eight GiB hold four compiles at two each');
+		Assert.equals(16, ProcessSpawn.parallelismFor(63, 256 * GIB, false), 'never past the cap');
+		Assert.equals(1, ProcessSpawn.parallelismFor(0, 64 * GIB, false), 'never fewer than one');
+		Assert.equals(1, ProcessSpawn.parallelismFor(7, GIB, false), 'never fewer than one, whatever the memory');
+		Assert.equals(3, ProcessSpawn.residentFor(8 * GIB, true), 'a tuned collector budgets more memory per compile');
 	}
 
 	@:pin('guard')
 	public function testALinuxCpuListIsCounted(): Void {
-		Assert.equals(16, HaxeSpawn.cpuListCount('0-7,16-23\n'));
-		Assert.equals(3, HaxeSpawn.cpuListCount('0,2-3'));
-		Assert.isNull(HaxeSpawn.cpuListCount('0-x'), 'an unreadable list counts nothing');
-		Assert.isNull(HaxeSpawn.cpuListCount('4-2'), 'nor does a reversed range');
+		Assert.equals(16, ProcessSpawn.cpuListCount('0-7,16-23\n'));
+		Assert.equals(3, ProcessSpawn.cpuListCount('0,2-3'));
+		Assert.isNull(ProcessSpawn.cpuListCount('0-x'), 'an unreadable list counts nothing');
+		Assert.isNull(ProcessSpawn.cpuListCount('4-2'), 'nor does a reversed range');
 	}
 
 }

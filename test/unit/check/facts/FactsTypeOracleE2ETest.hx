@@ -6,7 +6,7 @@ import sys.io.File;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 
 /**
@@ -210,7 +210,7 @@ class FactsTypeOracleE2ETest extends Test {
 
 	#if (sys || nodejs)
 	private static function run(dir: String, defines: Array<String>): String {
-		return HaxeSpawn.run(['check.hxml'].concat(defines), dir, BUFFER).out;
+		return ProcessSpawn.run(['check.hxml'].concat(defines), dir, BUFFER).out;
 	}
 	#end
 

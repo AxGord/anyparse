@@ -1,9 +1,9 @@
 package anyparse.check.oracle;
 
 import anyparse.core.TempScratch;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import anyparse.query.FileIdentity;
 import anyparse.query.SymbolIndex;
@@ -16,7 +16,7 @@ import haxe.io.Path;
  * server — the compiler-oracle TAIL for a resolver-unreachable autofix (the
  * generics / inference locals `explicit-local-type`'s structural arm cannot pin).
  * Lifecycle: `start` spawns `haxe --wait <port>` in the background, as a TETHERED job of a background batch
- * (`HaxeSpawn.startAll`, `SpawnJob.tethered`) so the server dies with the run however the run ends — a SIGTERM or
+ * (`ProcessSpawn.startAll`, `SpawnJob.tethered`) so the server dies with the run however the run ends — a SIGTERM or
  * SIGKILL of `apq` included, which used to leave it behind as a direct child no handler was left to reap — WARMS it with
  * one `haxe --connect <port> <hxml> --no-output`, and returns a handle; `typeAt`
  * queries `haxe --connect <port> <hxml> --display <file>@<bytePos>@type` per finding
@@ -161,15 +161,15 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 		if (dir == null) return out;
 		final inputs: Null<Map<String, String>> = stdinFiles(dir, requests);
 		if (inputs == null) {
-			HaxeSpawn.dropBatch(dir);
+			ProcessSpawn.dropBatch(dir);
 			return out;
 		}
 		final forms: Array<Array<String>> = requests.map(request -> displayForms(file, request.cwd));
 		var asking: Array<Int> = [for (i in 0...requests.length) i];
 		var form: Int = 0;
 		while (asking.length > 0) {
-			final replies: Array<HaxeRun> = HaxeSpawn.runAll(
-				asking.map(i -> positionJob(requests[i], forms[i][form], inputs)), REPLY_OUTPUT, HaxeSpawn.parallelism()
+			final replies: Array<ProcessRun> = ProcessSpawn.runAll(
+				asking.map(i -> positionJob(requests[i], forms[i][form], inputs)), REPLY_OUTPUT, ProcessSpawn.parallelism()
 			);
 			final next: Array<Int> = [];
 			for (k => i in asking) {
@@ -183,7 +183,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 			asking = next;
 			form++;
 		}
-		HaxeSpawn.dropBatch(dir);
+		ProcessSpawn.dropBatch(dir);
 		#end
 		return out;
 	}
@@ -208,7 +208,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle {
 			final free: Null<Int> = CompilerServer.freePort([], candidate);
 			if (free == null) return null;
 			final port: Int = free;
-			final server: PendingRuns = HaxeSpawn.startAll([{ args: ['--wait', '$port'], cwd: null, tethered: true }], SERVER_OUTPUT, 1);
+			final server: PendingRuns = ProcessSpawn.startAll([{ args: ['--wait', '$port'], cwd: null, tethered: true }], SERVER_OUTPUT, 1);
 			if (CompilerServer.warm(port, hxml, cwd, defines))
 				return new CompilerDisplayOracle(typeSyntax, hxml, cwd, defines ?? [], port, server);
 			server.cancel();

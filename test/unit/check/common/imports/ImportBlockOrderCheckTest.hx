@@ -4,8 +4,8 @@ import anyparse.check.Check;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.ImportBlockOrder;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ImportOrder;
@@ -399,7 +399,7 @@ class ImportBlockOrderCheckTest extends Test {
 			{ name: 's/Two.hx', source: staticClass('s', 'Two', 'hello') }
 		];
 		final dir: String = CliFixture.writeTree('wildorder', libs.concat([{ name: 'Main.hx', source: main }]));
-		final before: HaxeRun = runMain(dir);
+		final before: ProcessRun = runMain(dir);
 		if (before.status != 0) {
 			CliFixture.removeDir(dir);
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
@@ -416,12 +416,12 @@ class ImportBlockOrderCheckTest extends Test {
 			reordered
 		);
 		File.saveContent('$dir/Main.hx', reordered);
-		final after: HaxeRun = runMain(dir);
+		final after: ProcessRun = runMain(dir);
 		File.saveContent(
 			'$dir/Main.hx',
 			main.replace('import s.Two.*;\nimport b.Bee;\nimport s.One.*;', 'import s.One.*;\nimport b.Bee;\nimport s.Two.*;')
 		);
-		final swapped: HaxeRun = runMain(dir);
+		final swapped: ProcessRun = runMain(dir);
 		CliFixture.removeDir(dir);
 		Assert.equals('q.T p.Tools.greet z.Zed a.Alpha s.One.hello b.Bee', before.out.trim(), before.err);
 		Assert.equals(before.out, after.out, after.err);
@@ -463,7 +463,7 @@ class ImportBlockOrderCheckTest extends Test {
 			{ name: 'v/Fns2.hx', source: moduleField('v', 'Fns2', 'modfn') }
 		];
 		final dir: String = CliFixture.writeTree('modfieldorder', libs.concat([{ name: 'Main.hx', source: main }]));
-		final before: HaxeRun = runMain(dir);
+		final before: ProcessRun = runMain(dir);
 		if (before.status != 0) {
 			CliFixture.removeDir(dir);
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
@@ -476,7 +476,7 @@ class ImportBlockOrderCheckTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == '$dir/Main.hx');
 		final sortedEdits: Array<{ span: Span, text: String }> = check.fix(main, own, plugin, CheckFixture.index(files, plugin));
 		File.saveContent('$dir/Main.hx', main.replace('import v.Fns2;\nimport v.Fns;', 'import v.Fns;\nimport v.Fns2;'));
-		final sorted: HaxeRun = runMain(dir);
+		final sorted: ProcessRun = runMain(dir);
 		CliFixture.removeDir(dir);
 		Assert.equals('v.Fns.modfn', before.out.trim(), before.err);
 		Assert.equals('v.Fns2.modfn', sorted.out.trim(), 'the sorted order runs the other `modfn`: ${sorted.err}');
@@ -1046,8 +1046,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** Compile and run `dir`'s `Main` on `--interp`. */
-	private static function runMain(dir: String): HaxeRun {
-		return HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+	private static function runMain(dir: String): ProcessRun {
+		return ProcessSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 	}
 
 	/** A fixture module `pack.Name` declaring one MODULE-LEVEL function `fn`, answering with its own path. */

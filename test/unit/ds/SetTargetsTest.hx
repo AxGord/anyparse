@@ -1,6 +1,6 @@
 package unit.ds;
 
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 
 /**
  * `anyparse.ds.Set` on the targets the suite itself does not run on: the membership contract on the interpreter (the
@@ -18,7 +18,7 @@ class SetTargetsTest extends Test {
 		'class Main {\n\tstatic function main() {\n\t\tfinal s = new anyparse.ds.Set<haxe.ds.Option<Int>>();\n\t\ts.add(None);\n\t}\n}\n';
 
 	public function testMembershipContractOnTheInterpreter(): Void {
-		final run: Null<HaxeRun> = TargetCompile.compile(CONTRACT, ['--interp']);
+		final run: Null<ProcessRun> = TargetCompile.compile(CONTRACT, ['--interp']);
 		if (run == null) return;
 		Assert.equals(0, run.status);
 		Assert.equals('true,false,true,false,true,false,true,false,true,true,false,false\nfalse\n', run.out.split('\r').join(''));
@@ -29,7 +29,7 @@ class SetTargetsTest extends Test {
 	@:killer('M-DS-SET-ENUM-KEY')
 	public function testEnumKeyIsRefusedOnBothArms(): Void {
 		for (target in [['--interp'], ['-js', 'out.js']]) {
-			final run: Null<HaxeRun> = TargetCompile.compile(ENUM_KEY, target);
+			final run: Null<ProcessRun> = TargetCompile.compile(ENUM_KEY, target);
 			if (run == null) return;
 			Assert.notEquals(0, run.status, target.join(' '));
 			Assert.stringContains('has no @:to function', run.err, target.join(' '));

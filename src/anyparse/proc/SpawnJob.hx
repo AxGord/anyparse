@@ -3,7 +3,7 @@ package anyparse.proc;
 import anyparse.grammar.json.JValue;
 
 /**
- * One process `HaxeSpawn.runAll` runs: `haxe <args>`, or the `shell` command line when set, in `cwd` (the process cwd
+ * One process `ProcessSpawn.runAll` runs: `haxe <args>`, or the `shell` command line when set, in `cwd` (the process cwd
  * when null), killed after `timeout` ms when that is positive.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
@@ -30,7 +30,7 @@ typedef SpawnJob = {
 	var ?groupFile: String;
 
 	/**
-	 * The job never outlives the driver that started it, however the driver ends (`HaxeSpawn.TETHER`) — for a job that
+	 * The job never outlives the driver that started it, however the driver ends (`ProcessSpawn.TETHER`) — for a job that
 	 * never ends by itself, a compilation server.
 	 */
 	var ?tethered: Bool;

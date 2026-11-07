@@ -4,7 +4,7 @@ import anyparse.proc.PendingRuns;
 import unit.check.ProcessProbe;
 
 /**
- * `PendingRuns`: a batch started with `HaxeSpawn.startAll` runs while the caller goes on, and `cancel` ends it.
+ * `PendingRuns`: a batch started with `ProcessSpawn.startAll` runs while the caller goes on, and `cancel` ends it.
  *
  * Both fixtures are shell jobs that sleep, so what they assert is a matter of WHEN: the margins are a whole second,
  * far past the scheduling noise of a loaded machine and far short of the sleep a foreground batch would still owe.
@@ -27,10 +27,10 @@ final class PendingRunsTest extends Test {
 	public function testABatchRunsWhileTheCallerWorks(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingruns', []);
-		final pending: PendingRuns = HaxeSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 2 && echo done' }], BUFFER, 1);
+		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 2 && echo done' }], BUFFER, 1);
 		Sys.sleep(3);
 		final asked: Float = Sys.time();
-		final runs: Array<HaxeRun> = pending.await();
+		final runs: Array<ProcessRun> = pending.await();
 		Assert.isTrue(Sys.time() - asked < 1, 'the answer was ready: the job ran while the caller slept');
 		Assert.equals(0, runs[0].status);
 		Assert.equals('done', StringTools.trim(runs[0].out));
@@ -51,7 +51,7 @@ final class PendingRunsTest extends Test {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingfiles', []);
 		final before: Array<String> = pendingDirs();
-		final pending: PendingRuns = HaxeSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1' }], BUFFER, 1);
+		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1' }], BUFFER, 1);
 		Sys.sleep(0.5);
 		final made: Array<String> = [for (d in pendingDirs()) if (!before.contains(d)) d];
 		Assert.equals(1, made.length, 'one directory for the batch');
@@ -73,7 +73,7 @@ final class PendingRunsTest extends Test {
 	public function testACancelledBatchEndsItsJobs(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingcancel', []);
-		final pending: PendingRuns = HaxeSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1.5 && touch marker' }], BUFFER, 1);
+		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1.5 && touch marker' }], BUFFER, 1);
 		Sys.sleep(0.5);
 		pending.cancel();
 		Sys.sleep(2.5);
@@ -96,7 +96,7 @@ final class PendingRunsTest extends Test {
 	public function testATetheredJobDiesWithItsDriver(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingtether', []);
-		final pending: PendingRuns = HaxeSpawn.startAll([
+		final pending: PendingRuns = ProcessSpawn.startAll([
 			{
 				args: [],
 				cwd: dir,
@@ -133,7 +133,7 @@ final class PendingRunsTest extends Test {
 			return;
 		}
 		final dir: String = CliFixture.writeDir('pendingwedge', []);
-		final runs: Null<Array<HaxeRun>> = testkit.TestChild.wedge('bounded-pending', dir, 1500);
+		final runs: Null<Array<ProcessRun>> = testkit.TestChild.wedge('bounded-pending', dir, 1500);
 		Assert.notNull(runs, 'await answered while the driver was stopped');
 		if (runs != null) {
 			Assert.isNull(runs[0].status, 'no verdict');

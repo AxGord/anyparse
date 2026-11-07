@@ -6,12 +6,12 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * The lookup seam of `HaxeSpawn` (`ANSWER_ENV`): a job whose answer the named module has recorded is answered from it
+ * The lookup seam of `ProcessSpawn` (`ANSWER_ENV`): a job whose answer the named module has recorded is answered from it
  * without a process, in this process and in the process driver alike; a job it has no answer for is spawned as it always
  * was, and with the variable empty nothing is loaded.
  */
 @:nullSafety(Strict)
-final class HaxeSpawnAnswerTest extends Test {
+final class ProcessSpawnAnswerTest extends Test {
 
 	private static inline final ROOMY: Int = 8 * 1024 * 1024;
 
@@ -20,7 +20,7 @@ final class HaxeSpawnAnswerTest extends Test {
 	public function testARecordedAnswerIsReplayedWithoutASpawn(): Void {
 		#if nodejs
 		withModule((log, _) -> {
-			final run: HaxeRun = HaxeSpawn.run(['--version'], null, ROOMY);
+			final run: ProcessRun = ProcessSpawn.run(['--version'], null, ROOMY);
 			// the compiler itself would exit 0 on `--version`
 			Assert.equals(7, run.status);
 			Assert.equals('recorded out', run.out);
@@ -40,7 +40,7 @@ final class HaxeSpawnAnswerTest extends Test {
 		#if nodejs
 		withModule((log, _) -> {
 			final jobs: Array<SpawnJob> = [{ args: ['--version'] }, { args: ['--version'] }];
-			final runs: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 2);
+			final runs: Array<ProcessRun> = ProcessSpawn.runAll(jobs, ROOMY, 2);
 			Assert.equals(2, runs.length);
 			for (run in runs) {
 				Assert.equals(7, run.status);
@@ -58,10 +58,10 @@ final class HaxeSpawnAnswerTest extends Test {
 	public function testAJobWithNoAnswerIsSpawned(): Void {
 		#if nodejs
 		withModule((log, _) -> {
-			final run: HaxeRun = HaxeSpawn.run(['miss'], null, ROOMY);
+			final run: ProcessRun = ProcessSpawn.run(['miss'], null, ROOMY);
 			Assert.notEquals(7, run.status);
 			Assert.equals(1, asked(log).length, 'asked once, then spawned');
-			final driven: Array<HaxeRun> = HaxeSpawn.runAll([{ args: ['miss'] }, { args: ['miss'] }], ROOMY, 2);
+			final driven: Array<ProcessRun> = ProcessSpawn.runAll([{ args: ['miss'] }, { args: ['miss'] }], ROOMY, 2);
 			for (r in driven) Assert.notEquals(7, r.status);
 			Assert.equals(3, asked(log).length);
 		});
@@ -73,9 +73,9 @@ final class HaxeSpawnAnswerTest extends Test {
 	public function testAnEmptyVariableLoadsNothing(): Void {
 		#if nodejs
 		withModule((log, _) -> {
-			Sys.putEnv(HaxeSpawn.ANSWER_ENV, '');
-			Assert.notEquals(7, HaxeSpawn.run(['--version'], null, ROOMY).status);
-			for (r in HaxeSpawn.runAll([{ args: ['--version'] }, { args: ['--version'] }], ROOMY, 2)) Assert.notEquals(7, r.status);
+			Sys.putEnv(ProcessSpawn.ANSWER_ENV, '');
+			Assert.notEquals(7, ProcessSpawn.run(['--version'], null, ROOMY).status);
+			for (r in ProcessSpawn.runAll([{ args: ['--version'] }, { args: ['--version'] }], ROOMY, 2)) Assert.notEquals(7, r.status);
 			Assert.isFalse(FileSystem.exists(log), 'the module was never required');
 		});
 		#else
@@ -86,7 +86,7 @@ final class HaxeSpawnAnswerTest extends Test {
 	public function testAnAnswerPastTheBufferIsLeftToTheSpawn(): Void {
 		#if nodejs
 		withModule((log, _) -> {
-			final run: HaxeRun = HaxeSpawn.run(['--version'], null, 5);
+			final run: ProcessRun = ProcessSpawn.run(['--version'], null, 5);
 			Assert.notEquals(7, run.status);
 			Assert.equals(1, asked(log).length);
 		});
@@ -100,7 +100,7 @@ final class HaxeSpawnAnswerTest extends Test {
 		withModule((log, dir) -> {
 			final env: DynamicAccess<String> = {};
 			env['ANSWER_PROBE'] = 'set';
-			final run: HaxeRun = HaxeSpawn.exec({ args: ['--version'], cwd: dir, env: HaxeSpawn.environment(env) }, ROOMY);
+			final run: ProcessRun = ProcessSpawn.exec({ args: ['--version'], cwd: dir, env: ProcessSpawn.environment(env) }, ROOMY);
 			Assert.equals(7, run.status);
 			final request: Asked = haxe.Json.parse(asked(log)[0]); // noqa: avoid-haxe-json
 			Assert.equals('haxe', request.cmd);
@@ -123,7 +123,7 @@ final class HaxeSpawnAnswerTest extends Test {
 		#if nodejs
 		final count: Int = 4000;
 		withModule((log, _) -> {
-			final runs: Array<HaxeRun> = HaxeSpawn.runAll([for (_ in 0...count) { args: ['--version'] }], ROOMY, 4);
+			final runs: Array<ProcessRun> = ProcessSpawn.runAll([for (_ in 0...count) { args: ['--version'] }], ROOMY, 4);
 			Assert.equals(count, runs.length);
 			Assert.equals(count, runs.filter(run -> run.status == 7 && run.failure == '').length);
 		});
@@ -140,9 +140,9 @@ final class HaxeSpawnAnswerTest extends Test {
 		withModule((log, dir) -> {
 			final input: String = '$dir/input.txt';
 			File.saveContent(input, '');
-			Assert.notEquals(7, HaxeSpawn.exec({ args: ['-e', '0'], cmd: js.Node.process.execPath }, ROOMY).status);
-			Assert.notEquals(7, HaxeSpawn.exec({ args: ['--version'], stdin: input }, ROOMY).status);
-			Assert.notEquals(7, HaxeSpawn.exec({ args: [], shell: 'exit 0' }, ROOMY).status);
+			Assert.notEquals(7, ProcessSpawn.exec({ args: ['-e', '0'], cmd: js.Node.process.execPath }, ROOMY).status);
+			Assert.notEquals(7, ProcessSpawn.exec({ args: ['--version'], stdin: input }, ROOMY).status);
+			Assert.notEquals(7, ProcessSpawn.exec({ args: [], shell: 'exit 0' }, ROOMY).status);
 			Assert.isFalse(FileSystem.exists(log), 'the module was never required');
 		});
 		#else
@@ -164,7 +164,7 @@ final class HaxeSpawnAnswerTest extends Test {
 				{ args: [], shell: 'exit 0' },
 				{ args: ['--version'], tethered: true }
 			];
-			for (run in HaxeSpawn.runAll(jobs, ROOMY, 2)) Assert.notEquals(7, run.status);
+			for (run in ProcessSpawn.runAll(jobs, ROOMY, 2)) Assert.notEquals(7, run.status);
 			Assert.isFalse(FileSystem.exists(log), 'the module was never required');
 		});
 		#else
@@ -176,10 +176,10 @@ final class HaxeSpawnAnswerTest extends Test {
 	public function testAnAnswerIsMeasuredInBytes(): Void {
 		#if nodejs
 		withModule((log, _) -> {
-			Assert.notEquals(7, HaxeSpawn.run(['wide'], null, 10).status);
-			for (run in HaxeSpawn.runAll([{ args: ['wide'] }, { args: ['wide'] }], 10, 2)) Assert.notEquals(7, run.status);
+			Assert.notEquals(7, ProcessSpawn.run(['wide'], null, 10).status);
+			for (run in ProcessSpawn.runAll([{ args: ['wide'] }, { args: ['wide'] }], 10, 2)) Assert.notEquals(7, run.status);
 			Assert.equals(3, asked(log).length);
-			Assert.equals(7, HaxeSpawn.run(['wide'], null, 12).status, 'and at the limit it is returned');
+			Assert.equals(7, ProcessSpawn.run(['wide'], null, 12).status, 'and at the limit it is returned');
 		});
 		#else
 		Assert.pass('the seam needs the node target');
@@ -193,11 +193,11 @@ final class HaxeSpawnAnswerTest extends Test {
 		withModule((log, dir) -> {
 			final lost: SpawnJob = { args: ['--version'], stdin: '$dir/absent/in.txt' };
 			final lostToo: SpawnJob = { args: ['--version'], stdin: '$dir/absent/in2.txt' };
-			Sys.putEnv(HaxeSpawn.ANSWER_ENV, '');
-			for (run in HaxeSpawn.runAll([lost, lostToo], ROOMY, 2)) Assert.stringContains('could not open', run.failure);
-			Sys.putEnv(HaxeSpawn.ANSWER_ENV, '$dir/answer.js');
-			for (run in HaxeSpawn.runAll([lost, lostToo], ROOMY, 2)) Assert.stringContains('could not open', run.failure);
-			final mixed: Array<HaxeRun> = HaxeSpawn.runAll([lost, { args: ['--version'] }], ROOMY, 2);
+			Sys.putEnv(ProcessSpawn.ANSWER_ENV, '');
+			for (run in ProcessSpawn.runAll([lost, lostToo], ROOMY, 2)) Assert.stringContains('could not open', run.failure);
+			Sys.putEnv(ProcessSpawn.ANSWER_ENV, '$dir/answer.js');
+			for (run in ProcessSpawn.runAll([lost, lostToo], ROOMY, 2)) Assert.stringContains('could not open', run.failure);
+			final mixed: Array<ProcessRun> = ProcessSpawn.runAll([lost, { args: ['--version'] }], ROOMY, 2);
 			Assert.stringContains('could not open', mixed[0].failure);
 			Assert.equals(7, mixed[1].status);
 		});
@@ -218,12 +218,12 @@ final class HaxeSpawnAnswerTest extends Test {
 		final dir: String = CliFixture.writeDir('hs_answer', []);
 		final log: String = '$dir/asked.log';
 		File.saveContent('$dir/answer.js', module(log));
-		final before: String = Sys.getEnv(HaxeSpawn.ANSWER_ENV) ?? '';
+		final before: String = Sys.getEnv(ProcessSpawn.ANSWER_ENV) ?? '';
 		CliFixture.always(() -> {
-			Sys.putEnv(HaxeSpawn.ANSWER_ENV, before);
+			Sys.putEnv(ProcessSpawn.ANSWER_ENV, before);
 			CliFixture.removeDir(dir);
 		}, () -> {
-			Sys.putEnv(HaxeSpawn.ANSWER_ENV, '$dir/answer.js');
+			Sys.putEnv(ProcessSpawn.ANSWER_ENV, '$dir/answer.js');
 			body(log, dir);
 		});
 	}

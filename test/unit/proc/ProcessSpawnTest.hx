@@ -5,7 +5,7 @@ import anyparse.proc.SpawnJob;
 using StringTools;
 
 /**
- * `HaxeSpawn` — the one `haxe` child process the compiler-oracle package starts, and the
+ * `ProcessSpawn` — the one `haxe` child process the compiler-oracle package starts, and the
  * three OUTCOMES its callers read apart.
  *
  * They were three near-copies before, and what had drifted between them is exactly what
@@ -16,14 +16,14 @@ using StringTools;
  * this machine".
  */
 @:nullSafety(Strict)
-final class HaxeSpawnTest extends Test {
+final class ProcessSpawnTest extends Test {
 
 	/** Big enough that nothing this test runs can reach it. */
 	private static inline final ROOMY: Int = 8 * 1024 * 1024;
 
 	/** A run that PRODUCED a verdict carries no `failure`, whatever it exited with. */
 	public function testASuccessfulRunCarriesNoFailure(): Void {
-		final run: HaxeRun = HaxeSpawn.run(['--version'], null, ROOMY);
+		final run: ProcessRun = ProcessSpawn.run(['--version'], null, ROOMY);
 		if (run.failure != '') {
 			Assert.pass('haxe unavailable — skipped (${run.failure})');
 			return;
@@ -39,7 +39,7 @@ final class HaxeSpawnTest extends Test {
 	 * here and `Unavailable` for a missing binary.
 	 */
 	public function testARejectedRunIsStillARun(): Void {
-		final run: HaxeRun = HaxeSpawn.run(['--no-such-flag-zzz'], null, ROOMY);
+		final run: ProcessRun = ProcessSpawn.run(['--no-such-flag-zzz'], null, ROOMY);
 		if (run.failure != '' && run.status == null && run.out == '' && run.err == '') {
 			Assert.pass('haxe unavailable — skipped');
 			return;
@@ -51,7 +51,7 @@ final class HaxeSpawnTest extends Test {
 
 	/** On nodejs the working directory is honoured; the native `sys` branch has none to honour. */
 	public function testHonoursCwdMatchesTheTarget(): Void {
-		Assert.equals(#if nodejs true #else false #end, HaxeSpawn.honoursCwd());
+		Assert.equals(#if nodejs true #else false #end, ProcessSpawn.honoursCwd());
 	}
 
 	/**
@@ -68,10 +68,10 @@ final class HaxeSpawnTest extends Test {
 			{ args: [], cwd: null, shell: 'sleep 5' }
 		];
 		final started: Float = Date.now().getTime();
-		final overlapped: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 2, true);
+		final overlapped: Array<ProcessRun> = ProcessSpawn.runAll(jobs, ROOMY, 2, true);
 		Assert.equals(3, overlapped[0].status, 'the failure is answered as it ran');
 		Assert.isTrue(overlapped[1].cancelled == true && overlapped[1].unstarted != true, 'the running later job was killed');
-		final sequential: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 1, true);
+		final sequential: Array<ProcessRun> = ProcessSpawn.runAll(jobs, ROOMY, 1, true);
 		Assert.isTrue(sequential[1].unstarted == true, 'with one slot it never started');
 		Assert.isTrue(Date.now().getTime() - started < 4000, 'neither run waited for the slow job');
 		#else
@@ -92,7 +92,7 @@ final class HaxeSpawnTest extends Test {
 			{ args: [], cwd: null, shell: 'sleep 0.5; exit 1' },
 			{ args: [], cwd: dir, shell: '(sleep 2; echo leaked > leak.txt) & wait' }
 		];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll(jobs, ROOMY, 2, true);
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll(jobs, ROOMY, 2, true);
 		Assert.isTrue(runs[1].cancelled == true, 'the later job was cancelled');
 		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000)');
 		Assert.isFalse(sys.FileSystem.exists('$dir/leak.txt'), 'and the process it started died with it');
@@ -108,7 +108,7 @@ final class HaxeSpawnTest extends Test {
 	public function testAJobPastItsTimeoutIsKilled(): Void {
 		#if nodejs
 		final started: Float = Date.now().getTime();
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			{
 				args: [],
 				cwd: null,
@@ -136,10 +136,10 @@ final class HaxeSpawnTest extends Test {
 		final dir: String = CliFixture.writeDir('spawnsignal', []);
 		// the jobs go in through a FILE: this test blocks its own event loop while it polls, so a piped write would never flush
 		sys.io.File.saveContent(
-			'$dir/jobs.json', HaxeSpawn.jobsText([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
+			'$dir/jobs.json', ProcessSpawn.jobsText([{ args: [], cwd: dir, shell: 'sleep 30 & echo $! > child.txt; wait' }])
 		);
 		final driver: Dynamic = js.node.ChildProcess.spawn(
-			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
+			js.Node.process.execPath, ProcessSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
 		);
 		final child: Null<Int> = waitForPid('$dir/child.txt');
 		Assert.notNull(child, 'the job started its child');
@@ -214,7 +214,7 @@ final class HaxeSpawnTest extends Test {
 			Assert.pass('no lsof or /proc to ask on Windows');
 			return;
 		}
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			{
 				args: [],
 				cwd: null,
@@ -242,7 +242,7 @@ final class HaxeSpawnTest extends Test {
 			return;
 		}
 		final dir: String = CliFixture.writeDir('spawnwedge', []);
-		final runs: Null<Array<HaxeRun>> = testkit.TestChild.wedge('bounded-run', dir, 1500);
+		final runs: Null<Array<ProcessRun>> = testkit.TestChild.wedge('bounded-run', dir, 1500);
 		Assert.notNull(runs, 'runAll answered while its driver was stopped');
 		if (runs != null) {
 			Assert.isNull(runs[0].status, 'no verdict');
@@ -263,9 +263,9 @@ final class HaxeSpawnTest extends Test {
 	@:killer('M-DRIVER-BOUND-IGNORES-ROUNDS')
 	public function testTheDriverBoundScalesWithTheJobs(): Void {
 		final short: Array<SpawnJob> = [for (_ in 0...3) { args: [], cwd: null, timeout: 1000 }];
-		Assert.equals(2000, HaxeSpawn.driverBound(short, 1) - HaxeSpawn.driverBound(short, 3));
+		Assert.equals(2000, ProcessSpawn.driverBound(short, 1) - ProcessSpawn.driverBound(short, 3));
 		final open: Array<SpawnJob> = [{ args: [], cwd: null }];
-		Assert.isTrue(HaxeSpawn.driverBound(open, 1) > HaxeSpawn.driverBound([{ args: [], cwd: null, timeout: 60000 }], 1));
+		Assert.isTrue(ProcessSpawn.driverBound(open, 1) > ProcessSpawn.driverBound([{ args: [], cwd: null, timeout: 60000 }], 1));
 	}
 
 	/**
@@ -311,7 +311,7 @@ final class HaxeSpawnTest extends Test {
 		#if nodejs
 		final holder: Int = 93;
 		final started: Float = Date.now().getTime();
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			{ args: [], cwd: null, shell: 'sleep $holder & echo done' },
 			{ args: [], cwd: null, shell: 'echo ok' }
 		], ROOMY, 2);
@@ -350,7 +350,7 @@ final class HaxeSpawnTest extends Test {
 			final path: String = Sys.getEnv('PATH') ?? '';
 			Sys.putEnv('PATH', '${dir.path}:$path');
 			try {
-				for (_ in 0...3) HaxeSpawn.machineThreads();
+				for (_ in 0...3) ProcessSpawn.machineThreads();
 			} catch (exception: haxe.Exception) {
 				Sys.putEnv('PATH', path);
 				throw exception;
@@ -372,9 +372,9 @@ final class HaxeSpawnTest extends Test {
 	): Null<Float> {
 		#if nodejs
 		final dir: String = CliFixture.writeDir(prefix, files);
-		sys.io.File.saveContent('$dir/jobs.json', HaxeSpawn.jobsText([{ args: [], cwd: dir, shell: shell }]));
+		sys.io.File.saveContent('$dir/jobs.json', ProcessSpawn.jobsText([{ args: [], cwd: dir, shell: shell }]));
 		final driver: js.node.child_process.ChildProcess = js.node.ChildProcess.spawn(
-			js.Node.process.execPath, HaxeSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
+			js.Node.process.execPath, ProcessSpawn.driverArgs(1, ROOMY, false, { result: '', jobs: '$dir/jobs.json' }), { stdio: 'ignore' }
 		);
 		final child: Null<Int> = waitForPid('$dir/child.txt');
 		if (child == null) {
@@ -406,7 +406,7 @@ final class HaxeSpawnTest extends Test {
 	 * places. One byte of buffer against `haxe --version` is the smallest way to produce it.
 	 */
 	public function testAnOverflowIsToldApartFromAMissingBinary(): Void {
-		final run: HaxeRun = HaxeSpawn.run(['--version'], null, 1);
+		final run: ProcessRun = ProcessSpawn.run(['--version'], null, 1);
 		if (!run.overflowed && run.failure.indexOf('could not launch') != -1) {
 			Assert.pass('haxe unavailable — skipped');
 			return;

@@ -9,7 +9,7 @@ import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.StaticExtensionFacts;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
@@ -523,7 +523,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			return;
 		}
 		CliFixture.captureStderr(() -> Cli.run(['fmt', '--write', '$dir/Main.hx']));
-		final before: String = HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out;
+		final before: String = ProcessSpawn.run(['check.hxml'], dir, 1 << 20).out;
 		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-static-extension', dir]));
 		final after: String = File.getContent('$dir/Main.hx');
 		for (rewritten in ['b.z()', 'str.trim()', 'v.z()', 'using Main.Util;'])
@@ -537,7 +537,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			'Util.d(dy)',
 			'Util.d(mo)'
 		]) Assert.isTrue(after.indexOf(kept) >= 0, '$kept\n$after');
-		Assert.equals(before, HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
+		Assert.equals(before, ProcessSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -565,7 +565,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			return;
 		}
 		CliFixture.captureStderr(() -> Cli.run(['fmt', '--write', '$dir/Main.hx']));
-		final before: String = HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out;
+		final before: String = ProcessSpawn.run(['check.hxml'], dir, 1 << 20).out;
 		final err: String = CliFixture.captureStderr(() -> Cli.run(['lint', '--fix', '--rule', 'prefer-static-extension', dir]));
 		final after: String = File.getContent('$dir/Main.hx');
 		for (rewritten in [
@@ -580,7 +580,7 @@ class PreferStaticExtensionFactsTest extends Test {
 			'StringTools.trim(y)',
 			'StringTools.trim(z)'
 		]) Assert.isTrue(after.indexOf(kept) >= 0, '$kept\n$after');
-		Assert.equals(before, HaxeSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
+		Assert.equals(before, ProcessSpawn.run(['check.hxml'], dir, 1 << 20).out, 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

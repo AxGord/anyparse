@@ -1,10 +1,10 @@
 package unit.proc;
 
-/** The answer the process driver writes: `HaxeSpawn.runsOf` reads it as runs in job order, and refuses what is not that shape. */
-class HaxeRunsDocumentTest extends Test {
+/** The answer the process driver writes: `ProcessSpawn.runsOf` reads it as runs in job order, and refuses what is not that shape. */
+class ProcessRunsDocumentTest extends Test {
 
 	public function testRunsComeBackInTheOrderTheyAreWritten(): Void {
-		final runs: Null<Array<HaxeRun>> = HaxeSpawn.runsOf(
+		final runs: Null<Array<ProcessRun>> = ProcessSpawn.runsOf(
 			'{"runs":[{"status":0,"out":"a\\n","err":"","failure":"","overflowed":false,"cancelled":false},'
 			+ '{"out":"","err":"e","failure":"timed out","overflowed":true,"cancelled":true,"unstarted":true}]}'
 		);
@@ -24,7 +24,7 @@ class HaxeRunsDocumentTest extends Test {
 	}
 
 	public function testNoJobsIsNoRuns(): Void {
-		Assert.same([], HaxeSpawn.runsOf('{"runs":[]}'));
+		Assert.same([], ProcessSpawn.runsOf('{"runs":[]}'));
 	}
 
 	/** The driver wrote a bare array once; a reader of the envelope must not take it for an answer. */
@@ -37,7 +37,7 @@ class HaxeRunsDocumentTest extends Test {
 			'{"runs":[{"status":"0","out":"","err":"","failure":"","overflowed":false}]}',
 			'{"runs":[{"status":0,"out":1,"err":"","failure":"","overflowed":false}]}',
 			'{"other":[]}'
-		]) Assert.isNull(HaxeSpawn.runsOf(text), text);
+		]) Assert.isNull(ProcessSpawn.runsOf(text), text);
 	}
 
 }

@@ -4,9 +4,9 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerServer.ConnectResult;
 import anyparse.core.EnvFlag;
 import anyparse.core.PhaseTimings;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import anyparse.query.LintFixSafePass;
 
@@ -55,8 +55,8 @@ typedef PositionAsk = {
  * module (a file a macro reads).
  *
  * Declined with the report-mode warm path by `APQ_NO_ORACLE_SERVER`. A server holds its compiled project while it waits,
- * so the machine's memory (`HaxeSpawn.resident`) bounds how many start, the first configurations first; the compile
- * budget (`HaxeSpawn.parallelism`) bounds only how many of them compile at once.
+ * so the machine's memory (`ProcessSpawn.resident`) bounds how many start, the first configurations first; the compile
+ * budget (`ProcessSpawn.parallelism`) bounds only how many of them compile at once.
  */
 @:nullSafety(Strict)
 final class OracleServerPool {
@@ -115,7 +115,7 @@ final class OracleServerPool {
 	 * answering, or whose compile could not be told from a refused connection. Every path the run may write whose text
 	 * moved since the server's last compile is invalidated first. The compiles overlap; none stops another.
 	 */
-	public function compile(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
+	public function compile(oracles: Array<OracleConfig>): Array<Null<ProcessRun>> {
 		return PhaseTimings.measure('oracle warm compile', compileTimed.bind(oracles));
 	}
 
@@ -188,7 +188,7 @@ final class OracleServerPool {
 		if (_started || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')) return;
 		final available: Array<OracleConfig> = [];
 		for (o in oracles) if (o.unavailable == null && !available.exists(u -> keyOf(u) == keyOf(o))) available.push(o);
-		final usable: Array<OracleConfig> = available.slice(0, HaxeSpawn.resident());
+		final usable: Array<OracleConfig> = available.slice(0, ProcessSpawn.resident());
 		if (usable.length == 0) return;
 		_started = true;
 		final ports: Array<Int> = [];
@@ -215,13 +215,13 @@ final class OracleServerPool {
 			final up: Null<PoolServer> = _servers[keyOf(o)];
 			if (up != null) warm.push({ args: compileArgs(up.port, o), cwd: o.dir });
 		}
-		_warming = HaxeSpawn.startAll(warm, BUFFER, HaxeSpawn.parallelism());
+		_warming = ProcessSpawn.startAll(warm, BUFFER, ProcessSpawn.parallelism());
 		#end
 	}
 
 	/** `compile`, untimed. */
-	private function compileTimed(oracles: Array<OracleConfig>): Array<Null<HaxeRun>> {
-		final out: Array<Null<HaxeRun>> = [for (_ in oracles) null];
+	private function compileTimed(oracles: Array<OracleConfig>): Array<Null<ProcessRun>> {
+		final out: Array<Null<ProcessRun>> = [for (_ in oracles) null];
 		#if nodejs
 		if (!_servers.keys().hasNext()) return out;
 		_warming?.await();
@@ -235,12 +235,12 @@ final class OracleServerPool {
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
 		final compiled: Array<Int> = [for (i in asked) if (!unheard.contains(i)) i];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (i in compiled) {
 				final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
 				{ args: server == null ? [] : compileArgs(server.port, oracles[i]), cwd: oracles[i].dir };
 			}
-		], BUFFER, HaxeSpawn.parallelism());
+		], BUFFER, ProcessSpawn.parallelism());
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
@@ -248,7 +248,7 @@ final class OracleServerPool {
 				server.seen = now;
 				server.reread = [];
 			}
-			final run: HaxeRun = runs[k];
+			final run: ProcessRun = runs[k];
 			if (refused(run)) {
 				end(oracles[i]);
 			} else {
@@ -333,7 +333,7 @@ final class OracleServerPool {
 			if (server != null) for (path in moved(server.seen, now).concat(dropped))
 				invalidations.push({ index: i, job: invalidation(server, oracle, path) });
 		}
-		final replies: Array<HaxeRun> = HaxeSpawn.runAll(invalidations.map(v -> v.job), BUFFER, HaxeSpawn.parallelism());
+		final replies: Array<ProcessRun> = ProcessSpawn.runAll(invalidations.map(v -> v.job), BUFFER, ProcessSpawn.parallelism());
 		final unheard: Array<Int> = [];
 		for (k => asking in invalidations)
 			if (!CompilerServer.isServerReply(replies[k].out + replies[k].err) && !unheard.contains(asking.index))
@@ -398,7 +398,7 @@ final class OracleServerPool {
 	 * Whether `run` failed with diagnostics that blame files and none of them a path the run may write (`now`): a server's
 	 * stale view of the rest of the project, which the next warm compile repeats and no edit of the run mends.
 	 */
-	private static function redOutside(run: HaxeRun, now: Map<String, Null<String>>): Bool {
+	private static function redOutside(run: ProcessRun, now: Map<String, Null<String>>): Bool {
 		if (run.status == null || run.status == 0) return false;
 		final errors: String = run.out + run.err;
 		return LintFixSafePass.errorFiles(errors).length > 0
@@ -406,14 +406,14 @@ final class OracleServerPool {
 	}
 
 	/** Whether `run` never reached a server: the client's own refusal, which is no verdict. */
-	private static function refused(run: HaxeRun): Bool {
+	private static function refused(run: ProcessRun): Bool {
 		final text: String = run.out + run.err;
 		return run.status == null || text.indexOf('Couldn\'t connect') != -1 || text.indexOf('Could not connect') != -1;
 	}
 
 	/** `oracle`'s server on `port`, started as the one job of its own batch, so it can be ended alone (`end`). */
 	private static function serve(port: Int, oracle: OracleConfig): PendingRuns {
-		return HaxeSpawn.startAll([{ args: ['--wait', '$port'], cwd: oracle.dir, tethered: true }], BUFFER, 1);
+		return ProcessSpawn.startAll([{ args: ['--wait', '$port'], cwd: oracle.dir, tethered: true }], BUFFER, 1);
 	}
 
 	/** The display request of `ask` to `oracle`'s server on `port`. */

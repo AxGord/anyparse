@@ -2,8 +2,8 @@ package anyparse.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.core.PhaseTimings;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -243,20 +243,20 @@ final class OracleCoverage {
 	}
 
 	/**
-	 * `probe` for every configuration of `oracles`, the compiles overlapping (`HaxeSpawn.runAll`, bounded by
-	 * `HaxeSpawn.parallelism`) — each `-v` compile writes nothing, so they share nothing but the machine. One coverage
+	 * `probe` for every configuration of `oracles`, the compiles overlapping (`ProcessSpawn.runAll`, bounded by
+	 * `ProcessSpawn.parallelism`) — each `-v` compile writes nothing, so they share nothing but the machine. One coverage
 	 * per configuration in the same order; a configuration marked `unavailable` is an unknown coverage carrying that
 	 * reason, with no spawn. On a target whose spawn cannot honour a directory the probes run one by one through
 	 * `probe`, which refuses there on its own.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Array<OracleCoverage> {
 		#if (sys || nodejs)
-		if (!HaxeSpawn.honoursCwd())
+		if (!ProcessSpawn.honoursCwd())
 			return oracles.map(
 				oracle -> oracle.unavailable == null ? probe(oracle.hxml, oracle.dir, oracle.defines) : unknown(oracle.unavailable ?? '')
 			);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
-		final runs: Array<HaxeRun> = remembered(asked);
+		final runs: Array<ProcessRun> = remembered(asked);
 		final out: Array<OracleCoverage> = [];
 		var next: Int = 0;
 		for (oracle in oracles) {
@@ -510,7 +510,7 @@ final class OracleCoverage {
 	}
 
 	/** The coverage one probe spawn of `hxml`, run from `root`, reports. */
-	private static function fromRun(root: String, hxml: String, result: HaxeRun): OracleCoverage {
+	private static function fromRun(root: String, hxml: String, result: ProcessRun): OracleCoverage {
 		#if (sys || nodejs)
 		if (result.failure != '') return unknown(result.failure);
 		final status: Null<Int> = result.status;
@@ -535,23 +535,23 @@ final class OracleCoverage {
 	 * (`OracleRunMemo`) a configuration whose current input already had its `-v` compile — the baseline `CompilerOracle.judging`
 	 * takes — is answered from it, since the probe IS that compile; every probe spawned is filed for a later baseline.
 	 */
-	private static function remembered(asked: Array<OracleConfig>): Array<HaxeRun> {
+	private static function remembered(asked: Array<OracleConfig>): Array<ProcessRun> {
 		return PhaseTimings.measure('oracle coverage', rememberedTimed.bind(asked));
 	}
 
 	/** `remembered`, untimed. */
-	private static function rememberedTimed(asked: Array<OracleConfig>): Array<HaxeRun> {
+	private static function rememberedTimed(asked: Array<OracleConfig>): Array<ProcessRun> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(asked);
 		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : memo.fingerprints(asked);
-		final held: Array<Null<HaxeRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];
+		final held: Array<Null<ProcessRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];
 		final spawned: Array<Int> = [for (i in 0...asked.length) if (held[i] == null) i];
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
-		], PROBE_BUFFER, HaxeSpawn.parallelism());
+		], PROBE_BUFFER, ProcessSpawn.parallelism());
 		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints(spawned.map(i -> asked[i]));
 		return [
 			for (i in 0...asked.length) {
-				final reused: Null<HaxeRun> = held[i];
+				final reused: Null<ProcessRun> = held[i];
 				if (reused != null) {
 					reused;
 				} else {
@@ -593,27 +593,27 @@ final class OracleCoverage {
 	}
 
 	/**
-	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam, refusing up front
+	 * One `haxe` spawn for the probe through the shared `ProcessSpawn` seam, refusing up front
 	 * on a target that cannot honour the working directory: the compiler prints RELATIVE
 	 * `Parsed` paths, and resolving them against a root it never ran in would build a
 	 * plausible-looking set of wrong keys.
 	 */
-	private static function probeOutput(root: String, args: Array<String>): HaxeRun {
-		return !HaxeSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd()) ? {
+	private static function probeOutput(root: String, args: Array<String>): ProcessRun {
+		return !ProcessSpawn.honoursCwd() && Path.normalize(root) != Path.normalize(Sys.getCwd()) ? {
 			status: null,
 			out: '',
 			err: '',
 			failure: 'the coverage probe cannot run haxe in $root on this target',
 			overflowed: false
-		} : reworded(HaxeSpawn.run(args, root, PROBE_BUFFER));
+		} : reworded(ProcessSpawn.run(args, root, PROBE_BUFFER));
 	}
 
 	/**
-	 * `run` with its failure re-worded rather than passed through: `HaxeSpawn` reports what the
+	 * `run` with its failure re-worded rather than passed through: `ProcessSpawn` reports what the
 	 * SPAWN could not do, and the caller turns every one of those into an UNKNOWN coverage, whose
 	 * reader needs to know which of this project's compiles went missing.
 	 */
-	private static function reworded(run: HaxeRun): HaxeRun {
+	private static function reworded(run: ProcessRun): ProcessRun {
 		return run.failure == '' ? run : {
 			status: null,
 			out: '',

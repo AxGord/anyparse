@@ -4,8 +4,8 @@ import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.ContentHash;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
 import anyparse.util.Compare;
 import haxe.io.Path;
@@ -134,7 +134,7 @@ final class OracleCache {
 	 * Output buffer for the toolchain probe, in bytes. The probe is small — `haxe -v -lib …
 	 * --interp Std` prints a classpath, a defines line and the std modules it typed — but it
 	 * shared node's 1 MiB default with the typecheck spawn until both moved onto
-	 * `HaxeSpawn`, and an overflow there is silent by construction: it comes back as a
+	 * `ProcessSpawn`, and an overflow there is silent by construction: it comes back as a
 	 * launch error, `probeOutput` answers `''`, `runCompilerProbe` reads that as "not
 	 * believed", and the CACHE simply stops working with nothing said.
 	 */
@@ -633,12 +633,12 @@ final class OracleCache {
 	}
 
 	/**
-	 * One `haxe` spawn for the probe through the shared `HaxeSpawn` seam; `''` for every
+	 * One `haxe` spawn for the probe through the shared `ProcessSpawn` seam; `''` for every
 	 * launch failure, every overflow and every non-zero status, which `runCompilerProbe`
 	 * then reads as "not believed".
 	 */
 	private static function probeOutput(root: String, args: Array<String>): String {
-		final run: HaxeRun = HaxeSpawn.run(args, root, PROBE_BUFFER);
+		final run: ProcessRun = ProcessSpawn.run(args, root, PROBE_BUFFER);
 		return run.failure == '' && run.status == 0 ? run.out : '';
 	}
 

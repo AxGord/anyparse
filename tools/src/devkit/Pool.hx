@@ -1,7 +1,7 @@
 package devkit;
 
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import haxe.Exception;
 
@@ -10,7 +10,7 @@ using Lambda;
 /**
  * Commands run as separate processes, at most `size` at a time, their results answered in the order the commands
  * were given. The processes share nothing but the machine, so commands that write a common path must not share a
- * pool. Runs through `HaxeSpawn.runDriven`, whose process driver kills each command at
+ * pool. Runs through `ProcessSpawn.runDriven`, whose process driver kills each command at
  * its own `timeout`, ends it at its exit and names and kills what still holds its pipes.
  */
 @:nullSafety(Strict)
@@ -44,11 +44,11 @@ final class Pool {
 	}
 
 	private function answer(commands: Array<Command>, jobs: Array<SpawnJob>): Array<Result> {
-		final runs: Array<HaxeRun> = [];
+		final runs: Array<ProcessRun> = [];
 		final batch: Int = _size * BATCH_ROUNDS;
 		var from: Int = 0;
 		while (from < jobs.length) {
-			for (run in HaxeSpawn.runDriven(jobs.slice(from, from + batch), Command.MAX_BUFFER, _size)) runs.push(run);
+			for (run in ProcessSpawn.runDriven(jobs.slice(from, from + batch), Command.MAX_BUFFER, _size)) runs.push(run);
 			from += batch;
 		}
 		return [for (i => c in commands) new Result(c.toString(), runs[i])];

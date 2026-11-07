@@ -4,9 +4,10 @@ import anyparse.check.LintConfig.OracleGenerate;
 import anyparse.check.oracle.OracleCache.HxmlRefs;
 import anyparse.check.oracle.OracleGenerationLock.Holder;
 import anyparse.core.ContentHash;
+import anyparse.core.FileHash;
 import anyparse.grammar.json.JsonFormat;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import haxe.Exception;
@@ -38,13 +39,19 @@ import haxe.io.Path;
  * A command that fails, times out, or leaves an hxml missing makes every configuration it serves UNAVAILABLE with its output
  * quoted; a stale hxml is never used in its place. So does a root where the generation state cannot be created (a read-only
  * checkout): without a record and a lock nothing proves an hxml current. Entries naming one command in one directory are ONE
- * generation over the union of their inputs; distinct commands run concurrently (`HaxeSpawn.runAll`), so two of them must not
+ * generation over the union of their inputs; distinct commands run concurrently (`ProcessSpawn.runAll`), so two of them must not
  * write a common path (an hxml two commands claim is dropped when the config is read, `OracleDeclaration`). Each generation
  * is guarded across processes by a reader/writer lock: runs compiling a current tree share it and never wait for each other,
  * and only a regeneration takes it exclusively, after every other live reader is done (`holdShared`, `holdExclusive`).
  */
 @:nullSafety(Strict)
 final class OracleGeneration {
+
+	/** The per-project directory, directly under a generation's root, that holds hxq's generation state. */
+	public static inline final STATE_DIR: String = '.apq';
+
+	/** Files read (not answered from a memo) by `hashOf` in this process — tests read it to prove a file is read once per step. */
+	public static var hashReads(default, null): Int = 0;
 
 	/** Output buffer for one generate command, in bytes. */
 	private static inline final BUFFER: Int = 64 * 1024 * 1024;
@@ -57,6 +64,21 @@ final class OracleGeneration {
 
 	/** What a missing file hashes as, so its appearance or disappearance is a change like any other. */
 	private static inline final MISSING: String = 'missing';
+
+	/** How long `prepare` waits for another run's generation lock by default, in ms. */
+	private static inline final LOCK_WAIT: Int = 10 * 60 * 1000;
+
+	/** How long one generate command may run before its whole process group is killed, in ms. */
+	private static inline final GENERATE_TIMEOUT: Int = 30 * 60 * 1000;
+
+	/** Recursion cap for a directory input and for the walk up to a library root. */
+	private static inline final MAX_TREE_DEPTH: Int = 32;
+
+	/** Cap on nested hxml includes `implicitInputs` follows. */
+	private static inline final MAX_INCLUDE_DEPTH: Int = 8;
+
+	/** How often `prepare` sends a group found stale under its compile hold back through regeneration. */
+	private static inline final MAX_REJUDGE: Int = 3;
 
 	/**
 	 * `oracles` made ready to use: every `generate` entry whose recorded generation is not current has its command run
@@ -200,6 +222,92 @@ final class OracleGeneration {
 		return Path.join([stateDir(group), 'record.json']);
 	}
 
+	/**
+	 * The files the hxmls `group` just generated depend on without the entry declaring them: every hxml they include,
+	 * and for every classpath OUTSIDE the generation's directory the library that holds it — its `haxelib.json`,
+	 * `include.xml` and `templates/haxe` (the code templates a build-tool library renders the generated sources from) at
+	 * the nearest ancestor carrying a `haxelib.json`, and the haxelib repository's `.current` / `.dev` for it, as for
+	 * every `-lib` the hxml names. A library switched to another version or dev path therefore makes the generation
+	 * stale, without the project listing machine paths. The repository directory is found from the PATH (`libraries`),
+	 * never from the name a `haxelib.json` declares, which need not match it. Generic over build tools: it reads only
+	 * the hxml and the haxelib repository layout.
+	 */
+	public static function implicitInputs(group: GenerationGroup, libraries: LibraryIndex): Array<String> {
+		final paths: Array<String> = [];
+		#if (sys || nodejs)
+		final root: String = absolute(Sys.getCwd(), group.generate.root);
+		final names: Array<String> = [];
+		for (i => hxml in group.hxmls) collectHxml(hxml, absolute(root, group.dirs[i]), root, paths, names, libraries, 0);
+		final repo: Null<String> = libraries.repo;
+		if (repo != null) for (name in names) {
+			final lower: String = Path.join([repo, name.toLowerCase().replace('.', ',')]);
+			final dir: String = sys.FileSystem.exists(lower) ? lower : Path.join([repo, name.replace('.', ',')]);
+			for (marker in ['.current', '.dev']) addOnce(paths, Path.join([dir, marker]));
+		}
+		#end
+		return paths;
+	}
+
+	/** The directory that holds `group`'s generation lock, in its state directory beside its record. */
+	public static function lockDir(group: GenerationGroup): String {
+		return Path.join([stateDir(group), 'lock']);
+	}
+
+	/**
+	 * The directory holding `group`'s record, lock and epoch: `<project root>/.apq/oracle-generate/<md5>/`, keyed by the
+	 * TREE the generation writes — the real paths of its hxmls — and by nothing about the config or process asking. Every
+	 * config over that tree (a nested `apq.json` naming the same hxml included) therefore meets the same lock and the
+	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project root is
+	 * the nearest directory at or above the DECLARING config's directory holding a project marker (`ConfigFinder.projectRoot`),
+	 * else that directory itself: never a walk from the hxml, which could stop at a marker the generation writes into the tree
+	 * it deletes, or climb past a top-level hxml's own project into an enclosing one. Nothing in it is `.hx`, so no scan of
+	 * the project reads it, and a directory input never hashes it (`listTree`); it keeps ITSELF out of version control
+	 * (`prepare` writes a `.gitignore` of `*` into it), so a project lists nothing in its own ignore file.
+	 */
+	public static function stateDir(group: GenerationGroup): String {
+		#if (sys || nodejs)
+		final hxmls: Array<String> = group.hxmls.map(FileIdentity.realPath);
+		hxmls.sort(anyparse.util.Compare.compareString);
+		final declaring: String = FileIdentity.realPath(absolute(Sys.getCwd(), group.generate.root));
+		final home: String = ConfigFinder.projectRoot(declaring) ?? declaring;
+		return Path.join([home, STATE_DIR, 'oracle-generate', ContentHash.md5(hxmls.join('\n'))]);
+		#else
+		return '';
+		#end
+	}
+
+	/**
+	 * Drop this process's holds on the generations `oracles` declare, once its compiles of them are done. Idempotent;
+	 * process exit does the same for a caller that never gets here.
+	 */
+	public static function release(oracles: Array<OracleConfig>): Void {
+		releaseGroups(groupsOf(oracles), OracleGenerationLock.holder());
+	}
+
+	/**
+	 * `groups` in the ONE order every wait follows: by lock directory, the identity two runs actually contend on (two
+	 * declarations of one tree share it, whatever their commands).
+	 */
+	public static function lockOrder(groups: Array<GenerationGroup>): Array<GenerationGroup> {
+		final ordered: Array<GenerationGroup> = groups.copy();
+		ordered.sort((a, b) -> Reflect.compare(lockDir(a), lockDir(b)));
+		return ordered;
+	}
+
+	/**
+	 * Where `group`'s epoch lives: a nonce every regeneration writes before its command starts, successful or not. Part of
+	 * what `observe` sees, so a generation by any run moves the snapshot even when the record and the hxml end up as they
+	 * were — a failed one leaves no record to compare, and the tree it half rewrote is more than the hxml.
+	 */
+	public static function epochFile(group: GenerationGroup): String {
+		return Path.join([stateDir(group), 'epoch']);
+	}
+
+	/** The generation a declaration belongs to: its directory and its command. */
+	private static inline function keyOf(generate: OracleGenerate): String {
+		return '${generate.root}\n${generate.command}';
+	}
+
 	/** `oracle` as it may be used after `run`'s generations: unavailable, re-probed, or untouched — and marked when it raced. */
 	private static function ready(oracle: OracleConfig, run: GenerationRun): OracleConfig {
 		final generate: Null<OracleGenerate> = oracle.generate;
@@ -221,7 +329,7 @@ final class OracleGeneration {
 	}
 
 	/** Why `run` of `group`'s command is not a usable generation, or null when it is. */
-	private static function failureOf(group: GenerationGroup, run: HaxeRun): Null<String> {
+	private static function failureOf(group: GenerationGroup, run: ProcessRun): Null<String> {
 		final output: String = quoted(('${run.out}\n${run.err}').trim());
 		if (run.failure != '') return '${run.failure}$output';
 		if (run.status != 0) return '`${group.generate.command}` exited ${run.status}$output';
@@ -277,239 +385,9 @@ final class OracleGeneration {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/** The record at `path`, or null when there is none or it does not have a record's shape. */
-	private static function readRecord(path: String): Null<GenerationRecord> {
-		if (!sys.FileSystem.exists(path)) return null;
-		return try GenerationRecordParser.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
-	}
-
-	/**
-	 * The content hash of `path`: a file's bytes; a directory's recursive listing with every file's own hash, so an
-	 * added, removed, renamed or edited file under it is a change; `MISSING` when it does not exist or cannot be read.
-	 * Answered from `memo` when it already holds `path`, and recorded there — one `prepare` step reads each file once,
-	 * however many groups name it. Content only: a memo lives for one step and never stands in for a later read.
-	 */
-	private static function hashOf(path: String, memo: Map<String, String>): String {
-		final held: Null<String> = memo[path];
-		if (held != null) return held;
-		final hash: String = if (!sys.FileSystem.exists(path))
-			MISSING
-		else if (sys.FileSystem.isDirectory(path)) {
-			final lines: Array<String> = [];
-			listTree(path, '', lines, 0, memo);
-			lines.sort(Reflect.compare);
-			ContentHash.md5('dir\n${lines.join('\n')}');
-		} else {
-			hashReads++;
-			try
-				md5Bytes(sys.io.File.getBytes(path))
-			catch (exception: haxe.Exception)
-				MISSING;
-		};
-		memo[path] = hash;
-		return hash;
-	}
-
-	/** One `relative-path hash` line per file under `dir`, recursing at most `MAX_TREE_DEPTH` levels so a symlink loop ends. */
-	private static function listTree(dir: String, relative: String, into: Array<String>, depth: Int, memo: Map<String, String>): Void {
-		if (depth > MAX_TREE_DEPTH) return;
-		final entries: Array<String> = try sys.FileSystem.readDirectory(dir) catch (exception: haxe.Exception) [];
-		// hxq's own generation state is never an input: every generation writes it
-		for (entry in entries) if (entry != STATE_DIR) {
-			final full: String = Path.join([dir, entry]);
-			final rel: String = relative == '' ? entry : '$relative/$entry';
-			if (sys.FileSystem.isDirectory(full))
-				listTree(full, rel, into, depth + 1, memo);
-			else
-				into.push('$rel ${hashOf(full, memo)}');
-		}
-	}
-
-	/** md5 of `bytes` — through node's native digest there, since an input may be a multi-megabyte binary asset. */
-	private static function md5Bytes(bytes: haxe.io.Bytes): String {
-		return #if nodejs js.node.Crypto.createHash('md5')
-			.update(js.node.Buffer.hxFromBytes(bytes))
-			.digest('hex') #else haxe.crypto.Md5.make(bytes).toHex() #end;
-	}
-	#end
-
-	/** How long `prepare` waits for another run's generation lock by default, in ms. */
-	private static inline final LOCK_WAIT: Int = 10 * 60 * 1000;
-
-	/** How long one generate command may run before its whole process group is killed, in ms. */
-	private static inline final GENERATE_TIMEOUT: Int = 30 * 60 * 1000;
-
-	/** Recursion cap for a directory input and for the walk up to a library root. */
-	private static inline final MAX_TREE_DEPTH: Int = 32;
-
-	/** Cap on nested hxml includes `implicitInputs` follows. */
-	private static inline final MAX_INCLUDE_DEPTH: Int = 8;
-
-	/** The generation a declaration belongs to: its directory and its command. */
-	private static inline function keyOf(generate: OracleGenerate): String {
-		return '${generate.root}\n${generate.command}';
-	}
-
 	/** Every path of `paths` with its content hash, through `memo`. */
 	private static function hashAll(paths: Array<String>, memo: Map<String, String>): Array<FileHash> {
 		return #if (sys || nodejs) paths.map(path -> {path: path, hash: hashOf(path, memo) }) #else [] #end;
-	}
-
-	/**
-	 * The files the hxmls `group` just generated depend on without the entry declaring them: every hxml they include,
-	 * and for every classpath OUTSIDE the generation's directory the library that holds it — its `haxelib.json`,
-	 * `include.xml` and `templates/haxe` (the code templates a build-tool library renders the generated sources from) at
-	 * the nearest ancestor carrying a `haxelib.json`, and the haxelib repository's `.current` / `.dev` for it, as for
-	 * every `-lib` the hxml names. A library switched to another version or dev path therefore makes the generation
-	 * stale, without the project listing machine paths. The repository directory is found from the PATH (`libraries`),
-	 * never from the name a `haxelib.json` declares, which need not match it. Generic over build tools: it reads only
-	 * the hxml and the haxelib repository layout.
-	 */
-	public static function implicitInputs(group: GenerationGroup, libraries: LibraryIndex): Array<String> {
-		final paths: Array<String> = [];
-		#if (sys || nodejs)
-		final root: String = absolute(Sys.getCwd(), group.generate.root);
-		final names: Array<String> = [];
-		for (i => hxml in group.hxmls) collectHxml(hxml, absolute(root, group.dirs[i]), root, paths, names, libraries, 0);
-		final repo: Null<String> = libraries.repo;
-		if (repo != null) for (name in names) {
-			final lower: String = Path.join([repo, name.toLowerCase().replace('.', ',')]);
-			final dir: String = sys.FileSystem.exists(lower) ? lower : Path.join([repo, name.replace('.', ',')]);
-			for (marker in ['.current', '.dev']) addOnce(paths, Path.join([dir, marker]));
-		}
-		#end
-		return paths;
-	}
-
-	#if (sys || nodejs)
-	/** Fold one hxml's includes, library classpaths and `-lib` names into the accumulators — see `implicitInputs`. */
-	private static function collectHxml(
-		hxml: String, cwd: String, root: String, paths: Array<String>, names: Array<String>, libraries: LibraryIndex, depth: Int
-	): Void {
-		if (depth > MAX_INCLUDE_DEPTH) return;
-		final text: Null<String> = try sys.io.File.getContent(hxml) catch (exception: haxe.Exception) null;
-		if (text == null) return;
-		final refs: HxmlRefs = OracleCache.hxmlRefs(text);
-		for (include in refs.includes) {
-			final path: String = absolute(cwd, include);
-			if (paths.contains(path)) continue;
-			paths.push(path);
-			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
-		}
-		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
-		for (classPath in refs.classPaths) {
-			final dir: String = absolute(cwd, classPath);
-			if (dir == root || dir.startsWith('$root/')) continue;
-			final library: Null<String> = libraryRoot(dir);
-			if (library == null) continue;
-			for (file in ['haxelib.json', 'include.xml', 'templates/haxe']) addOnce(paths, Path.join([library, file]));
-			final installed: Null<String> = repositoryDir(libraries, library);
-			if (installed != null) for (marker in ['.current', '.dev']) addOnce(paths, Path.join([installed, marker]));
-		}
-	}
-
-	/**
-	 * The haxelib repository directory `library` (a library root) is selected through: the directory directly under the
-	 * repository for a versioned install, the one whose `.dev` points at it for a dev install, or — with no repository
-	 * known — a parent carrying `.current`. Null when none applies.
-	 */
-	private static function repositoryDir(libraries: LibraryIndex, library: String): Null<String> {
-		final repo: Null<String> = libraries.repo;
-		if (repo != null && library.startsWith('$repo/')) return Path.join([repo, library.substr(repo.length + 1).split('/')[0]]);
-		final dev: Null<String> = libraries.devs[library];
-		if (repo != null && dev != null) return Path.join([repo, dev]);
-		final parent: String = Path.directory(library);
-		return sys.FileSystem.exists(Path.join([parent, '.current'])) ? parent : null;
-	}
-
-	/**
-	 * The haxelib repository the generations in `groups` resolve libraries from (`haxelib config` in the first one's
-	 * directory, which honours a local `.haxelib`) and every dev install in it, dev path to repository directory. Taken
-	 * once per `prepare`.
-	 */
-	private static function libraryIndex(groups: Array<GenerationGroup>): LibraryIndex {
-		final devs: Map<String, String> = [];
-		final repo: Null<String> = groups.length == 0 ? null : haxelibRepository(absolute(Sys.getCwd(), groups[0].generate.root));
-		if (repo != null) {
-			final entries: Array<String> = try sys.FileSystem.readDirectory(repo) catch (exception: haxe.Exception) [];
-			for (entry in entries) {
-				final marker: String = Path.join([repo, entry, '.dev']);
-				if (!sys.FileSystem.exists(marker)) continue;
-				final target: Null<String> = try sys.io.File.getContent(marker).trim() catch (exception: haxe.Exception) null;
-				if (target != null && target != '') devs[absolute(repo, target)] = entry;
-			}
-		}
-		return { repo: repo, devs: devs };
-	}
-
-	/** The nearest ancestor of `dir` (itself included) holding a `haxelib.json`, or null within `MAX_TREE_DEPTH` levels. */
-	private static function libraryRoot(dir: String): Null<String> {
-		var current: String = dir;
-		for (_ in 0...MAX_TREE_DEPTH) {
-			if (sys.FileSystem.exists(Path.join([current, 'haxelib.json']))) return current;
-			final parent: String = Path.directory(current);
-			if (parent == '' || parent == current) return null;
-			current = parent;
-		}
-		return null;
-	}
-
-	/** The haxelib repository `root` resolves libraries from (`haxelib config`, which honours a local `.haxelib`), or null. */
-	private static function haxelibRepository(root: String): Null<String> {
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([{ args: [], cwd: root, shell: 'haxelib config' }], BUFFER, 1);
-		if (runs.length == 0 || runs[0].status != 0) return null;
-		final repo: String = runs[0].out.trim();
-		return repo == '' ? null : Path.removeTrailingSlashes(repo);
-	}
-
-	/** `path` resolved against `base` when relative, normalised, without a trailing slash. */
-	private static function absolute(base: String, path: String): String {
-		return Path.removeTrailingSlashes(Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path])));
-	}
-
-	private static inline function addOnce(paths: Array<String>, path: String): Void {
-		if (!paths.contains(path)) paths.push(path);
-	}
-	#end
-
-	/** The directory that holds `group`'s generation lock, in its state directory beside its record. */
-	public static function lockDir(group: GenerationGroup): String {
-		return Path.join([stateDir(group), 'lock']);
-	}
-
-	/**
-	 * The directory holding `group`'s record, lock and epoch: `<project root>/.apq/oracle-generate/<md5>/`, keyed by the
-	 * TREE the generation writes — the real paths of its hxmls — and by nothing about the config or process asking. Every
-	 * config over that tree (a nested `apq.json` naming the same hxml included) therefore meets the same lock and the
-	 * same record, whatever its `TMPDIR` or engine version (a record's own `format` answers the version). The project root is
-	 * the nearest directory at or above the DECLARING config's directory holding a project marker (`ConfigFinder.projectRoot`),
-	 * else that directory itself: never a walk from the hxml, which could stop at a marker the generation writes into the tree
-	 * it deletes, or climb past a top-level hxml's own project into an enclosing one. Nothing in it is `.hx`, so no scan of
-	 * the project reads it, and a directory input never hashes it (`listTree`); it keeps ITSELF out of version control
-	 * (`prepare` writes a `.gitignore` of `*` into it), so a project lists nothing in its own ignore file.
-	 */
-	public static function stateDir(group: GenerationGroup): String {
-		#if (sys || nodejs)
-		final hxmls: Array<String> = group.hxmls.map(FileIdentity.realPath);
-		hxmls.sort(Reflect.compare);
-		final declaring: String = FileIdentity.realPath(absolute(Sys.getCwd(), group.generate.root));
-		final home: String = ConfigFinder.projectRoot(declaring) ?? declaring;
-		return Path.join([home, STATE_DIR, 'oracle-generate', ContentHash.md5(hxmls.join('\n'))]);
-		#else
-		return '';
-		#end
-	}
-
-	/** Files read (not answered from a memo) by `hashOf` in this process — tests read it to prove a file is read once per step. */
-	public static var hashReads(default, null): Int = 0;
-
-	/**
-	 * Drop this process's holds on the generations `oracles` declare, once its compiles of them are done. Idempotent;
-	 * process exit does the same for a caller that never gets here.
-	 */
-	public static function release(oracles: Array<OracleConfig>): Void {
-		releaseGroups(groupsOf(oracles), OracleGenerationLock.holder());
 	}
 
 	/** Drop `me`'s shared and exclusive holds on every group of `groups`. */
@@ -581,22 +459,6 @@ final class OracleGeneration {
 		return claimed;
 	}
 
-	/** The per-project directory, directly under a generation's root, that holds hxq's generation state. */
-	public static inline final STATE_DIR: String = '.apq';
-
-	/** How often `prepare` sends a group found stale under its compile hold back through regeneration. */
-	private static inline final MAX_REJUDGE: Int = 3;
-
-	/**
-	 * `groups` in the ONE order every wait follows: by lock directory, the identity two runs actually contend on (two
-	 * declarations of one tree share it, whatever their commands).
-	 */
-	public static function lockOrder(groups: Array<GenerationGroup>): Array<GenerationGroup> {
-		final ordered: Array<GenerationGroup> = groups.copy();
-		ordered.sort((a, b) -> Reflect.compare(lockDir(a), lockDir(b)));
-		return ordered;
-	}
-
 	/** Mark `group`'s configurations unavailable for `why`, with a note. */
 	private static function refuse(run: GenerationRun, group: GenerationGroup, why: String): Void {
 		run.failures[group.key] = why;
@@ -620,7 +482,7 @@ final class OracleGeneration {
 			}
 		}
 		if (stale.length == 0) return;
-		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (s in stale) {
 				args: [],
 				cwd: s.group.generate.root,
@@ -628,7 +490,7 @@ final class OracleGeneration {
 				timeout: GENERATE_TIMEOUT,
 				groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
 			}
-		], BUFFER, HaxeSpawn.parallelism());
+		], BUFFER, ProcessSpawn.parallelism());
 		final libraries: LibraryIndex = libraryIndex(groups);
 		final settled: Map<String, String> = [];
 		for (i => s in stale) {
@@ -712,14 +574,144 @@ final class OracleGeneration {
 			+ exception.message;
 	}
 
-	/**
-	 * Where `group`'s epoch lives: a nonce every regeneration writes before its command starts, successful or not. Part of
-	 * what `observe` sees, so a generation by any run moves the snapshot even when the record and the hxml end up as they
-	 * were — a failed one leaves no record to compare, and the tree it half rewrote is more than the hxml.
-	 */
-	public static function epochFile(group: GenerationGroup): String {
-		return Path.join([stateDir(group), 'epoch']);
+	#if (sys || nodejs)
+	/** The record at `path`, or null when there is none or it does not have a record's shape. */
+	private static function readRecord(path: String): Null<GenerationRecord> {
+		if (!sys.FileSystem.exists(path)) return null;
+		return try GenerationRecordParser.parse(sys.io.File.getContent(path)) catch (exception: haxe.Exception) null;
 	}
+
+	/**
+	 * The content hash of `path`: a file's bytes; a directory's recursive listing with every file's own hash, so an
+	 * added, removed, renamed or edited file under it is a change; `MISSING` when it does not exist or cannot be read.
+	 * Answered from `memo` when it already holds `path`, and recorded there — one `prepare` step reads each file once,
+	 * however many groups name it. Content only: a memo lives for one step and never stands in for a later read.
+	 */
+	private static function hashOf(path: String, memo: Map<String, String>): String {
+		final held: Null<String> = memo[path];
+		if (held != null) return held;
+		final hash: String = if (!sys.FileSystem.exists(path))
+			MISSING
+		else if (sys.FileSystem.isDirectory(path)) {
+			final lines: Array<String> = [];
+			listTree(path, '', lines, 0, memo);
+			lines.sort(anyparse.util.Compare.compareString);
+			ContentHash.md5('dir\n${lines.join('\n')}');
+		} else {
+			hashReads++;
+			try
+				ContentHash.md5Bytes(sys.io.File.getBytes(path))
+			catch (exception: haxe.Exception)
+				MISSING;
+		};
+		memo[path] = hash;
+		return hash;
+	}
+
+	/** One `relative-path hash` line per file under `dir`, recursing at most `MAX_TREE_DEPTH` levels so a symlink loop ends. */
+	private static function listTree(dir: String, relative: String, into: Array<String>, depth: Int, memo: Map<String, String>): Void {
+		if (depth > MAX_TREE_DEPTH) return;
+		final entries: Array<String> = try sys.FileSystem.readDirectory(dir) catch (exception: haxe.Exception) [];
+		// hxq's own generation state is never an input: every generation writes it
+		for (entry in entries) if (entry != STATE_DIR) {
+			final full: String = Path.join([dir, entry]);
+			final rel: String = relative == '' ? entry : '$relative/$entry';
+			if (sys.FileSystem.isDirectory(full))
+				listTree(full, rel, into, depth + 1, memo);
+			else
+				into.push('$rel ${hashOf(full, memo)}');
+		}
+	}
+
+	/** Fold one hxml's includes, library classpaths and `-lib` names into the accumulators — see `implicitInputs`. */
+	private static function collectHxml(
+		hxml: String, cwd: String, root: String, paths: Array<String>, names: Array<String>, libraries: LibraryIndex, depth: Int
+	): Void {
+		if (depth > MAX_INCLUDE_DEPTH) return;
+		final text: Null<String> = try sys.io.File.getContent(hxml) catch (exception: haxe.Exception) null;
+		if (text == null) return;
+		final refs: HxmlRefs = OracleCache.hxmlRefs(text);
+		for (include in refs.includes) {
+			final path: String = absolute(cwd, include);
+			if (paths.contains(path)) continue;
+			paths.push(path);
+			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
+		}
+		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
+		for (classPath in refs.classPaths) {
+			final dir: String = absolute(cwd, classPath);
+			if (dir == root || dir.startsWith('$root/')) continue;
+			final library: Null<String> = libraryRoot(dir);
+			if (library == null) continue;
+			for (file in ['haxelib.json', 'include.xml', 'templates/haxe']) addOnce(paths, Path.join([library, file]));
+			final installed: Null<String> = repositoryDir(libraries, library);
+			if (installed != null) for (marker in ['.current', '.dev']) addOnce(paths, Path.join([installed, marker]));
+		}
+	}
+
+	/**
+	 * The haxelib repository directory `library` (a library root) is selected through: the directory directly under the
+	 * repository for a versioned install, the one whose `.dev` points at it for a dev install, or — with no repository
+	 * known — a parent carrying `.current`. Null when none applies.
+	 */
+	private static function repositoryDir(libraries: LibraryIndex, library: String): Null<String> {
+		final repo: Null<String> = libraries.repo;
+		if (repo != null && library.startsWith('$repo/')) return Path.join([repo, library.substr(repo.length + 1).split('/')[0]]);
+		final dev: Null<String> = libraries.devs[library];
+		if (repo != null && dev != null) return Path.join([repo, dev]);
+		final parent: String = Path.directory(library);
+		return sys.FileSystem.exists(Path.join([parent, '.current'])) ? parent : null;
+	}
+
+	/**
+	 * The haxelib repository the generations in `groups` resolve libraries from (`haxelib config` in the first one's
+	 * directory, which honours a local `.haxelib`) and every dev install in it, dev path to repository directory. Taken
+	 * once per `prepare`.
+	 */
+	private static function libraryIndex(groups: Array<GenerationGroup>): LibraryIndex {
+		final devs: Map<String, String> = [];
+		final repo: Null<String> = groups.length == 0 ? null : haxelibRepository(absolute(Sys.getCwd(), groups[0].generate.root));
+		if (repo != null) {
+			final entries: Array<String> = try sys.FileSystem.readDirectory(repo) catch (exception: haxe.Exception) [];
+			for (entry in entries) {
+				final marker: String = Path.join([repo, entry, '.dev']);
+				if (!sys.FileSystem.exists(marker)) continue;
+				final target: Null<String> = try sys.io.File.getContent(marker).trim() catch (exception: haxe.Exception) null;
+				if (target != null && target != '') devs[absolute(repo, target)] = entry;
+			}
+		}
+		return { repo: repo, devs: devs };
+	}
+
+	/** The nearest ancestor of `dir` (itself included) holding a `haxelib.json`, or null within `MAX_TREE_DEPTH` levels. */
+	private static function libraryRoot(dir: String): Null<String> {
+		var current: String = dir;
+		for (_ in 0...MAX_TREE_DEPTH) {
+			if (sys.FileSystem.exists(Path.join([current, 'haxelib.json']))) return current;
+			final parent: String = Path.directory(current);
+			if (parent == '' || parent == current) return null;
+			current = parent;
+		}
+		return null;
+	}
+
+	/** The haxelib repository `root` resolves libraries from (`haxelib config`, which honours a local `.haxelib`), or null. */
+	private static function haxelibRepository(root: String): Null<String> {
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([{ args: [], cwd: root, shell: 'haxelib config' }], BUFFER, 1);
+		if (runs.length == 0 || runs[0].status != 0) return null;
+		final repo: String = runs[0].out.trim();
+		return repo == '' ? null : Path.removeTrailingSlashes(repo);
+	}
+
+	/** `path` resolved against `base` when relative, normalised, without a trailing slash. */
+	private static function absolute(base: String, path: String): String {
+		return Path.removeTrailingSlashes(Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path])));
+	}
+
+	private static inline function addOnce(paths: Array<String>, path: String): Void {
+		if (!paths.contains(path)) paths.push(path);
+	}
+	#end
 
 }
 

@@ -7,8 +7,8 @@ import anyparse.check.oracle.CompilerServer;
 import anyparse.check.oracle.OracleServerPool;
 import anyparse.check.oracle.ServerState;
 import anyparse.check.oracle.ServerStateParser;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessSpawn;
 import unit.check.oracle.PortHolder.holding;
 import unit.check.oracle.PortHolder.unusedPort;
 import unit.check.oracle.PortHolder.watching;
@@ -278,7 +278,7 @@ final class OracleServerPortTest extends Test {
 	@:access(anyparse.check.oracle.OracleServerPool)
 	public function testAClientThatDidNotRunDoesNotEndTheReadinessPoll(): Void {
 		#if nodejs
-		final server: PendingRuns = HaxeSpawn.startAll([
+		final server: PendingRuns = ProcessSpawn.startAll([
 			{
 				cmd: js.Node.process.execPath,
 				args: ['-e', 'setTimeout(()=>{},60000)'],
@@ -301,7 +301,7 @@ final class OracleServerPortTest extends Test {
 	@:access(anyparse.check.oracle.OracleServerPool)
 	public function testAServerThatExitedIsNotPolled(): Void {
 		#if nodejs
-		final server: PendingRuns = HaxeSpawn.startAll([
+		final server: PendingRuns = ProcessSpawn.startAll([
 			{
 				cmd: js.Node.process.execPath,
 				args: ['-e', ''],

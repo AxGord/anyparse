@@ -1,10 +1,11 @@
 package dev;
 
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.BuildFailure;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.MutationVerdict;
 import anyparse.query.cli.TestTranscript;
+import anyparse.util.Compare;
 import dev.MutationCheck.TrackRow;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -263,7 +264,7 @@ final class MutationSlot {
 			if (!classes.contains(cls)) classes.push(cls);
 		}
 		if (classes.length == 0) return null;
-		classes.sort(Reflect.compare);
+		classes.sort(Compare.compareString);
 		return classes;
 	}
 
@@ -453,7 +454,7 @@ final class MutationSlot {
 			cmd('node $testJs')
 				.at(ctx.wt)
 				.env(PATH, path)
-				.env(HaxeSpawn.ANSWER_ENV, FixtureCache.answer(shimmed ? shim : null))
+				.env(ProcessSpawn.ANSWER_ENV, FixtureCache.answer(shimmed ? shim : null))
 				.env('APQ_TEST', filter == 'ALL' ? '' : filter)
 				.env('APQ_MUTANT', mutant ?? '')
 				.timeout(SUITE_TIMEOUT_MS)

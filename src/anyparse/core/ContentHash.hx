@@ -16,4 +16,13 @@ final class ContentHash {
 		return #if nodejs js.node.Crypto.createHash('md5').update(data, 'utf8').digest('hex') #else haxe.crypto.Md5.encode(data) #end;
 	}
 
+	/**
+	 * md5 of `bytes` as they are, with no text decoding in between — the digest of a file's content.
+	 */
+	public static function md5Bytes(bytes: haxe.io.Bytes): String {
+		return #if nodejs js.node.Crypto.createHash('md5')
+			.update(js.node.Buffer.hxFromBytes(bytes))
+			.digest('hex') #else haxe.crypto.Md5.make(bytes).toHex() #end;
+	}
+
 }

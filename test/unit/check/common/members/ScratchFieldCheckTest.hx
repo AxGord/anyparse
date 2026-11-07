@@ -2,8 +2,8 @@ package unit.check.common.members;
 
 import anyparse.check.Severity;
 import anyparse.check.common.members.ScratchField;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 import sys.io.File;
@@ -290,7 +290,7 @@ class ScratchFieldCheckTest extends Test {
 			+ '\t\tfor (i in 0...n) _tmp += i;\n\t\treturn _tmp;\n\t}\n\n\tstatic function main():Void {\n\t\tfinal m:Main = new Main();\n'
 			+ '\t\tSys.println(m.move(3) + " " + m.sum(4) + " " + m.move(-1));\n\t}\n}\n\n$SUPPORT';
 		final dir: String = CliFixture.writeTree('scratchfield', [{ name: 'Main.hx', source: main }]);
-		final before: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+		final before: ProcessRun = ProcessSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		if (before.status != 0) {
 			CliFixture.removeDir(dir);
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
@@ -298,7 +298,7 @@ class ScratchFieldCheckTest extends Test {
 		}
 		final out: String = fixed(main);
 		File.saveContent('$dir/Main.hx', out);
-		final after: HaxeRun = HaxeSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
+		final after: ProcessRun = ProcessSpawn.run(['-cp', '.', '-main', 'Main', '--interp'], dir, 1 << 20);
 		CliFixture.removeDir(dir);
 		Assert.isTrue(out.indexOf('_point') < 0 && out.indexOf('_tmp') < 0, out);
 		Assert.equals('12 10 0', before.out.trim(), before.err);

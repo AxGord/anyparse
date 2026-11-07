@@ -1,7 +1,6 @@
 package unit.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle.OracleOutcome;
-import anyparse.check.oracle.FileHash;
 import anyparse.check.oracle.GenerationRecord;
 import anyparse.check.oracle.GenerationRecordParser;
 import anyparse.check.oracle.GenerationRecordWriter;
@@ -12,6 +11,7 @@ import anyparse.check.oracle.OracleVerdictRecordWriter;
 import anyparse.check.oracle.ServerState;
 import anyparse.check.oracle.ServerStateParser;
 import anyparse.check.oracle.ServerStateWriter;
+import anyparse.core.FileHash;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
 import haxe.Exception;

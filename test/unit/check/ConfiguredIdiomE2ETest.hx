@@ -4,7 +4,7 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 
@@ -192,7 +192,7 @@ final class ConfiguredIdiomE2ETest extends Test {
 	}
 
 	private static function run(dir: String): String {
-		return HaxeSpawn.run(['check.hxml'], dir, BUFFER).out;
+		return ProcessSpawn.run(['check.hxml'], dir, BUFFER).out;
 	}
 	#end
 

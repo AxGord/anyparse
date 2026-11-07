@@ -5,7 +5,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.cli.WriteJournal.JournalState;
@@ -96,7 +96,7 @@ final class WriteVerification {
 
 	/** `settle` once the builds are known. */
 	private static function judge(op: String, journal: WriteJournal, oracles: Array<OracleConfig>, changed: Array<String>, exit: Int): Int {
-		final parallel: Int = HaxeSpawn.unleasedParallelism(UNLEASED_COMPILES);
+		final parallel: Int = ProcessSpawn.unleasedParallelism(UNLEASED_COMPILES);
 		final sources: Array<String> = [
 			for (path in changed) if (OracleCoverage.isSource(path) && ConfigFinder.fileExists(path)) path
 		];

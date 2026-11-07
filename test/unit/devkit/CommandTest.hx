@@ -15,7 +15,7 @@ import utest.Test;
 using StringTools;
 
 /**
- * `Command.run` — one process through the `HaxeSpawn` driver, its argument vector handed over with no shell in between. The
+ * `Command.run` — one process through the `ProcessSpawn` driver, its argument vector handed over with no shell in between. The
  * programs here are `node -e` scripts, so the suite needs nothing the runner does not already have.
  */
 @:nullSafety(Strict)
@@ -360,7 +360,7 @@ final class CommandTest extends Test {
 	}
 
 	/**
-	 * Whether `parentCommand` is the tether program (`HaxeSpawn.TETHER`) run as a program of its own: the driver only embeds its text.
+	 * Whether `parentCommand` is the tether program (`ProcessSpawn.TETHER`) run as a program of its own: the driver only embeds its text.
 	 */
 	private static function isTether(parentCommand: String): Bool {
 		return parentCommand.toLowerCase().contains('-e const cp = require("child_process");const lead');

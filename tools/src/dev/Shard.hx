@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ShardPlan;
 import anyparse.query.cli.CliIo;
@@ -243,7 +243,7 @@ final class Shard {
 				cmd('node ${job.testJs}')
 					.at(job.repo)
 					.env('PATH', shim == null ? path : '$shim:$path')
-					.env(HaxeSpawn.ANSWER_ENV, FixtureCache.answer(shim))
+					.env(ProcessSpawn.ANSWER_ENV, FixtureCache.answer(shim))
 					.env('APQ_TEST', split.filters[s])
 					.env('APQ_TEST_TIMING', Path.join([work, 'shard$s.timing']))
 					.env('APQ_TEST_PROGRESS', progressFile(work, s))

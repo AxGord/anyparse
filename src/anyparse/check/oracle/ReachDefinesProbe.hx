@@ -4,9 +4,9 @@ import anyparse.core.PhaseTimings;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachBuilds;
@@ -65,7 +65,7 @@ typedef ProbeRider = {
  */
 typedef RiddenReading = {
 	arms: Int,
-	verbose: Null<HaxeRun>,
+	verbose: Null<ProcessRun>,
 	configuration: Null<ReachConfiguration>
 };
 
@@ -130,7 +130,7 @@ final class ReachDefinesProbe {
 	private static inline final DIRECTORY_SUFFIX_BOUND: Int = 0x7fffffff;
 
 	/**
-	 * The builds of `oracles`, each probed once — the compiles overlap (`HaxeSpawn.parallelism`) — with the source of every file
+	 * The builds of `oracles`, each probed once — the compiles overlap (`ProcessSpawn.parallelism`) — with the source of every file
 	 * any of them compiles (one that cannot be read is left out); null when any of them cannot be probed.
 	 */
 	public static function probeAll(oracles: Array<OracleConfig>): Null<ReachBuilds> {
@@ -138,7 +138,10 @@ final class ReachDefinesProbe {
 		final jobs: Null<Array<SpawnJob>> = jobsFor(probe);
 		return PhaseTimings.measure(
 			'reach defines probe',
-			() -> answerAll(oracles, probe.held, probe.ready, jobs == null ? [] : HaxeSpawn.runAll(jobs, BUFFER, HaxeSpawn.parallelism()))
+			() ->
+				answerAll(
+					oracles, probe.held, probe.ready, jobs == null ? [] : ProcessSpawn.runAll(jobs, BUFFER, ProcessSpawn.parallelism())
+				)
 		);
 	}
 
@@ -150,7 +153,7 @@ final class ReachDefinesProbe {
 	public static function start(oracles: Array<OracleConfig>): DefinesProbe {
 		final probe: DefinesProbe = prepared(oracles);
 		final jobs: Null<Array<SpawnJob>> = jobsFor(probe);
-		probe.runs = jobs == null || jobs.length == 0 ? null : HaxeSpawn.startAll(jobs, BUFFER, HaxeSpawn.parallelism());
+		probe.runs = jobs == null || jobs.length == 0 ? null : ProcessSpawn.startAll(jobs, BUFFER, ProcessSpawn.parallelism());
 		return probe;
 	}
 
@@ -273,7 +276,7 @@ final class ReachDefinesProbe {
 	 * the plain probes instead and never takes the rider's compile for the build's.
 	 */
 	public static function readRidden(
-		oracle: OracleConfig, run: HaxeRun, rider: ProbeRider, grammar: GrammarPlugin, known: Map<String, Bool>
+		oracle: OracleConfig, run: ProcessRun, rider: ProbeRider, grammar: GrammarPlugin, known: Map<String, Bool>
 	): RiddenReading {
 		final lines: Array<String> = run.out.split('\n');
 		final arms: Int = [for (line in lines) if (line.trim().startsWith(DEFINES_PREFIX)) line].length;
@@ -298,7 +301,7 @@ final class ReachDefinesProbe {
 		];
 		if (DefineReads.anyReads(configuration.parsed ?? [], added, grammar, known)) return none;
 		configuration.everDefined = [for (d in configuration.everDefined) if (!added.contains(d)) d];
-		final verbose: HaxeRun = {
+		final verbose: ProcessRun = {
 			status: run.status,
 			out: [for (line in kept) if (!ownLine(line.trim())) line].join('\n'),
 			err: run.err,
@@ -360,7 +363,7 @@ final class ReachDefinesProbe {
 	 */
 	private static function answerAll(
 		oracles: Array<OracleConfig>, held: Array<Null<ReachConfiguration>>, ready: Null<Array<{ dir: String, args: Array<String> }>>,
-		runs: Array<HaxeRun>
+		runs: Array<ProcessRun>
 	): Null<ReachBuilds> {
 		for (p in ready ?? []) discard(p.dir);
 		if (runs.length != unheld(oracles, held).length || oracles.length == 0) return null;
@@ -430,7 +433,7 @@ final class ReachDefinesProbe {
 	}
 
 	/** The configuration the compile `run` of `oracle` reports (`parse`), its paths made canonical, or null. */
-	private static function answer(oracle: OracleConfig, run: HaxeRun): Null<ReachConfiguration> {
+	private static function answer(oracle: OracleConfig, run: ProcessRun): Null<ReachConfiguration> {
 		if (run.failure != '' || run.status != 0) return null;
 		final read: Null<ReachConfiguration> = parse(OracleDeclaration.describeOracle(oracle), run.out);
 		if (read == null) return null;

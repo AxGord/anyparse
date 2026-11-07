@@ -10,9 +10,9 @@ import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonText;
 import anyparse.macro.EmbeddedSource;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn.HaxeSpawn;
 import anyparse.proc.PendingRuns;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn.ProcessSpawn;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
@@ -24,7 +24,7 @@ using Lambda;
  * What the compiler typed, for every configured compiler oracle: one compile of the configuration's own hxml with the
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
  * `CompilerFacts` table. Asked per run and never kept across runs (`docs/decisions.md` records why a cache is unsound);
- * the compiles overlap (`HaxeSpawn.parallelism`). A configuration that cannot be asked, fails to compile, or leaves no
+ * the compiles overlap (`ProcessSpawn.parallelism`). A configuration that cannot be asked, fails to compile, or leaves no
  * complete file contributes no facts and is named in the table's `dropped`.
  *
  * ## The facts file
@@ -220,9 +220,9 @@ final class TypedFactsProbe {
 			for (k in 0...asked.length) if (asked[k].rider == null && wanted(memo, asked[k].oracle, inputs[k])) k
 		];
 		final baselines: Array<OracleConfig> = [for (k in ahead) asked[k].oracle];
-		final runs: PendingRuns = HaxeSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
+		final runs: PendingRuns = ProcessSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
 			for (b in baselines) { args: OracleCoverage.probeArgs(b.hxml, b.defines), cwd: b.dir }
-		]), carried ? ReachDefinesProbe.BUFFER : BUFFER, HaxeSpawn.parallelism());
+		]), carried ? ReachDefinesProbe.BUFFER : BUFFER, ProcessSpawn.parallelism());
 		return {
 			dropped: dropped,
 			asked: asked,
@@ -257,7 +257,7 @@ final class TypedFactsProbe {
 		#if (sys || nodejs)
 		final pending: Null<PendingRuns> = probe.runs;
 		if (pending == null) return null;
-		final runs: Array<HaxeRun> = pending.await();
+		final runs: Array<ProcessRun> = pending.await();
 		final asked: Array<FactsCompile> = probe.asked;
 		final memo: Null<OracleRunMemo> = probe.memo;
 		if (memo != null && probe.baselines.length > 0) {
@@ -265,7 +265,7 @@ final class TypedFactsProbe {
 			for (j in 0...probe.baselines.length) memo.file(probe.baselines[j], true, probe.before[j], after[j], runs[asked.length + j]);
 		}
 		final again: Array<Int> = memo == null ? [] : fileRidden(memo, probe, runs);
-		final redone: Array<HaxeRun> = compiledAgain(asked, again);
+		final redone: Array<ProcessRun> = compiledAgain(asked, again);
 		for (k => i in again) runs[i] = redone[k];
 		final facts: CompilerFacts = CompilerFacts.create(
 			file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
@@ -326,7 +326,7 @@ final class TypedFactsProbe {
 	 * (`ReachDefinesProbe.readRidden`) — its `-v` typecheck and its build — and name the ones of several arms, whose facts
 	 * a plain compile answers again: the hook joins the last arm only, under defines the plain compile gives the first.
 	 */
-	private static function fileRidden(memo: OracleRunMemo, probe: FactsProbe, runs: Array<HaxeRun>): Array<Int> {
+	private static function fileRidden(memo: OracleRunMemo, probe: FactsProbe, runs: Array<ProcessRun>): Array<Int> {
 		final grammar: Null<GrammarPlugin> = memo.grammar;
 		final ridden: Array<Int> = [for (i in 0...probe.asked.length) if (probe.asked[i].rider != null) i];
 		if (grammar == null || ridden.length == 0) return [];
@@ -339,7 +339,7 @@ final class TypedFactsProbe {
 			if (rider == null) continue;
 			final reading: RiddenReading = ReachDefinesProbe.readRidden(compile.oracle, runs[i], rider, grammar, known);
 			if (reading.arms > 1) again.push(i);
-			final verbose: Null<HaxeRun> = reading.verbose;
+			final verbose: Null<ProcessRun> = reading.verbose;
 			final configuration: Null<ReachConfiguration> = reading.configuration;
 			if (verbose == null || configuration == null) continue;
 			memo.file(compile.oracle, true, probe.inputs[i], after[k], verbose);
@@ -352,19 +352,19 @@ final class TypedFactsProbe {
 	 * The plain facts compiles of the compiles of `asked` that `again` numbers: each hook's first round rewrites the facts
 	 * file whole, so nothing the shared compile left there survives.
 	 */
-	private static function compiledAgain(asked: Array<FactsCompile>, again: Array<Int>): Array<HaxeRun> {
+	private static function compiledAgain(asked: Array<FactsCompile>, again: Array<Int>): Array<ProcessRun> {
 		return again.length == 0
 			? []
-			: HaxeSpawn.runAll([
+			: ProcessSpawn.runAll([
 				for (i in again) {
 					args: compileArgs(asked[i].oracle.hxml, asked[i].oracle.defines, asked[i].dir, asked[i].out),
 					cwd: asked[i].oracle.dir
 				}
-			], BUFFER, HaxeSpawn.parallelism());
+			], BUFFER, ProcessSpawn.parallelism());
 	}
 
 	/** Why the compile `run` left no facts, in one line. */
-	private static function failureOf(run: HaxeRun): String {
+	private static function failureOf(run: ProcessRun): String {
 		if (run.failure != '') return run.failure;
 		if (run.status == 0) return 'it wrote no facts file';
 		final first: String = StringTools.trim(run.err.split('\n').find(l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? '');
@@ -410,7 +410,7 @@ final class TypedFactsProbe {
 	}
 
 	/** The facts the compile `run` of `oracle` wrote to `out`, or null when it failed or left no file. */
-	private static function answer(oracle: OracleConfig, run: HaxeRun, out: String): Null<FactsDump> {
+	private static function answer(oracle: OracleConfig, run: ProcessRun, out: String): Null<FactsDump> {
 		if (run.failure != '' || run.status != 0) return null;
 		final text: Null<String> = try sys.io.File.getContent(out) catch (exception: haxe.Exception) null;
 		return text == null

@@ -1,7 +1,7 @@
 package unit.ds;
 
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import haxe.Exception;
 import unit.cli.CliFixture;
 
@@ -11,10 +11,10 @@ final class TargetCompile {
 	private static inline final BUFFER: Int = 8 * 1024 * 1024;
 
 	/** The run of `source` as `Main` under `args`, or null when this host has no working `haxe`. */
-	public static function compile(source: String, args: Array<String>): Null<HaxeRun> {
+	public static function compile(source: String, args: Array<String>): Null<ProcessRun> {
 		final dir: String = CliFixture.writeDir('dstargets', [{ name: 'Main.hx', source: source }]);
 		try {
-			final run: HaxeRun = HaxeSpawn.run(['-cp', '${CliFixture.repoRoot()}/src', '-cp', dir, '-main', 'Main'].concat(
+			final run: ProcessRun = ProcessSpawn.run(['-cp', '${CliFixture.repoRoot()}/src', '-cp', dir, '-main', 'Main'].concat(
 				args
 			), dir, BUFFER);
 			CliFixture.removeDir(dir);

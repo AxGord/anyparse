@@ -1,8 +1,8 @@
 package unit.cli;
 
 import anyparse.core.TempScratch;
-import anyparse.proc.HaxeRun;
-import anyparse.proc.HaxeSpawn;
+import anyparse.proc.ProcessRun;
+import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 #if (sys || nodejs)
 import haxe.Exception;
@@ -214,7 +214,7 @@ final class CliFixture {
 	}
 
 	public static function git(root: String, args: Array<String>): Void {
-		final run: HaxeRun = HaxeSpawn.exec({ cmd: 'git', args: args, cwd: root }, 1 << 20);
+		final run: ProcessRun = ProcessSpawn.exec({ cmd: 'git', args: args, cwd: root }, 1 << 20);
 		if (run.failure != '' || run.status != 0) throw 'git ${args.join(' ')}: ${run.failure}${run.err}';
 	}
 

@@ -5,7 +5,7 @@
 	"arms": [
 		{
 			"name": "M-SPAWN-RUN-IGNORES-CWD",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "exec",
 			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
 			"replace": "",
@@ -13,7 +13,7 @@
 		},
 		{
 			"name": "M-SPAWN-RUNALL-IGNORES-CWD",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "const opts = { cwd: j.cwd == null ? undefined : j.cwd,",
@@ -22,7 +22,7 @@
 		},
 		{
 			"name": "M-DRIVER-CANCELS-EARLIER-JOBS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "for (let k = i + 1; k < jobs.length; k++)",
@@ -31,7 +31,7 @@
 		},
 		{
 			"name": "M-DRIVER-NEVER-STOPS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": " if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);",
@@ -40,7 +40,7 @@
 		},
 		{
 			"name": "M-DRIVER-KILLS-ONLY-THE-SHELL",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "if (group) process.kill(-c.pid, s); else c.kill(s);",
@@ -49,7 +49,7 @@
 		},
 		{
 			"name": "M-DRIVER-NO-TIMEOUT",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
@@ -58,7 +58,7 @@
 		},
 		{
 			"name": "M-DRIVER-SIGNAL-ORPHANS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "for (const s of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(s, die);",
@@ -67,7 +67,7 @@
 		},
 		{
 			"name": "M-DRIVER-OUTLIVES-ITS-PARENT",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "setInterval(() => { if (process.ppid !== parent) die(); }, 500).unref();",
@@ -76,7 +76,7 @@
 		},
 		{
 			"name": "M-DRIVER-KILLS-WITHOUT-GRACE",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "signal(c, 'SIGTERM');",
@@ -85,7 +85,7 @@
 		},
 		{
 			"name": "M-DRIVER-NO-HARD-KILL",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "if (left) signal(c, 'SIGKILL'); ",
@@ -94,7 +94,7 @@
 		},
 		{
 			"name": "M-SPAWN-ORDER",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "runAllTimed",
 			"find": "if (answer != null && answer.length == jobs.length) return answer;",
 			"replace": "if (answer != null && answer.length == jobs.length) return [for (k in 0...answer.length) answer[answer.length - 1 - k]];",
@@ -102,7 +102,7 @@
 		},
 		{
 			"name": "M-ORACLE-PARALLEL-HALF-THE-CORES",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "threadsFor",
 			"find": ": cores - 1;",
 			"replace": ": Std.int(cores / 2);",
@@ -110,7 +110,7 @@
 		},
 		{
 			"name": "M-ORACLE-PARALLEL-COUNTS-SLOW-CORES",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "threadsFor",
 			"find": "fast > 0 && fast < cores ? fast : cores - 1",
 			"replace": "cores - 1",
@@ -118,7 +118,7 @@
 		},
 		{
 			"name": "M-ORACLE-PARALLEL-IGNORES-LEASE",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "parallelism",
 			"find": "PoolLease.threads() ?? machineThreads()",
 			"replace": "machineThreads()",
@@ -126,7 +126,7 @@
 		},
 		{
 			"name": "M-PENDING-JOBS-FILE-KEPT",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "+ \"if (process.argv[5]) try { require('fs').unlinkSync(process.argv[5]); } catch (err) {}\"",
@@ -135,7 +135,7 @@
 		},
 		{
 			"name": "M-TETHER-IGNORES-EOF",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "TETHER",
 			"kind": "FinalMember",
 			"find": "process.stdin.on(\"end\", end); process.stdin.on(\"close\", end); process.stdin.on(\"error\", end); process.stdin.resume();",
@@ -144,7 +144,7 @@
 		},
 		{
 			"name": "M-GC-RUN-INHERITS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "exec",
 			"find": "{ env: childEnv() }",
 			"replace": "{}",
@@ -152,7 +152,7 @@
 		},
 		{
 			"name": "M-GC-DRIVER-INHERITS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "runAllTimed",
 			"find": "env: childEnv(),",
 			"replace": "",
@@ -160,7 +160,7 @@
 		},
 		{
 			"name": "M-GC-INHERITED-OVERRIDDEN",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "gcParams",
 			"find": "if (!taken.contains(paramName(p))) p",
 			"replace": "p",
@@ -168,7 +168,7 @@
 		},
 		{
 			"name": "M-GC-OFF-IGNORED",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "gcParams",
 			"find": "asked == GC_OFF ? [] : ",
 			"replace": "",
@@ -176,7 +176,7 @@
 		},
 		{
 			"name": "M-GC-EMPTY-DECLARED-OFF",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "gcParams",
 			"find": "declared == null || declared.trim() == ''",
 			"replace": "declared == null",
@@ -184,7 +184,7 @@
 		},
 		{
 			"name": "M-GC-MEMORY-UNCOUNTED",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "residentFor",
 			"find": "(tunedCollector ? GC_MEMORY : 0)",
 			"replace": "0",
@@ -192,7 +192,7 @@
 		},
 		{
 			"name": "M-DRIVER-READS-STDIN",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "runAllTimed",
 			"find": "stdio: ['ignore', 'pipe', 'pipe'],",
 			"replace": "input: haxe.Json.stringify(jobs),",
@@ -200,7 +200,7 @@
 		},
 		{
 			"name": "M-DRIVER-UNBOUNDED",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "runAllTimed",
 			"find": "timeout: limit,",
 			"replace": "",
@@ -208,7 +208,7 @@
 		},
 		{
 			"name": "M-DRIVER-BOUND-IGNORES-ROUNDS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "driverBound",
 			"find": "rounds * longest",
 			"replace": "longest",
@@ -216,7 +216,7 @@
 		},
 		{
 			"name": "M-MACHINE-THREADS-REREAD",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "machineThreads",
 			"find": "machine ??= {",
 			"replace": "{",
@@ -224,14 +224,14 @@
 		},
 		{
 			"name": "M-SPAWN-ANSWER-NEVER-ASKED",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "recordedRun",
 			"force": "null",
 			"note": "a run in this process never asks the answer module, so every recorded compile is spawned through the shim again"
 		},
 		{
 			"name": "M-SPAWN-ANSWER-ASKS-ANY-JOB",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "recordedRun",
 			"find": "if (module == '' || job.cmd != null || job.stdin != null) return null;",
 			"replace": "if (module == '') return null;",
@@ -239,7 +239,7 @@
 		},
 		{
 			"name": "M-DRIVER-NEVER-ASKS",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": " const rec = recorded(jobs[i]); if (rec) { answered(i, rec); continue; } running++;",
@@ -248,7 +248,7 @@
 		},
 		{
 			"name": "M-DRIVER-ASKS-ANY-JOB",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "if (!m || j.cmd != null || j.shell != null || j.tethered || j.stdin != null) return null;",
@@ -257,7 +257,7 @@
 		},
 		{
 			"name": "M-DRIVER-ANSWER-REENTERS-START",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "{ answered(i, rec); continue; } running++;",
@@ -266,7 +266,7 @@
 		},
 		{
 			"name": "M-DRIVER-FLUSH-TWICE",
-			"type": "anyparse.proc.HaxeSpawn",
+			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
 			"find": "function flush() { if (flushed) return; flushed = true; emit(",
@@ -277,8 +277,8 @@
 			"name": "M-PENDING-RUNS-IN-FOREGROUND",
 			"type": "anyparse.proc.PendingRuns",
 			"method": "await",
-			"find": "final answer: Array<HaxeRun> = pid == null ? HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
-			"replace": "final answer: Array<HaxeRun> = HaxeSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
+			"find": "final answer: Array<ProcessRun> = pid == null ? ProcessSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound) : collect(pid);",
+			"replace": "final answer: Array<ProcessRun> = ProcessSpawn.runAll(_jobs, _maxBuffer, _parallel, false, _bound);",
 			"note": "a background batch is run again in the foreground when it is awaited, so nothing it did while the caller worked is saved"
 		},
 		{
@@ -293,7 +293,7 @@
 			"name": "M-GC-PENDING-INHERITS",
 			"type": "anyparse.proc.PendingRuns",
 			"method": "new",
-			"find": "{ stdio: 'ignore', env: HaxeSpawn.childEnv() }",
+			"find": "{ stdio: 'ignore', env: ProcessSpawn.childEnv() }",
 			"replace": "{ stdio: 'ignore' }",
 			"note": "a batch started in the background (the facts compiles, the reach probes, the warm servers) runs under the default collector"
 		},

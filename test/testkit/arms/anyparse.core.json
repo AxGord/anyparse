@@ -676,6 +676,14 @@
 			"find": ".update(data, 'utf8')",
 			"replace": ".update(data, 'latin1')",
 			"note": "node digests the text as latin1, so a text holding a non-ASCII character hashes to another value than the md5 of its UTF-8 bytes"
+		},
+		{
+			"name": "M-CONTENT-HASH-BYTES-WHOLE",
+			"type": "anyparse.core.ContentHash",
+			"method": "md5Bytes",
+			"find": "js.node.Buffer.hxFromBytes(bytes)",
+			"replace": "js.node.Buffer.hxFromBytes(bytes.sub(0, bytes.length - 1))",
+			"note": "the digest drops the last byte, so no content hashes to the md5 of its bytes"
 		}
 	]
 }

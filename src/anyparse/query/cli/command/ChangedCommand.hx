@@ -1,6 +1,6 @@
 package anyparse.query.cli.command;
 
-import anyparse.proc.HaxeRun;
+import anyparse.proc.ProcessRun;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.cli.GitRevision;
 import anyparse.util.Compare;
@@ -62,7 +62,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			CliIo.stderr('apq changed: "${opts.ref}" names no revision range git can resolve\n');
 			return ExitCode.EXIT_RUNTIME;
 		}
-		final listed: HaxeRun = GitRevision.diffNameStatus(range, opts.paths);
+		final listed: ProcessRun = GitRevision.diffNameStatus(range, opts.paths);
 		if (listed.failure != '' || listed.status != 0) {
 			CliIo.stderr('apq changed: git diff against "${opts.ref}" failed: ${listed.failure}${listed.err}\n');
 			return ExitCode.EXIT_RUNTIME;
@@ -220,7 +220,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		final from: String = sides[0] == '' ? 'HEAD' : sides[0];
 		final to: String = sides[1] == '' ? 'HEAD' : sides[1];
 		if (!symmetric) return [from, to];
-		final base: HaxeRun = GitRevision.git(['merge-base', from, to]);
+		final base: ProcessRun = GitRevision.git(['merge-base', from, to]);
 		return base.failure == '' && base.status == 0 ? [base.out.trim(), to] : null;
 	}
 
