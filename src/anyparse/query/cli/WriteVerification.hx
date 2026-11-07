@@ -8,6 +8,8 @@ import anyparse.check.oracle.OracleDeclaration;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.OracleProvider.OracleReading;
 import anyparse.query.cli.WriteJournal.JournalState;
 import haxe.io.Path;
 

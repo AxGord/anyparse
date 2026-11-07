@@ -8,6 +8,7 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 /**
  * The oracle-assisted `--fix` phase typed by the compiler's facts, end to end over a real compile of two configurations:

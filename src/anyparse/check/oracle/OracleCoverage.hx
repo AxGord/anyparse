@@ -1,12 +1,16 @@
 package anyparse.check.oracle;
 
-import anyparse.check.oracle.CompilerOracle.OracleExclusion;
 import anyparse.core.PhaseTimings;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OracleProvider.CompiledSet;
+import anyparse.query.OracleProvider.ConfigCoverage;
+import anyparse.query.OracleProvider.OracleCoverageMemo;
+import anyparse.query.OracleProvider.OracleExclusion;
+import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 
@@ -79,7 +83,7 @@ import haxe.io.Path;
  *   included. It is a scale, not a project file count.
  */
 @:nullSafety(Strict)
-final class OracleCoverage {
+final class OracleCoverage implements CompiledSet {
 
 	/** The extension of a source file the compiler parses. */
 	private static inline final SOURCE_EXTENSION: String = 'hx';
@@ -283,7 +287,7 @@ final class OracleCoverage {
 	 * LAZY because a probe is a whole compile per configuration and a run whose checks propose
 	 * nothing must pay for none; shared because both verified `--fix` phases memoise.
 	 */
-	public static function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<OracleCoverage> {
+	public static function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet> {
 		// every configuration the memo lacks is probed in ONE overlapping batch, each distinct one once
 		final missing: Array<OracleConfig> = [];
 		for (oracle in oracles) if (!memo.probes.exists(p -> sameConfig(p.config, oracle)) && !missing.exists(m -> sameConfig(m, oracle)))
@@ -320,14 +324,14 @@ final class OracleCoverage {
 	 * with the covering configurations). The phase stops only when no configuration's set is known
 	 * (`stop`), since then no edit can be shown verifiable at all.
 	 */
-	public static function usable(oracles: Array<OracleConfig>, coverages: Array<OracleCoverage>): UsableCoverage {
+	public static function usable(oracles: Array<OracleConfig>, coverages: Array<CompiledSet>): UsableCoverage {
 		final configs: Array<OracleConfig> = [];
-		final known: Array<OracleCoverage> = [];
+		final known: Array<CompiledSet> = [];
 		final unknown: Array<OracleConfig> = [];
 		final excluded: Array<OracleExclusion> = [];
 		var first: Null<String> = null;
 		for (i in 0...oracles.length) {
-			final coverage: OracleCoverage = coverages[i];
+			final coverage: CompiledSet = coverages[i];
 			if (coverage.known) {
 				configs.push(oracles[i]);
 				known.push(coverage);
@@ -377,19 +381,6 @@ final class OracleCoverage {
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end
-	}
-
-	/**
-	 * The decline sentence for the per-configuration gaps of ONE edit set — what every caller
-	 * holding a LIST of configurations quotes once none of them typechecks the edit.
-	 *
-	 * A single gap IS the whole answer and is quoted verbatim, so a one-configuration project
-	 * reads exactly as it always did. Several are joined rather than summarised: each is a
-	 * different build's reason for being unable to judge this edit, and naming one would send the
-	 * reader to close a gap that on its own permits nothing. Pure.
-	 */
-	public static function gapSentence(gaps: Array<String>): String {
-		return gaps.length == 1 ? gaps[0] : 'no configured compiler oracle typechecks this edit — ${gaps.join('; ')}';
 	}
 
 	/**
@@ -569,7 +560,7 @@ final class OracleCoverage {
 	}
 
 	/** `memo`'s probe for `oracle`, taken and recorded now when the memo holds none for that configuration. */
-	private static function probedFor(memo: OracleCoverageMemo, oracle: OracleConfig): OracleCoverage {
+	private static function probedFor(memo: OracleCoverageMemo, oracle: OracleConfig): CompiledSet {
 		final held: Null<ConfigCoverage> = memo.probes.find(p -> sameConfig(p.config, oracle));
 		if (held != null) return held.coverage;
 		final unavailable: Null<String> = oracle.unavailable;
@@ -624,42 +615,6 @@ final class OracleCoverage {
 	}
 	#end
 
-}
-
-/**
- * The cell a caller memoises its compiled-set probes in — empty until the first probe, or seeded
- * with the probes a previous phase already paid for. Each probe carries the configuration it was
- * taken for, which is the only key a reuse may be made by (`OracleCoverage.probedOnce`).
- */
-typedef OracleCoverageMemo = {
-
-	var probes: Array<ConfigCoverage>;
-
-	/** The phase's `usableOnce` split, null until its first candidate asks. */
-	var usable: Null<UsableCoverage>;
-
-}
-
-/** One compiled-set probe and the configuration it describes — never read apart. */
-typedef ConfigCoverage = {
-	var config: OracleConfig;
-	var coverage: OracleCoverage;
-}
-
-/**
- * The configurations a phase may judge with once coverage is known — see `OracleCoverage.usable`.
- *
- * `configs` and `coverages` are paired by position and hold only KNOWN coverage; `unknown` holds
- * the configurations that cannot say what they compile, which vouch for no edit but still verify
- * every candidate; `excluded` names each of them; `stop` is the reason the phase stops, non-null
- * only when no configuration is left.
- */
-typedef UsableCoverage = {
-	var configs: Array<OracleConfig>;
-	var coverages: Array<OracleCoverage>;
-	var unknown: Array<OracleConfig>;
-	var excluded: Array<OracleExclusion>;
-	var stop: Null<String>;
 }
 
 /**

@@ -6,9 +6,9 @@ import sys.io.File;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.common.imports.ShortenTypeRef;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /**

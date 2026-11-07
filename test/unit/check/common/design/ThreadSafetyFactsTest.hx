@@ -7,6 +7,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 using StringTools;

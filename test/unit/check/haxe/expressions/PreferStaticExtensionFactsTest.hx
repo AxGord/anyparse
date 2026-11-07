@@ -14,6 +14,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.StdResolver;
 import haxe.io.Path;
 import unit.cli.CliFixture;

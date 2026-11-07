@@ -1,10 +1,10 @@
 package anyparse.check.oracle;
 
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.OracleOutcome;
 import haxe.crypto.Md5;
 import haxe.io.Path;
 #if nodejs

@@ -4,8 +4,9 @@ package unit.cli;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.WriteFailure;
 import anyparse.query.cli.command.LintFixSafeTrail;
 import haxe.Exception;
@@ -34,7 +35,7 @@ class LintFixSafeTrailTest extends Test {
 			try
 				switch LintFixSafePass.isolate(
 					WholeWave('the compiler blames no file this run wrote', 'errors'), changed, [],
-					trail.seat(changed, [], [], fixedOf, [])
+					trail.seat(changed, [], [], fixedOf, [], new HaxeQueryPlugin())
 				) {
 					case WholeWave(reason, _):
 						why = reason;
@@ -59,7 +60,7 @@ class LintFixSafeTrailTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final created: String = '$root/kept';
 			final trail: LintFixSafeTrail = new LintFixSafeTrail((_, _, _) -> null, LintFixSafePass.PROBE_CAP);
-			final outcome: OracleOutcome = trail.seat([created], [], [], [], []).probe([], []);
+			final outcome: OracleOutcome = trail.seat([created], [], [], [], [], new HaxeQueryPlugin()).probe([], []);
 			switch outcome {
 				case Unavailable(reason): Assert.stringContains('cannot write $created: the file could not be deleted', reason);
 				case other: Assert.fail('expected Unavailable, got $other');

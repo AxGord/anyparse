@@ -8,6 +8,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import haxe.io.Path;
 import unit.cli.CliFixture;
 

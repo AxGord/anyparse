@@ -3,10 +3,10 @@ package unit.check.oracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerDisplayOracle.TypeReplyPosition;
 import anyparse.check.oracle.CompilerNameProof;
-import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.OracleServerPool;
 import anyparse.query.EditJournal;
+import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.runtime.Span;
 
 using StringTools;

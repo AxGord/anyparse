@@ -9,6 +9,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;

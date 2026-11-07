@@ -9,6 +9,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.ReachDefinesProbe;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 /**
  * A `compilerOracle` entry's `dir` is the working directory of EVERY spawn of that configuration,

@@ -8,6 +8,7 @@ import anyparse.check.common.control.PreferCaseGuard;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /**

@@ -6,6 +6,7 @@ import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;

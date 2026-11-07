@@ -1,12 +1,12 @@
 package anyparse.check.oracle;
 
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.core.ContentHash;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.util.Compare;
 import haxe.io.Path;
 

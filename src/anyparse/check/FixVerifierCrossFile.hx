@@ -4,15 +4,15 @@ import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.CompilerOracle.CompilerOracle;
-import anyparse.check.oracle.CompilerOracle.OracleExclusion;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
-import anyparse.check.oracle.OracleCoverage.OracleCoverage;
-import anyparse.check.oracle.OracleCoverage.OracleCoverageMemo;
-import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OracleProvider.OracleCoverageMemo;
+import anyparse.query.OracleProvider.OracleDeclines;
+import anyparse.query.OracleProvider.OracleExclusion;
+import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.OracleProvider.UsableCoverage;
+import anyparse.query.OracleProviders;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -53,7 +53,7 @@ final class FixVerifierCrossFile {
 				Linter.collect(files, run.plugin, [check], run.resolveConfig, run.applyEnablement).filter(v -> v.rule == check.id())
 			);
 			if (cross.length == 0) continue;
-			final usable: UsableCoverage = OracleCoverage.usableOnce(run.memo, run.judging, result.excluded);
+			final usable: UsableCoverage = OracleProviders.of(run.plugin).usableOnce(run.memo, run.judging, result.excluded);
 			result.coverage = run.memo.probes;
 			final unknown: Null<String> = usable.stop;
 			if (unknown != null) {
@@ -166,8 +166,8 @@ final class FixVerifierCrossFile {
 		final before: Map<String, String> = originals;
 		final verifying: Null<Array<OracleConfig>> = coveringConfigs(judge, before);
 		if (verifying == null)
-			return Declined(OracleCoverage.gapSentence(
-				['a file this rename edits is compiled by no judging configuration'].concat(CompilerOracle.sentencesOf(judge.excluded))
+			return Declined(OracleDeclines.gapSentence(
+				['a file this rename edits is compiled by no judging configuration'].concat(OracleDeclines.sentencesOf(judge.excluded))
 			));
 		final configs: Array<OracleConfig> = verifying;
 		final n: Int = judge.sets.length;
@@ -178,7 +178,7 @@ final class FixVerifierCrossFile {
 			final texts: Null<Map<String, String>> = candidate(judge, before, indices);
 			if (texts == null) return null;
 			for (file => text in texts) judge.write(file, text);
-			return CompilerOracle.typecheckAll(configs);
+			return OracleProviders.of(judge.plugin).typecheckAll(configs, false);
 		}
 		function keep(indices: Array<Int>): ComponentVerdict {
 			final texts: Null<Map<String, String>> = candidate(judge, before, indices);

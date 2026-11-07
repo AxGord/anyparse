@@ -1,8 +1,8 @@
 package unit.query;
 
 import anyparse.check.FailerBisect;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 using Lambda;
 using StringTools;

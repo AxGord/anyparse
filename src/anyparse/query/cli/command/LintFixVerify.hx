@@ -5,11 +5,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.facts.FactsTypeOracle;
-import anyparse.check.oracle.CompilerDisplayOracle;
-import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.CompilerServer;
 import anyparse.check.oracle.OracleCache;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
 import anyparse.core.EnvFlag;
 import anyparse.query.CachingGrammarPlugin;
@@ -24,6 +20,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
+import anyparse.query.OracleProvider;
 
 using Lambda;
 
@@ -376,10 +373,12 @@ final class LintFixVerify {
 	 * degrade to a skip note when the oracle can't run. Null = no fail. Split out of
 	 * `runLint` to keep it under the complexity budget.
 	 */
-	public static function reportModeOracle(oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool): Null<Int> {
+	public static function reportModeOracle(
+		compiler: OracleProvider, oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool
+	): Null<Int> {
 		if (oracles.length == 0) return null;
 		final confirmed: Array<OracleConfig> = [];
-		final outcomes: Array<OracleOutcome> = reportOracleVerdicts(oracles, paths, warmServer);
+		final outcomes: Array<OracleOutcome> = reportOracleVerdicts(compiler, oracles, paths, warmServer);
 		for (i in 0...oracles.length) switch outcomes[i] {
 			case Confirmed:
 				confirmed.push(oracles[i]);
@@ -441,7 +440,7 @@ final class LintFixVerify {
 	 * `CompilerOracle` directly, so a post-write typecheck is always a real compiler run.
 	 */
 	private static function reportOracleVerdicts(
-		oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool
+		compiler: OracleProvider, oracles: Array<OracleConfig>, paths: Array<String>, warmServer: Bool
 	): Array<OracleOutcome> {
 		final outcomes: Array<Null<OracleOutcome>> = [];
 		final fingerprints: Array<Null<String>> = [];
@@ -470,8 +469,8 @@ final class LintFixVerify {
 		final pending: Array<OracleConfig> = compile.map(i -> oracles[i]);
 		// the cold compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
 		final compiled: Array<OracleReading> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')
-			? CompilerOracle.typecheckEachReading(pending, false)
-			: pending.map(oracle -> {outcome: compiledOracleVerdict(oracle, paths), parsed: null });
+			? compiler.typecheckEachReading(pending, false)
+			: pending.map(oracle -> {outcome: compiledOracleVerdict(compiler, oracle, paths), parsed: null });
 		for (k => i in compile) {
 			final outcome: OracleOutcome = compiled[k].outcome ?? Unavailable('the typecheck was cancelled');
 			outcomes[i] = outcome;
@@ -495,17 +494,17 @@ final class LintFixVerify {
 	 * `--fix` risky-fix verification never comes here either: a post-write typecheck is the one
 	 * question a compilation server cannot answer honestly.
 	 */
-	private static function compiledOracleVerdict(oracle: OracleConfig, paths: Array<String>): OracleOutcome {
+	private static function compiledOracleVerdict(compiler: OracleProvider, oracle: OracleConfig, paths: Array<String>): OracleOutcome {
 		// A warm CONFIRM stands as it is; a warm REJECTION is re-run COLD before it is reported.
 		// A compilation server can re-emit a stale null-safety diagnostic for a module it restored
 		// from cache rather than recompiled — one such site made every cached recompile of this
 		// project spuriously red while the cold compile was green. So a rejection always
 		// carries the cold compiler's own verdict and error text, and the server can only ever
 		// change what a verdict COSTS.
-		return switch (CompilerServer.typecheck(oracle.hxml, oracle.dir, paths, oracle.defines)) {
+		return switch (compiler.serverTypecheck(oracle.hxml, oracle.dir, paths, oracle.defines)) {
 			case Confirmed: Confirmed;
-			case Rejected(_): coldAfterWarmRejection(oracle);
-			case null, _: CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
+			case Rejected(_): coldAfterWarmRejection(compiler, oracle);
+			case null, _: compiler.typecheck(oracle.hxml, oracle.dir, oracle.defines);
 		};
 	}
 
@@ -515,8 +514,8 @@ final class LintFixVerify {
 	 * without the note the run silently costs a warm typecheck plus a cold one forever with
 	 * nothing to point at.
 	 */
-	private static function coldAfterWarmRejection(oracle: OracleConfig): OracleOutcome {
-		final cold: OracleOutcome = CompilerOracle.typecheck(oracle.hxml, oracle.dir, oracle.defines);
+	private static function coldAfterWarmRejection(compiler: OracleProvider, oracle: OracleConfig): OracleOutcome {
+		final cold: OracleOutcome = compiler.typecheck(oracle.hxml, oracle.dir, oracle.defines);
 		if (cold.match(Confirmed))
 			CliIo.stderr(
 				'apq lint: warm compiler server rejected a build the compiler accepts — stale cached diagnostic, cold verdict used\n'
@@ -559,7 +558,8 @@ final class LintFixVerify {
 		// Per configuration, and a RED one is dropped rather than allowed to stop the phase — the
 		// same rule `FixVerifier` takes its baseline by, for the same reason: a configuration that
 		// does not typecheck before any annotation can judge none, while a green sibling still can.
-		final measured: OracleBaseline = CompilerOracle.judging(oracles);
+		final compiler: OracleProvider = OracleProviders.of(plugin);
+		final measured: OracleBaseline = compiler.judging(oracles);
 
 		// Grows when a judging configuration's compiled set turns out unknown — see below.
 		final excluded: Array<OracleExclusion> = measured.excluded;
@@ -598,7 +598,7 @@ final class LintFixVerify {
 		// by its configuration. Settled BEFORE the display server starts, because the server must
 		// be one of the configurations whose compiled set is known.
 		final coverageMemo: OracleCoverageMemo = { probes: coverage.copy(), usable: null };
-		final current: UsableCoverage = OracleCoverage.usableOnce(coverageMemo, measured.judging, excluded);
+		final current: UsableCoverage = compiler.usableOnce(coverageMemo, measured.judging, excluded);
 		final stop: Null<String> = current.stop;
 		if (stop != null) return {
 			tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $stop)',
@@ -606,6 +606,7 @@ final class LintFixVerify {
 			excluded: excluded
 		};
 		final display: DisplayHandle = {
+			compiler: compiler,
 			configs: current.configs,
 			typeSyntax: plugin.typeSyntax,
 			server: null,
@@ -659,7 +660,7 @@ final class LintFixVerify {
 		// keeps its veto whether or not it could say so.
 		final applied: { tail: String, appliedCount: Int } = candidates.length == 0
 			? { tail: ', oracle-assisted: 0 applied', appliedCount: 0 }
-			: commitAssisted(candidates, measured.judging, files, changedFiles, editsPerFile);
+			: commitAssisted(compiler, candidates, measured.judging, files, changedFiles, editsPerFile);
 		return {
 			tail: applied.tail + refusedTail + declinedTail + excludedTail(excluded),
 			appliedCount: applied.appliedCount,
@@ -688,7 +689,7 @@ final class LintFixVerify {
 	private static function displayOf(handle: DisplayHandle): Null<TypeOracle> {
 		if (!handle.tried) {
 			handle.tried = true;
-			handle.server = startDisplay(handle.configs, handle.typeSyntax);
+			handle.server = startDisplay(handle.compiler, handle.configs, handle.typeSyntax);
 		}
 		return handle.server;
 	}
@@ -729,9 +730,11 @@ final class LintFixVerify {
 	 * `CompilerDisplayOracle`), but not blindly the first: a server that will not come up for one
 	 * build is no reason to skip the phase while its sibling's would.
 	 */
-	private static function startDisplay(configs: Array<OracleConfig>, typeSyntax: TypeSyntaxReader): Null<CompilerDisplayOracle> {
+	private static function startDisplay(
+		compiler: OracleProvider, configs: Array<OracleConfig>, typeSyntax: TypeSyntaxReader
+	): Null<DisplayTypeOracle> {
 		for (config in configs) if (config.unavailable == null) {
-			final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(typeSyntax, config.hxml, config.dir, config.defines);
+			final display: Null<DisplayTypeOracle> = compiler.startDisplay(typeSyntax, config.hxml, config.dir, config.defines);
 			if (display != null) return display;
 		}
 		return null;
@@ -745,10 +748,10 @@ final class LintFixVerify {
 	 * non-convergent batch are three different things to act on, and used to print identically.
 	 */
 	private static function commitAssisted(
-		candidates: Array<{ file: String, before: String, after: String }>, oracles: Array<OracleConfig>,
+		compiler: OracleProvider, candidates: Array<{ file: String, before: String, after: String }>, oracles: Array<OracleConfig>,
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, editsPerFile: Map<String, Int>
 	): { tail: String, appliedCount: Int } {
-		final result: OracleBatchResult = verifyOracleBatch(candidates, oracles);
+		final result: OracleBatchResult = verifyOracleBatch(candidates, oracles, configs -> compiler.typecheckAll(configs, false));
 		syncAppliedSources(files, candidates, result.applied);
 		var edits: Int = 0;
 		for (f in result.applied) {
@@ -909,7 +912,7 @@ final class LintFixVerify {
 	 * code.
 	 */
 	private static function assistedEditsAreVerifiable(
-		compiled: Array<OracleCoverage>, excluded: Array<OracleExclusion>, entry: { file: String, source: String },
+		compiled: Array<CompiledSet>, excluded: Array<OracleExclusion>, entry: { file: String, source: String },
 		edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
 	): Null<String> {
 		final spans: Array<Span> = edits.map(edit -> edit.span);
@@ -926,7 +929,7 @@ final class LintFixVerify {
 		// The EXCLUDED configurations join the gap list for the same reason they do in
 		// `FixVerifier`: one of them may be the very build that would have typechecked this
 		// annotation, and a decline naming only the judging configurations hides that.
-		return OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded)));
+		return OracleDeclines.gapSentence(gaps.concat(OracleDeclines.sentencesOf(excluded)));
 	}
 
 	/**
@@ -941,13 +944,12 @@ final class LintFixVerify {
 	 */
 	public static function verifyOracleBatch(
 		candidates: Array<{ file: String, before: String, after: String }>, oracles: Array<OracleConfig>,
-		?typecheck: (Array<OracleConfig>) -> OracleOutcome
+		verdict: (Array<OracleConfig>) -> OracleOutcome
 	): OracleBatchResult {
 		// The oracle arrives as a parameter for the same reason `TypeOracle` is an interface: the
 		// three rollback CAUSES below are environment-shaped (a compiler that will not launch, an
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
-		// them against a real haxe. A test supplies canned verdicts; production passes nothing.
-		final verdict: (Array<OracleConfig>) -> OracleOutcome = typecheck ?? configs -> CompilerOracle.typecheckAll(configs);
+		// them against a real haxe. A test supplies canned verdicts; production the grammar's oracle.
 		CliIo.writeFiles(candidates.map(c -> {path: c.file, content: c.after }));
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
@@ -1066,8 +1068,9 @@ final class LintFixVerify {
 
 /** The display server `LintFixVerify.displayOf` starts for `configs` on first need, and whether it was tried. */
 private typedef DisplayHandle = {
+	final compiler: OracleProvider;
 	final configs: Array<OracleConfig>;
 	final typeSyntax: TypeSyntaxReader;
-	var server: Null<CompilerDisplayOracle>;
+	var server: Null<DisplayTypeOracle>;
 	var tried: Bool;
 }

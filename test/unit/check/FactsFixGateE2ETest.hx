@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 using StringTools;

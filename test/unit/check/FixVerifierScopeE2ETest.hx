@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.FixVerifier;
 import anyparse.check.common.members.PreferInline;
 import anyparse.check.oracle.CompilerOracle;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /**

@@ -2,6 +2,7 @@ package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 using StringTools;
 

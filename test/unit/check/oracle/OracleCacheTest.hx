@@ -8,6 +8,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCache;
 import anyparse.core.EnvFlag;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 /**
  * End-to-end and unit coverage of the content-addressed oracle verdict cache

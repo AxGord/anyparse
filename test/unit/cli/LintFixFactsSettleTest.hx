@@ -9,6 +9,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.command.LintFixDriver;
 
 /**

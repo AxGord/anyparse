@@ -10,6 +10,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.CompilerServer;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 /**
  * End-to-end coverage of the compiler-oracle (`apq.json` `compilerOracle`):

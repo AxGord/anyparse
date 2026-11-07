@@ -400,6 +400,14 @@
 			"find": "new UnusedImport(),",
 			"replace": "",
 			"note": "a rule leaves the builtin registry, so the kit's registered-rule reads must stop holding it"
+		},
+		{
+			"name": "M-FIXVERIFIER-BASELINE-NOT-ASKED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "verifyWith",
+			"find": "final measured: OracleBaseline = oracle.judging(oracles);",
+			"replace": "final measured: OracleBaseline = { judging: oracles, excluded: [], verdict: Confirmed };",
+			"note": "the risky phase stops asking the grammar's oracle for its baseline and takes every configuration as green, so it judges edits under builds that never typechecked"
 		}
 	]
 }

@@ -2,6 +2,7 @@ package unit.check.common.imports;
 
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /** One lint run of the fixture: its hoists as `<module>:<statement>`, sorted and joined, and its stderr. */
@@ -133,7 +134,7 @@ class HoistCommonImportBuildsE2ETest extends Test {
 			if (line.indexOf('(hoist-common-import)') >= 0 && line.startsWith('$dir/'))
 				hoisted.push('${line.substring(dir.length + 1, line.indexOf(':'))}:${quoted[1]}');
 		}
-		hoisted.sort(Reflect.compare);
+		hoisted.sort(anyparse.util.Compare.compareString);
 		return { hoisted: hoisted.join(','), err: err };
 	}
 	#end

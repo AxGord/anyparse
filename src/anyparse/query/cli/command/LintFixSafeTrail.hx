@@ -2,10 +2,10 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.ConfigFinder;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 using Lambda;
 
@@ -117,7 +117,7 @@ final class LintFixSafeTrail {
 	 */
 	public function seat(
 		changed: Array<String>, coupled: Array<Array<String>>, originalOf: Map<String, String>, fixedOf: Map<String, String>,
-		judging: Array<OracleConfig>
+		judging: Array<OracleConfig>, oracle: OracleProvider
 	): SafeBisectSeat {
 		return {
 			probe: (keep, partial) -> {
@@ -132,7 +132,7 @@ final class LintFixSafeTrail {
 						else
 							originalOf[file]
 					);
-					CompilerOracle.typecheckAll(judging);
+					oracle.typecheckAll(judging, false);
 				} catch (exception: WriteFailure) {
 					Unavailable('its candidate could not be put on disk: ${exception.message}');
 				}

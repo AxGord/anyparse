@@ -7,6 +7,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCoverage;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /**

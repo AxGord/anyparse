@@ -5,6 +5,7 @@ import sys.io.File;
 #end
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /**

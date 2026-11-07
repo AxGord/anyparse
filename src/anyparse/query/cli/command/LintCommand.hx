@@ -333,7 +333,7 @@ final class LintCommand implements CliCommand {
 		// whole of a single-file run, the inner loop's largest single tax.
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
-			: LintFixVerify.reportModeOracle(oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
+			: LintFixVerify.reportModeOracle(OracleProviders.of(cached), oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
 		LintOracleRun.endCompiles(early, ahead, oracles);
 		if (oracleExit != null) return oracleExit;
 

@@ -8,6 +8,7 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.runtime.Span;
 import unit.cli.CliFixture;
 

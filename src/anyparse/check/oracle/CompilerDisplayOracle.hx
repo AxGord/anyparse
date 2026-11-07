@@ -6,6 +6,7 @@ import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.proc.SpawnJob;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
@@ -52,7 +53,7 @@ import haxe.io.Path;
  * `start` / a null `typeAt` — the oracle degrades, never throws.
  */
 @:nullSafety(Strict)
-final class CompilerDisplayOracle extends PositionTypeOracle {
+final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayTypeOracle {
 
 	/** Total `typeAt` queries this process — a spawn counter tests read to prove the no-config gate. */
 	public static var invocations(default, null): Int = 0;

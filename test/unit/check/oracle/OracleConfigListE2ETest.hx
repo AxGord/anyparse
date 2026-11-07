@@ -10,6 +10,8 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.CompilerServer;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.ConfigCoverage;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.command.LintFixVerify;
 
 /**
@@ -415,8 +417,12 @@ final class OracleConfigListE2ETest extends Test {
 			'{"compilerOracle":[{"hxml":"check.hxml","defines":["flag"]}],"rules":{"explicit-local-type":{"enabled":true}}}', DISPLAY_MAIN
 		);
 		if (skipWithoutHaxe(dir, 'check.hxml')) return;
-		final display: Null<CompilerDisplayOracle> = LintFixVerify.startDisplay(
-			[oracle(dir, '$dir/check.hxml', ['flag'])], new HaxeQueryPlugin().typeSyntax
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		// the display oracle the Haxe plugin starts is the compiler's, whose raw `typeAt` this asks
+		final display: Null<CompilerDisplayOracle> = cast LintFixVerify.startDisplay(
+			plugin,
+			[oracle(dir, '$dir/check.hxml', ['flag'])],
+			plugin.typeSyntax
 		);
 		final type: Null<String> = display?.typeAt('$dir/Main.hx', DISPLAY_MAIN.indexOf('trace(v)') + 'trace('.length);
 		display?.stop();

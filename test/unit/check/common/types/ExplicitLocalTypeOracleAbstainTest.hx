@@ -9,6 +9,7 @@ import anyparse.check.common.types.LiteralInfer;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 using StringTools;

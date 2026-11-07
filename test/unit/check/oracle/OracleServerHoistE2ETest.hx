@@ -2,6 +2,7 @@ package unit.check.oracle;
 
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.query.Cli;
+import anyparse.query.OracleProvider.OracleOutcome;
 
 /**
  * A `--fix` run whose edit creates an ambient import file and removes the statements it replaces: the hoist ends applied and

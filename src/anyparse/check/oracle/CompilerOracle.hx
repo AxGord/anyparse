@@ -4,74 +4,11 @@ import anyparse.core.PhaseTimings;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
-
-/**
- * The verdict of one compiler-oracle typecheck run — `apq lint`'s bridge to
- * treating the Haxe compiler as ground truth. A project opts in through the `apq.json` `compilerOracle` key (an `.hxml` path, or
- * a LIST of configurations); the linter then runs `haxe <hxml> --no-output` per configuration and folds the results back into the run:
- *
- *  - `Confirmed`   — the project typechecks; report mode annotates its
- *    `@:nullSafety` trust as compiler-confirmed, fix mode keeps a risky fix.
- *  - `Rejected`    — the project does NOT typecheck; carries the compiler's
- *    error text. Report mode fails the lint; fix mode reverts the risky edit.
- *  - `Unavailable` — the oracle could not run (no `haxe` on PATH, a non-sys/
- *    nodejs target, or a spawn that produced no exit status). Treated
- *    conservatively: a report run degrades to a note (never a failure), a
- *    risky fix is left unapplied (report-only) since safety cannot be shown.
- */
-enum OracleOutcome {
-	Confirmed;
-	Rejected(errors: String);
-	Unavailable(reason: String);
-}
-
-/**
- * Which configurations may JUDGE an edit, why the others may not, and the verdict a phase proceeds on.
- *
- * `judging` holds the ones whose OWN baseline typechecks; `excluded` names each one that does not
- * (a fresh list the caller owns and may extend); `verdict` is `Confirmed` while at least one
- * configuration judges, else the outcome of the FIRST failing configuration in declared order (no
- * ranking between `Rejected` and `Unavailable`). A configuration red before any edit was never a
- * working gate — a failure there afterwards is unattributable — so it is dropped and named rather
- * than allowed to stop the phase. On a cross-platform tree the alternative is severe: one broken
- * target would disable every risky fix, including in files that target never reads.
- *
- * Every phase that judges (the safe-pass net, the risky phase, the oracle-assisted phase) measures
- * this afresh over every configured build; in a lint run the configurations remember what the compiler
- * answered (`OracleRunMemo`), so a phase whose tree an earlier compile already judged pays no compile for it.
- */
-typedef OracleBaseline = {
-	var judging: Array<OracleConfig>;
-	var excluded: Array<OracleExclusion>;
-	var verdict: OracleOutcome;
-}
-
-/**
- * One configuration's verdict and every file its compile parsed, as the compiler printed the path — null when the
- * verdict came off a compile that did not print them, or none was asked.
- */
-typedef OracleReading = {
-	var outcome: Null<OracleOutcome>;
-	var parsed: Null<Array<String>>;
-}
-
-/**
- * One configuration that judged nothing, and why: the configuration, the CLASS of the reason, and
- * the sentence a report prints. A report names a configuration once per (configuration, cause) —
- * never once per sentence, since a red build's sentence quotes an error line whose number moves
- * when a fix edits the lines above it.
- */
-typedef OracleExclusion = {
-	var config: OracleConfig;
-	var cause: ExclusionCause;
-	var sentence: String;
-}
-
-/** Why a configuration judged nothing: its own baseline failed, or its compiled set is unknown. */
-enum abstract ExclusionCause(String) to String {
-	var Baseline = 'baseline';
-	var Coverage = 'coverage';
-}
+import anyparse.query.OracleProvider.ExclusionCause;
+import anyparse.query.OracleProvider.OracleBaseline;
+import anyparse.query.OracleProvider.OracleExclusion;
+import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.OracleProvider.OracleReading;
 
 /**
  * Runs the Haxe compiler as a lint oracle: `haxe <hxml> --no-output` in a child
@@ -284,11 +221,6 @@ final class CompilerOracle {
 	 */
 	public static function exclusionKey(exclusion: OracleExclusion): String {
 		return '${OracleDeclaration.oracleKey(exclusion.config)}\n${exclusion.cause}';
-	}
-
-	/** The sentences of `exclusions`, in order — what a decline's reason list quotes. */
-	public static function sentencesOf(exclusions: Array<OracleExclusion>): Array<String> {
-		return [for (exclusion in exclusions) exclusion.sentence];
 	}
 
 	/** Whether `run` is a compile that ran to its own status — not cancelled, not a spawn that produced none. */

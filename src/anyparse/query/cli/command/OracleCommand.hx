@@ -7,6 +7,8 @@ import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleDeclaration;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.query.ExitCode.*;
+import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.OracleProvider.OracleReading;
 import haxe.io.Path;
 
 /**

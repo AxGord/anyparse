@@ -4,7 +4,6 @@ import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
-import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.scan.DefiniteAssignmentGuard;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
@@ -16,6 +15,7 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.LineDiff;
 import anyparse.query.LintDiff;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintRange;
 import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
@@ -79,6 +79,7 @@ final class LintFixDriver {
 		// check, and every fix — keyed by source content, so an unchanged file is
 		// reused across passes and only a rewritten one re-parses on its new content.
 		final cached: CachingGrammarPlugin = LintCommand.wrapResolution(plugin, resolution);
+		final oracle: OracleProvider = OracleProviders.of(cached);
 		// the oracle-assisted phase places the compiler's facts of a file's run-start text through the edits the run applied
 		if (oracleConfigured) cached.editJournal = new EditJournal();
 		// hxformat.json is on disk and source-independent — discover once per file.
@@ -126,7 +127,7 @@ final class LintFixDriver {
 			preWrite.taken = true;
 			// the first write of the run: the facts compiles must have read every file before it lands
 			cached.compilerFactsSettled();
-			if (oracleConfigured) preWrite.baseline = CompilerOracle.judging(oracles);
+			if (oracleConfigured) preWrite.baseline = oracle.judging(oracles);
 		}
 		var fixedCount: Int = 0;
 		var passes: Int = 0;
@@ -186,13 +187,14 @@ final class LintFixDriver {
 		// no disk write before this one but a create, which settled the facts compiles already
 		cached.compilerFactsSettled();
 		final safePass: SafePassOutcome = PhaseTimings.measure(
-			'fix safe writes', () -> commitSafeWrites(files, changedFiles, originalOf, coupled, oracles, created, trail, preWrite.baseline)
+			'fix safe writes',
+			() -> commitSafeWrites(files, changedFiles, originalOf, coupled, oracle, oracles, created, trail, preWrite.baseline)
 		);
 		// WHICH configurations judged nothing, and why — named by every phase, and once per run:
 		// see `nameExclusions`. Printed as each phase learns them, so an aborting run names them
 		// too, and ahead of the summary line whose tails point back at them.
 		final named: Array<String> = [];
-		nameExclusions(named, safePass.excluded);
+		nameExclusions(named, safePass.excluded, oracle);
 		fixedCount -= settleRevert(safePass, safeEditsOf, changedFiles, files, originalOf, true);
 
 		// The bytes the SAFE loop settled on, so the follow-up round below can name exactly the
@@ -213,7 +215,7 @@ final class LintFixDriver {
 				)
 		);
 		fixedCount += risky.appliedCount;
-		nameExclusions(named, risky.excluded);
+		nameExclusions(named, risky.excluded, oracle);
 		final riskyTail: String = risky.tail;
 
 		// OracleAssisted checks (explicit-local-type's inference tail, explicit-type's return types,
@@ -231,22 +233,23 @@ final class LintFixDriver {
 				)
 		);
 		fixedCount += oa.appliedCount;
-		nameExclusions(named, oa.excluded);
+		nameExclusions(named, oa.excluded, oracle);
 		final oracleTail: String = oa.tail;
 
 		// The follow-up convergence round: `followUpRound` re-enters the loop over whatever the two
 		// verified phases above rewrote, since both of them write AFTER it has already converged.
 		final followUp: SafePassOutcome = PhaseTimings.measure(
-			'fix follow-up', () -> followUpRound(files, settledOf, list -> {
+			'fix follow-up',
+			() -> followUpRound(files, settledOf, list -> {
 				final before: Int = fixedCount;
 				safeEditsOf.clear();
 				trail.startRound();
 				active = list;
 				converge(maxPasses);
 				return fixedCount - before;
-			}, coupled, changedFiles, oracles, created, safeEditsOf, trail)
+			}, coupled, changedFiles, oracle, oracles, created, safeEditsOf, trail)
 		);
-		nameExclusions(named, followUp.excluded);
+		nameExclusions(named, followUp.excluded, oracle);
 		fixedCount -= settleRevert(followUp, safeEditsOf, changedFiles, files, originalOf, false);
 
 		final baselineTail: String = safePass.tail;
@@ -1110,9 +1113,9 @@ final class LintFixDriver {
 	 * android target was dropped, not to read it twice with two line numbers. The first sentence wins. Uncapped, because the
 	 * list is one line per configured build rather than per file.
 	 */
-	private static function nameExclusions(named: Array<String>, exclusions: Array<OracleExclusion>): Void {
+	private static function nameExclusions(named: Array<String>, exclusions: Array<OracleExclusion>, oracle: OracleProvider): Void {
 		for (exclusion in exclusions) {
-			final key: String = CompilerOracle.exclusionKey(exclusion);
+			final key: String = oracle.exclusionKey(exclusion);
 			if (named.contains(key)) continue;
 			named.push(key);
 			CliIo.stderr('apq lint --fix: compiler oracle ${exclusion.sentence}\n');
@@ -1136,8 +1139,8 @@ final class LintFixDriver {
 	 */
 	private static function reconcileSafePass(
 		files: Array<{ file: String, source: String }>, changedFiles: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, pre: Null<OracleBaseline>, oracles: Array<OracleConfig>, created: Array<String>,
-		trail: LintFixSafeTrail
+		coupled: Array<Array<String>>, pre: Null<OracleBaseline>, oracle: OracleProvider, oracles: Array<OracleConfig>,
+		created: Array<String>, trail: LintFixSafeTrail
 	): SafePassOutcome {
 		if (pre == null || oracles.length == 0) return {
 			reverted: false,
@@ -1157,7 +1160,7 @@ final class LintFixDriver {
 		// with `-v`: the risky phase's coverage probe (`OracleCoverage.probedOnce`) asks about exactly this tree next, and a
 		// green `-v` compile answers it from the run's memo instead of compiling every configuration again
 		final decision: SafePassDecision = LintFixSafePass.classify(
-			resolved, LintFixSafePass.isConfirmed(resolved) ? CompilerOracle.typecheckAll(judging, true) : null
+			resolved, LintFixSafePass.isConfirmed(resolved) ? oracle.typecheckAll(judging, true) : null
 		);
 		final errors: String = switch decision {
 			case Proceed: return {
@@ -1226,9 +1229,9 @@ final class LintFixDriver {
 		final fixedOf: Map<String, String> = sourceSnapshot(files);
 		final narrowing: SafePassNarrowing = LintFixSafePass.isolate(
 			LintFixSafePass.narrow(
-				errors, changedFiles, coupled, restore, CompilerOracle.typecheckAll.bind(judging), LintFixSafePass.NARROW_ROUNDS
+				errors, changedFiles, coupled, restore, oracle.typecheckAll.bind(judging, false), LintFixSafePass.NARROW_ROUNDS
 			),
-			changedFiles, coupled, trail.seat(changedFiles, coupled, originalOf, fixedOf, judging), trail.probesLeft()
+			changedFiles, coupled, trail.seat(changedFiles, coupled, originalOf, fixedOf, judging, oracle), trail.probesLeft()
 		);
 		// Every arm settles the same way, because an isolation probe may have left any written file at a candidate the
 		// oracle rejected: the files it blamed back whole, a split file at the text it kept, every other one at the round's
@@ -1288,18 +1291,19 @@ final class LintFixDriver {
 	 */
 	private static function commitSafeWrites(
 		files: Array<{ file: String, source: String }>, changed: Array<String>, originalOf: Map<String, String>,
-		coupled: Array<Array<String>>, oracles: Array<OracleConfig>, created: Array<String>, trail: LintFixSafeTrail, ?pre: OracleBaseline
+		coupled: Array<Array<String>>, oracle: OracleProvider, oracles: Array<OracleConfig>, created: Array<String>,
+		trail: LintFixSafeTrail, ?pre: OracleBaseline
 	): SafePassOutcome {
 		// `pre` is the verdict a CREATING fix already forced before it wrote — reused rather than
 		// re-measured, because the tree it describes is the one before this run touched anything and
 		// the tree here is not.
-		final baseline: Null<OracleBaseline> = pre ?? (oracles.length > 0 && changed.length > 0 ? CompilerOracle.judging(oracles) : null);
+		final baseline: Null<OracleBaseline> = pre ?? (oracles.length > 0 && changed.length > 0 ? oracle.judging(oracles) : null);
 		// A created file is written again rather than skipped: a later pass may have EXTENDED it in
 		// memory only, and the write is idempotent where it did not.
 		CliIo.writeFiles([
 			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
 		]);
-		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracles, created, trail);
+		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracle, oracles, created, trail);
 	}
 
 	/**
@@ -1321,7 +1325,7 @@ final class LintFixDriver {
 	private static function followUpRound(
 		files: Array<{ file: String, source: String }>, settledOf: Map<String, String>,
 		converge: (Array<{ file: String, source: String }>) -> Int, coupled: Array<Array<String>>, changedFiles: Array<String>,
-		oracles: Array<OracleConfig>, created: Array<String>, editsOf: Map<String, Int>, trail: LintFixSafeTrail
+		oracle: OracleProvider, oracles: Array<OracleConfig>, created: Array<String>, editsOf: Map<String, Int>, trail: LintFixSafeTrail
 	): SafePassOutcome {
 		final quiet: SafePassOutcome = {
 			reverted: false,
@@ -1339,7 +1343,7 @@ final class LintFixDriver {
 		final rewritten: Array<String> = changedSince(files, verifiedOf).map(entry -> entry.file).concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
 		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
-		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracles, created, trail);
+		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracle, oracles, created, trail);
 		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted —
 		// bar the edits a file the net only split kept.
 		var kept: Int = fixed + splitKept(pass);

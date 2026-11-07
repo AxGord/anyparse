@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.runtime.Span;
 
 /**

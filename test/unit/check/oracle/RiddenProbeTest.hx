@@ -8,6 +8,7 @@ import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.macro.EmbeddedSource;
 import anyparse.query.CompilerFacts;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 
 /**

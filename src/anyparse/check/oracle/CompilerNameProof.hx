@@ -1,14 +1,14 @@
 package anyparse.check.oracle;
 
-import anyparse.check.Check.NameOracle;
 import anyparse.check.Check.NameSite;
 import anyparse.check.oracle.CompilerDisplayOracle.TypeReplyPosition;
-import anyparse.check.oracle.OracleCoverage.UsableCoverage;
 import anyparse.check.oracle.OracleServerPool.PositionAsk;
 import anyparse.core.PhaseTimings;
 import anyparse.query.EditJournal;
 import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.OracleProvider.NameProof;
+import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.runtime.Span;
 
 /**
@@ -20,7 +20,7 @@ import anyparse.runtime.Span;
  * none, or with no server in the pool, is no answer, never a pass. RUN-scoped: built for one verified pass.
  */
 @:nullSafety(Strict)
-final class CompilerNameProof implements NameOracle {
+final class CompilerNameProof implements NameProof {
 
 	/** Which configurations judge and what each compiles; null until `answerFor`. */
 	private var _judges: Null<() -> UsableCoverage> = null;

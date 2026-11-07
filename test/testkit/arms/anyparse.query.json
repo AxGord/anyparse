@@ -15628,6 +15628,20 @@
 			"find": "if (code > worst) worst = code;",
 			"replace": "worst = code;",
 			"note": "the last run's status is the call's, so a Haxe run that failed to parse is hidden by a clean JSON run after it"
+		},
+		{
+			"name": "M-ORACLE-PROVIDER-NOT-THROUGH-CACHE",
+			"type": "anyparse.query.OracleProviders",
+			"method": "of",
+			"force": "plugin is OracleProvider ? cast plugin : new AbsentOracle()",
+			"note": "the run's caching wrapper is asked as if it were the grammar, so a Haxe run on a cached plugin gets the absent oracle and every verified phase declines"
+		},
+		{
+			"name": "M-ORACLE-ABSENT-JUDGES",
+			"type": "anyparse.query.OracleProviders",
+			"method": "judging",
+			"force": "{ judging: oracles, excluded: [], verdict: Confirmed }",
+			"note": "a grammar with no compiler oracle reports every configuration green and judging, so a risky edit on it is kept with nothing having typechecked it"
 		}
 	]
 }

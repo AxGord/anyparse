@@ -12,6 +12,7 @@ import anyparse.check.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;

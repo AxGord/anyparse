@@ -1,8 +1,8 @@
 package unit.dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.check.oracle.OracleCache;
+import anyparse.query.OracleProvider.OracleOutcome;
 import dev.Binaries;
 import devkit.TempDir;
 import haxe.io.Path;

@@ -6,16 +6,12 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.NameOracleAware;
 import anyparse.check.Check.RiskyArm;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.CompilerNameProof;
-import anyparse.check.oracle.CompilerOracle.CompilerOracle;
-import anyparse.check.oracle.CompilerOracle.OracleBaseline;
-import anyparse.check.oracle.CompilerOracle.OracleExclusion;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LintFixSafePass;
+import anyparse.query.OracleProvider;
+import anyparse.query.OracleProviders;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
@@ -367,7 +363,7 @@ final class FixVerifier {
 		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): FixVerifyResult {
-		final names: CompilerNameProof = new CompilerNameProof();
+		final names: NameProof = OracleProviders.of(plugin).nameProof();
 		final aware: Array<NameOracleAware> = [for (check in riskyChecks) if (check is NameOracleAware) cast check];
 		for (check in aware) check.setNameOracle(names);
 		final result: FixVerifyResult = verifyWith(
@@ -378,7 +374,7 @@ final class FixVerifier {
 	}
 
 	private static function verifyWith(
-		names: CompilerNameProof, files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
+		names: NameProof, files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, optsByFile: Null<Map<String, Null<String>>>, coverage: Null<Array<ConfigCoverage>>,
 		resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool
 	): FixVerifyResult {
@@ -397,7 +393,8 @@ final class FixVerifier {
 		// gate, since a failure there afterwards is unattributable — where a green sibling still
 		// judges what it compiles perfectly well. Only when NOTHING judges does the phase decline,
 		// which is exactly what one red oracle always did.
-		final measured: OracleBaseline = CompilerOracle.judging(oracles);
+		final oracle: OracleProvider = OracleProviders.of(plugin);
+		final measured: OracleBaseline = oracle.judging(oracles);
 		final judging: Array<OracleConfig> = measured.judging;
 		// Grows when a judging configuration's compiled set turns out unknown — see below.
 		final excluded: Array<OracleExclusion> = measured.excluded;
@@ -432,7 +429,7 @@ final class FixVerifier {
 		final coverageMemo: OracleCoverageMemo = { probes: (coverage ?? []).copy(), usable: null };
 		// The same memoised answer the candidates are judged by: a check asking about a site before its first candidate
 		// exists settles the probe here, and the loop below reads it back.
-		names.answerFor(OracleCoverage.usableOnce.bind(coverageMemo, judging, excluded), plugin);
+		names.answerFor(oracle.usableOnce.bind(coverageMemo, judging, excluded), plugin);
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
 		// soundness gates can be whole-project (prefer-inline's subtype-override /
@@ -487,7 +484,7 @@ final class FixVerifier {
 				// baseline is green, so it still VERIFIES every candidate (`current.unknown`): it may
 				// compile the edited code, and a rejection from it is attributable. The phase stops
 				// only when no configuration's compiled set is known.
-				final current: UsableCoverage = OracleCoverage.usableOnce(coverageMemo, judging, excluded);
+				final current: UsableCoverage = oracle.usableOnce(coverageMemo, judging, excluded);
 				final unknown: Null<String> = current.stop;
 				if (unknown != null) return {
 					baseline: baseline,
@@ -731,7 +728,7 @@ final class FixVerifier {
 		// that may compile it — the covering ones and every one whose compiled set is unknown: dropping the latter
 		// is how an edit that compiles on mac and breaks an android build whose `-v` probe failed was applied.
 		return covering.length == 0
-			? Settled(Declined(OracleCoverage.gapSentence(gaps.concat(CompilerOracle.sentencesOf(excluded)))))
+			? Settled(Declined(OracleDeclines.gapSentence(gaps.concat(OracleDeclines.sentencesOf(excluded)))))
 			: Ready({
 				entry: entry,
 				edits: edits,
@@ -782,10 +779,11 @@ final class FixVerifier {
 		// without every layer between here and the spawn carrying a count.
 		final spawns: Array<Int> = [0];
 		function askCovering(): OracleOutcome {
-			final spentBefore: Int = CompilerOracle.invocations;
+			final oracle: OracleProvider = OracleProviders.of(plugin);
+			final spentBefore: Int = oracle.invocations();
 			rounds.push(1);
-			final outcome: OracleOutcome = CompilerOracle.typecheckAll(verifying);
-			spawns[0] += CompilerOracle.invocations - spentBefore;
+			final outcome: OracleOutcome = oracle.typecheckAll(verifying, false);
+			spawns[0] += oracle.invocations() - spentBefore;
 			return outcome;
 		}
 		write(entry.file, candidate.fullText);
@@ -940,7 +938,7 @@ final class FixVerifier {
 			for (config in candidate.verifying) if (!configs.contains(config)) configs.push(config);
 		}
 		rounds.push(n);
-		final outcome: OracleOutcome = CompilerOracle.typecheckAll(configs);
+		final outcome: OracleOutcome = OracleProviders.of(plugin).typecheckAll(configs, false);
 		if (outcome.match(Confirmed)) {
 			for (candidate in candidates) candidate.entry.source = candidate.fullText;
 			return [for (_ in candidates) Applied];
@@ -1020,10 +1018,11 @@ final class FixVerifier {
 		flat.sort((a, b) -> a - b);
 		final keptEdits: Array<GroupedEdit> = flat.map(i -> edits[i]);
 		final refused: Int = edits.length - keptEdits.length;
-		final spentBefore: Int = CompilerOracle.invocations;
+		final oracle: OracleProvider = OracleProviders.of(plugin);
+		final spentBefore: Int = oracle.invocations();
 		final inner: EntryVerdict = verifyEntry(entry, keptEdits, plugin, opts, usable, excluded, write, rounds);
 		return switch inner {
-			case Applied: Partial(keptEdits.length, refused, CompilerOracle.invocations - spentBefore, NotCanonical(message));
+			case Applied: Partial(keptEdits.length, refused, oracle.invocations() - spentBefore, NotCanonical(message));
 			case Partial(landed, dropped, spawns, cause) if (landed > 0): Partial(landed, dropped + refused, spawns, cause);
 			case Reverted(OracleUnavailable(reason)): Reverted(OracleUnavailable(reason));
 			case _: whole;

@@ -1,5 +1,11 @@
 package anyparse.grammar.haxe;
 
+import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.oracle.CompilerNameProof;
+import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.oracle.CompilerServer;
+import anyparse.check.oracle.OracleCoverage;
 import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
@@ -12,6 +18,7 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.OracleProvider;
 import anyparse.query.ParseGate;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
@@ -68,7 +75,7 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
-		implements ParsedRootProvider {
+		implements ParsedRootProvider implements OracleProvider {
 
 	/** The `--lang` this plugin answers to. */
 	public static inline final LANG: String = 'haxe';
@@ -704,6 +711,48 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	/** `GrammarPlugin` — `HxTypeSyntax` documents how each spelling reads. */
 	public function typeSyntax(typeSource: String): Null<TypeSyntax> {
 		return HxTypeSyntax.of(typeSource);
+	}
+
+	public function invocations(): Int {
+		return CompilerOracle.invocations;
+	}
+
+	public function judging(oracles: Array<OracleConfig>): OracleBaseline {
+		return CompilerOracle.judging(oracles);
+	}
+
+	public function typecheck(hxml: String, cwd: Null<String>, defines: Array<String>): OracleOutcome {
+		return CompilerOracle.typecheck(hxml, cwd, defines);
+	}
+
+	public function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool): OracleOutcome {
+		return CompilerOracle.typecheckAll(oracles, verbose);
+	}
+
+	public function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading> {
+		return CompilerOracle.typecheckEachReading(oracles, stopAfterFailure);
+	}
+
+	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome> {
+		return CompilerServer.typecheck(hxml, cwd, paths, defines);
+	}
+
+	public function exclusionKey(exclusion: OracleExclusion): String {
+		return CompilerOracle.exclusionKey(exclusion);
+	}
+
+	public function usableOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>, excluded: Array<OracleExclusion>): UsableCoverage {
+		return OracleCoverage.usableOnce(memo, oracles, excluded);
+	}
+
+	public function nameProof(): NameProof {
+		return new CompilerNameProof();
+	}
+
+	public function startDisplay(
+		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>
+	): Null<DisplayTypeOracle> {
+		return CompilerDisplayOracle.start(typeSyntax, hxml, cwd, defines);
 	}
 
 	/**

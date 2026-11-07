@@ -14,6 +14,7 @@ import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 using StringTools;

@@ -2,8 +2,8 @@ package anyparse.query;
 
 import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.CompilerOracle.OracleExclusion;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
+import anyparse.query.OracleProvider.OracleExclusion;
+import anyparse.query.OracleProvider.OracleOutcome;
 import haxe.Exception;
 import haxe.io.Path;
 

@@ -16,6 +16,7 @@ import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.command.LintFixVerify;
 import haxe.io.Path;
 

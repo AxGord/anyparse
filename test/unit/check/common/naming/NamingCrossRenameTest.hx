@@ -14,6 +14,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 using StringTools;

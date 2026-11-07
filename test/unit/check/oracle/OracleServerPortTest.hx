@@ -2,13 +2,13 @@ package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerDisplayOracle;
-import anyparse.check.oracle.CompilerOracle.OracleOutcome;
 import anyparse.check.oracle.CompilerServer;
 import anyparse.check.oracle.OracleServerPool;
 import anyparse.check.oracle.ServerState;
 import anyparse.check.oracle.ServerStateParser;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
+import anyparse.query.OracleProvider.OracleOutcome;
 import unit.check.oracle.PortHolder.holding;
 import unit.check.oracle.PortHolder.unusedPort;
 import unit.check.oracle.PortHolder.watching;

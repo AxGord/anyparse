@@ -174,6 +174,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/** File path -> the source its declarations were read from and what `declarationsOf` read. */
 	private final _declarations: Map<String, { source: String, info: Null<FileInfo> }> = [];
 
+	/**
+	 * The wrapped grammar. `OracleProviders` reads it: the compiler oracle is the grammar's capability, never the wrapper's.
+	 */
+	@:allow(anyparse.query.OracleProviders)
 	private final _inner: GrammarPlugin;
 
 	/**
@@ -223,6 +227,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
+
 		_shared = new SharedParseTier(inner.langName());
 	}
 
