@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.ModulePathTokens.TextEdit;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;
 
@@ -69,7 +70,7 @@ final class DeclaredSortedLists {
 		for (i => p in now) {
 			final entries: Array<ListEntry> = assigned[i];
 			if (entries.length == 0) return Left('sorted list part ${parts[i].file} (${parts[i].select}) would be left empty — refusing');
-			ArraySort.sort(entries, (a, b) -> compare(a.content, b.content));
+			ArraySort.sort(entries, (a, b) -> Compare.compareString(a.content, b.content));
 			if (entries.map(e -> e.literal).join('\n') == p.entries.map(e -> e.literal).join('\n')) continue;
 			final edits: Array<TextEdit> = out[parts[i].file] ?? [];
 			edits.push({ span: p.array, text: '[${p.lead}${entries.map(e -> e.literal).join(p.sep)}${p.trail}]' });
@@ -179,20 +180,10 @@ final class DeclaredSortedLists {
 		final assigned: Array<Array<ListEntry>> = [for (_ in now) []];
 		for (p in now) for (e in p.entries) {
 			var target: Int = 0;
-			for (i => bound in bounds) if (bound != null && compare(bound, e.content) <= 0) target = i;
+			for (i => bound in bounds) if (bound != null && Compare.compareString(bound, e.content) <= 0) target = i;
 			assigned[target].push(e);
 		}
 		return assigned;
-	}
-
-	/** Code-unit order. */
-	private static function compare(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
 	}
 
 }

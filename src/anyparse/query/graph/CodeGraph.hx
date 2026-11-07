@@ -2,6 +2,8 @@ package anyparse.query.graph;
 
 using Lambda;
 
+import anyparse.util.Compare;
+
 /**
  * The scale a graph node stands at. A package holds types, a type holds members; a group holds
  * whatever an analysis partitions together (a component of a cluster report) and is no declaration.
@@ -221,7 +223,7 @@ final class CodeGraph {
 	/** Every node, ordered by id. */
 	public function nodes(): Array<GraphNode> {
 		final all: Array<GraphNode> = [for (n in _nodes) n];
-		all.sort((a, b) -> compareText(a.id, b.id));
+		all.sort((a, b) -> Compare.compareString(a.id, b.id));
 		return all;
 	}
 
@@ -248,11 +250,11 @@ final class CodeGraph {
 		final all: Array<GraphEdge> = [for (e in _edges) e];
 		all.sort((a, b) ->
 			if (a.from != b.from)
-				compareText(a.from, b.from)
+				Compare.compareString(a.from, b.from)
 			else if (a.to != b.to)
-				compareText(a.to, b.to)
+				Compare.compareString(a.to, b.to)
 			else
-				compareText(a.kind, b.kind)
+				Compare.compareString(a.kind, b.kind)
 		);
 		return all;
 	}
@@ -284,15 +286,6 @@ final class CodeGraph {
 
 	private static inline function isAlphanumeric(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	private static inline function compareText(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
 	}
 
 	/** Add `value` to the list `key` names in `lists`, opening the list when there is none. */

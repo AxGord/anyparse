@@ -14253,7 +14253,7 @@
 			"name": "M-MODMOVE-LIST-ONE-PART",
 			"type": "anyparse.query.DeclaredSortedLists",
 			"method": "distribute",
-			"find": "for (i => bound in bounds) if (bound != null && compare(bound, e.content) <= 0) target = i;",
+			"find": "for (i => bound in bounds) if (bound != null && Compare.compareString(bound, e.content) <= 0) target = i;",
 			"replace": "for (i => bound in bounds) if (false) target = i;",
 			"note": "every entry is assigned to the first part, whatever range it falls in"
 		},

@@ -4,6 +4,7 @@ import anyparse.query.Cli.ReconCluster;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -682,7 +683,7 @@ final class ReconCommand implements CliCommand {
 			final dir: Null<String> = stack.pop();
 			if (dir == null) break;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort(CliIo.compareStrings);
+			names.sort(Compare.compareString);
 			for (name in names) {
 				final path: String = '$dir/$name';
 				if (FileSystem.isDirectory(path))
@@ -1127,12 +1128,7 @@ final class ReconCommand implements CliCommand {
 			final c: ReconCluster = entry.cluster;
 			CliIo.sysPrint('  cluster "${entry.key}" — ${c.count} path${CliIo.plural(c.count)}:\n');
 			final sorted: Array<String> = c.paths.copy();
-			sorted.sort((a, b) -> if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0);
+			sorted.sort(Compare.compareString);
 			for (p in sorted) {
 				if (!showSource) {
 					CliIo.sysPrint('    $p\n');

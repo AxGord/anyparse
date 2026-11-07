@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.DuplicateImport;
 import anyparse.check.common.imports.UnusedImport;
@@ -29,6 +30,9 @@ using StringTools;
  * tolerance inherited from `SymbolIndex`, and the grouped reporter.
  */
 class LintSliceTest extends Test {
+
+	/** The project's own `apq.json` names functions a one-file fixture cannot resolve; a framework test reads none of it. */
+	private static inline final NO_RULES: String = '{}';
 
 	/**
 	 * A type-position reference (`var x:Used`) keeps an import; an import
@@ -112,7 +116,7 @@ class LintSliceTest extends Test {
 		final files: Array<{ source: String, file: String }> = [
 			{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\n@:nullSafety(Strict)\nclass C {}' }
 		];
-		final viaDefault: Array<Violation> = Linter.run(files, plugin());
+		final viaDefault: Array<Violation> = Linter.run(files, plugin(), null, _ -> LintConfig.parse(NO_RULES));
 		Assert.equals(1, viaDefault.length);
 		Assert.equals('unused-import', viaDefault[0].rule);
 

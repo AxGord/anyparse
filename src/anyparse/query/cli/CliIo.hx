@@ -96,20 +96,6 @@ final class CliIo {
 	public static inline function plural(n: Int): String return n == 1 ? '' : 's';
 
 	/**
-	 * Lexicographic order for `Array<String>.sort`, which takes no default
-	 * comparator — so every walker that wants a stable listing writes the same
-	 * three-branch ternary, and `duplicate-code` reports the copies.
-	 */
-	public static function compareStrings(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
-	}
-
-	/**
 	 * Stderr sibling of the EPIPE guard, and the one writer of this process's stderr that survives a full pipe.
 	 *
 	 * `Sys.stderr()` on nodejs is `Fs.writeSync(2, …)` — a SYNCHRONOUS raw fd write that never touches the `process.stderr` Writable

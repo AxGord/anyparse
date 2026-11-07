@@ -378,6 +378,14 @@
 			"find": "a < b",
 			"replace": "a.toLowerCase() < b.toLowerCase()",
 			"note": "the order follows the letter, not the code unit"
+		},
+		{
+			"name": "M-UTIL-COMPARE-INT-OVERFLOW",
+			"type": "anyparse.util.Compare",
+			"method": "compareInt",
+			"find": "a < b",
+			"replace": "((a - b) | 0) < 0",
+			"note": "a subtraction in place of the branch overflows for integers far apart"
 		}
 	]
 }

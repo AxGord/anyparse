@@ -7,7 +7,10 @@ package anyparse.util;
  */
 final class Compare {
 
-	/** Order of two integers: -1, 0 or 1. */
+	/**
+	 * Order of two integers: -1, 0 or 1. Not `a - b`: Int is 32-bit on the static targets, so the subtraction overflows
+	 * (`compareInt(2147483647, -1)` would turn negative); the branches are the portable form.
+	 */
 	public static inline function compareInt(a: Int, b: Int): Int {
 		return if (a < b)
 			-1

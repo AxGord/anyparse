@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.proc.HaxeRun;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.cli.GitRevision;
+import anyparse.util.Compare;
 
 /** What `apq changed` was asked. */
 private typedef ChangedOpts = {
@@ -96,7 +97,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			return ExitCode.EXIT_OK;
 		}
 		final classes: Array<String> = [for (label => count in tally) '$label $count'];
-		classes.sort(CliIo.compareStrings);
+		classes.sort(Compare.compareString);
 		CliIo.sysPrint('changed against ${opts.ref}: ${entries.length} file(s)${classes.length == 0 ? '' : ' — ' + classes.join(', ')}\n');
 		for (block in report) CliIo.sysPrint(block);
 		return ExitCode.EXIT_OK;

@@ -356,7 +356,13 @@
 		"prefer-lpad": true,
 		"prefer-map": true,
 		"prefer-single-pass": true,
-		"prefer-compare-function": true,
+		"prefer-compare-function": {
+			"enabled": true,
+			"compare": {
+				"Int": "anyparse.util.Compare.compareInt",
+				"String": "anyparse.util.Compare.compareString"
+			}
+		},
 		"prefer-typed-throw": true,
 		"prefer-value-loop": true,
 		"redundant-ascription": true,

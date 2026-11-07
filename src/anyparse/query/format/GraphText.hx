@@ -2,6 +2,7 @@ package anyparse.query.format;
 
 import anyparse.ds.Set;
 import anyparse.query.graph.CodeGraph;
+import anyparse.util.Compare;
 import haxe.ds.ArraySort;
 
 using Lambda;
@@ -26,7 +27,7 @@ final class GraphText {
 		}
 		pairs.sort((x, y) -> {
 			final heavier: Int = pairWeight(graph, y) - pairWeight(graph, x);
-			return heavier != 0 ? heavier : compareText('${x.a} ${x.b}', '${y.a} ${y.b}');
+			return heavier != 0 ? heavier : Compare.compareString('${x.a} ${x.b}', '${y.a} ${y.b}');
 		});
 		final heaviest: Array<GraphEdge> = edges.copy();
 		// a stable sort keeps the graph's own order among edges of one weight
@@ -57,15 +58,6 @@ final class GraphText {
 			}
 		}
 		return out.toString();
-	}
-
-	private static inline function compareText(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
 	}
 
 	/** The sign of `change`, a blank for no change. */

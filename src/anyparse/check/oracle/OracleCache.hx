@@ -7,6 +7,7 @@ import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.HaxeRun;
 import anyparse.proc.HaxeSpawn;
 import anyparse.query.FileIdentity;
+import anyparse.util.Compare;
 import haxe.io.Path;
 
 /**
@@ -405,16 +406,6 @@ final class OracleCache {
 		return null;
 	}
 
-	/** Lexicographic comparator for the manifest's file lines, which start with the path, so line order IS path order. */
-	private static function compareStrings(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
-	}
-
 	private static function rootsOf(root: String, chain: HxmlChain, probe: CompilerProbe): Array<String> {
 		return chain.classPaths.concat(probe.dirs.map(dir -> absolute(root, dir)));
 	}
@@ -514,7 +505,7 @@ final class OracleCache {
 		for (dir in chain.classPaths) mergeDir(files, dir, false, memo, walks);
 		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo, walks);
 		final fileLines: Array<String> = [for (path => hash in files) '$path $hash'];
-		fileLines.sort(compareStrings);
+		fileLines.sort(Compare.compareString);
 		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
 	}
 

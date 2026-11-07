@@ -65,4 +65,12 @@ final class CompareTest extends Test {
 		Assert.same([-1, 2, 2, 3], numbers);
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-INT-OVERFLOW')
+	public function testIntegersFarApartCompareWithoutOverflow(): Void {
+		Assert.equals(1, Compare.compareInt(2147483647, -1));
+		Assert.equals(-1, Compare.compareInt(-1, 2147483647));
+		Assert.equals(-1, Compare.compareInt(-2147483648, 1));
+	}
+
 }

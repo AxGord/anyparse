@@ -22,6 +22,10 @@ class PreferCompareFunctionCheckTest extends Test {
 
 	private static inline final NAMED: String =
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"Int":"lib.Order.ints","String":"lib.Order.texts"}}}}';
+
+	/** The rule on, no function named: the project's own `apq.json` names some a fixture cannot resolve. */
+	private static inline final BARE: String = '{"rules":{"prefer-compare-function":true}}';
+
 	private static inline final STRING_ONLY: String =
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Order.texts"}}}}';
 	private static inline final ORDER: String =
@@ -69,7 +73,7 @@ class PreferCompareFunctionCheckTest extends Test {
 	public function testStringOperandsOfANullSafeClassFixed(): Void {
 		final head: String = '@:nullSafety(Strict)\nclass C {\n\n\tfunction f(xs:Array<String>):Void {\n\t\t';
 		final src: String = '${head}xs.sort((a:String, b:String) -> a < b ? -1 : a > b ? 1 : 0);\n\t}\n}';
-		final run: FixRun = CheckFixture.fixRun(new PreferCompareFunction(), CheckFixture.withStd(src));
+		final run: FixRun = CheckFixture.fixRun(new PreferCompareFunction(), CheckFixture.withStd(src), null, null, bare);
 		Assert.equals(1, run.violations.length);
 		Assert.equals('${head}xs.sort(Reflect.compare);\n\t}\n}', CanonicalEdit.applyEdits(src, run.edits));
 	}
@@ -84,7 +88,7 @@ class PreferCompareFunctionCheckTest extends Test {
 					+ '\t\txs.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);\n\t}\n}'
 			}
 		];
-		Assert.equals(0, CheckFixture.violationsIn(new PreferCompareFunction(), files).length);
+		Assert.equals(0, CheckFixture.violationsIn(new PreferCompareFunction(), files, null, bare).length);
 	}
 
 	public function testStringFieldOperandsReported(): Void {
@@ -213,14 +217,16 @@ class PreferCompareFunctionCheckTest extends Test {
 		].concat([
 			{ file: 'C.hx', source: sorted('xs.sort((a, b) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);') }
 		]);
-		Assert.equals(1, CheckFixture.violationsIn(new PreferCompareFunction(), files).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferCompareFunction(), files, null, bare).length);
 	}
 
 	/** A parenthesised return, and the closing statements of a block, are also the other rules' findings: only this one stays. */
 	public function testSupersedesTheRulesThatReadTheSameChain(): Void {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final compare: PreferCompareFunction = new PreferCompareFunction();
+		compare.setConfigResolver(bare);
 		final checks: Array<Check> = [
-			new PreferCompareFunction(),
+			compare,
 			new PreferIfExpressionChain(),
 			new PreferIfExpressionReturn()
 		];
@@ -230,14 +236,14 @@ class PreferCompareFunctionCheckTest extends Test {
 			'xs.sort(function(a:Int, b:Int) { return (a < b ? -1 : a > b ? 1 : 0); });',
 			'xs.sort(function(a:Int, b:Int) { if (a < b) return -1; if (a > b) return 1; return 0; });'
 		]) {
-			final found: Array<Violation> = Linter.collect([{ file: 'C.hx', source: ints(statement) }], plugin, checks, null, false);
+			final found: Array<Violation> = Linter.collect([{ file: 'C.hx', source: ints(statement) }], plugin, checks, bare, false);
 			Assert.equals(1, found.length, statement);
 			Assert.equals('prefer-compare-function', found[0].rule);
 		}
 		// A report-only finding still replaces the fixable findings of the rules it supersedes on the same chain.
 		final fields: Array<Violation> = Linter.collect([
 			{ file: 'C.hx', source: sorted('xs.sort((a:Item, b:Item) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);') }
-		], plugin, checks, null, false);
+		], plugin, checks, bare, false);
 		Assert.equals(1, fields.length);
 		Assert.equals('prefer-compare-function', fields[0].rule);
 		Assert.isTrue(fields[0].message.indexOf('no fix') >= 0);
@@ -282,7 +288,7 @@ class PreferCompareFunctionCheckTest extends Test {
 					+ '\t\txs.sort((a, b) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);\n\t}\n}'
 			}
 		];
-		Assert.equals(1, CheckFixture.violationsIn(new PreferCompareFunction(), files).length);
+		Assert.equals(1, CheckFixture.violationsIn(new PreferCompareFunction(), files, null, bare).length);
 	}
 
 	/** An arrow lambda's block body is read like a `function` literal's. */
@@ -698,11 +704,11 @@ class PreferCompareFunctionCheckTest extends Test {
 	}
 
 	private function violations(src: String): Array<Violation> {
-		return CheckFixture.violations(new PreferCompareFunction(), src);
+		return CheckFixture.fixRunUnder(new PreferCompareFunction(), src, BARE).violations;
 	}
 
 	private function applyFix(src: String): String {
-		return CheckFixture.fixedSource(new PreferCompareFunction(), src);
+		return CheckFixture.fixedUnder(new PreferCompareFunction(), src, BARE);
 	}
 
 	private function ints(statement: String): String {
@@ -736,6 +742,10 @@ class PreferCompareFunctionCheckTest extends Test {
 	/** A `String` excludes `null` only under null safety, the proof a fix asks for. */
 	private function strings(statement: String): String {
 		return '@:nullSafety(Strict)\nclass C {\n\n\tfunction f(xs:Array<String>):Void {\n\t\t$statement\n\t}\n}';
+	}
+
+	private function bare(path: String): LintConfig {
+		return LintConfig.parse(BARE);
 	}
 
 }
