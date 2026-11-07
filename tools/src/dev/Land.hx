@@ -23,19 +23,20 @@ using StringTools;
 
 /**
  * `dev land <branch>` — the parent's landing of a reviewed slice branch in the tree that holds this `dev.js`, as ONE
- * command: the branch's single commit is applied on top of the checked-out branch (`git cherry-pick --no-commit`), so the
- * history stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON
- * through their grammar by `apq merge-file`, each merged file a detail line), the three binaries rebuilt, the pick's `.hx`
- * files rewritten as canonical when that is layout only (`LandFormat`), the commit made
- * with a `Slice: <ID>` trailer, the `prose-refs` row (`LandProse`: the prose that still names a path the commit deleted or
- * renamed, report-only), then
- * `dev battery` (quick, or in full when the commit brings in a path where a shard and the one-process suite can
- * diverge, or the number of the landing, counted over every landing that runs the battery, is a multiple of ten — the
- * battery row says which) — and one verdict line. A branch that does not carry exactly one commit over the checked-out one
- * is refused; a conflict git cannot resolve or a failed build rolls the tree back to where it was — a place the merge
- * driver left gets a `MergeBrief` with the `--resolve` choices that re-land it; a red battery leaves the
- * commit for the caller to judge (docs/testing.md § "Landing a slice"). Any step after the pick that does not pass — one
- * that threw (`not run`) as much as one that failed — rolls it back.
+ * command that moves the checked-out branch only to a commit the battery judged. In a detached candidate tree of the
+ * checked-out commit (`LandCandidate`) the branch's single commit is applied (`git cherry-pick --no-commit`), so the history
+ * stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON through their
+ * grammar by `apq merge-file`, each merged file a detail line), the three binaries built, the pick's `.hx` files rewritten
+ * as canonical when that is layout only (`LandFormat`), the commit made with a `Slice: <ID>` trailer, and `dev battery` run
+ * (quick, or in full when the commit brings in a path where a shard and the one-process suite can diverge, or the number of
+ * the landing, counted over every landing that runs the battery, is a multiple of ten — the battery row says which). Only
+ * then is the checked-out branch fast-forwarded to that commit (`advance`), the binaries the candidate built copied into
+ * it, the `prose-refs` row (`LandProse`: the prose that still names a path the commit deleted or renamed, report-only)
+ * read — and one verdict line.
+ * A branch that does not carry exactly one commit over the checked-out one is refused; a conflict, a failed build or fmt, a
+ * red battery, or a step that threw leaves the checked-out branch, index and files as they were, and the verdict names the
+ * candidate commit; a place the merge driver left gets a `MergeBrief` with the `--resolve` choices that re-land it
+ * (docs/testing.md § "Landing a slice"). The candidate tree is removed whatever the outcome.
  */
 @:nullSafety(Strict)
 final class Land {
@@ -99,6 +100,9 @@ final class Land {
 	private final _format: LandFormat;
 	private final _prose: LandProse;
 
+	/** The detached tree the landing is made and judged in; main's checkout moves only to its verified commit. */
+	private final _candidate: LandCandidate;
+
 	/** The trailers the commit carries beside `Slice`, each `<key>: <value>`. */
 	private final _trailers: Array<String>;
 
@@ -112,20 +116,14 @@ final class Land {
 
 	private final _postLand: Null<PostLandStart>;
 
-	/** Whether the pick of this run has begun, so a failed step rolls the tree back. */
-	private var _picking: Bool = false;
-
-	/** The commit the checked-out branch was at when the pick began: the only place a rollback may go back to. */
-	private var _before: String = '';
-
-	/** Whether this run built the binaries from the picked tree. */
-	private var _built: Bool = false;
-
 	/** The snapshot key of the commit the checked-out branch was at when the landing began, or null before the base step. */
 	private var _base: Null<String> = null;
 
 	/** Whether the battery's suite ran only the classes the merge reaches, so the whole suite still has to run. */
 	private var _impacted: Bool = false;
+
+	/** The binaries the candidate's build made, as paths under the tree. */
+	private var _outputs: Array<String> = [];
 
 	private function new(options: LandOptions) {
 		_repo = options.repo;
@@ -135,7 +133,8 @@ final class Land {
 		_exec = options.exec;
 		_merged = options.merged;
 		_print = options.print;
-		_format = new LandFormat(options.repo, options.format, _summary);
+		_candidate = new LandCandidate(options.repo, Path.join([options.logs, 'candidate']));
+		_format = new LandFormat(_candidate.tree, options.format, _summary);
 		_prose = new LandProse(options.repo, options.skills, Path.join([options.logs, 'prose-refs.txt']), _summary);
 		_trailers = options.trailers ?? [];
 		_resolve = options.resolve ?? [];
@@ -145,8 +144,8 @@ final class Land {
 	}
 
 	/**
-	 * Every step in turn, each only while the ones before it passed; answers the exit status. A pick a failed step rolls
-	 * back leaves binaries built from the picked tree behind (they are not tracked), so they are rebuilt from HEAD.
+	 * Every step in turn, each only while the ones before it passed; answers the exit status. The steps up to the battery work
+	 * in the candidate tree, so one that does not pass leaves main as it was; the tree is dropped whatever the outcome.
 	 */
 	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>): Int {
 		final cache: Null<String> = battery?.cache;
@@ -162,8 +161,10 @@ final class Land {
 			{ name: 'build', step: build },
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
-			{ name: 'prose-refs', step: _prose.run },
 			{ name: 'battery', step: runBattery.bind(battery) },
+			{ name: 'advance', step: _candidate.advance },
+			{ name: 'binaries', step: install },
+			{ name: 'prose-refs', step: _prose.run },
 			{
 				name: 'post-land',
 				step: () -> PostLand.afterwards(_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _summary.detail)
@@ -173,43 +174,13 @@ final class Land {
 				step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
 			}
 		];
-		var aborted: Bool = false;
-		for (s in steps) if (_summary.passed()) {
-			final outcome: Outcome = _summary.time(s.name, s.step);
-			if (!outcome.match(Passed | Skipped(_))) aborted = rollback() || aborted;
-		}
-		if (aborted && _built) _summary.time(
-			'rebuild', () -> switch _compile(_repo, Path.join([_logs, 'rebuild.log'])) {
-				case Failed(why): Failed('the binaries are still the rolled-back pick\'s: $why');
-				case other:
-					_summary.detail('binaries rebuilt from HEAD after the rollback');
-					other;
-			}
-		);
+		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
+		final left: Null<String> = _candidate.drop();
 		_print(_summary.table());
+		if (left != null) _print('the candidate tree ${_candidate.tree} is left in place: $left');
 		final passed: Bool = _summary.passed();
-		_print('land $_branch: ${passed ? 'PASS' : 'FAIL'} — logs $_logs');
+		_print('land $_branch: ${passed ? 'PASS' : 'FAIL'} — ${_candidate.standing()} — logs $_logs');
 		return passed ? 0 : 1;
-	}
-
-	/**
-	 * Roll back the pick of this run, if one has begun. The tree is the user's and keeps changing while the steps run, so
-	 * `git reset --merge` takes back only what the pick staged and a conflicted pick leaves, and refuses — leaving the tree to
-	 * its owner — when the user edited a file of the pick; when HEAD is no longer where the pick began nothing is touched.
-	 * A step that threw is as unfinished as one that failed, so the caller asks after every step that did not pass, whichever
-	 * way it ended. Answers whether the pick was rolled back.
-	 */
-	private function rollback(): Bool {
-		if (!_picking) return false;
-		_picking = false;
-		if (git(['rev-parse', 'HEAD']).out.trim() != _before) {
-			_summary.add('rollback', Failed('HEAD moved since the pick began — not rolled back, the tree is as it is'));
-			return false;
-		}
-		final reset: Result = git(['reset', '--merge', _before]);
-		if (reset.ok) return true;
-		_summary.add('rollback', Failed('`git reset --merge` refused: ${reset.firstError()} — the tree is as it is'));
-		return false;
 	}
 
 	private function clean(): Outcome {
@@ -251,15 +222,16 @@ final class Land {
 	}
 
 	/**
-	 * `git cherry-pick --no-commit` of the branch's commit with the grammar merge driver named, the places `--resolve`
-	 * settled handed to it; every file it merged is a detail line, and a conflict it leaves fails the step with a brief.
+	 * The candidate tree opened at main's HEAD and `git cherry-pick --no-commit` of the branch's commit in it, with the grammar
+	 * merge driver named and the places `--resolve` settled handed to it; every file it merged is a detail line, and a conflict
+	 * it leaves fails the step with a brief.
 	 */
 	private function pick(): Outcome {
+		final opened: Outcome = _candidate.open();
+		if (!opened.match(Passed)) return opened;
 		final apq: String = Path.join([_repo, 'bin/apq.js']);
 		final choices: String = _resolve.length == 0 ? '' : ' --choices ${shellQuoted(choicesFile())}';
-		_before = git(['rev-parse', 'HEAD']).out.trim();
-		_picking = true;
-		final run: Result = git([
+		final run: Result = _candidate.git([
 			'-c',
 			'merge.$DRIVER.driver=node ${shellQuoted(apq)} merge-file %O %A %B --path %P$choices',
 			'cherry-pick',
@@ -269,7 +241,7 @@ final class Land {
 		final said: String = '${run.err}\n${run.out}';
 		for (line in said.split('\n')) if (line.startsWith(MERGED_PREFIX)) _summary.detail(line.trim());
 		if (run.ok) return Passed;
-		final unmerged: Array<String> = git(['diff', '--name-only', '--diff-filter=U']).lines();
+		final unmerged: Array<String> = _candidate.git(['diff', '--name-only', '--diff-filter=U']).lines();
 		if (unmerged.length == 0) return Failed(run.firstError());
 		final places: Array<MergePlace> = MergeBrief.placesOf(said);
 		if (places.length == 0) return Failed('git could not merge ${unmerged.join(', ')}');
@@ -284,10 +256,17 @@ final class Land {
 		return file;
 	}
 
-	/** `apq.js`, `test.js` and `dev.js` rebuilt from the picked tree, at once. */
+	/**
+	 * `apq.js`, `test.js` and `dev.js` built from the picked candidate tree, at once; what the build made is noted for
+	 * `install`. Main's suite weights are then seeded into the fresh tree, so the battery's shards balance as they would in
+	 * main's checkout.
+	 */
 	private function build(): Outcome {
-		_built = true;
-		return _compile(_repo, Path.join([_logs, 'build.log']));
+		final outcome: Outcome = _compile(_candidate.tree, Path.join([_logs, 'build.log']));
+		_outputs = _candidate.built();
+		final weights: String = Path.join([_repo, Shard.WEIGHTS]);
+		if (FileSystem.exists(weights)) File.copy(weights, Path.join([_candidate.tree, Shard.WEIGHTS]));
+		return outcome;
 	}
 
 	/**
@@ -318,21 +297,20 @@ final class Land {
 		if (!marked.ok) return Failed(marked.firstError());
 		final author: String = git(['log', '-1', '--format=%an <%ae>', _branch]).out.trim();
 		final date: String = git(['log', '-1', '--format=%aI', _branch]).out.trim();
-		final commit: Result = git(['commit', '-F', file, '--author', author, '--date', date]);
+		final commit: Result = _candidate.git(['commit', '-F', file, '--author', author, '--date', date]);
 		if (!commit.ok) return Failed(commit.firstError());
-		_picking = false;
-		_summary.detail(git(['rev-parse', '--short', 'HEAD']).out.trim());
+		_summary.detail(_candidate.made());
 		return Passed;
 	}
 
 	/**
-	 * `dev battery` over the landed tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
+	 * `dev battery` over the candidate tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
 	 * decided here, from what the commit brought in and the count of landings, and the row names why.
 	 */
 	private function runBattery(request: Null<BatteryRequest>): Outcome {
 		if (request == null) return Skipped(NO_BATTERY);
 		final landing: Int = Tally.next(Path.join([request.cache, TALLY_DIR]));
-		final why: Null<String> = fullReason(_merged(_repo), landing, request.full, request.every);
+		final why: Null<String> = fullReason(_merged(_candidate.tree), landing, request.full, request.every);
 		final record: Null<String> = GateReuse.locate(_repo, _branch);
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
 		_summary.detail(record == null ? mode : '$mode, offered the gate record of the branch\'s worktree');
@@ -340,7 +318,7 @@ final class Land {
 			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record,
 			why == null ? impactFile() : null
 		);
-		return switch _exec(flags, _repo, Path.join([_logs, 'battery.log'])) {
+		return switch _exec(flags, _candidate.tree, Path.join([_logs, 'battery.log'])) {
 			case Failed(failure): Failed('$mode — $failure');
 			case other: other;
 		};
@@ -394,7 +372,7 @@ final class Land {
 	private function impactFile(): Null<String> {
 		final impact: Null<ImpactScope> = _impact;
 		if (impact == null) return null;
-		return switch impact(_repo, _before) {
+		return switch impact(_candidate.tree, _candidate.before) {
 			case WholeSuite(why):
 				_summary.detail('whole suite under the lock — $why');
 				null;
@@ -405,6 +383,30 @@ final class Land {
 				_impacted = true;
 				file;
 		}
+	}
+
+	/**
+	 * The binaries the candidate's build made, copied into main's checkout once it holds the commit they were built from: the
+	 * bytes the battery ran, without a second build; and the suite weights, when the battery measured new ones. Each lands by a
+	 * rename, so a call starting meanwhile reads a whole file.
+	 */
+	private function install(): Outcome {
+		final measured: String = Path.join([_candidate.tree, Shard.WEIGHTS]);
+		final held: String = Path.join([_repo, Shard.WEIGHTS]);
+		final renewed: Bool = FileSystem.exists(measured)
+			&& (!FileSystem.exists(held) || File.getContent(measured) != File.getContent(held));
+		final carried: Array<String> = renewed ? _outputs.concat([Shard.WEIGHTS]) : _outputs;
+		for (path in carried) {
+			final target: String = Path.join([_repo, path]);
+			final part: String = '$target.land-tmp';
+			FileSystem.createDirectory(Path.directory(target));
+			File.copy(Path.join([_candidate.tree, path]), part);
+			FileSystem.rename(part, target);
+		}
+		_summary.detail(
+			'${_outputs.length} file(s) of the candidate\'s build${renewed ? ', and the suite weights its battery measured' : ''}'
+		);
+		return Passed;
 	}
 
 	public static function main(argv: Array<String>): Int {
@@ -586,7 +588,10 @@ final class Land {
 
 }
 
-/** The build of the three binaries `Land` runs after the merge: the tree and the log the transcripts go to. */
+/**
+ * The build of the three binaries `Land` runs in the candidate tree after the pick: the tree and the log the transcripts go
+ * to.
+ */
 typedef Compile = (tree:String, log:String) -> Outcome;
 
 /** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
@@ -617,6 +622,7 @@ typedef ImpactScope = (tree:String, base:String) -> SuiteScope;
 /** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
 typedef LandOptions = {
 
+	/** The main checkout: the tree whose checked-out branch a passed landing fast-forwards. */
 	var repo: String;
 	var branch: String;
 	var logs: String;

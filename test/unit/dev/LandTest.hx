@@ -19,15 +19,18 @@ import utest.Test;
 using StringTools;
 
 /**
- * `dev land` over a scratch repository: a slice of one commit lands on `main` linearly with its `Slice` trailer, a step after
- * the pick that does not pass — one that threw as much as one that failed — takes it back, and the battery's flags follow
- * the lease.
+ * `dev land` over a scratch repository: a slice of one commit lands on `main` linearly with its `Slice` trailer, made and
+ * judged in a candidate tree first, so a step that does not pass — one that threw as much as one that failed, a red battery
+ * as much as a conflict — leaves `main` as it was; and the battery's flags follow the lease.
  */
 @:nullSafety(Strict)
 final class LandTest extends Test {
 
 	/** The slice branch of the scratch repository; its id, `S1`, is what the trailer names. */
 	private static inline final BRANCH: String = 'batch/hxqb-S1';
+
+	/** Where a tree keeps the suite weights its shards balance on. */
+	private static inline final WEIGHTS: String = dev.Shard.WEIGHTS;
 
 	/** A merge driver that writes its own text over ours and reports the merge. */
 	private static inline final DRIVER_STUB: String = "const fs = require('fs'); const a = process.argv;\n"
@@ -46,15 +49,18 @@ final class LandTest extends Test {
 		+ "fs.writeFileSync(a[4], i < 0 ? 'none\\n' : fs.readFileSync(a[i + 1])); }\n";
 
 	@:pin('control')
-	@:killer('M-LAND-NOT-RUN-KEEPS-MERGE')
-	public function testABuildThatThrewTakesThePickBack(): Void {
+	@:killer('M-LAND-CANDIDATE-LEFT')
+	public function testABuildThatThrewLeavesMainAndNoCandidateTree(): Void {
 		final run: Landing = landing(() -> throw 'the compiler could not be started');
 		Assert.equals(1, run.status);
 		Assert.isTrue(run.output.indexOf('not run') >= 0);
-		Assert.equals(2, run.builds);
+		Assert.equals(1, run.builds);
+		Assert.equals('', run.engine);
 		Assert.isFalse(run.merging);
 		Assert.equals('', run.dirty);
 		Assert.isFalse(run.merged);
+		Assert.isFalse(run.moved);
+		Assert.isFalse(run.candidateLeft);
 	}
 
 	public function testABuildThatFailedTakesThePickBack(): Void {
@@ -65,11 +71,63 @@ final class LandTest extends Test {
 		Assert.isFalse(run.merged);
 	}
 
-	public function testAGreenBuildLeavesThePickCommitted(): Void {
+	@:pin('control')
+	@:killer('M-LAND-MAIN-BINARIES-STALE')
+	public function testAGreenLandingInstallsTheCandidatesBinariesInMain(): Void {
 		final run: Landing = landing(() -> Passed);
-		Assert.equals(0, run.status);
-		Assert.equals(1, run.builds);
+		Assert.equals(0, run.status, run.output);
 		Assert.isTrue(run.merged);
+		Assert.equals(1, run.builds, 'main takes the candidate\'s binaries, it is not built again');
+		Assert.isTrue(run.compiled[0].endsWith('/candidate'), run.compiled.join(' '));
+		Assert.equals('built\n', run.engine);
+		Assert.stringContains('1 file(s) of the candidate\'s build', run.output);
+		Assert.isFalse(run.candidateLeft);
+		Assert.stringContains('main at ${run.headAfter.substr(0, 7)}', run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-COMMITS-BEFORE-BATTERY')
+	public function testARedBatteryLeavesMainUntouchedAndNamesTheCandidate(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true });
+		Assert.equals(1, run.status);
+		Assert.isFalse(run.moved);
+		Assert.equals('', run.dirty);
+		Assert.isFalse(run.merging);
+		Assert.equals('', run.engine, 'main keeps its binaries when it did not advance');
+		Assert.isFalse(run.candidateLeft);
+		Assert.stringContains('main untouched at ${run.headBefore.substr(0, 7)}, candidate ', run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-BATTERY-JUDGES-MAIN')
+	public function testTheBatteryJudgesTheCandidateCommitMainThenAdvancesTo(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
+		Assert.equals(0, run.status, run.output);
+		Assert.isTrue(run.judged.tree.endsWith('/candidate'), run.judged.tree);
+		Assert.isTrue(run.judged.head.startsWith(run.headAfter), '${run.judged.head} judged, main at ${run.headAfter}');
+		Assert.isTrue(run.moved);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-WEIGHTS-NOT-SEEDED')
+	@:killer('M-LAND-WEIGHTS-NOT-KEPT')
+	public function testTheBatteryBalancesOnMainsWeightsAndAGreenLandKeepsWhatItMeasured(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { weights: 'unit.ATest\t5\n', measured: 'unit.ATest\t7\n' }
+		);
+		Assert.equals(0, run.status, run.output);
+		Assert.equals('unit.ATest\t5\n', run.judged.weights);
+		Assert.equals('unit.ATest\t7\n', run.weights);
+		Assert.stringContains('the suite weights its battery measured', run.output);
+	}
+
+	public function testARedLandKeepsMainsWeights(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true },
+			null, { weights: 'unit.ATest\t5\n', measured: 'unit.ATest\t7\n' }
+		);
+		Assert.equals(1, run.status);
+		Assert.equals('unit.ATest\t5\n', run.weights);
 	}
 
 	public function testTheBatteryIsQuickUnlessAskedFull(): Void {
@@ -228,7 +286,7 @@ final class LandTest extends Test {
 
 	public function testAMetricThatIsNoCountIsRefused(): Void {
 		Assert.same([], Land.metricTrailers(null, null));
-		Assert.raises(() -> Land.metricTrailers('two', null), devkit.Args.UsageError);
+		Assert.raises(Land.metricTrailers.bind('two', null), devkit.Args.UsageError);
 	}
 
 	public function testTheSliceIdIsTheBranchNameWithoutItsPrefix(): Void {
@@ -257,7 +315,7 @@ final class LandTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-LAND-NOT-RUN-KEEPS-MERGE')
+	@:killer('M-LAND-CANDIDATE-LEFT')
 	public function testAConflictTakesThePickBackWithNothingLeftHanging(): Void {
 		final run: Landing = landing(
 			() -> Passed, 'a.txt', null, null, { onMain: [{ path: 'a.txt', content: 'main\n' }], read: ['a.txt'] }
@@ -269,6 +327,7 @@ final class LandTest extends Test {
 		Assert.equals('', run.dirty);
 		Assert.equals('main\n', run.files['a.txt']);
 		Assert.equals(0, run.builds);
+		Assert.isFalse(run.candidateLeft);
 	}
 
 	public function testAnAppendOnlyFileBothSidesAppendedToKeepsBothLines(): Void {
@@ -336,8 +395,8 @@ final class LandTest extends Test {
 
 	public function testAResolutionOfAnotherShapeIsRefused(): Void {
 		Assert.equals('a.hx\tC.f#2\tboth\n', Land.choiceLine('a.hx#C.f#2=both'));
-		Assert.raises(() -> Land.choiceLine('a.hx=ours'), UsageError);
-		Assert.raises(() -> Land.choiceLine('a.hx#C.f=mine'), UsageError);
+		Assert.raises(Land.choiceLine.bind('a.hx=ours'), UsageError);
+		Assert.raises(Land.choiceLine.bind('a.hx#C.f=mine'), UsageError);
 		Assert.equals("'/a b/it'\\''s'", Land.shellQuoted("/a b/it's"));
 	}
 
@@ -362,44 +421,57 @@ final class LandTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-LAND-ROLLBACK-RESETS-HARD')
-	public function testARollbackKeepsWhatTheUserEditedMeanwhile(): Void {
+	@:killer('M-LAND-ADVANCE-RESETS-HARD')
+	public function testWhatTheUserEditedInMainMeanwhileOutlivesTheAdvance(): Void {
 		final run: Landing = landing(
-			() -> Failed('no good'), 'b.txt', null, null,
+			() -> Passed, 'b.txt', null, null,
 			{ during: repo -> File.saveContent('$repo/a.txt', 'user edit\n'), read: ['a.txt'] }
 		);
-		Assert.equals(1, run.status);
+		Assert.equals(0, run.status, run.output);
 		Assert.equals('user edit\n', run.files['a.txt']);
 		Assert.equals('M a.txt', run.dirty);
-		Assert.isFalse(run.merged);
-		Assert.isFalse(run.merging);
-		Assert.isFalse(run.moved);
+		Assert.isTrue(run.merged);
+		Assert.isTrue(run.moved);
 	}
 
-	public function testARollbackRefusedForAFileOfThePickLeavesTheTreeToTheUser(): Void {
+	public function testAnAdvanceThatWouldOverwriteWhatTheUserWroteIsRefused(): Void {
 		final run: Landing = landing(
-			() -> Failed('no good'), 'b.txt', null, null,
+			() -> Passed, 'b.txt', null, null,
 			{ during: repo -> File.saveContent('$repo/b.txt', 'user edit\n'), read: ['b.txt'] }
 		);
 		Assert.equals(1, run.status);
 		Assert.equals('user edit\n', run.files['b.txt']);
-		Assert.isTrue(run.output.indexOf('`git reset --merge` refused') >= 0, run.output);
-		Assert.isTrue(run.output.indexOf('b.txt') >= 0, run.output);
+		Assert.stringContains('`git merge --ff-only` refused', run.output);
+		Assert.stringContains('main untouched at ', run.output);
+		Assert.isFalse(run.moved);
 		Assert.equals(1, run.builds);
+		Assert.isFalse(run.candidateLeft);
 	}
 
 	@:pin('control')
-	@:killer('M-LAND-ROLLBACK-IGNORES-MOVED-HEAD')
-	public function testARollbackNeverResetsAHeadThatMovedMeanwhile(): Void {
+	@:killer('M-LAND-ADVANCE-IGNORES-MOVED-MAIN')
+	public function testMainTakenBackMeanwhileIsNeverAdvanced(): Void {
 		final run: Landing = landing(
-			() -> Failed('no good'), 'b.txt', null, null,
+			() -> Passed, 'b.txt', null, null,
+			{ onMain: [{ path: 'c.txt', content: 'c\n' }], during: repo -> git(repo, ['reset', '-q', '--keep', 'HEAD~1']) }
+		);
+		Assert.equals(1, run.status);
+		Assert.stringContains('main moved since the landing began', run.output);
+		Assert.equals(1, run.commits, 'the commit the user took off main stays off');
+		Assert.isFalse(run.merged);
+		Assert.equals(1, run.builds);
+	}
+
+	public function testMainThatMovedOnMeanwhileIsNeverAdvanced(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'b.txt', null, null,
 			{ during: repo -> git(repo, ['commit', '-q', '--allow-empty', '-m', 'the user commits']) }
 		);
 		Assert.equals(1, run.status);
-		Assert.isTrue(run.output.indexOf('HEAD moved since the pick began') >= 0, run.output);
+		Assert.stringContains('main moved since the landing began', run.output);
 		Assert.equals(2, run.commits);
 		Assert.equals('the user commits', run.message);
-		Assert.equals(1, run.builds);
+		Assert.isFalse(run.merged);
 	}
 
 	@:pin('control')
@@ -486,7 +558,6 @@ final class LandTest extends Test {
 
 	@:pin('control')
 	@:killer('M-LAND-FMT-NON-LAYOUT-FOLDED')
-	@:killer('M-LAND-FMT-FAILURE-KEEPS-REWRITE')
 	public function testARewriteBeyondLayoutFailsTheStepAndTakesThePickBack(): Void {
 		final run: Landing = formatting(rewriting('declarations', Passed));
 		Assert.equals(1, run.status);
@@ -565,8 +636,8 @@ final class LandTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-LAND-FMT-THROW-KEEPS-REWRITE')
-	public function testAWriterThatThrowsPutsThePickBack(): Void {
+	@:killer('M-LAND-CANDIDATE-LEFT')
+	public function testAWriterThatThrowsLeavesMainAsItWas(): Void {
 		final tools: FormatTools = rewriting('layout', Passed);
 		final run: Landing = formatting({
 			rewrite: tools.rewrite,
@@ -578,6 +649,7 @@ final class LandTest extends Test {
 		Assert.equals('', run.dirty);
 		Assert.isFalse(run.moved);
 		Assert.isFalse(run.merging);
+		Assert.isFalse(run.candidateLeft);
 	}
 
 	public function testALandingShowsTheProseRefsRowAndItNeverFailsIt(): Void {
@@ -728,7 +800,7 @@ final class LandTest extends Test {
 
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
-	 * compiler: the first call is the build after the pick, the second the rebuild after a rollback. `setup` shapes the
+	 * compiler, which writes `bin/engine.out` (ignored, as the real binaries are) into the tree it builds. `setup` shapes the
 	 * repository further.
 	 */
 	private static function landing(
@@ -745,6 +817,7 @@ final class LandTest extends Test {
 			final printed: Array<String> = [];
 			final flags: Array<Array<String>> = [];
 			var builds: Int = 0;
+			final compiled: Array<String> = [];
 			final cache: String = dir.file('cache');
 			if (battery != null && battery.landed > 0) {
 				makeDirectories('$cache/landings');
@@ -757,6 +830,8 @@ final class LandTest extends Test {
 			final bases: Array<String> = [];
 			var builtFrom: String = '';
 			var builtTree: String = '';
+			final judged: Judged = { tree: '', head: '', weights: '' };
+			seedWeights(repo, shape.weights);
 			final red: Bool = battery != null && battery.fails == true;
 
 			final unreadable: Bool = battery != null && battery.unreadable == true;
@@ -785,7 +860,12 @@ final class LandTest extends Test {
 					return Passed;
 				},
 				warm: warmSeam(shape, warmed),
-				compile: (tree, log) -> ++builds == 1 ? interfere(shape.during, repo, build) : Passed,
+				compile: (tree, log) -> {
+					compiled.push(tree);
+					makeDirectories('$tree/bin');
+					File.saveContent('$tree/bin/engine.out', 'built\n');
+					return ++builds == 1 ? interfere(shape.during, repo, build) : Passed;
+				},
 				format: shape.format ?? idle(),
 				exec: (words, tree, log) -> {
 					flags.push(words);
@@ -793,6 +873,8 @@ final class LandTest extends Test {
 					if (at >= 0) {
 						builtTree = words[at + 1];
 						builtFrom = cmd('git -C $builtTree rev-parse HEAD').run().out.trim();
+					} else {
+						judge(tree, shape.measured, judged);
 					}
 					return if (at >= 0)
 						makeBase(battery, cache, base)
@@ -824,6 +906,11 @@ final class LandTest extends Test {
 				headBefore: headBefore,
 				tallied: FileSystem.exists('$cache/landings'),
 				builds: builds,
+				compiled: compiled,
+				candidateLeft: FileSystem.exists('$logs/candidate'),
+				engine: contentsOf('$repo/bin/engine.out'),
+				judged: judged,
+				weights: contentsOf('$repo/$WEIGHTS'),
 				merging: cmd('git -C $repo rev-parse -q --verify CHERRY_PICK_HEAD').run().ok
 					|| cmd('git -C $repo rev-parse -q --verify MERGE_HEAD').run().ok,
 				dirty: cmd('git -C $repo status --porcelain').run().out.trim(),
@@ -865,6 +952,7 @@ final class LandTest extends Test {
 		FileSystem.createDirectory(repo);
 		git(repo, ['init', '-q', '-b', 'main']);
 		File.saveContent('$repo/a.txt', 'a\n');
+		File.saveContent('$repo/.gitignore', 'bin/*.out\n');
 		if (renameFrom != null) {
 			makeDirectories(Path.directory('$repo/$renameFrom'));
 			File.saveContent('$repo/$renameFrom', 'moved\n');
@@ -997,6 +1085,21 @@ final class LandTest extends Test {
 			};
 	}
 
+	/** Main's suite weights, when the setup gives some. */
+	private static function seedWeights(repo: String, weights: Null<String>): Void {
+		if (weights == null) return;
+		makeDirectories('$repo/bin');
+		File.saveContent('$repo/$WEIGHTS', weights);
+	}
+
+	/** What the battery over `tree` sees, kept in `into`; then the weights it `measured`, written as a green suite writes them. */
+	private static function judge(tree: String, measured: Null<String>, into: Judged): Void {
+		into.tree = tree;
+		into.head = cmd('git -C $tree rev-parse HEAD').run().out.trim();
+		into.weights = contentsOf('$tree/$WEIGHTS');
+		if (measured != null) File.saveContent('$tree/$WEIGHTS', measured);
+	}
+
 }
 
 /** What a `Land.land` run over a scratch repository left behind. */
@@ -1031,6 +1134,21 @@ private typedef Landing = {
 	/** Whether the landings were counted. */
 	var tallied: Bool;
 	var builds: Int;
+
+	/** The trees the binaries were built in. */
+	var compiled: Array<String>;
+
+	/** The binary the stand-in build writes, as main's checkout holds it after the landing; empty when it holds none. */
+	var engine: String;
+
+	/** What the landing's own battery ran over; empty fields when it ran none. */
+	var judged: Judged;
+
+	/** The suite weights main's checkout holds after the landing; empty for none. */
+	var weights: String;
+
+	/** Whether the candidate tree outlived the landing. */
+	var candidateLeft: Bool;
 	var merging: Bool;
 	var dirty: String;
 	var merged: Bool;
@@ -1061,6 +1179,13 @@ private typedef Landing = {
 	/** The log of the `prose-refs` row, or empty. */
 	var proseLog: String;
 
+}
+
+/** The tree a landing's own battery ran over, its HEAD then, and the suite weights it found there. */
+private typedef Judged = {
+	var tree: String;
+	var head: String;
+	var weights: String;
 }
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
@@ -1147,5 +1272,11 @@ private typedef Setup = {
 
 	/** Whether an earlier land's whole suite ended red. */
 	@:optional var redRecord: Bool;
+
+	/** The suite weights main's checkout holds before the landing. */
+	@:optional var weights: String;
+
+	/** The suite weights the landing's battery writes into its tree, as a green unfiltered suite does. */
+	@:optional var measured: String;
 
 }

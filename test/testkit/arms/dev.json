@@ -174,11 +174,11 @@
 			"note": "an infra tree's cached lint is keyed by its path alone, so a tree that changed between gate runs is compared through the lint of what it held before"
 		},
 		{
-			"name": "M-LAND-NOT-RUN-KEEPS-MERGE",
-			"type": "dev.Land",
-			"method": "rollback",
-			"force": "false",
-			"note": "a pick in progress is never rolled back, so a step that threw after it, or a conflicted pick, leaves the tree mid-pick with the staged files of the branch"
+			"name": "M-LAND-CANDIDATE-LEFT",
+			"type": "dev.LandCandidate",
+			"method": "drop",
+			"force": "null",
+			"note": "the candidate tree is never removed, so every landing leaves a worktree behind and one that stopped leaves it mid-pick or half-built"
 		},
 		{
 			"name": "M-LAND-DIVERGENCE-PATH-STAYS-QUICK",
@@ -237,20 +237,20 @@
 			"note": "a data record under the test kit is not exempt, so a landing that only moves one lands on the full battery"
 		},
 		{
-			"name": "M-LAND-ROLLBACK-RESETS-HARD",
-			"type": "dev.Land",
-			"method": "rollback",
-			"find": "git(['reset', '--merge', _before])",
-			"replace": "git(['reset', '--hard', _before])",
-			"note": "a rollback discards every change of the tree, so what the user edited in a tracked file while the binaries were built is lost"
+			"name": "M-LAND-ADVANCE-RESETS-HARD",
+			"type": "dev.LandCandidate",
+			"method": "advance",
+			"find": "main(['merge', '--ff-only', '--quiet', candidate])",
+			"replace": "main(['reset', '--hard', candidate])",
+			"note": "main is moved by a hard reset instead of a fast-forward, so what the user edited in main's checkout while the landing ran is lost"
 		},
 		{
-			"name": "M-LAND-ROLLBACK-IGNORES-MOVED-HEAD",
-			"type": "dev.Land",
-			"method": "rollback",
-			"find": "if (git(['rev-parse', 'HEAD']).out.trim() != _before)",
+			"name": "M-LAND-ADVANCE-IGNORES-MOVED-MAIN",
+			"type": "dev.LandCandidate",
+			"method": "advance",
+			"find": "if (head != before)",
 			"replace": "if (false)",
-			"note": "a rollback resets to the commit the pick began at even when the user committed meanwhile, taking their commit off the branch"
+			"note": "main is advanced from wherever it stands, so a commit the user took off main while the landing ran comes back with the candidate"
 		},
 		{
 			"name": "M-LAND-LANDED-AGAIN-PASSES",
@@ -269,12 +269,11 @@
 			"note": "a branch whose patch the checked-out branch holds under a commit without the trailer is landed a second time"
 		},
 		{
-			"name": "M-LAND-FMT-THROW-KEEPS-REWRITE",
-			"type": "dev.LandFormat",
-			"method": "run",
-			"find": "restore(paths);\n\t\t\tthrow exception;",
-			"replace": "throw exception;",
-			"note": "a writer run that throws leaves the rewritten bytes unstaged in the tree, so the rollback of the pick is refused for those files and the tree stays half-rewritten"
+			"name": "M-LAND-MAIN-BINARIES-STALE",
+			"type": "dev.Land",
+			"method": "install",
+			"force": "Passed",
+			"note": "main's checkout keeps the binaries of the commit before the landing, so the engine main runs is not the one the battery judged"
 		},
 		{
 			"name": "M-LAND-FMT-REWRITE-NOT-STAGED",
@@ -299,12 +298,12 @@
 			"note": "every rewrite counts as layout, so a change of meaning the writer made on a merged file is folded into the landing commit unreviewed"
 		},
 		{
-			"name": "M-LAND-FMT-FAILURE-KEEPS-REWRITE",
-			"type": "dev.LandFormat",
-			"method": "run",
-			"find": "if (!outcome.match(Passed)) restore(paths);",
-			"replace": "{}",
-			"note": "a failed fmt step leaves the rewritten bytes in the tree, so the rollback of the pick is refused for those files and the tree is left half-rewritten"
+			"name": "M-LAND-COMMITS-BEFORE-BATTERY",
+			"type": "dev.Land",
+			"method": "commit",
+			"find": "_summary.detail(_candidate.made());",
+			"replace": "{ _summary.detail(_candidate.made()); _candidate.advance(); }",
+			"note": "main is moved to the candidate as soon as it is committed, so a red battery leaves the landing on main as before"
 		},
 		{
 			"name": "M-LAND-FMT-SECOND-PASS-IGNORED",
@@ -1431,6 +1430,30 @@
 			"method": "relativeTo",
 			"force": "config",
 			"note": "a configuration is compared with the root of its own lint in its name, so one both trees reject differs between them and the row fails a slice for what the base rejects too"
+		},
+		{
+			"name": "M-LAND-BATTERY-JUDGES-MAIN",
+			"type": "dev.Land",
+			"method": "runBattery",
+			"find": "_exec(flags, _candidate.tree,",
+			"replace": "_exec(flags, _repo,",
+			"note": "the battery runs over main's checkout, so a green battery judges main's old HEAD and main then advances to a commit nobody judged"
+		},
+		{
+			"name": "M-LAND-WEIGHTS-NOT-SEEDED",
+			"type": "dev.Land",
+			"method": "build",
+			"find": "if (FileSystem.exists(weights)) File.copy(weights, Path.join([_candidate.tree, Shard.WEIGHTS]));",
+			"replace": "{}",
+			"note": "the fresh candidate tree has no suite weights, so every land battery plans its shards on equal weights and runs unbalanced"
+		},
+		{
+			"name": "M-LAND-WEIGHTS-NOT-KEPT",
+			"type": "dev.Land",
+			"method": "install",
+			"find": "renewed ? _outputs.concat([Shard.WEIGHTS]) : _outputs",
+			"replace": "_outputs",
+			"note": "the weights a green battery measured die with the candidate tree, so lands no longer refresh main's suite weights"
 		}
 	]
 }

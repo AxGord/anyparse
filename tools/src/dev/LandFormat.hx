@@ -3,8 +3,6 @@ package dev;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
-import devkit.Summary.Outcome;
-import haxe.Exception;
 
 using Lambda;
 using StringTools;
@@ -14,7 +12,7 @@ using StringTools;
  * layout only?". Two branches that were each canonical can merge into a tree that is not (a policy landed on one side, a file
  * added on the other), so `dev land` applies the writer to the `.hx` files of the pick that the battery's fmt row reads. A
  * rewrite `apq changed` classes as layout only, and that settles in one pass, is staged into the pick for the commit to
- * carry; any other change, or a file the writer still rewrites, fails the step and puts the pick's bytes back.
+ * carry; any other change, or a file the writer still rewrites, fails the step.
  */
 @:nullSafety(Strict)
 final class LandFormat {
@@ -40,20 +38,12 @@ final class LandFormat {
 	}
 
 	/**
-	 * The `fmt` step over the files the pick staged. A step that does not pass, or throws, puts the staged bytes back in the
-	 * tree, so the rollback of the pick finds nothing of the rewrite.
+	 * The `fmt` step over the files the pick staged. It runs in the landing's candidate tree, which a step that does not pass
+	 * leaves behind with whatever the writer wrote, so nothing is put back here.
 	 */
 	public function run(): Outcome {
 		final paths: Array<String> = formattable(git(['diff', '--cached', '--name-only', '--diff-filter=ACMR']).lines());
-		if (paths.length == 0) return Skipped('no .hx file of ${GateTree.TREE_SCOPE.join(', ')} in the pick');
-		final outcome: Outcome = try {
-			fold(paths);
-		} catch (exception: Exception) {
-			restore(paths);
-			throw exception;
-		};
-		if (!outcome.match(Passed)) restore(paths);
-		return outcome;
+		return paths.length == 0 ? Skipped('no .hx file of ${GateTree.TREE_SCOPE.join(', ')} in the pick') : fold(paths);
 	}
 
 	/** The trailer value naming the files the step folded in, or null when it folded none. */
@@ -85,12 +75,6 @@ final class LandFormat {
 		_formatted = changed;
 		_summary.detail('${changed.length} file(s) rewritten as layout, folded into the commit');
 		return Passed;
-	}
-
-	/** `paths` put back to the bytes the pick staged. */
-	private function restore(paths: Array<String>): Void {
-		final back: Result = git(['checkout', '--'].concat(paths));
-		if (!back.ok) _summary.add('restore', Failed('the rewritten files stay in the tree: ${back.firstError()}'));
 	}
 
 	private function git(words: Array<String>): Result {
