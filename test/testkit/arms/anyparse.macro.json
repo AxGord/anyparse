@@ -1984,6 +1984,30 @@
 			"find": ": keepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));",
 			"replace": ": callSourceTrail;",
 			"note": "a flat method-chain segment call keeps its source trailing comma under the default remove"
+		},
+		{
+			"name": "M-LAST-ARG-COMMENT-KEEPS-DROPPED-SEP",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "argCommentAfterSepExpr",
+			"find": "&& (!_acLast || $tcExpr);",
+			"replace": ";",
+			"note": "under remove a last call argument followed by an after-separator comment keeps its comma"
+		},
+		{
+			"name": "M-CALL-ARGS-NOT-REHOMED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "postfixArgsInit",
+			"find": "return rehome == null ? src :",
+			"replace": "return true ? src :",
+			"note": "a call whose dropped trailing comma a line comment followed is laid out from the source tree, not the tree the next parse reads"
+		},
+		{
+			"name": "M-LAST-ARG-COMMENT-DROPS-KEPT-SEP",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "argCommentAfterSepExpr",
+			"find": "(!_acLast || $tcExpr)",
+			"replace": "!_acLast",
+			"note": "under keep a last call argument followed by an after-separator comment loses its comma"
 		}
 	]
 }

@@ -265,7 +265,7 @@
 		},
 		{
 			"name": "trailing-keep/Probe.hx",
-			"note": "under wrapping.trailingComma=keep with fillLine call arguments at width 60: a source trailing comma survives on a flat call holding a collection argument, on method-chain segment calls flat and broken, and on a call whose block lambda breaks; a call whose object-literal argument breaks (`}, c)`) still loses it",
+			"note": "under wrapping.trailingComma=keep with fillLine call arguments at width 60: a source trailing comma survives on a flat call holding a collection argument, on method-chain segment calls flat and broken, on a call whose block lambda breaks, and on a call glued around an object-literal argument that breaks (`}, c,)`)",
 			"fixpoint": "trailing-keep/Probe.hx",
 			"argv": [
 				"hxq",
@@ -274,7 +274,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "7459be2cf81efcb3",
+				"out": "b5fd13b6728fbb9b",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

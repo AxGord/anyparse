@@ -2120,7 +2120,7 @@ class WrapList {
 		);
 		if (singleArgGlue != null) return singleArgGlue;
 		final multiArgBlockLambda: Null<Doc> = shapeMultiArgBlockLambda(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, sepBeforeFlags, lineWidth
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, sepBeforeFlags, lineWidth
 		);
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
@@ -2469,7 +2469,7 @@ class WrapList {
 	 */
 	private static function shapeMultiArgBlockLambda(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
+		appendTrailingComma: Bool, flatTrailingComma: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
 		var hasBlockLambda: Bool = false;
 		for (it in items) if ((isArrowBodyMarker(it) && arrowBodyIsBlock(it)) || isFunctionBlockLambdaItem(it)) {
@@ -2480,7 +2480,9 @@ class WrapList {
 		// `shapeMultiArgCollection` — the two share `multiArgBlockLambdaGlueShape`,
 		// so they share its seam.
 		if (mode != FillLineWithLeadingBreak || items.length <= 1 || !hasBlockLambda || lastItemEndsWithLineComment(items)) return null;
-		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
+		final glueShape: Doc = multiArgBlockLambdaGlueShape(
+			open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma
+		);
 		final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, null, sepBeforeFlags);
 		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
@@ -2568,7 +2570,9 @@ class WrapList {
 		final fitArm: Null<Doc> = thresholdArm != null ? null : renderPivotBreakArm(items[collIdx], true);
 		final collArm: Null<Doc> = thresholdArm ?? fitArm;
 		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];
-		final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags);
+		final glueShape: Doc = multiArgBlockLambdaGlueShape(
+			open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags, flatTrailingComma
+		);
 		final openShape: Doc = mode == FillLineWithLeadingBreak
 			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags)
 			: shapeFillLine(
@@ -2889,13 +2893,17 @@ class WrapList {
 	 * source-elided separator (cond-comp ctor) stays byte-faithful.
 	 */
 	private static function multiArgBlockLambdaGlueShape(
-		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, sepBeforeFlags: Null<Array<Bool>>
+		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, sepBeforeFlags: Null<Array<Bool>>,
+		flatTrailingComma: Bool
 	): Doc {
 		final inner: Array<Doc> = [];
 		for (i in 0...items.length) {
 			if (i > 0) inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text('$sep '));
 			inner.push(items[i]);
 		}
+		// The glue keeps the arguments on the lines they share with the delimiters, never breaking at a separator, so only
+		// a separator the source wrote after the last one is written: an add-knob comma goes to a list broken over lines.
+		if (flatTrailingComma) inner.push(Text(sep));
 		return Concat([Text(open), openInside, Concat(inner), closeInside, Text(close)]);
 	}
 
@@ -3271,19 +3279,29 @@ class WrapList {
 		return make(fillItems, fillSep, tailReserve);
 	}
 
+	/**
+	 * The separator after a filled list's last item. `appendTrailingComma` is the break-mode signal, so the list's own
+	 * Group decides it, and a list that packs onto one line keeps a comma only when `flatTrailingComma` says the source
+	 * wrote one. `canBreak` false is a sole item, which shares its line with the open delimiter however its own content
+	 * breaks: the list never breaks at a separator, so an add-knob comma has no place there and only a source one survives.
+	 */
+	private static function fillTrailSep(sep: String, appendTrailingComma: Bool, flatTrailingComma: Bool, canBreak: Bool): Doc {
+		return if (!appendTrailingComma)
+			Empty
+		else if (flatTrailingComma)
+			Text(sep)
+		else if (canBreak)
+			IfBreak(Text(sep), Empty)
+		else
+			Empty;
+	}
+
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, flatTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>,
 		?complexItemKinds: Array<Int>
 	): Doc {
-		// The list's own Group decides the trailing separator: `appendTrailingComma` is the break-mode signal, so a
-		// list that packs onto one line keeps a comma only when `flatTrailingComma` says the source wrote one.
-		final trailSep: Doc = if (!appendTrailingComma)
-			Empty
-		else if (flatTrailingComma)
-			Text(sep)
-		else
-			IfBreak(Text(sep), Empty);
+		final trailSep: Doc = fillTrailSep(sep, appendTrailingComma, flatTrailingComma, items.length > 1);
 		// ω-fill-leading-comment: the first item's Doc starts with the comment
 		// that preceded it in the source. Packed flat it lands glued to the open
 		// delimiter (`[// note`), which is not merely ugly — it RELOCATES the

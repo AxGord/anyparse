@@ -72,8 +72,8 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 
 `trailingComma` is an anyparse extension with two values: `"remove"` (the default when the key is
 absent) drops the trailing `,` of every array, object literal and argument list, flat or multiline, and
-`"keep"` lets a source trailing `,` survive and the `trailingCommas.*Default` keys add one to a list broken over lines (a
-list left on one line gets none; a function parameter list's trailing `,` is dropped under both values). A config that
+`"keep"` lets a source trailing `,` survive and the `trailingCommas.*Default` keys add one to a list broken over lines, one item per line or
+packed to fill them (a list left on one line, or a sole argument sharing the open delimiter's line, gets none; a function parameter list's trailing `,` is dropped under both values). A config that
 sets `trailingCommas.arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says
 nothing about `wrapping.trailingComma` loads as `"keep"`, so the comma it asks for is added; an explicit
 `"remove"` outranks every add-knob.

@@ -1021,6 +1021,9 @@ final class WriterPrattLowering {
 		};
 
 		final argsAccess: Expr = macro $i{argNames[1]};
+		final argsInit: Expr = isTriviaStar
+			? postfixArgsInit(inner, argsAccess, trailingCommaExpr(branch, postfixSourceTrailExpr(argsAccess)))
+			: argsAccess;
 		final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);
 		// ω-call-parens: a `@:postfix('(', ')')` ctor with
 		// `@:fmt(callParens)` opts into a runtime-switched space before
@@ -1101,7 +1104,7 @@ final class WriterPrattLowering {
 		return macro {
 			final _pfxOperandBase: anyparse.core.Doc = $operandCall;
 			final _pfxOperand: anyparse.core.Doc = $callLeadingBind;
-			final _args = $argsAccess;
+			final _args = $argsInit;
 			final _docs: Array<anyparse.core.Doc> = [];
 			final _sepBeforeFlags: Array<Bool> = [];
 			$forceMultiDecl;

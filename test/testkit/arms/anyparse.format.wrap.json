@@ -455,23 +455,23 @@
 		{
 			"name": "M-FILL-TRAIL-SEP-UNGATED",
 			"type": "anyparse.format.wrap.WrapList",
-			"method": "shapeFillLine",
-			"find": "IfBreak(Text(sep), Empty);",
-			"replace": "Text(sep);",
+			"method": "fillTrailSep",
+			"find": "IfBreak(Text(sep), Empty)",
+			"replace": "Text(sep)",
 			"note": "a fill-laid list that stays on one line gets the comma a trailingCommas add-knob asks for, which is meant for a broken list only"
 		},
 		{
 			"name": "M-FILL-TRAIL-SEP-DROPPED",
 			"type": "anyparse.format.wrap.WrapList",
-			"method": "shapeFillLine",
-			"find": "IfBreak(Text(sep), Empty);",
-			"replace": "Empty;",
+			"method": "fillTrailSep",
+			"find": "IfBreak(Text(sep), Empty)",
+			"replace": "Empty",
 			"note": "a fill-laid list broken over lines loses the comma a trailingCommas add-knob asks for"
 		},
 		{
 			"name": "M-FILL-FLAT-SOURCE-TRAIL-OFF",
 			"type": "anyparse.format.wrap.WrapList",
-			"method": "shapeFillLine",
+			"method": "fillTrailSep",
 			"find": "else if (flatTrailingComma)",
 			"replace": "else if (false)",
 			"note": "a fill-laid list that stays on one line drops the trailing comma its source wrote under keep"
@@ -483,6 +483,30 @@
 			"find": "cols, appendTrailingComma, flatTrailingComma, groupRestProbe,",
 			"replace": "cols, appendTrailingComma, false, groupRestProbe,",
 			"note": "a call holding a collection argument that stays on one line drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-SOLE-ARG-ADD-COMMA",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "fillTrailSep",
+			"find": "else if (canBreak)",
+			"replace": "else if (true)",
+			"note": "a sole argument that shares the open delimiter's line gets the comma a trailingCommas add-knob asks for when its own content breaks or overflows"
+		},
+		{
+			"name": "M-GLUE-SOURCE-TRAIL-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "multiArgBlockLambdaGlueShape",
+			"find": "if (flatTrailingComma) inner.push(Text(sep));",
+			"replace": "",
+			"note": "a call glued around a multi-line collection argument drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-BLOCK-LAMBDA-GLUE-SOURCE-TRAIL-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeMultiArgBlockLambda",
+			"find": "closeInside, sepBeforeFlags, flatTrailingComma",
+			"replace": "closeInside, sepBeforeFlags, false",
+			"note": "a leading-break call glued around a block lambda drops the trailing comma its source wrote under keep"
 		}
 	]
 }

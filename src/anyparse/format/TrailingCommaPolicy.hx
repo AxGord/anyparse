@@ -5,7 +5,8 @@ package anyparse.format;
  * flat or multiline.
  *
  * `Keep`   — the source's trailing `,` round-trips, and the per-construct
- * `trailingComma*` knobs may still ADD one in a multiline list. The Haxe writer
+ * `trailingComma*` knobs may still ADD one in a list broken over lines, one item per line or packed
+ * to fill them, but not after a sole item that shares the open delimiter's line. The Haxe writer
  * defaults to `Remove`; `Keep` is an explicit opt-in, and a config whose
  * `trailingCommas.*Default: "yes"` asks to ADD one while leaving
  * `wrapping.trailingComma` unset loads as `Keep`.

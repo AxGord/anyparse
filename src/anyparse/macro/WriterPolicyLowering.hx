@@ -36,11 +36,12 @@ final class WriterPolicyLowering {
 	private static final SPACE_SIDES: Array<String> = ['lead'];
 
 	/**
-	 * The separator a trivia postfix Star's source wrote after its last argument (`_args[last].sepAfter`), which
-	 * `keep` writes back in every layout; a plain Star records no separators.
+	 * The separator a trivia postfix Star's source wrote after its last argument (`<args>[last].sepAfter`, `_args` unless
+	 * `args` names the list), which `keep` writes back in every layout; a plain Star records no separators.
 	 */
-	public static function postfixSourceTrailExpr(): Expr {
-		return macro _args.length > 0 && _args[_args.length - 1].sepAfter;
+	public static function postfixSourceTrailExpr(?args: Expr): Expr {
+		final list: Expr = args ?? macro _args;
+		return macro $list.length > 0 && $list[$list.length - 1].sepAfter;
 	}
 
 	/**

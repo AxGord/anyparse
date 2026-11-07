@@ -130,7 +130,7 @@ final class WriterChainLowering {
 				// replaces the source `owner // test` layout.
 				var _recTrail: Null<String> = null;
 				while (true) switch _cursor {
-					case Call(_op, _args, _trailClose, _, _):
+					case Call(_op, _argsSrc, _trailClose, _, _):
 						switch _op {
 							case FieldAccess(_prev, _fld, _opTrail):
 								final _argsDoc: anyparse.core.Doc = $argsListExpr;
@@ -304,6 +304,33 @@ final class WriterChainLowering {
 	}
 
 	/**
+	 * The argument list a trivia postfix Star lays out from `src`: as the source wrote it, or — when `sepEmitted` is false
+	 * and the element rule can take a comment into its tail — as the next parse reads it once the writer drops the
+	 * separator after the last argument (`DroppedSepComment.last`, the sep-Star's own answer to the same question).
+	 */
+	private static function postfixArgsInit(elem: ShapeNode, src: Expr, sepEmitted: Expr): Expr {
+		final rehome: Null<Expr> = TriviaTailRehome.fnRefFor(elem);
+		return rehome == null ? src : macro anyparse.runtime.DroppedSepComment.last($src, $sepEmitted, $rehome);
+	}
+
+	/**
+	 * Whether argument `i`'s trailing comment is written after its separator, a property of the gap rather than of the
+	 * argument: the source put it there, or a line comment a separator follows (`LineCommentPastSep`). On the last argument
+	 * only while the policy keeps that separator; dropped, the comment stays beside the argument, where the next parse
+	 * finds it.
+	 */
+	private static function argCommentAfterSepExpr(c: PostfixStarCtx, i: Expr): Expr {
+		final tcExpr: Expr = c.tcExpr;
+		return macro {
+			final _acLast: Bool = $i == _args.length - 1;
+			anyparse.format.wrap.LineCommentPastSep.writtenAfterSep(
+				_args[$i].trailingComment, _args[$i].trailingBeforeSep, !_acLast && _args[$i].sepAfter
+			)
+				&& (!_acLast || $tcExpr);
+		};
+	}
+
+	/**
 	 * ω-callarg-own-line-comment: the postfix Star's force-multi shape — one
 	 * argument per indented line, each followed by its separator, with an
 	 * after-separator trailing comment cuddled onto that separator
@@ -338,15 +365,12 @@ final class WriterChainLowering {
 			while (_mj < _docs.length) {
 				_mInner.push(_dhl());
 				final _mTc: Null<String> = _args[_mj].trailingComment;
-				final _mAfterSep: Null<String> = anyparse.format.wrap.LineCommentPastSep.writtenAfterSep(
-					_mTc, _args[_mj].trailingBeforeSep, _mj < _docs.length - 1 && _args[_mj].sepAfter
-				)
-					? _mTc
-					: null;
+				final _mLast: Bool = _mj == _docs.length - 1;
+				// The element loop's own answer: a comment not written after the separator is in the element's Doc.
+				final _mAfterSep: Null<String> = ${argCommentAfterSepExpr(c, macro _mj)} ? _mTc : null;
 				// Between elements only when the source wrote a separator there; on the
 				// last element when the config asks for a trailing one OR the source
 				// itself put one (which is what an after-separator comment proves).
-				final _mLast: Bool = _mj == _docs.length - 1;
 				final _mTrail: Bool = _mLast && $tcExpr && !anyparse.format.wrap.WrapList.refusesTrailingSeparator(_docs[_mj]);
 				final _mSep: Bool = (!_mLast && _args[_mj].sepAfter) || _mTrail || _mAfterSep != null;
 				if (!$relocateExpr) {
@@ -392,9 +416,7 @@ final class WriterChainLowering {
 				// Parseable, idempotent, and strictly better than the refusal it
 				// replaces, but not the same shape; moving the chain emitter onto this
 				// rule is its own slice.
-				final _tcAfterSep: Bool = anyparse.format.wrap.LineCommentPastSep.writtenAfterSep(
-					_tc, _args[_i].trailingBeforeSep, _i < _args.length - 1 && _args[_i].sepAfter
-				);
+				final _tcAfterSep: Bool = ${argCommentAfterSepExpr(c, macro _i)};
 				if (_tcAfterSep) _forceArgMulti = true;
 				// `trailingCommentDocGuarded` already prepends ' ' to
 				// the captured content, so the per-arg Doc is just

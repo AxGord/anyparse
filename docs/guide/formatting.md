@@ -97,8 +97,10 @@ directly. Left out, an enum or typedef keeps the source blank and an `enum abstr
 
 `remove` by default: an array, map or object literal and a `new` or call argument list never end with a `,`, flat
 (`[1, 2,]` → `[1, 2]`) or broken over lines, whatever the source had and whatever a `trailingCommas.*Default: "yes"`
-asks for. `keep` lets a source trailing `,` survive in either layout, a call inside a method chain included, and lets
-those keys add one to a list broken over lines; a list that stays on one line gets none it did not have. A config that
+asks for; a line comment that followed the dropped `,` stays beside the last element (`b, // c` → `b // c`). `keep`
+lets a source trailing `,` survive in every layout, a call inside a method chain or glued around a block argument
+included, and lets those keys add one to a list broken over lines, one item per line or packed to fill them; a list
+that stays on one line, or a sole argument sharing the open delimiter's line, gets none it did not have. A config that
 sets `arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says nothing about
 `wrapping.trailingComma` loads as `keep`, so the comma it asks for is added. A function parameter list's trailing `,`
 is always dropped and a mandatory comma (`{> Base,}`) always written, whatever the key says. Details: `docs/haxe-format-config.md`.

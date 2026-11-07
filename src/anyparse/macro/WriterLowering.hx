@@ -689,8 +689,13 @@ class WriterLowering {
 			elemCall: macro $writeIdent(_args[_i].node, _segArgOpt, -1),
 			relocateTrailingComments: false
 		};
+		// The trivia walk binds a segment's arguments as `_argsSrc` (`wrapChainTriviaBody`).
+		final segArgsInit: Expr = WriterChainLowering.postfixArgsInit(
+			cbStar.children[0], macro _argsSrc, trailingCommaExpr(cb, postfixSourceTrailExpr(macro _argsSrc))
+		);
 		final argsListExpr: Expr = isCallTriviaStar
 			? macro {
+				final _args = $segArgsInit;
 				final _docs: Array<anyparse.core.Doc> = [];
 				var _forceArgMulti: Bool = false;
 				final _segArgOpt = $segArgOpt;
