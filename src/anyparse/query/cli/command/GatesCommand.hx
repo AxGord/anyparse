@@ -5,6 +5,7 @@ import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -120,6 +121,34 @@ final class GatesCommand implements CliCommand {
 			bucket.push(h);
 		}
 		return { order: order, groups: groups };
+	}
+
+	/**
+	 * Parse `trailOptParseGate('<pred>')` or `trailOptShapeGate('<pred>')`
+	 * out of a single `@:fmt` argument string. Returns `null` if the
+	 * arg isn't a gate call — `@:fmt(...)` carries many other flags
+	 * (`tightLead`, `wrapRules(...)`, `bodyPolicy(...)`, …) which
+	 * `gates` deliberately ignores. Hand-rolled parser to keep the
+	 * walker independent of the format/wrap plugin types.
+	 */
+	public static function extractGate(arg: String): Null<GateExtract> {
+		final trimmed: String = arg.trim();
+		final markers: Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
+		for (m in markers) if (trimmed.startsWith(m)) {
+			final after: String = trimmed.substr(m.length).trim();
+			if (!after.startsWith('(')) continue;
+			final inner: String = after.substring(1, after.lastIndexOf(')')).trim();
+			// `trailOptShapeGate` takes multiple args (`'endsWithCloseBrace', 'init'`);
+			// extract just the FIRST quoted string — that's the predicate
+			// method name on the schema instance. Subsequent args are
+			// flag-bearing (typically a field-name selector) and not part
+			// of the predicate identity.
+			final firstArg: String = sliceFirstQuotedArg(inner);
+			final stripped: String = CliArgs.stripQuotes(firstArg);
+			if (stripped.length == 0) continue;
+			return { gateKind: m, predicate: stripped };
+		}
+		return null;
 	}
 
 	private static inline function gatesParseExit(code: Int): GatesOpts {
@@ -307,50 +336,25 @@ final class GatesCommand implements CliCommand {
 	}
 
 	/**
-	 * Parse `trailOptParseGate('<pred>')` or `trailOptShapeGate('<pred>')`
-	 * out of a single `@:fmt` argument string. Returns `null` if the
-	 * arg isn't a gate call — `@:fmt(...)` carries many other flags
-	 * (`tightLead`, `wrapRules(...)`, `bodyPolicy(...)`, …) which
-	 * `gates` deliberately ignores. Hand-rolled parser to keep the
-	 * walker independent of the format/wrap plugin types.
-	 */
-	private static function extractGate(arg: String): Null<GateExtract> {
-		final trimmed: String = arg.trim();
-		final markers: Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
-		for (m in markers) if (trimmed.startsWith(m)) {
-			final after: String = trimmed.substr(m.length).trim();
-			if (!after.startsWith('(')) continue;
-			final inner: String = after.substring(1, after.lastIndexOf(')')).trim();
-			// `trailOptShapeGate` takes multiple args (`'endsWithCloseBrace', 'init'`);
-			// extract just the FIRST quoted string — that's the predicate
-			// method name on the schema instance. Subsequent args are
-			// flag-bearing (typically a field-name selector) and not part
-			// of the predicate identity.
-			final firstArg: String = sliceFirstQuotedArg(inner);
-			final stripped: String = CliArgs.stripQuotes(firstArg);
-			if (stripped.length == 0) continue;
-			return { gateKind: m, predicate: stripped };
-		}
-		return null;
-	}
-
-	/**
 	 * Pick the first comma-separated argument from a paren-list body.
 	 * Quote-aware: a comma INSIDE a `'…'` / `"…"` doesn't terminate the
 	 * arg. Returns the trimmed first segment; the whole string when no
 	 * top-level comma exists.
 	 */
 	private static function sliceFirstQuotedArg(inner: String): String {
-		var inSingle: Bool = false;
-		var inDouble: Bool = false;
-		for (i in 0...inner.length) {
+		var i: Int = 0;
+		while (i < inner.length) {
 			final c: Int = inner.fastCodeAt(i);
-			if (!inDouble && c == "'".code)
-				inSingle = !inSingle;
-			else if (!inSingle && c == '"'.code)
-				inDouble = !inDouble;
-			else if (!inSingle && !inDouble && c == ','.code)
+			if (c == "'".code || c == '"'.code) {
+				final end: Int = Strings.quotedEnd(inner, i);
+				// An unterminated quote swallows the rest, so the whole text is the argument.
+				if (end == i) return inner.trim();
+				i = end;
+			} else if (c == ','.code) {
 				return inner.substring(0, i).trim();
+			} else {
+				i++;
+			}
 		}
 		return inner.trim();
 	}

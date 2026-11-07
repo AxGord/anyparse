@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.ModulePath;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
@@ -433,22 +434,14 @@ final class ModuleScan {
 		final n: Int = text.length;
 		var i: Int = 0;
 		while (i < n) {
-			final c: Int = text.fastCodeAt(i);
-			final next: Int = i + 1 < n ? text.fastCodeAt(i + 1) : 0;
-			if (c == '/'.code && next == '/'.code) {
-				while (i < n && text.fastCodeAt(i) != '\n'.code) i++;
+			final commentEnd: Int = SourceComments.commentRegionEnd(text, i);
+			if (commentEnd < 0) {
+				buf.addChar(text.fastCodeAt(i));
+				i++;
+			} else {
 				buf.addChar(' '.code);
-				continue;
+				i = commentEnd < n ? commentEnd : n;
 			}
-			if (c == '/'.code && next == '*'.code) {
-				i += 2;
-				while (i + 1 < n && (text.fastCodeAt(i) != '*'.code || text.fastCodeAt(i + 1) != '/'.code)) i++;
-				i = i + 2 < n ? i + 2 : n;
-				buf.addChar(' '.code);
-				continue;
-			}
-			buf.addChar(c);
-			i++;
 		}
 		return buf.toString();
 	}

@@ -111,6 +111,22 @@ class LexicalRegionsTest extends Test {
 		Assert.same([], LexicalRegions.codeSpans(3, [{ from: 0, to: 3, kind: LexRegionKind.BlockComment }]), 'all comment: no code');
 	}
 
+	/**
+	 * A comment opens in a range only when the lexer says so: a `//` or `/*` inside a string literal is text, a real
+	 * comment inside the range counts, and one that opens outside it does not.
+	 */
+	@:pin('control') @:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
+	public function testCommentOpensInIgnoresMarkersInsideStrings(): Void {
+		final source: String = "var s = 'a // b'; var t = 1; /* c */";
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
+		Assert.isFalse(LexicalRegions.commentOpensIn(0, source.indexOf('var t'), regions), 'a `//` inside a string is no comment');
+		Assert.isTrue(LexicalRegions.commentOpensIn(0, source.length, regions), 'the block comment opens inside the whole source');
+		Assert.isFalse(LexicalRegions.commentOpensIn(0, source.indexOf('/* c'), regions), 'it opens past the range end');
+		Assert.isFalse(
+			LexicalRegions.commentOpensIn(source.indexOf('/* c') + 1, source.length, regions), 'it opened before the range start'
+		);
+	}
+
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');

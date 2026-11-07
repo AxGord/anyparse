@@ -6,6 +6,7 @@ import anyparse.check.common.literals.MacroGate.MacroIndex;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperatorSelection;
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
@@ -721,7 +722,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		final spans: Array<Span> = [];
 		for (operand in operands) {
 			final own: Null<Span> = operand.span;
-			if (own == null || chainHasComment(ctx.source, own.from, own.to)) return null;
+			if (own == null || ctx.hasCommentIn(own.from, own.to)) return null;
 			spans.push(own);
 		}
 		// Against `GROUP_JOIN` on purpose: the render puts exactly that operator back between
@@ -789,7 +790,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		// out whatever the render puts after it. Only the GAPS between operands are modelled.
 		for (operand in operands) {
 			final own: Null<Span> = operand.span;
-			if (own == null || chainHasComment(ctx.source, own.from, own.to)) return null;
+			if (own == null || ctx.hasCommentIn(own.from, own.to)) return null;
 		}
 		final segments: Array<ConcatSegment> = [];
 		final current: Array<Int> = [];
@@ -805,15 +806,15 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			if (headEnd == null) return null;
 			// The head is ONE verbatim segment spanning several operands, so a comment in a gap
 			// it swallows would ride into the render — refuse rather than model it.
-			if (chainHasComment(ctx.source, claimed.from, headEnd.to)) return null;
+			if (ctx.hasCommentIn(claimed.from, headEnd.to)) return null;
 			segments.push(SegExpr(ctx.source.substring(claimed.from, headEnd.to), false));
 			current.push(segments.length);
 		}
-		if (firstLitIdx >= 1) lockGapAfter(ctx.source, operands, firstLitIdx - 1, segments.length, locked, glue);
+		if (firstLitIdx >= 1) lockGapAfter(ctx, operands, firstLitIdx - 1, segments.length, locked, glue);
 		for (i in firstLitIdx ... operands.length) {
 			if (!appendOperandSegments(ctx, operands[i], segments)) return null;
 			current.push(segments.length);
-			lockGapAfter(ctx.source, operands, i, segments.length, locked, glue);
+			lockGapAfter(ctx, operands, i, segments.length, locked, glue);
 		}
 		// A head segment was emitted exactly when a bare operand precedes the first
 		// literal — the fact `plan` cannot recover from the segment list alone.
@@ -838,15 +839,15 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 * comment: the pairs inside each line still merge, and nothing an author wrote moves.
 	 */
 	private static function lockGapAfter(
-		source: String, operands: Array<QueryNode>, i: Int, end: Int, locked: Array<Int>, glue: Map<Int, String>
+		ctx: PlanContext, operands: Array<QueryNode>, i: Int, end: Int, locked: Array<Int>, glue: Map<Int, String>
 	): Void {
 		if (i < 0 || i + 1 >= operands.length) return;
 		final left: Null<Span> = operands[i].span;
 		final right: Null<Span> = operands[i + 1].span;
 		if (left == null || right == null) return;
-		if (!chainHasComment(source, left.to, right.from)) return;
+		if (!ctx.hasCommentIn(left.to, right.from)) return;
 		locked.push(end);
-		glue[end] = source.substring(left.to, right.from);
+		glue[end] = ctx.source.substring(left.to, right.from);
 	}
 
 	/**
@@ -1234,41 +1235,6 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			'these string concatenation segments can be re-cut to fit the line width';
 	}
 
-	/**
-	 * Whether the source range `[from, to)` carries a `//` or `/*` comment OUTSIDE any
-	 * string literal — asked of the GAP between two operands (which locks that group
-	 * boundary) and of an operand's own span (which refuses the construct). String bodies
-	 * are skipped (respecting `\` escapes) so a `'http://x'` literal does not read as a
-	 * comment.
-	 */
-	private static function chainHasComment(source: String, from: Int, to: Int): Bool {
-		var i: Int = from;
-		while (i < to) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == "'".code || c == '"'.code) {
-				i++;
-				while (i < to) {
-					final d: Int = source.fastCodeAt(i);
-					if (d == '\\'.code) {
-						i += 2;
-					} else if (d == c) {
-						i++;
-						break;
-					} else {
-						i++;
-					}
-				}
-			} else if (c == '/'.code && i + 1 < to) {
-				final n: Int = source.fastCodeAt(i + 1);
-				if (n == '/'.code || n == '*'.code) return true;
-				i++;
-			} else {
-				i++;
-			}
-		}
-		return false;
-	}
-
 	/** The per-file planning context, or null when the grammar's writer declares no layout metrics. */
 	private static function contextFor(
 		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, ?operators: OperatorGate
@@ -1549,6 +1515,7 @@ private class PlanContext {
 	private var _originalFailed: Bool = false;
 	private var _memberSpans: Null<Array<Span>> = null;
 	private var _statementSpans: Null<Array<Span>> = null;
+	private var _regions: Null<Array<LexRegion>> = null; // noqa: scratch-field
 
 	public function new(
 		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
@@ -1608,6 +1575,19 @@ private class PlanContext {
 		if (statement == null) return memberScope;
 		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
 		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
+	}
+
+	/**
+	 * Whether a comment opens inside `[from, to)` of the source — read off the lexical regions, so a `//` or `/*` inside a
+	 * string literal is no comment. Lexed on the first ask only: most files never reach a chain with a candidate operand.
+	 */
+	public function hasCommentIn(from: Int, to: Int): Bool {
+		var regions: Null<Array<LexRegion>> = _regions;
+		if (regions == null) {
+			regions = plugin.lexicalRegions(source);
+			_regions = regions;
+		}
+		return LexicalRegions.commentOpensIn(from, to, regions);
 	}
 
 	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */

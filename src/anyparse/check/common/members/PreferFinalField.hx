@@ -181,8 +181,8 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 	 * Whether `name` is written anywhere in `source` outside `exclude` (its own
 	 * declaration) — the in-file half of the proof, over the whole file.
 	 */
-	private static inline function writtenInFile(source: String, name: String, exclude: Span): Bool {
-		return MemberWriteScan.writtenInRange(source, name, exclude, 0, source.length);
+	private static inline function writtenInFile(source: String, name: String, exclude: Span, plugin: GrammarPlugin): Bool {
+		return MemberWriteScan.writtenInRange(source, name, exclude, 0, source.length, plugin);
 	}
 
 	/**
@@ -239,7 +239,7 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 		}
 		if (CtorFieldWrite.isInitializedNonPropertyField(source, field)) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
-			if (writtenInFile(source, name, span)) return;
+			if (writtenInFile(source, name, span, plugin)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
 			if (CtorFieldWrite.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
 			flag(out, file, span, name, 'is assigned only at its declaration', decline);

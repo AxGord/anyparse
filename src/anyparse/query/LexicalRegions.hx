@@ -118,4 +118,17 @@ final class LexicalRegions {
 		return out;
 	}
 
+	/**
+	 * Does a COMMENT region open inside `[from, to)`? A `//` or `/*` inside a string literal is text, so it is no
+	 * comment; one inside a `${ … }` hole of a string is code and counts. The one answer to "does this source range hold a
+	 * comment" for a caller that must not splice over one and cannot accept the string-blind
+	 * `SourceComments.hasCommentMarker`.
+	 */
+	public static function commentOpensIn(from: Int, to: Int, regions: Array<LexRegion>): Bool {
+		return regions.exists(region -> region.from >= from && region.from < to && switch region.kind {
+			case LineComment, BlockComment: true;
+			case StringLit, RegexLit: false;
+		});
+	}
+
 }

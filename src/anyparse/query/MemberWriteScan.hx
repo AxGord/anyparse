@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin;
+import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
@@ -48,7 +49,7 @@ final class MemberWriteScan {
 		)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
-				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
+				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
 			);
 	}
 
@@ -72,7 +73,7 @@ final class MemberWriteScan {
 				(subtype, src, span, redeclares) ->
 					redeclares
 					|| writeIndex.writtenAnywhere(subtype, name)
-					|| subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
+					|| subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
 			);
 	}
 
@@ -141,7 +142,7 @@ final class MemberWriteScan {
 	 * grantee source is scanned, unlike a subtype's declaration slice.
 	 */
 	public static inline function accessGrantMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayWrite(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayWrite(src, name, 0, src.length, plugin));
 	}
 
 	/**
@@ -228,7 +229,9 @@ final class MemberWriteScan {
 	 * inside the range; the operator scan that follows it may run past `to`, and the
 	 * word-boundary tests read the real neighbouring characters rather than the range edges.
 	 */
-	public static function writtenInRange(source: String, name: String, exclude: Null<Span>, from: Int, to: Int): Bool {
+	public static function writtenInRange(
+		source: String, name: String, exclude: Null<Span>, from: Int, to: Int, plugin: GrammarPlugin
+	): Bool {
 		final n: Int = source.length;
 		final len: Int = name.length;
 		if (len == 0) return false;
@@ -241,7 +244,7 @@ final class MemberWriteScan {
 			final boundedAfter: Bool = at >= n || !Strings.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx) || followedByAssign(source, at)) return true;
+			if (precededByIncrDecr(source, idx, plugin) || followedByAssign(source, at)) return true;
 		}
 	}
 
@@ -267,8 +270,8 @@ final class MemberWriteScan {
 	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
 	 * inject a member the text scan cannot see, or the scan finds a write outright.
 	 */
-	private static inline function mayWrite(src: String, name: String, from: Int, to: Int): Bool {
-		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to);
+	private static inline function mayWrite(src: String, name: String, from: Int, to: Int, plugin: GrammarPlugin): Bool {
+		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to, plugin);
 	}
 
 	/**
@@ -315,9 +318,11 @@ final class MemberWriteScan {
 	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
 	 * owner sees nothing (that file's grant list names the subtype, not the owner).
 	 */
-	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
-		return mayWrite(src, name, span.from, span.to)
-			|| scope.text.accessGrantMatches(subtype, name, granted -> mayWrite(granted, name, 0, granted.length));
+	private static function subtypeReach(
+		scope: SymbolIndex, subtype: String, name: String, src: String, span: Span, plugin: GrammarPlugin
+	): Bool {
+		return mayWrite(src, name, span.from, span.to, plugin)
+			|| scope.text.accessGrantMatches(subtype, name, granted -> mayWrite(granted, name, 0, granted.length, plugin));
 	}
 
 	/**
@@ -326,7 +331,8 @@ final class MemberWriteScan {
 	 * with `followedByAssign`'s comment-skipping so a write with a comment between the
 	 * operator and the name is not missed.
 	 */
-	private static function precededByIncrDecr(source: String, idx: Int): Bool {
+	private static function precededByIncrDecr(source: String, idx: Int, plugin: GrammarPlugin): Bool {
+		var regions: Null<Array<LexRegion>> = null;
 		var i: Int = idx - 1;
 		while (i >= 0) {
 			final c: Int = source.fastCodeAt(i);
@@ -335,9 +341,12 @@ final class MemberWriteScan {
 				continue;
 			}
 			if (c == '/'.code && i >= 1 && source.fastCodeAt(i - 1) == '*'.code) {
-				i -= 2;
-				while (i >= 1 && (source.fastCodeAt(i - 1) != '/'.code || source.fastCodeAt(i) != '*'.code)) i--;
-				i -= 2;
+				// Lexed only once a `*/` is met: it is the one thing that can hide the operator from the walk.
+				final lexed: Array<LexRegion> = regions ?? plugin.lexicalRegions(source);
+				regions = lexed;
+				final comment: Null<LexRegion> = LexicalRegions.regionAt(i, lexed);
+				if (comment == null || comment.kind != LexRegionKind.BlockComment) break;
+				i = comment.from - 1;
 				continue;
 			}
 			break;

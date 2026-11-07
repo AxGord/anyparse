@@ -246,7 +246,7 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 		if (name == null || span == null || owner == null) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !ConstantFieldScan.isConstantLiteral(init, ctx.source, ctx.seams)) return;
-		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length)) return;
+		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length, ctx.plugin)) return;
 		if (ReflectionScan.runtimeName(ctx.reflected, name)) return;
 		if (memberAccessedInFile(ctx.source, name, span)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;

@@ -140,8 +140,8 @@ final class CtorFieldFold {
 		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
 		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
 		if (
-			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from)
-			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length)
+			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from, plugin)
+			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length, plugin)
 		)
 			return null;
 		final dropped: Null<Span> = decl.dropped;
@@ -264,8 +264,8 @@ final class CtorFieldFold {
 		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
 		if (!CtorFieldWrite.superCallsFollow(base.container, ctor, guardFrom, shape)) return null;
 		if (
-			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from)
-			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length)
+			MemberWriteScan.writtenInRange(source, decl.name, init.target, 0, decl.span.from, plugin)
+			|| MemberWriteScan.writtenInRange(source, decl.name, init.target, decl.span.to, source.length, plugin)
 		)
 			return null;
 		final targetText: String = source.substring(init.target.from, init.target.to);
@@ -429,7 +429,7 @@ final class CtorFieldFold {
 	 * and the childless-fragments test catches the `${expr}` form, whose hole projects as
 	 * a nested expression node rather than an interpolation kind.
 	 */
-	private static function defaultIsMoveSafe(source: String, node: QueryNode, shape: RefShape): Bool {
+	private static function defaultIsMoveSafe(source: String, node: QueryNode, shape: RefShape, plugin: GrammarPlugin): Bool {
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		if (numeric.contains(node.kind)) return true;
 		if (node.kind == shape.boolLitKind) return true;
@@ -438,7 +438,7 @@ final class CtorFieldFold {
 		else if (node.kind == shape.negationKind)
 			node.children.length == 1 && numeric.contains(node.children[0].kind)
 		else
-			node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
+			node.kind == shape.fieldAccessKind && constantChain(source, node, shape, plugin);
 	}
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
@@ -455,7 +455,7 @@ final class CtorFieldFold {
 	 * field, unset at constructor position. Every segment name must also be unwritten in
 	 * the file, so the value cannot change between the declaration and the constructor.
 	 */
-	private static function constantChain(source: String, node: QueryNode, shape: RefShape): Bool {
+	private static function constantChain(source: String, node: QueryNode, shape: RefShape, plugin: GrammarPlugin): Bool {
 		final segments: Array<String> = [];
 		var current: QueryNode = node;
 		while (current.kind == shape.fieldAccessKind) {
@@ -469,7 +469,7 @@ final class CtorFieldFold {
 		final head: String = root.charAt(0);
 		if (head == head.toLowerCase()) return false;
 		segments.push(root);
-		return segments.foreach(segment -> !(MemberWriteScan.writtenInRange(source, segment, null, 0, source.length)));
+		return segments.foreach(segment -> !(MemberWriteScan.writtenInRange(source, segment, null, 0, source.length, plugin)));
 	}
 
 	/**
@@ -553,7 +553,7 @@ final class CtorFieldFold {
 	 * region, `initSpan` the default expression the constructor assignment inherits.
 	 */
 	private static function foldableDeclaration(
-		source: String, loc: { container: QueryNode, field: QueryNode }, declSpan: Span, shape: RefShape
+		source: String, loc: { container: QueryNode, field: QueryNode }, declSpan: Span, shape: RefShape, plugin: GrammarPlugin
 	): Null<FoldableDecl> {
 		final field: QueryNode = loc.field;
 		final name: Null<String> = field.name;
@@ -565,7 +565,7 @@ final class CtorFieldFold {
 		final init: Null<QueryNode> = declInitializer(field, shape);
 		final initSpan: Null<Span> = init?.span;
 		if (head == null || init == null || initSpan == null) return null;
-		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape)) return null;
+		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape, plugin)) return null;
 		final initDrop: Null<Span> = initializerDropSpan(source, fieldSpan, initSpan, head.end);
 		return initDrop == null ? null : {
 			node: field,
@@ -750,7 +750,7 @@ final class CtorFieldFold {
 		if (tree == null) return null;
 		final loc: Null<{ container: QueryNode, field: QueryNode }> = CtorFieldWrite.classLikeFieldAt(tree, declSpan.from, shape);
 		if (loc == null) return null;
-		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
+		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape, plugin);
 		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(loc.container, shape);
 		return decl == null || ctor == null ? null : {
 			container: loc.container,

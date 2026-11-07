@@ -15666,6 +15666,28 @@
 			"find": "if (length > at) out.push(new Span(at, length));",
 			"replace": "",
 			"note": "the run after the last region is dropped, so a scan of the code bytes never sees the end of a source that does not finish on a comment or a literal"
+		},
+		{
+			"name": "M-REGIONS-COMMENT-OPENS-STRING-BLIND",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentOpensIn",
+			"force": "regions.exists(region -> region.from >= from && region.from < to)",
+			"note": "every region opening inside the range counts as a comment, so a `//` or `/*` inside a string literal refuses a rewrite it does not threaten"
+		},
+		{
+			"name": "M-WRITESCAN-BLOCK-COMMENT-BLIND",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "precededByIncrDecr",
+			"find": "if (comment == null || comment.kind != LexRegionKind.BlockComment) break;",
+			"replace": "if (comment == null || true) break;",
+			"note": "a block comment between a prefix `++` and the name stops the walk, so `++ /* c */ x` is not read as a write"
+		},
+		{
+			"name": "M-MODULESCAN-COMMENTS-KEPT",
+			"type": "anyparse.query.ModuleScan",
+			"method": "stripComments",
+			"force": "text",
+			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
 		}
 	]
 }

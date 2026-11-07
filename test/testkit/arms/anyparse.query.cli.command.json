@@ -926,6 +926,13 @@
 			"find": "r = regionFrom(regions, r, i);",
 			"replace": "r = regions.length;",
 			"note": "strings and comments are read as code, so a bracket inside one ends or opens a pair and a fixture is stripped at the wrong place"
+		},
+		{
+			"name": "M-GATES-QUOTE-BLIND",
+			"type": "anyparse.query.cli.command.GatesCommand",
+			"method": "sliceFirstQuotedArg",
+			"force": "inner.indexOf(',') < 0 ? inner.trim() : inner.substring(0, inner.indexOf(',')).trim()",
+			"note": "the first argument ends at the first comma whether or not a quote encloses it, so a predicate name holding a comma is cut short"
 		}
 	]
 }

@@ -575,7 +575,7 @@ final class CtorFieldWrite {
 		// answer the three consumers ship today.
 		if (writeSpan == null || !ctorWriteUnconditional(ctor, writeSpan.from, shape)) return false;
 		return !MemberKinds.staticMemberFroms(loc.container, shape).contains(span.from)
-			&& !MemberWriteScan.writtenInRange(source, name, write.target, 0, source.length);
+			&& !MemberWriteScan.writtenInRange(source, name, write.target, 0, source.length, plugin);
 	}
 
 	/**
