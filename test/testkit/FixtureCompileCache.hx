@@ -1,6 +1,5 @@
 package testkit;
 
-import anyparse.util.Compare;
 import haxe.DynamicAccess;
 import haxe.Json;
 import haxe.io.Path;
@@ -442,7 +441,7 @@ final class FixtureCompileCache {
 		final described: Array<Array<String>> = [
 			for (files in contents) {
 				final names: Array<String> = [for (name in files.keys()) name];
-				names.sort(Compare.compareString);
+				names.sort(Reflect.compare); // noqa: prefer-compare-function
 				names.map(name -> '$name\t${files[name]}');
 			}
 		];
