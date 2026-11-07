@@ -290,12 +290,11 @@ final class CondRegionLivenessTest extends Test {
 	 * `CondDirective.condition` is null for two different facts — a keyword that takes none, and
 	 * a condition-bearing keyword whose tail was undelimitable — and reading the second as the
 	 * first declares the branch live whenever the opener is refuted, granting a region the
-	 * compiler compiles only under a condition nobody read. This source parses and is
-	 * writer-canonical, so it reaches the gate.
+	 * compiler compiles only under a condition nobody read. An unbalanced group is the undelimitable
+	 * shape: a group broken across lines is delimited like any other.
 	 */
 	public function testUndelimitableBranchConditionIsUnknownNotAnElse(): Void {
-		final undelimitable: String =
-			'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (\n\t\tjs || sys\n\t)\n\tvar b:Int = 2;\n\t#end\n\n}\n';
+		final undelimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys\n\tvar b:Int = 2;\n\t#end\n\n}\n';
 		Assert.notNull(
 			CondRegionLiveness.unproven(
 				undelimitable, SHAPE,

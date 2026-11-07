@@ -64,6 +64,46 @@
 			"note": "no byte of a raw region is scanned at all, so the fail-closed gate stops seeing every occurrence it exists to see and every name-driven op rewrites around such a region in silence"
 		},
 		{
+			"name": "M-COND-KEYWORD-OPERAND-SAME-LINE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "conditionAt",
+			"find": "final start: Int = skipBlank(source, from);",
+			"replace": "final start: Int = skipBlank(source.substring(0, source.indexOf('\\n', from) < 0 ? source.length : source.indexOf('\\n', from)), from);",
+			"note": "the condition must start on the keyword's own line, so `#if` / `false` on two lines reads no condition at all"
+		},
+		{
+			"name": "M-COND-GROUP-STOPS-AT-LINE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "scanParens",
+			"find": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n",
+			"replace": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n\t\t\tif (isLineBreak(c)) return at;\n",
+			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
+		},
+		{
+			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "scanExpression",
+			"find": "i = skipInlineSpace(source, afterOperand + binaryOp.length);",
+			"replace": "i = skipBlank(source, afterOperand + binaryOp.length);",
+			"note": "a binary operator carries the condition onto the next line, so `sys &&` / `js` on two lines swallows the body into the condition"
+		},
+		{
+			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "scanExpression",
+			"find": "operand = skipBlank(source, operand + 1);",
+			"replace": "operand = operand + 1;",
+			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
+		},
+		{
+			"name": "M-COND-LEADING-OPERATOR-SAME-LINE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "scanExpression",
+			"find": "final afterOperand: Int = skipInlineSpace(source, operandEnd);",
+			"replace": "final afterOperand: Int = skipBlank(source, operandEnd);",
+			"note": "a leading binary operator on the next line continues the condition, so `sys` / `|| js` on two lines swallows the region body into the condition"
+		},
+		{
 			"name": "M-DECLARINGFILES-EMPTY",
 			"type": "anyparse.query.TypeRefIndex",
 			"method": "declaringFiles",

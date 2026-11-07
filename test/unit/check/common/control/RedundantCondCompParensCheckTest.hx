@@ -57,6 +57,11 @@ class RedundantCondCompParensCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\t#if (!flag)\n\t\tg();\n\t\t#end\n\t}\n}').length);
 	}
 
+	@:pin('guard')
+	public function testAFlagInParensBrokenAcrossLinesKeepsItsParens(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\t#if (\n\t\t\tsys\n\t\t)\n\t\tg();\n\t\t#end\n\t}\n}').length);
+	}
+
 	public function testNestedParenPairKept(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\t#if ((sys))\n\t\tg();\n\t\t#end\n\t}\n}').length);
 	}

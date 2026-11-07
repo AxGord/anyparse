@@ -301,11 +301,21 @@ class IfFalseDeadCodeCheckTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-IFFALSE-MULTILINE-CONDITION')
-	public function testAConditionBrokenAcrossLinesIsNotTheLiteral(): Void {
-		// The owner reads a condition as a single-line tail, so a line break ends it before the literal.
-		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if (\n\t\tfalse\n\t\t)\n\t\tdead();\n\t\t#end\n\t}\n}').length);
-		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if\n\t\tfalse\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+	@:killer('M-COND-GROUP-STOPS-AT-LINE')
+	@:killer('M-COND-KEYWORD-OPERAND-SAME-LINE')
+	public function testAConditionBrokenAcrossLinesIsTheLiteral(): Void {
+		// The owner reads a condition across the line breaks the expression still needs, so the literal is found.
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if (\n\t\tfalse\n\t\t)\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if\n\t\tfalse\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-COND-GROUP-STOPS-AT-LINE')
+	public function testFixBodyStartsAfterAConditionBrokenAcrossLines(): Void {
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\t#if (\n\t\tfalse\n\t\t) ; #else\n\t\tlive();\n\t\t#end\n\t}\n}');
+		Assert.isTrue(
+			out.indexOf('#if') == -1 && out.indexOf('false') == -1 && out.indexOf('live();') != -1, 'dead branch dropped, got: <$out>'
+		);
 	}
 
 	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {

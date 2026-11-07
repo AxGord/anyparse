@@ -254,10 +254,12 @@ final class CondDirectives {
 
 	/**
 	 * The condition span starting after a keyword at `from`, or null when the directive carries
-	 * none. Never crosses a newline: a condition is a single-line directive tail.
+	 * none. A line break continues the condition only after the keyword, after `!` and inside a
+	 * parenthesised group. Outside parentheses Haxe reads `!`* and ONE operand, so a binary operator
+	 * never carries the condition across a line: the next line's leading `||` is the region's body.
 	 */
 	public static function conditionAt(source: String, from: Int): Null<Span> {
-		final start: Int = skipInlineSpace(source, from);
+		final start: Int = skipBlank(source, from);
 		final end: Int = scanExpression(source, start);
 		return end > start ? new Span(start, end) : null;
 	}
@@ -339,7 +341,7 @@ final class CondDirectives {
 		var end: Int = at;
 		while (true) {
 			var operand: Int = i;
-			while (operand < source.length && source.fastCodeAt(operand) == '!'.code) operand = skipInlineSpace(source, operand + 1);
+			while (operand < source.length && source.fastCodeAt(operand) == '!'.code) operand = skipBlank(source, operand + 1);
 			final operandEnd: Int = scanOperand(source, operand);
 			if (operandEnd <= operand) return end;
 			end = operandEnd;
@@ -367,13 +369,12 @@ final class CondDirectives {
 		return i;
 	}
 
-	/** The index just past the `)` matching the `(` at `at`, or `at` when the group is unbalanced or runs past the line. */
+	/** The index just past the `)` matching the `(` at `at`, or `at` when the group is unbalanced; a group may span lines. */
 	private static function scanParens(source: String, at: Int): Int {
 		var depth: Int = 0;
 		var i: Int = at;
 		while (i < source.length) {
 			final c: Int = source.fastCodeAt(i);
-			if (isLineBreak(c)) return at;
 			if (isQuote(c)) {
 				final quoted: Int = Strings.quotedEnd(source, i);
 				if (quoted <= i) return at;
@@ -394,6 +395,17 @@ final class CondDirectives {
 	/** The condition operator `source` carries at `at`, or null. */
 	private static function operatorAt(source: String, at: Int): Null<String> {
 		return OPERATORS.find(candidate -> source.substring(at, at + candidate.length) == candidate);
+	}
+
+	/** The index of the first character at or after `at` that is not whitespace, line breaks included. */
+	private static function skipBlank(source: String, at: Int): Int {
+		var i: Int = at;
+		while (i < source.length) {
+			final c: Int = source.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code && !isLineBreak(c)) return i;
+			i++;
+		}
+		return i;
 	}
 
 	/** The index of the first character at or after `at` that is neither a space nor a tab; a line break stops the skip. */

@@ -1079,14 +1079,6 @@
 			"find": "CondDirectives.stripOuterParens(text)",
 			"replace": "(text.charAt(0) == '(' ? text.substring(1, text.length - 1).trim() : text)",
 			"note": "only ONE layer of parentheses around the literal is peeled, so `#if ((false))` stops reading as the literal"
-		},
-		{
-			"name": "M-IFFALSE-MULTILINE-CONDITION",
-			"type": "anyparse.check.common.control.IfFalseDeadCode",
-			"method": "isIfLiteralAt",
-			"find": "CondDirectives.conditionAt(source, from + '#if'.length)",
-			"replace": "CondDirectives.conditionAt(source.replace('\\n', ' '), from + '#if'.length)",
-			"note": "a condition is read across line breaks, so `#if (` / `false` / `)` on three lines reads as the literal"
 		}
 	]
 }
