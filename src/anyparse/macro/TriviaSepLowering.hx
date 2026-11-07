@@ -851,13 +851,12 @@ final class TriviaSepLowering {
 		);
 		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
 		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
-		// `appendTrailingComma`. The fork is source-faithful for single-line
-		// lists: `{a: 1,}` / `[1, 2,]` / `f(x,)` keep their trailing `,` flat,
-		// while a list whose source had none stays comma-free even with the knob
-		// on (the knob only forces the break-mode layout via `forceExceeds`).
-		// Null `trailPresentAccess` (Stars without a source-trail slot) → `false`,
-		// byte-identical to the pre-slice flat shape.
-		final flatTrailingCommaExpr: Expr = trailPresentAccess ?? macro false;
+		// `appendTrailingComma`: a list whose source had none stays comma-free
+		// even with the knob on (the knob only forces the break-mode layout via
+		// `forceExceeds`). A source `,` survives flat only while
+		// `wrapping.trailingComma != Remove` — the policy answers for every
+		// layout of an opted-in list, flat included.
+		final flatTrailingCommaExpr: Expr = keepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable);
 
 		// ω-typedef-anon-force-multi: the `forceMode` option of
 		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When

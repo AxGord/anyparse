@@ -117,7 +117,9 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final NEW_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar n = new T(\n\t\t\talphaAlphaAlphaAlphaAlpha,\n'
 		+ '\t\t\tbetaBetaBetaBetaBetaBeta,\n\t\t\tgammaGammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDeltaDelta,\n'
 		+ '\t\t\tepsilonEpsilonEpsilonEps,\n\t\t);\n\t}\n}\n';
-	private static final ARR_FLAT_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t}\n}\n';
+	private static final FLAT_TRAILS: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t\tvar o = {a: 1, b: 2,};\n'
+		+ '\t\tvar n = new T(alpha, beta,);\n\t\tvar m = [1 => 2, 3 => 4,];\n\t}\n}\n';
+	private static final CALL_FLAT_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tg(alpha, beta,);\n\t}\n}\n';
 	private static final ANON_EXTENSION: String = 'typedef E = {\n\t> Base,\n}\n';
 	private static final PARAMS_TRAIL: String = 'class C {\n\tfunction f(\n\t\talphaAlphaAlphaAlphaAlpha: Int,\n'
 		+ '\t\tbetaBetaBetaBetaBetaBeta: Int,\n\t\tgammaGammaGammaGammaGamma: Int,\n\t\tdeltaDeltaDeltaDeltaDelta: Int,\n'
@@ -215,11 +217,13 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.raises(opts.bind('{"wrapping":{"trailingComma":"split"}}'));
 	}
 
-	/** A fitting list whose source carries a trailing comma stays on one line, call and array alike. */
+	/**
+	 * Under `Keep`, a fitting list whose source carries a trailing comma stays on one line, call and array alike.
+	 */
 	@:pin('guard')
 	public function testSourceTrailingCommaIsNoLayoutLever(): Void {
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t\tg(alpha, beta,);\n\t}\n}\n';
-		Assert.equals(source, base(source));
+		Assert.equals(source, write(source, KEEP_JSON));
 	}
 
 	// --- item (a) ---
@@ -293,9 +297,27 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.isTrue(remove(NEW_TRAIL).indexOf('epsilonEpsilonEpsilonEps);') >= 0, remove(NEW_TRAIL));
 	}
 
-	public function testRemoveLeavesFlatArrayTrailingComma(): Void {
-		Assert.equals(base(ARR_FLAT_TRAIL), remove(ARR_FLAT_TRAIL));
-		Assert.isTrue(remove(ARR_FLAT_TRAIL).indexOf('[alpha, beta,]') >= 0);
+	/** `Remove` drops a FLAT list's source trailing comma too: array, object literal, `new` arguments and map literal. */
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-FLAT-LIST-KEPT-UNDER-REMOVE')
+	public function testRemoveDropsFlatListTrailingComma(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t\tvar o = {a: 1, b: 2};\n'
+			+ '\t\tvar n = new T(alpha, beta);\n\t\tvar m = [1 => 2, 3 => 4];\n\t}\n}\n';
+		Assert.equals(expected, remove(FLAT_TRAILS));
+		Assert.equals(expected, base(FLAT_TRAILS));
+	}
+
+	/** `Remove` drops a FLAT call's source trailing argument comma (the postfix-Star path). */
+	@:pin('control')
+	@:killer('M-TRAILING-COMMA-FLAT-CALL-KEPT-UNDER-REMOVE')
+	public function testRemoveDropsFlatCallArgTrailingComma(): Void {
+		Assert.equals('class C {\n\tfunction f() {\n\t\tg(alpha, beta);\n\t}\n}\n', base(CALL_FLAT_TRAIL));
+	}
+
+	/** `Keep` leaves every flat source trailing comma as written. */
+	public function testKeepLeavesFlatTrailingCommas(): Void {
+		Assert.equals(FLAT_TRAILS, write(FLAT_TRAILS, KEEP_JSON));
+		Assert.equals(CALL_FLAT_TRAIL, write(CALL_FLAT_TRAIL, KEEP_JSON));
 	}
 
 	public function testRemoveLeavesMandatoryAnonExtensionComma(): Void {

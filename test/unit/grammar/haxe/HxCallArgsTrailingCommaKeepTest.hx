@@ -8,10 +8,9 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * The trailing comma is the one token the formatter may change, and only through
- * `wrapping.trailingComma` (`keep` by default): a call writes back the comma its source put after
- * the last argument in every layout, as every other list does. The call-argument list read only the
- * add-knob, so the comma was dropped.
+ * Under `wrapping.trailingComma: keep` (the Haxe writer defaults to `remove`) a call writes back the
+ * comma its source put after the last argument in every layout, as every other list does. The
+ * call-argument list read only the add-knob, so the comma was dropped.
  */
 class HxCallArgsTrailingCommaKeepTest extends Test {
 

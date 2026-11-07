@@ -1,29 +1,24 @@
 package anyparse.format;
 
 /**
- * Policy for a trailing separator after the LAST element of a MULTILINE
- * list literal.
+ * Policy for a trailing separator after the LAST element of a list literal,
+ * flat or multiline.
  *
  * `Keep`   — the source's trailing `,` round-trips, and the per-construct
- * `trailingComma*` knobs may still ADD one. The Haxe writer defaults to
- * `Remove`; `Keep` is an explicit opt-in, and a config whose `trailingCommas.*Default: "yes"` asks to ADD one while leaving
+ * `trailingComma*` knobs may still ADD one in a multiline list. The Haxe writer
+ * defaults to `Remove`; `Keep` is an explicit opt-in, and a config whose
+ * `trailingCommas.*Default: "yes"` asks to ADD one while leaving
  * `wrapping.trailingComma` unset loads as `Keep`.
- * `Remove` — a multiline list never ends with a separator, whatever the
- * source had and whatever the per-construct knob asks for. `Remove`
+ * `Remove` — a list never ends with a separator, flat or multiline, whatever
+ * the source had and whatever the per-construct knob asks for. `Remove`
  * therefore OUTRANKS `trailingCommas.arrayLiteralDefault` /
  * `callArgumentDefault` / `objectLiteralDefault`: those decide whether to
  * add a comma, this decides whether one may survive.
  *
- * Two consequences worth stating. `Remove` also suppresses the
- * `forceExceeds` signal a source trailing comma raises, so a list that was
- * forced multi-line ONLY by its trailing comma may now fit flat — and a
- * flat list keeps its source comma (see the scope note below), so the comma
- * can reappear in the collapsed shape. That suppression is required: keeping
- * the force while dropping the comma would flip the layout on the next
- * `fmt` pass.
- *
- * Scope is deliberately BREAK-mode only: a single-line list keeps its source
- * trailing comma, which is the shape the fork round-trips.
+ * `Remove` also suppresses the `forceExceeds` signal a source trailing comma
+ * raises, so a list forced multi-line ONLY by its trailing comma may now fit
+ * flat; keeping the force while dropping the comma would flip the layout on
+ * the next `fmt` pass.
  *
  * Which lists opt in is a GRAMMAR decision — a field or enum branch carries
  * `@:fmt(trailingCommaRemovable)`. In the Haxe grammar that is the array

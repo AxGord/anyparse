@@ -173,14 +173,15 @@ typedef WriteOptions = {
 	arrayMatrixWrap: ArrayMatrixWrap,
 
 	/**
-	 * Policy for the trailing separator after the LAST element of a
-	 * MULTILINE list literal. `Keep` round-trips the source
-	 * comma and lets the per-construct `trailingComma*` knobs add one;
-	 * `Remove` drops it. Only reaches grammar fields that opt in with
-	 * `@:fmt(trailingCommaRemovable)`, so constructs whose trailing
-	 * separator is mandatory stay untouched. Fed by the anyparse-specific
-	 * `wrapping.trailingComma` knob through `HaxeFormatConfigLoader`;
-	 * format-neutral so any delimited-list grammar can reuse it.
+	 * Policy for the trailing separator after the LAST element of a list
+	 * literal, flat or multiline. `Keep` round-trips the source comma and
+	 * lets the per-construct `trailingComma*` knobs add one to a multiline
+	 * list; `Remove` drops it in every layout. Only reaches grammar fields
+	 * that opt in with `@:fmt(trailingCommaRemovable)`, so constructs whose
+	 * trailing separator is mandatory stay untouched. Fed by the
+	 * anyparse-specific `wrapping.trailingComma` knob through
+	 * `HaxeFormatConfigLoader`; format-neutral so any delimited-list grammar
+	 * can reuse it.
 	 */
 	trailingComma: TrailingCommaPolicy,
 

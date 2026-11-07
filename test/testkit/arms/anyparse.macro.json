@@ -983,8 +983,8 @@
 			"name": "M-CALL-FLAT-SOURCE-TRAIL-OFF",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerPostfixCascadeCall",
-			"find": "final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;",
-			"replace": "final flatTcExpr: Expr = macro false;",
+			"find": "final flatTcExpr: Expr = c.isTriviaStar",
+			"replace": "final flatTcExpr: Expr = false && c.isTriviaStar",
 			"note": "a call that stays on one line drops the trailing comma its source wrote"
 		},
 		{
@@ -1944,6 +1944,22 @@
 			"find": "return null;",
 			"replace": "{}",
 			"note": "an EXTENSIONS array holding a non-literal element is read as its literal elements alone, so the clash check runs on a shortened claim and the CLI dispatches extensions the check never saw"
+		},
+		{
+			"name": "M-TRAILING-COMMA-FLAT-LIST-KEPT-UNDER-REMOVE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTrailExprs",
+			"find": "keepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable)",
+			"replace": "trailPresentAccess ?? macro false",
+			"note": "a flat array / object / new / map literal keeps its source trailing comma under wrapping.trailingComma=remove"
+		},
+		{
+			"name": "M-TRAILING-COMMA-FLAT-CALL-KEPT-UNDER-REMOVE",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixCascadeCall",
+			"find": "keepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))",
+			"replace": "postfixSourceTrailExpr()",
+			"note": "a flat call keeps its source trailing argument comma under wrapping.trailingComma=remove"
 		}
 	]
 }

@@ -92,3 +92,12 @@ or `one`, like the global key, for the blank line after a member that carries a 
 `none` a documented member keeps its blank line above (`beforeDocCommentEmptyLines`) and the next member follows it
 directly. Left out, an enum or typedef keeps the source blank and an `enum abstract` follows the global key. Details:
 `docs/haxe-format-config.md`.
+
+## The trailing comma: `wrapping.trailingComma`
+
+`remove` by default: an array, map or object literal and a `new` or call argument list never end with a `,`, flat
+(`[1, 2,]` → `[1, 2]`) or broken over lines, whatever the source had and whatever a `trailingCommas.*Default: "yes"`
+asks for. `keep` lets a source trailing `,` survive in either layout and lets those keys add one to a multiline list. A
+config that sets `arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says nothing about
+`wrapping.trailingComma` loads as `keep`, so the comma it asks for is added. Parameter lists and a mandatory comma
+(`{> Base,}`) are out of the key's reach. Details: `docs/haxe-format-config.md`.

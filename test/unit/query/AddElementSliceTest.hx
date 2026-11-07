@@ -133,8 +133,12 @@ class AddElementSliceTest extends Test {
 		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
 		assertAppend(source, 2, 33, "'c'", false, expected);
 		assertAppend(
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", true,
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n}\n'
+		);
+		assertAppend(
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", false,
-			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\',];\n}\n'
+			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\',];\n}\n', '{"wrapping":{"trailingComma":"keep"}}'
 		);
 	}
 
@@ -453,8 +457,10 @@ class AddElementSliceTest extends Test {
 		assertAdd(source, 7, 7, Before, 'typedef Z = Int;', false, expected);
 	}
 
-	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {
-		final result: EditResult = appendOf(source, line, col, code, reformat);
+	private function assertAppend(
+		source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String, ?optsJson: String
+	): Void {
+		final result: EditResult = appendOf(source, line, col, code, reformat, optsJson);
 		switch result {
 			case Ok(text):
 				Assert.equals(expected, text);
@@ -509,9 +515,9 @@ class AddElementSliceTest extends Test {
 		}
 	}
 
-	private static function appendOf(source: String, line: Int, col: Int, code: String, reformat: Bool): EditResult {
+	private static function appendOf(source: String, line: Int, col: Int, code: String, reformat: Bool, ?optsJson: String): EditResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return AddElement.appendElement(source, line, col, code, reformat, plugin);
+		return AddElement.appendElement(source, line, col, code, reformat, plugin, optsJson);
 	}
 
 	private static function addOf(source: String, line: Int, col: Int, side: InsertSide, code: String, reformat: Bool): EditResult {
