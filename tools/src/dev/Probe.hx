@@ -5,8 +5,7 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JsonFormat;
-import dev.CompileSpec;
-import dev.Expectation;
+import anyparse.util.Compare;
 import dev.Parity.Invocation;
 import dev.Parity.Outcome;
 import devkit.Args;
@@ -89,7 +88,7 @@ final class Probe {
 		if (!FileSystem.exists(engineGiven) || FileSystem.isDirectory(engineGiven))
 			throw new UsageError('engine $engineGiven is not a file');
 		final engine: String = FileSystem.fullPath(engineGiven);
-		final oneProcess: Bool = Parity.oneProcessFor(engine, !perProcess);
+		final oneProcess: Bool = Parity.oneProcessFor(repo, engine, !perProcess);
 		final kitFile: String = kitPath(repo, given[0]);
 		final kit: Kit = load(kitFile);
 		if (parity) {
@@ -177,7 +176,7 @@ final class Probe {
 		final written: Array<String> = [];
 		final names: Array<String> = [for (name in outcome.files.keys()) name];
 		for (name in before.keys()) if (!outcome.files.exists(name)) names.push(name);
-		names.sort(Reflect.compare);
+		names.sort(Compare.compareString);
 		for (name in names) {
 			final after: Null<String> = outcome.files[name];
 			if (after == before[name]) continue;
@@ -278,7 +277,7 @@ final class Probe {
 			found.push(~/\s+/g.replace(comment.matched(0), ' ').trim());
 			rest = comment.matchedRight();
 		}
-		found.sort(Reflect.compare);
+		found.sort(Compare.compareString);
 		return found;
 	}
 
@@ -289,7 +288,7 @@ final class Probe {
 	 */
 	public static function checkAll(repo: String, threads: Int): KitsReport {
 		final engine: String = FileSystem.fullPath(Path.join([repo, 'bin', 'apq.js']));
-		final oneProcess: Bool = Parity.oneProcessFor(engine, true);
+		final oneProcess: Bool = Parity.oneProcessFor(repo, engine, true);
 		final report: KitsReport = {
 			areas: 0,
 			invocations: 0,
@@ -318,7 +317,7 @@ final class Probe {
 		final found: Array<String> = [
 			for (name in FileSystem.readDirectory(root)) if (FileSystem.exists(Path.join([root, name, KIT_FILE]))) name
 		];
-		found.sort(Reflect.compare);
+		found.sort(Compare.compareString);
 		return found;
 	}
 

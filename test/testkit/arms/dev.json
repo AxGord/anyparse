@@ -1324,6 +1324,29 @@
 			"find": "cmd('git rev-parse HEAD')",
 			"replace": "cmd('git rev-parse HEAD^{tree}')",
 			"note": "the warm keeps the base lint under a key no gate on the landed commit asks for, so every land lints for nothing and every first rule-code gate lints its base again"
+		},
+		{
+			"name": "M-PARITY-NODE-FLAGS-RESPELT",
+			"type": "dev.Parity",
+			"method": "nodeFlags",
+			"force": "['--max-semi-space-size=64']",
+			"note": "the batch process runs node with a constant instead of the flags bin/apq carries, so a changed shim flag leaves parity and probe on the old one"
+		},
+		{
+			"name": "M-PARITY-PRESET-RESPELT",
+			"type": "dev.Parity",
+			"method": "engineArgv",
+			"find": "shimWords(shimTree, 'hxq', ~/set -- \"\\$cmd\" ([^\"]*)\"\\$@\"/)",
+			"replace": "['--lang-default', 'haxe']",
+			"note": "the hxq argv prefix is spelled in the tool instead of read from bin/hxq, so a changed preset reaches a batch process only after a hand edit"
+		},
+		{
+			"name": "M-PARITY-SHIM-LINE-SILENT",
+			"type": "dev.Parity",
+			"method": "shimWords",
+			"find": "if (!row.match(File.getContent(file))) throw new Exception('$file has no line matching ${row}');",
+			"replace": "if (!row.match(File.getContent(file))) return [];",
+			"note": "a shim without the line parity reads answers no words instead of failing, so a batch process runs without the node flags or the hxq preset while a call through the shim keeps them"
 		}
 	]
 }

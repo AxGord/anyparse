@@ -14,6 +14,7 @@ import devkit.Pool;
 import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
+import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -45,9 +46,6 @@ final class Parity {
 
 	/** How much of a differing line a report row quotes. */
 	private static inline final QUOTE_WIDTH: Int = 120;
-
-	/** The node flag the `bin/apq` shim runs the engine with, kept for a batch process so the two modes run alike. */
-	private static inline final NODE_FLAGS: String = '--max-semi-space-size=64';
 
 	/** The shims an invocation may name as its program: both run the engine `HXQ_BIN` pins. */
 	private static final SHIMS: Array<String> = ['apq', 'hxq'];
@@ -94,8 +92,8 @@ final class Parity {
 		shimTree: String, base: String, tip: String, invocations: Array<Invocation>, threads: Int, oneProcess: Bool
 	): Array<Comparison> {
 		return TempDir.with(work -> {
-			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads, oneProcessFor(base, oneProcess));
-			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads, oneProcessFor(tip, oneProcess));
+			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads, oneProcessFor(shimTree, base, oneProcess));
+			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads, oneProcessFor(shimTree, tip, oneProcess));
 			[
 				for (i => invocation in invocations) {
 					invocation: invocation,
@@ -189,7 +187,7 @@ final class Parity {
 	): Array<Outcome> {
 		final dirs: Array<String> = [for (i => invocation in invocations) fixture(work.file('$i'), invocation.files)];
 		final results: Array<Result> = if (oneProcess) {
-			batched(engine, invocations, dirs, work, threads);
+			batched(shimTree, engine, invocations, dirs, work, threads);
 		} else {
 			final commands: Array<Command> = [
 				for (i => invocation in invocations) {
@@ -223,30 +221,52 @@ final class Parity {
 		return dir;
 	}
 
-	/** The engine argv a shim invocation `argv` runs — what `bin/hxq` and `bin/apq` pass on: `hxq` names the Haxe default grammar. */
-	public static function engineArgv(argv: Array<String>): Array<String> {
+	/**
+	 * The engine argv a shim invocation `argv` runs: what the tree's `bin/hxq` puts after the command (its `set -- "$cmd" …
+	 * "$@"` line, the Haxe default grammar), and what `bin/apq` passes on unchanged.
+	 */
+	public static function engineArgv(shimTree: String, argv: Array<String>): Array<String> {
 		final rest: Array<String> = argv.slice(1);
-		return argv[0] == 'hxq' && rest.length > 0 ? [rest[0], '--lang-default', 'haxe'].concat(rest.slice(1)) : rest;
+		return argv[0] == 'hxq' && rest.length > 0
+			? [rest[0]].concat(shimWords(shimTree, 'hxq', ~/set -- "\$cmd" ([^"]*)"\$@"/)).concat(rest.slice(1))
+			: rest;
+	}
+
+	/**
+	 * The flags `node` runs the engine with: the default of the `node_flags`
+	 * line of the tree's `bin/apq`, so a batch process runs as a shim call does.
+	 */
+	public static function nodeFlags(shimTree: String): Array<String> {
+		return shimWords(shimTree, 'apq', ~/node_flags="\$\{HXQ_NODE_FLAGS-([^}]*)\}"/);
 	}
 
 	/**
 	 * Whether `engine` runs its invocations in one process when that is `wanted`: only an engine that has the `apq --batch`
 	 * entry, which a bare `--batch` tells apart (its usage line, where an older engine answers `unknown subcommand`).
 	 */
-	public static function oneProcessFor(engine: String, wanted: Bool): Bool {
+	public static function oneProcessFor(shimTree: String, engine: String, wanted: Bool): Bool {
 		if (!wanted) return false;
-		final probe: Result = Command.of(['node', NODE_FLAGS, engine, BatchRun.FLAG])
+		final probe: Result = Command.of(['node'].concat(nodeFlags(shimTree)).concat([engine, BatchRun.FLAG]))
 			.at(Path.directory(engine))
 			.timeout(TIMEOUT_MS)
 			.run();
 		return probe.err.startsWith('usage: apq ${BatchRun.FLAG} ');
 	}
 
+	/**
+	 * The words the first group of `row` captures in the shim `bin/<shim>` of `shimTree`; a shim with no such line is a failure.
+	 */
+	private static function shimWords(shimTree: String, shim: String, row: EReg): Array<String> {
+		final file: String = Path.join([shimTree, 'bin', shim]);
+		if (!row.match(File.getContent(file))) throw new Exception('$file has no line matching ${row}');
+		return row.matched(1).split(' ').filter(word -> word != '');
+	}
+
 	/** `apq <command> --help` for every command the engine `engine` lists, each over `files`. */
 	private static function helpInvocations(shimTree: String, engine: String, files: Map<String, String>): Array<Invocation> {
 		final help: Result = shim(shimTree, engine, ['apq', '--help']).at(shimTree).run();
 		final names: Array<String> = commandsOf(help.out);
-		if (names.length == 0) throw new haxe.Exception('`apq --help` of $engine lists no command');
+		if (names.length == 0) throw new Exception('`apq --help` of $engine lists no command');
 		return names.map(name -> {
 			name: 'help $name',
 			argv: ['apq', name, '--help'],
@@ -308,7 +328,7 @@ final class Parity {
 	 * order. A share whose engine process gave no answer fails each of its invocations with that process's first error.
 	 */
 	private static function batched(
-		engine: String, invocations: Array<Invocation>, dirs: Array<String>, work: TempDir, threads: Int
+		shimTree: String, engine: String, invocations: Array<Invocation>, dirs: Array<String>, work: TempDir, threads: Int
 	): Array<Result> {
 		final size: Int = Math.ceil(invocations.length / threads);
 		final shares: Array<Array<Int>> = [];
@@ -320,18 +340,13 @@ final class Parity {
 		final commands: Array<Command> = [
 			for (s => share in shares) {
 				final calls: BatchCalls = {
-					calls: share.map(i -> {argv: engineArgv(invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
+					calls: share.map(i -> {argv: engineArgv(shimTree, invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
 				};
 				final callsFile: String = work.file('batch-$s.json');
 				File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));
-				Command.of([
-					'node',
-					NODE_FLAGS,
-					engine,
-					BatchRun.FLAG,
-					callsFile,
-					work.file('batch-$s-answers.json')
-				])
+				Command.of(
+					['node'].concat(nodeFlags(shimTree)).concat([engine, BatchRun.FLAG, callsFile, work.file('batch-$s-answers.json')])
+				)
 					.env('HXQ_BIN', engine)
 					.at(work.file(''))
 					.timeout(TIMEOUT_MS * share.length);

@@ -3,7 +3,9 @@ package unit.dev;
 import dev.Parity;
 import dev.Repo;
 import devkit.TempDir;
+import haxe.Exception;
 import haxe.io.Path;
+import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
@@ -74,9 +76,14 @@ final class ParityTest extends Test {
 	}
 
 	public function testTheEngineArgvIsWhatTheShimPassesOn(): Void {
-		Assert.same(['fmt', '--lang-default', 'haxe', 'A.hx'], Parity.engineArgv(['hxq', 'fmt', 'A.hx']));
-		Assert.same(['get', 'a.json', 'x'], Parity.engineArgv(['apq', 'get', 'a.json', 'x']));
-		Assert.same([], Parity.engineArgv(['hxq']));
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		Assert.same(['fmt', '--lang-default', 'haxe', 'A.hx'], Parity.engineArgv(tree, ['hxq', 'fmt', 'A.hx']));
+		Assert.same(['get', 'a.json', 'x'], Parity.engineArgv(tree, ['apq', 'get', 'a.json', 'x']));
+		Assert.same([], Parity.engineArgv(tree, ['hxq']));
 	}
 
 	public function testAnEngineWithNoBatchEntryFailsEveryInvocationOfItsShare(): Void {
@@ -113,9 +120,9 @@ final class ParityTest extends Test {
 			final base: String = engine(dir.file('base.js'), 'A');
 			final tip: String = engine(dir.file('tip.js'), 'B');
 			final real: String = Path.join([tree, 'bin', 'apq.js']);
-			Assert.isFalse(Parity.oneProcessFor(base, true), 'a stand-in engine has no batch entry');
-			Assert.isTrue(Parity.oneProcessFor(real, true), 'this tree\'s engine has it');
-			Assert.isFalse(Parity.oneProcessFor(real, false), 'per process when one process is not wanted');
+			Assert.isFalse(Parity.oneProcessFor(tree, base, true), 'a stand-in engine has no batch entry');
+			Assert.isTrue(Parity.oneProcessFor(tree, real, true), 'this tree\'s engine has it');
+			Assert.isFalse(Parity.oneProcessFor(tree, real, false), 'per process when one process is not wanted');
 			final invocations: Array<Invocation> = [
 				for (name in ['one', 'two', 'three']) {
 					name: name,
@@ -131,6 +138,36 @@ final class ParityTest extends Test {
 				Assert.equals(apart[i].tip.out, run.tip.out);
 				Assert.same(apart[i].differences, run.differences);
 			}
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-NODE-FLAGS-RESPELT')
+	public function testTheNodeFlagsAreTheDefaultOfTheApqShim(): Void {
+		TempDir.with(dir -> {
+			final tree: String = shimTree(dir.file('flags'), 'node_flags="$${HXQ_NODE_FLAGS---max-old-space-size=7 --trace-gc}"', '');
+			Assert.same(['--max-old-space-size=7', '--trace-gc'], Parity.nodeFlags(tree));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-PRESET-RESPELT')
+	public function testTheHxqPresetIsWhatTheHxqShimInserts(): Void {
+		TempDir.with(dir -> {
+			final tree: String = shimTree(dir.file('preset'), '', '    set -- "$$cmd" --lang-default kotlin "$$@"');
+			Assert.same(['fmt', '--lang-default', 'kotlin', 'A.kt'], Parity.engineArgv(tree, ['hxq', 'fmt', 'A.kt']));
+			Assert.same(['fmt', 'A.kt'], Parity.engineArgv(tree, ['apq', 'fmt', 'A.kt']));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-SHIM-LINE-SILENT')
+	public function testAShimWithoutTheReadLineFailsInsteadOfDefaulting(): Void {
+		TempDir.with(dir -> {
+			final bare: String = shimTree(dir.file('bare'), 'echo none', 'echo none');
+			Assert.raises(Parity.nodeFlags.bind(bare), Exception);
+			Assert.raises(() -> Parity.engineArgv(bare, ['hxq', 'fmt', 'A.hx']), Exception);
+			Assert.same(['fmt', 'A.hx'], Parity.engineArgv(bare, ['apq', 'fmt', 'A.hx']), 'the apq shim adds nothing, so it reads nothing');
 		});
 	}
 
@@ -158,6 +195,14 @@ final class ParityTest extends Test {
 			failure: '',
 			files: files
 		};
+	}
+
+	/** A tree at `root` whose `bin/apq` holds the line `apqLine` and whose `bin/hxq` holds `hxqLine`. */
+	private static function shimTree(root: String, apqLine: String, hxqLine: String): String {
+		FileSystem.createDirectory(Path.join([root, 'bin']));
+		File.saveContent(Path.join([root, 'bin', 'apq']), '#!/usr/bin/env sh\n$apqLine\n');
+		File.saveContent(Path.join([root, 'bin', 'hxq']), '#!/usr/bin/env sh\n$hxqLine\n');
+		return root;
 	}
 
 }
