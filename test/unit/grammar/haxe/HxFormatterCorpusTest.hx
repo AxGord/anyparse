@@ -472,7 +472,7 @@ class HxFormatterCorpusTest extends Test {
 	private static function assertTokensKept(relPath: String, input: String, emitted: String): Void {
 		final written: String = ByteOrderMark.carry(input, emitted);
 		if (CommentInventory.firstMissing(input, written, HaxeLexicalRegions.scanComments) != null) return;
-		final drift: Null<Divergence> = WhitespaceInvariant.firstDivergence(input, written);
+		final drift: Null<Divergence> = WhitespaceInvariant.firstDivergence(input, written, HaxeLexicalRegions.scanComments);
 		if (drift != null && !KNOWN_TOKEN_DRIFT.contains(relPath))
 			Assert.fail('$relPath: formatting changed more than whitespace at line ${drift.line}: <${drift.expected}> → <${drift.actual}>');
 	}

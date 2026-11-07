@@ -491,6 +491,30 @@
 			"find": "return members.length > 0 && (",
 			"replace": "return (",
 			"note": "a body holding comments alone reads as documented, though it has no member a doc comment could document - the fork's comments-only body takes no edge blanks at all"
+		},
+		{
+			"name": "M-VERIFY-TRAILING-COMMA-EXEMPT-OFF",
+			"type": "anyparse.format.WhitespaceInvariant",
+			"method": "strip",
+			"find": "if (pending >= 0 && (c ==",
+			"replace": "if (false && (c ==",
+			"note": "the strip step keeps a comma before a closing bracket, so a trailing comma the knob adds or drops is a divergence again"
+		},
+		{
+			"name": "M-VERIFY-COMMA-EXEMPT-ANYWHERE",
+			"type": "anyparse.format.WhitespaceInvariant",
+			"method": "strip",
+			"find": "if (pending >= 0 && (c == ']'.code || c == ')'.code || c == '}'.code))",
+			"replace": "if (pending >= 0)",
+			"note": "the strip step drops a comma before ANY following code token, so a comma the writer lost mid-list verifies clean"
+		},
+		{
+			"name": "M-VERIFY-COMMENT-TRANSPARENCY-OFF",
+			"type": "anyparse.format.WhitespaceInvariant",
+			"method": "strip",
+			"find": "if (!inComment) {",
+			"replace": "if (true) {",
+			"note": "comment bytes count as code again, so a comment between a trailing comma and its closer keeps the comma visible"
 		}
 	]
 }

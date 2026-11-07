@@ -2,6 +2,8 @@ package anyparse.format;
 
 using StringTools;
 
+import anyparse.format.comment.CommentScan;
+
 /**
  * The formatter's non-whitespace invariant: a correct formatter changes only
  * WHITESPACE, so stripping every whitespace character from the input and from
@@ -18,8 +20,7 @@ using StringTools;
  * ## What it deliberately does NOT know
  *
  * Some formatter policies are token-level by design, and a divergence they
- * cause is CORRECT: an inserted or removed trailing comma
- * (`trailingCommaArgs`), braces added around a single statement
+ * cause is CORRECT: braces added around a single statement
  * (`singleStmtBraces`), an optional `;` normalised in or out, a javadoc close
  * rewritten from `**\/` to `*\/`. This module reports the divergence and says
  * nothing about which kind it is — the caller reads it. Keeping the rule
@@ -27,7 +28,14 @@ using StringTools;
  * useful diagnostic for a defect nobody has classified yet, which is the
  * situation it exists for.
  *
- * Pure and grammar-agnostic: whitespace is not a property of any one language.
+ * It knows exactly ONE token class: a `,` before a closing `]`, `)` or `}`
+ * with only whitespace or comments between. The trailing-comma knob adds and
+ * removes that token in any layout and it carries no meaning, so with
+ * `remove` as the default every tree that holds one would otherwise fail
+ * `--verify`. A comma anywhere else is still a divergence.
+ *
+ * Pure and grammar-agnostic: whitespace is not a property of any one language,
+ * and what a comment is arrives as the caller's `CommentScan`.
  */
 @:nullSafety(Strict)
 final class WhitespaceInvariant {
@@ -43,11 +51,12 @@ final class WhitespaceInvariant {
 	 * caller can point at a file the user still has on disk; `expected` and
 	 * `actual` quote the next run of non-whitespace characters from each side.
 	 * A side that simply ran out reports an empty window, which is what a
-	 * dropped or added trailing token looks like.
+	 * dropped or added trailing token looks like. `scan` reads the comments of
+	 * EACH text, so a trailing comma stays invisible through a comment.
 	 */
-	public static function firstDivergence(source: String, written: String): Null<Divergence> {
-		final left: Stripped = strip(source);
-		final right: Stripped = strip(written);
+	public static function firstDivergence(source: String, written: String, scan: CommentScan): Null<Divergence> {
+		final left: Stripped = strip(source, scan);
+		final right: Stripped = strip(written, scan);
 		final leftLen: Int = left.text.length;
 		final rightLen: Int = right.text.length;
 		final shared: Int = leftLen < rightLen ? leftLen : rightLen;
@@ -60,11 +69,24 @@ final class WhitespaceInvariant {
 		};
 	}
 
-	/** `text` with every whitespace character removed, plus the 1-based source line each kept character came from. */
-	private static function strip(source: String): Stripped {
-		final text: StringBuf = new StringBuf();
+	/**
+	 * `text` with every whitespace character removed, plus the 1-based source line each kept character came from.
+	 * A code `,` followed by a closing `]`, `)` or `}` with only whitespace or comments between is dropped: the
+	 * trailing-comma knob adds and removes exactly that token in any layout, and the comment it can sit before
+	 * (`2, // two` then `]`) stays in the text. Comment bytes never count as code, so a `,` or `]` inside one is inert.
+	 */
+	private static function strip(source: String, scan: CommentScan): Stripped {
+		final spans: Array<Int> = [];
+		scan(source, (start, end) -> {
+			spans.push(start);
+			spans.push(end);
+		});
+		final kept: Array<String> = [];
 		final lines: Array<Int> = [];
 		var line: Int = 1;
+		var span: Int = 0;
+		var pending: Int = -1;
+		var dropped: Int = 0;
 		for (i in 0...source.length) {
 			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code) {
@@ -72,10 +94,30 @@ final class WhitespaceInvariant {
 				continue;
 			}
 			if (c == ' '.code || c == '\t'.code || c == '\r'.code) continue;
-			text.add(source.charAt(i));
+			while (span < spans.length && i >= spans[span + 1]) span += 2;
+			final inComment: Bool = span < spans.length && i >= spans[span];
+			if (!inComment) {
+				if (pending >= 0 && (c == ']'.code || c == ')'.code || c == '}'.code)) {
+					kept[pending] = '';
+					dropped++;
+				}
+				pending = c == ','.code ? kept.length : -1;
+			}
+			kept.push(source.charAt(i));
 			lines.push(line);
 		}
-		return { text: text.toString(), lines: lines };
+		return dropped == 0 ? { text: kept.join(''), lines: lines } : compact(kept, lines);
+	}
+
+	/** `kept` and `lines` without the entries emptied by `strip`, which keeps the two arrays aligned. */
+	private static function compact(kept: Array<String>, lines: Array<Int>): Stripped {
+		final text: StringBuf = new StringBuf();
+		final keptLines: Array<Int> = [];
+		for (i => piece in kept) if (piece != '') {
+			text.add(piece);
+			keptLines.push(lines[i]);
+		}
+		return { text: text.toString(), lines: keptLines };
 	}
 
 	/** The last line the stripped source reached — the report position when the SOURCE is the side that ran out. */

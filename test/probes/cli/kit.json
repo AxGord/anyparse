@@ -9,7 +9,9 @@
 		"walk/Lit.hx": "package walk;\n\nclass Lit {\n\tpublic static final SNAPSHOT: String = 'bin/.last-sweep.json';\n}\n",
 		"walk/Use.hx": "package walk;\n\nimport haxe.Json;\n\nclass Use {\n\tpublic static function parse(s: String): Dynamic {\n\t\treturn Json.parse(s);\n\t}\n}\n",
 		"mixed/A.hx": "class A {\n\tstatic var s = \"zz\";\n}\n",
-		"mixed/b.json": "{\"k\": \"zz\"}\n"
+		"mixed/b.json": "{\"k\": \"zz\"}\n",
+		"verify/flat-comma/A.hx": "class A {\n\tstatic var x = [1, 2,];\n\tstatic function f() {\n\t\tg(1, 2,);\n\t}\n}\n",
+		"verify/comment-comma/A.hx": "class A {\n\tstatic var b = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var e = [\n\t\t1,\n\t\t2,\n\t\t// tail\n\t];\n}\n"
 	},
 	"invocations": [
 		{
@@ -8045,6 +8047,36 @@
 				"exit": 0,
 				"out": "21b8566917d192d4",
 				"err": "6e40de9052738532",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt verify/flat-comma/A.hx --verify",
+			"argv": [
+				"apq",
+				"fmt",
+				"verify/flat-comma/A.hx",
+				"--verify"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f22931c4653f967d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq fmt verify/comment-comma/A.hx --verify",
+			"argv": [
+				"apq",
+				"fmt",
+				"verify/comment-comma/A.hx",
+				"--verify"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f22931c4653f967d",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

@@ -6,10 +6,11 @@ import anyparse.query.Cli;
  * End-to-end probe for `apq fmt --verify` — the audit that formats each file in
  * memory and requires the output to differ from the input by WHITESPACE only.
  *
- * The last case is the positive control: a source whose reformat legitimately
- * changes a TOKEN (the trailing comma policy drops one). Without it the suite
- * would only ever show this check passing, which is indistinguishable from a
- * check that can no longer fail.
+ * The token-change case is the positive control: a source whose reformat
+ * legitimately changes a TOKEN (`singleStatementBraces: remove` drops a brace
+ * pair). Without it the suite would only ever show this check passing, which is
+ * indistinguishable from a check that can no longer fail. A trailing comma the
+ * `trailingComma` knob drops is the one token change verify does not report.
  */
 @:nullSafety(Strict)
 class ApqFmtVerifyCliTest extends Test {
@@ -48,15 +49,39 @@ class ApqFmtVerifyCliTest extends Test {
 
 	public function testTokenChangingReformatFailsVerification(): Void {
 		#if (sys || nodejs)
-		// `wrapping.trailingComma: remove` drops the trailing comma of a multi-line
-		// list — a real token change, and exactly the class of divergence the audit
-		// exists to surface.
+		// A dropped brace pair is a real token change, exactly the class of
+		// divergence the audit exists to surface.
 		final dir: String = CliFixture.writeDir('apq_fmt_verify_token', [
-			{ name: 'hxformat.json', source: '{"wrapping": {"trailingComma": "remove"}}\n' },
-			{ name: 'A.hx', source: 'class A {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t}\n}\n' }
+			{ name: 'hxformat.json', source: '{"whitespace": {"bracesConfig": {"singleStatementBraces": "remove"}}}\n' },
+			{ name: 'A.hx', source: 'class A {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tb();\n\t\t}\n\t}\n}\n' }
 		]);
 		Assert.notEquals(0, Cli.run(['fmt', dir, '--verify']));
 		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-VERIFY-TRAILING-COMMA-EXEMPT-OFF')
+	public function testDroppedTrailingCommasVerify(): Void {
+		#if (sys || nodejs)
+		// The default `remove` drops the trailing comma of a flat and of a multi-line list; neither is a divergence.
+		final dir: String = CliFixture.writeDir('apq_fmt_verify_comma', [
+			{ name: 'A.hx', source: 'class A {\n\tstatic var x = [1, 2,];\n\tstatic var y = [\n\t\t1,\n\t\t2,\n\t];\n}\n' }
+		]);
+		Assert.equals(0, Cli.run(['fmt', dir, '--verify']));
+		CliFixture.removeDir(dir);
+		// the commonest multi-line layout keeps a comment between the comma and the closer
+		final commented: String = CliFixture.writeDir('apq_fmt_verify_comma_comment', [
+			{
+				name: 'A.hx',
+				source: 'class A {\n\tstatic var y = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var z = [\n\t\t1,\n\t\t2,\n\t\t// tail\n'
+				+ '\t];\n}\n'
+			}
+		]);
+		Assert.equals(0, Cli.run(['fmt', commented, '--verify']));
+		CliFixture.removeDir(commented);
 		#else
 		Assert.pass('non-sys target');
 		#end

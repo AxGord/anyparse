@@ -2,11 +2,13 @@ package anyparse.query.cli.command;
 
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
+import anyparse.format.comment.CommentScan;
 import anyparse.query.Cli.FmtRunResult;
 import anyparse.query.CondRegionScan.OpaqueCondRegion;
 import anyparse.query.ExitCode.*;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.SourceComments;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
 
@@ -482,9 +484,11 @@ final class FmtCommand implements CliCommand {
 		CliIo.sysPrint('--verify catches what the writer round-trip cannot: a writer defect whose\n');
 		CliIo.sysPrint('output this parser still accepts is invisible to a tree-level gate, so\n');
 		CliIo.sysPrint('self-status, --list and lint all report green on a tree that no longer\n');
-		CliIo.sysPrint('compiles. Note that some policies change tokens on purpose — a trailing\n');
-		CliIo.sysPrint('comma, braces around a single statement, an optional semicolon — and those\n');
-		CliIo.sysPrint('are reported too; read the diff rather than treating any hit as a bug.\n');
+		CliIo.sysPrint('compiles. Note that some policies change tokens on purpose — braces around a\n');
+		CliIo.sysPrint('single statement, an optional semicolon — and those are reported too; read\n');
+		CliIo.sysPrint('the diff rather than treating any hit as a bug. The one token ignored is a\n');
+		CliIo.sysPrint('comma before a closing bracket, with only whitespace or comments between\n');
+		CliIo.sysPrint('(the trailing-comma knob\'s own).\n');
 	}
 
 	private static function parseFmtArgs(args: Array<String>): FmtOpts {
@@ -616,7 +620,7 @@ final class FmtCommand implements CliCommand {
 				unsettled: unsettled,
 				fatalExit: null
 			};
-			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted);
+			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted, commentScan(plugin));
 			if (divergence == null) return {
 				changed: true,
 				failed: false,
@@ -685,6 +689,15 @@ final class FmtCommand implements CliCommand {
 			unsettled: unsettled,
 			fatalExit: null
 		};
+	}
+
+	/**
+	 * The grammar's comments as the `CommentScan` the format package reads, taken from the plugin's lexical regions
+	 * (their line and block comments) so the verify audit asks the same lexer every other command does.
+	 */
+	private static function commentScan(plugin: GrammarPlugin): CommentScan {
+		return (source, onComment) -> for (token in SourceComments.collectCommentTokens(plugin.lexicalRegions(source)))
+			onComment(token.from, token.to);
 	}
 
 }
