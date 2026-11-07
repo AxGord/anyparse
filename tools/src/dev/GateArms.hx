@@ -419,8 +419,9 @@ final class GateArms {
 	/**
 	 * The members one call edge away, either way, from a member the slice changed in place. `graph --diff` compares by text, so
 	 * a member of a `layout` module is no seed, nor is one whose doc comment alone changed (`codeChanged`); a member added or
-	 * removed changes a caller too, so it is none either. A graph
-	 * that cannot be read throws and the row does not run, because no neighbours would quietly narrow the selection.
+	 * removed changes a caller too, so it is none either. A seed the calls graph holds no node for (a member with no call edge)
+	 * is skipped by `graph --focus` and answers an empty graph, so it has no neighbours; a graph that cannot be read throws and
+	 * the row does not run, because no neighbours would quietly narrow the selection.
 	 */
 	private static function callNeighbours(
 		gate: GateTree, base: String, layout: Array<String>, touches: Array<ModuleTouch>

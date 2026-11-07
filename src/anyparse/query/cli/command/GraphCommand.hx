@@ -146,14 +146,11 @@ final class GraphCommand implements CliCommand {
 			return writePage(
 				request, full, page, '$COMMAND --level ${request.level} --edges ${request.edges}', full.edges().length == 0, ctx
 			);
-		final focusIds: Array<String> = [];
-		for (query in request.focus) {
-			final found: Array<GraphNode> = GraphView.named(full, query, request.level);
-			if (found.length == 0) {
-				CliIo.stderr('apq $COMMAND: no ${request.level} in the graph is named "$query"\n');
-				return ctx.emptyExit(true);
-			}
-			for (n in found) if (!focusIds.contains(n.id)) focusIds.push(n.id);
+		final focusIds: Array<String> = focusNodes(full, request);
+		// no focus filter would draw the whole scope, so a focus that named nothing is the empty answer, drawn as such
+		if (request.focus.length > 0 && focusIds.length == 0) {
+			printView(request.output, new CodeGraph(), '$COMMAND --level ${request.level} --edges ${request.edges}');
+			return ctx.emptyExit(true);
 		}
 		final view: CodeGraph = GraphView.filter(full, {
 			minWeight: request.minWeight,
@@ -465,6 +462,19 @@ final class GraphCommand implements CliCommand {
 		if (source == Imports) throw new UsageFailure('--diff compares the call graph: it draws --edges calls');
 		if (pruning.length > 0) throw new UsageFailure('${pruning[0]} prunes one graph: it does not combine with --diff');
 		return page ? (level ?? Package) : Member;
+	}
+
+	/**
+	 * A name of `request.focus` that matches no node is reported on stderr and skipped, so the others still centre the view.
+	 */
+	private static function focusNodes(full: CodeGraph, request: GraphRequest): Array<String> {
+		final ids: Array<String> = [];
+		for (query in request.focus) {
+			final found: Array<GraphNode> = GraphView.named(full, query, request.level);
+			if (found.length == 0) CliIo.stderr('apq $COMMAND: no ${request.level} in the graph is named "$query"\n');
+			for (n in found) if (!ids.contains(n.id)) ids.push(n.id);
+		}
+		return ids;
 	}
 
 }

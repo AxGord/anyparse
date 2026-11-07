@@ -3,6 +3,9 @@ package unit.cli;
 import anyparse.query.Cli;
 import anyparse.query.format.json.CodeGraphJson;
 import anyparse.query.format.json.CodeGraphJsonParser;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
 import unit.query.graph.GraphFixture;
 #if (sys || nodejs)
 import anyparse.grammar.mermaid.MermaidParser;
@@ -189,6 +192,80 @@ class GraphCliTest extends Test {
 		});
 		#else
 		Assert.pass('stderr capture is node-only');
+		#end
+	}
+
+	/**
+	 * A focus on a member the call graph holds no node for is the empty answer: a valid empty graph on stdout, not an empty stdout.
+	 */
+	@:pin('control')
+	@:killer('M-GRAPH-UNKNOWN-FOCUS-WHOLE')
+	public function testAFocusOnAMemberWithNoCallEdgeDrawsAnEmptyGraph(): Void {
+		#if nodejs
+		withFixture(root -> {
+			final file: String = Path.join([root, 'pkg/c/Wide.hx']);
+			FileSystem.createDirectory(Path.directory(file));
+			File.saveContent(
+				file,
+				'package pkg.c;\n\nenum abstract Wide(Int) {\n\tvar One = 1;\n\n\t@:from public static function fromInt(i:Int):Wide {\n'
+				+ '\t\treturn cast i;\n\t}\n}\n'
+			);
+			for (name in ['pkg.c.Wide.fromInt', 'Nowhere']) {
+				var code: Int = -1;
+				var out: String = '';
+				final err: String = CliFixture.captureStderr(() -> out = CliFixture.captureStdout(() -> code = Cli.run([
+					'graph',
+					root,
+					'--level',
+					'member',
+					'--edges',
+					'calls',
+					'--radius',
+					'1',
+					'--focus',
+					name,
+					'--format',
+					'json'
+				])));
+				Assert.equals(0, code, name);
+				final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
+				Assert.equals(0, doc.nodes.length, 'the whole scope is not drawn for $name');
+				Assert.equals(0, doc.edges.length, name);
+				Assert.isTrue(err.indexOf('no member in the graph is named "$name"') >= 0, err);
+			}
+		});
+		#else
+		Assert.pass('stdout capture is node-only');
+		#end
+	}
+
+	/** A focus the graph does not know is skipped: the others still centre the view. */
+	@:pin('control')
+	@:killer('M-GRAPH-UNKNOWN-FOCUS-ABORTS')
+	public function testAnUnknownFocusBesideAKnownOneIsSkipped(): Void {
+		#if nodejs
+		withFixture(root -> {
+			var code: Int = -1;
+			var out: String = '';
+			final err: String = CliFixture.captureStderr(() -> out = CliFixture.captureStdout(() -> code = Cli.run([
+				'graph',
+				root,
+				'--level',
+				'member',
+				'--focus',
+				'Alpha.run',
+				'--focus',
+				'Nowhere',
+				'--format',
+				'json'
+			])));
+			Assert.equals(0, code);
+			final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
+			Assert.equals('pkg.a.Alpha.run', [for (n in doc.nodes) if (n.focus) n.name].join(','));
+			Assert.isTrue(err.indexOf('named "Nowhere"') >= 0, err);
+		});
+		#else
+		Assert.pass('stdout capture is node-only');
 		#end
 	}
 

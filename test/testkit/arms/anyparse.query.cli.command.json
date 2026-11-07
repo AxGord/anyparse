@@ -848,6 +848,22 @@
 			"find": "live.filter(v -> !onChangedLine(v)).concat(live.filter(onChangedLine))",
 			"replace": "live",
 			"note": "the baseline is spent in report order, so a finding the file held below the one the run wrote takes the written one's place and the run goes unreported"
+		},
+		{
+			"name": "M-GRAPH-UNKNOWN-FOCUS-WHOLE",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "drawScope",
+			"find": "request.focus.length > 0 && focusIds.length == 0",
+			"replace": "false",
+			"note": "a focus that names no node filters nothing, so the whole scope is drawn as the answer to a question about a member it does not hold"
+		},
+		{
+			"name": "M-GRAPH-UNKNOWN-FOCUS-ABORTS",
+			"type": "anyparse.query.cli.command.GraphCommand",
+			"method": "focusNodes",
+			"find": "if (found.length == 0) CliIo.stderr(",
+			"replace": "if (found.length == 0) return [];\nif (found.length == 0) CliIo.stderr(",
+			"note": "one unknown focus drops the nodes the other focuses resolved, so a seed list with a single stale name loses every neighbour"
 		}
 	]
 }
