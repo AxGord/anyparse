@@ -7,6 +7,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.LintConfig;
 import anyparse.check.common.design.Complexity;
 import anyparse.query.Cli;
+import anyparse.query.RunLedger;
 import unit.CheckFixture;
 
 /**
@@ -41,22 +42,18 @@ class LintPerFileConfigCliTest extends Test {
 	 * resolve per file; here it can only be to stop being silent.
 	 *
 	 * Both arms in one test: `--no-oracle` takes no verdict and must stay quiet, an oracle-consulting
-	 * run must not. Asserted through the once-per-process ledger, since the write is a bare
+	 * run must not. Asserted through the once-per-run ledger, since the write is a bare
 	 * `Sys.stderr` with no seam — and the ABSENCE assertion first is what keeps the pass from being
 	 * an artefact of some earlier test having warned.
 	 */
-	@:access(anyparse.check.LintConfig)
 	public function testAScopeSpanningTwoOraclesNamesTheDisagreement(): Void {
 		#if (sys || nodejs)
 		final key: String = 'scope-disagreement:the compiler oracle';
-		// The once-per-process ledger is shared with every other test in this runner, so the arm
-		// below owns its own starting state rather than assuming one.
-		LintConfig.warnedConfigs.remove(key);
 		final plain: String = dirWith('Foo.hx', UNUSED, '{"rules":{"unused-import":{"enabled":false}}}');
 		final none: String = dirWith('Bar.hx', UNUSED, null);
 		final mixed: Int = Cli.run(['lint', none, plain]);
 		Assert.isFalse(
-			LintConfig.warnedConfigs.contains(key),
+			RunLedger.said(LintConfig.WARNED_TOPIC, key),
 			'two roots that both name NO oracle agree — an OMITTED optional constructor argument is `undefined` on js, so a'
 			+ ' config-less directory rendered as `undefined|undefined` against a parsed document\'s `null|null`, and the very'
 			+ ' first mixed scope this ran over warned about nothing (exit $mixed)'
@@ -65,10 +62,10 @@ class LintPerFileConfigCliTest extends Test {
 		final two: String = dirWith('Bar.hx', UNUSED, '{"compilerOracle":"two.hxml"}');
 		final skipped: Int = Cli.run(['lint', '--no-oracle', one, two]);
 		Assert.isFalse(
-			LintConfig.warnedConfigs.contains(key), 'a run that takes no oracle verdict has nothing to warn about (exit $skipped)'
+			RunLedger.said(LintConfig.WARNED_TOPIC, key), 'a run that takes no oracle verdict has nothing to warn about (exit $skipped)'
 		);
 		final consulted: Int = Cli.run(['lint', one, two]);
-		Assert.isTrue(LintConfig.warnedConfigs.contains(key), 'a run that DOES consult one names the disagreement (exit $consulted)');
+		Assert.isTrue(RunLedger.said(LintConfig.WARNED_TOPIC, key), 'a run that DOES consult one names the disagreement (exit $consulted)');
 		CliFixture.removeDir(plain);
 		CliFixture.removeDir(none);
 		CliFixture.removeDir(one);
@@ -96,31 +93,31 @@ class LintPerFileConfigCliTest extends Test {
 	 * `_frameworks = frameworks ?? []`), so it needs its own pin. The same two contracts in a different
 	 * ORDER must agree, and so must the same names inside one contract. Only a real difference warns.
 	 */
-	@:access(anyparse.check.LintConfig)
 	public function testAScopeSpanningTwoRostersNamesTheDisagreement(): Void {
 		#if (sys || nodejs)
 		final key: String = 'scope-disagreement:the framework roster';
-		LintConfig.warnedConfigs.remove(key);
 		final silent: String = dirWith('Foo.hx', UNUSED, '{"rules":{"unused-import":{"enabled":false}}}');
 		final none: String = dirWith('Bar.hx', UNUSED, null);
 		// EXIT_OK asserted, not just interpolated: an absence assertion after a run that never
 		// linted anything would pass for the wrong reason.
 		Assert.equals(0, Cli.run(['lint', '--no-oracle', none, silent]), 'two roots that declare no roster lint clean');
-		Assert.isFalse(LintConfig.warnedConfigs.contains(key), 'and agree');
+		Assert.isFalse(RunLedger.said(LintConfig.WARNED_TOPIC, key), 'and agree');
 		// Same two contracts, opposite order, and one contract's names permuted: the consumer reads
 		// a roster with `filter` / `exists`, so neither order carries meaning.
 		final ordered: String = dirWith('Foo.hx', UNUSED, '{"frameworks":[{"root":"A","names":["x","y"]},{"root":"B","names":["z"]}]}');
 		final permuted: String = dirWith('Bar.hx', UNUSED, '{"frameworks":[{"root":"B","names":["z"]},{"root":"A","names":["y","x"]}]}');
 		Assert.equals(0, Cli.run(['lint', '--no-oracle', ordered, permuted]), 'a permuted roster lints clean');
-		Assert.isFalse(LintConfig.warnedConfigs.contains(key), 'and is the same roster, not a disagreement');
+		Assert.isFalse(RunLedger.said(LintConfig.WARNED_TOPIC, key), 'and is the same roster, not a disagreement');
 		final godot: String = dirWith('Foo.hx', UNUSED, '{"frameworks":[{"root":"Node","names":["_ready"]}]}');
 		final unity: String = dirWith('Bar.hx', UNUSED, '{"frameworks":[{"root":"MonoBehaviour","names":["Start"]}]}');
 		// A run holding no `FrameworkAware` rule applies no roster, so it must not claim one did.
 		final unrelated: Int = Cli.run(['lint', '--no-oracle', '--rule', 'prefer-single-quotes', godot, unity]);
-		Assert.isFalse(LintConfig.warnedConfigs.contains(key), 'no FrameworkAware rule in the run, no roster claim (exit $unrelated)');
+		Assert.isFalse(
+			RunLedger.said(LintConfig.WARNED_TOPIC, key), 'no FrameworkAware rule in the run, no roster claim (exit $unrelated)'
+		);
 		final disagreeing: Int = Cli.run(['lint', '--no-oracle', godot, unity]);
 		Assert.isTrue(
-			LintConfig.warnedConfigs.contains(key),
+			RunLedger.said(LintConfig.WARNED_TOPIC, key),
 			'two rosters ARE a disagreement, and `--no-oracle` does not silence this half (exit $disagreeing)'
 		);
 		CliFixture.removeDir(silent);

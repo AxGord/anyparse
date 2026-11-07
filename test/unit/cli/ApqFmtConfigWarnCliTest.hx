@@ -36,7 +36,6 @@ import anyparse.query.Cli;
 @:nullSafety(Strict)
 class ApqFmtConfigWarnCliTest extends Test {
 
-	@:access(anyparse.grammar.haxe.HaxeFormatConfigDiagnostics)
 	public function testTwoFilesSharingOneBadConfigReportItOnce(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('cfgwarn_once', [
@@ -47,7 +46,7 @@ class ApqFmtConfigWarnCliTest extends Test {
 		sys.FileSystem.createDirectory(subDir);
 		sys.io.File.saveContent('$subDir/B.hx', 'class B {}\n');
 		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx', '$subDir/B.hx']), 'both fixtures are already canonical');
-		final named: Array<String> = HaxeFormatConfigDiagnostics.reported.filter(p -> p.indexOf(dir) >= 0);
+		final named: Array<String> = HaxeFormatConfigDiagnostics.reportedPaths().filter(p -> p.indexOf(dir) >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported config path under $dir, got ${named.join(', ')}');
 		CliFixture.removeDir(dir);
 		#else

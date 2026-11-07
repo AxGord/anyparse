@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
+import anyparse.query.RunLedger;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Parser;
 import anyparse.runtime.Span.Position;
@@ -44,17 +45,20 @@ using Lambda;
 @:nullSafety(Strict)
 final class HaxeFormatConfigDiagnostics {
 
+	/**
+	 * The `RunLedger` topic of the config paths already reported, so a run that resolves the same
+	 * `hxformat.json` for hundreds of files says it once. Carries no parse state — only
+	 * "this path has been examined".
+	 */
+	private static inline final REPORTED_TOPIC: String = 'hxformat-config';
+
 	/** Set to `1` to silence the config report — for a project that knows its config states more than hxq reads. */
 	private static inline final SILENCE_VAR: String = 'APQ_NO_CONFIG_WARN';
 
-	/**
-	 * Config paths already reported, so a run that resolves the same
-	 * `hxformat.json` for hundreds of files says it once. Process-scoped
-	 * like `FormatConfigDiscovery.CACHE`, which is what feeds it, and
-	 * carries no parse state — only "this path has been examined".
-	 */
-	@:allow(anyparse.query.FormatConfigDiscovery)
-	private static final reported: Array<String> = [];
+	/** The config paths this run has already reported. */
+	public static inline function reportedPaths(): Array<String> {
+		return RunLedger.keysOf(REPORTED_TOPIC);
+	}
 
 	/**
 	 * The settings in `json` hxq will not act on: keys with no schema
@@ -90,7 +94,7 @@ final class HaxeFormatConfigDiagnostics {
 
 	/**
 	 * Report `json`'s unusable settings on stderr, once per config path
-	 * for the life of the process. Silent when the config is fully
+	 * for the life of the run. Silent when the config is fully
 	 * understood, when `APQ_NO_CONFIG_WARN=1`, and on a target with no
 	 * stderr.
 	 *
@@ -106,8 +110,7 @@ final class HaxeFormatConfigDiagnostics {
 	 * third caller and is worth consolidating.
 	 */
 	public static function warn(path: String, json: String): Void {
-		if (reported.contains(path)) return;
-		reported.push(path);
+		if (!RunLedger.first(REPORTED_TOPIC, path)) return;
 		#if nodejs
 		if (Sys.getEnv(SILENCE_VAR) == '1') return;
 		final line: Null<String> = message(path, diagnose(json));

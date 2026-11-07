@@ -15541,6 +15541,14 @@
 			"find": "if (!fields.contains(k)) k",
 			"replace": "k",
 			"note": "the method set keeps the field forms, so a field reads as a method that may implement an abstract one"
+		},
+		{
+			"name": "M-RUN-KEEPS-LEDGER",
+			"type": "anyparse.query.Cli",
+			"method": "run",
+			"find": "\tRunLedger.begin();\n",
+			"replace": "",
+			"note": "a run no longer starts with an empty warn-once ledger, so a second call in one engine process stays silent about a broken lint config and a skipped field-init where a fresh process warns"
 		}
 	]
 }

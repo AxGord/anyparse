@@ -234,6 +234,7 @@ final class Cli {
 	 * what a bug wants.
 	 */
 	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
+		RunLedger.begin();
 		try {
 			return dispatch(args, chooseLanguage);
 		} catch (exception: WriteFailure) {

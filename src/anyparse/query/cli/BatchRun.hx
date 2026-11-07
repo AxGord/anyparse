@@ -1,7 +1,5 @@
 package anyparse.query.cli;
 
-import anyparse.check.LintConfig;
-import anyparse.check.common.members.FieldInitAtDeclaration;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.Cli;
 import anyparse.query.ExitCode;
@@ -12,7 +10,10 @@ import sys.io.File;
  * each call through `Cli.run` the way the process entry does, in the call's working directory, with its stdin, both output
  * streams and `process.exit` taken over for that call, and writes every call's exit status and streams.
  * A call answers as a fresh process would only because the process-scoped state a call can observe is forgotten before it
- * (`forgetRun`, docs/design-principles.md § 2): a call whose answer differs from its own process's is a state leak to fix there.
+ * (the `hxformat.json` found per directory, `FormatConfigDiscovery.forgetRun`) or run-scoped to begin with (`Cli.run` begins a
+ * fresh `RunLedger`; docs/design-principles.md § 2): a call whose answer differs from its own process's is a state leak to fix there.
+ * The parse tiers, the std index and the compiler probe are keyed by content or by the toolchain, so they answer every call alike
+ * and are kept.
  * A call whose config runs a compiler oracle is outside that promise: the generation holds it takes last until the batch exits.
  */
 @:nullSafety(Strict)
@@ -48,7 +49,7 @@ final class BatchRun {
 		final restore: () -> Void = redirect(call.stdin ?? '', out, err);
 		var status: Int = EXIT_RUNTIME;
 		try {
-			forgetRun();
+			FormatConfigDiscovery.forgetRun();
 			Sys.setCwd(call.cwd);
 			status = Cli.entry(call.argv);
 		} catch (exception: Exception) {
@@ -64,17 +65,6 @@ final class BatchRun {
 		#else
 		throw new UsageFailure('${FLAG} runs on nodejs only');
 		#end
-	}
-
-	/**
-	 * Forgets what earlier calls left in process-scoped state a call can observe: the `hxformat.json` found per directory (the tree
-	 * may have changed since) and the warn-once ledgers (a second call must warn again). The parse tiers, the std index and the
-	 * compiler probe are keyed by content or by the toolchain, so they answer every call alike and are kept.
-	 */
-	private static function forgetRun(): Void {
-		FormatConfigDiscovery.forgetRun();
-		LintConfig.warnedConfigs.resize(0);
-		FieldInitAtDeclaration.skipsReported.resize(0);
 	}
 
 	#if nodejs

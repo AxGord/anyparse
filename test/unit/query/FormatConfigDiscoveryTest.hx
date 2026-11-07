@@ -79,14 +79,13 @@ class FormatConfigDiscoveryTest extends Test {
 	 * `filePath` is in scope, is a String, and would report a config error against every `.hx`
 	 * under the config instead of once against the config. Killer for exactly that arm.
 	 */
-	@:access(anyparse.grammar.haxe.HaxeFormatConfigDiagnostics)
 	public function testTheUnusableSettingsReportNamesTheConfigNotTheFileItGoverns(): Void {
 		final dir: String = _trees.make('apq-fcd-reportpath');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
 		Assert.notNull(FormatConfigDiscovery.discover(Path.join([nested, 'A.hx'])));
-		final named: Array<String> = HaxeFormatConfigDiagnostics.reported.filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
+		final named: Array<String> = HaxeFormatConfigDiagnostics.reportedPaths().filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported path under the fixture, got ${named.join(', ')}');
 		Assert.equals('hxformat.json', Path.withoutDirectory(named[0]), 'the report named ${named[0]} instead of the config it read');
 	}

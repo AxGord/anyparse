@@ -1,7 +1,6 @@
 package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.query.ConfigFinder.ConfigFile;
 #if (sys || nodejs)
 import sys.FileSystem;
@@ -59,6 +58,14 @@ final class FormatConfigDiscovery {
 	}
 
 	/**
+	 * Forgets every directory's discovered config, so the next run reads the tree as it is now — what one engine process
+	 * running several CLI calls does between them (`BatchRun`).
+	 */
+	public static inline function forgetRun(): Void {
+		CACHE.clear();
+	}
+
+	/**
 	 * The content of the nearest `hxformat.json` at or above `filePath`'s own
 	 * directory, or null when no ancestor directory holds one, when the one it holds
 	 * is blank (`normalize`), and on targets with no filesystem.
@@ -80,16 +87,6 @@ final class FormatConfigDiscovery {
 		#else
 		return null;
 		#end
-	}
-
-	/**
-	 * Forgets every directory's discovered config and which configs already warned, so the next run reads and reports the tree as
-	 * it is now — what one engine process running several CLI calls does between them (`BatchRun`).
-	 */
-	public static function forgetRun(): Void {
-		CACHE.clear();
-		HaxeFormatConfigDiagnostics.reported.resize(0);
-		HaxeFormatConfigLoader.warnedIndentCharacters.resize(0);
 	}
 
 }

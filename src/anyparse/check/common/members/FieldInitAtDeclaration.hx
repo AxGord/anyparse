@@ -11,6 +11,7 @@ import anyparse.query.MemberReach;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
+import anyparse.query.RunLedger;
 import anyparse.query.ShapeVocab;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
@@ -301,12 +302,11 @@ import haxe.Exception;
 final class FieldInitAtDeclaration extends RuleBase {
 
 	/**
-	 * `file#field` keys already reported by `fix`'s skip diagnostic — one line per
-	 * field per process. `lint --fix` re-runs the rule until it reaches a fixpoint, so
+	 * The `RunLedger` topic of the `file#field` keys already reported by `fix`'s skip diagnostic — one line per
+	 * field per run. `lint --fix` re-runs the rule until it reaches a fixpoint, so
 	 * an undeduplicated line would repeat once per pass.
 	 */
-	@:allow(anyparse.query.cli.BatchRun)
-	private static final skipsReported: Array<String> = [];
+	private static inline final SKIPS_TOPIC: String = 'field-init-skip';
 
 	public function new() {
 		super(
@@ -460,13 +460,12 @@ final class FieldInitAtDeclaration extends RuleBase {
 	}
 
 	/**
-	 * Report `name` skipped once per field per process. `lint --fix` re-runs the rule until it
+	 * Report `name` skipped once per field per run. `lint --fix` re-runs the rule until it
 	 * reaches a fixpoint, so an undeduplicated line would repeat once per pass.
 	 */
 	private static function reportSkip(file: String, name: Null<String>): Void {
 		final key: String = '$file#$name';
-		if (skipsReported.contains(key)) return;
-		skipsReported.push(key);
+		if (!RunLedger.first(SKIPS_TOPIC, key)) return;
 		stderr('apq fix: field-init-at-declaration: \'$name\' skipped — a prefix candidate is not in the fix set\n');
 	}
 

@@ -49,6 +49,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
+import anyparse.query.RunLedger;
 import haxe.Exception;
 
 /**
@@ -93,9 +94,8 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class HaxeFormatConfigLoader {
 
-	/** `indentation.character` values already reported — one line per value per process. */
-	@:allow(anyparse.query.FormatConfigDiscovery)
-	private static final warnedIndentCharacters: Array<String> = [];
+	/** The `RunLedger` topic of the `indentation.character` values already reported — one line per value per run. */
+	private static inline final INDENT_CHARACTER_TOPIC: String = 'hxformat-indent-character';
 
 	/**
 	 * Parses a `hxformat.json` document and returns the equivalent
@@ -1144,8 +1144,7 @@ final class HaxeFormatConfigLoader {
 	 * instead of raising the `'error'` event `Cli.main`'s listener catches.
 	 */
 	private static function warnUnknownIndentCharacter(character: String): Void {
-		if (warnedIndentCharacters.contains(character)) return;
-		warnedIndentCharacters.push(character);
+		if (!RunLedger.first(INDENT_CHARACTER_TOPIC, character)) return;
 		final line: String = 'apq: hxformat.json indentation.character \'$character'
 			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n';
 		#if nodejs

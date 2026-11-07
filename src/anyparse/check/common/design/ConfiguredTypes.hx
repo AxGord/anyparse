@@ -64,7 +64,7 @@ final class ConfiguredTypes {
 	}
 
 	/**
-	 * Print `line` about `rule`'s configuration once per process, through `LintConfig`'s own ledger — a config problem
+	 * Print `line` about `rule`'s configuration once per run, through `LintConfig`'s own ledger — a config problem
 	 * is a property of the document, and a run re-reads the document once per linted directory.
 	 */
 	public static function warn(rule: String, line: String): Void {

@@ -1,6 +1,5 @@
 package unit.cli;
 
-import anyparse.check.LintConfig;
 import anyparse.query.Cli;
 
 /**
@@ -62,18 +61,12 @@ class LintConfigCliTest extends Test {
 	public function testTheScopeGapNoticesReachTheRun(): Void {
 		#if (sys || nodejs)
 		final foo: String = 'package p;\n/** C. */\nclass C {\n\tprivate var f:Int = 0;\n}';
-		// The ledger is once-per-process and the suite shares one, so a sibling test reaching either
-		// key first would leave this one reading empty stderr and blaming the wiring. Two keys, not
-		// the whole array: re-arming every config warning the suite has already emitted is somebody
-		// else's regression to debug.
-		LintConfig.warnedConfigs.remove('scope-gap:the project source roots');
 		final libsOnly: String = dirWith('{"resolutionLibs":["utest"]}', foo);
 		final gap: String = CliFixture.captureStderr(() ->
 			Cli.run(['lint', '--rule', 'prefer-single-quotes', '--no-oracle', '$libsOnly/Foo.hx'])
 		);
 		CliFixture.removeDir(libsOnly);
 
-		LintConfig.warnedConfigs.remove('scope-gap:unreachable project source roots');
 		final nowhere: String = dirWith('{"resolutionRoots":["nowhere"]}', foo);
 		final root: String = CliFixture.captureStderr(() ->
 			Cli.run(['lint', '--rule', 'unused-private', '--no-oracle', '$nowhere/Foo.hx'])

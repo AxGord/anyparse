@@ -481,25 +481,9 @@
 			"name": "M-BATCH-RUN-REMEMBERS",
 			"type": "anyparse.query.cli.BatchRun",
 			"method": "answer",
-			"find": "\t\tforgetRun();\n",
+			"find": "\t\t\tFormatConfigDiscovery.forgetRun();\n",
 			"replace": "",
-			"note": "a call no longer forgets what earlier calls read, so a second call over the same tree keeps the first call's discovered hxformat.json and its warn-once ledgers: it answers with the stale layout and without the config warning a fresh process prints"
-		},
-		{
-			"name": "M-BATCH-RUN-KEEPS-CONFIG-WARNINGS",
-			"type": "anyparse.query.cli.BatchRun",
-			"method": "forgetRun",
-			"find": "LintConfig.warnedConfigs.resize(0);",
-			"replace": "",
-			"note": "a call no longer forgets which lint configs earlier calls warned about, so a second lint over the same broken apqlint.json is silent where a fresh process warns"
-		},
-		{
-			"name": "M-BATCH-RUN-KEEPS-FIX-SKIPS",
-			"type": "anyparse.query.cli.BatchRun",
-			"method": "forgetRun",
-			"find": "FieldInitAtDeclaration.skipsReported.resize(0);",
-			"replace": "",
-			"note": "a call no longer forgets the field-init skips earlier calls reported, so a second lint --fix over the same file drops the skip line a fresh process prints"
+			"note": "a call no longer forgets what earlier calls read, so a second call over the same tree keeps the first call's discovered hxformat.json: it answers with the stale layout and without the config warning a fresh process prints"
 		},
 		{
 			"name": "M-DECLARATION-DELTA-REORDER-HIDDEN",

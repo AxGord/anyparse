@@ -7,6 +7,7 @@ import anyparse.check.oracle.OracleRunMemo;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.RunLedger;
 import anyparse.query.format.LintFormat;
 import haxe.io.Path;
 
@@ -138,12 +139,11 @@ typedef DiscoveredConfig = {
 final class LintConfig {
 
 	/**
-	 * Keys already diagnosed — a config path for `discover`'s own per-file lines, a
+	 * The `RunLedger` topic of the keys already diagnosed — a config path for `discover`'s own per-file lines, a
 	 * `scope-disagreement:<setting>` or `scope-gap:<label>` key for a warning about the SCOPE rather than
-	 * about one document. Each reports at most once per process, whatever it reported.
+	 * about one document. Each reports at most once per run, whatever it reported.
 	 */
-	@:allow(anyparse.query.cli.BatchRun)
-	private static final warnedConfigs: Array<String> = [];
+	public static inline final WARNED_TOPIC: String = 'lint-config';
 
 	private final _rules: Map<String, RuleConfig>;
 
@@ -571,7 +571,7 @@ final class LintConfig {
 			if (doc == null) {
 				// A REAL config file that the schema rejects must not degrade silently — a
 				// wholesale fallback quietly collapses the resolution scope and every rule
-				// toggle. Once per file per process: `discover` re-runs for every linted
+				// toggle. Once per file per run: `discover` re-runs for every linted
 				// directory (the CLI memoises per directory, not per config), so an
 				// unde-duplicated line would repeat N times per run.
 				warnOnce(entry.path, 'apq: ${entry.path} failed to parse — ignored, the rest of the chain still applies\n');
@@ -579,7 +579,7 @@ final class LintConfig {
 			}
 			// A per-ENTRY drop degrades silently in exactly the way the wholesale rejection
 			// above does not: the document parses, every other key applies, and the entry the
-			// project wrote simply is not there. Same once-per-file-per-process ledger, and
+			// project wrote simply is not there. Same once-per-file-per-run ledger, and
 			// attributed to the document that declared it, since a chain has several.
 			if (doc.drops.length > 0) {
 				final lines: Array<String> = doc.drops.map(drop -> 'apq: ${entry.path}: $drop\n');
@@ -649,12 +649,10 @@ final class LintConfig {
 
 	/**
 	 * Write `message` to stderr the first time `configPath` reports anything —
-	 * the once-per-file-per-process ledger `discover`'s two diagnostics share.
+	 * the once-per-file-per-run ledger `discover`'s two diagnostics share.
 	 */
 	private static function warnOnce(configPath: String, message: String): Void {
-		if (warnedConfigs.contains(configPath)) return;
-		warnedConfigs.push(configPath);
-		stderr(message);
+		if (RunLedger.first(WARNED_TOPIC, configPath)) stderr(message);
 	}
 
 	/**

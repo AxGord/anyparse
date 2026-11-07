@@ -170,7 +170,7 @@ final class ConfigDisagreement {
 	}
 
 	/**
-	 * Emit `message`'s sentence, at most once per process per setting.
+	 * Emit `message`'s sentence, at most once per run per setting.
 	 *
 	 * Through `LintConfig`'s own ledger rather than a second one, so a run that has already warned
 	 * about a setting stays quiet however many rules ask the question again.

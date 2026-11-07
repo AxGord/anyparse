@@ -54,7 +54,7 @@ final class BatchRunTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-BATCH-RUN-KEEPS-CONFIG-WARNINGS')
+	@:killer('M-RUN-KEEPS-LEDGER')
 	public function testASecondLintCallOverABrokenConfigWarnsAgain(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('batch_lint_warn', [
@@ -73,7 +73,7 @@ final class BatchRunTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-BATCH-RUN-KEEPS-FIX-SKIPS')
+	@:killer('M-RUN-KEEPS-LEDGER')
 	public function testASecondFixCallReportsItsSkipAgain(): Void {
 		#if nodejs
 		// `b` moves only with the first write of `a`, which is no candidate: `a` is written twice
@@ -95,6 +95,23 @@ final class BatchRunTest extends Test {
 		];
 		for (call in 0...2)
 			Assert.stringContains('\'b\' skipped', BatchRun.answer({ argv: fix, cwd: dir, stdin: null }).err, 'call #$call');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('nodejs only');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-RUN-KEEPS-LEDGER')
+	public function testASecondFormatCallOverAnUnreadConfigKeyWarnsAgain(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('batch_format_warn', [
+			{ name: 'hxformat.json', source: '{"noSuchSection":{}}' },
+			{ name: 'A.hx', source: 'class A {}\n' }
+		]);
+		final format: Array<String> = ['fmt', '--list', 'A.hx'];
+		for (call in 0...2)
+			Assert.stringContains('hxq does not implement', BatchRun.answer({ argv: format, cwd: dir, stdin: null }).err, 'call #$call');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('nodejs only');
