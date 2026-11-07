@@ -24,6 +24,9 @@ final class ConfigFinder {
 	/** The former name of `PROJECT_CONFIG`, still read (same format, same inheritance chain); a directory holding both is an error. */
 	public static final LEGACY_PROJECT_CONFIG: String = 'apqlint.json';
 
+	/** The marker of a git work tree alone — a `projectRoot` that must stop at the repository, not at a nested library. */
+	public static final REPOSITORY_MARKERS: Array<String> = ['.git'];
+
 	/**
 	 * EVERY project config on the way up from `path`'s directory, NEAREST FIRST — the chain a config that
 	 * EXTENDS its ancestors is folded from (`LintConfig.discover`), as opposed to the nearest-only entries below,
@@ -97,14 +100,14 @@ final class ConfigFinder {
 	}
 
 	/**
-	 * The nearest directory at or above `dir` holding one of `PROJECT_ROOT_MARKERS` — the project root the inheriting
-	 * walk stops at — or null when none does, or the target has no file IO.
+	 * The nearest directory at or above `dir` holding one of `markers` (default `PROJECT_ROOT_MARKERS`) — the project root
+	 * the inheriting walk stops at — or null when none does, or the target has no file IO.
 	 */
-	public static function projectRoot(dir: String): Null<String> {
+	public static function projectRoot(dir: String, ?markers: Array<String>): Null<String> {
 		#if (sys || nodejs)
 		var current: String = haxe.io.Path.removeTrailingSlashes(sys.FileSystem.absolutePath(dir));
 		while (current != '') {
-			if (marksProjectRoot(current, PROJECT_ROOT_MARKERS)) return current;
+			if (marksProjectRoot(current, markers ?? PROJECT_ROOT_MARKERS)) return current;
 			final parent: String = haxe.io.Path.directory(current);
 			if (parent == current) break;
 			current = parent;

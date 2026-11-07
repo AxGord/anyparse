@@ -596,6 +596,54 @@
 			"method": "expandAnyGrammar",
 			"force": "expandFor(JSON_LANG, specs)",
 			"note": "a definition walk reads only the files of the --lang grammar, so `gates --lang json` finds no Haxe definition and says no input files matched"
+		},
+		{
+			"name": "M-READ-ONLY-NEVER",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "readOnly",
+			"find": "value != null && value != '' && value != '0'",
+			"replace": "false",
+			"note": "APQ_READ_ONLY is read as never set, so a reviewing agent's write ops and --fix write the tree"
+		},
+		{
+			"name": "M-READ-ONLY-ZERO-IS-ON",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "readOnly",
+			"find": "value != null && value != '' && value != '0'",
+			"replace": "value != null && value != ''",
+			"note": "APQ_READ_ONLY=0 counts as on, so a parent that clears the mode by setting it to 0 still gets every write refused"
+		},
+		{
+			"name": "M-READ-ONLY-EVERYTHING-PROTECTED",
+			"type": "anyparse.query.cli.ReadOnlyScope",
+			"method": "protects",
+			"find": "return Path.addTrailingSlash(target).indexOf(root) == 0;",
+			"replace": "return true;",
+			"note": "every path is inside the protected tree, so a harness writing its own scratch fixtures under a reviewer's variable is refused and its probe and parity readings deviate"
+		},
+		{
+			"name": "M-READ-ONLY-DELETE-UNGATED",
+			"type": "anyparse.query.cli.CliIo",
+			"method": "deletePath",
+			"find": "refuseIfReadOnly(path);",
+			"replace": "",
+			"note": "the file removal of a fix is not gated, so a lint --fix whose fix deletes a file reaches deletePath before any write of its pass and removes it from the protected tree"
+		},
+		{
+			"name": "M-READ-ONLY-CWD-FALLBACK",
+			"type": "anyparse.query.cli.ReadOnlyScope",
+			"method": "rootDirectory",
+			"find": ": ConfigFinder.projectRoot(Sys.getCwd(), ConfigFinder.REPOSITORY_MARKERS);",
+			"replace": ": ConfigFinder.projectRoot(Sys.getCwd(), ConfigFinder.REPOSITORY_MARKERS) ?? Sys.getCwd();",
+			"note": "a working directory outside any git work tree protects itself, so a harness running the engine in its own scratch directory has every fixture write refused under a reviewer's variable"
+		},
+		{
+			"name": "M-READ-ONLY-SPELLING-IDENTITY",
+			"type": "anyparse.query.cli.ReadOnlyScope",
+			"method": "protects",
+			"find": "final target: String = FileIdentity.realPath(path);",
+			"replace": "final target: String = haxe.io.Path.normalize(sys.FileSystem.absolutePath(path));",
+			"note": "a path is judged by its spelling, normalised but with symlinks unresolved, so a write through a link into the protected tree is let through while a dot-dot spelling is still caught"
 		}
 	]
 }

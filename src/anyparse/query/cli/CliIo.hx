@@ -34,6 +34,13 @@ final class CliIo {
 	public static inline final PERMISSION_BITS: Int = 0xFFF;
 
 	/**
+	 * The environment variable that makes every file write INTO THE PROTECTED TREE a refusal: set by whatever
+	 * runs an agent that reviews and must not edit the tree. Read at each write, never cached, so
+	 * a test or a parent process can flip it between runs of one process.
+	 */
+	public static inline final READ_ONLY_ENV: String = 'APQ_READ_ONLY';
+
+	/**
 	 * Heartbeat interval for the multi-file walk progress line — emit a
 	 * stderr `scanned K/N` every this many files so a corpus-wide walk
 	 * never goes silent (a watchdog reading a redirected stream sees
@@ -279,6 +286,7 @@ final class CliIo {
 	 * revert failing because its work was already undone would abort a rollback half way.
 	 */
 	public static function deletePath(path: String): Bool {
+		refuseIfReadOnly(path);
 		WriteJournal.note(path);
 		return #if (sys || nodejs) try {
 			if (FileSystem.exists(path)) FileSystem.deleteFile(path);
@@ -311,6 +319,7 @@ final class CliIo {
 	 */
 	public static function writeFiles(writes: Array<{ path: String, content: String }>): Void {
 		#if (sys || nodejs)
+		for (w in writes) refuseIfReadOnly(w.path);
 		final staged: Array<StagedWrite> = [];
 		final created: Array<String> = [];
 		refuseSameTarget(writes);
@@ -376,6 +385,19 @@ final class CliIo {
 		return null;
 	}
 
+	/**
+	 * Whether the run is read-only: `APQ_READ_ONLY` is set to anything but empty or `0` (an empty
+	 * value means unset, like the progress variables). Which paths that protects is `ReadOnlyScope`.
+	 */
+	public static function readOnly(): Bool {
+		#if (sys || nodejs)
+		final value: Null<String> = Sys.getEnv(READ_ONLY_ENV);
+		return value != null && value != '' && value != '0';
+		#else
+		return false;
+		#end
+	}
+
 	/** Block this thread for `ms` milliseconds without spawning anything. */
 	private static inline function pause(ms: Int): Void {
 		#if nodejs
@@ -420,6 +442,18 @@ final class CliIo {
 			if (earlier != null) throw new WriteFailure(w.path, 'the same file as ${earlier}, which this change set also writes');
 			seen[identity] = w.path;
 		}
+	}
+
+	/**
+	 * Refuse a write of `path` while the run is read-only and the path lies in the protected tree
+	 * (`ReadOnlyScope`) — called BEFORE anything is staged, journalled or removed, so a refused run
+	 * leaves the tree and its neighbourhood untouched. A path outside the tree (a harness's own
+	 * scratch fixture) is written as usual. It is a `UsageFailure`: the environment asks for a mode
+	 * the argv contradicts, and `Cli.run` turns that into one sentence and the usage status.
+	 */
+	private static function refuseIfReadOnly(path: String): Void {
+		if (readOnly() && ReadOnlyScope.protects(path))
+			throw new UsageFailure('read-only: it writes $path; this agent reviews, it does not edit ($READ_ONLY_ENV)');
 	}
 
 	#if (sys || nodejs)
