@@ -19,6 +19,7 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.Exception;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;
@@ -264,8 +265,8 @@ final class ModuleMove {
 			final head: String = source.substring(e.span.from, e.span.to).split('.')[0];
 			if (binders.contains(head))
 				reasons.push(
-					'$file:${lineOf(source, e.span.from)} spells ${source.substring(e.span.from, e.span.to)} in code, and "$head" is '
-					+ 'also a name this file declares — the path may read as a member access on it; qualify it differently first'
+					'$file:${Strings.lineOf(source, e.span.from)} spells ${source.substring(e.span.from, e.span.to)} in code, and "$head'
+					+ '" is also a name this file declares — the path may read as a member access on it; qualify it differently first'
 				);
 		}
 		for (r in unsortedListRefusals(file, source, tree, renames, declared, plugin)) reasons.push(r);
@@ -361,8 +362,8 @@ final class ModuleMove {
 				at.push({ offset: o, what: pkg });
 			for (a in at)
 				out.push(
-					'${e.file}:${lineOf(e.source, a.offset)} composes a path from "${a.what}" at run time — a module leaving that package '
-					+ 'is not followed by it; spell the full path or move the composition first'
+					'${e.file}:${Strings.lineOf(e.source, a.offset)} composes a path from "${a.what}" at run time — a module leaving '
+					+ 'that package is not followed by it; spell the full path or move the composition first'
 				);
 		}
 		return out;
@@ -481,8 +482,8 @@ final class ModuleMove {
 			final head: String = e.text.split('.')[0];
 			if (binders.contains(head))
 				reasons.push(
-					'$file:${lineOf(text, e.span.from)} needs ${e.text} written in full, and "$head" is also a name this file declares — '
-					+ 'the full path may read as a member access on it; qualify it differently first'
+					'$file:${Strings.lineOf(text, e.span.from)} needs ${e.text} written in full, and "$head'
+					+ '" is also a name this file declares — the full path may read as a member access on it; qualify it differently first'
 				);
 		}
 		texts[file] = ModulePathTokens.apply(text, sorted(edits));
@@ -551,11 +552,6 @@ final class ModuleMove {
 		final out: Array<TextEdit> = edits.copy();
 		ArraySort.sort(out, (a, b) -> a.span.from - b.span.from);
 		return out;
-	}
-
-	/** The 1-based line of `offset` in `source`. */
-	private static function lineOf(source: String, offset: Int): Int {
-		return source.substring(0, offset).split('\n').length;
 	}
 
 	/** The drifts of `probes` between `pre` and `post`, the index of the tree `texts` describe now. */
@@ -794,8 +790,8 @@ final class ModuleMove {
 			final order: Int = ImportOrder.orderOf(entries);
 			if (order >= 0 && !ImportOrder.sortedUnder(entries.map(ModulePathTokens.rewrite.bind(_, renames)), order))
 				out.push(
-					'$file:${lineOf(source, span.from)} holds a sorted list the move would leave unsorted — declare it in the "move" '
-					+ 'section\'s "sortedLists" so it is re-sorted'
+					'$file:${Strings.lineOf(source, span.from)} holds a sorted list the move would leave unsorted — declare it in the '
+					+ '"move" section\'s "sortedLists" so it is re-sorted'
 				);
 		}
 		return out;
@@ -845,7 +841,7 @@ final class ModuleMove {
 							&& !covers(grant.path, p.rename.newPath)
 						)
 							out.push(
-								'${e.file}:${lineOf(e.source, grant.at)} grants package ${grant.path} private access, and '
+								'${e.file}:${Strings.lineOf(e.source, grant.at)} grants package ${grant.path} private access, and '
 								+ '${p.rename.oldPath} leaves it for ${p.rename.newPath}'
 								+ ' — the grant would no longer reach it; name the module in it first'
 							);

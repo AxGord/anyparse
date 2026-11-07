@@ -6,6 +6,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.graph.FlowGraph.FlowKind;
 import anyparse.query.graph.FlowGraph.FlowNode;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -347,7 +348,7 @@ final class FlowBuilder {
 	}
 
 	private function lineOf(offset: Null<Int>): Int {
-		return offset == null ? 0 : new Span(offset, offset).lineCol(_source).line;
+		return offset == null ? 0 : Strings.lineOf(_source, offset);
 	}
 
 	/** The source of `n` on one line, a trailing `;` dropped. */
