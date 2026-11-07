@@ -15658,6 +15658,14 @@
 			"find": "_provider.probedOnce(_memo, _oracles)",
 			"replace": "_provider.probedOnce(_memo, _oracles).slice(0, 1)",
 			"note": "only the first declared build is asked, so a file a wide build and a narrow build both compile is judged by the wide one"
+		},
+		{
+			"name": "M-LEXREG-CODESPANS-TAIL",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "codeSpans",
+			"find": "if (length > at) out.push(new Span(at, length));",
+			"replace": "",
+			"note": "the run after the last region is dropped, so a scan of the code bytes never sees the end of a source that does not finish on a comment or a literal"
 		}
 	]
 }

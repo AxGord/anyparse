@@ -220,10 +220,16 @@ final class SuiteImpactTest extends Test {
 		Assert.isNull(SuiteImpact.entryOf(['-cp', 'src', '-main', 'anyparse.query.Cli']));
 	}
 
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-UNCOMMENTED-LITERAL')
 	public function testOnlyACommentThatStartsALineIsDroppedAndAnUnclosedOneStays(): Void {
 		Assert.equals('a;\nb; // c\n\n\td;', SuiteImpact.uncommented('a;\n// x\nb; // c\n/**\n * y\n */\n\td;'));
 		Assert.equals('a;\n/* x\nb;', SuiteImpact.uncommented('a;\n/* x\nb;'));
+		Assert.equals(
+			"a;\n'// not\n// a comment';\nb; // c\ne;", SuiteImpact.uncommented("a;\n'// not\n// a comment';\nb; // c\n// d\ne;"),
+			'a string holds its comment openers, one that starts a line included'
+		);
+		Assert.equals('x', SuiteImpact.uncommented('/* a */ // b\nx'), 'a comment after a closed block still starts the line');
 	}
 
 	@:pin('control')

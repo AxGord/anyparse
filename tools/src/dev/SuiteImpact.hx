@@ -3,8 +3,10 @@ package dev;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.ShardPlan;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateTree.ChangedPaths;
 import devkit.Args;
@@ -59,6 +61,7 @@ final class SuiteImpact {
 	private static inline final TEST_ROOT: String = 'test/';
 	private static inline final TEST_SUFFIX: String = 'Test.hx';
 	private static inline final HX: String = '.hx';
+	private static inline final BLOCK_MIN: Int = 4;
 	private static inline final MS_PER_SECOND: Float = 1000;
 	private static inline final SHORT_HASH: Int = 9;
 	private static inline final SUBJECT_WIDTH: Int = 70;
@@ -201,34 +204,26 @@ final class SuiteImpact {
 	 * closes was no comment (a string holding `/*`), so its lines stay.
 	 */
 	public static function uncommented(text: String): String {
-		final kept: Array<String> = [];
-		final block: Array<String> = [];
-		var inBlock: Bool = false;
-		for (line in text.split('\n')) {
-			var rest: String = line;
-			if (inBlock) {
-				block.push(line);
-				final end: Int = rest.indexOf('*/');
-				if (end < 0) continue;
-				inBlock = false;
-				block.resize(0);
-				rest = rest.substr(end + 2);
+		final out: StringBuf = new StringBuf();
+		var at: Int = 0;
+		for (region in new HaxeQueryPlugin().lexicalRegions(text)) {
+			final block: Bool = region.kind == LexRegionKind.BlockComment;
+			if (!block && region.kind != LexRegionKind.LineComment) continue;
+			if (block && !(region.to - region.from >= BLOCK_MIN && text.substring(region.to - 2, region.to) == '*/')) continue;
+			final lineStart: Int = region.from == 0 ? 0 : text.lastIndexOf('\n', region.from - 1) + 1;
+			var from: Int = lineStart < at ? at : lineStart;
+			if (text.substring(from, region.from).trim() != '') continue;
+			var to: Int = region.to;
+			if (!block) {
+				final newline: Int = text.indexOf('\n', to);
+				to = newline < 0 ? text.length : newline + 1;
+				if (newline < 0 && from == lineStart && from > at) from--;
 			}
-			final lead: String = rest.ltrim();
-			if (lead.startsWith('//')) continue;
-			if (lead.startsWith('/*')) {
-				final end: Int = lead.indexOf('*/', 2);
-				if (end < 0) {
-					inBlock = true;
-					block.push(line);
-					continue;
-				}
-				rest = lead.substr(end + 2);
-			}
-			kept.push(rest);
+			out.addSub(text, at, from - at);
+			at = to;
 		}
-		for (line in block) kept.push(line);
-		return kept.join('\n');
+		out.addSub(text, at, text.length - at);
+		return out.toString();
 	}
 
 	/** Every `.hx` under the roots of `tree`, by its path from `tree`. */
@@ -238,7 +233,7 @@ final class SuiteImpact {
 			final full: String = Path.join([tree, dir]);
 			if (!FileSystem.exists(full) || !FileSystem.isDirectory(full)) return;
 			final entries: Array<String> = FileSystem.readDirectory(full);
-			entries.sort(Reflect.compare);
+			entries.sort(Compare.compareString);
 			for (entry in entries) {
 				final path: String = '$dir/$entry';
 				if (FileSystem.isDirectory(Path.join([tree, path])))
@@ -489,7 +484,7 @@ final class SuiteImpact {
 			}
 			for (name in classes) if (!reached.contains(name)) misses.push('${arm.key} ${file ?? type} $name');
 		}
-		misses.sort(Reflect.compare);
+		misses.sort(Compare.compareString);
 		return { misses: misses, files: reach.count(), whole: whole };
 	}
 
@@ -513,7 +508,7 @@ final class SuiteImpact {
 			final module: Null<ImpactModule> = isTestClass(path) ? moduleOf(path) : null;
 			if (module != null) classes.push(module.qualified);
 		}
-		classes.sort(Reflect.compare);
+		classes.sort(Compare.compareString);
 		return Selected(classes);
 	}
 
@@ -661,7 +656,7 @@ private final class ImpactGraph {
 			if (next != null) spread(next.module, next.at);
 		}
 		final out: Array<String> = [for (i => _ in _via) _paths[i]];
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

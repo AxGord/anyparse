@@ -99,6 +99,18 @@ class LexicalRegionsTest extends Test {
 		Assert.isFalse(LexicalRegions.offsetWithinComment(source.indexOf('var'), regions), 'code is not');
 	}
 
+	/** The code spans are the runs between the regions, the head and the tail included, an empty run left out. */
+	@:pin('control')
+	@:killer('M-LEXREG-CODESPANS-TAIL')
+	public function testCodeSpansAreWhatLiesBetweenTheRegions(): Void {
+		final source: String = "a /* b */ c '}' d // e\nf";
+		final spans: Array<String> = LexicalRegions.codeSpans(source.length, HaxeLexicalRegions.scan(source))
+			.map(span -> source.substring(span.from, span.to));
+		Assert.same(['a ', ' c ', ' d ', '\nf'], spans);
+		Assert.equals(1, LexicalRegions.codeSpans(1, []).length, 'no region: the whole source is code');
+		Assert.same([], LexicalRegions.codeSpans(3, [{ from: 0, to: 3, kind: LexRegionKind.BlockComment }]), 'all comment: no code');
+	}
+
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');

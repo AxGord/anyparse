@@ -5,7 +5,10 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 #end
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ConfigFinder;
+import anyparse.query.LexicalRegions;
+import anyparse.runtime.Span;
 import dev.TyperConformance;
 import utest.Assert;
 import utest.Test;
@@ -79,6 +82,22 @@ final class TyperConformanceTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	/** A display test's statements end at a `;` that is code: one in a string or a comment ends nothing. */
+	@:pin('control')
+	@:killer('M-TYPER-STATEMENTS-NONCODE')
+	public function testAStatementEndsAtACodeSemicolon(): Void {
+		Assert.same(['a("x;y")', 'b(1) /* ; */', '// ; c()'], TyperConformance.statementsOf('a("x;y"); b(1) /* ; */;\n // ;\n c();'));
+	}
+
+	/** The brace closing a test body is the first code `}` past the opening one, from where the body starts. */
+	@:pin('control')
+	@:killer('M-TYPER-CLOSING-BRACE-FROM')
+	public function testTheClosingBraceIsACodeBraceFromWhereTheBodyStarts(): Void {
+		final text: String = '{ a; "}" /* } */ // }\n b; } z }';
+		final code: Array<Span> = LexicalRegions.codeSpans(text.length, new HaxeQueryPlugin().lexicalRegions(text));
+		Assert.equals(text.indexOf('} z'), TyperConformance.closingBrace(text, code, 1));
 	}
 
 	private static function run(dropped: Array<String>, configurations: Int, compiled: Int, cases: Int): FactsRun {

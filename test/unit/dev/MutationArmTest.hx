@@ -78,6 +78,8 @@ final class MutationArmTest extends Test {
 		Assert.equals('h {\n====\nh {\n\treturn false;\n', MutationArm.forcePayload('h {\n', 'false'));
 	}
 
+	@:pin('control')
+	@:killer('M-FORCE-HEADER-NONCODE-BRACES')
 	public function testTheBodyBraceIsTheLastOneOpeningAtDepthZero(): Void {
 		Assert.equals(
 			'function f(): Null<{ a: Int }> {\n', MutationArm.forceHeader('function f(): Null<{ a: Int }> {\n\treturn null;\n}'),

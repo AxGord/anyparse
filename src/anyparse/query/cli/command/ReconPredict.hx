@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
@@ -700,12 +701,13 @@ final class ReconPredict {
 		var totalUnblocks: Int = 0;
 		var candidatesWithSignal: Int = 0;
 		final noSignalLabels: Array<String> = [];
+		final regionsOf: Array<Array<LexRegion>> = records.map(r -> plugin.lexicalRegions(r.source));
 		for (cand in candidates) {
 			final unblocks: Array<String> = [];
 			final stillFails: Array<String> = [];
 			var noMatchCount: Int = 0;
-			for (r in records) {
-				final stripped: StripResult = stripBalancedPairs(r.source, cand.lead, cand.trail);
+			for (k => r in records) {
+				final stripped: StripResult = stripBalancedPairs(r.source, regionsOf[k], cand.lead, cand.trail);
 				if (stripped.count == 0) {
 					noMatchCount++;
 					continue;
@@ -793,24 +795,25 @@ final class ReconPredict {
 	 * the construct) from STILL FAIL (fixture has it but post-strip
 	 * parse still errors).
 	 */
-	private static function stripBalancedPairs(source: String, lead: String, trail: String): StripResult {
+	public static function stripBalancedPairs(source: String, regions: Array<LexRegion>, lead: String, trail: String): StripResult {
 		if (lead.length != 1 || trail.length != 1) return { out: source, count: 0 };
 		final leadCode: Int = lead.fastCodeAt(0);
 		final trailCode: Int = trail.fastCodeAt(0);
 		final isSymmetric: Bool = isBracketOpener(leadCode);
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
+		var r: Int = 0;
 		var count: Int = 0;
 		while (i < source.length) {
-			final triviaEnd: Int = skipStringOrComment(source, i);
-			if (triviaEnd > i) {
-				buf.addSub(source, i, triviaEnd - i);
-				i = triviaEnd;
+			r = regionFrom(regions, r, i);
+			if (r < regions.length && regions[r].from <= i) {
+				buf.addSub(source, i, regions[r].to - i);
+				i = regions[r].to;
 				continue;
 			}
 			final c: Int = source.fastCodeAt(i);
 			if (c == leadCode) {
-				final endIdx: Int = findPairEnd(source, i + 1, leadCode, trailCode, isSymmetric);
+				final endIdx: Int = findPairEnd(source, regions, r, i + 1, leadCode, trailCode, isSymmetric);
 				if (endIdx >= 0) {
 					count++;
 					i = endIdx;
@@ -832,13 +835,16 @@ final class ReconPredict {
 	 * `-1` when no match found (mismatched / unterminated). The caller
 	 * keeps the lead char as-is in that case.
 	 */
-	private static function findPairEnd(source: String, startIdx: Int, leadCode: Int, trailCode: Int, isSymmetric: Bool): Int {
+	private static function findPairEnd(
+		source: String, regions: Array<LexRegion>, firstRegion: Int, startIdx: Int, leadCode: Int, trailCode: Int, isSymmetric: Bool
+	): Int {
 		var i: Int = startIdx;
+		var r: Int = firstRegion;
 		var depth: Int = isSymmetric ? 1 : 0;
 		while (i < source.length) {
-			final triviaEnd: Int = skipStringOrComment(source, i);
-			if (triviaEnd > i) {
-				i = triviaEnd;
+			r = regionFrom(regions, r, i);
+			if (r < regions.length && regions[r].from <= i) {
+				i = regions[r].to;
 				continue;
 			}
 			final c: Int = source.fastCodeAt(i);
@@ -879,47 +885,6 @@ final class ReconPredict {
 
 	private static inline function isBracketCloser(c: Int): Bool {
 		return c == ')'.code || c == '}'.code || c == ']'.code;
-	}
-
-	/**
-	 * If `source[i]` starts a string literal (single- or double-quoted)
-	 * or comment (line-style or block-style), return the index PAST it;
-	 * otherwise return `i`. Handles backslash escapes inside strings,
-	 * multi-line block comments. Used by the permissive-construct strip
-	 * to skip trivia bytes so a `:` inside `"foo:bar"` doesn't trigger a
-	 * spurious asymmetric pair-match.
-	 */
-	private static function skipStringOrComment(source: String, i: Int): Int {
-		if (i >= source.length) return i;
-		final c: Int = source.fastCodeAt(i);
-		if (c == '/'.code && i + 1 < source.length) {
-			final c2: Int = source.fastCodeAt(i + 1);
-			if (c2 == '/'.code) {
-				var j: Int = i + 2;
-				while (j < source.length && source.fastCodeAt(j) != '\n'.code) j++;
-				return j;
-			}
-			if (c2 == '*'.code) {
-				var j: Int = i + 2;
-				while (j + 1 < source.length) {
-					if (source.fastCodeAt(j) == '*'.code && source.fastCodeAt(j + 1) == '/'.code) return j + 2;
-					j++;
-				}
-				return source.length;
-			}
-		}
-		if (c != '"'.code && c != "'".code) return i;
-		var j: Int = i + 1;
-		while (j < source.length) {
-			final cj: Int = source.fastCodeAt(j);
-			if (cj == '\\'.code) {
-				j += 2;
-				continue;
-			}
-			if (cj == c) return j + 1;
-			j++;
-		}
-		return source.length;
 	}
 
 	/**
@@ -1134,5 +1099,12 @@ final class ReconPredict {
 		return EXIT_RUNTIME;
 	}
 	#end
+
+	/** The index of the first region of `regions` that ends past offset `i`, looking on from index `r`. */
+	private static function regionFrom(regions: Array<LexRegion>, r: Int, i: Int): Int {
+		var at: Int = r;
+		while (at < regions.length && regions[at].to <= i) at++;
+		return at;
+	}
 
 }

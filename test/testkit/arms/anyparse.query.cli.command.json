@@ -918,6 +918,14 @@
 			"find": "final refused: Null<String> = checkEdits.length > 0",
 			"replace": "final refused: Null<String> = checkEdits.length > 0 && reach == null",
 			"note": "the driver never asks the import reach, so a safe fix imports a module the files own build cannot see"
+		},
+		{
+			"name": "M-RECON-STRIP-NONCODE",
+			"type": "anyparse.query.cli.command.ReconPredict",
+			"method": "stripBalancedPairs",
+			"find": "r = regionFrom(regions, r, i);",
+			"replace": "r = regions.length;",
+			"note": "strings and comments are read as code, so a bracket inside one ends or opens a pair and a fixture is stripped at the wrong place"
 		}
 	]
 }

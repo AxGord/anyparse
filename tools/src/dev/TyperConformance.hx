@@ -17,6 +17,7 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberLookup.MemberDeclaration;
 import anyparse.query.NominalTypes;
 import anyparse.query.OperatorOverloads.OperatorResult;
@@ -31,6 +32,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypingService;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -179,6 +181,33 @@ final class TyperConformance {
 			null;
 	}
 
+	/** The offset of the `}` closing the block whose body starts at `from`. */
+	public static function closingBrace(text: String, code: Array<Span>, from: Int): Int {
+		var depth: Int = 1;
+		for (run in code) for (i in (run.from < from ? from : run.from) ... run.to) {
+			final c: Int = text.fastCodeAt(i);
+			if (c == '{'.code) depth++;
+			if (c == '}'.code && --depth == 0) return i;
+		}
+		return text.length - 1;
+	}
+
+	/** The top-level statements of a function body, each trimmed and without its `;`. */
+	public static function statementsOf(body: String): Array<String> {
+		final out: Array<String> = [];
+		var depth: Int = 0;
+		var start: Int = 0;
+		for (run in LexicalRegions.codeSpans(body.length, new HaxeQueryPlugin().lexicalRegions(body))) for (i in run.from ... run.to) {
+			final c: String = body.charAt(i);
+			if (c == '(' || c == '[' || c == '{') depth++;
+			if (c == ')' || c == ']' || c == '}') depth--;
+			if (c != ';' || depth != 0) continue;
+			out.push(~/\s+/g.replace(body.substring(start, i), ' ').trim());
+			start = i + 1;
+		}
+		return out;
+	}
+
 	/**
 	 * Every probe project under `dir` — each directory holding an `apq.json` that names a compiler oracle — run as
 	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
@@ -192,7 +221,7 @@ final class TyperConformance {
 				FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
 				|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
 		);
-		names.sort(Reflect.compare);
+		names.sort(Compare.compareString);
 		final refused: Array<String> = [];
 		for (name in names) {
 			Sys.setCwd(Path.join([root, name]));
@@ -213,11 +242,11 @@ final class TyperConformance {
 		final std: Array<{ file: String, source: String }> = evalStd();
 		final cases: Array<String> = [];
 		collectPaths(Path.join([clone, 'tests/display/src/cases']), '.hx', cases);
-		cases.sort(Reflect.compare);
+		cases.sort(Compare.compareString);
 		for (path in cases) for (test in displayTests(path)) displayCase(test, plugin, std, report);
 		final stderrs: Array<String> = [];
 		collectPaths(Path.join([clone, 'tests/misc/projects']), '-fail.hxml.stderr', stderrs);
-		stderrs.sort(Reflect.compare);
+		stderrs.sort(Compare.compareString);
 		for (path in stderrs) miscCase(path, plugin, std, report);
 	}
 
@@ -243,12 +272,13 @@ final class TyperConformance {
 		final packageLine: EReg = ~/^package\s+([\w.]+)\s*;/m;
 		final pack: Null<String> = packageLine.match(text) ? packageLine.matched(1) : null;
 		final head: EReg = ~/\/\*\*([\s\S]*?)\*\*\/\s*((?:@:[A-Za-z]+(?:\([^)]*\))?\s*)*)function\s+(\w+)\s*\(\)[^{]*\{/;
+		final codeRuns: Array<Span> = LexicalRegions.codeSpans(text.length, new HaxeQueryPlugin().lexicalRegions(text));
 		final out: Array<DisplayTest> = [];
 		var at: Int = 0;
 		while (head.matchSub(text, at)) {
 			final pos: { pos: Int, len: Int } = head.matchedPos();
 			final bodyFrom: Int = pos.pos + pos.len;
-			final bodyTo: Int = closingBrace(text, bodyFrom);
+			final bodyTo: Int = closingBrace(text, codeRuns, bodyFrom);
 			final metas: String = head.matched(2);
 			final doc: String = head.matched(1).replace('**\\/', '**/');
 			final wrapped: String = metas.contains('@:funcCode') ? 'class Main { static function main() { $doc}}' : doc;
@@ -604,9 +634,9 @@ final class TyperConformance {
 	private static function usageVerdict(expected: Array<Span>, found: Null<Array<Span>>, firstOnly: Bool): Verdict {
 		if (found == null) return Unknown;
 		final got: Array<String> = found.map(s -> '${s.from}-${s.to}');
-		got.sort(Reflect.compare);
+		got.sort(Compare.compareString);
 		final want: Array<String> = expected.map(s -> '${s.from}-${s.to}');
-		want.sort(Reflect.compare);
+		want.sort(Compare.compareString);
 		final same: Bool = firstOnly ? got.length > 0 && got[0] == want[0] : got.join(',') == want.join(',');
 		return same ? Match : Different(got.join(','));
 	}
@@ -650,48 +680,6 @@ final class TyperConformance {
 			final r: Null<Span> = rangeOf(markers, RANGE.matched(1), RANGE.matched(2));
 			if (r != null) out.push(r);
 			rest = RANGE.matchedRight();
-		}
-		return out;
-	}
-
-	/** The offset of the `}` closing the block whose body starts at `from`. */
-	private static function closingBrace(text: String, from: Int): Int {
-		var depth: Int = 1;
-		var i: Int = from;
-		while (i < text.length && depth > 0) {
-			final c: String = text.charAt(i);
-			if (c == '"' || c == "'") {
-				i = text.indexOf(c, i + 1) + 1;
-				if (i == 0) return text.length;
-				continue;
-			}
-			if (c == '{') depth++;
-			if (c == '}') depth--;
-			i++;
-		}
-		return i - 1;
-	}
-
-	/** The top-level statements of a function body, each trimmed and without its `;`. */
-	private static function statementsOf(body: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		var i: Int = 0;
-		while (i < body.length) {
-			final c: String = body.charAt(i);
-			if (c == '"' || c == "'") {
-				final end: Int = body.indexOf(c, i + 1);
-				i = end < 0 ? body.length : end + 1;
-				continue;
-			}
-			if (c == '(' || c == '[' || c == '{') depth++;
-			if (c == ')' || c == ']' || c == '}') depth--;
-			if (c == ';' && depth == 0) {
-				out.push(~/\s+/g.replace(body.substring(start, i), ' ').trim());
-				start = i + 1;
-			}
-			i++;
 		}
 		return out;
 	}
@@ -1589,7 +1577,7 @@ private final class TypeText {
 			if (peek() == ',' || peek() == ';') _at++;
 		}
 		_at++;
-		fields.sort(Reflect.compare);
+		fields.sort(Compare.compareString);
 		return '{${fields.join(',')}}';
 	}
 
@@ -1765,7 +1753,7 @@ private final class Report {
 
 	private static function sortedKeys<V>(map: Map<String, V>): Array<String> {
 		final keys: Array<String> = [for (k in map.keys()) k];
-		keys.sort(Reflect.compare);
+		keys.sort(Compare.compareString);
 		return keys;
 	}
 

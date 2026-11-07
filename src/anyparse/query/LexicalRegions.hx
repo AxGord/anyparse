@@ -2,6 +2,8 @@ package anyparse.query;
 
 using Lambda;
 
+import anyparse.runtime.Span;
+
 /**
  * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
  */
@@ -99,6 +101,21 @@ final class LexicalRegions {
 			case LineComment, BlockComment: true;
 			case StringLit, RegexLit: false;
 		};
+	}
+
+	/**
+	 * The CODE spans of a source of `length` bytes: what lies between the sorted, non-overlapping `regions`, in source
+	 * order, an empty run left out. A scan of the code bytes walks these and never meets a comment, a string or a regex.
+	 */
+	public static function codeSpans(length: Int, regions: Array<LexRegion>): Array<Span> {
+		final out: Array<Span> = [];
+		var at: Int = 0;
+		for (region in regions) {
+			if (region.from > at) out.push(new Span(at, region.from));
+			if (region.to > at) at = region.to;
+		}
+		if (length > at) out.push(new Span(at, length));
+		return out;
 	}
 
 }

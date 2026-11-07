@@ -1549,6 +1549,38 @@
 			"find": "Math.isNaN(parsed) || parsed < 0 || parsed > 1",
 			"replace": "false",
 			"note": "a similarity floor that is no number is accepted as NaN, so every rival sharing one word is reported and the reading changes without an error"
+		},
+		{
+			"name": "M-SUITE-IMPACT-UNCOMMENTED-LITERAL",
+			"type": "dev.SuiteImpact",
+			"method": "uncommented",
+			"find": "if (!block && region.kind != LexRegionKind.LineComment) continue;",
+			"replace": "",
+			"note": "a string literal that starts a line is dropped like a line comment, and a comment opener inside a string is read as a comment, so the code a doc names loses lines it holds"
+		},
+		{
+			"name": "M-FORCE-HEADER-NONCODE-BRACES",
+			"type": "dev.MutationArm",
+			"method": "forceHeader",
+			"find": "new HaxeQueryPlugin().lexicalRegions(node)",
+			"replace": "[]",
+			"note": "a brace in a comment, a string, a character or a regex counts as code, so a forced return is spliced after the wrong line or the member is refused as unbalanced"
+		},
+		{
+			"name": "M-TYPER-STATEMENTS-NONCODE",
+			"type": "dev.TyperConformance",
+			"method": "statementsOf",
+			"find": "new HaxeQueryPlugin().lexicalRegions(body)",
+			"replace": "[]",
+			"note": "a semicolon in a string or a comment ends a statement, so a display test's assertion is cut in two and scored as two unreadable ones"
+		},
+		{
+			"name": "M-TYPER-CLOSING-BRACE-FROM",
+			"type": "dev.TyperConformance",
+			"method": "closingBrace",
+			"find": "(run.from < from ? from : run.from)",
+			"replace": "run.from",
+			"note": "the brace count starts at the head of the code run instead of at the body, so the opening brace is counted twice and the body runs to the end of the next function"
 		}
 	]
 }

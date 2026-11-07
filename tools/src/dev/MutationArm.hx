@@ -1,8 +1,10 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
+import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
@@ -182,13 +184,7 @@ final class MutationArm {
 		var depth: Int = 0;
 		var open: Int = -1;
 		var close: Int = -1;
-		var i: Int = 0;
-		while (i < node.length) {
-			final past: Int = pastNonCode(node, i);
-			if (past >= 0) {
-				i = past;
-				continue;
-			}
+		for (code in LexicalRegions.codeSpans(node.length, new HaxeQueryPlugin().lexicalRegions(node))) for (i in code.from ... code.to) {
 			final c: Int = node.fastCodeAt(i);
 			if (c == '{'.code) {
 				if (depth == 0) open = i;
@@ -197,7 +193,6 @@ final class MutationArm {
 				depth--;
 				if (depth == 0) close = i;
 			}
-			i++;
 		}
 		if (open < 0 || depth != 0 || close != node.rtrim().length - 1) return null;
 		final nl: Int = node.indexOf('\n', open);
@@ -631,38 +626,6 @@ final class MutationArm {
 				: '$name: rendering the cut died before it said why';
 		File.saveContent(Path.join([workroot, '$name.patch']), diff.out);
 		return null;
-	}
-
-	/**
-	 * The index just past the comment, string, character or regex literal opening at `i` of `text`, or -1 when none opens
-	 * there. A run left open ends the text.
-	 */
-	private static function pastNonCode(text: String, i: Int): Int {
-		final c: Int = text.fastCodeAt(i);
-		final d: Int = text.charCodeAt(i + 1) ?? -1;
-		if (c == '/'.code && d == '/'.code) {
-			final end: Int = text.indexOf('\n', i);
-			return end < 0 ? text.length : end + 1;
-		}
-		if (c == '/'.code && d == '*'.code) {
-			final end: Int = text.indexOf('*/', i + 2);
-			return end < 0 ? text.length : end + 2;
-		}
-		if (c == '~'.code && d == '/'.code) return pastQuoted(text, i + 1, '/'.code);
-		return c == "'".code || c == '"'.code ? pastQuoted(text, i, c) : -1;
-	}
-
-	/** The index just past the run `quote` opens at `i` of `text`, a backslash escaping the character after it. */
-	private static function pastQuoted(text: String, i: Int, quote: Int): Int {
-		var k: Int = i;
-		while (++k < text.length) {
-			final q: Int = text.fastCodeAt(k);
-			if (q == '\\'.code)
-				k++
-			else if (q == quote)
-				break;
-		}
-		return k + 1;
 	}
 
 	/** Print the rows of the cuts that did not apply and the tally of `applied` that did; answers 1 when any did not. */
