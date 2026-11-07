@@ -2,8 +2,6 @@ package anyparse.format;
 
 using StringTools;
 
-import anyparse.format.comment.CommentScan;
-
 /**
  * The formatter's non-whitespace invariant: a correct formatter changes only
  * WHITESPACE, so stripping every whitespace character from the input and from
@@ -34,8 +32,15 @@ import anyparse.format.comment.CommentScan;
  * `remove` as the default every tree that holds one would otherwise fail
  * `--verify`. A comma anywhere else is still a divergence.
  *
+ * A string or regex literal is NOT code: its text is compared byte for byte,
+ * whitespace included, and a `,]` inside one is never the exempt token. The
+ * regions come from the grammar's lexical scan, which shares nothing with the
+ * parse tree or the writer under audit. Text the scan leaves out of its
+ * literals (no literal regions, an unscannable source, a string holding code
+ * the writer re-lays) keeps the whitespace-only rule.
+ *
  * Pure and grammar-agnostic: whitespace is not a property of any one language,
- * and what a comment is arrives as the caller's `CommentScan`.
+ * and what a comment or a literal is arrives as the caller's `InertScan`.
  */
 @:nullSafety(Strict)
 final class WhitespaceInvariant {
@@ -51,10 +56,10 @@ final class WhitespaceInvariant {
 	 * caller can point at a file the user still has on disk; `expected` and
 	 * `actual` quote the next run of non-whitespace characters from each side.
 	 * A side that simply ran out reports an empty window, which is what a
-	 * dropped or added trailing token looks like. `scan` reads the comments of
-	 * EACH text, so a trailing comma stays invisible through a comment.
+	 * dropped or added trailing token looks like. `scan` reads the comments and
+	 * literals of EACH text, so a trailing comma stays invisible through a comment.
 	 */
-	public static function firstDivergence(source: String, written: String, scan: CommentScan): Null<Divergence> {
+	public static function firstDivergence(source: String, written: String, scan: InertScan): Null<Divergence> {
 		final left: Stripped = strip(source, scan);
 		final right: Stripped = strip(written, scan);
 		final leftLen: Int = left.text.length;
@@ -70,33 +75,38 @@ final class WhitespaceInvariant {
 	}
 
 	/**
-	 * `text` with every whitespace character removed, plus the 1-based source line each kept character came from.
+	 * `text` with every code whitespace character removed, plus the 1-based source line each kept character came from.
 	 * A code `,` followed by a closing `]`, `)` or `}` with only whitespace or comments between is dropped: the
 	 * trailing-comma knob adds and removes exactly that token in any layout, and the comment it can sit before
 	 * (`2, // two` then `]`) stays in the text. Comment bytes never count as code, so a `,` or `]` inside one is inert.
+	 * A literal region is kept BYTE FOR BYTE (a carriage return aside) and breaks the comma window: a `,]` inside a
+	 * string is text, not a trailing comma.
 	 */
-	private static function strip(source: String, scan: CommentScan): Stripped {
-		final spans: Array<Int> = [];
-		scan(source, (start, end) -> {
-			spans.push(start);
-			spans.push(end);
-		});
+	private static function strip(source: String, scan: InertScan): Stripped {
+		final zones: ZoneMap = new ZoneMap(source, scan);
 		final kept: Array<String> = [];
 		final lines: Array<Int> = [];
 		var line: Int = 1;
-		var span: Int = 0;
 		var pending: Int = -1;
 		var dropped: Int = 0;
 		for (i in 0...source.length) {
 			final c: Int = source.fastCodeAt(i);
+			final zone: Zone = zones.zoneAt(i);
+			if (zone == Literal) {
+				pending = -1;
+				if (c != '\r'.code) {
+					kept.push(source.charAt(i));
+					lines.push(line);
+				}
+				if (c == '\n'.code) line++;
+				continue;
+			}
 			if (c == '\n'.code) {
 				line++;
 				continue;
 			}
 			if (c == ' '.code || c == '\t'.code || c == '\r'.code) continue;
-			while (span < spans.length && i >= spans[span + 1]) span += 2;
-			final inComment: Bool = span < spans.length && i >= spans[span];
-			if (!inComment) {
+			if (zone == Code) {
 				if (pending >= 0 && (c == ']'.code || c == ')'.code || c == '}'.code)) {
 					kept[pending] = '';
 					dropped++;
@@ -139,3 +149,37 @@ private typedef Stripped = {
 	final text: String;
 	final lines: Array<Int>;
 };
+
+/**
+ * A grammar's non-code regions, handed to `WhitespaceInvariant` so it stays grammar-agnostic.
+ *
+ * `scan(source, onRegion)` reports every comment, string literal and regex literal of `source` as a
+ * `[start, end)` byte span in source order, with `literal` true for a string or regex and false for a comment.
+ * Source the grammar cannot scan reports nothing, so all of it is code.
+ */
+typedef InertScan = (source:String, onRegion:(start:Int, end:Int, literal:Bool) -> Void) -> Void;
+
+/** What one source byte is to the invariant. */
+private enum abstract Zone(Int) {
+	final Code = 0;
+	final Comment = 1;
+	final Literal = 2;
+}
+
+/** The `Zone` of each byte of one source. */
+private final class ZoneMap {
+
+	private final _zones: Array<Zone>;
+
+	public function new(source: String, scan: InertScan) {
+		final zones: Array<Zone> = [for (_ in 0...source.length) Code];
+		scan(source, (start, end, literal) -> for (i in start ... (end < source.length ? end : source.length))
+			zones[i] = literal ? Literal : Comment);
+		_zones = zones;
+	}
+
+	public function zoneAt(offset: Int): Zone {
+		return _zones[offset];
+	}
+
+}

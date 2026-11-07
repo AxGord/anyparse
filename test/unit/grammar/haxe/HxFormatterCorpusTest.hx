@@ -11,8 +11,10 @@ import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.cli.command.SweepCorpus;
 import anyparse.query.format.json.SweepSnapshot;
 import anyparse.query.format.json.SweepSnapshotParser;
@@ -472,7 +474,8 @@ class HxFormatterCorpusTest extends Test {
 	private static function assertTokensKept(relPath: String, input: String, emitted: String): Void {
 		final written: String = ByteOrderMark.carry(input, emitted);
 		if (CommentInventory.firstMissing(input, written, HaxeLexicalRegions.scanComments) != null) return;
-		final drift: Null<Divergence> = WhitespaceInvariant.firstDivergence(input, written, HaxeLexicalRegions.scanComments);
+		final drift: Null<Divergence> =
+			WhitespaceInvariant.firstDivergence(input, written, OccurrenceScan.inertScan(new HaxeQueryPlugin()));
 		if (drift != null && !KNOWN_TOKEN_DRIFT.contains(relPath))
 			Assert.fail('$relPath: formatting changed more than whitespace at line ${drift.line}: <${drift.expected}> → <${drift.actual}>');
 	}

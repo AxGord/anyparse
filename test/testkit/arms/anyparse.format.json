@@ -512,7 +512,7 @@
 			"name": "M-VERIFY-COMMENT-TRANSPARENCY-OFF",
 			"type": "anyparse.format.WhitespaceInvariant",
 			"method": "strip",
-			"find": "if (!inComment) {",
+			"find": "if (zone == Code) {",
 			"replace": "if (true) {",
 			"note": "comment bytes count as code again, so a comment between a trailing comma and its closer keeps the comma visible"
 		},
@@ -523,6 +523,22 @@
 			"find": "closed > i ? closed : n",
 			"replace": "closed > i ? closed : i + 1",
 			"note": "an unterminated literal is copied one quote character at a time, so an operator after it is respaced although the text never closed the literal"
+		},
+		{
+			"name": "M-VERIFY-LITERAL-ZONE-OFF",
+			"type": "anyparse.format.WhitespaceInvariant",
+			"method": "strip",
+			"find": "final zone: Zone = zones.zoneAt(i);",
+			"replace": "final zone: Zone = zones.zoneAt(i) == Literal ? Code : zones.zoneAt(i);",
+			"note": "string and regex literals read as code again, so a `,]` inside one is exempted like a trailing comma and its whitespace is not compared"
+		},
+		{
+			"name": "M-VERIFY-LITERAL-BREAKS-COMMA-OFF",
+			"type": "anyparse.format.WhitespaceInvariant",
+			"method": "strip",
+			"find": "pending = -1;\n\t\t\tif (c != '\\r'.code) {",
+			"replace": "if (c != '\\r'.code) {",
+			"note": "a literal no longer ends the comma window, so a comma lost before a literal that opens with a closer verifies clean"
 		}
 	]
 }

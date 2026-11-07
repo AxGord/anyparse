@@ -1,8 +1,8 @@
 package unit.format;
 
 import anyparse.format.WhitespaceInvariant;
-import anyparse.format.comment.CommentScan;
-import anyparse.grammar.haxe.HaxeLexicalRegions;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.OccurrenceScan;
 
 /**
  * The non-whitespace invariant behind `apq fmt --verify`.
@@ -14,8 +14,8 @@ import anyparse.grammar.haxe.HaxeLexicalRegions;
  */
 class WhitespaceInvariantTest extends Test {
 
-	/** The Haxe grammar's comment lexer, the seam every pin reads comments through. */
-	private static final HAXE: CommentScan = HaxeLexicalRegions.scanComments;
+	/** The Haxe grammar's comment and literal regions, as `fmt --verify` hands them to the invariant. */
+	private static final HAXE: InertScan = OccurrenceScan.inertScan(new HaxeQueryPlugin());
 
 	public function testDetectsTheCommaTheWriterAddedAfterEnd(): Void {
 		// The shape from `pony.events.Event0`: the source's comma lives INSIDE the
@@ -120,6 +120,52 @@ class WhitespaceInvariantTest extends Test {
 
 	public function testACloserInsideACommentDoesNotDropTheComma(): Void {
 		Assert.notNull(WhitespaceInvariant.firstDivergence('f(a, // )\n\tb);\n', 'f(a // )\n\tb);\n', HAXE));
+	}
+
+	@:pin('control')
+	@:killer('M-VERIFY-LITERAL-ZONE-OFF')
+	public function testAStringHoldingACommaCloserChangedByTheWriterIsReported(): Void {
+		final d: Null<Divergence> = WhitespaceInvariant.firstDivergence('var s = "a,]";\n', 'var s = "a]";\n', HAXE);
+		Assert.notNull(d);
+		if (d == null) return;
+		Assert.stringContains(',]"', d.expected);
+		Assert.stringContains(']"', d.actual);
+	}
+
+	@:pin('control')
+	@:killer('M-VERIFY-LITERAL-ZONE-OFF')
+	public function testALiteralIsComparedByteForByte(): Void {
+		Assert.notNull(WhitespaceInvariant.firstDivergence('var s = "a  b";\n', 'var s = "a b";\n', HAXE));
+		Assert.notNull(WhitespaceInvariant.firstDivergence('var r = ~/a  b/;\n', 'var r = ~/a b/;\n', HAXE));
+		Assert.isNull(WhitespaceInvariant.firstDivergence('var s = "a  b";\n', 'var   s   =   "a  b"  ;\n', HAXE));
+	}
+
+	@:pin('control')
+	@:killer('M-VERIFY-LITERAL-BREAKS-COMMA-OFF')
+	public function testACommaBeforeALiteralStartingWithACloserIsReported(): Void {
+		Assert.notNull(WhitespaceInvariant.firstDivergence('f(a, "]");\n', 'f(a "]");\n', HAXE));
+	}
+
+	public function testADroppedTrailingCommaAfterALiteralHolds(): Void {
+		Assert.isNull(WhitespaceInvariant.firstDivergence('var a = [1, "x",];\n', 'var a = [1, "x"];\n', HAXE));
+	}
+
+	public function testALiteralKeepsItsNewlinesAndTheLineOfTheNextDivergence(): Void {
+		final d: Null<Divergence> = WhitespaceInvariant.firstDivergence(
+			'var s = "a\nb";\nvar t = 1;\n', 'var s = "a\nb";\nvar t = 2;\n', HAXE
+		);
+		Assert.notNull(d);
+		if (d == null) return;
+		Assert.equals(3, d.line);
+	}
+
+	public function testACarriageReturnInALiteralIsLineEndingNotText(): Void {
+		Assert.isNull(WhitespaceInvariant.firstDivergence('var s = "a\r\nb";\n', 'var s = "a\nb";\n', HAXE));
+	}
+
+	public function testAScanReportingNoRegionKeepsTheWhitespaceOnlyRule(): Void {
+		final bare: InertScan = (source, onRegion) -> {};
+		Assert.isNull(WhitespaceInvariant.firstDivergence('var s = "a  b,]";\n', 'var s = "a b]";\n', bare));
 	}
 
 }

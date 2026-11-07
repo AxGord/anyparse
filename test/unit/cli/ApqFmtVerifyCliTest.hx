@@ -87,4 +87,20 @@ class ApqFmtVerifyCliTest extends Test {
 		#end
 	}
 
+	public function testLiteralsAreComparedVerbatimWhileTheRestIsReformatted(): Void {
+		#if (sys || nodejs)
+		// strings holding `,]` and runs of spaces, an interpolation hole (its code is re-laid) and a regex survive the reformat untouched
+		final dir: String = CliFixture.writeDir('apq_fmt_verify_literals', [
+			{
+				name: 'A.hx',
+				source: 'class A{static var s="a,]  b";static var t=\'x $${ s+1 } ,] y\';static var r=~/a  ,]/;static var l=[1,2,];}\n'
+			}
+		]);
+		Assert.equals(0, Cli.run(['fmt', dir, '--verify']));
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

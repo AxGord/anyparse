@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.format.WhitespaceInvariant.InertScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.OccurrenceScan.OccurrenceClass;
@@ -123,15 +124,9 @@ final class OccurrenceScan {
 	 * linear `offsetWithinAny`.
 	 */
 	public static function inertRegions(source: String, regions: Array<LexRegion>): Array<Span> {
-		final out: Array<Span> = [];
-		for (region in regions) {
-			final inert: Bool = switch region.kind {
-				case LineComment, BlockComment, RegexLit: true;
-				case StringLit: !literalInterpolates(source, region);
-			}
-			if (inert) out.push(new Span(region.from, region.to));
-		}
-		return out;
+		return [
+			for (region in regions) if (isInert(source, region)) new Span(region.from, region.to)
+		];
 	}
 
 	/**
@@ -410,6 +405,56 @@ final class OccurrenceScan {
 	}
 
 	/**
+	 * Whether `region` is inert to a reference scan: a comment, a regex literal, or a string literal that cannot
+	 * interpolate. The one place that classification lives; `inertRegions` and `inertScan` both ask it.
+	 */
+	public static function isInert(source: String, region: LexRegion): Bool {
+		return switch region.kind {
+			case LineComment, BlockComment, RegexLit: true;
+			case StringLit: !literalInterpolates(source, region);
+		}
+	}
+
+	/**
+	 * The grammar's inert regions as the `InertScan` that `WhitespaceInvariant` reads: a comment is reported apart from a
+	 * string or regex literal. A string that interpolates is not inert (`isInert`) and so stays code there: the writer re-lays
+	 * the code of its holes, and the lexical regions do not yet mark where a hole ends.
+	 */
+	public static function inertScan(plugin: GrammarPlugin): InertScan {
+		return (source, onRegion) -> for (region in plugin.lexicalRegions(source)) if (isInert(source, region)) onRegion(
+			region.from, region.to, switch region.kind {
+				case LineComment, BlockComment: false;
+				case StringLit, RegexLit: true;
+			}
+		);
+	}
+
+	/**
+	 * Whether the string literal `region` can interpolate: single-quoted and carrying a `$`
+	 * that is not the escaped `$$`. Decided per LITERAL rather than per occurrence — working out
+	 * which `${...}` region an occurrence falls in costs another scan, and the coarse answer only
+	 * ever vetoes a rename or masks a whole literal. A double-quoted literal never interpolates in
+	 * Haxe, so it is always inert.
+	 */
+	private static function literalInterpolates(source: String, region: LexRegion): Bool {
+		if (source.fastCodeAt(region.from) != "'".code) return false;
+		var i: Int = region.from + 1;
+		while (i < region.to) {
+			if (source.fastCodeAt(i) == '$'.code) {
+				if (i + 1 >= region.to || source.fastCodeAt(i + 1) != '$'.code) return true;
+				i += 2;
+				continue;
+			}
+			// A numeric escape (`\x24`, `$`) spells the same trigger a decoded literal `$`
+			// does (see `interpolationEscapeBefore`) — missing it here would mask a literal whose
+			// only read is an escaped interpolation, hiding a live reference wholesale.
+			if (DOLLAR_ESCAPES.exists(e -> i + e.length <= region.to && source.substr(i, e.length) == e)) return true;
+			i++;
+		}
+		return false;
+	}
+
+	/**
 	 * The scan behind `referencedInRange` / `referencedUnqualifiedInRange`;
 	 * a non-null `commentRegions` drops dot-qualified occurrences.
 	 */
@@ -595,31 +640,6 @@ final class OccurrenceScan {
 	private static function interpolatingLiteralAt(source: String, at: Int, regions: Array<LexRegion>): Bool {
 		final region: Null<LexRegion> = LexicalRegions.regionAt(at, regions);
 		return region != null && region.kind == StringLit && literalInterpolates(source, region);
-	}
-
-	/**
-	 * Whether the string literal `region` can interpolate: single-quoted and carrying a `$`
-	 * that is not the escaped `$$`. Decided per LITERAL rather than per occurrence — working out
-	 * which `${...}` region an occurrence falls in costs another scan, and the coarse answer only
-	 * ever vetoes a rename or masks a whole literal. A double-quoted literal never interpolates in
-	 * Haxe, so it is always inert.
-	 */
-	private static function literalInterpolates(source: String, region: LexRegion): Bool {
-		if (source.fastCodeAt(region.from) != "'".code) return false;
-		var i: Int = region.from + 1;
-		while (i < region.to) {
-			if (source.fastCodeAt(i) == '$'.code) {
-				if (i + 1 >= region.to || source.fastCodeAt(i + 1) != '$'.code) return true;
-				i += 2;
-				continue;
-			}
-			// A numeric escape (`\x24`, `$`) spells the same trigger a decoded literal `$`
-			// does (see `interpolationEscapeBefore`) — missing it here would mask a literal whose
-			// only read is an escaped interpolation, hiding a live reference wholesale.
-			if (DOLLAR_ESCAPES.exists(e -> i + e.length <= region.to && source.substr(i, e.length) == e)) return true;
-			i++;
-		}
-		return false;
 	}
 
 	/**

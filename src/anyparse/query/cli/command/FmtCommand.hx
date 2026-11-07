@@ -2,12 +2,12 @@ package anyparse.query.cli.command;
 
 import anyparse.format.WhitespaceInvariant;
 import anyparse.format.comment.CommentInventory;
-import anyparse.format.comment.CommentScan;
 import anyparse.query.Cli.FmtRunResult;
 import anyparse.query.CondRegionScan.OpaqueCondRegion;
 import anyparse.query.ExitCode.*;
 import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.runtime.Span;
@@ -620,7 +620,7 @@ final class FmtCommand implements CliCommand {
 				unsettled: unsettled,
 				fatalExit: null
 			};
-			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted, commentScan(plugin));
+			final divergence: Null<Divergence> = WhitespaceInvariant.firstDivergence(source, formatted, OccurrenceScan.inertScan(plugin));
 			if (divergence == null) return {
 				changed: true,
 				failed: false,
@@ -689,15 +689,6 @@ final class FmtCommand implements CliCommand {
 			unsettled: unsettled,
 			fatalExit: null
 		};
-	}
-
-	/**
-	 * The grammar's comments as the `CommentScan` the format package reads, taken from the plugin's lexical regions
-	 * (their line and block comments) so the verify audit asks the same lexer every other command does.
-	 */
-	private static function commentScan(plugin: GrammarPlugin): CommentScan {
-		return (source, onComment) -> for (token in SourceComments.collectCommentTokens(plugin.lexicalRegions(source)))
-			onComment(token.from, token.to);
 	}
 
 }
