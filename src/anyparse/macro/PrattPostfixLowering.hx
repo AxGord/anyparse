@@ -606,19 +606,11 @@ final class PrattPostfixLowering {
 		// the next postfix step's leading-trivia. Without the slot,
 		// the inner `skipWs(ctx)` of the next postfix iteration eats
 		// the comment.
-		//
-		// ω-D9A-keep-callargs-v2: alongside `_trailClose`, the ctor
-		// call grows a fourth positional `_argsOpenNewline:Bool`
-		// captured BEFORE the per-iter `skipWs`/`collectTrivia` (see
-		// macro block below); `Trivial.newlineBefore` for
-		// args[0] is unreliable due to upstream `ctx.pendingTrivia`
-		// leak so a separate parser-side capture is required.
 		final ctorCallTrivia: Expr = {
 			expr: ECall(ctorRef, [
 				macro left,
 				macro _args,
 				macro _trailClose,
-				macro _argsOpenNewline,
 				macro _argsInnerComment,
 				macro _callLeadingComment
 			]),
@@ -737,7 +729,7 @@ final class PrattPostfixLowering {
 		// positional `chainLeadComment:Null<String>` slot.
 		// It reads `_opTrailComment` — the operand's trailing comment captured
 		// at the loop's pre-skipWs site (see the trivia postfix loop below).
-		// The slot lets the writer's keep-mode chain dispatch reattach a bare
+		// The slot lets the writer's chain dispatch reattach a bare
 		// receiver's trailing comment (`owner // test`) that the per-iteration
 		// `skipWs` would otherwise eat.
 		final ctorCall: Expr = {

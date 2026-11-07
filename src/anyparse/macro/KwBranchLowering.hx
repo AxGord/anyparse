@@ -134,27 +134,18 @@ final class KwBranchLowering {
 	 * both of kw and lead may be absent.
 	 */
 	private static function appendKwRefLeadSteps(
-		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, triviaBodyPolicyKw: Bool, forwardNewlineForBody: Bool,
-		triviaWrapOpenNewline: Bool
+		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, forwardNewlineForBody: Bool, triviaWrapOpenNewline: Bool
 	): Void {
 		if (kwLead != null) {
 			steps.push(macro expectKw(ctx, $v{kwLead}));
-			// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
-			// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
-			// the gap up to the body's first token crossed a newline.
-			// Mirrors the struct-side `_bodyOnSameLine_<field>` capture
-			// in `lowerStruct`'s `@:optional @:kw` path.
-			if (triviaBodyPolicyKw) steps.push(macro final _kwEndPos: Int = ctx.pos);
 			if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
-			if (triviaBodyPolicyKw) steps.push(macro final _bodyOnSameLine: Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
 		}
 		if (leadText == null) return;
 		steps.push(macro expectLit(ctx, $v{leadText}));
 		// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
 		// the post-lead skipWs so _wrapOpenNewline can probe whether
 		// the gap up to the inner sub-rule's first token crossed a
-		// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
-		// pattern above.
+		// newline.
 		if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
 		// The comment on the open delimiter's line (`( // c`) is kept verbatim for the writer; `skipWs` would drop it.
 		if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingAfterOpen(ctx));
@@ -333,16 +324,15 @@ final class KwBranchLowering {
 	/**
 	 * Build the synth-ctor call for a `lowerKwRefBranch` ctor, appending the
 	 * trivia-mode positional args (`_trailPresent` / `_sourceText` /
-	 * `_bodyOnSameLine` / `_wrapOpenNewline`) the active
+	 * `_wrapOpenNewline`) the active
 	 * capture channels carry.
 	 */
 	private static function buildKwRefCtorCall(
-		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaBodyPolicyKw: Bool, triviaWrapOpenNewline: Bool
+		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaWrapOpenNewline: Bool
 	): Expr {
 		final ctorArgs: Array<Expr> = [macro _raw];
 		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
 		if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
-		if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
 		if (triviaWrapOpenNewline) {
 			ctorArgs.push(macro _wrapOpenNewline);
 			ctorArgs.push(macro _wrapOpenTrailing);

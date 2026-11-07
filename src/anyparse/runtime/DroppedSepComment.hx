@@ -41,7 +41,6 @@ final class DroppedSepComment {
 			trailingComment: null,
 			trailingBeforeSep: false,
 			sepAfter: false,
-			newlineAfterSep: t.newlineAfterSep,
 			leadingCommentsGlued: t.leadingCommentsGlued,
 			node: node
 		};

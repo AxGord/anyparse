@@ -263,7 +263,6 @@ final class StarLoopLowering {
 				}
 			};
 		}
-		final nlAfterSepScan: Expr = buildPrattBlankNlAfterSepScan();
 		final restoreStash: Expr = buildPrattBlankRestoreStash();
 		// ω-cond-comp-branch-trail: for a `@:fmt(padTrailing)` conditional branch
 		// body (no `#else` — the `#if` body Star before `#end`), capture the
@@ -302,15 +301,7 @@ final class StarLoopLowering {
 				// `buildPrattBlankRestoreStash` for the brace-terminated rule.
 				final _savedPending = ctx.pendingTrivia;
 				final _lead = collectTrivia(ctx);
-				// ω-keep-newline-after-sep (increment 1): `collectTrivia`
-				// leaves the cursor at the element's first token — for a
-				// `@:lead(LIT)`-prefixed link (e.g. `HxVarMore`'s
-				// `@:lead(',')`) that token IS the separator literal.
-				// Record it so we can probe the newline AFTER the
-				// separator (before the link payload): `_lead.newlineBefore`
-				// only sees the gap BEFORE the comma (usually empty —
-				// `getRaw(read),`), while the source break lands `,\n  next`.
-				// Additive (an `@:optional Trivial.newlineAfterSep` slot).
+				// The element's first token, past its leading trivia: the zero-width guard and the branch-trail rewind read it.
 				final _leadStart: Int = ctx.pos;
 				$nonNestGate;
 				try {
@@ -319,8 +310,6 @@ final class StarLoopLowering {
 					// nestBody arm above.
 					if (ctx.pos == _leadStart) throw anyparse.runtime.ParseError.backtrack;
 					final _trailing: Null<String> = collectTrailingFull(ctx);
-					var _nlAfterSep: Bool = false;
-					$nlAfterSepScan;
 					$accumRef.push({
 						blankBefore: _lead.blankBefore,
 						blankBefore2: _lead.blankBefore2,
@@ -330,17 +319,12 @@ final class StarLoopLowering {
 						trailingComment: _trailing,
 						trailingBeforeSep: false,
 						sepAfter: true,
-						newlineAfterSep: _nlAfterSep,
 						node: _node,
 					});
 				} catch (_e: anyparse.runtime.ParseError)
 					$nonNestCatch;
 			}
 		};
-	}
-
-	private static function buildPrattBlankNlAfterSepScan(): Expr {
-		return macro _nlAfterSep = ctx.newlineAfterSeparator(_leadStart);
 	}
 
 	private static function buildPrattBlankRestoreStash(): Expr {

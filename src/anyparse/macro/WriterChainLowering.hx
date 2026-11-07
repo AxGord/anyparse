@@ -96,15 +96,15 @@ final class WriterChainLowering {
 			var _probe = value;
 			var _isChain: Bool = false;
 			while (!_isChain) switch _probe {
-				case Call(_op, _, _, _, _, _):
+				case Call(_op, _, _, _, _):
 					switch _op {
 						case FieldAccess(_prev, _, _):
-							_isChain = _prev.match(Call(_, _, _, _, _, _));
+							_isChain = _prev.match(Call(_, _, _, _, _));
 							_probe = _prev;
 						case _: break;
 					}
 				case FieldAccess(_prev, _, _):
-					_isChain = _prev.match(Call(_, _, _, _, _, _));
+					_isChain = _prev.match(Call(_, _, _, _, _));
 					_probe = _prev;
 				case _:
 					break;
@@ -130,7 +130,7 @@ final class WriterChainLowering {
 				// replaces the source `owner // test` layout.
 				var _recTrail: Null<String> = null;
 				while (true) switch _cursor {
-					case Call(_op, _args, _trailClose, _, _, _):
+					case Call(_op, _args, _trailClose, _, _):
 						switch _op {
 							case FieldAccess(_prev, _fld, _opTrail):
 								final _argsDoc: anyparse.core.Doc = $argsListExpr;
@@ -139,7 +139,7 @@ final class WriterChainLowering {
 									: _dc([_dt('.' + _fld), _argsDoc]);
 								_segs.unshift(_segDoc);
 								switch _prev {
-									case Call(_, _, _, _, _, _):
+									case Call(_, _, _, _, _):
 										_hasCallPrev = true;
 										_seg0AfterCall = true;
 									case _:
@@ -170,7 +170,7 @@ final class WriterChainLowering {
 						else
 							_segs.unshift(_dt('.' + _fld));
 						switch _prev {
-							case Call(_, _, _, _, _, _):
+							case Call(_, _, _, _, _):
 								_hasCallPrev = true;
 								_seg0AfterCall = true;
 							case _:

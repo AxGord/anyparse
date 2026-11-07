@@ -16,7 +16,7 @@ using anyparse.macro.MetaInspect;
  * grows extra positional arguments beyond the ones the plain ctor has:
  * a `closeTrailing` comment after a postfix close, a `trailPresent`
  * flag for an optional trail literal, a verbatim `sourceText` slice, a
- * `kwNewline` / `chainNewline` / `bodyOnSameLine` layout witness. Each
+ * `chainNewline` / `wrapOpenNewline` layout witness. Each
  * `is…Branch` member here answers "does THIS shape earn THAT argument"
  * off the branch's raw metadata and children, `extraAltArgs` folds the
  * answers into the argument list, and `buildEnumCtor` assembles the
@@ -153,30 +153,6 @@ final class TriviaPairAltCtor {
 	}
 
 	/**
-	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
-	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
-	 * `bodyOnSameLine:Bool` arg in the synth pair (captured by the parser;
-	 * no body policy reads it). Reads
-	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
-	 * because `base.meta` is populated by `ShapeBuilder` before
-	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
-	 * `isCaptureSourceBranch` relies on).
-	 *
-	 * Requires `@:kw(...)` for the parser's commit point — bodyPolicy
-	 * without a kw has no anchor for the post-kw newline probe.
-	 * Co-occurs with `isAltTrailOptBranch` on the first consumer
-	 * `HxStatement.ReturnStmt` (`@:kw('return') @:trailOpt(';')`); the
-	 * `buildEnumCtor` push order (trailPresent → sourceText →
-	 * bodyOnSameLine) keeps the layout deterministic. Disjoint from the
-	 * close-trailing predicates (single Ref child, no Star child). First
-	 * consumer: `HxStatement.ReturnStmt`.
-	 */
-	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.readMetaString(':kw') != null && branch.fmtReadString('bodyPolicy') != null));
-	}
-
-	/**
 	 * ω-paren-wrap-source-newline: True when the branch is a single-Ref
 	 * `@:wrap(open, close)` Alt-ctor (no `@:kw`, has both `@:lead` and
 	 * `@:trail`) opting in via parameterless `@:fmt(captureWrapOpenNewline)`.
@@ -190,8 +166,7 @@ final class TriviaPairAltCtor {
 	 *     --> existing glue shape `(<inner>\n)` from the chain emit's
 	 *     `OptHardlineSkipAtOpenDelim`. Items[0] glued to enclosing `(`.
 	 *
-	 * Disjoint from `isAltBodyPolicyKwBranch` (kw absent vs required) and
-	 * from the close/postfix-trailing predicates (Ref vs Star child).
+	 * Disjoint from the close/postfix-trailing predicates (Ref vs Star child).
 	 * Plain mode keeps the original ctor arity and the writer falls back
 	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
 	 */
@@ -309,7 +284,7 @@ final class TriviaPairAltCtor {
 	 *  - the `hasOpenTrailing` / postfix-close groups reserve multiple
 	 *    slots at once (open-trailing brings THREE — `openTrailing` +
 	 *    `trailingBlankBefore` + `trailingLeading`; postfix-close the
-	 *    four call-trivia positionals).
+	 *    three call-trivia positionals).
 	 *  - `isInfixChainBranch` / `isRhsTrailBranch` / `isTernaryTrailBranch`
 	 *    have push blocks with no dedicated `has*` local — they contribute
 	 *    directly in the return expression. `isTernaryTrailBranch` reserves
@@ -319,7 +294,7 @@ final class TriviaPairAltCtor {
 		final hasCloseTrailing: Bool = isAltCloseTrailingBranch(branch);
 		final hasTrailOptFlag: Bool = isAltTrailOptBranch(branch);
 		final hasCaptureSource: Bool = isCaptureSourceBranch(branch);
-		final hasBodyPolicyKw: Bool = isAltBodyPolicyKwBranch(branch);
+
 		final hasWrapOpenNewline: Bool = isAltWrapOpenNewlineBranch(branch);
 
 		final hasChainNewline: Bool = isInfixChainBranch(branch);
@@ -332,12 +307,11 @@ final class TriviaPairAltCtor {
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0)
 			+ (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0)
-			+ (hasBodyPolicyKw ? 1 : 0)
 			+ (hasWrapOpenNewline ? 2 : 0)
 			+ (hasChainNewline ? 1 : 0)
 			+ (hasChainLeadComment ? 1 : 0)
 			+ (hasPostfixOpSpace ? 1 : 0)
-			+ (hasPostfixCloseTrailing ? 4 : 0)
+			+ (hasPostfixCloseTrailing ? 3 : 0)
 			+ (isInfixChainBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
 			+ (isTernaryTrailBranch(branch) ? 2 : 0);
@@ -453,27 +427,14 @@ final class TriviaPairAltCtor {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			args.push({ name: TriviaTypeSynth.SOURCE_TEXT_ARG_NAME, type: strCT });
 		}
-		// ω-issue-257-firstline: single-Ref kw-led Alt branches carrying
-		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
-		// arg holding the parser's source-shape capture (post-kw whitespace
-		// crossed a newline → false; same-line → true). Co-occurs with
-		// `isAltTrailOptBranch` on the first consumer `HxStatement.ReturnStmt`
-		// (`@:kw('return') @:trailOpt(';')`); the arg order in this block
-		// (trailPresent → sourceText → bodyOnSameLine) handles the overlap.
-		// Disjoint from the close-trailing predicates (single Ref child
-		// shape, no Star child).
-		if (isAltBodyPolicyKwBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: TriviaTypeSynth.BODY_ON_SAME_LINE_ARG_NAME, type: boolCT });
-		}
+
 		// ω-paren-wrap-source-newline: single-Ref @:wrap(open, close) Alt
 		// branches opting into source-shape capture via
 		// @:fmt(captureWrapOpenNewline) grow a positional `wrapOpenNewline:Bool`
 		// arg holding hasNewlineIn(_leadEndPos, ctx.pos) over the gap between
 		// the open lead literal and the inner sub-rule's first token.
-		// Disjoint from isAltBodyPolicyKwBranch (which requires @:kw; wrap
-		// ctors have no kw) and from the close/postfix trailing predicates
-		// (single Ref child shape, no Star). The arg follows bodyOnSameLine
+		// Disjoint from the close/postfix trailing predicates
+		// (single Ref child shape, no Star). The arg follows sourceText
 		// and precedes the postfix closeTrailing in buildEnumCtor's ordering
 		// so indices in WriterLowering stay deterministic. First consumer:
 		// HxExpr.ParenExpr.
@@ -557,18 +518,11 @@ final class TriviaPairAltCtor {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: 'closeTrailing', type: nullStrCT });
-			// Parallel positional `argsOpenNewline:Bool` slot capturing whether
-			// source had `\n` between the postfix open literal (e.g. `(`) and the
-			// first arg's leading non-whitespace. Co-occurs with `closeTrailing`
-			// (closeTrailing stays at argNames[2], this one is argNames[3]).
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: 'argsOpenNewline', type: boolCT });
-
 			// ω-callarg-empty-inner-comment: empty-parens inner comment slot
 			// (`f(/* c */)`). Holds a comment captured between the postfix open
 			// and close when no argument consumed it; null otherwise. Sibling of
 			// closeTrailing (reuses `nullStrCT`), read by the writer via
-			// `argNames[4]`.
+			// `argNames[3]`.
 			args.push({ name: 'argsInnerComment', type: nullStrCT });
 			// ω-keep-call-leading-comment: an inline block comment that precedes
 			// the callee of a call (`/* c */ f()` / `a * /* c */ f()`) — captured
@@ -576,7 +530,7 @@ final class TriviaPairAltCtor {
 			// drain it into an argument's leading slot. Holds the pre-callee
 			// comment so the writer emits it before the operand instead of
 			// relocating it inside the argument list; null otherwise. Read by the
-			// writer via `argNames[5]`.
+			// writer via `argNames[4]`.
 			args.push({ name: 'callLeadingComment', type: nullStrCT });
 		}
 		return {

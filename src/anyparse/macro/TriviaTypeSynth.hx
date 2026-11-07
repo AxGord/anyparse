@@ -350,18 +350,6 @@ class TriviaTypeSynth {
 	public static inline final SOURCE_TEXT_ARG_NAME: String = 'sourceText';
 
 	/**
-	 * ω-issue-257-firstline — positional arg name appended to paired Alt
-	 * ctors carrying `@:fmt(bodyPolicy(...))` on a single-Ref kw-led
-	 * branch (e.g. `HxStatementT.ReturnStmt`). The parser captures
-	 * whether the body's first token followed the keyword on the same
-	 * source line — the ctor-level mirror of the struct-field
-	 * `<field>BodyOnSameLine` slot; no body policy reads it.
-	 * Plain mode keeps the original ctor arity (no slot, default Same
-	 * layout via `widthAware`). First consumer: `HxStatementT.ReturnStmt`.
-	 */
-	public static inline final BODY_ON_SAME_LINE_ARG_NAME: String = 'bodyOnSameLine';
-
-	/**
 	 * ω-paren-wrap-source-newline — positional arg name appended to paired
 	 * Alt ctors carrying `@:fmt(captureWrapOpenNewline)` on a `@:wrap(...)`
 	 * (no kw, has lead+trail) single-Ref branch. The parser captures

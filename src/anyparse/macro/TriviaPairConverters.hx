@@ -114,7 +114,7 @@ final class TriviaPairConverters {
 		}
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) n++; // trailPresent
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) n++; // sourceText
-		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
+
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) n += 2; // wrapOpenNewline + wrapOpenTrailing
 
 		if (TriviaPairAltCtor.isInfixChainBranch(branch)) n++; // chainNewline (increment 2)
@@ -123,12 +123,11 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
-		// ω-D9A-keep-callargs-v2 + siblings: the postfix close-trailing gate adds
-		// FOUR slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
-		// argsInnerComment, callLeadingComment. Keep the count in
+		// The postfix close-trailing gate adds THREE slots in `buildEnumCtor` —
+		// closeTrailing, argsInnerComment, callLeadingComment. Keep the count in
 		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
 		// the paired ctor's arity.
-		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) n += 4; // noqa: magic-number
+		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) n += 3; // noqa: magic-number
 		return n;
 	}
 
@@ -444,7 +443,7 @@ final class TriviaPairConverters {
 		}
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) defaults.push(macro false); // trailPresent
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) defaults.push(macro ''); // sourceText
-		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) defaults.push(macro false); // bodyOnSameLine
+
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) {
 			defaults.push(macro false); // wrapOpenNewline
 			defaults.push(macro (null: Null<String>)); // wrapOpenTrailing
@@ -466,13 +465,6 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
-			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
-			// wraps. `false` matches the parser's initial state for source
-			// without a leading-newline after the postfix open. preWrite
-			// plugin rewrites don't preserve open-paren source shape, so the
-			// writer falls back to default (glued first arg) — consistent
-			// with the existing closeTrailing=null fallback.
-			defaults.push(macro false);
 			// ω-callarg-empty-inner-comment: argsInnerComment default for
 			// raw→paired wraps. `null` matches the parser's initial state for a
 			// call with no empty-parens inner comment.

@@ -138,7 +138,7 @@ final class WriterLoweringSupport {
 	 *
 	 * The slot order mirrors `TriviaTypeSynth.buildEnumCtor` push order:
 	 *   CloseTrailing (+ 3 conditional `:lead && !:tryparse` slots) →
-	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline →
+	 *   TrailOpt → CaptureSource → WrapOpenNewline →
 	 *   ChainNewline.
 	 *
 	 * Centralising this walker keeps idx accounting in lockstep with
@@ -158,8 +158,7 @@ final class WriterLoweringSupport {
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) idx++;
 		if (slot == CaptureSource) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) idx++;
-		if (slot == BodyPolicyKw) return macro $i{argNames[idx]};
-		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) idx++;
+
 		if (slot == WrapOpenNewline) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
 		if (slot == WrapOpenTrailing) return macro $i{argNames[idx]};
@@ -191,7 +190,7 @@ final class WriterLoweringSupport {
 			case CloseTrailing: TriviaPairAltCtor.isAltCloseTrailingBranch(branch);
 			case TrailOpt: TriviaPairAltCtor.isAltTrailOptBranch(branch);
 			case CaptureSource: TriviaPairAltCtor.isCaptureSourceBranch(branch);
-			case BodyPolicyKw: TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
+
 			case WrapOpenNewline, WrapOpenTrailing: TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
 
 			case ChainNewline: TriviaPairAltCtor.isInfixChainBranch(branch);

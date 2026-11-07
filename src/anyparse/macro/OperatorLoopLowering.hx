@@ -112,23 +112,10 @@ final class OperatorLoopLowering {
 		// position so `matchLit(sep)` finds the sep; only when the sweep
 		// yielded comments NOT at sep do we rewind for the next iter's `_lead`.
 		return macro {
-			// ω-D9A-keep-callargs-v2: capture source-vertical signal
-			// BEFORE per-iter `skipWs`/`collectTrivia` so the
-			// post-open `\n` is preserved as a dedicated bool slot.
-			// Reading `Trivial.newlineBefore` for args[0] would be
-			// polluted by `ctx.pendingTrivia` drained from upstream
-			// kw-Ref rules (see project_phase3_slice_d9a_revert).
-			// `_openPos` sits right after the outer postfix
-			// dispatch consumed the open lit (e.g. `(`); after
-			// `skipWs(ctx)` `ctx.pos` lands at the first
-			// non-whitespace byte, so the byte range covers exactly
-			// the post-open inter-token whitespace.
-			final _openPos: Int = ctx.pos;
 			// ω-callarg-empty-inner-comment: skip only whitespace (not comments)
 			// before the args loop, so the loop's `collectTrivia` can capture a
 			// leading comment on the first argument or an empty-parens inner
-			// comment. For comment-free calls this lands at the identical byte
-			// `skipWs` did, keeping the `argsOpenNewline` signal byte-identical.
+			// comment.
 			while (ctx.pos < ctx.input.length) {
 				final _wc: Int = ctx.input.charCodeAt(ctx.pos);
 				if (_wc == ' '.code || _wc == '\t'.code || _wc == '\n'.code || _wc == '\r'.code) {
@@ -137,7 +124,6 @@ final class OperatorLoopLowering {
 				}
 				break;
 			}
-			final _argsOpenNewline: Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
 			var _argsInnerComment: Null<String> = null;
 			// ω-keep-call-leading-comment: a pre-callee inline block comment leaked
 			// into `ctx.pendingTrivia` by the upstream operator/keyword

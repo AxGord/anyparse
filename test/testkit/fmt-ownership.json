@@ -34,7 +34,6 @@
 		"sepBeforeOpt"
 	],
 	"TriviaPairAltCtor": [
-		"bodyPolicy",
 		"captureChainNewline",
 		"capturePostfixOpSpace",
 		"captureRhsTrail",

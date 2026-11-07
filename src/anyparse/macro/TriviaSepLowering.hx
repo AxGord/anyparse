@@ -687,8 +687,7 @@ final class TriviaSepLowering {
 		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool, mapWrap: Null<WriterLowering.SepStarMapWrap>
 	): WriterLowering.SepStarChecks {
 
-		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
-		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
+		// ω-cascade-emits-comments: Ignore-mode runtime check. Fires when the wrap-rules JSON config sets
 		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
 		// annotation `@:fmt(ignoreSourceNewlinesForWrap)` is set (case-1,
 		// intrinsic per-construct semantic — currently `HxFnDecl.params`).
@@ -743,8 +742,7 @@ final class TriviaSepLowering {
 		// is set by `HxTypedefDecl.type`'s `propagateTypedefContext` and cleared
 		// per-element, so a NESTED anon inside a typedef body still re-flows.
 		final ignoreCheckExpr: Expr = forceMultiInTypedef ? macro ($ignoreResolved) && !opt._inTypedefBody : ignoreResolved;
-		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
-		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
+		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
 		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — the shape
 		// the loader builds for a user `arrayWrap.defaultWrap: noWrap` block,

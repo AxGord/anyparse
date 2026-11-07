@@ -3010,7 +3010,6 @@ enum abstract AltSlot(Int) {
 	final CloseTrailing = 0;
 	final TrailOpt = 1;
 	final CaptureSource = 2;
-	final BodyPolicyKw = 3;
 	final WrapOpenNewline = 4;
 	final ChainNewline = 6;
 	final ChainLeadComment = 7;

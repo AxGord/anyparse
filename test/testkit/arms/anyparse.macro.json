@@ -1641,13 +1641,6 @@
 			"note": "a rolled-back Star element no longer hands its stash back through `Parser.restorePendingAfterBrace`"
 		},
 		{
-			"name": "M-PRATT-NLSCAN-INLINE",
-			"type": "anyparse.macro.StarLoopLowering",
-			"method": "buildPrattBlankNlAfterSepScan",
-			"force": "macro {}",
-			"note": "a Star element no longer probes the newline after its separator through `Parser.newlineAfterSeparator`"
-		},
-		{
 			"name": "M-TERNARY-THEN-SEP-RUNON",
 			"type": "anyparse.macro.PrattPostfixLowering",
 			"method": "buildPrattBranchBody",

@@ -1085,20 +1085,20 @@ final class WriterPrattLowering {
 		// captured inner comment (`f(/* c */)`), push the comment Doc into
 		// `_docs` before the sep-list renders `()` so it emits `(/* c */)`.
 		// Gated on the Call ctor having grown the `argsInnerComment` slot
-		// (argNames[4]); every other postfix Star has no slot and stays inert.
-		final innerCommentEmit: Expr = c.isTriviaStar && c.argNames.length > 4 ? {
-			final innerRef: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
+		// (argNames[3]); every other postfix Star has no slot and stays inert.
+		final innerCommentEmit: Expr = c.isTriviaStar && c.argNames.length > 3 ? {
+			final innerRef: Expr = { expr: EConst(CIdent(c.argNames[3])), pos: Context.currentPos() };
 			macro if (_args.length == 0) {
 				final _ic: Null<String> = $innerRef;
 				if (_ic != null) _docs.push(leadingCommentDoc(_ic, opt));
 			};
 		} : macro {};
 		// ω-keep-call-leading-comment: prepend the parser-captured pre-callee
-		// comment (argNames[5]) before the operand Doc so a call emits
+		// comment (argNames[4]) before the operand Doc so a call emits
 		// `/* c */ f()` instead of relocating it inside the parens. Gated on the
 		// slot existing; every non-Call postfix Star lacks it and stays inert.
-		final callLeadingBind: Expr = c.isTriviaStar && c.argNames.length > 5 ? {
-			final clcRef: Expr = { expr: EConst(CIdent(c.argNames[5])), pos: Context.currentPos() };
+		final callLeadingBind: Expr = c.isTriviaStar && c.argNames.length > 4 ? {
+			final clcRef: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
 			macro {
 				final _clc: Null<String> = $clcRef;
 				_clc != null ? _dc([leadingCommentDoc(_clc, opt), _dt(' '), _pfxOperandBase]) : _pfxOperandBase;

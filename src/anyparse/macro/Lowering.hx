@@ -1101,14 +1101,6 @@ class Lowering {
 		// the synth-pair ctor is the carrier; plain pipelines keep the
 		// pre-slice ctor arity.
 		final triviaCaptureSource: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isCaptureSourceBranch(branch);
-		// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
-		// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
-		// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
-		// parser captures whether the post-kw whitespace crossed a
-		// newline; no body policy reads it. Trivia-only — plain mode keeps the
-		// original ctor arity and falls back to width-driven layout
-		// via `widthAware`.
-		final triviaBodyPolicyKw: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
 		// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
 		// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
 		// Bool arg in the synth pair. Parser captures whether the gap
@@ -1120,7 +1112,7 @@ class Lowering {
 		final triviaWrapOpenNewline: Bool = _ctx.trivia
 			&& isTriviaBearing(typePath)
 			&& TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
-		final ctorCall: Expr = buildKwRefCtorCall(ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline);
+		final ctorCall: Expr = buildKwRefCtorCall(ctorRef, triviaTrailOpt, triviaCaptureSource, triviaWrapOpenNewline);
 		final kwLead: Null<String> = branch.annotations[AnnotationKeys.KW_LEAD_TEXT];
 		final steps: Array<Expr> = [macro skipWs(ctx)];
 		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
@@ -1144,19 +1136,7 @@ class Lowering {
 		// consumed only by `HxStatement.TryCatchStmt` (issue_362
 		// _untyped_body_keep `try\n\tuntyped {…}` shape).
 		final forwardNewlineForBody: Bool = branch.fmtHasFlag('forwardNewlineForBody');
-		// `forwardNewlineForBody` omits the post-kw `skipWs`. The
-		// `triviaBodyPolicyKw` capture (`_bodyOnSameLine` from
-		// `hasNewlineIn(_kwEndPos, ctx.pos)`) would then scan an empty
-		// range and silently degenerate to `_bodyOnSameLine=true`. The
-		// two channels target the same data (post-kw newline) via
-		// different routes — combining them is a grammar error.
-		if (forwardNewlineForBody && triviaBodyPolicyKw)
-			Context.fatalError(
-				'Lowering: @:fmt(forwardNewlineForBody) on a @:fmt(bodyPolicy(...)) '
-				+ 'branch is a conflict — both channels capture the post-kw newline; pick one.',
-				Context.currentPos()
-			);
-		appendKwRefLeadSteps(steps, kwLead, leadText, triviaBodyPolicyKw, forwardNewlineForBody, triviaWrapOpenNewline);
+		appendKwRefLeadSteps(steps, kwLead, leadText, forwardNewlineForBody, triviaWrapOpenNewline);
 		// Capture _start_pos AFTER any lead literal AND its skipWs, so
 		// the substring spans only what lives between lead and trail.
 		// In `@:raw` rules the `skipWs` call gets stripped by the rule-

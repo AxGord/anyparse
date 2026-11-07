@@ -244,22 +244,6 @@ final class Parser {
 		if (i >= 0 && input.charCodeAt(i) == '}'.code) pendingTrivia = saved;
 	}
 
-	/** The separator starting at `from` (its run of non-whitespace bytes) is followed by whitespace holding a line break. */
-	public function newlineAfterSeparator(from: Int): Bool {
-		var i: Int = from;
-		while (i < input.length) {
-			final c: Int = input.charCodeAt(i);
-			if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code) break;
-			i++;
-		}
-		while (i < input.length) {
-			final c: Int = input.charCodeAt(i);
-			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return c == '\n'.code;
-			i++;
-		}
-		return false;
-	}
-
 	private static function alwaysFalse(): Bool {
 		return false;
 	}

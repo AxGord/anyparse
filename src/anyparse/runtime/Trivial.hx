@@ -73,14 +73,6 @@ typedef Trivial<T> = {
 	var sepAfter: Bool;
 
 	/**
-	 * At least one source newline sat AFTER this element's leading separator literal (the
-	 * `@:lead(',')` of a link such as `HxVarMore`), before the link payload — the forward-looking
-	 * cousin of `newlineBefore`: for a link whose first token is the separator, `newlineBefore`
-	 * records the gap BEFORE the comma, while the break lands AFTER it.
-	 */
-	@:optional var newlineAfterSep: Bool;
-
-	/**
 	 * The LAST captured leading comment sat on the SAME source line as the node AND is block-style —
 	 * the `/* c *\/ field` glue intent, so the writer keeps the comment on the field's line instead
 	 * of force-breaking after it. A line-style `//` leading comment always ends its source line and
