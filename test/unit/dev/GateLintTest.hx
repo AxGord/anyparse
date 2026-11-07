@@ -70,4 +70,64 @@ final class GateLintTest extends Test {
 		Assert.isNull(GateLint.keyOf(null, 'base', ['src'], ['a']));
 	}
 
+	@:pin('control')
+	@:killer('M-GATE-REJECTED-IN-NONE')
+	public function testTheRejectedConfigurationsAreReadFromTheLintsStandardError(): Void {
+		final stderr: String = [
+			'apq lint: compiler oracle unavailable for gone.hxml — no haxe (skipped)',
+			'apq lint: compiler oracle REJECTED tools/fixture-cache.hxml -D js — build does not typecheck:',
+			'src/A.hx:3: characters 1-2 : Type not found',
+			'apq lint: compiler oracle REJECTED build.hxml — build does not typecheck:',
+			'apq lint: compiler oracle REJECTED build.hxml — build does not typecheck:'
+		].join('\n');
+		Assert.same(['tools/fixture-cache.hxml -D js', 'build.hxml'], GateLint.rejectedIn(stderr, []));
+		Assert.same([], GateLint.rejectedIn('apq lint: compiler-confirmed\n', []));
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-REJECTION-NONE')
+	public function testOnlyAConfigurationTheTipRejectsAndTheBaseAcceptsIsNew(): Void {
+		Assert.same(['b.hxml'], GateLint.newRejections(['a.hxml', 'b.hxml'], ['a.hxml']));
+		Assert.same([], GateLint.newRejections(['a.hxml'], ['a.hxml', 'b.hxml']));
+		Assert.same([], GateLint.newRejections([], ['a.hxml']));
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-REJECTION-PASSES')
+	public function testTheLintRowFailsNamingAConfigurationOnlyTheTipRejects(): Void {
+		Assert.isTrue(GateLint.rejection(['a.hxml'], ['a.hxml'], 'tip.err').match(Passed));
+		Assert.isTrue(GateLint.rejection([], [], 'tip.err').match(Passed));
+		switch GateLint.rejection(['a.hxml', 'tools/b.hxml'], ['a.hxml'], 'tip.err') {
+			case Failed(why):
+				Assert.stringContains('tools/b.hxml', why);
+				Assert.stringContains('tip.err', why);
+			case other:
+				Assert.fail('expected a failure, got $other');
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-REJECTION-ROOT-BLIND')
+	public function testAConfigurationBothTreesRejectIsTheSameUnderTheirDifferentRoots(): Void {
+		final tip: String = 'apq lint: compiler oracle REJECTED /w/tip/tools/fixture-cache.hxml — build does not typecheck:\n';
+		final base: String =
+			'apq lint: compiler oracle REJECTED /private/var/T/base/tools/fixture-cache.hxml — build does not typecheck:\n';
+		final tipRejected: Array<String> = GateLint.rejectedIn(tip, ['/w/tip']);
+		final baseRejected: Array<String> = GateLint.rejectedIn(base, ['/var/T/base', '/private/var/T/base']);
+		Assert.same(['tools/fixture-cache.hxml'], tipRejected);
+		Assert.isTrue(GateLint.rejection(tipRejected, baseRejected, 'tip.err').match(Passed));
+		final broken: String = '${tip}apq lint: compiler oracle REJECTED /w/tip/tools/other.hxml -D js — build does not typecheck:\n';
+		switch GateLint.rejection(GateLint.rejectedIn(broken, ['/w/tip']), baseRejected, 'tip.err') {
+			case Failed(why):
+				Assert.stringContains('tools/other.hxml -D js', why);
+				Assert.isFalse(why.indexOf('/w/tip') >= 0);
+			case other:
+				Assert.fail('expected a failure, got $other');
+		}
+		Assert.same(
+			['/elsewhere/x.hxml'],
+			GateLint.rejectedIn('apq lint: compiler oracle REJECTED /elsewhere/x.hxml — build does not typecheck:\n', ['/w/tip'])
+		);
+	}
+
 }

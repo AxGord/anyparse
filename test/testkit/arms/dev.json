@@ -1403,6 +1403,34 @@
 			"find": "cmd('git -C $tree add -A').env('GIT_INDEX_FILE', index)",
 			"replace": "cmd('git -C $tree add -A')",
 			"note": "the tree is staged in the caller's own index, so a commit step that reads its changes leaves everything it had not staged added"
+		},
+		{
+			"name": "M-GATE-REJECTED-IN-NONE",
+			"type": "dev.GateLint",
+			"method": "rejectedIn",
+			"force": "[]",
+			"note": "the lint row stops reading which oracle configurations the lint rejected, so a slice that breaks a build the lint is configured to typecheck passes the row"
+		},
+		{
+			"name": "M-GATE-REJECTION-NONE",
+			"type": "dev.GateLint",
+			"method": "newRejections",
+			"force": "[]",
+			"note": "the lint row finds no oracle configuration the tip rejects and the base accepts, so a slice that breaks one passes the row and fails the land battery"
+		},
+		{
+			"name": "M-GATE-REJECTION-PASSES",
+			"type": "dev.GateLint",
+			"method": "rejection",
+			"force": "Passed",
+			"note": "the lint row passes a slice whose tip breaks an oracle build the base typechecked, which only the land battery then refuses"
+		},
+		{
+			"name": "M-GATE-REJECTION-ROOT-BLIND",
+			"type": "dev.GateLint",
+			"method": "relativeTo",
+			"force": "config",
+			"note": "a configuration is compared with the root of its own lint in its name, so one both trees reject differs between them and the row fails a slice for what the base rejects too"
 		}
 	]
 }

@@ -31,6 +31,8 @@ final class GateLint {
 	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
 	private static inline final TOUCHED_REPORT: String = 'lint-touched.json';
 
+	private static inline final REJECTED: String = 'compiler oracle REJECTED ';
+	private static inline final REJECTED_END: String = ' — build does not typecheck';
 	private static inline final TOUCHED_BASE_REPORT: String = 'lint-touched-base.json';
 
 	/** The engine's build flags, which with `src` make it what it is: the shared file and the leaf that adds the codegen flag. */
@@ -76,7 +78,7 @@ final class GateLint {
 		final scope: Array<String> = [for (path in pathsNow.keys()) path];
 		scope.sort(Compare.compareString);
 		final key: Null<String> = cacheKey('base ${_gate.base}${_oracle ? '' : ' no-oracle'}', scope);
-		final cached: Null<String> = scope.length == 0 ? '[]' : cachedLint(key);
+		final cached: Null<String> = scope.length == 0 ? '[]' : cachedWithRejections(key);
 		final linted: Outcome = cached == null
 			? _gate.withBaseCheckout(checkout -> lintPair(files, checkout, scope, key, null))
 			: lintPair(files, null, scope, key, cached);
@@ -119,6 +121,11 @@ final class GateLint {
 		return keyOf(_engine, tree, scope, rules);
 	}
 
+	/** Cache `report` under `key` (nothing without a key), staged beside its file so a reader never sees half of it. */
+	private inline function storeLint(key: Null<String>, report: String): Void {
+		store(key, 'json', report);
+	}
+
 	/**
 	 * The comparison of INFRA gate 4 over the findings of the rules `scope` names (every rule when null): the base tree is
 	 * linted by the new engine in a checkout of the base unless the cache holds that lint.
@@ -142,14 +149,19 @@ final class GateLint {
 		final runs: Array<Result> = Pool.of(commands.length).run(commands);
 		final now: Outcome = saveLint(runs[0], _gate.tree, _gate.log(TOUCHED_REPORT));
 		if (!now.match(Passed)) return now;
+		final tipLog: String = errLogOf(_gate.log(TOUCHED_REPORT));
+		final tipRejected: Array<String> = rejectedBy(tipLog, _gate.tree);
 		final old: String = _gate.log(TOUCHED_BASE_REPORT);
 		if (checkout == null) {
 			File.saveContent(old, cached ?? '[]');
-			return Passed;
+			return rejection(tipRejected, cachedRejected(key) ?? [], tipLog);
 		}
 		final before: Outcome = saveLint(runs[1], checkout, old);
-		if (before.match(Passed)) storeLint(key, File.getContent(old));
-		return before;
+		if (!before.match(Passed)) return before;
+		final baseRejected: Array<String> = rejectedBy(errLogOf(old), checkout);
+		storeRejected(key, baseRejected);
+		storeLint(key, File.getContent(old));
+		return rejection(tipRejected, baseRejected, tipLog);
 	}
 
 	/**
@@ -248,14 +260,14 @@ final class GateLint {
 		return FileSystem.exists(file) ? File.getContent(file) : null;
 	}
 
-	/** Cache `report` under `key` (nothing without a key), staged beside its file so a reader never sees half of it. */
-	private function storeLint(key: Null<String>, report: String): Void {
+	/** `text` as the cache file of `key` with extension `extension`, staged beside it. */
+	private function store(key: Null<String>, extension: String, text: String): Void {
 		if (key == null) return;
 		final dir: String = _gate.log('lint-cache');
 		FileSystem.createDirectory(dir);
-		final staged: String = Path.join([dir, '$key.${js.Node.process.pid}.tmp']);
-		File.saveContent(staged, report);
-		FileSystem.rename(staged, Path.join([dir, '$key.json']));
+		final staged: String = Path.join([dir, '$key.${js.Node.process.pid}.$extension.tmp']);
+		File.saveContent(staged, text);
+		FileSystem.rename(staged, Path.join([dir, '$key.$extension']));
 	}
 
 	/**
@@ -267,6 +279,34 @@ final class GateLint {
 		final kept: String = _gate.log('infra-base-$i.json');
 		File.saveContent(kept, RuleScope.keep(File.getContent(file), rules));
 		return kept;
+	}
+
+	/** The base lint cached under `key`, only when the configurations it rejected were cached with it. */
+	private function cachedWithRejections(key: Null<String>): Null<String> {
+		return cachedRejected(key) == null ? null : cachedLint(key);
+	}
+
+	/** The configurations the base lint under `key` rejected, or null when none were cached. */
+	private function cachedRejected(key: Null<String>): Null<Array<String>> {
+		if (key == null) return null;
+		final file: String = _gate.log('lint-cache/$key.rejected');
+		return FileSystem.exists(file) ? File.getContent(file).split('\n').filter(config -> config != '') : null;
+	}
+
+	/** Cache the configurations `rejected` beside the report under `key`, stored before it: the report is what makes the entry visible. */
+	private function storeRejected(key: Null<String>, rejected: Array<String>): Void {
+		store(key, 'rejected', rejected.join('\n'));
+	}
+
+	/**
+	 * The verdict of the oracle half of the lint row: the configurations the tip's lint rejected that the base's lint did
+	 * not. A report alone cannot show it — the lint prints its findings and then fails its exit on a rejected build.
+	 */
+	public static function rejection(tip: Array<String>, base: Array<String>, errLog: String): Outcome {
+		final added: Array<String> = newRejections(tip, base);
+		return added.length == 0
+			? Passed
+			: Failed(GateTree.clip('the oracle rejects ${added.join(', ')}, which the base accepts — $errLog'));
 	}
 
 	/**
@@ -312,6 +352,40 @@ final class GateLint {
 		return engine == null ? null : Sha1.encode([tree, engine].concat(scope).concat(only).join('\n'));
 	}
 
+	/**
+	 * The configurations a lint's standard error `stderr` reports as rejected, in
+	 * order and without repeats, each relative to the first of `roots` it lies under.
+	 */
+	public static function rejectedIn(stderr: String, roots: Array<String>): Array<String> {
+		final named: Array<String> = [];
+		for (line in stderr.split('\n')) {
+			final from: Int = line.indexOf(REJECTED);
+			final to: Int = line.indexOf(REJECTED_END);
+			if (from < 0 || to < from) continue;
+			final config: String = relativeTo(line.substring(from + REJECTED.length, to).trim(), roots);
+			if (config != '' && !named.contains(config)) named.push(config);
+		}
+		return named;
+	}
+
+	/** The configurations in `tip` that `base` does not hold. */
+	public static function newRejections(tip: Array<String>, base: Array<String>): Array<String> {
+		return tip.filter(config -> !base.contains(config));
+	}
+
+	/**
+	 * `config` without the leading directory in `roots`: the lint names a configuration by its absolute path, and the two
+	 * lints run in different roots (the tree and a checkout of the base, spelled through a symlink or its realpath), so only the
+	 * path below the root says the same configuration. A configuration outside every root stays as printed.
+	 */
+	public static function relativeTo(config: String, roots: Array<String>): String {
+		for (root in roots) {
+			final prefix: String = root.endsWith('/') ? root : '$root/';
+			if (config.startsWith(prefix)) return config.substr(prefix.length);
+		}
+		return config;
+	}
+
 	/** The file the standard error of the lint reporting to `out` goes to. */
 	private static inline function errLogOf(out: String): String {
 		return Path.withExtension(out, 'err');
@@ -344,6 +418,14 @@ final class GateLint {
 	private static function rebasedFile(value: JValue, pathsNow: Map<String, String>): JValue {
 		final file: Null<String> = RawJson.string(value);
 		return file == null ? value : JString(pathsNow[file] ?? file);
+	}
+
+	/**
+	 * The compiler-oracle configurations named by the `compiler oracle REJECTED` lines of the lint's standard error in
+	 * `file`; none when the file is missing.
+	 */
+	private static function rejectedBy(file: String, root: String): Array<String> {
+		return FileSystem.exists(file) ? rejectedIn(File.getContent(file), [root, FileSystem.fullPath(root)]) : [];
 	}
 
 }
