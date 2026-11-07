@@ -1,7 +1,5 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeText;
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
@@ -9,6 +7,7 @@ import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;

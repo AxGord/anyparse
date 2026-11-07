@@ -4,6 +4,7 @@ package anyparse.check.facts;
 import anyparse.check.facts.TypedFactsMacro.InlineMethod;
 import anyparse.check.facts.TypedFactsShapes.FieldRef;
 import anyparse.grammar.json.JsonText;
+import anyparse.query.FactsTypeText;
 import haxe.macro.Context;
 import haxe.macro.Expr.Position;
 import haxe.macro.Type;

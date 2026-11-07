@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.core.PhaseTimings;
 import anyparse.ds.Set;
 import anyparse.query.CallGraph.CallEdge;
@@ -16,6 +15,7 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.FieldFact;
 import anyparse.query.CompilerFacts.NativeFact;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.FactsView.ExternCalls;
 import anyparse.query.FactsView.FactsSource;
 import anyparse.query.FactsView.TruthSites;

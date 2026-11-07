@@ -1,8 +1,8 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
+import anyparse.query.FactsTypeTree;
 
 using Lambda;
 

@@ -1,10 +1,10 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.FactsTypeTree;
 
 using Lambda;
 

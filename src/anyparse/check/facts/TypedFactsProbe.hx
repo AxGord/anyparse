@@ -178,7 +178,7 @@ final class TypedFactsProbe {
 			text: EmbeddedSource.text('anyparse/check/facts/TypedFactsTypeStrings.hx')
 		},
 		{ path: 'anyparse/check/facts/TypedFactsShapes.hx', text: EmbeddedSource.text('anyparse/check/facts/TypedFactsShapes.hx') },
-		{ path: 'anyparse/check/facts/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/check/facts/FactsTypeText.hx') },
+		{ path: 'anyparse/query/FactsTypeText.hx', text: EmbeddedSource.text('anyparse/query/FactsTypeText.hx') },
 		{ path: 'anyparse/query/FileIdentity.hx', text: EmbeddedSource.text('anyparse/query/FileIdentity.hx') },
 		{ path: 'anyparse/grammar/json/JsonText.hx', text: EmbeddedSource.text('anyparse/grammar/json/JsonText.hx') }
 	];

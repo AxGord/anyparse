@@ -1,8 +1,8 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree.FactsType;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.FnNode;
+import anyparse.query.FactsTypeTree.FactsType;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;

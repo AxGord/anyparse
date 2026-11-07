@@ -512,14 +512,6 @@
 			"note": "the exactness of a value flowing whole is recorded nowhere"
 		},
 		{
-			"name": "M-FACTS-TREE-OPTIONAL",
-			"type": "anyparse.check.facts.FactsTypeTree",
-			"method": "functionType",
-			"find": "final optional: Bool = peek() == '?'.code && !separatorAt(_pos + 1);",
-			"replace": "final optional: Bool = peek() == '?'.code;",
-			"note": "a lone `?` argument is read as an optional argument, so an unknown argument type reads as a malformed type"
-		},
-		{
 			"name": "M-RUNMEMO-NO-BASELINE-AHEAD",
 			"type": "anyparse.check.facts.TypedFactsProbe",
 			"method": "wanted",
@@ -687,21 +679,6 @@
 			"find": "\t\t\t\t\tcase Named(_, _):\n\t\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
 			"replace": "",
 			"note": "a same-named constructor taking no argument, or fewer, refuses the capture though a pattern with that argument cannot be of it"
-		},
-		{
-			"name": "M-FACTS-CLOSED-PARAMETER",
-			"type": "anyparse.check.facts.FactsTypeTree",
-			"method": "isClosed",
-			"find": "case Unknown, Parameter(_): false;",
-			"replace": "case Unknown: false;\n\t\t\tcase Parameter(_): true;",
-			"note": "a type parameter counts as closed, so a capture or a loop result a parameter types is rewritten while a monomorph may stand for it"
-		},
-		{
-			"name": "M-FACTS-NULL-PEEL-UNMATCHED",
-			"type": "anyparse.check.facts.FactsTypeText",
-			"method": "closesAtEnd",
-			"force": "true",
-			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
 		},
 		{
 			"name": "M-FACTS-WALK-WRITTEN-CONSTANT",

@@ -1,6 +1,5 @@
-package anyparse.check.facts;
+package anyparse.query;
 
-using StringTools;
 using Lambda;
 
 /**
@@ -43,7 +42,10 @@ typedef FactsField = {
 	final type: FactsType;
 }
 
-/** A recursive-descent reader of one type string of the facts type grammar into a `FactsType`. */
+/**
+ * The one answer to "what are the parts of a type the compiler facts spell as a string": a recursive-descent reader of one type
+ * string of the facts type grammar into a `FactsType`. Language-neutral — the spelling is the facts', not any grammar's source.
+ */
 @:nullSafety(Strict)
 final class FactsTypeTree {
 

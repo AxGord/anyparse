@@ -1,9 +1,9 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.facts.FactsTypeOracle;
-import anyparse.check.facts.FactsTypeText;
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactsTypeText;
+import anyparse.query.FactsTypeTree;
 
 using StringTools;
 

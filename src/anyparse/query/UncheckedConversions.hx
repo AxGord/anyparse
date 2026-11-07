@@ -1,7 +1,7 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.query.FactsTypeTree;
 
 using Lambda;
 

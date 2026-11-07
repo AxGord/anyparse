@@ -821,6 +821,36 @@
 			}
 		},
 		{
+			"name": "M2",
+			"note": "module-form move of a module whose own using is also given by the new directory's import.hx: a using seen twice ranks once, so the move is not refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/A.hx",
+				"--to",
+				"src/s",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/A.hx": "package p;\n\nusing p.Tools;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n",
+				"src/p/Tools.hx": "package p;\n\nclass Tools {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n",
+				"src/s/import.hx": "using p.Tools;\n",
+				"main/Main.hx": "class Main { static function main() { trace(s.A.f()); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "923ca0272092c656",
+				"files": "b342a8211386d8b3",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
 			"name": "P9",
 			"note": "dest module declares Node itself and imports q.Node",
 			"argv": [

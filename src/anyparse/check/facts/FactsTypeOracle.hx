@@ -6,6 +6,8 @@ import anyparse.check.facts.FactsTypeSpelling.TypeScope;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
+import anyparse.query.FactsTypeText;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndexHost;

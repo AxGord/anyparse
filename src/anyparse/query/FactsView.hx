@@ -1,7 +1,5 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeText;
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CompilerFacts.CallFact;
@@ -21,6 +19,7 @@ import anyparse.query.CompilerFacts.StringFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.CondDirectives.CondBlock;
 import anyparse.query.CondDirectives.CondDirective;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImplicitSites.ImplicitSite;
 import anyparse.query.MemberReach.ReachUnknown;

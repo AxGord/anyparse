@@ -709,8 +709,8 @@ final class ModuleMove {
 			if (was == null || now == null) continue;
 			final b: UsingOrder = usingsOf(was, path -> ModulePathTokens.rewrite(path, renames));
 			final a: UsingOrder = usingsOf(now, path -> path);
-			final before: Array<String> = b.chain.concat(b.own);
-			final after: Array<String> = a.chain.concat(a.own);
+			final before: Array<String> = lastWins(b.chain.concat(b.own));
+			final after: Array<String> = lastWins(a.chain.concat(a.own));
 			if (before.join('\n') == after.join('\n')) continue;
 			final target: String = p.move.to;
 			final gained: Array<String> = after.filter(u -> !before.contains(u));
@@ -722,7 +722,7 @@ final class ModuleMove {
 				continue;
 			}
 			final missing: Array<String> = before.filter(u -> !after.contains(u));
-			final carried: Array<String> = a.chain.concat(missing).concat(a.own);
+			final carried: Array<String> = lastWins(a.chain.concat(missing).concat(a.own));
 			if (missing.exists(u -> u.startsWith('#')) || carried.join('\n') != before.join('\n'))
 				out.push(
 					'$target loses `using ${missing.join(', ')}`, and written into the module it would not keep its order among the '
@@ -958,6 +958,11 @@ final class ModuleMove {
 			}
 		}
 		return Right({ changes: current, removed: removed });
+	}
+
+	/** `usings` with each path kept only at its last place: a `using` repeated further in is the same ranking as the later one alone. */
+	private static function lastWins(usings: Array<String>): Array<String> {
+		return [for (i => u in usings) if (usings.lastIndexOf(u) == i) u];
 	}
 
 }

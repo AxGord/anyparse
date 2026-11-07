@@ -1,7 +1,7 @@
 package unit.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.UncheckedConversions;
 
 /**

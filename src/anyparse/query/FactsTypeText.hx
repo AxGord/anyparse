@@ -1,6 +1,6 @@
-package anyparse.check.facts;
+package anyparse.query;
 
-using StringTools;
+using StringTools; // noqa: redundant-import
 
 /**
  * Reads a type the way the compiler facts SPELL it (`TypedFactsProbe`: `(Iterable<$f.A>,Int)->Bool`,

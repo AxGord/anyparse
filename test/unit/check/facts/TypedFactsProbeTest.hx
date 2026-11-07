@@ -1,9 +1,9 @@
 package unit.check.facts;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.FactSites;
+import anyparse.query.FactsTypeTree;
 import haxe.io.Path;
 import sys.io.File;
 

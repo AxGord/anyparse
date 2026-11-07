@@ -2,9 +2,10 @@ package anyparse.check.facts;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.facts.FactsTypeOracle.FactsDecline;
-import anyparse.check.facts.FactsTypeTree.FactsArgument;
-import anyparse.check.facts.FactsTypeTree.FactsField;
-import anyparse.check.facts.FactsTypeTree.FactsType;
+import anyparse.query.FactsTypeTree.FactsArgument;
+import anyparse.query.FactsTypeTree.FactsField;
+import anyparse.query.FactsTypeTree.FactsType;
+import anyparse.query.FactsTypeTree.FactsTypeTree;
 import anyparse.query.SourceText;
 
 /** The type parameters a spelled type may name: those of the type `owner` (an id) and of the method `method`. */

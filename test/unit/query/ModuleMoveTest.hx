@@ -717,6 +717,34 @@ class ModuleMoveTest extends Test {
 		Assert.isTrue(textOf(out, 'src/s/A.hx').contains('using StringTools;'));
 	}
 
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-REPEAT-COUNTED')
+	public function testAUsingTheNewDirectoryAlreadyGivesAndTheModuleSpellsIsNotARefusal(): Void {
+		final a: String = 'package p;\n\nusing p.Tools;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final tools: String = 'package p;\n\nclass Tools {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/s/A.hx')], [
+			file('src/p/A.hx', a),
+			file('src/p/Tools.hx', tools),
+			file('src/s/import.hx', 'using p.Tools;\n')
+		]);
+		Assert.isTrue(textOf(out, 'src/s/A.hx').contains('class A'));
+	}
+
+	@:pin('control')
+	@:killer('M-MODMOVE-USING-REPEAT-LAST')
+	public function testARepeatedUsingRanksAtItsLastPlace(): Void {
+		final m: String = 'package p;\n\nusing p.A2;\nusing p.B2;\n\nclass M {\n\tpublic static function f(): Int return 3.twice();\n}\n';
+		final a2: String = 'package p;\n\nclass A2 {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
+		final b2: String = 'package p;\n\nclass B2 {\n\tpublic static function twice(n: Int): Int return n * 3;\n}\n';
+		final out: ModuleMoveOutcome = moved([move('src/p/M.hx', 'src/s/M.hx')], [
+			file('src/p/M.hx', m),
+			file('src/p/A2.hx', a2),
+			file('src/p/B2.hx', b2),
+			file('src/p/import.hx', 'using p.B2;\n')
+		]);
+		Assert.isTrue(textOf(out, 'src/s/M.hx').contains('class M'));
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}

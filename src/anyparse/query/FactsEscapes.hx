@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.check.facts.FactsTypeTree;
 import anyparse.ds.Set;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
@@ -8,6 +7,7 @@ import anyparse.query.CompilerFacts.FlowFact;
 import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
+import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
 
 using Lambda;
