@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.QuotationAware;
 import anyparse.query.BoolExprShape;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -650,15 +651,15 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 			final child: QueryNode = n.children[0];
 			final inner: Null<Span> = child.span;
 			if (outer == null || inner == null) return true;
-			if (!isBlank(source, outer.from + 1, inner.from) || !isBlank(source, inner.to, outer.to - 1)) return true;
+			if (
+				!Strings.isBlank(source.substring(outer.from + 1, inner.from)) || !Strings.isBlank(
+					source.substring(inner.to, outer.to - 1)
+				)
+			)
+				return true;
 			n = child;
 		}
 		return false;
-	}
-
-	/** Whether `[from, to)` of `source` is empty or whitespace only. */
-	private static function isBlank(source: String, from: Int, to: Int): Bool {
-		return source.substring(from, to).trim() == '';
 	}
 
 	/**
