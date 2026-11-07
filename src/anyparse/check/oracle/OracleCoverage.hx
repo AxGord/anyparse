@@ -13,6 +13,7 @@ import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.runtime.Span;
 import haxe.io.Path;
+import sys.FileSystem;
 
 /**
  * WHICH FILES and WHICH REGIONS of them the configured compiler oracle actually
@@ -93,6 +94,9 @@ final class OracleCoverage implements CompiledSet {
 
 	/** The `haxe -v` line that OPENS one compile arm and names the defines it starts with. */
 	private static inline final DEFINES_PREFIX: String = 'Defines:';
+
+	/** The `haxe -v` line naming the roots one compile arm resolves modules under, printed before that arm's `Defines:`. */
+	private static inline final CLASSPATH_PREFIX: String = 'Classpath:';
 
 	/**
 	 * The `haxe -v` line shape of an init macro that ADDS a define after the `Defines:`
@@ -215,6 +219,28 @@ final class OracleCoverage implements CompiledSet {
 		#else
 		return UNSUPPORTED_TARGET;
 		#end
+	}
+
+	/**
+	 * Why a compile that reads `file` cannot resolve one of `modules` (dotted import paths) — a sentence ready to quote in a
+	 * decline — or null when every arm that reads it can, or when the answer is unknown.
+	 *
+	 * An arm resolves a module only under its own `Classpath:` roots, and a build is a failed build the moment ONE arm
+	 * reading the file lacks a module the file now imports. An arm whose roots the transcript did not name proves nothing
+	 * either way, and an unknown or unclaimed file has no arm to ask: both answer null, since a refusal here is a decline of
+	 * a fix and the typecheck net still stands behind it.
+	 */
+	public function unreached(file: String, modules: Array<String>): Null<String> {
+		#if (sys || nodejs)
+		if (_compiled == null) return null;
+		final key: String = FileIdentity.canonical(Sys.getCwd(), file);
+		for (arm in _arms)
+			if (arm.classPaths.length != 0 && arm.files.contains(key))
+				for (module in modules)
+					if (!holdsModule(arm.classPaths, module))
+						return 'the build that compiles this file cannot see `$module` (its classpath does not hold it)';
+		#end
+		return null;
 	}
 
 	/**
@@ -369,13 +395,14 @@ final class OracleCoverage implements CompiledSet {
 	 * that says nothing about defines gets the conservative answer rather than an
 	 * accidental permission.
 	 */
-	public static function of(paths: Array<String>, root: String, ?defines: Array<String>): OracleCoverage {
+	public static function of(paths: Array<String>, root: String, ?defines: Array<String>, ?classPaths: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
 		final resolved: Array<String> = paths.map(path -> FileIdentity.canonical(root, path));
 		return new OracleCoverage(resolved, [
 			{
 				files: resolved,
-				defines: defines ?? []
+				defines: defines ?? [],
+				classPaths: (classPaths ?? []).map(path -> FileIdentity.canonical(root, path))
 			}
 		], '');
 		#else
@@ -414,20 +441,28 @@ final class OracleCoverage implements CompiledSet {
 	 */
 	public static function parseArms(verboseOutput: String): Array<CompiledArm> {
 		final arms: Array<CompiledArm> = [];
+		var pendingRoots: Array<String> = [];
 		for (rawLine in verboseOutput.split('\n')) {
 			final line: String = rawLine.trim();
+			if (line.startsWith(CLASSPATH_PREFIX)) {
+				pendingRoots = classPathsOf(line);
+				continue;
+			}
 			if (line.startsWith(DEFINES_PREFIX)) {
 				arms.push({
 					files: [],
-					defines: definesOf(line)
+					defines: definesOf(line),
+					classPaths: pendingRoots
 				});
+				pendingRoots = [];
 				continue;
 			}
 			final parsed: Bool = line.startsWith(PARSED_PREFIX);
 			if (!parsed && !line.startsWith(MACRO_DEFINE_PREFIX)) continue;
 			if (arms.length == 0) arms.push({
 				files: [],
-				defines: []
+				defines: [],
+				classPaths: []
 			});
 			final arm: CompiledArm = arms[arms.length - 1];
 			if (parsed) {
@@ -500,6 +535,28 @@ final class OracleCoverage implements CompiledSet {
 		return null;
 	}
 
+	/**
+	 * Whether a build with `classPaths` (absolute roots) resolves the import path `module`: some root holds the file of its
+	 * longest module prefix, because `pack.Module.member` and `pack.Module.Sub` both import through `pack/Module.hx`.
+	 */
+	public static function holdsModule(classPaths: Array<String>, module: String): Bool {
+		#if (sys || nodejs)
+		final segments: Array<String> = module.split('.');
+		var length: Int = segments.length;
+		while (length > 0) {
+			final relative: String = segments.slice(0, length).join('/') + '.$SOURCE_EXTENSION';
+			for (root in classPaths) if (FileSystem.exists(Path.join([root, relative]))) return true;
+			length--;
+		}
+		#end
+		return false;
+	}
+
+	/** The roots of one `Classpath:` line, the compiler's implicit current directory (an empty entry) read as `.`. Pure. */
+	public static function classPathsOf(classpathLine: String): Array<String> {
+		return classpathLine.substr(CLASSPATH_PREFIX.length).split(';').map(entry -> entry.trim() == '' ? '.' : entry.trim());
+	}
+
 	/** The coverage one probe spawn of `hxml`, run from `root`, reports. */
 	private static function fromRun(root: String, hxml: String, result: ProcessRun): OracleCoverage {
 		#if (sys || nodejs)
@@ -512,7 +569,8 @@ final class OracleCoverage implements CompiledSet {
 		final arms: Array<CompiledArm> = [
 			for (arm in parseArms(result.out)) {
 				files: [for (token in arm.files) FileIdentity.canonical(root, token)],
-				defines: arm.defines
+				defines: arm.defines,
+				classPaths: [for (token in arm.classPaths) FileIdentity.canonical(root, token)]
 			}
 		];
 		return new OracleCoverage(tokens.map(token -> FileIdentity.canonical(root, token)), arms, '');
@@ -633,6 +691,14 @@ final class OracleCoverage implements CompiledSet {
  * plus the `--macro define(...)` calls the same transcript goes on to report.
  */
 typedef CompiledArm = {
+
 	var files: Array<String>;
 	var defines: Array<String>;
+
+	/**
+	 * The roots the arm's compile resolves a module under, from the compiler's own `Classpath:` line — empty
+	 * when the transcript named none, which is an UNKNOWN reach rather than a build that sees nothing.
+	 */
+	var classPaths: Array<String>;
+
 }

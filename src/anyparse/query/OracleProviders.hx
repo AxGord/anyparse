@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.Check.NameSite;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.query.OracleProvider.CompiledSet;
 import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.OracleProvider.NameProof;
 import anyparse.query.OracleProvider.OracleBaseline;
@@ -76,6 +77,10 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 			excluded: [],
 			stop: OracleProviders.NO_ORACLE
 		};
+	}
+
+	public function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet> {
+		return [];
 	}
 
 	public function nameProof(): NameProof {

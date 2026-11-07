@@ -40,6 +40,12 @@ interface OracleProvider {
 	/** Which of `oracles` can vouch for an edit and what each compiles, settled once per `memo`; new exclusions join `excluded`. */
 	public function usableOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>, excluded: Array<OracleExclusion>): UsableCoverage;
 
+	/**
+	 * What each of `oracles` compiles, in order and unfiltered, probed once per `memo`: a build whose compiled set is unknown
+	 * stays in the answer as unknown, which `usableOnce` would drop — a reach question must treat it as "cannot say".
+	 */
+	public function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet>;
+
 	/** A fresh RUN-scoped name proof: whether a rewrite keeps what each written name means. */
 	public function nameProof(): NameProof;
 
@@ -59,6 +65,12 @@ interface CompiledSet {
 
 	/** Why the compiled set is unknown; empty when it is known. */
 	public final reason: String;
+
+	/**
+	 * Why this compile cannot resolve one of `modules` (dotted import paths) for `file` — a sentence to quote — or null when
+	 * it can, when it does not read `file`, or when it cannot say.
+	 */
+	public function unreached(file: String, modules: Array<String>): Null<String>;
 
 	/** Why an edit covering `spans` in `file` is not verifiable by this compile — a sentence to quote — or null when it is. */
 	public function uncovered(file: String, source: String, spans: Array<Span>, shape: RefShape, regions: Array<LexRegion>): Null<String>;

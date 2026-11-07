@@ -1181,6 +1181,41 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "REACH-NO-ORACLE",
+			"note": "prefer-split-part would import lib.Text, which the only declared build (-cp . alone) cannot resolve, run under --no-oracle: the fix must be declined, not written",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"shared",
+				"--rule",
+				"prefer-split-part",
+				"--fix",
+				"--no-oracle",
+				"--verbose"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\n\tstatic function main() {}\n\n\tfunction f(s:String):Void {\n\t\tvar a = s.split(\",\")[0];\n\t}\n\n}\n",
+				"narrow.hxml": "-cp .\n-main Main\n",
+				"shared/lib/Text.hx": "package lib;\n\nclass Text {\n\n\tpublic static function allBefore(text:String, delimiter:String):String return text;\n\n\tpublic static function allAfterLast(text:String, delimiter:String):String return text;\n\n}\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"narrow.hxml\",\"dir\":\".\"}],\"resolutionRoots\":[\".\"],\"rules\":{\"prefer-split-part\":{\"enabled\":true,\"textTools\":\"lib.Text\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4e8cf50524a920cd",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

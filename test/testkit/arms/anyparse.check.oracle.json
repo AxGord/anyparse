@@ -979,6 +979,38 @@
 			"find": "if (before == null || before != after) return;",
 			"replace": "if (before == null) return;",
 			"note": "a build compiled while the tree changed is filed under the fingerprint taken before, so once the tree is back at that content it answers for a tree it may never have read"
+		},
+		{
+			"name": "M-IMPORTREACH-NEVER-REFUSES",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "unreached",
+			"find": "if (!holdsModule(arm.classPaths, module))",
+			"replace": "if (false)",
+			"note": "an arm that lacks a module the fix imports is never reported, so a fix is written into a file whose own build cannot resolve its import"
+		},
+		{
+			"name": "M-IMPORTREACH-ALWAYS-REFUSES",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "unreached",
+			"find": "if (!holdsModule(arm.classPaths, module))",
+			"replace": "if (holdsModule(arm.classPaths, module))",
+			"note": "the answer is inverted, so a build that does resolve the import vetoes the fix and a build that does not lets it through"
+		},
+		{
+			"name": "M-IMPORTREACH-ARM-CLASSPATH-DROPPED",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "parseArms",
+			"find": "classPaths: pendingRoots",
+			"replace": "classPaths: []",
+			"note": "the roots a compile resolves modules under are not read off its transcript, so every arm is unknown and no import is ever judged"
+		},
+		{
+			"name": "M-IMPORTREACH-HOLDS-EXACT-PATH-ONLY",
+			"type": "anyparse.check.oracle.OracleCoverage",
+			"method": "holdsModule",
+			"find": "length--;",
+			"replace": "length = 0;",
+			"note": "only the whole dotted path is tried as a file, so an import of a member or a sub-type of a module the build does see is read as unreachable"
 		}
 	]
 }

@@ -15650,6 +15650,14 @@
 			"find": "CliIo.stderr('apq ${command.name()}: --lang ${argv[1]}",
 			"replace": "if (false) CliIo.stderr('apq ${command.name()}: --lang ${argv[1]}",
 			"note": "the runs of a multi-grammar call print one after another with nothing saying which grammar each hit and summary belongs to"
+		},
+		{
+			"name": "M-IMPORTREACH-FIRST-BUILD-ONLY",
+			"type": "anyparse.query.ImportReach",
+			"method": "unreached",
+			"find": "_provider.probedOnce(_memo, _oracles)",
+			"replace": "_provider.probedOnce(_memo, _oracles).slice(0, 1)",
+			"note": "only the first declared build is asked, so a file a wide build and a narrow build both compile is judged by the wide one"
 		}
 	]
 }

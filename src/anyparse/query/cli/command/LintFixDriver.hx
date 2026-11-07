@@ -68,7 +68,7 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int,
+		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int, reach: ImportReach,
 		?resolution: ResolutionScope
 	): Int {
 		final oracleConfigured: Bool = oracles.length > 0;
@@ -164,7 +164,7 @@ final class LintFixDriver {
 						applyLintPass(
 							active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement,
 							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate,
-							originalOf, safeEditsOf, trail
+							originalOf, safeEditsOf, trail, reach
 						)
 				);
 				fixedCount += pass.fixedDelta;
@@ -308,7 +308,7 @@ final class LintFixDriver {
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
 		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>,
 		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>, ?editsOf: Map<String, Int>,
-		?trail: LintFixSafeTrail
+		?trail: LintFixSafeTrail, ?reach: ImportReach
 	): LintPassResult {
 		// Every memo whose answer depends on an ambient source's TEXT is dropped at the head of each
 		// pass: a previous pass may have created or rewritten one, and a memo taken before that
@@ -394,7 +394,7 @@ final class LintFixDriver {
 			// The previous file's speculative parses go before this one makes its own: within one
 			// pass they are what grows, one edit set per check per file.
 			cached.retainSources(passSources(files, active));
-			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index);
+			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index, reach);
 			if (contributedEdits(groups).length == 0) {
 				ledgerFileLintEdits(ledger, groups, passes == 1, checks);
 				continue;
@@ -416,7 +416,7 @@ final class LintFixDriver {
 					final blamed: Array<String> = [];
 					settled = salvageFileLintEdits(
 						entry.source, groups, message, cached, optsByFile[entry.file], blamed,
-						findingSplitter(entry.source, checks, cached, index)
+						findingSplitter(entry.source, checks, cached, index, reach)
 					);
 					// EVERY pass, not just the first: `noted` already dedupes per file, so the
 					// `passes == 1` this used to also carry bought nothing and cost the one place a
@@ -715,7 +715,8 @@ final class LintFixDriver {
 	 * others. `contributedEdits` flattens the survivors into the disjoint set the gate is handed.
 	 */
 	public static function collectFileLintEdits(
-		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex,
+		?reach: ImportReach
 	): Array<RuleEdits> {
 		final groups: Array<RuleEdits> = [];
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -726,7 +727,7 @@ final class LintFixDriver {
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
-			final whole: RuleEdits = ruleEditsFor(check, source, own, cached, index, edits);
+			final whole: RuleEdits = ruleEditsFor(check, source, own, cached, index, edits, reach);
 			// A guard refusal is a fact about SOME of the check's edits, and one finding's
 			// emptied slot used to cost the check every other finding in the file. Re-asked one
 			// finding at a time, so only the finding the guard names is refused — the same
@@ -735,7 +736,7 @@ final class LintFixDriver {
 			if (whole.refusal == null || own.length < 2)
 				accept(whole)
 			else
-				for (v in own) accept(ruleEditsFor(check, source, [v], cached, index, edits));
+				for (v in own) accept(ruleEditsFor(check, source, [v], cached, index, edits, reach));
 		}
 		return groups;
 	}
@@ -746,7 +747,7 @@ final class LintFixDriver {
 	 */
 	private static function ruleEditsFor(
 		check: Check, source: String, own: Array<Violation>, cached: GrammarPlugin, index: SymbolIndex,
-		accepted: Array<{ span: Span, text: String }>
+		accepted: Array<{ span: Span, text: String }>, ?reach: ImportReach
 	): RuleEdits {
 		// A `CarryingFix` is asked ONCE, through the richer seam, and its `fix` is the pure
 		// projection of what comes back — asking both would run the same analysis twice and let
@@ -766,7 +767,9 @@ final class LintFixDriver {
 		// pass, while a gate refusal is a standing fact about those edits, so recording the
 		// refusal rather than "1 edit produced" is the truer of the two readings.
 		final refused: Null<String> = checkEdits.length > 0
-			? BodySlotGuard.emptiedSlot(source, checkEdits, cached) ?? DefiniteAssignmentGuard.unassignedRead(source, checkEdits, cached)
+			? BodySlotGuard.emptiedSlot(source, checkEdits, cached) ?? DefiniteAssignmentGuard.unassignedRead(source, checkEdits, cached) ?? reach?.unreached(
+				own[0].file, source, checkEdits, cached
+			)
 			: null;
 		// Accept a check's edits only when none overlaps an edit already accepted from
 		// an earlier check this pass — applying a subset would break an atomic fix
@@ -804,11 +807,13 @@ final class LintFixDriver {
 	 * splits into nothing, which leaves the group refused whole, as before the split existed.
 	 */
 	public static function findingSplitter(
-		source: String, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+		source: String, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex, ?reach: ImportReach
 	): (RuleEdits) -> Array<RuleEdits> {
 		return group -> {
 			final check: Null<Check> = checks.find(c -> c.id() == group.rule);
-			return check == null ? [] : [for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [])];
+			return check == null ? [] : [
+				for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [], reach)
+			];
 		};
 	}
 
@@ -1373,7 +1378,10 @@ final class LintFixDriver {
 	 *
 	 * The same netless state is reached WITHOUT the flag, by a project that configured no
 	 * `compilerOracle` at all — the state every foreign project starts in — and that arm used
-	 * to print nothing. Both now go through `LintFixSafePass.netNotice`, which says the net is
+	 * to print nothing. One compile survives the flag: the declared builds are probed, lazily and only when
+	 * a fix adds an import, to answer whether the file's own builds can see that module (`ImportReach`).
+	 *
+	 * Both now go through `LintFixSafePass.netNotice`, which says the net is
 	 * off and names the remedy for whichever arm it is.
 	 */
 	public static function runLintFix(
@@ -1391,7 +1399,8 @@ final class LintFixDriver {
 		// "behave as if the project configured no compilerOracle" — the flag and the missing key
 		// then cannot drift apart by construction.
 		return applyLintFixes(
-			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap, resolution
+			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap,
+			new ImportReach(OracleProviders.of(plugin), oracles), resolution
 		);
 	}
 

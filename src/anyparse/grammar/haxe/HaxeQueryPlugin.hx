@@ -745,6 +745,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return OracleCoverage.usableOnce(memo, oracles, excluded);
 	}
 
+	public function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet> {
+		return [for (coverage in OracleCoverage.probedOnce(memo, oracles)) coverage];
+	}
+
 	public function nameProof(): NameProof {
 		return new CompilerNameProof();
 	}
