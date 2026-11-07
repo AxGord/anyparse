@@ -81,16 +81,15 @@ final class OwnerCommand implements CliCommand implements LeadingQueryCount {
 			return EXIT_RUNTIME;
 		}
 		final files: Array<{ file: String, source: String }> = [
-			for (path in io.paths)
-				{
-					file: path,
-					source: (try {
-						CliIo.readSourceForParse(path);
-					} catch (exception: Exception) {
-						CliIo.stderr('apq owner: $path: ${exception.message}\n');
-						return EXIT_RUNTIME;
-					}: String)
-				}
+			for (path in io.paths) {
+				file: path,
+				source: (try {
+					CliIo.readSourceForParse(path);
+				} catch (exception: Exception) {
+					CliIo.stderr('apq owner: $path: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				}: String)
+			}
 		];
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 

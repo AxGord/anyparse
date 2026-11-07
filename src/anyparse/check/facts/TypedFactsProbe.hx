@@ -355,11 +355,10 @@ final class TypedFactsProbe {
 		return again.length == 0
 			? []
 			: HaxeSpawn.runAll([
-				for (i in again)
-					{
-						args: compileArgs(asked[i].oracle.hxml, asked[i].oracle.defines, asked[i].dir, asked[i].out),
-						cwd: asked[i].oracle.dir
-					}
+				for (i in again) {
+					args: compileArgs(asked[i].oracle.hxml, asked[i].oracle.defines, asked[i].dir, asked[i].out),
+					cwd: asked[i].oracle.dir
+				}
 			], BUFFER, HaxeSpawn.parallelism());
 	}
 

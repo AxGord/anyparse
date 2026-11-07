@@ -41,9 +41,8 @@ final class ClauseWrap {
 		final broken: Doc = switch mode {
 			case WrapMode.OnePerLine: Doc.Nest(indent, separated(items, 0, D.hardline()));
 			case WrapMode.OnePerLineAfterFirst: Doc.Nest(indent, Doc.Concat([Doc.Text(' '), items[0], separated(items, 1, D.hardline())]));
-			case WrapMode.FillLine, WrapMode.FillLineWithLeadingBreak: Doc.Nest(
-				indent, Doc.Concat([Doc.Text(' '), Doc.Fill(items, D.line())])
-			);
+			case WrapMode.FillLine, WrapMode.FillLineWithLeadingBreak:
+				Doc.Nest(indent, Doc.Concat([Doc.Text(' '), Doc.Fill(items, D.line())]));
 			case _: glued;
 		};
 		return threshold < 0 ? broken : Doc.IfLineExceeds(threshold, broken, glued);

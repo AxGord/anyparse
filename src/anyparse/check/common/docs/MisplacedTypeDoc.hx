@@ -146,8 +146,7 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		if (source.substring(gapFrom.to, gapTo.from).indexOf(DOC_OPEN) < 0) return null;
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final docs: Array<CommentTok> = [
-			for (tok in comments)
-				if (SourceComments.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
+			for (tok in comments) if (SourceComments.isDocBlock(source, tok) && tok.from >= gapFrom.to && tok.to <= gapTo.from) tok
 		];
 		return if (docs.length != 1)
 			null

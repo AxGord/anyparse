@@ -61,8 +61,7 @@ final class BinaryParseLowering {
 		return ct == null
 			? null
 			: switch ct {
-				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }):
-					inner;
+				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
 				// `Null<T>` as written, or as the compiler spells it back from a typed field (`StdTypes.Null<T>`)
 				case TPath({
 					pack: [],

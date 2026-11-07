@@ -114,15 +114,15 @@ final class UnusedCaseBinder extends RuleBase {
 		final resolved: CaseSeams = seams;
 		final context: CaseRunContext = CasePatternScan.runContextOf(resolved, files, plugin);
 		return [
-			for (entry in context.parsed)
-				for (candidate in collect(resolved, plugin, entry.file, entry.tree, entry.source, context.constants, context.index))
-					{
-						file: entry.file,
-						span: candidate.span,
-						rule: RULE_ID,
-						severity: Severity.Warning,
-						message: 'case binder \'${candidate.name}\' is never read; replace it with _'
-					}
+			for (entry in context.parsed) for (candidate in collect(
+				resolved, plugin, entry.file, entry.tree, entry.source, context.constants, context.index
+			)) {
+				file: entry.file,
+				span: candidate.span,
+				rule: RULE_ID,
+				severity: Severity.Warning,
+				message: 'case binder \'${candidate.name}\' is never read; replace it with _'
+			}
 		];
 	}
 

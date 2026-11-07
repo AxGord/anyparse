@@ -106,8 +106,8 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 			+ '\', TYPE_OUT_PARAM, 0).length == 0 ? [] : [macro for (_e0 in v) $$e{block(descend(node.children[0], '
 			+ 'ident(\'_e0\'), \'into\', TYPE_OUT_PARAM, 0))}]);\n\t}\n}';
 		final expected: String = 'class BracketBranch {\n\n\tfunction f() {\n\t\tblock(descend(node.children[0], ident(\'_e0\'), \'int'
-			+ 'o\', TYPE_OUT_PARAM, 0).length == 0 ? [] : [\n\t\t\tmacro for (_e0 in v) $$e{block(descend(node.chil'
-			+ 'dren[0], ident(\'_e0\'), \'into\', TYPE_OUT_PARAM, 0))}\n\t\t]);\n\t}\n\n}';
+			+ 'o\', TYPE_OUT_PARAM, 0).length == 0 ? [] : [macro for (_e0 in v) $$e{block(\n\t\t\tdescend(node.chil'
+			+ 'dren[0], ident(\'_e0\'), \'into\', TYPE_OUT_PARAM, 0)\n\t\t)}]);\n\t}\n\n}';
 		assertWrite(expected, src);
 	}
 

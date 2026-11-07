@@ -148,7 +148,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	public function testFixOutputKeepsInteriorComment(): Void {
 		final out: String = applyFixOnce(wrap('if (a) p(); else {\n\t\t\tif (b) q(); // note\n\t\t}'));
 		Assert.isTrue(out.indexOf('// note') != -1);
-		Assert.isTrue(out.indexOf('if (b) q();') != -1);
+		Assert.isTrue(out.indexOf('q(); // note') != -1);
 	}
 
 	/** End-to-end: a bare then-branch collapses onto the `else` line, no braces introduced. */

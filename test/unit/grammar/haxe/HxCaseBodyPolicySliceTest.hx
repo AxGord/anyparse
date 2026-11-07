@@ -43,15 +43,11 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		super();
 	}
 
-	public function testDefaultsCaseBodyKeepExpressionCaseKeep(): Void {
-		// Slice D6 (dogfood) — `caseBody` default flipped from `Next` to
-		// `Keep` so the no-config (dogfood) writer-equals path preserves
-		// user-written `case X(v): body;` shape. The fork-canonical `Next`
-		// is preserved by re-baselining in `HaxeFormatConfigLoader.
-		// loadHxFormatJson` before `applySameLine` merges JSON overrides.
+	public function testDefaultsCaseBodyAndExpressionCaseFitLine(): Void {
+		// No compiled default reads the source layout: both case-body knobs are `FitLine`.
 		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(BodyPolicy.Keep, defaults.caseBody);
-		Assert.equals(BodyPolicy.Keep, defaults.expressionCase);
+		Assert.equals(BodyPolicy.FitLine, defaults.caseBody);
+		Assert.equals(BodyPolicy.FitLine, defaults.expressionCase);
 	}
 
 	public function testNextKeepsSingleStmtMultiline(): Void {
@@ -99,7 +95,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 	public function testConfigLoaderMapsCaseBodySame(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"caseBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.caseBody);
-		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
+		Assert.equals(BodyPolicy.FitLine, opts.expressionCase);
 	}
 
 	public function testConfigLoaderMapsExpressionCaseSame(): Void {
@@ -111,7 +107,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 	public function testConfigLoaderEmptyKeepsDefaults(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
-		Assert.equals(BodyPolicy.Keep, opts.expressionCase);
+		Assert.equals(BodyPolicy.FitLine, opts.expressionCase);
 	}
 
 	public function testBothKnobsSameStillFlattens(): Void {
@@ -137,40 +133,6 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'FitLine must keep a fitting body on the case line: <$out>');
-	}
-
-	public function testKeepFlattensSameLineSource(): Void {
-		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'Keep should flatten same-line source: <$out>');
-	}
-
-	public function testKeepPreservesNextLineSource(): Void {
-		final src: String = 'class M { function f():Void { switch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t} } }';
-		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'Keep should not flatten next-line source: <$out>');
-		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for next-line source: <$out>');
-	}
-
-	public function testKeepMultiStmtForcedMultiline(): Void {
-		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); bar(); } } }';
-		final out: String = writeWithCaseBody(src, BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('case 1: foo();') == -1, 'multi-stmt body must stay multiline under Keep: <$out>');
-		Assert.isTrue(out.indexOf('case 1:\n') != -1, 'expected multiline `case 1:\\n` for multi-stmt under Keep: <$out>');
-	}
-
-	public function testExpressionCaseKeepAtVarInitFlattensSameLine(): Void {
-		// ω-issue-423-mech-a: `HxVarDecl.init` is wired with
-		// `@:fmt(propagateExprPosition)`, so a var-init switch puts its
-		// cases in expression-position. Default `expressionCase=Keep`
-		// + same-line source flattens the case body. Mirrors fork's
-		// `isReturnExpression` walk-up that hits `=` (Binop) and routes
-		// to `markExpressionCase`.
-		final src: String = 'class M { function f():Void { var v = switch (x) { case 1: 10; }; } }';
-		final out: String = writeWithExpressionCase(src, BodyPolicy.Keep);
-		Assert.isTrue(
-			out.indexOf('case 1: 10;') != -1, 'var-init switch case should flatten under expressionCase=Keep + sameLine source: <$out>'
-		);
 	}
 
 	private inline function writeWithCaseBody(src: String, policy: BodyPolicy): String {

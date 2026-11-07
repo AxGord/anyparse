@@ -111,8 +111,7 @@ final class WriterLoweringSupport {
 
 	/**
 	 * Build `!value.<fieldName><BEFORE_NEWLINE_SUFFIX>` — the `bodyOnSameLine`
-	 * inverse of the trivia BeforeNewline slot, used by `bodyPolicyWrap`'s
-	 * `Keep`-policy dispatch and the `bodyPolicyForCtor` runtime wrap.
+	 * inverse of the trivia BeforeNewline slot, forwarded by the `bodyPolicyForCtor` runtime wrap; no body policy reads it.
 	 */
 	private static inline function beforeNewlineNotAccess(fieldName: String): Expr {
 		return {

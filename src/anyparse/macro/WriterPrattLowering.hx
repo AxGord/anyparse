@@ -273,13 +273,12 @@ final class WriterPrattLowering {
 	private static function chainCommentChannelsDecl(relocateAboveExpr: Expr): Expr {
 		final docsCT: ComplexType = macro : Array<Null<anyparse.core.Doc>>;
 		final vars: Array<Var> = [
-			for (name in ['_afterComments', '_ownComments', '_aboveComments'])
-				{
-					name: name,
-					type: docsCT,
-					expr: macro [],
-					isFinal: true
-				}
+			for (name in ['_afterComments', '_ownComments', '_aboveComments']) {
+				name: name,
+				type: docsCT,
+				expr: macro [],
+				isFinal: true
+			}
 		];
 		vars.push({
 			name: '_relocateAbove',
@@ -509,8 +508,9 @@ final class WriterPrattLowering {
 		// ω-keep-chain (increment 2): in Trivia mode the chain ctors
 		// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
 		// per-operand source-newline). Bind it (`_nl`) and push into the
-		// `_breaks` array parallel to `_ops` so `BinaryChainEmit.emit`'s
-		// `WrapMode.Keep` shaper can reproduce the source line breaks. In
+		// `_breaks` array parallel to `_ops`: when an operand carries a comment,
+		// `BinaryChainEmit.emit`'s comment-forced `shapeKeep` lays the chain out
+		// along those source line breaks so the comment round-trips. In
 		// Plain mode the ctors keep 2-operand arity and no `_breaks` is
 		// threaded (chain stays glued via shapeNoWrap) → byte-inert.
 		// Outer-ctor chainNewline (read via altSlotAccess; null in Plain)
@@ -524,47 +524,15 @@ final class WriterPrattLowering {
 		// strictly in lockstep (no half-wired state).
 		final threadBreaks: Bool = pc.ctx.trivia && outerChainNl != null;
 		final gatherSwitch: Expr = infixChainGatherSwitch(isChainBool, isChainNullCoal, threadBreaks, leafCall);
-		// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
-		// ω-keep-chain head break (increment 2): a `return`→head source
-		// newline is delivered via the shared `opt._varKwNewline` channel
-		// (set by the `ReturnStmt` Case-3 `_setVarKwNewline` threading;
-		// the same field VarStmt uses). Read it as the chain head break
-		// (single `EVars` → declared at the outer block scope) and CLEAR
-		// it on `opt` (folded into the `_clearCallArgChainNest` re-bind
-		// below) so it does not leak to a nested chain / the multiVar
-		// fold. Trivia-keep only; in Plain / non-keep the field is false
-		// and untouched → byte-inert.
-		// ω-keep-chain (increment: opadd_chain_keep): drop the chain
-		// `_headBreak` when this Keep chain is wrapped by a return-context
-		// `ParenExpr` (`_keepChainInParen`, declared just above) — the
-		// `return`→value source newline is reproduced at the value level
-		// (`returnBody` FitLine), NOT inside the paren. A bare-value chain
-		// (opbool case-2) has `_keepChainInParen == false` → keeps headBreak.
-		final headDecl: Expr = threadBreaks ? macro final _headBreak: Bool = opt._varKwNewline && !_keepChainInParen : macro {};
-		// Fold `_clearVarKwNewline` into the `_clearCallArgChainNest`
-		// re-bind so the head-break flag is consumed once at the
-		// outermost chain (leaf/nested chains see it cleared).
-		// ω-keep-chain (increment: opadd_chain_keep): additionally mark
-		// `_keepFlatInner` on the leaf-operand opt when THIS chain's config
-		// resolves to `WrapMode.Keep` (`$chainRulesExpr.defaultMode == Keep`).
-		// A kept chain preserves source line structure verbatim (operand
-		// lines may exceed `lineWidth`), so its operands' inner `ParenExpr`
-		// must stay GLUED — the flag flips the `expressionParenHardFlatten`
-		// emit to the unconditional-glue branch. Runtime-gated so a non-keep
-		// chain (NoWrap / FillLine / OnePerLine) passes the flag through false
-		// → byte-inert. The `_setKeepFlatInner` re-bind wraps the existing
-		// clear chain so the flag rides the SAME opt the leaf `makeWriteCall`s
-		// thread. Trivia+chain-only (`threadBreaks`); Plain keeps the legacy form.
+		// `_breaks` (parallel to `_ops`) only exists in Trivia mode. The re-bind clears
+		// `_keepChainInParen` so only the outermost chain reads the enclosing paren.
 		final clearOptExpr: Expr = threadBreaks
-			? macro _setKeepFlatInner(
-				_clearKeepChainInParen(_clearVarKwNewline(_clearCallArgChainNest(opt))),
-				$chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep
-			)
+			? macro _clearKeepChainInParen(_clearCallArgChainNest(opt))
 			: macro _clearCallArgChainNest(opt);
 		final breaksDecl: Expr = threadBreaks ? macro final _breaks: Array<Bool> = [] : macro {};
 		// ω-keep-infix-operand-comment: trivia-only flag set by the gather when
-		// an operand carried a captured trailing comment; forces the chain's
-		// Keep shape so the comment round-trips (line comment → operator on the
+		// an operand carried a captured trailing comment; forces the chain's comment-forced
+		// `shapeKeep` so the comment round-trips (line comment → operator on the
 		// continuation line; block comment → inline).
 		final hasLeadDecl: Expr = threadBreaks ? macro var _hasLeadComment: Bool = false : macro {};
 		// ω-keep-infix-postop-comment: per-op comment trailing the operator
@@ -610,15 +578,14 @@ final class WriterPrattLowering {
 			$outerAfterPush;
 			_gather($i{argNames[1]});
 		};
-		// Thread `_breaks` (sourceBreakBefore) + `_headBreak` only in
-		// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
+		// Thread `_breaks` (sourceBreakBefore) only in Trivia mode.
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment,
-				_afterComments, _restAware, null, false, _ownComments, _aboveComments
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _hasLeadComment, _afterComments,
+				_restAware, null, false, _ownComments, _aboveComments
 			)
 			: macro anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, false, null, _restAware
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, null, _restAware
 			);
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [];
@@ -655,16 +622,7 @@ final class WriterPrattLowering {
 			// a chain that is itself a call argument — `opbool_in_call_
 			// leading_break_preserved`, `opsub_chain_in_single_param_call`).
 			final _condWrapForced: Bool = opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
-			// ω-keep-chain (increment: opadd_chain_keep): a `WrapMode.Keep`
-			// chain wrapped by an enclosing `ParenExpr` in a return-head-break
-			// context (`opt._keepChainInParen`, set at the paren's inner opt)
-			// suppresses its OWN continuation `Nest` — the value-level break
-			// already supplied the +cols, so the chain operators co-indent
-			// with the head (no +2cols compounding). The `$headDecl` below
-			// likewise drops the chain `_headBreak`. Gated on the chain config
-			// being Keep so non-keep chains in a paren are byte-inert.
-			final _keepChainInParen: Bool = opt._keepChainInParen && $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep;
-			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
+			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest;
 			// omega-chain-rest-width: the chain pivot and its fill group count the
 			// whole physical line (the trailing `;` / `)` and the space after `=`),
 			// except inside a paren that owns the wrap — an expression paren, or a
@@ -674,7 +632,6 @@ final class WriterPrattLowering {
 			// groupless NoWrap shape. Read before the re-bind below clears
 			// `_keepChainInParen`.
 			final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;
-			$headDecl;
 			final opt = $clearOptExpr;
 			final _leafOpen: Array<Bool> = [];
 			function _gather(_e: $argTypeCT): Void $gatherSwitch;
@@ -907,16 +864,7 @@ final class WriterPrattLowering {
 		final callInsideClose: Expr = c.callInsideClose;
 		if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(c.wrapRulesField);
-			// ω-keep-callclose-newline: keep the outer call's close `)` glued iff
-			// the chain config is Keep AND the parser saw no newline before the
-			// close (`argsCloseNewline == false`). Only a trivia Star carrying
-			// `methodChain` has the parser slot; otherwise the signal is constant
-			// `false` (byte-inert legacy close placement).
-			final keepCloseGluedExpr: Expr = c.isTriviaStar && c.methodChainField != null ? {
-				final chainRulesExpr: Expr = optFieldAccess(c.methodChainField);
-				final closeNlExpr: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
-				macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
-			} : macro false;
+
 			// ω-sep-faithful outer elide: thread the per-pair source sep flags
 			// (built in `lowerPostfixStar`'s element loop for trivia Stars) so
 			// the engine suppresses commas the source elided around conditional
@@ -952,19 +900,16 @@ final class WriterPrattLowering {
 				}
 				: macro null;
 			final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;
-			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
+			return macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
 					groupRestProbe: $groupRestProbeExpr,
 					sepBeforeFlags: _sepBeforeFlags,
-					keepCloseGlued: $keepCloseGluedExpr,
+
 					flatTrailingComma: $flatTcExpr,
 					complexItemKinds: $complexKindsExpr
 				}
 			);
-			if (!c.isTriviaStar) return wrapListExpr;
-			final keepDoc: Expr = lowerPostfixKeepDoc(c);
-			return macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
 		}
 		if (!c.branch.fmtHasFlag('fill'))
 			return macro sepList(
@@ -987,7 +932,7 @@ final class WriterPrattLowering {
 	/**
 	 * Build the args-list emission call for a postfix Star — the three-way
 	 * dispatch between the runtime `WrapList.emit` cascade (`@:fmt(wrapRules)`,
-	 * with a hand-built `Keep`-mode Doc for trivia Stars), the Wadler
+	 * with the one-argument-per-line Doc a line comment forces in a trivia Star), the Wadler
 	 * `fillList` (`@:fmt(fill)`), and the default `sepList`. Instance method because `optFieldAccess` reads `ctx`.
 	 */
 	private static function lowerPostfixSepListCall(pc: PrattLoweringCtx, c: WriterLowering.PostfixStarCtx): Expr {
@@ -1046,18 +991,6 @@ final class WriterPrattLowering {
 		// so the per-element opt and the args-list cascade share one lookup.
 		final wrapRulesField: Null<String> = branch.fmtReadString('wrapRules');
 		final wantChainNest: Bool = branch.fmtHasFlag('callArgChainNest');
-		// ω-keep-callclose-newline: the postfix-Star ctor that drives method
-		// chains (`HxExpr.Call`) carries `@:fmt(methodChain('<field>'))`. When the
-		// chain config is `Keep`, a chain sole-arg renders source-faithfully via
-		// `MethodChainEmit.shapeKeep` — a length-2-Nest shape that
-		// `shapeFillLine`'s `isChainOPLBreak` cannot tell apart from a genuine
-		// OnePerLine chain, so it would force the OUTER call's close `)` onto its
-		// own line. Under Keep we instead follow the source: keep `)` glued unless
-		// the parser recorded a newline before it (`argsCloseNewline`). The signal
-		// is computed only when the ctor carries both `methodChain` and is a
-		// trivia Star (the parser-captured slot exists); every other postfix Star
-		// passes the engine default `keepCloseGlued = false` and stays byte-inert.
-		final methodChainField: Null<String> = branch.fmtReadString('methodChain');
 		var elemOptArg: Expr = propagateExpr ? macro _setExprPosition(opt) : macro opt;
 		if (wantChainNest && wrapRulesField != null) {
 			final wrapRulesAccess: Expr = optFieldAccess(wrapRulesField);
@@ -1113,7 +1046,6 @@ final class WriterPrattLowering {
 			callInsideOpen: callInside.open,
 			callInsideClose: callInside.close,
 			wrapRulesField: wrapRulesField,
-			methodChainField: methodChainField,
 			elemCall: elemCall,
 			relocateTrailingComments: isTriviaStar && branch.fmtHasFlag('relocateTrailingComments')
 		};
@@ -1244,7 +1176,7 @@ final class WriterPrattLowering {
 		// ω-keep-ternary-operand-comment: the two operand-trailing slots grown by
 		// `@:fmt(captureTernaryTrail)`. Each attaches to its operand's Doc so the
 		// comment travels with the operand under EVERY shape the cascade can pick.
-		// A LINE comment additionally forces the source-faithful `Keep` shape with
+		// A LINE comment additionally forces the `shapeKeep` layout with
 		// every gap broken — a `//` runs to the newline, so leaving `? then` or
 		// `: else` glued after it would comment the rest of the ternary out. So
 		// does a BLOCK comment running on past its first line: the token after it
@@ -1303,7 +1235,7 @@ final class WriterPrattLowering {
 			// kept inside an explicit expression paren (`_keepChainInParen` - that
 			// paren owns the wrap and opens itself, `return a + (cond ? b : c)`).
 			// ω-keep-ternary-operand-comment: a line comment on an operand breaks
-			// EVERY gap (`_ternaryBreaks` all-true under `Keep`) at `BeforeLast`,
+			// EVERY gap (`_ternaryBreaks` all-true under `_forceKeep`) at `BeforeLast`,
 			// which is both the only safe shape and the canonical broken ternary
 			// the cascade itself emits (`cond\n\t? then\n\t: else`) — so the round
 			// trip is byte-stable from the second pass on. The location is PINNED
@@ -1314,7 +1246,7 @@ final class WriterPrattLowering {
 				? anyparse.format.wrap.WrappingLocation.BeforeLast
 				: null;
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, false, _forceKeep, null,
+				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, _forceKeep, null,
 				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc,
 				$inlineBranchExpr
 			);

@@ -432,13 +432,14 @@ final class GateArms {
 				.out
 		);
 		final seeds: Array<String> = [
-			for (node in diff.nodes) if (
-				node.level == 'member'
-				&& node.change == 'changed'
-				&& !layout.exists(m -> node.name.startsWith('$m.'))
-				&& codeChanged(node.name, touches)
-			)
-				node.name
+			for (node in diff.nodes)
+				if (
+					node.level == 'member'
+					&& node.change == 'changed'
+					&& !layout.exists(m -> node.name.startsWith('$m.'))
+					&& codeChanged(node.name, touches)
+				)
+					node.name
 		];
 		if (seeds.length == 0) return [];
 		final focus: Array<String> = [for (seed in seeds) for (arg in ['--focus', seed]) arg];

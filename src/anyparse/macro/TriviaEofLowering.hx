@@ -358,8 +358,7 @@ final class TriviaEofLowering {
 			case Conditional(_c):
 				if (_c.body.length > 0)
 					$condHeadClassify;
-			case _:
-				$headClassify;
+			case _: $headClassify;
 		};
 	}
 

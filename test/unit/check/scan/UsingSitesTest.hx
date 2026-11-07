@@ -157,7 +157,9 @@ class UsingSitesTest extends Test {
 	private static function unusedInSource(source: String, extra: Array<{ file: String, source: String }>): String {
 		final scope: Array<{ file: String, source: String }> = TYPES.concat(extra).concat([{ file: 'p/Src.hx', source: source }]);
 		return [
-			for (v in CheckFixture.violationsIn(new UnusedImport(), scope))
+			for (v in CheckFixture.violationsIn(
+				new UnusedImport(), scope
+			))
 				if (v.file == 'p/Src.hx' && v.severity == Severity.Warning && v.message.indexOf('unused using') == 0)
 					v.message.split('\'')[1]
 		].join(',');

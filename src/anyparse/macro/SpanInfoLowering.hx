@@ -171,9 +171,8 @@ class SpanInfoLowering extends PairedShapeLowering {
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, branch.annotations[AnnotationKeys.BASE_CTOR], argNames);
 		final body: Array<Expr> = [
-			for (i in 0...branch.children.length) for (e in recurse(
-				branch.children[i], ident(argNames[i]), ident(PairedShapeLowering.SPAN_FIELD), 0
-			)) e
+			for (i in 0...branch.children.length)
+				for (e in recurse(branch.children[i], ident(argNames[i]), ident(PairedShapeLowering.SPAN_FIELD), 0)) e
 		];
 		return { values: [pattern], expr: body.length == 0 ? macro {} : block(body) };
 	}
@@ -436,13 +435,12 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** Body of `_spanOf<Leaf>S`: a paired ctor always carries its own `_span`, so every arm returns it. */
 	private function lowerSpanOf(rule: String, node: ShapeNode): Expr {
 		final cases: Array<Case> = [
-			for (branch in node.children)
-				{
-					values: [
-						ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [for (_ in 0...branch.children.length) '_'])
-					],
-					expr: macro return _span
-				}
+			for (branch in node.children) {
+				values: [
+					ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [for (_ in 0...branch.children.length) '_'])
+				],
+				expr: macro return _span
+			}
 		];
 		return block([
 			{ expr: ESwitch(ident('v'), cases, null), pos: Context.currentPos() },

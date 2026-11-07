@@ -26,12 +26,8 @@ package anyparse.grammar.haxe;
  * The argument list reuses the sep-peek Star field pattern of `HxFnDecl.params` and
  * `HxExpr.Call`. It carries `@:trivia` so the args' Star collects per-element `Trivial<HxExpr>`
  * source trivia and the writer drives layout through `triviaSepStarExpr`.
- * `@:fmt(ignoreSourceNewlinesForWrap)` mirrors `HxFnDecl.params`: under the DEFAULT (non-keep)
- * `callParameter` config the intrinsic Ignore semantic DROPS the per-argument source newlines
- * so the wrap cascade — not the source grid — drives layout; under a `callParameter`
- * `defaultWrap: keep` config the `triviaSepStarExpr` `_keepEmit` gate (resolved via
- * `cascadeIsKeep`) wins over Ignore and the per-element `newlineBefore` swap preserves the
- * source per-argument line breaks.
+ * `@:fmt(ignoreSourceNewlinesForWrap)` mirrors `HxFnDecl.params`: the intrinsic Ignore semantic
+ * DROPS the per-argument source newlines so the wrap cascade — not the source grid — drives layout.
  *
  * `@:fmt(trailingCommaRemovable)` (ω-multiline-trailing-comma-remove) opts the argument list
  * into `wrapping.trailingComma`: under `remove` a broken argument list never ends with a `,`,

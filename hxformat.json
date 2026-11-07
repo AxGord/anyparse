@@ -174,7 +174,6 @@
 		"functionBody": "fitLine",
 		"returnBody": "fitLine",
 		"returnBodySingleLine": "fitLine",
-		"expressionIf": "next",
-		"comprehensionFor": "keep"
+		"expressionIf": "next"
 	}
 }

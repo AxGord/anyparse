@@ -293,21 +293,6 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		Assert.isTrue(bare.indexOf('case 2: bar();') != -1, 'without the own-line comment the same body inlines: <$bare>');
 	}
 
-	public function testKnobOffKeepsSourceShapeOnTheSameFixtures(): Void {
-		// Byte-inertness of the slice: `Keep` is the shipped default for both
-		// knobs, and under it neither gate fires — placement still comes off
-		// the source shape. Spelled explicitly rather than relying on the
-		// default so the fixture keeps testing `Keep` if a default ever moves;
-		// `HxCaseBodyPolicySliceTest.testDefaultsCaseBodyKeepExpressionCaseKeep`
-		// owns the defaults themselves.
-		final broken: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t}\n\t}\n}\n';
-		final brokenOut: String = write(broken, '{"sameLine": {"caseBody": "keep"}}');
-		Assert.isTrue(brokenOut.indexOf('case 1: foo();') == -1, 'Keep must still preserve a source-broken body: <$brokenOut>');
-		final inlineSrc: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final inlineOut: String = write(inlineSrc, '{"sameLine": {"caseBody": "keep"}}');
-		Assert.isTrue(inlineOut.indexOf('case 1: foo();') != -1, 'Keep must still preserve a source-inline body: <$inlineOut>');
-	}
-
 	public function testFitLineIsIdempotentOnForcedMultilineBody(): Void {
 		// BLOCKER regression: pass 1 broke the body to the next line, pass 2
 		// re-joined it as `case 4: obj = {`. One `fmt --write` then left

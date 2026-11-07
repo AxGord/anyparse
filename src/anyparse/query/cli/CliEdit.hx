@@ -281,8 +281,7 @@ final class CliEdit {
 		}) {
 			case Ok(_, node):
 				node != null && CheckScan.modifierKinds(plugin.refShape()).contains(node.kind) ? node.kind.toLowerCase() : null;
-			case Err(_):
-				null;
+			case Err(_): null;
 		};
 	}
 

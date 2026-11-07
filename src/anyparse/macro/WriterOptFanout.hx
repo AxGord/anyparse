@@ -985,120 +985,8 @@ final class WriterOptFanout {
 	}
 
 	/**
-	 * ω-keep-kw-newline (increment 1b) — opt-fanout shim for the VarStmt-family
-	 * `@:fmt(captureKwNewline)` ctors. Sets `_varKwNewline` to the supplied
-	 * value (idempotent: returns `o` unchanged when already equal — no
-	 * allocation when the source kept `var x = …` on one line). Read ONLY by
-	 * the `HxVarDecl` multiVar fold, which uses it for the head break
-	 * (`_breaks[0]`) under `WrapMode.Keep`. Sister to `_setParenInCondition`.
-	 * Gated on `_varKwNewline:Bool`.
-	 */
-	private static function setVarKwNewlineField(optionsCT: ComplexType): Field {
-		return {
-			name: '_setVarKwNewline',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [
-					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro : Bool },
-					chainBaseArg(optionsCT)
-				],
-				ret: optionsCT,
-				expr: macro {
-					if (o._varKwNewline == v) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._varKwNewline = v;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
-	 * ω-keep-kw-newline (increment 1b) — sister reset helper to
-	 * `_setVarKwNewline`. Returns `o` unchanged when `_varKwNewline` is already
-	 * `false`; otherwise returns a `_copyOpt(o)` with the flag cleared.
-	 * Consumed at the `HxVarDecl` multiVar fold so the recursive head/link
-	 * self-calls do not re-trigger the head break. Paired with
-	 * `_setVarKwNewline`.
-	 */
-	private static function clearVarKwNewlineField(optionsCT: ComplexType): Field {
-		return {
-			name: '_clearVarKwNewline',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (!o._varKwNewline) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._varKwNewline = false;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
-	 * ω-keep-chain (increment: opadd_chain_keep) — opt-fanout shim for the
-	 * opAddSub / opBool chain emit. Sets `_keepFlatInner` to the supplied value
-	 * (idempotent: returns `o` unchanged when already equal — no allocation when
-	 * the chain is not in keep mode). Read ONLY by the `ParenExpr`
-	 * (`@:fmt(expressionParenHardFlatten)`) emit, which takes the GLUED branch
-	 * unconditionally so a kept chain's inner parens stay flat regardless of
-	 * line width. Sister to `_setVarKwNewline`. Gated on `_keepFlatInner:Bool`.
-	 */
-	private static function setKeepFlatInnerField(optionsCT: ComplexType): Field {
-		return {
-			name: '_setKeepFlatInner',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [
-					{ name: 'o', type: optionsCT },
-					{ name: 'v', type: macro : Bool },
-					chainBaseArg(optionsCT)
-				],
-				ret: optionsCT,
-				expr: macro {
-					if (o._keepFlatInner == v) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._keepFlatInner = v;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
-	 * ω-keep-chain (increment: opadd_chain_keep) — sister reset helper to
-	 * `_setKeepFlatInner`. Returns `o` unchanged when `_keepFlatInner` is already
-	 * `false`; otherwise returns a `_copyOpt(o)` with the flag cleared. Paired
-	 * with `_setKeepFlatInner`.
-	 */
-	private static function clearKeepFlatInnerField(optionsCT: ComplexType): Field {
-		return {
-			name: '_clearKeepFlatInner',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (!o._keepFlatInner) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._keepFlatInner = false;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
 	 * ω-keep-chain (increment: opadd_chain_keep) — opt-fanout shim set by an
-	 * enclosing `ParenExpr` so a `WrapMode.Keep` chain suppresses its headBreak +
+	 * enclosing `ParenExpr` so the chain inside it suppresses its headBreak +
 	 * Nest (the return-head newline + continuation indent are supplied at the
 	 * value level). Idempotent. Gated on `_keepChainInParen:Bool`.
 	 */
@@ -1409,31 +1297,8 @@ final class WriterOptFanout {
 		// ω-pattern-rest-probe: same one-field-per-block gate for
 		// `_setSuppressPatternRestProbe`.
 		if (optionsHasField(optionsTypePath, '_suppressPatternRestProbe')) fields.push(setSuppressPatternRestProbeField(optionsCT));
-		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
-		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`
-		// records the source `var`→head newline so the `HxVarDecl` multiVar
-		// fold can break the head binding under `WrapMode.Keep`;
-		// `_clearVarKwNewline` resets it at the fold so recursive head/link
-		// self-calls do not re-trigger. Sister to `_setParenInCondition` /
-		// `_clearParenInCondition`. Gated on `_varKwNewline:Bool`.
-		if (optionsHasField(optionsTypePath, '_varKwNewline')) {
-			fields.push(setVarKwNewlineField(optionsCT));
-			fields.push(clearVarKwNewlineField(optionsCT));
-		}
-		// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
-		// for the opAddSub / opBool chain emit. `_setKeepFlatInner` marks the
-		// leaf-operand opt so an inner `ParenExpr` stays GLUED (no width-driven
-		// re-open) under `WrapMode.Keep`; `_clearKeepFlatInner` resets it.
-		// Sister to `_setVarKwNewline` / `_setParenInCondition`. Gated on
-		// `_keepFlatInner:Bool`.
-		if (optionsHasField(optionsTypePath, '_keepFlatInner')) {
-			fields.push(setKeepFlatInnerField(optionsCT));
-			fields.push(clearKeepFlatInnerField(optionsCT));
-		}
-		// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
-		// for the enclosing-`ParenExpr` → keep-chain signal. `_setKeepChainInParen`
-		// marks the inner opt so a `WrapMode.Keep` chain suppresses its headBreak
-		// + Nest; `_clearKeepChainInParen` resets it at the chain emit so nested
+		// Opt-fanout helper pair for the enclosing-`ParenExpr` signal. `_setKeepChainInParen`
+		// marks the inner opt; `_clearKeepChainInParen` resets it at the chain emit so nested
 		// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.
 		if (!optionsHasField(optionsTypePath, '_keepChainInParen')) return;
 		fields.push(setKeepChainInParenField(optionsCT));

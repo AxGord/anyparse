@@ -452,8 +452,9 @@ final class ShardPlan {
 	/** Every ordered pair where one filter string also selects another class. */
 	private static function findCollisions(names: Array<String>): Array<String> {
 		return [
-			for (i in 0...names.length) for (j in 0...names.length) if (i != j && names[j].indexOf(names[i]) >= 0)
-				'${names[i]} is a substring of ${names[j]}'
+			for (i in 0...names.length)
+				for (j in 0...names.length)
+					if (i != j && names[j].indexOf(names[i]) >= 0) '${names[i]} is a substring of ${names[j]}'
 		];
 	}
 

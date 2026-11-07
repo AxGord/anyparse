@@ -241,10 +241,11 @@ class FmtFlagOwnershipTest extends Test {
 		final record: FmtOwnershipRecord = FmtOwnershipRecordParser.parse(File.getContent(path));
 		for (module => flags in record.modules) out[module] = switch flags {
 			case JArray(items): [
-				for (item in items) switch item {
-					case JString(name): name;
-					case _: throw 'fmt-ownership record: a flag of "$module" is not a string';
-				}
+				for (item in items)
+					switch item {
+						case JString(name): name;
+						case _: throw 'fmt-ownership record: a flag of "$module" is not a string';
+					}
 			];
 			case _: throw 'fmt-ownership record: "$module" is not an array';
 		};

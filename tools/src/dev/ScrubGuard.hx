@@ -201,8 +201,10 @@ final class ScrubGuard {
 		final base: String = span.substr(0, cut);
 		final tip: String = span.substr(cut + 2);
 		final added: Array<String> = [
-			for (line in cmd('git diff --no-color -U0 $base $tip').at(root).text().split('\n'))
-				if (line.startsWith('+') && !line.startsWith('+++')) line.substr(1)
+			for (line in cmd('git diff --no-color -U0 $base $tip')
+				.at(root)
+				.text()
+				.split('\n')) if (line.startsWith('+') && !line.startsWith('+++')) line.substr(1)
 		];
 		final messages: String = cmd('git log --format=%H%n%B $base..$tip').at(root).text();
 		final trees: Array<PathIndex> = privates ?? [];

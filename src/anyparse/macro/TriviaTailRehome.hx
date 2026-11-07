@@ -205,8 +205,7 @@ final class TriviaTailRehome {
 		final pos: Position = Context.currentPos();
 		return {
 			expr: EObjectDecl([
-				for (f in fieldNames)
-					{ field: f, expr: f == replaced ? with : { expr: EField(macro value, f), pos: pos } }
+				for (f in fieldNames) { field: f, expr: f == replaced ? with : { expr: EField(macro value, f), pos: pos } }
 			]),
 			pos: pos
 		};

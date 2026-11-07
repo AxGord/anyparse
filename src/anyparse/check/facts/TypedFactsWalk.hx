@@ -919,8 +919,7 @@ final class TypedFactsWalk {
 					case _: '';
 				};
 				'{"a":"super"$sup,$head}';
-			case TLocal(v) if (_locals.exists(v.id)):
-				'{"t":${q(_locals[v.id] ?? '')},"a":"local",$head}';
+			case TLocal(v) if (_locals.exists(v.id)): '{"t":${q(_locals[v.id] ?? '')},"a":"local",$head}';
 			case TIdent(identifier):
 				final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.CODE_INTRINSICS.contains(identifier));
 				add('native', '{"w":"ident","n":${q(identifier)},"p":$where$code${handedText(args)}}');
@@ -1156,8 +1155,7 @@ final class TypedFactsWalk {
 	private static function heldValue(e: TypedExpr): Bool {
 		return switch e.expr {
 			case TField(_, _), TLocal(_): true;
-			case TParenthesis(inner), TMeta(_, inner):
-				heldValue(inner);
+			case TParenthesis(inner), TMeta(_, inner): heldValue(inner);
 			// the typer wraps every branch of an if- / switch-expression in a block whose last expression is its value
 			case TBlock(exprs):
 				exprs.length > 0 && heldValue(exprs[exprs.length - 1]);

@@ -36,16 +36,11 @@ final class HxTypeSyntax {
 
 	private function type(t: HxTypeS): TypeSyntax {
 		return switch t {
-			case Named(ref, span):
-				node(span, Nominal(ref.name, [for (a in ref.params ?? []) argument(a)]));
-			case Parens(inner, span):
-				node(span, type(inner).shape);
-			case Arrow(_, _, span), OptionalArg(Arrow(_, _, _), span):
-				node(span, curried(t));
-			case ArrowFn(fn, span):
-				node(span, Function([for (a in fn.args) param(a)], type(fn.ret), false));
-			case Anon(members, span):
-				node(span, Structure([for (m in members) for (f in field(m)) f]));
+			case Named(ref, span): node(span, Nominal(ref.name, [for (a in ref.params ?? []) argument(a)]));
+			case Parens(inner, span): node(span, type(inner).shape);
+			case Arrow(_, _, span), OptionalArg(Arrow(_, _, _), span): node(span, curried(t));
+			case ArrowFn(fn, span): node(span, Function([for (a in fn.args) param(a)], type(fn.ret), false));
+			case Anon(members, span): node(span, Structure([for (m in members) for (f in field(m)) f]));
 			case ConditionalType(c, span):
 				node(
 					span,
@@ -54,8 +49,7 @@ final class HxTypeSyntax {
 							.concat(c.elseClause == null ? [] : [type(c.elseClause.type)])
 					)
 				);
-			case DollarType(_, span), OptionalArg(_, span), ConstStringType(_, span), BracketExprListType(_, span):
-				node(span, Other);
+			case DollarType(_, span), OptionalArg(_, span), ConstStringType(_, span), BracketExprListType(_, span): node(span, Other);
 		};
 	}
 

@@ -63,11 +63,10 @@ final class CPrecedenceTrap extends RuleBase {
 			RunScan.eachMatched(violations, byKey, (_, span) -> spans.push(span));
 			// A node's span may run over the whitespace after it; the pair closes on the operand's last token.
 			return [
-				for (span in spans)
-					if (!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)) {
-						final text: String = source.substring(span.from, span.to).rtrim();
-						{ span: new Span(span.from, span.from + text.length), text: '($text)' };
-					}
+				for (span in spans) if (!spans.exists(outer -> outer != span && outer.from <= span.from && span.to <= outer.to)) {
+					final text: String = source.substring(span.from, span.to).rtrim();
+					{ span: new Span(span.from, span.from + text.length), text: '($text)' };
+				}
 			];
 		});
 	}

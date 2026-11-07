@@ -135,8 +135,7 @@ final class Unification {
 	/** Two ends neither of which is an abstract nor the dynamic type, not two core value types. */
 	private function plainUnify(given: TypeEnd, wanted: TypeEnd): ArgumentFit {
 		return switch [given, wanted] {
-			case [Declared(a), Declared(b)]:
-				verdict(nominal(a), plain(b));
+			case [Declared(a), Declared(b)]: verdict(nominal(a), plain(b));
 			// a core value type has no ancestor, so a class, an interface or an enum the index reads in every build rejects it
 			case [Core(_), Declared(b)]: nominal(b) == null ? MayFit : Misfits;
 			case [Declared(a), Core(_)]:
@@ -175,8 +174,7 @@ final class Unification {
 		return graph == null
 			? MayFit
 			: agreed([
-				for (b in graph.branches)
-					!b.transitive && !allowCast ? Misfits : anyOf([for (t in side(b)) through(b, t)])
+				for (b in graph.branches) !b.transitive && !allowCast ? Misfits : anyOf([for (t in side(b)) through(b, t)])
 			]);
 	}
 

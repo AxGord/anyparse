@@ -304,14 +304,6 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		Assert.isTrue(onBreak.indexOf('case 1:\n') != -1, 'the compared output must really be the spread outcome: <$onBreak>');
 	}
 
-	public function testKeepIgnoresTheKey(): Void {
-		final keep: String = write(
-			MIXED_SRC, '{"wrapping": {"maxLineLength": 39}, "sameLine": {"caseSiblings": "anyBreak", "expressionCase": "keep"}}'
-		);
-		Assert.isTrue(keep.indexOf('case 1: aa(bb);') != -1, 'Keep still preserves the source shape, symmetry or not: <$keep>');
-		Assert.isTrue(keep.indexOf('case 2: cc(ddddddddddddddd);') != -1, '<$keep>');
-	}
-
 	/**
 	 * The key shares a `fitLine` choice and nothing else: under `same`, `next` and `keep` it moves no byte. A label-splice
 	 * body writes its slot whatever the policy, so its fixtures are the ones that could break this. Each fixture first shows
@@ -328,7 +320,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 			Assert.notEquals(
 				write(src, cfg('fitLine', 'off')), write(src, cfg('fitLine', 'anyBreak')), 'the fixture must discriminate: <$src>'
 			);
-			for (policy in ['same', 'next', 'keep'])
+			for (policy in ['same', 'next'])
 				Assert.equals(write(src, cfg(policy, 'off')), write(src, cfg(policy, 'anyBreak')), '$policy must ignore the key: <$src>');
 		}
 	}
@@ -547,15 +539,6 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		final pass3: String = write(pass2, j);
 		Assert.equals(pass1, pass2, 'the region-aware verdict must reach its fixed point in ONE pass');
 		Assert.equals(pass2, pass3);
-	}
-
-	public function testKeepIgnoresTheKeyOnAConditionalSwitch(): Void {
-		final keep: String = write(
-			CONDITIONAL_SRC, '{"wrapping": {"maxLineLength": 39}, "sameLine": {"caseSiblings": "anyBreak", "expressionCase": "keep"}}'
-		);
-		Assert.isTrue(keep.indexOf('case 1: aa(bb);') != -1, 'Keep preserves the source shape, region or not: <$keep>');
-		Assert.isTrue(keep.indexOf('case 2: cc(ddddddddddddddd);') != -1, '<$keep>');
-		Assert.isTrue(keep.indexOf('case _: ee(ff);') != -1, '<$keep>');
 	}
 
 	/** The value set is closed: `widthOnly`, the trigger nobody chose, is refused and not read as `off`. */

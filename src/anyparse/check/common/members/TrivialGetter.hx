@@ -897,18 +897,24 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 */
 	private static function messageFor(shape: String, propName: String, field: String, count: Int = 0): String {
 		return switch shape {
-			case SHAPE_SET_A: 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
-				+ '(default, set)\' and remove get_$propName';
-			case 'setABypass': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
-				+ '(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
-			case 'setAInline': 'property \'$propName\' has a trivial getter over backing field \'$field\', but $count'
-				+ ' external write(s) block a (default, set) collapse; mark get_$propName inline';
-			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var '
-				+ '$propName\' and remove get_$propName/set_$propName';
-			case 'setC': 'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName'
-				+ '(get, default)\' and remove set_$propName';
-			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName'
-				+ '(default, null)\' and remove get_$propName';
+			case SHAPE_SET_A:
+				'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
+					+ '(default, set)\' and remove get_$propName';
+			case 'setABypass':
+				'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName'
+					+ '(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
+			case 'setAInline':
+				'property \'$propName\' has a trivial getter over backing field \'$field\', but $count'
+					+ ' external write(s) block a (default, set) collapse; mark get_$propName inline';
+			case 'setB':
+				'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var '
+					+ '$propName\' and remove get_$propName/set_$propName';
+			case 'setC':
+				'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName'
+					+ '(get, default)\' and remove set_$propName';
+			case _:
+				'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName'
+					+ '(default, null)\' and remove get_$propName';
 		}
 	}
 

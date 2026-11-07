@@ -38,26 +38,23 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/** The same without the cuddled-open head, so the list keeps its ladder. */
 	private static final CFG_SAME_LADDER: String = cfg('same', false, true);
 
-	/** `comprehensionFor: keep`, which glues a body the source wrote on the head line. */
-	private static final CFG_KEEP: String = cfg('keep', true, true);
-
 	/** No `objectLiteral` rules: the literal breaks through a rest-aware fit `Group` rather than a first-line probe. */
-	private static final CFG_GROUP: String = cfg('keep', false, false);
+	private static final CFG_GROUP: String = cfg('same', false, false);
 
 	/** The rest-aware `Group` again, with a trailing comma the ladder line carries after the item. */
 	private static final CFG_TRAILING_COMMA: String = cfg('same', true, false, true);
 
 	/** Every config the sweeps run under. */
-	private static final CONFIGS: Array<String> = [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP, CFG_GROUP, CFG_TRAILING_COMMA];
+	private static final CONFIGS: Array<String> = [CFG_SAME, CFG_SAME_LADDER, CFG_GROUP, CFG_TRAILING_COMMA];
 
-	/** No wrap rules at all: the cascade's defaults under `comprehensionFor: keep`. */
-	private static final CFG_PLAIN_KEEP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "keep"}}';
+	/** No wrap rules at all: the cascade's defaults under `comprehensionFor: same`. */
+	private static final CFG_PLAIN_SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
 
 	/** An `expressionWrapping` rule: an expression paren opens by its own width probe, with no collapse gate. */
 	private static final CFG_EXPRESSION: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
 		+ '"expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
-		+ '"value": 0}], "type": "noWrap"}]}}, "sameLine": {"comprehensionFor": "keep"}}';
+		+ '"value": 0}], "type": "noWrap"}]}}, "sameLine": {"comprehensionFor": "same"}}';
 
 	/** The ternary paren at the width where its literal breaks: it opens, as it does for every narrower literal. */
 	private static final OPEN_TERNARY_PAREN: String = 'class M {\n\tfunction f() {\n\t\tvar y = (\n\t\t\tcond ? [\n\t\t\t\tfor (x in xs)\n'
@@ -153,7 +150,7 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-OBJECT-LITERAL-HOST')
 	public function testALiteralHostKeepsItsAllmanDecision(): Void {
-		for (config in CONFIGS.concat([CFG_PLAIN_KEEP])) for (k in 1...60) assertOneWriteWithinLimit(literalHostShape(k), config, k);
+		for (config in CONFIGS.concat([CFG_PLAIN_SAME])) for (k in 1...60) assertOneWriteWithinLimit(literalHostShape(k), config, k);
 	}
 
 	/** One alternative per break, from its outermost node: the alternatives do not multiply with the nesting depth. */
@@ -185,7 +182,7 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-COMMITTED-BARE')
 	public function testALambdaBodyFollowsTheBreak(): Void {
-		for (config in [CFG_GROUP, CFG_TRAILING_COMMA, CFG_PLAIN_KEEP]) for (k in 1...101)
+		for (config in [CFG_GROUP, CFG_TRAILING_COMMA, CFG_PLAIN_SAME]) for (k in 1...101)
 			assertOneWriteWithinLimit(lambdaShape(k), config, k);
 	}
 
@@ -196,7 +193,7 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-COLLAPSE-COUNTED')
 	public function testAStaticallyBrokenLambdaBodyStaysGlued(): Void {
-		for (config in [CFG_SAME, CFG_SAME_LADDER, CFG_KEEP]) for (k in 1...101) assertOneWriteWithinLimit(lambdaShape(k), config, k);
+		for (config in [CFG_SAME, CFG_SAME_LADDER]) for (k in 1...101) assertOneWriteWithinLimit(lambdaShape(k), config, k);
 	}
 
 	/**

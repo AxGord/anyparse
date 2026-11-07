@@ -114,8 +114,7 @@ final class Clusters {
 		graph: CallGraph, typeName: String, hubCount: Null<Int>, kinds: Null<Array<EdgeKind>>
 	): Null<ClusterReport> {
 		final members: Array<FnNode> = [
-			for (id => n in graph.nodes)
-				if (n.typeName == typeName && n.name != null && !n.isExternal && id.indexOf('#') == -1) n
+			for (id => n in graph.nodes) if (n.typeName == typeName && n.name != null && !n.isExternal && id.indexOf('#') == -1) n
 		];
 		if (members.length == 0) return null;
 		members.sort(byPosition);

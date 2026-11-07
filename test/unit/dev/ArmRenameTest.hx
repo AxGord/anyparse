@@ -97,8 +97,7 @@ final class ArmRenameTest extends Test {
 		switch registries {
 			case JArray(items):
 				for (item in items) switch JValueTools.field(item, 'file') {
-					case JString(file) if ((file: String) == ArmRegistry.DIRECTORY):
-						return JValueWriter.write(item);
+					case JString(file) if ((file: String) == ArmRegistry.DIRECTORY): return JValueWriter.write(item);
 					case _:
 				}
 			case _:

@@ -306,31 +306,30 @@ final class WriterCascadeLowering {
 				$headPathIdent = '';
 			};
 			final cases: Array<Case> = [
-				for (cp in info.ctorPatterns)
-					{
-						values: [cp.pattern],
-						guard: null,
-						expr: cp.isMatch
-							? macro {
-								// `_v0` is the matched ctor's first positional
-								// arg. For ctors whose first arg is a leaf path
-								// terminal (`HxTypeName` / `HxWildPath` abstracts
-								// over `String`), `_v0` IS the path string and
-								// `Reflect.hasField` returns false. For ctors
-								// whose first arg is a struct sub-rule carrying
-								// a `.path` field (`HxImportAlias`), the lookup
-								// extracts the dotted-ident path. Multi-arg
-								// enum branches are unsupported by the PEG
-								// lowering so this is the only struct-payload
-								// shape the cascade has to recognise.
-								final _v0Path: String = Reflect.hasField(_v0, 'path') ? Std.string(Reflect.field(_v0, 'path')) : '$_v0';
-								$tailKindIdent = 1;
-								$tailPathIdent = _v0Path;
-								$headKindIdent = 1;
-								$headPathIdent = _v0Path;
-							}
-							: cp.isTransparent ? transparentBody : noMatchBody
-					}
+				for (cp in info.ctorPatterns) {
+					values: [cp.pattern],
+					guard: null,
+					expr: cp.isMatch
+						? macro {
+							// `_v0` is the matched ctor's first positional
+							// arg. For ctors whose first arg is a leaf path
+							// terminal (`HxTypeName` / `HxWildPath` abstracts
+							// over `String`), `_v0` IS the path string and
+							// `Reflect.hasField` returns false. For ctors
+							// whose first arg is a struct sub-rule carrying
+							// a `.path` field (`HxImportAlias`), the lookup
+							// extracts the dotted-ident path. Multi-arg
+							// enum branches are unsupported by the PEG
+							// lowering so this is the only struct-payload
+							// shape the cascade has to recognise.
+							final _v0Path: String = Reflect.hasField(_v0, 'path') ? Std.string(Reflect.field(_v0, 'path')) : '$_v0';
+							$tailKindIdent = 1;
+							$tailPathIdent = _v0Path;
+							$headKindIdent = 1;
+							$headPathIdent = _v0Path;
+						}
+						: cp.isTransparent ? transparentBody : noMatchBody
+				}
 			];
 			cases.push({ values: [macro null], guard: null, expr: noMatchBody });
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });
@@ -437,27 +436,26 @@ final class WriterCascadeLowering {
 				$hkbIdent = 0;
 			};
 			final cases: Array<Case> = [
-				for (cp in info.ctorPatterns)
-					{
-						values: [cp.pattern],
-						guard: null,
-						expr: switch cp.subset {
-							case 1: macro {
-								$tkaIdent = 1;
-								$tkbIdent = 0;
-								$hkaIdent = 1;
-								$hkbIdent = 0;
-							};
-							case 2: macro {
-								$tkaIdent = 0;
-								$tkbIdent = 1;
-								$hkaIdent = 0;
-								$hkbIdent = 1;
-							};
-							case 3: transparentBody; // noqa: magic-number
-							case _: noMatchBody;
-						}
+				for (cp in info.ctorPatterns) {
+					values: [cp.pattern],
+					guard: null,
+					expr: switch cp.subset {
+						case 1: macro {
+							$tkaIdent = 1;
+							$tkbIdent = 0;
+							$hkaIdent = 1;
+							$hkbIdent = 0;
+						};
+						case 2: macro {
+							$tkaIdent = 0;
+							$tkbIdent = 1;
+							$hkaIdent = 0;
+							$hkbIdent = 1;
+						};
+						case 3: transparentBody; // noqa: magic-number
+						case _: noMatchBody;
 					}
+				}
 			];
 			cases.push({ values: [macro null], guard: null, expr: noMatchBody });
 			acc.currCompute.push({ expr: ESwitch(classifierAccess, cases, null), pos: pos });

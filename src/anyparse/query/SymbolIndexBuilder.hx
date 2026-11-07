@@ -949,9 +949,8 @@ final class SymbolIndexBuilder {
 	private static function agreedDefaults(first: TypeDeclInfo, alternate: TypeDeclInfo): Array<Null<String>> {
 		final other: Array<Null<String>> = alternate.typeParamDefaults;
 		return [
-			for (i in 0...first.typeParamNames.length) i < other.length && other[i] == first.typeParamDefaults[i]
-				? first.typeParamDefaults[i]
-				: null
+			for (i in 0...first.typeParamNames.length)
+				i < other.length && other[i] == first.typeParamDefaults[i] ? first.typeParamDefaults[i] : null
 		];
 	}
 

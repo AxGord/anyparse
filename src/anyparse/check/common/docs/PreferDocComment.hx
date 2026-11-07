@@ -140,14 +140,13 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		return seams == null ? [] : [
-			for (entry in files) for (rewrite in rewrites(entry.source, plugin, seams))
-				{
-					file: entry.file,
-					span: rewrite.comment,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'line comment above a declaration; use a doc comment'
-				}
+			for (entry in files) for (rewrite in rewrites(entry.source, plugin, seams)) {
+				file: entry.file,
+				span: rewrite.comment,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: 'line comment above a declaration; use a doc comment'
+			}
 		];
 	}
 

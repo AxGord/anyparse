@@ -78,7 +78,7 @@ final class WriterTriviaStarDispatch {
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
 		final trailBBAccess: Null<Expr> = c.trailBBAccess;
-		final trailNLAccess: Null<Expr> = c.trailNLAccess;
+
 		final trailLCAccess: Null<Expr> = c.trailLCAccess;
 		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
 		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
@@ -264,7 +264,7 @@ final class WriterTriviaStarDispatch {
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
+				reflowSourceMultilineStar, matrixWrapStar, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
 				uniformStmtBlanksStar, complexItemsStar, mapWrapStar, TriviaTailRehome.fnRefFor(starNode.children[0]),
 				starNode.fmtHasFlag('relocateTrailingComments'), afterDocPolicy(starNode)
 			));

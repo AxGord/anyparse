@@ -587,10 +587,9 @@ final class ShadowingLocal extends RuleBase {
 		if (tree == null) return false;
 		final delta: Int = edit.text.length - (edit.span.to - edit.span.from);
 		final moved: Array<Int> = [
-			for (hit in hits) if (
-				hit.kind == RefKind.Read && (bindsWithin(hit.bindingSpan, span) || bindsWithin(hit.bindingSpan, outerSpan))
-			)
-				shifted(hit.span.from, span.to, delta)
+			for (hit in hits)
+				if (hit.kind == RefKind.Read && (bindsWithin(hit.bindingSpan, span) || bindsWithin(hit.bindingSpan, outerSpan)))
+					shifted(hit.span.from, span.to, delta)
 		];
 		final bound: Array<Int> = [
 			for (hit in Refs.find(
@@ -635,8 +634,7 @@ final class ShadowingLocal extends RuleBase {
 		if (at < 0) return Declined(DECLINE_UNPLACED);
 		final pos: Position = new Span(at, at).lineCol(site.source);
 		return switch Rename.rename(site.source, pos.line, pos.col, newName, site.plugin, shape) {
-			case Err(message):
-				Declined('renaming it to "$newName" is refused: $message');
+			case Err(message): Declined('renaming it to "$newName" is refused: $message');
 			case Ok(_):
 				site.claimed.push({ name: newName, scope: frameSpan });
 				Applied(Rename.renameOccurrences(site.source, site.tree, at, shape).map(occ -> {span: occ, text: newName }));

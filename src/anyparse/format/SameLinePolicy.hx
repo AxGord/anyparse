@@ -1,18 +1,14 @@
 package anyparse.format;
 
 /**
- * Four-way placement policy for keyword-and-preceding-token joins
+ * Three-way placement policy for keyword-and-preceding-token joins
  * (`} else`, `} catch`, `} while`).
  *
  * `Same` — keyword sits on the same line as the preceding token,
  * separated by a single space (`} else {`).
  * `Next` — keyword moves to the next line at the current indent level
  * (`}\n\telse {`).
- * `Keep` — preserve the source shape. The writer reads a per-node
- * boolean captured by the trivia-mode parser and dispatches between
- * `Same` and `Next` layouts at runtime. In plain (non-trivia) mode the
- * parser does not capture the slot, so `Keep` degrades to `Same`.
- *
+
  * `SameOnBlock` — shape-aware cuddle: the keyword sits on the same line
  * as the preceding token when that token closes a CURLY block
  * (`} else {`), because a block owns its own indent and its `}` is a
@@ -32,6 +28,5 @@ package anyparse.format;
 enum abstract SameLinePolicy(Int) from Int to Int {
 	final Same = 0;
 	final Next = 1;
-	final Keep = 2;
 	final SameOnBlock = 3;
 }

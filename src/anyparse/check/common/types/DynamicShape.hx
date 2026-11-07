@@ -75,9 +75,10 @@ final class DynamicShape {
 				case Param: 'raw Dynamic parameter type — narrow it or use Any';
 				case Return: 'raw Dynamic return type — narrow it or use Any';
 				case TypeArg: 'raw Dynamic type argument — narrow it or use Any';
-				case Local: boundary
-					? 'raw Dynamic boundary local (Reflect/Json result) — narrow the type where it is consumed'
-					: 'raw Dynamic local variable type — narrow it or use Any';
+				case Local:
+					boundary
+						? 'raw Dynamic boundary local (Reflect/Json result) — narrow the type where it is consumed'
+						: 'raw Dynamic local variable type — narrow it or use Any';
 			}
 		}
 	};

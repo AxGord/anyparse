@@ -342,10 +342,9 @@ class UnusedCaseBinderCheckTest extends Test {
 		var count: Int = -1;
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = [
-				for (f in tree) if (
-					(alone ? f.name == subject : StringTools.endsWith(f.name, '.hx')) && !StringTools.endsWith(f.name, 'import.hx')
-				)
-					{ file: '$root/${f.name}', source: f.source }
+				for (f in tree)
+					if ((alone ? f.name == subject : StringTools.endsWith(f.name, '.hx')) && !StringTools.endsWith(f.name, 'import.hx'))
+						{ file: '$root/${f.name}', source: f.source }
 			];
 			final found: Array<Violation> = CheckFixture.violationsIn(new UnusedCaseBinder(), files);
 			count = found.filter(v -> v.file == '$root/$subject').length;

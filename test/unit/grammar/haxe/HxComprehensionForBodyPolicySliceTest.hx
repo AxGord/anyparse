@@ -21,10 +21,9 @@ import utest.Test;
  * `Keep` default. The slice is one read in `applySameLine`, placed AFTER
  * `applyExpressionIfFanout` so the SPECIFIC key outranks the general fanout.
  *
- * The four values are the engine's own `BodyPolicy`, so they mean here what
+ * The values are the engine's own `BodyPolicy`, so they mean here what
  * they mean on every other body knob: `same` puts the body on the head's
- * line, `next` on its own line one level in, `keep` reproduces the source
- * break, and `fitLine` keeps a body that RENDERS FLAT on the head line while it fits and
+ * line, `next` on its own line one level in, and `fitLine` (the default) keeps a body that RENDERS FLAT on the head line while it fits and
  * puts one that cannot render flat on its own line one level in. That last
  * clause is strict: it used to ask only whether the body's FIRST line fits,
  * which glued an if/else head to the `for` and left its `else` below.
@@ -46,9 +45,6 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 
 	/** The same config with `comprehensionFor: fitLine`. */
 	private static final CFG_FIT: String = cfg('fitLine', 'next');
-
-	/** The same config with `comprehensionFor: keep`. */
-	private static final CFG_KEEP: String = cfg('keep', 'next');
 
 	/**
 	 * `comprehensionFor: next` against `expressionIf: same` — the fanout writes
@@ -79,7 +75,7 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 	private static final FLAT_PLAIN: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
 		+ 'sourceCollectionValueName) computeEntryValueFrom(elementValue) ];\n\t}\n}';
 
-	/** The body on its own line under the cuddled head — what `next` produces, and what `keep` reads back. */
+	/** The body on its own line under the cuddled head — what `next` produces. */
 	private static final NEXT_PLAIN: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
 		+ 'sourceCollectionValueName)\n\t\t\tcomputeEntryValueFrom(elementValue)\n\t\t];\n\t}\n}';
 
@@ -87,23 +83,27 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 		super();
 	}
 
-	/** `same` on a body the source already wrote on the head line: byte-identical to the base binary. */
+	/**
+	 * `same` on a body the source already wrote on the head line keeps it there, where the `fitLine` default would move an
+	 * if/else body off it: the pin that the key is read at all.
+	 */
 	@:pin('control')
 	@:killer('M-ALWAYS-NEXT')
+	@:killer('M-NO-WIRE')
 	public function testSameKeepsAFlatBodyOnTheHeadLine(): Void {
 		Assert.equals(SAME_IF_ELSE, HxWriteFixture.triviaWrite(FLAT_IF_ELSE, CFG_SAME));
 	}
 
-	/** `same` OVERRIDES a source break — the byte that proves the key is no longer an alias for `keep`. */
+	/** `same` overrides a source break: the body goes back up onto the head line. */
 	@:pin('control')
-	@:killer('M-NO-WIRE')
+	@:killer('M-ALWAYS-NEXT')
 	public function testSamePullsTheBodyUpOntoTheHeadLine(): Void {
 		Assert.equals(FLAT_PLAIN, HxWriteFixture.triviaWrite(BROKEN_PLAIN, CFG_SAME));
 	}
 
 	/** `next` puts the if/else body on its own line under the `for`, `else` aligned with its own `if`. */
 	@:pin('control')
-	@:killer('M-NO-WIRE')
+	@:killer('M-ALWAYS-SAME')
 	public function testNextPutsTheBodyOnItsOwnLine(): Void {
 		Assert.equals(NEXT_IF_ELSE, HxWriteFixture.triviaWrite(FLAT_IF_ELSE, CFG_NEXT));
 	}
@@ -122,16 +122,9 @@ final class HxComprehensionForBodyPolicySliceTest extends Test {
 
 	/** `fitLine` on a flat-fitting body collapses the source break, like `same`. */
 	@:pin('control')
-	@:killer('M-NO-WIRE')
+	@:killer('M-ALWAYS-NEXT')
 	public function testFitLinePullsUpABodyThatFits(): Void {
 		Assert.equals(FLAT_PLAIN, HxWriteFixture.triviaWrite(BROKEN_PLAIN, CFG_FIT));
-	}
-
-	/** `keep` reproduces the source break — the pre-slice behaviour, now the value that ASKS for it. */
-	@:pin('control')
-	@:killer('M-ALWAYS-SAME')
-	public function testKeepReadsTheSourceBreak(): Void {
-		Assert.equals(NEXT_PLAIN, HxWriteFixture.triviaWrite(BROKEN_PLAIN, CFG_KEEP));
 	}
 
 	/** The `next` layout is a fixed point — a second write changes nothing. */

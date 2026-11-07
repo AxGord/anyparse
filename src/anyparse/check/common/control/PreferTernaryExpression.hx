@@ -131,14 +131,13 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return [
-			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex))
-				{
-					file: entry.file,
-					span: m.span,
-					rule: 'prefer-ternary-expression',
-					severity: Severity.Info,
-					message: 'this two-branch if-expression can be a ternary'
-				}
+			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex)) {
+				file: entry.file,
+				span: m.span,
+				rule: 'prefer-ternary-expression',
+				severity: Severity.Info,
+				message: 'this two-branch if-expression can be a ternary'
+			}
 		];
 	}
 

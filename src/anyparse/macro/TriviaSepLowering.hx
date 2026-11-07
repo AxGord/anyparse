@@ -81,11 +81,6 @@ final class TriviaSepLowering {
 		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, ?suppressAdditionalIndent: Expr,
 		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
 		matrixWrap: Bool = false,
-		// ω-keep-fnsig-newline: accessor for the close-newline slot
-		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
-		// pass it; null for every other call site → the keep close placement
-		// degrades to the legacy own-line close (byte-inert).
-		?trailNLAccess: Expr,
 		// ω-typedef-between-fields: opt-in for typedef-RHS anon-body blank
 		// inserts (currently `HxType.Anon` via `@:fmt(typedefBodyBlanks)`).
 		// When true, the force-multi branch reads `opt.typedefBeginType` /
@@ -219,9 +214,7 @@ final class TriviaSepLowering {
 		};
 		final emptyText: String = openText + closeText;
 		final trailBB: Expr = trailBBAccess ?? macro false;
-		// ω-keep-fnsig-newline: close-newline splice (`value.<field>Trailing
-		// NewlineBefore`), null for non-bearing callers → defaults to `false`.
-		final trailNL: Expr = trailNLAccess ?? macro false;
+
 		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
 		final trailClose: Expr = trailCloseAccess ?? macro (null: Null<String>);
 		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
@@ -245,14 +238,14 @@ final class TriviaSepLowering {
 		final checks: WriterLowering.SepStarChecks = triviaSepCheckExprs(
 			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, forceMultiInTypedef, mapWrap
 		);
-		final keepCheckExpr: Expr = checks.keepCheckExpr;
+
 		final ignoreCheckExpr: Expr = checks.ignoreCheckExpr;
 		final noWrapFlatCheckExpr: Expr = checks.noWrapFlatCheckExpr;
 		final triviaLeadDoc: Expr = checks.triviaLeadDoc;
 		final wrapLeadFlatDoc: Expr = checks.wrapLeadFlatDoc;
 		final wrapLeadBreakDoc: Expr = checks.wrapLeadBreakDoc;
 		final wrapTrailBreakDoc: Expr = checks.wrapTrailBreakDoc;
-		final triviaTrailDocKeepAware: Expr = checks.triviaTrailDocKeepAware;
+		final triviaTrailDoc: Expr = checks.triviaTrailDoc;
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -278,13 +271,12 @@ final class TriviaSepLowering {
 		// and `appendTrailingComma` is false — behaviour is byte-
 		// identical to the pre-slice path.
 		final trail: WriterLowering.SepStarTrailExprs = triviaSepTrailExprs(
-			trailingCommaField, trailPresentAccess, matrixWrap, forceMultiInTypedef, openText, closeText, sepText, triviaElemCall,
-			trailingCommaRemovable
+			trailingCommaField, trailPresentAccess, forceMultiInTypedef, trailingCommaRemovable
 		);
 		final forceExceedsExpr: Expr = trail.forceExceedsExpr;
 		final appendTrailingCommaExpr: Expr = trail.appendTrailingCommaExpr;
 		final flatTrailingCommaExpr: Expr = trail.flatTrailingCommaExpr;
-		final keepMatrixComputeExpr: Expr = trail.keepMatrixComputeExpr;
+
 		final forceModeExpr: Expr = trail.forceModeExpr;
 		final noTriviaBranch: Expr = triviaSepNoTriviaBranch({
 			openText: openText,
@@ -323,8 +315,7 @@ final class TriviaSepLowering {
 			appendTrailingCommaExpr: appendTrailingCommaExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			triviaLeadDoc: triviaLeadDoc,
-			triviaTrailDocKeepAware: triviaTrailDocKeepAware,
-			keepMatrixComputeExpr: keepMatrixComputeExpr,
+			triviaTrailDoc: triviaTrailDoc,
 			noTriviaBranch: noTriviaBranch,
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
@@ -343,21 +334,17 @@ final class TriviaSepLowering {
 			bracedList: openText == '{',
 			matrixWrap: matrixWrap,
 			uniformStmtBlanks: uniformStmtBlanks,
-			keepCheckExpr: keepCheckExpr,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
 			predicateScanExpr: predicateScan,
 			matrixSucceedsExpr: matrixSucc,
-			keepMatrixComputeExpr: keepMatrixComputeExpr,
 			forceMultiExpr: triviaSepForceMultiExpr(sepCtx),
 			noTriviaBranch: noTriviaBranch
 		}
 		final body: Expr = macro {
 			final _trailLC: Array<String> = $trailLC;
 			final _trailBB: Bool = $trailBB;
-			// ω-keep-fnsig-newline: source newline-before-close signal,
-			// consumed by `triviaTrailDocKeepAware` under `_keepEmit`.
-			final _trailNL: Bool = $trailNL;
+
 			final _trailClose: Null<String> = $trailClose;
 			final _trailOpen: Null<String> = $trailOpen;
 			// ω-open-trailing-alt: empty Star with only a same-line block-
@@ -438,29 +425,13 @@ final class TriviaSepLowering {
 	}
 
 	/**
-	 * Sep-Star force-multi per-element leading break dispatch: Keep-mode
-	 * source-aware break, noWrap-flat cuddle, or the legacy unconditional
-	 * hardline. References the runtime `_keepEmit`/`_noWrapFlatten`/`_si`/
+	 * Sep-Star force-multi per-element leading break dispatch: noWrap-flat
+	 * cuddle, or the legacy unconditional hardline. References the runtime `_noWrapFlatten`/`_si`/
 	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 */
 	private static function triviaSepForceMultiLeadExpr(): Expr {
 		return macro {
-			// ω-keep-objectlit: per-element source-aware leading break.
-			// Keep mode: first element gets hardline only if source
-			// had `\n` before it (`newlineBefore=true`) — otherwise
-			// glue to open lit. Subsequent elements: hardline on
-			// source-newline, space otherwise. Legacy non-Keep path
-			// always pushes hardline (force-multi byte-identical).
-			if (_keepEmit) {
-				if (_si > 0) {
-					if (_t.newlineBefore)
-						_inner.push(_dhl());
-					else
-						_inner.push(_dt(' '));
-				} else if (_t.newlineBefore) {
-					_inner.push(_dhl());
-				}
-			} else if (_noWrapFlatten) {
+			if (_noWrapFlatten) {
 				// ω-nowrap-flat: cuddle every element flat (space sep),
 				// mirroring the fork's `noWrap()` line-end suppression.
 				// The ONLY break is the unsuppressible newline a `//`
@@ -491,8 +462,8 @@ final class TriviaSepLowering {
 	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 *
 	 * `relocateTrailingComments` (`@:fmt(relocateTrailingComments)`): a `//` comment may move above an element
-	 * that starts its own line and has no leading comment (`trailingCommentAboveOr`); a Keep-mode element glued
-	 * to its predecessor or a noWrap-cuddled one keeps it, since the moved comment would not end a line there.
+	 * that starts its own line and has no leading comment (`trailingCommentAboveOr`); a noWrap-cuddled element
+	 * keeps it, since the moved comment would not end a line there.
 	 */
 	private static function triviaSepForceMultiLineExpr(
 		appendTrailingCommaExpr: Expr, flatTrailingCommaExpr: Expr, sepText: String, relocateTrailingComments: Bool
@@ -502,7 +473,7 @@ final class TriviaSepLowering {
 				if (_tc == null) {
 					_inner.push(_line);
 				} else {
-					final _ownLine: Bool = !_noWrapFlatten && (!_keepEmit || _t.newlineBefore);
+					final _ownLine: Bool = !_noWrapFlatten;
 					final _code: anyparse.core.Doc = _emitSep ? _dc([_elem, _dt($v{sepText})]) : _elem;
 					final _above: Bool = opt.trailingCommentAbove && _ownLine && _t.leadingComments.length == 0;
 					_inner.push(trailingCommentAboveOr(_above, _tc, _code, _line, opt));
@@ -556,7 +527,7 @@ final class TriviaSepLowering {
 		final keepCurlyEndExpr: Expr = c.keepCurlyEndExpr;
 		final typedefEndExpr: Expr = c.typedefEndExpr;
 		final triviaLeadDoc: Expr = c.triviaLeadDoc;
-		final triviaTrailDocKeepAware: Expr = c.triviaTrailDocKeepAware;
+		final triviaTrailDoc: Expr = c.triviaTrailDoc;
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
 		final lineExpr: Expr = triviaSepForceMultiLineExpr(
@@ -623,8 +594,8 @@ final class TriviaSepLowering {
 			// element (`0]`) — the fork's `noWrap()` calls
 			// `noLineEndBefore(close)`. Only when the list actually
 			// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
-			// own-line close (`triviaTrailDocKeepAware`).
-			_parts.push(_noWrapFlatten ? _de() : $triviaTrailDocKeepAware);
+			// own-line close (`triviaTrailDoc`).
+			_parts.push(_noWrapFlatten ? _de() : $triviaTrailDoc);
 			_parts.push(_dt($v{c.closeText}));
 			// ω-sep-star-close-trail: guarded, not verbatim — a `//` close-trailing
 			// ends its source line, and the enclosing list glues its separator
@@ -715,10 +686,7 @@ final class TriviaSepLowering {
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
 		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool, mapWrap: Null<WriterLowering.SepStarMapWrap>
 	): WriterLowering.SepStarChecks {
-		final keepCheckExpr: Expr = wrapRulesField != null ? {
-			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
-			macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
-		} : macro false;
+
 		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
 		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
 		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
@@ -843,33 +811,14 @@ final class TriviaSepLowering {
 		// the close to the last body token (Inline), `_dhl()` keeps
 		// it on its own line (Same).
 		final wrapTrailBreakDoc: Expr = triviaTrailDoc;
-		// ω-keep-fnsig-newline: close-delimiter placement for the trivia
-		// force-multi KEEP path. Function signatures (the only Star carrying
-		// `@:fmt(ignoreSourceNewlinesForWrap)`) preserve the SOURCE close
-		// placement under keep: the close `)` stays glued to the last
-		// parameter (`param7:Int)` — `wrapping_of_function_signature_keep`) when
-		// the source had no newline before it, but drops to its own indented
-		// line (`\n\t):FastMatrix3` — `issue_238_keep_wrapping_function_signature`)
-		// when the author put one there. `_trailNL` carries that source signal
-		// (captured at the Star's close-peek into the `TrailingNewlineBefore`
-		// slot). When `_keepEmit` is live: `_dhl()` if the source broke before
-		// close, `_de()` (glued) otherwise. Object-literals / arrays (no
-		// intrinsic flag) keep their own-line close unchanged, and non-keep
-		// params (`_keepEmit == false`) stay on the legacy break — both byte-
-		// inert. Only consumed at the trivia branch's `_parts` assembly; the
-		// no-trivia cascade reads `wrapTrailBreakDoc`.
-		final triviaTrailDocKeepAware: Expr = ignoreSourceNewlinesForWrap
-			? macro (_keepEmit ? (_trailNL ? _dhl() : _de()) : $triviaTrailDoc)
-			: triviaTrailDoc;
 		return {
-			keepCheckExpr: keepCheckExpr,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
 			triviaLeadDoc: knobNextOrEmpty,
 			wrapLeadFlatDoc: wrapLeadFlatDoc,
 			wrapLeadBreakDoc: knobNextOrEmpty,
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
-			triviaTrailDocKeepAware: triviaTrailDocKeepAware
+			triviaTrailDoc: triviaTrailDoc
 		};
 	}
 
@@ -880,8 +829,7 @@ final class TriviaSepLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepTrailExprs(
-		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, matrixWrap: Bool, forceMultiInTypedef: Bool, openText: String,
-		closeText: String, sepText: String, triviaElemCall: Expr, trailingCommaRemovable: Bool
+		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, forceMultiInTypedef: Bool, trailingCommaRemovable: Bool
 	): WriterLowering.SepStarTrailExprs {
 		final knobAccessOrFalse: Expr = trailingCommaField == null ? macro false : optFieldAccess(trailingCommaField);
 		final forceExceedsExpr: Expr = trailPresentAccess != null && trailingCommaField != null
@@ -912,55 +860,7 @@ final class TriviaSepLowering {
 		// Null `trailPresentAccess` (Stars without a source-trail slot) → `false`,
 		// byte-identical to the pre-slice flat shape.
 		final flatTrailingCommaExpr: Expr = trailPresentAccess ?? macro false;
-		// ω-arraymatrix-keep: matrix-align takes precedence over the Keep
-		// cascade. The non-Keep matrix attempt (`matrixComputeExpr`, in the
-		// no-trivia/cascade branch) is gated `!_keepEmit` and so never fires
-		// under a `"defaultWrap": "keep"` array — a kept matrix lands in the
-		// force-multi path, which preserves the source rows but emits no
-		// column padding. The fork runs `tryMatrixWrap` BEFORE
-		// `applyWrappingPlace` inside `arrayLiteralWrapping`, so matrix grid
-		// layout wins over the array's keep/noWrap rules; this expr mirrors
-		// that for the Keep case. Computed at the outer Star scope (the
-		// no-trivia branch's `_matrixDoc` is unreachable under Keep) and
-		// gated on `_keepEmit` + the same source-multiline-without-hardline
-		// condition the non-Keep path uses (`!_requiresHardline`,
-		// `_hasSourceNewlines`). The matrix detector reads per-element
-		// `newlineBefore` (row boundaries) and the bare rendered cell Docs;
-		// on a uniform grid it returns the aligned/unaligned Doc, else null
-		// → fall through to force-multi. Cells under `!_requiresHardline`
-		// carry no comments (any leading/trailing comment forces a hardline
-		// under Keep, see the predicate split below), so the bare
-		// `$triviaElemCall` render matches the no-trivia branch's `_docs`
-		// exactly. Only meaningful when the Star opted into
-		// `@:fmt(arrayMatrixWrap)` (`matrixWrap` compile-time flag); every
-		// other sep-Star consumer leaves it `macro null` and stays byte-
-		// identical.
-		final keepMatrixComputeExpr: Expr = matrixWrap
-			? macro {
-				if (
-					_keepEmit
-					&& !_requiresHardline
-					&& _hasSourceNewlines
-					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
-				) {
-					final _kdocs: Array<anyparse.core.Doc> = [];
-					final _krow: Array<Bool> = [];
-					var _kmi: Int = 0;
-					while (_kmi < _arr.length) {
-						final _t = _arr[_kmi];
-						_kdocs.push($triviaElemCall);
-						_krow.push(_kmi == 0 || _t.newlineBefore);
-						_kmi++;
-					}
-					final _kmcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					anyparse.format.wrap.MatrixWrap.tryLayout(
-						_kdocs, _krow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _kmcols
-					);
-				} else {
-					(null: Null<anyparse.core.Doc>);
-				}
-			}
-			: macro (null: Null<anyparse.core.Doc>);
+
 		// ω-typedef-anon-force-multi: the `forceMode` option of
 		// `WrapList.emit` — a runtime `Null<WrapMode>` predicate. When
 		// the Star opted into `@:fmt(forceMultiInTypedef)` AND the
@@ -990,7 +890,6 @@ final class TriviaSepLowering {
 			forceExceedsExpr: forceExceedsExpr,
 			appendTrailingCommaExpr: appendTrailingCommaExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
-			keepMatrixComputeExpr: keepMatrixComputeExpr,
 			forceModeExpr: forceModeExpr
 		};
 	}
@@ -1060,7 +959,7 @@ final class TriviaSepLowering {
 					// unless the rows form a uniform grid of at least TWO columns, so a
 					// flat array (no `newlineBefore` anywhere) and a one-per-line array
 					// both fall straight through to the cascade.
-					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline && !_keepEmit) {
+					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline) {
 						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
 						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 						_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(
@@ -1165,10 +1064,10 @@ final class TriviaSepLowering {
 				// overridden — `fmt` would need two rewrites and `writeRoundTrip(s) == s`
 				// would fail after one. Collapse such an answer to one-per-line, which is
 				// the shape that second pass produces anyway: same final bytes, one pass
-				// earlier. Keep / Ignore reproduce or drop the source layout and are fixed
-				// points already; a reflow Star routes its multiline lists through the same
-				// cascade, so both passes agree there too.
-				final _breakAsOnePerLine: Bool = !$v{c.reflowSourceMultiline} && !_keepEmit && !_ignoreEmit;
+				// earlier. Ignore drops the source layout and is a fixed point already; a
+				// reflow Star routes its multiline lists through the same cascade, so both
+				// passes agree there too.
+				final _breakAsOnePerLine: Bool = !$v{c.reflowSourceMultiline} && !_ignoreEmit;
 				$complexKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
@@ -1234,8 +1133,7 @@ final class TriviaSepLowering {
 	 * Sep-Star predicate-scan loop: one pass over `_arr` populating the
 	 * `_requiresHardline` / `_hasSourceNewlines` / `_hasInlineableTrivia` /
 	 * `_anyMultilineItem` accumulators (declared in the emitted scope) from each
-	 * element's blank/comment/source-newline signals. References the runtime
-	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
+	 * element's blank/comment/source-newline signals. References the runtime `_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
 	 */
 	private static function triviaSepPredicateScanExpr(
 		reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr, relocateTrailingComments: Bool
@@ -1268,15 +1166,14 @@ final class TriviaSepLowering {
 				// it marks a single-line `['a', 'b']` as source-multiline → forces it OnePerLine,
 				// which the writer's own broken-branch output then re-triggers every pass (non-
 				// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
-				// element's flag — EXCEPT in Keep mode (preserves source breaks verbatim) and for
-				// a comprehension (`for`/`while` sole element), whose element genuinely starts on
+				// element's flag — EXCEPT for a comprehension (`for`/`while` sole element), whose element genuinely starts on
 				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
 				// newlines, so they are always counted.
 				if (
-					_t.newlineBefore && !_ignoreEmit && !_matrixOff && !(
-						$v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
-						&& !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t)
-					)
+					_t.newlineBefore
+					&& !_ignoreEmit
+					&& !_matrixOff
+					&& !($v{reflowSourceMultiline} && _ti == 0 && !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t))
 				)
 					_hasSourceNewlines = true;
 				// A non-enum payload (e.g. an object-literal field struct) answers
@@ -1362,12 +1259,12 @@ final class TriviaSepLowering {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepDispatchExpr(c: WriterLowering.SepStarDispatchCtx): Expr {
-		final keepCheckExpr: Expr = c.keepCheckExpr;
+
 		final ignoreCheckExpr: Expr = c.ignoreCheckExpr;
 		final noWrapFlatCheckExpr: Expr = c.noWrapFlatCheckExpr;
 		final predicateScanExpr: Expr = c.predicateScanExpr;
 		final matrixSucceedsExpr: Expr = c.matrixSucceedsExpr;
-		final keepMatrixComputeExpr: Expr = c.keepMatrixComputeExpr;
+
 		final forceMultiExpr: Expr = c.forceMultiExpr;
 		final noTriviaBranch: Expr = c.noTriviaBranch;
 		// ω-uniform-element-blanks: the `_uniformCollapse` pre-pass, shared with
@@ -1376,11 +1273,9 @@ final class TriviaSepLowering {
 		// `macro {}` for every non-opted sep-Star.
 		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
 		return macro {
-			// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
-			// `_hasTrivia` into three orthogonal predicates so the
-			// Ignore-mode cascade can ingest per-element block comments
-			// and the Keep emit path can stay gated on physical hardline
-			// requirements alone.
+			// ω-cascade-emits-comments: decompose `_hasTrivia` into three
+			// orthogonal predicates so the Ignore-mode cascade can ingest
+			// per-element block comments.
 			//
 			//  - `_requiresHardline` — physical hardline requirement:
 			//    `_trailLC`/`_trailOpen` on the open/close boundary, any
@@ -1406,25 +1301,10 @@ final class TriviaSepLowering {
 			// `_requiresHardline=true` (legacy bucket); cascade rewrite
 			// at the no-trivia branch collapses to `_docs.push(_elem)`
 			// because `_parts.length==1` on no-comment elements.
-			// ω-keep-fnsig-newline: `_keepEmit` is read FIRST so the
-			// `_ignoreEmit` gate below can yield to it. The only Star
-			// carrying the intrinsic `@:fmt(ignoreSourceNewlinesForWrap)`
-			// flag (so `ignoreCheckExpr == macro true`) is `HxFnDecl.params`;
-			// it ALSO reads `wrapRules('functionSignatureWrap')`. When the
-			// JSON config sets that rule to `keep`, the author opted into
-			// source-newline preservation explicitly, so Keep must win over
-			// the per-construct Ignore default. For every JSON-config consumer
-			// `defaultMode` is a single value — Keep and Ignore are mutually
-			// exclusive — so `!_keepEmit` only ever flips the params-in-Keep
-			// case; all other Stars (Ignore-mode object-literals / arrays,
-			// default-mode params) keep the prior `_ignoreEmit` value byte-
-			// for-byte. The force-multi per-element swap further below reads
-			// this same `_keepEmit` for the source-`newlineBefore` dispatch.
-			final _keepEmit: Bool = $keepCheckExpr;
-			final _ignoreEmit: Bool = $ignoreCheckExpr && !_keepEmit;
+			final _ignoreEmit: Bool = $ignoreCheckExpr;
 			// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
-			// to Keep/Ignore (mutually exclusive `defaultMode`s, so this
-			// only ever flips for an actual NoWrap config). Scoped to the
+			// to Ignore (a single `defaultMode`, so this only ever flips for
+			// an actual NoWrap config). Scoped to the
 			// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
 			// flag (the only Star carrying it). The fork flattens noWrap
 			// arrays (`arrayLiteralWrapping` → `applyWrappingPlace`) but
@@ -1435,7 +1315,7 @@ final class TriviaSepLowering {
 			// legacy source-multiline force-multi shape. Drives the fork's
 			// `noWrap()` flat-with-comment-break layout below.
 			final _noWrapRules: Bool = $noWrapFlatCheckExpr;
-			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && _noWrapRules && !_keepEmit && !_ignoreEmit;
+			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && _noWrapRules && !_ignoreEmit;
 			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
 			// entirely — like the `Ignore` policy it DROPS source newlines
 			// so the cascade (not the force-multi path) drives layout: a
@@ -1476,24 +1356,10 @@ final class TriviaSepLowering {
 			// Star (`matrixWrap`) under noWrap with no comment/blank
 			// hardline; every other path leaves it false.
 			final _matrixSucceeds: Bool = $matrixSucceedsExpr;
-			// ω-keep-relax-gate: Keep emit gate. Fires whenever the
-			// wrap-rules runtime mode is Keep — comments and blanks no
-			// longer block Keep semantics. The force-multi loop below
-			// emits leadingComments/trailingComment + blanks per
-			// element, and the per-element swap honours source
-			// `newlineBefore` for inter-element breaks. Syntactic
-			// invariant: a line-trailing `// ...` comment ends the
-			// source line, so the next element always carries
-			// `newlineBefore=true` and gets `_dhl()` from the swap —
-			// no risk of `_dt(' ')` cuddling content after a `//`.
-			// The cascade-emits-comments path remains reserved for
-			// Ignore mode (`_hasInlineableTrivia` bucket).
-			// `_keepEmit` itself is declared above (hoisted so the
-			// `_ignoreEmit` gate can yield to it — ω-keep-fnsig-newline).
 			// ω-array-reflow: when the Star opted into
 			// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
 			// signal is bare source newlines (no hardline-requiring
-			// trivia, no Keep / Ignore policy), divert away from the
+			// trivia, no Ignore policy), divert away from the
 			// force-multi (one-`_dhl()`-per-element) path and let the
 			// wrap cascade re-flow the list. `_smlKeep` gates that
 			// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
@@ -1528,22 +1394,10 @@ final class TriviaSepLowering {
 			final _smlKeep: Bool = $v{c.reflowSourceMultiline}
 				&& _hasSourceNewlines
 				&& !_requiresHardline
-				&& !_keepEmit
 				&& !_ignoreEmit
 				&& !_noWrapFlatten;
 			final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
-			// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep
-			// force-multi emit. `_keepMatrixDoc` is non-null only for a
-			// matrix-eligible Star (`matrixWrap`) under Keep with a
-			// uniform source grid; otherwise null → fall through to the
-			// existing force-multi / cascade dispatch byte-identically.
-			// Wrapped in `_dwb(_dbg(...))` like the force-multi path so a
-			// matrix nested inside a force-flat region keeps its indent
-			// and an enclosing Group defers the grid's hardlines.
-			final _keepMatrixDoc: Null<anyparse.core.Doc> = $keepMatrixComputeExpr;
-			if (_keepMatrixDoc != null) {
-				${triviaSepCloseTrailAppendExpr(macro _dwb(_dbg(_keepMatrixDoc)))};
-			} else if (_forceMulti) {
+			if (_forceMulti) {
 				$forceMultiExpr;
 			} else {
 				${redecidedWhenIgnored(c.bracedList, triviaSepCloseTrailAppendExpr(noTriviaBranch))};

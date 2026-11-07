@@ -54,8 +54,8 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "68b2419ac75ffc0f",
-				"err": "e3b0c44298fc1c14",
+				"out": "8d6059ac9e7e0cc0",
+				"err": "da4d1f394fdd9f4c",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
 				"commentsKept": true
@@ -144,7 +144,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "e153b1db1e4bc6a4",
+				"out": "8f3a5d43b7e49bc9",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

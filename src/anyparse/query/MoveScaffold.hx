@@ -46,8 +46,9 @@ final class MoveScaffold {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
-			for (g in MoveMember.membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions))
-				if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
+			for (g in MoveMember.membersOf(
+				prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions
+			)) if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
 		];
 		if (viaField != null) {
 			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);
@@ -70,16 +71,16 @@ final class MoveScaffold {
 		];
 		return switch candidates {
 			case [one]: VOk(one);
-			case []: scaffold
-				? scaffoldViaResult(prep, deriveViaName(prep.destTypeName), plugin.lexicalRegions)
-				: VErr(
-					'caller(s) of the moved instance member(s) remain in "${prep.srcTypeName}" but it has no field of '
-					+ 'type "${prep.destTypeName}" to route them through — add one '
-					+ '(e.g. `private final _x: ${prep.destTypeName}`), wire it in the constructor, pass --via <field>, or --scaffold'
-				);
-			case many: VErr(
-				'multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) — pass --via <field>'
-			);
+			case []:
+				scaffold
+					? scaffoldViaResult(prep, deriveViaName(prep.destTypeName), plugin.lexicalRegions)
+					: VErr(
+						'caller(s) of the moved instance member(s) remain in "${prep.srcTypeName}" but it has no field of '
+						+ 'type "${prep.destTypeName}" to route them through — add one '
+						+ '(e.g. `private final _x: ${prep.destTypeName}`), wire it in the constructor, pass --via <field>, or --scaffold'
+					);
+			case many:
+				VErr('multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) — pass --via <field>');
 		};
 	}
 

@@ -517,11 +517,7 @@ final class OracleCoverage {
 		final tokens: Array<String> = parsedPaths(result.out);
 		if (tokens.length == 0) return unknown('`haxe -v` named no parsed source file');
 		final arms: Array<CompiledArm> = [
-			for (arm in parseArms(result.out))
-				{
-					files: [for (token in arm.files) canonical(root, token)],
-					defines: arm.defines
-				}
+			for (arm in parseArms(result.out)) { files: [for (token in arm.files) canonical(root, token)], defines: arm.defines }
 		];
 		return new OracleCoverage(tokens.map(token -> canonical(root, token)), arms, '');
 		#else

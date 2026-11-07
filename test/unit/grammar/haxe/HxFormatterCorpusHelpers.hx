@@ -29,6 +29,68 @@ typedef HxTestCase = {
 @:nullSafety(Strict)
 final class HxFormatterCorpusHelpers {
 
+	/**
+	 * The one answer to "which corpus fixtures encode an authorial layout the canonical writer does not reproduce":
+	 * each expected section is a layout the fork read from its input (an explicit `keep`, or the fork's `keep`
+	 * default for `expressionCase` / `comprehensionFor`), and the writer's output is a function of the AST and the
+	 * options alone. Such a fixture failing is not a defect; one that passes no longer belongs here.
+	 */
+	public static final FORK_AUTHORIAL: Array<String> = [
+		'test/testcases/emptylines/getter_setter_keep.hxtest',
+		'test/testcases/indentation/else_in_return_switch_with_expressionIf_same.hxtest',
+		'test/testcases/indentation/issue_114_untyped_keep.hxtest',
+		'test/testcases/indentation/issue_144_switch_braceless_if.hxtest',
+		'test/testcases/indentation/issue_168_object_literal_in_array_comprehension.hxtest',
+		'test/testcases/indentation/issue_258_object_literal_false.hxtest',
+		'test/testcases/indentation/issue_258_object_literal_true.hxtest',
+		'test/testcases/indentation/issue_304_expression_if_indentation_keep_indent_assignment_expr.hxtest',
+		'test/testcases/indentation/issue_304_expression_if_indentation_keep.hxtest',
+		'test/testcases/indentation/issue_334_complex_var_assignment_indent_value_expr.hxtest',
+		'test/testcases/indentation/issue_334_complex_var_assignment.hxtest',
+		'test/testcases/indentation/lambda_map.hxtest',
+		'test/testcases/lineends/issue_231_anon_function_parameter_keep.hxtest',
+		'test/testcases/lineends/issue_329_else_body_with_popen_indent_value_expr_keep.hxtest',
+		'test/testcases/lineends/issue_329_else_body_with_popen_keep.hxtest',
+		'test/testcases/other/for_with_macro_reification.hxtest',
+		'test/testcases/other/issue_34_switch_this.hxtest',
+		'test/testcases/sameline/issue_120_expression_case_2_keep.hxtest',
+		'test/testcases/sameline/issue_121_longer_expression_case_keep.hxtest',
+		'test/testcases/sameline/issue_125_expression_case_and_comment_keep.hxtest',
+		'test/testcases/sameline/issue_132_expression_case_if.hxtest',
+		'test/testcases/sameline/issue_137_array_comprehension.hxtest',
+		'test/testcases/sameline/issue_235_keep_if_else.hxtest',
+		'test/testcases/sameline/issue_254_case_colon_keep.hxtest',
+		'test/testcases/sameline/issue_257_return_keep.hxtest',
+		'test/testcases/sameline/issue_257_return_next.hxtest',
+		'test/testcases/sameline/issue_257_return_same_indent_value_expr.hxtest',
+		'test/testcases/sameline/issue_257_return_same.hxtest',
+		'test/testcases/sameline/issue_303_return_sameline_all_keep.hxtest',
+		'test/testcases/sameline/issue_306_case_bropen_keep_curly_both.hxtest',
+		'test/testcases/sameline/issue_306_case_bropen_keep.hxtest',
+		'test/testcases/sameline/issue_362_untyped_body_keep.hxtest',
+		'test/testcases/sameline/issue_552_non_value_if_in_switch.hxtest',
+		'test/testcases/sameline/return_if_else_if_keep.hxtest',
+		'test/testcases/sameline/switch_case_keep.hxtest',
+		'test/testcases/wrapping/else_after_switch_as_if_body.hxtest',
+		'test/testcases/wrapping/expression_paren_close_multiline.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_array_comprehension.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_array.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_call.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_function_signature.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_nowrap.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_object_literal.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping_return_call.hxtest',
+		'test/testcases/wrapping/issue_238_keep_wrapping.hxtest',
+		'test/testcases/wrapping/issue_299_opboolchain_keep.hxtest',
+		'test/testcases/wrapping/issue_311_line_break_before_popen_keep.hxtest',
+		'test/testcases/wrapping/issue_355_var_wrapping_keep.hxtest',
+		'test/testcases/wrapping/issue_357_array_comprehension.hxtest',
+		'test/testcases/wrapping/method_chain_with_comments_keep.hxtest',
+		'test/testcases/wrapping/opadd_chain_keep.hxtest',
+		'test/testcases/wrapping/wrapping_method_chain_keep.hxtest',
+		'test/testcases/wrapping/wrapping_of_function_signature_keep.hxtest'
+	];
+
 	private static inline final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';
 	private static inline final SECTION_SEP: String = '\n---\n';
 	private static inline final EXPECTED_SECTIONS: Int = 3;

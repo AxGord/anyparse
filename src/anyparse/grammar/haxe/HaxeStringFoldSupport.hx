@@ -229,17 +229,13 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		return switch node.kind {
-			case 'BoolLit', 'NullLit':
-				source.substring(span.from, span.to);
-			case 'IntLit':
-				decimalText(source.substring(span.from, span.to).replace('_', ''));
-			case 'HexLit':
-				hexText(source.substring(span.from, span.to).replace('_', ''));
+			case 'BoolLit', 'NullLit': source.substring(span.from, span.to);
+			case 'IntLit': decimalText(source.substring(span.from, span.to).replace('_', ''));
+			case 'HexLit': hexText(source.substring(span.from, span.to).replace('_', ''));
 			case 'Neg' if (node.children.length == 1 && (node.children[0].kind == 'IntLit' || node.children[0].kind == 'HexLit')):
 				final magnitude: Null<String> = constantText(node.children[0], source);
 				magnitude == null || magnitude == '0' ? magnitude : '-$magnitude';
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

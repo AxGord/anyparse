@@ -151,14 +151,10 @@ final class HxGlueWidthSliceTest extends Test {
 	}
 
 	public function testGlueSurvivesUnderTheNonFitLinePolicies(): Void {
-		// Policy inertness: the width answer belongs to `FitLine` alone.
-		// `Same` glues unconditionally and must keep doing so at the width that
-		// makes `fitLine` break, and `Keep` reproduces the source shape.
-		for (policy in ['same', 'keep']) {
-			final json: String = '{"wrapping": {"maxLineLength": 130}, "sameLine": {"forBody": "$policy"}}';
-			final out: String = write(GLUE_SRC, json);
-			Assert.isTrue(out.indexOf(GLUED_LINE) != -1, '`$policy` must keep the unconditional glue: <$out>');
-		}
+		// Policy inertness: the width answer belongs to `FitLine` alone. `Same` glues
+		// unconditionally and must keep doing so at the width that makes `fitLine` break.
+		final out: String = write(GLUE_SRC, '{"wrapping": {"maxLineLength": 130}, "sameLine": {"forBody": "same"}}');
+		Assert.isTrue(out.indexOf(GLUED_LINE) != -1, '`same` must keep the unconditional glue: <$out>');
 	}
 
 	public function testIsIdempotentAcrossThreePasses(): Void {

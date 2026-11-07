@@ -260,14 +260,13 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (entry in files) for (candidate in candidatesOf(entry.source, plugin))
-				{
-					file: entry.file,
-					span: candidate.span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: candidate.message
-				}
+			for (entry in files) for (candidate in candidatesOf(entry.source, plugin)) {
+				file: entry.file,
+				span: candidate.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: candidate.message
+			}
 		];
 	}
 

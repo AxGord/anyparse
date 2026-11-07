@@ -617,8 +617,7 @@ final class HaxeSpawn {
 					cpuListCount(sys.io.File.getContent('/sys/devices/cpu_core/cpus'))
 				catch (exception: haxe.Exception)
 					null;
-			case _:
-				null;
+			case _: null;
 		} #else null #end;
 	}
 
@@ -862,15 +861,14 @@ final class HaxeSpawn {
 	 */
 	public static function unanswered(count: Int, failure: String, err: String, ?cancelled: Bool): Array<HaxeRun> {
 		return [
-			for (_ in 0...count)
-				{
-					status: null,
-					out: '',
-					err: err,
-					failure: failure,
-					overflowed: false,
-					cancelled: cancelled
-				}
+			for (_ in 0...count) {
+				status: null,
+				out: '',
+				err: err,
+				failure: failure,
+				overflowed: false,
+				cancelled: cancelled
+			}
 		];
 	}
 

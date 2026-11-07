@@ -37,11 +37,10 @@ final class ElemChainEmit {
 				parts[parts.length - 1] = Concat([parts[parts.length - 1]].concat(elem.tail));
 		}
 		if (parts.length < 2 || (!ops.contains(op) && !leadsWithSep(rules))) return null;
-		if (cascadeLeavesTheList(parts.length, rules) || namesAdditionalIndent(rules) || operandOpensItsOwnLine(parts)) return null;
+		if (cascadeLeavesTheList(rules) || namesAdditionalIndent(rules) || operandOpensItsOwnLine(parts)) return null;
 		if (parts.slice(0, parts.length - 1).concat(tail).exists(WrapList.endsWithLineComment)) return null;
 		return BinaryChainEmit.emit(
-			parts, ops, opt, rules, false, false, null, false, false, null, false, null, false, null, null,
-			{ sep: sep, tail: tail, close: close }
+			parts, ops, opt, rules, false, false, null, false, null, false, null, false, null, null, { sep: sep, tail: tail, close: close }
 		);
 	}
 
@@ -58,14 +57,14 @@ final class ElemChainEmit {
 		return parts.exists(WrapList.startsWithHardline);
 	}
 
+	/** A cascade defaulting to `ignore` names no layout the chain could take. */
+	private static inline function cascadeLeavesTheList(rules: WrapRules): Bool {
+		return rules.defaultMode == WrapMode.Ignore;
+	}
+
 	/** Whether any answer of the cascade may start a continuation line with the list separator. */
 	private static function leadsWithSep(rules: WrapRules): Bool {
 		return rules.defaultLocation == WrappingLocation.BeforeLast || rules.rules.exists(r -> r.location == WrappingLocation.BeforeLast);
-	}
-
-	/** A cascade defaulting to `keep` or `ignore` names no layout the chain could take. */
-	private static function cascadeLeavesTheList(operands: Int, rules: WrapRules): Bool {
-		return rules.defaultMode == WrapMode.Keep || rules.defaultMode == WrapMode.Ignore || WrapList.cascadeIsKeep(rules, operands);
 	}
 
 	/** The chain's cascade answer carries mode and location only, so the extra continuation indent stays with the list layout. */
@@ -97,12 +96,9 @@ final class ElemChainEmit {
 	 */
 	private static function chainOperands(d: Doc, op: String): Array<Doc> {
 		return switch d {
-			case Group(Concat([left, Nest(_, Concat([Line(_), Text(t), right]))])) if (t == '$op '):
-				leftOperands(left, op).concat([right]);
-			case Concat([left, Text(t), right]) if (t == ' $op '):
-				leftOperands(left, op).concat([right]);
-			case _:
-				[d];
+			case Group(Concat([left, Nest(_, Concat([Line(_), Text(t), right]))])) if (t == '$op '): leftOperands(left, op).concat([right]);
+			case Concat([left, Text(t), right]) if (t == ' $op '): leftOperands(left, op).concat([right]);
+			case _: [d];
 		};
 	}
 

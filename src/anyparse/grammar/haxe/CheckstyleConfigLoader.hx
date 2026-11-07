@@ -201,8 +201,7 @@ final class CheckstyleConfigLoader {
 			case 'ConstantName': [constantRule(type, format, tokens, ignoreExtern)];
 			case 'LocalVariableName': [ruleFor(NamingCategory.Local, type, format, [], [], ignoreExtern)];
 			case 'ParameterName': [ruleFor(NamingCategory.Param, type, format, [], [], ignoreExtern)];
-			case 'EnumValueName':
-				[ruleFor(NamingCategory.EnumValue, type, format, [], [], ignoreExtern)];
+			case 'EnumValueName': [ruleFor(NamingCategory.EnumValue, type, format, [], [], ignoreExtern)];
 			// `CatchParameterNameCheck` is the one naming check that does not extend `NameCheckBase`: it
 			// declares no `ignoreExtern` at all, so checkstyle never exempts a catch variable for one and
 			// neither does this — the flag is dropped here rather than defaulted.

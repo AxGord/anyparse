@@ -194,8 +194,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 			match: matchPat,
 			nth: nth
 		}) {
-			case Ok(_, node):
-				node;
+			case Ok(_, node): node;
 			case Err(message):
 				CliIo.stderr('apq $op: $message\n');
 				null;

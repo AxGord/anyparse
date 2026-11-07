@@ -230,8 +230,9 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		final found: Array<Violation> = crossed('b.acquire(); a.acquire();');
 		Assert.same(['info B H.viaBoth | H.a', 'warning B H.viaBoth | H.b'], holds(found).filter(g -> g.indexOf('viaBoth') >= 0));
 		Assert.same([true], [
-			for (v in found) if (v.data?.member == 'H.viaBoth' && v.data?.subject == 'H.a')
-				v.message.indexOf(' — taken after the hold of H.b by the same call of H.takeBoth, ') >= 0
+			for (v in found)
+				if (v.data?.member == 'H.viaBoth' && v.data?.subject == 'H.a')
+					v.message.indexOf(' — taken after the hold of H.b by the same call of H.takeBoth, ') >= 0
 		]);
 		Assert.same(
 			['info B H.viaBoth | H.b', 'warning B H.viaBoth | H.a'],
@@ -265,8 +266,9 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			'warning B H.viaBoth | H.b'
 		], holds(found));
 		Assert.same([true], [
-			for (v in found) if (v.data?.member == 'H.takeBoth')
-				v.message.indexOf(' — long only through waiting for H.a, held long by H.slowA, H.viaBoth, reported there') >= 0
+			for (v in found)
+				if (v.data?.member == 'H.takeBoth')
+					v.message.indexOf(' — long only through waiting for H.a, held long by H.slowA, H.viaBoth, reported there') >= 0
 		]);
 		#else
 		Assert.pass('non-sys target');

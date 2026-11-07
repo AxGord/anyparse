@@ -106,8 +106,7 @@ class ShapeBuilder {
 			case TType(ref, _):
 				final td: DefType = ref.get();
 				shapeTypedef(td);
-			case TAbstract(ref, _):
-				shapeAbstract(ref.get());
+			case TAbstract(ref, _): shapeAbstract(ref.get());
 			case _:
 				Context.fatalError('ShapeBuilder: cannot shape top-level type: ${typeToString(t)}', Context.currentPos());
 				throw 'unreachable';

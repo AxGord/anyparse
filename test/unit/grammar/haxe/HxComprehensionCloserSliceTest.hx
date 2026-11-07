@@ -39,23 +39,27 @@ import utest.Test;
 final class HxComprehensionCloserSliceTest extends Test {
 
 	/** client-shaped config with `wrapping.comprehensionCuddledOpen` ON — the regime client formats under. */
-	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
+	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {'
+		+ '"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
+
+	/** `ON` with the comprehension body on the head line (`comprehensionFor: same`), so a `switch` body opens there. */
+	private static final ON_SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
 
 	/** Same config with the cuddled-open knob absent — the pre-knob leading-break regime. */
 	private static final OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/**
 	 * Knob ON but TIGHT (unpadded) comprehension brackets — no
 	 * `comprehensionBrackets` padding, where `shapeComprehensionBlockHug` declines.
 	 */
-	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/** The reported shape (anonymised from a macro-generating build macro): reified body, curly tail, `];` glued to the body line. */
 	private static final REIFIED_GLUED: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (fieldEntry in '
@@ -171,7 +175,7 @@ final class HxComprehensionCloserSliceTest extends Test {
 	public function testHeadGluedSwitchBodyKeepsBlockHug(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (elementValue in sourceCollectionValue) '
 			+ 'switch elementValue.kindValue {\n\t\t\tcase KAlpha: alphaDescriptor;\n\t\t\tcase _: betaDescriptor;\n\t\t} ];\n\t}\n}';
-		Assert.equals(src, triviaWrite(src, ON));
+		Assert.equals(src, triviaWrite(src, ON_SAME));
 	}
 
 	/**
@@ -211,9 +215,9 @@ final class HxComprehensionCloserSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for ('
 			+ 'innerElement in innerCollectionValue)\n\t\t\tmacro if ($$p{[\'sourceObject\', innerElement.slot]} != null) '
 			+ '$$p{[outerElement.slot]} = $$p{[\'sourceObject\', innerElement.slot]} ];\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (outerElement in outerCollectionValue) for ('
-			+ 'innerElement in innerCollectionValue)\n\t\t\tmacro if ($$p{[\'sourceObject\', innerElement.slot]} != null) '
-			+ '$$p{[outerElement.slot]} = $$p{[\'sourceObject\', innerElement.slot]}\n\t\t];\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ for (outerElement in outerCollectionValue)\n'
+			+ '\t\t\tfor (innerElement in innerCollectionValue)\n\t\t\t\tmacro if ($$p{[\'sourceObject\', innerEl'
+			+ 'ement.slot]} != null) $$p{[outerElement.slot]} = $$p{[\'sourceObject\', innerElement.slot]}\n\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}
 

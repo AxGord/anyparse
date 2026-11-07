@@ -451,10 +451,11 @@ class TypeNameBindingTest extends Test {
 		return targets == null
 			? 'open'
 			: [
-				for (t in targets) switch t {
-					case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
-					case OutOfIndex(path): path;
-				}
+				for (t in targets)
+					switch t {
+						case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+						case OutOfIndex(path): path;
+					}
 			].join(' | ');
 	}
 

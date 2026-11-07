@@ -511,8 +511,9 @@ final class RefactorSupport {
 	 */
 	public static function valueBoundOffsets(name: String, tree: QueryNode, shape: RefShape): Array<Int> {
 		return [
-			for (h in Refs.find(name, tree, shape))
-				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
+			for (h in Refs.find(
+				name, tree, shape
+			)) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
 	}
 

@@ -117,8 +117,8 @@
 			"name": "M-CHAIN-REST-SHAPE-UNTHREADED",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
 			"method": "layout",
-			"find": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware",
-			"replace": "r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, false",
+			"find": "return shape(r.mode, r.location, items, ops, cols, indentUnit, cuddleLast, restAware, list);",
+			"replace": "return shape(r.mode, r.location, items, ops, cols, indentUnit, cuddleLast, false, list);",
 			"note": "`restAware` never reaches the shapes, so the fill group stays plain and undoes the rest-aware pivot's break"
 		},
 		{
@@ -405,11 +405,12 @@
 			"note": "a cascade naming an additional indent reaches the chain, whose answer carries mode and location only, so the indent stops answering"
 		},
 		{
-			"name": "M-ELEM-CHAIN-TAKES-KEEP",
+			"name": "M-ELEM-CHAIN-TAKES-IGNORE",
 			"type": "anyparse.format.wrap.ElemChainEmit",
 			"method": "cascadeLeavesTheList",
-			"force": "false",
-			"note": "a `keep` or `ignore` label holding `|` moves to the chain on the built-in rules, away from what those modes write"
+			"find": "return rules.defaultMode == WrapMode.Ignore;",
+			"replace": "return false;",
+			"note": "an `ignore` label holding `|` moves to the chain on the built-in rules, away from what that mode writes"
 		},
 		{
 			"name": "M-LIST-CHAIN-CLOSER-GLUED",
@@ -442,6 +443,14 @@
 			"find": "WrapList.namedThresholdLiteral(item, true)",
 			"replace": "WrapList.namedThresholdLiteral(item)",
 			"note": "a ternary operand literal deciding its break by fit is not named, so a branch literal that breaks under the compiled defaults leaves the ternary broken on the first write and glued on the next"
+		},
+		{
+			"name": "M-CUDDLE-WRAPPED-HEAD",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": ": IfFirstLineExceeds(lineWidth, openShape, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape));",
+			"replace": ": IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);",
+			"note": "a flat-capable item measures its cuddled head by the line it would naturally render, so a head too wide for `[ for (` cuddles anyway and wraps its own iterable call instead of falling back to the leading break"
 		}
 	]
 }

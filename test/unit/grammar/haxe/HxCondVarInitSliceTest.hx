@@ -132,8 +132,7 @@ class HxCondVarInitSliceTest extends HxTestHelpers {
 					case _:
 				}
 				found;
-			case _:
-				throw 'expected ClassDecl, got ${ast.decls[0].decl}';
+			case _: throw 'expected ClassDecl, got ${ast.decls[0].decl}';
 		};
 	}
 

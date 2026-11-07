@@ -150,11 +150,10 @@ final class CallGraphNodes {
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		function params(f: QueryNode): String {
 			return [
-				for (p in f.children)
-					if (paramKinds.contains(p.kind)) {
-						final at: Null<Span> = p.type?.span;
-						'${p.kind}:${at == null ? '' : source.substring(at.from, at.to)}';
-					}
+				for (p in f.children) if (paramKinds.contains(p.kind)) {
+					final at: Null<Span> = p.type?.span;
+					'${p.kind}:${at == null ? '' : source.substring(at.from, at.to)}';
+				}
 			].join(',');
 		}
 		final returned: Null<String> = CallGraphNames.returnSourceOf(fn, returns);

@@ -688,8 +688,8 @@ class TypedFactsProbeTest extends Test {
 			function usesAt(at: String): String {
 				final from: Int = source.indexOf(at) + at.indexOf('items');
 				final uses: Array<String> = [
-					for (f in walked.fields) if (f.field == 'items' && !f.write && f.at.span.from == from)
-						f.use + (f.method == null ? '' : ':${f.method}')
+					for (f in walked.fields)
+						if (f.field == 'items' && !f.write && f.at.span.from == from) f.use + (f.method == null ? '' : ':${f.method}')
 				];
 				uses.sort(Reflect.compare);
 				return uses.join(',');

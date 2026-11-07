@@ -680,7 +680,6 @@ class WriterLowering {
 			callInsideOpen: macro _de(),
 			callInsideClose: macro _de(),
 			wrapRulesField: cwf,
-			methodChainField: null,
 			elemCall: macro $writeIdent(_args[_i].node, _segArgOpt, -1),
 			relocateTrailingComments: false
 		};
@@ -1396,9 +1395,8 @@ class WriterLowering {
 		// byte-identical rather than the absence of the meta.
 		return switch (normalize) {
 			case 'reindentBlock': reindentBlockEmit();
-			case 'condOperatorSpacing': macro return _dt(
-				anyparse.format.DirectiveCondition.spaceOperators((cast value: String), opt.condDirectiveOpSpacing)
-			);
+			case 'condOperatorSpacing':
+				macro return _dt(anyparse.format.DirectiveCondition.spaceOperators((cast value: String), opt.condDirectiveOpSpacing));
 
 			case _: macro return _dt(value);
 		};
@@ -1591,38 +1589,21 @@ class WriterLowering {
 		// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
 		// next `HxVarDecl(T)` link, so the rest of the walk is identical.
 		final linkBind: Expr = _ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
-		// ω-keep-newline-after-sep (increment 1): when this fold's
-		// `WrapList.emit` resolves to `WrapMode.Keep`, the engine reproduces
-		// each comma-link's source break iff the source placed a newline AFTER
-		// the comma (`,\n  next`). That signal lives on the trivia Star
-		// element's `Trivial.newlineAfterSep` slot, only available in trivia
-		// mode. ω-keep-kw-newline (increment 1b): the HEAD break (`_breaks[0]`)
-		// reproduces the source `var`→head newline, threaded onto
-		// `opt._varKwNewline` by the `HxStatement.VarStmt` writer. In plain
-		// mode `_breaks` stays null and Keep falls back to `shapeNoWrap` glue.
-		final breakDecl: Expr = _ctx.trivia
-			? (macro final _breaks: Array<Bool> = [_varKwNewlineHead])
-			: (macro final _breaks: Null<Array<Bool>> = null);
-		final breakStepPush: Expr = _ctx.trivia ? (macro _breaks.push(_ml[0].newlineAfterSep == true)) : (macro {});
 		return macro {
 			final _suppressMoreEntry: Bool = opt._suppressMore;
-			final _varKwNewlineHead: Bool = opt._varKwNewline;
-			final opt = _clearSuppressMore(_clearVarKwNewline(opt));
+			final opt = _clearSuppressMore(opt);
 			final _headPlusMore: anyparse.core.Doc = $headPlusMore;
 			if (!_suppressMoreEntry && $moreAccess.length > 0) {
 				final _items: Array<anyparse.core.Doc> = [$selfIdent(value, _setSuppressMore(opt))];
-				$breakDecl;
 				var _ml = $moreAccess;
 				while (_ml.length > 0) {
 					$linkBind;
-					$breakStepPush;
 					_items.push($selfIdent(_link.decl, _setSuppressMore(opt)));
 					_ml = $linkMoreAccess;
 				}
 				anyparse.format.wrap.WrapList.emit(
 					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, {
-						trailBreak: anyparse.core.Doc.Empty,
-						sourceBreakBefore: _breaks
+						trailBreak: anyparse.core.Doc.Empty
 					}
 				);
 			} else {
@@ -1783,8 +1764,6 @@ typedef SameLineShapeAwareCtx = {
 	final prevPadTrailing: Null<Expr>;
 	final flagBased: Expr;
 	final shapeAwareSwitch: Expr;
-	final hasKeepSlot: Bool;
-	final fieldName: Null<String>;
 };
 
 /**
@@ -1806,7 +1785,7 @@ typedef SameLineShapeAwareCtx = {
  *   - `elseFieldName`       — name of the sibling `else`-side field on `value`; `null` when no peer.
  *   - `afterKwExpr`         — runtime access to captured after-kw trivia (`kwGapDoc` source).
  *   - `kwLeadingExpr`       — runtime access to captured kw-leading trivia.
- *   - `bodyOnSameLineExpr`  — runtime `Bool` driving the `Keep` branch's flat-vs-break choice.
+ *   - `bodyOnSameLineExpr`  — runtime `Bool` source-shape slot; no layout reads it.
  *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
  *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
  *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a
@@ -1864,15 +1843,6 @@ typedef WrapBodyOpts = {
 	// FitLine body answers for its own line and GLUES, leaving `try body` on the head while the
 	// `catch` seam below it has already broken.
 	?constructFitBody: Bool,
-	// ω-keep-chain (increment: opadd_chain_keep) — runtime `Bool` access to the
-	// ctor's captured `return`→value source newline (the `captureKwNewline` synth
-	// slot, ReturnStmt only). When true AND the body is already-multiline
-	// (`flatLength == -1`, e.g. a `WrapMode.Keep` chain nested in `1 * (…)`), the
-	// FitLine return path breaks `return\n\t<body>` instead of gluing — preserving
-	// the source's head newline at the VALUE level (the inner chain has had its
-	// own `_headBreak` suppressed by the enclosing ParenExpr's `_setKeepChainInParen`).
-	// Null in plain mode / non-bearing ctors → byte-inert (legacy glue).
-	?kwNewlineExpr: Null<Expr>,
 	// ω-fnbody-meta-block-glue — when true, the body-placement override
 	// detects an `ExprBody` whose inner expression is a metadata-wrapped
 	// BLOCK (`@:meta { … }`, runtime shape `ExprBody(MetaExpr(_, BlockExpr))`,
@@ -1971,9 +1941,8 @@ typedef BodyWrapShared = {
 };
 
 /**
- * The five resolved body-layout Exprs (one per `BodyPolicy` axis plus the
- * block-ctor variant) threaded into `bodyPolicyWrap`'s policy/outer
- * dispatch and Keep arm.
+ * The resolved body-layout Exprs (one per `BodyPolicy` axis plus the
+ * block-ctor variant) threaded into `bodyPolicyWrap`'s policy/outer dispatch.
  */
 typedef BodyLayouts = {
 
@@ -2392,8 +2361,7 @@ typedef SepStarCtx = {
 	final appendTrailingCommaExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
 	final triviaLeadDoc: Expr;
-	final triviaTrailDocKeepAware: Expr;
-	final keepMatrixComputeExpr: Expr;
+	final triviaTrailDoc: Expr;
 	final noTriviaBranch: Expr;
 	final reflowSourceMultiline: Bool;
 	final matrixWrap: Bool;
@@ -2452,12 +2420,10 @@ typedef SepStarDispatchCtx = {
 	final bracedList: Bool;
 	final matrixWrap: Bool;
 	final uniformStmtBlanks: Bool;
-	final keepCheckExpr: Expr;
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;
 	final predicateScanExpr: Expr;
 	final matrixSucceedsExpr: Expr;
-	final keepMatrixComputeExpr: Expr;
 	final forceMultiExpr: Expr;
 	final noTriviaBranch: Expr;
 };
@@ -2523,24 +2489,22 @@ typedef SepStarTrailExprs = {
 	final forceExceedsExpr: Expr;
 	final appendTrailingCommaExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
-	final keepMatrixComputeExpr: Expr;
 	final forceModeExpr: Expr;
 };
 /**
- * Output bundle of `triviaSepCheckExprs` — the keep/ignore/noWrap runtime
+ * Output bundle of `triviaSepCheckExprs` — the ignore/noWrap runtime
  * checks plus the leftCurly/rightCurly placement Docs the sep-Star tail
- * consumes (`_keepEmit`/`_ignoreEmit`/`_noWrapFlat`, `_sepCtx`'s lead/trail
+ * consumes (`_ignoreEmit`/`_noWrapFlat`, `_sepCtx`'s lead/trail
  * Docs, and `WrapList.emit`'s lead-flat/lead-break/trail-break args).
  */
 typedef SepStarChecks = {
-	final keepCheckExpr: Expr;
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;
 	final triviaLeadDoc: Expr;
 	final wrapLeadFlatDoc: Expr;
 	final wrapLeadBreakDoc: Expr;
 	final wrapTrailBreakDoc: Expr;
-	final triviaTrailDocKeepAware: Expr;
+	final triviaTrailDoc: Expr;
 };
 /**
  * Shared setup locals bundled for the `triviaTryparseStarExpr` emission
@@ -2908,7 +2872,6 @@ typedef PostfixStarCtx = {
 	final callInsideOpen: Expr;
 	final callInsideClose: Expr;
 	final wrapRulesField: Null<String>;
-	final methodChainField: Null<String>;
 	final elemCall: Expr;
 	final relocateTrailingComments: Bool;
 };
@@ -2961,7 +2924,6 @@ typedef TriviaStarCtx = {
 	final prevTrailFieldName: Null<String>;
 	final fieldName: Null<String>;
 	final trailBBAccess: Null<Expr>;
-	final trailNLAccess: Null<Expr>;
 	final trailLCAccess: Null<Expr>;
 	final trailCloseAccess: Null<Expr>;
 	final trailOpenAccess: Null<Expr>;

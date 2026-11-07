@@ -251,7 +251,6 @@ final class ProseClaimCensusTest extends Test {
 		'unit.grammar.haxe.HxMethodChainAllOrNothingSliceTest#testLambdaCloserCuddleSurvivesTheAllOrNothingBreak :: control',
 		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testGlueBoundaryAtExactlyTheLimitStillGlues :: control',
 		'unit.grammar.haxe.HxOpAddChainOperatorFirstSliceTest#testMidChainOpeningParenKeepsTheGlueWhenTheHeadFits :: control',
-		'unit.grammar.haxe.HxOpenDelimStashBarrierTest#testKeepModeHonoursOnlyInBracketNewlines :: base',
 		'unit.grammar.haxe.HxOptionalSemicolonSliceTest#testPlainWriterStillElidesAfterASingleBraceTerminatedInit :: control',
 		'unit.grammar.haxe.HxTernaryCuddleProbeShapeTest#testAfterLastLocationBuildsNoCuddleProbes :: control',
 		'unit.grammar.haxe.HxValueIfBracketElseBreakSliceTest#testAFittingBracketLadderCollapses :: base',

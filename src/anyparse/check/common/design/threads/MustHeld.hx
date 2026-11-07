@@ -250,8 +250,8 @@ final class MustHeld {
 	 */
 	private function givePoints(id: String, valuation: String, lock: String, at: Int): Null<Array<Int>> {
 		final points: Array<Int> = [
-			for (g in _givesIn[id] ?? []) if (g.lock == lock && runs(id, valuation, g.edge) && !leavesFirst(g.edge, at))
-				g.edge.span?.from ?? -1
+			for (g in _givesIn[id] ?? [])
+				if (g.lock == lock && runs(id, valuation, g.edge) && !leavesFirst(g.edge, at)) g.edge.span?.from ?? -1
 		];
 		final releasers: Map<String, Bool> = _releasers.releasersOf(lock);
 		for (e in _graph.outEdges(id)) if (_releasers.runsFrom(e) && releasers.exists(e.to) && runs(id, valuation, e))

@@ -53,10 +53,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 		switch cond.body[0] {
 			case OrphanElseStmt(stmt):
 				switch stmt {
-					case IfStmt(_):
-						Assert.pass();
-					case null, _:
-						Assert.fail('expected OrphanElseStmt(IfStmt)');
+					case IfStmt(_): Assert.pass();
+					case null, _: Assert.fail('expected OrphanElseStmt(IfStmt)');
 				}
 			case null, _:
 				Assert.fail('expected OrphanElseStmt');

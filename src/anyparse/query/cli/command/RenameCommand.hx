@@ -216,8 +216,7 @@ final class RenameCommand implements CliCommand {
 					case Left(message):
 						CliIo.stderr('apq rename: $message — nothing written\n');
 						return EXIT_RUNTIME;
-					case Right(found):
-						found;
+					case Right(found): found;
 				};
 				final changes: Array<FileChange> = opChanges.concat(registries.changes);
 				var totalOccurrences: Int = 0;
@@ -353,8 +352,7 @@ final class RenameCommand implements CliCommand {
 			case Left(message):
 				CliIo.stderr('apq rename: $message — nothing written\n');
 				EXIT_RUNTIME;
-			case Right(registries):
-				emitInFileRename(result, write, registries);
+			case Right(registries): emitInFileRename(result, write, registries);
 		};
 	}
 

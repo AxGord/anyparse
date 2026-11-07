@@ -437,11 +437,13 @@ final class DynamicBag {
 	private static function bagMessage(verdict: BagVerdict): String {
 		return switch verdict {
 			case Real(t): 'raw Dynamic used only as a string-keyed bag — convert it to DynamicAccess<$t>';
-			case Typeless: 'raw Dynamic used only as a string-keyed bag whose values are themselves Dynamic — '
-				+ 'DynamicAccess<Dynamic> adds nothing over Dynamic, so it stays raw Dynamic';
+			case Typeless:
+				'raw Dynamic used only as a string-keyed bag whose values are themselves Dynamic — '
+					+ 'DynamicAccess<Dynamic> adds nothing over Dynamic, so it stays raw Dynamic';
 			case Heterogeneous: 'raw Dynamic used only as a string-keyed bag with mixed value types — no single DynamicAccess element type';
-			case Undetermined: 'raw Dynamic used only as a string-keyed bag whose value type does not resolve to a single real type — '
-				+ 'it stays raw Dynamic (a compiler oracle may narrow the value; DynamicAccess<Dynamic> is the rejected typeless shape)';
+			case Undetermined:
+				'raw Dynamic used only as a string-keyed bag whose value type does not resolve to a single real type — it stays raw '
+					+ 'Dynamic (a compiler oracle may narrow the value; DynamicAccess<Dynamic> is the rejected typeless shape)';
 		};
 	}
 

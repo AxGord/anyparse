@@ -184,14 +184,13 @@ private class Rename implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (entry in files) for (at in occurrences(entry.source))
-				{
-					file: entry.file,
-					span: new Span(at, at + 3),
-					rule: id(),
-					severity: Severity.Warning,
-					message: 'a FOO'
-				}
+			for (entry in files) for (at in occurrences(entry.source)) {
+				file: entry.file,
+				span: new Span(at, at + 3),
+				rule: id(),
+				severity: Severity.Warning,
+				message: 'a FOO'
+			}
 		];
 	}
 

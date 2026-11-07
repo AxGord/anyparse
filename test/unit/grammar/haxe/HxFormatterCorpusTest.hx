@@ -98,6 +98,9 @@ class HxFormatterCorpusTest extends Test {
 	 */
 	private static final sweepFixtures: Array<{ path: String, status: String }> = [];
 
+	/** Listed fork-authorial fixtures that pass: stale entries of the list. */
+	private static final sweepAuthorialPassing: Array<String> = [];
+
 	// ω-sweep-delta — process-wide accumulator across every per-category
 	// `runCategory` invocation. The per-category prints stay (legacy
 	// behavior), and a single end-of-process aggregate prints the totals
@@ -115,6 +118,9 @@ class HxFormatterCorpusTest extends Test {
 	private static var sweepSkipWrite: Int = 0;
 	private static var sweepSkipConfig: Int = 0;
 	private static var sweepSkipMalformed: Int = 0;
+
+	/** Failing fixtures `HxFormatterCorpusHelpers.FORK_AUTHORIAL` lists: part of the fail column, not a defect. */
+	private static var sweepAuthorial: Int = 0;
 
 	public function new(): Void {
 		super();
@@ -254,12 +260,15 @@ class HxFormatterCorpusTest extends Test {
 			final actualRaw: String = FormatterOff.restore(tc.input, emitted, HaxeLexicalRegions.scanComments);
 			assertTokensKept(relPath, tc.input, actualRaw);
 			final actual: String = stripTrailingNewline(actualRaw);
+			final authorial: Bool = HxFormatterCorpusHelpers.FORK_AUTHORIAL.contains(relPath);
 			if (actual == tc.expected) {
 				pass++;
+				if (authorial) sweepAuthorialPassing.push(relPath);
 				sweepFixtures.push({ path: relPath, status: 'PASS' });
 			} else {
 				fail++;
-				failLines.push('  [$name] ${describeDiff(tc.expected, actual)}');
+				if (authorial) sweepAuthorial++;
+				failLines.push('  [$name]${authorial ? ' (fork-authorial)' : ''} ${describeDiff(tc.expected, actual)}');
 				sweepFixtures.push({ path: relPath, status: 'FAIL' });
 			}
 		}
@@ -337,6 +346,8 @@ class HxFormatterCorpusTest extends Test {
 			+ '$sweepSkipConfig skip-config / $sweepSkipMalformed malformed (total $total) ====='
 		);
 		Sys.println(deltaStr);
+		Sys.println('  fork-authorial: $sweepAuthorial of the fail column (HxFormatterCorpusHelpers.FORK_AUTHORIAL)');
+		if (sweepAuthorialPassing.length > 0) Sys.println('  listed fork-authorial but passing: ${sweepAuthorialPassing.join(', ')}');
 		try {
 			// `fixtures` array carries the per-fixture status map that
 			// `apq recon --regression-probe` reads to diff status FLIPS

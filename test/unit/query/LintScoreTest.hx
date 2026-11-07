@@ -286,8 +286,7 @@ class LintScoreTest extends Test {
 				['-x'],
 				['--limit', '-1'],
 				['--severity', 'all']
-			])
-				runScore(truth, report, flags)
+			]) runScore(truth, report, flags)
 		]);
 		#else
 		Assert.pass('non-sys target');

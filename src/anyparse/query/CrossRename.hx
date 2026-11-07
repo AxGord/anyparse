@@ -321,8 +321,8 @@ final class CrossRename {
 		source: String, typeRefTree: QueryNode, typeName: String, qualified: Array<String>, typeRefShape: TypeRefShape
 	): Array<Int> {
 		return [
-			for (path in qualified) for (hit in Uses.find(path, typeRefTree, typeRefShape))
-				RefactorSupport.lastSegmentOffset(source, hit.span, path, typeName)
+			for (path in qualified)
+				for (hit in Uses.find(path, typeRefTree, typeRefShape)) RefactorSupport.lastSegmentOffset(source, hit.span, path, typeName)
 		];
 	}
 

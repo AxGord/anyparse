@@ -342,6 +342,8 @@ class HxTriviaWriteTest extends Test {
 	 * the Same-layout's `kwGapDoc`, so the Next-layout `_dn(_cols, [_dhl,
 	 * body])` silently dropped the comment.
 	 */
+	@:pin('control')
+	@:killer('M-FIT-DROPS-KW-COMMENT')
 	public function testSameLineCommentAfterElseNonBlockRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta();\n\t\telse // afterElse\n\t\t\tb();\n\t}\n}';
 		assertRoundtrip(source);
@@ -696,7 +698,7 @@ class HxTriviaWriteTest extends Test {
 	 */
 	public function testCaseBodyEmptyTrailWithBlankAfter(): Void {
 		final source: String = 'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n'
-			+ '\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
+			+ '\t\t\tcase B: trace(\'b\');\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 

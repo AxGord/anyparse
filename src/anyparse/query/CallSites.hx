@@ -251,8 +251,7 @@ final class CallSites {
 		// signature change can break it. Left in, it refuses every method whose name merely
 		// appears in an interpolated string.
 		final boundReads: Array<RefHit> = [
-			for (h in hits)
-				if (h.kind == RefKind.Read && !h.interpolated && h.bindingSpan != null && bindingFrom(h) == binding) h
+			for (h in hits) if (h.kind == RefKind.Read && !h.interpolated && h.bindingSpan != null && bindingFrom(h) == binding) h
 		];
 		final boundReadFroms: Array<Int> = boundReads.map(h -> h.span.from);
 

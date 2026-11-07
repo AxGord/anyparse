@@ -65,14 +65,12 @@ class Bin implements Strategy {
 						switch entry.params[0].expr {
 							case EConst(CInt(v)): node.annotations['bin.fixedLen'] = Std.parseInt(v);
 							case EConst(CString(s, _)): node.annotations['bin.dataRef'] = s;
-							case _:
-								Context.fatalError('@:bin argument must be an Int literal or a String literal', entry.pos);
+							case _: Context.fatalError('@:bin argument must be an Int literal or a String literal', entry.pos);
 						}
 					case 2:
 						node.annotations['bin.fixedLen'] = intOrFail(entry.params[0], ':bin');
 						node.annotations['bin.encoding'] = readEncodingIdent(entry.params[1], 'bin');
-					case _:
-						Context.fatalError('@:bin expects 1 argument (Int or String) or 2 arguments (Int, Dec|Oct)', entry.pos);
+					case _: Context.fatalError('@:bin expects 1 argument (Int or String) or 2 arguments (Int, Dec|Oct)', entry.pos);
 				}
 			case ':length':
 				if (entry.params.length != 2) Context.fatalError('@:length expects two arguments (Int, Dec|Oct)', entry.pos);

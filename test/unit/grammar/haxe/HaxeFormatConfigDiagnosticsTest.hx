@@ -121,17 +121,16 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	 * wired. It IS wired now — a map literal reads `wrapping.mapWrap` and an
 	 * array literal `wrapping.arrayWrap` — so the pin flips: naming it must
 	 * produce NO issue, and the cascade must reach `opt.mapLiteralWrap`
-	 * rather than silently landing nowhere. Reporting a key hxq now honours
-	 * would send the author looking for a problem that is not there.
+	 * rather than silently landing nowhere.
 	 */
 	public function testMapWrapIsModelled(): Void {
-		final json: String = '{"wrapping": {"mapWrap": {"defaultWrap": "keep", "rules": []}}}';
+		final json: String = '{"wrapping": {"mapWrap": {"defaultWrap": "onePerLine", "rules": []}}}';
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(json);
 		Assert.equals(0, issues.keys.length);
 		Assert.equals(0, issues.wrapValues.length);
 		final opt: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
-		Assert.equals(WrapMode.Keep, opt.mapLiteralWrap.defaultMode);
-		Assert.notEquals(WrapMode.Keep, opt.arrayLiteralWrap.defaultMode);
+		Assert.equals(WrapMode.OnePerLine, opt.mapLiteralWrap.defaultMode);
+		Assert.notEquals(WrapMode.OnePerLine, opt.arrayLiteralWrap.defaultMode);
 	}
 
 	public function testUnknownWrapConditionIsReported(): Void {
@@ -281,7 +280,7 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 
 	/** Nothing to say means nothing is said — the clean-config path must not print an empty header. */
 	public function testMessageIsNullWhenThereIsNothingToSay(): Void {
-		Assert.isNull(HaxeFormatConfigDiagnostics.message('/p/hxformat.json', { keys: [], wrapValues: [] }));
+		Assert.isNull(HaxeFormatConfigDiagnostics.message('/p/hxformat.json', { keys: [], wrapValues: [], unsupported: [] }));
 	}
 
 	/** A chain emitter reads no indent, so a chain rule's `additionalIndent` is reported as having no effect. */
@@ -293,6 +292,71 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 		);
 		Assert.equals(1, issues.wrapValues.length);
 		Assert.stringContains('additionalIndent', issues.wrapValues[0]);
+	}
+
+	/** Every `keep` value is reported as unsupported, sameLine knobs by key and wrap ones by slot, never as an unknown wrap string. */
+	@:pin('control')
+	@:killer('M-SAMELINE-KEEP-UNREPORTED')
+	public function testKeepSettingsAreReportedAsUnsupported(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"sameLine": {"ifBody": "keep", "elseSwitch": "keep", "forBody": "next"},'
+			+ ' "wrapping": {"arrayWrap": {"defaultWrap": "keep", "rules": [{"type": "keep"}]}}}'
+		);
+		Assert.equals(0, issues.wrapValues.length);
+		Assert.same([
+			'wrapping defaultWrap "keep"',
+			'wrapping rule type "keep" (the rule is dropped)',
+			'sameLine.elseSwitch "keep"',
+			'sameLine.ifBody "keep"'
+		], issues.unsupported);
+	}
+
+	/** The report says why `keep` is gone and what to write instead. */
+	@:pin('control')
+	@:killer('M-KEEP-CLAUSE-SILENT')
+	public function testKeepClauseNamesTheAlternatives(): Void {
+		final line: Null<String> = HaxeFormatConfigDiagnostics.message(
+			'/p/hxformat.json', { keys: [], wrapValues: [], unsupported: ['sameLine.ifBody "keep"'] }
+		);
+		Assert.notNull(line);
+		Assert.stringContains('1 "keep" setting(s) hxq does not support, so the default applies: sameLine.ifBody "keep"', line ?? '');
+		Assert.stringContains('use same, next or fitLine', line ?? '');
+	}
+
+	/** Every placement key of `sameLine` stating `keep` is reported by name, the Bool and Int knobs beside them never. */
+	@:pin('control')
+	@:killer('M-SAMELINE-KEEP-UNREPORTED')
+	public function testEverySameLinePlacementKeyStatingKeepIsReported(): Void {
+		final placementKeys: Array<String> = [
+			'anonFunctionBody',
+			'caseBody',
+			'catchBody',
+			'comprehensionFor',
+			'doWhile',
+			'doWhileBody',
+			'elseBody',
+			'elseIf',
+			'elseSwitch',
+			'expressionCase',
+			'expressionIf',
+			'expressionTry',
+			'forBody',
+			'functionBody',
+			'ifBody',
+			'ifElse',
+			'returnBody',
+			'returnBodySingleLine',
+			'tryBody',
+			'tryCatch',
+			'untypedBody',
+			'whileBody'
+		];
+		final stated: Array<String> = placementKeys.map(key -> '"$key": "keep"');
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(
+			'{"sameLine": {${stated.join(', ')}, "fitLineBodyGlue": true, "expressionIfFitMaxBranches": 3}}'
+		);
+		Assert.same(placementKeys.map(key -> 'sameLine.$key "keep"'), issues.unsupported);
+		Assert.equals(0, issues.keys.length);
 	}
 
 }

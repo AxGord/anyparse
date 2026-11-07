@@ -262,14 +262,13 @@ private class TableFake implements Check implements RiskyFix implements GroupedF
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (entry in files)
-				{
-					file: entry.file,
-					span: null,
-					rule: _id,
-					severity: Severity.Warning,
-					message: 'test double finding'
-				}
+			for (entry in files) {
+				file: entry.file,
+				span: null,
+				rule: _id,
+				severity: Severity.Warning,
+				message: 'test double finding'
+			}
 		];
 	}
 

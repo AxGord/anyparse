@@ -298,10 +298,11 @@ class LexicalLowering {
 		for (entry in meta) if (entry.name == ':balanced') {
 			if (entry.params.length != 2) Context.fatalError('@:balanced expects an opening and a closing literal', entry.pos);
 			final pair: Array<String> = [
-				for (p in entry.params) switch p.expr {
-					case EConst(CString(s, _)): s;
-					case _: fail('@:balanced arguments must be string literals', p.pos);
-				}
+				for (p in entry.params)
+					switch p.expr {
+						case EConst(CString(s, _)): s;
+						case _: fail('@:balanced arguments must be string literals', p.pos);
+					}
 			];
 			for (side in pair) if (side.length != 1) Context.fatalError('@:balanced counts single characters, got "$side"', entry.pos);
 			return pair;

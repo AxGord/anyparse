@@ -28,18 +28,16 @@ final class OracleDeclaration {
 	 */
 	public static function read(raw: JValue, baseDir: Null<String>, drops: Array<String>): Array<OracleConfig> {
 		return switch raw {
-			case JString(hxml):
-				[
-					at(hxml, {
-						hxml: hxml,
-						dir: null,
-						defines: [],
-						generate: null,
-						generateInputs: null
-					}, baseDir, drops, 0)
-				];
-			case JArray(items):
-				readList(items, baseDir, drops);
+			case JString(hxml): [
+				at(hxml, {
+					hxml: hxml,
+					dir: null,
+					defines: [],
+					generate: null,
+					generateInputs: null
+				}, baseDir, drops, 0)
+			];
+			case JArray(items): readList(items, baseDir, drops);
 			case _:
 				drops.push('compilerOracle is neither an hxml path nor a list of configurations — ignored');
 				[];

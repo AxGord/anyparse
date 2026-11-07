@@ -107,16 +107,16 @@ final class BinaryChainEmit {
 	 */
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
-		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>, restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>,
-		inlineMultilineBranch: Bool = false, ?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, forceKeep: Bool = false, ?afterComments: Array<Null<Doc>>,
+		restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>, inlineMultilineBranch: Bool = false,
+		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList
 	): Doc {
 		final items: Array<Doc> = isTernaryOps(ops)
 			? items.map(item -> WrapList.namedThresholdLiteral(item, true))
 			: items.map(item -> WrapList.namedThresholdLiteral(item));
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
-				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, headBreak, forceKeep, afterComments, restAware,
+				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, forceKeep, afterComments, restAware,
 				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list
 			);
 		}
@@ -175,8 +175,7 @@ final class BinaryChainEmit {
 	/**
 	 * True for modes that lay the chain across multiple lines
 	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
-	 * `FillLineWithLeadingBreak`). `NoWrap` / `Keep` / `Ignore` keep the
-	 * chain inline. Used by the ω-chain-keep-flat unwrap pivot.
+	 * `FillLineWithLeadingBreak`). `NoWrap` / `Ignore` keep the chain inline. Used by the ω-chain-keep-flat unwrap pivot.
 	 */
 	private static inline function isBreakMode(m: WrapMode): Bool {
 		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
@@ -206,8 +205,8 @@ final class BinaryChainEmit {
 
 	/**
 	 * Does this `mode` at this `location` reach a shaper that honours the
-	 * `cuddleLast` flag? The two one-operand-per-line shapes do; `Keep` is
-	 * source-faithful by contract, the fill family breaks its gaps by packing rather
+	 * `cuddleLast` flag? The two one-operand-per-line shapes do; the fill family
+	 * breaks its gaps by packing rather
 	 * than at a fixed separator, and `NoWrap` is already glued. Asked so a
 	 * probe-gated cuddle wraps only the shapes that CAN differ.
 	 *
@@ -245,8 +244,8 @@ final class BinaryChainEmit {
 
 	private static function layout(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
-		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>, restAware: Bool = false,
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, forceKeep: Bool = false, ?afterComments: Array<Null<Doc>>,
+		restAware: Bool = false,
 		// ω-keep-ternary-operand-comment: the wrapping location the `forceKeep`
 		// shape must use, overriding the cascade's own answer. A caller that
 		// forces `Keep` because an operand carries a LINE comment has exactly one
@@ -350,10 +349,7 @@ final class BinaryChainEmit {
 		final cuddleProbeWidth: Int = cuddleProbed ? ops[0].length + 1 + DocMeasure.flatTokenWidth(items[1]) : 0;
 
 		function shapeWith(r: { mode: WrapMode, location: WrappingLocation }, cuddleLast: Bool): Doc {
-			return shape(
-				r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments, cuddleLast, restAware,
-				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }, list
-			);
+			return shape(r.mode, r.location, items, ops, cols, indentUnit, cuddleLast, restAware, list);
 		}
 
 		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
@@ -364,7 +360,7 @@ final class BinaryChainEmit {
 		}
 
 		function shapeNoWrapAt(location: WrappingLocation): Doc {
-			return shape(NoWrap, location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, null, false, false, null, list);
+			return shape(NoWrap, location, items, ops, cols, indentUnit, false, false, list);
 		}
 
 		// ω-keep-infix-operand-comment: when an operand carries a captured
@@ -398,7 +394,10 @@ final class BinaryChainEmit {
 			? ternaryHugCollectionBranchIndex(items, ops)
 			: -1;
 		return if (forceKeep)
-			WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
+			WrapBoundary(shapeKeep(
+				items, ops, cols, forceKeepLocation ?? evalAt(true, []).location, sourceBreakBefore, afterComments,
+				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }
+			))
 		else if (anyHardline)
 			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt, inlineMultilineBranch))
 		else if (pivotHugIdx >= 0)
@@ -634,31 +633,16 @@ final class BinaryChainEmit {
 
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
-		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, cuddleLast: Bool = false,
-		restAware: Bool = false, ?keepComments: KeepGapComments, ?list: ChainList
+		cuddleLast: Bool = false, restAware: Bool = false, ?list: ChainList
 	): Doc {
 		if (list != null) return shapeList(mode, location, items, ops, cols, indentUnit, restAware, list);
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location, cuddleLast);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location, cuddleLast);
-			case FillLine, FillLineWithLeadingBreak:
-				shapeFillLine(items, ops, cols, indentUnit, location, restAware);
-			// ω-keep-chain (increment 2): JSON `"defaultWrap": "keep"` on chain
-			// configs (opAddSubChain, opBoolChain) preserves the source's
-			// per-operator line breaks verbatim — break before operand `i`
-			// iff the parser captured a source newline in that operator's
-			// gap (`sourceBreakBefore[i-1]`), else glue with ` op `. The
-			// signal is the per-infix-ctor `chainNewline` synth slot
-			// captured at parse time in `lowerPrattLoop`; mirror of fork's
-			// `keepLineEnds`/`markKeepLineEnds` per-token `isOriginalNewlineBefore`.
-			// When the signal is absent (null — plain mode / non-capturing
-			// ctor) shapeKeep degrades to shapeNoWrap → byte-inert.
-			case Keep:
-				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak, afterComments, keepComments);
-			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
-			// pre-empts at the trivia branch. Defensive fallback to
-			// shapeNoWrap on engine leakage.
+			case FillLine, FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, indentUnit, location, restAware);
+			// ω-cascade-emits-comments: the writer pre-empts `Ignore` at the
+			// trivia branch. Defensive fallback to shapeNoWrap on engine leakage.
 			case Ignore: shapeNoWrap(items, ops);
 			case _: shapeOnePerLineAfterFirst(items, ops, cols, location);
 		};
@@ -675,7 +659,7 @@ final class BinaryChainEmit {
 	): Doc {
 		function body(operands: Array<Doc>): Doc {
 			return switch mode {
-				case NoWrap, Keep, Ignore: shapeNoWrap(operands, ops, list.sep);
+				case NoWrap, Ignore: shapeNoWrap(operands, ops, list.sep);
 				case OnePerLine: shapeOnePerLine(operands, ops, cols, location, false, list.sep);
 				case FillLine, FillLineWithLeadingBreak: shapeFillLine(operands, ops, cols, indentUnit, location, restAware, list.sep);
 				case _: shapeOnePerLineAfterFirst(operands, ops, cols, location, false, list.sep);
@@ -702,8 +686,9 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * `WrapMode.Keep` shaper — reproduces the source's per-operator line
-	 * breaks. `sourceBreakBefore` is parallel to `ops`: entry `i` is true
+	 * The comment-forced shaper (`forceKeep`): an operand carries a captured comment, so
+	 * the chain keeps the source's per-operator line breaks around it, which is where a
+	 * line comment's mandatory newline already sits. `sourceBreakBefore` is parallel to `ops`: entry `i` is true
 	 * when the parser captured a source newline in the gap of operator `i`
 	 * (between operand `i` and operand `i+1`). When true the continuation
 	 * breaks at the chain's one-tab `Nest(cols)` indent; when false the
@@ -716,18 +701,12 @@ final class BinaryChainEmit {
 	 *    line and lands the next operand at the start of the continuation
 	 *    line (`a +\n\tb`). A glued gap emits ` op operand` inline.
 	 *
-	 * `headBreak` (the source had a newline between the call-site keyword —
-	 * e.g. `return` — and the chain head) prepends a `Line('\n')` INSIDE the
-	 * `Nest` so the head operand lands on its own continuation line
-	 * (`return\n\t\t\thead\n\t\t\t&& …`). Default false keeps the head glued.
-	 *
 	 * When `sourceBreakBefore` is null (plain mode / non-capturing ctor)
-	 * or every entry is false AND `headBreak` is false, the output is
-	 * byte-identical to `shapeNoWrap` — inert for the non-keep hot path.
+	 * or every entry is false, the output is byte-identical to `shapeNoWrap`.
 	 */
 	private static function shapeKeep(
 		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, ?sourceBreakBefore: Array<Bool>,
-		headBreak: Bool = false, ?afterComments: Array<Null<Doc>>, ?keepComments: KeepGapComments
+		?afterComments: Array<Null<Doc>>, ?keepComments: KeepGapComments
 	): Doc {
 		final breaks: Array<Bool> = sourceBreakBefore ?? [];
 		final owns: Null<Array<Null<Doc>>> = keepComments?.own;
@@ -741,7 +720,7 @@ final class BinaryChainEmit {
 				leftLineComment
 			);
 		}
-		// First operand stays at the call-site column (unless `headBreak`);
+		// First operand stays at the call-site column;
 		// only the continuation tail is nested at the chain's one-tab indent,
 		// so a broken gap lands its line at `base + cols` while a glued gap
 		// keeps the operands inline (mirror `shapeOnePerLineAfterFirst`).
@@ -766,9 +745,7 @@ final class BinaryChainEmit {
 			}
 			tail.push(items[i + 1]);
 		}
-		// `headBreak` puts the head operand on its own continuation line:
-		// the whole chain (head + tail) is nested and led by a `Line('\n')`.
-		return headBreak ? Nest(cols, Concat([Line('\n'), items[0]].concat(tail))) : Concat([items[0], Nest(cols, Concat(tail))]);
+		return Concat([items[0], Nest(cols, Concat(tail))]);
 	}
 
 	/** Entry `i` of a per-gap comment channel, null when the channel or the entry is absent. */
@@ -1472,10 +1449,8 @@ final class BinaryChainEmit {
 					var r: Null<Bool> = null;
 					for (it in arr) if (r == null) r = walk(it);
 					r;
-				case Line(flat):
-					flat.startsWith('\n') ? WrapList.isLineCommentText(lastText) : null;
-				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
-					WrapList.isLineCommentText(lastText);
+				case Line(flat): flat.startsWith('\n') ? WrapList.isLineCommentText(lastText) : null;
+				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: WrapList.isLineCommentText(lastText);
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 					ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
@@ -1487,8 +1462,7 @@ final class BinaryChainEmit {
 					IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat),
 					IfTrailingCommentOverflows(_, _, _, _, flat):
 					walk(flat);
-				case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
-					null;
+				case Empty, OptSpace(_), OptSpaceSkipAfterHardline: null;
 				case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _):
 					// Which item a fill breaks after is a render-time decision: no static first line.
 					false;

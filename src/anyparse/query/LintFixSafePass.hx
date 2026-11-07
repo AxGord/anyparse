@@ -503,9 +503,8 @@ final class LintFixSafePass {
 		if (culprits.exists(culprit -> culprit.kept != null)) return Bisected(culprits, probes);
 		return switch narrowing {
 			case Narrowed(_): Narrowed(culprits.map(culprit -> culprit.file), probes);
-			case WholeWave(why, errors) if (culprits.length >= changed.length): WholeWave(
-				'$why; every file this run wrote is implicated', errors
-			);
+			case WholeWave(why, errors) if (culprits.length >= changed.length):
+				WholeWave('$why; every file this run wrote is implicated', errors);
 			case _: Bisected(culprits, probes);
 		};
 	}

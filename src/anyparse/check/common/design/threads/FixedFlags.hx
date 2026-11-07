@@ -18,8 +18,8 @@ final class FixedFlags {
 	/** The fixed flags of the function node `fn` (see the class doc), at most `MAX_FLAGS`, in parameter order. */
 	public static function of(fn: QueryNode, shape: RefShape, ifKinds: Array<String>): Array<String> {
 		final params: Array<String> = [
-			for (c in fn.children) if ((shape.paramKinds ?? []).contains(c.kind) && c.name != null && BareNames.stable(fn, c, shape))
-				c.name ?? ''
+			for (c in fn.children)
+				if ((shape.paramKinds ?? []).contains(c.kind) && c.name != null && BareNames.stable(fn, c, shape)) c.name ?? ''
 		];
 		if (params.length == 0) return [];
 		final tests: Map<String, Int> = [];

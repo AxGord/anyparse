@@ -209,8 +209,9 @@ final class LockDominance {
 			a.edge, state.valuation, state.ctx
 		) != 0) for (at in positions) {
 			final held: Array<String> = [
-				for (h in _must.at(a.edge.from, state.valuation, a.edge.file, at, lock))
-					if (MustHeld.objectOf(h) == object && MustHeld.lockOf(h) != lock) MustHeld.lockOf(h)
+				for (h in _must.at(
+					a.edge.from, state.valuation, a.edge.file, at, lock
+				)) if (MustHeld.objectOf(h) == object && MustHeld.lockOf(h) != lock) MustHeld.lockOf(h)
 			];
 			final known: Null<Array<String>> = meet;
 			meet = known == null ? held : known.filter(l -> held.contains(l));

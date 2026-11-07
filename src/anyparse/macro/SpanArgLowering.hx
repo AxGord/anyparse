@@ -104,10 +104,8 @@ final class SpanArgLowering {
 	private static function appendSpanArg(e: Expr): Expr {
 		final spanArg: Expr = macro new anyparse.runtime.Span(_start, ctx.pos);
 		return switch e.expr {
-			case ECall(fn, args):
-				{ expr: ECall(fn, args.concat([spanArg])), pos: e.pos };
-			case EField(_, _), EConst(CIdent(_)):
-				{ expr: ECall(e, [spanArg]), pos: e.pos };
+			case ECall(fn, args): { expr: ECall(fn, args.concat([spanArg])), pos: e.pos };
+			case EField(_, _), EConst(CIdent(_)): { expr: ECall(e, [spanArg]), pos: e.pos };
 			case _: e;
 		};
 	}

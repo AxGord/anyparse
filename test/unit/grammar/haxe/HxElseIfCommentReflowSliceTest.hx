@@ -118,12 +118,6 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"whitespace": {"addLineCommentSpace": false, "bracesConfig": {"singleStatementBraces": "remove"}}, '
 		+ '"sameLine": {"ifBody": "fitLine"}}';
 
-	/** `sameLine.elseBody: "keep"` routes the whole else through `buildBodyKeepLayout`. */
-	private static final CONFIG_KEEP_ELSE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "whitespace": {"addLineCommentSpace": false, "bracesConfig": {'
-		+ '"singleStatementBraces": "remove"}}, "sameLine": {'
-		+ '"ifBody": "fitLine", "elseBody": "keep", "elseIfCommentReflow": true}}';
-
 	/** The one config where a bare body reaches the writer as a width PROBE rather than a break. */
 	private static final CONFIG_GLUED_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 60}, "whitespace": {"addLineCommentSpace": false}, '
@@ -152,17 +146,6 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t\t// open delims (  [  {\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final OPEN_DELIM_REFLOWED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else if (b) { // open delims (  [  {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final KEEP_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
-		+ '\t\t\t// note\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final KEEP_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
-		+ '\t\t\t// note\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
-
-	/** The Keep policy keeps a source break between `else` and `if` even with no comment in it. */
-	private static final KEEP_ELSE_BREAK_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
-		+ '\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-
-	private static final KEEP_ELSE_BREAK_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
-		+ '\t\t} else\n\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
 	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif ('
 		+ 'b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t}\n}';
 	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
@@ -233,8 +216,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t} else\n\t\t\t// dispose the bitmap when the object is a bitmap\n\t\t\tif (b) {\n'
 		+ '\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n\n\tfunction bare() {\n\t\tif (a)\n'
 		+ '\t\t\tone();\n\t\telse\n\t\t\t// pick the second branch\n\t\t\tif (b)\n\t\t\t\ttwo();\n'
-		+ '\t}\n\n\tfunction broken() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else\n'
-		+ '\t\t\tif (b) {\n\t\t\t\ttwo();\n\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}\n';
+		+ '\t}\n\n\tfunction broken() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n\t\t} else if (b) {\n'
+		+ '\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}\n';
 
 	public function new(): Void {
 		super();
@@ -392,21 +375,6 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	}
 
 	/**
-	 * Scope limit, pinned rather than fixed: `sameLine.elseBody: "keep"` routes the
-	 * whole else through `buildBodyKeepLayout`, whose own `Same` arm the knob does
-	 * not reach. "Keep" means preserve the source shape, which is what the reader
-	 * asked for, so the reflow staying out is coherent - it is documented at every
-	 * doc site rather than silently absent.
-	 */
-	@:pin('control')
-	@:killer('M-KEEP-ELSEIF-ALWAYS-GLUED')
-	public function testKeepElsePolicyDisablesTheReflow(): Void {
-		Assert.equals(KEEP_ELSE_CANON, write(KEEP_ELSE_SRC, CONFIG_KEEP_ELSE));
-		Assert.equals(KEEP_ELSE_CANON, write(KEEP_ELSE_CANON, CONFIG_KEEP_ELSE));
-		Assert.equals(KEEP_ELSE_BREAK_CANON, write(KEEP_ELSE_BREAK_SRC, CONFIG_KEEP_ELSE));
-	}
-
-	/**
 	 * A bare body that cannot render flat reaches the writer as a width PROBE, whose
 	 * two branches are different shapes - there is no single break that is "the end
 	 * of the head", so the walk refuses instead of picking one branch and losing the
@@ -471,7 +439,7 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 
 	/** Byte-inertness for a config-less run - the default options never reflow. */
 	@:pin('control')
-	@:killer('M-KEEP-ELSEIF-ALWAYS-GLUED')
+	@:killer('M-EICR-KNOB-IGNORED')
 	public function testDefaultOptionsAreByteInert(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
 		Assert.equals(DEFAULT_CANON, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(DEFAULT_SRC), opts));

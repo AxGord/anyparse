@@ -58,8 +58,7 @@ final class JsonText {
 			case '\t'.code: '\\t';
 			case BACKSPACE: '\\b';
 			case FORM_FEED: '\\f';
-			case _:
-				c < ' '.code ? unicodeEscape(c) : String.fromCharCode(c);
+			case _: c < ' '.code ? unicodeEscape(c) : String.fromCharCode(c);
 		};
 	}
 

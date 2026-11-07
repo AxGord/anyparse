@@ -237,8 +237,9 @@ class JoinBranchCallCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final claimed: Array<String> = [
-			for (check in Linter.builtins()) for (v in CheckFixture.violationsIn(check, files, plugin))
-				if (v.rule == 'join-branch-call' || v.rule == 'prefer-ternary-expression') v.rule
+			for (check in Linter.builtins())
+				for (v in CheckFixture.violationsIn(check, files, plugin))
+					if (v.rule == 'join-branch-call' || v.rule == 'prefer-ternary-expression') v.rule
 		];
 		Assert.equals('join-branch-call', claimed.join(','));
 	}

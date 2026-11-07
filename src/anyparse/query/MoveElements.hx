@@ -152,11 +152,10 @@ final class MoveElements {
 		final destOriginal: String = request.destSource ?? source;
 		final destTree: QueryNode = if (request.destSource == null)
 			tree
-		else
-			switch ParseGate.parse(plugin, destOriginal, 'destination') {
-				case Unparsed(message): return Left(message);
-				case Parsed(parsed): parsed;
-			};
+		else switch ParseGate.parse(plugin, destOriginal, 'destination') {
+			case Unparsed(message): return Left(message);
+			case Parsed(parsed): parsed;
+		};
 		final target: QueryNode = switch arrayAt(destTree, destOriginal, plugin, request.target, 'target') {
 			case Left(message): return Left(message);
 			case Right(found): found;

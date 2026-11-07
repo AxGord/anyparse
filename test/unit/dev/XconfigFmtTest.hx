@@ -178,10 +178,8 @@ final class XconfigFmtTest extends Test {
 			final root: String = dir.file('scratch2');
 			final joining: String = 'apq fmt: $root/src/a/A.hx: the writer needed 2 rewrites to reach its fixed point\n$SUMMARY';
 			switch XconfigFmt.touchedStand(_ -> printing(joining), repo, ['src/a/A.hx'], root, FILED) {
-				case Breaks(failure):
-					Assert.contains('+ src/a/A.hx', failure.detail);
-				case other:
-					Assert.fail('expected Breaks, got $other');
+				case Breaks(failure): Assert.contains('+ src/a/A.hx', failure.detail);
+				case other: Assert.fail('expected Breaks, got $other');
 			}
 		});
 	}
@@ -195,8 +193,7 @@ final class XconfigFmtTest extends Test {
 				case Breaks(failure):
 					Assert.contains('- $gone (gone from the tree)', failure.detail);
 					Assert.stringContains('remove from XCONFIG_ONE_PASS', failure.line);
-				case other:
-					Assert.fail('expected Breaks, got $other');
+				case other: Assert.fail('expected Breaks, got $other');
 			}
 		});
 	}

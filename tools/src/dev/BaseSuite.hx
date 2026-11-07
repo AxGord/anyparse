@@ -223,8 +223,7 @@ final class BaseSuite {
 			case Read(reading):
 				got.push(reading);
 				Passed;
-			case Unread(why):
-				Failed(why);
+			case Unread(why): Failed(why);
 		});
 		if (got.length == 0) return switch outcome {
 			case Failed(why), NotRun(why): why;

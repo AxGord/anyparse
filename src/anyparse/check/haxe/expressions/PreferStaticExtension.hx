@@ -682,8 +682,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	/** The finding text for `verdict`, carrying the suggested extension form. */
 	private static function messageFor(verdict: Verdict, suggestion: String): String {
 		return switch verdict {
-			case Verdict.Fixable:
-				'this static utility call can be the extension call $suggestion';
+			case Verdict.Fixable: 'this static utility call can be the extension call $suggestion';
 			case Verdict.UnresolvedReceiver:
 				'this static utility call may be the extension call $suggestion'
 					+ ' (receiver type unresolved: verify the receiver type declares no same-name member)';

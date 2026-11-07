@@ -192,8 +192,7 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 	): Null<QueryNode> {
 		final result: AddressResult = Address.resolve(tree, source, plugin, { select: selectExpr, nth: nth });
 		return switch result {
-			case Ok(_, node) if (node != null):
-				node;
+			case Ok(_, node) if (node != null): node;
 			case Ok(_, _):
 				CliIo.stderr('apq get: $label: --select resolved to no node\n');
 				null;

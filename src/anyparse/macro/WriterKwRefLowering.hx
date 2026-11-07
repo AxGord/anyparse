@@ -146,19 +146,7 @@ final class WriterKwRefLowering {
 		// inits route through `HxStatement.VarStmt` / `HxExpr.VarExpr` — never
 		// this ctor — so the flag stays false there and they remain
 		// knob-gated. Idempotent helper; allocation-free when already set.
-		// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
-		// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
-		// thread `_setVarKwNewline(opt, true)` into the inner `decl`
-		// writeCall so the `HxVarDecl` multiVar fold reproduces the head
-		// break under `WrapMode.Keep`. The helper is idempotent and
-		// allocation-free when the flag matches, so a same-line `var x = …`
-		// (kwNewline false) leaves `opt` unchanged — byte-inert. Trivia-
-		// only (the slot exists only on bearing trivia ctors); plain mode
-		// leaves `kwNewlineExpr` null and the head stays glued to `var `.
-		final kwNewlineExpr: Null<Expr> = kw.ctx.trivia && kw.isTriviaBearing(typePath)
-			? altSlotAccess(branch, children.length, argNames, KwNewline)
-			: null;
-		final ctorOptArg: Expr = kwRefCtorOptArg(kw, c, kwNewlineExpr);
+		final ctorOptArg: Expr = kwRefCtorOptArg(kw, c);
 		final subCall: Expr = if (isSelfRef && hasPratt)
 			{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos() }
 		else
@@ -200,15 +188,13 @@ final class WriterKwRefLowering {
 		// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
 		// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
 		// mode + bearing typePath, the synth ctor carries a positional
-		// `bodyOnSameLine:Bool` arg captured by the parser. Forward its
-		// access expression so `bodyPolicyWrap`'s `Keep` branch can
-		// dispatch source-shape-aware. The arg index follows the same
+		// `bodyOnSameLine:Bool` arg captured by the parser. Its access
+		// expression is forwarded to `bodyPolicyWrap`, where no body
+		// policy reads the source shape. The arg index follows the same
 		// ordering as `TriviaTypeSynth.buildEnumCtor`: closeTrailing
 		// (+ openTrailing/trailingBlankBefore/trailingLeading) →
 		// trailPresent → sourceText → bodyOnSameLine → postfix
-		// closeTrailing. Plain mode keeps `null` and the wrap degrades
-		// to `sameLayoutExpr` (no Keep slot — falls through the same
-		// width-aware path as `Same`).
+		// closeTrailing. Plain mode keeps `null`.
 		final bodyOnSameLineExpr: Null<Expr> = kw.ctx.trivia && kw.isTriviaBearing(typePath)
 			? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
 			: null;
@@ -225,23 +211,22 @@ final class WriterKwRefLowering {
 			: null;
 		// ω-issue-257-firstline regression-fix: forward `indentArgs` to
 		// `bodyPolicyWrap` so its `indentObjGuardedNext` rule fires for
-		// the ctor-level `Next`/`Keep`-bodyOnSameLine-false fallback path
-		// when the body is an ObjectLit and `indentObjectLiteral=false`.
-		// Without forwarding, the `Keep`-route nextLayoutExpr always
-		// emits `_dn(_cols, [_dhl, body])` and over-indents `{` by one
+		// the ctor-level `Next` path when the body is an ObjectLit and
+		// `indentObjectLiteral=false`. Without forwarding, the `Next`
+		// nextLayoutExpr always emits `_dn(_cols, [_dhl, body])` and over-indents `{` by one
 		// step (`return\n\t\t\t{` instead of `return\n\t\t{` for
 		// `indentObjectLiteral=false` configs). The post-process wrap
 		// below at `indentWrapped` keeps overriding the SAME-policy case
 		// when `indentObjectLiteral=true`; the two layers are orthogonal
 		// — post-process handles `Same+true`, bodyPolicyWrap handles
-		// `Next+false` and `Keep+false`. Reads the meta once and reuses
+		// `Next+false`. Reads the meta once and reuses
 		// the result for both layers.
 		//
 		// ω-issue-257-return-same-indent-value-expr: split the
 		// `indentValueIfCtor` entries on this ctor by arity:
 		//   - 3-arg form `(ctorName, optField, leftCurlyField)` →
 		//     `indentArgs`, fed to `bodyPolicyWrap.indentObjGuardedNext`
-		//     (Next/Keep+false ObjectLit path) AND post-hoc
+		//     (Next+false ObjectLit path) AND post-hoc
 		//     `indentWrapped` (Same+true ObjectLit path). At most one
 		//     entry per ctor.
 		//   - 2-arg form `(ctorName, optField)` → `ifExprIndentArgs`,
@@ -270,8 +255,7 @@ final class WriterKwRefLowering {
 				widthAware: ctorWidthAware,
 				ifExprIndentArgs: ifExprIndentArgs,
 				singleLineFlagName: ctorSingleLineFlag,
-				singleLineMultiCtors: ctorSingleLineMultiCtors,
-				kwNewlineExpr: kwNewlineExpr
+				singleLineMultiCtors: ctorSingleLineMultiCtors
 			})
 			: subCall;
 
@@ -453,10 +437,7 @@ final class WriterKwRefLowering {
 		// mirroring `WrapList.emitCondition` `brkShape` for the
 		// `if (\n cond \n)` keep case. Computed at macro time so the
 		// null-`wrapOpenNewlineExpr` case (plain / no opt-in) is not
-		// spliced; the runtime `flatLength` gate keeps it byte-inert for a
-		// flat (non-broken) paren content and for non-keep configs (where
-		// the inner does not source-break). `_keepFlatInner` (operand of a
-		// kept chain) is excluded by the outer ternary below.
+		// spliced; the runtime `flatLength` gate keeps it byte-inert for a flat (non-broken) paren content.
 		final keepOpenGate: Expr = wrapOpenNewlineExpr != null
 			? macro ($wrapOpenNewlineExpr && anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0)
 			: macro false;
@@ -468,66 +449,52 @@ final class WriterKwRefLowering {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _wrapTrail: anyparse.core.Doc = $trailDoc;
 			final _parenShape: anyparse.core.Doc -> anyparse.core.Doc = (_wrapInner: anyparse.core.Doc) -> {
-				// ω-keep-chain (increment: opadd_chain_keep): when this expr
-				// paren is an operand of a `WrapMode.Keep` chain
-				// (`opt._keepFlatInner`, set on the leaf-operand opt at the
-				// chain emit), the kept chain preserves source line structure
-				// verbatim — its operand lines may exceed `lineWidth`. The
-				// inner paren must therefore stay GLUED `(<inner>)`
-				// UNCONDITIONALLY, NOT re-open via the width-driven
-				// `IfFullLineExceeds` probe below (which would force
-				// `(\n\tHardFlatten(inner)\n)`). Mirrors fork `keep2`'s
-				// `noLineEndBefore` lock on operand-interior boundaries.
-				// Byte-identical to the existing GLUED flat side, so a
-				// standalone expr paren (flag false) is byte-inert.
-				opt._keepFlatInner
-					? _dc([$leadDoc, _wrapInner, _wrapTrail])
-					: anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
-						? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
-						: $keepOpenGate
-							? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
-							: anyparse.format.wrap.WrapList.topLevelOperatorClass(_wrapInner) == anyparse.format.wrap.ChainOperatorClass.OpAddSub
-								? $opAddSubShape
-								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
-									? (
-										anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-											? _dfle(opt.lineWidth + 1, _dc([
-												$leadDoc,
-												_dn(_cols, _dc([_dhl(), _wrapInner])),
-												_dhl(),
-												_wrapTrail
-											]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-											: _dc([$leadDoc, _wrapInner, _wrapTrail])
-									)
-									: anyparse.format.wrap.WrapList.isTopLevelValueIf(_wrapInner)
-										&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+				anyparse.format.wrap.WrapList.startsWithHardline(_wrapInner)
+					? _dg(_dib($hardlineOpenShape, _dc([$leadDoc, _wrapInner, _wrapTrail])))
+					: $keepOpenGate
+						? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
+						: anyparse.format.wrap.WrapList.topLevelOperatorClass(_wrapInner) == anyparse.format.wrap.ChainOperatorClass.OpAddSub
+							? $opAddSubShape
+							: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
+								? (
+									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
 										? _dfle(opt.lineWidth + 1, _dc([
 											$leadDoc,
 											_dn(_cols, _dc([_dhl(), _wrapInner])),
 											_dhl(),
 											_wrapTrail
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-										: anyparse.format.wrap.BinaryChainEmit.isBreakableBoolChain(_wrapInner)
+										: _dc([$leadDoc, _wrapInner, _wrapTrail])
+								)
+								: anyparse.format.wrap.WrapList.isTopLevelValueIf(_wrapInner)
+									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+									? _dfle(opt.lineWidth + 1, _dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _wrapInner])),
+										_dhl(),
+										_wrapTrail
+									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+									: anyparse.format.wrap.BinaryChainEmit.isBreakableBoolChain(_wrapInner)
+										? _dfle(opt.lineWidth + 1, _dc([
+											$leadDoc,
+											_dn(_cols, _dc([_dhl(), anyparse.format.wrap.BinaryChainEmit.coIndented(_wrapInner)])),
+											_dhl(),
+											_wrapTrail
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+										: opt._parenInCondition
+											&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
 											? _dfle(opt.lineWidth + 1, _dc([
 												$leadDoc,
-												_dn(_cols, _dc([_dhl(), anyparse.format.wrap.BinaryChainEmit.coIndented(_wrapInner)])),
+												_dn(_cols, _dc([_dhl(), _wrapInner])),
 												_dhl(),
 												_wrapTrail
 											]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-											: opt._parenInCondition
-												&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-												? _dfle(opt.lineWidth + 1, _dc([
-													$leadDoc,
-													_dn(_cols, _dc([_dhl(), _wrapInner])),
-													_dhl(),
-													_wrapTrail
-												]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-												: _dfle(opt.lineWidth + 1, _dc([
-													$leadDoc,
-													_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-													_dhl(),
-													_wrapTrail
-												]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+											: _dfle(opt.lineWidth + 1, _dc([
+												$leadDoc,
+												_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+												_dhl(),
+												_wrapTrail
+											]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
 			};
 			anyparse.core.BreakCommits.followBare($innerDoc, _parenShape);
 		};
@@ -540,27 +507,20 @@ final class WriterKwRefLowering {
 	 * The open side pins the chain flat (`HardFlatten`) only while it CAN be one line: an operand that already broke (an
 	 * array its rule lays out one item per line) leaves hardlines a force-flat region renders as bare newlines at column
 	 * 0, so such a chain opens as it does under an `expressionWrapping` rule — the paren's indent and the chain's own
-	 * breaks, behind the paren's width probe. A `WrapMode.Keep` chain its source broke at its OWN operators
-	 * (`breaksAtOwnAddSubOperator`) reproduces that line structure in the paren its source glued (an open one takes
-	 * `keepOpenGate`) at every width, as it already did within the limit: opening it adds two breaks the source does
-	 * not have. It reads no source bit the `return` / `=` policy may overrule, so one write stays a fixed point.
+	 * breaks, behind the paren's width probe.
 	 */
 	private static function opAddSubParenShape(leadDoc: Expr): Expr {
 		return macro (
-			opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
-				&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) == null
-				&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)
-				? _dc([$leadDoc, _wrapInner, _wrapTrail])
-				: anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-					|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
-					? _dfle(
-						opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail]),
-						_dc([$leadDoc, _wrapInner, _wrapTrail])
-					)
-					: _dfle(
-						opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])), _dhl(), _wrapTrail]),
-						_dc([$leadDoc, _wrapInner, _wrapTrail])
-					)
+			anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+				|| anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0
+				? _dfle(
+					opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail]),
+					_dc([$leadDoc, _wrapInner, _wrapTrail])
+				)
+				: _dfle(
+					opt.lineWidth + 1, _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])), _dhl(), _wrapTrail]),
+					_dc([$leadDoc, _wrapInner, _wrapTrail])
+				)
 		);
 	}
 
@@ -601,7 +561,7 @@ final class WriterKwRefLowering {
 	 * expressionParenHardFlatten / keep-chain-in-paren / var-kw-newline)
 	 * onto `macro opt`.
 	 */
-	private static function kwRefCtorOptArg(kw: KwRefCtx, c: WriterLowering.LowerBranchCtx, kwNewlineExpr: Null<Expr>): Expr {
+	private static function kwRefCtorOptArg(kw: KwRefCtx, c: WriterLowering.LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
 		final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
@@ -643,22 +603,9 @@ final class WriterKwRefLowering {
 					)
 					: $optExpr
 			);
-		// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
-		// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
-		// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
-		// (a) SUPPRESS its own `_headBreak` — the `return`→value source
-		// newline is reproduced at the VALUE level (`returnBody` FitLine
-		// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
-		// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
-		// already supplies the +cols, so the chain operators continue at that
-		// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
-		// the `return`→`1` newline at the value and the chain ops co-indented
-		// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
-		// → byte-inert. A BARE chain return value (opbool case-2) has NO
-		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
-		// its own headBreak + Nest. Trivia-only.
-		if (parenHardFlatten && kw.ctx.trivia) optExpr = macro _setKeepChainInParen($optExpr, true, opt);
-		return kwNewlineExpr != null ? macro _setVarKwNewline($optExpr, $kwNewlineExpr, opt) : optExpr;
+		// A `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) marks its inner opt `_keepChainInParen`: the chain
+		// and ternary inside it leave the wrap to the paren's own probe (`_restAware`). Trivia-only.
+		return parenHardFlatten && kw.ctx.trivia ? macro _setKeepChainInParen($optExpr, true, opt) : optExpr;
 	}
 
 	/**

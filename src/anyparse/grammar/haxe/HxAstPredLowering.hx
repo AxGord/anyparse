@@ -1030,10 +1030,13 @@ final class HxAstPredLowering extends AstPredLowering {
 			'HxAstPredLowering: $HX_EXPR is not a rule', Context.currentPos()
 		);
 		final leftOperandCtors: Array<String> = [
-			for (branch in exprRule.children) if (
-				MetaInspect.hasMeta(branch, ':infix') || MetaInspect.hasMeta(branch, ':postfix') || MetaInspect.hasMeta(branch, ':ternary')
-			)
-				(branch.annotations.get(AnnotationKeys.BASE_CTOR): String)
+			for (branch in exprRule.children)
+				if (
+					MetaInspect.hasMeta(branch, ':infix')
+					|| MetaInspect.hasMeta(branch, ':postfix')
+					|| MetaInspect.hasMeta(branch, ':ternary')
+				)
+					(branch.annotations.get(AnnotationKeys.BASE_CTOR): String)
 		];
 		return predField(
 			'ternaryBranchHoldsMultilineBlock',

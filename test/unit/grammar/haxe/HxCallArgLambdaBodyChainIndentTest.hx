@@ -116,7 +116,7 @@ final class HxCallArgLambdaBodyChainIndentTest extends Test {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tvisitAll(() -> switch (kind) {\n\t\t\tcase 1:\n\t\t\t\tret'
 			+ 'urn pendingMarkers.length == 0 && sessionChanged && requestedAnchors.length == 0\n\t\t\t\t\t&& !seen'
-			+ 'Before(index, spanPath, trailingNode);\n\t\t\tcase _:\n\t\t\t\tfalse;\n\t\t});\n\t}\n\n}',
+			+ 'Before(index, spanPath, trailingNode);\n\t\t\tcase _: false;\n\t\t});\n\t}\n\n}',
 			triviaWrite(
 				'class Sample {\n\tfunction run() {\n\t\tvisitAll(() -> switch (kind) {\n\t\t\tcase 1:\n\t\t\t\tretur'
 				+ 'n pendingMarkers.length == 0 && sessionChanged && requestedAnchors.length == 0 && !seenBefore(index,'

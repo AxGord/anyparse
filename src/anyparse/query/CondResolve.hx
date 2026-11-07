@@ -80,8 +80,9 @@ final class CondResolve {
 		);
 		final decided: Array<CondRegion> = all.filter(isDecided);
 		final undecided: Array<UndecidedRegion> = [
-			for (region in all) if (!isDecided(region) && survivesTheFold(region, decided))
-				{ at: region.branches[0].at, directive: region.branches[0].directive }
+			for (region in all)
+				if (!isDecided(region) && survivesTheFold(region, decided))
+					{ at: region.branches[0].at, directive: region.branches[0].directive }
 		];
 		final edits: Array<{ span: Span, text: String }> = [];
 		var resolved: Int = 0;

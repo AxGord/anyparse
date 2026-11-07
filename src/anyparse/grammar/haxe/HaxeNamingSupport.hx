@@ -398,7 +398,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	public static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
 		return switch node.kind {
 			case 'ClassDecl', 'ClassForm', 'AbstractClassDecl', 'InterfaceDecl', 'EnumDecl', 'AbstractDecl', 'EnumAbstractDecl',
-				'TypedefDecl': NamingCategory.Type;
+				'TypedefDecl':
+				NamingCategory.Type;
 			case 'FnMember', 'FinalModifiedMember': NamingCategory.Method;
 			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;

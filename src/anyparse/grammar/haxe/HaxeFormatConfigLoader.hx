@@ -67,8 +67,9 @@ import haxe.Exception;
  * strings, no state.
  *
  * Vocabulary collapses, applied uniformly wherever a string maps to a policy enum — an unrecognised token
- * keeps the default: `"same"` / `"next"` / `"keep"` → `SameLinePolicy` and `BodyPolicy` (`"fitLine"` → `Same`
- * on a keyword-join site with no `FitLine` branch); `"before"` / `"both"` → `BracePlacement.Next`, `"after"` /
+ * keeps the default: `"same"` / `"next"` → `SameLinePolicy` and `BodyPolicy` (`"fitLine"` → `Same` on a
+ * keyword-join site with no `FitLine` branch; `"keep"` is reported unsupported and
+ * keeps the default); `"before"` / `"both"` → `BracePlacement.Next`, `"after"` /
  * `"none"` → `Same` (the inline `{ ... }` shape is not representable); `"before"` / `"onlyBefore"` →
  * `WhitespacePolicy.Before`, `"after"` / `"onlyAfter"` → `After`, `"around"` → `Both`, `"none*"` → `None` (the
  * `only*` / `none*` sides collapse to the four values the writer exposes); a trailing-comma `"yes"` → `true`,
@@ -80,10 +81,10 @@ import haxe.Exception;
  * Cascades: each global `lineEnds.leftCurly` / `emptyCurly` / `rightCurly` value is written into its own
  * per-construct knobs, and a per-construct sub-section (`objectLiteralCurly`, `anonFunctionCurly`,
  * `anonTypeCurly`, `blockCurly`, …) wins over the cascade — the fork's `getCurlyPolicy` precedence.
- * `sameLine.expressionIf` fans out on two channels: `keep` / `same` into all three `expression*Body` knobs,
+ * `sameLine.expressionIf` fans out on two channels: `same` into all three `expression*Body` knobs,
  * `next` / `fitLine` into the if/else pair only (`expressionForBody` has no `else` sibling to fall back
  * through); and the same value ungated into `sameLineExpressionElse`, where `next` maps to `SameOnBlock` —
- * `Same` after a `}` close, `Keep` after any other shape — because the fork's `expressionIf=next` is
+ * `Same` after a `}` close, `Next` after any other shape — because the fork's `expressionIf=next` is
  * block-shape-aware. `comments.blockCommentStyle` is anyparse-only: `"verbatim"` / `"javadoc"` /
  * `"javadocNoStars"` reshape MULTI-LINE doc blocks only; `"plain"` is refused because `CommentStyle.Plain`
  * would demote a doc to a plain block.
@@ -106,32 +107,10 @@ final class HaxeFormatConfigLoader {
 		final result: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
-		// ω-D6-casebody-fork-default: fork's `SameLineConfig` declares
-		// `caseBody: Next`. Anyparse's `defaultWriteOptions` ships `Keep`
-		// (dogfood track preserves source `case X(v): body;` shape when no
-		// config is supplied), so any JSON load path must re-baseline to
-		// the fork canonical before `applySameLine` merges JSON overrides
-		// on top. Reset BEFORE the section-presence guard so a fixture
-		// that omits the entire `sameLine` block still gets the fork
-		// default (corpus parity Δ 0/0/0 invariant). Sister to the
-		// `afterLeftCurly`/`beforeRightCurly` re-baseline above
-		// `applyEmptyLines`.
+
+		// The fork declares `Next` for these six bodies; the compiled defaults are `FitLine`, so a config — even `{}` —
+		// re-baselines them before its own keys apply, whether or not it names a `sameLine` section.
 		result.caseBody = BodyPolicy.Next;
-		// ω-D7-ctrlflow-body-fork-default: fork's `SameLineConfig` declares
-		// `ifBody`/`elseBody`/`forBody`/`whileBody`/`doWhileBody: Next`.
-		// Anyparse's `defaultWriteOptions` ships `Keep` for the same five
-		// knobs (dogfood track preserves source `if (cond) stmt;` /
-		// `else stmt;` / `for (x in xs) stmt;` / `while (cond) stmt;` /
-		// `do stmt while (cond);` shape when no config is supplied), so any
-		// JSON load path must re-baseline to the fork canonical before
-		// `applySameLine` merges JSON overrides on top. Same outside-section-
-		// guard placement as `caseBody` above so a fixture that omits the
-		// entire `sameLine` block still gets the fork default (corpus parity
-		// Δ 0/0/0 invariant). `elseBody` flip (D8) is safe under the
-		// ω-D8-keep-block-trivia engine fix in WriterLowering's
-		// `bodyPolicyWrap`: Keep + block ctor + captured kw-trivia now
-		// routes through `blockLayoutExpr` (Allman) instead of
-		// `nextLayoutExpr` (which over-indented `{` by +cols).
 		result.ifBody = BodyPolicy.Next;
 		result.elseBody = BodyPolicy.Next;
 		result.forBody = BodyPolicy.Next;
@@ -314,9 +293,9 @@ final class HaxeFormatConfigLoader {
 	// `wrapModeFromString` for rationale.
 
 	private static function applySameLine(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
-		if (section.ifElse != null) opt.sameLineElse = HaxeFormatValues.sameLineToRuntime(section.ifElse);
-		if (section.tryCatch != null) opt.sameLineCatch = HaxeFormatValues.sameLineToRuntime(section.tryCatch);
-		if (section.doWhile != null) opt.sameLineDoWhile = HaxeFormatValues.sameLineToRuntime(section.doWhile);
+		if (section.ifElse != null) opt.sameLineElse = HaxeFormatValues.sameLineToRuntime(section.ifElse, opt.sameLineElse);
+		if (section.tryCatch != null) opt.sameLineCatch = HaxeFormatValues.sameLineToRuntime(section.tryCatch, opt.sameLineCatch);
+		if (section.doWhile != null) opt.sameLineDoWhile = HaxeFormatValues.sameLineToRuntime(section.doWhile, opt.sameLineDoWhile);
 		applySameLineBodies(section, opt);
 		applyExpressionIfFanout(section, opt);
 		// omega-comprehension-for-body: `sameLine.comprehensionFor` is the SPECIFIC
@@ -325,13 +304,11 @@ final class HaxeFormatConfigLoader {
 		// `@:fmt(bodyPolicy('expressionForBody'))`), so it is read AFTER the
 		// `expressionIf` fanout, which sets the same knob as a general default and
 		// must not clobber the specific key.
-		if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);
-		if (section.elseIf != null) opt.elseIf = HaxeFormatValues.keywordPlacementToRuntime(section.elseIf);
-		// omega-else-switch: the `elseIf` twin for a `switch` else-body. Read through the
-		// KEEP-honouring converter, so an absent key and an explicit `"keep"` agree on
-		// `KeywordPlacement.Keep` - the value under which the generated override arm never
-		// fires and every existing config keeps its bytes.
-		if (section.elseSwitch != null) opt.elseSwitch = HaxeFormatValues.keywordPlacementKeepToRuntime(section.elseSwitch);
+		if (section.comprehensionFor != null)
+			opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);
+		if (section.elseIf != null) opt.elseIf = HaxeFormatValues.keywordPlacementToRuntime(section.elseIf, opt.elseIf);
+		// omega-else-switch: the `elseIf` twin for a `switch` branch body.
+		if (section.elseSwitch != null) opt.elseSwitch = HaxeFormatValues.keywordPlacementToRuntime(section.elseSwitch, opt.elseSwitch);
 		if (section.fitLineIfWithElse != null) opt.fitLineIfWithElse = section.fitLineIfWithElse;
 		// omega-arrow-value-if-reflow: independent Bool knob, read here rather
 		// than in `applyExpressionIfFanout` because it does not fan out into the
@@ -362,7 +339,7 @@ final class HaxeFormatConfigLoader {
 		// over-wide glued `#if ... #end` value breaks at its directive seams.
 		if (section.conditionalExprFit != null) opt.conditionalExprFit = section.conditionalExprFit;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
-		if (section.expressionTry != null) opt.expressionTry = HaxeFormatValues.sameLineToRuntime(section.expressionTry);
+		if (section.expressionTry != null) opt.expressionTry = HaxeFormatValues.sameLineToRuntime(section.expressionTry, opt.expressionTry);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
 		// omega-bracket-body-glue: the `[` sibling of `expressionIfWithBlocks`, and a
 		// SEPARATE key rather than an extension of it — that one collapses a block
@@ -594,10 +571,10 @@ final class HaxeFormatConfigLoader {
 		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
 	}
 
-	/** `keep` and `ignore` name no layout of their own on the case label's plain list, so the built-in rules stay beside them. */
+	/** `ignore` names no layout of its own on the case label's plain list, so the built-in rules stay beside it. */
 	private static function casePatternClearsRules(cfg: HxFormatWrapRules): Bool {
 		final named: Null<WrapMode> = cfg.defaultWrap != null ? HaxeFormatValues.wrapModeFromString(cfg.defaultWrap) : null;
-		return named != WrapMode.Keep && named != WrapMode.Ignore;
+		return named != WrapMode.Ignore;
 	}
 
 	private static function applyWrappingRulesB(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
@@ -653,12 +630,12 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applySameLineBodies(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
-		if (section.ifBody != null) opt.ifBody = HaxeFormatValues.bodyPolicyToRuntime(section.ifBody);
-		if (section.elseBody != null) opt.elseBody = HaxeFormatValues.bodyPolicyToRuntime(section.elseBody);
-		if (section.forBody != null) opt.forBody = HaxeFormatValues.bodyPolicyToRuntime(section.forBody);
-		if (section.whileBody != null) opt.whileBody = HaxeFormatValues.bodyPolicyToRuntime(section.whileBody);
-		if (section.doWhileBody != null) opt.doBody = HaxeFormatValues.bodyPolicyToRuntime(section.doWhileBody);
-		if (section.returnBody != null) opt.returnBody = HaxeFormatValues.bodyPolicyToRuntime(section.returnBody);
+		if (section.ifBody != null) opt.ifBody = HaxeFormatValues.bodyPolicyToRuntime(section.ifBody, opt.ifBody);
+		if (section.elseBody != null) opt.elseBody = HaxeFormatValues.bodyPolicyToRuntime(section.elseBody, opt.elseBody);
+		if (section.forBody != null) opt.forBody = HaxeFormatValues.bodyPolicyToRuntime(section.forBody, opt.forBody);
+		if (section.whileBody != null) opt.whileBody = HaxeFormatValues.bodyPolicyToRuntime(section.whileBody, opt.whileBody);
+		if (section.doWhileBody != null) opt.doBody = HaxeFormatValues.bodyPolicyToRuntime(section.doWhileBody, opt.doBody);
+		if (section.returnBody != null) opt.returnBody = HaxeFormatValues.bodyPolicyToRuntime(section.returnBody, opt.returnBody);
 		// ω-return-body-single-line: `sameLine.returnBodySingleLine` refines
 		// the kw→value separator for returns whose value is NOT a control-flow
 		// or block construct (literals, idents, ternaries, array / object /
@@ -670,13 +647,14 @@ final class HaxeFormatConfigLoader {
 		// value's `Type.enumConstructor` against the listed control-flow ctors,
 		// mirroring the fork's `shouldReturnBeSameLine` AST classification.
 		if (section.returnBodySingleLine != null)
-			opt.returnBodySingleLine = HaxeFormatValues.bodyPolicyToRuntime(section.returnBodySingleLine);
-		if (section.catchBody != null) opt.catchBody = HaxeFormatValues.bodyPolicyToRuntime(section.catchBody);
-		if (section.tryBody != null) opt.tryBody = HaxeFormatValues.bodyPolicyToRuntime(section.tryBody);
-		if (section.caseBody != null) opt.caseBody = HaxeFormatValues.bodyPolicyToRuntime(section.caseBody);
-		if (section.expressionCase != null) opt.expressionCase = HaxeFormatValues.bodyPolicyToRuntime(section.expressionCase);
+			opt.returnBodySingleLine = HaxeFormatValues.bodyPolicyToRuntime(section.returnBodySingleLine, opt.returnBodySingleLine);
+		if (section.catchBody != null) opt.catchBody = HaxeFormatValues.bodyPolicyToRuntime(section.catchBody, opt.catchBody);
+		if (section.tryBody != null) opt.tryBody = HaxeFormatValues.bodyPolicyToRuntime(section.tryBody, opt.tryBody);
+		if (section.caseBody != null) opt.caseBody = HaxeFormatValues.bodyPolicyToRuntime(section.caseBody, opt.caseBody);
+		if (section.expressionCase != null)
+			opt.expressionCase = HaxeFormatValues.bodyPolicyToRuntime(section.expressionCase, opt.expressionCase);
 		if (section.caseSiblings != null) opt.caseSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.caseSiblings);
-		if (section.functionBody != null) opt.functionBody = HaxeFormatValues.bodyPolicyToRuntime(section.functionBody);
+		if (section.functionBody != null) opt.functionBody = HaxeFormatValues.bodyPolicyToRuntime(section.functionBody, opt.functionBody);
 		// Slice ω-anonfnbody-keep: `sameLine.anonFunctionBody` drives the
 		// signature→body separator on `HxFnExpr.body`'s `ExprBody` branch
 		// (the bare-expr anon-fn body, e.g. `function() trace(i)`), the
@@ -684,14 +662,15 @@ final class HaxeFormatConfigLoader {
 		// `@:fmt(bodyPolicyForCtor('ExprBody', 'anonFunctionBody'))` on the
 		// `HxFnExpr.body` optional Ref. Default `Same` reproduces the
 		// pre-slice cuddle, so the knob is byte-inert until set.
-		if (section.anonFunctionBody != null) opt.anonFunctionBody = HaxeFormatValues.bodyPolicyToRuntime(section.anonFunctionBody);
-		if (section.untypedBody != null) opt.untypedBody = HaxeFormatValues.bodyPolicyToRuntime(section.untypedBody);
+		if (section.anonFunctionBody != null)
+			opt.anonFunctionBody = HaxeFormatValues.bodyPolicyToRuntime(section.anonFunctionBody, opt.anonFunctionBody);
+		if (section.untypedBody != null) opt.untypedBody = HaxeFormatValues.bodyPolicyToRuntime(section.untypedBody, opt.untypedBody);
 	}
 
 	private static function applyExpressionIfFanout(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
 		// Slice ω-expr-body-keep: the JSON key `sameLine.expressionIf`
-		// is parsed via the schema (so unknown-key validation passes)
-		// and `Keep` / `Same` are honoured at runtime. `Same` force-
+		// is parsed via the schema (so unknown-key validation passes);
+		// `keep` fans out nothing (`HaxeFormatValues.bodyPolicyToRuntime`). `Same` force-
 		// flattens expression-position `if/else/for` bodies, which is
 		// unconditionally safe because the bodyPolicyWrap `Same` branch
 		// emits `_dop(' ')` regardless of surrounding context — no arrow-
@@ -711,9 +690,9 @@ final class HaxeFormatConfigLoader {
 		// into HxIfExpr.thenBranch's `bodyPolicy('expressionIfBody')` and
 		// break the existing arrow-body fixture. The Next/FitLine gate
 		// stays.
-		if (section.expressionIf == null) return;
-		final p: BodyPolicy = HaxeFormatValues.bodyPolicyToRuntime(section.expressionIf);
-		if (p == BodyPolicy.Keep || p == BodyPolicy.Same) {
+		if (section.expressionIf == null || section.expressionIf == HxFormatBodyPolicy.Keep) return;
+		final p: BodyPolicy = HaxeFormatValues.bodyPolicyToRuntime(section.expressionIf, opt.expressionIfBody);
+		if (p == BodyPolicy.Same) {
 			opt.expressionIfBody = p;
 			opt.expressionElseBody = p;
 			opt.expressionForBody = p;
@@ -741,26 +720,16 @@ final class HaxeFormatConfigLoader {
 		// fanout (which has the arrow-body regression gate above).
 		//
 		// ω-same-on-block: `next` maps to `SameOnBlock`, the shape-aware
-		// dispatch, not to `Keep`. `Keep` makes the writer read the synth
-		// `BeforeKwNewline` slot and preserve whatever the source wrote,
-		// which lands on the right answer only where the source already
-		// agrees: a value-`if` with a `{ … }` branch and a break before
-		// `else` keeps that break forever, while the STATEMENT twin of
-		// the same construct joins to `} else {` (its `sameLineElse`
-		// defaults to `Same`) — one construct, two layouts, decided by
-		// value-vs-statement position alone.
-		//
-		// `SameOnBlock` is `Same` after a CURLY close and `Next` after
+		// dispatch. `SameOnBlock` is `Same` after a CURLY close and `Next` after
 		// everything else: a non-block branch (object literal,
 		// `macro { … }`, a bare value) keeps the forced break the
 		// `@:fmt(shapeAware)` switch gives it, and so does a BRACKET-block
 		// branch, whose `]` the `next` layout closes one indent deeper —
 		// mapping `next` onto a plain `Same` instead glues `[] else {` and
 		// `['--code', staged]; else if (…)`.
-		// `Same` and `Keep` map directly. `FitLine` falls through to
+		// `Same` maps directly. `FitLine` falls through to
 		// `Same` (no SameLinePolicy counterpart).
 		opt.sameLineExpressionElse = switch p {
-			case BodyPolicy.Keep: SameLinePolicy.Keep;
 			case BodyPolicy.Next: SameLinePolicy.SameOnBlock;
 			case _: SameLinePolicy.Same;
 		};
@@ -1149,11 +1118,10 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyComprehensionForPadding(section: Null<HxFormatSameLineSection>, opt: HxModuleWriteOptions): Void {
 		if (section == null) return;
-		// `forBody: fitLine` keeps an object-literal comprehension body on the `for` line. An explicit `keep` or `next` says
-		// where the body goes on its own, so only an absent key, `same` and `fitLine` defer to `forBody`.
+		// `forBody: fitLine` keeps an object-literal comprehension body on the `for` line. An explicit `next` says where
+		// the body goes on its own; every other value (an unsupported `keep` reads as absent) defers to `forBody`.
 		final comprehensionFor: Null<HxFormatBodyPolicy> = section.comprehensionFor;
-		opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine
-			&& (comprehensionFor == null || comprehensionFor == HxFormatBodyPolicy.Same || comprehensionFor == HxFormatBodyPolicy.FitLine);
+		opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine && comprehensionFor != HxFormatBodyPolicy.Next;
 		// `comprehensionFor: fitLine` is the fork's trigger for padded
 		// comprehension brackets; every other value (incl. the `same`
 		// default) leaves the `bracketConfig` / default policy in place.

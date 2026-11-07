@@ -226,8 +226,7 @@ class LintFixSafeBisectTest extends Test {
 				'q/Unused.hx',
 				'Main.hx',
 				'r/Spare.hx'
-			])
-				{ file: '$root/${src ? 'src/' : ''}$name', source: File.getContent('$root/${src ? 'src/' : ''}$name') }
+			]) { file: '$root/${src ? 'src/' : ''}$name', source: File.getContent('$root/${src ? 'src/' : ''}$name') }
 		];
 		var code: Int = -1;
 		final err: String = CliFixture.captureStderr(() ->

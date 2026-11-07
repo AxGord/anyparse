@@ -41,8 +41,9 @@ final class MoveMemberFields {
 		final added: Array<String> = [];
 		while (true) {
 			final cuts: Array<Span> = [
-				for (g in all) if (names.contains(g.member.name ?? '') || added.contains(g.member.name ?? ''))
-					ElementSpan.memberCutSpan(srcSource, g.groupSpan, regions)
+				for (g in all)
+					if (names.contains(g.member.name ?? '') || added.contains(g.member.name ?? ''))
+						ElementSpan.memberCutSpan(srcSource, g.groupSpan, regions)
 			];
 			final slices: String = cuts.map(c -> srcSource.substring(c.from, c.to)).join('\n');
 			final candidates: Array<MemberGroup> = all.filter(g -> {

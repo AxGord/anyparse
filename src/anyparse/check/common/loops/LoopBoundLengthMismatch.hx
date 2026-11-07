@@ -153,11 +153,12 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (index == null) return;
 		final confined: SymbolIndex = index;
 		final kept: Array<LengthSource> = [
-			for (src in found) if (
-				MemberWriteScan.referencesConfined(owner, src.name, ctx.source, confined, ctx.plugin)
-				&& keepsLength(container, src, owner, true, ctx)
-			)
-				src
+			for (src in found)
+				if (
+					MemberWriteScan.referencesConfined(owner, src.name, ctx.source, confined, ctx.plugin)
+					&& keepsLength(container, src, owner, true, ctx)
+				)
+					src
 		];
 		for (src in kept) checkLoops(container, src, kept, owner, true, ctx);
 	}

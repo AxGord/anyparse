@@ -50,10 +50,9 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	 * Project-shaped config: tab indent, maxLineLength 140, `ifBody` fitLine,
 	 * `expressionIf` next, padded comprehension brackets, cuddled-open on.
 	 */
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {'
+		+ '"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/**
 	 * Same, plus the project's `callParameter` cascade — needed by the call-host
@@ -64,12 +63,12 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},{"conditions": ['
 		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/** `CFG` without `wrapping.comprehensionCuddledOpen` — the gate-1 disarm is config-independent and must hold here too. */
 	private static final CFG_NO_CUDDLE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/**
 	 * `CFG_CALL` with `comprehensionFor: fitLine` — the project spelling, which pads
@@ -90,9 +89,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	public function testOverflowingDeclComprehensionBreaksInsideBrackets(): Void {
 		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal selectedUnits:Array<SceneNode<NodePayload>> '
 			+ '= [for (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode];\n\t}\n}';
-		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n'
-			+ '\t\tfinal selectedUnits:Array<SceneNode<NodePayload>> = [\n'
-			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode\n\t\t];\n\t}\n}';
+		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal selectedUnits:Array<SceneNode<NodeP'
+			+ 'ayload>> = [ for (sceneNode in _sceneLayer.sceneNodes)\n\t\t\tif (sceneNode is UnitBase) sceneNode\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
 
@@ -123,8 +121,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	public function testComprehensionOnePastLimitBreaksInsideBrackets(): Void {
 		final src: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [for (o in list) if ('
 			+ 'o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o];\n\t}\n}';
-		final expected: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [\n'
-			+ '\t\t\tfor (o in list) if (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o\n\t\t];\n\t}\n}';
+		final expected: String = 'class Boundary {\n\tprivate function edge():Void {\n\t\tfinal atLimit:Array<Item> = [ for (o in list)\n'
+			+ '\t\t\tif (o is UnitXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX) o\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
 
@@ -146,8 +144,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	public function testAssignmentRhsComprehensionBreaksInsideBrackets(): Void {
 		final src: String = 'class Assign {\n\tprivate function run():Void {\n\t\tunitRegistryTable = [for (sceneNode in '
 			+ '_sceneLayer.sceneNodes) if (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode];\n\t}\n}';
-		final expected: String = 'class Assign {\n\tprivate function run():Void {\n\t\tunitRegistryTable = [\n'
-			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode'
+		final expected: String = 'class Assign {\n\tprivate function run():Void {\n\t\tunitRegistryTable = [ for (sceneNode in _sceneL'
+			+ 'ayer.sceneNodes)\n\t\t\tif (sceneNode is UnitBaseDerivedNameXXXXXXXXXXXXXXXXXXXXXXXXXXXX) sceneNode'
 			+ '\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
@@ -156,8 +154,9 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	public function testMapComprehensionBreaksInsideBrackets(): Void {
 		final src: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal lookupTable:Map<String, SceneNode> = [for ('
 			+ 'sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode.key => sceneNode];\n\t}\n}';
-		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal lookupTable:Map<String, SceneNode> = [\n'
-			+ '\t\t\tfor (sceneNode in _sceneLayer.sceneNodes) if (sceneNode is UnitBase) sceneNode.key => sceneNode\n\t\t];\n\t}\n}';
+		final expected: String = 'class Renderer {\n\tprivate function collect():Void {\n\t\tfinal lookupTable:Map<String, SceneNode> '
+			+ '= [ for (sceneNode in _sceneLayer.sceneNodes)\n\t\t\tif (sceneNode is UnitBase) sceneNode.key => sce'
+			+ 'neNode\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
 
@@ -186,9 +185,9 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		final src: String = 'class Inner {\n\tprivate function run():Void {\n'
 			+ '\t\tfinal removedPaths:Array<String> = [for (entry in pendingEntries) if (entry.state == REMOVED && '
 			+ 'entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH)) entry.path];\n\t}\n}';
-		final expected: String = 'class Inner {\n\tprivate function run():Void {\n\t\tfinal removedPaths:Array<String> = [\n'
-			+ '\t\t\tfor (entry in pendingEntries) if (entry.state == REMOVED && '
-			+ 'entry.path.startsWith(Const.SHARED_ROOT_PREFIX_WITH_TRAILING_SLASH))\n\t\t\t\tentry.path\n\t\t];\n\t}\n}';
+		final expected: String = 'class Inner {\n\tprivate function run():Void {\n\t\tfinal removedPaths:Array<String> = [ for (entry '
+			+ 'in pendingEntries)\n\t\t\tif (entry.state == REMOVED && entry.path.startsWith(Const.SHARED_ROOT_PREF'
+			+ 'IX_WITH_TRAILING_SLASH)) entry.path\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG_CALL);
 	}
 
@@ -197,8 +196,8 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 		final src: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {\n'
 			+ '\t\tdispatchNodeUpdate([for (sceneNode in nodes) if (payload.kind == sceneNode.kind) '
 			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)]);\n\t}\n}';
-		final expected: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):Void {'
-			+ '\n\t\tdispatchNodeUpdate([\n\t\t\tfor (sceneNode in nodes) if (payload.kind == sceneNode.kind) '
+		final expected: String = 'class CallHost {\n\tprivate function run(payload:NodePayload, nodes:Array<SceneNode<NodePayload>>):V'
+			+ 'oid {\n\t\tdispatchNodeUpdate([ for (sceneNode in nodes)\n\t\t\tif (payload.kind == sceneNode.kind) '
 			+ 'new UpdateNodePropsCommand(this, cast sceneNode, payload)\n\t\t]);\n\t}\n}';
 		assertWrite(expected, src, CFG_CALL);
 	}

@@ -43,10 +43,8 @@ final class CompareFunctions {
 						continue;
 					}
 					switch field.value {
-						case JString(path):
-							read(key, type, path, intType, typeSyntax, index);
-						case _:
-							problems.push('$key.$type is not a string');
+						case JString(path): read(key, type, path, intType, typeSyntax, index);
+						case _: problems.push('$key.$type is not a string');
 					}
 				}
 			case _:

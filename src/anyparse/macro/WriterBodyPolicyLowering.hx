@@ -17,11 +17,9 @@ using anyparse.macro.MetaInspect;
  *
  * Everything behind ONE decision: given a field the grammar marked as a
  * construct's BODY (`@:fmt(bodyPolicy(...))`), where does that body go
- * relative to its head - same line, next line, its own block, or kept as
- * the source had it - and what separator, indent, brace placement and
- * comment fold the choice implies. The five layout builders
- * (`buildBodySameLayout` / `Next` / `Block` / `Fit` / `Keep`) each emit one
- * arm, `buildBodyCoreWrap` selects between them at runtime - substituting
+ * relative to its head - same line, next line, its own block, or the first that fits - and what separator, indent, brace placement and
+ * comment fold the choice implies. The four layout builders (`buildBodySameLayout` / `Next` / `Block`
+ * / `Fit`) each emit one arm, `buildBodyCoreWrap` selects between them at runtime - substituting
  * `BodyPolicy.Next` for the config's placement on the one loop-body shape
  * `buildLoopBodyIfElseTest` names - and the `wrapBody*` members bolt on the
  * trailing-doc, Allman and meta-block-glue corrections.
@@ -147,7 +145,7 @@ final class WriterBodyPolicyLowering {
 		final sameLayoutExpr: Expr = buildBodySameLayout(bp, opts, shared);
 		final nextLayoutExpr: Expr = buildBodyNextLayout(bp, opts, shared);
 		final blockLayoutExpr: Expr = buildBodyBlockLayout(opts, shared);
-		final fitExpr: Expr = buildBodyFitExpr(bp, opts, shared);
+		final fitExpr: Expr = fitYieldsToKwComments(opts, shared, buildBodyFitExpr(bp, opts, shared), nextLayoutExpr);
 		final layouts: WriterLowering.BodyLayouts = {
 			sameLayoutExpr: sameLayoutExpr,
 			nextLayoutExpr: nextLayoutExpr,
@@ -158,8 +156,7 @@ final class WriterBodyPolicyLowering {
 		final ifStmtPattern: Null<Expr> = opts.hasElseIf
 			? (bp.findCtorPattern(opts.bodyTypePath, 'IfStmt') ?? bp.findCtorPattern(opts.bodyTypePath, 'IfExpr'))
 			: null;
-		final keepLayoutExpr: Expr = buildBodyKeepLayout(bp, opts, layouts, blockSplit, ifStmtPattern);
-		final coreWrapExpr: Expr = buildBodyCoreWrap(bp, opts, optFlag, layouts, keepLayoutExpr, blockSplit, ifStmtPattern);
+		final coreWrapExpr: Expr = buildBodyCoreWrap(bp, opts, optFlag, layouts, blockSplit, ifStmtPattern);
 		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, shared.isBlockBody);
 		final glueLayoutExpr: Expr = wrapBodyAfterTrail(opts, sameLayoutExpr, writeCall, shared.isBlockBody);
 		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr);
@@ -186,7 +183,7 @@ final class WriterBodyPolicyLowering {
 		// bodies inline when `opt.<flagName>` is true AND the body's
 		// runtime ctor is `BlockExpr`. Done at the entry of bodyPolicyWrap
 		// so the flattened body propagates through every downstream
-		// policy / override layout (Same / Next / Keep / FitLine / etc.).
+		// policy / override layout (Same / Next / FitLine / etc.).
 		// Non-BlockExpr bodies and flag-false invocations get the original
 		// writeCall result unchanged.
 		//
@@ -272,7 +269,6 @@ final class WriterBodyPolicyLowering {
 		final elseFieldName: Null<String> = opts.elseFieldName;
 		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
 		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
-		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
 		final baseResolved: Expr = if (fallbackFlagName == null || elseFieldName == null) {
 			ctorOverriddenOptFlag;
 		} else {
@@ -280,7 +276,7 @@ final class WriterBodyPolicyLowering {
 			final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
 			macro {
 				final _resolvedBP: anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
-				$elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat ? $fallbackAccess : _resolvedBP;
+				$elseAccess == null && _resolvedBP != $samePat ? $fallbackAccess : _resolvedBP;
 			};
 		};
 		return arrowValueIfPolicy(opts, baseResolved, samePat);
@@ -342,9 +338,8 @@ final class WriterBodyPolicyLowering {
 		};
 		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
 		// (OptSpace, drops before break-mode hardline) instead of `_dt(' ')`
-		// (Text). When `Keep` policy degrades to `sameLayoutExpr` (no
-		// `bodyOnSameLineExpr` slot — Case 3 enum-branch path) and the body's
-		// own emission opens with a hardline (e.g. ObjectLit + leftCurly=Next),
+		// (Text). When the body's own emission opens with a hardline
+		// (e.g. ObjectLit + leftCurly=Next),
 		// the OptSpace drops, yielding `return\n{...}` instead of the spurious
 		// `return \n{...}`. For Same policy with non-hardline-opening body
 		// (Ident, Call, block ctor `{...}`), OptSpace renders as `' '`,
@@ -491,7 +486,7 @@ final class WriterBodyPolicyLowering {
 	): Expr {
 		final writeCall: Expr = shared.writeCall;
 		final singleLineFlagName: Null<String> = opts.singleLineFlagName;
-		final kwNewlineExpr: Null<Expr> = opts.kwNewlineExpr;
+
 		final elseFieldName: Null<String> = opts.elseFieldName;
 		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
@@ -502,14 +497,7 @@ final class WriterBodyPolicyLowering {
 		// The two arms below reach the glue by the same `flatLength == -1` test
 		// the shared `fitLineLayout` uses, so all three inherit one answer.
 		final gluedLayout: Expr = macro anyparse.format.BodyFit.glueLayout(_cols, _body, _dc([_dop(' '), $gluedBody]), opt.lineWidth);
-		final multilineGlue: Expr = kwNewlineExpr != null
-			? macro (
-				$kwNewlineExpr && (
-					opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
-					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
-				) && !anyparse.format.wrap.WrapList.startsWithHardline(_body) ? _dn(_cols, _dc([_dhl(), _body])) : $gluedLayout
-			)
-			: gluedLayout;
+		final multilineGlue: Expr = gluedLayout;
 		// ω-condwrap-fitline-construct-group: under a construct-level BodyGroup
 		// (see WrapBodyOpts.condFitGroup) the flat-body FitLine layout is the
 		// soft line — the group's whole-construct fitsFlat owns the same-vs-next
@@ -623,48 +611,36 @@ final class WriterBodyPolicyLowering {
 	}
 
 	/**
-	 * The same decision as `buildElseSwitchCases`, but as a pair of BOOL tests instead of a pair
-	 * of switch arms — `(same, next)`, each `null` when the field declares no `@:fmt(elseSwitch)`.
+	 * The same decision as `buildElseSwitchCases`, but as BOOL tests instead of switch arms —
+	 * one per placement, each `null` when the field declares no `@:fmt(elseSwitch)`.
 	 *
 	 * Why it exists: an arm carries a whole LAYOUT expression, and the layouts of the `if`
-	 * writer are large. Two arms in `buildBodyKeepLayout` plus two in `buildBodyCoreWrap` added
-	 * four more copies of them to ONE generated function, and `HaxeModuleTriviaWriter` — a
+	 * writer are large. Extra arms added more copies of them to ONE generated function, and `HaxeModuleTriviaWriter` — a
 	 * single generated class that is already the largest in the tree — grew past what a JVM
 	 * class file holds: `tools/jvm-portability.hxml` failed with `IO.Overflow("write_ui16")`,
 	 * the 16-bit constant-pool counter. Reverting this ONE field's meta made it pass again,
 	 * which is how the cause was pinned. As a condition folded into the layout choice, the
 	 * same decision adds no layout copy at all.
 	 */
-	private static function buildElseSwitchTests(
-		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts
-	): { same: Null<Expr>, next: Null<Expr> } {
-		final cases: Array<Case> = buildElseSwitchCases(bp, opts, macro true, macro false);
+	private static function buildElseSwitchTests(bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts): ElseSwitchTests {
+		final cases: Array<Case> = buildElseSwitchCases(bp, opts);
 		if (cases.length == 0) return { same: null, next: null };
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		return {
-			same: {
-				expr: ESwitch(bodyValueExpr, [{ values: cases[0].values, expr: macro true, guard: cases[0].guard }], macro false),
+		inline function test(arm: Case): Expr {
+			return {
+				expr: ESwitch(bodyValueExpr, [{ values: arm.values, expr: macro true, guard: arm.guard }], macro false),
 				pos: Context.currentPos()
-			},
-			next: {
-				expr: ESwitch(bodyValueExpr, [{ values: cases[1].values, expr: macro true, guard: cases[1].guard }], macro false),
-				pos: Context.currentPos()
-			}
-		};
+			};
+		}
+		return { same: test(cases[0]), next: test(cases[1]) };
 	}
 
 	/**
-	 * omega-else-switch: the two GUARDED outer-switch arms a
-	 * `@:fmt(elseSwitch('<knobField>', '<ctor>'…))` field contributes - one for
-	 * `KeywordPlacement.Same` (the `switch` glues to its keyword's line, `else`
-	 * or `if (cond)` alike) and one for `Next` (it moves to the next line at the
-	 * outer indent).
-	 *
-	 * Guards rather than a nested switch on the knob, because the third value
-	 * `Keep` must mean "no opinion": a failed guard continues matching with the
-	 * arms that follow, so `Keep` reaches exactly the block-ctor / elseIf / policy
-	 * arms that answered before this flag existed. That is what makes the default
-	 * byte-inert without a second copy of those arms.
+	 * omega-else-switch: the two GUARDED arms a
+	 * `@:fmt(elseSwitch('<knobField>', '<ctor>'…))` field contributes, in
+	 * `KeywordPlacement` order - `Same` (the `switch` glues to its keyword's line,
+	 * `else` or `if (cond)` alike) and `Next` (it moves to the next line at the outer
+	 * indent). Each arm's expression is `true`; `buildElseSwitchTests` turns them into tests.
 	 *
 	 * Unlike the `elseIf` flag beside it, the ctor names come from the GRAMMAR: the
 	 * meta's tail lists them (`'SwitchStmt', 'SwitchStmtBare'` in statement
@@ -674,9 +650,7 @@ final class WriterBodyPolicyLowering {
 	 *
 	 * Empty array for every field without the meta.
 	 */
-	private static function buildElseSwitchCases(
-		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts, sameLayoutExpr: Expr, nextLayoutExpr: Expr
-	): Array<Case> {
+	private static function buildElseSwitchCases(bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts): Array<Case> {
 		final args: Null<Array<String>> = opts.elseSwitchArgs;
 		if (args == null) return [];
 		if (args.length < 2)
@@ -699,74 +673,22 @@ final class WriterBodyPolicyLowering {
 		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 		final samePat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Same']));
 		final nextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+
 		// A comment the source wrote between `else` and the `switch` needs no guard here: the
 		// `Same` layout carries kw-slot comments (`kwSameLayoutDoc`), which push the body onto its
 		// own line one step in - the source's own two-line shape.
 		return [
-			{ values: patterns, expr: sameLayoutExpr, guard: macro $knob == $samePat },
-			{ values: patterns.copy(), expr: nextLayoutExpr, guard: macro $knob == $nextPat }
+			{ values: patterns, expr: macro true, guard: macro $knob == $samePat },
+			{ values: patterns.copy(), expr: macro true, guard: macro $knob == $nextPat }
 		];
 	}
 
 	/**
-	 * Build the `Keep`-policy layout Expr (ω-keep-policy) — runtime-dispatched
-	 * between same and next layouts via the parser's `bodyOnSameLine` slot,
-	 * with the block-ctor `blockLayoutExpr` route (ω-D8-keep-block-trivia) and
-	 * the `elseIf == Next` override (ω-D8-keep-elseif-override).
-	 */
-	private static function buildBodyKeepLayout(
-		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts, layouts: WriterLowering.BodyLayouts,
-		blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }, ifStmtPattern: Null<Expr>
-	): Expr {
-		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		final bodyOnSameLineExpr: Null<Expr> = opts.bodyOnSameLineExpr;
-		final sameLayoutExpr: Expr = layouts.sameLayoutExpr;
-		final nextLayoutExpr: Expr = layouts.nextLayoutExpr;
-		final blockLayoutExpr: Expr = layouts.blockLayoutExpr;
-		final keepNextLayoutExpr: Expr = if (blockSplit.tagged.length > 0) {
-			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null }];
-			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
-			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
-		} else {
-			nextLayoutExpr;
-		};
-		// omega-else-switch: the `Keep` body policy is the path Pony's config takes
-		// (`sameLine.elseBody` unset), so the knob has to be honoured HERE as well as
-		// in `buildBodyCoreWrap` - otherwise `elseSwitch: "same"` would move nothing
-		// on the very tree it was asked for. It is folded into the layout CHOICE rather
-		// than added as two more switch arms: an arm carries a whole layout expression,
-		// and four extra copies of these two overflowed a JVM class file (see
-		// `buildElseSwitchTests`). `same` wins over the source's own line, `next` loses
-		// to nothing - together they read as "the knob overrides `bodyOnSameLine`".
-		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(bp, opts);
-		final esSame: Null<Expr> = tests.same;
-		final esNext: Null<Expr> = tests.next;
-		final keepBaseExpr: Expr = if (bodyOnSameLineExpr == null)
-			sameLayoutExpr;
-		else if (esSame == null)
-			macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr);
-		else
-			macro ($esSame || (!$esNext && $bodyOnSameLineExpr) ? $sameLayoutExpr : $keepNextLayoutExpr);
-		if (ifStmtPattern == null) return keepBaseExpr;
-		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
-		final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-		final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];
-		final elseIfSwitchForKeep: Expr = {
-			expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
-			pos: Context.currentPos()
-		};
-		final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null }];
-		outerKeepBodyCases.push({ values: [macro _], expr: keepBaseExpr, guard: null });
-		return { expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos() };
-	}
-
-	/**
-	 * Build the core body-wrap Expr — the policy switch (Same/Next/FitLine),
-	 * the block-ctor + elseIf outer overrides (bodySwitch), and the outer Keep
-	 * dispatch (ω-keep-policy).
+	 * Build the core body-wrap Expr — the policy switch (Same/Next/FitLine)
+	 * under the block-ctor + elseIf outer overrides (bodySwitch).
 	 */
 	private static function buildBodyCoreWrap(
-		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts, optFlag: Expr, layouts: WriterLowering.BodyLayouts, keepLayoutExpr: Expr,
+		bp: BodyPolicyCtx, opts: WriterLowering.WrapBodyOpts, optFlag: Expr, layouts: WriterLowering.BodyLayouts,
 		blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }, ifStmtPattern: Null<Expr>
 	): Expr {
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
@@ -777,15 +699,13 @@ final class WriterBodyPolicyLowering {
 		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
 		final nextPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
 		final fitPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
-		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
 		// ω-loop-body-if-else-next: the key is a POLICY SUBSTITUTION, not a layout
 		// arm. On a LOOP body field whose runtime body is an `if` that owns an
 		// `else`, the placement `forBody` / `whileBody` / `doWhileBody` chose is
-		// replaced by `Next` before ANY reader sees it — the outer `Keep` switch
-		// below, and the policy switch inside it, both read the selector
-		// `policyFlag` this one feeds. Gating `buildBodyFitExpr` instead leaves
-		// `same` and `keep` carrying the defect the key is documented to withdraw,
-		// with no way to decline it. Folded into the
+		// replaced by `Next` before ANY reader sees it — the policy switch reads
+		// the selector `policyFlag` this one feeds. Gating `buildBodyFitExpr`
+		// instead leaves `same` carrying the defect the key is documented to
+		// withdraw, with no way to decline it. Folded into the
 		// selector rather than added as arms, for the JVM method-size reason the
 		// `omega-else-switch` comment below records.
 		final loopIfElseTest: Null<Expr> = buildLoopBodyIfElseTest(opts);
@@ -793,11 +713,9 @@ final class WriterBodyPolicyLowering {
 		// omega-bracket-body-glue: a `[` body the knob hugs to its branch head IS the `Same`
 		// layout, so the knob is a policy SUBSTITUTION on the selector — one ternary over two
 		// enum constants instead of a whole extra outer arm, the same shape `loopIfElseTest`
-		// above and `elseSwitchPolicy` below take. On the SELECTOR and not on the inner
-		// `policySwitch`, because the outer `Keep` switch at the bottom reads this value too:
-		// gated one level in, the knob's OPEN seam was blind to `sameLine.expressionIf: keep`
-		// while its two CLOSE seams (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`) read
-		// the flag alone, so the same knob glued `] else` and refused `if (c) [` on one input.
+		// above and `elseSwitchPolicy` below take: its two CLOSE seams
+		// (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`) read the flag alone, so the
+		// OPEN seam must not depend on which policy arm the body reaches.
 		final bracketTest: Null<Expr> = bp.buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
 		final policyFlag: Expr = bracketTest == null ? loopPolicy : macro ($bracketTest ? $samePat : $loopPolicy);
 		final policyCases: Array<Case> = [
@@ -807,13 +725,13 @@ final class WriterBodyPolicyLowering {
 		];
 		// omega-else-switch: folded into the policy SELECTOR rather than added as two more
 		// outer arms. An arm carries a whole layout expression, and `writeHxIfStmtT` is the
-		// largest method the writer emits: two arms here plus two in `buildBodyKeepLayout`
-		// pushed it past the JVM's 16-bit branch offsets, and `jvm-portability` refused the
+		// largest method the writer emits: extra arms there pushed it past the JVM's
+		// 16-bit branch offsets, and `jvm-portability` refused the
 		// class with `Expecting a stackmap frame at branch target -1728`. As a substitution
 		// on the policy value the same decision costs one ternary over two enum constants.
 		// A `switch` body matches neither the block-ctor arms nor the `IfStmt` one, so it
 		// still reaches this switch exactly as the prepended arms intended.
-		final tests: { same: Null<Expr>, next: Null<Expr> } = buildElseSwitchTests(bp, opts);
+		final tests: ElseSwitchTests = buildElseSwitchTests(bp, opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
 		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : $esNext ? $nextPat : $policyFlag);
@@ -834,18 +752,9 @@ final class WriterBodyPolicyLowering {
 		}
 		if (blockSplit.untagged.length > 0) outerCases.push({ values: blockSplit.untagged, expr: sameLayoutExpr, guard: null });
 		if (blockSplit.tagged.length > 0) outerCases.push({ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null });
-		final bodySwitch: Expr = if (outerCases.length == 0) {
-			policySwitch;
-		} else {
-			outerCases.push({ values: [macro _], expr: policySwitch, guard: null });
-			{ expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos() };
-		};
-		// ω-keep-policy: `Keep` takes precedence over block-ctor and
-		// elseIf overrides — "keep" means preserve source, so the
-		// policy-driven layout shortcuts do not apply. Route the whole
-		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
-		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null }];
-		return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
+		if (outerCases.length == 0) return policySwitch;
+		outerCases.push({ values: [macro _], expr: policySwitch, guard: null });
+		return { expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos() };
 	}
 
 	/** The runtime test "is `value` built by one of `patterns`" — constant `false` for an empty list. */
@@ -1111,8 +1020,7 @@ final class WriterBodyPolicyLowering {
 	 * routes a single-line `return [for …];` value to
 	 * `sameLine.returnBodySingleLine` instead of force-gluing it. The
 	 * single-vs-multi-line distinction is handled downstream by the
-	 * policy's own layout (`Same` width-probe / `Next` break / `Keep`
-	 * source-shape), so no source-line probe is needed at this point.
+	 * policy's own layout (`Same` width-probe / `Next` break / `FitLine` fit test), so no source-line probe is needed at this point.
 	 */
 	private static function collectBlockCtorPatternsByLeftCurly(
 		bp: BodyPolicyCtx, bodyTypePath: String
@@ -1148,6 +1056,22 @@ final class WriterBodyPolicyLowering {
 		return macro anyparse.format.BodyFit.offerLiteralBreaks(_body, _body -> $inner);
 	}
 
+	/**
+	 * A comment captured after the body's keyword cannot share a line with a glued body, so the
+	 * `FitLine` layout yields to the `Next` one whenever a kw-trivia slot holds one — the same
+	 * answer `kwSameLayoutDoc` gives under `Same`. Without it the fit layout never reads the slots
+	 * and the comment is lost.
+	 */
+	private static function fitYieldsToKwComments(
+		opts: WriterLowering.WrapBodyOpts, shared: WriterLowering.BodyWrapShared, fitExpr: Expr, nextLayoutExpr: Expr
+	): Expr {
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		return !shared.hasKwSlots || afterKwExpr == null || kwLeadingExpr == null
+			? fitExpr
+			: macro $afterKwExpr == null && $kwLeadingExpr.length == 0 ? $fitExpr : $nextLayoutExpr;
+	}
+
 }
 
 /**
@@ -1166,4 +1090,9 @@ typedef BodyPolicyCtx = {
 	final findCtorPattern: (bodyTypePath:String, ctorName:String) -> Null<Expr>;
 	final foldSsbTrailingComment: (base:Expr, ssbTrailCommentExpr:Null<Expr>) -> Expr;
 }
+/** One `@:fmt(elseSwitch)` test per `KeywordPlacement` value, each `null` on a field without the meta. */
+typedef ElseSwitchTests = {
+	final same: Null<Expr>;
+	final next: Null<Expr>;
+};
 #end

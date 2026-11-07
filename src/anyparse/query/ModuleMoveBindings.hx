@@ -288,14 +288,10 @@ final class ModuleMoveBindings {
 		};
 		// a type position reads by module path whatever the head binds; a value's reading after the move asks the head itself
 		return switch asValue ? sides.pre.typing.headReading(trees.before, s.head, s.sub, s.at) : ByModulePath {
-			case AsMember:
-				null;
-			case Unreadable:
-				drift('a member of what "${s.head}" binds or a module path, which the index cannot tell', NOWHERE, null);
-			case ByModulePath if (!unread && wasKey == tierKey(now, module -> module)):
-				null;
-			case ByModulePath:
-				drift(wasKey, tierKey(now, module -> module), full);
+			case AsMember: null;
+			case Unreadable: drift('a member of what "${s.head}" binds or a module path, which the index cannot tell', NOWHERE, null);
+			case ByModulePath if (!unread && wasKey == tierKey(now, module -> module)): null;
+			case ByModulePath: drift(wasKey, tierKey(now, module -> module), full);
 		};
 	}
 
@@ -340,16 +336,14 @@ final class ModuleMoveBindings {
 	 */
 	private static function meaning(index: SymbolIndex, info: FileInfo, name: String, at: Int, mapped: (String) -> String): Meaning {
 		return switch index.refs.names.tierOf(name, info, at) {
-			case Bound(decls):
-				{ key: declsKey(decls, mapped), single: decls.length == 1 ? decls[0] : null };
+			case Bound(decls): { key: declsKey(decls, mapped), single: decls.length == 1 ? decls[0] : null };
 			case Unknown:
 				final candidates: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, info, at);
 				{
 					key: candidates == null ? UNKNOWN : 'either ${candidates.map(c -> targetKey(c, mapped)).join(' | ')}',
 					single: null
 				};
-			case Free:
-				{ key: 'free', single: null };
+			case Free: { key: 'free', single: null };
 		};
 	}
 

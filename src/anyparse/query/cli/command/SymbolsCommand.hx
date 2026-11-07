@@ -82,16 +82,15 @@ final class SymbolsCommand implements CliCommand {
 		if (kind != null && CliWalk.rejectUnknownKinds('symbols', plugin, [kind], [])) return EXIT_USAGE;
 
 		final files: Array<{ file: String, source: String }> = [
-			for (path in paths)
-				{
-					file: path,
-					source: (try {
-						CliIo.readSourceForParse(path);
-					} catch (exception: Exception) {
-						CliIo.stderr('apq symbols: $path: ${exception.message}\n');
-						return EXIT_RUNTIME;
-					}: String)
-				}
+			for (path in paths) {
+				file: path,
+				source: (try {
+					CliIo.readSourceForParse(path);
+				} catch (exception: Exception) {
+					CliIo.stderr('apq symbols: $path: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				}: String)
+			}
 		];
 
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.symbols(files, plugin, kindFilter);

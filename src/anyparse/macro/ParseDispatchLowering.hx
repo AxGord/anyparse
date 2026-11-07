@@ -167,8 +167,7 @@ final class ParseDispatchLowering {
 			case KwZeroArg(kw): wordOrByteFirst([kw]);
 			case SingleLit(lit): wordOrByteFirst([lit]);
 			case MultiLit(lits): wordOrByteFirst(lits);
-			case StarList(lead, _, _, _):
-				litFirst([lead]);
+			case StarList(lead, _, _, _): litFirst([lead]);
 			// Split into guarded arms rather than an if-chain inside one
 			// arm: the keyword decides the first token whenever it is
 			// present, the lead literal otherwise, and a bare `Ref` commits
@@ -469,7 +468,8 @@ final class ParseDispatchLowering {
 		return switch e.expr {
 			case EConst(CIdent('null' | 'true' | 'false')), EConst(CInt(_, _)), EConst(CFloat(_, _)), EConst(CString(_, _)),
 				EArrayDecl([]), EField({ expr: EConst(CIdent('ctx')) }, 'pos'),
-				ECall({ expr: EConst(CIdent('collectTrivia' | 'skipWsAndStash')) }, _): true;
+				ECall({ expr: EConst(CIdent('collectTrivia' | 'skipWsAndStash')) }, _):
+				true;
 			case _: false;
 		};
 	}
@@ -562,7 +562,8 @@ final class ParseDispatchLowering {
 			case ECall(
 				{ expr: EField({ expr: EField({ expr: EConst(CIdent('ctx')) }, 'input') }, 'charCodeAt') },
 				[{ expr: EField({ expr: EConst(CIdent('ctx')) }, 'pos') }]
-			): true;
+			):
+				true;
 			case _: false;
 		};
 	}
@@ -656,8 +657,7 @@ final class ParseDispatchLowering {
 	 */
 	private static function describeByteSet(codes: Array<Int>): String {
 		return [
-			for (run in byteRuns(codes))
-				run.lo == run.hi ? describeByte(run.lo) : '${describeByte(run.lo)}-${describeByte(run.hi)}'
+			for (run in byteRuns(codes)) run.lo == run.hi ? describeByte(run.lo) : '${describeByte(run.lo)}-${describeByte(run.hi)}'
 		].join('|');
 	}
 
@@ -911,8 +911,7 @@ final class ParseDispatchLowering {
 				final from: Null<Int> = Std.parseInt(lo);
 				final to: Null<Int> = Std.parseInt(hi);
 				from == null || to == null || to < from ? null : [for (c in from ... to + 1) c];
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

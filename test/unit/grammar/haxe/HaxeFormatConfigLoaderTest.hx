@@ -79,13 +79,21 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.equals(SameLinePolicy.Next, opts.sameLineDoWhile);
 	}
 
-	public function testSameLineKeepMapsToKeepAndFitLineMapsToSame(): Void {
+	/** `keep` names no runtime value: each knob stays at the default it had, and `fitLine` on a keyword knob reads as `Same`. */
+	@:pin('control')
+	@:killer('M-BODY-KEEP-NOT-DEFAULT')
+	public function testSameLineKeepLeavesTheDefaultAndFitLineMapsToSame(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine": {"ifElse": "keep", "tryCatch": "fitLine", "doWhile": "keep"}}'
+			'{"sameLine": {"ifElse": "keep", "tryCatch": "fitLine", "doWhile": "keep", "ifBody": "keep", "expressionCase": "keep",'
+			+ ' "elseSwitch": "keep", "comprehensionFor": "keep"}}'
 		);
-		Assert.equals(SameLinePolicy.Keep, opts.sameLineElse);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineElse);
 		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
-		Assert.equals(SameLinePolicy.Keep, opts.sameLineDoWhile);
+		Assert.equals(SameLinePolicy.Same, opts.sameLineDoWhile);
+		Assert.equals(BodyPolicy.Next, opts.ifBody);
+		Assert.equals(BodyPolicy.FitLine, opts.expressionCase);
+		Assert.equals(KeywordPlacement.Same, opts.elseSwitch);
+		Assert.equals(BodyPolicy.FitLine, opts.expressionForBody);
 	}
 
 	public function testTrailingCommasYesFlipsFlag(): Void {

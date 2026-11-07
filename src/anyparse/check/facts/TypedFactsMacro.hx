@@ -528,14 +528,17 @@ final class TypedFactsMacro {
 	private static function metaList(meta: Array<MetadataEntry>): String {
 		if (meta.length == 0) return '';
 		final builds: Array<String> = [
-			for (m in meta) if (m.name == ':build' || m.name == ':autoBuild' || m.name == ':genericBuild')
-				for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))
+			for (m in meta)
+				if (m.name == ':build' || m.name == ':autoBuild' || m.name == ':genericBuild')
+					for (p in m.params ?? []) q(haxe.macro.ExprTools.toString(p))
 		];
 		final code: Array<String> = [
-			for (m in meta) if (TypedFactsShapes.CODE_METAS.contains(m.name)) for (p in m.params ?? []) switch p.expr {
-				case EConst(CString(s, _)): JsonText.quote(s);
-				case _: 'null';
-			}
+			for (m in meta)
+				if (TypedFactsShapes.CODE_METAS.contains(m.name)) for (p in m.params ?? [])
+					switch p.expr {
+						case EConst(CString(s, _)): JsonText.quote(s);
+						case _: 'null';
+					}
 		];
 		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds)) + (
 			code.length == 0 ? '' : ',"code":' + arr(code)

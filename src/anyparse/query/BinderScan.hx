@@ -120,8 +120,9 @@ final class BinderScan {
 	 */
 	public static function binderKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		inline function add(kinds: Null<Array<String>>): Void if (kinds != null) for (kind in kinds) if (!out.contains(kind))
-			out.push(kind);
+		inline function add(kinds: Null<Array<String>>): Void
+			if (kinds != null)
+				for (kind in kinds) if (!out.contains(kind)) out.push(kind);
 		inline function addOne(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
 		add(shape.paramKinds);
 		add(shape.localDeclKinds);

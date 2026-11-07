@@ -27,13 +27,13 @@ final class HxSoleItemCuddledBracketsTest extends Test {
 	 */
 	private static final OFF: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
 
 	/** Same config with `wrapping.soleItemCuddledBrackets` turned on. */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
 		+ ' "wrapping": {"maxLineLength": 140, "soleItemCuddledBrackets": true},'
 		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
 
 	/** A sole `for` comprehension whose body is a call with an object-literal argument, in the exploded leading-break layout. */
 	private static final COMPREHENSION_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n'

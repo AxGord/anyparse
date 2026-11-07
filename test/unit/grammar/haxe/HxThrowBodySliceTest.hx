@@ -86,11 +86,6 @@ class HxThrowBodySliceTest extends Test {
 		Assert.isTrue(out.indexOf('throw\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');
 	}
 
-	public function testKeepDoesNotForceLayout(): Void {
-		final out: String = writeWith('class M { function f():Void { throw 1; } }', BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('throw') != -1, 'sanity: `throw` present in: <$out>');
-	}
-
 	public function testStringValueRoundTrips(): Void {
 		final out: String = writeWith('class M { function f():Void { throw "boom"; } }', BodyPolicy.Same);
 		Assert.isTrue(out.indexOf('throw "boom";') != -1, 'expected `throw "boom";` flat in: <$out>');
@@ -131,7 +126,7 @@ class HxThrowBodySliceTest extends Test {
 
 	private static inline function makeLongStringLit(len: Int = LONG_VALUE_LEN): String {
 		final buf: StringBuf = new StringBuf();
-		for (i in 0...len) buf.add('-');
+		for (_ in 0...len) buf.add('-');
 		return '"${buf.toString()}"';
 	}
 

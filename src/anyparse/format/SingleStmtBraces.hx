@@ -556,8 +556,7 @@ class SingleStmtBraces {
 		final head: Dynamic = paramAt(e, 0);
 		return switch ctor {
 			case 'IfStmt': elseTailDanglingIf(head, 'elseBody');
-			case 'IfExpr':
-				elseTailDanglingIf(head, 'elseBranch');
+			case 'IfExpr': elseTailDanglingIf(head, 'elseBranch');
 			// Loop / lambda / function typedefs whose LAST field is the body.
 			case 'WhileStmt', 'WhileExpr', 'ForStmt', 'ForExpr', 'ForReifExpr', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr',
 				'NamedFnExpr', 'LocalFnStmt', 'LocalInlineFnStmt':
@@ -620,22 +619,18 @@ class SingleStmtBraces {
 	private static function tailSealed(ctor: String): Bool {
 		return switch ctor {
 			// Statements closed by `}` (block / switch / untyped block).
-			case 'BlockStmt', 'SwitchStmt', 'SwitchStmtBare', 'UntypedBlockStmt':
-				true;
+			case 'BlockStmt', 'SwitchStmt', 'SwitchStmtBare', 'UntypedBlockStmt': true;
 			// Keyword statements closed by their own `;` or by the do-while `)`.
-			case 'DoWhileStmt', 'BreakStmt', 'ContinueStmt', 'VoidReturnStmt', 'EmptyStmt', 'EllipsisStmt', 'ErrorStmt':
-				true;
+			case 'DoWhileStmt', 'BreakStmt', 'ContinueStmt', 'VoidReturnStmt', 'EmptyStmt', 'EllipsisStmt', 'ErrorStmt': true;
 			// Function / do-while body wrappers that carry their own braces or `;`.
-			case 'BlockBody', 'UntypedBlockBody', 'NoBody':
-				true;
+			case 'BlockBody', 'UntypedBlockBody', 'NoBody': true;
 			// Expressions closed by a brace or a paren.
 			case 'ArrayExpr', 'ObjectLit', 'BlockExpr', 'ParenExpr', 'ECheckTypeExpr', 'NewExpr', 'TypedCastExpr', 'SwitchExpr',
 				'SwitchExprBare', 'DollarBlockExpr', 'DollarReifExpr', 'DoWhileExpr':
 				true;
 			// Postfix operators and member access - the last token is a bracket, an
 			// operator or a name.
-			case 'IndexAccess', 'Call', 'FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess', 'PostIncr', 'PostDecr':
-				true;
+			case 'IndexAccess', 'Call', 'FieldAccess', 'SafeFieldAccess', 'ForceFieldAccess', 'PostIncr', 'PostDecr': true;
 			case _: false;
 		};
 	}
@@ -650,8 +645,7 @@ class SingleStmtBraces {
 	 */
 	private static function tailOperandIndex(ctor: String): Int {
 		return switch ctor {
-			case 'Ternary':
-				2;
+			case 'Ternary': 2;
 			// Every binary infix operator, incl. the arrows: the right operand is last.
 			// `Is` / `HxType.Arrow` put a type there, which the walk treats conservatively.
 			case 'Mul', 'Div', 'Mod', 'Add', 'Sub', 'Shl', 'UShr', 'Shr', 'BitOr', 'BitAnd', 'BitXor', 'Eq', 'NotEq', 'LtEq', 'GtEq',

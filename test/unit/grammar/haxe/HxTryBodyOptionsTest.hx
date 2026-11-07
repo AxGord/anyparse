@@ -87,15 +87,6 @@ class HxTryBodyOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('try \n') == -1, 'did not expect `try \\n` (dangling space) in: <$out>');
 	}
 
-	public function testTryBodyKeepUnderAfterStaysOpen(): Void {
-		// tryBody=Keep + tryPolicy=After + leftCurly=Same default →
-		// `try {`. Keep degrades to Same in `bodyPolicyWrap` (no
-		// trivia-mode `bodyOnSameLine` slot threaded here), so the
-		// kwOwnsInlineSpace switch picks the After/Both branch.
-		final out: String = writeWith(SRC_BLOCK_BODY, BodyPolicy.Keep, WhitespacePolicy.After);
-		Assert.isTrue(out.indexOf('try {') != -1, 'expected `try {` (Keep+After) in: <$out>');
-	}
-
 	public function testTryBodyNextOnBlockBodyDefersToLeftCurly(): Void {
 		// tryBody=Next on a tagged block body still routes through
 		// blockLayoutExpr (leftCurly wins). leftCurly=Same default →
@@ -118,11 +109,6 @@ class HxTryBodyOptionsTest extends Test {
 	public function testJsonFitLineMapsToFitLine(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"tryBody": "fitLine"}}');
 		Assert.equals(BodyPolicy.FitLine, opts.tryBody);
-	}
-
-	public function testJsonKeepMapsToKeep(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"tryBody": "keep"}}');
-		Assert.equals(BodyPolicy.Keep, opts.tryBody);
 	}
 
 	public function testEmptyJsonKeepsDefault(): Void {

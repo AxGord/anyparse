@@ -98,10 +98,8 @@ final class Monomorphs {
 				// what `reread` answers is the given type read as one of the wanted head, whatever end that head resolves to
 				final read: Null<TypeTerm> = sameHead(head, args.length, given) ? given : reread(wanted, given);
 				switch read {
-					case Of(_, givenArgs, _) if (givenArgs.length == args.length):
-						for (i => arg in args) unify(arg, givenArgs[i], reread);
-					case _:
-						for (m in cellsOf(wanted)) poison(m);
+					case Of(_, givenArgs, _) if (givenArgs.length == args.length): for (i => arg in args) unify(arg, givenArgs[i], reread);
+					case _: for (m in cellsOf(wanted)) poison(m);
 				}
 			case Opaque(_, monos):
 				for (m in monos) poison(m);

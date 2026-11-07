@@ -88,10 +88,11 @@ final class MoveToHelperArms {
 		return switch arm.find {
 			case JString(find): [find];
 			case JArray(items): [
-				for (item in items) switch item {
-					case JString(find): find;
-					case _: continue;
-				}
+				for (item in items)
+					switch item {
+						case JString(find): find;
+						case _: continue;
+					}
 			];
 			case _: [];
 		};

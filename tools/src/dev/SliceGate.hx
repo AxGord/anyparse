@@ -231,10 +231,13 @@ final class SliceGate {
 			case 'arms': GateArms.outcome.bind(_gate);
 			case 'scrub': scrubOutcome;
 			case 'artifacts': artifactsOutcome;
-			case 'kits': () ->
-				KitsRow.reached(_gate.touched)
-					? KitsRow.outcome(_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n'))
-					: Skipped('neither the engine nor a kit changed');
+			case 'kits':
+				() ->
+					KitsRow.reached(_gate.touched)
+						? KitsRow.outcome(
+							_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n')
+						)
+						: Skipped('neither the engine nor a kit changed');
 			case _: () -> NotRun('no row named $name');
 		};
 	}

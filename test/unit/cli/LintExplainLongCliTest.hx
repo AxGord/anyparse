@@ -129,8 +129,9 @@ class LintExplainLongCliTest extends Test {
 		);
 		final reasons: Array<JValue> = RawJson.items(JValueTools.at(lock(json, 'A._m'), 'reasons'));
 		final paths: Array<Null<String>> = [
-			for (r in reasons) if (JValueTools.field(r, 'errorPath') != null)
-				(RawJson.string(JValueTools.field(r, 'errorPath')) ?? 'errorPath is not a string').split('/').pop()
+			for (r in reasons)
+				if (JValueTools.field(r, 'errorPath') != null)
+					(RawJson.string(JValueTools.field(r, 'errorPath')) ?? 'errorPath is not a string').split('/').pop()
 		];
 		Assert.same(['A.hx:3'], paths);
 		Assert.stringContains('only on an error path (catch at ', lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out);

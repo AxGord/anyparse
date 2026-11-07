@@ -168,8 +168,7 @@ class D {
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));
 			case OptSpace(s): Text(s);
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: Empty;
-			case OptSpaceSkipAfterHardline:
-				Text(' ');
+			case OptSpaceSkipAfterHardline: Text(' ');
 			// ω-force-flat-engine slice A: all four markers collapse —
 			// outer `flatten` already applies the force-flat transform, so
 			// a nested `Flatten`/`HardFlatten`/`CollapseProbe` is idempotent
@@ -182,8 +181,7 @@ class D {
 			// transparent to the flatten transform — descend `inner`. The
 			// `#`-marker col-0 re-indent is render-only and moot under a forced-
 			// flat collapse.
-			case ConditionalMarkerZero(inner):
-				flatten(inner);
+			case ConditionalMarkerZero(inner): flatten(inner);
 			// ω-cond-indent-policy AlignedDecrease: render-time marker,
 			// structurally transparent to the flatten transform — descend
 			// `inner`. The uniform -1 re-indent is render-only and moot under a

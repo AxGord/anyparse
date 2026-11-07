@@ -184,12 +184,13 @@ final class KeyedMerge {
 		return switch _choices[key] {
 			case Ours: mine;
 			case Theirs: other;
-			case Both: if (mine == null)
-				other
-			else if (other == null)
-				mine
-			else
-				'${lineOf(mine)}$other';
+			case Both:
+				if (mine == null)
+					other
+				else if (other == null)
+					mine
+				else
+					'${lineOf(mine)}$other';
 			case null:
 				_conflicts.push({ key: key, ours: ours, theirs: theirs });
 				'<<<<<<< ours $key\n${lineOf(mine ?? '')}=======\n${lineOf(other ?? '')}>>>>>>> theirs $key\n';

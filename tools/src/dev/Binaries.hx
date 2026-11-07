@@ -86,7 +86,8 @@ final class Binaries {
 	 */
 	private static function plainOracles(tree: String): Array<OracleConfig> {
 		return [
-			for (oracle in LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles())
+			for (oracle in LintConfig.discover(Path.join([tree, 'apq.json']))
+				.compilerOracles())
 				if (
 					oracle.unavailable == null
 					&& oracle.defines.length == 0

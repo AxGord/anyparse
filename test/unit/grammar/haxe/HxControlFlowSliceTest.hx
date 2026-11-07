@@ -191,8 +191,7 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 				// else binds to inner if, not outer
 				Assert.isNull(outer.elseBody);
 				switch outer.thenBody {
-					case IfStmt(inner):
-						Assert.notNull(inner.elseBody);
+					case IfStmt(inner): Assert.notNull(inner.elseBody);
 					case null, _: Assert.fail('expected inner IfStmt');
 				}
 			case null, _:

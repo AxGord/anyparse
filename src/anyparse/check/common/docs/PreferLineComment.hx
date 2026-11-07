@@ -81,14 +81,13 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final kinds: LineCommentKinds = decisionKinds(plugin.refShape());
 		return kinds.blocks.length == 0 ? [] : [
-			for (entry in files) for (rewrite in rewrites(entry.source, plugin, kinds))
-				{
-					file: entry.file,
-					span: rewrite.comment,
-					rule: 'prefer-line-comment',
-					severity: Severity.Info,
-					message: 'block comment in a statement position; use a line comment'
-				}
+			for (entry in files) for (rewrite in rewrites(entry.source, plugin, kinds)) {
+				file: entry.file,
+				span: rewrite.comment,
+				rule: 'prefer-line-comment',
+				severity: Severity.Info,
+				message: 'block comment in a statement position; use a line comment'
+			}
 		];
 	}
 

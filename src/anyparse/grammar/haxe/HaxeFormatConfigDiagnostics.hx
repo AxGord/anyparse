@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
+import anyparse.grammar.haxe.format.HxFormatSameLineSection;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
 import anyparse.grammar.haxe.format.HxFormatWrapCondition;
@@ -57,7 +58,8 @@ final class HaxeFormatConfigDiagnostics {
 
 	/**
 	 * The settings in `json` hxq will not act on: keys with no schema
-	 * field, and `wrapping` strings with no runtime mapping. Both groups
+	 * field, `wrapping` strings with no runtime mapping, and every `keep`
+	 * value (`unsupported`). All groups
 	 * are empty when everything is understood, and equally when the config
 	 * does not parse — the load path reports that failure itself, at the
 	 * position and with the text only it has.
@@ -66,20 +68,24 @@ final class HaxeFormatConfigDiagnostics {
 	 * surveyed only where its vocabulary is a plain `String` the parser
 	 * cannot police. Every enum-typed slot (`sameLine.ifBody`,
 	 * `lineEnds.*Curly`, …) is rejected at PARSE time with its own message,
-	 * so it never reaches here.
+	 * so it never reaches here — except the fork's `keep`, which the schema
+	 * accepts so that this report can name it.
 	 */
 	public static function diagnose(json: String): HaxeFormatConfigIssues {
 		final ctx: Parser = new Parser(new StringInput(json));
 		final cfg: Null<HxFormatConfig> = try HxFormatConfigParser.parseWith(ctx) catch (exception: Exception) null;
-		if (cfg == null) return { keys: [], wrapValues: [] };
+		if (cfg == null) return { keys: [], wrapValues: [], unsupported: [] };
 		final index: LineIndex = new LineIndex(json);
 		final wrapValues: Array<String> = [];
+		final unsupported: Array<String> = [];
 		final wrapping: Null<HxFormatWrappingSection> = cfg.wrapping;
-		if (wrapping != null) collectWrappingIssues(wrapping, wrapValues);
+		if (wrapping != null) collectWrappingIssues(wrapping, wrapValues, unsupported);
+		final sameLine: Null<HxFormatSameLineSection> = cfg.sameLine;
+		if (sameLine != null) collectSameLineKeep(sameLine, unsupported);
 		final keys: Array<String> = ctx.unknownFields.map(unknownKeyIssue.bind(_, index));
 		final whitespace: Null<HxFormatWhitespaceSection> = cfg.whitespace;
 		if (whitespace != null) collectColonIssue(whitespace, keys);
-		return { keys: keys, wrapValues: wrapValues };
+		return { keys: keys, wrapValues: wrapValues, unsupported: unsupported };
 	}
 
 	/**
@@ -130,11 +136,23 @@ final class HaxeFormatConfigDiagnostics {
 			clauses.push('${issues.keys.length} key(s) hxq does not implement, so they have no effect: ${issues.keys.join(', ')}');
 		if (issues.wrapValues.length > 0)
 			clauses.push('${issues.wrapValues.length} wrap setting(s) hxq does not implement: ${issues.wrapValues.join(', ')}');
+		if (issues.unsupported.length > 0)
+			clauses.push(
+				'${issues.unsupported.length} "keep" setting(s) hxq does not support, so the default applies: '
+				+ issues.unsupported.join(', ')
+				+ ' (hxq lays code out from the syntax tree, not the source line breaks: use same, next or fitLine for sameLine, a wrap '
+				+ 'mode such as noWrap, onePerLine or fillLine for wrapping)'
+			);
 		return clauses.length == 0 ? null : 'apq: $path: ${clauses.join('; ')} [silence with $SILENCE_VAR=1]\n';
 	}
 
 	private static inline function add(into: Array<String>, issue: String): Void {
 		if (!into.contains(issue)) into.push(issue);
+	}
+
+	/** Both spellings of the fork's source-layout mode, as `HaxeFormatValues.wrapModeFromString` reads every mode. */
+	private static inline function isKeep(s: String): Bool {
+		return s == 'keep' || s == 'Keep';
 	}
 
 	/**
@@ -169,18 +187,20 @@ final class HaxeFormatConfigDiagnostics {
 	 * `type` or `cond` makes `wrapRuleFromConfig` return null and the
 	 * WHOLE rule disappear from the cascade.
 	 */
-	private static function collectWrappingIssues(section: HxFormatWrappingSection, into: Array<String>): Void {
+	private static function collectWrappingIssues(section: HxFormatWrappingSection, into: Array<String>, keeps: Array<String>): Void {
 		final matrix: Null<String> = section.arrayMatrixWrap;
 		if (matrix != null && ArrayMatrixWrap.resolve(matrix) == null) add(into, 'arrayMatrixWrap "$matrix" (the format default is kept)');
 		for (cascade in cascades(section)) {
 			final defaultWrap: Null<String> = cascade.defaultWrap;
-			if (defaultWrap != null && HaxeFormatValues.wrapModeFromString(defaultWrap) == null)
+			if (defaultWrap != null && isKeep(defaultWrap))
+				add(keeps, 'wrapping defaultWrap "$defaultWrap"');
+			else if (defaultWrap != null && HaxeFormatValues.wrapModeFromString(defaultWrap) == null)
 				add(into, 'defaultWrap "$defaultWrap" (the cascade keeps its built-in default)');
 			final defaultLocation: Null<String> = cascade.defaultLocation;
 			if (defaultLocation != null && HaxeFormatValues.wrappingLocationFromString(defaultLocation) == null)
 				add(into, 'defaultLocation "$defaultLocation" (ignored)');
 			final rules: Null<Array<HxFormatWrapRule>> = cascade.rules;
-			if (rules != null) for (rule in rules) collectRuleIssues(rule, into);
+			if (rules != null) for (rule in rules) collectRuleIssues(rule, into, keeps);
 		}
 		for (chain in [section.methodChain, section.opBoolChain, section.opAddSubChain]) if (chain != null && chainStatesIndent(chain))
 			add(
@@ -196,10 +216,12 @@ final class HaxeFormatConfigDiagnostics {
 	 * which drop the rule just as silently as an unreadable string does
 	 * and are just as invisible to the author.
 	 */
-	private static function collectRuleIssues(rule: HxFormatWrapRule, into: Array<String>): Void {
+	private static function collectRuleIssues(rule: HxFormatWrapRule, into: Array<String>, keeps: Array<String>): Void {
 		final type: Null<String> = rule.type;
 		if (type == null)
 			add(into, 'a rule with no "type" (the rule is dropped)');
+		else if (isKeep(type))
+			add(keeps, 'wrapping rule type "$type" (the rule is dropped)');
 		else if (HaxeFormatValues.wrapModeFromString(type) == null)
 			add(into, 'type "$type" (the rule is dropped)');
 		final location: Null<String> = rule.location;
@@ -256,6 +278,21 @@ final class HaxeFormatConfigDiagnostics {
 		if (chain.defaultAdditionalIndent != null) return true;
 		final rules: Null<Array<HxFormatWrapRule>> = chain.rules;
 		return rules != null && rules.exists(rule -> rule.additionalIndent != null);
+	}
+
+	/**
+	 * Every `sameLine` key stating `keep`. Its value is typed, so the parser accepts the fork's spelling, and the loader
+	 * then leaves that knob at its default (`HaxeFormatValues.bodyPolicyToRuntime` and its siblings).
+	 */
+	private static function collectSameLineKeep(section: HxFormatSameLineSection, into: Array<String>): Void {
+		// Only the placement-policy fields of the section are strings (the rest are Bool / Int, or a sibling policy with
+		// no `keep`), so reading every field by reflection reports a new policy key with no list to extend.
+		final keys: Array<String> = Reflect.fields(section);
+		keys.sort(Reflect.compare);
+		for (key in keys) {
+			final value: String = Std.string(Reflect.field(section, key));
+			if (isKeep(value)) add(into, 'sameLine.$key "$value"');
+		}
 	}
 
 }

@@ -77,8 +77,7 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 				for (conflict in conflicts)
 					CliIo.stderr('merge-conflict: $path ${conflict.key} (ours ${conflict.ours}, theirs ${conflict.theirs})\n');
 				ExitCode.EXIT_RUNTIME;
-			case Unreadable(why):
-				lineMerge(opts, path, why);
+			case Unreadable(why): lineMerge(opts, path, why);
 		};
 	}
 

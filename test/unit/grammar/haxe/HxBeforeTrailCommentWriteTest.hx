@@ -19,7 +19,7 @@ import utest.Test;
 class HxBeforeTrailCommentWriteTest extends Test {
 
 	public inline function testSwitchSubject(): Void {
-		assertFixedPoint('switch (v /* s */) {\n\t\t\tcase 1:\n\t\t\t\trun();\n\t\t}');
+		assertFixedPoint('switch (v /* s */) {\n\t\t\tcase 1: run();\n\t\t}');
 	}
 
 	public inline function testIfCondition(): Void {

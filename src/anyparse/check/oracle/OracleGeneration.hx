@@ -623,14 +623,13 @@ final class OracleGeneration {
 		}
 		if (stale.length == 0) return;
 		final runs: Array<HaxeRun> = HaxeSpawn.runAll([
-			for (s in stale)
-				{
-					args: [],
-					cwd: s.group.generate.root,
-					shell: s.group.generate.command,
-					timeout: GENERATE_TIMEOUT,
-					groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
-				}
+			for (s in stale) {
+				args: [],
+				cwd: s.group.generate.root,
+				shell: s.group.generate.command,
+				timeout: GENERATE_TIMEOUT,
+				groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
+			}
 		], BUFFER, HaxeSpawn.parallelism());
 		final libraries: LibraryIndex = libraryIndex(groups);
 		final settled: Map<String, String> = [];

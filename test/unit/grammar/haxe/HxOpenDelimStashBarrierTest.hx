@@ -72,13 +72,6 @@ class HxOpenDelimStashBarrierTest extends Test {
 	private static inline final BARE_OBJECT_LIT_OWN_LINE: String =
 		'class M {\n\tstatic function f() {\n\t\tvar c =\n\t\t\t{k: 1, m: 2};\n\t\treturn c;\n\t}\n}\n';
 
-	/** `a1` has the newline before `[`, `a2` after it — Keep must tell them apart. */
-	private static inline final KEEP_MODE_ARRAYS: String =
-		'class M {\n\tstatic function f() {\n\t\tvar a1 =\n\t\t\t[1, 2, 3];\n\t\tvar a2 = [\n\t\t\t1, 2, 3];\n\t\treturn [a1, a2];\n\t}\n}\n';
-
-	/** Source-faithful array wrapping — `rules: []` clears the cascade so `keep` is what answers. */
-	private static inline final KEEP_ARRAY_WRAP: String = '{"wrapping":{"arrayWrap":{"defaultWrap":"keep","rules":[]}}}';
-
 	/** Control: an ordinary statement in a block — no stash is ever produced here. */
 	private static inline final PLAIN_BLOCK_STATEMENT: String =
 		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar a = 1;\n\t\treturn [for (key in o) key => 1];\n\t}\n}\n';
@@ -135,21 +128,6 @@ class HxOpenDelimStashBarrierTest extends Test {
 	public function testBareObjectLiteralOnItsOwnLineStaysFlat(): Void {
 		final out: String = write(BARE_OBJECT_LIT_OWN_LINE);
 		Assert.isTrue(out.indexOf('var c = {k: 1, m: 2};') != -1, 'expected a flat object literal in: <$out>');
-	}
-
-	/**
-	 * Keep mode is the one place the classifier deliberately does NOT suppress
-	 * element 0 (`triviaSepPredicateScanExpr` guards its carve-out with
-	 * `!_keepEmit`), because Keep exists to reproduce the source breaks verbatim.
-	 * The barrier runs UPSTREAM of that exemption, so both halves need pinning at
-	 * once: a newline before `[` must stop re-emerging as a break after `[`, and a
-	 * newline that really is after `[` must still be reproduced. Only the first
-	 * assertion is red at base.
-	 */
-	public function testKeepModeHonoursOnlyInBracketNewlines(): Void {
-		final out: String = write(KEEP_MODE_ARRAYS, KEEP_ARRAY_WRAP);
-		Assert.isTrue(out.indexOf('var a1 = [1, 2, 3];') != -1, 'a newline before `[` is not a break inside it: <$out>');
-		Assert.isTrue(out.indexOf('var a2 = [\n') != -1, 'a newline after `[` must still be reproduced: <$out>');
 	}
 
 	private inline function write(src: String, json: String = '{}'): String {

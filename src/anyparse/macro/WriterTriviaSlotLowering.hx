@@ -60,12 +60,7 @@ final class WriterTriviaSlotLowering {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
 			pos: Context.currentPos()
 		};
-		// ω-keep-fnsig-newline: accessor for the close-newline slot, threaded
-		// into `triviaSepStarExpr` for the `_keepEmit` close placement.
-		final trailNLAccess: Null<Expr> = fieldName == null ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX),
-			pos: Context.currentPos()
-		};
+
 		final trailLCAccess: Null<Expr> = fieldName == null ? null : {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
 			pos: Context.currentPos()
@@ -115,7 +110,7 @@ final class WriterTriviaSlotLowering {
 			prevTrailFieldName: prevTrailFieldName,
 			fieldName: fieldName,
 			trailBBAccess: trailBBAccess,
-			trailNLAccess: trailNLAccess,
+
 			trailLCAccess: trailLCAccess,
 			trailCloseAccess: trailCloseAccess,
 			trailOpenAccess: trailOpenAccess,

@@ -227,14 +227,13 @@ final class JoinArrayPushes extends RuleBase {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		return [
-			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes))
-				{
-					file: entry.file,
-					span: m.span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'the push statements after this empty array can be folded into the literal'
-				}
+			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes)) {
+				file: entry.file,
+				span: m.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: 'the push statements after this empty array can be folded into the literal'
+			}
 		];
 	}
 
@@ -654,10 +653,8 @@ final class JoinArrayPushes extends RuleBase {
 	private static function emptyArrayField(container: QueryNode, name: String, statics: Array<Int>, ctx: Ctx): Null<FieldDecl> {
 		final s: Seams = ctx.seams;
 		final declared: Array<QueryNode> = [];
-		MemberKinds.eachMemberHost(container, host -> for (member in host.children) if (
-			s.memberDeclKinds.contains(member.kind) && member.name == name
-		)
-			declared.push(member));
+		MemberKinds.eachMemberHost(container, host -> for (member in host.children)
+			if (s.memberDeclKinds.contains(member.kind) && member.name == name) declared.push(member));
 		if (declared.length != 1) return null;
 		final member: QueryNode = declared[0];
 		final span: Null<Span> = member.span;

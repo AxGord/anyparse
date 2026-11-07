@@ -223,8 +223,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 					case Not(FieldAccess(IdentExpr(recv), field)):
 						Assert.equals('img', (recv: String));
 						Assert.equals('powerOfTwo', (field: String));
-					case other:
-						Assert.fail('expected Not(FieldAccess(img, powerOfTwo)), got $other');
+					case other: Assert.fail('expected Not(FieldAccess(img, powerOfTwo)), got $other');
 				}
 			case other:
 				Assert.fail('expected IfStmt, got $other');

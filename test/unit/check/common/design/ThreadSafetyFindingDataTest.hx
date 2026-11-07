@@ -258,15 +258,16 @@ class ThreadSafetyFindingDataTest extends Test {
 			for (start in [
 				'Runner.create(fs.download); fs.save(); fs.store();',
 				'Runner.create(fs.download); fs.store(); fs.save();'
-			]) ThreadSafetyCheckTest.orderFindings([
-				for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
-					source.replace(
-						'public function save():Void',
-						'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } '
-						+ 'public function save():Void'
-					)
 			])
-				.map(v -> '${v.data?.member} ${v.data?.subject} @${v.span?.from}')
+				ThreadSafetyCheckTest.orderFindings([
+					for (source in ThreadSafetyCheckTest.storeFixture('acquireMutation(); db.add(false); releaseMutation();', start))
+						source.replace(
+							'public function save():Void',
+							'public function store():Void { acquireMutation(); db.add(false); releaseMutation(); } '
+							+ 'public function save():Void'
+						)
+				])
+					.map(v -> '${v.data?.member} ${v.data?.subject} @${v.span?.from}')
 		];
 		Assert.equals(1, keys[0].length);
 		Assert.same(keys[0], keys[1]);

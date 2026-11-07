@@ -37,11 +37,10 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  * names the knob families:
  *
  * - Same-line policies (`SameLinePolicy`: `sameLineElse`, `sameLineCatch`, `sameLineDoWhile`,
- *   `sameLineExpressionElse`, `expressionTry`); `Keep` reads a trivia-mode source-shape slot and degrades to
- *   `Same` in plain mode.
+ *   `sameLineExpressionElse`, `expressionTry`).
  * - Body-placement policies (`BodyPolicy`: `ifBody` … `untypedBody`, `caseBody` / `expressionCase`,
  *   `returnBody` / `throwBody`, the `expression*Body` trio); `Same` keeps the body inline, `Next` pushes it
- *   one indent deeper, `FitLine` keeps it flat when it fits within `lineWidth`, `Keep` preserves the source
+ *   one indent deeper, `FitLine` keeps it flat when it fits within `lineWidth`; no value reads the source
  *   layout. A block body (`{ … }`) carries its own hardlines, so the separator before `{` ignores the policy.
  * - Brace placement and empty bodies (`BracePlacement` / `EmptyCurly` / `RightCurlyPlacement`, global plus
  *   per-construct `objectLiteral*`, `anonType*`, `anonFunction*`, `block*`); the loader cascades each global
@@ -105,25 +104,25 @@ final class HxModuleWriteOptions {
 	public var trailingCommaParams: Bool = false;
 	public var trailingCommaObjectLits: Bool = false;
 	public var trailingCommaAnonTypes: Bool = false;
-	public var ifBody: BodyPolicy = BodyPolicy.Keep;
-	public var elseBody: BodyPolicy = BodyPolicy.Keep;
-	public var forBody: BodyPolicy = BodyPolicy.Keep;
-	public var whileBody: BodyPolicy = BodyPolicy.Keep;
-	public var doBody: BodyPolicy = BodyPolicy.Keep;
+	public var ifBody: BodyPolicy = BodyPolicy.FitLine;
+	public var elseBody: BodyPolicy = BodyPolicy.FitLine;
+	public var forBody: BodyPolicy = BodyPolicy.FitLine;
+	public var whileBody: BodyPolicy = BodyPolicy.FitLine;
+	public var doBody: BodyPolicy = BodyPolicy.FitLine;
 	public var returnBody: BodyPolicy = BodyPolicy.FitLine;
 	public var returnBodySingleLine: BodyPolicy = BodyPolicy.FitLine;
 	public var throwBody: BodyPolicy = BodyPolicy.Same;
 	public var catchBody: BodyPolicy = BodyPolicy.Next;
 	public var tryBody: BodyPolicy = BodyPolicy.Next;
-	public var caseBody: BodyPolicy = BodyPolicy.Keep;
+	public var caseBody: BodyPolicy = BodyPolicy.FitLine;
 	public var caseSiblings: SiblingPolicy = SiblingPolicy.Off;
-	public var expressionCase: BodyPolicy = BodyPolicy.Keep;
+	public var expressionCase: BodyPolicy = BodyPolicy.FitLine;
 	public var functionBody: BodyPolicy = BodyPolicy.Next;
 	public var anonFunctionBody: BodyPolicy = BodyPolicy.Same;
 	public var untypedBody: BodyPolicy = BodyPolicy.Same;
 	public var expressionIfBody: BodyPolicy = BodyPolicy.Same;
 	public var expressionElseBody: BodyPolicy = BodyPolicy.Same;
-	public var expressionForBody: BodyPolicy = BodyPolicy.Keep;
+	public var expressionForBody: BodyPolicy = BodyPolicy.FitLine;
 	public var expressionIfWithBlocks: Bool = false;
 	public var expressionIfWithBrackets: Bool = false;
 	public var leftCurly: BracePlacement = BracePlacement.Same;
@@ -181,9 +180,8 @@ final class HxModuleWriteOptions {
 	 * twin of `elseIf` for the other keyword-headed statement a branch
 	 * idiomatically carries. `Same` glues it to its keyword's line
 	 * (`if (c) switch s { … } else switch s { … }`), `Next` puts it on the next
-	 * line, `Keep` (the default) has no opinion and lets the field's own
-	 * `ifBody` / `elseBody` policy decide - which is what makes the knob
-	 * byte-inert for every config that does not set it.
+	 * line. `Same` is the default (`sameLine.elseSwitch: fitLine` reads as `Same` too: a
+	 * keyword has no fit placement of its own).
 	 *
 	 * Fed by `sameLine.elseSwitch`; read at BOTH branches of `HxIfStmt` and
 	 * `HxIfExpr` through `@:fmt(elseSwitch(...))`, which names the `switch` ctors
@@ -192,7 +190,7 @@ final class HxModuleWriteOptions {
 	 * the head's own column, so the following `else` cuddles that `}` exactly as
 	 * it cuddles a block's (`PrevBodyInfo.headGlue`).
 	 */
-	public var elseSwitch: KeywordPlacement = KeywordPlacement.Keep;
+	public var elseSwitch: KeywordPlacement = KeywordPlacement.Same;
 
 	public var fitLineIfWithElse: Bool = false;
 
@@ -982,7 +980,6 @@ final class HxModuleWriteOptions {
 	// the calls inside it inherit it. Default false → every value-position
 	// construct keeps its rest probe.
 	public var _suppressPatternRestProbe: Bool = false; // noqa: naming
-	public var _varKwNewline: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a class-member `var` / `final` initializer (NOT a local statement) via
@@ -1011,27 +1008,9 @@ final class HxModuleWriteOptions {
 	// terminal-else writeCall), so an independent if-chain nested inside a
 	// branch still de-braces on its own merits. Default `false`.
 	public var _ssbChainSuppress: Bool = false; // noqa: naming
-	// ω-keep-chain — set on the leaf-operand opt
-	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
-	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED
-	// branch UNCONDITIONALLY: a kept chain preserves the source line structure
-	// verbatim (operand lines may exceed `lineWidth`), so its inner parens must
-	// NOT re-open via the width-driven `IfFullLineExceeds` probe — mirror fork's
-	// `keep2` `noLineEndBefore` lock on operand boundaries with no source break.
-	// Default false → non-keep / Plain are byte-inert.
-	public var _keepFlatInner: Bool = false; // noqa: naming
-	// ω-keep-chain — set by an enclosing
-	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) on its inner opt. A
-	// `WrapMode.Keep` opAddSub / opBool chain reads it to suppress BOTH its own
-	// `_headBreak` (the source return-head newline is reproduced at the
-	// return-VALUE level instead) AND its continuation `Nest` (the value-level
-	// break already supplies the +cols, so chain operators co-indent with the
-	// head rather than compounding to +2cols). Non-keep chains ignore it (gated
-	// on `isKeep`). Default false → Plain / direct-value chains byte-inert.
-	// Also read by `WriterLowering.lowerTernaryBranch` as the "inside an explicit
-	// expression paren" signal: a rest-aware ternary is EXCLUDED when this is set
-	// (the paren owns the wrap). Keep the setter firing for ANY expression paren,
-	// not only Keep chains, or that ternary gate silently breaks.
+	// Set by an enclosing `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) on its inner opt: the
+	// "inside an explicit expression paren" signal. A rest-aware chain or ternary is EXCLUDED when
+	// it is set (the paren owns the wrap); the chain emit clears it for its operands.
 	public var _keepChainInParen: Bool = false; // noqa: naming
 	// ω-typedef-intersection-operand-break — set per-element by
 	// `HxTypedefDecl.intersections`'s trivia-Star loop on the opt passed to a

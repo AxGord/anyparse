@@ -100,12 +100,10 @@ final class RuleScope {
 	/** `report` (a `lint --format json` array) without the findings of every rule outside `ids`. */
 	public static function keep(report: String, ids: Array<String>): String {
 		return switch JValueParser.parse(report) {
-			case JArray(records):
-				RawJson.print(JArray([
-					for (record in records) if (ids.contains(RawJson.stringAt(record, 'rule') ?? '')) record
-				]), '  ');
-			case _:
-				report;
+			case JArray(records): RawJson.print(JArray([
+				for (record in records) if (ids.contains(RawJson.stringAt(record, 'rule') ?? '')) record
+			]), '  ');
+			case _: report;
 		}
 	}
 

@@ -52,18 +52,17 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'caseBody=Same must flatten at statement-position: <$out>');
 	}
 
-	public function testNestedCaseExpressionCaseKeepFlattensSameLine(): Void {
+	public function testNestedCaseExpressionCaseSameFlattens(): Void {
 		// Inner switch is the body of the outer case `1` — inner case
 		// `2` is in expression-position. Source has both inner cases
-		// same-line. expressionCase=Keep (default) + sameLine=true →
-		// flatten inner cases. Outer caseBody=Next (default) →
+		// same-line. expressionCase=Same → flatten inner cases. Outer caseBody=Next (default) →
 		// outer case body breaks (the nested switch lands on the next
 		// line). caseBody intentionally Same to confirm it is IGNORED
 		// at expression-position.
 		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); case 3: bar(); } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Next;
-		opts.expressionCase = BodyPolicy.Keep;
+		opts.expressionCase = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 2: foo();') != -1, 'expected inline inner case 2 at expression-position: <$out>');
 		Assert.isTrue(out.indexOf('case 3: bar();') != -1, 'expected inline inner case 3 at expression-position: <$out>');
@@ -101,15 +100,6 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		Assert.isTrue(out.indexOf('case 1: switch') != -1, 'caseBody=Same must flatten outer (statement-position) case: <$out>');
 	}
 
-	public function testNewlineBeforeBlocksKeepFlattenAtExpressionPosition(): Void {
-		// At expression-position, expressionCase=Keep flattens only
-		// when source has body same-line as `:`. With a source-side
-		// newline before the body, Keep preserves the break.
-		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) {\n\t\t\tcase 2:\n\t\t\t\tfoo();\n\t\t} } } }';
-		final out: String = writeWithDefaults(src);
-		Assert.isTrue(out.indexOf('case 2: foo();') == -1, 'Keep must NOT flatten when source has newline before body: <$out>');
-	}
-
 	public function testDefaultBranchPropagatesExprPosition(): Void {
 		// `default` branch also propagates _inExprPosition=true to
 		// descendants — a case nested inside a default body picks
@@ -117,9 +107,9 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		final src: String = 'class M { function f():Void { switch (x) { default: switch (y) { case 2: foo(); } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Next;
-		opts.expressionCase = BodyPolicy.Keep;
+		opts.expressionCase = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('case 2: foo();') != -1, 'default-body-nested case must flatten via expressionCase=Keep: <$out>');
+		Assert.isTrue(out.indexOf('case 2: foo();') != -1, 'default-body-nested case must flatten via expressionCase=Same: <$out>');
 	}
 
 	private inline function writeWithDefaults(src: String): String {

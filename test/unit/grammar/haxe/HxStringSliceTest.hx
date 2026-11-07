@@ -157,8 +157,7 @@ class HxStringSliceTest extends HxTestHelpers {
 					case Add(left, right):
 						Assert.isTrue(left.match(IdentExpr(_)));
 						Assert.isTrue(right.match(IntLit(_)));
-					case null, _:
-						Assert.fail('expected Add, got $expr');
+					case null, _: Assert.fail('expected Add, got $expr');
 				}
 			case _:
 				Assert.fail('expected Block, got ${parts[0]}');

@@ -155,8 +155,7 @@ final class BranchesTest extends Test {
 				case NotRun(why):
 					Assert.stringContains('last started: lint', why);
 					Assert.isTrue(why.length < 300, why);
-				case _:
-					Assert.fail('$outcome');
+				case _: Assert.fail('$outcome');
 			}
 		});
 	}
@@ -270,10 +269,8 @@ final class BranchesTest extends Test {
 			Assert.same(['a', 'b'], summary.steps().map(step -> step.name));
 			Assert.isTrue(summary.steps()[0].outcome.match(Passed), 'the finished row keeps its result');
 			switch summary.steps()[1].outcome {
-				case NotRun(why):
-					Assert.stringContains('last started: b', why);
-				case other:
-					Assert.fail('$other');
+				case NotRun(why): Assert.stringContains('last started: b', why);
+				case other: Assert.fail('$other');
 			}
 		});
 	}

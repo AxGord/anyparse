@@ -87,22 +87,19 @@ class AstPredLowering {
 	private function ruleCT(rule: String): ComplexType {
 		final simple: String = simpleName(rule);
 		return switch _mode {
-			case PredSpans if (!isTerminalRule(rule)):
-				TPath({
-					pack: packOf(_shape.root).concat(['spans']),
-					name: 'Pairs',
-					sub: '${simple}S',
-					params: []
-				});
-			case PredTrivia if (isTriviaBearing(rule)):
-				TPath({
-					pack: packOf(rule).concat(['trivia']),
-					name: 'Pairs',
-					sub: '${simple}T',
-					params: []
-				});
-			case _:
-				TPath({ pack: packOf(rule), name: simple, params: [] });
+			case PredSpans if (!isTerminalRule(rule)): TPath({
+				pack: packOf(_shape.root).concat(['spans']),
+				name: 'Pairs',
+				sub: '${simple}S',
+				params: []
+			});
+			case PredTrivia if (isTriviaBearing(rule)): TPath({
+				pack: packOf(rule).concat(['trivia']),
+				name: 'Pairs',
+				sub: '${simple}T',
+				params: []
+			});
+			case _: TPath({ pack: packOf(rule), name: simple, params: [] });
 		};
 	}
 

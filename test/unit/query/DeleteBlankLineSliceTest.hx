@@ -168,10 +168,8 @@ class DeleteBlankLineSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(source);
 		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [];
-		MemberKinds.eachMemberHost(tree, host -> for (child in host.children) if (
-			child.name == 'd1' || child.name == 'd2' || child.name == 'd3'
-		)
-			targets.push({ node: child, parent: host }));
+		MemberKinds.eachMemberHost(tree, host -> for (child in host.children)
+			if (child.name == 'd1' || child.name == 'd2' || child.name == 'd3') targets.push({ node: child, parent: host }));
 		Assert.equals(3, targets.length);
 		switch ElementSpan.deleteNodes(source, targets, true, plugin, true, KEEPS_TWO_BLANKS) {
 			case Ok(text):

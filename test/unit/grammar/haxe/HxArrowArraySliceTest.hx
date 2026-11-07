@@ -301,8 +301,7 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 						Assert.fail('expected Arrow in first entry');
 				}
 				switch elems[1] {
-					case Arrow(IntLit(k), DoubleStringExpr(_)):
-						Assert.equals(2, (k: Int));
+					case Arrow(IntLit(k), DoubleStringExpr(_)): Assert.equals(2, (k: Int));
 					case null, _: Assert.fail('expected Arrow in second entry');
 				}
 			case null, _:

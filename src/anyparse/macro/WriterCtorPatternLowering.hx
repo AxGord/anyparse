@@ -256,8 +256,7 @@ final class WriterCtorPatternLowering {
 	 * the pre-`else` gap (`beforeKwSeparator`) — so a grammar that opts one field
 	 * in cannot get a different answer from another. The last two are the CLOSE
 	 * side of the hug: a `[` glued to its branch head is only half a shape while
-	 * the matching `]` is left alone on its line by a `;` the source wrote and a
-	 * source-preserving `Keep` gap.
+	 * the matching `]` is left alone on its line by a `;` the source wrote.
 	 */
 	private static function buildBracketBodyGlueTest(
 		ctx: CtorPatternCtx, args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr
@@ -289,9 +288,9 @@ final class WriterCtorPatternLowering {
 	 * A GLUED `switch` closes with a `}` in the head's own column, exactly as a
 	 * curly block does, so the `shapeAware` hardline that fires on every
 	 * non-block ctor is wrong for it and this test is what routes the gap back to
-	 * the flag-driven separator. Under `next` / `keep` the close sits one indent
-	 * deeper and the hardline is right, which is why the knob is part of the test
-	 * rather than the ctor alone.
+	 * the flag-driven separator. Under `next` the close sits one indent deeper and
+	 * the hardline is right, which is why the knob is part of the test rather than
+	 * the ctor alone.
 	 */
 	private static function buildElseSwitchGlueTest(
 		ctx: CtorPatternCtx, args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr

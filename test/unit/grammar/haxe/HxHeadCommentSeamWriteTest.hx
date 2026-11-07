@@ -62,7 +62,7 @@ class HxHeadCommentSeamWriteTest extends Test {
 
 	/** Sibling of the catch case: the `switch` subject's `)` -> `{` seam. */
 	public function testSwitchHeadLineCommentSurvives(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (v) // pick\n\t\t{\n\t\t\tcase 1:\n\t\t\t\ta();\n\t\t}\n\t}\n}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (v) // pick\n\t\t{\n\t\t\tcase 1: a();\n\t\t}\n\t}\n}';
 		Assert.equals('$source\n', roundTrip(source));
 	}
 

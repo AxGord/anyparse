@@ -317,10 +317,10 @@ class AddElementSliceTest extends Test {
 
 	/** A brace-less `else` body gains braces the same way — the `if` branch is untouched. */
 	public function testBraceLessElseBodyGainsBraces(): Void {
-		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse b();\n\t}\n}\n';
+		final source: String = 'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c)\n\t\t\ta();\n\t\telse\n\t\t\tb();\n\t}\n}\n';
 		final expected: String =
-			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c) a();\n\t\telse {\n\t\t\tb();\n\t\t\td();\n\t\t}\n\t}\n}\n';
-		assertAdd(source, 4, 8, After, 'd();', false, expected);
+			'class C {\n\tfunction f(c:Bool):Void {\n\t\tif (c)\n\t\t\ta();\n\t\telse {\n\t\t\tb();\n\t\t\td();\n\t\t}\n\t}\n}\n';
+		assertAdd(source, 6, 4, After, 'd();', false, expected);
 	}
 
 	/** A brace-less loop body gains braces — the condition/subject child is never the target. */

@@ -47,7 +47,7 @@ class HxElseIfOptionsTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-KEEP-ELSEIF-NEXT-OFF')
+	@:killer('M-ELSEIF-NEXT-OFF')
 	public function testElseIfNextMovesNestedIfToNextLine(): Void {
 		final out: String = writeWithElseIf('class F { function f():Void { if (a) {} else if (b) {} } }', KeywordPlacement.Next);
 		Assert.isTrue(out.indexOf('else\n\t\t\tif (b)') != -1, 'expected `else\\n\\t\\t\\tif (b)` in: <$out>');
@@ -74,7 +74,7 @@ class HxElseIfOptionsTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-KEEP-ELSEIF-NEXT-OFF')
+	@:killer('M-ELSEIF-NEXT-OFF')
 	public function testElseIfNextOnlyLastLevelKeepsFirstLevelInline(): Void {
 		// else-if-else chain. Only the immediate else that is itself an
 		// IfStmt is subject to elseIf; the terminal else carrying a

@@ -9,12 +9,10 @@ package anyparse.grammar.haxe.format;
  *   inline after the preceding token (`} else if (...)`).
  * - `"next"` → `KeywordPlacement.Next` — keyword moves to the next
  *   line at the current indent level (`} else\n\tif (...)`).
- * - `"keep"` → `KeywordPlacement.Same` (degraded — per-node source-
- *   shape tracking not yet available in the parser; `Same` is the
- *   nearest no-surprise fallback).
- * - `"fitLine"` → `KeywordPlacement.Same` (degraded — the writer
- *   has no shape-aware fit mode for lone keywords; the nearest
- *   no-surprise fallback is the inline placement).
+ * - `"keep"` parses so that `HaxeFormatConfigDiagnostics` can name it;
+ *   the knob keeps its default.
+ * - `"fitLine"` → `KeywordPlacement.FitLine` for `elseSwitch`, `Same`
+ *   for `elseIf` (a nested `if` has no fit placement of its own).
  *
  * Mirrors `HxFormatSameLinePolicy` but renders at runtime as a
  * two-value `KeywordPlacement` rather than a `Bool`. The separate

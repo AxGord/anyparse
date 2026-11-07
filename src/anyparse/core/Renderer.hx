@@ -3245,16 +3245,14 @@ class Renderer {
 				if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
 				if (f.forceFlat) {
 					// drop entirely
-				} else
-					switch ctx.lastEmit {
-						case OpenDelim:
-							// drop, leave col / pendingIndent / lastEmit as-is
-						case Hardline:
-							ctx.pendingIndent = f.indent;
-							ctx.col = f.indent;
-						case Other:
-							breakLine(ctx, f.indent, false);
-					}
+				} else switch ctx.lastEmit {
+					case OpenDelim:
+						// drop, leave col / pendingIndent / lastEmit as-is
+					case Hardline:
+						ctx.pendingIndent = f.indent;
+						ctx.col = f.indent;
+					case Other: breakLine(ctx, f.indent, false);
+				}
 			case _:
 		}
 	}
@@ -4037,10 +4035,8 @@ class Renderer {
 			return { add: 0, aborted: false };
 		}
 		return switch node.doc {
-			case Group(innerDoc) if (renderCol >= 0):
-				fitsFlat(sibling.width - renderCol, 0, innerDoc) ? null : broken(innerDoc);
-			case GroupWithRestProbe(innerDoc) if (renderCol >= 0):
-				fitsFlat(sibling.width - penCol, 0, innerDoc) ? null : broken(innerDoc);
+			case Group(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - renderCol, 0, innerDoc) ? null : broken(innerDoc);
+			case GroupWithRestProbe(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - penCol, 0, innerDoc) ? null : broken(innerDoc);
 			case IfWidthExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
@@ -4058,8 +4054,7 @@ class Renderer {
 					aborted = step.aborted;
 				}
 				{ add: add, aborted: aborted };
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

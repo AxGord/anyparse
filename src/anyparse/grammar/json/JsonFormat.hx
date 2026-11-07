@@ -173,8 +173,7 @@ final class JsonFormat implements TextFormat {
 				final code: Null<Int> = Std.parseInt('0x$hex');
 				if (code == null) throw new Exception('invalid unicode escape: $hex');
 				{ char: code, consumed: 5 };
-			case _:
-				throw new Exception('invalid escape: \\${String.fromCharCode(esc)}');
+			case _: throw new Exception('invalid escape: \\${String.fromCharCode(esc)}');
 		};
 	}
 

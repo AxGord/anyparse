@@ -428,8 +428,7 @@ final class FactsEscapes {
 		final read: Null<FactsType> = FactsTypeTree.read(type);
 		if (read == null) return refuse('the constructor `$id.$name` has a type that does not read');
 		return switch read {
-			case Function(held, _):
-				held.foreach(a -> escapeType(substitute(a.type, bound)));
+			case Function(held, _): held.foreach(a -> escapeType(substitute(a.type, bound)));
 			// a constructor of no arguments is a value of its enum, which holds nothing
 			case Named(_, _): true;
 			case Unknown, Parameter(_), Structure(_): refuse('the constructor `$id.$name` has a type that is no function and no enum');
@@ -524,10 +523,9 @@ final class FactsEscapes {
 			case Named(name, args): Named(name, [for (a in args) substitute(a, bound)]);
 			case Function(args, result):
 				Function([for (a in args) { optional: a.optional, type: substitute(a.type, bound) }], substitute(result, bound));
-			case Structure(fields):
-				Structure([
-					for (f in fields) { optional: f.optional, name: f.name, type: substitute(f.type, bound) }
-				]);
+			case Structure(fields): Structure([
+				for (f in fields) { optional: f.optional, name: f.name, type: substitute(f.type, bound) }
+			]);
 			case Unknown: Unknown;
 		};
 	}

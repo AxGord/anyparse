@@ -24,13 +24,12 @@ final class HxExprParenObjectLitGlueTest extends Test {
 	/** project-shaped config: tab indent, `maxLineLength` 140, packed-or-one-per-line collections, fillLine `expressionWrapping`. */
 	private static final FILL_LINE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": '
-		+ '[{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "expressionWrapping": {"defaultWrap": '
-		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
-		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": '
+		+ '1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": '
+		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": '
+		+ '"packedOrOnePerLine"}]}, "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {'
+		+ '"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/** Same config with `wrapping.expressionWrapping` absent - the universal default (`NoWrap`) cascade. */
 	private static final DEFAULT_WRAP: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
@@ -39,7 +38,7 @@ final class HxExprParenObjectLitGlueTest extends Test {
 		+ '1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": '
 		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
 		+ '"type": "packedOrOnePerLine"}]}}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", '
-		+ '"closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+		+ '"closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/** Exploded `(\n\t{...}\n)` parens in the three positions a paren-wrapped literal reaches: decl init, call arg, `return`. */
 	private static final POSITIONS_EXPLODED: String = 'class C {\n\tfunction test() {\n\t\tfinal declValue = (\n\t\t\t{\n'

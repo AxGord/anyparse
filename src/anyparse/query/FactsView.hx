@@ -426,14 +426,13 @@ final class FactsView {
 		final converted: Null<Array<ImplicitSite>> = conversionSitesIn(file, span, harmless);
 		if (converted == null) return null;
 		final out: Array<ImplicitSite> = [
-			for (s in strings)
-				{
-					family: Text,
-					span: s.at.span,
-					types: [simpleSource(s.operand)],
-					exact: s.exact,
-					owners: [typedOwner(s.operand)]
-				}
+			for (s in strings) {
+				family: Text,
+				span: s.at.span,
+				types: [simpleSource(s.operand)],
+				exact: s.exact,
+				owners: [typedOwner(s.operand)]
+			}
 		];
 		for (c in calls) {
 			final target: Null<String> = c.target;
@@ -659,8 +658,7 @@ final class FactsView {
 			final blind: Null<ReachUnknown> = FactMarkers.first(
 				n, m -> switch m {
 					case MacroExpansion: truth && g != null && faceted(g, file, n.at.span) ? null : Reification(file, span);
-					case ReflectionInlined:
-						truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;
+					case ReflectionInlined: truth && !splicedReachesNoMember(n) ? DynamicName(file, span) : null;
 					// a marker no reader knows may stand for code no text holds, as an expansion does
 					case Unknown(text): Unmodelled(file, span, 'facts marker $text');
 					case StaleForeign, InlineSite, ReflectionUnattributed, ReflectionFrom(_): null;

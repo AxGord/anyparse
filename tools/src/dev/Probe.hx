@@ -134,15 +134,14 @@ final class Probe {
 		return {
 			invocations: invocations,
 			cases: [
-				for (row in rows)
-					{
-						compile: row.compile ?? raw.compile,
-						expect: row.expect,
-						knownDefect: row.knownDefect,
-						fixpoint: row.fixpoint,
-						outShape: row.outShape,
-						outMinLines: row.outMinLines
-					}
+				for (row in rows) {
+					compile: row.compile ?? raw.compile,
+					expect: row.expect,
+					knownDefect: row.knownDefect,
+					fixpoint: row.fixpoint,
+					outShape: row.outShape,
+					outMinLines: row.outMinLines
+				}
 			]
 		};
 	}
@@ -437,13 +436,11 @@ final class Probe {
 	/** The kit `kit` with the `expect` of each invocation replaced by the answer `seen` holds for it, every other key kept as it stands. */
 	private static function recorded(kit: JValue, seen: Array<Seen>): JValue {
 		return switch kit {
-			case JObject(entries):
-				JObject([
-					for (entry in entries)
-						entry.key == 'invocations' ? JValueTools.entry('invocations', withExpectations(entry.value, seen)) : entry
-				]);
-			case _:
-				kit;
+			case JObject(entries): JObject([
+				for (entry in entries)
+					entry.key == 'invocations' ? JValueTools.entry('invocations', withExpectations(entry.value, seen)) : entry
+			]);
+			case _: kit;
 		}
 	}
 
@@ -459,8 +456,7 @@ final class Probe {
 				final held: Bool = entries.exists(entry -> entry.key == EXPECT_KEY);
 				final replaced: Array<JEntry> = [for (entry in entries) entry.key == EXPECT_KEY ? value : entry];
 				JObject(held ? replaced : replaced.concat([value]));
-			case _:
-				row;
+			case _: row;
 		}
 	}
 
@@ -474,14 +470,13 @@ final class Probe {
 	/** `outcomes` with both streams normalized against the fixture directory each ran in under `work`. */
 	private static function normalized(outcomes: Array<Outcome>, work: TempDir): Array<Outcome> {
 		return [
-			for (i => outcome in outcomes)
-				{
-					status: outcome.status,
-					out: normalize(outcome.out, work.file('$i')),
-					err: normalize(outcome.err, work.file('$i')),
-					failure: outcome.failure,
-					files: outcome.files
-				}
+			for (i => outcome in outcomes) {
+				status: outcome.status,
+				out: normalize(outcome.out, work.file('$i')),
+				err: normalize(outcome.err, work.file('$i')),
+				failure: outcome.failure,
+				files: outcome.files
+			}
 		];
 	}
 

@@ -102,14 +102,13 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		return seams == null ? [] : [
-			for (entry in files) for (span in collect(plugin, entry.source, seams))
-				{
-					file: entry.file,
-					span: span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: 'this branching lambda body needs its block braces'
-				}
+			for (entry in files) for (span in collect(plugin, entry.source, seams)) {
+				file: entry.file,
+				span: span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: 'this branching lambda body needs its block braces'
+			}
 		];
 	}
 

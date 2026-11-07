@@ -36,18 +36,19 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	/** The compiled defaults, 160 columns. */
 	private static final CFG_DEFAULT: String = '{}';
 
-	/** A comprehension's open bracket cuddles its `for`, at 140 columns. */
-	private static final CFG_CUDDLED: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
+	/** A comprehension's open bracket cuddles its `for`, at 140 columns, and its body stays on the head line (`same`). */
+	private static final CFG_CUDDLED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"comprehensionCuddledOpen": true}, "sameLine": {"comprehensionFor": "same"}}';
 
 	/**
 	 * `CFG_CUDDLED` with an object-literal rule that keeps a literal flat up to 140 columns of fields, whatever column it
 	 * starts at: a flat literal then runs past the limit on main as well (`k` 17-20 and 52-56 of `callOfComprehension`),
 	 * so only the one-write fixed point is asserted under it.
 	 */
-	private static final CFG_OBJECT_RULE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
-		+ '{"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "onePerLine", '
-		+ '"rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
+	private static final CFG_OBJECT_RULE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "onePerLine", "rules": ['
+		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}, '
+		+ '"sameLine": {"comprehensionFor": "same"}}';
 
 	/** `CFG_CUDDLED` with the `#if` region its own fit group (`sameLine.conditionalExprFit`) and a fit-line `for` body. */
 	private static final CFG_FIT: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
@@ -74,7 +75,7 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	private static final CFG_FIT_RULE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": '
 		+ '{"maxLineLength": 120, "comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "onePerLine", '
 		+ '"rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}, '
-		+ '"sameLine": {"conditionalExprFit": true}}';
+		+ '"sameLine": {"conditionalExprFit": true, "comprehensionFor": "same"}}';
 
 	/** The comprehension at `k = 62` under `CFG_FIT_RULE`: the literal fits its line, so it stays flat. */
 	private static final FLAT_62: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in xs) #if debug\n'

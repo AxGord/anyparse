@@ -51,8 +51,7 @@ final class HaxeTypeRewrites {
 	 */
 	public static function arrowFnOldStyleRewrite(value: HxType, opt: WriteOptions): Null<HxType> {
 		return switch value {
-			case ArrowFn({ args: [Positional(inner = Arrow(_, _))], ret: ret }):
-				Arrow(Parens(inner), ret);
+			case ArrowFn({ args: [Positional(inner = Arrow(_, _))], ret: ret }): Arrow(Parens(inner), ret);
 			case _: null;
 		}
 	}

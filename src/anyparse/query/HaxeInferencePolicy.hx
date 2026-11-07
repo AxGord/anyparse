@@ -95,7 +95,8 @@ final class HaxeInferencePolicy implements InferencePolicy {
 		return switch wanted {
 			case Of(head, _, text) if (nullableInner(wanted) != null): Of(head, [inner ?? given], text);
 			case Of(head, args, _) if (inner != null): sameHead(head, args.length, inner) ? inner : reread(wanted, inner, reading);
-			case Of(head, args, text): iterableElement(wanted, given, reading) ?? ancestorArguments(head, args.length, text, given, reading);
+			case Of(head, args, text):
+				iterableElement(wanted, given, reading) ?? ancestorArguments(head, args.length, text, given, reading);
 			case _: null;
 		};
 	}

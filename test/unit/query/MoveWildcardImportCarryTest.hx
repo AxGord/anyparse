@@ -334,8 +334,7 @@ final class MoveWildcardImportCarryTest extends Test {
 				case Ok(changes, _):
 					final written: String = changes.find(c -> c.file.endsWith(use))?.newSource ?? '';
 					Assert.isTrue(written.contains('Dest.qfun()'), 'the caller should be repointed at the destination, got: $written');
-				case Err(message):
-					Assert.fail('the move should go through, got: $message');
+				case Err(message): Assert.fail('the move should go through, got: $message');
 			}
 		});
 		#else

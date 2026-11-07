@@ -1,6 +1,6 @@
 package unit.grammar.haxe;
 
-import anyparse.format.BodyPolicy;
+import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
@@ -39,8 +39,8 @@ class HxModuleWriteOptionsTest extends Test {
 	@:killer('M-LOADER-WRITES-THE-DEFAULT')
 	public function testALoadedConfigLeavesTheDefaultRecordAlone(): Void {
 		final loaded: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		Assert.equals(BodyPolicy.Next, loaded.caseBody);
-		Assert.equals(BodyPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.caseBody);
+		Assert.equals(KeepEmptyLinesPolicy.Remove, loaded.afterLeftCurly);
+		Assert.equals(KeepEmptyLinesPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.afterLeftCurly);
 	}
 
 	/** A generated shim sets its flag on a clone: written on the caller's record, the flag would leak to the next sibling and file. */

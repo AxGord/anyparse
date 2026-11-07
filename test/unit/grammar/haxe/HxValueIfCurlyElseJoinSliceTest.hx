@@ -38,9 +38,6 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	/** Pony-shaped config with `sameLine.expressionIf: next` — what both real trees set. */
 	private static final CFG_NEXT: String = cfg('next');
 
-	/** The same config with `expressionIf: keep`, which must still mean keep. */
-	private static final CFG_KEEP: String = cfg('keep');
-
 	/** The reported source, reduced: the value-`if` with a `{ … }` branch and the break the sweep left before `else`. */
 	private static final BROKEN: String = 'class DIVerifier {\n'
 		+ '\tprivate static function recordResolution(className: String, fieldName: String, ref: Null<ResolvedRef>): Void {\n\t\tfinal '
@@ -99,7 +96,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 
 	/** The report itself: his source in, his target bytes out. RED at base. */
 	@:pin('control')
-	@:killer('M-EXPR-ELSE-KEEP')
+	@:killer('M-EXPR-ELSE-NEXT')
 	public function testTheReportedValueIfJoinsItsElseToTheCurlyClose(): Void {
 		Assert.equals(JOINED, HxWriteFixture.triviaWrite(BROKEN, CFG_NEXT));
 	}
@@ -149,7 +146,7 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 
 	/** `};` is not a join either, so the `;` goes with the break it used to justify. RED at base. */
 	@:pin('control')
-	@:killer('M-EXPR-ELSE-KEEP')
+	@:killer('M-EXPR-ELSE-NEXT')
 	@:killer('M-EXPR-ELSE-PLAIN-SAME')
 	public function testTheSemicolonBeforeElseGoesWithTheJoin(): Void {
 		Assert.equals(JOINED, HxWriteFixture.triviaWrite(SEMI, CFG_NEXT));
@@ -172,13 +169,6 @@ final class HxValueIfCurlyElseJoinSliceTest extends Test {
 	@:killer('M-SBE-UNGATED')
 	public function testAnElseLessValueIfKeepsItsTerminator(): Void {
 		Assert.equals(ELSE_LESS, HxWriteFixture.triviaWrite(ELSE_LESS, CFG_NEXT));
-	}
-
-	/** `keep` still means keep: the same source, the same break, under the neighbouring config value. */
-	@:pin('control')
-	@:killer('M-KEEP-JOINS')
-	public function testKeepStillPreservesTheSourceBreak(): Void {
-		Assert.equals(BROKEN, HxWriteFixture.triviaWrite(BROKEN, CFG_KEEP));
 	}
 
 	/**

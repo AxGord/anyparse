@@ -738,8 +738,7 @@ final class TypeNameBinding {
 		return switch answer {
 			case Decls(decls): InIndex(decls);
 			case Outside(path): OutOfIndex(path);
-			case Unreadable(path):
-				path == null ? null : OutOfIndex(path);
+			case Unreadable(path): path == null ? null : OutOfIndex(path);
 			// an `Either` is made only by a guarded statement against the rest of the order, and no tier read here is one
 			case Either(_), Pass: null;
 		};
@@ -800,8 +799,9 @@ final class TypeNameBinding {
 	/** The non-private types `files` declare — named `name` unless it is null, main types only when `mainOnly`. */
 	private static function typesIn(files: Array<FileInfo>, name: Null<String>, mainOnly: Bool): Array<ResolvedType> {
 		return [
-			for (f in files) for (t in f.types) if ((name == null || t.name == name) && (!mainOnly || t.isMain) && !t.isPrivate)
-				{ file: f, type: t }
+			for (f in files)
+				for (t in f.types)
+					if ((name == null || t.name == name) && (!mainOnly || t.isMain) && !t.isPrivate) { file: f, type: t }
 		];
 	}
 

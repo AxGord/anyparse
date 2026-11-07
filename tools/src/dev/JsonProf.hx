@@ -82,12 +82,10 @@ final class JsonProf {
 			case 'json-reach-parse-hand': reachParseHand.bind(sys.io.File.getContent(sample));
 			case 'json-reach-write-std': reachWriteStd.bind(ReachBuildsRecordParser.parse(sys.io.File.getContent(sample)));
 			case 'json-reach-write-typed': reachWriteTyped.bind(ReachBuildsRecordParser.parse(sys.io.File.getContent(sample)));
-			case 'json-stored-parse-std': storedParseStd.bind(
-				StoredTreeWriter.write(storedSample(), JsonFormat.instance.compactWriteOptions)
-			);
-			case 'json-stored-parse-typed': storedParseTyped.bind(
-				StoredTreeWriter.write(storedSample(), JsonFormat.instance.compactWriteOptions)
-			);
+			case 'json-stored-parse-std':
+				storedParseStd.bind(StoredTreeWriter.write(storedSample(), JsonFormat.instance.compactWriteOptions));
+			case 'json-stored-parse-typed':
+				storedParseTyped.bind(StoredTreeWriter.write(storedSample(), JsonFormat.instance.compactWriteOptions));
 			case 'json-stored-write-std': storedWriteStd.bind(storedSample());
 			case 'json-stored-write-typed': storedWriteTyped.bind(storedSample());
 			case 'json-escape-std': escapeStd;

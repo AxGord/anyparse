@@ -107,8 +107,7 @@ final class MutationCheck {
 			case Count(n, note):
 				if (note != null) Sys.stderr().writeString('dev mutation-check: $note\n');
 				n;
-			case Unusable(why):
-				return refuse([why]);
+			case Unusable(why): return refuse([why]);
 		};
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final workroot: String = dirs.claimAfterSweep(WORK_PREFIX, job.repo);

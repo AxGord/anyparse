@@ -31,8 +31,8 @@ final class XconfigFmt {
 		final prefix: String = 'apq fmt: $root/';
 		final marker: String = ': the writer needed ';
 		final files: Array<String> = [
-			for (line in err.split('\n')) if (line.startsWith(prefix) && line.indexOf(marker) >= 0)
-				line.substring(prefix.length, line.indexOf(marker))
+			for (line in err.split('\n'))
+				if (line.startsWith(prefix) && line.indexOf(marker) >= 0) line.substring(prefix.length, line.indexOf(marker))
 		];
 		files.sort(Reflect.compare);
 		return files;

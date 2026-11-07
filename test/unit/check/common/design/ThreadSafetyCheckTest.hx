@@ -1527,8 +1527,8 @@ class ThreadSafetyCheckTest extends Test {
 		);
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		final found: Array<String> = [
-			for (v in vs) if (!(v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)))
-				'${v.file.substring(root.length + 1)}: ${v.message}'
+			for (v in vs)
+				if (!(v.file == '' && v.message.startsWith(PositiveSinks.NOTICE))) '${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		found.sort(Reflect.compare);
 		CliFixture.removeDir(root);

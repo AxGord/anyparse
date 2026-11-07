@@ -224,15 +224,14 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final plans: Plans = planFor(files, plugin, null);
 		final out: Array<Violation> = [
-			for (plan in plans.hoists) for (spelled in plan.from)
-				{
-					file: spelled.file,
-					span: spelled.span,
-					rule: RULE_ID,
-					severity: Severity.Warning,
-					message: '${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$SHARE_LEAD${plan.holders} of '
-						+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
-				}
+			for (plan in plans.hoists) for (spelled in plan.from) {
+				file: spelled.file,
+				span: spelled.span,
+				rule: RULE_ID,
+				severity: Severity.Warning,
+				message: '${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$SHARE_LEAD${plan.holders} of '
+					+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
+			}
 		];
 		for (plan in plans.sinks) out.push({
 			file: plan.site,
@@ -344,8 +343,8 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 				readers: reading.length,
 				governed: governed.length,
 				into: [
-					for (file in reading) if (!(ctx.infoOf[file]?.imports ?? []).exists(imp -> !imp.guarded && statementKeyOf(imp) == key))
-						file
+					for (file in reading)
+						if (!(ctx.infoOf[file]?.imports ?? []).exists(imp -> !imp.guarded && statementKeyOf(imp) == key)) file
 				]
 			});
 		}

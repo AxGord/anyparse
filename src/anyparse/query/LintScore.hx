@@ -147,8 +147,7 @@ final class LintScore {
 				{ name: 'rule', value: truth.rule },
 				{ name: 'project', value: truth.project },
 				{ name: 'commit', value: truth.commit }
-			])
-				if (field.value == '') '"${field.name}" must be non-empty'
+			]) if (field.value == '') '"${field.name}" must be non-empty'
 		];
 		final keys: Array<String> = [for (e in truth.entries) dupKeyOf(e)];
 		for (i => e in truth.entries) for (error in entryErrors(e, keys[i], keys)) errors.push('entry $i (${keys[i]}): $error');
@@ -187,9 +186,8 @@ final class LintScore {
 			severity: minimum ?? ALL_SEVERITIES,
 			excluded: ofRule.length - scored.length,
 			families: [
-				for (family in families) bucket(
-					family, keys.filter(k -> k.family == family), truth.entries.filter(e -> e.family == family), entryOf, hit
-				)
+				for (family in families)
+					bucket(family, keys.filter(k -> k.family == family), truth.entries.filter(e -> e.family == family), entryOf, hit)
 			],
 			overall: bucket(ALL, keys, truth.entries, entryOf, hit),
 			lost: [for (e in truth.entries) if (isRecall(e) && !hit(e)) e],
@@ -245,23 +243,21 @@ final class LintScore {
 			overall: bucketRecord(result.overall),
 			families: [for (b in result.families) bucketRecord(b)],
 			lost: [
-				for (e in result.lost)
-					{
-						family: e.family,
-						member: e.member,
-						subject: e.subject,
-						verdict: e.verdict
-					}
+				for (e in result.lost) {
+					family: e.family,
+					member: e.member,
+					subject: e.subject,
+					verdict: e.verdict
+				}
 			],
 			unlabelled: [
-				for (k in result.unlabelled)
-					{
-						family: k.family,
-						member: k.member,
-						subject: k.subject,
-						count: k.count,
-						file: k.file
-					}
+				for (k in result.unlabelled) {
+					family: k.family,
+					member: k.member,
+					subject: k.subject,
+					count: k.count,
+					file: k.file
+				}
 			]
 		}, JsonFormat.instance.expandedWriteOptions);
 	}

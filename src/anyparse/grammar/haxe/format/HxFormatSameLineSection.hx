@@ -8,19 +8,18 @@ package anyparse.grammar.haxe.format;
  * `while` sit on the same line as their preceding block. `ifBody` / `elseBody` / `forBody` / `whileBody` /
  * `doWhileBody` (→ `doBody`) / `returnBody` / `returnBodySingleLine` / `catchBody` / `tryBody` /
  * `functionBody` / `untypedBody` / `caseBody` / `expressionCase` are three-way body-placement knobs (`same` /
- * `next` / `fitLine`, plus `keep`); `elseIf` and `elseSwitch` are keyword-placement knobs; `expressionTry` is
- * the same-line knob for an expression-position `try`.
+ * `next` / `fitLine`); `elseIf` and `elseSwitch` are keyword-placement knobs; `expressionTry` is
+ * the same-line knob for an expression-position `try`. A `keep` value (the fork's "reproduce the source") is
+ * reported by `HaxeFormatConfigDiagnostics` and leaves the knob at its default.
  *
  * `caseBody` and `expressionCase` feed the same Star body site, dispatched on `opt._inExprPosition` rather
- * than OR-ed: `same` and `fitLine` both OVERRIDE a source break, only `keep` reads the source form. So setting
- * `caseBody` alone and testing on a `return switch …` (an EXPRESSION-position switch, governed by
- * `expressionCase`) leaves the source shape untouched and reads exactly like a writer that cannot re-join at
- * all.
+ * than OR-ed. So setting `caseBody` alone and testing on a `return switch …` (an EXPRESSION-position switch,
+ * governed by `expressionCase`) leaves that switch on `expressionCase`'s default.
  *
- * `expressionIf` fans `keep` / `same` out into all three runtime knobs `expressionIfBody` /
+ * `expressionIf` fans `same` out into all three runtime knobs `expressionIfBody` /
  * `expressionElseBody` / `expressionForBody` and `next` / `fitLine` into the if/else pair only (absent, each
- * keeps its own compiled default — `Same` / `Same` / `Keep`, NOT uniform), and also drives the per-`else` gap
- * `sameLineExpressionElse`: `same` → `Same`, `keep` → `Keep`, `next` → `SameOnBlock` (the `else` cuddles to a
+ * keeps its own compiled default — `Same` / `Same` / `FitLine`, NOT uniform), and also drives the per-`else` gap
+ * `sameLineExpressionElse`: `same` → `Same`, `next` → `SameOnBlock` (the `else` cuddles to a
  * `}` close and keeps its forced break after every other shape), `fitLine` → `Same`. `expressionIfWithBlocks`
  * is a body-CONTENTS flattener for `BlockExpr` branches and nothing else: it never pulls `else` up to a `}`
  * (that is `expressionIf: next`) and never hugs a branch value to its head (that is
@@ -78,22 +77,15 @@ package anyparse.grammar.haxe.format;
 	 * optional `;` the source wrote before `else` and pulls the `else` up to the
 	 * `]`, so `return if (c) [` closes as `] else [];` and not as `];` on a line
 	 * of its own. Without that half the hug is half a shape -- the pre-`else` gap
-	 * resolves to `Keep` under `sameLine.expressionIf: next`, so a break the
-	 * source wrote there would survive forever. The `;` drop overrides
+	 * would otherwise follow the source. The `;` drop overrides
 	 * `whitespace.semicolonBeforeElse` for this one shape. The curly twin (`};`)
 	 * is deliberately NOT covered: `expressionIfWithBlocks` collapses a block
 	 * body's CONTENTS and hugs nothing.
 	 *
-	 * All three seams read the flag ALONE, never the resolved layout: a hug that
-	 * sat inside the policy switch which the outer `Keep` arm of
-	 * `WriterBodyPolicyLowering.buildBodyCoreWrap` bypasses would, under
-	 * `sameLine.expressionIf: keep`, drop the `;` and pull `else` up to the `]`
-	 * while leaving the `[` on a line of its own -- the half shape the two close
-	 * seams exist to prevent, mirrored. The substitution sits on the policy
-	 * VALUE (the seam `loopBodyIfElseNext` uses), so `same` / `next` / `keep`
-	 * emit ONE byte-identical result under the knob while every knob-off cell
-	 * keeps the bytes it had. `keep` decides the layout POLICY; it never decides
-	 * whether an explicit knob applies.
+	 * All three seams read the flag ALONE, never the resolved layout. The
+	 * substitution sits on the policy VALUE (the seam `loopBodyIfElseNext` uses),
+	 * so `same` / `next` emit ONE byte-identical result under the knob while every
+	 * knob-off cell keeps the bytes it had.
 	 */
 	@:optional var expressionIfWithBrackets: Bool;
 	@:optional var expressionIfArrowBodyReflow: Bool;
@@ -121,14 +113,12 @@ package anyparse.grammar.haxe.format;
 	 * out into; this key is read AFTER that fanout, so the specific value wins.
 	 *
 	 * `same` puts the body on the head's line, `next` on its own line one level
-	 * in, `keep` reproduces the source break, `fitLine` glues a body whose first
-	 * line fits the head line and breaks one whose does not — the engine's own
-	 * `BodyPolicy` semantics, identical to `forBody` / `ifBody`.
+	 * in, `fitLine` glues a body whose first line fits the head line and breaks
+	 * one whose does not — the engine's own `BodyPolicy` semantics, identical to
+	 * `forBody` / `ifBody`.
 	 *
-	 * An ABSENT key leaves `expressionForBody` at its `Keep` default rather than
-	 * the fork's declared `Same`: every corpus fixture omits the key, and a
-	 * `Same` default would re-lay every comprehension body the corpus wrote on
-	 * its own line.
+	 * An ABSENT key leaves `expressionForBody` at its `FitLine` default, without
+	 * the bracket padding a STATED `fitLine` adds (below).
 	 *
 	 * `fitLine` ALSO pads the comprehension brackets (`[ for … ]`) through
 	 * `HaxeFormatConfigLoader.applyComprehensionForPadding`, mirroring the fork's
@@ -138,7 +128,7 @@ package anyparse.grammar.haxe.format;
 	 * policy you want is not `fitLine`.
 	 *
 	 * `fitLine` ALSO makes an object-literal body ignore its source lines, so one that fits collapses onto the line.
-	 * Under `forBody: fitLine` an object-literal body stays on the `for` line unless this key says `keep` or `next`
+	 * Under `forBody: fitLine` an object-literal body stays on the `for` line unless this key says `next`
 	 * (`HaxeFormatConfigLoader.applyComprehensionForPadding`).
 	 */
 	@:optional var comprehensionFor: HxFormatBodyPolicy;

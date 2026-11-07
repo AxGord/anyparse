@@ -162,8 +162,8 @@ final class PendingRunsTest extends Test {
 	/** The batch directories under the scratch root now. */
 	private static function pendingDirs(): Array<String> {
 		return [
-			for (entry in sys.FileSystem.readDirectory(anyparse.core.TempScratch.root())) if (StringTools.startsWith(entry, 'apq-pending-'))
-				entry
+			for (entry in sys.FileSystem.readDirectory(anyparse.core.TempScratch.root()))
+				if (StringTools.startsWith(entry, 'apq-pending-')) entry
 		];
 	}
 	#end

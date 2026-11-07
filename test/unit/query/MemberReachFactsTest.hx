@@ -689,13 +689,12 @@ class MemberReachFactsTest extends Test {
 		}> = withReach(['Main.hx' => main, 'Lib.hx' => lib], null, true, false, null, null, null, true, (reach, dir) -> {
 			final g: CallGraph = reach.graph();
 			[
-				for (e in g.outEdges('Main.run'))
-					{
-						to: e.to,
-						file: Path.withoutDirectory(g.node(e.to)?.file ?? ''),
-						kind: e.kind.label(),
-						placed: e.span != null
-					}
+				for (e in g.outEdges('Main.run')) {
+					to: e.to,
+					file: Path.withoutDirectory(g.node(e.to)?.file ?? ''),
+					kind: e.kind.label(),
+					placed: e.span != null
+				}
 			];
 		});
 		Assert.isTrue(edges.exists(e -> e.to == 'Lib.wrap' && e.kind == 'call' && !e.placed), 'the splice has a site: $edges');
@@ -2095,15 +2094,14 @@ class MemberReachFactsTest extends Test {
 		facts.configurations.push('b.hxml');
 		function listed(names: Array<String>): Array<ReachConfiguration> {
 			return [
-				for (n in names)
-					{
-						name: n,
-						defined: [],
-						everDefined: [],
-						values: [],
-						compiled: [],
-						types: []
-					}
+				for (n in names) {
+					name: n,
+					defined: [],
+					everDefined: [],
+					values: [],
+					compiled: [],
+					types: []
+				}
 			];
 		}
 		Assert.isTrue(FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D y'])), 'the order of the list counted');
@@ -5008,12 +5006,11 @@ class MemberReachFactsTest extends Test {
 		final dir: String = CliFixture.writeTree('reach_facts', entries);
 		final oracles: Array<OracleConfig> =
 			hxmls == null ? [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }] : [
-				for (h in hxmls)
-					{
-						hxml: Path.withoutDirectory(h),
-						dir: Path.directory(h) == '' ? dir : Path.join([dir, Path.directory(h)]),
-						defines: []
-					}
+				for (h in hxmls) {
+					hxml: Path.withoutDirectory(h),
+					dir: Path.directory(h) == '' ? dir : Path.join([dir, Path.directory(h)]),
+					defines: []
+				}
 			];
 		final facts: Null<CompilerFacts> = withFacts ? TypedFactsProbe.probeAll(oracles) : null;
 		final edit: Null<CompilerFacts -> Void> = factsEdit;
@@ -5021,18 +5018,10 @@ class MemberReachFactsTest extends Test {
 		lastDropped = facts == null ? [] : [for (d in facts.dropped) '${d.name}: ${d.reason}'];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final project: Array<{ file: String, source: String }> = [
-			for (name => text in files)
-				{
-					file: Path.join([dir, name]),
-					source: text
-				}
+			for (name => text in files) { file: Path.join([dir, name]), source: text }
 		];
 		final libraries: Array<{ file: String, source: String }> = [
-			for (name => text in library ?? [])
-				{
-					file: Path.join([dir, name]),
-					source: text
-				}
+			for (name => text in library ?? []) { file: Path.join([dir, name]), source: text }
 		];
 		final std: Array<{ file: String, source: String }> = [for (name => text in STD_STAND_INS) { file: name, source: text }];
 		for (name => text in declared ?? []) std.push({ file: name, source: text });

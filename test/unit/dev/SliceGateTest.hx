@@ -632,8 +632,8 @@ final class SliceGateTest extends Test {
 			final read: String -> String = file -> FileSystem.exists(file) ? File.getContent(file) : '';
 			final rowsDir: String = '$tree-logs/rows';
 			final rowLogs: Map<String, String> = FileSystem.exists(rowsDir) ? [
-				for (f in FileSystem.readDirectory(rowsDir)) if (f.endsWith('.json.log'))
-					f.substr(0, f.length - '.json.log'.length) => read(Path.join([rowsDir, f]))
+				for (f in FileSystem.readDirectory(rowsDir))
+					if (f.endsWith('.json.log')) f.substr(0, f.length - '.json.log'.length) => read(Path.join([rowsDir, f]))
 			] : [];
 			ran = {
 				branches: read('$tree-logs/branches.log'),

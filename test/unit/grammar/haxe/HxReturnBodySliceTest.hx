@@ -73,16 +73,11 @@ class HxReturnBodySliceTest extends Test {
 
 	public function testFitLineBreaksLongValue(): Void {
 		final buf: StringBuf = new StringBuf();
-		for (i in 0...200) buf.add('-');
+		for (_ in 0...200) buf.add('-');
 		final longLit: String = '"${buf.toString()}"';
 		final src: String = 'class M { function f():String { return $longLit; } }';
 		final out: String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('return\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');
-	}
-
-	public function testKeepDoesNotForceLayout(): Void {
-		final out: String = writeWith('class M { function f():Int { return 1; } }', BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('return') != -1, 'sanity: `return` present in: <$out>');
 	}
 
 	public function testVoidReturnUnaffected(): Void {
@@ -116,11 +111,6 @@ class HxReturnBodySliceTest extends Test {
 	public function testConfigLoaderMapsReturnBodyNext(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
-	}
-
-	public function testConfigLoaderMapsReturnBodyKeep(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "keep"}}');
-		Assert.equals(BodyPolicy.Keep, opts.returnBody);
 	}
 
 	public function testConfigLoaderMapsReturnBodyFitLine(): Void {

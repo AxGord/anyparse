@@ -483,8 +483,7 @@ final class SuiteImpact {
 					case WholeSuite(_):
 						whole++;
 						null;
-					case Selected(selected):
-						selected;
+					case Selected(selected): selected;
 				};
 				reached = reach[file] ?? continue;
 			}

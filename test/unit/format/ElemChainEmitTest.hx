@@ -23,7 +23,6 @@ final class ElemChainEmitTest extends Test {
 	private static final ONE_PER_LINE: String = '{"wrapping": {"maxLineLength": 60, "casePattern": {"defaultWrap": "onePerLine"}}}';
 	private static final AFTER_FIRST: String =
 		'{"wrapping": {"maxLineLength": 60, "casePattern": {"defaultWrap": "onePerLineAfterFirst"}}}';
-	private static final KEEP: String = '{"wrapping": {"maxLineLength": 60, "casePattern": {"defaultWrap": "keep"}}}';
 	private static final IGNORE: String = '{"wrapping": {"maxLineLength": 60, "casePattern": {"defaultWrap": "ignore"}}}';
 	private static final CURLY_BEFORE: String = '{"wrapping": {"maxLineLength": 40}, "lineEnds": {"leftCurly": "before"}}';
 	private static final CURLY_BEFORE_LEADING: String = '{"wrapping": {"maxLineLength": 40, "casePattern": {"defaultWrap": "fillLine", '
@@ -183,25 +182,13 @@ final class ElemChainEmitTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-CASE-PATTERN-KEEP-CLEARS-RULES')
-	public function testKeepStaysOnTheBuiltInRules(): Void {
-		assertLabel('$WIDE_A,\n\t\t\t\t$WIDE_B, $WIDE_C', KEEP, 'case $WIDE_A,\n\t\t\t\t$WIDE_B,\n\t\t\t\t$WIDE_C:');
-	}
-
-	@:pin('control')
-	@:killer('M-CASE-PATTERN-KEEP-CLEARS-RULES')
+	@:killer('M-CASE-PATTERN-IGNORE-CLEARS-RULES')
 	public function testIgnoreStaysOnTheBuiltInRules(): Void {
 		assertLabel('$WIDE_A,\n\t\t\t\t$WIDE_B, $WIDE_C', IGNORE, 'case $WIDE_A,\n\t\t\t\t$WIDE_B,\n\t\t\t\t$WIDE_C:');
 	}
 
 	@:pin('control')
-	@:killer('M-ELEM-CHAIN-TAKES-KEEP')
-	public function testKeepLeavesAlternativesInTheirElement(): Void {
-		assertLabel('$WIDE_A | $WIDE_B | $WIDE_C', KEEP, 'case $WIDE_A\n\t\t\t\t| $WIDE_B\n\t\t\t\t| $WIDE_C:');
-	}
-
-	@:pin('control')
-	@:killer('M-ELEM-CHAIN-TAKES-KEEP')
+	@:killer('M-ELEM-CHAIN-TAKES-IGNORE')
 	public function testIgnoreLeavesAlternativesInTheirElement(): Void {
 		assertLabel('$WIDE_A | $WIDE_B | $WIDE_C', IGNORE, 'case $WIDE_A\n\t\t\t\t| $WIDE_B\n\t\t\t\t| $WIDE_C:');
 	}

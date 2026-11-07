@@ -96,18 +96,15 @@ final class CppLiteralGuard {
 			case ESwitch(subject, cases, fallback):
 				for (c in cases) for (value in c.values) strand(value, stranded);
 				final rewritten: Array<Case> = [
-					for (c in cases)
-						{
-							values: c.values,
-							guard: c.guard == null ? null : rewrite(c.guard, stranded),
-							expr: c.expr == null ? null : rewrite(c.expr, stranded)
-						}
+					for (c in cases) {
+						values: c.values,
+						guard: c.guard == null ? null : rewrite(c.guard, stranded),
+						expr: c.expr == null ? null : rewrite(c.expr, stranded)
+					}
 				];
 				{ expr: ESwitch(rewrite(subject, stranded), rewritten, fallback == null ? null : rewrite(fallback, stranded)), pos: e.pos };
-			case ECall({ expr: EConst(CIdent('__cpp__')) }, _):
-				e;
-			case _:
-				ExprTools.map(e, x -> rewrite(x, stranded));
+			case ECall({ expr: EConst(CIdent('__cpp__')) }, _): e;
+			case _: ExprTools.map(e, x -> rewrite(x, stranded));
 		}
 	}
 

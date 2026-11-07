@@ -97,13 +97,12 @@ final class Parity {
 			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads, oneProcessFor(base, oneProcess));
 			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads, oneProcessFor(tip, oneProcess));
 			[
-				for (i => invocation in invocations)
-					{
-						invocation: invocation,
-						base: before[i],
-						tip: after[i],
-						differences: differences(before[i], after[i])
-					}
+				for (i => invocation in invocations) {
+					invocation: invocation,
+					base: before[i],
+					tip: after[i],
+					differences: differences(before[i], after[i])
+				}
 			];
 		});
 	}
@@ -202,14 +201,13 @@ final class Parity {
 			Pool.of(threads).run(commands);
 		};
 		return [
-			for (i => result in results)
-				{
-					status: result.status,
-					out: result.out,
-					err: result.err,
-					failure: result.failure,
-					files: snapshot(dirs[i], '')
-				}
+			for (i => result in results) {
+				status: result.status,
+				out: result.out,
+				err: result.err,
+				failure: result.failure,
+				files: snapshot(dirs[i], '')
+			}
 		];
 	}
 

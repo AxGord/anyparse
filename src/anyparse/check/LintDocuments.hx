@@ -199,8 +199,7 @@ final class LintDocuments {
 	 */
 	private static function parseRule(raw: JValue): Null<RuleConfig> {
 		return switch raw {
-			case JBool(v):
-				{ enabled: v, props: [] };
+			case JBool(v): { enabled: v, props: [] };
 			case JObject(entries):
 				var enabled: Null<Bool> = null;
 				var severity: Null<Severity> = null;

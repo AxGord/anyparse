@@ -266,12 +266,7 @@ final class LambdaLoopScan {
 		final usingEdit: Null<{ span: Span, text: String }> = UsingScan.insertUnlessCovered(header, LAMBDA_MODULE, rewrites, violations);
 		if (usingEdit == null) return [];
 		final grouped: Array<GroupedEdit> = [
-			for (i in 0...rewrites.length)
-				{
-					span: rewrites[i].span,
-					text: rewrites[i].text,
-					group: extensionForm[i] ? USING_GROUP : null
-				}
+			for (i in 0...rewrites.length) { span: rewrites[i].span, text: rewrites[i].text, group: extensionForm[i] ? USING_GROUP : null }
 		];
 		grouped.push({ span: usingEdit.span, text: usingEdit.text, group: USING_GROUP });
 		return grouped;

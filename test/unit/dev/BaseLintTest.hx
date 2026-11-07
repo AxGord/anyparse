@@ -127,10 +127,8 @@ final class BaseLintTest extends Test {
 			Assert.isTrue(BaseLint.plan(gate));
 			later('sleep 1 && printf "no engine" > ${gate.log(BaseLint.UNREAD)} && rm ${gate.log(BaseLint.PENDING)}');
 			switch new GateLint(gate).infraOutcome() {
-				case NotRun(why):
-					Assert.stringContains('no engine', why);
-				case other:
-					Assert.fail('$other');
+				case NotRun(why): Assert.stringContains('no engine', why);
+				case other: Assert.fail('$other');
 			}
 		}));
 	}
@@ -194,10 +192,8 @@ final class BaseLintTest extends Test {
 			Assert.isTrue(warming.ended().match(Passed));
 			Assert.isFalse(BaseLint.plan(gate), 'the warm kept the report');
 			switch BaseLint.read(gate) {
-				case Got(report):
-					Assert.equals('[]', File.getContent(report).trim());
-				case NotGot(why):
-					Assert.fail(why);
+				case Got(report): Assert.equals('[]', File.getContent(report).trim());
+				case NotGot(why): Assert.fail(why);
 			}
 		}));
 	}

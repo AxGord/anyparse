@@ -544,10 +544,11 @@ final class OptionalParamShorthand extends RuleBase {
 		final message: Null<String> = switch arm {
 			case NullDefault(shape): 'prefer ?$name:${shape.inner} over ${shape.opt ? '?' : ''}$name:${shape.raw} = null';
 			case _ if (!isSigilDropSafe(site.fn, site.fnParent, name, seams)): null;
-			case RedundantSigil(rawType): 'drop the redundant ? on ?$name:$rawType'
-				+ ' - a non-null default already makes the parameter optional, and the ? widens its body type to Null<$rawType>';
-			case Hoist(plan): 'prefer $name:${plan.typeText} = ${plan.constText} over ?$name:${plan.rawType}'
-				+ ' with $name ?? ${plan.constText}';
+			case RedundantSigil(rawType):
+				'drop the redundant ? on ?$name:$rawType'
+					+ ' - a non-null default already makes the parameter optional, and the ? widens its body type to Null<$rawType>';
+			case Hoist(plan):
+				'prefer $name:${plan.typeText} = ${plan.constText} over ?$name:${plan.rawType}' + ' with $name ?? ${plan.constText}';
 		}
 		if (message == null) return;
 		// Re-bound to a non-null local — see above.

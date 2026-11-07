@@ -403,10 +403,9 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 		if (after == null || after.length != links.length || bareBranches(after, site.seams).length > 0) return false;
 		final before: Array<QueryNode> = bareBranches(links, site.seams);
 		final braced: Array<QueryNode> = [
-			for (i => link in after) for (b in [THEN_BRANCH_INDEX, ELSE_BRANCH_INDEX]) if (
-				b < link.children.length && before.contains(links[i].children[b])
-			)
-				link.children[b]
+			for (i => link in after)
+				for (b in [THEN_BRANCH_INDEX, ELSE_BRANCH_INDEX])
+					if (b < link.children.length && before.contains(links[i].children[b])) link.children[b]
 		];
 		return braced.length == before.length && [
 			for (i => block in braced) block.children.length == 1 && block.children[0].kind == before[i].kind

@@ -218,22 +218,21 @@ final class CallReturns {
 		return index.typing.cache.callArguments.answer(
 			key,
 			() -> [
-				for (a in args)
-					if (a.kind == c.shape.nullLiteralKind) {
-						NullValue;
-					} else {
-						final own: IndexTyping = {
-							root: c.root,
-							shape: c.shape,
-							declaredTypes: c.declaredTypes,
-							chain: c.chain,
-							index: index,
-							file: c.file,
-							seen: []
-						};
-						final text: Null<String> = TypingService.typeWalk(a, c.shape, argumentHost(), own);
-						text == null ? Untyped : argumentOf(text, fi, site.from, params, c);
-					}
+				for (a in args) if (a.kind == c.shape.nullLiteralKind) {
+					NullValue;
+				} else {
+					final own: IndexTyping = {
+						root: c.root,
+						shape: c.shape,
+						declaredTypes: c.declaredTypes,
+						chain: c.chain,
+						index: index,
+						file: c.file,
+						seen: []
+					};
+					final text: Null<String> = TypingService.typeWalk(a, c.shape, argumentHost(), own);
+					text == null ? Untyped : argumentOf(text, fi, site.from, params, c);
+				}
 			]
 		);
 	}

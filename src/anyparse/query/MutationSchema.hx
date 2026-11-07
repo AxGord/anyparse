@@ -310,8 +310,8 @@ final class MutationSchema {
 				bodyOpen: bodySpan.from,
 				modifiers: modifiers,
 				params: [
-					for (child in member.children) if (PARAM_KINDS.contains(child.kind))
-						(child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
+					for (child in member.children)
+						if (PARAM_KINDS.contains(child.kind)) (child.kind == 'Rest' ? '...' : '') + (child.name ?? '')
 				],
 				copyAt: parent == owner ? closing : span.to,
 				closing: closing,

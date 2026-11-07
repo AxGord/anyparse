@@ -44,10 +44,8 @@ class HxCondDeclPrefixKeywordSliceTest extends HxTestHelpers {
 			case Conditional(inner):
 				Assert.equals(1, inner.body.length);
 				switch inner.body[0] {
-					case AbstractKw:
-						Assert.pass();
-					case _:
-						Assert.fail('expected AbstractKw, got ${inner.body[0]}');
+					case AbstractKw: Assert.pass();
+					case _: Assert.fail('expected AbstractKw, got ${inner.body[0]}');
 				}
 			case _:
 				Assert.fail('expected Conditional, got ${ast.decls[0].meta[0]}');

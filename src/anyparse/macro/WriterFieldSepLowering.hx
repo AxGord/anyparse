@@ -53,15 +53,7 @@ final class WriterFieldSepLowering {
 	 * Without `@:fmt(sameLine(...))` metadata, emits a plain space (`_dt(' ')`) —
 	 * the existing D61 behaviour. With `@:fmt(sameLine("flagName"))`, emits a
 	 * switch on `opt.<flagName>:SameLinePolicy` picking between space
-	 * (`Same`), hardline (`Next`), and a runtime slot lookup (`Keep`).
-	 *
-	 * ω-keep-policy: when the field is an `@:optional @:kw(...)` Ref AND
-	 * the writer runs in trivia mode, the field's synth
-	 * `<fieldName>BeforeKwNewline:Bool` slot drives the `Keep` branch —
-	 * `true` emits a hardline (source had the kw on its own line),
-	 * `false` emits a space (source had the kw inline with the preceding
-	 * token). Plain mode / non-kw fields don't carry the slot, so `Keep`
-	 * degrades to `Same`.
+	 * (`Same`) and hardline (`Next`).
 	 *
 	 * ψ₉ opt-in shape-awareness via `@:fmt(shapeAware)`: when the field also
 	 * carries the `@:fmt(shapeAware)` meta AND `prevBody` is non-null (the
@@ -80,8 +72,7 @@ final class WriterFieldSepLowering {
 	 * Consumed by the two struct-field sites (non-optional kw, optional
 	 * Ref/lead) for the boundary between a field and the preceding token. The try-parse Star
 	 * `@:fmt(sameLine(...))` site in `emitWriterStarField` has its own inline
-	 * handler (per-element separator, different semantic) and routes
-	 * `Keep` to `Same` since there is no per-element source-shape slot.
+	 * handler (per-element separator, different semantic).
 	 */
 	private static function sameLineSeparator(
 		ctx: FieldSepCtx, child: ShapeNode, prevBody: Null<PrevBodyInfo>, typePath: String, ?prevPadTrailing: Expr
@@ -109,30 +100,7 @@ final class WriterFieldSepLowering {
 		// last body element still ends with a hardline).
 		if (flagName == null) return withPadTrailingDrop(prevPadTrailing, macro _dossh());
 		final optFlag: Expr = optFieldAccess(flagName);
-		final fieldName: Null<String> = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
-		// only exists on the synth paired `*T` type of trivia-bearing enclosing
-		// rules. Non-bearing rules with `@:optional @:kw @:fmt(sameLine(...))`
-		// would otherwise hit an EField on a nonexistent slot. No current
-		// grammar triggers this combo (first non-bearing `@:optional @:kw` is
-		// `HxIfExpr.elseBranch`, which has no `@:fmt(sameLine)`), but closing
-		// the gap preemptively avoids recurrence of the Lowering fix pattern.
-		final hasKeepSlot: Bool = ctx.ctx.trivia
-			&& ctx.isTriviaBearing(typePath)
-			&& fieldName != null
-			&& child.kind == Ref
-			&& child.annotations[AnnotationKeys.BASE_OPTIONAL] == true
-			&& child.readMetaString(':kw') != null;
-		final keepExpr: Expr = if (hasKeepSlot) {
-			final slotAccess: Expr = {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-				pos: Context.currentPos()
-			};
-			macro ($slotAccess ? _dhl() : _dt(' '));
-		} else {
-			macro _dt(' ');
-		};
-		final flagBased: Expr = sameLinePolicySwitch(optFlag, keepExpr);
+		final flagBased: Expr = sameLinePolicySwitch(optFlag);
 		if (prevBody == null || !child.fmtHasFlag('shapeAware')) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		// ω-same-on-block: the block arm splits by the DELIMITER the branch opens
 		// with, because `SameLinePolicy.SameOnBlock` promises a cuddle after a `}`
@@ -153,7 +121,7 @@ final class WriterFieldSepLowering {
 		if (curlyPatterns.length > 0) cases.push({ values: curlyPatterns, expr: flagBased, guard: null });
 		if (otherBlockPatterns.length > 0) cases.push({
 			values: otherBlockPatterns,
-			expr: sameLineNonCurlyBlockPolicySwitch(optFlag, keepExpr),
+			expr: sameLineNonCurlyBlockPolicySwitch(optFlag),
 			guard: null
 		});
 		cases.push({ values: [macro _], expr: macro _dhl(), guard: null });
@@ -163,7 +131,7 @@ final class WriterFieldSepLowering {
 		// hardline the `_` arm above forces on every non-block ctor would leave
 		// the keyword stranded under a close it is flush with. The verdict comes
 		// from the previous FIELD (`PrevBodyInfo.headGlue`), never from this
-		// field's meta: at `next` / `keep`, on a field the knob does not arm, and
+		// field's meta: at `next`, on a field the knob does not arm, and
 		// under a captured comment that declined the glue, the same `switch` sits
 		// one indent deeper and the hardline is the right answer. Routed to
 		// `flagBased` rather than to a bare space so a glued close reads the same
@@ -175,9 +143,7 @@ final class WriterFieldSepLowering {
 			prevBody: prevBody,
 			prevPadTrailing: prevPadTrailing,
 			flagBased: flagBased,
-			shapeAwareSwitch: shapeAwareSwitch,
-			hasKeepSlot: hasKeepSlot,
-			fieldName: fieldName
+			shapeAwareSwitch: shapeAwareSwitch
 		});
 	}
 
@@ -206,12 +172,9 @@ final class WriterFieldSepLowering {
 		} : null;
 		// omega-bracket-body-glue CLOSE side: the gap before a keyword whose PRECEDING
 		// sibling is a body the knob hugs to its head. `HxIfExpr.elseBranch` is the one
-		// consumer — `sameLineExpressionElse` resolves to `Keep` under
-		// `expressionIf: next`, so the gap answers from the source, and a source that
-		// wrote `];` on its own line keeps `else` on the next one forever. Turning the
-		// knob on is the explicit statement that this shape closes with `] else`, the
-		// mirror of the `if (c) [` it already opens with. Layered OUTSIDE
-		// `sameLineSeparator` so the `Keep` slot, the `shapeAware` switch and the
+		// consumer. Turning the knob on is the explicit statement that this shape
+		// closes with `] else`, the mirror of the `if (c) [` it already opens with.
+		// Layered OUTSIDE `sameLineSeparator` so the `shapeAware` switch and the
 		// `padTrailing` drop keep their exact bytes for every other field, and INSIDE the
 		// comment layers below so a captured own-line comment still replaces the gap.
 		final sepPlainExpr: Expr = sameLineSeparator(ctx, child, prevBodyField, typePath, prevPadTrailing);
@@ -339,10 +302,8 @@ final class WriterFieldSepLowering {
 		// line. The child's runtime layout is driven by `opt.<bodyPolicy>`:
 		//  - `Same` — body is forced inline → else-break is wrong, fall to
 		//    flagBased (sameLineElse drives the gap).
-		//  - `Keep` + slot says source had body inline (`!BeforeKwNewline`)
-		//    → body is inline → suppress, fall to flagBased.
-		//  - `Next` / `FitLine` / `Keep`+slot=broken — body sits on its own
-		//    line → keep the pre-slice shape-break.
+		//  - `Next` / `FitLine` — body sits on its own line → keep the
+		//    pre-slice shape-break.
 		// Default `elseBody=Next` keeps existing behaviour. Without this
 		// gate, fanning `elseBody` to `expressionCase` inside a flat case
 		// body would still produce `if (cond) body;\n\telse elseBody;`
@@ -370,16 +331,7 @@ final class WriterFieldSepLowering {
 			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
 		};
 		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-		final keepPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
-		final isInlineExpr: Expr = if (c.hasKeepSlot) {
-			final slotAccess: Expr = {
-				expr: EField(macro value, c.fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-				pos: Context.currentPos()
-			};
-			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
-		} else {
-			macro $bpAccess == $samePat;
-		};
+		final isInlineExpr: Expr = macro $bpAccess == $samePat;
 		// ω-ifelse-semicolon-next-line: when the body is forced inline
 		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
 		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a

@@ -103,22 +103,20 @@ final class HaxeFormat implements TextFormat {
 	 * Default `WriteOptions` for Haxe output: tab indent, 4-column tab width, terminal newline, each value the initializer of its
 	 * `HxModuleWriteOptions` field. Generated Haxe writers use this record when the caller omits the `options` argument to `write()`.
 	 *
-	 * Every default mirrors haxe-formatter's `@:default` for the same key EXCEPT the eight
-	 * source-preserving compiled defaults — `ifBody` / `elseBody` / `forBody` / `whileBody` /
-	 * `doBody` / `caseBody` are `Keep` (fork: `Next`) and `afterLeftCurly` / `beforeRightCurly`
-	 * are `Keep` (fork: `Remove`) — so a file with NO discoverable `hxformat.json` keeps the
-	 * shape its author wrote; `HaxeFormatConfigLoader.loadHxFormatJson` re-baselines those eight
-	 * to the fork value before applying any key, so any loaded config, even `{}`, formats the
-	 * way the fork formats. `expressionForBody` is `Keep` (fork `Same`; see
-	 * `HxFormatSameLineSection`). The other deliberate divergences, each a decision:
+	 * Every default mirrors haxe-formatter's `@:default` for the same key EXCEPT eight compiled
+	 * defaults a file with NO discoverable `hxformat.json` gets: `ifBody` / `elseBody` / `forBody` /
+	 * `whileBody` / `doBody` / `caseBody` are `FitLine` (fork: `Next`) and `afterLeftCurly` /
+	 * `beforeRightCurly` are `Keep` (fork: `Remove`). `HaxeFormatConfigLoader.loadHxFormatJson`
+	 * re-baselines those eight to the fork value before applying any key, so any loaded config, even
+	 * `{}`, formats the way the fork formats. No body or keyword placement reads the source layout.
+	 * The other deliberate divergences, each a decision:
 	 *
 	 * - `returnBody` is `FitLine` where the fork says `Same` — the fork's `Same` wraps long
 	 *   values via its separate `wrapping.maxLineLength` pass, which corresponds to our `FitLine`.
 	 * - `throwBody` is `Same` — the fork has no `throwBody` knob and leaves `throw <expr>` inline
 	 *   regardless of length, deferring any wrap to the value's own chain / fill rules.
-	 * - `expressionCase` is `Keep` where the fork says `Same` — `Keep` gates on source
-	 *   same-line-ness, so a multi-line source body keeps its `VarStmt` `@:trailOpt(';')`
-	 *   cascade instead of collapsing.
+	 * - `expressionCase` and `expressionForBody` (`sameLine.comprehensionFor`) are `FitLine`, and
+	 *   `elseSwitch` is `Same` (its `fitLine`), where the fork reads the source (`keep`) or says `same`.
 	 * - `leftCurly` exposes only `Same` / `Next` — the fork's `Before` / `Both` collapse to `Next`,
 	 *   and its inline `None` shape is not modelled. Each of the three globals (`leftCurly`,
 	 *   `emptyCurly`, `rightCurly`) cascades into its own per-construct knobs, a per-construct

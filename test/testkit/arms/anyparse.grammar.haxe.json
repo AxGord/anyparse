@@ -7,16 +7,16 @@
 			"name": "M-ALWAYS-NEXT",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
-			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
-			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Next);",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Next, opt.expressionForBody);",
 			"note": "every value of sameLine.comprehensionFor becomes `next`, so a body the key asked to keep on the head line leaves it"
 		},
 		{
 			"name": "M-ALWAYS-SAME",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
-			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
-			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Same);",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Same, opt.expressionForBody);",
 			"note": "every value of sameLine.comprehensionFor becomes `same`, so `keep` stops reproducing the source break"
 		},
 		{
@@ -25,11 +25,11 @@
 			"method": "applySameLine",
 			"find": [
 				"applyExpressionIfFanout(section, opt);",
-				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);"
+				"opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);"
 			],
 			"replace": [
-				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);\n\tapplyExpressionIfFanout(section, opt);",
-				""
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);\n\tapplyExpressionIfFanout(section, opt);",
+				"{}"
 			],
 			"note": "the specific comprehensionFor key is read BEFORE the general expressionIf fanout, so the fanout clobbers it — the S77 precedence PERMUTED, which is what its note asked for and what one find/replace pair could not express"
 		},
@@ -45,17 +45,17 @@
 			"name": "M-NO-WIRE",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",
-			"find": "if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor);",
-			"replace": "",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "{}",
 			"note": "the one read that wires sameLine.comprehensionFor is gone, so the key goes back to the inert state S77 found it in"
 		},
 		{
-			"name": "M-EXPR-ELSE-KEEP",
+			"name": "M-EXPR-ELSE-NEXT",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyExpressionIfFanout",
 			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
-			"replace": "case BodyPolicy.Next: SameLinePolicy.Keep;",
-			"note": "`sameLine.expressionIf: next` maps the else-gap back to `Keep`, so a value-`if` with a `{ … }` branch reproduces whatever break the source wrote while its statement twin joins"
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Next;",
+			"note": "`sameLine.expressionIf: next` maps the else-gap to `Next`, so a value-`if` with a `{ … }` branch puts its `else` on the line after the `}` while its statement twin joins"
 		},
 		{
 			"name": "M-EXPR-ELSE-PLAIN-SAME",
@@ -64,14 +64,6 @@
 			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
 			"replace": "case BodyPolicy.Next: SameLinePolicy.Same;",
 			"note": "the refuted cheap fix, wired as an arm: `next` maps onto a plain `Same`, so the shape-aware bracket arm joins an `else` onto a `]` and the curly `;` drop stops firing"
-		},
-		{
-			"name": "M-KEEP-JOINS",
-			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
-			"method": "applyExpressionIfFanout",
-			"find": "case BodyPolicy.Keep: SameLinePolicy.Keep;",
-			"replace": "case BodyPolicy.Keep: SameLinePolicy.SameOnBlock;",
-			"note": "`sameLine.expressionIf: keep` stops meaning keep for the else-gap and joins a break the config asked to preserve"
 		},
 		{
 			"name": "M-ELSE-BODY-SAME",
@@ -815,11 +807,11 @@
 			"note": "a `casePattern` block naming `defaultWrap` still runs the built-in rules, so that default and its location never answer"
 		},
 		{
-			"name": "M-CASE-PATTERN-KEEP-CLEARS-RULES",
+			"name": "M-CASE-PATTERN-IGNORE-CLEARS-RULES",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "casePatternClearsRules",
 			"force": "true",
-			"note": "`keep` and `ignore` drop the built-in rules, and the plain list then writes one flat line past the limit"
+			"note": "`ignore` drops the built-in rules, and the plain list then writes one flat line past the limit"
 		},
 		{
 			"name": "M-OBJLIT-GLUE-FORBODY-OFF",
@@ -833,16 +825,16 @@
 			"name": "M-OBJLIT-GLUE-ABSENT-KEY",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyComprehensionForPadding",
-			"find": "comprehensionFor == null || ",
-			"replace": "",
+			"find": "&& comprehensionFor != HxFormatBodyPolicy.Next",
+			"replace": "&& comprehensionFor != null && comprehensionFor != HxFormatBodyPolicy.Next",
 			"note": "an absent comprehensionFor stops deferring to forBody, though it means the same default"
 		},
 		{
 			"name": "M-OBJLIT-GLUE-EVERY-VALUE",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyComprehensionForPadding",
-			"find": "comprehensionFor == null || ",
-			"replace": "true || ",
+			"find": "&& comprehensionFor != HxFormatBodyPolicy.Next",
+			"replace": "&& true",
 			"note": "forBody overrides a comprehensionFor of keep or next, which place the body themselves"
 		},
 		{
@@ -884,6 +876,30 @@
 			"find": "opt.enumAbstractBeginTypeIfDocComments = section.enumAbstractEmptyLines?.beginTypeIfDocComments",
 			"replace": "opt.enumAbstractBeginTypeIfDocComments = null",
 			"note": "`enumAbstractEmptyLines.beginTypeIfDocComments` is dropped on load, so an enum abstract holding a doc comment gets no blank after its `{`"
+		},
+		{
+			"name": "M-SAMELINE-KEEP-UNREPORTED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "collectSameLineKeep",
+			"find": "if (isKeep(value))",
+			"replace": "if (false)",
+			"note": "a sameLine key stating keep loads as its default and no line says so"
+		},
+		{
+			"name": "M-KEEP-CLAUSE-SILENT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "message",
+			"find": "if (issues.unsupported.length > 0)",
+			"replace": "if (false)",
+			"note": "the report finds the keep settings and prints nothing about them"
+		},
+		{
+			"name": "M-BODY-KEEP-NOT-DEFAULT",
+			"type": "anyparse.grammar.haxe.HaxeFormatValues",
+			"method": "bodyPolicyToRuntime",
+			"find": "case HxFormatBodyPolicy.Keep: current;",
+			"replace": "case HxFormatBodyPolicy.Keep: BodyPolicy.Same;",
+			"note": "an unsupported keep body policy overrides the knob instead of leaving its default"
 		}
 	]
 }

@@ -137,7 +137,7 @@
 			"name": "M-NONCURLY-SAME-DROP",
 			"type": "anyparse.macro.WriterPolicyLowering",
 			"method": "sameLineNonCurlyBlockPolicySwitch",
-			"force": "sameLinePolicySwitch(optFlag, keepExpr)",
+			"force": "sameLinePolicySwitch(optFlag)",
 			"note": "a `[ … ]` block ctor separator falls back to the curly switch, where `SameOnBlock` matches no case and lands on the default space - so a bracket branch the `next` layout moved to its own line glues its `else` to the `]` (`[1] else if (b)` / `[] else`)"
 		},
 		{
@@ -227,22 +227,6 @@
 			"note": "the loop-body `if`/`else` shape stops substituting `Next` for the placement, so `loopBodyIfElseNext` is inert at every `forBody` / `whileBody` / `doWhileBody` value and the reported site glues again"
 		},
 		{
-			"name": "M-LOOPIF-KEEP-BLIND",
-			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildBodyCoreWrap",
-			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
-			"replace": "return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
-			"note": "the outer `Keep` switch reads the raw placement again, so a `keep` body routes to the source-preserving layout before any substitution can be seen - the S157 blind spot at `loopBodyIfElseNext`, and since S154 the bracket-hug substitution too, which is why `M-BRACKET-GLUE-KEEP-BLIND` cuts the same line one substitution narrower"
-		},
-		{
-			"name": "M-BRACKET-GLUE-KEEP-BLIND",
-			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildBodyCoreWrap",
-			"find": "return { expr: ESwitch(policyFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
-			"replace": "return { expr: ESwitch(loopPolicy, outerKeepCases, bodySwitch), pos: Context.currentPos() };",
-			"note": "the outer `Keep` switch reads the placement from before the bracket substitution, so `expressionIfWithBrackets` goes blind at `sameLine.expressionIf: keep` and only there - the knob still cuddles `] else` through its two close seams and refuses the `[` hug, which is the half shape it exists to prevent"
-		},
-		{
 			"name": "M-COND-KIND-NAME-CONVENTION",
 			"type": "anyparse.macro.QueryWalkerLowering",
 			"method": "condKindsReaching",
@@ -269,7 +253,7 @@
 			"name": "M-ELSE-SWITCH-TESTS-NONE",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildElseSwitchTests",
-			"find": "final cases: Array<Case> = buildElseSwitchCases(bp, opts, macro true, macro false);",
+			"find": "final cases: Array<Case> = buildElseSwitchCases(bp, opts);",
 			"replace": "final cases: Array<Case> = [];",
 			"note": "the `elseSwitch` knob contributes no case, so the policy selector never substitutes and `same` leaves the `switch` on its own line whatever the config asked for"
 		},
@@ -393,20 +377,12 @@
 			"note": "the semicolon-next-line `else` rule stops asking whether it is at expression position, so a value-`if` inside a case body is governed by the statement rule"
 		},
 		{
-			"name": "M-KEEP-ELSEIF-NEXT-OFF",
+			"name": "M-ELSEIF-NEXT-OFF",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildBodyKeepLayout",
-			"find": "\tfinal elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];\n\tfinal elseIfSwitchForKeep: Expr = {",
-			"replace": "\tfinal elseIfCases: Array<Case> = [];\n\tfinal elseIfSwitchForKeep: Expr = {",
-			"note": "the Keep layout stops honouring `elseIf: next`, so a nested `if` under a source-preserved `else` keeps whatever line the source wrote instead of moving to its own"
-		},
-		{
-			"name": "M-KEEP-ELSEIF-ALWAYS-GLUED",
-			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildBodyKeepLayout",
-			"find": "\t\texpr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),",
-			"replace": "\t\texpr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),",
-			"note": "the Keep layout glues every `IfStmt` else body onto the `else` line instead of falling back to the source-preserved gap, so a comment-led `else` / `if` pair loses its break"
+			"method": "buildBodyCoreWrap",
+			"find": "final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null }];",
+			"replace": "final elseIfCases: Array<Case> = [];",
+			"note": "the body wrap stops honouring `elseIf: next`, so a nested `if` under `else` stays glued to its keyword"
 		},
 		{
 			"name": "M-BEFORE-KW-TRAILING-DROP",
@@ -948,36 +924,12 @@
 			"note": "the span info records no return type source, so no signature reads one"
 		},
 		{
-			"name": "M-PAREN-KEPT-CHAIN-OPENS",
-			"type": "anyparse.macro.WriterKwRefLowering",
-			"method": "opAddSubParenShape",
-			"find": "opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep",
-			"replace": "false",
-			"note": "a `keep` chain its source broke opens the paren its source glued again, adding a break after `(` and before `)` the source does not have"
-		},
-		{
-			"name": "M-PAREN-KEPT-CHAIN-SOURCE-NEST",
-			"type": "anyparse.macro.WriterKwRefLowering",
-			"method": "opAddSubParenShape",
-			"find": "? _dc([$leadDoc, _wrapInner, _wrapTrail])",
-			"replace": "? (opt._varKwNewline ? _dc([$leadDoc, _wrapInner, _wrapTrail]) : _dn(_cols, _dc([$leadDoc, _wrapInner, _wrapTrail])))",
-			"note": "the glued paren nests its kept chain by the SOURCE break after `return`, which the `return` policy may drop or add, so one write is no longer a fixed point"
-		},
-		{
 			"name": "M-CATCH-BLOCK-LINE-END-GLUED",
 			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
 			"method": "buildCloseTrailingFirstSepOverride",
 			"find": "guard: macro _ct != null && _t.newlineBefore",
 			"replace": "guard: macro false",
 			"note": "a block comment that ended its source line after the try body's `}` glues the first `catch` onto its line again under a same-line policy"
-		},
-		{
-			"name": "M-PAREN-KEPT-CHAIN-OPERAND",
-			"type": "anyparse.macro.WriterKwRefLowering",
-			"method": "opAddSubParenShape",
-			"find": "&& anyparse.format.wrap.WrapList.breaksAtOwnAddSubOperator(_wrapInner)",
-			"replace": "&& anyparse.format.wrap.WrapList.flatLength(_wrapInner) < 0",
-			"note": "a kept chain broken only inside an operand (an array one item per line) counts as one its source broke, so its paren stays glued instead of opening"
 		},
 		{
 			"name": "M-TRAIL-FORCEMULTI-UNGATED",
@@ -1130,14 +1082,6 @@
 			"find": "_ownLine && _t.leadingComments.length == 0",
 			"replace": "_ownLine",
 			"note": "a sep-list element already led by a comment moves its trailing one too, so the next pass reads a longer leading list"
-		},
-		{
-			"name": "M-TCO-FIELD-OWN-LINE-IGNORED",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepForceMultiLineExpr",
-			"find": "!_noWrapFlatten && (!_keepEmit || _t.newlineBefore)",
-			"replace": "true",
-			"note": "a Keep-mode element glued to the open delimiter moves its comment, which then trails the delimiter instead of standing above the element"
 		},
 		{
 			"name": "M-TCO-ARG-KNOB-IGNORED",
@@ -1936,6 +1880,14 @@
 			"find": "anyparse.format.wrap.WrapList.namedThresholdLiteral($bodyCall, true)",
 			"replace": "$bodyCall",
 			"note": "an arrow measures its body literal flat, so a literal body that breaks moves below the arrow on the first write and glues to it on the next"
+		},
+		{
+			"name": "M-FIT-DROPS-KW-COMMENT",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "fitYieldsToKwComments",
+			"find": "return !shared.hasKwSlots ||",
+			"replace": "return true ||",
+			"note": "the FitLine body layout never reads the keyword's comment slots, so `else // c` before a non-block body loses its comment"
 		}
 	]
 }

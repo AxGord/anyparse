@@ -249,13 +249,6 @@ final class HxCaseBodyControlFlowGlueTest extends Test {
 		}
 	}
 
-	/** Under a non-`FitLine` policy the whole path is unreachable, so the source shape survives untouched. */
-	public function testKnobOffIsInert(): Void {
-		final keep: String = write(BLOCK_IF_SRC, '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "keep"}}');
-		Assert.isTrue(keep.indexOf('case A: if (c) {') != -1, 'Keep preserves the source shape: <$keep>');
-		Assert.isTrue(keep.indexOf('case _: bb();') != -1, '<$keep>');
-	}
-
 	private inline function json(maxLineLength: Int): String {
 		return '{"wrapping": {"maxLineLength": $maxLineLength}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}}';
 	}

@@ -64,10 +64,11 @@ final class CompilerNameProof implements NameOracle {
 		final journal: EditJournal = new EditJournal();
 		journal.record(before, edits, after);
 		return [
-			for (j => row in asked) agreed(
-				row, config -> pairAt(answers[configs.indexOf(config)], sitesOf[configs.indexOf(config)].indexOf(j)),
-				(was, now) -> namesOnePlace(was, now, file, before, after, journal)
-			)
+			for (j => row in asked)
+				agreed(
+					row, config -> pairAt(answers[configs.indexOf(config)], sitesOf[configs.indexOf(config)].indexOf(j)),
+					(was, now) -> namesOnePlace(was, now, file, before, after, journal)
+				)
 		];
 	}
 

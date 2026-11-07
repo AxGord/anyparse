@@ -132,7 +132,7 @@ final class BodyFitChainHeadGateTest extends Test {
 		final src: String = 'class G {\n\tfunction f() {\n\t\tfinal out:Array<QueryNode> = [$line];\n\t}\n}\n';
 		final json: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak",'
 			+ ' "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}},'
-			+ ' "sameLine": {"ifBody": "fitLine", "forBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+			+ ' "sameLine": {"ifBody": "fitLine", "forBody": "fitLine", "expressionIf": "next"}}';
 		final out: String = write(src, json);
 		Assert.isTrue(out.indexOf('\t\t\t$line\n') != -1, 'a comprehension chain that fits must stay on one line: <$out>');
 	}

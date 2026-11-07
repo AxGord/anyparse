@@ -121,10 +121,9 @@ final class ExhaustiveSwitches {
 	/** The bare names the patterns of the case `branch` match, its guard-free `Plain` patterns only. */
 	private function plainValues(branch: QueryNode): Array<String> {
 		return [
-			for (p in branch.children) if (
-				p.kind == _shape.plainCasePatternKind && p.children.length == 1 && p.children[0].kind == _shape.identKind
-			)
-				p.children[0].name ?? ''
+			for (p in branch.children)
+				if (p.kind == _shape.plainCasePatternKind && p.children.length == 1 && p.children[0].kind == _shape.identKind)
+					p.children[0].name ?? ''
 		];
 	}
 

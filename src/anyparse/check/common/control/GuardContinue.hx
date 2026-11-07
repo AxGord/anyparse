@@ -596,8 +596,9 @@ final class GuardContinue extends RuleBase {
 	 */
 	private static function applyRenames(inner: String, from: Int, renames: Array<LocalRename>): String {
 		final edits: Array<{ span: Span, text: String }> = [
-			for (r in renames) for (span in r.spans) if (span.from >= from && span.to <= from + inner.length)
-				{ span: span, text: r.newName }
+			for (r in renames)
+				for (span in r.spans)
+					if (span.from >= from && span.to <= from + inner.length) { span: span, text: r.newName }
 		];
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = inner;

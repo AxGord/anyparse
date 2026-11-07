@@ -38,8 +38,7 @@ final class BodyAllman {
 			case Doc.Concat([Doc.OptSpace(' '), body]):
 				final moved: Null<Doc> = allmanBreakSide(cols, body);
 				moved == null ? layout : Doc.Concat([Doc.OptSpace(' '), moved]);
-			case _:
-				layout;
+			case _: layout;
 		};
 	}
 
@@ -70,8 +69,7 @@ final class BodyAllman {
 				final i: Int = BodyFit.lastNonEmptyIdx(items);
 				final t: Null<{ brk: Doc, token: BreakToken }> = i < 0 ? null : tailBreak(items[i]);
 				t == null ? null : { brk: replacedAt(items, i, t.brk), token: t.token };
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

@@ -183,11 +183,10 @@ final class TerminalParseLowering {
 		final pack: Array<String> = packOf(typePath);
 		final errMsg: String = 'invalid $simple value';
 		final cases: Array<Case> = [
-			for (v in values)
-				{
-					values: [{ expr: EConst(CString(v.value)), pos: Context.currentPos() }],
-					expr: MacroStringTools.toFieldExpr(pack.concat([simple, v.name]))
-				}
+			for (v in values) {
+				values: [{ expr: EConst(CString(v.value)), pos: Context.currentPos() }],
+				expr: MacroStringTools.toFieldExpr(pack.concat([simple, v.name]))
+			}
 		];
 		final defaultExpr: Expr = macro throw new anyparse.runtime.ParseError(
 			new anyparse.runtime.Span(_errPos, ctx.pos), $v{errMsg} + ': "' + _matched + '"'
@@ -258,13 +257,11 @@ final class TerminalParseLowering {
 		}
 		if (decodePath == null) return switch underlying {
 			case 'Float': macro Std.parseFloat(_matched);
-			case 'Int':
-				macro {
-					final _v: Null<Int> = Std.parseInt(_matched);
-					if (_v == null)
-						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'invalid int literal');
-					_v;
-				};
+			case 'Int': macro {
+				final _v: Null<Int> = Std.parseInt(_matched);
+				if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'invalid int literal');
+				_v;
+			};
 			case 'Bool': macro _matched == 'true';
 			case 'String' if (raw): macro _matched;
 			case 'String':

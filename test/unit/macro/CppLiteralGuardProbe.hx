@@ -45,10 +45,11 @@ final class CppLiteralGuardProbe {
 			}
 		}).fields;
 		final stranded: Array<String> = [
-			for (e in CppLiteralGuard.rewriteFields(fields)) switch e.expr {
-				case EConst(CString(s, _)): s;
-				case _: '';
-			}
+			for (e in CppLiteralGuard.rewriteFields(fields))
+				switch e.expr {
+					case EConst(CString(s, _)): s;
+					case _: '';
+				}
 		];
 		final printer: Printer = new Printer();
 		final text: String = [for (field in fields) printer.printField(field)].join('\n');

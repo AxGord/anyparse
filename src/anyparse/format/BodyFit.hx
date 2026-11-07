@@ -366,8 +366,7 @@ final class BodyFit {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
-				case BreakCommit(_, flat, _) if (BreakCommits.decisionMapped(flat, (brk, _) -> brk) != null):
-					n;
+				case BreakCommit(_, flat, _) if (BreakCommits.decisionMapped(flat, (brk, _) -> brk) != null): n;
 				case BreakCommit(brk, flat, token):
 					final f: Doc = walk(flat);
 					f == flat ? n : BreakCommit(brk, f, token);

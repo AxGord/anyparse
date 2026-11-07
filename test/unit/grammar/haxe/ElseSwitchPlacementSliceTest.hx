@@ -18,34 +18,26 @@ import utest.Test;
  * column, so the `else` must cuddle it the way it cuddles a block's. Both seams decline
  * together on a captured comment, which is what the two comment pins below separate.
  *
- * Its default is `Keep`, NOT `Same` as `elseIf`'s is, and that asymmetry is deliberate: `elseIf`
- * has shipped with `Same` since it existed, while this knob is new and must leave every existing
- * config's bytes alone. `testDefaultIsKeepNotSame` is the pin on that, and it is the one this
- * class exists for - a `Same` default would silently reformat every project that never asked.
+ * Its default is `Same`: no placement reads the source layout.
  *
  * ⚠️ EVERY assertion here goes through the TRIVIA writer. The plain writer captures no
- * source-newline and no comment slots, so a `Keep` assertion against it passes vacuously and a
- * comment assertion FAILS vacuously - as this very class's first draft did. Trivia mode is
+ * comment slots, so a comment assertion against it FAILS vacuously - as this very class's
+ * first draft did. Trivia mode is
  * also what `hxq fmt` and the Pony sweep run, so it is the mode the knob was asked for.
  */
 @:nullSafety(Strict)
 class ElseSwitchPlacementSliceTest extends Test {
 
 	private static final BASE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}';
-	private static final KEEP: String = '$BASE}';
+	private static final DEFAULT: String = '$BASE}';
 	private static final SAME: String = '$BASE, "sameLine": {"elseSwitch": "same"}}';
 	private static final NEXT: String = '$BASE, "sameLine": {"elseSwitch": "next"}}';
 	private static final EXPLICIT_KEEP: String = '$BASE, "sameLine": {"elseSwitch": "keep"}}';
 
 	/**
-	 * The value-`if` needs `expressionIf: next` under it or the branch policies default to `Same`
-	 * and glue every branch on their own - the knob then decides NOTHING and an assertion on it
-	 * passes with the whole feature disabled. `M-ELSE-SWITCH-TESTS-NONE` reported MISMATCH against
-	 * the first draft of `testTheValueIfThenBranchGluesAsWell` for exactly that reason; the
-	 * `else`-side value test above it had been vacuous the same way since it was written.
+	 * The value-`if` needs `expressionIf: next` under it, or the branch policies default to `Same` and glue every
+	 * branch on their own: the knob then decides nothing and an assertion on it passes with the feature disabled.
 	 */
-	private static final EXPR_NEXT: String = '$BASE, "sameLine": {"expressionIf": "next"}}';
-
 	private static final SAME_EXPR_NEXT: String = '$BASE, "sameLine": {"elseSwitch": "same", "expressionIf": "next"}}';
 
 	/** An `else` whose body is a `switch`, written on the line AFTER the `else` - Pony's shape. */
@@ -62,14 +54,19 @@ class ElseSwitchPlacementSliceTest extends Test {
 		+ '\t\t\t// why\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\treturn 1;\n\t\t\t}\n\t\telse\n\t\t\tswitch s {\n'
 		+ '\t\t\t\tcase _:\n\t\t\t\t\treturn 2;\n\t\t\t}\n\t}\n}';
 
-	public function testDefaultIsKeepNotSame(): Void {
+	public function testDefaultIsSame(): Void {
 		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(KeywordPlacement.Keep, defaults.elseSwitch, 'a new knob must default to no opinion');
+		Assert.equals(KeywordPlacement.Same, defaults.elseSwitch, 'a switch branch glues to its keyword');
 		Assert.equals(KeywordPlacement.Same, defaults.elseIf, 'its older twin keeps the default it shipped with');
 	}
 
-	public function testKeepLeavesTheAuthorsTwoLineShape(): Void {
-		Assert.equals(TWO_LINE, HxWriteFixture.triviaWrite(TWO_LINE, KEEP));
+	/** The default is `same`: the `switch` glues to its `else` with no key in the config. */
+	@:pin('control')
+	@:killer('M-ELSE-SWITCH-TESTS-NONE')
+	public function testTheDefaultGluesTheSwitchToItsElse(): Void {
+		final out: String = HxWriteFixture.triviaWrite(TWO_LINE, DEFAULT);
+		Assert.isTrue(out.indexOf('else switch s {') != -1, 'expected `else switch s {` in: <$out>');
+		Assert.equals(HxWriteFixture.triviaWrite(TWO_LINE, SAME), out);
 	}
 
 	@:pin('control')
@@ -87,9 +84,9 @@ class ElseSwitchPlacementSliceTest extends Test {
 		Assert.isTrue(out.indexOf('else switch') == -1, 'expected the switch pushed off the else line in: <$out>');
 	}
 
-	/** An explicit `"keep"` and an absent key must agree — that is what the KEEP-honouring reader buys. */
+	/** An explicit `"keep"` is unsupported and leaves the default, so it writes what an absent key writes. */
 	public function testExplicitKeepAgreesWithTheAbsentKey(): Void {
-		Assert.equals(HxWriteFixture.triviaWrite(TWO_LINE, KEEP), HxWriteFixture.triviaWrite(TWO_LINE, EXPLICIT_KEEP));
+		Assert.equals(HxWriteFixture.triviaWrite(TWO_LINE, DEFAULT), HxWriteFixture.triviaWrite(TWO_LINE, EXPLICIT_KEEP));
 	}
 
 	/**
@@ -103,7 +100,7 @@ class ElseSwitchPlacementSliceTest extends Test {
 			+ '\t\telse\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\t1;\n\t\t\t}\n\t}\n}';
 		final out: String = HxWriteFixture.triviaWrite(src, SAME_EXPR_NEXT);
 		Assert.isTrue(out.indexOf('else switch s {') != -1, 'expected the value-if else to carry it too in: <$out>');
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, EXPR_NEXT), 'without the knob the same input must not move');
+
 	}
 
 	/** An `else if` chain that ENDS in an `else switch`: the chain links keep their own handler. */
@@ -159,15 +156,14 @@ class ElseSwitchPlacementSliceTest extends Test {
 	public function testTheValueIfThenBranchGluesAsWell(): Void {
 		final src: String = 'class F {\n\tfunction f(s:String):Int {\n\t\treturn if (s == \'\')\n\t\t\tswitch s {\n'
 			+ '\t\t\t\tcase _:\n\t\t\t\t\t1;\n\t\t\t}\n\t\telse\n\t\t\tswitch s {\n\t\t\t\tcase _:\n\t\t\t\t\t2;\n\t\t\t}\n\t}\n}';
-		final expected: String = 'class F {\n\tfunction f(s:String):Int {\n\t\treturn if (s == \'\') switch s {\n\t\t\tcase _:\n'
-			+ '\t\t\t\t1;\n\t\t} else switch s {\n\t\t\tcase _:\n\t\t\t\t2;\n\t\t}\n\t}\n}';
+		final expected: String = 'class F {\n\tfunction f(s:String):Int {\n\t\treturn if (s == \'\') switch s {\n\t\t\tcase _: 1;\n'
+			+ '\t\t} else switch s {\n\t\t\tcase _: 2;\n\t\t}\n\t}\n}';
 		Assert.equals(expected, HxWriteFixture.triviaWrite(src, SAME_EXPR_NEXT));
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, EXPR_NEXT), 'without the knob the same input must not move');
 	}
 
-	/** Neither seam fires without the knob - the default still owes every existing config its bytes. */
-	public function testKeepLeavesBothSwitchesWhereTheAuthorPutThem(): Void {
-		Assert.equals(BOTH_TWO_LINE, HxWriteFixture.triviaWrite(BOTH_TWO_LINE, KEEP));
+	/** Both seams fire under the default, as under `same`: both switches glue and the `else` cuddles the first close. */
+	public function testTheDefaultGluesBothSwitches(): Void {
+		Assert.equals(HxWriteFixture.triviaWrite(BOTH_TWO_LINE, SAME), HxWriteFixture.triviaWrite(BOTH_TWO_LINE, DEFAULT));
 	}
 
 	/**

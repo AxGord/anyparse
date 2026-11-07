@@ -279,7 +279,8 @@ final class CliRegistry {
 		return switch name {
 			case 'encapsulate-field': ENCAPSULATE_FIELD_GAP;
 			case 'comment-rewrite', 'extract-interface', 'extract-superclass', 'introduce-parameter-object', 'mutation-verdict',
-				'mutation-schema': 2;
+				'mutation-schema':
+				2;
 			case _: 1;
 		}
 	}

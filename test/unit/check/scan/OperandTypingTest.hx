@@ -476,12 +476,13 @@ class OperandTypingTest extends Test {
 				final answer: String = switch ask.read {
 					case Reports: mine.length > 0 ? 'accepted' : 'refused';
 					case Silent: mine.length > 0 ? 'refused' : 'accepted';
-					case Fixable: if (mine.length == 0)
-						'refused'
-					else if (mine.exists(v -> v.message.indexOf('overloads') >= 0))
-						'unproven'
-					else
-						'accepted';
+					case Fixable:
+						if (mine.length == 0)
+							'refused'
+						else if (mine.exists(v -> v.message.indexOf('overloads') >= 0))
+							'unproven'
+						else
+							'accepted';
 					case Positive: positive(ask.check, files, found.filter(v -> v.file == file), file, at, plugin);
 				};
 				final expected: String = if (route == 'Unread')

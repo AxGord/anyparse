@@ -466,9 +466,8 @@ final class StructSeqLowering {
 					ctx.recordUnknownField(_key, _keyPos, $knownNames);
 					$i{anyFn}(ctx);
 				};
-			case Error: macro throw new anyparse.runtime.ParseError(
-				new anyparse.runtime.Span(ctx.pos, ctx.pos), 'unknown field: "' + _key + '"'
-			);
+			case Error:
+				macro throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'unknown field: "' + _key + '"');
 			case _:
 				Context.fatalError(
 					'Lowering: UnknownPolicy.Store is not supported in ByName mode (schema ${sc.formatInfo.schemaTypePath})',

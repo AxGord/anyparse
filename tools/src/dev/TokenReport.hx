@@ -145,16 +145,15 @@ final class TokenReport {
 			sums[key] = sum;
 		}
 		final rows: Array<ToolRow> = [
-			for (key => sum in sums)
-				{
-					key: key,
-					calls: sum.calls,
-					outTok: tokens(sum.outChars),
-					avgOutTok: sum.calls == 0 ? 0 : Math.round(tokens(sum.outChars) / sum.calls),
-					inTok: tokens(sum.inChars),
-					over2k: sum.over2k,
-					over5k: sum.over5k
-				}
+			for (key => sum in sums) {
+				key: key,
+				calls: sum.calls,
+				outTok: tokens(sum.outChars),
+				avgOutTok: sum.calls == 0 ? 0 : Math.round(tokens(sum.outChars) / sum.calls),
+				inTok: tokens(sum.inChars),
+				over2k: sum.over2k,
+				over5k: sum.over5k
+			}
 		];
 		rows.sort((a, b) -> b.inTok + b.outTok - a.inTok - a.outTok);
 		return rows;
@@ -172,15 +171,14 @@ final class TokenReport {
 			sums[id] = sum;
 		}
 		final rows: Array<RoleToolRow> = [
-			for (id => sum in sums)
-				{
-					role: id.substr(0, id.indexOf('\n')),
-					key: id.substr(id.indexOf('\n') + 1),
-					calls: sum.calls,
-					outTok: tokens(sum.outChars),
-					over5k: sum.over5k,
-					biggest: sum.biggest.map(big -> {outTok: tokens(big.outChars), call: big.call })
-				}
+			for (id => sum in sums) {
+				role: id.substr(0, id.indexOf('\n')),
+				key: id.substr(id.indexOf('\n') + 1),
+				calls: sum.calls,
+				outTok: tokens(sum.outChars),
+				over5k: sum.over5k,
+				biggest: sum.biggest.map(big -> {outTok: tokens(big.outChars), call: big.call })
+			}
 		];
 		rows.sort((a, b) -> b.outTok - a.outTok);
 		return rows;

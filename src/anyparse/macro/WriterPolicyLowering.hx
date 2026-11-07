@@ -61,7 +61,7 @@ final class WriterPolicyLowering {
 	 * (source on same line) or as `Nest(_cols, [hardline, body])`
 	 * (source had a newline at the boundary). Pure source-shape decision —
 	 * no user-config policy involvement, distinct from the heavier
-	 * `bodyPolicyWrap` (Same/Next/Keep + bodyOnSameLine slot) and the
+	 * `bodyPolicyWrap` (Same/Next/FitLine) and the
 	 * shape-aware `bareBodyBreakWrap` (block-ctor switch). Sister to the
 	 * issue_48-v2 inline `nlAccess ? _dhl() : _dt(' ')` sep but with the
 	 * `_dn(_cols, ...)` wrap so the body picks up `+1` indent step on
@@ -130,24 +130,21 @@ final class WriterPolicyLowering {
 		policyModule: Array<String>, scrutinee: Expr, caseSpecs: Array<{ values: Array<String>, expr: Expr }>, dflt: Expr
 	): Expr {
 		final cases: Array<Case> = [
-			for (spec in caseSpecs)
-				{
-					values: [
-						for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name]))
-					],
-					expr: spec.expr,
-					guard: null
-				}
+			for (spec in caseSpecs) {
+				values: [
+					for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name]))
+				],
+				expr: spec.expr,
+				guard: null
+			}
 		];
 		return { expr: ESwitch(scrutinee, cases, dflt), pos: Context.currentPos() };
 	}
 
 	/**
-	 * ω-keep-policy — build a runtime switch over `opt.<sameLineFlag>`
+	 * Build a runtime switch over `opt.<sameLineFlag>`
 	 * (a `SameLinePolicy` enum abstract). `Next` maps to hardline at
-	 * the current indent, `Keep` routes to the caller-supplied
-	 * `keepExpr` (a slot-based dispatch in the kw-Ref site, a `Same`
-	 * fallback everywhere else), the default case (`Same`,
+	 * the current indent, the default case (`Same`,
 	 * `SameOnBlock` and unknown values) emits a plain space — a caller
 	 * without shape information cannot honour a shape-aware policy, so it
 	 * degrades to the cuddle. The shape-aware sites that CAN honour it call
@@ -157,11 +154,12 @@ final class WriterPolicyLowering {
 	 * macro-time enum resolution against the `SameLinePolicy` abstract
 	 * (same precedent as `bodyPolicyWrap` / `leftCurlySeparator`).
 	 */
-	private static function sameLinePolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
-		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
-			{ values: ['Next'], expr: macro _dhl() },
-			{ values: ['Keep'], expr: keepExpr }
-		], macro _dt(' '));
+	private static function sameLinePolicySwitch(optFlag: Expr): Expr {
+		return buildPolicySwitch(
+			['anyparse', 'format', 'SameLinePolicy'], optFlag,
+			[{ values: ['Next'], expr: macro _dhl() }],
+			macro _dt(' ')
+		);
 	}
 
 	/**
@@ -178,18 +176,15 @@ final class WriterPolicyLowering {
 	 * knob (which hugs the `[` to its head as well), layered OUTSIDE this
 	 * separator and therefore still winning when it is set.
 	 *
-	 * This arm used to route `SameOnBlock` to `keepExpr`, the source's own
-	 * break slot, so a source typed flat came back as `[1] else if (b)` /
-	 * `[] else` — the `else` glued to a close the writer had itself moved — and
-	 * one written with the break kept it: the layout followed how the source
-	 * was typed. Mapping `next` onto a plain `Same` is no better: it glues
-	 * `[] else {` and `['--code', staged]; else if (…)` everywhere.
+	 * Mapping `next` onto a plain `Same` would glue `[] else {` and
+	 * `['--code', staged]; else if (…)` everywhere.
 	 */
-	private static function sameLineNonCurlyBlockPolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
-		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
-			{ values: ['Next', 'SameOnBlock'], expr: macro _dhl() },
-			{ values: ['Keep'], expr: keepExpr }
-		], macro _dt(' '));
+	private static function sameLineNonCurlyBlockPolicySwitch(optFlag: Expr): Expr {
+		return buildPolicySwitch(
+			['anyparse', 'format', 'SameLinePolicy'], optFlag,
+			[{ values: ['Next', 'SameOnBlock'], expr: macro _dhl() }],
+			macro _dt(' ')
+		);
 	}
 
 	/**
@@ -255,8 +250,7 @@ final class WriterPolicyLowering {
 		// `leftCurly('anonFunctionLeftCurly')`) keeps the `_dt(' ')` Same
 		// default — the pre-slice heuristic that switched to `_de()` on
 		// any knob-form was tuned for the first-field-Star site only.
-		// ω-trivia-tryparse-linelength: switch the `Same` (and `Keep` / non-
-		// `Next`) default from hard `_dt(' ')` to `_dossh()`
+		// ω-trivia-tryparse-linelength: switch the `Same` (every non-`Next`) default from hard `_dt(' ')` to `_dossh()`
 		// (OptSpaceSkipAfterHardline) so a preceding hardline (e.g. our
 		// lineLengthAware-emitted trail-terminator after a trailing line
 		// comment) drops the space, leaving the next `{` at base indent
@@ -631,7 +625,7 @@ final class WriterPolicyLowering {
 	 */
 	private static function blockBodyKeepsInlineBranch(starNode: ShapeNode): Expr {
 		final altPolicy: Null<String> = starNode.fmtReadString('blockBodyKeepsInline');
-		return altPolicy == null ? macro _dt(' ') : sameLinePolicySwitch(optFieldAccess(altPolicy), macro _dt(' '));
+		return altPolicy == null ? macro _dt(' ') : sameLinePolicySwitch(optFieldAccess(altPolicy));
 	}
 
 	/**
@@ -731,17 +725,15 @@ final class WriterPolicyLowering {
 
 	private static function buildCaseBodyFlagPredicate(flagName: String): Expr {
 		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-		final keepPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
 		final optFlag: Expr = optFieldAccess(flagName);
-		return macro ($optFlag == $samePat || ($optFlag == $keepPat && !_arr[0].newlineBefore));
+		return macro ($optFlag == $samePat);
 	}
 
 	/**
 	 * ω-case-body-fitline — per-flag FIT predicate: `opt.<flag> == FitLine`.
 	 *
 	 * Sister to `buildCaseBodyFlagPredicate`, which answers "is the body
-	 * COMMITTED to the case-header line at write time" (`Same`, or `Keep`
-	 * with same-line source). This one answers "is the placement DEFERRED
+	 * COMMITTED to the case-header line at write time" (`Same`). This one answers "is the placement DEFERRED
 	 * to the renderer" — the emit then lays the body out as
 	 * `BodyGroup(Nest(cols, [Line, body]))` so the renderer's own
 	 * `fitsFlat` picks inline when `indent + patterns + ': ' + flat body`

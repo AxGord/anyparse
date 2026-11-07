@@ -583,8 +583,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool, v:Int, b:Bool):Void {\n\t\tif (a) {\n\t\t\tswitch (v) {\n\t\t\t\tcase 1: if (b) p();\n'
 			+ '\t\t\t\tcase _: q();\n\t\t\t}\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, v:Int, b:Bool):Void {\n\t\tif (a)\n\t\t\tswitch (v) {\n\t\t\t\tcase 1:\n'
-			+ '\t\t\t\t\tif (b) p();\n\t\t\t\tcase _:\n\t\t\t\t\tq();\n\t\t\t}\n\t\telse\n\t\t\tr();\n\t}\n}'
+			'class F {\n\tfunction f(a:Bool, v:Int, b:Bool):Void {\n\t\tif (a) switch (v) {\n\t\t\tcase 1:\n'
+			+ '\t\t\t\tif (b) p();\n\t\t\tcase _:\n\t\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}'
 		);
 	}
 

@@ -212,8 +212,7 @@ final class CanonicalEdit {
 		source: String, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
 		return switch canonicalize(source, edits, false, plugin, optsJson) {
-			case Ok(text, rewrites):
-				Ok(text, rewrites);
+			case Ok(text, rewrites): Ok(text, rewrites);
 			// The FALLBACK below carries no `rewrites` argument: the writer loop never ran on
 			// that path, and `null` is what `EditResult.Ok` documents for it. A `0` would read
 			// as a measurement.

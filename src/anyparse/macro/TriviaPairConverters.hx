@@ -193,11 +193,10 @@ final class TriviaPairConverters {
 			}
 			// Pattern: CtorName(arg0, arg1, _, _, ...)
 			final binders: Array<Expr> = [
-				for (i in 0...origArgCount)
-					{
-						expr: EConst(CIdent((branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME): String))),
-						pos: pos
-					}
+				for (i in 0...origArgCount) {
+					expr: EConst(CIdent((branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME): String))),
+					pos: pos
+				}
 			];
 			for (_ in 0...extraCount) binders.push({ expr: EConst(CIdent('_')), pos: pos });
 			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
@@ -403,8 +402,10 @@ final class TriviaPairConverters {
 			}
 			// Pattern: CtorName(arg0, arg1, ...) — raw ctors have no extras.
 			final binders: Array<Expr> = [
-				for (i in 0...origArgCount)
-					{ expr: EConst(CIdent(branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME))), pos: pos }
+				for (i in 0...origArgCount) {
+					expr: EConst(CIdent(branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME))),
+					pos: pos
+				}
 			];
 			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
 			// Body: PairedType.CtorName(wrap(arg0), wrap(arg1), ...defaults).

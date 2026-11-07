@@ -380,11 +380,10 @@ final class TriviaPairAltCtor {
 			access: []
 		};
 		final args: Array<FunctionArg> = [
-			for (arg in branch.children)
-				{
-					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
-					type: TriviaTypeSynth.shapeToComplexType(arg, synthPack)
-				}
+			for (arg in branch.children) {
+				name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
+				type: TriviaTypeSynth.shapeToComplexType(arg, synthPack)
+			}
 		];
 		// ω-close-trailing-alt: close-peek `@:trivia` Alt-branch Stars
 		// (only `HxStatement.BlockStmt` in the current grammar) grow a

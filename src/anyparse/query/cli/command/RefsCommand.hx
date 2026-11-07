@@ -303,14 +303,13 @@ final class RefsCommand implements CliCommand implements LeadingQuery {
 		}
 	): Null<Array<RefsBatch>> {
 		final batches: Array<RefsBatch> = [
-			for (name in names)
-				{
-					name: name,
-					entries: [],
-					memberAccesses: 0,
-					bindings: 0,
-					candidateNames: []
-				}
+			for (name in names) {
+				name: name,
+				entries: [],
+				memberAccesses: 0,
+				bindings: 0,
+				candidateNames: []
+			}
 		];
 		var scanned: Int = 0;
 		for (path in paths) {

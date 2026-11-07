@@ -257,8 +257,7 @@ class ShardPlanTest extends Test {
 			case Planned(_):
 				Assert.fail('expected a refusal');
 				'';
-			case Refused(text):
-				text;
+			case Refused(text): text;
 		};
 		Assert.stringContains('registers the same class twice', message);
 	}
@@ -274,8 +273,7 @@ class ShardPlanTest extends Test {
 			case Planned(_):
 				Assert.fail('expected a refusal');
 				'';
-			case Refused(text):
-				text;
+			case Refused(text): text;
 		};
 		Assert.stringContains('pinned class unit.cli.ApqDxTier5CliTest is not registered in a list', message);
 	}
@@ -417,15 +415,13 @@ class ShardPlanTest extends Test {
 			case Planned(_):
 				Assert.fail('expected a refusal');
 				'';
-			case Refused(message):
-				message;
+			case Refused(message): message;
 		};
 	}
 
 	private function unwrap(result: ShardPlanResult): Array<ShardPlacement> {
 		return switch result {
-			case Planned(placements):
-				placements;
+			case Planned(placements): placements;
 			case Refused(message):
 				Assert.fail('unexpected refusal: $message');
 				[];

@@ -88,13 +88,12 @@ final class ParityTest extends Test {
 		TempDir.with(dir -> {
 			final stand: String = engine(dir.file('a.js'), 'A');
 			final invocations: Array<Invocation> = [
-				for (name in ['one', 'two'])
-					{
-						name: name,
-						argv: ['apq', 'echo', name],
-						stdin: null,
-						files: []
-					}
+				for (name in ['one', 'two']) {
+					name: name,
+					argv: ['apq', 'echo', name],
+					stdin: null,
+					files: []
+				}
 			];
 			final outcomes: Array<Outcome> = TempDir.with(work -> Parity.side(tree, stand, invocations, work, 1, true));
 			Assert.same([null, null], outcomes.map(outcome -> outcome.status));
@@ -118,13 +117,12 @@ final class ParityTest extends Test {
 			Assert.isTrue(Parity.oneProcessFor(real, true), 'this tree\'s engine has it');
 			Assert.isFalse(Parity.oneProcessFor(real, false), 'per process when one process is not wanted');
 			final invocations: Array<Invocation> = [
-				for (name in ['one', 'two', 'three'])
-					{
-						name: name,
-						argv: ['apq', 'echo', name],
-						stdin: 'in',
-						files: ['log' => '']
-					}
+				for (name in ['one', 'two', 'three']) {
+					name: name,
+					argv: ['apq', 'echo', name],
+					stdin: 'in',
+					files: ['log' => '']
+				}
 			];
 			final apart: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, false);
 			final wanted: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, true);

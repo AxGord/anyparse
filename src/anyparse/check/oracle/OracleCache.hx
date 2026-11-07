@@ -444,13 +444,11 @@ final class OracleCache {
 	 */
 	private static function storedOutcome(record: OracleVerdictRecord): Null<OracleOutcome> {
 		return switch (record.verdict) {
-			case 'confirmed':
-				Confirmed;
+			case 'confirmed': Confirmed;
 			case 'rejected':
 				final errors: Null<String> = record.errors;
 				errors == null ? null : Rejected(errors);
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

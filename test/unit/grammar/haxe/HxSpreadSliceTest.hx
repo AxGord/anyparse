@@ -81,10 +81,8 @@ class HxSpreadSliceTest extends HxTestHelpers {
 			case ExprStmt(Call(_, args)):
 				Assert.equals(1, args.length);
 				switch args[0] {
-					case Spread(IdentExpr(name)):
-						Assert.equals('args', (name: String));
-					case _:
-						Assert.fail('expected Spread(IdentExpr), got ${args[0]}');
+					case Spread(IdentExpr(name)): Assert.equals('args', (name: String));
+					case _: Assert.fail('expected Spread(IdentExpr), got ${args[0]}');
 				}
 			case _:
 				Assert.fail('expected ExprStmt(Call(_, [Spread(_)])), got ${stmts[0]}');

@@ -1106,10 +1106,8 @@ final class FieldInitAtDeclaration extends RuleBase {
 		if (recv.kind != shape.identKind || recv.name != selfText) return true;
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		var own: Null<Int> = null;
-		MemberKinds.eachMemberHost(container, host -> for (member in host.children) if (
-			member.name == scan.name && memberKinds.contains(member.kind)
-		)
-			own = member.span?.from);
+		MemberKinds.eachMemberHost(container, host -> for (member in host.children)
+			if (member.name == scan.name && memberKinds.contains(member.kind)) own = member.span?.from);
 		return own == null || (scan.file == scan.fieldFile && own == scan.fieldFrom);
 	}
 
@@ -1167,8 +1165,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 				shape.nullSafeAccessKind,
 				shape.forceFieldAccessKind,
 				shape.stringInterpIdentKind
-			])
-				if (k != null) k
+			]) if (k != null) k
 		];
 		final faultingKinds: Array<String> = [
 			for (k in [shape.fieldAccessKind, shape.indexAccessKind, shape.callKind]) if (k != null) k

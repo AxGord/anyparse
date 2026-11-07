@@ -239,10 +239,12 @@ final class UnusedImport extends RuleBase {
 		if (scans == null) return null;
 		final evidence: ImportEvidence = evidenceOf(index, plugin);
 		return [
-			for (imp in info.imports) [
-				for (scan in readersOf(scans, imp, info.file, evidence.resolveIndex))
-					if (!provenDeadIn(scan, info.file, imp, plugin, evidence)) scan.file
-			]
+			for (imp in info.imports)
+				[
+					for (scan in readersOf(
+						scans, imp, info.file, evidence.resolveIndex
+					)) if (!provenDeadIn(scan, info.file, imp, plugin, evidence)) scan.file
+				]
 		];
 	}
 

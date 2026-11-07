@@ -577,14 +577,15 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		var proven: Bool = true;
 		function walk(node: QueryNode): Void {
 			if (!proven || stops.contains(node.kind)) return;
-			if (returns.contains(node.kind))
-				switch node.children.length == 1 ? returnProof(node.children[0], shape, tree, index) : Unproven {
-					case Quoted:
-						quoted = true;
-					case Companion:
-					case Unproven:
-						proven = false;
-				}
+			if (returns.contains(node.kind)) switch node.children.length == 1 ? returnProof(
+				node.children[0], shape, tree, index
+			) : Unproven {
+				case Quoted:
+					quoted = true;
+				case Companion:
+				case Unproven:
+					proven = false;
+			}
 			for (c in node.children) walk(c);
 		}
 		walk(body);

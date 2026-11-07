@@ -172,8 +172,7 @@ class TransformLowering {
 			pos: Context.currentPos()
 		};
 		final rebuiltArgs: Array<Expr> = [
-			for (i in 0...branch.children.length)
-				rebuildExpr(branch.children[i], macro $i{argNames[i]})
+			for (i in 0...branch.children.length) rebuildExpr(branch.children[i], macro $i{argNames[i]})
 		];
 		final rebuilt: Expr = { expr: ECall(ctorRef, rebuiltArgs), pos: Context.currentPos() };
 		return { values: [pattern], expr: rebuilt };
@@ -220,8 +219,7 @@ class TransformLowering {
 					// Array<X>: map each element through the element rebuild.
 					final perElem: Expr = rebuildExpr(node.children[0], macro _e);
 					macro [for (_e in $valueExpr) $perElem];
-				case Seq:
-					rebuildStruct(node, valueExpr);
+				case Seq: rebuildStruct(node, valueExpr);
 				case Alt, Opt, Terminal:
 					// A direct anonymous Alt/Opt/Terminal child reaching a
 					// grammar type is never produced by the shape builder —
@@ -284,12 +282,9 @@ class TransformLowering {
 				// Terminal rules, whose hook is the rename primitive.
 				final ref: String = node.annotations[AnnotationKeys.BASE_REF];
 				_shape.rules.exists(ref);
-			case Star:
-				isTransformable(node.children[0]);
-			case Seq, Alt:
-				node.children.exists(isTransformable);
-			case Terminal, Opt:
-				false;
+			case Star: isTransformable(node.children[0]);
+			case Seq, Alt: node.children.exists(isTransformable);
+			case Terminal, Opt: false;
 		};
 	}
 

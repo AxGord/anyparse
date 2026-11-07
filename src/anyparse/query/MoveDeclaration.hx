@@ -88,10 +88,11 @@ final class MoveDeclaration {
 			textExtensions: strings(section, 'textExtensions'),
 			registries: objects(section, 'registries', ['file', 'keys', 'byPackage', 'members']).map(r -> registry(r, at)),
 			sortedLists: [
-				for (list in objects(section, 'sortedLists', ['parts'])) objects(list, 'parts', ['file', 'select']).map(part -> {
-					file: at(string(part, 'sortedLists.parts', 'file')),
-					select: string(part, 'sortedLists.parts', 'select')
-				})
+				for (list in objects(section, 'sortedLists', ['parts']))
+					objects(list, 'parts', ['file', 'select']).map(part -> {
+						file: at(string(part, 'sortedLists.parts', 'file')),
+						select: string(part, 'sortedLists.parts', 'select')
+					})
 			],
 			mirrors: objects(section, 'mirrors', ['source', 'test', 'suffixes']).map(m -> {
 				source: at(string(m, 'mirrors', 'source')),
@@ -104,17 +105,15 @@ final class MoveDeclaration {
 	/** The string array at `key` of `node` (empty when absent); throws naming the key when it is anything else. */
 	private static function strings(node: Null<JValue>, key: String): Array<String> {
 		return switch JValueTools.field(node, key) {
-			case null:
-				[];
-			case JArray(items):
-				[
-					for (item in items) switch item {
+			case null: [];
+			case JArray(items): [
+				for (item in items)
+					switch item {
 						case JString(text): text;
 						case _: throw new Exception('"$KEY.$key" holds a non-string');
 					}
-				];
-			case _:
-				throw new Exception('"$KEY.$key" is not an array of strings');
+			];
+			case _: throw new Exception('"$KEY.$key" is not an array of strings');
 		};
 	}
 
@@ -153,8 +152,7 @@ final class MoveDeclaration {
 				for (entry in entries) if (!allowed.contains(entry.key))
 					return '"$label" declares unknown key "${entry.key}" (known: ${allowed.join(', ')})';
 				null;
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

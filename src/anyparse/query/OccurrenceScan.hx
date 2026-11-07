@@ -542,8 +542,7 @@ final class OccurrenceScan {
 		source: String, at: Int, len: Int, condSpans: Array<Span>, regions: Array<LexRegion>
 	): OccurrenceClass {
 		for (region in regions) if (at >= region.from && at < region.to) return switch region.kind {
-			case StringLit:
-				literalNamesIdentifier(source, at, len, region) ? StringLiteral : StringWord;
+			case StringLit: literalNamesIdentifier(source, at, len, region) ? StringLiteral : StringWord;
 			// A regex body is inert literal text, and no by-name lookup reads one, but nothing needs
 			// the relaxation - the conservative reading stays.
 			case RegexLit: StringLiteral;

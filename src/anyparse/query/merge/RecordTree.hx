@@ -69,14 +69,13 @@ final class RecordTree {
 		if (spans.length == 0) return null;
 		final ids: Array<String> = identities(source, list.children, path);
 		final children: Array<MergeChild> = [
-			for (i => item in list.children)
-				{
-					key: ids[i],
-					lead: '',
-					text: source.substring(spans[i].from, spans[i].to),
-					tree: treeOf(source, valueOf(item, false), spans[i], ids[i]),
-					seat: null
-				}
+			for (i => item in list.children) {
+				key: ids[i],
+				lead: '',
+				text: source.substring(spans[i].from, spans[i].to),
+				tree: treeOf(source, valueOf(item, false), spans[i], ids[i]),
+				seat: null
+			}
 		];
 		return {
 			head: source.substring(outer.from, spans[0].from),

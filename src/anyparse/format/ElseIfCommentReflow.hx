@@ -92,18 +92,15 @@ final class ElseIfCommentReflow {
 	private static function scan(doc: Doc, trailing: Doc, afterCond: Bool): ElseIfHeadScan {
 		return switch doc {
 			// Invisible or width-only glue - neither ends nor breaks the head line.
-			case Empty, OptSpace(_), OptSpaceSkipAfterHardline:
-				Scanning(afterCond);
+			case Empty, OptSpace(_), OptSpaceSkipAfterHardline: Scanning(afterCond);
 			// Rendered head tokens: the `if` keyword, the body-policy space, the
 			// then-body block's `{`.
-			case Text(s):
-				isHeadText(s) ? Scanning(afterCond) : Refused;
+			case Text(s): isHeadText(s) ? Scanning(afterCond) : Refused;
 			// THE ACCEPT. An unconditional break, in the body phase, is the end of
 			// the head line - after the block's `{` when the body is braced, right
 			// after the condition's `)` when the policy breaks a bare body. Both
 			// promised placements are this one position.
-			case Line(flat):
-				afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;
+			case Line(flat): afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;
 			// Every `WrapList.emitCondition` return is a `WrapBoundary`, so the
 			// FIRST one closes the condition. Skipped whole: its interior is head
 			// by construction, whatever shape the wrap cascade gave it (probes,

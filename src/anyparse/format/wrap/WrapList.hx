@@ -127,30 +127,15 @@ typedef WrapListOptions = {
 	 *
 	 * Setting this maps every break-introducing cascade answer to `OnePerLine`, which IS what
 	 * the force-multi path produces, so pass 2 reproduces pass 1 by construction. `NoWrap`
-	 * (and the `Keep` / `Ignore` engine fallbacks, which render flat) are untouched — a list
+	 * (and the `Ignore` engine fallback, which renders flat) are untouched — a list
 	 * that stays on one line grows no newline for the next pass to read.
 	 *
 	 * Off for a Star that carries `@:fmt(reflowSourceMultiline)` (its source-multiline lists go
-	 * through the cascade too, so both passes already agree) and for Keep / Ignore runtime modes
-	 * (Keep reproduces the source layout, Ignore drops it — both are fixed points already).
+	 * through the cascade too, so both passes already agree) and for the
+	 * Ignore runtime mode (it drops the source layout, a fixed point already).
 	 * Default `false`.
 	 */
 	var ?breakAsOnePerLine: Bool;
-
-	/** Per-element `Bool` array marking the elements the SOURCE placed a break before. Omitted = no source breaks recorded. */
-	var ?sourceBreakBefore: Array<Bool>;
-
-	/**
-	 * ω-keep-callclose-newline: when the SOLE call-arg is a Keep-mode method chain whose
-	 * source had NO newline before the outer close `)` (the chain glued the close —
-	 * `})));`), keep the close glued instead of routing through `shapeFillLine`'s
-	 * `isChainOPLBreak` close-on-own-line break. Set only by
-	 * `WriterLowering.lowerPostfixStar` when the Call ctor's `methodChain` rules are `Keep`
-	 * and the parser's `argsCloseNewline` slot is false. Default `false` → every non-keep /
-	 * source-broke caller keeps the legacy chain-OPL close placement, so the axis is
-	 * byte-inert.
-	 */
-	var ?keepCloseGlued: Bool;
 
 	/**
 	 * ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded to the flat
@@ -266,7 +251,7 @@ class WrapList {
 	 * reads 9999 as MATCHING, so an empty list takes whatever mode a min-width
 	 * rule selects rather than falling past it. All three emitters return
 	 * before the cascade on an empty item list, so the only readers that ever
-	 * see the sentinel are the width-blind probes (`cascadeIsKeep`).
+	 * see the sentinel are width-blind probes.
 	 */
 	public static inline final MAX_ITEM_LEN: Int = 9999;
 
@@ -347,19 +332,7 @@ class WrapList {
 		// byte-identical tight `(cond)`. Break shape leaves the cond on its
 		// own line so inner pads do not apply there.
 		openInside: Doc = Empty,
-		closeInside: Doc = Empty,
-		// ω-condition-wrap-keep — the source placed a newline right after the
-		// open paren (`if (\n\tcond`). Captured at parse time onto the cond
-		// field's `<field>CondOpenNewline:Bool` synth slot (mandatory-Ref
-		// `@:fmt(condWrap)` + `@:fmt(captureCondOpenNewline)`) and threaded by
-		// the single-Ref condWrap emit in `WriterLowering`. Consumed ONLY under
-		// `WrapMode.Keep` (`rules.defaultMode == Keep`) → forces `brkShape`
-		// (`(\n\tcond\n)`) so a kept condition round-trips the author's
-		// post-`(` break verbatim while the inner chain self-breaks per the
-		// already-landed chain source-newline mechanism. Default false →
-		// every non-keep / non-bearing caller (span mode, plain mode) is
-		// byte-inert.
-		sourceOpenNewline: Bool = false
+		closeInside: Doc = Empty
 	): Doc {
 		final cols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		final condW: Int = DocMeasure.flatTokenWidth(condDoc);
@@ -385,21 +358,6 @@ class WrapList {
 			Text(close)
 		]);
 
-		// ω-condition-wrap-keep: a `WrapMode.Keep` condition whose source
-		// placed a newline right after the open paren (`if (\n\tcond`) breaks
-		// the cond onto its own line verbatim — `brkShape` reproduces BOTH the
-		// post-`(` break AND the `)` on its own line. Without this, the
-		// width-driven decision below glues `if (cond` whenever the cond fits
-		// flat (or returns the chain's own hardline-bearing flat shape via the
-		// `hasHardline` branch), dropping the author's structural break. Gated
-		// on `rules.defaultMode == Keep` so every other wrap mode (and the
-		// non-bearing default `sourceOpenNewline == false`) is byte-inert. The
-		// inner chain self-breaks via the already-landed chain source-newline
-		// mechanism (`BinaryChainEmit.shapeKeep`), so `condDoc` already carries
-		// the `&& operand` continuation breaks — `brkShape`'s `Nest(cols)` just
-		// indents them under the bumped base. Pre-empts the `hasHardline` and
-		// `isTopLevelChain` branches below, both of which would otherwise glue.
-		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep) return WrapBoundary(brkShape);
 
 		inline function decideAt(exceeds: Bool): WrapMode {
 			// One item, so min and max are the same width and the widths are
@@ -644,51 +602,6 @@ class WrapList {
 				return rule.mode;
 		}
 		return rules.defaultMode;
-	}
-
-	/**
-	 * ω-keep-fnsig-newline: width-independent Keep predicate for the trivia
-	 * source-newline-preservation path (`TriviaSepLowering.triviaSepStarExpr`'s
-	 * `_keepEmit` gate). The trivia branch decides whether to reproduce each
-	 * element's source `newlineBefore` BEFORE per-element Docs (and thus
-	 * rendered widths) exist, so it cannot consult the column-aware cascade
-	 * the no-trivia `emit` path uses. This resolves the cascade for the known
-	 * `itemCount` (= element count) across BOTH the fits and exceeds states
-	 * (and both `lineLengthFires` outcomes, paired with the exceeds probe);
-	 * returns `true` only when EVERY probed state yields `Keep`. That is
-	 * exactly the set of configs whose Keep decision is width-independent:
-	 *  - `defaultWrap: keep` with `rules: []` (e.g.
-	 *    `issue_238_keep_wrapping_function_signature`) — `decide*` falls
-	 *    through to `defaultMode == Keep` in every state.
-	 *  - a structural rule such as `itemCount >= 0 -> keep` (e.g.
-	 *    `wrapping_of_function_signature_keep`) — matches in every state.
-	 * A genuinely width-conditional rule (`lineLength >= 140 -> keep`)
-	 * disagrees across the probes and correctly returns `false`, so the
-	 * trivia path does NOT force keep when the source-layout intent is
-	 * actually gated on rendered width — that case stays on the legacy
-	 * cascade. Width conditions cannot be evaluated pre-render either: they are
-	 * probed at the zero-width / empty-list sentinels (`maxItemLen = 0`,
-	 * `totalItemLen = 0`, `minItemLen = MAX_ITEM_LEN`, `hasMultilineItems =
-	 * false`, `equalItemLengths = false`, `complexItemCount = 0`), and that is
-	 * not "not firing" for most of them: `allItemLengths <= n`,
-	 * `allItemLengths >= n`, `totalItemLength <= n` and the
-	 * `value: 0` polarity of `equalItemLengths` / `hasMultilineItems` all read
-	 * as MATCHING there. That is the safe direction for every cascade this
-	 * project has met, because in all of them a spurious match resolves to a
-	 * non-Keep mode, so the probe answers false and the caller falls back to
-	 * the width-aware cascade. (`complexItemCount >= n` is the one sentinel
-	 * that reads as NOT matching — `0 >= n` is false for every `n >= 1`, and
-	 * the loader defaults an omitted `value` to 1 — which lands on the same
-	 * safe side by the other route.) It is not safe by construction: a config whose `keep` rule is
-	 * ITSELF gated on one of those predicates would be force-kept on width
-	 * grounds the probe cannot see. Nothing here detects that shape; no
-	 * function-signature keep fixture has it.
-	 */
-	public static function cascadeIsKeep(rules: WrapRules, itemCount: Int): Bool {
-		inline function at(exceeds: Bool): WrapMode {
-			return decideWithLineLengthState(rules, itemCount, 0, 0, exceeds, false, _ -> exceeds);
-		}
-		return at(false) == WrapMode.Keep && at(true) == WrapMode.Keep;
 	}
 
 	/**
@@ -1109,59 +1022,6 @@ class WrapList {
 	}
 
 	/**
-	 * True iff an `isPureOpAddSubChain` chain carries a hard break at one of its OWN top-level operator gaps (or before
-	 * its head) — a break its `WrapMode.Keep` shape reproduced from the source — as opposed to one that only an operand
-	 * renders (a block lambda, a broken array or object literal), which `flatLength < 0` cannot tell apart.
-	 *
-	 * The chain's separators and the breaks around them are direct children of one `Concat` at the shallowest
-	 * `WrapBoundary` depth holding a `+` / `-` separator; an operand's own breaks sit inside the operand.
-	 */
-	public static function breaksAtOwnAddSubOperator(d: Doc): Bool {
-		var opDepth: Int = -1;
-		var broken: Bool = false;
-		function isHard(n: Doc): Bool {
-			return switch n {
-				case Line(flat): flat.charAt(0) == '\n';
-				case _: false;
-			};
-		}
-		function isAddSub(n: Doc): Bool {
-			return switch n {
-				case Text(t):
-					t.trim() == '+' || t.trim() == '-';
-				case _: false;
-			};
-		}
-		function w(n: Doc, depth: Int): Void {
-			switch n {
-				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), Flatten(i), HardFlatten(i), CollapseProbe(i),
-					CollapseAddProbe(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _), BreakCommit(_, i):
-					w(i, depth);
-				case WrapBoundary(i):
-					w(i, depth + 1);
-				case IfBreak(b, _), IfWidthExceeds(_, b, _), IfFirstLineExceeds(_, b, _), IfLineExceeds(_, b, _),
-					IfResidualLineExceeds(_, b, _), IfFullLineExceeds(_, b, _), IfNaturalFirstLineExceeds(_, b, _),
-					IfNaturalFirstLineExceedsWithRest(_, b, _), IfNaturalFirstLineFitsOpenDelim(_, b, _),
-					IfArrowContinuationFits(_, _, _, b, _), IfArrowContinuationFitsWithRest(_, _, _, b, _),
-					IfIndentWidthExceeds(_, _, b, _), IfGluedFirstLineExceeds(_, _, b, _), IfTrailingCommentOverflows(_, _, _, _, b):
-					w(b, depth);
-				case Concat(items):
-					if (items.exists(isAddSub)) {
-						if (opDepth < 0 || depth < opDepth) {
-							opDepth = depth;
-							broken = false;
-						}
-						if (depth == opDepth && items.exists(isHard)) broken = true;
-					}
-					for (it in items) w(it, depth);
-				case _:
-			}
-		}
-		w(d, 0);
-		return broken;
-	}
-
-	/**
 	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
 	 * delimiter — `[` (array literal) or `{` (object / map literal). The
 	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
@@ -1446,7 +1306,7 @@ class WrapList {
 	 * Collapse every break-introducing mode to `OnePerLine` when `on` — the writer's own
 	 * fixed point for a Star that force-one-per-lines a source-multiline list.
 	 *
-	 * `NoWrap` and the `Keep` / `Ignore` engine fallbacks render on one line and so leave
+	 * `NoWrap` and the `Ignore` engine fallback render on one line and so leave
 	 * nothing for the next pass's source-newline scan to read; every other mode puts a
 	 * newline inside the list, and the next pass answers that newline with one-per-line
 	 * regardless of what the cascade said. Emitting one-per-line here is not a different
@@ -1997,8 +1857,7 @@ class WrapList {
 	private static function flatLeafLen(node: Doc): Int {
 		return switch (node) {
 			case Text(s): s.length;
-			case Line(flat):
-				flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? -1 : flat.length;
+			case Line(flat): flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? -1 : flat.length;
 			case OptSpace(s): s.length;
 			case OptSpaceSkipAfterHardline: 1;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: -1;
@@ -2199,7 +2058,6 @@ class WrapList {
 	private static function shape(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
-		?sourceBreakBefore: Array<Bool>, keepCloseGlued: Bool = false,
 		// ω-nowrap-source-trail-comma: source-only trailing-comma signal for the
 		// FLAT (`NoWrap`) layout. Distinct from `appendTrailingComma` (= source
 		// `<field>TrailPresent` OR per-construct knob): the knob forces break-mode
@@ -2266,13 +2124,13 @@ class WrapList {
 		);
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-			keepCloseGlued, lineWidth, complexItemKinds
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, lineWidth,
+			complexItemKinds
 		);
 		if (multiArgCollection != null) return multiArgCollection;
 		final byMode: Doc = shapeByMode(
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
-			sourceBreakBefore, keepCloseGlued, flatTrailingComma, complexItemKinds
+			flatTrailingComma, complexItemKinds
 		);
 		// ω-solitem-cuddled-brackets runs LAST on purpose: it is the only intercept
 		// that WRAPS the cascade's own shape rather than replacing it, so it needs
@@ -2664,8 +2522,7 @@ class WrapList {
 	 */
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int,
-		?complexItemKinds: Array<Int>
+		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int, ?complexItemKinds: Array<Int>
 	): Null<Doc> {
 		if ((mode != FillLine && mode != FillLineWithLeadingBreak) || items.length <= 1) return null;
 		final collIdx: Int = soleMultilineCollectionArg(items);
@@ -2715,7 +2572,7 @@ class WrapList {
 			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags)
 			: shapeFillLine(
 				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-				keepCloseGlued, complexItemKinds
+				complexItemKinds
 			);
 		final probe: Doc = IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		// ω-render-pivot-collection-arg: the committed population (`collArm ==
@@ -2756,50 +2613,29 @@ class WrapList {
 	/**
 	 * The cascade-resolved `WrapMode` dispatch — the tail of `shape` once
 	 * every special-case glue intercept declined. Each mode routes to its
-	 * dedicated `shape*` layout builder. `Keep` / `Ignore` are normally
+	 * dedicated `shape*` layout builder. `Ignore` is normally
 	 * pre-empted by the writer's trivia branch (`triviaSepStarExpr`) and
-	 * collapse to a sensible single-line fallback here; the `multiVar`
-	 * `Keep` fold is the one path that threads `sourceBreakBefore` to
-	 * reproduce each comma-link's source break via `shapeKeep`.
+	 * collapses to a sensible single-line fallback here.
 	 */
 	private static function shapeByMode(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>,
-		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool, ?complexItemKinds: Array<Int>
+		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, flatTrailingComma: Bool,
+		?complexItemKinds: Array<Int>
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
-			case FillLine: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-				keepCloseGlued, complexItemKinds
-			);
+			case FillLine:
+				shapeFillLine(
+					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
+					complexItemKinds
+				);
 			case FillLineWithLeadingBreak:
 				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags);
-			case PackedOrOnePerLine:
-				shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
-			// ω-keep-objectlit: Keep cascade hits are pre-empted by the
-			// writer's trivia branch (`triviaSepStarExpr`) — at the engine
-			// level, Keep collapses to NoWrap so any leakage produces a
-			// sensible single-line layout instead of a crash. The Keep
-			// emit shape lives at the writer, not the engine, because it
-			// needs per-element `Trivial<T>.newlineBefore` access (already
-			// rendered Docs lose that signal).
-			//
-			// ω-keep-newline-after-sep (increment 1): the multiVar fold
-			// DOES carry the per-link source-break signal into the engine
-			// via `sourceBreakBefore` (built from `Trivial.newlineAfterSep`).
-			// When present, `shapeKeep` reproduces each comma-link's source
-			// break; absent (every other Keep consumer) keeps the legacy
-			// defensive `shapeNoWrap` glue so the change is byte-inert.
-			case Keep:
-				sourceBreakBefore != null
-					? shapeKeep(open, close, sep, items, cols, appendTrailingComma, sourceBreakBefore)
-					: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
-			// ω-cascade-emits-comments: Ignore is the sister policy on the
-			// source-newline axis. Like Keep, the writer's trivia branch
-			// pre-empts before reaching the engine — the cascade-emit
+			case PackedOrOnePerLine: shapePackedOrOnePerLine(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
+			// ω-cascade-emits-comments: the writer's trivia branch
+			// pre-empts `Ignore` before reaching the engine — the cascade-emit
 			// shape lives inside `triviaSepStarExpr` because it needs
 			// per-element `Trivial<T>.leadingComments` / `trailingComment`
 			// access. Defensive fallback so any leakage produces a
@@ -3347,56 +3183,6 @@ class WrapList {
 	}
 
 	/**
-	 * ω-keep-newline-after-sep (increment 1): the `WrapMode.Keep` engine
-	 * shape. Reproduces each link's source layout per the
-	 * `sourceBreakBefore` flags (built by the multiVar fold from
-	 * `Trivial.newlineAfterSep`): each link gets its separator then either a
-	 * forced hardline at the continuation indent (`sourceBreakBefore[i] ==
-	 * true`) or a literal space (source kept it on the same line).
-	 * ω-keep-kw-newline (increment 1b): the head (`items[0]`,
-	 * `sourceBreakBefore[0]`) likewise breaks onto its own continuation line
-	 * when the source put a newline after the `var` / `final` keyword
-	 * (`var\n\trawRead`); otherwise it stays glued to the open delim.
-	 * Structurally the `shapeOnePerLineAfterFirst` skeleton with a per-link
-	 * break/space decision instead of an unconditional hardline. Only
-	 * reached when the caller threads `sourceBreakBefore` (multiVar fold);
-	 * every other Keep consumer stays on the legacy `shapeNoWrap` glue.
-	 */
-	private static function shapeKeep(
-		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, sourceBreakBefore: Array<Bool>
-	): Doc {
-		// ω-keep-kw-newline (increment 1b): the head (`items[0]`) breaks onto
-		// its own line at the continuation indent when `sourceBreakBefore[0]`
-		// is set — the multiVar fold maps the source `var`→head newline
-		// (`var\n\t\t\trawRead`) onto that flag. When unset (the default, and
-		// every other Keep consumer) the head stays glued to the open delim.
-		final headBreak: Bool = sourceBreakBefore.length > 0 && sourceBreakBefore[0];
-		if (items.length == 1)
-			return headBreak
-				? Concat([Text(open), Nest(cols, Concat([Line('\n'), items[0]])), Text(close)])
-				: Concat([Text(open), items[0], Text(close)]);
-		// `nested` holds everything inside the continuation Nest: the optional
-		// leading head break, the head itself (when broken), then each link's
-		// separator + per-link break/space + item. When the head is glued the
-		// Nest contains only the tail and `items[0]` rides the open delim line.
-		final nested: Array<Doc> = [];
-		if (headBreak) {
-			nested.push(Line('\n'));
-			nested.push(items[0]);
-		}
-		for (i in 1...items.length) {
-			nested.push(Text(sep));
-			final brk: Bool = i < sourceBreakBefore.length && sourceBreakBefore[i];
-			nested.push(brk ? Line('\n') : Text(' '));
-			nested.push(items[i]);
-		}
-		if (appendTrailingComma) nested.push(Text(sep));
-		return headBreak
-			? Concat([Text(open), Nest(cols, Concat(nested)), Text(close)])
-			: Concat([Text(open), items[0], Nest(cols, Concat(nested)), Text(close)]);
-	}
-
-	/**
 	 * True iff element `i` is a call-bearing CONTAINER literal
 	 * (`WrapListOptions.complexItemKinds` code 2) — the chunk policy's trigger.
 	 * Index 0 answers `false` even for a container: a leading container is
@@ -3486,8 +3272,7 @@ class WrapList {
 
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false,
-		?complexItemKinds: Array<Int>
+		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, ?complexItemKinds: Array<Int>
 	): Doc {
 		// ω-fill-leading-comment: the first item's Doc starts with the comment
 		// that preceded it in the source. Packed flat it lands glued to the open
@@ -3566,20 +3351,7 @@ class WrapList {
 				closeInside,
 				Text(close)
 			]);
-			// ω-keep-callclose-newline: under a Keep-mode method-chain sole arg
-			// whose source glued the outer close `)` (`argsCloseNewline == false`,
-			// surfaced as `keepCloseGlued`), the chain renders via
-			// `MethodChainEmit.shapeKeep` — a `Concat([receiver, Nest(...)])` whose
-			// length-2-Nest signature is INDISTINGUISHABLE from a genuine
-			// OnePerLine chain at `isChainOPLBreak`. The OPL gate would force the
-			// outer close onto its own line (`}))\n\t\t);`), but the fork keeps it
-			// where the source put it (`})));`). The keep signal carries the source
-			// intent directly (no width re-probe), so we short-circuit to the glued
-			// shape — the source-faithful close for the `})));` case. A keep chain
-			// whose source DID break before the close has `keepCloseGlued == false`
-			// (the parser captured a newline) and falls through to the OPL break,
-			// reproducing the author's own-line close.
-			if (keepCloseGlued || !isChainOPLBreak(items[0])) return groupOrRestProbe(gluedShape, groupRestProbe);
+			if (!isChainOPLBreak(items[0])) return groupOrRestProbe(gluedShape, groupRestProbe);
 			final brkShape: Doc = Concat([
 				Text(open),
 				openInside,
@@ -3741,11 +3513,8 @@ class WrapList {
 	 * `false` — in each of those the head line DOES carry a link, which is what
 	 * this predicate's consumer asks about.
 	 *
-	 * COLLISION, pre-existing and still live: `shapeKeepTail` emits the same
-	 * `Concat([Nest(…)])` even for a fully GLUED keep mask, so a `Keep` chain
-	 * answers `true` here without breaking anywhere. The consumer short-circuits
-	 * that case on `keepCloseGlued` before consulting this predicate; the old
-	 * `Concat([receiver, Nest])` signature had the identical collision.
+	 * `shapeKeepTail` emits the same `Concat([Nest(…)])` shape, but only for a
+	 * comment-break mask, which always breaks somewhere.
 	 */
 	private static function isOPLTail(d: Doc): Bool {
 		return switch d {
@@ -3795,10 +3564,8 @@ class WrapList {
 		return switch d {
 			case Nest(_, Concat(arr)) if (arr.length >= 1):
 				switch arr[0] {
-					case Line(s) if (s == '\n'):
-						true;
-					case _:
-						false;
+					case Line(s) if (s == '\n'): true;
+					case _: false;
 				}
 			case _: false;
 		};
@@ -3937,8 +3704,7 @@ class WrapList {
 			// ω-cond-indent-policy FixedZero / AlignedDecrease: render-time
 			// markers, transparent — leading-hardline answer matches `inner`.
 			case ConditionalMarkerZero(inner): hasLeadingHardline(inner);
-			case ConditionalMarkerDecrease(inner):
-				hasLeadingHardline(inner);
+			case ConditionalMarkerDecrease(inner): hasLeadingHardline(inner);
 			// Every leaf kind is already resolved by `leadingHardlineLeaf`.
 			case _: false;
 		};
@@ -3962,7 +3728,8 @@ class WrapList {
 				IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),
 				IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _), IfIndentWidthExceeds(_, _, _, _),
-				IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _): false;
+				IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
+				false;
 			case _: null;
 		};
 	}
@@ -4021,8 +3788,7 @@ class WrapList {
 	 */
 	private static function firstVisibleTextIsFunctionKw(d: Doc): Bool {
 		return switch d {
-			case Text(s):
-				s.trim() == 'function';
+			case Text(s): s.trim() == 'function';
 			case Concat(arr):
 				var found: Bool = false;
 				var hit: Bool = false;
@@ -4121,8 +3887,7 @@ class WrapList {
 	 */
 	private static function firstVisibleText(d: Doc): Null<String> {
 		return switch d {
-			case Text(s):
-				s.trim();
+			case Text(s): s.trim();
 			case Concat(arr):
 				var found: Bool = false;
 				var r: Null<String> = null;
@@ -4198,8 +3963,7 @@ class WrapList {
 			case Concat(arr):
 				for (it in arr) if (hasTopLevelElse(it, depth)) return true;
 				false;
-			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner):
-				hasTopLevelElse(inner, depth + 1);
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner): hasTopLevelElse(inner, depth + 1);
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Flatten(i), HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i),
 				CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i), ConditionalMarkerZero(i), ConditionalMarkerDecrease(i),
 				BreakMark(i, _):
@@ -4268,10 +4032,8 @@ class WrapList {
 		open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
 	): Null<Doc> {
 		final padded: Bool = switch openInside {
-			case Empty:
-				false;
-			case _:
-				true;
+			case Empty: false;
+			case _: true;
 		};
 		return padded && items.length == 1 && isBlockBodyComprehensionItem(items[0])
 			? Concat([Text(open), openInside, items[0], closeInside, Text(close)])
@@ -4370,9 +4132,12 @@ class WrapList {
 			Text(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
+		// A flat-capable item's head must fit flat after `[ `: its natural first line alone would let the
+		// iterable wrap its own call to make room for the cuddle. The inner natural probe stays what an
+		// enclosing list measures, so a sole-argument host still reads the cuddled head it hugs.
 		return itemFlat < 0
 			? IfFirstLineExceeds(lineWidth, openShape, glueShape)
-			: IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);
+			: IfFirstLineExceeds(lineWidth, openShape, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape));
 	}
 
 	/**
@@ -4391,12 +4156,9 @@ class WrapList {
 	 */
 	private static function dropComprehensionBody(item: Doc): Null<Doc> {
 		return switch item {
-			case Group(Nest(n, Concat([Line(' '), body]))), BodyGroup(Nest(n, Concat([Line(' '), body]))):
-				BodyFit.breakLayout(n, body);
-			case Concat(parts):
-				BodyFit.rebuiltTail(parts, dropComprehensionBody);
-			case _:
-				BodyFit.slotProbeBreak(item);
+			case Group(Nest(n, Concat([Line(' '), body]))), BodyGroup(Nest(n, Concat([Line(' '), body]))): BodyFit.breakLayout(n, body);
+			case Concat(parts): BodyFit.rebuiltTail(parts, dropComprehensionBody);
+			case _: BodyFit.slotProbeBreak(item);
 		};
 	}
 
@@ -4527,58 +4289,35 @@ class WrapList {
 			case Empty, Text(_), Line(_), OptSpace(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline,
 				OptSpaceSkipAfterHardline:
 				d;
-			case BodyGroup(inner):
-				flatLength(inner) >= 0 ? Group(groupifyShared(inner, memo)) : BodyGroup(groupifyShared(inner, memo));
-			case Group(inner):
-				Group(groupifyShared(inner, memo));
-			case GroupWithRestProbe(inner):
-				GroupWithRestProbe(groupifyShared(inner, memo));
-			case Nest(n, inner):
-				Nest(n, groupifyShared(inner, memo));
-			case Flatten(inner):
-				Flatten(groupifyShared(inner, memo));
-			case WrapBoundary(inner):
-				WrapBoundary(groupifyShared(inner, memo));
-			case LeadingBreak(n, inner, token):
-				LeadingBreak(n, groupifyShared(inner, memo), token);
-			case BreakCommit(brk, flat, token):
-				BreakCommit(groupifyShared(brk, memo), groupifyShared(flat, memo), token);
-			case BreakMark(inner, token):
-				BreakMark(groupifyShared(inner, memo), token);
-			case HardFlatten(inner):
-				HardFlatten(groupifyShared(inner, memo));
-			case CollapseProbe(inner):
-				CollapseProbe(groupifyShared(inner, memo));
-			case CollapseAddProbe(inner):
-				CollapseAddProbe(groupifyShared(inner, memo));
-			case CollapseBoolProbe(inner):
-				CollapseBoolProbe(groupifyShared(inner, memo));
-			case CollapseChainProbe(inner):
-				CollapseChainProbe(groupifyShared(inner, memo));
-			case ConditionalMarkerZero(inner):
-				ConditionalMarkerZero(groupifyShared(inner, memo));
-			case ConditionalMarkerDecrease(inner):
-				ConditionalMarkerDecrease(groupifyShared(inner, memo));
-			case Concat(items):
-				Concat([for (it in items) groupifyShared(it, memo)]);
-			case IfBreak(b, f):
-				IfBreak(groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfWidthExceeds(n, b, f):
-				IfWidthExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfFirstLineExceeds(n, b, f):
-				IfFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case BodyGroup(inner): flatLength(inner) >= 0 ? Group(groupifyShared(inner, memo)) : BodyGroup(groupifyShared(inner, memo));
+			case Group(inner): Group(groupifyShared(inner, memo));
+			case GroupWithRestProbe(inner): GroupWithRestProbe(groupifyShared(inner, memo));
+			case Nest(n, inner): Nest(n, groupifyShared(inner, memo));
+			case Flatten(inner): Flatten(groupifyShared(inner, memo));
+			case WrapBoundary(inner): WrapBoundary(groupifyShared(inner, memo));
+			case LeadingBreak(n, inner, token): LeadingBreak(n, groupifyShared(inner, memo), token);
+			case BreakCommit(brk, flat, token): BreakCommit(groupifyShared(brk, memo), groupifyShared(flat, memo), token);
+			case BreakMark(inner, token): BreakMark(groupifyShared(inner, memo), token);
+			case HardFlatten(inner): HardFlatten(groupifyShared(inner, memo));
+			case CollapseProbe(inner): CollapseProbe(groupifyShared(inner, memo));
+			case CollapseAddProbe(inner): CollapseAddProbe(groupifyShared(inner, memo));
+			case CollapseBoolProbe(inner): CollapseBoolProbe(groupifyShared(inner, memo));
+			case CollapseChainProbe(inner): CollapseChainProbe(groupifyShared(inner, memo));
+			case ConditionalMarkerZero(inner): ConditionalMarkerZero(groupifyShared(inner, memo));
+			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(groupifyShared(inner, memo));
+			case Concat(items): Concat([for (it in items) groupifyShared(it, memo)]);
+			case IfBreak(b, f): IfBreak(groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfWidthExceeds(n, b, f): IfWidthExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfFirstLineExceeds(n, b, f): IfFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfLineExceeds(n, b, f):
 				// A chain gate folds its flat side's measured width into `n` at emit time
 				// (`BodyFit.chainStaircase`), so the re-tag that widens that side re-folds it.
 				final g: Doc = groupifyShared(f, memo);
 				final refold: Int = BodyFit.slotProbeBreak(d) == null ? 0 : DocMeasure.flatTokenWidth(g) - DocMeasure.flatTokenWidth(f);
 				IfLineExceeds(n + refold, groupifyShared(b, memo), g);
-			case IfResidualLineExceeds(n, b, f):
-				IfResidualLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfFullLineExceeds(n, b, f):
-				IfFullLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfNaturalFirstLineExceeds(n, b, f):
-				IfNaturalFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfResidualLineExceeds(n, b, f): IfResidualLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfFullLineExceeds(n, b, f): IfFullLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfNaturalFirstLineExceeds(n, b, f): IfNaturalFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			// A shared arm here rebuilt BOTH probes as the plain ctor and dropped the
 			// rest-awareness of the `…WithRest` one — the failure `D.mapChildren` warns
 			// about, and the sibling arrow pair three arms below keeps them separate for
@@ -4593,14 +4332,11 @@ class WrapList {
 				IfArrowContinuationFits(ei, fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfArrowContinuationFitsWithRest(ei, fw, n, b, f):
 				IfArrowContinuationFitsWithRest(ei, fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfIndentWidthExceeds(fw, n, b, f):
-				IfIndentWidthExceeds(fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
-			case IfGluedFirstLineExceeds(n, bi, b, f):
-				IfGluedFirstLineExceeds(n, bi, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfIndentWidthExceeds(fw, n, b, f): IfIndentWidthExceeds(fw, n, groupifyShared(b, memo), groupifyShared(f, memo));
+			case IfGluedFirstLineExceeds(n, bi, b, f): IfGluedFirstLineExceeds(n, bi, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfTrailingCommentOverflows(n, tw, c, b, f):
 				IfTrailingCommentOverflows(n, tw, groupifyShared(c, memo), groupifyShared(b, memo), groupifyShared(f, memo));
-			case Fill(items, sep, tr):
-				Fill([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
+			case Fill(items, sep, tr): Fill([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 			case FillWithRestProbe(items, sep, tr):
 				FillWithRestProbe([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
 			case FillBreakAfterWrap(items, sep, tr):
@@ -4630,8 +4366,7 @@ class WrapList {
 			sepBeforeFlags: axes.sepBeforeFlags,
 			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
 			breakAsOnePerLine: axes.breakAsOnePerLine ?? false,
-			sourceBreakBefore: axes.sourceBreakBefore,
-			keepCloseGlued: axes.keepCloseGlued ?? false,
+
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
 			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
@@ -4655,7 +4390,7 @@ class WrapList {
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
 		// Resolve every optional axis ONCE, into locals the body then reads as plain
-		// values. `forceMode`, `sepBeforeFlags` and `sourceBreakBefore` stay nullable:
+		// values. `forceMode` and `sepBeforeFlags` stay nullable:
 		// null is their meaningful state.
 		final axes: ResolvedWrapListOptions = resolveAxes(options);
 		final pastSep: PastSepItems = LineCommentPastSep.relocate(items, sep, axes.sepBeforeFlags);
@@ -4670,8 +4405,7 @@ class WrapList {
 		final sepBeforeFlags: Null<Array<Bool>> = pastSep.sepBeforeFlags;
 		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
 		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
-		final sourceBreakBefore: Null<Array<Bool>> = axes.sourceBreakBefore;
-		final keepCloseGlued: Bool = axes.keepCloseGlued;
+
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
 		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
@@ -4799,8 +4533,8 @@ class WrapList {
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, sourceBreakBefore, keepCloseGlued, flatTrailingComma, opt.comprehensionCuddledOpen,
-				opt.soleItemCuddledBrackets, complexItemKinds
+				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
+				complexItemKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -4868,8 +4602,6 @@ private typedef ResolvedWrapListOptions = {
 	final sepBeforeFlags: Null<Array<Bool>>;
 	final sourceMultilineKeep: Bool;
 	final breakAsOnePerLine: Bool;
-	final sourceBreakBefore: Null<Array<Bool>>;
-	final keepCloseGlued: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
 	final comprehensionBodyMeasure: Bool;

@@ -61,10 +61,8 @@ class LintFixSafeTrailTest extends Test {
 			final trail: LintFixSafeTrail = new LintFixSafeTrail((_, _, _) -> null, LintFixSafePass.PROBE_CAP);
 			final outcome: OracleOutcome = trail.seat([created], [], [], [], []).probe([], []);
 			switch outcome {
-				case Unavailable(reason):
-					Assert.stringContains('cannot write $created: the file could not be deleted', reason);
-				case other:
-					Assert.fail('expected Unavailable, got $other');
+				case Unavailable(reason): Assert.stringContains('cannot write $created: the file could not be deleted', reason);
+				case other: Assert.fail('expected Unavailable, got $other');
 			}
 		});
 		#else

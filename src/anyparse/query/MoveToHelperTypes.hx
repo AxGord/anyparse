@@ -148,13 +148,12 @@ final class MoveToHelperTypes {
 				merged.push(cut);
 		}
 		return [
-			for (cut in merged)
-				if (isBlank(source, cut.to, source.length)) {
-					var from: Int = cut.from;
-					while (from > 0 && SourceText.isSpace(source.fastCodeAt(from - 1))) from--;
-					{ span: new Span(from, source.length), text: '\n' };
-				} else
-					{ span: cut, text: '' }
+			for (cut in merged) if (isBlank(source, cut.to, source.length)) {
+				var from: Int = cut.from;
+				while (from > 0 && SourceText.isSpace(source.fastCodeAt(from - 1))) from--;
+				{ span: new Span(from, source.length), text: '\n' };
+			} else
+				{ span: cut, text: '' }
 		];
 	}
 

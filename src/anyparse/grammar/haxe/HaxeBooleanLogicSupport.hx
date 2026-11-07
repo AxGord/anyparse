@@ -348,18 +348,15 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 */
 	private static function slotPrecedence(slotKind: String): Null<Precedence> {
 		return switch slotKind {
-			case 'Not', 'Neg':
-				PREC_ATOM;
+			case 'Not', 'Neg': PREC_ATOM;
 			// The comparison tier is left-associative but NOT associative in meaning, so a result at
 			// PREC_CMP may not sit bare in either of its slots: `c == (n >= 0)` de-parenthesised is
 			// `(c == n) >= 0`. Demanding the next tier up parenthesises exactly the PREC_CMP results
 			// and nothing else — anything binding tighter already sits at PREC_BINARY or above.
-			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq':
-				PREC_BINARY;
+			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_BINARY;
 			// `is` binds tighter than every binary operator (`a + b is T` is `a + (b is T)`), so only a
 			// prefix result may sit bare on its left.
-			case 'Is':
-				PREC_NOT;
+			case 'Is': PREC_NOT;
 			// `in` binds tighter than every other binary operator on its LEFT (`x == y in b` is
 			// `x == (y in b)`), so both its slots demand the binary tier — the right one needlessly.
 			case 'In': PREC_BINARY;
@@ -655,8 +652,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case 'Ternary': PREC_TERNARY;
 			case 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq': PREC_CMP;
 			case 'Interval': PREC_INTERVAL;
-			case 'Is', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod':
-				PREC_BINARY;
+			case 'Is', 'BitOr', 'BitXor', 'BitAnd', 'Shl', 'Shr', 'UShr', 'Add', 'Sub', 'Mul', 'Div', 'Mod': PREC_BINARY;
 			// `=>`, the two operators that bind tight on the left but take a whole expression on the
 			// right, and `cast`, whose operand is a whole expression: as an OPERAND each runs on into
 			// whatever follows it (`x -> b && c` is `x -> (b && c)`, `cast a && b` is `cast (a && b)`),

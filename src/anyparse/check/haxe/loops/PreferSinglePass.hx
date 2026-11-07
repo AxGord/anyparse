@@ -158,8 +158,7 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 			case FilterMap: 'this filter(…).map(…) walks the array twice — [for (x in xs) if (p) f] does it in one pass';
 			case MapMap: 'this map(…).map(…) walks the array twice — one map(x -> g(f(x))) does it in one pass';
 			case FilterFilter: 'this filter(…).filter(…) walks the array twice — one filter(x -> p && q) does it in one pass';
-			case MapFilter:
-				'this map(…).filter(…) walks the array twice — [for (x in xs) { final y = f; if (p) y; }] does it in one pass';
+			case MapFilter: 'this map(…).filter(…) walks the array twice — [for (x in xs) { final y = f; if (p) y; }] does it in one pass';
 		}
 	}
 

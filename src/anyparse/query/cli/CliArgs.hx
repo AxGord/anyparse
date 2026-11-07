@@ -336,16 +336,15 @@ final class CliArgs {
 			}
 		}
 		return ([
-			for (path in paths)
-				{
-					file: path,
-					source: (try {
-						CliIo.readSourceForParse(path);
-					} catch (exception: Exception) {
-						CliIo.stderr('apq $cmd: $path: ${exception.message}\n');
-						return null;
-					}: String)
-				}
+			for (path in paths) {
+				file: path,
+				source: (try {
+					CliIo.readSourceForParse(path);
+				} catch (exception: Exception) {
+					CliIo.stderr('apq $cmd: $path: ${exception.message}\n');
+					return null;
+				}: String)
+			}
 		]: Array<{ file: String, source: String }>);
 	}
 

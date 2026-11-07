@@ -270,44 +270,24 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	}
 
 	/**
-	 * The whole 4x2 placement table on the reported site, in one pin. The key first shipped gated on the `FitLine`
-	 * LAYOUT, so `same` and `keep` produced the reported defect and the key documented for them was silent; the gate
-	 * then moved onto the policy VALUE, upstream of every layout, and all four placements answer it.
+	 * The whole 3x2 placement table on the reported site, in one pin. The key first shipped gated on the `FitLine`
+	 * LAYOUT, so `same` produced the reported defect and the key documented for it was silent; the gate then moved
+	 * onto the policy VALUE, upstream of every layout, and all three placements answer it.
 	 *
 	 * Off (or absent, which is the same `false`) every placement keeps the bytes it had before the key existed:
-	 * `fitLine` / `same` glue whatever the source did, `keep` reproduces the glued source, `next` breaks every body.
-	 * On, all four produce ONE shape - the `next` bytes.
+	 * `fitLine` / `same` glue whatever the source did, `next` breaks every body. On, all three produce ONE shape - the
+	 * `next` bytes.
 	 */
 	@:pin('control')
 	@:killer('M-LOOPIF-POLICY-BLIND')
 	public function testEveryPlacementObeysTheKey(): Void {
-		for (placement in ['fitLine', 'same', 'keep', 'next']) {
+		for (placement in ['fitLine', 'same', 'next']) {
 			Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_GLUED, withPlacement(REPORTED_ON, placement)), 'on/$placement');
 			Assert.equals(
 				placement == 'next' ? REPORTED_NEXT : REPORTED_GLUED, triviaWrite(REPORTED_GLUED, withPlacement(REPORTED_OFF, placement)),
 				'off/$placement'
 			);
 		}
-	}
-
-	/**
-	 * `keep` is the placement that reads the source, and the key has to win over it without taking the reading away: off, both
-	 * source forms come back verbatim; on, both land on the broken-out one.
-	 *
-	 * Only the third assertion can fail under an arm - it is the table pin's `on/keep` cell again. The one that earns this pin
-	 * its own place is the SECOND: `keep` reproducing a hand-broken source is the only proof in this file that `"keep"` reaches
-	 * `BodyPolicy.Keep` at all rather than degrading to `Same`, which is what `HxFormatBodyPolicy` once claimed before the
-	 * loader was read.
-	 */
-	@:pin('control')
-	@:killer('M-LOOPIF-KEEP-BLIND')
-	public function testKeepPlacementObeysTheKeyAndStillReadsTheSource(): Void {
-		final keepOn: String = withPlacement(REPORTED_ON, 'keep');
-		final keepOff: String = withPlacement(REPORTED_OFF, 'keep');
-		Assert.equals(REPORTED_GLUED, triviaWrite(REPORTED_GLUED, keepOff));
-		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_NEXT, keepOff));
-		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_GLUED, keepOn));
-		Assert.equals(REPORTED_NEXT, triviaWrite(REPORTED_NEXT, keepOn));
 	}
 
 	/**
@@ -319,7 +299,7 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-LOOPIF-ALWAYS')
 	public function testGuardStaysGluedUnderEveryPlacement(): Void {
-		for (placement in ['fitLine', 'same', 'keep']) {
+		for (placement in ['fitLine', 'same']) {
 			Assert.equals(REPORTED_GUARD, triviaWrite(REPORTED_GUARD, withPlacement(REPORTED_ON, placement)), 'on/$placement');
 			Assert.equals(REPORTED_GUARD, triviaWrite(REPORTED_GUARD, withPlacement(REPORTED_OFF, placement)), 'off/$placement');
 			Assert.equals(DO_WHILE_GUARD, triviaWrite(DO_WHILE_GUARD, doWhileConfig(placement, true)), 'do-on/$placement');
@@ -336,7 +316,7 @@ final class HxLoopBodyIfElseSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-LOOPIF-NOWRAP')
 	public function testDoWhileIfElseBreaksUnderHeader(): Void {
-		for (placement in ['fitLine', 'same', 'keep', 'next']) {
+		for (placement in ['fitLine', 'same', 'next']) {
 			Assert.equals(DO_WHILE_NEXT, triviaWrite(DO_WHILE_GLUED, doWhileConfig(placement, true)), 'on/$placement');
 			Assert.equals(
 				placement == 'next' ? DO_WHILE_NEXT : DO_WHILE_GLUED, triviaWrite(DO_WHILE_GLUED, doWhileConfig(placement, false)),

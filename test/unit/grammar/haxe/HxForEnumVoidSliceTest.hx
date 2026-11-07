@@ -68,8 +68,7 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 			case ForStmt(outer):
 				Assert.equals('i', (outer.varName: String));
 				switch outer.body {
-					case ForStmt(inner):
-						Assert.equals('j', (inner.varName: String));
+					case ForStmt(inner): Assert.equals('j', (inner.varName: String));
 					case null, _: Assert.fail('expected nested ForStmt');
 				}
 			case null, _:

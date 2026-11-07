@@ -46,9 +46,9 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	/** The compiled defaults, 160 columns. */
 	private static final CFG_DEFAULT: String = '{}';
 
-	/** A comprehension's open bracket cuddles its `for`, at 140 columns. */
-	private static final CFG_CUDDLED: String =
-		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true}}';
+	/** A comprehension's open bracket cuddles its `for`, at 140 columns, and its body stays on the head line (`same`). */
+	private static final CFG_CUDDLED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
+		+ '"comprehensionCuddledOpen": true}, "sameLine": {"comprehensionFor": "same"}}';
 
 	public function new(): Void {
 		super();

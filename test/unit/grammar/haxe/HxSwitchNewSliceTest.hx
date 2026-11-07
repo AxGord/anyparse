@@ -155,8 +155,7 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 			case CaseBranch(b):
 				Assert.equals(1, b.body.length);
 				switch b.body[0] {
-					case SwitchStmt(inner):
-						Assert.equals(1, inner.cases.length);
+					case SwitchStmt(inner): Assert.equals(1, inner.cases.length);
 					case null, _: Assert.fail('expected nested SwitchStmt');
 				}
 			case null, _:

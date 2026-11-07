@@ -34,14 +34,13 @@ final class LanguageBoundProbe implements Check implements LanguageBound {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (f in files)
-				{
-					file: f.file,
-					span: null,
-					rule: id(),
-					severity: Severity.Info,
-					message: 'ran on ${plugin.langName()}'
-				}
+			for (f in files) {
+				file: f.file,
+				span: null,
+				rule: id(),
+				severity: Severity.Info,
+				message: 'ran on ${plugin.langName()}'
+			}
 		];
 	}
 

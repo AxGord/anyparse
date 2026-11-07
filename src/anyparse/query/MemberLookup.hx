@@ -216,7 +216,8 @@ final class MemberLookup {
 	public function memberDeclarationsOf(typeName: String, memberName: String): Array<MemberDeclaration> {
 		return [
 			for (decl in _refs.named(typeName))
-				for (m in decl.type.members) if (m.name == memberName) { type: decl.type, member: m, file: decl.file }
+				for (m in decl.type.members)
+					if (m.name == memberName) { type: decl.type, member: m, file: decl.file }
 		];
 	}
 
@@ -530,7 +531,8 @@ final class MemberLookup {
 	public function declarationsOf(typeName: String, member: String): Array<OverrideFamilyMember> {
 		return [
 			for (decl in _refs.named(typeName))
-				for (m in decl.type.members) if (m.name == member) { file: decl.file.file, typeName: decl.type.name, declFrom: m.declFrom }
+				for (m in decl.type.members)
+					if (m.name == member) { file: decl.file.file, typeName: decl.type.name, declFrom: m.declFrom }
 		];
 	}
 

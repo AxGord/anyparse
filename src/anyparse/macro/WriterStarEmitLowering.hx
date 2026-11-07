@@ -701,10 +701,8 @@ final class WriterStarEmitLowering {
 		// a runtime-conditional separator (space or hardline), so the
 		// first element's leading separator acts as the boundary with
 		// the preceding struct field (τ₁ — catches against try body).
-		// Per-element shape is not captured today, so `Keep` degrades
-		// to `Same` at this site (ω-keep-policy).
 		final optFlag: Expr = optFieldAccess(sameLineName);
-		final sepExpr: Expr = sameLinePolicySwitch(optFlag, macro _dt(' '));
+		final sepExpr: Expr = sameLinePolicySwitch(optFlag);
 		// ω-block-shape-aware: when the Star carries
 		// `@:fmt(blockBodyKeepsInline)` AND the prev struct field's
 		// body has block ctors AND the element type carries a same-
@@ -1265,8 +1263,8 @@ final class WriterStarEmitLowering {
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt, false,
-			trailingCommaRemovableAlt, uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0]),
+			reflowSourceMultilineAlt, matrixWrapAlt, typedefBodyBlanksAlt, propagateExprPositionAlt, false, trailingCommaRemovableAlt,
+			uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0]),
 			branch.fmtHasFlag('relocateTrailingComments'), WriterTriviaStarDispatch.afterDocPolicy(branch)
 		);
 	}

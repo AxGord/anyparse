@@ -850,8 +850,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		// The compiler finds module `a.b.C` as `<class path>/a/b/C.hx`, so that is the file looked for, under any root.
 		final tail: String = '${module.split('.').join('/')}.hx';
 		final files: Array<{ file: String, source: String }> = [
-			for (entry in named[Path.withoutDirectory(tail)] ?? []) if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail'))
-				entry
+			for (entry in named[Path.withoutDirectory(tail)] ?? [])
+				if (entry.file == tail || StringTools.endsWith(entry.file, '/$tail')) entry
 		];
 		// Each candidate is read declarations-only, once per file whatever name is asked. A ROOT module's path is its bare file
 		// name, which any directory may hold, so the package read decides; a file at `a/b/C.hx` is that module's own, and one

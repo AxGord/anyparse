@@ -977,8 +977,9 @@ final class CrossRenameMember {
 		final memo: Null<Array<Int>> = scan.bound;
 		if (memo != null) return memo;
 		final hits: Array<Int> = [
-			for (h in Refs.find(scan.target.memberName, scan.tree, scan.refShape))
-				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
+			for (h in Refs.find(
+				scan.target.memberName, scan.tree, scan.refShape
+			)) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
 		scan.bound = hits;
 		return hits;

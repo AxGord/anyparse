@@ -73,14 +73,13 @@ final class RedundantCondCompParens extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return [
-			for (entry in files) for (site in sites(entry.source, plugin))
-				{
-					file: entry.file,
-					span: site.condition,
-					rule: ID,
-					severity: Severity.Info,
-					message: 'redundant parentheses around the conditional-compilation flag `${site.flag}`'
-				}
+			for (entry in files) for (site in sites(entry.source, plugin)) {
+				file: entry.file,
+				span: site.condition,
+				rule: ID,
+				severity: Severity.Info,
+				message: 'redundant parentheses around the conditional-compilation flag `${site.flag}`'
+			}
 		];
 	}
 

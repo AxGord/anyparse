@@ -224,7 +224,7 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "e1594e1b4d0f90f6",
-				"files": "5aced0b4f0402159",
+				"files": "3b087c6b4941c928",
 				"compiles": [
 					true,
 					true
@@ -286,7 +286,7 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "40968ff102b1e6f5",
-				"files": "8c71b7f53a28defd",
+				"files": "8c1c04bc39e6ba16",
 				"compiles": [
 					true,
 					true
@@ -403,14 +403,14 @@
 				"--fix"
 			],
 			"files": {
-				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tswitch (v()) {\n\t\t\tcase 1:\n\t\t\t\tif (a) {\n\t\t\t\t\tp('one-a');\n\t\t\t\t}\n\t\t\tcase _:\n\t\t\t\tp('other');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function v():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function t(a:Bool, b:Bool):Void {\n\t\tfinal xs = [1, 2, 3];\n\t\tvar n = 2;\n\t\tswitch (v()) {\n\t\t\tcase 1:\n\t\t\t\tif (a) {\n\t\t\t\t\tp('one-a');\n\t\t\t\t}\n\t\t\tcase _: p('other');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (a in [true, false]) for (b in [true, false]) t(a, b);\n\t}\n}\n",
 				"apq.json": "{}\n"
 			},
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "4ee4574c89ca6a5e",
-				"files": "2654a71ca9e641f7",
+				"files": "c319df3591f3739f",
 				"compiles": [
 					true,
 					true
@@ -441,7 +441,7 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "e1594e1b4d0f90f6",
-				"files": "f52edf04093008bb",
+				"files": "5e313f206c37fa08",
 				"compiles": [
 					true,
 					true
@@ -473,7 +473,7 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "40968ff102b1e6f5",
-				"files": "6ebf397eb5add7d7",
+				"files": "2314e23e5623962f",
 				"compiles": [
 					true,
 					true
@@ -526,13 +526,13 @@
 				"--fix"
 			],
 			"files": {
-				"Main.hx": "class B {\n\tpublic var n:Int;\n\tpublic var next:Dynamic;\n\n\tpublic function new(n:Int, ?next:Dynamic) {\n\t\tthis.n = n;\n\t\tthis.next = next;\n\t}\n\n\tpublic function a():Int {\n\t\tMain.out.push('a' + n);\n\t\treturn n;\n\t}\n\n\tpublic function more():Bool {\n\t\treturn next != null;\n\t}\n}\n\nclass D {\n\tpublic var n:Int = 7;\n\n\tpublic function new() {}\n}\n\nclass Host {\n\tpublic var bubble:Int = 42;\n\n\tpublic function new() {}\n\n\tpublic function p8(o:Dynamic):Void {\n\t\tcast(o, Bubble).a();\n\t\tMain.out.push('$bubble');\n\t\tcast(o, Bubble).a();\n\t}\n}\n\nclass Bubble extends B {}\n\nclass Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function sink(x:Dynamic, y:Dynamic):Void {\n\t\tout.push('sink');\n\t}\n\n\tstatic function log(s:String):Int {\n\t\tout.push(s);\n\t\treturn 0;\n\t}\n\n\tstatic function p1(o:Dynamic):Void {\n\t\tif (o is B) cast(o, B).a();\n\t\tif (o is B) cast(o, B).a();\n\t}\n\n\tstatic function p1e(o:Dynamic):Void {\n\t\tif (o is B) cast(o, D).n;\n\t\telse log('else');\n\t\tlog('mid');\n\t\tcast(o, D).n;\n\t}\n\n\tstatic function p1f(o:Dynamic, k:Int):Void {\n\t\tfor (i in 0...k) cast(o, B).a();\n\t\t{\n\t\t\tif (k > 0) cast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p2(o:Dynamic):Void {\n\t\to = cast(o, B).next;\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p3(o:Dynamic, n:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tfor (i in 0...2) {\n\t\t\tcast(o, B).a();\n\t\t\to = n;\n\t\t}\n\t}\n\n\tstatic function p4(o:Dynamic, n:Dynamic):Void {\n\t\tsink(o = n, cast(o, B).a());\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p5(o:Dynamic):Void {\n\t\twhile (cast(o, B).more()) {\n\t\t\tcast(o, B).a();\n\t\t\to = cast(o, B).next;\n\t\t}\n\t}\n\n\tstatic function p7(o:Dynamic, p:Dynamic):Void {\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t}\n\n\tstatic function p9(o:Dynamic, n:Dynamic):Void {\n\t\tfinal f = () -> o = n;\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p9b(o:Dynamic, n:Dynamic):Void {\n\t\tvar f:() -> Void = null;\n\t\tf = function() {\n\t\t\to = n;\n\t\t};\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p12(o:Dynamic):Void {\n\t\tsink(log('before'), cast(o, B).n);\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p14(list:Array<Dynamic>):Void {\n\t\tfor (o in list) {\n\t\t\tcast(o, B).a();\n\t\t\tcast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p10(o:Dynamic, k:Int):Void {\n\t\tswitch (k) {\n\t\t\tcase 1:\n\t\t\t\tcast(o, B).a();\n\t\t\tcase 2:\n\t\t\t\tcast(o, B).a();\n\t\t\tdefault:\n\t\t}\n\t}\n\n\tstatic function p11(o:Dynamic, k:Bool):Void {\n\t\tk && cast(o, B).more();\n\t\tk ? cast(o, B).a() : cast(o, B).a();\n\t}\n\n\tstatic function p15(o:Dynamic, k:Bool):Void {\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught');\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught2');\n\t}\n\n\tstatic function p16(o:Dynamic, k:Bool):Void {\n\t\tdo cast(o, B).a() while (false);\n\t\tif (k) cast(o, B).a();\n\t}\n\n\tstatic function p6(f:Dynamic):Void {\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t}\n\n\tstatic function p17(o:Dynamic):Void {\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t}\n\n\tstatic function p18(o:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tcast(o, B).a();\n\t\to = null;\n\t\tcast(o, B);\n\t\tcast(o, B);\n\t}\n\n\tstatic function run(name:String, f:() -> Void):Void {\n\t\tout = [];\n\t\ttry\n\t\t\tf()\n\t\tcatch (e:Dynamic)\n\t\t\tout.push('THROW');\n\t\tSys.println(name + \": \" + out.join(\",\"));\n\t}\n\n\tstatic function main():Void {\n\t\tfinal c:B = new B(2);\n\t\tfinal l:B = new B(1, c);\n\t\trun('p1', () -> p1('str'));\n\t\trun('p1e', () -> p1e(new D()));\n\t\trun('p1f', () -> p1f('str', 0));\n\t\trun('p2', () -> p2(l));\n\t\trun('p3', () -> p3(l, c));\n\t\trun('p4', () -> p4(l, c));\n\t\trun('p5', () -> p5(l));\n\t\trun('p7', () -> p7(l, new D()));\n\t\trun('p8', () -> new Host().p8(new Bubble(5)));\n\t\trun('p9', () -> p9(l, c));\n\t\trun('p9b', () -> p9b(l, c));\n\t\trun('p12', () -> p12('str'));\n\t\trun('p14', () -> p14([l, c]));\n\t\trun('p10', () -> p10(l, 1));\n\t\trun('p11', () -> p11('str', false));\n\t\trun('p15', () -> p15('str', false));\n\t\trun('p16', () -> p16(l, false));\n\t\trun('p18', () -> p18(l));\n\t}\n}\n"
+				"Main.hx": "class B {\n\tpublic var n:Int;\n\tpublic var next:Dynamic;\n\n\tpublic function new(n:Int, ?next:Dynamic) {\n\t\tthis.n = n;\n\t\tthis.next = next;\n\t}\n\n\tpublic function a():Int {\n\t\tMain.out.push('a' + n);\n\t\treturn n;\n\t}\n\n\tpublic function more():Bool {\n\t\treturn next != null;\n\t}\n}\n\nclass D {\n\tpublic var n:Int = 7;\n\n\tpublic function new() {}\n}\n\nclass Host {\n\tpublic var bubble:Int = 42;\n\n\tpublic function new() {}\n\n\tpublic function p8(o:Dynamic):Void {\n\t\tcast(o, Bubble).a();\n\t\tMain.out.push('$bubble');\n\t\tcast(o, Bubble).a();\n\t}\n}\n\nclass Bubble extends B {}\n\nclass Main {\n\tpublic static var out:Array<String> = [];\n\n\tstatic function sink(x:Dynamic, y:Dynamic):Void {\n\t\tout.push('sink');\n\t}\n\n\tstatic function log(s:String):Int {\n\t\tout.push(s);\n\t\treturn 0;\n\t}\n\n\tstatic function p1(o:Dynamic):Void {\n\t\tif (o is B) cast(o, B).a();\n\t\tif (o is B) cast(o, B).a();\n\t}\n\n\tstatic function p1e(o:Dynamic):Void {\n\t\tif (o is B)\n\t\t\tcast(o, D).n;\n\t\telse\n\t\t\tlog('else');\n\t\tlog('mid');\n\t\tcast(o, D).n;\n\t}\n\n\tstatic function p1f(o:Dynamic, k:Int):Void {\n\t\tfor (i in 0...k) cast(o, B).a();\n\t\t{\n\t\t\tif (k > 0) cast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p2(o:Dynamic):Void {\n\t\to = cast(o, B).next;\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p3(o:Dynamic, n:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tfor (i in 0...2) {\n\t\t\tcast(o, B).a();\n\t\t\to = n;\n\t\t}\n\t}\n\n\tstatic function p4(o:Dynamic, n:Dynamic):Void {\n\t\tsink(o = n, cast(o, B).a());\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p5(o:Dynamic):Void {\n\t\twhile (cast(o, B).more()) {\n\t\t\tcast(o, B).a();\n\t\t\to = cast(o, B).next;\n\t\t}\n\t}\n\n\tstatic function p7(o:Dynamic, p:Dynamic):Void {\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t\tsink(cast(o, B).n, cast(p, D).n);\n\t}\n\n\tstatic function p9(o:Dynamic, n:Dynamic):Void {\n\t\tfinal f = () -> o = n;\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p9b(o:Dynamic, n:Dynamic):Void {\n\t\tvar f:() -> Void = null;\n\t\tf = function() {\n\t\t\to = n;\n\t\t};\n\t\tcast(o, B).a();\n\t\tf();\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p12(o:Dynamic):Void {\n\t\tsink(log('before'), cast(o, B).n);\n\t\tcast(o, B).a();\n\t}\n\n\tstatic function p14(list:Array<Dynamic>):Void {\n\t\tfor (o in list) {\n\t\t\tcast(o, B).a();\n\t\t\tcast(o, B).a();\n\t\t}\n\t}\n\n\tstatic function p10(o:Dynamic, k:Int):Void {\n\t\tswitch (k) {\n\t\t\tcase 1: cast(o, B).a();\n\t\t\tcase 2: cast(o, B).a();\n\t\t\tdefault:\n\t\t}\n\t}\n\n\tstatic function p11(o:Dynamic, k:Bool):Void {\n\t\tk && cast(o, B).more();\n\t\tk ? cast(o, B).a() : cast(o, B).a();\n\t}\n\n\tstatic function p15(o:Dynamic, k:Bool):Void {\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught');\n\t\ttry\n\t\t\tcast(o, B).a()\n\t\tcatch (e:Dynamic)\n\t\t\tlog('caught2');\n\t}\n\n\tstatic function p16(o:Dynamic, k:Bool):Void {\n\t\tdo cast(o, B).a() while (false);\n\t\tif (k) cast(o, B).a();\n\t}\n\n\tstatic function p6(f:Dynamic):Void {\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t\t(cast f : Void->Void)();\n\t}\n\n\tstatic function p17(o:Dynamic):Void {\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t\t(cast o : Null<B>).a();\n\t}\n\n\tstatic function p18(o:Dynamic):Void {\n\t\tcast(o, B).a();\n\t\tcast(o, B).a();\n\t\to = null;\n\t\tcast(o, B);\n\t\tcast(o, B);\n\t}\n\n\tstatic function run(name:String, f:() -> Void):Void {\n\t\tout = [];\n\t\ttry\n\t\t\tf()\n\t\tcatch (e:Dynamic)\n\t\t\tout.push('THROW');\n\t\tSys.println(name + \": \" + out.join(\",\"));\n\t}\n\n\tstatic function main():Void {\n\t\tfinal c:B = new B(2);\n\t\tfinal l:B = new B(1, c);\n\t\trun('p1', () -> p1('str'));\n\t\trun('p1e', () -> p1e(new D()));\n\t\trun('p1f', () -> p1f('str', 0));\n\t\trun('p2', () -> p2(l));\n\t\trun('p3', () -> p3(l, c));\n\t\trun('p4', () -> p4(l, c));\n\t\trun('p5', () -> p5(l));\n\t\trun('p7', () -> p7(l, new D()));\n\t\trun('p8', () -> new Host().p8(new Bubble(5)));\n\t\trun('p9', () -> p9(l, c));\n\t\trun('p9b', () -> p9b(l, c));\n\t\trun('p12', () -> p12('str'));\n\t\trun('p14', () -> p14([l, c]));\n\t\trun('p10', () -> p10(l, 1));\n\t\trun('p11', () -> p11('str', false));\n\t\trun('p15', () -> p15('str', false));\n\t\trun('p16', () -> p16(l, false));\n\t\trun('p18', () -> p18(l));\n\t}\n}\n"
 			},
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "90276f3c4ff22001",
-				"files": "c42a85c98e892328",
+				"files": "a121780ed6511ea8",
 				"compiles": [
 					true,
 					true
@@ -1075,7 +1075,7 @@
 				"--fix"
 			],
 			"files": {
-				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function g():Bool {\n\t\treturn true;\n\t}\n\n\tstatic function a(c:Bool):Void {\n\t\tif (g()) {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t} else {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t}\n\t}\n\n\tstatic function b(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t} else {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t}\n\t}\n\n\tstatic function c(j:Int):Void {\n\t\tif (j == 0) p('c');\n\t\telse if (j > 1 && !(j == 3)) p('c');\n\t\telse p('c');\n\t}\n\n\tstatic function d(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t} else {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t}\n\t}\n\n\tstatic function e(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('e');\n\t\t} else if (j == 1) {\n\t\t\tp('e');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (j in 0...2) {\n\t\t\ta(true);\n\t\t\tb(j);\n\t\t\tc(j);\n\t\t\td(j);\n\t\t\te(j);\n\t\t}\n\t}\n}\n",
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function g():Bool {\n\t\treturn true;\n\t}\n\n\tstatic function a(c:Bool):Void {\n\t\tif (g()) {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t} else {\n\t\t\tvar v = 1;\n\t\t\tp('a$v');\n\t\t}\n\t}\n\n\tstatic function b(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t} else {\n\t\t\tp('b');\n\t\t\tp('b2');\n\t\t}\n\t}\n\n\tstatic function c(j:Int):Void {\n\t\tif (j == 0)\n\t\t\tp('c');\n\t\telse if (j > 1 && !(j == 3))\n\t\t\tp('c');\n\t\telse\n\t\t\tp('c');\n\t}\n\n\tstatic function d(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t} else {\n\t\t\tvar v = j;\n\t\t\tp('d$v');\n\t\t}\n\t}\n\n\tstatic function e(j:Int):Void {\n\t\tif (j == 0) {\n\t\t\tp('e');\n\t\t} else if (j == 1) {\n\t\t\tp('e');\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tfor (j in 0...2) {\n\t\t\ta(true);\n\t\t\tb(j);\n\t\t\tc(j);\n\t\t\td(j);\n\t\t\te(j);\n\t\t}\n\t}\n}\n",
 				"apq.json": "{}\n"
 			},
 			"expect": {

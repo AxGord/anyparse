@@ -135,7 +135,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * the comment's line — so the rule's claim held only under `next` / `fitLine` / `keep`. RED at base.
 	 */
 	public function testTrailingLineCommentSurvivesTheWriteGate(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tif (a) x = 1; // one\n\t\telse if (b) x = 2;\n\t\telse x = 3;\n\t}\n}\n';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tx = 1; // one\n\t\telse if (b)\n\t\t\tx = 2;\n\t\telse\n'
+			+ '\t\t\tx = 3;\n\t}\n}\n';
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);
 		switch CanonicalEdit.canonicalize(src, es, false, new HaxeQueryPlugin()) {

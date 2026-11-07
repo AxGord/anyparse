@@ -23,12 +23,8 @@ package anyparse.format;
  * field's own `@:fmt(bodyPolicy(...))`. For non-`IfStmt` ctors the
  * behaviour falls through to the normal bodyPolicy-driven layout.
  *
- * Two values are sufficient because the `else if` idiom only makes
- * sense inline or on the next line — `FitLine` would duplicate the
- * `elseBody=FitLine` case the bodyPolicy already handles, and `Keep`
- * would require per-node source-shape tracking the parser does not
- * yet carry. Additional values can be appended here once a fixture
- * makes them necessary.
+ * Two values: the idiom only makes sense inline or on the next line, and
+ * no value reads the source layout. A config's `"fitLine"` reads as `Same`.
  *
  * Format-neutral — lives in `anyparse.format` so grammars for other
  * languages (AS3, C-family, ...) can reuse the same shape for their
@@ -38,25 +34,6 @@ package anyparse.format;
  * one options field).
  */
 enum abstract KeywordPlacement(Int) from Int to Int {
-
 	final Same = 0;
 	final Next = 1;
-
-	/**
-	 * No keyword-placement opinion - the field's own `@:fmt(bodyPolicy(...))`
-	 * decides, exactly as it does for a body ctor the flag does not name.
-	 *
-	 * This is the value a keyword-placement knob defaults to when its whole
-	 * point is to be opt-in: with `Keep` the generated override arm never
-	 * fires and the emission is byte-identical to a build without the flag.
-	 * `sameLine.elseSwitch` is the first such knob. It is NOT a source-shape
-	 * mode of its own - when the deferred-to bodyPolicy is itself `Keep`, the
-	 * source shape is what comes out, which is where the name comes from.
-	 *
-	 * `sameLine.elseIf` never maps here: its documented default is `Same` and
-	 * `HaxeFormatValues.keywordPlacementToRuntime` degrades the config
-	 * spelling `"keep"` to `Same` for it, as it always has.
-	 */
-	final Keep = 2;
-
 }

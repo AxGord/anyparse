@@ -251,10 +251,8 @@ class HxCondUnbalancedRegionSliceTest extends HxTestHelpers {
 				Assert.equals(-1, (inner.raw: String).indexOf('{'));
 				Assert.equals('#end', (inner.endKw: String));
 				switch inner.body {
-					case BlockStmt(stmts):
-						Assert.equals(2, stmts.length);
-					case null, _:
-						Assert.fail('expected BlockStmt body, got ${inner.body}');
+					case BlockStmt(stmts): Assert.equals(2, stmts.length);
+					case null, _: Assert.fail('expected BlockStmt body, got ${inner.body}');
 				}
 			case null, _:
 				Assert.fail('expected CondSpliceBlockTail, got ${body[1]}');

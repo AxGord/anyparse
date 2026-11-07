@@ -140,8 +140,9 @@ final class TmpLifecycle {
 		// collated, as a shell's glob lists them, not by code unit
 		names.sort((a, b) -> js.Syntax.code('{0}.localeCompare({1})', a, b));
 		return [
-			for (prefix in prefixes) for (name in names) if (isClaimName(name, prefix) && FileSystem.isDirectory('$root/$name'))
-				'$root/$name'
+			for (prefix in prefixes)
+				for (name in names)
+					if (isClaimName(name, prefix) && FileSystem.isDirectory('$root/$name')) '$root/$name'
 		];
 	}
 

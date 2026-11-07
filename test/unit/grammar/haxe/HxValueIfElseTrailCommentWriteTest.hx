@@ -11,7 +11,7 @@ import utest.Test;
  * The comment lands in the `elseBranchBeforeKwTrailing` slot and `kwBeforeTrailingDoc` emits it
  * ahead of the pre-`else` gap. Under `same` (the compiled default) that gap is a plain space, so
  * the writer put `else` on the comment's own line, the comment swallowed it, and `writeRoundTrip`
- * refused the file. `next` / `fitLine` / `keep` answer a hardline there and never met the defect.
+ * refused the file. `next` / `fitLine` answer a hardline there and never met the defect.
  * It was the writer half of `prefer-if-expression-assignment`'s trailing-comment carry: the rule's
  * edit text was right and every `--fix` under the default config refused it.
  */
@@ -40,7 +40,7 @@ class HxValueIfElseTrailCommentWriteTest extends Test {
 	@:pin('control')
 	@:killer('M-KWTRAIL-GUARD-HARD')
 	public function testAGapOpeningWithABreakIsUnchanged(): Void {
-		assertFixedPoint('if (a) x = 1; // s\n\t\t// own\n\t\telse x = 2;');
+		assertFixedPoint('if (a)\n\t\t\tx = 1; // s\n\t\t// own\n\t\telse\n\t\t\tx = 2;');
 	}
 
 	/** The statement is already what the writer produces for it — the byte contract a canonical file has. */

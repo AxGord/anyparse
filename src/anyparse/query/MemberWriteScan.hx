@@ -282,7 +282,8 @@ final class MemberWriteScan {
 	private static inline function isOperatorChar(c: Int): Bool {
 		return switch c {
 			case '='.code, '+'.code, '-'.code, '*'.code, '/'.code, '%'.code, '&'.code, '|'.code, '^'.code, '<'.code, '>'.code, '?'.code,
-				'~'.code, '!'.code: true;
+				'~'.code, '!'.code:
+				true;
 			case _: false;
 		};
 	}

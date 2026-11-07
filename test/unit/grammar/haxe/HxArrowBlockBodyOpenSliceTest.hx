@@ -221,37 +221,8 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	/**
-	 * DISCRIMINATES the guard's THIRD conjunct (`flatTokenWidthFirstLine <= 1`): under
-	 * `objectLiteral.defaultWrap: "keep"` a one-line source literal reproduces its own
-	 * layout, so `{ onDone: () -> { ... }, tag: 1 }` DOES force a hardline (the inner
-	 * block's) while its own head run continues past the `{`. `hasForcedBreak` alone
-	 * therefore admitted it and suppressed a break the head line needed -- 108 to 146
-	 * columns against a 140 budget. Reverting the whole arm leaves this PASSING.
-	 */
-	public function testKeepModeLiteralBreakingLaterStillBreaks(): Void {
-		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal resultValueName = '
-			+ 'receiverObjectNameHereLongerStill.methodNameGoesHereTooNow(entryValueName ->\n\t\t\t{onDoneCallbackNameValueLong: () -> {\n'
-			+ '\t\t\t\tperformActionNow(entryValueName);\n\t\t\t}, tagLabelValue: 1 }\n\t\t);\n\t}\n\n}';
-		Assert.equals(src, triviaWrite(src, keepModeCfg()));
-	}
-
 	private inline function triviaWrite(src: String, ?cfg: String): String {
 		return HxWriteFixture.triviaWrite(src, cfg ?? CFG);
-	}
-
-	/**
-	 * `CFG` with `wrapping.objectLiteral.defaultWrap` and `sameLine.functionBody` set to
-	 * `keep`, the combination under which an object-literal arrow body reproduces its
-	 * source layout instead of breaking open -- the config that separates "forces a
-	 * hardline somewhere" from "breaks before any other token".
-	 */
-	private static inline function keepModeCfg(): String {
-		return CFG.replace(
-			'"wrapping":{"functionSignature"', '"wrapping":{"objectLiteral":{"defaultWrap":"keep","rules":[]},"functionSignature"'
-		)
-			.split('"functionBody":"fitLine"')
-			.join('"functionBody":"keep"');
 	}
 
 }

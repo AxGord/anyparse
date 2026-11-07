@@ -218,7 +218,7 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 	public function testEveryEmittedChainShapeReadsAsAChainItem(): Void {
 		final opt: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG);
 		for (named in chainCascades()) {
-			final doc: Doc = MethodChainEmit.emit(Text('recv'), chainSegments(), opt, named.rules, null, false, named.leadingBreak);
+			final doc: Doc = MethodChainEmit.emit(Text('recv'), chainSegments(), opt, named.rules, false, named.leadingBreak);
 			Assert.isTrue(WrapList.isMethodChainItem(doc), 'chain shape "${named.name}" must read as a method-chain item');
 		}
 	}

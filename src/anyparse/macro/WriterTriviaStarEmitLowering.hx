@@ -152,7 +152,7 @@ final class WriterTriviaStarEmitLowering {
 		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
 		final sepExpr: Expr = if (sameLineName != null) {
 			final optFlag: Expr = optFieldAccess(sameLineName);
-			sameLinePolicySwitch(optFlag, macro _dt(' '));
+			sameLinePolicySwitch(optFlag);
 		} else {
 			macro _dt(' ');
 		};
@@ -188,17 +188,13 @@ final class WriterTriviaStarEmitLowering {
 		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))` on a
 		// `nestBody` Star opts the body field into runtime
 		// single-stmt-flat emission. The runtime ORs all named
-		// `BodyPolicy` flags across two predicates:
-		//  - ANY flag == `Same` → flatten unconditionally (override).
-		//  - ANY flag == `Keep` → flatten IFF the source had the
-		//    body's first element on the same line as the lead
-		//    (read off `Trivial<T>.newlineBefore`).
-		// Either path gates on the body holding exactly one element
+		// `BodyPolicy` flags: ANY flag == `Same` flattens.
+		// That path gates on the body holding exactly one element
 		// with no leading / orphan-trailing trivia; multi-stmt and
 		// trivia-bearing bodies stay multiline. Consumed by
 		// `HxCaseBranch.body` and `HxDefaultBranch.stmts` to
 		// switch between `case X:\n\tstmt;` (Next) and
-		// `case X: stmt;` (Same / Keep+sameLine).
+		// `case X: stmt;` (Same).
 		final caseBodyFlagNames: Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
 		// ω-expression-case-flat-fanout: when `@:fmt(flatChildOpt('A=B', …))`
 		// is present, parse each `'from=to'` arg into a [from, to] pair so

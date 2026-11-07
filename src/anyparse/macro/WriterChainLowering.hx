@@ -50,8 +50,7 @@ final class WriterChainLowering {
 	/**
 	 * Build the trivia-mode method-chain walk body for `wrapWithChainDispatch`.
 	 * Walks the Call/FieldAccess spine right-to-left collecting per-segment
-	 * Docs (and parallel source-newline `_breaks` for `Keep` round-trip),
-	 * glues bare leading `.field` accesses, captures the receiver's dot-gap
+	 * Docs, glues bare leading `.field` accesses, captures the receiver's dot-gap
 	 * trailing comment, and dispatches to `MethodChainEmit.emit` for a
 	 * 2+-segment chain whose receiver ends in a Call (`)`).
 	 */
@@ -102,8 +101,7 @@ final class WriterChainLowering {
 						case FieldAccess(_prev, _, _, _):
 							_isChain = _prev.match(Call(_, _, _, _, _, _));
 							_probe = _prev;
-						case _:
-							break;
+						case _: break;
 					}
 				case FieldAccess(_prev, _, _, _):
 					_isChain = _prev.match(Call(_, _, _, _, _, _));
@@ -113,16 +111,6 @@ final class WriterChainLowering {
 			}
 			if (_isChain) {
 				final _segs: Array<anyparse.core.Doc> = [];
-				// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
-				// — entry `i` is whether the source had a newline in the gap
-				// before segment `i`'s `.field` lead (the FieldAccess ctor's
-				// captured `chainNewline` synth slot). Built in lockstep with
-				// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
-				// the source per-segment dot-boundary line breaks via
-				// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
-				// 2-arg ctor patterns below and threads no `_breaks` (null →
-				// shapeNoWrap, byte-inert).
-				final _breaks: Array<Bool> = [];
 				var _cursor = value;
 				var _receiver = value;
 				var _hasCallPrev: Bool = false;
@@ -138,8 +126,8 @@ final class WriterChainLowering {
 				// `chainLeadComment` slot. When that operand IS the chain receiver
 				// (a bare value, the `case _:` of the `switch _prev` below), stash
 				// the comment so it can be reattached to the receiver Doc after the
-				// walk — a `Keep` chain would otherwise drop it when the per-segment
-				// break replaces the source `owner // test` layout.
+				// walk — the chain would otherwise drop it when a segment break
+				// replaces the source `owner // test` layout.
 				var _recTrail: Null<String> = null;
 				while (true) switch _cursor {
 					// ω-keep-callclose-newline: trivia Call ctor grew a 5th
@@ -148,13 +136,12 @@ final class WriterChainLowering {
 					// `lowerPostfixStar`, not the per-segment chain emit).
 					case Call(_op, _args, _trailClose, _, _, _):
 						switch _op {
-							case FieldAccess(_prev, _fld, _nl, _opTrail):
+							case FieldAccess(_prev, _fld, _, _opTrail):
 								final _argsDoc: anyparse.core.Doc = $argsListExpr;
 								final _segDoc: anyparse.core.Doc = _trailClose != null
 									? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
 									: _dc([_dt('.' + _fld), _argsDoc]);
 								_segs.unshift(_segDoc);
-								_breaks.unshift(_nl);
 								switch _prev {
 									case Call(_, _, _, _, _, _):
 										_hasCallPrev = true;
@@ -168,7 +155,7 @@ final class WriterChainLowering {
 								_receiver = _cursor;
 								break;
 						}
-					case FieldAccess(_prev, _fld, _nl, _opTrail):
+					case FieldAccess(_prev, _fld, _, _opTrail):
 						// ω-methodchain-glue-bare-field: a bare `.field`
 						// access that precedes an already-collected segment
 						// (a Call to its right) is NOT its own chain
@@ -182,20 +169,10 @@ final class WriterChainLowering {
 						// for `a().b`); keep current shape. Without this glue
 						// every leading bare FieldAccess over-segments the
 						// chain and inflates the cascade item count.
-						//
-						// ω-keep-chain: when the bare field glues onto
-						// `_segs[0]` it becomes that segment's NEW leading
-						// dot, so its source-newline (`_nl`) REPLACES the
-						// existing `_breaks[0]` (the break-before now refers
-						// to the glued lead). When `_segs` is empty the bare
-						// field is its own segment → push its `_nl` parallel.
-						if (_segs.length > 0) {
+						if (_segs.length > 0)
 							_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-							_breaks[0] = _nl;
-						} else {
+						else
 							_segs.unshift(_dt('.' + _fld));
-							_breaks.unshift(_nl);
-						}
 						switch _prev {
 							case Call(_, _, _, _, _, _):
 								_hasCallPrev = true;
@@ -226,7 +203,7 @@ final class WriterChainLowering {
 					// (`method_chain_single_arg_break_parens`). Mirror the
 					// `BinaryChainEmit` `_chainNestSuppress` gate.
 					return anyparse.format.wrap.MethodChainEmit.emit(
-						_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
+						_recDoc, _segs, opt, $chainRulesExpr, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
 					);
 				}
 			}
@@ -237,7 +214,7 @@ final class WriterChainLowering {
 	/**
 	 * Build the plain-mode method-chain walk body for `wrapWithChainDispatch`
 	 * — the no-trivia twin of `wrapChainTriviaBody` (2-arg Call/FieldAccess
-	 * ctor patterns, no `_breaks` / receiver-comment slots).
+	 * ctor patterns, no receiver-comment slot).
 	 */
 	private static function wrapChainPlainBody(c: ChainDispatchCtx): Expr {
 		final argsListExpr: Expr = c.argsListExpr;
@@ -260,8 +237,7 @@ final class WriterChainLowering {
 						case FieldAccess(_prev, _):
 							_isChain = _prev.match(Call(_, _));
 							_probe = _prev;
-						case _:
-							break;
+						case _: break;
 					}
 				case FieldAccess(_prev, _):
 					_isChain = _prev.match(Call(_, _));
@@ -321,10 +297,9 @@ final class WriterChainLowering {
 				if (_segs.length >= 1 && _hasCallPrev) {
 					final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
 					// ω-methodchain-reeval-after-callparam nest-suppress prereq
-					// (plain-mode twin): pass `sourceBreakBefore = null` then the
-					// `_callArgChainNest` gate.
+					// (plain-mode twin): pass the `_callArgChainNest` gate.
 					return anyparse.format.wrap.MethodChainEmit.emit(
-						_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
+						_recDoc, _segs, opt, $chainRulesExpr, opt._callArgChainNest, $segCallLeadingBreakExpr, _seg0AfterCall
 					);
 				}
 			}
@@ -345,8 +320,7 @@ final class WriterChainLowering {
 	 * bypasses the cascade the same way a sep-Star's force-multi branch does: a
 	 * `//` runs to the newline, which leaves exactly one legal layout anyway.
 	 *
-	 * Structurally `lowerPostfixKeepDoc` with an unconditional hardline per
-	 * element instead of the source-newline probe. Reads the trailing slots
+	 * Reads the trailing slots
 	 * directly (not `_docs`) because the element loop deliberately leaves an
 	 * after-separator comment out of the element's own Doc — its position is a
 	 * property of the gap, not of the element.
@@ -388,75 +362,6 @@ final class WriterChainLowering {
 			}
 			final _mCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			_dwb(_dc([_dt($v{c.postfixOp}), _dn(_mCols, _dc(_mInner)), _dhl(), _dt($v{c.postfixClose})]));
-		};
-	}
-
-	/**
-	 * Build the source-faithful `Keep`-mode args-list Doc for a trivia
-	 * postfix Star. The `ω-D9A-keep-callargs` per-arg hand-built layout (`_dhl()` where source
-	 * had a newline before the next arg, `_dt(' ')` otherwise) plus the
-	 * `argsOpenNewline` leading/trailing hardlines.
-	 */
-	private static function lowerPostfixKeepDoc(c: PostfixStarCtx): Expr {
-		final postfixOp: String = c.postfixOp;
-		final postfixClose: String = c.postfixClose;
-		final elemSep: String = c.elemSep;
-		final tcExpr: Expr = c.tcExpr;
-		// ω-D9A-keep-callargs: when the wrap-rules' runtime config
-		// sets `defaultMode == WrapMode.Keep`, bypass the cascade
-		// and build the args list Doc by hand — `_dhl()` between
-		// args when source had `\n` before the next arg
-		// (`Trivial<T>.newlineBefore`), `_dt(' ')` otherwise.
-		//
-		// ω-D9A-keep-callargs-v2: args[0]'s leading source-vertical
-		// signal is captured by a dedicated parser slot
-		// `argsOpenNewline` (positional `argNames[3]`, sibling of
-		// `closeTrailing` at `argNames[2]`). `Trivial<T>.newlineBefore`
-		// for args[0] is unreliable because upstream kw-Ref rules
-		// (e.g. `catch (e:E)\n\t\ttrace(e);`) drain `ctx.pendingTrivia`
-		// into the first `collectTrivia`. The slot is captured BEFORE
-		// the per-iter `skipWs(ctx)` so the post-open `\n` is
-		// preserved verbatim. Inter-arg signals (i ≥ 1) stay on
-		// `Trivial.newlineBefore` — captured by the loop's
-		// `collectTrivia(ctx)` AFTER the previous sep, where
-		// pendingTrivia is already drained.
-		//
-		// When `argsOpenNewline=true` the emit also adds a trailing
-		// `_dhl()` between the last arg and the close lit so the
-		// source-vertical fixture's `\n)` shape round-trips. Sister
-		// to `triviaSepStarExpr`'s `ω-keep-objectlit` per-element
-		// source-aware leading.
-		//
-		// JSON-driven: the loader maps `"defaultWrap": "keep"` on
-		// the named wrap-rules section → `Keep`. Default
-		// `NoWrap` cascades route to `wrapListExpr` (legacy
-		// byte-identical).
-		final argsOpenNewlineExpr: Expr = { expr: EConst(CIdent(c.argNames[3])), pos: Context.currentPos() };
-		return macro {
-			final _kArgsOpenNewline: Bool = $argsOpenNewlineExpr;
-			final _kInner: Array<anyparse.core.Doc> = [];
-			var _kj: Int = 0;
-			while (_kj < _docs.length) {
-				if (_kj > 0)
-					_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
-				else if (_kArgsOpenNewline)
-					_kInner.push(_dhl());
-				_kInner.push(_docs[_kj]);
-				final _kIsLast: Bool = _kj == _docs.length - 1;
-				if (!_kIsLast)
-					_kInner.push(_dt($v{elemSep}));
-				else if ($tcExpr)
-					_kInner.push(_dt($v{elemSep}));
-				_kj++;
-			}
-			final _kCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			final _kOuter: Array<anyparse.core.Doc> = [
-				_dt($v{postfixOp}),
-				_dn(_kCols, _dc(_kInner)),
-			];
-			if (_kArgsOpenNewline) _kOuter.push(_dhl());
-			_kOuter.push(_dt($v{postfixClose}));
-			_dwb(_dc(_kOuter));
 		};
 	}
 

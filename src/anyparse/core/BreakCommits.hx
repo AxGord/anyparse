@@ -252,20 +252,16 @@ final class BreakCommits {
 	 */
 	public static function decisionMapped(body: Doc, f: (brk:Doc, rebuild:Doc -> Doc) -> Doc): Null<Doc> {
 		return switch body {
-			case IfFirstLineExceeds(n, brk, flat):
-				f(brk, b -> IfFirstLineExceeds(n, b, flat));
-			case Group(IfWidthExceeds(n, brk, flat)):
-				f(brk, b -> Group(IfWidthExceeds(n, b, flat)));
-			case GroupWithRestProbe(IfBreak(brk, flat)):
-				f(brk, b -> GroupWithRestProbe(IfBreak(b, flat)));
+			case IfFirstLineExceeds(n, brk, flat): f(brk, b -> IfFirstLineExceeds(n, b, flat));
+			case Group(IfWidthExceeds(n, brk, flat)): f(brk, b -> Group(IfWidthExceeds(n, b, flat)));
+			case GroupWithRestProbe(IfBreak(brk, flat)): f(brk, b -> GroupWithRestProbe(IfBreak(b, flat)));
 			case WrapBoundary(inner):
 				final mapped: Null<Doc> = decisionMapped(inner, f);
 				mapped == null ? null : WrapBoundary(mapped);
 			case Concat([inner]):
 				final mapped: Null<Doc> = decisionMapped(inner, f);
 				mapped == null ? null : Concat([mapped]);
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

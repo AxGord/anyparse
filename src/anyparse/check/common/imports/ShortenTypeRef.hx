@@ -429,8 +429,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 */
 	private function unansweredValueSites(source: String, file: String, plans: Array<PathPlan>, edits: Array<GroupedEdit>): Array<String> {
 		final rewrites: Array<{ site: Span, text: String }> = [
-			for (plan in plans) if (plan.proven)
-				for (site in plan.valueTargets) if (edits.exists(e -> e.span == site)) { site: site, text: plan.text }
+			for (plan in plans)
+				if (plan.proven)
+					for (site in plan.valueTargets)
+						if (edits.exists(e -> e.span == site)) { site: site, text: plan.text }
 		];
 		if (rewrites.length == 0) return [];
 		final oracle: Null<NameOracle> = _nameOracle;
@@ -485,9 +487,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final byPath: Map<String, Int> = [];
 		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
 		final edits: Array<GroupedEdit> = [
-			for (path in plan.plans) if (path.proven)
-				for (target in path.targets) if (wanted.contains(spanKey(target)))
-					{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
+			for (path in plan.plans)
+				if (path.proven)
+					for (target in path.targets)
+						if (wanted.contains(spanKey(target))) { span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
 		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
@@ -633,7 +636,8 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		return [
 			for (o in mine)
 				if (
-					o.path != text && (
+					o.path != text
+					&& (
 						o.valueSite == null || head == SourceText.lastSegment(o.path) || head == o.path.split('.')[0]
 						|| valueNameFree(head, o, context, index, file)
 					)

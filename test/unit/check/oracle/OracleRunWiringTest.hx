@@ -193,8 +193,8 @@ final class OracleRunWiringTest extends Test {
 	/** The facts compiles' probe directories under the scratch root, sorted. */
 	private static function factsDirs(): Array<String> {
 		final found: Array<String> = [
-			for (entry in sys.FileSystem.readDirectory(TempScratch.root())) if (StringTools.startsWith(entry, 'anyparse-typed-facts-'))
-				entry
+			for (entry in sys.FileSystem.readDirectory(TempScratch.root()))
+				if (StringTools.startsWith(entry, 'anyparse-typed-facts-')) entry
 		];
 		found.sort(Reflect.compare);
 		return found;

@@ -291,15 +291,13 @@ final class RegexFirstBytes {
 	private static function escapeBytes(c: Int): Null<Array<Int>> {
 		return switch c {
 			case 'd'.code: range('0'.code, '9'.code);
-			case 'w'.code:
-				range('0'.code, '9'.code).concat(range('A'.code, 'Z'.code)).concat(['_'.code]).concat(range('a'.code, 'z'.code));
+			case 'w'.code: range('0'.code, '9'.code).concat(range('A'.code, 'Z'.code)).concat(['_'.code]).concat(range('a'.code, 'z'.code));
 			case 'n'.code: ['\n'.code];
 			case 't'.code: ['\t'.code];
 			case 'r'.code: ['\r'.code];
 			case 'f'.code: [FORM_FEED];
 			case 'v'.code: [VERTICAL_TAB];
-			case _:
-				isWordChar(c) ? null : [c];
+			case _: isWordChar(c) ? null : [c];
 		};
 	}
 

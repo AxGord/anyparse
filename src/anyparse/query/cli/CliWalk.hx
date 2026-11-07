@@ -518,10 +518,8 @@ final class CliWalk {
 					' — no string-literal content matches "$n" (default: substring on this grammar\'s string-content kinds, every quote '
 						+ 'spelling; --exact for full equality). Widen the kind set with --kind $widen'
 						+ ' or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
-			case 'meta':
-				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
-			case _:
-				'';
+			case 'meta': ''; // meta has no <name> arg (annotation is its own thing) — leave silent.
+			case _: '';
 		};
 	}
 

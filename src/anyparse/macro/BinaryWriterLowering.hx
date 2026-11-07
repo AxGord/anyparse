@@ -170,20 +170,19 @@ class BinaryWriterLowering {
 	private static function makeIntEncodeExpr(encoding: String): Expr {
 		return switch encoding {
 			case 'Dec': macro '$_v';
-			case 'Oct':
-				macro {
-					if (_v < 0) throw new haxe.Exception('negative int cannot be encoded as octal');
-					var _rem: Int = _v;
-					var _out: String = '';
-					if (_rem == 0)
-						_out = '0';
-					else
-						while (_rem > 0) {
-							_out = String.fromCharCode('0'.code + (_rem & 7)) + _out; // noqa: magic-number
-							_rem = _rem >>> 3; // noqa: magic-number
-						}
-					_out;
-				};
+			case 'Oct': macro {
+				if (_v < 0) throw new haxe.Exception('negative int cannot be encoded as octal');
+				var _rem: Int = _v;
+				var _out: String = '';
+				if (_rem == 0)
+					_out = '0';
+				else
+					while (_rem > 0) {
+						_out = String.fromCharCode('0'.code + (_rem & 7)) + _out; // noqa: magic-number
+						_rem = _rem >>> 3; // noqa: magic-number
+					}
+				_out;
+			};
 			case _:
 				Context.fatalError('BinaryWriterLowering: unsupported bin encoding "$encoding"', Context.currentPos());
 				throw 'unreachable';

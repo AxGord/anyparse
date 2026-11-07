@@ -620,9 +620,8 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('K.new'));
 		for (f in [k, m, l]) g.addFiles([f]);
 		final all: CallGraph = CallGraph.build([c, k, m, l], plugin);
-		final shape: CallGraph -> String -> Array<String> -> Void = (graph, from, out) ->
-			for (e in graph.outEdges(from))
-				out.push('${e.kind.label()}->${e.to}');
+		final shape: CallGraph -> String -> Array<String> -> Void = (graph, from, out) -> for (e in graph.outEdges(from))
+			out.push('${e.kind.label()}->${e.to}');
 		final grown: Array<String> = [];
 		final built: Array<String> = [];
 		shape(g, 'C.c', grown);
@@ -1242,10 +1241,10 @@ class CallGraphTest extends Test {
 		final g: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(library), plugin));
 		function targets(from: String): Array<String> {
 			final out: Array<String> = [
-				for (id in g.nodes.keys()) if (
-					id == from || StringTools.startsWith(id, '$from#')
-				)
-					for (e in g.outEdges(id)) if (e.kind == Call) e.to
+				for (id in g.nodes.keys())
+					if (id == from || StringTools.startsWith(id, '$from#'))
+						for (e in g.outEdges(id))
+							if (e.kind == Call) e.to
 			];
 			out.sort(Reflect.compare);
 			return out;

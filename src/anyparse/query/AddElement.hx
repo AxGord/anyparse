@@ -176,10 +176,8 @@ final class AddElement {
 		// stays at the start of a line instead of trailing the element's last token: `} /** doc *\/`.
 		final afterText: String = SourceText.startsItsLine(source, after) ? '$trimmed\n' : '\n$trimmed';
 		final edit: Splice = switch side {
-			case After:
-				{ span: new Span(after, after), text: isComma ? ', $trimmed' : afterText };
-			case Before:
-				{ span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
+			case After: { span: new Span(after, after), text: isComma ? ', $trimmed' : afterText };
+			case Before: { span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
 		};
 
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);

@@ -118,14 +118,13 @@ final class UnnecessarySwitch extends RuleBase {
 		final resolved: Seams = seams;
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return [
-			for (entry in files) for (candidate in candidates(resolved, plugin, entry.source, index))
-				{
-					file: entry.file,
-					span: candidate.span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: MESSAGE
-				}
+			for (entry in files) for (candidate in candidates(resolved, plugin, entry.source, index)) {
+				file: entry.file,
+				span: candidate.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: MESSAGE
+			}
 		];
 	}
 

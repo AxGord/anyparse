@@ -47,17 +47,16 @@ class MethodChainEmit {
 	 * The chain `receiver` + `segments`. Under `methodChainCuddledLinks` it is offered once more per break nested in the
 	 * receiver or a segment (`BreakCommits.offerItemBreaks`) whose committed form ends on a closing line where the plain
 	 * one does not: the next rewrite reads that break from the source and cuddles the link after it, so the first rewrite
-	 * lays the chain out the same way exactly when the break happens.
+	 * lays the chain out the same way exactly when the break happens. The source's own dot-leading line breaks are not
+	 * an input: the layout is a function of the segments, the rules and the line comments they end with.
 	 */
 	public static function emit(
-		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, ?sourceBreakBefore: Array<Bool>,
-		nestSuppress: Bool = false, segCallLeadingBreak: Bool = false, headEndsWithCall: Bool = true
+		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
+		segCallLeadingBreak: Bool = false, headEndsWithCall: Bool = true
 	): Doc {
 		if (segments.length == 0) return WrapBoundary(receiver);
 		function laidOut(parts: Array<Doc>, committed: Int): Doc {
-			return layout(
-				parts[0], parts.slice(1), opt, rules, sourceBreakBefore, nestSuppress, segCallLeadingBreak, headEndsWithCall, committed
-			);
+			return layout(parts[0], parts.slice(1), opt, rules, nestSuppress, segCallLeadingBreak, headEndsWithCall, committed);
 		}
 		final parts: Array<Doc> = [receiver].concat(segments);
 		final plain: Doc = laidOut(parts, -1);
@@ -110,8 +109,8 @@ class MethodChainEmit {
 	 * break, `-1` for none; the cuddle reads its closing line on the break side of a conditional that cannot stay flat.
 	 */
 	private static function layout(
-		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, sourceBreakBefore: Null<Array<Bool>>, nestSuppress: Bool,
-		segCallLeadingBreak: Bool, headEndsWithCall: Bool, committed: Int
+		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool, segCallLeadingBreak: Bool,
+		headEndsWithCall: Bool, committed: Int
 	): Doc {
 
 		// ω-chain-comment-forced-break: a method-chain segment (or the
@@ -135,8 +134,7 @@ class MethodChainEmit {
 		// non-comment hot path) `shapeAt` uses the original `shape(mode, …)`
 		// exactly as before → byte-inert.
 		final commentForcedBreak: Array<Bool> = [
-			for (i in 0...segments.length)
-				WrapList.endsWithLineComment(i == 0 ? receiver : segments[i - 1])
+			for (i in 0...segments.length) WrapList.endsWithLineComment(i == 0 ? receiver : segments[i - 1])
 		];
 		final hasCommentBreak: Bool = commentForcedBreak.indexOf(true) != -1;
 
@@ -193,11 +191,6 @@ class MethodChainEmit {
 		}
 
 		function shapeAt(mode: WrapMode): Doc {
-			// `Keep` mode already reproduces the source per-segment layout
-			// (incl. the comment-bearing dot breaks) via `sourceBreakBefore`,
-			// so leave it untouched — the comment-forced mask is only needed
-			// for the NON-keep cascade modes that would otherwise glue a
-			// `.field` onto a line comment.
 			// ω-methodchain-all-or-nothing / isDotAfterPClose: the policy breaks
 			// EVERY chain item onto its own line, and a `.` is a chain item only
 			// when it follows a `)` (fork `MarkWrapping.isDotAfterPClose`). For a
@@ -212,9 +205,9 @@ class MethodChainEmit {
 			final effective: WrapMode = mode == OnePerLine && policyItems && !headEndsWithCall && segments.length >= 2
 				? OnePerLineAfterFirst
 				: mode;
-			return hasCommentBreak && effective != Keep
+			return hasCommentBreak
 				? shapeKeepTail(segments, cols, commentBreakMask(effective, segments.length, commentForcedBreak))
-				: shapeTail(effective, receiver, segments, cols, opt.lineWidth, opt.methodChainCuddledLinks, committed, sourceBreakBefore);
+				: shapeTail(effective, receiver, segments, cols, opt.lineWidth, opt.methodChainCuddledLinks, committed);
 		}
 
 		// Normal path: cascade evaluated against (exceeds=false /
@@ -224,12 +217,9 @@ class MethodChainEmit {
 		// minimal (one impossible state filtered out per `t < lineWidth`
 		// or `t > lineWidth` case).
 		final tail: Doc = switch extraThresholds.length {
-			case 0:
-				emitNoThreshold(opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
-			case 1:
-				emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
-			case _:
-				buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
+			case 0: emitNoThreshold(opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
+			case 1: emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
+			case _: buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth);
 		}
 		// ω-methodchain-all-or-nothing: the receiver is emitted OUTSIDE the
 		// width decision, so the renderer reaches the probe with the pen at the
@@ -285,32 +275,14 @@ class MethodChainEmit {
 	 * asks the same of `receiver + seg0`), never to place it.
 	 */
 	private static function shapeTail(
-		mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, cuddledLinks: Bool, committed: Int,
-		?sourceBreakBefore: Array<Bool>
+		mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, cuddledLinks: Bool, committed: Int
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrapTail(segments);
 			case OnePerLine: shapeOnePerLine(receiver, segments, cols, lineWidth, cuddledLinks, committed);
-			case OnePerLineAfterFirst:
-				shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth, cuddledLinks, committed);
-			// ω-keep-chain (increment 9): JSON `"defaultWrap": "keep"` on
-			// method-chain configs (`methodChain.defaultWrap = "keep"`)
-			// reproduces the source's per-segment dot-boundary line breaks
-			// verbatim — break before segment `i` iff the parser captured a
-			// source newline in that `.field`'s leading gap
-			// (`sourceBreakBefore[i]`), else glue the segment inline. The
-			// signal is the per-FieldAccess-ctor `chainNewline` synth slot
-			// captured at parse time in `lowerPostfixLoop` (mirror of the
-			// Pratt-operand `captureChainNewline` channel and fork's
-			// `markMethodChaining` + per-Dot `isOriginalNewlineBefore`). When
-			// the signal is absent (null — plain mode / non-capturing ctor)
-			// `shapeKeepTail` degrades to `shapeNoWrapTail` → byte-inert.
-			case Keep:
-				shapeKeepTail(segments, cols, sourceBreakBefore);
-			// ω-cascade-emits-comments: Ignore sister to Keep — defensive
-			// fallback on engine leakage.
-			case Ignore:
-				shapeNoWrapTail(segments);
+			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth, cuddledLinks, committed);
+			// ω-cascade-emits-comments: defensive fallback on engine leakage.
+			case Ignore: shapeNoWrapTail(segments);
 			// FillLine and FillLineWithLeadingBreak don't have a chain-
 			// specific semantics in fork's `WrappingProcessor` either.
 			// Fall back to OnePerLineAfterFirst (the most common chain
@@ -424,7 +396,7 @@ class MethodChainEmit {
 	 * ω-methodchain-reeval-after-callparam — is `mode` a dot-break chain shape
 	 * (`OnePerLine` / `OnePerLineAfterFirst`)? The re-glue flip only tags a
 	 * chain whose width-driven BREAK shape actually splits at a Dot; a chain
-	 * whose break shape is itself `NoWrap` / `Keep` has no dot-break to strip.
+	 * whose break shape is itself `NoWrap` has no dot-break to strip.
 	 */
 	private static function isDotBreak(mode: WrapMode): Bool {
 		return switch mode {
@@ -543,14 +515,10 @@ class MethodChainEmit {
 	}
 
 	/**
-	 * `WrapMode.Keep` shaper — reproduces the source's per-segment dot-
-	 * boundary line breaks. `sourceBreakBefore` is parallel to `segments`:
-	 * entry `i` is true when the parser captured a source newline in the
-	 * gap before segment `i`'s `.field` lead. When true the segment breaks
-	 * onto its own line at the chain's one-tab `Nest(cols)` indent; when
-	 * false the segment glues inline onto the running line (mirror fork's
-	 * `markMethodChaining` keep semantics — break at a Dot iff that Dot was
-	 * `isOriginalNewlineBefore`).
+	 * Mask shaper for a chain whose receiver or a segment ends with a line comment.
+	 * `breakBefore` is parallel to `segments` (the `commentBreakMask`): entry `i`
+	 * true breaks segment `i` onto its own line at the chain's one-tab
+	 * `Nest(cols)` indent, false glues it onto the running line.
 	 *
 	 * The receiver and the leading run of glued segments stay at the call-
 	 * site column; only broken segments (and any further segments after
@@ -559,15 +527,12 @@ class MethodChainEmit {
 	 * gaps keep the segments on the same rendered line (mirror
 	 * `shapeOnePerLineAfterFirst`'s `Nest` placement).
 	 *
-	 * When `sourceBreakBefore` is null (plain mode / non-capturing ctor) or
-	 * every entry is false, the output is byte-identical to `shapeNoWrapTail` —
-	 * inert for the non-keep method-chain hot path.
+	 * When every entry is false the output is byte-identical to `shapeNoWrapTail`.
 	 */
-	private static function shapeKeepTail(segments: Array<Doc>, cols: Int, ?sourceBreakBefore: Array<Bool>): Doc {
-		final breaks: Array<Bool> = sourceBreakBefore ?? [];
+	private static function shapeKeepTail(segments: Array<Doc>, cols: Int, breakBefore: Array<Bool>): Doc {
 		final tail: Array<Doc> = [];
 		for (i => segment in segments) {
-			if (i < breaks.length && breaks[i]) tail.push(Line('\n'));
+			if (i < breakBefore.length && breakBefore[i]) tail.push(Line('\n'));
 			tail.push(segment);
 		}
 		return Concat([Nest(cols, Concat(tail))]);
@@ -587,8 +552,7 @@ class MethodChainEmit {
 		// `segs[i]`, so its predecessor is the receiver at `i == 0` and
 		// `segs[i-1]` after. No cuddling gap keeps the pre-knob shape below.
 		final cuddle: Array<Bool> = cuddledLinks ? [
-			for (i in 0...segs.length)
-				endsWithMultilineClose(i == 0 ? receiver : segs[i - 1], committed == i)
+			for (i in 0...segs.length) endsWithMultilineClose(i == 0 ? receiver : segs[i - 1], committed == i)
 		] : [];
 		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([], segs, 0, cuddle, cols));
 		final tail: Array<Doc> = [];
@@ -731,10 +695,8 @@ class MethodChainEmit {
 			case WrapBoundary(inner):
 				final swapped: Null<Doc> = restAwareArgsWrap(inner, lineWidth);
 				swapped == null ? null : WrapBoundary(swapped);
-			case BreakCommit(_, flat):
-				restAwareArgsWrap(flat, lineWidth);
-			case Group(IfBreak(brk, flat)) if (brkLeadingBreaks(brk)):
-				IfLineExceeds(lineWidth, brk, flat);
+			case BreakCommit(_, flat): restAwareArgsWrap(flat, lineWidth);
+			case Group(IfBreak(brk, flat)) if (brkLeadingBreaks(brk)): IfLineExceeds(lineWidth, brk, flat);
 			case _: null;
 		};
 	}

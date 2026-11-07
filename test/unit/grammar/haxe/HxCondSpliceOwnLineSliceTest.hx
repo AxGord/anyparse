@@ -45,10 +45,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 		switch body[0] {
 			case ReturnStmt(value):
 				switch value {
-					case CondSpliceTail(_, _):
-						Assert.pass();
-					case null, _:
-						Assert.fail('expected ReturnStmt(CondSpliceTail), got $value');
+					case CondSpliceTail(_, _): Assert.pass();
+					case null, _: Assert.fail('expected ReturnStmt(CondSpliceTail), got $value');
 				}
 			case null, _:
 				Assert.fail('expected ReturnStmt, got ${body[0]}');
@@ -113,8 +111,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	 * opens with the `if` keyword.
 	 */
 	public function testOwnLineStatementSpliceAfterSwitchStaysStatementScoped(): Void {
-		final src: String = 'class C {\n\tfunction f(obj, attrs) {\n\t\tvar obj = switch name {\n\t\t\tcase _:\n'
-			+ '\t\t\t\tcustomUIElement(name);\n\t\t}\n\t\t#if (haxe_ver >= 4.10)\n\t\tif (Std.isOfType(obj, Node))\n'
+		final src: String = 'class C {\n\tfunction f(obj, attrs) {\n\t\tvar obj = switch name {\n\t\t\tcase _: '
+			+ 'customUIElement(name);\n\t\t}\n\t\t#if (haxe_ver >= 4.10)\n\t\tif (Std.isOfType(obj, Node))\n'
 			+ '\t\t#else\n\t\tif (Std.is(obj, Node))\n\t\t#end\n\t\tsetNodeAttrs(cast obj, attrs);\n\t\tobj.name = attrs.name;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
@@ -194,10 +192,8 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 		switch body[0] {
 			case ReturnStmt(value):
 				switch value {
-					case CondSpliceTail(_, _):
-						Assert.pass();
-					case null, _:
-						Assert.fail('expected ReturnStmt(CondSpliceTail), got $value');
+					case CondSpliceTail(_, _): Assert.pass();
+					case null, _: Assert.fail('expected ReturnStmt(CondSpliceTail), got $value');
 				}
 			case null, _:
 				Assert.fail('expected ReturnStmt, got ${body[0]}');

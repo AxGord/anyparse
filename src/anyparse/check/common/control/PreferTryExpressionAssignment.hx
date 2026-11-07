@@ -137,14 +137,13 @@ final class PreferTryExpressionAssignment extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		return seams == null ? [] : [
-			for (entry in files) for (m in collect(plugin, entry.source, seams))
-				{
-					file: entry.file,
-					span: m.keySpan,
-					rule: 'prefer-try-expression-assignment',
-					severity: Severity.Info,
-					message: m.message
-				}
+			for (entry in files) for (m in collect(plugin, entry.source, seams)) {
+				file: entry.file,
+				span: m.keySpan,
+				rule: 'prefer-try-expression-assignment',
+				severity: Severity.Info,
+				message: m.message
+			}
 		];
 	}
 

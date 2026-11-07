@@ -260,12 +260,9 @@ final class TokenTranscript {
 			access: accessOf(name, input, cwd, agent.slice)
 		};
 		final payload: String = switch name {
-			case BASH:
-				WRITE_OP.match(line) ? command : '';
-			case 'Edit', 'Write':
-				(input.newString ?? '') + (input.content ?? '');
-			case _:
-				'';
+			case BASH: WRITE_OP.match(line) ? command : '';
+			case 'Edit', 'Write': (input.newString ?? '') + (input.content ?? '');
+			case _: '';
 		};
 		agent.writeChars += payload.length;
 		agent.indentChars += indentation(payload);
@@ -314,16 +311,14 @@ final class TokenTranscript {
 		final command: String = input.command ?? '';
 		final path: String = input.filePath ?? '';
 		return switch name {
-			case BASH:
-				{
-					read: sample(ShellHxAccess.readSegment(command, cwd, slice)),
-					write: sample(ShellHxAccess.writeSegment(command, cwd, slice)),
-					script: sample(ShellHxAccess.scriptSegment(command, cwd, slice))
-				};
+			case BASH: {
+				read: sample(ShellHxAccess.readSegment(command, cwd, slice)),
+				write: sample(ShellHxAccess.writeSegment(command, cwd, slice)),
+				script: sample(ShellHxAccess.scriptSegment(command, cwd, slice))
+			};
 			case 'Edit', 'Write':
 				{ read: null, write: REPO_HX.match(path) && ShellHxAccess.isRepoPath(path, slice) ? '$name $path' : null, script: null };
-			case _:
-				{ read: null, write: null, script: null };
+			case _: { read: null, write: null, script: null };
 		};
 	}
 

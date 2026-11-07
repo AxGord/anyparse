@@ -244,14 +244,13 @@ final class PreferIfExpressionChain extends RuleBase {
 		// sibling module declares, and read a chain the switch refuses as claimed.
 		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
 		return [
-			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection))
-				{
-					file: entry.file,
-					span: m.span,
-					rule: 'prefer-if-expression-chain',
-					severity: Severity.Info,
-					message: 'this nested ternary chain can be an if-expression chain'
-				}
+			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection)) {
+				file: entry.file,
+				span: m.span,
+				rule: 'prefer-if-expression-chain',
+				severity: Severity.Info,
+				message: 'this nested ternary chain can be an if-expression chain'
+			}
 		];
 	}
 
@@ -429,12 +428,11 @@ final class PreferIfExpressionChain extends RuleBase {
 		// fails the site closed — the family's original guard, which is what `carriedComments`
 		// degrades to with no gaps.
 		final seats: Array<CarrySeat> = inverted ? [] : [
-			for (i in 0...emitted.length)
-				{
-					condEnd: emitted[i].condSpan.to,
-					value: emitted[i].value,
-					nextStart: i + 1 < emitted.length ? emitted[i + 1].condSpan.from : terminalSpan.from
-				}
+			for (i in 0...emitted.length) {
+				condEnd: emitted[i].condSpan.to,
+				value: emitted[i].value,
+				nextStart: i + 1 < emitted.length ? emitted[i + 1].condSpan.from : terminalSpan.from
+			}
 		];
 		final carried: Null<Carried> = IfExpressionChain.carriedComments(
 			headSpan, kept, IfExpressionChain.carryGaps(seats), source, comments

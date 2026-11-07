@@ -28,8 +28,11 @@ import unit.cli.CliFixture;
 @:nullSafety(Strict)
 final class PreferCaseGuardOracleE2ETest extends Test {
 
-	/** `maxLineLength` 140 and nothing else -- the config both fixtures below are canonical under. */
-	private static final HXFORMAT: String = '{"wrapping": {"maxLineLength": 140}}\n';
+	/**
+	 * `maxLineLength` 140 and a `fitLine` case body, the compiled default: the config both fixtures below are canonical
+	 * under, here and on the verifier's own default path.
+	 */
+	private static final HXFORMAT: String = '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine"}}\n';
 
 	/**
 	 * A statement switch over a plain constant class: the guard conversion typechecks, so
@@ -40,7 +43,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		+ '\tpublic static inline final UP:Int = 2;\n'
 		+ '\n\tprivate function new() {}\n}\n\nclass Good {\n\tpublic static var hit:Int = 0;\n\n\tpublic static function main():Void {\n'
 		+ '\t\trun(Codes.DOWN);\n\t}\n\n\tprivate static function run(code:Int):Void {\n\t\tswitch code {\n\t\t\tcase Codes.DOWN:\n'
-		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Codes.UP:\n\t\t\t\ttrace(hit);\n'
+		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Codes.UP: trace(hit);\n'
 		+ '\t\t}\n\t}\n}\n';
 
 	/**
@@ -49,7 +52,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 	 */
 	private static final REVERTS: String = 'class Bad {\n\tpublic static var hit:Int = 0;\n\n\tpublic static function main():Void {\n'
 		+ '\t\trun(Ek.A);\n\t}\n\n\tprivate static function run(code:Ek):Void {\n\t\tswitch code {\n\t\t\tcase Ek.A:\n'
-		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Ek.B:\n\t\t\t\ttrace(hit);\n'
+		+ '\t\t\t\tif (hit == 0) {\n\t\t\t\t\thit = 1;\n\t\t\t\t\ttrace(hit);\n\t\t\t\t}\n\t\t\tcase Ek.B: trace(hit);\n'
 		+ '\t\t}\n\t}\n}\n';
 
 	/** On the classpath for the compiler, deliberately NOT in the linted file set. */

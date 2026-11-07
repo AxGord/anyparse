@@ -942,18 +942,17 @@ class HoistCommonImportTest extends Test {
 		final cwd: String = Sys.getCwd();
 		final builds: ReachBuilds = {
 			configurations: [
-				for (i => names in parsing)
-					{
-						name: 'build$i',
-						defined: [],
-						everDefined: [],
-						values: [],
-						compiled: [],
-						types: [],
-						parsed: [
-							for (name in names) OracleCoverage.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
-						]
-					}
+				for (i => names in parsing) {
+					name: 'build$i',
+					defined: [],
+					everDefined: [],
+					values: [],
+					compiled: [],
+					types: [],
+					parsed: [
+						for (name in names) OracleCoverage.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
+					]
+				}
 			],
 			library: []
 		};
@@ -1057,11 +1056,10 @@ class HoistCommonImportTest extends Test {
 					+ '\t}\n\n}\n'
 			}
 		].concat([
-			for (module in ['TwoQq', 'ThreeQq', 'FourQq', 'FiveQq'])
-				{
-					name: 'src/aqq/$module.hx',
-					source: 'package aqq;\n\nclass $module {}\n'
-				}
+			for (module in ['TwoQq', 'ThreeQq', 'FourQq', 'FiveQq']) {
+				name: 'src/aqq/$module.hx',
+				source: 'package aqq;\n\nclass $module {}\n'
+			}
 		]);
 		return parent == '' ? tree : tree.concat([{ name: 'src/import.hx', source: parent }]);
 	}

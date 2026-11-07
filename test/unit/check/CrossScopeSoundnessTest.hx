@@ -856,9 +856,9 @@ class CrossScopeSoundnessTest extends Test {
 	): Array<String> {
 		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
 		return [
-			for (check in Linter.builtins()) for (v in CheckFixture.violationsIn(
-				check, report, plugin
-			)) if (v.file == DECL_FILE) '${v.rule}|${v.severity}|${v.span?.from}'
+			for (check in Linter.builtins())
+				for (v in CheckFixture.violationsIn(check, report, plugin))
+					if (v.file == DECL_FILE) '${v.rule}|${v.severity}|${v.span?.from}'
 		];
 	}
 

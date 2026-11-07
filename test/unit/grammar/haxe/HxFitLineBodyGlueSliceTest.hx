@@ -195,7 +195,7 @@ final class HxFitLineBodyGlueSliceTest extends Test {
 			+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": '
 			+ '"noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}},'
 			+ ' "bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {'
-			+ '"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep", "fitLineBodyGlue": $glue}}';
+			+ '"ifBody": "fitLine", "expressionIf": "next", "fitLineBodyGlue": $glue}}';
 	}
 
 }

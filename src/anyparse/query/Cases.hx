@@ -60,8 +60,7 @@ final class Cases {
 
 	private static function matchPattern(target: String, pat: QueryNode): Bool {
 		return switch pat.kind {
-			case 'IdentExpr':
-				pat.name == target;
+			case 'IdentExpr': pat.name == target;
 			case 'Call':
 				final kids: Array<QueryNode> = pat.children;
 				kids.length > 0 && kids[0].kind == 'IdentExpr' && kids[0].name == target;
@@ -83,8 +82,7 @@ final class Cases {
 				// Explicit `false` documents the design (vs falling through
 				// the default arm and looking like an oversight).
 				false;
-			case _:
-				false;
+			case _: false;
 		};
 	}
 

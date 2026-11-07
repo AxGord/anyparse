@@ -38,8 +38,7 @@ final class TriviaSlotNames {
 	 * source had at least one newline (not necessarily a blank line) between
 	 * the last `@:trivia` Star element and the close literal. Sibling of
 	 * `trailingBlankBeforeLocalName`; set from the same terminal
-	 * `_lead.newlineBefore`. Consumed by the writer's `_keepEmit` close
-	 * placement to round-trip a kept signature's glued-vs-own-line close.
+	 * `_lead.newlineBefore`.
 	 */
 	public static inline function trailingNewlineBeforeLocalName(localName: String): String return '${localName}_trailNL';
 

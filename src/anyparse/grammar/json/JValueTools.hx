@@ -28,8 +28,7 @@ class JValueTools {
 					case held: held;
 				};
 				found;
-			case _:
-				null;
+			case _: null;
 		}
 	}
 
@@ -51,8 +50,7 @@ class JValueTools {
 							case JNull: null;
 							case held: held;
 						};
-				case _:
-					field(here, segment);
+				case _: field(here, segment);
 			}
 			if (here == null) return null;
 		}
@@ -62,16 +60,13 @@ class JValueTools {
 	/** Deep structural equality of two `JValue`s. **/
 	public static function equals(a: JValue, b: JValue): Bool {
 		return switch [a, b] {
-			case [JNull, JNull]:
-				true;
-			case [JBool(x), JBool(y)]:
-				x == y;
+			case [JNull, JNull]: true;
+			case [JBool(x), JBool(y)]: x == y;
 			case [JNumber(x), JNumber(y)]:
 				// NaN handling: NaN != NaN is fine for JSON; a JNumber round-trip
 				// should never produce NaN because the writer maps it to null.
 				x == y;
-			case [JString(x), JString(y)]:
-				x == y;
+			case [JString(x), JString(y)]: x == y;
 			case [JArray(xs), JArray(ys)]:
 				if (xs.length != ys.length) {
 					false;
@@ -98,8 +93,7 @@ class JValueTools {
 					}
 					eq;
 				}
-			case _:
-				false;
+			case _: false;
 		}
 	}
 

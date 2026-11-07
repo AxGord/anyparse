@@ -301,11 +301,10 @@ final class ExtractConstantTo {
 		final bare: Bool = !wildcard && RefactorSupport.bareNameResolves(destType, module, ModuleScan.packageOf(tree));
 		final newSource: String = if (imported || bare)
 			replaced
-		else
-			switch AddImport.addImport(replaced, importPath, false, true, plugin, request.optsJson) {
-				case Ok(text, _): text;
-				case Err(message): return Err('import: $message');
-			};
+		else switch AddImport.addImport(replaced, importPath, false, true, plugin, request.optsJson) {
+			case Ok(text, _): text;
+			case Err(message): return Err('import: $message');
+		};
 		return switch ExtractConstant.buildModuleSource(
 			destSource != null, destSource, dest.pkg, destType, dest.file, member.name, memberText(member, 'public'), request.reformat,
 			plugin, dest.optsJson

@@ -70,8 +70,9 @@ final class GateExcerpt {
 	/** The track rows of a `dev mutation-arm` log whose verdict is not that the arm held, each read into its verdict and arm. */
 	public static function armRows(log: String): Array<ArmRow> {
 		return [
-			for (line in Excerpt.linesOf(log)) if (TRACK_ROW.match(line) && !HELD.contains(TRACK_ROW.matched(1)))
-				{ verdict: TRACK_ROW.matched(1), name: TRACK_ROW.matched(2), line: line }
+			for (line in Excerpt.linesOf(log))
+				if (TRACK_ROW.match(line) && !HELD.contains(TRACK_ROW.matched(1)))
+					{ verdict: TRACK_ROW.matched(1), name: TRACK_ROW.matched(2), line: line }
 		];
 	}
 

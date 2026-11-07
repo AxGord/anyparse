@@ -75,28 +75,15 @@ final class HaxeFormatValues {
 			case 'onePerLine', 'OnePerLine': WrapMode.OnePerLine;
 			case 'onePerLineAfterFirst', 'OnePerLineAfterFirst': WrapMode.OnePerLineAfterFirst;
 			case 'fillLine', 'FillLine': WrapMode.FillLine;
-			case 'fillLineWithLeadingBreak', 'FillLineWithLeadingBreak':
-				WrapMode.FillLineWithLeadingBreak;
-			// ω-keep-objectlit: fork's `WrappingType.Keep` preserves
-			// source-newline pattern per-element. Loader maps it to
-			// `WrapMode.Keep`; `triviaSepStarExpr` (`TriviaSepLowering.hx`)
-			// consumes it for trivia-bearing Stars (ObjectLit, Anon-type,
-			// etc.) via the `_keepEmit` gate. `BinaryChainEmit` and
-			// `MethodChainEmit` route `Keep` to their `shapeNoWrap` arms
-			// — chain Keep semantics is a follow-up slice; the NoWrap
-			// fallback preserves the pre-recognition baseline byte-
-			// identically for chain-config Keep fixtures.
-			case 'keep', 'Keep':
-				WrapMode.Keep;
+			case 'fillLineWithLeadingBreak', 'FillLineWithLeadingBreak': WrapMode.FillLineWithLeadingBreak;
+			// The fork's `keep` (reproduce the source's line breaks) has no runtime value: the writer lays a list out from
+			// the AST and the options alone, so `keep` reads as unrecognised and `HaxeFormatConfigDiagnostics` names it.
 			// ω-cascade-emits-comments: anyparse extension with NO fork
-			// counterpart (the fork's `WrappingType` ends at `keep`) — it
-			// drops source-newline signal and lets the cascade pick a
-			// width-driven layout. Sister to Keep on the same axis.
-			// `triviaSepStarExpr` consumes it via the `_ignoreEmit`
-			// gate; chain emitters route `Ignore → shapeNoWrap` as a
-			// defensive fallback.
-			case 'ignore', 'Ignore':
-				WrapMode.Ignore;
+			// counterpart — it drops source-newline signal and lets the cascade
+			// pick a width-driven layout. `triviaSepStarExpr` consumes it via
+			// the `_ignoreEmit` gate; chain emitters route `Ignore → shapeNoWrap`
+			// as a defensive fallback.
+			case 'ignore', 'Ignore': WrapMode.Ignore;
 			// ω-packed-or-oneperline: anyparse extension with no fork
 			// counterpart — leading break, then the items share one
 			// continuation line if they fit at that indent, else one per line.
@@ -110,8 +97,7 @@ final class HaxeFormatValues {
 			case 'itemCount <= n', 'ItemCountLessThan': WrapConditionType.ItemCountLessThan;
 			case 'itemCount >= n', 'ItemCountLargerThan': WrapConditionType.ItemCountLargerThan;
 			case 'anyItemLength >= n', 'AnyItemLengthLargerThan': WrapConditionType.AnyItemLengthLargerThan;
-			case 'anyItemLength <= n', 'AnyItemLengthLessThan':
-				WrapConditionType.AnyItemLengthLessThan;
+			case 'anyItemLength <= n', 'AnyItemLengthLessThan': WrapConditionType.AnyItemLengthLessThan;
 			// `allItemLengths <= n` is the FORK's spelling; `allItemLengths < n` is
 			// hxq's own older one, kept because this repo's docs and one ingest
 			// test still name it. Both mean `max(itemFlatLength) <= n`.
@@ -121,19 +107,16 @@ final class HaxeFormatValues {
 			case 'totalItemLength >= n', 'TotalItemLengthLargerThan': WrapConditionType.TotalItemLengthLargerThan;
 			case 'totalItemLength <= n', 'TotalItemLengthLessThan': WrapConditionType.TotalItemLengthLessThan;
 			case 'exceedsMaxLineLength', 'ExceedsMaxLineLength': WrapConditionType.ExceedsMaxLineLength;
-			case 'lineLength >= n', 'LineLengthLargerThan':
-				WrapConditionType.LineLengthLargerThan;
+			case 'lineLength >= n', 'LineLengthLargerThan': WrapConditionType.LineLengthLargerThan;
 			// The fork's IDENTIFIER is `HasMultiLineItems` (capital L); hxq's own
 			// enum spells it `HasMultilineItems`. Accept both, or a config
 			// serialised from the fork's enum drops the whole rule.
 			case 'hasMultilineItems', 'HasMultiLineItems', 'HasMultilineItems': WrapConditionType.HasMultilineItems;
-			case 'complexItemCount >= n', 'ComplexItemCountLargerThan':
-				WrapConditionType.ComplexItemCountLargerThan;
+			case 'complexItemCount >= n', 'ComplexItemCountLargerThan': WrapConditionType.ComplexItemCountLargerThan;
 			// The container half of the same `complexItemKinds` array — see
 			// `WrapConditionType.HasContainerItems`. No fork counterpart, so only
 			// hxq's own spelling and the enum identifier are accepted.
-			case 'hasContainerItems', 'HasContainerItems':
-				WrapConditionType.HasContainerItems;
+			case 'hasContainerItems', 'HasContainerItems': WrapConditionType.HasContainerItems;
 			// Same array again, crossed with each item's own rendered width — see
 			// `WrapConditionType.HasMultilineLambdaItems`.
 			case 'hasMultilineLambdaItems', 'HasMultilineLambdaItems': WrapConditionType.HasMultilineLambdaItems;
@@ -162,20 +145,25 @@ final class HaxeFormatValues {
 		};
 	}
 
-	private static function sameLineToRuntime(policy: HxFormatSameLinePolicy): SameLinePolicy {
+	/**
+	 * `keep` returns `current`: the writer never reproduces a source line break, so the
+	 * knob keeps the value it had and `HaxeFormatConfigDiagnostics` reports the key.
+	 */
+	private static function sameLineToRuntime(policy: HxFormatSameLinePolicy, current: SameLinePolicy): SameLinePolicy {
 		return switch policy {
 			case HxFormatSameLinePolicy.Next: SameLinePolicy.Next;
-			case HxFormatSameLinePolicy.Keep: SameLinePolicy.Keep;
+			case HxFormatSameLinePolicy.Keep: current;
 			case _: SameLinePolicy.Same;
 		};
 	}
 
-	private static function bodyPolicyToRuntime(policy: HxFormatBodyPolicy): BodyPolicy {
+	/** `keep` returns `current`, as in `sameLineToRuntime`. */
+	private static function bodyPolicyToRuntime(policy: HxFormatBodyPolicy, current: BodyPolicy): BodyPolicy {
 		return switch policy {
 			case HxFormatBodyPolicy.Same: BodyPolicy.Same;
 			case HxFormatBodyPolicy.Next: BodyPolicy.Next;
 			case HxFormatBodyPolicy.FitLine: BodyPolicy.FitLine;
-			case HxFormatBodyPolicy.Keep: BodyPolicy.Keep;
+			case HxFormatBodyPolicy.Keep: current;
 			case _: BodyPolicy.Same;
 		};
 	}
@@ -251,7 +239,8 @@ final class HaxeFormatValues {
 	private static function parenGapToKwAfter(policy: HxFormatWhitespacePolicy): WhitespacePolicy {
 		return switch policy {
 			case HxFormatWhitespacePolicy.Before, HxFormatWhitespacePolicy.OnlyBefore, HxFormatWhitespacePolicy.Around,
-				HxFormatWhitespacePolicy.NoneAfter: WhitespacePolicy.After;
+				HxFormatWhitespacePolicy.NoneAfter:
+				WhitespacePolicy.After;
 			case _: WhitespacePolicy.None;
 		};
 	}
@@ -271,35 +260,20 @@ final class HaxeFormatValues {
 	private static function parenOpeningToInnerPad(policy: HxFormatWhitespacePolicy): WhitespacePolicy {
 		return switch policy {
 			case HxFormatWhitespacePolicy.After, HxFormatWhitespacePolicy.OnlyAfter, HxFormatWhitespacePolicy.Around,
-				HxFormatWhitespacePolicy.NoneBefore: WhitespacePolicy.After;
+				HxFormatWhitespacePolicy.NoneBefore:
+				WhitespacePolicy.After;
 			case _: WhitespacePolicy.None;
 		};
 	}
 
-	private static function keywordPlacementToRuntime(policy: HxFormatKeywordPlacement): KeywordPlacement {
-		return switch policy {
-			case HxFormatKeywordPlacement.Next: KeywordPlacement.Next;
-			case _: KeywordPlacement.Same;
-		};
-	}
-
 	/**
-	 * The `keep`-honouring sibling of `keywordPlacementToRuntime`, for a
-	 * keyword-placement knob whose default is "no opinion" rather than `Same`.
-	 *
-	 * The two differ on exactly one spelling: `"keep"` maps to
-	 * `KeywordPlacement.Keep` here and degrades to `Same` there. `sameLine.elseIf`
-	 * keeps the degrading reader (its documented default is `Same`, and a config
-	 * that spells `keep` for it has always got `Same`); `sameLine.elseSwitch` uses
-	 * this one, so an absent key and an explicit `"keep"` agree.
-	 *
-	 * `"fitLine"` still degrades to `Same` in both: the writer has no shape-aware
-	 * fit mode for a lone keyword.
+	 * `sameLine.elseIf` / `elseSwitch`: `"fitLine"` reads as `Same` (a lone keyword has no fit
+	 * placement of its own) and `"keep"` returns `current`, as in `sameLineToRuntime`.
 	 */
-	private static function keywordPlacementKeepToRuntime(policy: HxFormatKeywordPlacement): KeywordPlacement {
+	private static function keywordPlacementToRuntime(policy: HxFormatKeywordPlacement, current: KeywordPlacement): KeywordPlacement {
 		return switch policy {
 			case HxFormatKeywordPlacement.Next: KeywordPlacement.Next;
-			case HxFormatKeywordPlacement.Keep: KeywordPlacement.Keep;
+			case HxFormatKeywordPlacement.Keep: current;
 			case _: KeywordPlacement.Same;
 		};
 	}

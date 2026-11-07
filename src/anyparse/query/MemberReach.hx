@@ -865,10 +865,11 @@ final class MemberReach {
 	 */
 	private function seedsOf(g: CallGraph, entry: ReachEntry): Seeds {
 		return switch entry {
-			case Region(file, span): seedsWhere(
-				g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s),
-				splicedInto(g, file, [span]), [span]
-			);
+			case Region(file, span):
+				seedsWhere(
+					g, file, span, s -> s != null && s.from >= span.from && s.to <= span.to && isLive(g, file, s),
+					splicedInto(g, file, [span]), [span]
+				);
 			case Calls(file, sites):
 				final starts: Array<Int> = [for (s in sites) if (s.span != null) s.span.from];
 				final spans: Array<Span> = [for (s in sites) if (s.span != null) s.span];
@@ -889,13 +890,14 @@ final class MemberReach {
 		final key: String = CallGraphNames.normalizePath(file);
 		// every declaration the node folds is its code: a range meeting any of them may run what its facts filed off it
 		return [
-			for (id in facts.faceted.keys()) if (
-				g.declarationsOf(id)
-					.exists(
-						d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
-					)
-			)
-				id
+			for (id in facts.faceted.keys())
+				if (
+					g.declarationsOf(id)
+						.exists(
+							d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
+						)
+				)
+					id
 		];
 	}
 
@@ -1033,7 +1035,9 @@ final class MemberReach {
 	 */
 	private function liveHazards(file: String, tree: QueryNode, source: String, span: Span): Array<ReachHazard> {
 		final out: Array<ReachHazard> = [
-			for (h in _hazards.hazardsIn(file, tree, source, span))
+			for (h in _hazards.hazardsIn(
+				file, tree, source, span
+			))
 				if (
 					_live.live(file, source, h.span)
 					&& (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))
@@ -1677,18 +1681,15 @@ final class MemberReach {
 		if (onFresh) return null;
 		final view: Null<FactsView> = _scope.facts;
 		return switch f.access {
-			case 'FEnum':
-				null;
-			case 'FClosure' if (owner != null && view?.immutableMethod(owner, f.field) == true):
-				null;
+			case 'FEnum': null;
+			case 'FClosure' if (owner != null && view?.immutableMethod(owner, f.field) == true): null;
 			case 'FInstance', 'FStatic' if (owner != null && view != null):
 				final graphOwner: String = view.graphType(owner);
 				final source: Null<String> = FactsView.simpleSource(f.type);
 				if (!reads.exists(r -> r.owner == graphOwner && r.name == f.field))
 					reads.push({ owner: graphOwner, name: f.field, inert: source != null && _g.library.inertType(source) });
 				null;
-			case _:
-				Unconfined(f.at.file, f.at.span, 'it reads `${f.field}` off a value of no class');
+			case _: Unconfined(f.at.file, f.at.span, 'it reads `${f.field}` off a value of no class');
 		};
 	}
 
@@ -2189,8 +2190,7 @@ final class MemberReach {
 						final x: Null<NativeFact> = h.native;
 						final verdict: NativeVerdict = x == null ? Blind : nativeVerdict(x, ownNames, question.declaring);
 						switch verdict {
-							case Blind:
-								blind = blind ?? NativeCode(x?.at.file ?? entry.file, h.span);
+							case Blind: blind = blind ?? NativeCode(x?.at.file ?? entry.file, h.span);
 							case Hands(types, values, classes):
 								judged.push({ file: entry.file, span: h.span });
 								if (types == null || types.length > 0 || values || classes.length > 0)

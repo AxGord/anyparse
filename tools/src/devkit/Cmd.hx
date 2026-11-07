@@ -60,9 +60,8 @@ final class Cmd {
 	/** Whether `value` IS an array of strings — the one value type that splices into several arguments (not `Dynamic`/`Any`). */
 	private static function isArray(value: Expr): Bool {
 		return switch Context.followWithAbstracts(Context.typeof(value)) {
-			case TInst(_.get() => { pack: [], name: 'Array' }, _): Context.unify(
-				Context.typeof(value), Context.resolveType(macro : Array<String>, value.pos)
-			);
+			case TInst(_.get() => { pack: [], name: 'Array' }, _):
+				Context.unify(Context.typeof(value), Context.resolveType(macro : Array<String>, value.pos));
 			case _: false;
 		};
 	}

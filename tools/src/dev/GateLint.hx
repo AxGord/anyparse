@@ -271,10 +271,8 @@ final class GateLint {
 	public static function rebased(report: String, pathsNow: Map<String, String>): String {
 		if ([for (base => now in pathsNow) if (base != now) now].length == 0) return report;
 		return switch JValueParser.parse(report) {
-			case JArray(records):
-				RawJson.print(JArray([for (record in records) rebasedRecord(record, pathsNow)]), '  ');
-			case _:
-				report;
+			case JArray(records): RawJson.print(JArray([for (record in records) rebasedRecord(record, pathsNow)]), '  ');
+			case _: report;
 		}
 	}
 
@@ -330,12 +328,10 @@ final class GateLint {
 	/** The lint record `record` filed under the path `pathsNow` maps its `file` to, every other key kept. */
 	private static function rebasedRecord(record: JValue, pathsNow: Map<String, String>): JValue {
 		return switch record {
-			case JObject(entries):
-				JObject([
-					for (entry in entries) entry.key == 'file' ? JValueTools.entry('file', rebasedFile(entry.value, pathsNow)) : entry
-				]);
-			case _:
-				record;
+			case JObject(entries): JObject([
+				for (entry in entries) entry.key == 'file' ? JValueTools.entry('file', rebasedFile(entry.value, pathsNow)) : entry
+			]);
+			case _: record;
 		}
 	}
 

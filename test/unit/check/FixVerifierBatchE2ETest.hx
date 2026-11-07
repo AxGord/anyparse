@@ -188,14 +188,13 @@ final class FixVerifierBatchE2ETest extends Test {
 		};
 		final rounds: Array<Int> = [];
 		final verdicts: Array<String> = FixVerifier.judgeBatch([
-			for (name in NAMES)
-				{
-					entry: { file: '$name.hx', source: plain(name) },
-					edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
-					opts: null,
-					fullText: '// x\n${plain(name)}',
-					verifying: [unavailable]
-				}
+			for (name in NAMES) {
+				entry: { file: '$name.hx', source: plain(name) },
+				edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
+				opts: null,
+				fullText: '// x\n${plain(name)}',
+				verifying: [unavailable]
+			}
 		], new HaxeQueryPlugin(), (file, text) -> disk[file] = text, rounds)
 			.map(Std.string);
 		Assert.equals('[4,1,1,1,1]', Std.string(rounds), 'the batch round, then each file alone — no halves');

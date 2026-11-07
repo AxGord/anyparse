@@ -7,9 +7,8 @@ import utest.Test;
  * `comments.trailingCommentOverflow: "above"` inside an expression: an object-literal field, or an argument of a
  * call or a `new` already laid out one argument per line, moves an overflowing `//` comment onto its own line above it, at
  * its indent, under the statement's positive list (`HxTrailingCommentOverflowSliceTest`): not a directive, no
- * leading comment of its own, code that alone fits on one line. A Keep-mode field glued to its predecessor keeps
- * the comment, which could not end a line above it. Every moved form is a fixed point. Fixtures are 60 columns
- * wide at tab 4.
+ * leading comment of its own, code that alone fits on one line. Every moved form is a fixed point. Fixtures are
+ * 60 columns wide at tab 4.
  */
 @:nullSafety(Strict)
 final class HxTrailingCommentOverflowListSliceTest extends Test {
@@ -18,7 +17,6 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 	private static final ON: String = '"comments": {"trailingCommentOverflow": "above"}';
 	private static final CONFIG_ON: String = '{$BASE}, $ON}';
 	private static final CONFIG_OFF: String = '{$BASE}}';
-	private static final CONFIG_KEEP_ON: String = '{$BASE, "objectLiteral": {"defaultWrap": "keep", "rules": []}}, $ON}';
 	private static final FIELD_SRC: Array<String> = [
 		'final d = {',
 		'\ta: 1, // a comment long enough to overflow this line here',
@@ -130,22 +128,6 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		');'
 	];
 
-	/** A Keep-mode literal glues its first field to `{`, so that field's comment stays; the next field's moves. */
-	private static final KEEP_SRC: Array<String> = [
-		'final d = {a: 1, // a comment long enough to overflow this line here',
-		'\tb: 2, // and another comment long enough to overflow this',
-		'\tc: 3',
-		'};'
-	];
-
-	private static final KEEP_ABOVE: Array<String> = [
-		'final d = {a: 1, // a comment long enough to overflow this line here',
-		'\t// and another comment long enough to overflow this',
-		'\tb: 2,',
-		'\tc: 3',
-		'};'
-	];
-
 	/** The head operand's operator comment stays: above the head is the statement, not the chain. */
 	private static final CHAIN: Array<String> = [
 		'return alpha(first) || // a comment long enough to overflow',
@@ -198,13 +180,6 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 		Assert.equals(fn(STAYS), write(fn(STAYS), CONFIG_ON));
 	}
 
-	/** A Keep-mode field that shares its line with `{` keeps its comment; one that starts its own line moves it. */
-	@:pin('control')
-	@:killer('M-TCO-FIELD-OWN-LINE-IGNORED')
-	public function testKeepGluedFieldKeepsItsComment(): Void {
-		Assert.equals(fn(KEEP_ABOVE), write(fn(KEEP_SRC), CONFIG_KEEP_ON));
-	}
-
 	/** The chain head's operator comment keeps its line under the knob. */
 	public function testChainOperatorCommentStays(): Void {
 		Assert.equals(fn(CHAIN), write(fn(CHAIN), CONFIG_ON));
@@ -213,7 +188,7 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 	/** Every moved form is a fixed point of the same config. */
 	public function testMovedFormsAreFixedPoints(): Void {
 		for (canon in [FIELD_ABOVE, ARG_ABOVE, TRAIL_ABOVE, NEW_ABOVE]) Assert.equals(fn(canon), write(fn(canon), CONFIG_ON));
-		Assert.equals(fn(KEEP_ABOVE), write(fn(KEEP_ABOVE), CONFIG_KEEP_ON));
+
 	}
 
 	private function write(src: String, config: String): String {

@@ -212,8 +212,8 @@ class ExtractMethodSliceTest extends Test {
 	public function testSiblingLoopBindersStillExtract(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfor (i in 0...3)\n\t\t\ttrace(i);\n\t\ttrace(0);\n'
 			+ '\t\tfor (i in 0...2)\n\t\t\ttrace(i);\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tfor (i in 0...3)\n'
-			+ '\t\t\t\ttrace(i);\n\t\t\ttrace(0);\n\t\t}\n\t\thelper();\n\t\tfor (i in 0...2)\n\t\t\ttrace(i);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfunction helper() {\n\t\t\tfor (i in 0...3) trace(i);\n\t\t\tt'
+			+ 'race(0);\n\t\t}\n\t\thelper();\n\t\tfor (i in 0...2) trace(i);\n\t}\n}\n';
 		assertExtract(source, 3, 3, 5, 3, 'helper', true, expected);
 	}
 

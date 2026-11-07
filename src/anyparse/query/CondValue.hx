@@ -128,8 +128,7 @@ final class CondValues {
 			case [Number(a), Number(b)]: Ordered(a < b ? -1 : a > b ? 1 : 0);
 			case [Text(a), Text(b)]: textOrder(a, b);
 			case [Truth(a), Truth(b)]: Ordered(a == b ? 0 : a ? 1 : -1);
-			case [Version(r1, p1), Version(r2, p2)]:
-				versionOrder(r1, p1, r2, p2);
+			case [Version(r1, p1), Version(r2, p2)]: versionOrder(r1, p1, r2, p2);
 			// the compiler's `Cannot compare` error: no build compiles the condition
 			case [Text(_), Number(_)], [Number(_), Text(_)], [_, Version(_, _)], [Version(_, _), _]: Undecided;
 			case _: Never;

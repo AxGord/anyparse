@@ -165,8 +165,7 @@ final class CollapsePass {
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
 				BreakMark(inner, _):
 				[inner];
-			case Concat(items):
-				items;
+			case Concat(items): items;
 			case IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl):
 				// ω-case-sym-linear + ω-glue-width: both `BodyFit` width probes are
 				// EXCLUDED from the both-branch descent. Their two branches wrap the
@@ -184,8 +183,7 @@ final class CollapsePass {
 				IfTrailingCommentOverflows(_, _, _, brk, fl):
 				// The relocation choice's `code` is a subtree of `brk`, so the two branches cover it.
 				[brk, fl];
-			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-				items.concat([sep]);
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _): items.concat([sep]);
 		};
 	}
 
@@ -561,8 +559,7 @@ final class CollapsePass {
 	 */
 	private static function compareOpGluedToHeadBreak(d: Doc, decisions: CollapseRun, width: Int): Null<Doc> {
 		final parts: Null<{ group: Doc, left: Doc, cont: Doc }> = switch d {
-			case Group(Concat([left, cont])), GroupWithRestProbe(Concat([left, cont])):
-				{ group: d, left: left, cont: cont };
+			case Group(Concat([left, cont])), GroupWithRestProbe(Concat([left, cont])): { group: d, left: left, cont: cont };
 			case _: null;
 		};
 		if (parts == null) return null;

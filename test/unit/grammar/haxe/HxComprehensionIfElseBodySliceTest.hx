@@ -33,10 +33,9 @@ import utest.Test;
 final class HxComprehensionIfElseBodySliceTest extends Test {
 
 	/** Project-shaped config with the knob ON and padded comprehension brackets (`whitespace.bracketConfig`). */
-	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "keep"}}';
+	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
+		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {'
+		+ '"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
 
 	/** Same, with `comprehensionFor: same` — tight brackets, generic `arrayWrap` cascade. The cuddle must answer identically. */
 	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
@@ -56,8 +55,9 @@ final class HxComprehensionIfElseBodySliceTest extends Test {
 
 	/** Its layout under `comprehensionFor: keep`: the head cuddles the `[`, the body stays on the head line. */
 	private static final IF_ELSE_CUDDLED: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '
-		+ 'sourceCollectionValueName) if (elementValue.enabledFlagValue)\n\t\t\telementValue.captionValue\n\t\telse\n'
-		+ '\t\t\telementValue.detailValue\n\t\t];\n\t}\n}';
+		+ 'sourceCollectionValueName)\n\t\t\tif (elementValue.enabledFlagValue)\n'
+		+ '\t\t\t\telementValue.captionValue\n\t\t\telse\n\t\t\t\teleme'
+		+ 'ntValue.detailValue\n\t\t];\n\t}\n}';
 
 	/** The same under tight brackets — the cuddle is not a bracket-padding artefact, only the pad after `[` differs. */
 	private static final IF_ELSE_CUDDLED_TIGHT: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [for (elementValue in '
@@ -75,9 +75,10 @@ final class HxComprehensionIfElseBodySliceTest extends Test {
 		+ 'else fallbackValue ] ];\n\t}\n}';
 
 	/** Both levels cuddle their own `[` under `keep`, which then leaves both bodies on their head lines. */
-	private static final NESTED_CUDDLED: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (rowValue in '
-		+ 'sourceMatrixValueName) [ for (indexValue in 0...rowValue.length) if (indexValue > offsetValue)\n'
-		+ '\t\t\trowValue[indexValue]\n\t\telse\n\t\t\tfallbackValue\n\t\t]\n\t\t];\n\t}\n}';
+	private static final NESTED_CUDDLED: String = 'class C {\n\tfunction test() {\n'
+		+ '\t\tfinal r = [ for (rowValue in sourceMatrixValueName)\n\t\t\t[ for (indexValue in '
+		+ '0...rowValue.length)\n\t\t\t\tif (indexValue > offsetValue)\n\t\t\t\t\trowValue[inde'
+		+ 'xValue]\n\t\t\t\telse\n\t\t\t\t\tfallbackValue\n\t\t\t]\n\t\t];\n\t}\n}';
 
 	/**
 	 * The `Matrix.hor` target under `fitLine`: both `[ for` heads cuddled, each body one level below its own head,

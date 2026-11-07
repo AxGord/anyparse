@@ -150,15 +150,17 @@ final class JoinSingleUseLocal extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		return seams == null ? [] : [
-			for (entry in files) for (m in collect(entry.source, plugin, seams)) ({
-				file: entry.file,
-				span: m.declSpan,
-				rule: 'join-single-use-local',
-				severity: Severity.Info,
-				message: m.later
-					? 'this local only captures a value nothing writes and can be inlined at its one read, statements later'
-					: 'this local only captures a trivial read and can be inlined into the next statement'
-			}: Violation)
+			for (entry in files)
+				for (m in collect(entry.source, plugin, seams))
+					({
+						file: entry.file,
+						span: m.declSpan,
+						rule: 'join-single-use-local',
+						severity: Severity.Info,
+						message: m.later
+							? 'this local only captures a value nothing writes and can be inlined at its one read, statements later'
+							: 'this local only captures a trivial read and can be inlined into the next statement'
+					}: Violation)
 		];
 	}
 

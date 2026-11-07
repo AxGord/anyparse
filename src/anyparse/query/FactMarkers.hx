@@ -84,8 +84,7 @@ final class FactMarkers {
 			n, m -> switch m {
 				case StaleForeign: 'a fact of `$id` lies in a file whose text the table no longer has';
 				case ReflectionInlined: harmlessSplice(n) ? null : 'a reflective body spliced into `$id` lost the name it was handed';
-				case Unknown(text):
-					unknownReason(id, text);
+				case Unknown(text): unknownReason(id, text);
 				case InlineSite, MacroExpansion, ReflectionUnattributed, ReflectionFrom(_): null;
 			}
 		);

@@ -15,9 +15,10 @@ final class Table {
 		final widths: Array<Int> = [for (_ in header) 0];
 		for (row in all) for (i => cell in row) if (cell.length > widths[i]) widths[i] = cell.length;
 		return [
-			for (row in all) [
-				for (i => cell in row) i == 0 ? cell.rpad(' ', widths[i]) : cell.lpad(' ', widths[i])
-			].join('  ').rtrim()
+			for (row in all)
+				[
+					for (i => cell in row) i == 0 ? cell.rpad(' ', widths[i]) : cell.lpad(' ', widths[i])
+				].join('  ').rtrim()
 		].join('\n');
 	}
 

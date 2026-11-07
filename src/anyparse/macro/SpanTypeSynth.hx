@@ -152,11 +152,10 @@ class SpanTypeSynth {
 		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
 		final args: Array<FunctionArg> = [
-			for (arg in branch.children)
-				{
-					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
-					type: shapeToComplexType(arg, synthPack)
-				}
+			for (arg in branch.children) {
+				name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
+				type: shapeToComplexType(arg, synthPack)
+			}
 		];
 		args.push({ name: SPAN_FIELD_NAME, type: spanCT });
 		return {

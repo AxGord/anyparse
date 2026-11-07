@@ -172,13 +172,12 @@ final class UncheckedConversions {
 					false
 				else if (_arrays.contains(id))
 					true
-				else
-					switch fact.kind {
-						case 'class': !fact.isExtern;
-						case 'abstract': coreValue(fact);
-						case 'typedef': readThrough(fact.targets, id, fact, args, seen);
-						case _: false;
-					}
+				else switch fact.kind {
+					case 'class': !fact.isExtern;
+					case 'abstract': coreValue(fact);
+					case 'typedef': readThrough(fact.targets, id, fact, args, seen);
+					case _: false;
+				}
 			case _: false;
 		};
 	}

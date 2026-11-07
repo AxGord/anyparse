@@ -383,10 +383,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			case Alt:
 				{ expr: ESwitch(ident('v'), [for (branch in node.children) walkCase(rule, branch)], null), pos: Context.currentPos() };
 			case Seq: lowerWalkSeq(rule, node);
-			case Star:
-				block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0).length == 0 ? [] : [
-					macro for (_e0 in v) $e{block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0))}
-				]);
+			case Star: block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0).length == 0 ? [] : [macro for (_e0 in v) $e{block(
+				descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0)
+			)}]);
 			case Ref: block(descend(node, ident('v'), 'into', TYPE_OUT_PARAM, 0));
 			case Terminal, Opt: macro {};
 		};
@@ -718,8 +717,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				block(
 					[(macro final _s: Null<anyparse.runtime.Span> = fallbackSpan)].concat(typeRefsDescend(node.children[0], ident('v'), 0))
 				);
-			case Ref:
-				block([(macro final _s: Null<anyparse.runtime.Span> = fallbackSpan)].concat(typeRefsDescend(node, ident('v'), 0)));
+			case Ref: block([(macro final _s: Null<anyparse.runtime.Span> = fallbackSpan)].concat(typeRefsDescend(node, ident('v'), 0)));
 			case Terminal, Opt: macro {};
 		};
 	}

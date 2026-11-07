@@ -73,8 +73,7 @@ final class BitsBuilder {
 			case TEnum(ref, params):
 				if (params.length > 0) Context.fatalError('Bits<$shown>: an enum with type parameters is not a fixed domain', pos);
 				enumDomain(ref.get(), shown, pos);
-			case TAbstract(ref, _) if (ref.get().meta.has(':enum')):
-				abstractDomain(ref.get(), shown, pos);
+			case TAbstract(ref, _) if (ref.get().meta.has(':enum')): abstractDomain(ref.get(), shown, pos);
 			case _:
 				Context.fatalError(
 					'Bits<$shown'
@@ -146,8 +145,7 @@ final class BitsBuilder {
 	private static function literalOf(expr: Expr): Int {
 		return switch (expr.expr) {
 			case ECast(inner, _), EParenthesis(inner), ECheckType(inner, _): literalOf(inner);
-			case EConst(CInt(digits)):
-				Std.parseInt(digits) ?? -1;
+			case EConst(CInt(digits)): Std.parseInt(digits) ?? -1;
 			case _: -1;
 		};
 	}

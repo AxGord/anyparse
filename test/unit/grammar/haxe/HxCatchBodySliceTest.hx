@@ -67,11 +67,6 @@ class HxCatchBodySliceTest extends Test {
 		Assert.isTrue(out.indexOf(') trace(e)') != -1, 'expected `) trace(e)` flat (non-block body Same) in: <$out>');
 	}
 
-	public function testKeepDoesNotCrash(): Void {
-		final out: String = writeWith('class M { function f():Void { try { a; } catch (e:Any) { b; } } }', BodyPolicy.Keep);
-		Assert.isTrue(out.indexOf('catch (e:Any)') != -1, 'sanity: `catch (e:Any)` present in: <$out>');
-	}
-
 	public function testJsonNextMapsToNext(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.catchBody);
@@ -85,11 +80,6 @@ class HxCatchBodySliceTest extends Test {
 	public function testJsonFitLineMapsToFitLine(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "fitLine"}}');
 		Assert.equals(BodyPolicy.FitLine, opts.catchBody);
-	}
-
-	public function testJsonKeepMapsToKeep(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "keep"}}');
-		Assert.equals(BodyPolicy.Keep, opts.catchBody);
 	}
 
 	public function testEmptyJsonKeepsDefault(): Void {

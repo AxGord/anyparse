@@ -77,8 +77,7 @@ class HxPredBuild {
 		if (options == null) return false;
 		return switch options.expr {
 			case EConst(CIdent('null')): false;
-			case EObjectDecl(fields):
-				fields.exists(f -> f.field == name && f.expr.expr.match(EConst(CIdent('true'))));
+			case EObjectDecl(fields): fields.exists(f -> f.field == name && f.expr.expr.match(EConst(CIdent('true'))));
 			case _:
 				Context.fatalError('HxPredBuild: options must be an anonymous-struct literal (e.g. `{trivia: true}`)', options.pos);
 				throw 'unreachable';

@@ -255,11 +255,12 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 	private static function shownOf(entry: ChangedPath, delta: FileDelta, selector: Null<String>): Array<DeclarationChange> {
 		final whole: Bool = isWhole(entry);
 		return [
-			for (change in delta.declarations) if (
-				(selector != null || !whole || change.depth <= 0)
-				&& (selector == null || change.selector == selector || change.key == selector || change.name == selector)
-			)
-				change
+			for (change in delta.declarations)
+				if (
+					(selector != null || !whole || change.depth <= 0)
+					&& (selector == null || change.selector == selector || change.key == selector || change.name == selector)
+				)
+					change
 		];
 	}
 
@@ -268,9 +269,8 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		return switch change.status {
 			case Added: '+ ${change.path}  ${change.after}';
 			case Removed: '- ${change.path}  ${change.before}';
-			case Changed: change.before == '' && change.after == ''
-				? '~ ${change.path}'
-				: '~ ${change.path}  ${change.before} -> ${change.after}';
+			case Changed:
+				change.before == '' && change.after == '' ? '~ ${change.path}' : '~ ${change.path}  ${change.before} -> ${change.after}';
 		};
 	}
 
@@ -296,9 +296,10 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 	 */
 	private static function sizeOf(change: DeclarationChange): String {
 		return switch change.status {
-			case Changed: change.added + change.removed == 0 && change.moved
-				? '(moved)'
-				: '+${change.added} -${change.removed}${change.moved ? ' (moved)' : ''}';
+			case Changed:
+				change.added + change.removed == 0 && change.moved
+					? '(moved)'
+					: '+${change.added} -${change.removed}${change.moved ? ' (moved)' : ''}';
 			case Added: '${change.spanLines} line(s)';
 			case Removed: '${change.spanLines} line(s), base';
 		};

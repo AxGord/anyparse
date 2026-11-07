@@ -124,11 +124,9 @@ final class GuardedImportCarry {
 				// The tree says the statement is guarded and the lexical directive walk does not
 				// agree: an unbalanced `#if` run, or one this reader stopped at. Refuse rather than
 				// fall back on the statement alone, which is the silent drop this module exists for.
-				case GuardNone:
-					'the directive walk cannot place it under any `#if`';
+				case GuardNone: 'the directive walk cannot place it under any `#if`';
 				// A conjunction of conditions, which this op will not synthesise a spelling for.
-				case GuardNested(depth):
-					'it sits $depth `#if` regions deep, so more than one condition guards it';
+				case GuardNested(depth): 'it sits $depth `#if` regions deep, so more than one condition guards it';
 				// `#else` means "not the conditions above", and reproducing that at the destination
 				// takes the whole chain, not one branch of it.
 				case GuardBranch(keyword):

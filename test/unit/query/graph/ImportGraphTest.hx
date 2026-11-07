@@ -88,11 +88,10 @@ class ImportGraphTest extends Test {
 		]);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = [
-				for (name in ['pkg/a/import.hx', 'pkg/a/Alpha.hx', 'pkg/b/Beta.hx'])
-					{
-						file: '$root/$name',
-						source: File.getContent('$root/$name')
-					}
+				for (name in ['pkg/a/import.hx', 'pkg/a/Alpha.hx', 'pkg/b/Beta.hx']) {
+					file: '$root/$name',
+					source: File.getContent('$root/$name')
+				}
 			];
 			Assert.equals('pkg.a -> pkg.b x1', edges(ImportGraph.build(indexOf(files), Package)).join('|'));
 		});

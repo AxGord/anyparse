@@ -434,10 +434,8 @@ final class GatesCommand implements CliCommand {
 				// `@:optional @:lead + @:trail`). Exclude Star (`@:sep`)
 				// — angle-bracket arrays are not the target.
 				!m.hasOptional && m.lead != null && m.trail != null && m.sep == null;
-			case 'kw-lead':
-				m.kw != null;
-			case _:
-				false;
+			case 'kw-lead': m.kw != null;
+			case _: false;
 		};
 	}
 
@@ -502,16 +500,11 @@ final class GatesCommand implements CliCommand {
 
 	private static function gatesNoHitsLabel(mechanism: String): String {
 		return switch mechanism {
-			case 'trail-opt':
-				'`@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations';
-			case 'optional-ref':
-				'`@:optional` Ref fields with `@:lead` / `@:kw` / `@:absentOn`';
-			case 'optional-ref-trail':
-				'`@:optional @:lead @:trail` Ref fields (Slice 40 bracket-pair pattern)';
-			case 'mandatory-ref-lead-trail':
-				'mandatory Ref fields with `@:lead` + `@:trail` (relax candidates for Slice 40 mechanism)';
-			case 'kw-lead':
-				'fields with `@:kw`';
+			case 'trail-opt': '`@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations';
+			case 'optional-ref': '`@:optional` Ref fields with `@:lead` / `@:kw` / `@:absentOn`';
+			case 'optional-ref-trail': '`@:optional @:lead @:trail` Ref fields (Slice 40 bracket-pair pattern)';
+			case 'mandatory-ref-lead-trail': 'mandatory Ref fields with `@:lead` + `@:trail` (relax candidates for Slice 40 mechanism)';
+			case 'kw-lead': 'fields with `@:kw`';
 			case _: '<unknown mechanism>';
 		};
 	}

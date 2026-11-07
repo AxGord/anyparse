@@ -187,10 +187,8 @@ final class TokenAudit {
 	 */
 	public static function landedIds(landings: Array<Landing>, agents: Array<AgentReading>): Array<String> {
 		return [
-			for (l in landings) if (agents.exists(a ->
-				a.slice == l.id && a.turns.length > 0 && a.turns[0].start <= l.landed * MS_PER_SECOND
-			))
-				l.id
+			for (l in landings)
+				if (agents.exists(a -> a.slice == l.id && a.turns.length > 0 && a.turns[0].start <= l.landed * MS_PER_SECOND)) l.id
 		];
 	}
 

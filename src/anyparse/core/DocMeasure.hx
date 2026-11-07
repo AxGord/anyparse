@@ -487,8 +487,7 @@ final class DocMeasure {
 	 */
 	public static function firstVisibleText(d: Doc): Null<String> {
 		return switch d {
-			case Text(s):
-				s;
+			case Text(s): s;
 			// Whitespace-only leaves carry no visible text. As an item of the
 			// list arm below they are skipped; as the probed node itself they
 			// answer null. `isWhitespaceOnlyLeaf` is the one place that set
@@ -815,8 +814,7 @@ final class DocMeasure {
 			case Line(_), OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				seen.push('\n');
 				-1;
-			case Empty, OptSpaceSkipAfterHardline:
-				-1;
+			case Empty, OptSpaceSkipAfterHardline: -1;
 			case Concat(arr), Fill(arr, _, _), FillWithRestProbe(arr, _, _), FillBreakAfterWrap(arr, _, _):
 				var hit: Int = -1;
 				for (it in arr) if (hit == -1) hit = leadTokenChar(it, seen);
@@ -909,8 +907,7 @@ final class DocMeasure {
 			// transparent rather than as a break — no emitter produces one in
 			// tail position, and reading it as a break would claim a closing
 			// line that the atom has already terminated.
-			case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				TailCloses;
+			case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline: TailCloses;
 			case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
 				if (out != null) out.nest = nest;
 				TailBreak;
@@ -939,8 +936,7 @@ final class DocMeasure {
 				}
 			case Concat(items), Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 				scanTailItemsAt(items, nest, resolveForcedBreaks, out);
-			case Nest(n, inner):
-				scanTailAt(inner, nest + n, resolveForcedBreaks, out);
+			case Nest(n, inner): scanTailAt(inner, nest + n, resolveForcedBreaks, out);
 			case Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner),
 				BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
 				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):

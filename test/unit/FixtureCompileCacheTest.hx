@@ -36,27 +36,23 @@ class FixtureCompileCacheTest extends Test {
 		final first: Fixture = fixture(PROBE);
 		final second: Fixture = fixture(PROBE);
 		final real: Fixture = fixture(PROBE);
-		CliFixture.always(
-			() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe, real.dir, real.probe]) CliFixture.removeDir(dir),
-			() -> {
-				FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
-				final replayed: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
-				Assert.equals('miss,hit', tally(cache), 'the second fixture is the first one elsewhere');
-				// the compiler itself at a third place: the replay must answer as it does, modulo that place
-				final compiled: ChildProcessSpawnSyncResult = ChildProcess.spawnSync(
-					'haxe', args(real), { cwd: real.dir, encoding: 'utf8' }
-				);
-				final out: String = replayed.out.toString();
-				Assert.equals(0, replayed.status);
-				Assert.equals(moved(Std.string(compiled.stdout), real, second), out);
-				Assert.isTrue(out.indexOf(resolved(second.dir)) >= 0, 'the replay names its own cwd: $out');
-				Assert.isTrue(out.indexOf(first.probe) < 0, 'nothing of the recorded run survives: $out');
-				Assert.equals(
-					moved(File.getContent(Path.join([real.probe, 'dump.txt'])), real, second),
-					File.getContent(Path.join([second.probe, 'dump.txt']))
-				);
-			}
-		);
+		CliFixture.always(() -> for (dir in [cache, first.dir, first.probe, second.dir, second.probe, real.dir, real.probe])
+			CliFixture.removeDir(dir), () -> {
+			FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
+			final replayed: CompileOutcome = FixtureCompileCache.run('haxe', 'stamp', cache, second.dir, args(second));
+			Assert.equals('miss,hit', tally(cache), 'the second fixture is the first one elsewhere');
+			// the compiler itself at a third place: the replay must answer as it does, modulo that place
+			final compiled: ChildProcessSpawnSyncResult = ChildProcess.spawnSync('haxe', args(real), { cwd: real.dir, encoding: 'utf8' });
+			final out: String = replayed.out.toString();
+			Assert.equals(0, replayed.status);
+			Assert.equals(moved(Std.string(compiled.stdout), real, second), out);
+			Assert.isTrue(out.indexOf(resolved(second.dir)) >= 0, 'the replay names its own cwd: $out');
+			Assert.isTrue(out.indexOf(first.probe) < 0, 'nothing of the recorded run survives: $out');
+			Assert.equals(
+				moved(File.getContent(Path.join([real.probe, 'dump.txt'])), real, second),
+				File.getContent(Path.join([second.probe, 'dump.txt']))
+			);
+		});
 	}
 
 	public function testAChangedProbeSourceOrFixtureIsACompile(): Void {
@@ -65,13 +61,11 @@ class FixtureCompileCacheTest extends Test {
 		// a mutated facts macro reaches the probe directory as different text, exactly like this
 		final probe: Fixture = fixture('$PROBE// mutated\n');
 		final main: Fixture = fixture(PROBE, '$MAIN// edited\n');
-		CliFixture.always(
-			() -> for (dir in [cache, base.dir, base.probe, probe.dir, probe.probe, main.dir, main.probe]) CliFixture.removeDir(dir),
-			() -> {
-				for (f in [base, probe, main]) FixtureCompileCache.run('haxe', 'stamp', cache, f.dir, args(f));
-				Assert.equals('miss,miss,miss', tally(cache));
-			}
-		);
+		CliFixture.always(() -> for (dir in [cache, base.dir, base.probe, probe.dir, probe.probe, main.dir, main.probe])
+			CliFixture.removeDir(dir), () -> {
+			for (f in [base, probe, main]) FixtureCompileCache.run('haxe', 'stamp', cache, f.dir, args(f));
+			Assert.equals('miss,miss,miss', tally(cache));
+		});
 	}
 
 	/**

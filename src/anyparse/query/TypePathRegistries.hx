@@ -113,18 +113,17 @@ final class TypePathRegistries {
 	/** The records of the document `json` as `members` lays them out. Throws the JSON parser's error on a document that does not parse. */
 	public static function memberRecords(members: MemberKeys, json: String): Array<MemberRecord> {
 		return [
-			for (record in recordsOf(JsonProjection.parse(json), members.records))
-				{
-					name: firstString(record, members.name, json)?.value ?? '',
-					type: firstString(record, members.type, json)?.value ?? '',
-					kind: firstString(record, members.kind, json)?.value ?? members.defaultKind,
-					member: firstString(record, members.member, json),
-					finds: stringsAt(record, members.find, json),
-					replaces: stringsAt(record, members.replace, json),
-					opaque: [
-						for (key in members.opaque) for (slot in stringsAt(record, key, json)) { key: key, slot: slot }
-					]
-				}
+			for (record in recordsOf(JsonProjection.parse(json), members.records)) {
+				name: firstString(record, members.name, json)?.value ?? '',
+				type: firstString(record, members.type, json)?.value ?? '',
+				kind: firstString(record, members.kind, json)?.value ?? members.defaultKind,
+				member: firstString(record, members.member, json),
+				finds: stringsAt(record, members.find, json),
+				replaces: stringsAt(record, members.replace, json),
+				opaque: [
+					for (key in members.opaque) for (slot in stringsAt(record, key, json)) { key: key, slot: slot }
+				]
+			}
 		];
 	}
 
@@ -141,10 +140,14 @@ final class TypePathRegistries {
 	/** The objects of the array a top-level member `records` holds. */
 	private static function recordsOf(root: QueryNode, records: String): Array<QueryNode> {
 		return [
-			for (object in root.children) if (object.kind == JsonProjection.OBJECT)
-				for (m in object.children) if (m.kind == JsonProjection.MEMBER && m.name == records)
-					for (array in m.children) if (array.kind == JsonProjection.ARRAY)
-						for (item in array.children) if (item.kind == JsonProjection.OBJECT) item
+			for (object in root.children)
+				if (object.kind == JsonProjection.OBJECT)
+					for (m in object.children)
+						if (m.kind == JsonProjection.MEMBER && m.name == records)
+							for (array in m.children)
+								if (array.kind == JsonProjection.ARRAY)
+									for (item in array.children)
+										if (item.kind == JsonProjection.OBJECT) item
 		];
 	}
 
@@ -184,14 +187,10 @@ final class TypePathRegistries {
 	/** Every string at `path[i..]` under `node`, arrays transparent. */
 	private static function valuesAt(node: Null<JValue>, path: Array<String>, i: Int): Array<String> {
 		return switch node {
-			case JArray(items):
-				[for (item in items) for (v in valuesAt(item, path, i)) v];
-			case JString(text):
-				i == path.length ? [text] : [];
-			case JObject(_) if (i < path.length):
-				valuesAt(JValueTools.field(node, path[i]), path, i + 1);
-			case _:
-				[];
+			case JArray(items): [for (item in items) for (v in valuesAt(item, path, i)) v];
+			case JString(text): i == path.length ? [text] : [];
+			case JObject(_) if (i < path.length): valuesAt(JValueTools.field(node, path[i]), path, i + 1);
+			case _: [];
 		};
 	}
 

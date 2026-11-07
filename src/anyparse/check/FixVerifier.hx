@@ -702,11 +702,12 @@ final class FixVerifier {
 		final fullText: String = switch CanonicalEdit.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
 			case Ok(_): return Settled(NoChange);
-			case Err(message): return Settled(
-				CanonicalEdit.isWriterCanonical(before, plugin, opts)
-					? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write, rounds)
-					: SourceNotCanonical
-			);
+			case Err(message):
+				return Settled(
+					CanonicalEdit.isWriterCanonical(before, plugin, opts)
+						? writerNarrowed(entry, edits, message, plugin, opts, usable, excluded, write, rounds)
+						: SourceNotCanonical
+				);
 		};
 		// The candidate exists; WHICH configurations could ever judge it is a separate question,
 		// and it is asked here rather than earlier so that the decline count means what it says:
@@ -911,11 +912,10 @@ final class FixVerifier {
 				final prep: Null<EntryPrep> = p.prep;
 				if (prep == null)
 					null
-				else
-					switch prep {
-						case Settled(settled): settled;
-						case Ready(_): judged[next++];
-					};
+				else switch prep {
+					case Settled(settled): settled;
+					case Ready(_): judged[next++];
+				};
 			}
 		];
 	}

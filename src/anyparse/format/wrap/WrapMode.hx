@@ -26,31 +26,18 @@ enum abstract WrapMode(Int) from Int to Int {
 	final FillLineWithLeadingBreak = 4;
 
 	/**
-	 * Source-newline preservation: each element's hardline-vs-glue decision reads
-	 * `Trivial<T>.newlineBefore` at the writer site.
-	 *
-	 * Effective only at the trivia-emit branch (`TriviaSepLowering.triviaSepStarExpr`).
-	 * The cascade engine's `shape` switch maps `Keep → shapeNoWrap` as a defensive
-	 * fallback, because the writer pre-empts a Keep cascade before invoking
-	 * `WrapList.emit` — a Keep rule that does reach the engine then gets a sensible
-	 * single-line layout instead of a crash.
-	 */
-	final Keep = 5;
-
-	/**
 	 * Source-newline drop: ignore `Trivial<T>.newlineBefore` and let the cascade
 	 * pick a width-driven layout, with per-element leading comments and block-style
 	 * trailing comments inlined into the cascade-emitted items so source comments
-	 * survive. Sister to `Keep` — the opposite policy on the same axis.
+	 * survive.
 	 *
 	 * An anyparse extension the fork's `WrappingType` has no value for, so no corpus
 	 * fixture selects it and it reaches the engine only from a JSON config that names
-	 * it. It is also the only mode that COLLAPSES a list the source broke — every
-	 * other one preserves the source form or only breaks a long one — which is what a
-	 * project asking for a canonical single-line layout needs.
+	 * it. A list the source broke collapses under it whenever it fits, which
+	 * is what a project asking for a canonical single-line layout needs.
 	 *
 	 * Effective only at the trivia-emit branch (`TriviaSepLowering.triviaSepStarExpr`);
-	 * the engine's `shape` switch maps `Ignore → shapeNoWrap` exactly as for `Keep`.
+	 * the engine's `shape` switch maps `Ignore → shapeNoWrap` as a defensive fallback.
 	 */
 	final Ignore = 6;
 

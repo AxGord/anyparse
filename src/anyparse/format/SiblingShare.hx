@@ -156,10 +156,8 @@ final class SiblingShare {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
-				case Doc.IfIndentWidthExceeds(v, _, glued, _) if (v == MEASURED_COMMENTED):
-					walk(glued);
-				case _:
-					D.mapChildrenShared(n, walk);
+				case Doc.IfIndentWidthExceeds(v, _, glued, _) if (v == MEASURED_COMMENTED): walk(glued);
+				case _: D.mapChildrenShared(n, walk);
 			};
 			memo.set(n, out);
 			return out;
@@ -174,8 +172,7 @@ final class SiblingShare {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
-				case Doc.IfIndentWidthExceeds(v, _, _, own) if (v == MEASURED_COMMENTED):
-					offer == null ? own : walk(own);
+				case Doc.IfIndentWidthExceeds(v, _, _, own) if (v == MEASURED_COMMENTED): offer == null ? own : walk(own);
 				case Doc.IfIndentWidthExceeds(v, _, brk, own) if (isVote(v)):
 					final o: Doc = offer == null ? own : walk(own);
 					final b: Doc = offer == null ? brk : walk(brk);
@@ -183,8 +180,7 @@ final class SiblingShare {
 					offer == null ? plain : Doc.BreakCommit(Doc.IfIndentWidthExceeds(offer.width, lineWidth, b, o), plain, offer.alias);
 				case Doc.BreakMark(inner, token) if (offer != null && token == offer.token):
 					Doc.BreakMark(Doc.BreakMark(walk(inner), token), offer.alias);
-				case _:
-					D.mapChildrenShared(n, walk);
+				case _: D.mapChildrenShared(n, walk);
 			};
 			memo.set(n, out);
 			return out;
@@ -206,8 +202,7 @@ final class SiblingShare {
 				else
 					second;
 				width == WrapList.flatLength(widest) ? null : { width: width, token: token, alias: new BreakToken() };
-			case _:
-				null;
+			case _: null;
 		};
 	}
 

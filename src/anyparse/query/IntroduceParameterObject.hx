@@ -272,8 +272,8 @@ final class IntroduceParameterObject {
 			final to: Int = firstSpan(args[prep.rng.end]).to;
 			final literal: String = '{ '
 				+ [
-					for (i in prep.rng.start ... prep.rng.end + 1)
-						'${prep.fields[i - prep.rng.start].name}: ${source.substring(firstSpan(args[i]).from, firstSpan(args[i]).to)}'
+					for (i in prep.rng.start ... prep.rng.end
+						+ 1) '${prep.fields[i - prep.rng.start].name}: ${source.substring(firstSpan(args[i]).from, firstSpan(args[i]).to)}'
 				].join(', ')
 				+ ' }';
 			edits.push({ span: new Span(from, to), text: literal });

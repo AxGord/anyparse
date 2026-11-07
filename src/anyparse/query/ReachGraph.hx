@@ -1357,9 +1357,11 @@ final class ReachGraph {
 		final isClass: Null<String> -> Bool = t ->
 			t != null && NominalTypes.outerNominalOf(StringTools.trim(t), _scope.plugin.typeSyntax) == classType;
 		final out: Array<{ name: String, file: String }> = [
-			for (fi in _scope.index.allFiles()) for (t in fi.types) for (m in t.members)
-				if (functionKinds.contains(m.kind) && (m.returnNominal == classType || m.paramTypeSources.exists(isClass)))
-					{ name: m.name, file: fi.file }
+			for (fi in _scope.index.allFiles())
+				for (t in fi.types)
+					for (m in t.members)
+						if (functionKinds.contains(m.kind) && (m.returnNominal == classType || m.paramTypeSources.exists(isClass)))
+							{ name: m.name, file: fi.file }
 		];
 		_producers = out;
 		return out;

@@ -366,30 +366,17 @@ final class WriterRefFieldLowering {
 		// separator AND the body emission) and fall through to the
 		// per-ctor `sep + writeCall` default for every other ctor.
 		// Consumer: `HxFnExpr.body` for `('ExprBody',
-		// 'anonFunctionBody')` — the bare-expr anon-fn body. The
-		// gap-at-parent rationale matches the mandatory-Ref path:
-		// the signature→body source-newline gap is consumed by the
-		// parent struct's pre-field `skipWs` before this branch's
-		// sub-rule probes, so the `Keep`-policy slot must be read
-		// at the parent (`<field>BeforeNewline`), NOT inside the
-		// kw-less `ExprBody` branch (which grows no slot). Default
+		// 'anonFunctionBody')` — the bare-expr anon-fn body. Default
 		// `anonFunctionBody=Same` reproduces the prior ExprBody
 		// `_dt(' ')` cuddle byte-for-byte, so this is inert until
-		// the knob is set to `Next` / `Keep`.
+		// the knob is set to `Next`.
 		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 		if (lcSep != null && lcCtors.length > 0) {
 			final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
 			final sepExpr: Expr = buildLeftCurlySepExpr(ctx, refName, lcCtors, ctorExpr, lcSep);
 			if (bodyPolicyForCtorPairs.length > 0) {
-				// The `<field>BeforeNewline` Keep-dispatch slot is
-				// synthesised only for NON-optional bare Refs
-				// (`TriviaTypeSynth.isBareNonFirstRef` excludes
-				// `@:optional`). This optional-Ref path therefore has
-				// no slot — pass `null`, so `Same` / `Next` work and
-				// `Keep` degrades to the no-slot default. Supporting
-				// `Keep` here would require extending slot synthesis
-				// to optional Refs (a separate, larger change — the
-				// `sourceMultilineKeep` wall noted in ω-fnbody-keep).
+				// No body policy reads the source shape, so the optional-Ref
+				// path passes no source-newline slot.
 				final wrapBodyOnSameLineExpr: Null<Expr> = null;
 				optParts.push(buildBodyPolicyForCtorChain(
 					ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr, null
@@ -441,8 +428,9 @@ final class WriterRefFieldLowering {
 				valueFieldAccess(fieldName), false
 			)
 			: null;
-		// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
-		// `Keep` branch of `bodyPolicyWrap` / policySwitch.
+		// `<field>BodyOnSameLine:Bool`: read by the
+		// `nestBodyOnSourceNewline` branch below; `bodyPolicyWrap`
+		// receives it but no body policy reads the source shape.
 		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap ? {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
 			pos: Context.currentPos()
@@ -767,12 +755,9 @@ final class WriterRefFieldLowering {
 		};
 		if (siblingAccess == null) return null;
 		final policyDispatch: Expr = macro switch opt.semicolonBeforeElse {
-			case anyparse.format.OptionalSemicolon.Never:
-				_sbeSibling ? _de() : $sourcePresent;
-			case anyparse.format.OptionalSemicolon.Always:
-				_sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
-			case _:
-				$sourcePresent;
+			case anyparse.format.OptionalSemicolon.Never: _sbeSibling ? _de() : $sourcePresent;
+			case anyparse.format.OptionalSemicolon.Always: _sbeSibling ? _dt($v{trailOptText}) : $sourcePresent;
+			case _: $sourcePresent;
 		};
 		// omega-bracket-body-glue CLOSE side: a branch value the knob hugs to its head
 		// (`if (c) [`) has to close the same way (`] else`), and `];` cannot cuddle. So
@@ -927,26 +912,12 @@ final class WriterRefFieldLowering {
 		// uses for `hasBeforeLeadingSlot`; null off the slot path →
 		// byte-inert. (`firstFieldNlOptIn` is declared just below
 		// alongside `bodyOnSameLineExpr` — both share the gate.)
-		// Slice ω-expr-body-keep: `BodyPolicy.Keep` on bare-Ref
-		// body fields reads the source-shape signal from the
-		// existing `<field>BeforeNewline:Bool` synth slot
-		// (created by `isBareNonFirstRef` in TriviaTypeSynth) —
-		// `BodyOnSameLine` is its inverse, no separate slot
-		// needed. First-field bodyPolicy paths (Case 3) have no
-		// BeforeNewline slot, so the !isFirstField gate keeps
-		// the pre-slice null fallback there. Without ctx.trivia
-		// the slot doesn't exist either; null falls back to the
-		// `Same` layout inside `bodyPolicyWrap` (matches the
-		// pre-slice plain-mode behaviour for Keep).
-		//
-		// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)`
-		// opt-in extends slot reading to first-field bodyPolicy
-		// paths. Pairs with parent Alt-branch
-		// `@:fmt(forwardNewlineForBody)` (Case 3 omits post-kw
-		// `skipWs`) and `TriviaTypeSynth.isBareNonFirstRef` /
-		// `StructSeqLowering.computeBeforeSlots` first-field allowances.
-		// Currently consumed by `HxTryCatchStmt.body` for
-		// `untypedBody=Keep` source-shape preservation.
+		// `bodyOnSameLineExpr` is the inverse of the bare-Ref
+		// `<field>BeforeNewline:Bool` synth slot (`isBareNonFirstRef`);
+		// `bodyPolicyWrap` receives it but no body policy reads the
+		// source shape. `@:fmt(beforeNewlineSlotFirst)` extends the
+		// slot to a first-field body (`HxTryCatchStmt.body`), pairing
+		// with the parent Alt-branch `@:fmt(forwardNewlineForBody)`.
 		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
 		final bodyOnSameLineExpr: Null<Expr> = ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn)
 			? beforeNewlineNotAccess(fieldName)
@@ -976,8 +947,7 @@ final class WriterRefFieldLowering {
 		// when a body that can render flat breaks by width where
 		// the policy glued it (`BodyAllman.gluedLayout`). The override
 		// places the body in Allman position with extra
-		// `+cols` indent on contents, regardless of Keep/Same/
-		// Next/FitLine policy. Currently consumed by
+		// `+cols` indent on contents, regardless of Same/Next/FitLine policy. Currently consumed by
 		// `HxForExpr.body` for the `[for (x in xs) {<multi>}]`
 		// shape; HxIfExpr.thenBranch deliberately does NOT
 		// carry this meta because fork keeps `if (cond) {`
@@ -1233,10 +1203,9 @@ final class WriterRefFieldLowering {
 		final optFlag: Expr = optFieldAccess(flagName);
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
-		final flagSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
-			{ values: ['Next'], expr: nextLayoutExpr },
-			{ values: ['Keep'], expr: sameLayoutExpr }
-		], sameLayoutExpr);
+		final flagSwitch: Expr = buildPolicySwitch(
+			['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextLayoutExpr }], sameLayoutExpr
+		);
 		final blockPatterns: Array<Expr> = shapeAware ? collectBlockCtorPatterns(ctx.ctorPat, bodyTypePath) : [];
 		// ω-block-allman-leftcurly: when the body's runtime ctor is a block,
 		// the inline `' ' + body` layout cuddles the brace (`try { … }`). That
@@ -1485,36 +1454,6 @@ final class WriterRefFieldLowering {
 		final condInsideClose: Expr = condInsideArgs != null && condInsideArgs.length == 2
 			? policyInsideSpace(condInsideArgs[1], true)
 			: macro _de();
-		// ω-condition-wrap-keep: read the `<field>CondOpenNewline:Bool`
-		// synth slot (populated by `Lowering` when the source broke
-		// right after the open paren) and thread it into
-		// `emitCondition`'s `sourceOpenNewline` arg. Under
-		// `WrapMode.Keep` the engine forces `brkShape` so the
-		// author's post-`(` break round-trips. Gated on trivia +
-		// bearing + the field opting in via
-		// `@:fmt(captureCondOpenNewline)`; otherwise the slot does
-		// not exist, so we pass a literal `false` → byte-inert
-		// (plain mode, non-keep modes, non-opted condWrap fields).
-		final hasCondOpenNewlineSlot: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath) && child.fmtHasFlag('captureCondOpenNewline');
-		final condOpenNewlineExpr: Expr = hasCondOpenNewlineSlot ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX),
-			pos: Context.currentPos()
-		} : macro false;
-		// ω-condition-wrap-keep: only the trivia-bearing Haxe cond
-		// path (slot present) sets `_keepChainInParen` — the
-		// `_setKeepChainInParen` helper exists only on opt types that
-		// declare `_keepChainInParen` (Haxe `HxModuleWriteOptions`). A
-		// generic `@:fmt(condWrap)` grammar without the slot emits the
-		// plain opt shadow → no reference to the Haxe-only helper. The
-		// runtime `sourceOpenNewline` + Keep gate further narrows the
-		// flag to force-broken keep conds.
-		final condKeepChainInParen: Expr = hasCondOpenNewlineSlot
-			? macro {
-				final _condKeepBrk: Bool = $condOpenNewlineExpr && _condMode == anyparse.format.wrap.WrapMode.Keep;
-				final opt = _condKeepBrk ? _setKeepChainInParen(opt, true) : opt;
-				opt;
-			}
-			: macro opt;
 		parts.push(macro {
 			final _condRules: anyparse.format.wrap.WrapRules = $condKnobAccess;
 			final _condMode: anyparse.format.wrap.WrapMode = _condRules.defaultMode;
@@ -1532,23 +1471,8 @@ final class WriterRefFieldLowering {
 			// (`{rules: [], defaultMode: NoWrap}` → false).
 			final _parenCond: Bool = anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null;
 			final opt = _setParenInCondition(_setCondWrapChainMode(opt, _chainOvr), _parenCond, opt);
-			// ω-condition-wrap-keep: when the cond paren is force-broken
-			// (source newline after `(` + Keep mode → `emitCondition`
-			// returns `brkShape`), the `brkShape`'s `Nest(cols, condDoc)`
-			// already supplies the +cols paren indent. Mark the cond
-			// chain's opt `_keepChainInParen` so its OWN continuation
-			// `Nest` is suppressed (chain operators co-indent with the
-			// head at outer+cols, not compounding to outer+2cols) AND its
-			// own `_headBreak` is dropped (`brkShape`'s leading `Line`
-			// already put the head operand on its own line). Reuses the
-			// `_keepChainInParen` channel (gated there on the
-			// chain config being Keep). `condKeepChainInParen` is a
-			// macro-time no-op (`opt`) for non-Haxe / non-bearing grammars
-			// so the Haxe-only `_setKeepChainInParen` helper is never
-			// referenced there.
-			final opt = $condKeepChainInParen;
 			anyparse.format.wrap.WrapList.emitCondition(
-				$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess, $condInsideOpen, $condInsideClose, $condOpenNewlineExpr
+				$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess, $condInsideOpen, $condInsideClose
 			);
 		});
 	}
@@ -1591,9 +1515,7 @@ final class WriterRefFieldLowering {
 		// '<flagName>'))` (repeatable) runtime-replaces the per-ctor
 		// `sep + writeCall` pair with a `bodyPolicyWrap` for each matched
 		// runtime ctor, built as a ternary chain falling through to the
-		// per-ctor default. The `<field>BeforeNewline` Keep-dispatch slot is
-		// read at the parent (where it IS captured, see `hasBeforeNewlineSlot`
-		// in `StructSeqLowering.lowerStruct`), NOT inside the kw-less branch. Consumers:
+		// per-ctor default. Consumers:
 		// `HxFnDecl.body` for `('UntypedBlockBody', 'untypedBody')` and
 		// `('ExprBody', 'functionBody')`. Same/Next output stays byte-identical
 		// to the pre-slice inner-branch emission.
@@ -1808,11 +1730,10 @@ final class WriterRefFieldLowering {
 		final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 		final useNodeAccess: Bool = ctx.ctx.trivia && ctx.isTriviaBearing(typePath);
 		final probeBody: Expr = useNodeAccess
-			? macro for (_m in $starAccess)
-				if (_m.node.match($ctorIdent)) {
-					_f = true;
-					break;
-				}
+			? macro for (_m in $starAccess) if (_m.node.match($ctorIdent)) {
+				_f = true;
+				break;
+			}
 			: macro for (_m in $starAccess) if (_m.match($ctorIdent)) {
 				_f = true;
 				break;

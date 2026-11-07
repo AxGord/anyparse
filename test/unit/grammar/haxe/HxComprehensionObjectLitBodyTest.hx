@@ -23,9 +23,6 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	/** `comprehensionFor: same` spelled out, which defers to `forBody` just as the absent key does. */
 	private static final CFG_FOR_BODY_SAME: String = cfg('"forBody": "fitLine", "comprehensionFor": "same"');
 
-	/** `comprehensionFor: keep` places the body itself, so `forBody` has no say. */
-	private static final CFG_FOR_BODY_KEEP: String = cfg('"forBody": "fitLine", "comprehensionFor": "keep"');
-
 	/** `comprehensionFor: next` places the body itself too. */
 	private static final CFG_FOR_BODY_NEXT: String = cfg('"forBody": "fitLine", "comprehensionFor": "next"');
 
@@ -37,6 +34,9 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 
 	/** No `sameLine` key at all. */
 	private static final CFG_DEFAULT: String = cfg('');
+
+	/** `comprehensionFor: same` alone: a placement with no `fitLine` knob anywhere. */
+	private static final CFG_SAME: String = cfg('"comprehensionFor": "same"');
 
 	/** The Allman placement every config without a `fitLine` knob gives a source-multi-line literal. */
 	private static final ALLMAN: String = wrap(
@@ -56,16 +56,17 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	/** The literal glues whichever line the source put its `{` on. */
 	@:pin('control') @:killer('M-OBJLIT-GLUE-FORBODY-OFF')
 	public function testForBodyFitLineGluesTheLiteral(): Void {
-		Assert.equals(GLUED, write(cuddledSource(), CFG_FOR_BODY));
-		Assert.equals(GLUED, write(allmanSource(), CFG_FOR_BODY));
-		Assert.equals(GLUED, write(GLUED, CFG_FOR_BODY));
+		Assert.equals(GLUED, write(cuddledSource(), CFG_FOR_BODY_SAME));
+		Assert.equals(GLUED, write(allmanSource(), CFG_FOR_BODY_SAME));
+		Assert.equals(GLUED, write(GLUED, CFG_FOR_BODY_SAME));
 	}
 
-	/** An absent key defers to `forBody` exactly as the spelled-out `same` does. */
+	/** An absent key defers to `forBody` exactly as the spelled-out `same` does: a literal broken by width glues under both. */
 	@:pin('control') @:killer('M-OBJLIT-GLUE-ABSENT-KEY')
 	public function testAbsentComprehensionForDefersToForBody(): Void {
-		Assert.equals(GLUED, write(cuddledSource(), CFG_FOR_BODY));
-		Assert.equals(GLUED, write(cuddledSource(), CFG_FOR_BODY_SAME));
+		final expected: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
+		Assert.equals(expected, write(WIDE_FLAT, CFG_FOR_BODY));
+		Assert.equals(expected, write(WIDE_FLAT, CFG_FOR_BODY_SAME));
 	}
 
 	/** A wide literal the source wrote flat breaks in place behind the glued `{` rather than moving to Allman. */
@@ -76,23 +77,31 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 		Assert.equals(expected, write(expected, CFG_FOR_BODY));
 	}
 
-	/** A `keep` or `next` comprehension places its body itself, whatever `forBody` says. */
+	/** A `next` comprehension places its body itself, whatever `forBody` says. */
 	@:pin('control') @:killer('M-OBJLIT-GLUE-EVERY-VALUE')
 	public function testAnExplicitComprehensionPlacementOutranksForBody(): Void {
-		Assert.equals(ALLMAN, write(cuddledSource(), CFG_FOR_BODY_KEEP));
 		Assert.equals(ALLMAN, write(cuddledSource(), CFG_FOR_BODY_NEXT));
 	}
 
-	/** Without a `fitLine` knob the literal stays in Allman position and keeps the lines the source gave it. */
+	/** Without a `fitLine` placement the literal stays in Allman position and keeps the lines the source gave it. */
 	@:pin('control') @:killer('M-REFLOW-ANY-POLICY')
-	public function testDefaultConfigKeepsAllman(): Void {
-		Assert.equals(ALLMAN, write(cuddledSource(), CFG_DEFAULT));
+	public function testSameKeepsAllman(): Void {
+		Assert.equals(ALLMAN, write(cuddledSource(), CFG_SAME));
 	}
 
-	/** The glue is about the literal: another body under the same knob keeps the placement its policy gave it. */
+	/** With no `sameLine` key the comprehension body takes `fitLine`, so a literal that fits collapses onto the head line. */
+	@:pin('guard')
+	public function testDefaultConfigCollapsesALiteralThatFits(): Void {
+		Assert.equals(wrap('var x = [for (i in xs) {a: i, b: i}];'), write(cuddledSource(), CFG_DEFAULT));
+	}
+
+	/**
+	 * The glue is about the literal: another body under the same knob keeps the placement its policy gave it, so one too
+	 * wide for the head line stays below it.
+	 */
 	@:pin('control') @:killer('M-ALLMAN-GLUE-ANY-CTOR')
 	public function testGlueLeavesAnotherBodyAlone(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\tf(i)\n\t\t];');
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t$NAME_A${NAME_B.substr(0, 36)}\n\t\t];');
 		Assert.equals(source, write(source, CFG_FOR_BODY));
 	}
 
@@ -238,11 +247,11 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
-	/** Without `comprehensionFor: fitLine` a parenthesised literal keeps the lines the source gave it. */
+	/** Without a `fitLine` placement a parenthesised literal keeps the lines the source gave it. */
 	@:pin('control') @:killer('M-PAREN-FRAME-ANY-POLICY')
-	public function testDefaultConfigKeepsAParenthesisedLiteralsLines(): Void {
+	public function testSameKeepsAParenthesisedLiteralsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t})\n\t\t];');
-		Assert.equals(source, write(source, CFG_DEFAULT));
+		Assert.equals(source, write(source, CFG_SAME));
 	}
 
 	/** A comment inside a parenthesised literal keeps its lines, as in a bare one. */

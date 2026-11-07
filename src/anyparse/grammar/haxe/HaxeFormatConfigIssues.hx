@@ -5,7 +5,7 @@ package anyparse.grammar.haxe;
  * `hxformat.json`: the settings hxq will not act on, split by what
  * ignoring them costs.
  *
- * The two groups are reported separately because their consequences
+ * The groups are reported separately because their consequences
  * differ. An unimplemented KEY simply does nothing — the config states
  * a preference and the writer never reads it. An unimplemented wrap
  * VALUE is worse: `HaxeFormatConfigLoader.wrapRuleFromConfig` drops the
@@ -22,6 +22,12 @@ typedef HaxeFormatConfigIssues = {
 	keys: Array<String>,
 
 	/** Wrap-cascade strings with no runtime mapping, deduplicated and quoted. */
-	wrapValues: Array<String>
+	wrapValues: Array<String>,
+
+	/**
+	 * Every `keep` value, `sameLine.<key> "keep"` or `wrapping … "keep"`: the fork's "reproduce the source's line
+	 * breaks", which hxq does not support — the writer lays code out from the syntax tree and the options alone.
+	 */
+	unsupported: Array<String>
 
 };

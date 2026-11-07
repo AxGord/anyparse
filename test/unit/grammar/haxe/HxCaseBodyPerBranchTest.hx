@@ -234,13 +234,6 @@ final class HxCaseBodyPerBranchTest extends Test {
 		has(onBreak, 'case 2:\n');
 	}
 
-	public function testKeepPreservesTheSourceShape(): Void {
-		final keep: String = write(CONDITIONAL_SRC, '{"wrapping": {"maxLineLength": 39}, "sameLine": {"expressionCase": "keep"}}');
-		has(keep, 'case 1: aa(bb);');
-		has(keep, 'case 2: cc(ddddddddddddddd);');
-		has(keep, 'case _: ee(ff);');
-	}
-
 	/** `d` switches nested through each other's first case body. A canary: a placement pre-pass per level would cost 2^d here. */
 	public function testDeeplyNestedSwitchesSettleInOnePass(): Void {
 		var body: String = 'aa(bb);';

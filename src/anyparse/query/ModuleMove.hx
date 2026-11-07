@@ -354,9 +354,8 @@ final class ModuleMove {
 		for (e in files) if (lastSegments.exists(s -> e.source.indexOf(s) >= 0)) {
 			final regions: Array<LexRegion> = plugin.lexicalRegions(e.source);
 			final at: Array<{ offset: Int, what: String }> = [
-				for (prefix in prefixes) for (o in ModulePathTokens.stringsEndingWith(
-					e.source, regions, prefix
-				)) { offset: o, what: prefix }
+				for (prefix in prefixes)
+					for (o in ModulePathTokens.stringsEndingWith(e.source, regions, prefix)) { offset: o, what: prefix }
 			];
 			for (pkg in packages) for (o in ModulePathTokens.stringsNamingPackage(e.source, regions, pkg))
 				at.push({ offset: o, what: pkg });
@@ -942,8 +941,9 @@ final class ModuleMove {
 		for (directory in directories) {
 			final members: Array<TypePathRegistry> = placed.filter(r -> Path.directory(r.file) == directory);
 			final documents: Array<RegistryDocument> = [
-				for (r in members) for (e in request.textFiles) if (e.file == r.file)
-					{ file: e.file, source: current.find(c -> c.file == e.file)?.newSource ?? e.source }
+				for (r in members)
+					for (e in request.textFiles)
+						if (e.file == r.file) { file: e.file, source: current.find(c -> c.file == e.file)?.newSource ?? e.source }
 			];
 			final carried: CarriedDocuments = try PackageDocuments.carry(
 				documents, members[0].keys

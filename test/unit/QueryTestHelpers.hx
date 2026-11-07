@@ -65,15 +65,14 @@ final class QueryTestHelpers {
 			final compiled: Array<String> = all.map(f -> OracleCoverage.canonical(cwd, f.file));
 			return {
 				configurations: [
-					for (c in declared)
-						{
-							name: c.name,
-							defined: c.defined,
-							everDefined: c.everDefined,
-							values: c.values,
-							compiled: compiled,
-							types: types
-						}
+					for (c in declared) {
+						name: c.name,
+						defined: c.defined,
+						everDefined: c.everDefined,
+						values: c.values,
+						compiled: compiled,
+						types: types
+					}
 				],
 				library: libraryFiles
 			};

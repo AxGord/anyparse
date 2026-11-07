@@ -218,8 +218,7 @@ class CondResolveTest extends Test {
 	/** The rewritten source, failing the assertion with the refusal text when the op declined. */
 	private static function okText(answer: CondResolveResult): String {
 		return switch answer.result {
-			case Ok(text, _):
-				text;
+			case Ok(text, _): text;
 			case Err(message):
 				Assert.fail('expected a rewrite, got: $message');
 				'';
@@ -232,8 +231,7 @@ class CondResolveTest extends Test {
 			case Ok(_, _):
 				Assert.fail('expected a refusal, got a rewrite');
 				'';
-			case Err(message):
-				message;
+			case Err(message): message;
 		}
 	}
 
