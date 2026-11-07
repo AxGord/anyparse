@@ -2,6 +2,8 @@ package anyparse.format;
 
 using StringTools;
 
+import anyparse.util.Strings;
+
 /**
  * Text normalisation for a conditional-compilation condition - the `#if` /
  * `#elseif` operand a grammar captures VERBATIM as one terminal.
@@ -41,7 +43,9 @@ final class DirectiveCondition {
 		while (i < n) {
 			final c: Int = text.fastCodeAt(i);
 			if (c == '"'.code || c == "'".code) {
-				final end: Int = literalEnd(text, i);
+				// An unterminated literal keeps the rest of the text as authored.
+				final closed: Int = Strings.quotedEnd(text, i);
+				final end: Int = closed > i ? closed : n;
 				out += text.substring(i, end);
 				i = end;
 				continue;
@@ -78,27 +82,6 @@ final class DirectiveCondition {
 	/** A space or a tab - the whitespace this transform owns. A newline is not one. */
 	private static inline function isBlank(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code;
-	}
-
-	/**
-	 * The index one past the closing quote of the literal starting at `open`, or
-	 * `text.length` for an unterminated one. Backslash escapes are stepped over, so
-	 * an escaped quote does not end the literal.
-	 */
-	private static function literalEnd(text: String, open: Int): Int {
-		final quote: Int = text.fastCodeAt(open);
-		final n: Int = text.length;
-		var i: Int = open + 1;
-		while (i < n) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			i++;
-			if (c == quote) return i;
-		}
-		return n;
 	}
 
 	/**

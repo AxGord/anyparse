@@ -252,6 +252,16 @@ final class CondDirectives {
 		});
 	}
 
+	/**
+	 * The condition span starting after a keyword at `from`, or null when the directive carries
+	 * none. Never crosses a newline: a condition is a single-line directive tail.
+	 */
+	public static function conditionAt(source: String, from: Int): Null<Span> {
+		final start: Int = skipInlineSpace(source, from);
+		final end: Int = scanExpression(source, start);
+		return end > start ? new Span(start, end) : null;
+	}
+
 	/** Whether `c` opens a string literal. */
 	private static inline function isQuote(c: Int): Bool {
 		return c == '"'.code || c == '\''.code;
@@ -315,16 +325,6 @@ final class CondDirectives {
 	}
 
 	/**
-	 * The condition span starting after a keyword at `from`, or null when the directive carries
-	 * none. Never crosses a newline: a condition is a single-line directive tail.
-	 */
-	private static function conditionAt(source: String, from: Int): Null<Span> {
-		final start: Int = skipInlineSpace(source, from);
-		final end: Int = scanExpression(source, start);
-		return end > start ? new Span(start, end) : null;
-	}
-
-	/**
 	 * The end of the conditional expression at `at`, or `at` when the text holds none.
 	 *
 	 * The scan is a operand / operator alternation — optional `!` prefixes, then an operand,
@@ -355,7 +355,7 @@ final class CondDirectives {
 		if (at >= source.length) return at;
 		final c: Int = source.fastCodeAt(at);
 		if (c == '('.code) return scanParens(source, at);
-		if (isQuote(c)) return scanQuoted(source, at);
+		if (isQuote(c)) return Strings.quotedEnd(source, at);
 		if (Strings.isIdentStart(c)) return scanFlagName(source, at + 1);
 		if (!isDigit(c)) return at;
 		var i: Int = at + 1;
@@ -375,7 +375,7 @@ final class CondDirectives {
 			final c: Int = source.fastCodeAt(i);
 			if (isLineBreak(c)) return at;
 			if (isQuote(c)) {
-				final quoted: Int = scanQuoted(source, i);
+				final quoted: Int = Strings.quotedEnd(source, i);
 				if (quoted <= i) return at;
 				i = quoted;
 				continue;
@@ -386,27 +386,6 @@ final class CondDirectives {
 				depth--;
 				if (depth == 0) return i + 1;
 			}
-			i++;
-		}
-		return at;
-	}
-
-	/** The index just past the string literal opening at `at`, or `at` when it is unterminated on its line. */
-	private static function scanQuoted(source: String, at: Int): Int {
-		final quote: Int = source.fastCodeAt(at);
-		var i: Int = at + 1;
-		while (i < source.length) {
-			final c: Int = source.fastCodeAt(i);
-			if (isLineBreak(c)) return at;
-			if (c == '\\'.code) {
-				// The escape must not step OVER a line break: the condition is a single-line tail,
-				// and a trailing backslash in text the grammar never accepted would otherwise carry
-				// the scan into the next line.
-				if (i + 1 >= source.length || isLineBreak(source.fastCodeAt(i + 1))) return at;
-				i += 2;
-				continue;
-			}
-			if (c == quote) return i + 1;
 			i++;
 		}
 		return at;

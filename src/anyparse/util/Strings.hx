@@ -12,7 +12,8 @@ typedef Split = {
 
 /**
  * The one answer to "how does the project read a piece of plain text": the line a position sits on, whether a string is
- * blank, whether it is an identifier, a quoted literal of it, and the part of it before or after a delimiter. A
+ * blank, whether it is an identifier, a quoted literal of it, where a
+ * quoted literal ends, and the part of it before or after a delimiter. A
  * delimiter is always a non-empty string. Where the delimiter is missing, the plain form returns the input unchanged
  * (nothing to cut) and the `OrNull` form returns null, so the caller who needs the difference asks for it by name. This
  * package imports nothing from `anyparse.*`, and it holds no state.
@@ -161,6 +162,28 @@ final class Strings {
 		final start: Int = from + open.length;
 		final to: Int = text.indexOf(close, start);
 		return to < 0 ? null : text.substring(start, to);
+	}
+
+	/**
+	 * The index just past the string literal opening at `at` (its first character is the quote), or `at` when the
+	 * literal is unterminated on its line. A backslash escape is stepped over, but never over a line break: a text that
+	 * is a single-line tail must not let a dangling backslash carry the scan into the next line.
+	 */
+	public static function quotedEnd(source: String, at: Int): Int {
+		final quote: Int = fastCodeAt(source, at);
+		var i: Int = at + 1;
+		while (i < source.length) {
+			final c: Int = fastCodeAt(source, i);
+			if (c == '\n'.code || c == '\r'.code) return at;
+			if (c == '\\'.code) {
+				if (i + 1 >= source.length || fastCodeAt(source, i + 1) == '\n'.code || fastCodeAt(source, i + 1) == '\r'.code) return at;
+				i += 2;
+				continue;
+			}
+			if (c == quote) return i + 1;
+			i++;
+		}
+		return at;
 	}
 
 }

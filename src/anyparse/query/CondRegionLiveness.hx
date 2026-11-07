@@ -429,8 +429,11 @@ final class CondRegionLiveness {
 		}
 		if (code == '"'.code || code == '\''.code) {
 			final from: Int = cursor.pos;
-			cursor.pos = quotedEnd(text, cursor.pos);
-			if (cursor.pos >= 0) return CondValues.text(text.substring(from + 1, cursor.pos - 1));
+			final end: Int = Strings.quotedEnd(text, from);
+			if (end > from) {
+				cursor.pos = end;
+				return CondValues.text(text.substring(from + 1, end - 1));
+			}
 			cursor.ok = false;
 			return null;
 		}
@@ -469,8 +472,8 @@ final class CondRegionLiveness {
 		skipSpace(text, cursor);
 		final quote: Int = cursor.pos < text.length ? text.fastCodeAt(cursor.pos) : 0;
 		final from: Int = cursor.pos;
-		final end: Int = quote == '"'.code || quote == '\''.code ? quotedEnd(text, cursor.pos) : -1;
-		if (end < 0) {
+		final end: Int = quote == '"'.code || quote == '\''.code ? Strings.quotedEnd(text, from) : from;
+		if (end <= from) {
 			cursor.ok = false;
 			return null;
 		}
@@ -525,22 +528,6 @@ final class CondRegionLiveness {
 			if (!Strings.isIdentStart(text.fastCodeAt(i + 1))) return i;
 			i += 2;
 		}
-	}
-
-	/** The index just past the string literal opening at `at`, or -1 when it is unterminated. */
-	private static function quotedEnd(text: String, at: Int): Int {
-		final quote: Int = text.fastCodeAt(at);
-		var i: Int = at + 1;
-		while (i < text.length) {
-			final code: Int = text.fastCodeAt(i);
-			if (code == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			if (code == quote) return i + 1;
-			i++;
-		}
-		return -1;
 	}
 
 	/** The end of the digit-and-dot run starting at `at`. */

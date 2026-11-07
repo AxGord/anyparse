@@ -271,6 +271,43 @@ class IfFalseDeadCodeCheckTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-IFFALSE-LITERAL-PREFIX')
+	public function testALiteralLedConditionIsNotFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if (false)\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if (false && x)\n\t\tlive();\n\t\t#end\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if (true || x)\n\t\tlive();\n\t\t#end\n\t}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-PARENS-KEPT')
+	public function testSpacedParensAroundTheLiteralAreFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if ( false )\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-BODY-START-KEYWORD')
+	public function testFixBodyStartsAfterTheWholeCondition(): Void {
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\t#if ( false ) ; #else\n\t\tlive();\n\t\t#end\n\t}\n}');
+		Assert.isTrue(out.indexOf('#if') == -1 && out.indexOf('live();') != -1, 'dead branch dropped, got: <$out>');
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-ONE-PAREN-LAYER')
+	public function testEveryLayerOfParensAroundTheLiteralIsPeeled(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if ((true))\n\t\tlive();\n\t\t#end\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f() {\n\t\t#if ((false))\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-MULTILINE-CONDITION')
+	public function testAConditionBrokenAcrossLinesIsNotTheLiteral(): Void {
+		// The owner reads a condition as a single-line tail, so a line break ends it before the literal.
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if (\n\t\tfalse\n\t\t)\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if\n\t\tfalse\n\t\tdead();\n\t\t#end\n\t}\n}').length);
+	}
+
 	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		return CanonicalEdit.applyEdits(src, edits);
 	}

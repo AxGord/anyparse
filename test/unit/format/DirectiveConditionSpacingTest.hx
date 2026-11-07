@@ -86,6 +86,19 @@ class DirectiveConditionSpacingTest extends Test {
 		Assert.equals(once, DirectiveCondition.spaceOperators(once, OperatorSpacing.Around));
 	}
 
+	@:pin('control')
+	@:killer('M-DIRCOND-UNTERMINATED-RESPACED')
+	public function testAnUnterminatedLiteralKeepsTheRestAsAuthored(): Void {
+		Assert.equals('(a == "x||y', DirectiveCondition.spaceOperators('(a == "x||y', OperatorSpacing.Around));
+		Assert.equals('(a == "x\n||y")', DirectiveCondition.spaceOperators('(a == "x\n||y")', OperatorSpacing.Around));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-ESCAPE-OFF')
+	public function testAnEscapedQuoteDoesNotEndTheLiteral(): Void {
+		Assert.equals('(a == "x\\"||y") || b', DirectiveCondition.spaceOperators('(a == "x\\"||y")||b', OperatorSpacing.Around));
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}

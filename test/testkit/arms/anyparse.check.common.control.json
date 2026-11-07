@@ -1048,6 +1048,45 @@
 			"find": "final class CollapsibleElseIf extends RuleBase implements QuotationAware {",
 			"replace": "final class CollapsibleElseIf extends RuleBase {",
 			"note": "the rule takes the central reification drop again, so an else block holding one if inside a macro quotation is neither reported nor collapsed"
+		},
+		{
+			"name": "M-IFFALSE-LITERAL-PREFIX",
+			"type": "anyparse.check.common.control.IfFalseDeadCode",
+			"method": "isIfLiteralAt",
+			"find": ") == literal;",
+			"replace": ").startsWith(literal);",
+			"note": "a condition that merely STARTS with the literal reads as the literal, so `#if false && x` is flagged dead although it is a conditional on x"
+		},
+		{
+			"name": "M-IFFALSE-PARENS-KEPT",
+			"type": "anyparse.check.common.control.IfFalseDeadCode",
+			"method": "isIfLiteralAt",
+			"find": "CondDirectives.stripOuterParens(text)",
+			"replace": "text",
+			"note": "the parentheses around the literal are not peeled, so a spaced `#if ( false )` stops reading as the literal"
+		},
+		{
+			"name": "M-IFFALSE-BODY-START-KEYWORD",
+			"type": "anyparse.check.common.control.IfFalseDeadCode",
+			"method": "bodyStart",
+			"force": "'#if'.length",
+			"note": "the THEN body is taken to begin right after the keyword, so the condition text counts as body and a trivial dead region reads as non-trivial"
+		},
+		{
+			"name": "M-IFFALSE-ONE-PAREN-LAYER",
+			"type": "anyparse.check.common.control.IfFalseDeadCode",
+			"method": "isIfLiteralAt",
+			"find": "CondDirectives.stripOuterParens(text)",
+			"replace": "(text.charAt(0) == '(' ? text.substring(1, text.length - 1).trim() : text)",
+			"note": "only ONE layer of parentheses around the literal is peeled, so `#if ((false))` stops reading as the literal"
+		},
+		{
+			"name": "M-IFFALSE-MULTILINE-CONDITION",
+			"type": "anyparse.check.common.control.IfFalseDeadCode",
+			"method": "isIfLiteralAt",
+			"find": "CondDirectives.conditionAt(source, from + '#if'.length)",
+			"replace": "CondDirectives.conditionAt(source.replace('\\n', ' '), from + '#if'.length)",
+			"note": "a condition is read across line breaks, so `#if (` / `false` / `)` on three lines reads as the literal"
 		}
 	]
 }

@@ -1216,6 +1216,36 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "R1",
+			"note": "if-false: parentheses nested around the literal are all peeled, so `#if ((false))` is a dead region (read through the condition reader, not a hand skip of one paren layer)",
+			"argv": [
+				"hxq",
+				"lint",
+				"A.hx",
+				"--rule",
+				"if-false",
+				"--no-oracle"
+			],
+			"files": {
+				"A.hx": "class A {\n\tfunction f() {\n\t\t#if ((false))\n\t\tdead();\n\t\t#end\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "5ff4d0e91595b85d",
+				"err": "b4b220b0ef1c9805",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

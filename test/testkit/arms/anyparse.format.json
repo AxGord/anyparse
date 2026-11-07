@@ -515,6 +515,14 @@
 			"find": "if (!inComment) {",
 			"replace": "if (true) {",
 			"note": "comment bytes count as code again, so a comment between a trailing comma and its closer keeps the comma visible"
+		},
+		{
+			"name": "M-DIRCOND-UNTERMINATED-RESPACED",
+			"type": "anyparse.format.DirectiveCondition",
+			"method": "spaceOperators",
+			"find": "closed > i ? closed : n",
+			"replace": "closed > i ? closed : i + 1",
+			"note": "an unterminated literal is copied one quote character at a time, so an operator after it is respaced although the text never closed the literal"
 		}
 	]
 }

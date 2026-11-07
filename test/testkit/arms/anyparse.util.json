@@ -386,6 +386,46 @@
 			"find": "a < b",
 			"replace": "((a - b) | 0) < 0",
 			"note": "a subtraction in place of the branch overflows for integers far apart"
+		},
+		{
+			"name": "M-UTIL-QUOTED-END-AT-CLOSE",
+			"type": "anyparse.util.Strings",
+			"method": "quotedEnd",
+			"find": "if (c == quote) return i + 1;",
+			"replace": "if (c == quote) return i;",
+			"note": "a literal ends at its closing quote instead of just past it, so the returned index points at the quote and every caller re-reads it as an opener"
+		},
+		{
+			"name": "M-UTIL-QUOTED-ESCAPE-OFF",
+			"type": "anyparse.util.Strings",
+			"method": "quotedEnd",
+			"find": "i += 2;",
+			"replace": "i += 1;",
+			"note": "a backslash escape no longer hides the character after it, so an escaped quote ends the literal early"
+		},
+		{
+			"name": "M-UTIL-QUOTED-BREAK-IGNORED",
+			"type": "anyparse.util.Strings",
+			"method": "quotedEnd",
+			"find": "if (c == '\\n'.code || c == '\\r'.code) return at;",
+			"replace": "",
+			"note": "a line break no longer ends the scan, so an unterminated literal swallows the lines after it"
+		},
+		{
+			"name": "M-UTIL-QUOTED-ESCAPE-BREAK-OFF",
+			"type": "anyparse.util.Strings",
+			"method": "quotedEnd",
+			"find": "if (i + 1 >= source.length || fastCodeAt(source, i + 1) == '\\n'.code || fastCodeAt(source, i + 1) == '\\r'.code) return at;",
+			"replace": "",
+			"note": "an escape may step over a line break, so a trailing backslash carries the scan into the next line"
+		},
+		{
+			"name": "M-UTIL-QUOTED-UNTERMINATED-LENGTH",
+			"type": "anyparse.util.Strings",
+			"method": "quotedEnd",
+			"find": "i++;\n\t}\n\treturn at;",
+			"replace": "i++;\n\t}\n\treturn source.length;",
+			"note": "an unterminated literal reports the end of the text as its end, so a caller reads the rest as a closed literal"
 		}
 	]
 }

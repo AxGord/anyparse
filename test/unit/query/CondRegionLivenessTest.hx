@@ -381,6 +381,23 @@ final class CondRegionLivenessTest extends Test {
 		Assert.equals(0, CondRegionLiveness.deadSpans(BRANCHED, SHAPE, [], regions).length);
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-ESCAPE-OFF')
+	public function testAnEscapedQuoteDoesNotEndAConditionLiteral(): Void {
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "\\"" || flag == "1")', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == \'\\\'\' || flag == "1")', VALUED));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-UNTERMINATED-LENGTH')
+	@:killer('M-UTIL-QUOTED-BREAK-IGNORED')
+	public function testAnUnterminatedConditionLiteralStaysUnknown(): Void {
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1', VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\n"', VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\\', VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(semv > version("1.0.0))', VALUED));
+	}
+
 	/** A zero-length span at `needle`'s first occurrence — the shape an insertion has. */
 	private static function at(source: String, needle: String): Span {
 		final from: Int = source.indexOf(needle);

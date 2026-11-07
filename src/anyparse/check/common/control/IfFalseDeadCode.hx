@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 
 using StringTools;
@@ -85,7 +86,7 @@ final class IfFalseDeadCode extends RuleBase {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final isTrueBranch: Bool = isIfTrueAt(source, span.from);
-			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to), isTrueBranch);
+			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to));
 			if (region == null) continue;
 			if (isTrueBranch) {
 				if (region.elsePos != -1 && !isTrivialBody(region.otherwise)) continue;
@@ -106,14 +107,6 @@ final class IfFalseDeadCode extends RuleBase {
 	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
 	private static inline function isIfTrueAt(source: String, from: Int): Bool {
 		return isIfLiteralAt(source, from, 'true');
-	}
-
-	private static inline function isWs(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code;
-	}
-
-	private static inline function isWordChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 	}
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode): Void {
@@ -145,7 +138,7 @@ final class IfFalseDeadCode extends RuleBase {
 	 */
 	private static function deadRegionMessage(slice: String, isTrueBranch: Bool): String {
 		final base: String = isTrueBranch ? TRUE_MESSAGE : FALSE_MESSAGE;
-		final region: Null<EliminatedRegion> = eliminatedRegion(slice, isTrueBranch);
+		final region: Null<EliminatedRegion> = eliminatedRegion(slice);
 		if (region == null) return base;
 		final eliminated: Null<String> = isTrueBranch ? (region.elsePos == -1 ? null : region.otherwise) : region.then;
 		return eliminated == null || isTrivialBody(eliminated) ? base : base + DEAD_BRANCH_NOTE;
@@ -164,61 +157,38 @@ final class IfFalseDeadCode extends RuleBase {
 	 * chain (`fix` stays report-only; `deadRegionMessage` keeps the base
 	 * message) or a malformed region (`#else` with no matching `#end`).
 	 */
-	private static function eliminatedRegion(slice: String, isTrueBranch: Bool): Null<EliminatedRegion> {
+	private static function eliminatedRegion(slice: String): Null<EliminatedRegion> {
 		if (findTopLevelMarker(slice, '#elseif') != -1) return null;
 		final elsePos: Int = findTopLevelMarker(slice, '#else');
 		final endPos: Int = slice.lastIndexOf('#end');
 		if (elsePos != -1 && endPos <= elsePos) return null;
 		final bodyEnd: Int = elsePos == -1 ? endPos : elsePos;
 		return {
-			then: slice.substring(bodyStart(slice, isTrueBranch), bodyEnd),
+			then: slice.substring(bodyStart(slice), bodyEnd),
 			elsePos: elsePos,
 			otherwise: elsePos == -1 ? '' : slice.substring(elsePos + '#else'.length, endPos).trim()
 		};
 	}
 
-	/** `true` iff the source at `from` opens with `#if <literal>` / `#if (<literal>)` (word-bounded). */
+	/**
+	 * `true` iff the source at `from` opens with `#if <literal>` / `#if (<literal>)` and the condition is NOTHING
+	 * ELSE: `#if false && x` is a conditional on `x`, not a dead region.
+	 */
 	private static function isIfLiteralAt(source: String, from: Int, literal: String): Bool {
 		if (!sliceStartsWith(source, from, '#if')) return false;
-		var i: Int = from + '#if'.length;
-		while (i < source.length && isWs(source.charCodeAt(i) ?? 0)) i++;
-		var parens: Bool = false;
-		if (i < source.length && source.charCodeAt(i) == '('.code) {
-			parens = true;
-			i++;
-			while (i < source.length && isWs(source.charCodeAt(i) ?? 0)) i++;
-		}
-		if (!sliceStartsWith(source, i, literal)) return false;
-		final after: Int = source.charCodeAt(i + literal.length) ?? 0;
-		if (isWordChar(after)) return false;
-		if (!parens) return true;
-		var j: Int = i + literal.length;
-		while (j < source.length && isWs(source.charCodeAt(j) ?? 0)) j++;
-		return source.charCodeAt(j) == ')'.code;
+		final condition: Null<Span> = CondDirectives.conditionAt(source, from + '#if'.length);
+		if (condition == null) return false;
+		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
+		return CondDirectives.stripOuterParens(text) == literal;
 	}
 
 	/**
-	 * Index in `slice` (which itself opens with the region's own `#if
-	 * <literal>` / `#if (<literal>)`) right after the condition, where the
-	 * THEN body begins — the same skip `isIfLiteralAt` performs, restarted
-	 * at `slice[0]`.
+	 * Index in `slice` (which itself opens with the region's own `#if <literal>` / `#if (<literal>)`) right after the
+	 * condition, where the THEN body begins — the same condition `isIfLiteralAt` read, restarted at `slice[0]`.
 	 */
-	private static function bodyStart(slice: String, isTrueBranch: Bool): Int {
-		final literal: String = isTrueBranch ? 'true' : 'false';
-		var i: Int = '#if'.length;
-		while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
-		var parens: Bool = false;
-		if (i < slice.length && slice.charCodeAt(i) == '('.code) {
-			parens = true;
-			i++;
-			while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
-		}
-		i += literal.length;
-		if (parens) {
-			while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
-			if (i < slice.length && slice.charCodeAt(i) == ')'.code) i++;
-		}
-		return i;
+	private static function bodyStart(slice: String): Int {
+		final condition: Null<Span> = CondDirectives.conditionAt(slice, '#if'.length);
+		return condition == null ? '#if'.length : condition.to;
 	}
 
 	/**

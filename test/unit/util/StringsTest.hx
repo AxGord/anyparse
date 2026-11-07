@@ -327,4 +327,33 @@ final class StringsTest extends Test {
 		Assert.isNull(Strings.extract('a[b', '[', ']'));
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-END-AT-CLOSE')
+	public function testAQuotedLiteralEndsJustPastItsClosingQuote(): Void {
+		Assert.equals(6, Strings.quotedEnd('x "ab" y', 2));
+		Assert.equals(4, Strings.quotedEnd('\'ab\' y', 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-ESCAPE-OFF')
+	public function testAnEscapedQuoteDoesNotEndTheLiteral(): Void {
+		Assert.equals(6, Strings.quotedEnd('"a\\"b"', 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-BREAK-IGNORED')
+	@:killer('M-UTIL-QUOTED-UNTERMINATED-LENGTH')
+	public function testAnUnterminatedLiteralStopsAtTheLineBreak(): Void {
+		Assert.equals(0, Strings.quotedEnd('"abc', 0));
+		Assert.equals(0, Strings.quotedEnd('"ab\ncd"', 0));
+		Assert.equals(2, Strings.quotedEnd('x "ab\n"', 2));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-QUOTED-ESCAPE-BREAK-OFF')
+	public function testADanglingBackslashBeforeALineBreakIsUnterminated(): Void {
+		Assert.equals(0, Strings.quotedEnd('"ab\\\n"', 0));
+		Assert.equals(0, Strings.quotedEnd('"ab\\', 0));
+	}
+
 }
