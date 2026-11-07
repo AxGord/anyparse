@@ -6,6 +6,10 @@ package anyparse.format;
  *
  * `Keep`   — the source's trailing `,` round-trips, and the per-construct
  * `trailingComma*` knobs may still ADD one. Byte-inert default.
+ * `Split`  — `Keep`, plus the authorial lever: a list whose source wrote a separator after its last element is laid out one element
+ * per line whatever the cascade and the width answer, and a list without one is laid out by policy and width as
+ * under `Keep`. A per-construct add-knob then writes its comma only in the one-per-line shape: the next pass reads
+ * any comma the writer wrote as the lever, so a knob comma in a filled layout would split the list a pass later.
  * `Remove` — a multiline list never ends with a separator, whatever the
  * source had and whatever the per-construct knob asks for. `Remove`
  * therefore OUTRANKS `trailingCommas.arrayLiteralDefault` /
@@ -37,6 +41,7 @@ enum abstract TrailingCommaPolicy(Int) from Int to Int {
 
 	final Keep = 0;
 	final Remove = 1;
+	final Split = 2;
 
 	/**
 	 * Resolves the config string (`hxformat.json`
@@ -47,6 +52,7 @@ enum abstract TrailingCommaPolicy(Int) from Int to Int {
 		return switch name {
 			case 'keep': Keep;
 			case 'remove': Remove;
+			case 'split': Split;
 			case _: null;
 		};
 	}

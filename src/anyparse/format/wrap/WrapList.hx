@@ -31,6 +31,14 @@ typedef WrapListOptions = {
 	var ?appendTrailingComma: Bool;
 
 	/**
+	 * Restrict `appendTrailingComma` to the `OnePerLine` shape. Under a policy that reads a source trailing separator
+	 * as the author's one-per-line lever (`TrailingCommaPolicy.Split`), a separator written in any other break shape
+	 * would turn that shape into `OnePerLine` on the next pass, so one write would not reach the fixed point.
+	 * Default `false`.
+	 */
+	var ?trailingCommaOnlyOnePerLine: Bool;
+
+	/**
 	 * Doc prepended INSIDE the engine's `Group(IfBreak(brk, flat))` on the FLAT side, so a
 	 * per-construct decoration (typically a leftCurly placement: hardline for Allman, Empty
 	 * for cuddled) tracks the wrap engine's flat/break decision. When the cascade collapses
@@ -1379,6 +1387,11 @@ class WrapList {
 		forceExceeds: Bool, anyHardline: Bool, extraThresholds: Array<Int>, evalAt: (Bool, Array<Int>) -> WrapMode
 	): Bool {
 		return forceExceeds && !anyHardline && extraThresholds.length == 0 && evalAt(true, []) == NoWrap;
+	}
+
+	/** The list's trailing separator in one resolved `mode`: `appends`, held to `OnePerLine` when the caller asked so. */
+	private static inline function appendsInMode(appends: Bool, axes: ResolvedWrapListOptions, mode: WrapMode): Bool {
+		return appends && (!axes.trailingCommaOnlyOnePerLine || mode == OnePerLine);
 	}
 
 	/**
@@ -4357,6 +4370,7 @@ class WrapList {
 		final axes: WrapListOptions = options ?? {};
 		return {
 			appendTrailingComma: axes.appendTrailingComma ?? false,
+			trailingCommaOnlyOnePerLine: axes.trailingCommaOnlyOnePerLine ?? false,
 			leadFlat: axes.leadFlat ?? Empty,
 			leadBreak: axes.leadBreak ?? Empty,
 			forceExceeds: axes.forceExceeds ?? false,
@@ -4531,10 +4545,10 @@ class WrapList {
 		// Per-state shape builder: picks the right lead based on the
 		// resolved mode (flat vs break-style layout).
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
+			final modeAppends: Bool = appendsInMode(appendTrailingComma, axes, mode);
 			final body: Doc = shape(
-				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
-				complexItemKinds
+				mode, open, close, sep, items, openInside, closeInside, cols, modeAppends, trailBreakDoc, groupRestProbe, sepBeforeFlags,
+				opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets, complexItemKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -4593,6 +4607,7 @@ class WrapList {
  */
 private typedef ResolvedWrapListOptions = {
 	final appendTrailingComma: Bool;
+	final trailingCommaOnlyOnePerLine: Bool;
 	final leadFlat: Doc;
 	final leadBreak: Doc;
 	final forceExceeds: Bool;

@@ -70,6 +70,15 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
 `soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
 
+`trailingComma` (anyparse extension, `keep` | `remove` | `split`, default `keep`) answers what the trailing separator of
+a multiline list does. `keep` round-trips the source comma; `remove` drops it and outranks the `trailingCommas.*Default`
+add-knobs; `split` keeps it AND reads it as the author's request for one element per line, so a source `[1, 2,]` is
+written broken however short, while a list without the comma is laid out by its wrap cascade and the width. Under
+`split` an add-knob writes its comma only when the list is laid out one element per line — the next pass would read
+a knob comma in a filled or after-first layout as the lever and split the list, so one write would not be canonical. It reaches
+the lists whose grammar field carries `@:fmt(trailingCommaRemovable)` (array and object literals, call and `new`
+arguments); see `TrailingCommaPolicy`.
+
 All four cuddle keys are **anyparse extensions** — the fork has no such concept, so their
 shapes were derived here, not copied — and each is documented on its `WriteOptions` field:
 `ternaryCuddledBraces` (a broken ternary's `:` and the else branch's opening delimiter ride

@@ -176,7 +176,8 @@ typedef WriteOptions = {
 	 * Policy for the trailing separator after the LAST element of a
 	 * MULTILINE list literal. `Keep` (default) round-trips the source
 	 * comma and lets the per-construct `trailingComma*` knobs add one;
-	 * `Remove` drops it. Only reaches grammar fields that opt in with
+	 * `Remove` drops it; `Split` keeps it and lays a list whose source wrote
+	 * it out one element per line. Only reaches grammar fields that opt in with
 	 * `@:fmt(trailingCommaRemovable)`, so constructs whose trailing
 	 * separator is mandatory stay untouched. Fed by the anyparse-specific
 	 * `wrapping.trailingComma` knob through `HaxeFormatConfigLoader`;

@@ -308,6 +308,7 @@ final class HaxeFormatValues {
 	private static function trailingCommaRemovalToRuntime(policy: HxFormatWrappingTrailingCommaPolicy): TrailingCommaPolicy {
 		return switch policy {
 			case HxFormatWrappingTrailingCommaPolicy.Remove: TrailingCommaPolicy.Remove;
+			case HxFormatWrappingTrailingCommaPolicy.Split: TrailingCommaPolicy.Split;
 			case _: TrailingCommaPolicy.Keep;
 		};
 	}

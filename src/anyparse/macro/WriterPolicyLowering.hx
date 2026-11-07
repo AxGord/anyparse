@@ -707,6 +707,46 @@ final class WriterPolicyLowering {
 	}
 
 	/**
+	 * The trailing-comma lever of `wrapping.trailingComma: split`: a list whose source wrote a separator after its last
+	 * element (`sourceTrail`) is forced one element per line, every other list keeps `fallback` (a `Null<WrapMode>`
+	 * Expr for the `forceMode` option of `WrapList.emit`). Callers reach it only for a Star with
+	 * `@:fmt(trailingCommaRemovable)`, the same opt-in as the `Remove` veto, so a mandatory separator never splits.
+	 */
+	private static function trailingCommaSplitModeExpr(sourceTrail: Expr, fallback: Expr): Expr {
+		return macro opt.trailingComma == anyparse.format.TrailingCommaPolicy.Split && $sourceTrail
+			? (anyparse.format.wrap.WrapMode.OnePerLine: Null<anyparse.format.wrap.WrapMode>)
+			: $fallback;
+	}
+
+	/**
+	 * The `forceMode` Expr of a list owned by `node` — the `trailingCommaExpr` twin for the split lever: a constant
+	 * `null` mode unless the node carries `@:fmt(trailingCommaRemovable)` and the caller has the source-trail signal.
+	 */
+	private static function trailingCommaForceModeExpr(node: ShapeNode, ?sourceTrail: Expr): Expr {
+		final noForceMode: Expr = macro (null: Null<anyparse.format.wrap.WrapMode>);
+		return sourceTrail != null && trailingCommaLeverReaches(node, true)
+			? trailingCommaSplitModeExpr(sourceTrail, noForceMode)
+			: noForceMode;
+	}
+
+	/**
+	 * Whether the split lever reaches the list owned by `node`: it opts in with `@:fmt(trailingCommaRemovable)` and its
+	 * caller reads the source-trail signal (`hasSourceTrail`).
+	 */
+	private static function trailingCommaLeverReaches(node: ShapeNode, hasSourceTrail: Bool): Bool {
+		return hasSourceTrail && node.fmtHasFlag('trailingCommaRemovable');
+	}
+
+	/**
+	 * The `trailingCommaOnlyOnePerLine` option of `WrapList.emit`: under `split` a list the lever reaches writes its
+	 * trailing separator, an add-knob's included, only in the `OnePerLine` shape, since the next pass reads any separator
+	 * it wrote as the lever. `macro false` for a list the lever does not reach.
+	 */
+	private static function trailingCommaOnlyOnePerLineExpr(leverReaches: Bool): Expr {
+		return leverReaches ? macro opt.trailingComma == anyparse.format.TrailingCommaPolicy.Split : macro false;
+	}
+
+	/**
 	 * Return a `Bool`-valued expression for the `keepInnerWhenEmpty`
 	 * argument of `sepList`. Returns `macro false` when the field
 	 * carries no `@:fmt(keepInnerWhenEmpty("flagName"))` knob, else
