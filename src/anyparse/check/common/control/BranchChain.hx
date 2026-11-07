@@ -29,6 +29,12 @@ typedef ChainSeams = {
 	/** `RefShape.catchClauseKind`; unset, no try is read as a group. */
 	final catchKind: Null<String>;
 
+	/** `RefShape.exprStatementKind`: the statement a bare splice stands under (`isSplice`). */
+	final exprStmtKind: Null<String>;
+
+	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, whose content no brace rule can read. */
+	final spliceKinds: Array<String>;
+
 };
 
 /**
@@ -97,6 +103,16 @@ final class BranchChain {
 		return last != null && seams.lastChildClosedKinds.contains(node.kind) && selfTerminated(last, source, seams);
 	}
 
+	/**
+	 * Whether the statement `node` is a quotation's splice (`RefShape.spliceKinds`), bare or as the one expression of an
+	 * expression statement. What the macro splices there may be a block or a declaration, so a brace rule neither counts
+	 * such a branch as bare nor strips the braces around it.
+	 */
+	public static function isSplice(node: QueryNode, seams: ChainSeams): Bool {
+		return seams.spliceKinds.contains(node.kind)
+			|| (node.kind == seams.exprStmtKind && node.children.length == 1 && seams.spliceKinds.contains(node.children[0].kind));
+	}
+
 	/** The `ChainSeams` of `shape`, or null when it names no statement-position `if` kind or no block-statement kind. */
 	public static function chainSeams(shape: RefShape): Null<ChainSeams> {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
@@ -111,7 +127,9 @@ final class BranchChain {
 				.concat(shape.tryStatementKinds ?? [])
 				.concat(catchKind == null ? [] : [catchKind]),
 			tryKinds: (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []),
-			catchKind: catchKind
+			catchKind: catchKind,
+			exprStmtKind: shape.exprStatementKind,
+			spliceKinds: shape.spliceKinds ?? []
 		};
 	}
 

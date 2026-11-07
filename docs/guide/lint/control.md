@@ -19,8 +19,11 @@ Two bare branches are symmetric too — this is not a "brace everything" rule. A
 
 A `try` / `catch` is a group the same way, in statement and in value position: its try body and
 every catch body braced, or all of them bare. A bare expression body takes its `;` inside the new
-braces. Neither shape is read inside a `macro` reification — a brace level there is part of the
-code the macro builds, which the writer leaves alone too.
+braces. Inside a `macro` quotation both shapes are read and fixed (`QuotationAware`): an added
+brace level builds `EBlock([e])` where the quotation built `e`, and the typer scopes every branch
+body as a block anyway. The writer leaves a quotation's braces alone, so this rule is what makes
+them symmetric there. A spliced branch (`$e`, `$e{…}`, `${…}`) is neither braced nor bare — the
+macro may splice a block there.
 
 ```haxe
 if (ready) { start(); log(); } else wait();
@@ -39,11 +42,11 @@ an outer `case P(b):` whose body is EXACTLY one `switch b { … }` on that binde
 
 ## `collapsible-else-if`
 
-an `else` whose body is a block holding exactly one statement, and that statement is an `if` (`} else { if (b) p(); }`) — the braces buy nothing, the chain already reads as `else if`; `Info`, `--fix` collapses it to `else if (b) p();` by replacing the block's span with its interior, i.e. stripping ONLY the braces (and the whitespace they carried), so a comment inside the block survives verbatim — rebuilding the text from the inner `if`'s span would drop it, a comment being trivia and never an AST child. Gated on POSITION as well as shape, and the position gate is a correctness gate: the `if` owning the `else` must be a direct child of a statement list (`ControlFlowSupport.blockKinds`) or the else branch of another `if` that itself passes the gate (the `else if` chain case, which inherits its head's position and IS flagged). Anywhere else the flagged `if` may be the brace-less body of an enclosing statement carrying a trailing `else`, and de-bracing would hand that `else` to the inner `if` — in `if (x) if (a) p(); else { if (b) q(); } else r();` the `r()` would go from `!x` to `x && !a && !b`. Deliberate safe misses: that dangling-exposed position and its loop-body / `case`-body / `#if`-region-direct-child variants, a block whose interior opens with a COMMENT ahead of the `if` (the collapse would strand it between `else` and `if` and push the `if` onto its own unindented line — a comment AFTER the `if` merely trails the collapsed statement and stays flagged), a block with more than one statement, a block whose sole child is a `#if … #end` region (which projects as its own node, so the sole child is not an `if`), a block wrapping another block (`unnecessary-block` owns that layer), and expression-position `if` (excluded from `RefShape.ifStatementKinds`). An `else` on the INNER `if` is still flagged — it stays that `if`'s `else` after the collapse. Brace layout on the collapsed chain is NOT this check's business: the interior goes out as written and the canonicalizing writer round-trip settles it, so under a `singleStatementBraces: remove` policy the collapsed body gains braces when the sibling then-branch keeps them and stays bare when it does not (`SingleStmtBraces` gate 7, both directions)
+an `else` whose body is a block holding exactly one statement, and that statement is an `if` (`} else { if (b) p(); }`) — the braces buy nothing, the chain already reads as `else if`; `Info`, `--fix` collapses it to `else if (b) p();` by replacing the block's span with its interior, i.e. stripping ONLY the braces (and the whitespace they carried), so a comment inside the block survives verbatim — rebuilding the text from the inner `if`'s span would drop it, a comment being trivia and never an AST child. Gated on POSITION as well as shape, and the position gate is a correctness gate: the `if` owning the `else` must be a direct child of a statement list (`ControlFlowSupport.blockKinds`) or the else branch of another `if` that itself passes the gate (the `else if` chain case, which inherits its head's position and IS flagged). Anywhere else the flagged `if` may be the brace-less body of an enclosing statement carrying a trailing `else`, and de-bracing would hand that `else` to the inner `if` — in `if (x) if (a) p(); else { if (b) q(); } else r();` the `r()` would go from `!x` to `x && !a && !b`. Deliberate safe misses: that dangling-exposed position and its loop-body / `case`-body / `#if`-region-direct-child variants, a block whose interior opens with a COMMENT ahead of the `if` (the collapse would strand it between `else` and `if` and push the `if` onto its own unindented line — a comment AFTER the `if` merely trails the collapsed statement and stays flagged), a block with more than one statement, a block whose sole child is a `#if … #end` region (which projects as its own node, so the sole child is not an `if`), a block wrapping another block (`unnecessary-block` owns that layer), and expression-position `if` (excluded from `RefShape.ifStatementKinds`). An `else` on the INNER `if` is still flagged — it stays that `if`'s `else` after the collapse. Brace layout on the collapsed chain is NOT this check's business: the interior goes out as written and the canonicalizing writer round-trip settles it, so under a `singleStatementBraces: remove` policy the collapsed body gains braces when the sibling then-branch keeps them and stays bare when it does not (`SingleStmtBraces` gate 7, both directions). Read and fixed inside a `macro` quotation as well (`QuotationAware`): the collapse builds the inner `EIf` where the quotation built `EBlock([EIf])`, which the typer scopes the same
 
 ## `collapsible-if`
 
-an `if` whose sole then-branch is another `if`, neither carrying an `else` (`if (a) { if (b) … }`) — the two conditions merge with `&&`; `Warning`, `--fix` rewrites to `if (a && b) …` (behaviour-preserving via short-circuit), parenthesizing a lower-precedence operand (`if (a || c) if (b)` → `if ((a || c) && b)`)
+an `if` whose sole then-branch is another `if`, neither carrying an `else` (`if (a) { if (b) … }`) — the two conditions merge with `&&`; `Warning`, `--fix` rewrites to `if (a && b) …` (behaviour-preserving via short-circuit), parenthesizing a lower-precedence operand (`if (a || c) if (b)` → `if ((a || c) && b)`). Read and fixed inside a `macro` quotation as well (`QuotationAware`): the merge builds one `EIf` on an `&&` where the quotation built two nested ones, and a spliced condition stays one operand
 
 ## `comparison-to-boolean`
 
@@ -226,7 +229,10 @@ Braces stay where they do work: where an `else` can follow and the statement hol
 declaration (they scope it), around a statement with no terminator of its own, and around a
 comment. A lone `if` is `collapsible-if`'s or `collapsible-else-if`'s, a nested block
 `unnecessary-block`'s. A chain goes bare whole or not at all, so it never meets
-`asymmetric-branch-braces`; a `do … while` body and `try` / `catch` are not read.
+`asymmetric-branch-braces`; a `do … while` body and `try` / `catch` are not read. Inside a `macro`
+quotation the rule reads and fixes the same way (`QuotationAware`: the typer scopes a branch body as
+a block either way), except that a spliced statement (`$e;`) keeps its braces — the macro may splice
+a declaration there.
 
 ```haxe
 if (ready) { start(); } else { wait(); }

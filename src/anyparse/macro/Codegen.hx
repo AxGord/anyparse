@@ -126,9 +126,8 @@ class Codegen {
 			try {
 				final _v = $parseCall;
 				skipWs(ctx);
-				if (ctx.pos != ctx.input.length) {
+				if (ctx.pos != ctx.input.length)
 					throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'trailing data after value');
-				}
 				return _v;
 			} catch (e: anyparse.runtime.ParseError) {
 				// Decorate the error with the source string so
@@ -170,9 +169,8 @@ class Codegen {
 		final body: Expr = macro {
 			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
 			final _v = $parseCall;
-			if (ctx.pos != ctx.input.length) {
+			if (ctx.pos != ctx.input.length)
 				throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'trailing data after value');
-			}
 			return _v;
 		};
 		return {
@@ -344,16 +342,15 @@ class Codegen {
 			}
 			final _verbatim: String = ctx.input.substring(_start, ctx.pos);
 			final _pt = ctx.pendingTrivia;
-			if (_pt == null) {
+			if (_pt == null)
 				ctx.pendingTrivia = {
 					blankBefore: false,
 					blankAfterLeadingComments: false,
 					newlineBefore: false,
 					leadingComments: [_verbatim],
 				};
-			} else {
+			else
 				_pt.leadingComments.push(_verbatim);
-			}
 			continue;
 		}
 		final close: String = p.close;
@@ -369,16 +366,15 @@ class Codegen {
 			}
 			final _verbatim: String = ctx.input.substring(_start, _end);
 			final _pt = ctx.pendingTrivia;
-			if (_pt == null) {
+			if (_pt == null)
 				ctx.pendingTrivia = {
 					blankBefore: false,
 					blankAfterLeadingComments: false,
 					newlineBefore: false,
 					leadingComments: [_verbatim],
 				};
-			} else {
+			else
 				_pt.leadingComments.push(_verbatim);
-			}
 			continue;
 		}
 	}
@@ -599,9 +595,7 @@ class Codegen {
 				],
 				ret: macro : Void,
 				expr: macro {
-					if (!matchLit(ctx, lit)) {
-						throw anyparse.runtime.ParseError.backtrack;
-					}
+					if (!matchLit(ctx, lit)) throw anyparse.runtime.ParseError.backtrack;
 				}
 			}),
 			pos: Context.currentPos()
@@ -671,15 +665,11 @@ class Codegen {
 				],
 				ret: macro : Void,
 				expr: macro {
-					if (!matchLit(ctx, keyword)) {
-						throw anyparse.runtime.ParseError.backtrack;
-					}
+					if (!matchLit(ctx, keyword)) throw anyparse.runtime.ParseError.backtrack;
 					if (ctx.pos < ctx.input.length) {
 						final c: Int = ctx.input.charCodeAt(ctx.pos);
 						final isWord: Bool = $isWordTest;
-						if (isWord) {
-							throw anyparse.runtime.ParseError.backtrack;
-						}
+						if (isWord) throw anyparse.runtime.ParseError.backtrack;
 					}
 				}
 			}),
@@ -745,8 +735,9 @@ class Codegen {
 						if (_leading.length == 0) {
 							_blankBefore = true;
 							if (_nl >= 3) _blankBefore2 = _nl - 2; // noqa: magic-number
-						} else
+						} else {
 							_blankAfterLeadingComments = true;
+						}
 					}
 					continue;
 				}

@@ -499,9 +499,9 @@ final class TriviaSepLowering {
 	): Expr {
 		final pushExpr: Expr = relocateTrailingComments
 			? macro {
-				if (_tc == null)
+				if (_tc == null) {
 					_inner.push(_line);
-				else {
+				} else {
 					final _ownLine: Bool = !_noWrapFlatten && (!_keepEmit || _t.newlineBefore);
 					final _code: anyparse.core.Doc = _emitSep ? _dc([_elem, _dt($v{sepText})]) : _elem;
 					final _above: Bool = opt.trailingCommentAbove && _ownLine && _t.leadingComments.length == 0;

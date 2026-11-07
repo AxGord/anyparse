@@ -393,15 +393,13 @@ final class WriterStarEmitLowering {
 					final _elemDoc: anyparse.core.Doc = $elemCall;
 					_items.push(_dhl());
 					_items.push(_elemDoc);
-					if (_si < _arr.length - 1 && !anyparse.core.DocMeasure.endsWithSemi(_elemDoc) && !($predicateCheck)) {
+					if (_si < _arr.length - 1 && !anyparse.core.DocMeasure.endsWithSemi(_elemDoc) && !($predicateCheck))
 						_items.push(_dt($v{sepText}));
-					}
 					_lastElemDoc = _elemDoc;
 					_si++;
 				}
-				if (_lastElemDoc != null && !anyparse.core.DocMeasure.endsWithSemi(_lastElemDoc) && !($lastPredicateCheck)) {
+				if (_lastElemDoc != null && !anyparse.core.DocMeasure.endsWithSemi(_lastElemDoc) && !($lastPredicateCheck))
 					_items.push(_dt($v{sepText}));
-				}
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				_dc([_dt($v{openText ?? ''}), _dn(_cols, _dc(_items)), _dhl(), _dt($v{closeText})]);
 			}
@@ -982,10 +980,12 @@ final class WriterStarEmitLowering {
 							$blankBreak;
 						else
 							_dhl();
-					} else
+					} else {
 						_dt(' ');
-				} else
+					}
+				} else {
 					_de();
+				}
 			}
 			: macro $prev && $fieldAccess.length > 0 ? _dt(' ') : _de();
 		return withPadTrailingDrop(prevPadTrailing, baseExpr);

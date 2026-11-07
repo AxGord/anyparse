@@ -261,9 +261,8 @@ final class TerminalParseLowering {
 			case 'Int':
 				macro {
 					final _v: Null<Int> = Std.parseInt(_matched);
-					if (_v == null) {
+					if (_v == null)
 						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'invalid int literal');
-					}
 					_v;
 				};
 			case 'Bool': macro _matched == 'true';

@@ -255,9 +255,9 @@ final class WriterBlankLowering {
 				if (_w == _line.length) continue;
 				final _ws: String = _line.substr(0, _w);
 				final _seen: Null<String> = _base;
-				if (_seen == null)
-					_base = _ws
-				else {
+				if (_seen == null) {
+					_base = _ws;
+				} else {
 					var _k: Int = 0;
 					while (_k < _seen.length && _k < _ws.length && _seen.charCodeAt(_k) == _ws.charCodeAt(_k)) _k++;
 					_base = _seen.substr(0, _k);

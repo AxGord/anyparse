@@ -397,9 +397,9 @@ final class TriviaTryparseLowering {
 		final rulesExpr: Expr = optFieldAccess(listLayout[1]);
 		return macro {
 			final _arr = $fieldAccess;
-			if (_arr.length == 0)
-				_de()
-			else {
+			if (_arr.length == 0) {
+				_de();
+			} else {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _writerOpt = $writerOptExpr;
 				var _hasComments: Bool = false;
@@ -421,9 +421,9 @@ final class TriviaTryparseLowering {
 					while (_hj < _items.length) {
 						final _ht = _arr[_hj];
 						final _hlc: Array<String> = _ht.leadingComments;
-						if (_hlc.length == 0)
+						if (_hlc.length == 0) {
 							_docs.push(_dt(' '));
-						else {
+						} else {
 							var _hc: Int = 0;
 							while (_hc < _hlc.length) {
 								_docs.push(StringTools.startsWith(_hlc[_hc], '/*') && _hlc[_hc].indexOf('\n') < 0 ? _dt(' ') : _dhl());
@@ -1302,9 +1302,7 @@ final class TriviaTryparseLowering {
 		final priorCondProbe: Expr = elemCondFnExpr == null ? macro false : macro $elemCondFnExpr(_arr[_si - 1].node);
 		return sepText != null && sepFaithful
 			? macro {
-				if (_si > 0 && _arr[_si - 1].sepAfter) {
-					_docs.push(_dt($v{sepText}));
-				}
+				if (_si > 0 && _arr[_si - 1].sepAfter) _docs.push(_dt($v{sepText}));
 			}
 			: sepText != null && blockEnded
 				? macro {
@@ -1312,9 +1310,8 @@ final class TriviaTryparseLowering {
 						_si > 0
 						&& _priorElemDoc != null
 						&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !$priorCondProbe))
-					) {
+					)
 						_docs.push(_dt($v{sepText}));
-					}
 				}
 				: macro {};
 	}
@@ -1331,9 +1328,7 @@ final class TriviaTryparseLowering {
 		// the mandatory-comma case `[a, #if x b, #end c]`.
 		return sepText != null && sepFaithful
 			? macro {
-				if (_arr.length > 0 && _arr[_arr.length - 1].sepAfter) {
-					_docs.push(_dt($v{sepText}));
-				}
+				if (_arr.length > 0 && _arr[_arr.length - 1].sepAfter) _docs.push(_dt($v{sepText}));
 			}
 			: sepText != null && blockEnded
 				? macro {
@@ -1342,9 +1337,8 @@ final class TriviaTryparseLowering {
 						&& _priorElemDoc != null
 						&& _arr[_arr.length - 1].sepAfter
 						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
-					) {
+					)
 						_docs.push(_dt($v{sepText}));
-					}
 				}
 				: macro {};
 	}

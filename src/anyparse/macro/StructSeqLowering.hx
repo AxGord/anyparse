@@ -578,13 +578,11 @@ final class StructSeqLowering {
 			skipWs(ctx);
 			expectLit(ctx, $v{seqOpen});
 			skipWs(ctx);
-			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
-				while (true) {
-					skipWs(ctx);
-					_arr.push($element);
-					skipWs(ctx);
-					if (!matchLit(ctx, $v{entrySep})) break;
-				}
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) while (true) {
+				skipWs(ctx);
+				_arr.push($element);
+				skipWs(ctx);
+				if (!matchLit(ctx, $v{entrySep})) break;
 			}
 			skipWs(ctx);
 			expectLit(ctx, $v{seqClose});
@@ -689,18 +687,16 @@ final class StructSeqLowering {
 			skipWs(ctx);
 			expectLit(ctx, $v{mappingOpen});
 			skipWs(ctx);
-			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
-				while (true) {
-					skipWs(ctx);
-					$keyPosDecl;
-					$keyDecl;
-					skipWs(ctx);
-					expectLit(ctx, $v{keyValueSep});
-					skipWs(ctx);
-					$perEntry;
-					skipWs(ctx);
-					if (!matchLit(ctx, $v{entrySep})) break;
-				}
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) while (true) {
+				skipWs(ctx);
+				$keyPosDecl;
+				$keyDecl;
+				skipWs(ctx);
+				expectLit(ctx, $v{keyValueSep});
+				skipWs(ctx);
+				$perEntry;
+				skipWs(ctx);
+				if (!matchLit(ctx, $v{entrySep})) break;
 			}
 			skipWs(ctx);
 			expectLit(ctx, $v{mappingClose});
@@ -1274,14 +1270,12 @@ final class StructSeqLowering {
 					|| _captured.blankBefore
 					|| _captured.blankAfterLeadingComments
 					|| _captured.leadingComments.length > 0
-				) {
-					ctx.pendingTrivia = {
-						blankBefore: _captured.blankBefore,
-						blankAfterLeadingComments: _captured.blankAfterLeadingComments,
-						newlineBefore: _captured.newlineBefore,
-						leadingComments: _captured.leadingComments,
-					};
-				}
+				) ctx.pendingTrivia = {
+					blankBefore: _captured.blankBefore,
+					blankAfterLeadingComments: _captured.blankAfterLeadingComments,
+					newlineBefore: _captured.newlineBefore,
+					leadingComments: _captured.leadingComments,
+				};
 			});
 		}
 		return { hasNewlineAfterSlot: hasNewlineAfterSlot, newlineAfterLocal: newlineAfterLocal };

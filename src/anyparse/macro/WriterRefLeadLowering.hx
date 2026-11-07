@@ -191,12 +191,12 @@ final class WriterRefLeadLowering {
 				final _elems: Null<Array<Dynamic>> = cast Type.enumParameters(cast _optVal)[0];
 				_elems != null && _elems.length > 0 && anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_elems[0]);
 			};
-			if ((_lhsHasTypeParam && !_rhsIsComprehension) || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr')
+			if ((_lhsHasTypeParam && !_rhsIsComprehension) || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr') {
 				_dc([
 					_dt($v{leadText}),
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
 				]);
-			else {
+			} else {
 				// Decl-header arm (last resort). `_head.width` is what the
 				// glued shape keeps on THIS line once the RHS's own wrap
 				// fires — `= new Foo(` for a call whose args leading-break.
@@ -260,8 +260,9 @@ final class WriterRefLeadLowering {
 				final _openPad: String = _op == $wpAfter || _op == $wpBoth ? ' ' : '';
 				final _closePad: String = _cp == $wpBefore || _cp == $wpBoth ? ' ' : '';
 				_dt('(' + _openPad + _inner + _closePad + ')');
-			} else
+			} else {
 				_dt(_condStr);
+			}
 		};
 	}
 

@@ -225,9 +225,9 @@ final class HxCasePredLowering extends AstPredLowering {
 			var i: Int = 0;
 			while (i < n && !hit) {
 				final c: Int = StringTools.fastCodeAt(raw, i);
-				if (c == '\n'.code)
+				if (c == '\n'.code) {
 					atLineStart = true;
-				else if (atLineStart && c != ' '.code && c != '\t'.code) {
+				} else if (atLineStart && c != ' '.code && c != '\t'.code) {
 					hit = kwAt(raw, i, 'case') || kwAt(raw, i, 'default');
 					atLineStart = false;
 				}

@@ -185,9 +185,9 @@ final class TriviaTailRehome {
 		if (call == null) return macro null;
 		final rebuilt: Expr = macro {
 			final _f = $access;
-			if (_f == null)
-				null
-			else {
+			if (_f == null) {
+				null;
+			} else {
 				final _r = $call;
 				_r == null ? null : ${structCopy(fieldNames, name, macro _r)};
 			}

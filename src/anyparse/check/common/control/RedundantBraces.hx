@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.BranchChain.ChainSeams;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.LoopScan;
@@ -33,9 +34,13 @@ using StringTools;
  * A chain is the unit, as in `asymmetric-branch-braces`: it is a finding only when EVERY branch can go bare (an
  * `else switch` is neither braced nor bare), so the fix never leaves one braced branch beside a bare one and the two
  * rules never claim one chain. A `do … while` body and a `try` / `catch` are not read.
+ *
+ * Inside a `macro` quotation (`QuotationAware`) it declines the central reification drop: a dropped brace level builds
+ * `e` where the quotation built `EBlock([e])`, and the typer scopes every if / else / loop body as a block anyway, so
+ * the emitted code types the same. A spliced statement (`BranchChain.isSplice`) keeps its braces like a declaration.
  */
 @:nullSafety(Strict)
-final class RedundantBraces extends RuleBase implements DefaultOff {
+final class RedundantBraces extends RuleBase implements DefaultOff implements QuotationAware {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'redundant-braces';
@@ -99,7 +104,6 @@ final class RedundantBraces extends RuleBase implements DefaultOff {
 	 */
 	private static function walk(node: QueryNode, site: Site, out: Array<Unbrace>, shielded: Bool, link: Bool): Void {
 		final seams: Seams = site.seams;
-		if (seams.opaqueKinds.contains(node.kind)) return;
 		final found: Null<Unbrace> = if (seams.ifKinds.contains(node.kind) && !link)
 			chainFinding(node, site, shielded)
 		else if (seams.loopKinds.contains(node.kind))
@@ -168,6 +172,7 @@ final class RedundantBraces extends RuleBase implements DefaultOff {
 		if (block.kind != seams.closing.blockStmtKind || block.children.length != 1) return false;
 		final statement: QueryNode = block.children[0];
 		return !seams.keptKinds.contains(statement.kind)
+			&& !BranchChain.isSplice(statement, seams.closing)
 			&& !CondRegionScan.isConditionalKind(statement.kind, seams.shield.shape)
 			&& BranchChain.selfTerminated(statement, site.source, seams.closing)
 			&& (shielded || !IfExpressionChain.holdsElseLessConditional(statement, seams.shield.conditionalKinds))
@@ -242,7 +247,6 @@ final class RedundantBraces extends RuleBase implements DefaultOff {
 			doWhileKinds: shape.doWhileLoopKinds ?? [],
 			switchKinds: shape.switchStatementKinds ?? [],
 			keptKinds: kept,
-			opaqueKinds: shape.opaqueKinds ?? [],
 			closing: chain,
 			shield: IfExpressionChain.shieldSeams(shape, plugin.controlFlowSupport()?.blockKinds() ?? [])
 		};
@@ -264,9 +268,6 @@ private typedef Seams = {
 
 	/** Statements whose braces are kept: `if`s, blocks and every local declaration kind. */
 	final keptKinds: Array<String>;
-
-	/** Subtrees not walked: a macro reification is code the program builds, not code it runs. */
-	final opaqueKinds: Array<String>;
 
 	/** The chain and statement-closing seams the brace rules share (`BranchChain.chainSeams`). */
 	final closing: ChainSeams;

@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SymbolIndex;
@@ -14,6 +15,9 @@ using StringTools;
  * sole statement being an `if`), and the enclosing `if` sits in a position no trailing
  * `else` can follow. `Info` — the code is correct, this is a readability simplification
  * (mirroring the sibling `redundant-else-after-return`).
+ *
+ * Inside a `macro` quotation (`QuotationAware`) it declines the central reification drop: the collapse builds the
+ * inner `EIf` where the quotation built `EBlock([EIf])`, which the typer scopes the same.
  *
  * ## What is flagged
  *
@@ -84,7 +88,7 @@ using StringTools;
  * converges on a later `--fix` pass.
  */
 @:nullSafety(Strict)
-final class CollapsibleElseIf extends RuleBase {
+final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;

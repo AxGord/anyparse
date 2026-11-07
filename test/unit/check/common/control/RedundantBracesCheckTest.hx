@@ -110,6 +110,28 @@ class RedundantBracesCheckTest extends Test {
 		Assert.equals(0, CheckFixture.violations(new AsymmetricBranchBraces(), fixed(src)).length);
 	}
 
+	/**
+	 * A `macro` reification is read and fixed like any other code: a dropped brace level builds `e` where the quotation
+	 * built `EBlock([e])`, and the typer scopes a branch body as a block either way.
+	 */
+	@:pin('control')
+	@:killer('M-REDUNDANT-BRACES-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t} else {\n\t\t\t\tq();\n\t\t\t}\n\t\t};');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(wrap('e = macro {\n\t\t\tif (a) p(); else q();\n\t\t};'), fixed(src));
+	}
+
+	/** A statement a quotation splices keeps its braces: what the macro splices there may be a declaration or a block. */
+	@:pin('control')
+	@:killer('M-REDUNDANT-BRACES-SPLICE')
+	public function testASplicedStatementKeepsItsBraces(): Void {
+		Assert.equals(
+			0, violations(wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\t$$b;\n\t\t\t} else {\n\t\t\t\tq();\n\t\t\t}\n\t\t};')).length
+		);
+		Assert.equals(0, violations(wrap('e = macro {\n\t\t\tfor (c in s) {\n\t\t\t\t$$e{b};\n\t\t\t}\n\t\t};')).length);
+	}
+
 	public function testTheCheckIsDefaultOff(): Void {
 		Assert.isTrue(Std.isOfType(new RedundantBraces(), DefaultOff));
 	}

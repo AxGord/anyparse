@@ -911,17 +911,13 @@ final class TriviaBlockLowering {
 		// `!priorPredCall` guard suppresses the spurious `;` between `#end` and the
 		// next stmt (a `#if … #end` ends with `d`, byte check misses).
 		final blockSepBeforeHardlineExpr: Expr = macro {
-			if (_si > 0 && _priorElemDoc != null && !_sepGlued && $priorSep) {
-				_inner.push(_dt($v{sepText}));
-			}
+			if (_si > 0 && _priorElemDoc != null && !_sepGlued && $priorSep) _inner.push(_dt($v{sepText}));
 		};
 		// ω-blockended-trivia-trail-sep (Session 3): after the last element, emit
 		// `;` iff the LAST element's `sepAfter` is true and it doesn't already end
 		// with `;` (inner `@:trail(';')` baked it in).
 		final blockTrailSepEmitExpr: Expr = macro {
-			if (_arr.length > 0 && _priorElemDoc != null && !_sepGlued && $lastSep) {
-				_inner.push(_dt($v{sepText}));
-			}
+			if (_arr.length > 0 && _priorElemDoc != null && !_sepGlued && $lastSep) _inner.push(_dt($v{sepText}));
 		};
 		final elemSepGlueExpr: Expr = macro {
 			_sepGlued = _t.trailingComment != null && (_si < _arr.length - 1 ? $ownBetween : $ownTrail);

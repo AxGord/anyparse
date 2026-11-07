@@ -939,9 +939,9 @@ final class WriterBodyPolicyLowering {
 			final _bodyForAllman: Null<anyparse.core.Doc> = $optAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 				? $writeCall
 				: null;
-			if (_bodyForAllman != null && anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1)
-				_dn(_cols, _dc([_dhl(), _bodyForAllman]))
-			else {
+			if (_bodyForAllman != null && anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1) {
+				_dn(_cols, _dc([_dhl(), _bodyForAllman]));
+			} else {
 				final _layoutForAllman: anyparse.core.Doc = $wrapExpr;
 				_bodyForAllman == null ? _layoutForAllman : anyparse.format.BodyAllman.gluedLayout(_cols, _layoutForAllman);
 			}

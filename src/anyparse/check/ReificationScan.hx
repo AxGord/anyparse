@@ -27,7 +27,7 @@ using Lambda;
  * A check whose collector is a plain recursive walk may gate AT THE DESCENT, one line in its own
  * walker — `if (seams.opaqueKinds.contains(node.kind)) return;` — which is what
  * `redundant-case-body`, `empty-case-arm`, `unused-case-binder`, `collapse-nested-switch` and
- * `case-pattern-separator` do. That is an optimisation and a structural convenience, not the
+ * `case-pattern-separator` do. A `QuotationAware` check has no such stop. That is an optimisation and a structural convenience, not the
  * policy: it keeps the walk from descending at all, so the quoted subtree costs nothing and this
  * class never has to parse the file a second time. Removing one would not change any verdict.
  *
@@ -44,8 +44,8 @@ using Lambda;
  *
  * That the drop is enough to gate the FIXES as well is a property of the pipeline, not an
  * assumption: every fix path re-derives its edits from the violations it is handed, so a finding
- * that never appears produces no edit. `QuotationAware` is the opt-out;
- * `redundant-parens` and `empty-statement` carry it, each with its reason on its class doc.
+ * that never appears produces no edit. `QuotationAware` is the opt-out; the builtins that carry
+ * it are listed on its doc, each with its reason on its own class doc.
  */
 @:nullSafety(Strict)
 final class ReificationScan {

@@ -997,6 +997,57 @@
 			"find": "\t\t\tif (!seams.ifStatementKinds.contains(node.kind)) return null;\n",
 			"replace": "\t\t\tif (node.kind != 'IfStmt') return null;\n",
 			"note": "the rule spells the Haxe if-statement kind again instead of asking RefShape, so the kind-literal guard sees an unaccounted kind"
+		},
+		{
+			"name": "M-ASYM-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.AsymmetricBranchBraces",
+			"method": "AsymmetricBranchBraces",
+			"kind": "ClassDecl",
+			"find": "final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implements QuotationAware {",
+			"replace": "final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {",
+			"note": "the rule takes the central reification drop again, so an asymmetric if/else or try/catch inside a macro quotation is neither reported nor braced"
+		},
+		{
+			"name": "M-ASYM-SPLICE-BARE",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "isSplice",
+			"force": "false",
+			"note": "a branch a quotation splices counts as bare, so `if (a) { p(); q(); } else $b;` is flagged and its splice braced, though the macro may splice a block there"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "RedundantBraces",
+			"kind": "ClassDecl",
+			"find": "final class RedundantBraces extends RuleBase implements DefaultOff implements QuotationAware {",
+			"replace": "final class RedundantBraces extends RuleBase implements DefaultOff {",
+			"note": "the rule takes the central reification drop again, so braces nothing needs inside a macro quotation are neither reported nor stripped"
+		},
+		{
+			"name": "M-REDUNDANT-BRACES-SPLICE",
+			"type": "anyparse.check.common.control.RedundantBraces",
+			"method": "removable",
+			"find": "!BranchChain.isSplice(statement, seams.closing)",
+			"replace": "true",
+			"note": "a block holding one spliced statement loses its braces, though the macro may splice a declaration there whose scope they bound"
+		},
+		{
+			"name": "M-COLLAPSIBLE-IF-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.CollapsibleIf",
+			"method": "CollapsibleIf",
+			"kind": "ClassDecl",
+			"find": "final class CollapsibleIf extends RuleBase implements QuotationAware {",
+			"replace": "final class CollapsibleIf extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so a nested if inside a macro quotation is neither reported nor merged"
+		},
+		{
+			"name": "M-COLLAPSIBLE-ELSE-IF-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.CollapsibleElseIf",
+			"method": "CollapsibleElseIf",
+			"kind": "ClassDecl",
+			"find": "final class CollapsibleElseIf extends RuleBase implements QuotationAware {",
+			"replace": "final class CollapsibleElseIf extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so an else block holding one if inside a macro quotation is neither reported nor collapsed"
 		}
 	]
 }

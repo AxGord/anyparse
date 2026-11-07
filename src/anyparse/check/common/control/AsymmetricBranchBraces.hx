@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.BranchChain.ChainSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
@@ -40,19 +41,18 @@ using StringTools;
  *
  * A try/catch is a group the same way, in statement and in value position: its try body and every catch body braced,
  * or all of them bare. `try { p(); q(); } catch (e:T) r();` is one finding spanning the `try`, and the fix braces
- * `r();`, as the writer's `tryBraceVerdict` does. Neither is read inside a `macro` reification
- * (`RefShape.opaqueKinds`): a brace level there is part of the code it builds - the writer leaves it alone too.
+ * `r();`, as the writer's `tryBraceVerdict` does.
  *
- * ## Grammar-agnostic
+ * ## Inside a `macro` quotation (`QuotationAware`)
  *
- * The `if` kinds come from `RefShape.ifStatementKinds` (statement position only),
- * the block kind from `RefShape.blockStmtKind`, and the exempt else kinds from
- * `ifStatementKinds` plus `RefShape.switchStatementKinds`. Any of the first two
- * unset makes the check a no-op; an unset `switchStatementKinds` costs only the
- * `else switch` exemption, so a grammar without it reports those pairs.
+ * It declines the central reification drop: an added brace level builds `EBlock([e])` where the quotation built `e`,
+ * and the typer scopes every if / else / try / catch body as a block anyway, so the emitted code types the same. A
+ * spliced branch (`BranchChain.isSplice`) is neither braced nor bare: what the macro splices may be a block.
+ *
+ * Grammar-agnostic: `RefShape.ifStatementKinds`, `blockStmtKind` (either unset: a no-op), `switchStatementKinds`.
  */
 @:nullSafety(Strict)
-final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
+final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implements QuotationAware {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'asymmetric-branch-braces';
@@ -159,7 +159,6 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 	 * there anyway - a brace level in it is part of the code it builds - so this only spares the walk.
 	 */
 	private static function walk(node: QueryNode, seams: Seams, out: Array<Asymmetry>, link: Bool): Void {
-		if (seams.opaqueKinds.contains(node.kind)) return;
 		final found: Null<Asymmetry> = link || !seams.ifKinds.contains(node.kind) ? tryFinding(node, seams) : chainFinding(node, seams);
 		if (found != null) out.push(found);
 		final elseLink: Null<QueryNode> = elseOf(node, seams);
@@ -199,6 +198,8 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			|| span == null
 			|| thenBraced == (last.kind == seams.blockStmtKind)
 			|| (thenBraced && seams.exemptElseKinds.contains(last.kind))
+			|| BranchChain.isSplice(tail.children[THEN_BRANCH_INDEX], seams)
+			|| BranchChain.isSplice(last, seams)
 		)
 			null
 		else
@@ -268,7 +269,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 
 	/** The bodies of a try/catch group that carry no braces. */
 	private static function bareBodies(bodies: Array<QueryNode>, seams: Seams): Array<QueryNode> {
-		return bodies.filter(b -> !seams.bracedKinds.contains(b.kind));
+		return bodies.filter(b -> !seams.bracedKinds.contains(b.kind) && !BranchChain.isSplice(b, seams));
 	}
 
 	/**
@@ -373,7 +374,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 		];
 		final last: Null<QueryNode> = elseOf(links[links.length - 1], seams);
 		if (last != null && last.kind != seams.blockStmtKind && !seams.exemptElseKinds.contains(last.kind)) out.push(last);
-		return out;
+		return out.filter(branch -> !BranchChain.isSplice(branch, seams));
 	}
 
 	/**
@@ -430,8 +431,8 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff {
 			lastChildClosedKinds: chain.lastChildClosedKinds,
 			tryKinds: chain.tryKinds,
 			catchKind: chain.catchKind,
+			spliceKinds: chain.spliceKinds,
 			bracedKinds: [chain.blockStmtKind].concat(plugin.controlFlowSupport()?.blockKinds() ?? []),
-			opaqueKinds: shape.opaqueKinds ?? [],
 			shape: shape
 		};
 	}
@@ -470,8 +471,8 @@ private typedef Seams = {
 	/** What a braced body is: the block-statement kind and `ControlFlowSupport.blockKinds` - a value `try` holds blocks too. */
 	final bracedKinds: Array<String>;
 
-	/** Subtrees not walked: a macro reification is code the program builds, not code it runs. */
-	final opaqueKinds: Array<String>;
+	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, left bare (`BranchChain.isSplice`). */
+	final spliceKinds: Array<String>;
 
 	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
 	final shape: RefShape;

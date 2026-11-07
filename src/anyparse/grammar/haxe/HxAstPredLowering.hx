@@ -705,11 +705,11 @@ final class HxAstPredLowering extends AstPredLowering {
 		final kwLen: Int = ELSE_KEYWORD.length;
 		return macro {
 			final after: Int = i + $v{kwLen};
-			if (raw.substr(i, $v{kwLen}) != $v{ELSE_KEYWORD})
+			if (raw.substr(i, $v{kwLen}) != $v{ELSE_KEYWORD}) {
 				false;
-			else if (after >= n)
+			} else if (after >= n) {
 				true;
-			else {
+			} else {
 				final nc: Int = StringTools.fastCodeAt(raw, after);
 				!(
 					(nc >= 'a'.code && nc <= 'z'.code)
@@ -948,9 +948,9 @@ final class HxAstPredLowering extends AstPredLowering {
 		final condArgsArm: Expr = macro {
 			final _b = _ca.body;
 			final _k = _b.length > 0 ? ${mapOnly(starElem(HX_COND_ARGS, 'body', macro _b[0]))} : 0;
-			if (_k == 1)
+			if (_k == 1) {
 				1;
-			else {
+			} else {
 				final _eb = _ca.elseBody;
 				if (_eb == null || _eb.length == 0)
 					0;

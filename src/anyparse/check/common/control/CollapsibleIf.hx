@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.query.SymbolIndex;
 
@@ -8,6 +9,10 @@ import anyparse.query.SymbolIndex;
  * carrying an `else` (`if (a) { if (b) … }`). The two conditions can be merged with `&&`
  * (`if (a && b) …`), behaviour-preserving because `&&` short-circuits exactly as the
  * nested `if`s do. `Severity.Warning`; `fix` performs the merge.
+ *
+ * Inside a `macro` quotation (`QuotationAware`) it declines the central reification drop: the merge builds one
+ * `EIf(EBinop(OpBoolAnd, a, b), …)` where the quotation built two nested `EIf`s, which the typer runs the same, and a
+ * spliced condition stays one operand node whatever it holds.
  *
  * ## Grammar-agnostic
  *
@@ -19,7 +24,7 @@ import anyparse.query.SymbolIndex;
  * makes the check a no-op; unset `andOperatorText` disables only the autofix.
  */
 @:nullSafety(Strict)
-final class CollapsibleIf extends RuleBase {
+final class CollapsibleIf extends RuleBase implements QuotationAware {
 
 	public function new() {
 		super('collapsible-if', 'a nested if with no else that can be merged with && (if (a) if (b) …)', RuleCategory.Control);

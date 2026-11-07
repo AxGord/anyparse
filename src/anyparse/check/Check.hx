@@ -173,9 +173,11 @@ interface ConfigAware {
  * report-only finding there is un-actionable besides (see `ReificationScan`). The drop is applied
  * once, in `Linter.collect`, through which every consumer of a check's findings reads them.
  *
- * Two builtins implement it, each with its reason written down beside it: `redundant-parens` (a pair dropped in a delimited slot
- * types the same inside a quotation, the splice-arity and operand gates covering what does not) and `empty-statement` (a stray
- * `;` is not in the reified AST at all); no other builtin should without one.
+ * A builtin implements it only with its reason written down beside it: `redundant-parens` (a pair dropped in a delimited slot
+ * types the same inside a quotation, the splice-arity and operand gates covering what does not), `empty-statement` (a stray
+ * `;` is not in the reified AST at all), and the brace and if-shape rules `asymmetric-branch-braces`, `redundant-braces`,
+ * `collapsible-if` and `collapsible-else-if` (the typer scopes a branch body as a block either way; a spliced statement is
+ * left alone, `BranchChain.isSplice`). A rule that reads bindings or types stays out: a splice hides what it reads.
  * The slot exists so the central drop is a policy a future check can DECLINE rather than a trap
  * it cannot see: a check that analyses quotations AS DATA — a macro-hygiene rule, a reification
  * linter — would otherwise silently report nothing at all and give no hint why.

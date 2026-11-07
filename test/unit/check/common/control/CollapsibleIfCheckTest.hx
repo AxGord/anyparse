@@ -43,6 +43,18 @@ class CollapsibleIfCheckTest extends Test {
 		Assert.equals('p();', edits[1].text);
 	}
 
+	/**
+	 * A `macro` reification is read and fixed like any other code: the merged `if` builds one `EIf` on an `&&` where the
+	 * quotation built two nested ones, which run the same.
+	 */
+	@:pin('control')
+	@:killer('M-COLLAPSIBLE-IF-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (a) if ($$b) p();\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('a && $$b', fixEdits(src)[0].text);
+	}
+
 	public function testFixWrapsLowerPrecedenceOperand(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (a || c) if (b) p();\n\t}\n}';
 		final edits: Array<{ span: Span, text: String }> = fixEdits(src);

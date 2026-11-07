@@ -19,7 +19,7 @@ import anyparse.check.common.control.AsymmetricBranchBraces;
  * `DefaultOff` is asserted, not assumed: brace symmetry is the project's taste, so the check may
  * not fire unasked. Once asked, its fix takes the writer's repair direction and its gates: a
  * branch with no terminator of its own and a declaration stay bare. A try/catch is the same kind of group - its try
- * body and every catch body - and a `macro` reification is read for neither.
+ * body and every catch body - and a `macro` reification is read for both, a spliced branch counting as neither side.
  */
 @:nullSafety(Strict)
 class AsymmetricBranchBracesCheckTest extends Test {
@@ -387,14 +387,35 @@ class AsymmetricBranchBracesCheckTest extends Test {
 	}
 
 	/**
-	 * A `macro` reification is code the program BUILDS: a brace level there is part of the value it returns
-	 * (`EBlock([e])` for `e`), so the writer leaves its braces alone and no finding is reported there - an if/else or a
-	 * try/catch inside one is none. The same constructs outside a reification are (the tests above).
+	 * A `macro` reification is read and fixed like any other code: an added brace level builds `EBlock([e])` where the
+	 * quotation built `e`, and the typer scopes a branch body as a block either way.
 	 */
-	@:pin('guard')
-	public function testAMacroReificationIsNotRead(): Void {
-		Assert.equals(0, violations(wrap('e = macro try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (err:Dynamic)\n\t\t\tr();')).length);
-		Assert.equals(0, violations(wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t} else\n\t\t\t\tq();\n\t\t};')).length);
+	@:pin('control')
+	@:killer('M-ASYM-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final quotedIf: String = wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t} else\n\t\t\t\tr();\n\t\t};');
+		Assert.equals(1, violations(quotedIf).length);
+		Assert.equals(
+			wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t} else\n\t\t\t\t{ r(); }\n\t\t};'),
+			CheckFixture.fixedSource(new AsymmetricBranchBraces(), quotedIf)
+		);
+		Assert.equals(1, violations(wrap('e = macro try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (err:Dynamic)\n\t\t\tr();')).length);
+	}
+
+	/**
+	 * A branch a quotation splices (`$e`, `$e{…}`, `${…}`) is neither braced nor bare: what the macro splices there may
+	 * itself be a block, so a pair or a try group with one is no finding.
+	 */
+	@:pin('control')
+	@:killer('M-ASYM-SPLICE-BARE')
+	public function testASplicedBranchIsNeitherBracedNorBare(): Void {
+		Assert.equals(
+			0, violations(wrap('e = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t} else\n\t\t\t\t$$b;\n\t\t};')).length
+		);
+		Assert.equals(
+			0, violations(wrap('e = macro {\n\t\t\tif (a)\n\t\t\t\t$$e{b};\n\t\t\telse {\n\t\t\t\tp();\n\t\t\t}\n\t\t};')).length
+		);
+		Assert.equals(0, violations(wrap('e = macro try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (err:Dynamic)\n\t\t\t$$b;')).length);
 	}
 
 	private function violations(src: String): Array<Violation> {

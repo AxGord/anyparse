@@ -65,9 +65,7 @@ final class OperatorLoopLowering {
 			if (_hadComment) {
 				ctx.pos = _preWsPos;
 				final _pt = ctx.pendingTrivia;
-				if (_pt != null) {
-					while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
-				}
+				if (_pt != null) while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
 			} else if (_hadNewline) {
 				// ω-untyped-keep: when no operator matches AND the consumed
 				// WS contained a newline (no comment, no rewind), stash the

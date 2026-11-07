@@ -218,14 +218,12 @@ final class KwBranchLowering {
 					|| _trailOptCap.blankBefore
 					|| _trailOptCap.blankAfterLeadingComments
 					|| _trailOptCap.leadingComments.length > 0
-				) {
-					ctx.pendingTrivia = {
-						blankBefore: _trailOptCap.blankBefore,
-						blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
-						newlineBefore: _trailOptCap.newlineBefore,
-						leadingComments: _trailOptCap.leadingComments,
-					};
-				}
+				) ctx.pendingTrivia = {
+					blankBefore: _trailOptCap.blankBefore,
+					blankAfterLeadingComments: _trailOptCap.blankAfterLeadingComments,
+					newlineBefore: _trailOptCap.newlineBefore,
+					leadingComments: _trailOptCap.leadingComments,
+				};
 			});
 		} else {
 			steps.push(macro skipWs(ctx));

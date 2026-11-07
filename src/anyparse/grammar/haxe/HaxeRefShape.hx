@@ -1390,6 +1390,8 @@ final class HaxeRefShape {
 		// only when nothing wraps it, so a paren around one changes the built call's
 		// ARITY with no syntax error. All `$x{…}` forms share this kind.
 		table.spliceSensitiveExprKinds = ['DollarReifExpr'];
+		// `$e` names a spliced `Expr`; `$e{…}` / `${…}` build one, so any of them may be a declaration or a block.
+		table.spliceKinds = ['DollarIdentExpr', 'DollarReifExpr', 'DollarBlockExpr'];
 		// Provably tighter than `?:`, so a paren around one as a ternary condition is
 		// redundant. Fail-closed: the loose / right-greedy kinds (assignment, ternary,
 		// arrow, `untyped`/`macro`/metadata, block-like `if`/`switch` exprs) are absent,

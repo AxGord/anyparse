@@ -1204,9 +1204,9 @@ final class WriterCtorBlankLowering {
 		// threaded, and would silently measure short until then.
 		return macro {
 			final _arr = $fieldExpr;
-			if (_arr == null || _arr.length == 0)
+			if (_arr == null || _arr.length == 0) {
 				false;
-			else {
+			} else {
 				var _sum: Int = 0;
 				var _maxLen: Int = 0;
 				var _minLen: Int = anyparse.format.wrap.WrapList.MAX_ITEM_LEN;

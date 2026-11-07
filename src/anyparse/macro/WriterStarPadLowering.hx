@@ -46,9 +46,9 @@ final class WriterStarPadLowering {
 		if (openText != null) parts.push(macro _dt($v{openText}));
 		parts.push(macro {
 			final _arr = $fieldAccess;
-			if (_arr.length == 0)
-				_de()
-			else {
+			if (_arr.length == 0) {
+				_de();
+			} else {
 				final _docs: Array<anyparse.core.Doc> = [];
 				var _si: Int = 0;
 				while (_si < _arr.length) {
@@ -79,9 +79,9 @@ final class WriterStarPadLowering {
 				parts.push(macro {
 					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 					final _arr = $fieldAccess;
-					if (_arr.length == 0)
-						_de()
-					else {
+					if (_arr.length == 0) {
+						_de();
+					} else {
 						final _docs: Array<anyparse.core.Doc> = [];
 						$leadingPush;
 						var _si: Int = 0;
@@ -173,9 +173,9 @@ final class WriterStarPadLowering {
 			final interSepLit: String = sepTextForInter ?? '';
 			parts.push(macro {
 				final _arr = $fieldAccess;
-				if (_arr.length == 0)
-					_de()
-				else {
+				if (_arr.length == 0) {
+					_de();
+				} else {
 					final _docs: Array<anyparse.core.Doc> = [];
 					$leadingPush;
 					final _items: Array<anyparse.core.Doc> = [];
@@ -192,9 +192,9 @@ final class WriterStarPadLowering {
 		} else {
 			parts.push(macro {
 				final _arr = $fieldAccess;
-				if (_arr.length == 0)
-					_de()
-				else {
+				if (_arr.length == 0) {
+					_de();
+				} else {
 					final _docs: Array<anyparse.core.Doc> = [];
 					$leadingPush;
 					var _si: Int = 0;

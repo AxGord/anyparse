@@ -1259,9 +1259,9 @@ class WriterCodegen {
 	private static function pushChainOpCommentsField(): Field {
 		final body: Expr = macro {
 			afters.push(after == null ? null : trailingCommentDocVerbatim(after, opt));
-			if (own.length == 0)
+			if (own.length == 0) {
 				owns.push(null);
-			else {
+			} else {
 				final _run: Array<anyparse.core.Doc> = [];
 				for (_ci in 0...own.length) {
 					if (_ci > 0) _run.push(_dhl());

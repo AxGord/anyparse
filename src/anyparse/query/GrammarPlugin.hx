@@ -3374,6 +3374,14 @@ final class RefShape {
 	public var spliceSensitiveExprKinds: Null<Array<String>>;
 
 	/**
+	 * Expression kinds that stand, inside an `opaqueKinds` quotation, for an AST spliced in at build time
+	 * (Haxe: `$e`, `$e{…}`, `${…}` and the other `$x{…}` forms). A check that reads only shape inside a
+	 * quotation cannot see what one holds - a declaration, a block - so it treats a statement made of one as
+	 * unknown and leaves it alone. Optional; unset makes no statement a splice.
+	 */
+	public var spliceKinds: Null<Array<String>>;
+
+	/**
 	 * Expression kinds that bind STRICTLY TIGHTER than the ternary `?:` operator, so a
 	 * `parenKind` wrapping one as a ternary CONDITION (`(e) ? a : b`) is redundant —
 	 * unwrapping it re-parses to the same tree. A fail-closed WHITELIST: a kind absent

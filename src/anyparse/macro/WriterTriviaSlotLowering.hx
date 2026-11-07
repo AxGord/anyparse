@@ -223,9 +223,9 @@ final class WriterTriviaSlotLowering {
 			macro {
 				final _sep598: anyparse.core.Doc = $triviaSepExpr;
 				final _leadCm598: Array<String> = $leadAccess;
-				if (_leadCm598.length == 0)
+				if (_leadCm598.length == 0) {
 					_sep598;
-				else {
+				} else {
 					final _p598: Array<anyparse.core.Doc> = [_sep598];
 					for (_ci598 in 0..._leadCm598.length) {
 						_p598.push(leadingCommentDocRun(_leadCm598, _ci598, opt));

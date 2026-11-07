@@ -159,6 +159,18 @@ class CollapsibleElseIfCheckTest extends Test {
 	}
 
 	/**
+	 * A `macro` reification is read and fixed like any other code: the collapse builds the inner `EIf` where the quotation
+	 * built `EBlock([EIf])`, which the typer scopes the same.
+	 */
+	@:pin('control')
+	@:killer('M-COLLAPSIBLE-ELSE-IF-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = wrap('final e = macro {\n\t\t\tif (a) p(); else {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\t};');
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(applyFixOnce(src, REMOVE_BRACES_CONFIG).indexOf('else if (b) q();') != -1);
+	}
+
+	/**
 	 * The motivating `CrashReport` shape under `singleStatementBraces: "remove"`: the
 	 * then-branch is a brace-KEEPING block, so the collapsed chain's body must be braced
 	 * too. The check no longer emits those braces — the WRITER does, on the canonicalizing

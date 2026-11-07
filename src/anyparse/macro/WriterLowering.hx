@@ -1625,8 +1625,9 @@ class WriterLowering {
 						sourceBreakBefore: _breaks
 					}
 				);
-			} else
+			} else {
 				_headPlusMore;
+			}
 		};
 	}
 
