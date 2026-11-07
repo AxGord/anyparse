@@ -24,7 +24,9 @@
 		"fitlit-xconfig/Lit3.hx": "class C {\n\n\tfunction f() {\n\t\tfor (culprit in culprits) for (rule in culprit.rules) if (!isBanned(culprit.file, rule)) _banned.push({ file: culprit.file, rule: rule });\n\t}\n\n}\n",
 		"fitlit-xconfig/Glue.hx": "class C {\n\n\tfunction f() {\n\t\tif (c) foo.bar = { a: 1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2222222222222222222222222222222222222222 };\n\t\tfor (a in b) x = { aaaa: 1, bbbb: 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk' };\n\t\twhile (c) return { aaaa: 1, bbbb: 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk' };\n\t\tfor (culprit in culprits) for (rule in culprit.rules) if (!isBanned(culprit.file, rule)) _banned.push({ file: culprit.file, rule: rule, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2222222222222222222222222222222222222222 });\n\t}\n\n}\n",
 		"trailing-flat/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tvar a = [1, 2,];\n\t\tvar n = [[1,], [2, 3,],];\n\t\tvar m = [1 => 2, 3 => 4,];\n\t\tvar o = {a: 1, b: 2,};\n\t\tg(1, 2,);\n\t\tvar c = new B(1, 2,);\n\t}\n}\n",
-		"trailing-flat/hxformat.json": "{}"
+		"trailing-flat/hxformat.json": "{}",
+		"trailing-keep/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"maxLineLength\": 60, \"callParameter\": {\"defaultWrap\": \"fillLine\", \"rules\": []}}}",
+		"trailing-keep/Probe.hx": "class A {\n\tfunction f() {\n\t\tf(a, b, {x: 1, y: 2},);\n\t\tf(a, b, [1, 2, 3],);\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c,);\n\t\tf(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbb, {xxxxxxxxxxxxxxx: 1, yyyyyyyyyyyyyyyyyy: 2},);\n\t\tfoo.bar(a, {x: 1},).baz();\n\t\tfoo.bar(a, b,).baz(c,);\n\t\tfoo.bar(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccc, ddddddddd,).baz();\n\t\tfoo.bar(function() {\n\t\t\treturn 1;\n\t\t}, b,).baz();\n\t\tg(function() {\n\t\t\treturn 1;\n\t\t}, b,);\n\t\tg(a,);\n\t\tfoo.bar(a,).baz();\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -255,6 +257,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "666b7626391d7ab9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "trailing-keep/Probe.hx",
+			"note": "under wrapping.trailingComma=keep with fillLine call arguments at width 60: a source trailing comma survives on a flat call holding a collection argument, on method-chain segment calls flat and broken, and on a call whose block lambda breaks; a call whose object-literal argument breaks (`}, c)`) still loses it",
+			"fixpoint": "trailing-keep/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"trailing-keep/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7459be2cf81efcb3",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

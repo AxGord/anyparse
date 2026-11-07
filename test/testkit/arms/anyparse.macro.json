@@ -1960,6 +1960,30 @@
 			"find": "keepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))",
 			"replace": "postfixSourceTrailExpr()",
 			"note": "a flat call keeps its source trailing argument comma under wrapping.trailingComma=remove"
+		},
+		{
+			"name": "M-CHAIN-CALL-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": "final callTcExpr: Expr = trailingCommaExpr(cb, callSourceTrail);",
+			"replace": "final callTcExpr: Expr = trailingCommaExpr(cb);",
+			"note": "a method-chain segment call laid out one argument per line drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-CHAIN-CALL-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": "flatTrailingComma: $callFlatTcExpr }",
+			"replace": "flatTrailingComma: false }",
+			"note": "a method-chain segment call that stays on one line drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-CHAIN-CALL-FLAT-TRAIL-UNDER-REMOVE",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": ": keepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));",
+			"replace": ": callSourceTrail;",
+			"note": "a flat method-chain segment call keeps its source trailing comma under the default remove"
 		}
 	]
 }

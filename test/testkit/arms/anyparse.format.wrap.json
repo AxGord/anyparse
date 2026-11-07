@@ -451,6 +451,38 @@
 			"find": ": IfFirstLineExceeds(lineWidth, openShape, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape));",
 			"replace": ": IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);",
 			"note": "a flat-capable item measures its cuddled head by the line it would naturally render, so a head too wide for `[ for (` cuddles anyway and wraps its own iterable call instead of falling back to the leading break"
+		},
+		{
+			"name": "M-FILL-TRAIL-SEP-UNGATED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeFillLine",
+			"find": "IfBreak(Text(sep), Empty);",
+			"replace": "Text(sep);",
+			"note": "a fill-laid list that stays on one line gets the comma a trailingCommas add-knob asks for, which is meant for a broken list only"
+		},
+		{
+			"name": "M-FILL-TRAIL-SEP-DROPPED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeFillLine",
+			"find": "IfBreak(Text(sep), Empty);",
+			"replace": "Empty;",
+			"note": "a fill-laid list broken over lines loses the comma a trailingCommas add-knob asks for"
+		},
+		{
+			"name": "M-FILL-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeFillLine",
+			"find": "else if (flatTrailingComma)",
+			"replace": "else if (false)",
+			"note": "a fill-laid list that stays on one line drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-COLLECTION-ARG-FLAT-SOURCE-TRAIL-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeMultiArgCollection",
+			"find": "cols, appendTrailingComma, flatTrailingComma, groupRestProbe,",
+			"replace": "cols, appendTrailingComma, false, groupRestProbe,",
+			"note": "a call holding a collection argument that stays on one line drops the trailing comma its source wrote under keep"
 		}
 	]
 }

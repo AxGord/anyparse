@@ -924,14 +924,6 @@ final class WriterPrattLowering {
 	}
 
 	/**
-	 * The separator a trivia postfix Star's source wrote after its last argument (`_args[last].sepAfter`), which
-	 * `keep` writes back in every layout; a plain Star records no separators.
-	 */
-	private static function postfixSourceTrailExpr(): Expr {
-		return macro _args.length > 0 && _args[_args.length - 1].sepAfter;
-	}
-
-	/**
 	 * Build the args-list emission call for a postfix Star — the three-way
 	 * dispatch between the runtime `WrapList.emit` cascade (`@:fmt(wrapRules)`,
 	 * with the one-argument-per-line Doc a line comment forces in a trivia Star), the Wadler

@@ -2124,8 +2124,8 @@ class WrapList {
 		);
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags, lineWidth,
-			complexItemKinds
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
+			sepBeforeFlags, lineWidth, complexItemKinds
 		);
 		if (multiArgCollection != null) return multiArgCollection;
 		final byMode: Doc = shapeByMode(
@@ -2522,7 +2522,8 @@ class WrapList {
 	 */
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int, ?complexItemKinds: Array<Int>
+		appendTrailingComma: Bool, flatTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
+		?complexItemKinds: Array<Int>
 	): Null<Doc> {
 		if ((mode != FillLine && mode != FillLineWithLeadingBreak) || items.length <= 1) return null;
 		final collIdx: Int = soleMultilineCollectionArg(items);
@@ -2571,8 +2572,8 @@ class WrapList {
 		final openShape: Doc = mode == FillLineWithLeadingBreak
 			? shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags)
 			: shapeFillLine(
-				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-				complexItemKinds
+				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
+				sepBeforeFlags, complexItemKinds
 			);
 		final probe: Doc = IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		// ω-render-pivot-collection-arg: the committed population (`collArm ==
@@ -2628,8 +2629,8 @@ class WrapList {
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(open, close, sep, items, cols, appendTrailingComma, sepBeforeFlags);
 			case FillLine:
 				shapeFillLine(
-					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
-					complexItemKinds
+					open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
+					sepBeforeFlags, complexItemKinds
 				);
 			case FillLineWithLeadingBreak:
 				shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma, complexItemKinds, sepBeforeFlags);
@@ -3272,8 +3273,17 @@ class WrapList {
 
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, ?complexItemKinds: Array<Int>
+		appendTrailingComma: Bool, flatTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>,
+		?complexItemKinds: Array<Int>
 	): Doc {
+		// The list's own Group decides the trailing separator: `appendTrailingComma` is the break-mode signal, so a
+		// list that packs onto one line keeps a comma only when `flatTrailingComma` says the source wrote one.
+		final trailSep: Doc = if (!appendTrailingComma)
+			Empty
+		else if (flatTrailingComma)
+			Text(sep)
+		else
+			IfBreak(Text(sep), Empty);
 		// ω-fill-leading-comment: the first item's Doc starts with the comment
 		// that preceded it in the source. Packed flat it lands glued to the open
 		// delimiter (`[// note`), which is not merely ugly — it RELOCATES the
@@ -3321,7 +3331,7 @@ class WrapList {
 		// where the Nest legitimately positions each broken-before
 		// item at the list's continuation indent.
 		if (items.length == 1) {
-			final tail0: Doc = appendTrailingComma ? Text(sep) : Empty;
+			final tail0: Doc = trailSep;
 			// Close-paren placement at items.length=1: default close-glued.
 			// When `items[0]` carries an internal hardline (binop chain
 			// break inside a 1-arg call, multi-line lambda body, ternary
@@ -3446,7 +3456,7 @@ class WrapList {
 			}
 			chunkStart = i;
 		}
-		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
+		final tail: Doc = trailSep;
 		final inner: Doc = Concat([Concat(bodyParts), tail]);
 		final outerInner: Doc = Concat([
 			Text(open),

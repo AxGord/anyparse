@@ -172,6 +172,7 @@
 		"multiVarWrap",
 		"noSiblingFallback",
 		"preWrite",
+		"trailingCommaRemovable",
 		"wrapRules"
 	],
 	"WriterLoweringSupport": [

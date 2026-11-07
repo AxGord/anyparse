@@ -608,7 +608,22 @@ class WriterLowering {
 		final callClose: String = cb.annotations[AnnotationKeys.POSTFIX_CLOSE] ?? '';
 		final callSep: String = cb.annotations[AnnotationKeys.LIT_SEP_TEXT] ?? ',';
 		final callWrapField: Null<String> = cb.fmtReadString('wrapRules');
-		final callTcExpr: Expr = trailingCommaExpr(cb);
+		// ω-postfix-starsuffix-trivia: per-arg Doc comprehension below
+		// must mirror `lowerPostfixStar`'s trivia branch: when args are
+		// `Array<Trivial<HxExprT>>` (auto-wrapped by TriviaTypeSynth),
+		// read `.node` for the recursive write and append
+		// `.trailingComment` verbatim. Plain-mode and grammars that
+		// don't auto-collect on the postfix Star-suffix keep the
+		// pre-slice direct `_a` access.
+		final cbStar: ShapeNode = cb.children[1];
+		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
+		// A segment call keeps its source trailing separator under `keep` exactly like a regular call
+		// (`lowerPostfixCascadeCall`): broken through `appendTrailingComma`, flat through `flatTrailingComma`.
+		final callSourceTrail: Null<Expr> = isCallTriviaStar ? postfixSourceTrailExpr() : null;
+		final callTcExpr: Expr = trailingCommaExpr(cb, callSourceTrail);
+		final callFlatTcExpr: Expr = callSourceTrail == null
+			? macro false
+			: keepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));
 		// Args list shape: the Call ctor MUST carry `@:fmt(wrapRules(
 		// '<field>'))` for the chain-emit's per-segment rendering to use
 		// the same arg layout as a regular Call. Surfacing this as a
@@ -625,22 +640,13 @@ class WriterLowering {
 		final callRulesExpr: Expr = optFieldAccess(cwf);
 		final cascadeExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 			$v{callOpen}, $v{callClose}, $v{callSep}, _argDocs, opt, _de(), _de(), false, $callRulesExpr,
-			{ appendTrailingComma: $callTcExpr }
+			{ appendTrailingComma: $callTcExpr, flatTrailingComma: $callFlatTcExpr }
 		);
 		final chainRulesExpr: Expr = optFieldAccess(chainField);
 		final writeIdent: Expr = {
 			expr: EConst(CIdent(writeFnName)),
 			pos: Context.currentPos()
 		};
-		// ω-postfix-starsuffix-trivia: per-arg Doc comprehension below
-		// must mirror `lowerPostfixStar`'s trivia branch: when args are
-		// `Array<Trivial<HxExprT>>` (auto-wrapped by TriviaTypeSynth),
-		// read `.node` for the recursive write and append
-		// `.trailingComment` verbatim. Plain-mode and grammars that
-		// don't auto-collect on the postfix Star-suffix keep the
-		// pre-slice direct `_a` access.
-		final cbStar: ShapeNode = cb.children[1];
-		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		// ω-methodchain-reeval-after-callparam (axis 2): a chain segment's call
 		// args bypass the normal `HxExpr.Call` postfix path's per-arg
 		// `_setCallArgChainNest` wrapping (the chain segment goes through

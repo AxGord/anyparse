@@ -25,7 +25,8 @@ package anyparse.format;
  * literal, the object literal, and the two argument lists (`f(…)` and
  * `new T(…)`). Constructs where the trailing separator is MANDATORY (a
  * `{ > Base, }` anon-type extension) never carry the flag and are
- * unreachable from this policy; function parameter lists are left out too.
+ * unreachable from this policy; a function parameter list never keeps
+ * its trailing separator, whatever the policy.
  *
  * Format-neutral — lives in `anyparse.format` so any delimited-list grammar
  * can reuse it.

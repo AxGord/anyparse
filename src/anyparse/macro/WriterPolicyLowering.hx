@@ -36,6 +36,14 @@ final class WriterPolicyLowering {
 	private static final SPACE_SIDES: Array<String> = ['lead'];
 
 	/**
+	 * The separator a trivia postfix Star's source wrote after its last argument (`_args[last].sepAfter`), which
+	 * `keep` writes back in every layout; a plain Star records no separators.
+	 */
+	public static function postfixSourceTrailExpr(): Expr {
+		return macro _args.length > 0 && _args[_args.length - 1].sepAfter;
+	}
+
+	/**
 	 * ω-pad-trailing-ref — wrap a sep-emission `Expr` with the
 	 * `prevPadTrailing` runtime drop. When the immediately preceding
 	 * field fired `@:fmt(padTrailing)`, drop THIS sep at runtime so
