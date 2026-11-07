@@ -1881,38 +1881,6 @@
 			"find": "return !shared.hasKwSlots ||",
 			"replace": "return true ||",
 			"note": "the FitLine body layout never reads the keyword's comment slots, so `else // c` before a non-block body loses its comment"
-		},
-		{
-			"name": "M-TRAILING-COMMA-SPLIT-SEP-STAR-OFF",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepTrailExprs",
-			"find": "? trailingCommaSplitModeExpr(trailPresentAccess, typedefForceModeExpr)",
-			"replace": "? typedefForceModeExpr",
-			"note": "a separated-list Star no longer reads the source trailing comma as the split lever, so `[1, 2,]` stays flat under `trailingComma: split`"
-		},
-		{
-			"name": "M-TRAILING-COMMA-SPLIT-CALL-OFF",
-			"type": "anyparse.macro.WriterPrattLowering",
-			"method": "lowerPostfixCascadeCall",
-			"find": "trailingCommaForceModeExpr(c.branch, sourceTrail)",
-			"replace": "trailingCommaForceModeExpr(c.branch, null)",
-			"note": "call arguments no longer read the source trailing comma as the split lever, so `g(a, b,)` stays flat under `trailingComma: split`"
-		},
-		{
-			"name": "M-TRAILING-COMMA-SPLIT-SEP-KNOB-ANY-MODE",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepTrailExprs",
-			"find": "onlyOnePerLineExpr: trailingCommaOnlyOnePerLineExpr(leverReaches)",
-			"replace": "onlyOnePerLineExpr: trailingCommaOnlyOnePerLineExpr(false)",
-			"note": "under `split` an array add-knob writes its comma in a filled layout too, the next pass reads it as the lever and splits the list: two writes to the fixed point"
-		},
-		{
-			"name": "M-TRAILING-COMMA-SPLIT-CALL-KNOB-ANY-MODE",
-			"type": "anyparse.macro.WriterPrattLowering",
-			"method": "lowerPostfixCascadeCall",
-			"find": "trailingCommaOnlyOnePerLineExpr(trailingCommaLeverReaches(c.branch, sourceTrail != null))",
-			"replace": "trailingCommaOnlyOnePerLineExpr(false)",
-			"note": "under `split` the call-argument add-knob writes its comma in a filled layout too, the next pass reads it as the lever and splits the arguments: two writes to the fixed point"
 		}
 	]
 }

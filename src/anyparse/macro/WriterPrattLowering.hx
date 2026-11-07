@@ -900,18 +900,13 @@ final class WriterPrattLowering {
 				}
 				: macro null;
 			final flatTcExpr: Expr = c.isTriviaStar ? postfixSourceTrailExpr() : macro false;
-			final sourceTrail: Null<Expr> = c.isTriviaStar ? postfixSourceTrailExpr() : null;
-			final forceModeExpr: Expr = trailingCommaForceModeExpr(c.branch, sourceTrail);
-			final onlyOnePerLineExpr: Expr = trailingCommaOnlyOnePerLineExpr(trailingCommaLeverReaches(c.branch, sourceTrail != null));
 			return macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {
 					appendTrailingComma: $tcExpr,
-					trailingCommaOnlyOnePerLine: $onlyOnePerLineExpr,
 					groupRestProbe: $groupRestProbeExpr,
 					sepBeforeFlags: _sepBeforeFlags,
 
 					flatTrailingComma: $flatTcExpr,
-					forceMode: $forceModeExpr,
 					complexItemKinds: $complexKindsExpr
 				}
 			);

@@ -296,7 +296,6 @@ final class TriviaSepLowering {
 			forceExceedsExpr: forceExceedsExpr,
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
 			forceModeExpr: forceModeExpr,
-			onlyOnePerLineExpr: trail.onlyOnePerLineExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			reflowSourceMultiline: reflowSourceMultiline,
 			complexItems: complexItems
@@ -878,23 +877,18 @@ final class TriviaSepLowering {
 		// `typedef T = {…}->Void` / `typedef T = Array<{k:Int}>` flat).
 		// Null fall-through preserves pre-slice cascade-driven layout
 		// for non-typedef anon consumers (var-type-hint, fn-return-type).
-		final typedefForceModeExpr: Expr = forceMultiInTypedef
+		final forceModeExpr: Expr = forceMultiInTypedef
 			? macro (
 				opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
 					? anyparse.format.wrap.WrapMode.OnePerLine
 					: (null: Null<anyparse.format.wrap.WrapMode>)
 			)
 			: macro (null: Null<anyparse.format.wrap.WrapMode>);
-		final leverReaches: Bool = trailPresentAccess != null && trailingCommaRemovable;
-		final forceModeExpr: Expr = trailPresentAccess != null && trailingCommaRemovable
-			? trailingCommaSplitModeExpr(trailPresentAccess, typedefForceModeExpr)
-			: typedefForceModeExpr;
 		return {
 			forceExceedsExpr: forceExceedsExpr,
 			appendTrailingCommaExpr: appendTrailingCommaExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
-			forceModeExpr: forceModeExpr,
-			onlyOnePerLineExpr: trailingCommaOnlyOnePerLineExpr(leverReaches)
+			forceModeExpr: forceModeExpr
 		};
 	}
 
@@ -916,7 +910,6 @@ final class TriviaSepLowering {
 		final forceExceedsExpr: Expr = c.forceExceedsExpr;
 		final wrapTrailBreakDoc: Expr = c.wrapTrailBreakDoc;
 		final forceModeExpr: Expr = c.forceModeExpr;
-		final onlyOnePerLineExpr: Expr = c.onlyOnePerLineExpr;
 		final flatTrailingCommaExpr: Expr = c.flatTrailingCommaExpr;
 		final openText: String = c.openText;
 		final closeText: String = c.closeText;
@@ -1077,7 +1070,6 @@ final class TriviaSepLowering {
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
 						appendTrailingComma: $appendTrailingCommaExpr,
-						trailingCommaOnlyOnePerLine: $onlyOnePerLineExpr,
 						leadFlat: $wrapLeadFlatDoc,
 						leadBreak: $wrapLeadBreakDoc,
 						forceExceeds: $forceExceedsExpr,

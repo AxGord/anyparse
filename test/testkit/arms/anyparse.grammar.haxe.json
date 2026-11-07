@@ -900,14 +900,6 @@
 			"find": "case HxFormatBodyPolicy.Keep: current;",
 			"replace": "case HxFormatBodyPolicy.Keep: BodyPolicy.Same;",
 			"note": "an unsupported keep body policy overrides the knob instead of leaving its default"
-		},
-		{
-			"name": "HX-TRAILING-COMMA-SPLIT-UNMAPPED",
-			"type": "anyparse.grammar.haxe.HaxeFormatValues",
-			"method": "trailingCommaRemovalToRuntime",
-			"find": "case HxFormatWrappingTrailingCommaPolicy.Split: TrailingCommaPolicy.Split;",
-			"replace": "case HxFormatWrappingTrailingCommaPolicy.Split: TrailingCommaPolicy.Keep;",
-			"note": "the `split` config value reads as `keep`, so the lever never switches on from hxformat.json"
 		}
 	]
 }

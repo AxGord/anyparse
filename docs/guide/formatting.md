@@ -92,12 +92,3 @@ or `one`, like the global key, for the blank line after a member that carries a 
 `none` a documented member keeps its blank line above (`beforeDocCommentEmptyLines`) and the next member follows it
 directly. Left out, an enum or typedef keeps the source blank and an `enum abstract` follows the global key. Details:
 `docs/haxe-format-config.md`.
-
-## The trailing comma as a layout lever: `wrapping.trailingComma`
-
-`keep` (default) round-trips a list's trailing comma, `remove` drops it from every multiline array, object literal and
-argument list. `split` makes the comma the author's lever: a list whose source writes `,` after its last element is laid
-out one element per line, however short (`[1, 2,]`, `{x: 1,}`, `f(a, b,)`, `new T(a,)`), and keeps the comma; a list
-without one is laid out by its wrap rules and the line width as under `keep`. Under `split` a `trailingCommas.*Default: yes` knob
-adds its comma only to a list laid out one element per line. Function parameter lists, a `{ > Base, }`
-extension and the arguments of a call inside a method chain are outside its reach. Details: `docs/haxe-format-config.md`.

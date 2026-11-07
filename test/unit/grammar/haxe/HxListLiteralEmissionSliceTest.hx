@@ -198,6 +198,22 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals(TrailingCommaPolicy.Keep, opts('{}').trailingComma);
 	}
 
+	/**
+	 * `split` is not a value of `wrapping.trailingComma`: a source trailing comma is never a
+	 * layout lever, so a config asking for one is refused at load instead of read as `keep`.
+	 */
+	@:pin('guard')
+	public function testConfigTrailingCommaSplitRejected(): Void {
+		Assert.raises(opts.bind('{"wrapping":{"trailingComma":"split"}}'));
+	}
+
+	/** A fitting list whose source carries a trailing comma stays on one line, call and array alike. */
+	@:pin('guard')
+	public function testSourceTrailingCommaIsNoLayoutLever(): Void {
+		final source: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t\tg(alpha, beta,);\n\t}\n}\n';
+		Assert.equals(source, base(source));
+	}
+
 	// --- item (a) ---
 
 	public function testArrayTwoElementUniformGapCollapses(): Void {

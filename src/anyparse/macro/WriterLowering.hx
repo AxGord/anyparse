@@ -2449,7 +2449,6 @@ typedef SepStarNoTriviaCtx = {
 	final forceExceedsExpr: Expr;
 	final wrapTrailBreakDoc: Expr;
 	final forceModeExpr: Expr;
-	final onlyOnePerLineExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
 	final reflowSourceMultiline: Bool;
 
@@ -2490,7 +2489,6 @@ typedef SepStarTrailExprs = {
 	final appendTrailingCommaExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
 	final forceModeExpr: Expr;
-	final onlyOnePerLineExpr: Expr;
 };
 /**
  * Output bundle of `triviaSepCheckExprs` — the ignore/noWrap runtime
