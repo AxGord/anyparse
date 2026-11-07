@@ -119,7 +119,7 @@ final class DiffCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` per-hit format (default: paired-header)\n');
 		CliIo.sysPrint('  --limit <n>         Stop after n hits (default: no limit)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Structural AST diff: walks both trees pairwise and reports nodes\n');
 		CliIo.sysPrint('where kind / name slot / child count diverges. No LCS realignment\n');

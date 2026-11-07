@@ -145,9 +145,9 @@ final class ExtractConstantCommand implements CliCommand {
 			CliIo.stderr('apq extract-constant: --into mode expects one or more <scope> files/dirs/globs to search\n');
 			return EXIT_USAGE;
 		}
-		final paths: Array<String> = CliArgs.expandInputs(scopeArgs, '.hx').paths;
+		final paths: Array<String> = CliArgs.expandFor(plugin.langName(), scopeArgs).paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq extract-constant: scope matched no .hx files\n');
+			CliIo.stderr('apq extract-constant: ${CliArgs.noFilesMatched(plugin.langName(), scopeArgs)}\n');
 			return EXIT_RUNTIME;
 		}
 

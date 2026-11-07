@@ -14,7 +14,7 @@ final class CliUsage {
 
 	public static function printWriteLangHelp(): Void {
 		CliIo.sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 	}
 
@@ -46,7 +46,7 @@ final class CliUsage {
 	public static function printEditOptionsTail(): Void {
 		CliIo.sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
 		CliIo.sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 
@@ -89,7 +89,7 @@ final class CliUsage {
 	public static function printFlatLimitLangHelp(): Void {
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		CliIo.sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 	}
 
@@ -106,7 +106,7 @@ final class CliUsage {
 	public static function printShortReformatWriteLangHelp(): Void {
 		CliIo.sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
 		CliIo.sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

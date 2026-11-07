@@ -135,7 +135,7 @@ final class InlineMethodCommand implements CliCommand {
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

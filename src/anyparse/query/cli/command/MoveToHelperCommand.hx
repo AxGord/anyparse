@@ -67,7 +67,9 @@ final class MoveToHelperCommand implements CliCommand {
 		final names: Array<String> = positional[1].split(',').map(StringTools.trim).filter(n -> n != '');
 		final srcTypeName: String = opts['--type'] ?? RefactorSupport.baseNameOf(srcFile);
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(opts['--lang'] ?? 'haxe'));
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles('move-to-helper', scopeDir, [srcFile]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			'move-to-helper', plugin.langName(), scopeDir, [srcFile]
+		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 		final helperFile: Null<String> = opts['--file'];
 		if (helperFile != null && !scopeFiles.exists(e -> e.file == helperFile) && exists(helperFile)) {
@@ -180,7 +182,7 @@ final class MoveToHelperCommand implements CliCommand {
 		CliIo.sysPrint('  --arms <json>  Print the mutation-arm retarget hint for this registry\n');
 		CliIo.sysPrint('  --dry-run      Print every rewritten file as it would be written\n');
 		CliIo.sysPrint('  --write        Apply in place (default: per-file summary)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

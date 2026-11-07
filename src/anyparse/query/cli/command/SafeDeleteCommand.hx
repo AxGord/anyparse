@@ -81,7 +81,9 @@ final class SafeDeleteCommand implements CliCommand {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		final op: String = 'safe-delete';
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(op, scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			op, plugin.langName(), scopeDir, [srcFileNN]
+		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		// The op WRITES `srcFile`, so the canonical gate and the re-emit are judged by the

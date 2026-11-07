@@ -227,7 +227,7 @@ final class MoveElementsCommand implements CliCommand {
 		CliIo.sysPrint('              entries joined by newlines), write nothing\n');
 		CliIo.sysPrint('  --write     write the source and the destination together (default: print both results)\n');
 		CliIo.sysPrint('  --reformat  canonicalise a file that is not already canonical\n');
-		CliIo.sysPrint('  --lang <name>  grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>  grammar plugin (default: by file extension)\n');
 	}
 
 }

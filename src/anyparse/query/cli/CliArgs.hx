@@ -252,11 +252,14 @@ final class CliArgs {
 	}
 
 	/**
-	 * Expand one-or-more file/dir/glob specs into a deduped path list,
-	 * order-preserving. `singleFile` (parse-fail becomes a hard error,
-	 * mirroring `apq ast`) holds only when exactly one spec was given
-	 * and it resolved to exactly that one concrete file — multi-spec or
-	 * glob/dir scans skip unparseable files silently.
+	 * `specs` expanded as the files of grammar `lang` — the one file walk by grammar: a directory walks to every file
+	 * carrying one of its registered extensions (`GrammarEntry.extensions`), so a walk under `--lang json` reads the `.json`
+	 * files, never the `.hx` ones. A command that reads files of one language walks through here, never by an extension
+	 * of its own.
+	 *
+	 * The paths are deduped and order-preserving. `singleFile` (parse-fail becomes a hard error, mirroring `apq ast`)
+	 * holds only when exactly one spec was given and it resolved to exactly that one concrete file — multi-spec or glob/dir
+	 * scans skip unparseable files silently.
 	 *
 	 * `unmatched` is every spec that expanded to NOTHING, in the order given. The union alone cannot
 	 * answer for them: a spec naming a file that is not there disappears into it the moment any OTHER
@@ -264,16 +267,27 @@ final class CliArgs {
 	 * The list is a fact about the arguments, so it is computed here and REPORTED by the caller that
 	 * owns the arguments (`resolveInputPaths`) — this function stays free of output.
 	 */
-	public static function expandInputs(specs: Array<String>, ext: String): ExpandedInputs {
-		return expandEach(specs, [ext]);
+	public static function expandFor(lang: String, specs: Array<String>): ExpandedInputs {
+		return expandEach(specs, grammarOf(lang).extensions);
 	}
 
 	/**
-	 * `specs` expanded as the files of grammar `lang`: a directory walks to every file carrying one of its registered
-	 * extensions (`GrammarEntry.extensions`), so a walk under `--lang json` reads the `.json` files, never the `.hx` ones.
+	 * `specs` expanded as the files of EVERY registered grammar, each read later by the grammar its extension names
+	 * (`pickPluginFor`): the walk of a command whose files are not written in the grammar `--lang` names — a grammar's
+	 * definition sources are.
 	 */
-	public static function expandFor(lang: String, specs: Array<String>): ExpandedInputs {
-		return expandEach(specs, grammarOf(lang).extensions);
+	public static function expandAnyGrammar(specs: Array<String>): ExpandedInputs {
+		return expandEach(specs, [for (entry in grammars()) for (extension in entry.extensions) extension]);
+	}
+
+	/** The files grammar `lang` reads, named for a diagnostic by their extensions: `.hx files`, `.json files`. */
+	public static function filesOf(lang: String): String {
+		return '${grammarOf(lang).extensions.join(' / ')} files';
+	}
+
+	/** The one wording of scope `specs` holding no file of grammar `lang`, for `apq <cmd>: <this>` to print. */
+	public static function noFilesMatched(lang: String, specs: Array<String>): String {
+		return '${quotedSpecs(specs)} matched no ${filesOf(lang)}';
 	}
 
 	/** `--limit`'s value as a non-negative count; anything else throws a usage failure. */
@@ -291,13 +305,13 @@ final class CliArgs {
 	}
 
 	/**
-	 * Expand a --scope dir/glob and read every file plus the extras (the
+	 * Expand a --scope dir/glob into the files of grammar `lang` and read every one plus the extras (the
 	 * op's own files), reporting read failures; null aborts the op.
 	 */
 	public static function collectScopeFiles(
-		cmd: String, scopeDir: String, extraFiles: Array<String>
+		cmd: String, lang: String, scopeDir: String, extraFiles: Array<String>
 	): Null<Array<{ file: String, source: String }>> {
-		final expanded: ExpandedInputs = expandInputs([scopeDir], '.hx');
+		final expanded: ExpandedInputs = expandFor(lang, [scopeDir]);
 		final paths: Array<String> = expanded.paths;
 		// An extra file the scope walk already holds under another spelling (absolute against a relative scope) takes that
 		// entry's place: the caller looks its own spelling up, and a second entry would index the file twice.
@@ -345,8 +359,8 @@ final class CliArgs {
 	}
 
 	/**
-	 * Plugin + expanded input paths for a scope, warning about scope specs that matched
-	 * no `.hx` file at all — a silent drop there is a query answered over less than the
+	 * Plugin + expanded input paths for a scope, warning about scope specs that matched no
+	 * file of the grammar at all — a silent drop there is a query answered over less than the
 	 * caller asked for.
 	 *
 	 * `suggestSeparator` adds the bare-`--` hint to that warning, and ONLY a command that
@@ -360,8 +374,7 @@ final class CliArgs {
 		final expanded: ExpandedInputs = expandFor(lang, specs);
 		if (expanded.unmatched.length > 0 && expanded.paths.length > 0)
 			CliIo.stderr(
-				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no '
-				+ '${grammarOf(lang).extensions.join(' / ')} files and were skipped: '
+				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no ${filesOf(lang)} and were skipped: '
 				+ quotedSpecs(expanded.unmatched)
 				+ (suggestSeparator ? ' — if they are QUERIES, put a bare `--` between them and the scope' : '')
 				+ '\n'
@@ -379,7 +392,7 @@ final class CliArgs {
 		return grammarOf(lang).merge;
 	}
 
-	/** `expandInputs` over several extensions: a directory walks once per extension, a file or glob names its own paths. */
+	/** `expandFor` over several extensions: a directory walks once per extension, a file or glob names its own paths. */
 	private static function expandEach(specs: Array<String>, extensions: Array<String>): ExpandedInputs {
 		final paths: Array<String> = [];
 		final unmatched: Array<String> = [];
@@ -417,7 +430,7 @@ final class CliArgs {
 }
 
 /**
- * What `expandInputs` answers: the deduped `.hx` paths the specs expanded to, whether the call
+ * What `expandFor` answers: the deduped `.hx` paths the specs expanded to, whether the call
  * named exactly ONE concrete file, and every spec that expanded to NOTHING.
  *
  * `unmatched` is what the union alone cannot say — a spec naming a file that is not there vanishes

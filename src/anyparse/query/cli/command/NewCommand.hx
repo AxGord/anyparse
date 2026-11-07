@@ -91,11 +91,10 @@ final class NewCommand implements CliCommand {
 	 * is refused. `--bodies -` reads `@@ <method>` sections from stdin (see
 	 * `NewFile`); a method without a section is left as a NotImplementedException
 	 * stub (reported on stderr). Without `--write` the source goes to stdout.
-	 * The class name for a new file: its basename without the `.hx` extension.
+	 * The class name for a new file: its basename without its extension, whichever grammar registers it.
 	 */
 	public static function newFileClassName(path: String): String {
-		final base: String = Path.withoutDirectory(path);
-		return base.endsWith('.hx') ? base.substr(0, base.length - 3) : base;
+		return Path.withoutExtension(Path.withoutDirectory(path));
 	}
 
 	/**
@@ -146,14 +145,14 @@ final class NewCommand implements CliCommand {
 	 * not exist.
 	 * Resolve an `--implements` argument to the interface's source, its
 	 * fully-qualified module path, and its simple name. A qualified `pkg.Name`
-	 * maps to `<srcRoot>/pkg/Name.hx`; a simple `Name` is taken as a sibling in
+	 * maps to `<srcRoot>/pkg/Name<ext>`, `<ext>` the source extension of the new file's grammar; a simple `Name` is taken as a sibling in
 	 * the new file's own directory (its module path is then the new file's
 	 * package + `.Name`). Returns null when the file does not exist. The module
 	 * path lets the caller carry the interface's sibling sub-types and decide the
 	 * interface import.
 	 */
 	private static function resolveInterface(
-		iface: String, newPath: String
+		iface: String, newPath: String, ext: String
 	): Null<{ source: String, ifaceModule: String, simple: String }> {
 		final dot: Int = iface.lastIndexOf('.');
 		if (dot >= 0) {
@@ -167,10 +166,10 @@ final class NewCommand implements CliCommand {
 				break;
 			}
 			if (srcRoot == null) return null;
-			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
+			final file: String = srcRoot + iface.split('.').join('/') + ext;
 			return FileSystem.exists(file) ? { source: CliIo.readFile(file), ifaceModule: iface, simple: simple } : null;
 		}
-		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
+		final file: String = '${Path.directory(FileSystem.absolutePath(newPath))}/$iface$ext';
 		if (!FileSystem.exists(file)) return null;
 		final newPkg: String = derivePackage(newPath);
 		return { source: CliIo.readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
@@ -218,6 +217,12 @@ final class NewCommand implements CliCommand {
 		}
 
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
+		// A scaffold is a type declaration; a grammar whose reference shape names no type-declaration kind (a data grammar)
+		// has none to scaffold, and saying so beats the parse failure of a Haxe-shaped scaffold read in that grammar.
+		if (!o.raw && plugin.refShape().typeDeclKinds == null) {
+			CliIo.stderr('apq new: grammar "${o.lang}" declares no types to scaffold — create the file with --raw -\n');
+			return EXIT_USAGE;
+		}
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		return executeNew(o, filePath, plugin, optsJson);
 	}
@@ -265,7 +270,7 @@ final class NewCommand implements CliCommand {
 		CliIo.sysPrint('                      @@ members (a free-form member block), @@ imports, @@ doc;\n');
 		CliIo.sysPrint('                      an unfilled interface method gets a NotImplementedException stub\n');
 		CliIo.sysPrint('  --write             Write the new file (default: emit to stdout)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Assemble a NEW module and canonicalise it through the writer (parses-or-\n');
 		CliIo.sysPrint('fails, byte-canonical, atomic). The path must not already exist — modify\n');
@@ -383,9 +388,12 @@ final class NewCommand implements CliCommand {
 		var ifaceSource: Null<String> = null;
 		final iface: Null<String> = o.iface;
 		if (iface != null) {
-			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
+			final ext: String = CliArgs.sourceExtensionOf(o.lang);
+			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath, ext);
 			if (resolved == null) {
-				CliIo.stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
+				CliIo.stderr(
+					'apq new: could not locate interface "$iface" (expected a $ext file beside the new file or at its package path)\n'
+				);
 				return EXIT_RUNTIME;
 			}
 			ifaceSimple = resolved.simple;

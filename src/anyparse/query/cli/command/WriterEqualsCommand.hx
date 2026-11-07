@@ -176,7 +176,7 @@ final class WriterEqualsCommand implements CliCommand {
 		CliIo.sysPrint(
 			'  --plain             Use the plain (non-trivia) writer (mirrors unit tests; only with -D anyparse_plain_pipeline)\n'
 		);
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  --config <path>     Load writer options from JSON file (hxformat.json-shaped).\n');
 		CliIo.sysPrint('                      Used for plain .hx inputs (dogfood opt-in); a .hxtest section-1\n');
 		CliIo.sysPrint('                      always wins over this flag.\n');

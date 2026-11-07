@@ -73,7 +73,7 @@ final class DeclaresCommand implements CliCommand implements LeadingQuery {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, scan.inputSpecs, scan.separator < 0);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq declares: ${CliArgs.quotedSpecs(scan.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq declares: ${CliArgs.noFilesMatched(lang, scan.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -120,7 +120,7 @@ final class DeclaresCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('and every type answered off it, each under its own `=== <type> ===` section.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

@@ -149,7 +149,7 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		CliIo.sysPrint('  --limit <n>         Cap the lit section at n hits\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
 		CliIo.sysPrint('  uses  — type-position references (precise); a simple <name>\n');

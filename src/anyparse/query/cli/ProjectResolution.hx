@@ -19,7 +19,7 @@ final class ProjectResolution {
 	public static function hostFor(plugin: GrammarPlugin, file: String, source: String): GrammarPlugin {
 		final config: LintConfig = LintConfig.discover(file);
 		final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(
-			[{ file: file, source: source }], config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd()
+			plugin.langName(), [{ file: file, source: source }], config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd()
 		);
 		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
 		if (scope != null) host.setResolutionScope(scope);

@@ -203,7 +203,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		CliIo.sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
 		CliIo.sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
 		CliIo.sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
-		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help        Show this help\n');
 		CliUsage.printPostWriteFixTail();
 	}

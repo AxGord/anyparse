@@ -113,7 +113,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 		final memberNames: Null<Array<String>> = members?.split(',').map(StringTools.trim).filter(n -> n != '');
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
-		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
+		final ifaceFile: String = out ?? '$dir$ifaceNameNN${CliArgs.sourceExtensionOf(lang)}';
 		if (refuseOccupiedDestination('extract-interface', ifaceFile)) return EXIT_RUNTIME;
 
 		final source: String = try {
@@ -164,7 +164,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 		CliIo.sysPrint('  --members m1,m2    Only these methods (default: every public method)\n');
 		CliIo.sysPrint('  --out <path>       Interface file path (default: sibling <IfaceName>.hx)\n');
 		CliIo.sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
-		CliIo.sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin (default: by file extension)\n');
 	}
 
 }

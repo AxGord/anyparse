@@ -320,7 +320,7 @@ final class StripCommand implements CliCommand {
 		// rejoin with the root so file IO uses absolute paths regardless
 		// of CWD.
 		final out: Array<String> = cluster.paths.map(p -> '$root/$p');
-		out.sort(Reflect.compare);
+		out.sort(anyparse.util.Compare.compareString);
 		return out;
 		#else
 		CliIo.stderr('apq strip: --from-cluster requires a sys target (filesystem walk)\n');
@@ -349,7 +349,7 @@ final class StripCommand implements CliCommand {
 		CliIo.sysPrint('                      key (same shape as `apq recon --cluster <key>`). Positional <dir>\n');
 		CliIo.sysPrint("                      becomes the corpus root (env fallback to $ANYPARSE_HXFORMAT_FORK\n");
 		CliIo.sysPrint('                      /test/testcases). Apply complement of `recon --predict-strip`.\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Apply literal substitutions in order, then parse the result via the\n');
 		CliIo.sysPrint('grammar plugin. Emits PARSE OK / PARSE FAIL: <err> and exits 0/2 —\n');

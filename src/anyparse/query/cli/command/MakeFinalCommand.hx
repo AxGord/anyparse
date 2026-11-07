@@ -83,7 +83,7 @@ final class MakeFinalCommand implements CliCommand {
 					return EXIT_RUNTIME;
 				}
 			}
-		] : CliArgs.collectScopeFiles(op, scopeDir, [filePath]);
+		] : CliArgs.collectScopeFiles(op, plugin.langName(), scopeDir, [filePath]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: EditResult = MakeFinal.makeFinal(filePath, typeNameNN, fieldNameNN, scopeFiles, plugin);
@@ -113,7 +113,7 @@ final class MakeFinalCommand implements CliCommand {
 		CliIo.sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
 		CliIo.sysPrint('  --scope <dir>  Widen the reassignment check across the scope\n');
 		CliIo.sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

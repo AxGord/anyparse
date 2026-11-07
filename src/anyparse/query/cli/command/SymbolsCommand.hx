@@ -72,7 +72,7 @@ final class SymbolsCommand implements CliCommand {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq symbols: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq symbols: ${CliArgs.noFilesMatched(lang, inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -107,7 +107,7 @@ final class SymbolsCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --kind <Kind>   Only list this decl kind (ClassDecl/InterfaceDecl/\n');
 		CliIo.sysPrint('                  EnumDecl/TypedefDecl/AbstractDecl)\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

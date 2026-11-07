@@ -93,7 +93,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq resolve-define: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq resolve-define: ${CliArgs.noFilesMatched(o.lang, o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -160,7 +160,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('                 list of changed paths for a dir / multiple files)\n');
 		CliIo.sysPrint('  --list, -l     Print paths that would change; no rewrite\n');
 		CliIo.sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help     Show this help\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The result goes through the shared write gate, so three refusals are the\n');

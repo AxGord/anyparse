@@ -137,7 +137,7 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		CliIo.sysPrint('  --as <Type>    Name of the generated typedef (required)\n');
 		CliIo.sysPrint('  --name <obj>   Object parameter name (default: lower-camel of the type)\n');
 		CliIo.sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

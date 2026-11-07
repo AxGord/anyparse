@@ -152,7 +152,7 @@ final class FmtCommand implements CliCommand {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq fmt: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq fmt: ${CliArgs.noFilesMatched(o.lang, o.inputSpecs)}\n');
 			return { exit: EXIT_RUNTIME, summary: '' };
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -442,7 +442,7 @@ final class FmtCommand implements CliCommand {
 		CliIo.sysPrint('  --one-pass      Also require every file to reach its fixed point in ONE\n');
 		CliIo.sysPrint('                  writer rewrite; exit non-zero otherwise. Composes with\n');
 		CliIo.sysPrint('                  every mode above and changes none of them\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Canonicalise Haxe source by re-emitting it through the writer, formatted\n');
 		CliIo.sysPrint('by the project hxformat.json discovered from each file\'s directory. With\n');

@@ -520,7 +520,7 @@
 			"name": "M-WALK-FOLLOWS-NO-GRAMMAR",
 			"type": "anyparse.query.cli.CliArgs",
 			"method": "expandFor",
-			"force": "expandInputs(specs, \".hx\")",
+			"force": "expandEach(specs, [\".hx\"])",
 			"note": "a directory walk reads the .hx files whatever the grammar, so the JSON run over a mixed directory parses Haxe as JSON and never sees its .json files"
 		},
 		{
@@ -558,6 +558,44 @@
 			"find": "return held.foreach(scopes -> !(scopes.contains(arg)));",
 			"replace": "return true;",
 			"note": "a walked run keeps the scopes holding only other grammars' files, so `apq refs x src test` warns in its JSON run that src matched no files and was walked as a scope spec"
+		},
+		{
+			"name": "M-SCOPE-FILES-WALK-HX",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "collectScopeFiles",
+			"find": "expandFor(lang, [scopeDir])",
+			"replace": "expandEach([scopeDir], ['.hx'])",
+			"note": "a refactor's --scope walks the .hx files whatever the op's grammar, so a JSON scope is read as Haxe files parsed by the JSON plugin"
+		},
+		{
+			"name": "M-GRAPH-SCOPE-WALK-HX",
+			"type": "anyparse.query.cli.CliCallGraph",
+			"method": "readScope",
+			"find": "CliArgs.expandFor(lang, inputSpecs)",
+			"replace": "CliArgs.expandFor('haxe', inputSpecs)",
+			"note": "a graph command's scope is the .hx files whatever its grammar"
+		},
+		{
+			"name": "M-FILES-OF-HX",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "filesOf",
+			"force": "'.hx files'",
+			"note": "a scope holding no file of the run's grammar is reported as matching no .hx files, under --lang json too"
+		},
+		{
+			"name": "M-LANG-HELP-DEFAULT-HAXE",
+			"type": "anyparse.query.cli.CliUsage",
+			"method": "printWriteLangHelp",
+			"find": "Grammar plugin (default: by file extension)",
+			"replace": "Grammar plugin (default: haxe)",
+			"note": "the shared --lang help line claims Haxe as the default grammar again"
+		},
+		{
+			"name": "M-GATES-WALKS-LANG-FILES",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "expandAnyGrammar",
+			"force": "expandFor(JSON_LANG, specs)",
+			"note": "a definition walk reads only the files of the --lang grammar, so `gates --lang json` finds no Haxe definition and says no input files matched"
 		}
 	]
 }

@@ -71,7 +71,7 @@ final class ImportersCommand implements CliCommand implements LeadingQuery {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq importers: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq importers: ${CliArgs.noFilesMatched(lang, inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -101,7 +101,7 @@ final class ImportersCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('import pkg.*; is not counted.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

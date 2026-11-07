@@ -173,7 +173,7 @@ final class LintReport {
 		// Group findings per file, each group sorted by source position so the report
 		// reads top-to-bottom. ONE pass rather than a filter per path: that scan was
 		// O(paths x findings) and the text branch below ran a second one. `paths` is
-		// deduplicated and order-preserving (`expandInputs`), and a file's findings enter
+		// deduplicated and order-preserving (`expandFor`), and a file's findings enter
 		// a group in `shown` order exactly as the filter yielded them, so every format's
 		// emitted sequence is unchanged.
 		final byFile: Map<String, Array<Violation>> = [];

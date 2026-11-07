@@ -113,7 +113,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		);
 		CliIo.sysPrint('                      (- gone, + new, two lines of context, ... for the rest); with #<sel> only the declaration\n');
 		CliIo.sysPrint('                      whose address, dotted name path or name is <sel>, in full, in every listed file\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin for a file no extension routes (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin for a file no extension routes\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Every file `git diff <base-ref>` reports (the working tree against the revision, or\n');
 		CliIo.sysPrint('<tip-ref> against it, or for `...` their merge base against <tip-ref>; paths relative to the current\n');

@@ -227,7 +227,7 @@ class CliHelpListingPinTest extends Test {
 		'                      text is going back into an op.',
 		'  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)',
 		'  --limit <n>         Stop after n hits total (default: no limit)',
-		'  --lang <name>       Grammar plugin (default: haxe)',
+		'  --lang <name>       Grammar plugin (default: by file extension)',
 		'',
 		'Phase 3.1: name-only matching, no lexical scope. Filters combine',
 		'inclusively — passing `--decls --reads` keeps both kinds.',
@@ -256,7 +256,7 @@ class CliHelpListingPinTest extends Test {
 		'  --from-file <path>  Read the doc text from a file instead of the argument',
 		'  --reformat          Canonicalise the whole file (allow a non-canonical input)',
 		'  --write             Overwrite <file> in place (default: emit to stdout)',
-		'  --lang <name>       Grammar plugin (default: haxe)',
+		'  --lang <name>       Grammar plugin (default: by file extension)',
 		'',
 		'Add or replace the doc-comment of the addressed declaration. The text is',
 		'formatted into a doc-comment block and spliced before the declaration; an',
@@ -289,7 +289,7 @@ class CliHelpListingPinTest extends Test {
 		'  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)',
 		'  --reformat     Canonicalise the file if it has drifted',
 		'  --write        Apply in place (default: print the rewritten file)',
-		'  --lang <name>  Grammar plugin (default haxe)'
+		'  --lang <name>  Grammar plugin (default: by file extension)'
 	];
 
 	/** `apq diff --help`, from the base binary. */
@@ -299,7 +299,7 @@ class CliHelpListingPinTest extends Test {
 		'Options:',
 		'  --flat              Legacy flat `file:line:col:` per-hit format (default: paired-header)',
 		'  --limit <n>         Stop after n hits (default: no limit)',
-		'  --lang <name>       Grammar plugin (default: haxe)',
+		'  --lang <name>       Grammar plugin (default: by file extension)',
 		'',
 		'Structural AST diff: walks both trees pairwise and reports nodes',
 		'where kind / name slot / child count diverges. No LCS realignment',
@@ -319,7 +319,7 @@ class CliHelpListingPinTest extends Test {
 		'$$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.',
 		'',
 		'Options:',
-		'  --lang <name>           Grammar plugin (default: haxe)',
+		'  --lang <name>           Grammar plugin (default: by file extension)',
 		'  --top N                 Show top N clusters (default: 30)',
 		'  --all                   Show every cluster',
 		'  --cluster <key>         Drill into ONE cluster: full path list instead of',

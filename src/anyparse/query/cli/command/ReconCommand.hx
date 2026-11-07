@@ -194,7 +194,7 @@ final class ReconCommand implements CliCommand {
 		CliIo.sysPrint("$ANYPARSE_HXFORMAT_FORK/test/testcases when the env var is set.\n");
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --lang <name>           Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>           Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  --top N                 Show top N clusters (default: 30)\n');
 		CliIo.sysPrint('  --all                   Show every cluster\n');
 		CliIo.sysPrint('  --cluster <key>         Drill into ONE cluster: full path list instead of\n');

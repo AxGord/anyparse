@@ -119,7 +119,7 @@ final class OwnerCommand implements CliCommand implements LeadingQueryCount {
 		CliIo.sysPrint('  --list          Print every owned question instead, as\n');
 		CliIo.sysPrint('                  question<TAB>Type[.member]<TAB>file:line\n');
 		CliIo.sysPrint('  --limit N       How many declarations to print (default 10)\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

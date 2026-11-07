@@ -94,7 +94,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq comment-rewrite: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq comment-rewrite: ${CliArgs.noFilesMatched(o.lang, o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -146,7 +146,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 		CliIo.sysPrint('  --reformat     Canonicalise the whole file (allow a non-canonical input)\n');
 		CliIo.sysPrint('  --allow-wide   Leave the block exactly as written: no reflow into\n');
 		CliIo.sysPrint('                 wrapping.maxLineLength and no width refusal\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('MATCHING. A LITERAL find is matched against a body whose line breaks — and the\n');
 		CliIo.sysPrint('` * ` continuation after each of them — are collapsed to ONE SPACE. The find is\n');

@@ -102,7 +102,7 @@ final class CliCallGraph {
 	 */
 	public static function readScope(cmd: String, inputSpecs: Array<String>, lang: String): Null<GraphScope> {
 		final cached: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
-		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandFor(lang, inputSpecs);
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq $cmd: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');

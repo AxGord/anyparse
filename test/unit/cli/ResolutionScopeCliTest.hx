@@ -445,7 +445,7 @@ class ResolutionScopeCliTest extends Test {
 			return;
 		}
 		final root: String = CliFixture.writeDir('resdeclared', [{ name: 'B.hx', source: 'package other;\nclass B {}\n' }]);
-		final sources: Null<ResolutionSources> = LintCommand.resolutionThunk([], [root], [], true)?.sources();
+		final sources: Null<ResolutionSources> = LintCommand.resolutionThunk('haxe', [], [root], [], true)?.sources();
 		CliFixture.removeDir(root);
 		final declared: Int = (sources?.declaredLibrary?.entries() ?? []).length;
 		Assert.equals(1, declared, 'the declared half is the root and nothing else');

@@ -77,7 +77,7 @@ final class ModuleMoveCli {
 		}
 		final ext: String = CliArgs.sourceExtensionOf(opts.lang);
 		final scopeFiles: Array<{ file: String, source: String }> = readAll(
-			CliArgs.expandInputs(scopes, ext).paths.map(ConfigFinder.absolute)
+			CliArgs.expandFor(opts.lang, scopes).paths.map(ConfigFinder.absolute)
 		);
 		final scopePaths: Array<String> = scopeFiles.map(e -> e.file);
 		final declared: Array<String> = switch textFilesOf(declaration, ext) {
@@ -94,7 +94,7 @@ final class ModuleMoveCli {
 		// name an import of a library module may bind cannot be read, and the move refuses it.
 		final config: LintConfig = LintConfig.discover(opts.moves[0].from);
 		final resolution: Null<ResolutionScope> = LintCommand.resolutionThunk(
-			scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
+			opts.lang, scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
 		);
 		final result: ModuleMoveResult = ModuleMove.run({
 			moves: opts.moves,

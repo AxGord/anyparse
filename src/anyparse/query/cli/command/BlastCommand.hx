@@ -222,7 +222,7 @@ final class BlastCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		CliIo.sysPrint('  --limit <n>         Explicit cap on the heuristic section (overrides smart default)\n');
 		CliIo.sysPrint('  --all               Disable the smart-default cap on the heuristic section\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Heuristic field-access (`.member` superset) is capped at ${HEUR_DEFAULT_CAP} by default.\n');
 		CliIo.sysPrint('Pass --all for the full list, or --limit N for an explicit cap.\n');

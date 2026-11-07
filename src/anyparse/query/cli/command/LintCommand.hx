@@ -205,7 +205,7 @@ final class LintCommand implements CliCommand {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(o.lang, o.inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(o.inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq lint: ${CliArgs.noFilesMatched(o.lang, o.inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final plugin: GrammarPlugin = io.plugin;
@@ -267,7 +267,7 @@ final class LintCommand implements CliCommand {
 		final resolutionRoots: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots());
 		final resolutionLibs: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs());
 		final unconfigured: Null<ResolutionScope> = resolutionThunk(
-			files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
+			plugin.langName(), files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
 		);
 		// Compiler oracle (opt-in via apq.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
@@ -368,10 +368,11 @@ final class LintCommand implements CliCommand {
 	 * not "spawns nothing".
 	 *
 	 * Reading the `files` array live keeps the report portion current across `--fix` passes; the
-	 * library portion is immutable.
+	 * library portion is immutable. Every root is walked for the files of grammar `lang` — the
+	 * grammar the scope is parsed by — never by an extension of its own.
 	 */
 	public static function resolutionThunk(
-		files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool
+		lang: String, files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool
 	): Null<ResolutionScope> {
 		final declared: Bool = roots.length > 0 || libNames.length > 0;
 		if (!declared && !(stdEnabled && StdResolver.stdDir() != null)) return null;
@@ -403,7 +404,7 @@ final class LintCommand implements CliCommand {
 						files: Array<{ file: String, source: String }>,
 						matched: Bool,
 						allMatched: Bool
-					} = readResolutionRoots(roots, reportPaths);
+					} = readResolutionRoots(lang, roots, reportPaths);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
 					rootsAllMatched = read.allMatched;
@@ -414,7 +415,7 @@ final class LintCommand implements CliCommand {
 					final libraryRead: {
 						declared: Array<{ file: String, source: String }>,
 						std: Array<{ file: String, source: String }>
-					} = readResolutionLibrary(libNames, stdEnabled, reportPaths, rootFiles);
+					} = readResolutionLibrary(lang, libNames, stdEnabled, reportPaths, rootFiles);
 					declaredLibrary = rootFiles.concat(libraryRead.declared);
 					library = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);
 				}
@@ -511,7 +512,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Read every `.hx` under the project's declared `resolutionRoots`, excluding the run's own report
+	 * Read every file of grammar `lang` under the project's declared `resolutionRoots`, excluding the run's own report
 	 * files (`reportPaths`, keyed by `realPath`) — the PROJECT half of the resolution scope.
 	 *
 	 * Separable from the library half because of what a write scan may believe. A declared root is the
@@ -522,10 +523,10 @@ final class LintCommand implements CliCommand {
 	 * spells (`speed`, `panel`, `timer`, `ready`, `names`) and gains none.
 	 */
 	private static function readResolutionRoots(
-		roots: Array<String>, reportPaths: Map<String, Bool>
+		lang: String, roots: Array<String>, reportPaths: Map<String, Bool>
 	): { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
-		// A declared root resolving to no `.hx` — a typo, a directory since moved, a path written
+		// A declared root resolving to no file of the grammar — a typo, a directory since moved, a path written
 		// against the wrong base — leaves `projectRoots` empty, which is byte-identical to never
 		// declaring the key: `RefactorSupport.resolutionProjectSourcesOf` answers null and the
 		// cross-file proofs answer from the report scope. `ConfigDisagreement.warnMissingProjectRoots`
@@ -538,7 +539,7 @@ final class LintCommand implements CliCommand {
 		final seen: Map<String, Bool> = reportPaths.copy();
 		final unreachable: Array<String> = [];
 		for (root in roots) {
-			final paths: Array<String> = CliArgs.expandInputs([root], '.hx').paths;
+			final paths: Array<String> = CliArgs.expandFor(lang, [root]).paths;
 			if (paths.length == 0) {
 				unreachable.push(root);
 				continue;
@@ -555,7 +556,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	/**
-	 * Read every `.hx` under the resolution scope's LIBRARY roots — `libNames` resolved to haxelib
+	 * Read every file of grammar `lang` under the resolution scope's LIBRARY roots — `libNames` resolved to haxelib
 	 * source dirs, plus the auto-discovered Haxe std — excluding the run's own report files
 	 * (`reportPaths`, keyed by `realPath`) and everything `readResolutionRoots` already read
 	 * (`alreadyRead`). Together with that function, the whole of `resolutionThunk`'s FIRST-DEMAND
@@ -566,7 +567,8 @@ final class LintCommand implements CliCommand {
 	 * pre-split scan list achieved by seeding itself with `roots`.
 	 */
 	private static function readResolutionLibrary(
-		libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>, alreadyRead: Array<{ file: String, source: String }>
+		lang: String, libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>,
+		alreadyRead: Array<{ file: String, source: String }>
 	): { declared: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }> } {
 		// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
 		// `haxelib libpath` spawn lives here, reached only through the thunk, never in its
@@ -584,7 +586,7 @@ final class LintCommand implements CliCommand {
 		}
 		// The auto-discovered Haxe std joins the SAME scope as the declared roots / libs
 		// (StdResolver — ONE channel, no hardcoded machine-specific paths): its target-agnostic
-		// core (toplevel *.hx + haxe/ + sys/) as expandInputs specs, deduped against any explicit
+		// core (toplevel *.hx + haxe/ + sys/) as `expandFor` specs, deduped against any explicit
 		// std root. Unconditional apart from the explicit opt-out — whether a std type resolves must
 		// not depend on the project happening to declare a library, so `resolutionThunk`'s
 		// null-decision admits a std-only scope. `stdEnabled` false is the project declining it
@@ -600,16 +602,16 @@ final class LintCommand implements CliCommand {
 		];
 		final exclude: Map<String, Bool> = reportPaths.copy();
 		for (entry in alreadyRead) exclude[FileIdentity.realPath(entry.file)] = true;
-		final declared: Array<{ file: String, source: String }> = readResolutionSources(scanRoots, exclude);
+		final declared: Array<{ file: String, source: String }> = readResolutionSources(lang, scanRoots, exclude);
 		for (entry in declared) exclude[FileIdentity.realPath(entry.file)] = true;
-		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(stdSpecs, exclude) };
+		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(lang, stdSpecs, exclude) };
 	}
 
-	/** Read every `.hx` matched by `specs`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
+	/** Every file of grammar `lang` matched by `specs`, read, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
 	private static function readResolutionSources(
-		specs: Array<String>, exclude: Map<String, Bool>
+		lang: String, specs: Array<String>, exclude: Map<String, Bool>
 	): Array<{ file: String, source: String }> {
-		return readExpanded(CliArgs.expandInputs(specs, '.hx').paths, exclude);
+		return readExpanded(CliArgs.expandFor(lang, specs).paths, exclude);
 	}
 
 	/** Read each of `paths`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */

@@ -446,7 +446,7 @@ final class GraphCommand implements CliCommand {
 		CliIo.sysPrint('  --flow <Type.member>  The control-flow chart of one function body instead of a graph of the scope: its\n');
 		CliIo.sysPrint('                    decisions, loops, switches, try / catch and exits, consecutive declarations folded;\n');
 		CliIo.sysPrint('                    takes --format and --lang, refuses every option that draws a whole scope\n');
-		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: by file extension)\n');
 	}
 
 	/**

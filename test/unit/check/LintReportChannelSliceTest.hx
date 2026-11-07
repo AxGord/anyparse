@@ -26,7 +26,7 @@ using StringTools;
  *
  * Both are pinned at their seat rather than through stdout: `Cli.run` prints with `Sys.print` and
  * this suite has no in-process capture for it, so the assertions drive the two functions that
- * decide — `reportedViolations` and `expandInputs` — with the same arguments `runLint` passes them.
+ * decide — `reportedViolations` and `expandFor` — with the same arguments `runLint` passes them.
  */
 @:access(anyparse.query.Cli)
 @:nullSafety(Strict)
@@ -91,7 +91,7 @@ class LintReportChannelSliceTest extends Test {
 	}
 
 	/**
-	 * `expandInputs` reports every spec that expanded to nothing, whatever the others did.
+	 * `expandFor` reports every spec that expanded to nothing, whatever the others did.
 	 *
 	 * RED at base on all three `unmatched` assertions — the record had no such field, and the union
 	 * alone cannot answer for a spec that matched nothing beside one that did. The `paths`
@@ -104,15 +104,15 @@ class LintReportChannelSliceTest extends Test {
 		final dir: String = CliFixture.writeDir('lintchan', [{ name: 'C.hx', source: 'package pkg;\n\nclass C {}\n' }]);
 		final missing: String = '$dir/NoSuchFile.hx';
 
-		final mixed: ExpandedInputs = CliArgs.expandInputs([dir, missing], '.hx');
+		final mixed: ExpandedInputs = CliArgs.expandFor('haxe', [dir, missing]);
 		Assert.equals(1, mixed.paths.length, 'the spec that DID match still resolves');
 		Assert.equals(1, mixed.unmatched.length, 'and the one that did not is named rather than dropped');
 		Assert.equals(missing, mixed.unmatched[0]);
 
-		final allGood: ExpandedInputs = CliArgs.expandInputs([dir], '.hx');
+		final allGood: ExpandedInputs = CliArgs.expandFor('haxe', [dir]);
 		Assert.equals(0, allGood.unmatched.length, 'a scope where every argument matched names nothing');
 
-		final noneGood: ExpandedInputs = CliArgs.expandInputs([missing, '$dir/AlsoMissing.hx'], '.hx');
+		final noneGood: ExpandedInputs = CliArgs.expandFor('haxe', [missing, '$dir/AlsoMissing.hx']);
 		Assert.equals(0, noneGood.paths.length);
 		Assert.equals(2, noneGood.unmatched.length, 'the wholly-empty case names each argument, not the joined list');
 

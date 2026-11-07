@@ -277,7 +277,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 			+ 'HxModuleWriter.write(HaxeModuleParser.parse(src)); flattens source layout, drops comments\n'
 		);
 		CliIo.sysPrint('  --diff              With --writer-output: AST-diff the input against the emitted output (writer-bug loop)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 	}
 
 	/**
@@ -295,11 +295,11 @@ final class AstCommand implements CliCommand implements StdinDocument {
 
 	/**
 	 * Heuristic: does the string look like a file/dir path? Contains `/`
-	 * or `.hx` suffix, OR is an existing filesystem entry. Pairs with
+	 * or a registered grammar extension (`CliArgs.langOfFile`), OR is an existing filesystem entry. Pairs with
 	 * `looksLikeTypeName` to detect the `ast <TypeName> <dir>` shape.
 	 */
 	private static function looksLikePath(s: String): Bool {
-		return s.indexOf('/') >= 0 || s.endsWith('.hx') || #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
+		return s.indexOf('/') >= 0 || CliArgs.langOfFile(s) != null || #if (sys || nodejs) sys.FileSystem.exists(s) #else false #end;
 	}
 
 	/**

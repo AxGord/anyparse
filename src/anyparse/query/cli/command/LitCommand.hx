@@ -369,7 +369,7 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('                       in --kind scans directives ONLY.\n');
 		CliIo.sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		CliIo.sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
-		CliIo.sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>        Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('A bare `--` splits SEVERAL texts from the scope: the tree is parsed ONCE\n');
 		CliIo.sysPrint('and every text answered off it, each under its own `=== <text> ===` section\n');

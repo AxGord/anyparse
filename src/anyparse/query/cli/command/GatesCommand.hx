@@ -1,7 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
@@ -180,12 +179,11 @@ final class GatesCommand implements CliCommand {
 			CliIo.stderr('apq gates: unknown --mechanism "$mechanism" (valid: ${validMechanisms.join(', ')})\n');
 			return EXIT_USAGE;
 		}
-		// Default scope: the grammar tree for the selected lang.
+		// `--lang` names whose DEFINITIONS are read (the default directory), not what they are written in: each definition
+		// file is parsed by the grammar its own extension names.
 		final effectiveSpecs: Array<String> = o.inputSpecs.length > 0 ? o.inputSpecs : ['src/anyparse/grammar/$lang/'];
 
-		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
-		final shape: MetaShape = plugin.metaShape();
-		final expanded: ExpandedInputs = CliArgs.expandInputs(effectiveSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandAnyGrammar(effectiveSpecs);
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq gates: no input files matched ${CliArgs.quotedSpecs(effectiveSpecs)}\n');
@@ -198,12 +196,13 @@ final class GatesCommand implements CliCommand {
 		var totalHits: Int = 0;
 		for (path in paths) {
 			final source: String = CliIo.readSourceForParse(path);
+			final plugin: GrammarPlugin = CliArgs.pickPluginFor(lang, path);
 			final tree: Null<QueryNode> = CliWalk.parseWalked('gates', plugin.parseFile, path, source, singleFile, skipEntries);
 			if (tree == null) {
 				if (singleFile) return EXIT_RUNTIME;
 				continue;
 			}
-			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
+			final raw: Array<MetaHit> = Meta.find(tree, plugin.metaShape(), source);
 			final fileHits: Array<GateHit> = mechanism == 'trail-opt'
 				? collectTrailOptHits(raw, source, limit, totalHits)
 				: collectMechanismHits(raw, source, mechanism, limit, totalHits);

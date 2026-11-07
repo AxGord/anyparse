@@ -135,7 +135,7 @@ final class StdResolver {
 
 	/**
 	 * The resolution-scope specs a discovered `stdDir` contributes, in the shape
-	 * `expandInputs` consumes: the toplevel `*.hx` glob plus the `haxe/` and `sys/`
+	 * `expandFor` consumes: the toplevel `*.hx` glob plus the `haxe/` and `sys/`
 	 * subtree directories — the target-agnostic core, excluding the target-specific
 	 * subtrees (`js/`, `cpp/`, `python/`, …). Pure — no I/O.
 	 */

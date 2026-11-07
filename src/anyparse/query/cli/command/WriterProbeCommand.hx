@@ -92,7 +92,7 @@ final class WriterProbeCommand implements CliCommand {
 		CliIo.sysPrint('Usage: apq writer-probe [options] <file>\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Parse <file>, run BOTH the trivia and plain writer pipelines, and\n');
 		CliIo.sysPrint('emit each output between labelled fences:\n');

@@ -115,7 +115,7 @@ final class ClustersCommand implements CliCommand {
 			'  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains,accessor (default call,ref,new,accessor)\n'
 		);
 		CliIo.sysPrint('  --format <f>   text (the report, default), mermaid or json (the members grouped by component)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

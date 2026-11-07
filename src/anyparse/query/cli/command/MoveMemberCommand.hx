@@ -93,7 +93,9 @@ final class MoveMemberCommand implements CliCommand {
 		final destTypeName: String = destType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles('move-member', scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			'move-member', plugin.langName(), scopeDir, [srcFileNN]
+		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = MoveMember.move(
@@ -123,7 +125,7 @@ final class MoveMemberCommand implements CliCommand {
 		CliIo.sysPrint('  --scaffold     Generate the dest final fields + ctor and the via field wiring\n');
 		CliIo.sysPrint('  --keep-bare    Keep bare static callers in the source bare via `import <Dest>.*;`\n');
 		CliIo.sysPrint('  --write        Apply in place (default: print per-file summary)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

@@ -611,7 +611,7 @@ final class SourceCommand implements CliCommand {
 		CliIo.sysPrint('  --outline          Signatures with line windows, no bodies: of the whole file, or of each\n');
 		CliIo.sysPrint('                     --select / --at node and its members (a member alone: its signature)\n');
 		CliIo.sysPrint('  --all, --full      Print the whole file, or a whole --select / --at node, past the budget\n');
-		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help         Show this help\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');

@@ -175,13 +175,13 @@ final class RenameCommand implements CliCommand {
 	private static function runRenameScope(
 		filePath: String, source: String, line: Int, col: Int, newName: String, scope: String, write: Bool, plugin: GrammarPlugin
 	): Int {
-		final expanded: ExpandedInputs = CliArgs.expandInputs([scope], '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandFor(plugin.langName(), [scope]);
 		final paths: Array<String> = expanded.paths;
 		// The cursor file's declaration must be covered even if it sits
-		// outside the scope directory — add it when expandInputs missed it.
+		// outside the scope directory — add it when expandFor missed it.
 		if (!paths.contains(filePath)) paths.push(filePath);
 		if (paths.length == 0) {
-			CliIo.stderr('apq rename: --scope $scope matched no .hx files\n');
+			CliIo.stderr('apq rename: ${CliArgs.noFilesMatched(plugin.langName(), [scope])}\n');
 			return EXIT_RUNTIME;
 		}
 
@@ -405,7 +405,7 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('                      member needs a resolution scope, which this in-file op\n');
 		CliIo.sysPrint('                      carries none of - there it repairs only a member of the\n');
 		CliIo.sysPrint('                      enclosing type (`apq lint --fix` has the wider scope)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
 		CliIo.sysPrint('the symbol at <line>:<col>. The position selects the EXACT binding —\n');

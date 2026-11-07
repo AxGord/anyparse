@@ -15601,8 +15601,8 @@
 			"name": "M-CLI-RUNS-FIRST-ONLY",
 			"type": "anyparse.query.Cli",
 			"method": "runEach",
-			"find": "for (argv in chosen.runs)",
-			"replace": "for (argv in chosen.runs.slice(0, 1))",
+			"find": "for (i => argv in chosen.runs)",
+			"replace": "for (i => argv in chosen.runs.slice(0, 1))",
 			"note": "only the first grammar of a mixed call runs, so `apq fmt --list` over a directory of .hx and .json never looks at the JSON"
 		},
 		{
@@ -15642,6 +15642,14 @@
 			"method": "judging",
 			"force": "{ judging: oracles, excluded: [], verdict: Confirmed }",
 			"note": "a grammar with no compiler oracle reports every configuration green and judging, so a risky edit on it is kept with nothing having typechecked it"
+		},
+		{
+			"name": "M-RUNS-UNLABELLED",
+			"type": "anyparse.query.Cli",
+			"method": "runEach",
+			"find": "CliIo.stderr('apq ${command.name()}: --lang ${argv[1]}",
+			"replace": "if (false) CliIo.stderr('apq ${command.name()}: --lang ${argv[1]}",
+			"note": "the runs of a multi-grammar call print one after another with nothing saying which grammar each hit and summary belongs to"
 		}
 	]
 }

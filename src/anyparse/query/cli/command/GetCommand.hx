@@ -75,7 +75,7 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 	 * file or a file is not a data document.
 	 */
 	private static function runWhere(o: GetArgs, where: WhereClause, ctx: CliContext): Int {
-		final expanded: ExpandedInputs = CliArgs.expandInputs(o.files, '.json');
+		final expanded: ExpandedInputs = CliArgs.expandFor(CliArgs.JSON_LANG, o.files);
 		var failed: Bool = expanded.unmatched.length > 0;
 		for (spec in expanded.unmatched) CliIo.stderr('apq get: "$spec" matched no .json file\n');
 		var matches: Int = 0;

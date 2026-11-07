@@ -353,7 +353,10 @@ final class Cli {
 		if (chosen.runs.length == 1) return command.run(chosen.runs[0], new CliContext(requireMatch, postWriteFix, chosen.stdin));
 		final matches: RunMatches = new RunMatches();
 		var worst: Int = EXIT_OK;
-		for (argv in chosen.runs) {
+		for (i => argv in chosen.runs) {
+			// Each of several runs leads with `--lang <name>` (`LanguageChoice.perLanguage`): the label says whose grammar the
+			// hits and the summary that follow on this run belong to.
+			CliIo.stderr('apq ${command.name()}: --lang ${argv[1]} (run ${i + 1} of ${chosen.runs.length})\n');
 			final code: Int = command.run(argv, new CliContext(false, postWriteFix, chosen.stdin, matches));
 			if (code > worst) worst = code;
 		}

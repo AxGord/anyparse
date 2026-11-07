@@ -216,7 +216,7 @@ final class SearchCommand implements CliCommand implements LeadingQuery implemen
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --json              Emit JSON instead of text\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  --kind <Kind>       Only match nodes of this AST kind\n');
 		CliIo.sysPrint('  --explain           Print parsed pattern AST; on 0 hits show input-kind histogram\n');
 		CliIo.sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');

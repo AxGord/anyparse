@@ -26,7 +26,7 @@ using StringTools;
  *     follow-up `strip` / `recon --probe` / `writer-equals` can target them
  *     without re-heredoc-ing, and prints the RESOLVED path. Stdin source
  *     path also stages (avoids a second stdin read). The slot is
- * `$APQ_PROBE_PATH`, else `<temp root>/anyparse-last-probe.<pid>.hx` —
+ * `$APQ_PROBE_PATH`, else `<temp root>/anyparse-last-probe.<pid><ext>` —
  * it used to be one hard-coded `/tmp` path for the whole machine, which
  * handed a second worker's source to the first one's `strip`.
  *  4. `ANYPARSE_HXFORMAT_FORK` persistent cache — `defaultReconRoot`

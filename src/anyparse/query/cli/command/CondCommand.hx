@@ -216,7 +216,7 @@ final class CondCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('                  cap). --limit counts REGIONS, so it cannot bound a define\n');
 		CliIo.sysPrint('                  used as a whole-file guard — this is the flag that does.\n');
 		CliIo.sysPrint('  --flat          One `<file>:<line>:<col>:` prefix per head line, no group header\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('The scan is lexical, so an unparseable file is walked rather than skipped: its\n');

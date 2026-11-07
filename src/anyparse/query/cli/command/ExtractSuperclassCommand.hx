@@ -82,7 +82,7 @@ final class ExtractSuperclassCommand implements CliCommand {
 		final memberNames: Array<String> = membersNN.split(',').map(StringTools.trim).filter(n -> n != '');
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
-		final superFile: String = out ?? '$dir$superNameNN.hx';
+		final superFile: String = out ?? '$dir$superNameNN${CliArgs.sourceExtensionOf(lang)}';
 		if (ExtractInterfaceCommand.refuseOccupiedDestination('extract-superclass', superFile)) return EXIT_RUNTIME;
 
 		final source: String = try {
@@ -127,7 +127,7 @@ final class ExtractSuperclassCommand implements CliCommand {
 		CliIo.sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
 		CliIo.sysPrint('  --out <path>       Superclass file path (default: sibling <SuperName>.hx)\n');
 		CliIo.sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
-		CliIo.sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>      Grammar plugin (default: by file extension)\n');
 	}
 
 }

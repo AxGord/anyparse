@@ -153,7 +153,7 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 		// also captured (we read once, write the file, then hand the bytes to
 		// runAst via --code instead of --stdin so the downstream loader sees the
 		// same source we staged).
-		final stagedSource: Null<String> = stageProbeSource(codeFinal, readStdin);
+		final stagedSource: Null<String> = stageProbeSource(codeFinal, readStdin, lang);
 		if (writerProbeMode) {
 			final source: String = stagedSource ?? (codeFinal == '-' ? readStdin() : codeFinal);
 			final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
@@ -196,14 +196,14 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	 * failing the probe would be the worse outcome. So does a refusal: staging
 	 * is a convenience, never the probe's job.
 	 */
-	private static function stageProbeSource(codeArg: String, readStdin: () -> String): Null<String> {
+	private static function stageProbeSource(codeArg: String, readStdin: () -> String, lang: String): Null<String> {
 		#if (sys || nodejs)
 		final source: String = codeArg == '-' ? readStdin() : codeArg;
 		try {
 			// Inside the `try` on purpose: resolving the path reads the
 			// environment and the OS temp root, and a throw there would
 			// otherwise fail a probe that staging is only decorating.
-			final path: String = stageProbePath();
+			final path: String = stageProbePath(lang);
 			if (isStageTargetSafe(path)) {
 				sys.io.File.saveContent(path, source);
 				CliIo.stderr('apq probe: staged source -> $path (use it with `apq strip $path …` or `apq recon --probe $path`).\n');
@@ -291,7 +291,8 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	#if (sys || nodejs)
 	/**
 	 * The scratch path THIS process stages to: `$STAGE_PROBE_ENV` when set,
-	 * else `<temp root>/anyparse-last-probe.<pid>.hx`.
+	 * else `<temp root>/anyparse-last-probe.<pid><ext>`, `<ext>` the source extension of grammar `lang`, so a chained
+	 * `recon --probe` reads the staged file by the grammar it was probed in.
 	 *
 	 * Both halves are load-bearing and neither alone is enough. The temp
 	 * root answers the caller's own isolation — the suite's
@@ -312,9 +313,9 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	 * the next command is handed the right name rather than a constant it
 	 * has to remember.
 	 */
-	private static function stageProbePath(): String {
+	private static function stageProbePath(lang: String): String {
 		final explicit: Null<String> = Sys.getEnv(STAGE_PROBE_ENV);
-		return explicit != null && explicit.length > 0 ? explicit : TempScratch.slot(STAGE_PROBE_STEM, '.hx');
+		return explicit != null && explicit.length > 0 ? explicit : TempScratch.slot(STAGE_PROBE_STEM, CliArgs.sourceExtensionOf(lang));
 	}
 
 	/**

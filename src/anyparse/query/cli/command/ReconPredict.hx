@@ -1,7 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
-import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
@@ -215,54 +214,40 @@ final class ReconPredict {
 
 	/**
 	 * Walk the current corpus and diff each fixture's parse status against
-	 * the prior snapshot, printing REGRESSED / UNBLOCKED flips. Reuses the
-	 * recursive-stack walk of `collectReconSkipRecords` but keeps the OK
-	 * list too (which that helper drops). `unwired` aborts the caller.
+	 * the prior snapshot, printing REGRESSED / UNBLOCKED flips. Walks the
+	 * fixtures `ReconCommand.hxtestPathsUnder` lists. `unwired` aborts the caller.
 	 */
 	private static function walkReconRegression(plugin: GrammarPlugin, root: String, prior: Map<String, String>): ReconRegressionResult {
 		var regressed: Int = 0;
 		var unblocked: Int = 0;
 		var scanned: Int = 0;
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort(Reflect.compare);
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
-				}
-				if (!name.endsWith('.hxtest')) continue;
-				final relPath: String = ReconCommand.stripRootPrefix(path, root);
-				final priorStatus: Null<String> = prior[relPath];
-				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
-				scanned++;
-				final source: String = CliIo.readSourceForParse(path);
-				final current: ReconCurrentParse = reconRegressionParse(plugin, source);
-				if (current.unwired) return {
-					regressed: regressed,
-					unblocked: unblocked,
-					scanned: scanned,
-					unwired: true
-				};
-				final priorParsed: Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
-				final priorSkipParse: Bool = priorStatus == 'SKIP_PARSE';
-				if (priorParsed && !current.ok) {
-					regressed++;
-					final locus: String = current.line > 0
-						? ' :: ${current.line}:${current.col} expected="${current.msg}"'
-						: ' :: ${current.msg}';
-					CliIo.sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
-				} else if (priorSkipParse && current.ok) {
-					unblocked++;
-					CliIo.sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
-				}
-				// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
-				// No flip: silent.
+		for (path in ReconCommand.hxtestPathsUnder(root)) {
+			final relPath: String = ReconCommand.stripRootPrefix(path, root);
+			final priorStatus: Null<String> = prior[relPath];
+			if (priorStatus == null) continue; // present locally but absent from snapshot — silent
+			scanned++;
+			final source: String = CliIo.readSourceForParse(path);
+			final current: ReconCurrentParse = reconRegressionParse(plugin, source);
+			if (current.unwired) return {
+				regressed: regressed,
+				unblocked: unblocked,
+				scanned: scanned,
+				unwired: true
+			};
+			final priorParsed: Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
+			final priorSkipParse: Bool = priorStatus == 'SKIP_PARSE';
+			if (priorParsed && !current.ok) {
+				regressed++;
+				final locus: String = current.line > 0
+					? ' :: ${current.line}:${current.col} expected="${current.msg}"'
+					: ' :: ${current.msg}';
+				CliIo.sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
+			} else if (priorSkipParse && current.ok) {
+				unblocked++;
+				CliIo.sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
 			}
+			// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
+			// No flip: silent.
 		}
 		return {
 			regressed: regressed,
@@ -700,7 +685,7 @@ final class ReconPredict {
 			return EXIT_RUNTIME;
 		}
 		final records: Array<ReconRecord> = walk.records;
-		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
+		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(lang);
 		if (candidates.length == 0) {
 			CliIo.stderr(
 				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang'
@@ -771,18 +756,18 @@ final class ReconPredict {
 	 * relaxation isn't the bracket-pair mechanism. Single-char leads only —
 	 * the strip function depth-tracker assumes one byte per lead/trail.
 	 */
-	private static function collectPermissiveCandidates(plugin: GrammarPlugin, lang: String): Array<PermissiveCandidate> {
+	private static function collectPermissiveCandidates(lang: String): Array<PermissiveCandidate> {
 		final out: Array<PermissiveCandidate> = [];
 		final grammarDir: String = 'src/anyparse/grammar/$lang/';
 		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
-		final expanded: ExpandedInputs = CliArgs.expandInputs([grammarDir], '.hx');
-		final shape: MetaShape = plugin.metaShape();
+		// The definitions of grammar `lang` are parsed by the grammar each file's extension names, never by `plugin`.
 		final skipEntries: Array<SkipEntry> = [];
-		for (path in expanded.paths) {
+		for (path in CliArgs.expandAnyGrammar([grammarDir]).paths) {
 			final source: String = CliIo.readSourceForParse(path);
-			final tree: Null<QueryNode> = CliWalk.parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
+			final reader: GrammarPlugin = CliArgs.pickPluginFor(lang, path);
+			final tree: Null<QueryNode> = CliWalk.parseWalked('recon', reader.parseFile, path, source, false, skipEntries);
 			if (tree == null) continue;
-			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
+			final raw: Array<MetaHit> = Meta.find(tree, reader.metaShape(), source);
 			final grouped: { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } = GatesCommand.groupMetaHitsByDeclSpan(raw);
 			for (key in grouped.order) {
 				final metas: Null<Array<MetaHit>> = grouped.groups[key];

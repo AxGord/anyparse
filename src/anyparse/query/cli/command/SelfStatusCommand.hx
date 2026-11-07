@@ -149,7 +149,7 @@ final class SelfStatusCommand implements CliCommand {
 		final specs: Array<String> = opts.roots.length > 0 ? opts.roots : ['src'];
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(opts.lang, specs);
 		if (io.paths.length == 0) {
-			CliIo.stderr('apq self-status: ${CliArgs.quotedSpecs(specs)} matched no .hx files\n');
+			CliIo.stderr('apq self-status: ${CliArgs.noFilesMatched(opts.lang, specs)}\n');
 			return EXIT_RUNTIME;
 		}
 		final walk: SelfStatusWalk = walkSelfStatus(io.plugin, io.paths, opts.showSource);
@@ -181,7 +181,7 @@ final class SelfStatusCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
 		CliIo.sysPrint('  --source       Append windowed source around each fail-locus.\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension).\n');
 		CliIo.sysPrint('  -h, --help     Show this help.\n');
 	}
 	#end

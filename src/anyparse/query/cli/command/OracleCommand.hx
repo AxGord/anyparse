@@ -80,7 +80,7 @@ final class OracleCommand implements CliCommand {
 		}
 		final paths: Array<String> = CliArgs.resolveInputPaths(lang, specs).paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq oracle: ${CliArgs.quotedSpecs(specs)} matched no .hx files\n');
+			CliIo.stderr('apq oracle: ${CliArgs.noFilesMatched(lang, specs)}\n');
 			return EXIT_RUNTIME;
 		}
 		// `lint` over the same scope asks the FIRST path's builds, so those are the verdicts worth recording; a scope

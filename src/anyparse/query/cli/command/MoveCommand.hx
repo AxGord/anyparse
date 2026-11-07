@@ -164,9 +164,9 @@ final class MoveCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos('move', cursorSource, plugin, o.posSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
 
-		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
+		// Gather scope files = expandFor(scope) ∪ {cursorFile, destFile}.
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
-			'move', scopeDir, [cursorFile, destFile]
+			'move', plugin.langName(), scopeDir, [cursorFile, destFile]
 		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
@@ -184,7 +184,7 @@ final class MoveCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --scope <dir>       Directory whose .hx imports are fixed (required)\n');
 		CliIo.sysPrint('  --write             Write each changed file in place (default: print summary)\n');
-		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Move the TYPE declaration (class / interface / enum / typedef /\n');
 		CliIo.sysPrint('abstract) at <line>:<col> in <file> into <dest-file>, in the same package\n');

@@ -130,7 +130,7 @@ final class ReachCommand implements CliCommand {
 		CliIo.sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
 		CliIo.sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual,accessor)\n');
 		CliIo.sysPrint('  --format <f>      text (the paths, default), mermaid or json (the member graph of the paths)\n');
-		CliIo.sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>     Grammar plugin (default: by file extension)\n');
 	}
 
 }

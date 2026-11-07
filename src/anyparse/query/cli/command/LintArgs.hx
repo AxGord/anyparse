@@ -274,7 +274,7 @@ final class LintArgs {
 		CliIo.sysPrint('  --verbose        Bring back the accounting a quiet run withholds: the --fix\n');
 		CliIo.sysPrint('                   rule census (silent on a run that wrote nothing) and the\n');
 		CliIo.sysPrint('                   --no-oracle net notice. Adds output, never behaviour\n');
-		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>    Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
 
@@ -584,7 +584,7 @@ final class LintArgs {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
-			CliIo.stderr('apq lint: ${CliArgs.quotedSpecs(inputSpecs)} matched no .hx files\n');
+			CliIo.stderr('apq lint: ${CliArgs.noFilesMatched(lang, inputSpecs)}\n');
 			return EXIT_RUNTIME;
 		}
 		// A rule the scope's grammar never runs is no state of this scope's lint: it is left out, as a run leaves it out.

@@ -126,7 +126,7 @@ final class CalleesCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains,accessor (default all)\n');
 		CliIo.sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped; text only)\n');
 		CliIo.sysPrint('  --format <f>   text (the call tree, default), mermaid or json (the member graph walked)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 	private static inline function runCallees(args: Array<String>, ctx: CliContext): Int {

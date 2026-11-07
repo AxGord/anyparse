@@ -296,7 +296,7 @@ final class StdlibDupCommand implements CliCommand {
 		CliIo.sysPrint('  --limit <n>     Drive at most n candidates through the differential\n');
 		CliIo.sysPrint('  --work <dir>    Stage the generated probes here (default: a per-process\n');
 		CliIo.sysPrint('                  directory under the OS temp root, announced on stderr)\n');
-		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		CliIo.sysPrint('  --lang <name>   Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('  -h, --help      Show this help\n');
 	}
 

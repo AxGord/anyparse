@@ -81,7 +81,9 @@ final class PullUpCommand implements CliCommand {
 		final targetTypeName: String = targetType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(cmd, scopeDir, [srcFileNN]);
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			cmd, plugin.langName(), scopeDir, [srcFileNN]
+		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = up
@@ -108,7 +110,7 @@ final class PullUpCommand implements CliCommand {
 		CliIo.sysPrint('  --to <$rel>  Target type name (must be in the direct inheritance relation)\n');
 		CliIo.sysPrint('  --scope <dir>  Scope to locate the target type (dir/glob; srcFile auto-included)\n');
 		CliIo.sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
-		CliIo.sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		CliIo.sysPrint('  --lang <name>  Grammar plugin (default: by file extension)\n');
 	}
 
 }

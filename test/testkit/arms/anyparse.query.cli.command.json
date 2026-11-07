@@ -871,6 +871,45 @@
 			"method": "queryParsesIn",
 			"force": "true",
 			"note": "a search pattern over a mixed directory runs for every grammar, so a Haxe pattern fails as a JSON pattern and the call exits 1"
+		},
+		{
+			"name": "M-RESOLUTION-ROOTS-WALK-HX",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "readResolutionRoots",
+			"find": "CliArgs.expandFor(lang, [root])",
+			"replace": "CliArgs.expandFor('haxe', [root])",
+			"note": "the declared resolutionRoots are read as .hx files whatever the lint's grammar"
+		},
+		{
+			"name": "M-NEW-DATA-SCAFFOLD",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "runNew",
+			"find": "if (!o.raw && plugin.refShape().typeDeclKinds == null) {",
+			"replace": "if (false) {",
+			"note": "`new --class` in a data grammar scaffolds a Haxe type and fails with a parse error instead of naming --raw"
+		},
+		{
+			"name": "M-NEW-CLASS-NAME-KEEPS-EXT",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "newFileClassName",
+			"force": "Path.withoutDirectory(path)",
+			"note": "a new module's type name keeps its file extension"
+		},
+		{
+			"name": "M-PROBE-STAGE-HX",
+			"type": "anyparse.query.cli.command.ProbeCommand",
+			"method": "stageProbePath",
+			"find": "CliArgs.sourceExtensionOf(lang)",
+			"replace": "'.hx'",
+			"note": "a JSON probe is staged as a .hx file, so a chained recon --probe reads it as Haxe"
+		},
+		{
+			"name": "M-GATES-PARSED-BY-LANG",
+			"type": "anyparse.query.cli.command.GatesCommand",
+			"method": "runGates",
+			"find": "CliArgs.pickPluginFor(lang, path)",
+			"replace": "CliArgs.pickPlugin(lang)",
+			"note": "gates parses a grammar's Haxe definitions with that grammar's own plugin, so `gates --lang json` reads nothing and reports no annotations"
 		}
 	]
 }
