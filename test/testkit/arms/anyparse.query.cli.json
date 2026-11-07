@@ -47,8 +47,8 @@
 			"type": "anyparse.query.cli.CliContext",
 			"method": "CliContext",
 			"kind": "ClassDecl",
-			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nthis.requireMatch = requireMatch;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
-			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;\nthis.postWriteFix = postWriteFix;\nthis.stdin = stdin;\n}",
+			"find": "public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches) {\nthis.requireMatch = requireMatch;",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;",
 			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
 		},
 		{
@@ -270,7 +270,7 @@
 			"method": "choose",
 			"find": "if (ofFiles.length > 1 && preset == null)",
 			"replace": "if (ofFiles.length > 1)",
-			"note": "files of two grammars are refused under a preset too, so `hxq lint F.hx apq.json` exits 2 where it read both as Haxe"
+			"note": "files of two grammars run once per grammar under a preset too, so `hxq lint F.hx apq.json` lints apq.json as JSON where it read both as Haxe"
 		},
 		{
 			"name": "M-LANG-END-OF-OPTIONS-VALUE",
@@ -474,7 +474,7 @@
 			"name": "M-LANG-QUERY-COUNTED-AS-FILE",
 			"type": "anyparse.query.cli.LanguageChoice",
 			"method": "fileArguments",
-			"force": "[for (i in command.flags().positionals(args)) args[i]]",
+			"force": "command.flags().positionals(args)",
 			"note": "the text a walker searches for is read as a file, so `hxq lit '.last-sweep.json' src` parses every file that holds the text as JSON and reports it skip-parse"
 		},
 		{
@@ -499,6 +499,65 @@
 			"find": "if (edits == 0) out.resize(0);",
 			"replace": "",
 			"note": "a reorder with no other change is named member by member beside the (module) row, which already shows it"
+		},
+		{
+			"name": "M-LANG-DIRECTORY-UNWALKED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "byProject",
+			"find": "final walked: Array<String> = project.languages.filter(lang -> (held[lang] ?? []).length > 0);",
+			"replace": "final walked: Array<String> = [];",
+			"note": "a directory names no grammar, so `apq lint src` without `--lang` is a usage error where it is `hxq lint src`"
+		},
+		{
+			"name": "M-LANG-DIRECTORY-EVERY-GRAMMAR",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "byProject",
+			"find": "CliArgs.expandFor(lang, [scope]).paths.length > 0",
+			"replace": "true",
+			"note": "a directory names every grammar the project takes, files under it or not, so `apq lint src` runs a JSON and a Mermaid pass over a tree of Haxe"
+		},
+		{
+			"name": "M-WALK-FOLLOWS-NO-GRAMMAR",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "expandFor",
+			"force": "expandInputs(specs, \".hx\")",
+			"note": "a directory walk reads the .hx files whatever the grammar, so the JSON run over a mixed directory parses Haxe as JSON and never sees its .json files"
+		},
+		{
+			"name": "M-LANG-RUN-KEEPS-OTHER-FILES",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "ownFiles",
+			"force": "args",
+			"note": "each per-grammar run keeps the files another grammar names, so `apq lint a.json B.hx` parses B.hx as JSON and a.json as Haxe"
+		},
+		{
+			"name": "M-LANG-PROJECT-LANGUAGES-IGNORED",
+			"type": "anyparse.query.cli.LanguageDeclaration",
+			"method": "namesAt",
+			"force": "null",
+			"note": "the project `languages` key is never read, so a directory walk takes every registered grammar whatever apq.json declares"
+		},
+		{
+			"name": "M-LANG-PROJECT-LANG-IGNORED",
+			"type": "anyparse.query.cli.LanguageDeclaration",
+			"method": "nameAt",
+			"force": "null",
+			"note": "the project `lang` key is never read, so stdin no content test recognises and a call naming no file stay usage errors in a project that names its language"
+		},
+		{
+			"name": "M-LANG-JSON-REPORT-SPLIT",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "asksForJson",
+			"force": "false",
+			"note": "a JSON report over files of two grammars is printed as two documents one after the other, which no JSON reader takes"
+		},
+		{
+			"name": "M-LANG-WALK-KEEPS-FOREIGN-SCOPE",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "owns",
+			"find": "return held.foreach(scopes -> !(scopes.contains(arg)));",
+			"replace": "return true;",
+			"note": "a walked run keeps the scopes holding only other grammars' files, so `apq refs x src test` warns in its JSON run that src matched no files and was walked as a scope spec"
 		}
 	]
 }

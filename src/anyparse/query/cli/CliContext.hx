@@ -14,7 +14,8 @@ import anyparse.query.ExitCode.*;
  * process observes whatever the first one left. A field on a per-run instance is
  * the same value with none of that.
  *
- * Immutable by construction: a command reads the run, it does not reconfigure it.
+ * Immutable by construction: a command reads the run, it does not reconfigure it. The one thing a run writes is
+ * what its find-walk found (`matches`), into a cell the runs of one call share.
  */
 @:nullSafety(Strict)
 final class CliContext {
@@ -45,10 +46,14 @@ final class CliContext {
 	 */
 	public final stdin: Null<String>;
 
-	public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String) {
+	/** What the find-walks of this call found, shared by the contexts of its runs (`Cli`'s `runEach` reads it). */
+	public final matches: RunMatches;
+
+	public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches) {
 		this.requireMatch = requireMatch;
 		this.postWriteFix = postWriteFix;
 		this.stdin = stdin;
+		this.matches = matches ?? new RunMatches();
 	}
 
 	/**
@@ -58,6 +63,7 @@ final class CliContext {
 	 * found-vs-gone.
 	 */
 	public inline function emptyExit(empty: Bool): Int {
+		matches.record(empty);
 		return empty && requireMatch ? EXIT_RUNTIME : EXIT_OK;
 	}
 

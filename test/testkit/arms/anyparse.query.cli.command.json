@@ -864,6 +864,13 @@
 			"find": "if (found.length == 0) CliIo.stderr(",
 			"replace": "if (found.length == 0) return [];\nif (found.length == 0) CliIo.stderr(",
 			"note": "one unknown focus drops the nodes the other focuses resolved, so a seed list with a single stale name loses every neighbour"
+		},
+		{
+			"name": "M-LANG-PATTERN-EVERY-GRAMMAR",
+			"type": "anyparse.query.cli.command.SearchCommand",
+			"method": "queryParsesIn",
+			"force": "true",
+			"note": "a search pattern over a mixed directory runs for every grammar, so a Haxe pattern fails as a JSON pattern and the call exits 1"
 		}
 	]
 }

@@ -11,6 +11,7 @@ import anyparse.query.cli.CliIo;
 import anyparse.query.cli.CliRegistry;
 import anyparse.query.cli.LanguageChoice;
 import anyparse.query.cli.PostWriteFix;
+import anyparse.query.cli.RunMatches;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
 import anyparse.query.cli.WriteJournal;
@@ -311,13 +312,14 @@ final class Cli {
 		}
 		final unknown: Null<String> = registered.flags().unknownFlag(rest);
 		if (unknown != null) throw new UsageFailure('unknown option "$unknown" — `apq $cmd --help` lists its options');
-		// The process entry names no default grammar: an argv with no `--lang` gets the one its files or its stdin
-		// name, or a usage error. An in-process caller keeps its argv as given.
+		// The process entry names no default grammar: an argv with no `--lang` runs once per grammar its files, its stdin
+		// or its project config name (`LanguageChoice`), and exits with the worst status of the runs; nothing named is a
+		// usage error. An in-process caller keeps its argv as given.
 		// re-bound because strict null-safety does not carry the narrowed `registered` into a closure
 		final command: CliCommand = registered;
 		final run: () -> Int = if (chooseLanguage) {
 			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
-			() -> command.run(chosen.args, new CliContext(requireMatch, postWriteFix, chosen.stdin));
+			() -> runEach(command, chosen, requireMatch, postWriteFix);
 		} else {
 			() -> command.run(rest, new CliContext(requireMatch, postWriteFix));
 		};
@@ -341,6 +343,21 @@ final class Cli {
 			'  --verify        A --write that only edits files is typechecked too (one that creates or deletes one always is)\n'
 		);
 		CliIo.sysPrint('  --no-verify     A --write is never typechecked\n');
+	}
+
+	/**
+	 * `command` run once per argv `chosen` holds, each with a context of its own; the worst (highest) status of the runs.
+	 * Over several runs `--exit-on-empty` judges the call: it fails only when every run's find-walk came back empty.
+	 */
+	private static function runEach(command: CliCommand, chosen: LanguageChoiceResult, requireMatch: Bool, postWriteFix: Bool): Int {
+		if (chosen.runs.length == 1) return command.run(chosen.runs[0], new CliContext(requireMatch, postWriteFix, chosen.stdin));
+		final matches: RunMatches = new RunMatches();
+		var worst: Int = EXIT_OK;
+		for (argv in chosen.runs) {
+			final code: Int = command.run(argv, new CliContext(false, postWriteFix, chosen.stdin, matches));
+			if (code > worst) worst = code;
+		}
+		return requireMatch && worst == EXIT_OK && matches.allEmpty() ? EXIT_RUNTIME : worst;
 	}
 
 }

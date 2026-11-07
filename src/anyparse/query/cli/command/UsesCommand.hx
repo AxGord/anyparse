@@ -91,7 +91,7 @@ final class UsesCommand implements CliCommand implements LeadingQuery {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandFor(o.lang, o.inputSpecs);
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq uses: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');

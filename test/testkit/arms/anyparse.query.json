@@ -15596,6 +15596,38 @@
 			"method": "closesAtEnd",
 			"force": "true",
 			"note": "a leading Null<...> is peeled off a facts type it does not enclose, mangling Null<A>->Null<B>"
+		},
+		{
+			"name": "M-CLI-RUNS-FIRST-ONLY",
+			"type": "anyparse.query.Cli",
+			"method": "runEach",
+			"find": "for (argv in chosen.runs)",
+			"replace": "for (argv in chosen.runs.slice(0, 1))",
+			"note": "only the first grammar of a mixed call runs, so `apq fmt --list` over a directory of .hx and .json never looks at the JSON"
+		},
+		{
+			"name": "M-CLI-EXIT-ON-EMPTY-PER-RUN",
+			"type": "anyparse.query.Cli",
+			"method": "runEach",
+			"find": "new CliContext(false, postWriteFix, chosen.stdin, matches)",
+			"replace": "new CliContext(requireMatch, postWriteFix, chosen.stdin, matches)",
+			"note": "--exit-on-empty judges each grammar's run, so a call whose Haxe run found the name fails because its JSON run did not"
+		},
+		{
+			"name": "M-CLI-EXIT-ON-EMPTY-DROPPED",
+			"type": "anyparse.query.Cli",
+			"method": "runEach",
+			"find": "requireMatch && worst == EXIT_OK && matches.allEmpty() ? EXIT_RUNTIME : worst",
+			"replace": "worst",
+			"note": "--exit-on-empty over several runs is never applied, so a call no run found anything for exits 0"
+		},
+		{
+			"name": "M-CLI-RUNS-LAST-STATUS",
+			"type": "anyparse.query.Cli",
+			"method": "runEach",
+			"find": "if (code > worst) worst = code;",
+			"replace": "worst = code;",
+			"note": "the last run's status is the call's, so a Haxe run that failed to parse is hidden by a clean JSON run after it"
 		}
 	]
 }

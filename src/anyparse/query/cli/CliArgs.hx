@@ -1,6 +1,5 @@
 package anyparse.query.cli;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
 import anyparse.macro.GrammarDiscovery;
@@ -146,19 +145,16 @@ final class CliArgs {
 	}
 
 	/**
-	 * Every CODE-grammar `--lang` the CLI can dispatch - the registry of
-	 * plugins whose `RefShape` carries a code kind vocabulary, enumerable so a
-	 * whole-registry check (`RefShapeKindProjectionTest`) covers a plugin added here without
-	 * being taught its name. That test calls `pickPlugin` for every name here, so a name declared here and
-	 * not constructed there fails the suite. `pickPlugin` builds from the whole registry (`grammars`),
-	 * never gated on this list, so a plugin registered there is never refused for being absent here.
-	 * The DATA grammars `json` (`JSON_LANG`) and `mermaid` (`MERMAID_LANG`) are registered there and
-	 * deliberately absent: `json` declares only its two container kinds and the string kind and `mermaid`
-	 * none, which the registry check's Haxe-sized floors would reject as a shrunken vocabulary;
-	 * `JsonQueryPluginTest` and `MermaidQueryPluginTest` hold them against their own projections instead.
+	 * Every CODE-grammar `--lang` the CLI can dispatch: the registered grammars (`grammars`) whose `RefShape`
+	 * names type-declaration kinds, enumerable so a whole-registry check (`RefShapeKindProjectionTest`) covers a code
+	 * grammar added to the classpath without being taught its name. The DATA grammars (`json`, `mermaid`) name none and
+	 * are left out: the registry check's Haxe-sized floors would reject their vocabularies, and `JsonQueryPluginTest` and
+	 * `MermaidQueryPluginTest` hold them against their own projections instead.
 	 */
 	public static function langNames(): Array<String> {
-		return [HaxeQueryPlugin.LANG];
+		return [
+			for (entry in grammars()) if (entry.make().refShape().typeDeclKinds != null) entry.lang
+		];
 	}
 
 	public static function pickPlugin(lang: String): GrammarPlugin {
@@ -269,15 +265,15 @@ final class CliArgs {
 	 * owns the arguments (`resolveInputPaths`) — this function stays free of output.
 	 */
 	public static function expandInputs(specs: Array<String>, ext: String): ExpandedInputs {
-		final paths: Array<String> = [];
-		final unmatched: Array<String> = [];
-		for (spec in specs) {
-			final hits: Array<String> = Glob.expand(spec, ext);
-			if (hits.length == 0) unmatched.push(spec);
-			for (p in hits) if (!paths.contains(p)) paths.push(p);
-		}
-		final singleFile: Bool = specs.length == 1 && paths.length == 1 && paths[0] == specs[0];
-		return { paths: paths, singleFile: singleFile, unmatched: unmatched };
+		return expandEach(specs, [ext]);
+	}
+
+	/**
+	 * `specs` expanded as the files of grammar `lang`: a directory walks to every file carrying one of its registered
+	 * extensions (`GrammarEntry.extensions`), so a walk under `--lang json` reads the `.json` files, never the `.hx` ones.
+	 */
+	public static function expandFor(lang: String, specs: Array<String>): ExpandedInputs {
+		return expandEach(specs, grammarOf(lang).extensions);
 	}
 
 	/** `--limit`'s value as a non-negative count; anything else throws a usage failure. */
@@ -361,10 +357,11 @@ final class CliArgs {
 	 */
 	public static function resolveInputPaths(lang: String, specs: Array<String>, suggestSeparator: Bool = false): ResolvedInputs {
 		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: ExpandedInputs = expandInputs(specs, '.hx');
+		final expanded: ExpandedInputs = expandFor(lang, specs);
 		if (expanded.unmatched.length > 0 && expanded.paths.length > 0)
 			CliIo.stderr(
-				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no .hx files and were skipped: '
+				'apq: ${expanded.unmatched.length} of ${specs.length} scope argument(s) matched no '
+				+ '${grammarOf(lang).extensions.join(' / ')} files and were skipped: '
 				+ quotedSpecs(expanded.unmatched)
 				+ (suggestSeparator ? ' — if they are QUERIES, put a bare `--` between them and the scope' : '')
 				+ '\n'
@@ -380,6 +377,19 @@ final class CliArgs {
 	/** How `apq merge-file` takes the files of the grammar `lang` apart. */
 	public static function mergeShapeOf(lang: String): MergeShape {
 		return grammarOf(lang).merge;
+	}
+
+	/** `expandInputs` over several extensions: a directory walks once per extension, a file or glob names its own paths. */
+	private static function expandEach(specs: Array<String>, extensions: Array<String>): ExpandedInputs {
+		final paths: Array<String> = [];
+		final unmatched: Array<String> = [];
+		for (spec in specs) {
+			final hits: Array<String> = [for (ext in extensions) for (p in Glob.expand(spec, ext)) p];
+			if (hits.length == 0) unmatched.push(spec);
+			for (p in hits) if (!paths.contains(p)) paths.push(p);
+		}
+		final singleFile: Bool = specs.length == 1 && paths.length == 1 && paths[0] == specs[0];
+		return { paths: paths, singleFile: singleFile, unmatched: unmatched };
 	}
 
 	/** The registry row of `--lang lang`; an unregistered name is a usage error. */

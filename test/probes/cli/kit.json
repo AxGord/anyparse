@@ -7,7 +7,9 @@
 		"arms/a.json": "{\"arms\": [{\"name\": \"X\", \"member\": \"run\"}, {\"name\": \"Y\", \"member\": \"walk\"}]}\n",
 		"arms/b.json": "{\"arms\": [{\"name\": \"Z\", \"member\": \"run\"}]}\n",
 		"walk/Lit.hx": "package walk;\n\nclass Lit {\n\tpublic static final SNAPSHOT: String = 'bin/.last-sweep.json';\n}\n",
-		"walk/Use.hx": "package walk;\n\nimport haxe.Json;\n\nclass Use {\n\tpublic static function parse(s: String): Dynamic {\n\t\treturn Json.parse(s);\n\t}\n}\n"
+		"walk/Use.hx": "package walk;\n\nimport haxe.Json;\n\nclass Use {\n\tpublic static function parse(s: String): Dynamic {\n\t\treturn Json.parse(s);\n\t}\n}\n",
+		"mixed/A.hx": "class A {\n\tstatic var s = \"zz\";\n}\n",
+		"mixed/b.json": "{\"k\": \"zz\"}\n"
 	},
 	"invocations": [
 		{
@@ -598,9 +600,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "06fd49b789572360",
+				"exit": 0,
+				"out": "a29ac0d48d0d2d01",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -633,9 +635,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "06fd49b789572360",
+				"exit": 0,
+				"out": "1de9bd3b3cd58515",
+				"err": "f7080661e69ee4a7",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -672,7 +674,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "06fd49b789572360",
+				"err": "df7e1a8e0d11f089",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -705,9 +707,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "06fd49b789572360",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -772,9 +774,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"exit": 0,
+				"out": "4c83022e7db6b821",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -805,9 +807,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"exit": 0,
+				"out": "1fd9d00ac72218bd",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -841,9 +843,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"exit": 0,
+				"out": "bcba274df6795e59",
+				"err": "9099b980ac52310b",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -879,9 +881,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"exit": 0,
+				"out": "a35c5e1fe4f7f3a1",
+				"err": "408ce753f647dbcb",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -918,9 +920,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"exit": 0,
+				"out": "9f776a2d57ed5a73",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -957,7 +959,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"err": "fbc3c6060a761f54",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -992,7 +994,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "c8c685632153487d",
+				"err": "5b55489b5062a062",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1024,9 +1026,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "08760cc4a8b70b73",
+				"exit": 0,
+				"out": "ca362531ed272139",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1059,9 +1061,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "08760cc4a8b70b73",
+				"exit": 0,
+				"out": "90ac81d823da6902",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1128,9 +1130,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "77ee225483439a08",
+				"exit": 0,
+				"out": "9199bdf344b27225",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1163,9 +1165,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "77ee225483439a08",
+				"exit": 0,
+				"out": "bc207176b758c232",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1201,9 +1203,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "77ee225483439a08",
+				"exit": 0,
+				"out": "3efd04ed184195ef",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1236,9 +1238,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "90ad4c02bebe8612",
+				"exit": 0,
+				"out": "15517b5c4c9d8e1c",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1271,9 +1273,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "90ad4c02bebe8612",
+				"exit": 0,
+				"out": "98ea3b8627326fca",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1306,9 +1308,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "a0da153dc4381cdf",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1340,9 +1342,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "1aa97fa9cdcfd5b1",
+				"err": "d924af1ff86a517e",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1378,9 +1380,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "c1bee505ace0da6c",
+				"err": "054b3efcd9957abf",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1417,9 +1419,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "31299e39343122a3",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1453,9 +1455,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "b8c7bfc0325941d9",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1487,9 +1489,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "c0abae0985609f45",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1520,9 +1522,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e1a359e448433e47",
+				"exit": 0,
+				"out": "04f76ce391c35677",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1557,9 +1559,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e1a359e448433e47",
+				"exit": 0,
+				"out": "50bfc500c3551bc6",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1594,9 +1596,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "b1363c9094322c13",
+				"exit": 0,
+				"out": "949643d79149d9a2",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1629,9 +1631,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "b1363c9094322c13",
+				"exit": 0,
+				"out": "b83f74b325f1d855",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1664,9 +1666,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "ee30159fcb9cb551",
+				"exit": 0,
+				"out": "c6eacac7eade79da",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1700,9 +1702,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "ee30159fcb9cb551",
+				"exit": 0,
+				"out": "c6eacac7eade79da",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1736,9 +1738,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "7ac94dcee10e1af7",
+				"exit": 0,
+				"out": "e50282891a3303c9",
+				"err": "31c67f29053df869",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1770,9 +1772,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "aad5c4d30dac104d",
+				"exit": 0,
+				"out": "2aca882d37add7be",
+				"err": "8fda086f5a8f9293",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1807,9 +1809,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "5719239ec07779da",
+				"exit": 0,
+				"out": "16a23a67df841d7c",
+				"err": "ec20c8f0bfcf22b7",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1842,9 +1844,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "fccb423b51eded65",
+				"exit": 0,
+				"out": "4285e7f45e1dc8a0",
+				"err": "ee1689ec7daaea00",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1873,9 +1875,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8bacd0b4d2b3809",
+				"exit": 0,
+				"out": "dacbcc6953071428",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1939,9 +1941,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8bacd0b4d2b3809",
+				"exit": 0,
+				"out": "295f0fa509cf5b65",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1971,9 +1973,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "8675ed78bc52e59f",
+				"exit": 0,
+				"out": "e7b5974b2f8dfb8c",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2003,9 +2005,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "8675ed78bc52e59f",
+				"exit": 0,
+				"out": "e7b5974b2f8dfb8c",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2036,9 +2038,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "5dccb816980cacaa",
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2068,9 +2070,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "2ab21295fc5abaf8",
+				"exit": 0,
+				"out": "fc4c9eac958c22b5",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2099,9 +2101,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "6d126ca26f80dfc3",
+				"err": "0bf9839eb8450534",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2132,9 +2134,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
+				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "6d126ca26f80dfc3",
+				"err": "0bf9839eb8450534",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2623,9 +2625,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "1a9bf32b1824f08d",
+				"exit": 0,
+				"out": "69617162e2f08688",
+				"err": "8831392fec977eba",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2753,9 +2755,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "d0167ada62090e9d",
+				"exit": 0,
+				"out": "5a3b0022962cefc1",
+				"err": "9c61c9068e2ee6bf",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -3230,9 +3232,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c9f1b0af35be8f44",
+				"exit": 0,
+				"out": "d639e8b738b26cc1",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -7076,9 +7078,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8bacd0b4d2b3809",
+				"exit": 0,
+				"out": "ef51f5cb78c0bdf4",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -7111,9 +7113,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
+				"exit": 1,
 				"out": "e3b0c44298fc1c14",
-				"err": "c8bacd0b4d2b3809",
+				"err": "d6c71858a56f3573",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -7146,9 +7148,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "c8bacd0b4d2b3809",
+				"exit": 0,
+				"out": "617e7140d7e889bf",
+				"err": "2558b142afac64a7",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -7879,9 +7881,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "e0130b48f288c5ba",
+				"exit": 0,
+				"out": "a0e38658e486e5cd",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -7895,9 +7897,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 2,
-				"out": "e3b0c44298fc1c14",
-				"err": "5dccb816980cacaa",
+				"exit": 0,
+				"out": "b5c9b70a6ebb922b",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -8008,6 +8010,41 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "ef3bdbb565f6ea57",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit zz mixed --flat",
+			"argv": [
+				"apq",
+				"lit",
+				"zz",
+				"mixed",
+				"--flat"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "62c0133fed93a997",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lit s mixed --flat --exit-on-empty",
+			"argv": [
+				"apq",
+				"lit",
+				"s",
+				"mixed",
+				"--flat",
+				"--exit-on-empty"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "21b8566917d192d4",
+				"err": "6e40de9052738532",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

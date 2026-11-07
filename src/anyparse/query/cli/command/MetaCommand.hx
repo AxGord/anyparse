@@ -135,7 +135,7 @@ final class MetaCommand implements CliCommand implements LeadingQueryCount {
 		if (declKind != null && CliWalk.rejectUnknownKinds(CMD, plugin, [declKind], [], ON_FLAG)) return EXIT_USAGE;
 		final shape: MetaShape = plugin.metaShape();
 
-		final expanded: ExpandedInputs = CliArgs.expandInputs(inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandFor(o.lang, inputSpecs);
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq meta: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');

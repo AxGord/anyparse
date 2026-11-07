@@ -34,6 +34,15 @@ file naming four relaxations inherited neither the resolution scope nor the
 oracle nor the rules the root opted into, and a rule that is not in the set does
 not fail — it finds nothing.
 
+**Which languages the project holds.** `apq` called with no `--lang` takes the
+grammar from the files it is given; for a directory it walks the files of every
+registered grammar under it and runs once per grammar that has some. A top-level
+`"languages"` (array of grammar names, e.g. `["haxe", "json"]`) narrows the
+grammars such a walk takes, and `"lang"` (one name) is the grammar of a call no
+file names — a document on stdin, a template. The nearest document declaring each
+key wins; a name no grammar registers is a usage error naming the file. Neither
+key changes `hxq`: its Haxe preset comes before the project.
+
 A top-level `"resolutionRoots"` (array of directory paths, relative to the
 config file resolved to absolute) declares a separate RESOLUTION scope: the
 `.hx` under those roots join the cross-file `SymbolIndex` that the type /

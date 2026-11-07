@@ -177,6 +177,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/cli/CliArgs.hx',
 			'src/anyparse/query/cli/DataDelta.hx',
 			'src/anyparse/query/cli/DataPath.hx',
+			'src/anyparse/query/cli/LanguageDeclaration.hx',
 			'src/anyparse/query/cli/command/SweepCommand.hx',
 			'src/anyparse/query/cli/command/SweepCorpus.hx',
 			'src/anyparse/query/format/FlowJson.hx',

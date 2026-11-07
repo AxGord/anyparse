@@ -35,7 +35,7 @@ typedef SearchOpts = {
  * from "ran fine".
  */
 @:nullSafety(Strict)
-final class SearchCommand implements CliCommand implements LeadingQuery {
+final class SearchCommand implements CliCommand implements LeadingQuery implements PatternQuery {
 
 	private static final CMD: String = 'search';
 
@@ -56,6 +56,17 @@ final class SearchCommand implements CliCommand implements LeadingQuery {
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		return runSearch(args, ctx);
+	}
+
+	public function queryParsesIn(args: Array<String>, plugin: GrammarPlugin): Bool {
+		final pattern: Null<String> = parseSearchArgs(args).pattern;
+		if (pattern == null) return true;
+		return try {
+			plugin.parsePattern(pattern);
+			true;
+		} catch (exception: Exception) {
+			false;
+		};
 	}
 
 	public function usage(): Void {
@@ -159,7 +170,7 @@ final class SearchCommand implements CliCommand implements LeadingQuery {
 			CliIo.stderr(Text.render(parsed.root));
 		}
 
-		final expanded: ExpandedInputs = CliArgs.expandInputs(o.inputSpecs, '.hx');
+		final expanded: ExpandedInputs = CliArgs.expandFor(o.lang, o.inputSpecs);
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
 			CliIo.stderr('apq search: no input files matched ${CliArgs.quotedSpecs(o.inputSpecs)}\n');
