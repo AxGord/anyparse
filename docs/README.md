@@ -40,7 +40,7 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 | [`journal/architecture-log.md`](journal/architecture-log.md) | journal | 11 KB | — | what `architecture.md` condensed: the `#if` raw-region census, the CLI migration chronicle, the superseded CoreIR / strategy / runtime listings |
 | [`journal/strategies-log.md`](journal/strategies-log.md) | journal | 26 KB | — | what `strategies.md` condensed: the `@:fmt` census readings and the module-split narrative, the original per-strategy prose |
 | [`journal/formats-log.md`](journal/formats-log.md) | journal | 8 KB | — | what `formats.md` condensed: the verbatim interface listings and the inheritance example the code refuted |
-| [`journal/haxe-format-config-log.md`](journal/haxe-format-config-log.md) | journal | 28 KB | — | what `haxe-format-config.md` condensed: the per-slice measurements behind each key, the original key table |
+| [`journal/haxe-format-config-log.md`](journal/haxe-format-config-log.md) | journal | 40 KB | — | what `haxe-format-config.md` condensed: the per-slice measurements behind each key, the original key table; plus the dated fork-vs-`hxq fmt` convergence readings |
 | [`journal/design-principles-log.md`](journal/design-principles-log.md) | journal | 3 KB | — | what `design-principles.md` condensed: the JVM-thread and process-fan-out readings |
 | [`archive/roadmap-phase3-slices.md`](archive/roadmap-phase3-slices.md) | archive | 211 KB | — | the Phase 3 slice history, closed |
 | [`archive/cli-query-phase5-slices.md`](archive/cli-query-phase5-slices.md) | archive | 96 KB | — | the CLI Phase 5 dogfood history, closed |

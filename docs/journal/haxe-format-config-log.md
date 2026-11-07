@@ -288,3 +288,110 @@ a block body's CONTENTS and glues nothing; the `} else {` shape comes from `same
 itself, whose `next` resolves the pre-`else` gap to `SameOnBlock` (S100). So a value-`if` with block
 branches hugs its head and cuddles its `else` under `same` and `next` with or without
 `expressionIfWithBlocks` — measured on the same broken source in both trees' configs.
+
+## Reading: where the haxe-formatter fork and `hxq fmt` disagree on three trees (FX-REMEASURE, 2026-11-07)
+
+Successor of the first census (FX-0, 2026-10-22). One reading of one moment: anyparse main `5981140d0`, the newest fork branch
+(`fx/type-doc-emptylines`, tip `d3df79a`, built from a detached worktree of the fork, its checked-out tree and the haxelib path
+untouched). The trees are COPIES of the `.hx` files, each with its own `hxformat.json`: this repo (`src test tools`, 3177 files /
+731 k lines), Pony (`src tools tests socketTests install docgen`, working tree, 872 / 72 k) and the client tree (`src`, 936 / 132 k).
+Both tools format the same input in place; a second pass of each measures idempotence. A hunk is a maximal run of differing lines
+(runs closer than four lines are merged); "h/f" = hunks / files. The harness (copy, two passes, hunk merge, class predicates) was scratch code and is not kept, the census is reproducible from
+the method in this paragraph. Examples of the class table were reduced from a hunk and run on a tree's own config, each tool on
+the same snippet; the tree is the one whose cell is largest in the row (row 9: the client tree, the only config under which the
+example reproduces; rows 8, 14 and 15: the anyparse tree; row 13: the client tree), the per-example tree was not recorded.
+Classes 11, 18, 19, row 12 (its examples are the config gaps above) and the three long-tail rows are **counted by predicate, no
+repro**: their counts say how many hunks match the predicate, not that one mechanism was isolated.
+
+| tree | fork rewrote | hxq rewrote | **fork ≠ hxq** | fork 2nd pass changes | hxq 2nd pass changes |
+|---|---:|---:|---:|---:|---:|
+| anyparse | 1249 f | 0 | **1249 f / 27 871 l** | 109 f / 921 l | 0 |
+| Pony | 277 f (+1 crash) | 49 f (+3 not parsed) | **280 f / 6 380 l** | 7 f / 80 l | 0 |
+| client tree | 291 f | 7 f | **293 f / 7 791 l** | 2 f / 8 l | 0 |
+
+FX-0 had 1459 / 347 / 824 files (19 205 / 5 929 / 68 850 lines). In FILES the client tree fell 824 → 293 (F1 config reading, F2
+type-body blanks), anyparse and Pony fell less (1459 → 1249, 347 → 280). In LINES only the client tree fell (68 850 → 7 791);
+anyparse rose 19 205 → 27 871 and Pony 5 929 → 6 380, and the anyparse tree itself grew from 2279 to 3177 files (632 k → 731 k
+lines; Pony 872 → 872 files, 72 k lines; client tree 906 → 936 files, 125 k → 132 k), so for anyparse and Pony this reading
+is not a convergence.
+Config reading is no longer the dominant source: the fork warns (with `-v`) on a key it does not know and accepts the other
+hxq-only keys as "ignored". Closing the config gaps below (`ternaryMultilineBranch` everywhere, `opBoolChain` in anyparse, the two
+space keys in Pony) leaves **1209 / 265 / 292 files** and 23 721 / 6 031 / 7 709 lines; the rest is layout.
+
+### CONFIG GAPS (an unset key falls back to each tool's own default; checked by filling every key the fork's default config has and the tree lacks, then one key at a time)
+
+Filling all unset keys with the fork's defaults moves the difference by 17 / 2 / 0 files, so gaps are small; the ones that move it:
+
+| gap | trees | effect | example |
+|---|---|---|---|
+| `wrapping.ternaryMultilineBranch` unset: fork default `inline`, hxq default breaks; pin `"break"` (the fork has it) | all three | −2 437 / −78 / −82 lines | `return c == null ? null : switch f(c) {⏎case A: x;⏎case _: null;⏎};` fork keeps it on one head line, hxq puts `? null` and `: switch` on their own lines |
+| `wrapping.opBoolChain` unset: the fork wraps a condition by `conditionWrapping` (fill), hxq falls back to one operand per line | anyparse | −1 713 l / 24 f (354 h) | `if (a == null \|\| b == null \|\| … six operands …)` fork fills two per line, hxq one per line; with the client tree's `opBoolChain` pinned both fill |
+| `whitespace.colonPolicy` unset (catch parameter `catch (e:T)`: tokentree gives the fork `colonPolicy`, hxq reads `typeHintColonPolicy`) | Pony | 83 h / 45 f | `catch (e:Dynamic)` vs `catch (e: Dynamic)`; FX-0 K7, still open |
+| `whitespace.bracketConfig.comprehensionBrackets.openingPolicy: onlyAfter` | Pony | 36 h / 23 f | `return [for (k in keys) k];` fork `return[ for (k in keys) k ];`, hxq `return [ for … ]`; FX-0 K6, still open: delete the key |
+| `emptyLines.externClassEmptyLines` unset | Pony | 2 f / 4 l | |
+
+Not a gap although the key is unset in the anyparse config: `arrayWrap`, `anonType`, `objectLiteral`. hxq's default for an unset
+list class is to keep the source layout (flat stays flat, broken stays broken: a `for (k in [a, b]) …` stays flat or broken as written),
+so `hxq(fork(x))` differs from `hxq(x)` in 351 / 73 / 15 files, mostly blanks plus about 340 h of array / object / hugged-argument
+layout in anyparse. With the key set (Pony, client tree) hxq collapses both shapes. That is CANON-3 territory, not a config gap.
+
+### hxq-only keys the fork reads and ignores (cannot converge by config; deleting the key from the hxq side is the measure)
+
+| key | effect of deleting it | trees using it |
+|---|---|---|
+| `sameLine.caseSiblings: anyBreak` (the fork lists it as unknown) | −913 l Pony, −610 l client tree | Pony, client |
+| `whitespace.bracesConfig.singleStatementBraces`: `remove` in Pony and the client tree, `symmetric` in anyparse | −328 l / 12 f Pony; not measured on the others | all three |
+| `sameLine.loopBodyIfElseNext` | −109 l | Pony |
+| `wrapping.methodChain.itemsAfterCloseParenOnly` | −476 l | anyparse |
+| `wrapping.comprehensionCuddledOpen`, `soleItemCuddledBrackets`, `methodChainCuddledLinks`, `sameLine.expressionIfFitMaxBranches`, `fitLineBodyGlue`, `expressionIfArrowBodyReflow` | ±20…140 l each | Pony / client |
+
+Not an ignored key: `<kind>EmptyLines.beginTypeIfDocComments` / `endTypeIfDocComments` — the fork now follows it, and deleting it
+from the hxq side WIDENS the gap (+448 l).
+
+### Divergence classes on the reading with `ternaryMultilineBranch` pinned
+
+Hunks / files per tree: anyparse 4285 h / 1233 f, Pony 821 / 280, client tree 886 / 292. Verdict: **A** anyparse defect, **F** fork
+defect or outdated, **G** config gap, **T** taste call (a question below), **K** hxq-only key the fork ignores. Cells are
+anyparse | Pony | client tree; a hunk is counted once, in its first matching class (rules in the order of the table), so the rows
+add up to the totals together with the three long-tail lines.
+
+| # | class | verdict | h (f) anyparse | h (f) Pony | h (f) client | minimal example |
+|---|---|---|---|---|---|---|
+| 1 | `case` bodies: hxq moves every body of a switch onto its own line once one sibling does not fit; the fork decides per case | K, T1 | 3 (3) | 161 (73) | 110 (66) | `case A: foo();` beside an over-long `case B: x.y(…);` → hxq `case A:⏎foo();`, fork keeps `case A: foo();` and wraps B's call |
+| 2 | fork breaks a fitting object literal: nested in an outer literal broken one per line, or as the last argument of a chain head | F | 73 (58) | 100 (40) | 60 (41) | `new W({ a: 1, …long…, nested: { x: true, y: false } })` → fork `nested: {⏎x: true,⏎y: false⏎}`; `f(a, b, { x: 0, alpha: 1 }).ease(e).onUpdate(u).onComplete(c);` over 140 → fork `{⏎x: 0, alpha: 1⏎})` |
+| 3 | fork breaks a fitting array (a trailing `[x]` of a ternary inside a long argument list) or the parens of a fitting call argument | F | 17 (16) | 4 (3) | 86 (58) | `super(c ? (d ? [a, b] : [b, a]) : [x], w,⏎h, …)` → fork `: [⏎x⏎], w,`, hxq `: [x], w, h,` filled |
+| 4 | closing `}` / `})` glued to the tail of a wrapped `+` chain (the continuation is left unindented); and the reverse, `}` of an anon type in a return type broken onto its own line with the function's closing brace mis-indented | F | 340 (143) | 0 | 1 (1) | `out.push({ …, message: 'a'⏎+ 'b' });` → hxq `+ 'b'⏎});`; `): Null<{ span: Span, text: String }> {` after a wrapped parameter list → fork `text: String⏎}> {` and `}` of the body one tab deeper |
+| 5 | `&&` / `||` chains: hxq one operand per line (default of the unset `opBoolChain`), the fork fills by `conditionWrapping`; 153 of the hunks are the other direction (the fork breaks, hxq does not) | G | 354 (222) | 0 | 2 (2) | six operands in an `if (…)`: fork two per line, hxq one per line (with the client tree's `opBoolChain` pinned both fill) |
+| 6 | method chain: hxq cuddles the head call (`Type.make(x)⏎.a()⏎.b()`), the fork breaks before the first `.` | K (`itemsAfterCloseParenOnly`) | 138 (110) | 0 | 9 (4) | `return Holder.Master.create(first.name).second(a)…tenth(g);` over 140 → fork `Holder.Master⏎.create(first.name)⏎.second(a)` |
+| 7 | call arguments: hxq one per line when an argument is a container, the fork honours `fillLineWithLeadingBreak`; and the hug of a sole array argument the other way round | T2 | 442 (199) | 43 (35) | 80 (45) | `ParenGuard.guard(source, [{ span: s, text: t, holes: h }], plugin)` → fork `(⏎source, [{…}], plugin⏎)`, hxq one argument per line |
+| 8 | list literal broken one per line by hxq where the fork keeps it flat: hxq keeps the source layout when `arrayWrap` is unset | A (CANON-3) | 272 (95) | 3 (3) | 9 (7) | `for (k in [(a: Null<String>), b]) if (k != null) k;` is stable flat AND broken in hxq |
+| 9 | `try x catch (e:T) y;` on one line (client tree config: hxq keeps one line, the fork forces `catch` onto its own line); the 32 (20) / 2 (1) cells are counted by predicate on some other shape, no repro | F | 32 (20) | 2 (1) | 41 (27) | client tree config: `try load(this) catch (e:Exception) trace(e);` → fork `try load(this)⏎catch (e:Exception) trace(e);`. Under the anyparse and Pony configs both tools break `try load(this) catch (e:haxe.Exception) trace(e);` into the same four lines (try / load / catch / trace) |
+| 10 | bodies of `if` / `for` / `return` (`singleStatementBraces`, `loopBodyIfElseNext`, `if (c)⏎return x ? a : b`); the fork also breaks a short condition when the body is long | K, F | 174 (138) | 82 (48) | 32 (22) | `if (c) { return v; }` → hxq `if (c) return v;`; `if (body.length == 0) return a || b ? x : y;` over 140 → fork `if (⏎body.length == 0⏎) return …` |
+| 11 | ternary layout with non-switch branches; `+` continuation in array elements | F, T | 191 (137) | 7 (7) | 19 (15) | counted by predicate, no repro |
+| 12 | space: `catch (e:T)`, `return[ for`, `#if (!macro )` | G, F | 1 (1) | 125 (64) | 0 | see the gaps |
+| 13 | space: `->`: the fork leaves the arrow of a lambda after typed parameters unspaced and ignores `functionTypeHaxe4Policy: none` for function types | F | 0 | 0 | 56 (14) | `(n:Int)->run(n)` → fork unchanged, hxq `(n:Int) -> run(n)`; `var cb:()->Void` → fork `() -> Void`, hxq keeps |
+| 14 | space: colon of a named function-type parameter and of a type-parameter constraint | T3 | 141 (85) | 45 (19) | 0 | `final f: (call:QueryNode) -> Bool;` `f<T:Dynamic>` → fork `(call: QueryNode)`, `<T: Dynamic>` (config `typeHintColonPolicy: after`), hxq unspaced |
+| 15 | space: `macro (…)` against `macro(…)` | T4 | 95 (26) | 0 | 0 | `return macro ($a >= 1);` → fork `macro($a >= 1)` |
+| 16 | blank line between consecutive typedef / enum fields after a field with a multi-line doc comment (the fork knows only the global `afterFieldsWithDocComments`, not the per-kind key) | F | 228 (127) | 2 (2) | 3 (3) | `/** …⏎ */ var reason;⏎var description;` → fork inserts a blank between the two |
+| 17 | blank after a standalone `//` marker before a member: hxq keeps the source blank, the fork drops it | T5 | 62 (62) | 0 | 3 (2) | `// --- section⏎⏎public function t() {…}` → fork removes the blank |
+| 18 | other blank-line differences (before a doc comment after `}`: hxq keeps two source blanks, the fork one or none) | T5 | 260 (153) | 62 (42) | 18 (14) | counted by predicate, no repro |
+| 19 | indentation: `+` / `?` continuation, the `}` left by class 4, comment blocks, block-comment body re-indented | F | 139 (90) | 37 (33) | 20 (14) | counted by predicate, no repro |
+| – | compound reshapes, same line count, several decisions at once | long tail | 313 (224) | 19 (18) | 195 (74) | not separable; counted by predicate, no repro |
+| – | space, other positions (colons, brace padding, commas) | long tail | 116 (94) | 39 (24) | 16 (15) | counted by predicate, no repro |
+| – | wrap shapes no predicate took | long tail | 894 (504) | 90 (65) | 126 (85) | counted by predicate, no repro |
+
+Anyparse's own tree is canonical under hxq (0 files rewritten), Pony is not (49 files), the client tree nearly is (7). The fork is
+not idempotent on any of the three; hxq is on all of them (second pass: 0 files).
+
+### Defects found on the way
+
+- anyparse: 3 Pony files do not parse (`tests/test/ToolsTest.hx`, a template under `tools/bin/templates/webmodel`, `tools/nodesrc/module/server/Proxy.hx`; the template also crashes the fork); `Build.hx` and `Copy.hx` of Pony need two writer rewrites to reach their fixed point (the writer says so); `hxq fmt` on a directory argument works through the `hxq` wrapper, the bare engine rejects it (`no argument names a file of a known language`).
+- fork: classes 2, 3, 4, 9, 13 and 16 above; a second pass changes 109 / 7 / 2 files.
+
+### Taste calls (questions for the user)
+
+1. T1: `sameLine.caseSiblings: anyBreak` (all bodies of a switch move together). Dropping it removes 913 / 610 lines of divergence (Pony / client tree); the fork cannot express it. Keep, or per-case fitting like the fork?
+2. T2: an argument that is an array / object literal: one argument per line (hxq) or fill (the config's `fillLineWithLeadingBreak`)?
+3. T3: colon of a named function-type parameter and of a `<T:Bound>` constraint: follow `typeHintColonPolicy` (fork) or stay unspaced (hxq, what the anyparse tree has)?
+4. T4: `macro (expr)` with or without the space?
+5. T5: blank lines around `//` section markers and before doc comments: source decides (hxq, bounded by `maxAnywhereInFile`) or a forced count (fork)?
