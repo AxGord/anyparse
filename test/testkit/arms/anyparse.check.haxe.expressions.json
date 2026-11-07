@@ -335,6 +335,94 @@
 			"find": "!results.contains(call)",
 			"replace": "false",
 			"note": "a call read for more than its sign is rewritten, so a callback doing arithmetic on it sorts differently under a function of another magnitude"
+		},
+		{
+			"name": "M-SPLITP-MEMBER-SWAP",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "splitRead",
+			"find": "{ split: first, member: BEFORE }",
+			"replace": "{ split: first, member: AFTER_LAST }",
+			"note": "the first part is read with the function for the text after the last delimiter, so a rewrite answers another text"
+		},
+		{
+			"name": "M-SPLITP-ANY-INDEX",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "isFirstPart",
+			"find": "source.substring(span.from, span.to) == FIRST_PART",
+			"replace": "true",
+			"note": "every index counts as the first part, so the second part, which no function of the utility reads, is rewritten"
+		},
+		{
+			"name": "M-SPLITP-EMPTY-DELIMITER",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "isPlainLiteral",
+			"find": "span.to - span.from >= MIN_QUOTED",
+			"replace": "true",
+			"note": "an empty delimiter is accepted, so a split into characters is rewritten into the text before an empty string"
+		},
+		{
+			"name": "M-SPLITP-INTERPOLATED",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "isPlainLiteral",
+			"find": "node.children.foreach(c -> c.kind == s.interpTextKind || s.interpInertKinds.contains(c.kind))",
+			"replace": "true",
+			"note": "an interpolated delimiter is taken for a literal, so a delimiter the program computes, which may be empty, is rewritten"
+		},
+		{
+			"name": "M-SPLITP-ANY-RECEIVER",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "proved",
+			"find": "nominal(c.operand) == s.stringType",
+			"replace": "true",
+			"note": "every receiver is taken for a String, so an EReg or a nullable text is rewritten into a call that does not compile"
+		},
+		{
+			"name": "M-SPLITP-COMMENT",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "cutAt",
+			"find": " || CheckScan.hasCommentMarker(source, span.from, span.to)",
+			"replace": "",
+			"note": "a comment inside the cut is accepted, so the rewrite deletes it"
+		},
+		{
+			"name": "M-SPLITP-IMPORT-LOST",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "fixGrouped",
+			"find": "edits.push({ span: edit.span, text: edit.text, group: group });",
+			"replace": "edits.push({ span: edit.span, text: '', group: group });",
+			"note": "the fix writes the short name of the utility and no import of its class, so the file stops compiling"
+		},
+		{
+			"name": "M-SPLITP-ANY-TOOLS",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "readTools",
+			"find": "return found.length != 1 || !isTextCut(found[0], string, typeSyntax);",
+			"replace": "return false;",
+			"note": "any class is accepted as the utility, so the fix writes a call of a function that is missing or has another signature"
+		},
+		{
+			"name": "M-SPLITP-OVERLAPPING-POP",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "fits",
+			"find": "(member == BEFORE || isBorderFree(",
+			"replace": "(true || isBorderFree(",
+			"note": "a self-overlapping delimiter is accepted for the last part, so split and lastIndexOf, which pick different matches, are taken for one cut"
+		},
+		{
+			"name": "M-SPLITP-EXACT-PARAMS",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "isTextCut",
+			"find": "m.paramTypeSources.length >= CUT_PARAMS",
+			"replace": "m.paramTypeSources.length == CUT_PARAMS",
+			"note": "a utility function with a trailing optional parameter is refused as a configuration error"
+		},
+		{
+			"name": "M-SPLITP-ANY-SKIPPABLE",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "isTextCut",
+			"find": "m.paramSkippableFrom == CUT_PARAMS",
+			"replace": "true",
+			"note": "a required third parameter is accepted, so the fix writes a two-argument call that does not compile"
 		}
 	]
 }

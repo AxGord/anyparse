@@ -140,6 +140,7 @@
 	"prefer-safe-nav-comparison",
 	"prefer-single-pass",
 	"prefer-single-quotes",
+	"prefer-split-part",
 	"prefer-static-extension",
 	"prefer-switch",
 	"prefer-switch-expression",
