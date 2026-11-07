@@ -76,8 +76,7 @@ final class WriterLoweringSupport {
 	 * when the parser captured a source newline in the gap before the field.
 	 *
 	 * Used by `lowerStruct` for source-newline preservation paths
-	 * (issue_48-v2 bare-ref hardline) — also see `beforeNewlineNotAccess` for
-	 * the `bodyOnSameLine` inverse used by `bodyPolicyWrap` consumers.
+	 * (issue_48-v2 bare-ref hardline).
 	 */
 	private static inline function beforeNewlineAccess(fieldName: String): Expr {
 		return {
@@ -105,17 +104,6 @@ final class WriterLoweringSupport {
 	private static inline function beforeLeadingAccess(fieldName: String): Expr {
 		return {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
-	 * Build `!value.<fieldName><BEFORE_NEWLINE_SUFFIX>` — the `bodyOnSameLine`
-	 * inverse of the trivia BeforeNewline slot, forwarded by the `bodyPolicyForCtor` runtime wrap; no body policy reads it.
-	 */
-	private static inline function beforeNewlineNotAccess(fieldName: String): Expr {
-		return {
-			expr: EUnop(OpNot, false, beforeNewlineAccess(fieldName)),
 			pos: Context.currentPos()
 		};
 	}
@@ -151,7 +139,7 @@ final class WriterLoweringSupport {
 	 * The slot order mirrors `TriviaTypeSynth.buildEnumCtor` push order:
 	 *   CloseTrailing (+ 3 conditional `:lead && !:tryparse` slots) →
 	 *   TrailOpt → CaptureSource → BodyPolicyKw → WrapOpenNewline →
-	 *   KwNewline → ChainNewline.
+	 *   ChainNewline.
 	 *
 	 * Centralising this walker keeps idx accounting in lockstep with
 	 * `buildEnumCtor`; future slot additions become a single chain extend
@@ -176,10 +164,9 @@ final class WriterLoweringSupport {
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
 		if (slot == WrapOpenTrailing) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) idx++;
-		if (slot == KwNewline) return macro $i{argNames[idx]};
-		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) idx++;
+
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
-		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
 		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
@@ -206,8 +193,9 @@ final class WriterLoweringSupport {
 			case CaptureSource: TriviaPairAltCtor.isCaptureSourceBranch(branch);
 			case BodyPolicyKw: TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
 			case WrapOpenNewline, WrapOpenTrailing: TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
-			case KwNewline: TriviaPairAltCtor.isAltKwNewlineBranch(branch);
-			case ChainNewline, ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
+
+			case ChainNewline: TriviaPairAltCtor.isInfixChainBranch(branch);
+			case ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaPairAltCtor.isPostfixOpSpaceBranch(branch);
 			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixChainBranch(branch);
 			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);

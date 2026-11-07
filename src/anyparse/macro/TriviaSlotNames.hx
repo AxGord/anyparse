@@ -34,15 +34,6 @@ final class TriviaSlotNames {
 	public static inline function trailingBlankBeforeLocalName(localName: String): String return '${localName}_trailBB';
 
 	/**
-	 * ω-keep-fnsig-newline: name of the `Bool` local that records whether the
-	 * source had at least one newline (not necessarily a blank line) between
-	 * the last `@:trivia` Star element and the close literal. Sibling of
-	 * `trailingBlankBeforeLocalName`; set from the same terminal
-	 * `_lead.newlineBefore`.
-	 */
-	public static inline function trailingNewlineBeforeLocalName(localName: String): String return '${localName}_trailNL';
-
-	/**
 	 * Name of the `Array<String>` local that records the own-line
 	 * comments captured on a `@:trivia` Star's final iteration (after
 	 * the last element, before the close / EOF).

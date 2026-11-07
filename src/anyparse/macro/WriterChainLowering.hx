@@ -98,12 +98,12 @@ final class WriterChainLowering {
 			while (!_isChain) switch _probe {
 				case Call(_op, _, _, _, _, _):
 					switch _op {
-						case FieldAccess(_prev, _, _, _):
+						case FieldAccess(_prev, _, _):
 							_isChain = _prev.match(Call(_, _, _, _, _, _));
 							_probe = _prev;
 						case _: break;
 					}
-				case FieldAccess(_prev, _, _, _):
+				case FieldAccess(_prev, _, _):
 					_isChain = _prev.match(Call(_, _, _, _, _, _));
 					_probe = _prev;
 				case _:
@@ -130,13 +130,9 @@ final class WriterChainLowering {
 				// replaces the source `owner // test` layout.
 				var _recTrail: Null<String> = null;
 				while (true) switch _cursor {
-					// ω-keep-callclose-newline: trivia Call ctor grew a 5th
-					// positional `argsCloseNewline`; the chain walk ignores it
-					// here (close placement is decided by the outer call's
-					// `lowerPostfixStar`, not the per-segment chain emit).
 					case Call(_op, _args, _trailClose, _, _, _):
 						switch _op {
-							case FieldAccess(_prev, _fld, _, _opTrail):
+							case FieldAccess(_prev, _fld, _opTrail):
 								final _argsDoc: anyparse.core.Doc = $argsListExpr;
 								final _segDoc: anyparse.core.Doc = _trailClose != null
 									? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
@@ -155,7 +151,7 @@ final class WriterChainLowering {
 								_receiver = _cursor;
 								break;
 						}
-					case FieldAccess(_prev, _fld, _, _opTrail):
+					case FieldAccess(_prev, _fld, _opTrail):
 						// ω-methodchain-glue-bare-field: a bare `.field`
 						// access that precedes an already-collected segment
 						// (a Call to its right) is NOT its own chain

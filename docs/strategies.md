@@ -107,7 +107,7 @@ blankLinesBetweenSameCtorTailTransparent(…), blankLinesOnTransitionAcross(…)
 blockShape, bodyAllmanIndentForCtor(…), bodyAwareCompactIndent, bodyBreak(…), bodyPolicy(…),
 bodyPolicyForCtor(…), bodyPolicyOverride(…), bodyPolicySingleLine(…), bracketKindPad,
 breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, captureAfterLead, captureChainNewline,
-captureCondOpenNewline, captureKwNewline, capturePostfixOpSpace, captureRhsTrail, captureSource(…),
+capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 catchParensGap, catchParensInsideClose, chainNestSuppress,
 clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,

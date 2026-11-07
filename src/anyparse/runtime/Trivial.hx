@@ -76,8 +76,7 @@ typedef Trivial<T> = {
 	 * At least one source newline sat AFTER this element's leading separator literal (the
 	 * `@:lead(',')` of a link such as `HxVarMore`), before the link payload — the forward-looking
 	 * cousin of `newlineBefore`: for a link whose first token is the separator, `newlineBefore`
-	 * records the gap BEFORE the comma, while the break a `Keep` wrap must reproduce lands AFTER it.
-	 * Consumed ONLY under `WrapMode.Keep`; byte-inert for every non-keep construct.
+	 * records the gap BEFORE the comma, while the break lands AFTER it.
 	 */
 	@:optional var newlineAfterSep: Bool;
 

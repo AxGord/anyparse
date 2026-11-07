@@ -134,19 +134,11 @@ final class KwBranchLowering {
 	 * both of kw and lead may be absent.
 	 */
 	private static function appendKwRefLeadSteps(
-		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, triviaKwNewline: Bool, triviaBodyPolicyKw: Bool,
-		forwardNewlineForBody: Bool, triviaWrapOpenNewline: Bool
+		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, triviaBodyPolicyKw: Bool, forwardNewlineForBody: Bool,
+		triviaWrapOpenNewline: Bool
 	): Void {
-		// ω-keep-kw-newline (increment 1b): track the byte position right
-		// after the LAST consumed keyword / lead literal (BEFORE its post-
-		// literal `skipWs`) so the `_varKwNewline` probe spans the gap up to
-		// the inner `decl` Ref's first token. Reassigned after each
-		// `expectKw` / `expectLit` so the last one wins (`static var` →
-		// after `var`). Declared only when the branch opts in.
-		if (triviaKwNewline) steps.push(macro var _lastLitEnd: Int = ctx.pos);
 		if (kwLead != null) {
 			steps.push(macro expectKw(ctx, $v{kwLead}));
-			if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
 			// ω-issue-257-firstline: capture `_kwEndPos` BEFORE the
 			// post-kw `skipWs` so `_bodyOnSameLine` can probe whether
 			// the gap up to the body's first token crossed a newline.
@@ -156,26 +148,18 @@ final class KwBranchLowering {
 			if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
 			if (triviaBodyPolicyKw) steps.push(macro final _bodyOnSameLine: Bool = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos));
 		}
-		if (leadText != null) {
-			steps.push(macro expectLit(ctx, $v{leadText}));
-			if (triviaKwNewline) steps.push(macro _lastLitEnd = ctx.pos);
-			// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
-			// the post-lead skipWs so _wrapOpenNewline can probe whether
-			// the gap up to the inner sub-rule's first token crossed a
-			// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
-			// pattern above.
-			if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
-			// The comment on the open delimiter's line (`( // c`) is kept verbatim for the writer; `skipWs` would drop it.
-			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingAfterOpen(ctx));
-			steps.push(macro skipWs(ctx));
-			if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
-		}
-		// ω-keep-kw-newline (increment 1b): the gap probe runs AFTER both the
-		// kw and lead skipWs but BEFORE `_raw = callSub`, so `ctx.pos` sits at
-		// the inner `decl` Ref's first token. `_lastLitEnd` holds the end of
-		// the last literal before its skipWs, so `hasNewlineIn` spans exactly
-		// the `var`→head gap.
-		if (triviaKwNewline) steps.push(macro final _varKwNewline: Bool = hasNewlineIn(ctx.input, _lastLitEnd, ctx.pos));
+		if (leadText == null) return;
+		steps.push(macro expectLit(ctx, $v{leadText}));
+		// omega-paren-wrap-source-newline: capture _leadEndPos BEFORE
+		// the post-lead skipWs so _wrapOpenNewline can probe whether
+		// the gap up to the inner sub-rule's first token crossed a
+		// newline. Mirrors the kw-led _kwEndPos / _bodyOnSameLine
+		// pattern above.
+		if (triviaWrapOpenNewline) steps.push(macro final _leadEndPos: Int = ctx.pos);
+		// The comment on the open delimiter's line (`( // c`) is kept verbatim for the writer; `skipWs` would drop it.
+		if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenTrailing: Null<String> = collectTrailingAfterOpen(ctx));
+		steps.push(macro skipWs(ctx));
+		if (triviaWrapOpenNewline) steps.push(macro final _wrapOpenNewline: Bool = hasNewlineIn(ctx.input, _leadEndPos, ctx.pos));
 	}
 
 	/**
@@ -349,12 +333,11 @@ final class KwBranchLowering {
 	/**
 	 * Build the synth-ctor call for a `lowerKwRefBranch` ctor, appending the
 	 * trivia-mode positional args (`_trailPresent` / `_sourceText` /
-	 * `_bodyOnSameLine` / `_wrapOpenNewline` / `_varKwNewline`) the active
+	 * `_bodyOnSameLine` / `_wrapOpenNewline`) the active
 	 * capture channels carry.
 	 */
 	private static function buildKwRefCtorCall(
-		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaBodyPolicyKw: Bool, triviaWrapOpenNewline: Bool,
-		triviaKwNewline: Bool
+		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaBodyPolicyKw: Bool, triviaWrapOpenNewline: Bool
 	): Expr {
 		final ctorArgs: Array<Expr> = [macro _raw];
 		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
@@ -364,7 +347,7 @@ final class KwBranchLowering {
 			ctorArgs.push(macro _wrapOpenNewline);
 			ctorArgs.push(macro _wrapOpenTrailing);
 		}
-		if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
+
 		return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 	}
 

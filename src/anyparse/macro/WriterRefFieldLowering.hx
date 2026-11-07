@@ -375,12 +375,9 @@ final class WriterRefFieldLowering {
 			final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
 			final sepExpr: Expr = buildLeftCurlySepExpr(ctx, refName, lcCtors, ctorExpr, lcSep);
 			if (bodyPolicyForCtorPairs.length > 0) {
-				// No body policy reads the source shape, so the optional-Ref
-				// path passes no source-newline slot.
-				final wrapBodyOnSameLineExpr: Null<Expr> = null;
-				optParts.push(buildBodyPolicyForCtorChain(
-					ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr, null
-				));
+				optParts.push(
+					buildBodyPolicyForCtorChain(ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, null)
+				);
 				// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 			} else {
 				optParts.push(sepExpr);
@@ -428,9 +425,7 @@ final class WriterRefFieldLowering {
 				valueFieldAccess(fieldName), false
 			)
 			: null;
-		// `<field>BodyOnSameLine:Bool`: read by the
-		// `nestBodyOnSourceNewline` branch below; `bodyPolicyWrap`
-		// receives it but no body policy reads the source shape.
+		// `<field>BodyOnSameLine:Bool`: read by the `nestBodyOnSourceNewline` branch below.
 		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap ? {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
 			pos: Context.currentPos()
@@ -459,7 +454,6 @@ final class WriterRefFieldLowering {
 				elseFieldName: elseFieldName,
 				afterKwExpr: afterKwExpr,
 				kwLeadingExpr: kwLeadingExpr,
-				bodyOnSameLineExpr: bodyOnSameLineExpr,
 				indentObjArgs: indentObjArgs,
 				inlineBlockBodyArgs: inlineBlockBodyArgs,
 				strictFitLineArgs: child.fmtReadStringArgs(WriterLowering.STRICT_FIT_LINE_BODY),
@@ -910,21 +904,12 @@ final class WriterRefFieldLowering {
 		// bare-Ref then-body asymmetry. Gated on the same
 		// `(!isFirstField || firstFieldNlOptIn)` predicate the parser
 		// uses for `hasBeforeLeadingSlot`; null off the slot path →
-		// byte-inert. (`firstFieldNlOptIn` is declared just below
-		// alongside `bodyOnSameLineExpr` — both share the gate.)
-		// `bodyOnSameLineExpr` is the inverse of the bare-Ref
-		// `<field>BeforeNewline:Bool` synth slot (`isBareNonFirstRef`);
-		// `bodyPolicyWrap` receives it but no body policy reads the
-		// source shape. `@:fmt(beforeNewlineSlotFirst)` extends the
+		// byte-inert. `@:fmt(beforeNewlineSlotFirst)` extends the
 		// slot to a first-field body (`HxTryCatchStmt.body`), pairing
 		// with the parent Alt-branch `@:fmt(forwardNewlineForBody)`.
 		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
-		final bodyOnSameLineExpr: Null<Expr> = ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn)
-			? beforeNewlineNotAccess(fieldName)
-			: null;
 		// ω-556-then-body-leading-comment: own-line leading-comment
-		// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
-		// sibling shares the `isBareNonFirstRef` host).
+		// slot (the BeforeNewline sibling shares the `isBareNonFirstRef` host).
 		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn)
 			? headGapCommentsOutside(ctx.braceSym, child, beforeLeadingAccess(fieldName), fieldAccess, valueFieldAccess(fieldName), false)
 			: null;
@@ -984,7 +969,6 @@ final class WriterRefFieldLowering {
 			bodyTypePath: refName,
 			hasElseIf: hasElseIf,
 			elseFieldName: elseFieldName,
-			bodyOnSameLineExpr: bodyOnSameLineExpr,
 			kwPolicyFlagName: kwPolicyFlag,
 			afterTrailExpr: afterTrailExpr,
 			beforeLeadingExpr: beforeLeadingExpr,
@@ -1521,7 +1505,7 @@ final class WriterRefFieldLowering {
 		// to the pre-slice inner-branch emission.
 		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 		if (bodyPolicyForCtorPairs.length > 0) {
-			final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeLeadingSlot ? beforeNewlineNotAccess(fieldName) : null;
+
 			// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
 			// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
 			// `bodyPolicyWrap` can route a metadata-wrapped block body
@@ -1535,7 +1519,7 @@ final class WriterRefFieldLowering {
 					Context.currentPos()
 				);
 			parts.push(buildBodyPolicyForCtorChain(
-				ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, wrapBodyOnSameLineExpr, metaBlockGlueArgs
+				ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, metaBlockGlueArgs
 			));
 			// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 		} else {
@@ -1667,13 +1651,13 @@ final class WriterRefFieldLowering {
 	 * its matched runtime ctor to a `bodyPolicyWrap`, falling through to the
 	 * `_dc([sepExpr, writeCall])` default for every unpaired ctor. Iterates in
 	 * reverse so the first-declared pair sits at the chain head. Shared by the
-	 * mandatory `case Ref` leftCurly path (with metaBlockGlue / BeforeNewline
-	 * slot) and the optional-Ref leftCurly path (null both).
+	 * mandatory `case Ref` leftCurly path (with metaBlockGlue) and the
+	 * optional-Ref leftCurly path (null).
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function buildBodyPolicyForCtorChain(
 		ctx: RefFieldCtx, pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr,
-		refName: String, wrapBodyOnSameLineExpr: Null<Expr>, metaBlockGlueArgs: Null<Array<String>>
+		refName: String, metaBlockGlueArgs: Null<Array<String>>
 	): Expr {
 		final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
 		// Fold the pairs into a ternary chain. Iterate in reverse
@@ -1700,7 +1684,6 @@ final class WriterRefFieldLowering {
 				bodyTypePath: refName,
 				hasElseIf: false,
 				elseFieldName: null,
-				bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
 				metaBlockGlueArgs: wrapMetaBlockGlue
 			});
 			chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;

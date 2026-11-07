@@ -309,10 +309,8 @@ final class StarLoopLowering {
 				// Record it so we can probe the newline AFTER the
 				// separator (before the link payload): `_lead.newlineBefore`
 				// only sees the gap BEFORE the comma (usually empty —
-				// `getRaw(read),`), while the source break the writer's
-				// `Keep` wrap must reproduce lands `,\n  next`. Additive
-				// (an `@:optional Trivial.newlineAfterSep` slot, read only
-				// under `WrapMode.Keep`) → byte-inert for non-keep.
+				// `getRaw(read),`), while the source break lands `,\n  next`.
+				// Additive (an `@:optional Trivial.newlineAfterSep` slot).
 				final _leadStart: Int = ctx.pos;
 				$nonNestGate;
 				try {
@@ -418,7 +416,7 @@ final class StarLoopLowering {
 
 	private static function buildTriviaCloseLoopBody(
 		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, terminationCheck: Expr, sepMatchExpr: Expr, trailBBLocal: String,
-		trailNLLocal: String, trailLCLocal: String
+		trailLCLocal: String
 	): Expr {
 		// ω-trivia-trailing-before-sep: capture trailing same-line comment
 		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
@@ -436,10 +434,7 @@ final class StarLoopLowering {
 				final _lead = collectTrivia(ctx);
 				if ($terminationCheck) {
 					$i{trailBBLocal} = _lead.blankBefore;
-					// ω-keep-fnsig-newline: capture the close-newline alongside
-					// the close-blank so a kept signature reproduces a glued vs
-					// own-line close.
-					$i{trailNLLocal} = _lead.newlineBefore;
+
 					$i{trailLCLocal} = _lead.leadingComments;
 					break;
 				}

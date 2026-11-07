@@ -116,19 +116,19 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) n++; // sourceText
 		if (TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch)) n++; // bodyOnSameLine
 		if (TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch)) n += 2; // wrapOpenNewline + wrapOpenTrailing
-		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
-		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
+
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) n++; // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
 		if (TriviaPairAltCtor.isInfixChainBranch(branch)) n += 2; // opAfterComment + opOwnComments (infix post-operator comments)
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2 + siblings: the postfix close-trailing gate adds
-		// FIVE slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
-		// argsCloseNewline, argsInnerComment, callLeadingComment. Keep the count in
+		// FOUR slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
+		// argsInnerComment, callLeadingComment. Keep the count in
 		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
 		// the paired ctor's arity.
-		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) n += 5; // noqa: magic-number
+		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) n += 4; // noqa: magic-number
 		return n;
 	}
 
@@ -336,13 +336,7 @@ final class TriviaPairConverters {
 				entries.push({ field: fieldName + TriviaTypeSynth.AFTER_LEAD_SUFFIX, expr: macro ([]: Array<String>) });
 			if (TriviaPairSlots.isPadTrailingTerminalRef(child))
 				entries.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro false });
-			// ω-condition-wrap-keep: raw→paired upcast default for the
-			// `<field>CondOpenNewline:Bool` slot. preWrite plugin rewrites
-			// don't preserve the source's post-`(` break, so the upcast
-			// defaults to `false` → the writer falls back to the width-
-			// driven glue. Mirrors the `isPadTrailingTerminalRef` sibling.
-			if (TriviaPairSlots.isCondOpenNewlineRef(child))
-				entries.push({ field: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false });
+
 			// ω-struct-trailopt-source-track: struct
 			// typedef fields carrying `@:trailOpt(LIT)` grow a
 			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
@@ -369,9 +363,7 @@ final class TriviaPairConverters {
 		entries: Array<{ field: String, expr: Expr }>, fieldName: String, child: ShapeNode
 	): Void {
 		entries.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro false });
-		// ω-keep-fnsig-newline: sibling default for the close-newline
-		// slot (raw→paired upcast). Mirrors TRAILING_BLANK_BEFORE_SUFFIX.
-		entries.push({ field: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro false });
+
 		entries.push({ field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
 		if (child.readMetaString(':trail') != null)
 			entries.push({ field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro (null: Null<String>) });
@@ -457,8 +449,8 @@ final class TriviaPairConverters {
 			defaults.push(macro false); // wrapOpenNewline
 			defaults.push(macro (null: Null<String>)); // wrapOpenTrailing
 		}
-		if (TriviaPairAltCtor.isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
-		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
+
+		if (TriviaPairAltCtor.isInfixChainBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch))
 			defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
 		if (TriviaPairAltCtor.isInfixChainBranch(branch)) {
@@ -480,14 +472,7 @@ final class TriviaPairConverters {
 			// plugin rewrites don't preserve open-paren source shape, so the
 			// writer falls back to default (glued first arg) — consistent
 			// with the existing closeTrailing=null fallback.
-			defaults.push(macro false); // argsOpenNewline
-			// ω-keep-callclose-newline: argsCloseNewline default for raw→paired
-			// wraps. `false` matches the parser's initial state for source whose
-			// close glued (no newline before the postfix close). preWrite plugin
-			// rewrites don't preserve close-paren source shape, so the writer
-			// falls back to the glued close — consistent with the sibling
-			// argsOpenNewline=false / closeTrailing=null fallbacks.
-			defaults.push(macro false); // argsCloseNewline
+			defaults.push(macro false);
 			// ω-callarg-empty-inner-comment: argsInnerComment default for
 			// raw→paired wraps. `null` matches the parser's initial state for a
 			// call with no empty-parens inner comment.

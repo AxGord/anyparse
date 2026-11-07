@@ -67,7 +67,7 @@ final class TriviaTryparseLowering {
 	 * the resolved policy is `FitLine`, i.e. the flat/break choice is the
 	 * renderer's. Consumed by the `_fitCase` runtime local, which is
 	 * computed AFTER `_flatCase` and is mutually exclusive with it (a
-	 * policy is `Same`/`Keep` or `FitLine`, never both).
+	 * policy is `Same` or `FitLine`, never both).
 	 */
 	private static inline function triviaTryparseFitGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
 		return triviaTryparseCaseGateExpr(caseBodyFlagNames, true);
@@ -922,7 +922,7 @@ final class TriviaTryparseLowering {
 	 * Both such policies land here, split out of
 	 * `triviaTryparseWrapDispatchExpr` so they share one arm.
 	 *
-	 * `_flatCase` (`Same`, or `Keep` on same-line source) is COMMITTED to the
+	 * `_flatCase` (`Same`) is COMMITTED to the
 	 * label line: the separator is already the hard `_dt(' ')` the cascade
 	 * pushed, and the body may still wrap internally afterwards, so the
 	 * `_dn(_cols, …)` gives those wrapped lines their `+1` continuation
@@ -1376,13 +1376,13 @@ final class TriviaTryparseLowering {
 	 * One eligibility, two placement decisions. The eligibility is the body
 	 * SHAPE: `_soleFlat`, a `nestBody` Star holding exactly one element not refused by
 	 * `refuseFlatOnComplexExpr`, with no leading comment on that element. On top of it,
-	 * `_flatCase` COMMITS the body to the case-header line at write time (`Same`, or `Keep`
-	 * on same-line source) and `_fitCase` defers the same-vs-next choice to the renderer
-	 * (`FitLine`). Every other policy — `Next`, and `Keep` with a source-broken body — leaves
+	 * `_flatCase` COMMITS the body to the case-header line at write time (`Same`)
+	 * and `_fitCase` defers the same-vs-next choice to the renderer
+	 * (`FitLine`). Every other policy — `Next` — leaves
 	 * both false, which is the plain `nestBody` break.
 	 *
 	 * The two are mutually exclusive because one policy value cannot be both
-	 * `Same`/`Keep` and `FitLine`; the explicit `!_flatCase` keeps that true
+	 * `Same` and `FitLine`; the explicit `!_flatCase` keeps that true
 	 * by construction, so the two consumers may test them in either order.
 	 *
 	 * `_flatCase` additionally requires an EMPTY orphan trailing-comment run: it is the

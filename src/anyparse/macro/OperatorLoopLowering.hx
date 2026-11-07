@@ -162,18 +162,11 @@ final class OperatorLoopLowering {
 				}
 			}
 			final _args: Array<$wrappedCT> = [];
-			// ω-keep-callclose-newline: source-vertical signal for the
-			// gap before the postfix close literal. `collectTrivia`'s
-			// final iteration (the close-peek break) reports whether a
-			// newline preceded the close in `_lead.newlineBefore`
-			// (`arg\n)` vs `arg)`). Captured on the break and threaded
-			// to the writer's Keep-mode chain close placement. Default
-			// `false` for the never-iterated impossible path.
-			var _argsCloseNewline: Bool = false;
+
 			while (true) {
 				final _lead = collectTrivia(ctx);
 				if (!($closeNotNextExpr)) {
-					_argsCloseNewline = _lead.newlineBefore;
+
 					// ω-callarg-empty-inner-comment: an empty argument list whose
 					// only content is a comment (`f(/* c */)`) — the comment
 					// captured by `collectTrivia` belongs to no argument. Route it

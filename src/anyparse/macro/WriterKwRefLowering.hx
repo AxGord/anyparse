@@ -185,19 +185,7 @@ final class WriterKwRefLowering {
 		final ctorSingleLineArgs: Null<Array<String>> = branch.fmtReadStringArgs('bodyPolicySingleLine');
 		final ctorSingleLineFlag: Null<String> = ctorSingleLineArgs == null ? null : ctorSingleLineArgs[0];
 		final ctorSingleLineMultiCtors: Null<Array<String>> = ctorSingleLineArgs?.slice(1);
-		// ω-issue-257-firstline: when the ctor is the bodyPolicy-kw-Ref
-		// shape (predicate matches `HxStatement.ReturnStmt`) and trivia
-		// mode + bearing typePath, the synth ctor carries a positional
-		// `bodyOnSameLine:Bool` arg captured by the parser. Its access
-		// expression is forwarded to `bodyPolicyWrap`, where no body
-		// policy reads the source shape. The arg index follows the same
-		// ordering as `TriviaTypeSynth.buildEnumCtor`: closeTrailing
-		// (+ openTrailing/trailingBlankBefore/trailingLeading) →
-		// trailPresent → sourceText → bodyOnSameLine → postfix
-		// closeTrailing. Plain mode keeps `null`.
-		final bodyOnSameLineExpr: Null<Expr> = kw.ctx.trivia && kw.isTriviaBearing(typePath)
-			? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
-			: null;
+
 		// omega-paren-wrap-source-newline: ctors carrying
 		// @:fmt(captureWrapOpenNewline) on a single-Ref @:wrap branch grow
 		// a positional `wrapOpenNewline:Bool` arg in the synth pair (see
@@ -250,7 +238,6 @@ final class WriterKwRefLowering {
 				bodyTypePath: refName,
 				hasElseIf: false,
 				elseFieldName: null,
-				bodyOnSameLineExpr: bodyOnSameLineExpr,
 				indentObjArgs: indentArgs,
 				widthAware: ctorWidthAware,
 				ifExprIndentArgs: ifExprIndentArgs,

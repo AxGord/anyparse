@@ -29,16 +29,13 @@
 	"StructSeqLowering": [
 		"bareRefSepWhenPresent",
 		"beforeNewlineSlotFirst",
-		"captureCondOpenNewline",
 		"captureSourceNewlineAfter",
 		"captureTrailComment",
-		"condWrap",
 		"sepBeforeOpt"
 	],
 	"TriviaPairAltCtor": [
 		"bodyPolicy",
 		"captureChainNewline",
-		"captureKwNewline",
 		"capturePostfixOpSpace",
 		"captureRhsTrail",
 		"captureSource",
@@ -52,10 +49,8 @@
 		"bareRefSepWhenPresent",
 		"beforeNewlineSlotFirst",
 		"captureAfterLead",
-		"captureCondOpenNewline",
 		"captureSourceNewlineAfter",
 		"captureTrailComment",
-		"condWrap",
 		"keepBlankAfterStarCtor",
 		"nestBody",
 		"sepBeforeOpt"

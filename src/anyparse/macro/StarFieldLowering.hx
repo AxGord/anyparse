@@ -390,52 +390,7 @@ final class StarFieldLowering {
 		// the writer's struct-literal at end-of-fn can read them. Regular
 		// tryparse never writes here (rewind-on-fail uncaptures trivia);
 		// slots exist purely to satisfy synth-paired-type field shape.
-		if (isTriviaCollects) {
-			final trailBBLocal: String = trailingBlankBeforeLocalName(localName);
-			final trailNLLocal: String = trailingNewlineBeforeLocalName(localName);
-			final trailLCLocal: String = trailingLeadingLocalName(localName);
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			final arrayStrCT: ComplexType = TPath({
-				pack: [],
-				name: 'Array',
-				params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-			});
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailBBLocal,
-						type: boolCT,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-			// ω-keep-fnsig-newline: sibling zero-init local so the struct-literal
-			// push of TrailingNewlineBefore has a defined value on this path too.
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailNLLocal,
-						type: boolCT,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: trailLCLocal,
-						type: arrayStrCT,
-						expr: macro [],
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos()
-			});
-		}
+		if (isTriviaCollects) pushOrphanTrailLocals(parseSteps, localName);
 		final loopBody: Expr = buildOptKwStarLoopBody(
 			elemCT, elemCall, isTriviaCollects, sepText, starNode.fmtHasFlag('padTrailing'), trailingBlankBeforeLocalName(localName),
 			trailingLeadingLocalName(localName)
@@ -641,51 +596,10 @@ final class StarFieldLowering {
 		// trivia propagates outward through the enclosing Star's own
 		// `collectTrivia` scan rather than being stashed here.
 		final trailBBLocal: String = trailingBlankBeforeLocalName(localName);
-		final trailNLLocal: String = trailingNewlineBeforeLocalName(localName);
 		final trailLCLocal: String = trailingLeadingLocalName(localName);
 		final trailBALocal: String = trailingBlankAfterLocalName(localName);
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		final arrayStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Array',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailBBLocal,
-					type: boolCT,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
-			pos: Context.currentPos()
-		});
-		// ω-keep-fnsig-newline: sibling close-newline local, declared
-		// unconditionally next to `trailBBLocal`. Assigned from the terminal
-		// `_lead.newlineBefore` at each close-peek break below.
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailNLLocal,
-					type: boolCT,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
-			pos: Context.currentPos()
-		});
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailLCLocal,
-					type: arrayStrCT,
-					expr: macro [],
-					isFinal: false
-				}
-			]),
-			pos: Context.currentPos()
-		});
+		pushOrphanTrailLocals(parseSteps, localName);
 		// ω-trail-blank-after: tryparse + nestBody Stars carry an extra Bool
 		// slot that records whether the source had a blank line BETWEEN the
 		// stashed orphan trail comment and the next outer-Star sibling. Set
@@ -821,9 +735,7 @@ final class StarFieldLowering {
 		// the trailing after the sep (`elem, // c\n`) — covered by the
 		// `_trailingBeforeSep == null && _sepAfter` gate so we don't
 		// double-capture.
-		parseSteps.push(
-			buildTriviaCloseLoopBody(elemCT, elemCall, accumRef, terminationCheck, sepMatchExpr, trailBBLocal, trailNLLocal, trailLCLocal)
-		);
+		parseSteps.push(buildTriviaCloseLoopBody(elemCT, elemCall, accumRef, terminationCheck, sepMatchExpr, trailBBLocal, trailLCLocal));
 		if (closeText == null) return;
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{closeText}));
@@ -1236,6 +1148,41 @@ final class StarFieldLowering {
 	 */
 	private static function trailCloseCaptureExpr(starNode: ShapeNode): Expr {
 		return starNode.fmtHasFlag('captureTrailComment') ? macro null : macro collectTrailingFull(ctx);
+	}
+
+	/**
+	 * Zero-initialise the orphan-trail locals (`<local>_trailBB`, `<local>_trailLC`) of a trivia Star at
+	 * outer scope, so the struct literal at the end of the field's parse can read them whichever path ran.
+	 */
+	private static function pushOrphanTrailLocals(parseSteps: Array<Expr>, localName: String): Void {
+		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+		final arrayStrCT: ComplexType = TPath({
+			pack: [],
+			name: 'Array',
+			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
+		});
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: trailingBlankBeforeLocalName(localName),
+					type: boolCT,
+					expr: macro false,
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: trailingLeadingLocalName(localName),
+					type: arrayStrCT,
+					expr: macro [],
+					isFinal: false
+				}
+			]),
+			pos: Context.currentPos()
+		});
 	}
 
 }

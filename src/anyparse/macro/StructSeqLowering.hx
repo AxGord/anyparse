@@ -134,23 +134,13 @@ final class StructSeqLowering {
 			// uses it as the byte count for a variable-length Bytes payload.
 			final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations.get('bin.lengthPrefix');
 			if (lenPrefix != null) emitBinLengthPrefix(fieldName, lenPrefix.width, lenPrefix.encoding, parseSteps);
-			// ω-condition-wrap-keep: a mandatory-Ref condition field of a
-			// `@:fmt(condWrap)` struct opted in via
-			// `@:fmt(captureCondOpenNewline)` captures whether the source broke
-			// right after the open paren (`if (\n\tcond`). The probe spans the
-			// gap between the end of the `@:lead('(')` literal (BEFORE its
-			// post-lead `skipWs`) and the cond's first token (AFTER the
-			// pre-field `skipWs` at L~2224). Trivia+bearing only — plain mode
-			// keeps the original struct shape (no slot synthesised). Read by
-			// the writer's single-Ref condWrap emit under `WrapMode.Keep`.
-			final hasCondOpenNewlineSlot: Bool = hasCondOpenNewlineField(sc, child, typePath, isStar, isOptional, leadText);
-			final condOpenNewlineLocal: String = '_condOpenNewline_$fieldName';
+
 			// ω-before-lead: pre-declared null so a lead commit can fill it on a hit
 			// while a miss (and the absent value) leave it null. The mandatory lead
 			// fills it in `emitFieldLeadIn`, the optional one in its commit branch.
 			final beforeLeadLocal: Null<String> = hasBeforeLeadSlotField(sc, child, node, typePath) ? beforeLeadLocalName(fieldName) : null;
 			if (beforeLeadLocal != null) parseSteps.push(macro var $beforeLeadLocal: Null<String> = null);
-			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, hasCondOpenNewlineSlot, beforeLeadLocal);
+			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, beforeLeadLocal);
 			// Field value — by kind.
 			final localName: String = '_f_$fieldName';
 			// Suppress the pre-field `skipWs` only for a trivia-collecting
@@ -189,16 +179,8 @@ final class StructSeqLowering {
 			final afterLeadLocal: Null<String> = afterLeadLocalFor(sc, child, typePath, fieldName);
 			emitPreFieldWs(
 				parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
-				beforeNlLocal, beforeLeadingLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal,
-				hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
+				beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
 			);
-			// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
-			// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
-			// `[_condLeadEnd, ctx.pos)` answers "did the source break right
-			// after `(`?". Captured into the local that the struct literal
-			// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
-			// only for the opted-in condWrap cond field; `_condLeadEnd` was
-			// declared right after the lead `expectLit` above.
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
 			// trailing comment after the kw and (b) own-line leading comments
@@ -207,14 +189,13 @@ final class StructSeqLowering {
 			// `<field>KwLeading:Array<String>` of the paired type. Writer
 			// consumes them to preserve source layout.
 			//
-			// ω-keep-policy: two additional source-shape booleans captured
+			// Two additional source-shape booleans captured
 			// on the same path — `_beforeKwNl_<field>` records whether the
 			// whitespace between the preceding token and the kw crossed a
 			// newline; `_bodyOnSameLine_<field>` records whether the body
 			// follows the kw on the same line. Both default to `false` on
 			// the commit-miss path. Landed on synth slots
-			// `<field>BeforeKwNewline:Bool` / `<field>BodyOnSameLine:Bool`
-			// for the writer's `Keep` dispatch.
+			// `<field>BeforeKwNewline:Bool` / `<field>BodyOnSameLine:Bool`.
 			// Sidecar slots (<field>AfterKw, <field>KwLeading, <field>BeforeKwNewline,
 			// <field>BodyOnSameLine) only exist on the synth paired `*T` type of
 			// trivia-bearing rules. Non-bearing rules have no paired type and the
@@ -323,13 +304,13 @@ final class StructSeqLowering {
 			pushStructFieldEntries(
 				sc, structFields, fieldName, localName, child, hasStructFieldTrailOptSlot, trailPresentLocal, hasAfterTrailSlot,
 				afterTrailLocal, hasBeforeNewlineSlot, beforeNlLocal, hasBeforeLeadingSlot, beforeLeadingLocal, hasNewlineAfterSlot,
-				newlineAfterLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
-				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeTrailSlot, beforeTrailLocal
+				newlineAfterLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal,
+				beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeTrailSlot, beforeTrailLocal
 			);
 			pushLeadSlotEntries(structFields, fieldName, beforeLeadLocal, afterLeadLocal);
 			// pushStructFieldEntries pushes the field value + every applicable
 			// trivia/source-shape sidecar slot (TrailPresent / AfterTrail /
-			// BeforeNewline / BeforeLeading / NewlineAfter / CondOpenNewline / the
+			// BeforeNewline / BeforeLeading / NewlineAfter / the
 			// kw-trivia set / TrailingStar slots / SepBefore); see there for the
 			// per-slot gating rationale.
 		}
@@ -938,10 +919,9 @@ final class StructSeqLowering {
 		// carries `@:fmt(forwardNewlineForBody)` (which omits the parent's
 		// post-kw `skipWs`). The first-field `collectTrivia` then scans
 		// the gap between the parent kw and the field's first token
-		// itself, capturing `newlineBefore` for the writer's `Keep`
-		// dispatch. Currently consumed by `HxTryCatchStmt.body` to
-		// preserve `try\n\tuntyped {…}` source shape under
-		// `untypedBody=Keep`.
+		// itself, capturing `newlineBefore` for the writer's
+		// `nestBodyOnSourceNewline` dispatch. Currently consumed by
+		// `HxTryCatchStmt.body`.
 		final beforeSlots: { hasBeforeNewlineSlot: Bool, hasBeforeLeadingSlot: Bool } = computeBeforeSlots(
 			sc, child, node, typePath, isStar, isOptional, kwLead, leadText
 		);
@@ -995,9 +975,9 @@ final class StructSeqLowering {
 		sc: StructSeqCtx, structFields: Array<ObjectField>, fieldName: Null<String>, localName: String, child: ShapeNode,
 		hasStructFieldTrailOptSlot: Bool, trailPresentLocal: String, hasAfterTrailSlot: Bool, afterTrailLocal: String,
 		hasBeforeNewlineSlot: Bool, beforeNlLocal: String, hasBeforeLeadingSlot: Bool, beforeLeadingLocal: String,
-		hasNewlineAfterSlot: Bool, newlineAfterLocal: String, hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String,
-		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String,
-		beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, hasBeforeTrailSlot: Bool, beforeTrailLocal: String
+		hasNewlineAfterSlot: Bool, newlineAfterLocal: String, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String,
+		beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String,
+		hasBeforeTrailSlot: Bool, beforeTrailLocal: String
 	): Void {
 		structFields.push({ field: fieldName, expr: macro $i{localName} });
 		// ω-struct-trailopt-source-track (Session 14 Phase 3): push the
@@ -1031,11 +1011,7 @@ final class StructSeqLowering {
 		});
 		if (hasNewlineAfterSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
-		// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`
-		// slot fed by the open-paren newline probe above. Read by the
-		// writer's single-Ref condWrap emit under `WrapMode.Keep`.
-		if (hasCondOpenNewlineSlot)
-			structFields.push({ field: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro $i{condOpenNewlineLocal} });
+
 		if (hasKwTriviaSlots) {
 			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal} });
 			structFields.push({ field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal} });
@@ -1281,25 +1257,6 @@ final class StructSeqLowering {
 	}
 
 	/**
-	 * A mandatory-Ref condition field of a `@:fmt(condWrap)` struct opted in via
-	 * `@:fmt(captureCondOpenNewline)` grows a `<field>CondOpenNewline:Bool` slot
-	 * (trivia+bearing only). True for exactly that field shape. Pure predicate
-	 * lifted from `lowerStruct`.
-	 */
-	private static function hasCondOpenNewlineField(
-		sc: StructSeqCtx, child: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, leadText: Null<String>
-	): Bool {
-		return child.kind == Ref
-			&& !isStar
-			&& !isOptional
-			&& leadText != null
-			&& sc.ctx.trivia
-			&& sc.isTriviaBearing(typePath)
-			&& child.fmtHasFlag('condWrap')
-			&& child.fmtHasFlag('captureCondOpenNewline');
-	}
-
-	/**
 	 * An `@:optional @:kw(...)` Ref (or optional-kw Star) field in trivia mode
 	 * on a bearing rule grows the kw-trivia sidecar slots (`<field>AfterKw` etc.).
 	 * True for exactly that shape. Pure predicate lifted from `lowerStruct`.
@@ -1409,8 +1366,7 @@ final class StructSeqLowering {
 		//    capture source-shape booleans into
 		//    `_beforeKwNl_<field>` (pre-kw ws crossed a newline)
 		//    and `_bodyOnSameLine_<field>` (post-kw gap stayed
-		//    on the same line) for the writer's `Keep` branches
-		//    (ω-keep-policy).
+		//    on the same line) for the writer's source-shape branches.
 		//  - Trivia mode + lead: ω₆b stash — any captured leading
 		//    run flows into `pendingTrivia` for the sub-rule's
 		//    first @:trivia Star to drain.

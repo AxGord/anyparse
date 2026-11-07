@@ -256,7 +256,7 @@ final class StructFieldTrailLowering {
 	private static function emitPreFieldWs(
 		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
 		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
-		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, beforeBlankLocal: Null<String>, afterLeadLocal: Null<String>
+		beforeBlankLocal: Null<String>, afterLeadLocal: Null<String>
 	): Void {
 		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 			if (hasBeforeLeadingSlot) {
@@ -335,24 +335,6 @@ final class StructFieldTrailLowering {
 				parseSteps.push(macro skipWs(ctx));
 			}
 		}
-		// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
-		// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
-		// `[_condLeadEnd, ctx.pos)` answers "did the source break right
-		// after `(`?". Captured into the local that the struct literal
-		// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
-		// only for the opted-in condWrap cond field; `_condLeadEnd` was
-		// declared right after the lead `expectLit` above.
-		if (hasCondOpenNewlineSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: condOpenNewlineLocal,
-					type: macro : Bool,
-					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
-					isFinal: true
-				}
-			]),
-			pos: Context.currentPos()
-		});
 	}
 
 	/**
@@ -365,7 +347,7 @@ final class StructFieldTrailLowering {
 	 */
 	private static function emitFieldLeadIn(
 		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
-		hasCondOpenNewlineSlot: Bool, beforeLeadLocal: Null<String>
+		beforeLeadLocal: Null<String>
 	): Void {
 		if (isStar || isOptional) return;
 		if (kwLead != null) {
@@ -378,10 +360,6 @@ final class StructFieldTrailLowering {
 		if (beforeLeadLocal != null) parseSteps.push(macro $i{beforeLeadLocal} = collectTrailingBlock(ctx));
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{leadText}));
-		// ω-condition-wrap-keep: record the byte position right
-		// after the open paren (BEFORE the pre-field `skipWs` below)
-		// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
-		if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
 	}
 
 	/**
@@ -397,13 +375,10 @@ final class StructFieldTrailLowering {
 		child: ShapeNode, localName: String, fieldName: Null<String>, structFields: Array<ObjectField>
 	): Void {
 		final trailBBLocal: String = trailingBlankBeforeLocalName(localName);
-		final trailNLLocal: String = trailingNewlineBeforeLocalName(localName);
+
 		final trailLCLocal: String = trailingLeadingLocalName(localName);
 		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal} });
-		// ω-keep-fnsig-newline: sibling close-newline push, unconditional
-		// next to TrailingBlankBefore so the struct-literal field set
-		// matches the synth-define exactly.
-		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro $i{trailNLLocal} });
+
 		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal} });
 		// ω-close-trailing: the synth slot exists only for close-peek
 		// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate

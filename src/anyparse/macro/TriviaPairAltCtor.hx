@@ -155,9 +155,8 @@ final class TriviaPairAltCtor {
 	/**
 	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
 	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
-	 * `bodyOnSameLine:Bool` arg in the synth pair so `bodyPolicyWrap`'s
-	 * `Keep` branch can dispatch source-shape-aware between
-	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time. Reads
+	 * `bodyOnSameLine:Bool` arg in the synth pair (captured by the parser;
+	 * no body policy reads it). Reads
 	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
 	 * because `base.meta` is populated by `ShapeBuilder` before
 	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
@@ -214,25 +213,6 @@ final class TriviaPairAltCtor {
 	}
 
 	/**
-	 * ω-keep-kw-newline (increment 1b) — true when the branch is a single-Ref
-	 * mandatory-`@:kw` Alt ctor carrying `@:fmt(captureKwNewline)` (the
-	 * VarStmt-family: `VarStmt` / `FinalStmt` / `StaticVarStmt` /
-	 * `StaticFinalStmt`). Such ctors grow a positional `kwNewline:Bool` arg in
-	 * the synth pair so the `HxVarDecl` multiVar fold can reproduce the
-	 * source-author `var`→head newline under `WrapMode.Keep`. Requires the
-	 * mandatory `@:kw` for the parser commit point. Disjoint from
-	 * `isAltWrapOpenNewlineBranch` (those are kw-less @:wrap ctors). Reads the
-	 * flag via `fmtHasFlag`, which works at arm-time (`base.meta` populated by
-	 * `ShapeBuilder` before `arm()` runs — same path the sister predicates
-	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
-	 * StaticVarStmt, StaticFinalStmt}`.
-	 */
-	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.hasMeta(':kw') && branch.fmtHasFlag('captureKwNewline')));
-	}
-
-	/**
 	 * ω-keep-chain — true when the branch is a binary chain enum ctor
 	 * carrying `@:fmt(captureChainNewline)`. Two consumer families:
 	 *  - `@:infix` Pratt chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`
@@ -241,9 +221,9 @@ final class TriviaPairAltCtor {
 	 *  - `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (increment 9
 	 *    — the `lowerPostfixLoop` gap before the `.` dispatch captures the
 	 *    source newline before the `.field` segment).
-	 * Such ctors grow a positional `chainNewline:Bool` arg in the synth pair
-	 * so the chain emit (`BinaryChainEmit` / `MethodChainEmit`) can reproduce
-	 * the source per-boundary line breaks under `WrapMode.Keep`. Requires
+	 * Such ctors grow a positional `chainLeadComment` arg in the synth pair (the
+	 * infix ones also `chainNewline`, which the binary chain emit reads to place
+	 * a comment-forced break). Requires
 	 * exactly two operand children (`left,right` infix / `operand,field`
 	 * postfix). Disjoint from every sister predicate (chain ctors carry no
 	 * `@:kw` / `@:lead` / `@:trail` / `@:wrap` / bodyPolicy, and the
@@ -329,7 +309,7 @@ final class TriviaPairAltCtor {
 	 *  - the `hasOpenTrailing` / postfix-close groups reserve multiple
 	 *    slots at once (open-trailing brings THREE — `openTrailing` +
 	 *    `trailingBlankBefore` + `trailingLeading`; postfix-close the
-	 *    five call-trivia positionals).
+	 *    four call-trivia positionals).
 	 *  - `isInfixChainBranch` / `isRhsTrailBranch` / `isTernaryTrailBranch`
 	 *    have push blocks with no dedicated `has*` local — they contribute
 	 *    directly in the return expression. `isTernaryTrailBranch` reserves
@@ -341,13 +321,8 @@ final class TriviaPairAltCtor {
 		final hasCaptureSource: Bool = isCaptureSourceBranch(branch);
 		final hasBodyPolicyKw: Bool = isAltBodyPolicyKwBranch(branch);
 		final hasWrapOpenNewline: Bool = isAltWrapOpenNewlineBranch(branch);
-		final hasKwNewline: Bool = isAltKwNewlineBranch(branch);
-		final hasChainNewline: Bool = isAltChainNewlineBranch(branch);
-		// Deliberately the SAME predicate as `hasChainNewline`, not a
-		// copy-paste bug: `buildEnumCtor` pushes the `chainLeadComment`
-		// slot under the same gate as `chainNewline`, so the arity
-		// reserves both (the writer's FieldAccess pattern destructures
-		// them separately).
+
+		final hasChainNewline: Bool = isInfixChainBranch(branch);
 		final hasChainLeadComment: Bool = isAltChainNewlineBranch(branch);
 		final hasPostfixOpSpace: Bool = isPostfixOpSpaceBranch(branch);
 		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
@@ -359,11 +334,10 @@ final class TriviaPairAltCtor {
 			+ (hasArrayLitTrailPresent ? 1 : 0)
 			+ (hasBodyPolicyKw ? 1 : 0)
 			+ (hasWrapOpenNewline ? 2 : 0)
-			+ (hasKwNewline ? 1 : 0)
 			+ (hasChainNewline ? 1 : 0)
 			+ (hasChainLeadComment ? 1 : 0)
 			+ (hasPostfixOpSpace ? 1 : 0)
-			+ (hasPostfixCloseTrailing ? 5 : 0)
+			+ (hasPostfixCloseTrailing ? 4 : 0)
 			+ (isInfixChainBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
 			+ (isTernaryTrailBranch(branch) ? 2 : 0);
@@ -508,41 +482,27 @@ final class TriviaPairAltCtor {
 			args.push({ name: TriviaTypeSynth.WRAP_OPEN_NEWLINE_ARG_NAME, type: boolCT });
 			args.push({ name: TriviaTypeSynth.WRAP_OPEN_TRAILING_ARG_NAME, type: macro : Null<String> });
 		}
-		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family Alt
-		// branches opting into source-shape capture via `@:fmt(captureKwNewline)`
-		// grow a positional `kwNewline:Bool` arg holding `hasNewlineIn` over the
-		// gap between the last keyword / lead literal (`var` / `final`) and the
-		// inner `decl` Ref's first token. Disjoint from isAltWrapOpenNewlineBranch
-		// (those are kw-less @:wrap ctors) and isAltBodyPolicyKwBranch (VarStmt
-		// carries no @:fmt(bodyPolicy(...))) — composes additively. The arg
-		// follows wrapOpenNewline and precedes the postfix closeTrailing in this
-		// ordering so indices in WriterLowering stay deterministic. First
-		// consumers: HxStatement.{VarStmt, FinalStmt, StaticVarStmt, StaticFinalStmt}.
-		if (isAltKwNewlineBranch(branch)) {
-			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-			args.push({ name: TriviaTypeSynth.KW_NEWLINE_ARG_NAME, type: boolCT });
-		}
+
 		// ω-keep-chain (increment 2): Pratt/infix enum ctors opting into
 		// per-operand source-newline capture via `@:fmt(captureChainNewline)`
 		// (`HxExpr.Add` / `Sub` / `And` / `Or`) grow a positional
 		// `chainNewline:Bool` arg holding `hasNewlineIn` over the gap before
 		// this ctor's RIGHT operand. Disjoint from every predicate above
 		// (these ctors carry no @:trivia / @:lead / @:kw / @:wrap / bodyPolicy),
-		// so it composes additively as the LAST appended slot. Follows
-		// kwNewline in the ordering so WriterLowering's `altSlotAccess` walker
-		// reaches it as the terminal `ChainNewline` slot. First consumers:
-		// HxExpr.{Add, Sub, And, Or}.
-		if (isAltChainNewlineBranch(branch)) {
+		// so it composes additively as the LAST appended slot. WriterLowering's
+		// `altSlotAccess` walker reaches it as the `ChainNewline` slot. The
+		// `@:postfix('.')` FieldAccess carries none: no writer reads a dot-gap break.
+		if (isInfixChainBranch(branch)) {
 			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 			args.push({ name: TriviaTypeSynth.CHAIN_NEWLINE_ARG_NAME, type: boolCT });
 		}
 		// ω-keep-chain-receiver-comment + ω-keep-infix-operand-comment: every chain
 		// ctor — the `@:postfix('.')` FieldAccess AND the `@:infix` Add/Sub/And/Or —
-		// grows a `chainLeadComment:Null<String>` slot immediately after its
-		// `chainNewline:Bool` slot, holding the verbatim trailing comment of its left
+		// grows a `chainLeadComment:Null<String>` slot (after `chainNewline` where the
+		// ctor has one), holding the verbatim trailing comment of its left
 		// operand captured before the operator (the dot gap for FieldAccess, the
 		// operator gap for the infix chain ctors). Gated by isAltChainNewlineBranch so
-		// it appends after chainNewline and stays disjoint from the closeTrailing
+		// it stays disjoint from the closeTrailing
 		// family below (chain ctors carry no close delimiter).
 		if (isAltChainNewlineBranch(branch)) {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
@@ -597,37 +557,18 @@ final class TriviaPairAltCtor {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: 'closeTrailing', type: nullStrCT });
-			// ω-D9A-keep-callargs-v2: parallel positional `argsOpenNewline:Bool`
-			// slot capturing whether source had `\n` between the postfix open
-			// literal (e.g. `(`) and the first arg's leading non-whitespace.
-			// Drives `WriterLowering.lowerPostfixStar`'s Keep-mode args[0]
-			// hardline + trailing-before-close hardline. The per-element
-			// `Trivial.newlineBefore` for args[0] is polluted by upstream
-			// `ctx.pendingTrivia` drained from kw-Ref rules
-			// ahead of the per-iter trivia collection,
-			// so the open-newline signal needs its own slot captured by
-			// `Lowering` BEFORE the per-iter `skipWs(ctx)` / `collectTrivia(ctx)`
-			// can lose it. Co-occurs with `closeTrailing` so the writer
-			// reads via `argNames[3]` (closeTrailing stays at argNames[2]).
+			// Parallel positional `argsOpenNewline:Bool` slot capturing whether
+			// source had `\n` between the postfix open literal (e.g. `(`) and the
+			// first arg's leading non-whitespace. Co-occurs with `closeTrailing`
+			// (closeTrailing stays at argNames[2], this one is argNames[3]).
 			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 			args.push({ name: 'argsOpenNewline', type: boolCT });
-			// ω-keep-callclose-newline: sibling positional `argsCloseNewline:Bool`
-			// recording whether source had `\n` between the last arg (or the open
-			// lit for an empty list) and the postfix close literal (e.g. `arg\n)`
-			// vs `arg)`). Sibling of `argsOpenNewline` — captured by `Lowering`'s
-			// close-peek `skipWs(ctx)` window right before `expectLit(close)`.
-			// Consumed ONLY by `WriterLowering.lowerPostfixStar`'s Keep-mode
-			// method-chain close placement: when the Call's `methodChain` rules are
-			// `Keep` and this is false (source glued the close), the outer call's
-			// close `)` stays glued to the chain's last token (`})));`) instead of
-			// the `shapeFillLine` `isChainOPLBreak` own-line break. Reads via
-			// `argNames[4]` (argsOpenNewline stays at argNames[3]).
-			args.push({ name: 'argsCloseNewline', type: boolCT });
+
 			// ω-callarg-empty-inner-comment: empty-parens inner comment slot
 			// (`f(/* c */)`). Holds a comment captured between the postfix open
 			// and close when no argument consumed it; null otherwise. Sibling of
 			// closeTrailing (reuses `nullStrCT`), read by the writer via
-			// `argNames[5]`.
+			// `argNames[4]`.
 			args.push({ name: 'argsInnerComment', type: nullStrCT });
 			// ω-keep-call-leading-comment: an inline block comment that precedes
 			// the callee of a call (`/* c */ f()` / `a * /* c */ f()`) — captured
@@ -635,7 +576,7 @@ final class TriviaPairAltCtor {
 			// drain it into an argument's leading slot. Holds the pre-callee
 			// comment so the writer emits it before the operand instead of
 			// relocating it inside the argument list; null otherwise. Read by the
-			// writer via `argNames[6]`.
+			// writer via `argNames[5]`.
 			args.push({ name: 'callLeadingComment', type: nullStrCT });
 		}
 		return {

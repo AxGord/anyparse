@@ -825,11 +825,10 @@ class Codegen {
 	}
 
 	/**
-	 * ω-keep-policy — tiny helper for source-shape capture. Scans the
+	 * Tiny helper for source-shape capture. Scans the
 	 * input range `[from, to)` for a newline byte; used by the optional-
 	 * kw path in `StructSeqLowering.lowerStruct` to populate the synth
-	 * `<field>BeforeKwNewline` / `<field>BodyOnSameLine` slots that
-	 * drive the writer's `Keep` branches. Trivia-mode only.
+	 * `<field>BeforeKwNewline` / `<field>BodyOnSameLine` slots. Trivia-mode only.
 	 */
 	private static function hasNewlineInField(): Field {
 		final body: Expr = macro {

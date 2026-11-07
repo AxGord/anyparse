@@ -318,37 +318,6 @@ final class TriviaPairSlots {
 		};
 	}
 
-	/**
-	 * ω-condition-wrap-keep — true for the mandatory-Ref condition field of a
-	 * `@:fmt(condWrap)` struct (`HxIfStmt.cond` / `HxWhileStmt.cond`) that opts
-	 * into source-shape capture via `@:fmt(captureCondOpenNewline)`. Such a
-	 * field grows a `<field>CondOpenNewline:Bool` slot recording whether the
-	 * source broke right after the open paren. Requires `condWrap` (the field
-	 * carries the `@:lead('(')` open delimiter whose post-`(` gap is probed)
-	 * and a bare mandatory Ref (the condWrap contract). Disjoint from
-	 * `isPadTrailingTerminalRef` (which keys on `captureSourceNewlineAfter`).
-	 * Reads the flags via `fmtHasFlag`, which works at arm-time (`base.meta`
-	 * populated by `ShapeBuilder` before `arm()` runs — same path the sister
-	 * predicates rely on).
-	 */
-	public static function isCondOpenNewlineRef(child: ShapeNode): Bool {
-		return child.kind == Ref && (
-			child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
-			&& (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline'))
-		);
-	}
-
-	public static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
-	}
-
 	public static function buildKwTriviaSlots(child: ShapeNode, pos: Position): Array<Field> {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
@@ -359,7 +328,7 @@ final class TriviaPairSlots {
 		// populates them — `AfterKw` gets a captured same-line trailing
 		// or `null`; `KwLeading` gets a list of own-line comments
 		// (possibly empty); `BeforeKwNewline` / `BodyOnSameLine` carry
-		// source-shape booleans for the `Keep` policy branches.
+		// source-shape booleans read by the comment and `nestBodyOnSourceNewline` paths.
 		// Mandatory typing keeps Null-Safety strict happy in the
 		// writer's `kwGapDoc` / `bodyPolicyWrap` call sites.
 		return [
@@ -437,15 +406,7 @@ final class TriviaPairSlots {
 				pos: pos,
 				access: []
 			},
-			// ω-keep-fnsig-newline: sibling slot recording a single newline (not
-			// a blank line) before the close. Defined unconditionally alongside
-			// TrailingBlankBefore so the arity stays locked.
-			{
-				name: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX,
-				kind: FVar(boolCT),
-				pos: pos,
-				access: []
-			},
+
 			{
 				name: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX,
 				kind: FVar(arrayStrCT),

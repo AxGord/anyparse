@@ -85,13 +85,12 @@ class TriviaTypeSynth {
 	public static inline final KW_LEADING_SUFFIX: String = 'KwLeading';
 
 	/**
-	 * ω-keep-policy — two additional source-shape slots captured
+	 * Two additional source-shape slots captured
 	 * alongside `AfterKw` / `KwLeading` for the same `@:optional @:kw(...)`
 	 * Ref fields. `BeforeKwNewline` records whether the source had a
-	 * newline between the preceding token and the keyword (consumed by
-	 * `sameLineSeparator`'s `Keep` branch). `BodyOnSameLine` records
-	 * whether the body's first token followed the keyword on the same
-	 * line (consumed by `bodyPolicyWrap`'s `Keep` branch). Both default
+	 * newline between the preceding token and the keyword. `BodyOnSameLine`
+	 * records whether the body's first token followed the keyword on the
+	 * same line (read by `nestBodyOnSourceNewline`). Both default
 	 * to `false` on the commit-miss path.
 	 */
 	public static inline final BEFORE_KW_NEWLINE_SUFFIX: String = 'BeforeKwNewline';
@@ -240,24 +239,6 @@ class TriviaTypeSynth {
 	public static inline final NEWLINE_AFTER_SUFFIX: String = 'NewlineAfter';
 
 	/**
-	 * ω-condition-wrap-keep — source-shape slot synthesised on paired Seq
-	 * types alongside the mandatory-Ref condition field of a `@:fmt(condWrap)`
-	 * struct (`HxIfStmt.cond` / `HxWhileStmt.cond`) that opts in via
-	 * `@:fmt(captureCondOpenNewline)`. Records whether the source placed a
-	 * newline right AFTER the condition's open paren `@:lead('(')` and before
-	 * the cond's first token (`if (\n\tcond` vs `if (cond`). Read by the
-	 * single-Ref condWrap emit in `WriterLowering`, which threads it into
-	 * `WrapList.emitCondition`'s `sourceOpenNewline` arg so a `WrapMode.Keep`
-	 * condition reproduces the author's post-`(` break verbatim.
-	 *
-	 * Sister to `NewlineAfter` (which captures the gap AFTER a bare-Ref
-	 * field's last token); this captures the gap AFTER the field's lead
-	 * literal. Plain mode keeps the original struct shape (no slot); the
-	 * writer falls back to the width-driven glue.
-	 */
-	public static inline final CONDITION_OPEN_NEWLINE_SUFFIX: String = 'CondOpenNewline';
-
-	/**
 	 * ω-orphan-trivia — suffixes for trailing-trivia sibling slots
 	 * synthesised on paired Seq types alongside `@:trivia` Star fields.
 	 * `TrailingLeading` carries the own-line comments captured AFTER
@@ -269,25 +250,6 @@ class TriviaTypeSynth {
 	public static inline final TRAILING_BLANK_BEFORE_SUFFIX: String = 'TrailingBlankBefore';
 
 	public static inline final TRAILING_LEADING_SUFFIX: String = 'TrailingLeading';
-
-	/**
-	 * ω-keep-fnsig-newline — suffix for a `Bool` flag recording whether the
-	 * source placed at least one newline between the last `@:trivia` Star
-	 * element and the close literal (`param7:Int\n)` vs `param7:Int)`).
-	 * Sibling of `TrailingBlankBefore` (which records a BLANK line — 2+
-	 * newlines), captured from the same terminal `_lead.newlineBefore` at the
-	 * Star's close-peek. Consumed ONLY by `triviaSepStarExpr`'s `_keepEmit`
-	 * close-placement: under a kept function signature, the close `)` breaks
-	 * onto its own line iff the author put a newline there, so a kept
-	 * signature round-trips both `param7:Int)` (glued — e.g.
-	 * `wrapping_of_function_signature_keep`) and `\n\t):FastMatrix3` (own line
-	 * — e.g. `issue_238_keep_wrapping_function_signature`). Synthesised
-	 * unconditionally alongside `TrailingBlankBefore` so the slot arity stays
-	 * in lockstep (struct field, name-matched — no positional ctor risk).
-	 * Default `false` (no newline before close) for every non-keep / non-
-	 * bearing consumer — byte-inert.
-	 */
-	public static inline final TRAILING_NEWLINE_BEFORE_SUFFIX: String = 'TrailingNewlineBefore';
 
 	/**
 	 * ω-close-trailing — suffix for the same-line trailing comment
@@ -392,9 +354,8 @@ class TriviaTypeSynth {
 	 * ctors carrying `@:fmt(bodyPolicy(...))` on a single-Ref kw-led
 	 * branch (e.g. `HxStatementT.ReturnStmt`). The parser captures
 	 * whether the body's first token followed the keyword on the same
-	 * source line so `bodyPolicyWrap`'s `Keep` branch can pick between
-	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time — the ctor-
-	 * level mirror of the struct-field `<field>BodyOnSameLine` slot.
+	 * source line — the ctor-level mirror of the struct-field
+	 * `<field>BodyOnSameLine` slot; no body policy reads it.
 	 * Plain mode keeps the original ctor arity (no slot, default Same
 	 * layout via `widthAware`). First consumer: `HxStatementT.ReturnStmt`.
 	 */
@@ -426,24 +387,6 @@ class TriviaTypeSynth {
 	public static inline final WRAP_OPEN_TRAILING_ARG_NAME: String = 'wrapOpenTrailing';
 
 	/**
-	 * ω-keep-kw-newline (increment 1b) — positional arg name appended to
-	 * paired Alt ctors carrying `@:fmt(captureKwNewline)` on the mandatory-
-	 * `@:kw` VarStmt-family enum ctors (`VarStmt` / `FinalStmt` /
-	 * `StaticVarStmt` / `StaticFinalStmt`). The parser captures whether the
-	 * source had a newline between the LAST keyword / lead literal
-	 * (`var` / `final`) and the inner `decl` Ref's first token — i.e. the
-	 * author wrote `var\n\trawRead` (newline) vs `var rawRead` (same line).
-	 * The writer threads the flag into the `HxVarDecl` multiVar fold's
-	 * `WrapMode.Keep` head break (`_breaks[0]`) so a kept multi-var decl
-	 * round-trips the source-author `var`→head newline. Plain mode keeps
-	 * the original ctor arity (no slot; head always glued to `var `).
-	 * Sister to `bodyOnSameLine` / `wrapOpenNewline` — same parser-capture-
-	 * onto-synth-arg channel, but on the mandatory-kw enum-ctor path rather
-	 * than the optional-kw Ref path.
-	 */
-	public static inline final KW_NEWLINE_ARG_NAME: String = 'kwNewline';
-
-	/**
 	 * ω-keep-chain (increment 2) — positional arg name appended to paired
 	 * infix enum ctors carrying `@:fmt(captureChainNewline)` (the Pratt
 	 * binary-chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`). The parser
@@ -451,11 +394,10 @@ class TriviaTypeSynth {
 	 * source had a newline anywhere in the gap before this ctor's RIGHT
 	 * operand (covering both `a\n&& b` and `a +\n b` shapes). The writer's
 	 * chain `_gather` reads it into a `_breaks` array parallel to `_ops`
-	 * and threads it to `BinaryChainEmit.emit(..., sourceBreakBefore)` so a
-	 * `WrapMode.Keep` chain round-trips the source per-operator line breaks.
+	 * and threads it to `BinaryChainEmit.emit(..., sourceBreakBefore)`, whose
+	 * comment-forced layout follows the source per-operator line breaks.
 	 * Plain mode keeps the original 2-operand ctor arity (no slot; chain
-	 * always glues via `shapeNoWrap`). Sister to `kwNewline` — same parser-
-	 * capture-onto-synth-arg channel, but on the Pratt/infix enum-ctor path.
+	 * always glues via `shapeNoWrap`).
 	 */
 	public static inline final CHAIN_NEWLINE_ARG_NAME: String = 'chainNewline';
 
@@ -471,14 +413,13 @@ class TriviaTypeSynth {
 
 	/**
 	 * ω-keep-chain-receiver-comment — positional arg name appended to the
-	 * `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (alongside its
-	 * `chainNewline:Bool` slot). Holds the verbatim same-line trailing comment
+	 * `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess`. Holds the verbatim same-line trailing comment
 	 * captured by the parser in the gap BEFORE the `.` dispatch — i.e. the
 	 * trailing comment of the FieldAccess's operand. For a chain whose receiver
 	 * is a bare value (`owner // test\n\t.addEntity()…`) the inner-most
 	 * FieldAccess's operand IS that receiver, so this slot carries the
 	 * receiver's trailing comment; the chain dispatch threads it onto the
-	 * receiver Doc under `WrapMode.Keep` so the comment survives the per-segment
+	 * receiver Doc so the comment survives the per-segment
 	 * break. Null for operands whose trailing comment is already captured
 	 * elsewhere — a Call operand's `)`-trailing comment is held by the Call's
 	 * `closeTrailing` slot, so `collectTrailingFull` finds nothing left at the
@@ -640,14 +581,7 @@ class TriviaTypeSynth {
 					// `HxConditionalExpr.expr → '#end'` when both `elseifs`
 					// and `elseExpr` are absent).
 					if (TriviaPairSlots.isPadTrailingTerminalRef(child)) fields.push(TriviaPairSlots.buildNewlineAfterSlot(child, pos));
-					// ω-condition-wrap-keep: the mandatory-Ref condition field
-					// of a `@:fmt(condWrap)` struct opted in via
-					// `@:fmt(captureCondOpenNewline)` grows a `CondOpenNewline:Bool`
-					// slot capturing whether the source broke right after the
-					// condition's open paren (`if (\n\tcond`). Read by the
-					// single-Ref condWrap emit so a `WrapMode.Keep` condition
-					// reproduces the author's post-`(` break.
-					if (TriviaPairSlots.isCondOpenNewlineRef(child)) fields.push(TriviaPairSlots.buildCondOpenNewlineSlot(child, pos));
+
 					// ω-struct-trailopt-source-track:
 					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
 					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The

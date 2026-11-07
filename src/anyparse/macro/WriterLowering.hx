@@ -1785,7 +1785,7 @@ typedef SameLineShapeAwareCtx = {
  *   - `elseFieldName`       — name of the sibling `else`-side field on `value`; `null` when no peer.
  *   - `afterKwExpr`         — runtime access to captured after-kw trivia (`kwGapDoc` source).
  *   - `kwLeadingExpr`       — runtime access to captured kw-leading trivia.
- *   - `bodyOnSameLineExpr`  — runtime `Bool` source-shape slot; no layout reads it.
+
  *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
  *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
  *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a
@@ -1812,7 +1812,6 @@ typedef WrapBodyOpts = {
 	elseFieldName: Null<String>,
 	?afterKwExpr: Null<Expr>,
 	?kwLeadingExpr: Null<Expr>,
-	?bodyOnSameLineExpr: Null<Expr>,
 	?kwPolicyFlagName: Null<String>,
 	?afterTrailExpr: Null<Expr>,
 	?beforeLeadingExpr: Null<Expr>,
@@ -3013,7 +3012,6 @@ enum abstract AltSlot(Int) {
 	final CaptureSource = 2;
 	final BodyPolicyKw = 3;
 	final WrapOpenNewline = 4;
-	final KwNewline = 5;
 	final ChainNewline = 6;
 	final ChainLeadComment = 7;
 	final PostfixOpSpace = 8;

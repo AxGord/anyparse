@@ -610,8 +610,7 @@ final class PrattPostfixLowering {
 		// ω-D9A-keep-callargs-v2: alongside `_trailClose`, the ctor
 		// call grows a fourth positional `_argsOpenNewline:Bool`
 		// captured BEFORE the per-iter `skipWs`/`collectTrivia` (see
-		// macro block below). The signal feeds `lowerPostfixStar`'s
-		// Keep-mode args[0] hardline; `Trivial.newlineBefore` for
+		// macro block below); `Trivial.newlineBefore` for
 		// args[0] is unreliable due to upstream `ctx.pendingTrivia`
 		// leak so a separate parser-side capture is required.
 		final ctorCallTrivia: Expr = {
@@ -620,7 +619,6 @@ final class PrattPostfixLowering {
 				macro _args,
 				macro _trailClose,
 				macro _argsOpenNewline,
-				macro _argsCloseNewline,
 				macro _argsInnerComment,
 				macro _callLeadingComment
 			]),
@@ -723,19 +721,9 @@ final class PrattPostfixLowering {
 			pos: Context.currentPos()
 		};
 		final suffixCT: ComplexType = oc.ruleReturnCT(suffixRef);
-		// ω-keep-chain (increment 9): a `@:postfix('.')` ctor carrying
-		// `@:fmt(captureChainNewline)` (`HxExpr.FieldAccess`) grows a 3rd
-		// positional `chainNewline:Bool` synth arg in Trivia mode holding
-		// whether the source had a newline in the gap BEFORE the `.`
-		// dispatch. `_preWsPos` (the trivia while-loop's pre-skipWs save)
-		// to `ctx.pos` (just past the matched `.`) spans exactly the
-		// dot-leading gap; the `.` is a single non-newline char so the
-		// scan is equivalent to the gap before it. The writer's chain
-		// dispatch reads it into a `_breaks` array parallel to `_segs`
-		// and threads it to `MethodChainEmit.emit(..., sourceBreakBefore)`
-		// so a `WrapMode.Keep` method-chain round-trips the source per-
-		// segment dot-boundary line breaks. Plain mode keeps the original
-		// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
+		// A `@:postfix('.')` ctor carrying `@:fmt(captureChainNewline)`
+		// (`HxExpr.FieldAccess`) grows a `chainLeadComment` synth arg in Trivia
+		// mode (see below); it carries no dot-gap newline, which no writer reads.
 		final captureChainNl: Bool = oc.ctx.trivia && branch.fmtHasFlag('captureChainNewline');
 		// ω-postfix-op-space: a word-op postfix ctor with
 		// `@:fmt(capturePostfixOpSpace)` grows a positional `opSpaceBefore:Bool`
@@ -745,8 +733,8 @@ final class PrattPostfixLowering {
 		// the gap is non-empty iff their distance exceeds the operator length.
 		final captureOpSpace: Bool = oc.ctx.trivia && branch.fmtHasFlag('capturePostfixOpSpace');
 		final postfixOpLen: Int = (branch.annotations[AnnotationKeys.POSTFIX_OP]: String).length;
-		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
-		// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
+		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 3rd
+		// positional `chainLeadComment:Null<String>` slot.
 		// It reads `_opTrailComment` — the operand's trailing comment captured
 		// at the loop's pre-skipWs site (see the trivia postfix loop below).
 		// The slot lets the writer's keep-mode chain dispatch reattach a bare
@@ -759,7 +747,6 @@ final class PrattPostfixLowering {
 					? [
 						macro left,
 						macro _suffix,
-						macro _chainNl,
 						macro _opTrailComment
 					]
 					: captureOpSpace
@@ -785,7 +772,6 @@ final class PrattPostfixLowering {
 			}
 		else if (captureChainNl)
 			macro {
-				final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
 				skipWs(ctx);
 				final _suffix: $suffixCT = $suffixCall;
 				left = $ctorCall;

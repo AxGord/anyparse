@@ -1105,8 +1105,7 @@ class Lowering {
 		// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
 		// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
 		// parser captures whether the post-kw whitespace crossed a
-		// newline so `bodyPolicyWrap`'s `Keep` branch can dispatch
-		// source-shape-aware. Trivia-only — plain mode keeps the
+		// newline; no body policy reads it. Trivia-only — plain mode keeps the
 		// original ctor arity and falls back to width-driven layout
 		// via `widthAware`.
 		final triviaBodyPolicyKw: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltBodyPolicyKwBranch(branch);
@@ -1121,18 +1120,7 @@ class Lowering {
 		final triviaWrapOpenNewline: Bool = _ctx.trivia
 			&& isTriviaBearing(typePath)
 			&& TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
-		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
-		// ctors with `@:fmt(captureKwNewline)` carry a positional
-		// `kwNewline:Bool` arg. The parser captures whether the gap between
-		// the LAST keyword / lead literal (`var` / `final`) and the inner
-		// `decl` Ref's first token crossed a newline, so the writer's
-		// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
-		// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
-		// ctor arity (head always glued to `var `).
-		final triviaKwNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isAltKwNewlineBranch(branch);
-		final ctorCall: Expr = buildKwRefCtorCall(
-			ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline, triviaKwNewline
-		);
+		final ctorCall: Expr = buildKwRefCtorCall(ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline);
 		final kwLead: Null<String> = branch.annotations[AnnotationKeys.KW_LEAD_TEXT];
 		final steps: Array<Expr> = [macro skipWs(ctx)];
 		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
@@ -1168,7 +1156,7 @@ class Lowering {
 				+ 'branch is a conflict — both channels capture the post-kw newline; pick one.',
 				Context.currentPos()
 			);
-		appendKwRefLeadSteps(steps, kwLead, leadText, triviaKwNewline, triviaBodyPolicyKw, forwardNewlineForBody, triviaWrapOpenNewline);
+		appendKwRefLeadSteps(steps, kwLead, leadText, triviaBodyPolicyKw, forwardNewlineForBody, triviaWrapOpenNewline);
 		// Capture _start_pos AFTER any lead literal AND its skipWs, so
 		// the substring spans only what lives between lead and trail.
 		// In `@:raw` rules the `skipWs` call gets stripped by the rule-

@@ -44,18 +44,16 @@ package anyparse.grammar.haxe;
 enum HxStatement {
 
 	@:kw('static') @:lead('var') @:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), captureKwNewline)
+	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticVarStmt(decl: HxVarDecl);
 	@:kw('static') @:lead('final') @:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), captureKwNewline)
+	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticFinalStmt(decl: HxVarDecl);
 	@:kw('var') @:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace,
-		captureKwNewline)
+	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	VarStmt(decl: HxVarDecl);
 	@:kw('final') @:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace,
-		captureKwNewline)
+	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	FinalStmt(decl: HxVarDecl);
 
 	/**
@@ -84,7 +82,7 @@ enum HxStatement {
 			'returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'
 		), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace'), widthAware,
-		captureKwNewline, propagateExprPosition)
+		propagateExprPosition)
 	ReturnStmt(value: HxExpr);
 	@:kw('return') @:trail(';')
 	VoidReturnStmt;
