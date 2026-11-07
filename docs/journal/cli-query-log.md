@@ -1784,3 +1784,18 @@ These remain open and will be answered in the phase that needs them:
 ## From § Launch and the code cache
 
 Readings of the code-cache launcher on its own tree (`82c29e677` + the slice, node 20.18, 16 cores, load average 30–60 with other agents running): medians of 15 interleaved runs through the `hxq` shim with `HXQ_BIN` pinned, `HXQ_CODE_CACHE=0` against the default — `--help` 199 → 111 ms, `ast` of a 2.5 KB file 223 → 129, `fmt` of a 32 KB file 329 → 199, `source --range 1:20` 201 → 108; `node -e 0` 40. `lint <file> --no-oracle` (5 runs) 13.1 s → 12.4 s, inside its own noise: that command's cost is the `resolutionRoots` re-parse, not the start. Cache 5.5 MB for a 12.5 MB engine; the warm step adds the launcher compile and one child run to `haxe bin/apq-js.hxml`. A cache warmed by `--help` alone gave `fmt` 155 ms where the mixed warm gave 136 (one quieter run), for 4 ms more on `source`. node 22.12 reads its own cache (hit) and treats node 20's as a miss.
+
+Readings of the engine under node 22.16.0 (the active runtime), 24.12.0 (V8 13.6) and 26.13.0 (V8 14.6), on the tree of `b57579f41`, Apple M3 Max with 16 cores, macOS 27.2, load average 1.7–3.7 over the runs (never the quiet < 2 the plan asked for: another agent's post-land and gates were running, equal for all three arms because they alternate round by round). One engine build, copied into a directory per node with its own V8 code cache warmed by that node (the cache is keyed by the node build, so a shared one would thrash); `--max-semi-space-size=64` as the shim passes it; arms interleaved round by round, one at a time. Medians, with the spread (max − min) / median in brackets:
+
+| workload | rounds | 22.16.0 | 24.12.0 | 26.13.0 |
+|---|---|---|---|---|
+| start-up, warm code cache (`source --range 1:3`), ms | 21 | 77 (8%) | 73 (12%) | 71 (7%) |
+| start-up, no cache, ms | 11 | 148 (2%) | 143 (3%) | 130 (4%) |
+| `fmt src --list`, ms | 7 | 6954 (2%) | 6276 (1%) | 6099 (2%) |
+| `lint src --no-oracle`, ms | 7 | 31917 (5%) | 30739 (1%) | 30696 (1%) |
+| `parse-prof tparse src` (Trivia parser, Fast mode), ms per rep, 3 reps | 9 | 836 (1%) | 786 (1%) | 705 (2%) |
+| `parse-prof walk src` (parse plus `QueryNode` projection), ms per rep | 7 | 922 (2%) | 854 (1%) | 774 (1%) |
+| `parse-prof rt src` (parse plus write, what `fmt` runs), ms per rep | 7 | 6062 (1%) | 5813 (1%) | 5627 (1%) |
+| `bin/test.js`, whole suite as one process, s | 2 | 784.8 (0.1%) | 782.3 (0.1%) | 775.1 (0.1%) |
+
+Against 22: 24 is 3–10% faster on the engine workloads and 26 is 4–16% faster (parse 16% on `tparse` and `walk`, parse plus write 7%, `fmt` 12%, `lint` 4%, start-up 8–12%); the suite moves 0.3% and 1.2%, because its wall time is mostly child processes and the compiler, not engine JS. Correctness on 24 and 26: the suite ends with the same counts as 22 (20536 tests, 84898 assertions, 0 failures, 0 errors; the corpus sweep totals are the same), the six `dev probe` kits (cli, comments, lint-fix, move, new-typedef, writer-body) report 0 deviating invocations on both, the launcher reads a cache warmed by the same node (start-up 77 → 71–73 ms against the no-cache 130–148), and `dev worker-build … both` succeeds and warms its cache under each. No source change was needed for either version.
