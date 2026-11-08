@@ -310,7 +310,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
 		// asked once over the whole class's edit set, not per member. The findings above stay.
-		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, isDeclKind)) {
+		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, MemberKinds.isMemberDeclNode)) {
 			final span: Null<Span> = member.span;
 			if (span != null) _deletable.push(CheckScan.spanKey(host.file, span));
 		}
@@ -353,7 +353,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 		// preceding FIELD would otherwise carry onto the next method and answer for it — inventing a
 		// finding in one direction and hiding one in the other. A member written inside a
 		// member-position `#if` region is visited too, with the run of its own branch.
-		MemberBranchScan.eachMember(branch, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(branch, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
 			// A modifier run only SOME builds see cannot answer `public`, which this rule reads as
 			// enabling — see `MemberBranchScan.joinRuns`. This is also what keeps the old
 			// conservatism for `#if js public #end function f()`: a method public in one build only
@@ -418,11 +418,6 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			&& !name.startsWith(CheckScan.GET_PREFIX)
 			&& !name.startsWith(CheckScan.SET_PREFIX)
 			&& !(name.startsWith(DUNDER) && name.endsWith(DUNDER));
-	}
-
-	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
-	private static function isDeclKind(node: QueryNode): Bool {
-		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 }

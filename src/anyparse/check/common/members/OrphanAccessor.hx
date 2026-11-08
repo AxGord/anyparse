@@ -225,7 +225,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		// The run resets at EVERY member, not only at a method: a `static` / `@:keep` written on a
 		// preceding FIELD would otherwise carry onto the next accessor and answer for it. A member
 		// written inside a member-position `#if` region is visited too, with its own branch's run.
-		MemberBranchScan.eachMember(branch, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(branch, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
 			final isMethod: Bool = CheckScan.METHOD_KINDS.contains(child.kind);
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
@@ -272,7 +272,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
 		// asked once over the whole class's edit set, not per member. The findings above stay.
-		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, isDeclKind)) {
+		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, MemberKinds.isMemberDeclNode)) {
 			final span: Null<Span> = member.span;
 			if (span != null) _deletable.push(CheckScan.spanKey(file, span));
 		}
@@ -455,11 +455,6 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		)
 			out.push(name);
 		for (child in node.children) collectReferences(child, kinds, out);
-	}
-
-	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set every region guard counts. */
-	private static function isDeclKind(node: QueryNode): Bool {
-		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 	/**

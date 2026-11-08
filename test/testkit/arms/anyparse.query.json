@@ -15792,6 +15792,45 @@
 			"find": "return own[0] == inside[0] && own[own.length - 1] == inside[inside.length - 1] ? own : null;",
 			"replace": "return own;",
 			"note": "a closer after the region's own closer no longer makes the span ambiguous, so the first region is returned as if it were the whole span"
+		},
+		{
+			"name": "M-ANY-KIND-NO-ROOT",
+			"type": "anyparse.query.MemberKinds",
+			"method": "subtreeContainsAnyKind",
+			"find": "return kinds.contains(node.kind) || node.children.exists(",
+			"replace": "return node.children.exists(",
+			"note": "the root is no longer tested, so the walk answers for descendants only"
+		},
+		{
+			"name": "M-ANY-KIND-NO-DESCENT",
+			"type": "anyparse.query.MemberKinds",
+			"method": "subtreeContainsAnyKind",
+			"force": "kinds.contains(node.kind)",
+			"note": "the walk stops at the root, so a kind below it is never found"
+		},
+		{
+			"name": "M-ANY-KIND-EMPTY-TRUE",
+			"type": "anyparse.query.MemberKinds",
+			"method": "subtreeContainsAnyKind",
+			"find": "return kinds.contains(node.kind) ||",
+			"replace": "return kinds.length == 0 || kinds.contains(node.kind) ||",
+			"note": "an empty kind set answers true, so a caller with nothing to look for sees a hit"
+		},
+		{
+			"name": "M-MEMBER-DECL-NODE-FALSE",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isMemberDeclNode",
+			"find": "return isMemberDeclKind(node.kind);",
+			"replace": "return false;",
+			"note": "no node is a member declaration, so every region guard counts zero members"
+		},
+		{
+			"name": "M-MEMBER-DECL-NODE-TRUE",
+			"type": "anyparse.query.MemberKinds",
+			"method": "isMemberDeclNode",
+			"find": "return isMemberDeclKind(node.kind);",
+			"replace": "return true;",
+			"note": "every node is a member declaration, so a region guard counts non-members"
 		}
 	]
 }

@@ -232,34 +232,6 @@ final class PreferRangeLoop extends RuleBase {
 		return target.kind == s.identKind && target.name == loopVar;
 	}
 
-	/**
-	 * The number of DIRECT writes of `name` in `node`'s subtree — a `writeParentKinds`
-	 * node whose first child is an `identKind` named `name` (so `arr[name] = v` /
-	 * `obj.name = v`, whose target is not that bare identifier, are reads not writes).
-	 * Reification subtrees are not counted.
-	 */
-	private static function countWritesTo(node: QueryNode, name: String, s: Seams): Int {
-		if (s.opaqueKinds.contains(node.kind)) return 0;
-		var count: Int = 0;
-		if (s.writeParentKinds.contains(node.kind) && node.children.length >= 1) {
-			final target: QueryNode = node.children[0];
-			if (target.kind == s.identKind && target.name == name) count++;
-		}
-		for (c in node.children) count += countWritesTo(c, name, s);
-		return count;
-	}
-
-	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
-	private static function containsKind(node: QueryNode, kind: String, s: Seams): Bool {
-		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
-	}
-
-	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
-	private static function declaresName(node: QueryNode, name: String, s: Seams): Bool {
-		return !s.opaqueKinds.contains(node.kind)
-			&& ((s.localDeclKinds.contains(node.kind) && node.name == name) || node.children.exists(c -> declaresName(c, name, s)));
-	}
-
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
 	private static function excerpt(text: String): String {
 		final flat: String = SourceText.collapseSpaces(text);
@@ -307,10 +279,10 @@ final class PreferRangeLoop extends RuleBase {
 	private static function bodyIsRangeConvertible(body: QueryNode, loopVar: String, bound: QueryNode, s: Seams): Bool {
 		if (body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return false;
 		if (!isPostIncrementOf(body.children[body.children.length - 1], loopVar, s)) return false;
-		if (countWritesTo(body, loopVar, s) != 1) return false;
+		if (LoopScan.countWrites(body, loopVar, s) != 1) return false;
 		final boundName: Null<String> = boundIdentName(bound, s);
-		final boundWritten: Bool = boundName != null && countWritesTo(body, boundName, s) != 0;
-		return !boundWritten && !containsKind(body, s.continueKind, s) && !declaresName(body, loopVar, s);
+		final boundWritten: Bool = boundName != null && LoopScan.countWrites(body, boundName, s) != 0;
+		return !boundWritten && !LoopScan.containsKind(body, s.continueKind, s) && !LoopScan.declares(body, loopVar, s);
 	}
 
 	/**

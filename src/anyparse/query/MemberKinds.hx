@@ -323,6 +323,11 @@ final class MemberKinds {
 		return kind == shape.stringInterpTextKind || (shape.stringInterpInertSegmentKinds ?? []).contains(kind);
 	}
 
+	/** Whether `node` declares a member: `isMemberDeclKind` over the node's own kind. */
+	public static inline function isMemberDeclNode(node: QueryNode): Bool {
+		return isMemberDeclKind(node.kind);
+	}
+
 	/**
 	 * Every node kind an expression subtree may contain and still be SIDE-EFFECT-FREE, read off
 	 * the grammar rather than enumerated here: the constant literals, every inert segment of a
@@ -541,6 +546,16 @@ final class MemberKinds {
 	/** Whether the subtree rooted at `node` contains any node of kind `kind`. */
 	public static function subtreeContainsKind(node: QueryNode, kind: String): Bool {
 		return node.kind == kind || node.children.exists(c -> subtreeContainsKind(c, kind));
+	}
+
+	/**
+	 * Whether the subtree rooted at `node` (the root included) contains a node whose kind is
+	 * in `kinds`; false for an empty `kinds`. The one answer to "does this subtree hold any of
+	 * these kinds", opaque nodes not skipped — a walk that must not cross an opaque node asks
+	 * `check.scan.LoopScan.containsKind`.
+	 */
+	public static function subtreeContainsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
+		return kinds.contains(node.kind) || node.children.exists(c -> subtreeContainsAnyKind(c, kinds));
 	}
 
 	/**

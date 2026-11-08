@@ -154,7 +154,7 @@ final class LoopScan {
 	 * first child is the bare identifier `name`, so `arr[name] = v` / `obj.name = v` (whose target
 	 * is not that identifier) count as reads. Reification subtrees are not counted.
 	 */
-	public static function countWrites(node: QueryNode, name: String, s: LoopSeams): Int {
+	public static function countWrites(node: QueryNode, name: String, s: WriteScanSeams): Int {
 		if (s.opaqueKinds.contains(node.kind)) return 0;
 		var count: Int = 0;
 		if (s.writeParentKinds.contains(node.kind) && node.children.length >= 1) {
@@ -166,13 +166,13 @@ final class LoopScan {
 	}
 
 	/** Whether `node`'s subtree re-declares a local named `name`, skipping reification subtrees. */
-	public static function declares(node: QueryNode, name: String, s: LoopSeams): Bool {
+	public static function declares(node: QueryNode, name: String, s: DeclScanSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind)
 			&& ((s.localDeclKinds.contains(node.kind) && node.name == name) || node.children.exists(c -> declares(c, name, s)));
 	}
 
 	/** Whether `node`'s subtree contains a node of `kind`, skipping reification subtrees. */
-	public static function containsKind(node: QueryNode, kind: String, s: LoopSeams): Bool {
+	public static function containsKind(node: QueryNode, kind: String, s: OpaqueSeams): Bool {
 		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
 	}
 
@@ -585,6 +585,27 @@ typedef LoopSeams = {
 	var closureKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 
+}
+
+/**
+ * The one field every reification-skipping walk reads. A rule whose own seams carry
+ * `opaqueKinds` passes them as they are, with no `LoopSeams` built from a copy of the fields.
+ */
+typedef OpaqueSeams = {
+	var opaqueKinds: Array<String>;
+}
+
+/** `OpaqueSeams` plus what `countWrites` reads: the write-parent kinds and the bare identifier kind. */
+typedef WriteScanSeams = {
+	var opaqueKinds: Array<String>;
+	var writeParentKinds: Array<String>;
+	var identKind: String;
+}
+
+/** `OpaqueSeams` plus the local-declaration kinds `declares` reads. */
+typedef DeclScanSeams = {
+	var opaqueKinds: Array<String>;
+	var localDeclKinds: Array<String>;
 }
 
 /**

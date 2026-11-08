@@ -4,6 +4,7 @@ import anyparse.check.common.unused.DeadStore;
 import anyparse.check.scan.NullFlow;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
@@ -335,7 +336,8 @@ class DeadStoreTest extends Test {
 		for (s in spellings) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, 'class C { static function r(a:Array<Int>):Void { ${s.code} } }');
 			Assert.notNull(tree, 'the spelling ${s.code} no longer parses');
-			if (tree != null) Assert.isTrue(subtreeHasKind(tree, s.kind), 'the grammar no longer projects ${s.code} as ${s.kind}');
+			if (tree != null)
+				Assert.isTrue(MemberKinds.subtreeContainsKind(tree, s.kind), 'the grammar no longer projects ${s.code} as ${s.kind}');
 			Assert.isTrue(authority.contains(s.kind), 'the nested-function authority is missing ${s.kind} (${s.code})');
 		}
 	}
@@ -611,11 +613,6 @@ class DeadStoreTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(vs.length > 0, 'the dead store must be reported before its fix can be judged');
 		return check.fix(src, vs, plugin, CheckFixture.index(files, plugin));
-	}
-
-	/** Whether `node`'s subtree holds a node of kind `kind`. */
-	private static function subtreeHasKind(node: QueryNode, kind: String): Bool {
-		return node.kind == kind || node.children.exists(c -> subtreeHasKind(c, kind));
 	}
 
 }

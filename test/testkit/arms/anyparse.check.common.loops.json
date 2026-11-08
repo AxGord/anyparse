@@ -590,7 +590,7 @@
 			"name": "M-LOOPBOUND-EXITS",
 			"type": "anyparse.check.common.loops.LoopBoundLengthMismatch",
 			"method": "fillLoopOf",
-			"find": "if (containsAnyKind(body, s.exitKinds)) return null;",
+			"find": "if (MemberKinds.subtreeContainsAnyKind(body, s.exitKinds)) return null;",
 			"replace": "",
 			"note": "a fill loop that may `continue` past its append is read as appending once per iteration"
 		},

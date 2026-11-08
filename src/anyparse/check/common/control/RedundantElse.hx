@@ -4,6 +4,7 @@ import anyparse.check.scan.RegionTerminator;
 import anyparse.check.scan.ScopeFrames;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -307,13 +308,8 @@ final class RedundantElse extends RuleBase {
 	 */
 	private static function narrowingLapses(ifNode: QueryNode, elseNode: QueryNode, seams: Seams, narrowed: Array<String>): Bool {
 		return narrowed.length != 0
-			&& subtreeHasKind(ifNode.children[1], seams.resetKinds)
+			&& MemberKinds.subtreeContainsAnyKind(ifNode.children[1], seams.resetKinds)
 			&& narrowed.exists(subject -> dereferences(elseNode, subject, seams));
-	}
-
-	/** Whether `node`'s subtree holds a node of one of `kinds`. */
-	private static function subtreeHasKind(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) || node.children.exists(child -> subtreeHasKind(child, kinds));
 	}
 
 	/** Whether `node`'s subtree reads a member off `subject` — a field access whose receiver is that subject. */

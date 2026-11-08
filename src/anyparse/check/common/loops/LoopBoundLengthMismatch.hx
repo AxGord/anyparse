@@ -302,7 +302,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final bound: Null<QueryNode> = zeroBasedBound(stmt, s.core.forStmtKind, ctx);
 		if (bound == null) return null;
 		final body: QueryNode = stmt.children[1];
-		if (containsAnyKind(body, s.exitKinds)) return null;
+		if (MemberKinds.subtreeContainsAnyKind(body, s.exitKinds)) return null;
 		final direct: Array<QueryNode> = body.kind == s.core.blockStmtKind ? body.children : [body];
 		final pushes: Array<QueryNode> = [];
 		for (st in direct) {
@@ -626,11 +626,6 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	private static function statementsOf(fn: QueryNode, s: Seams): Array<QueryNode> {
 		final body: Null<QueryNode> = fn.children.length == 0 ? null : fn.children[fn.children.length - 1];
 		return body != null && s.statementListKinds.contains(body.kind) ? body.children : [];
-	}
-
-	/** Whether `node`'s subtree holds a node of any of `kinds`. */
-	private static function containsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) || node.children.exists(c -> containsAnyKind(c, kinds));
 	}
 
 	/** The trimmed source text of `node`. */

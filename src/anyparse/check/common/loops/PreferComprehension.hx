@@ -1,5 +1,6 @@
 package anyparse.check.common.loops;
 
+import anyparse.check.scan.LoopScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
@@ -831,7 +832,7 @@ final class PreferComprehension extends RuleBase {
 		final region: Null<QueryNode> = valueRegion(host, name, s);
 		if (region == null) return false;
 		final nullSafeKind: Null<String> = s.nullSafeKind;
-		if (nullSafeKind != null && containsKind(region, nullSafeKind, s)) return false;
+		if (nullSafeKind != null && LoopScan.containsKind(region, nullSafeKind, s)) return false;
 		return precedingNodesPure(region, useSpan.from, s);
 	}
 
@@ -871,11 +872,6 @@ final class PreferComprehension extends RuleBase {
 	 */
 	private static function commentIntersects(span: Span, ctx: ComprehensionCtx): Bool {
 		return ctx.comments.exists(tok -> tok.from < span.to && tok.to > span.from);
-	}
-
-	/** Whether `kind` appears anywhere in `node`'s subtree, reification aside. */
-	private static function containsKind(node: QueryNode, kind: String, s: ComprehensionSeams): Bool {
-		return !s.opaqueKinds.contains(node.kind) && (node.kind == kind || node.children.exists(c -> containsKind(c, kind, s)));
 	}
 
 

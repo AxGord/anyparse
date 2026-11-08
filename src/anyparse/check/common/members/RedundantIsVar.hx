@@ -131,7 +131,7 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		final declared: Null<TypeDeclInfo> = host.types.find(t -> t.name == owner);
 		if (declared == null || declared.hasKeep || declared.isExtern) return;
 		final candidates: Array<Candidate> = [];
-		MemberBranchScan.eachMember(branch, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(branch, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
 			final candidate: Null<Candidate> = certain ? candidateOf(child, run, source, ctx.shape) : null;
 			if (candidate != null) candidates.push(candidate);
 		});

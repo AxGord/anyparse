@@ -6,6 +6,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.CasePatterns;
 import anyparse.query.CaseSlotTypes;
 import anyparse.query.IndexScope;
+import anyparse.query.MemberKinds;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -319,10 +320,10 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final resolvedBinder: Null<QueryNode> = isolatedBinder(scan, site.switchNode, site.arm, site.pat, use, binder);
 		if (resolvedBinder == null) return null;
 		final binderNode: QueryNode = resolvedBinder;
-		if (CasePatternScan.containsAnyKind(site.pat, [seams.assignKind])) return null;
+		if (MemberKinds.subtreeContainsAnyKind(site.pat, [seams.assignKind])) return null;
 		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && CasePatternScan.containsAnyKind(site.arm, [conditional])) return null;
-		if (CasePatternScan.containsAnyKind(site.arm, seams.opaqueKinds)) return null;
+		if (conditional != null && MemberKinds.subtreeContainsAnyKind(site.arm, [conditional])) return null;
+		if (MemberKinds.subtreeContainsAnyKind(site.arm, seams.opaqueKinds)) return null;
 		final innerArms: Array<QueryNode> = site.inner.children.slice(1);
 		for (innerArm in innerArms) if (innerArm.kind != seams.caseBranchKind) return null;
 		if (bindersCollide(seams, site.pat, binderNode, innerArms)) return null;
@@ -362,7 +363,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final bound: Array<String> = [];
 		boundNames(seams, pat, binderNode, bound);
 		for (innerArm in innerArms) for (kid in innerArm.children) if (kid.kind == seams.plainCasePatternKind) {
-			if (CasePatternScan.containsAnyKind(kid, seams.extractorKinds)) return false;
+			if (MemberKinds.subtreeContainsAnyKind(kid, seams.extractorKinds)) return false;
 			boundNames(seams, kid, binderNode, bound);
 		}
 		return read.foreach(name -> !(bound.contains(name)));
@@ -536,7 +537,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		var catchAll: Bool = false;
 		for (i in at + 1...arms.length) {
 			final later: QueryNode = arms[i];
-			if (CasePatternScan.containsAnyKind(later, seams.extractorKinds)) return false;
+			if (MemberKinds.subtreeContainsAnyKind(later, seams.extractorKinds)) return false;
 			if (defaultKind != null && later.kind == defaultKind) {
 				if (later.children.length != 0) return false;
 				catchAll = true;
@@ -738,7 +739,8 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	private static function outerPatternsExtractorFree(seams: Seams, switchNode: QueryNode): Bool {
 		for (arm in switchNode.children) if (arm.kind == seams.caseBranchKind) {
 			final kids: Array<QueryNode> = arm.children;
-			for (i in 0...patternRunLength(seams, kids)) if (CasePatternScan.containsAnyKind(kids[i], seams.extractorKinds)) return false;
+			for (i in 0...patternRunLength(seams, kids)) if (MemberKinds.subtreeContainsAnyKind(kids[i], seams.extractorKinds))
+				return false;
 		}
 		return true;
 	}

@@ -233,8 +233,8 @@ final class RedundantCaseBody extends RuleBase {
 	 */
 	private static function armClean(seams: CaseSeams, arm: QueryNode): Bool {
 		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && CasePatternScan.containsAnyKind(arm, [conditional])) return false;
-		return !CasePatternScan.containsAnyKind(arm, seams.opaqueKinds) && CasePatternScan.patternsModellable(seams, arm);
+		if (conditional != null && MemberKinds.subtreeContainsAnyKind(arm, [conditional])) return false;
+		return !MemberKinds.subtreeContainsAnyKind(arm, seams.opaqueKinds) && CasePatternScan.patternsModellable(seams, arm);
 	}
 
 	/** How many leading children of `arm` are its label — its pattern run plus a guard, when it has one. */

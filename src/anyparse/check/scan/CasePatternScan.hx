@@ -208,11 +208,6 @@ final class CasePatternScan {
 		return count;
 	}
 
-	/** Whether `node`'s subtree holds a node of any kind in `kinds`. */
-	public static function containsAnyKind(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.length != 0 && (kinds.contains(node.kind) || node.children.exists(child -> containsAnyKind(child, kinds)));
-	}
-
 	/**
 	 * Whether every pattern of `arm`'s run is one a REWRITE may reason about: no EXTRACTOR (which
 	 * RUNS code while matching, so deleting the arm — or moving when its label is evaluated — is
@@ -227,8 +222,8 @@ final class CasePatternScan {
 	public static function patternsModellable(seams: CaseSeams, arm: QueryNode): Bool {
 		final nullKind: Null<String> = seams.nullLiteralKind;
 		for (pattern in patternRun(seams, arm)) {
-			if (containsAnyKind(pattern, seams.extractorKinds)) return false;
-			if (nullKind != null && containsAnyKind(pattern, [nullKind])) return false;
+			if (MemberKinds.subtreeContainsAnyKind(pattern, seams.extractorKinds)) return false;
+			if (nullKind != null && MemberKinds.subtreeContainsAnyKind(pattern, [nullKind])) return false;
 		}
 		return true;
 	}
@@ -326,8 +321,8 @@ final class CasePatternScan {
 	public static function binderGroups(seams: CaseSeams, arm: QueryNode): Null<Array<Array<PatternBinder>>> {
 		if (arm.kind != seams.caseBranchKind) return null;
 		final conditional: Null<String> = seams.conditionalKind;
-		if (conditional != null && containsAnyKind(arm, [conditional])) return null;
-		if (containsAnyKind(arm, seams.opaqueKinds)) return null;
+		if (conditional != null && MemberKinds.subtreeContainsAnyKind(arm, [conditional])) return null;
+		if (MemberKinds.subtreeContainsAnyKind(arm, seams.opaqueKinds)) return null;
 		final found: Null<Array<PatternBinder>> = binders(seams, arm);
 		if (found == null) return null;
 		final groups: Array<Array<PatternBinder>> = [];

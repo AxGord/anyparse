@@ -436,7 +436,8 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			// re-parse gate would then drop EVERY edit the pass had for this file. The collapse arm
 			// removes the field and the accessors together, so it is judged as one set.
 			if (
-				c.inlineGetter == null && MemberBranchScan.survivingDeletions(branch, cls, deletions, isDeclKind).length != deletions.length
+				c.inlineGetter == null
+				&& MemberBranchScan.survivingDeletions(branch, cls, deletions, MemberKinds.isMemberDeclNode).length != deletions.length
 			)
 				continue;
 			// A subtype references the backing field the collapse deletes; still emit when every such
@@ -1247,11 +1248,6 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		// property's name — a member only that branch's build declares.
 		return !OccurrenceScan.referencedInRange(source, field, 0, region.from, [])
 			&& !OccurrenceScan.referencedInRange(source, field, region.to, source.length, []);
-	}
-
-	/** `RefactorSupport.isMemberDeclKind` as a node predicate — the member set the region guard counts. */
-	private static function isDeclKind(node: QueryNode): Bool {
-		return MemberKinds.isMemberDeclKind(node.kind);
 	}
 
 	/**

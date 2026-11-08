@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.IndexScope;
+import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
@@ -250,7 +251,7 @@ final class EmptyCaseArm extends RuleBase {
 	 * an expression kind of its own that `binders` cannot model, so neither can sit in a candidate.
 	 */
 	private static function armSilent(seams: CaseSeams, arm: QueryNode, isDefault: Bool): Bool {
-		if (CasePatternScan.containsAnyKind(arm, seams.opaqueKinds)) return false;
+		if (MemberKinds.subtreeContainsAnyKind(arm, seams.opaqueKinds)) return false;
 		if (isDefault) return arm.children.length == 0;
 		final run: Array<QueryNode> = CasePatternScan.patternRun(seams, arm);
 		if (run.length == 0 || CasePatternScan.guardOf(seams, arm, run.length) != null) return false;

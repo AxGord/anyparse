@@ -2,6 +2,7 @@ package anyparse.check.common.members;
 
 import anyparse.check.common.members.MemberSlots.OrderedMember;
 import anyparse.check.scan.CheckScan;
+import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.Refs;
 
@@ -55,7 +56,7 @@ final class MemberInitDeps {
 		for (m in block) {
 			final init: Null<QueryNode> = m.initNode;
 			if (!m.isField || init == null) continue;
-			if (subtreeContainsAny(init, unsafe)) return false;
+			if (MemberKinds.subtreeContainsAnyKind(init, unsafe)) return false;
 			if (readsAnyFieldName(init, all, m, source)) return false;
 		}
 		for (g in all) {
@@ -200,7 +201,7 @@ final class MemberInitDeps {
 		final init: Null<QueryNode> = m.initNode;
 		return m.isField
 			&& init != null
-			&& subtreeContainsAny(init, unsafe)
+			&& MemberKinds.subtreeContainsAnyKind(init, unsafe)
 			&& !(movableArglessNew && isMovableAllocation(init, shape, source));
 	}
 
@@ -219,11 +220,6 @@ final class MemberInitDeps {
 		if (newExprKind == null || init.kind != newExprKind) return false;
 		final span: Null<Span> = init.span;
 		return span != null && source.substring(span.from, span.to).rtrim().endsWith('()');
-	}
-
-	/** Whether `node`'s subtree contains a node of any kind in `kinds`. */
-	private static function subtreeContainsAny(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) || node.children.exists(c -> subtreeContainsAny(c, kinds));
 	}
 
 	/**

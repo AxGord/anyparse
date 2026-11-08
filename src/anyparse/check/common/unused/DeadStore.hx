@@ -555,12 +555,7 @@ final class DeadStore extends RuleBase {
 			&& node.kind == ctx.callKind
 			&& node.children.length >= 2
 			&& navKind != null
-			&& containsKind(node.children[0], navKind);
-	}
-
-	/** Whether `node`'s subtree contains a node of `kind`. */
-	private static function containsKind(node: QueryNode, kind: String): Bool {
-		return node.kind == kind || node.children.exists(c -> containsKind(c, kind));
+			&& MemberKinds.subtreeContainsKind(node.children[0], navKind);
 	}
 
 	/**
