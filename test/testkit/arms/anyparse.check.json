@@ -423,6 +423,14 @@
 			"method": "maskRestAfter",
 			"force": "text",
 			"note": "the tail after an anchor stays in the message identity again, so a quoted rewrite that moves re-keys a finding that never changed"
+		},
+		{
+			"name": "M-LINTREACH-AFTER-SUPERSESSION",
+			"type": "anyparse.check.Linter",
+			"method": "collect",
+			"find": "return withoutSuperseded(narrow == null ? gated : narrow(gated), checks);",
+			"replace": "final superseded: Array<Violation> = withoutSuperseded(gated, checks); return narrow == null ? superseded : narrow(superseded);",
+			"note": "the caller withholds findings after supersession, so a withheld finding has already taken the one it supersedes with it"
 		}
 	]
 }

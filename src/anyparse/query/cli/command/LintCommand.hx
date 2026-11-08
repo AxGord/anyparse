@@ -315,8 +315,12 @@ final class LintCommand implements CliCommand {
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		final explainer: Null<ThreadSafety> = LintExplainLong.explainer(activeChecks, o.explainLong);
-		final found: Array<Violation> = LintReport.withinRange(
-			Linter.run(files, cached, activeChecks, resolveConfig, applyEnablement), f -> sourceOf[f], o.range
+		final reach: ImportReach = new ImportReach(OracleProviders.of(plugin), oracles);
+		// The range and the reach both narrow BEFORE supersession: a finding either withholds must not take the one it supersedes with it,
+		// and a finding outside the range costs no probe.
+		final found: Array<Violation> = Linter.run(
+			files, cached, activeChecks, resolveConfig, applyEnablement,
+			all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)
 		);
 		// One narrowing, applied before everything downstream: the report, the severity summary and
 		// `--fail-on` all speak about the SAME set, so a caller can gate on "my edit introduced

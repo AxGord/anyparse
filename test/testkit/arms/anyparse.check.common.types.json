@@ -354,6 +354,30 @@
 			"find": "!type.isPrivate && ",
 			"replace": "",
 			"note": "a module-private enum is respelled to a bit set of a module that cannot name it, which does not compile"
+		},
+		{
+			"name": "M-REMEDY-MAPASSET-SET-UNSET",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "run",
+			"find": "remedy: grows ? setType : null",
+			"replace": "remedy: null",
+			"note": "a growing-set finding names no remedy module, so it is reported in a file whose build cannot resolve the project set type"
+		},
+		{
+			"name": "M-REMEDY-MAPASSET-BITS-UNSET",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "run",
+			"find": "remedy: bitsType",
+			"replace": "remedy: null",
+			"note": "a bit-set finding names no remedy module, so it is reported in a file whose build cannot resolve the project bit-set type"
+		},
+		{
+			"name": "M-REMEDY-MAPASSET-ARRAY-NAMES",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "run",
+			"find": "remedy: grows ? setType : null",
+			"replace": "remedy: setType",
+			"note": "the Array advice names the project set module although it needs none, so a build blind to that module silences a finding whose advice it can follow"
 		}
 	]
 }

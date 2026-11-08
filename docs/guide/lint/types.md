@@ -86,6 +86,8 @@ A project that names its set type, `"map-as-set": { "enabled": true, "set": "any
 
 A project that names its bit-set type, `"map-as-set": { "enabled": true, "bits": "anyparse.ds.Bits" }`, is told that a set whose key is a fixed enum domain is a bit set, growing or not, and `--fix` respells it the same way (`new Bits<K>()`, `add`, `has`, `remove`, `clear`; the import is added). The key is a domain when it resolves to one declaration that is an enum whose constructors take no parameters, or an `Int` enum abstract whose every value is a non-negative integer literal; a private, generic or `@:build` type is not. A bit set is a value its own `add` replaces, so a `final` binding keeps the advice it had (an array, or the set type's rewrite when `set` is named), and so does a key that is not such a domain. Without the `bits` key nothing changes.
 
+Like `prefer-compare-function`, a bit-set finding, and a growing-set finding under `set`, is silent in a file whose `compilerOracle` build cannot read the named module (the array advice needs no module and stays reported).
+
 ## `prefer-is-operator`
 
 A two-argument `Std.isOfType(x, T)` whose second argument names a type, replaceable with the

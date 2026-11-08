@@ -15925,6 +15925,30 @@
 			"method": "firstOf",
 			"force": "new AbsentOracle()",
 			"note": "a write mixing grammars would be judged by no compiler"
+		},
+		{
+			"name": "M-IMPORTREACH-REPORT-KEEPS-ALL",
+			"type": "anyparse.query.ImportReach",
+			"method": "remedyResolves",
+			"find": ".foreach(coverage -> coverage.unreached(v.file, [module]) == null)",
+			"replace": ".foreach(coverage -> true)",
+			"note": "every finding naming a remedy module is reported, so a file whose build cannot resolve the helper is still told to use it"
+		},
+		{
+			"name": "M-IMPORTREACH-REPORT-DROPS-ALL",
+			"type": "anyparse.query.ImportReach",
+			"method": "remedyResolves",
+			"find": ".foreach(coverage -> coverage.unreached(v.file, [module]) == null)",
+			"replace": ".foreach(coverage -> false)",
+			"note": "every finding naming a remedy module is withheld, so a build that holds the helper never hears of the site"
+		},
+		{
+			"name": "M-IMPORTREACH-PROBES-EAGERLY",
+			"type": "anyparse.query.ImportReach",
+			"method": "remedyResolves",
+			"find": "importedPaths(source, plugin).contains(module)",
+			"replace": "false",
+			"note": "the declared builds are compiled for a remedy module the file already imports, so a report pays a compile for a question the file itself answers"
 		}
 	]
 }

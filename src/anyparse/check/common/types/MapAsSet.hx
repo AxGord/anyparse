@@ -173,7 +173,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 						rule: RULE_ID,
 						severity: Severity.Info,
 						message: '\'$name\' is a map whose every value is true, a set of the values of $key — '
-						+ '${SourceText.lastSegment(bitsType)}<$key> says the same'
+						+ '${SourceText.lastSegment(bitsType)}<$key> says the same',
+						remedy: bitsType
 					});
 					return;
 				}
@@ -191,7 +192,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 							+ SourceText.lastSegment(setType ?? '')
 							+ '<$key> says the same'
 						: '\'$name\' is a map whose every value is true, used only as a set of keys — Array<$key'
-							+ '> with contains() says the same'
+							+ '> with contains() says the same',
+					remedy: grows ? setType : null
 				});
 			});
 		});

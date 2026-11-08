@@ -119,7 +119,8 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 				span: c.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'this cut of a string is ${SourceText.lastSegment(path)}.${c.member}'
+				message: 'this cut of a string is ${SourceText.lastSegment(path)}.${c.member}',
+				remedy: path
 			});
 		});
 		return found.concat(problems);

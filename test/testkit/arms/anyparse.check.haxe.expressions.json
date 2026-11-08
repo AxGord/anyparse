@@ -423,6 +423,22 @@
 			"find": "m.paramSkippableFrom == CUT_PARAMS",
 			"replace": "true",
 			"note": "a required third parameter is accepted, so the fix writes a two-argument call that does not compile"
+		},
+		{
+			"name": "M-REMEDY-COMPARE-UNSET",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "run",
+			"find": "remedy: m.compare?.typePath",
+			"replace": "remedy: null",
+			"note": "a finding naming the project compare function carries no remedy module, so it is reported in a file whose build cannot resolve that function"
+		},
+		{
+			"name": "M-REMEDY-SPLIT-UNSET",
+			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
+			"method": "run",
+			"find": "remedy: path",
+			"replace": "remedy: null",
+			"note": "a finding naming the project text utility carries no remedy module, so it is reported in a file whose build cannot resolve that utility"
 		}
 	]
 }

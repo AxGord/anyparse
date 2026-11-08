@@ -441,7 +441,7 @@ final class FixtureCompileCache {
 		final described: Array<Array<String>> = [
 			for (files in contents) {
 				final names: Array<String> = [for (name in files.keys()) name];
-				names.sort(Reflect.compare); // noqa: prefer-compare-function
+				names.sort(Reflect.compare);
 				names.map(name -> '$name\t${files[name]}');
 			}
 		];

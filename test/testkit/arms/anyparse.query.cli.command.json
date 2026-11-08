@@ -996,6 +996,22 @@
 			"find": "= compiler.typecheckEachReading(ready, false);",
 			"replace": "= anyparse.check.oracle.CompilerOracle.typecheckEachReading(ready, false);",
 			"note": "apq oracle on a grammar with no compiler runs the Haxe compiler and claims a verdict it cannot record"
+		},
+		{
+			"name": "M-LINTREACH-REPORT-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)",
+			"replace": "all -> LintReport.withinRange(all, f -> sourceOf[f], o.range)",
+			"note": "the report never asks the import reach, so a site whose helper the file build cannot see is still reported"
+		},
+		{
+			"name": "M-LINTREACH-REPORT-DROPS-REMEDIED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)",
+			"replace": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached).filter(v -> v.remedy == null)",
+			"note": "every finding naming a remedy module is withheld, so a build that holds the helper never hears of the site"
 		}
 	]
 }

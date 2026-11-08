@@ -713,11 +713,12 @@ final class Linter {
 	 * defaults the inverse of `run`'s on purpose, so a caller that forgets the flag writes nothing a config switched
 	 * off; `run` and the fix verifiers pass the run's own `applyEnablement`, which an explicit `--rule` selection
 	 * turns off for the report and every fix alike. A `CrossFileAnchored` check is handed the same per-file answer
-	 * before it runs, so it anchors each finding where the finding survives.
+	 * before it runs, so it anchors each finding where the finding survives. `narrow`, when given, withholds findings after
+	 * those gates and BEFORE supersession: a finding the caller withholds must not take the finding it supersedes with it.
 	 */
 	public static function collect(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true, ?narrow: (Array<Violation>) -> Array<Violation>
 	): Array<Violation> {
 		final resolve: Null<(String) -> LintConfig> = resolveConfig;
 		for (check in checks) if (check is CrossFileAnchored)
@@ -727,7 +728,8 @@ final class Linter {
 		];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
 		final kept: Array<Violation> = Suppression.apply(unquoted, files, plugin.lexicalRegions);
-		return withoutSuperseded(resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement), checks);
+		final gated: Array<Violation> = resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
+		return withoutSuperseded(narrow == null ? gated : narrow(gated), checks);
 	}
 
 	/**
@@ -747,12 +749,12 @@ final class Linter {
 	 * resolver for severity/options is NOT silently robbed of findings whose
 	 * rule a config disables (the trap when it defaulted true) — matching
 	 * `--rule` semantics, where an explicitly selected check runs regardless
-	 * of `enabled`. The CLI's non-`--rule` path passes true explicitly to keep
-	 * config-disabled rules out of a full report.
+	 * of `enabled`. The CLI's non-`--rule` path passes true explicitly to keep config-disabled rules
+	 * out of a full report. `narrow` is `collect`'s: it withholds findings before supersession.
 	 */
 	public static function run(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false, ?narrow: (Array<Violation>) -> Array<Violation>
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
 		// Parse each file once and share the trees across all checks — each check
@@ -764,7 +766,7 @@ final class Linter {
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		// `collect` has already applied the reification, inline-suppression and (unless an explicit
 		// --rule selection bypasses it) per-file enablement gates.
-		final out: Array<Violation> = collect(files, cached, active, resolveConfig, applyEnablement);
+		final out: Array<Violation> = collect(files, cached, active, resolveConfig, applyEnablement, narrow);
 		if (resolveConfig == null) return out;
 		for (violation in out) {
 			final sev: Null<Severity> = resolveConfig(violation.file).severityFor(violation.rule);

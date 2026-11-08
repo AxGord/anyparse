@@ -126,7 +126,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				span: m.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: m.message + (m.noFix == null ? '' : '; no fix, ${m.noFix}')
+				message: m.message + (m.noFix == null ? '' : '; no fix, ${m.noFix}'),
+				remedy: m.compare?.typePath
 			});
 		});
 		for (problem in problems) found.push({

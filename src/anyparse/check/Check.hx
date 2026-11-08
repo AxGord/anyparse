@@ -43,6 +43,13 @@ typedef Violation = {
 	 */
 	@:optional var data: Null<FindingData>;
 
+	/**
+	 * The module a finding's remedy names that the file must resolve, or null when the remedy names none the file's builds could
+	 * lack — set by a rule whose advice is a project-configured helper. `ImportReach.reportable` withholds the finding in a file
+	 * whose build cannot see the module; no reported byte changes, as for `declineReason`.
+	 */
+	@:optional var remedy: Null<String>;
+
 }
 
 /**

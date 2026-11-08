@@ -1277,6 +1277,71 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "R1",
+			"note": "prefer-compare-function on a build that cannot read the named function: no finding at its sites, and the rules those sites supersede (redundant-lambda-wrapper, prefer-if-expression-chain) report there",
+			"argv": [
+				"hxq",
+				"lint",
+				"leaf/src/C.hx",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"leaf/narrow.hxml\",\"dir\":\"leaf\"}],\"resolutionRoots\":[\"shared\",\"leaf/src\"],\"rules\":{\"prefer-compare-function\":{\"enabled\":true,\"compare\":{\"String\":\"lib.Cmp.strings\",\"Int\":\"lib.Cmp.ints\"}},\"redundant-lambda-wrapper\":{\"enabled\":true},\"prefer-if-expression-chain\":{\"enabled\":true},\"prefer-if-expression-return\":{\"enabled\":true}}}\n",
+				"leaf/narrow.hxml": "-cp src\n-main C\n",
+				"leaf/src/C.hx": "@:nullSafety(Strict)\nclass C {\n\tstatic function main() {}\n\n\tfunction wrapped(xs:Array<String>):Void {\n\t\txs.sort((a, b) -> Reflect.compare(a, b));\n\t}\n\n\tfunction ternary(xs:Array<String>):Void {\n\t\txs.sort((a:String, b:String) -> a < b ? -1 : a > b ? 1 : 0);\n\t}\n\n\tfunction statements(xs:Array<String>):Void {\n\t\txs.sort(function(a:String, b:String):Int {\n\t\t\tif (a < b) return -1;\n\t\t\tif (a > b) return 1;\n\t\t\treturn 0;\n\t\t});\n\t}\n}\n",
+				"shared/lib/Cmp.hx": "package lib;\nclass Cmp {\n\tpublic static function strings(a:String, b:String):Int return a < b ? -1 : a > b ? 1 : 0;\n\tpublic static function ints(a:Int, b:Int):Int return a - b;\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "7bd7750d5a2ea5e9",
+				"err": "c41d047739c25fad",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "REACH-MAP-AS-SET",
+			"note": "map-as-set advises the project set type lib.Set, which the only declared build (-cp src alone) cannot resolve, run under --no-oracle: the finding is withheld, not reported",
+			"argv": [
+				"hxq",
+				"lint",
+				"leaf/src/C.hx",
+				"--no-oracle",
+				"--rule",
+				"map-as-set",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\n\tstatic function main() {}\n\n}\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"leaf/narrow.hxml\",\"dir\":\"leaf\"}],\"resolutionRoots\":[\"shared\",\"leaf/src\"],\"rules\":{\"map-as-set\":{\"enabled\":true,\"set\":\"lib.Set\"}}}\n",
+				"leaf/narrow.hxml": "-cp src\n-main C\n",
+				"leaf/src/C.hx": "class C {\n\tstatic function main() {\n\t\tnew C().f([\"a\"]);\n\t}\n\n\tpublic function new() {}\n\n\tpublic function f(names:Array<String>):Bool {\n\t\tfinal seen:Map<String, Bool> = new Map();\n\t\tfor (name in names) {\n\t\t\tseen.set(name, true);\n\t\t}\n\t\treturn seen.exists(\"a\");\n\t}\n}\n",
+				"shared/lib/Set.hx": "package lib;\nclass Set<T> {\n\tpublic function new() {}\n\tpublic function add(k:T):Void {}\n\tpublic function has(k:T):Bool return false;\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e9c853be52da8a63",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

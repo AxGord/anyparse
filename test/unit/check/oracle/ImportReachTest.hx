@@ -1,6 +1,9 @@
 package unit.check.oracle;
 
+import anyparse.check.Check;
 import anyparse.check.LintConfig;
+import anyparse.check.common.types.MapAsSet;
+import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
 import anyparse.check.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
@@ -20,11 +23,24 @@ import anyparse.query.cli.command.LintFixDriver;
 final class ImportReachTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"prefer-split-part":{"enabled":true,"textTools":"lib.Text"}}}';
+	private static inline final COMPARE_CONFIG: String =
+		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Cmp.strings"}}}}';
 	private static final TEXT: String = 'package lib;\nclass Text {\n'
 		+ '\tpublic static function allBefore(text:String, delimiter:String):String return text;\n'
 		+ '\tpublic static function allAfterLast(text:String, delimiter:String):String return text;\n}';
 	private static final MAIN: String =
 		'class C {\n\n\tstatic function main() {}\n\n\tfunction f(s:String):Void {\n\t\tvar a = s.split(",")[0];\n\t}\n\n}\n';
+	private static final SET_CONFIG: String = '{"rules":{"map-as-set":{"enabled":true,"set":"lib.Sets","bits":"lib.Flags"}}}';
+	private static final GROWN: String = 'class C {\n\n\tstatic function main() {}\n\n\tfunction f(k:String):Bool {\n'
+		+ '\t\tfinal seen:Map<String, Bool> = [];\n\t\tfor (i in 0...3) seen[k] = true;\n\t\treturn seen.exists(k);\n\t}\n\n}\n';
+	private static final ONCE: String = 'class C {\n\n\tstatic function main() {}\n\n\tfunction f(k:String):Bool {\n'
+		+ '\t\tfinal seen:Map<String, Bool> = [];\n\t\tseen["a"] = true;\n\t\treturn seen.exists(k);\n\t}\n\n}\n';
+	private static final FLAGGED: String = 'enum Color {\n\tRed;\n\tGreen;\n}\n\nclass C {\n\n\tstatic function main() {}\n\n'
+		+ '\tfunction f(c:Color):Bool {\n\t\tvar seen:Map<Color, Bool> = [];\n\t\tseen[c] = true;\n\t\treturn seen.exists(c);\n\t}\n\n}\n';
+	private static final CMP: String = 'package lib;\nclass Cmp {\n\tpublic static function strings(a:String, b:String):Int return 0;\n}';
+	private static final SORTED: String = '@:nullSafety(Strict)\nclass C {\n\n\tstatic function main() {}\n\n'
+		+ '\tfunction wrapped(xs:Array<String>):Void {\n\t\txs.sort((a, b) -> Reflect.compare(a, b));\n\t}\n\n'
+		+ '\tfunction ternary(xs:Array<String>):Void {\n\t\txs.sort((a:String, b:String) -> a < b ? -1 : a > b ? 1 : 0);\n\t}\n\n}\n';
 
 	/** The driver refuses a fix importing what the file's own build cannot see, with a sentence naming the module. */
 	@:pin('control')
@@ -141,6 +157,117 @@ final class ImportReachTest extends Test {
 		#end
 	}
 
+	/** A finding whose only remedy imports what a build reading its file cannot see is not reported, though the rule found it. */
+	@:pin('control')
+	@:killer('M-IMPORTREACH-REPORT-KEEPS-ALL')
+	public function testAFindingWhoseRemedyTheBuildCannotSeeIsNotReported(): Void {
+		#if (sys || nodejs)
+		final root: String = fixture();
+		Assert.equals(1, foundIn(root, MAIN).own.length, 'the rule does find the site');
+		Assert.equals(0, reportedUnder(root, reachOver([leaf(root, 'narrow.hxml')]), MAIN).length);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same finding in a build that holds the module is reported, and so is one when a build is not asked at all. */
+	@:pin('control')
+	@:killer('M-IMPORTREACH-REPORT-DROPS-ALL')
+	public function testAFindingWhoseRemedyTheBuildSeesIsReported(): Void {
+		#if (sys || nodejs)
+		final root: String = fixture();
+		Assert.equals(1, reportedUnder(root, reachOver([leaf(root, 'wide.hxml')]), MAIN).length);
+		Assert.equals(1, reportedUnder(root, reachOver([]), MAIN).length, 'no declared build, no question');
+		Assert.equals(
+			0, reportedUnder(root, reachOver([leaf(root, 'wide.hxml'), leaf(root, 'narrow.hxml')]), MAIN).length,
+			'one blind build is enough'
+		);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Builds are compiled only for a finding whose fix would add an import: one the file already has asks nothing. */
+	@:pin('control')
+	@:killer('M-IMPORTREACH-PROBES-EAGERLY')
+	public function testNoBuildIsProbedWhenTheFixAddsNoImport(): Void {
+		#if (sys || nodejs)
+		final root: String = fixture();
+		final reach: ImportReach = reachOver([leaf(root, 'narrow.hxml')]);
+		Assert.equals(1, reportedUnder(root, reach, 'import lib.Text;\n\n$MAIN').length);
+		Assert.isFalse(reach.probed(), 'an import already in the file is nothing to probe for');
+		Assert.equals(0, reportedUnder(root, reach, MAIN).length);
+		Assert.isTrue(reach.probed(), 'the same builds are probed once a fix would import');
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A finding advising the project's helper names its module: that is what a build is asked about. */
+	@:pin('control')
+	@:killer('M-REMEDY-COMPARE-UNSET')
+	public function testACompareFindingNamesTheModuleOfItsFunction(): Void {
+		final run: Found = compareFoundIn('.', SORTED);
+		Assert.equals(1, run.own.length);
+		Assert.equals('lib.Cmp', run.own[0].remedy);
+	}
+
+	/** A compare finding follows the same reach: silent where the build cannot read `lib.Cmp`, reported where it can. */
+	@:pin('control')
+	@:killer('M-IMPORTREACH-REPORT-KEEPS-ALL')
+	public function testACompareFindingFollowsTheSameReach(): Void {
+		#if (sys || nodejs)
+		final root: String = fixture();
+		final run: Found = compareFoundIn(root, SORTED);
+		Assert.equals(0, reachOver([leaf(root, 'narrow.hxml')]).reportable(run.own, run.files, run.plugin).length);
+		Assert.equals(1, reachOver([leaf(root, 'wide.hxml')]).reportable(run.own, run.files, run.plugin).length);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A split-part finding names its utility's module. */
+	@:pin('control')
+	@:killer('M-REMEDY-SPLIT-UNSET')
+	public function testASplitFindingNamesTheModuleOfItsUtility(): Void {
+		final run: Found = foundIn('.', MAIN);
+		Assert.equals(1, run.own.length);
+		Assert.equals('lib.Text', run.own[0].remedy);
+	}
+
+	/** A growing map-as-set finding names the project's `set` module, a bit-set finding its `bits` module, and the Array advice none. */
+	@:pin('control')
+	@:killer('M-REMEDY-MAPASSET-SET-UNSET')
+	public function testAGrowingSetFindingNamesTheSetModule(): Void {
+		final run: Found = mapAsSetFoundIn(GROWN);
+		Assert.equals(1, run.own.length);
+		Assert.stringContains('Sets<String>', run.own[0].message);
+		Assert.equals('lib.Sets', run.own[0].remedy);
+	}
+
+	@:pin('control')
+	@:killer('M-REMEDY-MAPASSET-BITS-UNSET')
+	public function testABitSetFindingNamesTheBitsModule(): Void {
+		final run: Found = mapAsSetFoundIn(FLAGGED);
+		Assert.equals(1, run.own.length);
+		Assert.stringContains('Flags<Color>', run.own[0].message);
+		Assert.equals('lib.Flags', run.own[0].remedy);
+	}
+
+	/** The Array advice needs no project module, so nothing is asked of a build for it. */
+	@:pin('control')
+	@:killer('M-REMEDY-MAPASSET-ARRAY-NAMES')
+	public function testTheArrayAdviceNamesNoModule(): Void {
+		final run: Found = mapAsSetFoundIn(ONCE);
+		Assert.equals(1, run.own.length);
+		Assert.stringContains('Array<String>', run.own[0].message);
+		Assert.isNull(run.own[0].remedy);
+	}
+
 	#if (sys || nodejs)
 	/** Two leaves over one tree: `narrow` sees `src` alone, `wide` also sees the root `lib.Text` lives under. */
 	private static function fixture(): String {
@@ -148,7 +275,8 @@ final class ImportReachTest extends Test {
 			{ name: 'leaf/narrow.hxml', source: '-cp src\n-main C\n' },
 			{ name: 'leaf/wide.hxml', source: '-cp src\n-cp ../shared\n-main C\n' },
 			{ name: 'leaf/src/C.hx', source: MAIN },
-			{ name: 'shared/lib/Text.hx', source: TEXT }
+			{ name: 'shared/lib/Text.hx', source: TEXT },
+			{ name: 'shared/lib/Cmp.hx', source: CMP }
 		]);
 	}
 
@@ -167,17 +295,60 @@ final class ImportReachTest extends Test {
 
 	/** The groups `lint --fix` would collect for `C.hx` under `reach`. */
 	private static function groupsUnder(root: String, reach: ImportReach): Array<RuleEdits> {
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final run: Found = foundIn(root, MAIN);
+		return LintFixDriver.collectFileLintEdits(MAIN, run.own, [run.check], run.plugin, CheckFixture.index(run.files, run.plugin), reach);
+	}
+
+	/** The findings `lint` would report for `source` as `C.hx`, once `reach` has asked each remedy's builds. */
+	private static function reportedUnder(root: String, reach: ImportReach, source: String): Array<Violation> {
+		final run: Found = foundIn(root, source);
+		return reach.reportable(run.own, run.files, run.plugin);
+	}
+
+	private static function foundIn(root: String, source: String): Found {
 		final check: PreferSplitPart = new PreferSplitPart();
 		check.setConfigResolver(_ -> LintConfig.parse(CONFIG));
+		return foundBy(root, source, check, CONFIG);
+	}
+
+	/** The findings of `compare` over `source` as `C.hx`, the project naming `lib.Cmp.strings` for `String`. */
+	private static function compareFoundIn(root: String, source: String): Found {
+		final check: PreferCompareFunction = new PreferCompareFunction();
+		check.setConfigResolver(_ -> LintConfig.parse(COMPARE_CONFIG));
+		return foundBy(root, source, check, COMPARE_CONFIG);
+	}
+
+	/** The findings of `map-as-set` over `source` as `C.hx`, the project naming `lib.Sets` and `lib.Flags` as its set and bit-set types. */
+	private static function mapAsSetFoundIn(source: String): Found {
+		final check: MapAsSet = new MapAsSet();
+		check.setConfigResolver(_ -> LintConfig.parse(SET_CONFIG));
+		return foundBy('.', source, check, SET_CONFIG);
+	}
+
+	private static function foundBy(root: String, source: String, check: Check, config: String): Found {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = [
-			{ file: '$root/leaf/src/C.hx', source: MAIN },
-			{ file: 'lib/Text.hx', source: TEXT }
+			{ file: '$root/leaf/src/C.hx', source: source },
+			{ file: 'lib/Text.hx', source: TEXT },
+			{ file: 'lib/Cmp.hx', source: CMP }
 		];
-		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin, _ -> LintConfig.parse(CONFIG))
+		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin, _ -> LintConfig.parse(config))
 			.filter(v -> v.file == files[0].file);
-		return LintFixDriver.collectFileLintEdits(MAIN, own, [check], plugin, CheckFixture.index(files, plugin), reach);
+		return {
+			check: check,
+			files: files,
+			plugin: plugin,
+			own: own
+		};
 	}
 	#end
 
+}
+
+/** One rule's findings in `C.hx` and what produced them. */
+private typedef Found = {
+	final check: Check;
+	final files: Array<{ file: String, source: String }>;
+	final plugin: CachingGrammarPlugin;
+	final own: Array<Violation>;
 }
