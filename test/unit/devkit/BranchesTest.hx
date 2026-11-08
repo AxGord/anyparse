@@ -301,26 +301,43 @@ final class BranchesTest extends Test {
 		}
 		TempDir.with(dir -> {
 			sys.io.File.saveContent(dir.file('config.yaml'), 'budget: 6\nload_threshold: 1000\n');
-			final started: Float = Date.now().getTime();
-			final elapsed: String = 'console.log(Date.now() - ${started})';
-			final after: Float -> Command -> Command = (seconds, command) ->
-				command.under(['sh', '-c', 'sleep $seconds; exec "$$@"', 'sh']);
+			final stamp: String = 'console.log(Date.now())';
+			final held: String = dir.file('held');
+			final once: String -> Command -> Command = (condition, command) -> command.under([
+				'sh',
+				'-c',
+				'seq 400 | { while read n; do if $condition; then exit 0; fi; sleep 0.05; done; exit 1; } || '
+				+ '{ echo "gave up waiting: $condition" >&2; exit 1; }; exec "$$@"',
+				'sh'
+			]);
 			final leased: Array<String> -> Command = Branches.leased(
 				Own(wfRun, 6), [['heavy'], ['light']],
-				rows -> rows[0] == 'heavy' ? null : 2, rows -> Command.of(['node', '-e', elapsed]), 'busy'
+				rows -> rows[0] == 'heavy' ? null : 2, rows -> Command.of(['node', '-e', stamp]), 'busy'
 			);
-			final holder: Command = Command.of([wfRun, '--threads', '3', '--label', 'holder', '--', 'sleep', '4']);
+			final holder: Command = Command.of([
+				wfRun,
+				'--threads',
+				'3',
+				'--label',
+				'holder',
+				'--',
+				'sh',
+				'-c',
+				'touch $held; sleep 6; node -e "$stamp"'
+			]);
 			final runs: Array<Result> = Pool.of(3).run([
 				holder.env('WF_POOL_DIR', dir.path),
-				after(0.3, leased(['heavy'])).env('WF_POOL_DIR', dir.path),
-				after(0.6, leased(['light'])).env('WF_POOL_DIR', dir.path)
+				once('[ -e $held ]', leased(['heavy'])).env('WF_POOL_DIR', dir.path),
+				once('grep -qs "busy heavy" ${dir.file('pool.json')}', leased(['light'])).env('WF_POOL_DIR', dir.path)
 			]);
-			final light: Null<Int> = Std.parseInt(runs[2].out.trim());
-			final heavy: Null<Int> = Std.parseInt(runs[1].out.trim());
-			Assert.isTrue(
-				light != null && light < 3000, 'the light branch ran while the holder still held its threads: ${runs[2].out}${runs[2].err}'
-			);
-			Assert.isTrue(heavy != null && heavy >= 3000, 'the heavy one waited for its whole share: ${runs[1].out}${runs[1].err}');
+			final released: Float = Std.parseFloat(runs[0].out.trim());
+			final heavy: Float = Std.parseFloat(runs[1].out.trim());
+			final light: Float = Std.parseFloat(runs[2].out.trim());
+			Assert.isFalse(Math.isNaN(released), 'the holder printed no stamp: ${runs[0].out}${runs[0].err}');
+			Assert.isFalse(Math.isNaN(heavy), 'the heavy branch printed no stamp: ${runs[1].out}${runs[1].err}');
+			Assert.isFalse(Math.isNaN(light), 'the light branch printed no stamp: ${runs[2].out}${runs[2].err}');
+			Assert.isTrue(light < released, 'the light branch ran while the holder still held its threads: ${runs[2].out}${runs[2].err}');
+			Assert.isTrue(heavy >= released, 'the heavy one waited for the holder to release: ${runs[1].out}${runs[1].err}');
 		});
 	}
 
