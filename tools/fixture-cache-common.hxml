@@ -5,6 +5,17 @@
 #
 # No `-cp src` and no `-lib utest`: the replay program is `test/testkit` code alone, so an
 # import an ambient source under `test/` adds has to resolve without either.
+#
+# Why no `-cp src` (a decision, not an omission): `devkit.FixtureCache.shim` names the built
+# program by the digest of the one file `test/testkit/FixtureCompileCache.hx` and keeps it in
+# the store across runs, so a module imported from `src` could change with no rebuild and a stale
+# program would answer every compile. The program is built from the runner's own tree, never a
+# mutation slot, so a mutant cannot reach it. Two helpers do re-answer a `src` question: the
+# `Reflect.compare` sort (`util.Compare`) and the hxml line reading of `hxmlAllowed`
+# (`OracleCache.hxmlArgs`, in the engine's `check.oracle`); the Json sites would need the
+# `@:build`-generated `JValueParser`. The sort is one line and the other two sit outside pure
+# util/core, so none repays the stale-program risk and the guard a source root would need.
+# docs/testing.md, "The fixture cache".
 -cp test
 -main testkit.FixtureCompileCache
 -lib hxnodejs
