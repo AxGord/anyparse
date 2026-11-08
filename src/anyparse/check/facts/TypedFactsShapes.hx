@@ -53,9 +53,6 @@ final class TypedFactsShapes {
 		':classCode'
 	];
 
-	/** The classes whose members are reflection, called or read as a value. */
-	public static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
-
 	/**
 	 * The reflective members that name a member of the object they act on, each with the index of its argument holding the
 	 * name (`Reflect.field(o, name)` -> 1): the grammar's `reflectiveNameCalls`, which the facts' reader holds. A positive list:

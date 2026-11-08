@@ -3362,8 +3362,8 @@
 			"type": "anyparse.query.FactsView",
 			"method": "namesExactly",
 			"find": [
-				"typed.sort(Reflect.compare);",
-				"listed.sort(Reflect.compare);"
+				"typed.sort(Compare.compareString);",
+				"listed.sort(Compare.compareString);"
 			],
 			"replace": [
 				"",
@@ -3918,7 +3918,7 @@
 			"name": "M-FACTS-TEXTLESS",
 			"type": "anyparse.query.FactsView",
 			"method": "textless",
-			"find": "return fact != null && fact.kind != TYPEDEF_KIND && !declarationsNamed().exists(graphType(id));",
+			"find": "return fact != null && fact.kind != FactKinds.TYPEDEF && !declarationsNamed().exists(graphType(id));",
 			"replace": "return false;",
 			"note": "a typed type the index declares no type of its name anywhere is read as a library placeholder: its `toString` and the methods reflection reaches run nothing, though they push onto `Main.items`"
 		},
@@ -3926,7 +3926,7 @@
 			"name": "M-FACTS-IMPLICIT-MEMBERS",
 			"type": "anyparse.query.FactsView",
 			"method": "implicitUnheld",
-			"find": "return fields.exists(f -> f.kinds.exists(k -> METHOD_KINDS.contains(k)) && runs(f));",
+			"find": "return fields.exists(f -> f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k)) && runs(f));",
 			"replace": "return true;",
 			"note": "(precision) a type whose text the index does not hold runs an implicit member whether or not it declares one: a conversion of one with no `toString` refuses"
 		},
@@ -3942,7 +3942,7 @@
 			"name": "M-FACTS-IMPLICIT-INTERFACE",
 			"type": "anyparse.query.FactsView",
 			"method": "implicitUnheld",
-			"find": "if (fact.kind == INTERFACE_KIND && fact.alike) return false;",
+			"find": "if (fact.kind == FactKinds.INTERFACE && fact.alike) return false;",
 			"replace": "",
 			"note": "(precision) an interface the index does not hold runs the methods it declares, which have no body: std's `haxe.IMap` refuses every conversion of a value of any type"
 		},
@@ -3950,7 +3950,7 @@
 			"name": "M-FACTS-IMPLICIT-EXTERN",
 			"type": "anyparse.query.FactsView",
 			"method": "implicitUnheld",
-			"find": "return called && (!quiet || (members.externInline && f.kinds.contains(INLINE_FIELD_KIND)));",
+			"find": "return called && (!quiet || (members.externInline && f.kinds.contains(FactKinds.INLINE)));",
 			"replace": "return called;",
 			"note": "(precision) an extern type's method runs code of the program through an implicit call: js's `Date`, whose instances escape, refuses every conversion"
 		},
@@ -5062,8 +5062,8 @@
 			"name": "M-ESCAPES-FACTS-ENUM",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "escapeType",
-			"find": "case 'enum': fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));",
-			"replace": "case 'enum': true;",
+			"find": "case FactKinds.ENUM: fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));",
+			"replace": "case FactKinds.ENUM: true;",
 			"note": "what an escaped enum value's constructor arguments hold is taken to stay in the type system"
 		},
 		{
@@ -5078,8 +5078,8 @@
 			"name": "M-ESCAPES-FACTS-PLACE-ARGS",
 			"type": "anyparse.query.FactsEscapes",
 			"method": "placeKeeps",
-			"find": "NOMINAL_KINDS.contains(fact.kind) && args.length == fact.params.length && args.foreach(placeKeeps);",
-			"replace": "NOMINAL_KINDS.contains(fact.kind);",
+			"find": "FactKinds.NOMINAL_KINDS.contains(fact.kind) && args.length == fact.params.length && args.foreach(placeKeeps);",
+			"replace": "FactKinds.NOMINAL_KINDS.contains(fact.kind);",
 			"note": "a place of a nominal type is taken to keep the type of what it holds whatever its arguments, `Array<Dynamic>` included"
 		},
 		{
@@ -6470,7 +6470,7 @@
 			"name": "M-METHODS-METHOD-ONLY",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "selfBound",
-			"find": "node.kind != METHOD_NODE || ",
+			"find": "node.kind != FactKinds.METHOD || ",
 			"replace": "",
 			"note": "a constructor's `this` is the object it builds even where a rebinding call may be handed its class as a value"
 		},
@@ -6780,7 +6780,7 @@
 			"name": "M-NATIVE-SITE-ALIAS",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "noneBy",
-			"find": "else if (fact.kind == 'typedef')",
+			"find": "else if (fact.kind == FactKinds.TYPEDEF)",
 			"replace": "else if (false)",
 			"note": "(precision) an alias of a type no value of which is an object is not read through"
 		},
@@ -7083,8 +7083,8 @@
 			"name": "M-VALUE-CTOR-SUBTYPES",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "constructedWith",
-			"find": "|| table.subtypesOf(owner).length > 0)",
-			"replace": ")",
+			"find": "\t\t\t|| table.subtypesOf(owner).length > 0\n",
+			"replace": "",
 			"note": "a constructor a subclass runs through `super` is taken to run only at a `new` of its own class"
 		},
 		{
@@ -7243,7 +7243,7 @@
 			"name": "M-METHODS-HOLDERS-REBIND",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "scanReflection",
-			"find": "if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;",
+			"find": "if (FactKinds.REFLECTION_CLASSES.contains(target)) out.rebinds = true;",
 			"replace": "",
 			"note": "a reflective class read as a value rebinds no function, though whatever calls it may call `Reflect.callMethod`"
 		},
@@ -7347,8 +7347,8 @@
 			"name": "M-CLASSLESS-TYPEDEF",
 			"type": "anyparse.query.FactsView",
 			"method": "classlessType",
-			"find": "declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == TYPEDEF_KIND\n\t\t\t\t\t&& declared.targets.length > 0",
-			"replace": "false && declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == TYPEDEF_KIND\n\t\t\t\t\t&& declared.targets.length > 0",
+			"find": "declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == FactKinds.TYPEDEF\n\t\t\t\t\t&& declared.targets.length > 0",
+			"replace": "false && declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == FactKinds.TYPEDEF\n\t\t\t\t\t&& declared.targets.length > 0",
 			"note": "(precision) a typedef of a structure (lime's `WindowAttributes`) may be an object of any class"
 		},
 		{
@@ -8357,7 +8357,7 @@
 			"name": "M-FACTS-OWNERS-VARIABLES",
 			"type": "anyparse.query.FactsView",
 			"method": "ownersDeclaring",
-			"find": "graphMember(t, f.name) == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))",
+			"find": "graphMember(t, f.name) == name && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))",
 			"replace": "graphMember(t, f.name) == name",
 			"note": "(precision) a variable of another type of the name counts as code a member admitted by its name may run"
 		},
@@ -8556,7 +8556,7 @@
 			"name": "M-UNCHECKED-BOXED-ALIAS",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "coreValueType",
-			"find": "\t\t\t\telse if (fact.kind == 'typedef')",
+			"find": "\t\t\t\telse if (fact.kind == FactKinds.TYPEDEF)",
 			"replace": "\t\t\t\telse if (false)",
 			"note": "a nullable alias of a core value is taken to convert, where hxcpp boxes it"
 		},
@@ -8588,8 +8588,8 @@
 			"name": "M-UNCHECKED-ALIAS",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "converts",
-			"find": "case 'typedef': readThrough(fact.targets, id, fact, args, seen);",
-			"replace": "case 'typedef': false;",
+			"find": "case FactKinds.TYPEDEF: readThrough(fact.targets, id, fact, args, seen);",
+			"replace": "case FactKinds.TYPEDEF: false;",
 			"note": "(precision) an alias of a type hxcpp converts into is taken to keep what lands there"
 		},
 		{
@@ -8604,8 +8604,8 @@
 			"name": "M-UNCHECKED-CLASS-EXTERN",
 			"type": "anyparse.query.UncheckedConversions",
 			"method": "converts",
-			"find": "case 'class': !fact.isExtern;",
-			"replace": "case 'class': true;",
+			"find": "case FactKinds.CLASS: !fact.isExtern;",
+			"replace": "case FactKinds.CLASS: true;",
 			"note": "an extern class is taken to convert what lands there as a program class does"
 		},
 		{

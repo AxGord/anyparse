@@ -54,15 +54,6 @@ final class CallGraphFacts {
 	/** The access of a call of the value a field holds (`CompilerFacts.CallFact`). */
 	private static inline final FIELD_VALUE: String = 'fieldValue';
 
-	/** The fact kind of a method's body (`TypedFactsProbe`): the one kind a build macro's own method is taken in as. */
-	private static inline final METHOD_KIND: String = 'method';
-
-	/** The kind of a typed interface (`TypeFact.kind`). */
-	private static inline final INTERFACE_KIND: String = 'interface';
-
-	/** The field kind of a method the program may reassign (`TypeFact.fields`). */
-	private static inline final DYNAMIC_FIELD: String = 'dynamic';
-
 	/** The call accesses by a name off a value of no class or a structure (`CallFact.access`). */
 	private static final DYNAMIC_CALLS: Array<String> = ['FDynamic', 'FAnon'];
 
@@ -315,16 +306,16 @@ final class CallGraphFacts {
 			// a macro function in every build runs in no program; one a build may replace is a value there
 			if (
 				n == null
-				|| n.kind != METHOD_KIND
+				|| n.kind != FactKinds.METHOD
 				|| n.overloadIndex > 0
-				|| (kinds.length > 0 && kinds.foreach(k -> k == CompilerFacts.MACRO_FIELD_KIND))
+				|| (kinds.length > 0 && kinds.foreach(k -> k == FactKinds.MACRO))
 			)
 				continue;
 			final name: String = view.graphMember(id, field);
 			final graphId: String = '$type.$name';
 			final declared: Bool = g.nodes[graphId]?.isExternal == false;
 			if (declared && !n.generated) continue;
-			if (!declared) adoptNode(g, graphId, file, type, name, kinds.contains(DYNAMIC_FIELD));
+			if (!declared) adoptNode(g, graphId, file, type, name, kinds.contains(FactKinds.DYNAMIC));
 			adopted[graphId] = n;
 			out.push(graphId);
 		}
@@ -692,7 +683,7 @@ final class CallGraphFacts {
 	 */
 	private static function dispatchesOnly(g: CallGraph, owner: String, type: String, view: FactsView): Bool {
 		final fact: Null<TypeFact> = view._table.type(CompilerFacts.baseId(owner));
-		return fact != null && fact.kind == INTERFACE_KIND && fact.alike && (view.truth || g.types.isInterface(type));
+		return fact != null && fact.kind == FactKinds.INTERFACE && fact.alike && (view.truth || g.types.isInterface(type));
 	}
 
 	/**
@@ -701,7 +692,9 @@ final class CallGraphFacts {
 	 */
 	private static function dispatchType(receiver: Null<String>, owner: String, view: FactsView): String {
 		final declared: Null<TypeFact> = receiver == null ? null : view._table.type(CompilerFacts.baseId(receiver));
-		return declared != null && (declared.kind == 'class' || declared.kind == 'interface') ? declared.id : CompilerFacts.baseId(owner);
+		return declared != null && (declared.kind == FactKinds.CLASS || declared.kind == FactKinds.INTERFACE)
+			? declared.id
+			: CompilerFacts.baseId(owner);
 	}
 
 	/** The file of the graph whose table key is `key` — `node`'s own, or another the graph holds — or null for none. */

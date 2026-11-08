@@ -4,6 +4,7 @@ package anyparse.check.facts;
 import anyparse.check.facts.TypedFactsMacro.InlineMethod;
 import anyparse.check.facts.TypedFactsShapes.FieldRef;
 import anyparse.grammar.json.JsonText;
+import anyparse.query.FactKinds;
 import anyparse.query.FactsTypeText;
 import haxe.macro.Context;
 import haxe.macro.Expr.Position;
@@ -303,8 +304,8 @@ final class TypedFactsWalk {
 	private function child(f: TypedExpr, localName: Null<String>): String {
 		final info: { min: Int, max: Int, file: String } = Context.getPosInfos(f.pos);
 		final nested: TypedFactsWalk = new TypedFactsWalk(
-			_host, '$id@${info.min}', localName == null ? 'fn' : 'local', _owner, _isStatic, str(f.t), localName, _locals, _written,
-			_aliases, _built, _literals
+			_host, '$id${FactKinds.NESTED_ID}${info.min}', localName == null ? FactKinds.FN : FactKinds.LOCAL, _owner, _isStatic, str(f.t),
+			localName, _locals, _written, _aliases, _built, _literals
 		);
 		// a function outside this body was spliced in: it runs here, but no range of its own file is where it runs. One
 		// bound straight to a local is reached without `walk`, so the splice is decided here too
@@ -554,7 +555,7 @@ final class TypedFactsWalk {
 			case TTypeExpr(m):
 				// a reflection class read as a value takes every one of its members along
 				final name: String = TypedFactsShapes.moduleTypeId(m);
-				if (TypedFactsShapes.REFLECTION_CLASSES.contains(name)) add('refl', '{"t":${q(name)},"v":true,"p":${at(e.pos)}}');
+				if (FactKinds.REFLECTION_CLASSES.contains(name)) add('refl', '{"t":${q(name)},"v":true,"p":${at(e.pos)}}');
 			case TVar(v, init):
 				declare(v, e.pos);
 				// an unrolled loop declares one local once per copy, and every copy's reads are its uses
@@ -732,7 +733,7 @@ final class TypedFactsWalk {
 	/** A `Reflect.*` / `Type.*` member read as a value rather than called: whatever calls it later is reflection. */
 	private function reflectionValue(fa: FieldAccess, e: TypedExpr): Void {
 		switch fa {
-			case FStatic(c, cf), FClosure({ c: c }, cf) if (TypedFactsShapes.REFLECTION_CLASSES.contains(c.toString())):
+			case FStatic(c, cf), FClosure({ c: c }, cf) if (FactKinds.REFLECTION_CLASSES.contains(c.toString())):
 				add('refl', '{"t":${q(c.toString() + '.' + cf.toString())},"v":true,"p":${at(e.pos)}}');
 			case _:
 		}
@@ -943,7 +944,7 @@ final class TypedFactsWalk {
 		final access: FieldRef = TypedFactsShapes.describe(fa);
 		final declaring: Null<String> = access.owner;
 		final targetName: String = declaring == null ? access.field : '$declaring.${access.field}';
-		if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.REFLECTION_CLASSES.contains(declaring))
+		if (access.kind == 'FStatic' && declaring != null && FactKinds.REFLECTION_CLASSES.contains(declaring))
 			reflection(targetName, args, where);
 		if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
 			final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
@@ -962,7 +963,7 @@ final class TypedFactsWalk {
 		final declared: Bool = declaring != null
 			&& kind == access.kind
 			&& DECLARED_CALLS.contains(kind)
-			&& !TypedFactsShapes.REFLECTION_CLASSES.contains(declaring)
+			&& !FactKinds.REFLECTION_CLASSES.contains(declaring)
 			&& !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring);
 		final chosen: String = _host.overloaded(targetName) ? ',"sig":${q(str(callee.t))}' : '';
 		return {

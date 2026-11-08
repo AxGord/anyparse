@@ -26,26 +26,14 @@ using Lambda;
 @:nullSafety(Strict)
 final class FactsProvenance {
 
-	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
-	private static inline final IMPL_KIND: String = 'impl';
-
 	/** The access of a call of a method the compiler spliced in (`CompilerFacts.CallFact`). */
 	private static inline final INLINED: String = 'inlined';
 
 	/** The access of a call of a super constructor (`CompilerFacts.CallFact`). */
 	private static inline final SUPER: String = 'super';
 
-	/** The kind of a typedef (`TypeFact.kind`). */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
-
-	/** The kind of a variable's initializer (`FactNode.kind`). */
-	private static inline final VAR_KIND: String = 'var';
-
 	/** The flow of a value handed to a call as an argument (`FlowFact.via`). */
 	private static inline final ARG_FLOW: String = 'arg';
-
-	/** The fact kinds of a type's own function body, as opposed to a function nested in one. */
-	private static final OWN_BODY_KINDS: Array<String> = ['method', 'ctor'];
 
 	/**
 	 * The metadata of an abstract's field the compiler calls where the text writes an operator, a conversion, an index
@@ -98,10 +86,10 @@ final class FactsProvenance {
 		if (span == null || source == null || tree == null || name == null || g.declarationsOf(node.id).length != 1) return false;
 		final body: BodyText = BodyText.of(_view._table.keyOf(node.file), span, source, tree, _scope.shape);
 		final bodies: Array<FactNode> = [
-			for (n in _view._table.nodesIn(node.file)) if (FactsView.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
+			for (n in _view._table.nodesIn(node.file)) if (FactKinds.FUNCTION_KINDS.contains(n.kind) && body.holds(n.at)) n
 		];
 		// the function's own body must be among them: a body a macro replaced is typed elsewhere, and only what it kept is here
-		final own: Bool = bodies.exists(n -> OWN_BODY_KINDS.contains(n.kind) && SourceText.lastSegment(n.id) == name);
+		final own: Bool = bodies.exists(n -> FactKinds.OWN_BODY_KINDS.contains(n.kind) && SourceText.lastSegment(n.id) == name);
 		return own && bodies.foreach(n -> factsMatch(n, body));
 	}
 
@@ -203,7 +191,7 @@ final class FactsProvenance {
 	 * declares no field and the builds typed no code of it.
 	 */
 	private function aliasOnly(typed: TypeFact): Bool {
-		return typed.kind == TYPEDEF_KIND && typed.fields.length == 0 && _view._table.nodeIdsOf(typed.id).length == 0;
+		return typed.kind == FactKinds.TYPEDEF && typed.fields.length == 0 && _view._table.nodeIdsOf(typed.id).length == 0;
 	}
 
 	/**
@@ -267,11 +255,11 @@ final class FactsProvenance {
 	 * more — splices the body of another such method. Null for any other node.
 	 */
 	private function inlinedWhole(n: FactNode, body: BodyText): Null<(FactPos) -> Bool> {
-		if (n.kind != VAR_KIND) return null;
+		if (n.kind != FactKinds.VAR) return null;
 		final verdicts: Map<String, Bool> = [];
 		function written(p: FactPos): Bool {
 			var callee: Null<FactNode> = null;
-			for (m in _view._table.nodesIn(p.file)) if (m != n && FactsView.FUNCTION_KINDS.contains(m.kind) && holds(m.at, p)) {
+			for (m in _view._table.nodesIn(p.file)) if (m != n && FactKinds.FUNCTION_KINDS.contains(m.kind) && holds(m.at, p)) {
 				final best: Null<FactNode> = callee;
 				if (best == null || m.at.span.to - m.at.span.from < best.at.span.to - best.at.span.from) callee = m;
 			}
@@ -535,7 +523,7 @@ final class FactsProvenance {
 	private function implicitlyCalled(target: String): Bool {
 		final dot: Int = target.lastIndexOf('.');
 		final owner: Null<TypeFact> = dot <= 0 ? null : _view._table.type(target.substr(0, dot));
-		final field: Null<FieldDeclFact> = owner == null || owner.kind != IMPL_KIND
+		final field: Null<FieldDeclFact> = owner == null || owner.kind != FactKinds.IMPL
 			? null
 			: owner.fields.find(f -> f.name == target.substr(dot + 1));
 		return field != null && field.meta.exists(m -> IMPLICITLY_CALLED_META.contains(m));
@@ -582,7 +570,7 @@ final class FactsProvenance {
 	 */
 	private static function madeConstructor(n: FactNode): Bool {
 		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
-		return n.kind == 'ctor'
+		return n.kind == FactKinds.CTOR
 			&& n.calls.foreach(c -> c.access == SUPER)
 			&& n.news.length == 0
 			&& n.fields.length == 0
@@ -616,7 +604,7 @@ final class FactsProvenance {
 	/** The field a node id names (`pack.Type.field`, `pack.Type.field~n` for a further overload). */
 	private static function fieldOf(id: String): String {
 		final field: String = SourceText.lastSegment(id);
-		final mark: Int = field.indexOf('~');
+		final mark: Int = field.indexOf(FactKinds.OVERLOAD_ID);
 		return mark < 0 ? field : field.substr(0, mark);
 	}
 

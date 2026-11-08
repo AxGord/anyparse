@@ -23,7 +23,7 @@
 			"name": "M-FACTS-INITIALIZER",
 			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "classType",
-			"find": "case FVar(_, _): 'var';",
+			"find": "case FVar(_, _): FactKinds.VAR;",
 			"replace": "case FVar(_, _): 'method';",
 			"note": "a field initializer is written as a method node"
 		},
@@ -167,7 +167,7 @@
 			"name": "M-FACTS-INIT",
 			"type": "anyparse.check.facts.TypedFactsMacro",
 			"method": "classType",
-			"find": "walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);",
+			"find": "walkBody(init, '$id.__init__', FactKinds.INIT, id, true, '()->Void', home, 0, genericCopy);",
 			"replace": "",
 			"note": "__init__ is not walked"
 		},
@@ -644,7 +644,7 @@
 			"name": "M-FOLD-FACTS-PLAIN-KINDS",
 			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "nonOverloadingName",
-			"find": "return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))",
+			"find": "return id != null\n\t\t\t&& (builtins.contains(id) || (declared != null && declared.alike && FactKinds.NOMINAL_KINDS.contains(declared.kind)))",
 			"replace": "return id != null",
 			"note": "any type the facts name is named, an abstract included, and the overload table judges another declaration of that simple name"
 		},
@@ -652,8 +652,8 @@
 			"name": "M-FACTS-ALIKE-FOLD",
 			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "nonOverloadingName",
-			"find": "(declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind))",
-			"replace": "(declared != null && PLAIN_KINDS.contains(declared.kind))",
+			"find": "(declared != null && declared.alike && FactKinds.NOMINAL_KINDS.contains(declared.kind))",
+			"replace": "(declared != null && FactKinds.NOMINAL_KINDS.contains(declared.kind))",
 			"note": "a type one configuration declares a class and another an overloading abstract is named by the first one's record"
 		},
 		{
@@ -668,15 +668,15 @@
 			"name": "M-FACTS-CTOR-EVERY",
 			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "constructorArgumentClosed",
-			"find": "\t\t\t\t\tcase _:\n\t\t\t\t\t\treturn false;\n",
-			"replace": "\t\t\t\t\tcase _:\n",
+			"find": "\t\t\t\tcase _:\n\t\t\t\t\treturn false;\n",
+			"replace": "\t\t\t\tcase _:\n",
 			"note": "a constructor of the name typed by an enum parameter is ignored once another is closed, so the name alone decides which enum the pattern is of"
 		},
 		{
 			"name": "M-FACTS-CTOR-ARITY",
 			"type": "anyparse.check.facts.FactsTypeOracle",
 			"method": "constructorArgumentClosed",
-			"find": "\t\t\t\t\tcase Named(_, _):\n\t\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
+			"find": "\t\t\t\tcase Named(_, _):\n\t\t\t\tcase Function(args, _) if (index >= args.length):\n",
 			"replace": "",
 			"note": "a same-named constructor taking no argument, or fewer, refuses the capture though a pattern with that argument cannot be of it"
 		},
@@ -1101,6 +1101,78 @@
 			"find": "defines: HOOK_DEFINES,",
 			"replace": "defines: [],",
 			"note": "the shared compile types without keep-inline-positions, so an inlined body's facts take the call site's range where the plain facts compile keeps the callee's"
+		},
+		{
+			"name": "M-FACTKINDS-TYPE-INTERFACE",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "case _ if (c.isInterface): FactKinds.INTERFACE;",
+			"replace": "case _ if (c.isInterface): 'iface';",
+			"note": "an interface is written with a kind of its own, so the readers that compare FactKinds.INTERFACE never meet it"
+		},
+		{
+			"name": "M-FACTKINDS-TYPE-IMPL",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "FactKinds.IMPL;",
+			"replace": "'implementation';",
+			"note": "an abstract's implementation class is written with a kind of its own, so no reader finds the statics of an abstract"
+		},
+		{
+			"name": "M-FACTKINDS-NODE-METHOD",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "case FMethod(_): FactKinds.METHOD;",
+			"replace": "case FMethod(_): 'meth';",
+			"note": "a method body is written as a node kind of its own, so no reader takes it for a function body"
+		},
+		{
+			"name": "M-FACTKINDS-NODE-NESTED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "child",
+			"find": "localName == null ? FactKinds.FN : FactKinds.LOCAL",
+			"replace": "localName == null ? 'lambda' : FactKinds.LOCAL",
+			"note": "a function expression is written as a node kind of its own, so no reader takes it for a nested function"
+		},
+		{
+			"name": "M-FACTKINDS-FIELD-DYNAMIC",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "fieldRecord",
+			"find": "case FMethod(MethDynamic): FactKinds.DYNAMIC;",
+			"replace": "case FMethod(MethDynamic): 'dyn';",
+			"note": "a dynamic method is written as a field kind of its own, so no reader takes it for a method"
+		},
+		{
+			"name": "M-FACTKINDS-ID-NESTED",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "child",
+			"find": "'$id${FactKinds.NESTED_ID}${info.min}'",
+			"replace": "'$id#${info.min}'",
+			"note": "a nested function's id joins its parent's with a mark of its own, so no reader splits it off the member"
+		},
+		{
+			"name": "M-FACTKINDS-ID-OVERLOAD",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "classType",
+			"find": "${FactKinds.OVERLOAD_ID}",
+			"replace": "^",
+			"note": "an overload's id joins its field's with a mark of its own, so no reader finds the node of a further overload"
+		},
+		{
+			"name": "M-FACTKINDS-REFLECTION-TYPE",
+			"type": "anyparse.check.facts.TypedFactsWalk",
+			"method": "fieldCall",
+			"find": "&& declaring != null && FactKinds.REFLECTION_CLASSES.contains(declaring))",
+			"replace": "&& declaring != null && declaring == 'Reflect')",
+			"note": "only Reflect is marked as reflection, so a call of Type is a call of a declared method"
+		},
+		{
+			"name": "M-FACTKINDS-ID-UNIQUE",
+			"type": "anyparse.check.facts.TypedFactsMacro",
+			"method": "uniqueId",
+			"find": "${FactKinds.UNIQUE_ID}",
+			"replace": "-",
+			"note": "a repeated node id is numbered with a mark of its own, so no reader cuts the index off the member"
 		}
 	]
 }

@@ -36,15 +36,6 @@ final class ArgumentUses {
 	/** The access of a call of an instance method (`CallFact.access`): an override may run instead. */
 	private static inline final INSTANCE_ACCESS: String = 'FInstance';
 
-	/** The kind of an interface, which declares a method and runs none (`TypeFact.kind`). */
-	private static inline final INTERFACE_KIND: String = 'interface';
-
-	/** The field kinds a method that runs its declared body has (`TypedFactsProbe`). */
-	private static final BODIED_KINDS: Array<String> = ['method', 'inline'];
-
-	/** The type kinds whose methods have bodies (`TypeFact.kind`): a class, an abstract's implementation class. */
-	private static final BODIED_TYPES: Array<String> = ['class', 'impl'];
-
 	/** Argument key -> the uses the value meets, or null when the facts do not answer; settled once. */
 	private final _settled: Map<String, Null<Array<ParamUse>>> = [];
 
@@ -109,7 +100,7 @@ final class ArgumentUses {
 			// target code may override what an extern subclass does not declare, and a type the builds disagree on is none
 			if (type == null || type.isExtern || !type.alike) return null;
 			// an interface declares the method and runs none: each class implementing it is among the subtypes
-			if (type.kind == INTERFACE_KIND && onInstance) continue;
+			if (type.kind == FactKinds.INTERFACE && onInstance) continue;
 			final declaring: Null<String> = onInstance ? declarer(c, field) : c;
 			if (declaring == null) return null;
 			final node: Null<FactNode> = answered(declaring, field, !onInstance);
@@ -137,11 +128,11 @@ final class ArgumentUses {
 	/** The node of the method `field` of the type `owner` declares, static or not, when the facts answer for it; null otherwise. */
 	private function answered(owner: String, field: String, isStatic: Bool): Null<FactNode> {
 		final type: Null<TypeFact> = _table.type(owner);
-		if (type == null || !type.alike || type.isExtern || !BODIED_TYPES.contains(type.kind) || type.code.length > 0) return null;
+		if (type == null || !type.alike || type.isExtern || !FactKinds.CODE_KINDS.contains(type.kind) || type.code.length > 0) return null;
 		final declared: Null<FieldDeclFact> = type.fields.find(f -> f.name == field && f.isStatic == isStatic);
 		if (
 			declared == null
-			|| !declared.kinds.foreach(k -> BODIED_KINDS.contains(k))
+			|| !declared.kinds.foreach(k -> FactKinds.FIXED_METHOD_KINDS.contains(k))
 			|| declared.overloads.exists(o -> o != 0)
 			|| declared.code.length > 0
 		)

@@ -5,6 +5,7 @@ import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
+import anyparse.query.FactKinds;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
@@ -95,9 +96,6 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 
 	/** The member name the `Std.string(...)` arm matches on. */
 	private static inline final STD_METHOD: String = 'string';
-
-	/** The kind the compiler's facts give a class (`CompilerFacts.TypeFact`). */
-	private static inline final CLASS_KIND: String = 'class';
 
 	public function new() {
 		super('redundant-tostring', 'a .toString() call in a position that already stringifies', RuleCategory.Literals);
@@ -326,7 +324,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		final id: Null<String> = facts?.typeIdAt(ctx.file, recvSpan, false);
 		if (facts == null || id == null) return false;
 		final declared: Null<TypeFact> = facts.facts.type(id);
-		return declared != null && declared.alike && declared.kind == CLASS_KIND && !declared.isExtern;
+		return declared != null && declared.alike && declared.kind == FactKinds.CLASS && !declared.isExtern;
 	}
 
 	/** The human-facing half of a finding's message — why this position already stringifies. */

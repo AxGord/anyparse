@@ -130,7 +130,7 @@ final class UncheckedConversions {
 					true
 				else if (fact == null || !fact.alike || seen.contains(id))
 					false
-				else if (fact.kind == 'typedef')
+				else if (fact.kind == FactKinds.TYPEDEF)
 					fact.targets.length > 0 && fact.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read != null
@@ -173,9 +173,9 @@ final class UncheckedConversions {
 				else if (_arrays.contains(id))
 					true
 				else switch fact.kind {
-					case 'class': !fact.isExtern;
-					case 'abstract': coreValue(fact);
-					case 'typedef': readThrough(fact.targets, id, fact, args, seen);
+					case FactKinds.CLASS: !fact.isExtern;
+					case FactKinds.ABSTRACT: coreValue(fact);
+					case FactKinds.TYPEDEF: readThrough(fact.targets, id, fact, args, seen);
 					case _: false;
 				}
 			case _: false;
@@ -190,7 +190,7 @@ final class UncheckedConversions {
 				final fact: Null<TypeFact> = _table.type(id);
 				if (fact == null || seen.contains(id))
 					false
-				else if (fact.kind == 'typedef')
+				else if (fact.kind == FactKinds.TYPEDEF)
 					fact.targets.exists(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read == null
@@ -264,7 +264,7 @@ final class UncheckedConversions {
 
 	/** Whether the typed type `fact` is a core value type: one the compiler represents itself, no value of which is null. */
 	private static inline function coreValue(fact: TypeFact): Bool {
-		return fact.kind == 'abstract' && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL);
+		return fact.kind == FactKinds.ABSTRACT && fact.meta.contains(CORE_TYPE) && fact.meta.contains(NOT_NULL);
 	}
 
 	/**
@@ -273,8 +273,8 @@ final class UncheckedConversions {
 	 */
 	private static function readAs(fact: TypeFact): Null<Array<String>> {
 		return switch fact.kind {
-			case 'typedef': fact.targets;
-			case 'abstract' if (!coreValue(fact)): fact.underlying;
+			case FactKinds.TYPEDEF: fact.targets;
+			case FactKinds.ABSTRACT if (!coreValue(fact)): fact.underlying;
 			case _: null;
 		};
 	}

@@ -28,6 +28,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -85,14 +86,12 @@ final class FactsView {
 	/** What the graph puts in the id of a function nested in another (`CallGraph`): a local function or a lambda. */
 	public static inline final NESTED_MARK: String = '#';
 
-	/** The node kind of a field's initializer (`TypedFactsProbe`). */
-	private static inline final VAR_KIND: String = 'var';
-
-	/** The node kinds that are the body of a function (`TypedFactsProbe`). */
-	public static final FUNCTION_KINDS: Array<String> = ['method', 'ctor', 'fn', 'local'];
-
-	/** The classes whose members are reflection (`TypedFactsProbe`). */
-	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
+	/**
+	 * The reflective accesses by name that act on a field of the object itself and run nothing it holds. A property access
+	 * (`getProperty`, `setProperty`) runs an accessor, which a structure may hold as a function value (js reads it off
+	 * `__properties__`), so it is none.
+	 */
+	public static final FIELD_ACCESSES: Array<String> = ['Reflect.field', 'Reflect.setField', 'Reflect.hasField', 'Reflect.deleteField'];
 
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
@@ -100,26 +99,11 @@ final class FactsView {
 	/** The suffix of an abstract's implementation class: its statics are the abstract's members. */
 	private static inline final IMPL_SUFFIX: String = '_Impl_';
 
-	/** The kind of an abstract's implementation class (`TypeFact.kind`). */
-	private static inline final IMPL_KIND: String = 'impl';
-
-	/** The kind of a typed abstract (`TypeFact.kind`): its methods are its implementation class's statics. */
-	private static inline final ABSTRACT_KIND: String = 'abstract';
-
-	/** The kind of a typed interface (`TypeFact.kind`): it declares no code of its own. */
-	private static inline final INTERFACE_KIND: String = 'interface';
-
-	/** The kind of an inline field (`FieldDeclFact.kind`): an extern type's inline method has a body. */
-	private static inline final INLINE_FIELD_KIND: String = 'inline';
-
 	/** The name an abstract's constructor takes in its implementation class. */
 	private static inline final IMPL_CONSTRUCTOR: String = '_new';
 
 	/** The access of a call of a static field (`CallFact.access`): it runs on no receiver. */
 	private static inline final STATIC_ACCESS: String = 'FStatic';
-
-	/** The kind of a typed typedef (`TypeFact.kind`). */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
 
 	/** The catch-all type: a value of it is an object of no class unless it escaped (`classless`). */
 	private static inline final CATCH_ALL: String = 'Dynamic';
@@ -131,13 +115,6 @@ final class FactsView {
 	private static inline final MAX_TYPEDEF_DEPTH: Int = 8;
 
 	/**
-	 * The reflective accesses by name that act on a field of the object itself and run nothing it holds. A property access
-	 * (`getProperty`, `setProperty`) runs an accessor, which a structure may hold as a function value (js reads it off
-	 * `__properties__`), so it is none.
-	 */
-	public static final FIELD_ACCESSES: Array<String> = ['Reflect.field', 'Reflect.setField', 'Reflect.hasField', 'Reflect.deleteField'];
-
-	/**
 	 * The reflective accesses by name that set a field: the object's own field converts the value as its assignment would
 	 * (`conversionSitesIn`).
 	 */
@@ -146,28 +123,11 @@ final class FactsView {
 	/** The call accesses whose target is a field a type declares. */
 	private static final DECLARED_ACCESSES: Array<String> = ['FInstance', 'FStatic', 'FClosure', 'super', 'inlined', 'fieldValue'];
 
-	/** The field kinds that are methods (`TypedFactsProbe`): a read of one is a function value. */
-	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
-
-	/** The method kinds no code can reassign (`immutableMethod`): a `dynamic` one is a variable. */
-	private static final IMMUTABLE_METHOD_KINDS: Array<String> = ['method', 'inline'];
-
-	/** The typed kinds (`TypeFact.kind`) a value of which is an object of a class: its members are what that class declares. */
-	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
-
 	/** A package-qualified path's package prefix, in a type string. */
 	private static final PACKAGE_PREFIX: EReg = ~/([A-Za-z_][A-Za-z0-9_]*\.)+(?=[A-Za-z_])/g;
 
 	/** An abstract implementation class's name, in a type string. */
 	private static final IMPL_NAME: EReg = ~/([A-Za-z0-9_]+)_Impl_/g;
-
-	/** The table read — by the view and by the parts of the facts layer working over it; every other reader asks the view. */
-	@:allow(anyparse.query.CallGraphFacts)
-	@:allow(anyparse.query.FactsEscapes)
-	@:allow(anyparse.query.FactsMethodValues)
-	@:allow(anyparse.query.FactsProvenance)
-	@:allow(anyparse.query.FunctionValueTypes)
-	private final _table: CompilerFacts;
 
 	/**
 	 * Whether the table holds every build the project ships: the analysis runs under a list of builds declared complete
@@ -207,22 +167,30 @@ final class FactsView {
 	 */
 	private final _overriders: Map<String, Array<String>> = [];
 
-	/** An abstract's implementation class -> the abstract, as the facts type them (`implemented`), built on first need. */
-	private var _implementing: Null<Map<String, String>> = null;
-
 	/** A description of an implicit call (`implicitUnheldAnywhere`'s key) -> the types it finds, settled once. */
 	private final _implicitUnheldAnywhere: Map<String, Array<String>> = [];
+
+	/** A pair of facts types `from\nto` -> the operands of the conversions putting a value of the one at the other makes. */
+	private final _conversionOperands: Map<String, Array<Null<String>>> = [];
+
+	/** The table read — by the view and by the parts of the facts layer working over it; every other reader asks the view. */
+	@:allow(anyparse.query.CallGraphFacts)
+	@:allow(anyparse.query.FactsEscapes)
+	@:allow(anyparse.query.FactsMethodValues)
+	@:allow(anyparse.query.FactsProvenance)
+	@:allow(anyparse.query.FunctionValueTypes)
+	private final _table: CompilerFacts;
+
+	private final _scope: ReachProject;
+
+	/** An abstract's implementation class -> the abstract, as the facts type them (`implemented`), built on first need. */
+	private var _implementing: Null<Map<String, String>> = null;
 
 	/** Simple name -> the index's declarations of a type so named (`declarationsNamed`), built on first need. */
 	private var _declarationsNamed: Null<Map<String, Array<IndexedDeclaration>>> = null;
 
-	private final _scope: ReachProject;
-
 	/** Where an unchecked conversion may put a value its place's type says nothing of (`unchecked`), built on first need. */
 	private var _unchecked: Null<UncheckedConversions> = null;
-
-	/** A pair of facts types `from\nto` -> the operands of the conversions putting a value of the one at the other makes. */
-	private final _conversionOperands: Map<String, Array<Null<String>>> = [];
 
 	/** Graph type name -> the typed types standing for it, built on first need. */
 	private var _bySimpleName: Null<Map<String, Array<String>>> = null;
@@ -291,6 +259,7 @@ final class FactsView {
 	}
 
 	/** The table key of `file`: what a fact's `FactPos.file` spells it as (`CompilerFacts.keyOf`). */
+	// noqa: member-order
 	public inline function keyOf(file: String): String {
 		return _table.keyOf(file);
 	}
@@ -368,7 +337,7 @@ final class FactsView {
 	 */
 	public function immutableMethod(owner: String, name: String): Bool {
 		final declared: Null<FieldDeclFact> = _table.type(CompilerFacts.baseId(owner))?.fields.find(d -> d.name == name);
-		return declared != null && declared.kinds.foreach(k -> IMMUTABLE_METHOD_KINDS.contains(k));
+		return declared != null && declared.kinds.foreach(k -> FactKinds.FIXED_METHOD_KINDS.contains(k));
 	}
 
 	/**
@@ -704,7 +673,7 @@ final class FactsView {
 				target != null
 				&& c.access == INLINED
 				&& dot > 0
-				&& REFLECTION_CLASSES.contains(target.substr(0, dot))
+				&& FactKinds.REFLECTION_CLASSES.contains(target.substr(0, dot))
 				&& !out.contains(target)
 			)
 				out.push(target);
@@ -729,7 +698,7 @@ final class FactsView {
 	 * `_new` in its implementation class.
 	 */
 	public function graphMember(typeId: String, field: String): String {
-		return field == IMPL_CONSTRUCTOR && _table.type(typeId)?.kind == IMPL_KIND ? _scope.shape.constructorName ?? 'new' : field;
+		return field == IMPL_CONSTRUCTOR && _table.type(typeId)?.kind == FactKinds.IMPL ? _scope.shape.constructorName ?? 'new' : field;
 	}
 
 	/** The typed subtypes of `type` that declare an instance method `name`, by graph id: overrides a dispatch on it reaches. */
@@ -750,11 +719,9 @@ final class FactsView {
 		if (held != null) return held.copy();
 		final found: Array<String> = [
 			for (sub in _table.subtypesOf(CompilerFacts.baseId(type)))
-				if (
-					_table.type(sub)?.fields.exists(f ->
-						f.name == name && !f.isStatic && f.kinds.exists(k -> METHOD_KINDS.contains(k))
-					) == true
-				)
+				if (_table.type(sub)?.fields.exists(f ->
+					f.name == name && !f.isStatic && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))
+				) == true)
 					sub
 		];
 		_overriders[key] = found;
@@ -783,7 +750,7 @@ final class FactsView {
 		final types: Array<String> = root == null || root == id ? [id] : [id, root];
 		final homes: Array<String> = [for (t in types) for (h in _table.typeHomes(t)) h.file];
 		final held: Bool = declared.exists(d -> homes.contains(d.key) || (!d.read && types.contains(d.id)));
-		final answer: Bool = _table.type(id)?.kind != TYPEDEF_KIND && declared.length > 0 && !held;
+		final answer: Bool = _table.type(id)?.kind != FactKinds.TYPEDEF && declared.length > 0 && !held;
 		_unheld[id] = answer;
 		return answer;
 	}
@@ -798,7 +765,7 @@ final class FactsView {
 		if (!truth) return false;
 		final id: String = CompilerFacts.baseId(owner);
 		final fact: Null<TypeFact> = _table.type(id);
-		return fact != null && fact.kind != TYPEDEF_KIND && !declarationsNamed().exists(graphType(id));
+		return fact != null && fact.kind != FactKinds.TYPEDEF && !declarationsNamed().exists(graphType(id));
 	}
 
 	/**
@@ -816,8 +783,8 @@ final class FactsView {
 		final fact: Null<TypeFact> = _table.type(CompilerFacts.baseId(owner));
 		if (fact == null) return true;
 		if (fact.meta.exists(m -> members.typeMetas.contains(m))) return true;
-		if (fact.kind == INTERFACE_KIND && fact.alike) return false;
-		final abstractLike: Bool = fact.kind == ABSTRACT_KIND || fact.kind == IMPL_KIND;
+		if (fact.kind == FactKinds.INTERFACE && fact.alike) return false;
+		final abstractLike: Bool = fact.kind == FactKinds.ABSTRACT || fact.kind == FactKinds.IMPL;
 		final quiet: Bool = fact.isExtern && fact.alike;
 		final implementation: Null<String> = fact.implementation;
 		final fields: Array<FieldDeclFact> = fact.fields.concat(
@@ -826,9 +793,9 @@ final class FactsView {
 		inline function runs(f: FieldDeclFact): Bool {
 			final called: Bool = (members.names.contains(f.name) && (abstractLike || !f.isStatic))
 				|| f.meta.exists(m -> members.metas.contains(m));
-			return called && (!quiet || (members.externInline && f.kinds.contains(INLINE_FIELD_KIND)));
+			return called && (!quiet || (members.externInline && f.kinds.contains(FactKinds.INLINE)));
 		}
-		return fields.exists(f -> f.kinds.exists(k -> METHOD_KINDS.contains(k)) && runs(f));
+		return fields.exists(f -> f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k)) && runs(f));
 	}
 
 	/**
@@ -840,7 +807,7 @@ final class FactsView {
 		return fact != null
 			&& fact.isExtern
 			&& fact.alike
-			&& fact.fields.exists(f -> f.name == member && f.kinds.exists(k -> METHOD_KINDS.contains(k)));
+			&& fact.fields.exists(f -> f.name == member && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k)));
 	}
 
 	/**
@@ -883,7 +850,7 @@ final class FactsView {
 	/** Whether the typed type `owner` declares `name` as a method in some build: a read of it there is a function value. */
 	public function isMethod(owner: String, name: String): Bool {
 		return _table.type(CompilerFacts.baseId(owner))?.fields.exists(f ->
-			f.name == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))
+			f.name == name && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))
 		) ?? false;
 	}
 
@@ -1006,9 +973,9 @@ final class FactsView {
 		for (t in bySimpleName()[type] ?? []) {
 			final fact: Null<TypeFact> = _table.type(t);
 			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
-			final own: String = fact.kind == IMPL_KIND && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
+			final own: String = fact.kind == FactKinds.IMPL && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
 			final body: Null<FactNode> = _table.node('$t.$own');
-			if (body != null && FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
+			if (body != null && FactKinds.FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
 		}
 		return holders;
 	}
@@ -1046,11 +1013,9 @@ final class FactsView {
 		final typed: Array<String> = bySimpleName()[type] ?? [];
 		final owners: Array<String> = [
 			for (t in typed)
-				if (
-					_table.type(t)?.fields.exists(f ->
-						graphMember(t, f.name) == name && f.kinds.exists(k -> METHOD_KINDS.contains(k))
-					) == true
-				)
+				if (_table.type(t)?.fields.exists(f ->
+					graphMember(t, f.name) == name && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))
+				) == true)
 					t
 		];
 		if (owners.length == 0) return null;
@@ -1077,7 +1042,7 @@ final class FactsView {
 			final built: Map<String, Array<String>> = [];
 			for (ids in bySimpleName()) for (id in ids) {
 				final fact: Null<TypeFact> = _table.type(id);
-				if (fact == null || fact.kind != TYPEDEF_KIND) continue;
+				if (fact == null || fact.kind != FactKinds.TYPEDEF) continue;
 				for (target in fact.targets) {
 					final base: String = CompilerFacts.baseId(target);
 					final names: Array<String> = built[base] ?? [];
@@ -1145,7 +1110,7 @@ final class FactsView {
 		for (typed in owners) for (id in _table.nodeIdsOf(typed)) {
 			final n: Null<FactNode> = _table.node(id);
 			if (n == null) return null;
-			if (n.kind != VAR_KIND || n.isStatic != isStatic) continue;
+			if (n.kind != FactKinds.VAR || n.isStatic != isStatic) continue;
 			if (n.generated || n.incomplete.exists(unplaced)) return null;
 			out.push(n);
 		}
@@ -1190,8 +1155,8 @@ final class FactsView {
 		for (n in field.overloads) if (n > overloads) overloads = n;
 		final out: Array<FactNode> = [];
 		for (i in 0...overloads + 1) {
-			final found: Null<FactNode> = _table.node(i == 0 ? '$owner.$own' : '$owner.$own~$i');
-			if (found == null || found.generated || !FUNCTION_KINDS.contains(found.kind)) return null;
+			final found: Null<FactNode> = _table.node(i == 0 ? '$owner.$own' : '$owner.$own${FactKinds.OVERLOAD_ID}$i');
+			if (found == null || found.generated || !FactKinds.FUNCTION_KINDS.contains(found.kind)) return null;
 			out.push(found);
 		}
 		return out;
@@ -1315,7 +1280,7 @@ final class FactsView {
 			var overloads: Int = 0;
 			for (n in field.overloads) if (n > overloads) overloads = n;
 			for (i in 0...overloads + 1)
-				for (home in _table.rangedHomes(i == 0 ? '$t.${field.name}' : '$t.${field.name}~$i'))
+				for (home in _table.rangedHomes(i == 0 ? '$t.${field.name}' : '$t.${field.name}${FactKinds.OVERLOAD_ID}$i'))
 					if (!keys.contains(home)) return true;
 		}
 		return false;
@@ -1341,11 +1306,11 @@ final class FactsView {
 	 */
 	private function rootOf(typed: String): Null<String> {
 		final fact: Null<TypeFact> = _table.type(typed);
-		if (fact == null || fact.kind == TYPEDEF_KIND) return null;
+		if (fact == null || fact.kind == FactKinds.TYPEDEF) return null;
 		final generic: Null<String> = fact.genericOf;
 		return if (generic != null)
 			CompilerFacts.baseId(generic)
-		else if (fact.kind == IMPL_KIND)
+		else if (fact.kind == FactKinds.IMPL)
 			implemented(typed)
 		else
 			typed;
@@ -1361,10 +1326,10 @@ final class FactsView {
 		final generic: Null<String> = fact.genericOf;
 		return if (generic != null)
 			CompilerFacts.baseId(generic) == id
-		else if (fact.kind == IMPL_KIND)
+		else if (fact.kind == FactKinds.IMPL)
 			implemented(typed) == id
 		else
-			fact.kind == TYPEDEF_KIND && fact.targets.length > 0 && fact.targets.foreach(t -> CompilerFacts.baseId(t) == id);
+			fact.kind == FactKinds.TYPEDEF && fact.targets.length > 0 && fact.targets.foreach(t -> CompilerFacts.baseId(t) == id);
 	}
 
 	/**
@@ -1400,7 +1365,7 @@ final class FactsView {
 		final declared: Span = declaredIn(g.treeOf(node.file), span);
 		final inside: Array<FactNode> = [
 			for (n in _table.nodesIn(node.file))
-				if (FUNCTION_KINDS.contains(n.kind) && !n.generated && n.at.file == key && within(n.at.span, declared)) n
+				if (FactKinds.FUNCTION_KINDS.contains(n.kind) && !n.generated && n.at.file == key && within(n.at.span, declared)) n
 		];
 		final outer: Array<FactNode> = [
 			for (n in inside) if (!inside.exists(o -> within(n.at.span, o.at.span) && wider(o.at.span, n.at.span))) n
@@ -1704,8 +1669,8 @@ final class FactsView {
 		if (configurations == null) return false;
 		final typed: Array<String> = table.configurations.copy();
 		final listed: Array<String> = configurations.map(c -> c.name);
-		typed.sort(Reflect.compare);
-		listed.sort(Reflect.compare);
+		typed.sort(Compare.compareString);
+		listed.sort(Compare.compareString);
 		if (typed.length != listed.length) return false;
 		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
 		return true;
@@ -1765,7 +1730,7 @@ final class FactsView {
 		final byImpl: Map<String, String> = _implementing ?? [
 			for (id in _table.typeIds()) {
 				final fact: Null<TypeFact> = _table.type(id);
-				final implementation: Null<String> = fact?.kind == ABSTRACT_KIND ? fact?.implementation : null;
+				final implementation: Null<String> = fact?.kind == FactKinds.ABSTRACT ? fact?.implementation : null;
 				if (implementation != null) CompilerFacts.baseId(implementation) => id;
 			}
 		];
@@ -1791,7 +1756,7 @@ final class FactsView {
 	public function objectClass(type: String): Null<String> {
 		final id: String = CompilerFacts.baseId(unwrapped(type));
 		final declared: Null<TypeFact> = _table.type(id);
-		return declared != null && declared.alike && !declared.isExtern && OBJECT_KINDS.contains(declared.kind) ? id : null;
+		return declared != null && declared.alike && !declared.isExtern && FactKinds.OBJECT_KINDS.contains(declared.kind) ? id : null;
 	}
 
 	/**
@@ -1814,7 +1779,7 @@ final class FactsView {
 				final declared: Null<TypeFact> = _table.type(id);
 				declared != null
 					&& declared.alike
-					&& declared.kind == TYPEDEF_KIND
+					&& declared.kind == FactKinds.TYPEDEF
 					&& declared.targets.length > 0
 					&& declared.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
@@ -1832,7 +1797,7 @@ final class FactsView {
 	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */
 	public function methodsOf(id: String): Array<String> {
 		return [
-			for (f in _table.type(id)?.fields ?? []) if (f.kinds.exists(k -> METHOD_KINDS.contains(k))) graphMember(id, f.name)
+			for (f in _table.type(id)?.fields ?? []) if (f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))) graphMember(id, f.name)
 		];
 	}
 

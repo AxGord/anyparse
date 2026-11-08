@@ -2,6 +2,7 @@ package anyparse.check.haxe.expressions;
 
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.query.CompilerFacts;
+import anyparse.query.FactKinds;
 import anyparse.query.FactsTypeText;
 import anyparse.query.FactsTypeTree;
 
@@ -32,9 +33,6 @@ final class StaticExtensionFacts {
 	/** The access the facts record for a call the compiler spliced in (`inline`). */
 	private static inline final INLINED_ACCESS: String = 'inlined';
 
-	/** A typedef's kind in the facts. */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
-
 	/** A bound on a typedef chain, which a structure-typed alias never ends. */
 	private static inline final MAX_ALIAS_HOPS: Int = 16;
 
@@ -43,9 +41,6 @@ final class StaticExtensionFacts {
 
 	/** The one type that dispatches nothing statically. */
 	private static inline final DYNAMIC: String = 'Dynamic';
-
-	/** The type kinds whose declared fields are the members an instance access resolves against (`TypedFactsProbe`). */
-	private static final MEMBER_HOSTS: Array<String> = ['class', 'interface'];
 
 	/** A type path with no arguments: a nominal type the table can hold. */
 	private static final NOMINAL: EReg = ~/^[A-Za-z_][A-Za-z0-9_.]*$/;
@@ -71,7 +66,7 @@ final class StaticExtensionFacts {
 		for (id in chain) if (facts.type(id)?.fields.exists(f -> f.name == method) == true) return Shadowed;
 		for (id in chain) {
 			final t: Null<TypeFact> = facts.type(id);
-			if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;
+			if (t == null || !FactKinds.OBJECT_KINDS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;
 		}
 		final owner: Null<String> = staticOwner(facts, file, call, module, method);
 		if (owner == null) return Unproven;
@@ -149,7 +144,7 @@ final class StaticExtensionFacts {
 	private static function aliasedFact(facts: CompilerFacts, id: String): Null<TypeFact> {
 		var cur: Null<TypeFact> = facts.type(id);
 		var hops: Int = 0;
-		while (cur != null && cur.kind == TYPEDEF_KIND) {
+		while (cur != null && cur.kind == FactKinds.TYPEDEF) {
 			// a structure or a function type has no statics: the alias brings nothing
 			if (cur.targets.length > 0 && cur.targets.foreach(t -> t.startsWith('{') || t.startsWith('('))) return cur;
 			if (cur.targets.length != 1 || ++hops > MAX_ALIAS_HOPS) return null;
@@ -182,7 +177,7 @@ final class StaticExtensionFacts {
 		if (declared.length != 1) return null;
 		final field: FieldDeclFact = declared[0];
 		return !field.isStatic
-			|| field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND)
+			|| field.kinds.contains(FactKinds.MACRO)
 			|| field.meta.contains(NO_USING_META)
 			|| field.overloads.exists(n -> n > 0)
 			|| field.types.length != 1
@@ -204,9 +199,9 @@ final class StaticExtensionFacts {
 		final declared: Null<TypeFact> = facts.type(id);
 		if (declared == null) return false;
 		return switch declared.kind {
-			case 'class', 'interface':
+			case FactKinds.CLASS, FactKinds.INTERFACE:
 				id == base || chain.contains(id);
-			case 'typedef':
+			case FactKinds.TYPEDEF:
 				declared.targets.length > 0 && declared.targets.foreach(t -> t.startsWith('{'));
 			case _: false;
 		};

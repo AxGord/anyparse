@@ -46,11 +46,6 @@ final class NullGuardedCode {
 	/** The use of a field read whose value goes on (`FieldFact.use`): a method's value. */
 	private static inline final VALUE: String = 'value';
 
-	/** The kind of a typed class (`TypeFact.kind`) and of a method's node (`FactNode.kind`). */
-	private static inline final CLASS_KIND: String = 'class';
-
-	private static inline final METHOD_KIND: String = 'method';
-
 	/** The nullable wrapper: a value of it is one of its argument's, or null. */
 	private static inline final NULLABLE: String = 'Null';
 
@@ -64,9 +59,6 @@ final class NullGuardedCode {
 
 	/** What the facts spell a type the compiler left unbound with: no operator of any type applies to it. */
 	private static inline final UNBOUND: String = '?';
-
-	/** The kind of a typed typedef (`TypeFact.kind`). */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
 
 	/** The metadata making a field callable by code outside the program. */
 	private static inline final EXPOSE: String = ':expose';
@@ -85,9 +77,6 @@ final class NullGuardedCode {
 
 	/** The reflective members that write a member by its name: a value they store replaces the one it held. */
 	private static final WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
-
-	/** The kinds of a typed type a test of whose values against null is the language's own (`builtinEquality`). */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
 	/** The containers whose element store holds the value stored and calls nothing (`containerSealed`), by typed id. */
 	private static final CONTAINERS: Array<String> = ['Array', 'haxe.ds.Map'];
@@ -309,10 +298,10 @@ final class NullGuardedCode {
 	 * with one signature, not exposed to code outside the program, of a class that is not extern.
 	 */
 	private function callable(type: TypeFact, field: FieldDeclFact): Bool {
-		return type.kind == CLASS_KIND
+		return type.kind == FactKinds.CLASS
 			&& type.alike
 			&& !type.isExtern
-			&& field.kinds.foreach(k -> k == METHOD_KIND)
+			&& field.kinds.foreach(k -> k == FactKinds.METHOD)
 			&& !field.overloads.exists(o -> o > 0)
 			&& !field.meta.contains(EXPOSE)
 			&& !type.meta.contains(EXPOSE);
@@ -379,7 +368,7 @@ final class NullGuardedCode {
 	 */
 	private function parameterNeverCalls(id: String, index: Int, count: Int, depth: Int): Bool {
 		final node: Null<FactNode> = _view.node(id);
-		if (node == null || node.kind != METHOD_KIND || node.params.length != count || !node.keptParams.contains(index)) return false;
+		if (node == null || node.kind != FactKinds.METHOD || node.params.length != count || !node.keptParams.contains(index)) return false;
 		if (node.variants.exists(v -> v.params.length != count) || FactMarkers.carries(node, m -> !m.match(InlineSite))) return false;
 		final name: String = node.params[index].name;
 		if (namesInNode(node, name)) return false;
@@ -478,7 +467,7 @@ final class NullGuardedCode {
 		final type: Null<TypeFact> = _view.type(owner);
 		final declared: Null<FieldDeclFact> = type?.fields.find(f -> f.name == field);
 		if (type == null || declared == null) return false;
-		if (type.kind != CLASS_KIND || !type.alike || type.isExtern || !declared.isStatic) return false;
+		if (type.kind != FactKinds.CLASS || !type.alike || type.isExtern || !declared.isStatic) return false;
 		if (!declared.kinds.foreach(k -> PLAIN_VARIABLE.match(k)) || namedByTargetCode(field)) return false;
 		// a call of the value it holds reads it too
 		if (gathered().calls.exists('$owner.$field')) return false;
@@ -524,7 +513,9 @@ final class NullGuardedCode {
 		if (read == null) return true;
 		return switch unwrapNullable(read) {
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, [Named(id, _)]):
-				hierarchy.contains(id) || _view.type(id)?.kind != CLASS_KIND || _view.subtypesOf(id).exists(s -> hierarchy.contains(s));
+				hierarchy.contains(id)
+					|| _view.type(id)?.kind != FactKinds.CLASS
+					|| _view.subtypesOf(id).exists(s -> hierarchy.contains(s));
 			case Named(CLASS_VALUE | ABSTRACT_VALUE, _): true;
 			case _: false;
 		};
@@ -559,8 +550,8 @@ final class NullGuardedCode {
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view.type(id);
 				fact != null && fact.alike && (
-					NOMINAL_KINDS.contains(fact.kind) || (
-						fact.kind == TYPEDEF_KIND
+					FactKinds.NOMINAL_KINDS.contains(fact.kind) || (
+						fact.kind == FactKinds.TYPEDEF
 						&& fact.targets.length > 0
 						&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1))
 					)
@@ -577,7 +568,7 @@ final class NullGuardedCode {
 				return true;
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view.type(id);
-				if (fact == null || fact.kind != TYPEDEF_KIND || fact.targets.length != 1) return false;
+				if (fact == null || fact.kind != FactKinds.TYPEDEF || fact.targets.length != 1) return false;
 				current = FactsTypeTree.read(fact.targets[0]);
 			case _:
 				return false;

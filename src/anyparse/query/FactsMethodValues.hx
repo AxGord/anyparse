@@ -42,15 +42,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class FactsMethodValues {
 
-	/** The node kind of an instance or static method's body (`FactNode.kind`). */
-	private static inline final METHOD_NODE: String = 'method';
-
-	/** The kind of a typed class (`TypeFact.kind`). */
-	private static inline final CLASS_KIND: String = 'class';
-
-	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
-	private static inline final NESTED_ID: String = '@';
-
 	/** The access of a field read off a value of no class (`FieldFact.access`): its value is typed by nothing. */
 	private static inline final DYNAMIC_ACCESS: String = 'FDynamic';
 
@@ -69,9 +60,6 @@ final class FactsMethodValues {
 	/** The type of an abstract as a value: it holds its statics, no instance. */
 	private static inline final ABSTRACT_VALUE: String = 'Abstract';
 
-	/** The kind of a typed enum (`TypeFact.kind`): its values are no object of a class. */
-	private static inline final ENUM_KIND: String = 'enum';
-
 	/** How deep `mayHold` reads through wrappers and type parameters before it answers that a value may be anything. */
 	private static inline final MAX_DEPTH: Int = 8;
 
@@ -84,20 +72,11 @@ final class FactsMethodValues {
 	/** The nullable wrapper: a value of it is what it wraps. */
 	private static inline final NULLABLE: String = 'Null';
 
-	/** What ends a field node's id before an overload index (`~n`) or a uniqueness suffix (`#n`). */
-	private static final ID_SUFFIXES: Array<String> = ['~', '#'];
-
 	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
 	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];
 
-	/** The field kinds that are methods (`FieldDeclFact.kinds`). */
-	private static final METHOD_KINDS: Array<String> = ['method', 'inline', 'dynamic'];
-
 	/** The reflective calls that run a function with a receiver they are handed as its `this`. */
 	private static final REBINDING_CALLS: Array<String> = ['Reflect.callMethod'];
-
-	/** The classes whose members are reflection (`TypedFactsProbe`). */
-	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
 
 	/**
 	 * The reflective members whose result never holds a member's value read off an object, though its type could: they
@@ -147,9 +126,6 @@ final class FactsMethodValues {
 	 */
 	private static final VALUE_RESULTS: Array<String> = ['Void', 'Bool', 'Int', 'Float', 'String'];
 
-	/** The typed kinds a value of which is an object of a class (`TypeFact.kind`). */
-	private static final OBJECT_KINDS: Array<String> = ['class', 'interface'];
-
 	private final _view: FactsView;
 	private final _table: CompilerFacts;
 
@@ -186,14 +162,14 @@ final class FactsMethodValues {
 		if (reads.unknown != null) return false;
 		// no call hands a function a receiver of its own: every `this` is what a dispatch bound
 		if (!reads.rebinds) return true;
-		final nested: Int = holder.indexOf(NESTED_ID);
+		final nested: Int = holder.indexOf(FactKinds.NESTED_ID);
 		final root: String = nested < 0 ? holder : holder.substr(0, nested);
 		final node: Null<FactNode> = _table.node(root);
-		if (node == null || node.kind != METHOD_NODE || node.isStatic) return false;
+		if (node == null || node.kind != FactKinds.METHOD || node.isStatic) return false;
 		final owner: Null<TypeFact> = _table.type(node.owner);
-		if (owner == null || owner.kind != CLASS_KIND || !owner.alike || owner.isExtern) return false;
+		if (owner == null || owner.kind != FactKinds.CLASS || !owner.alike || owner.isExtern) return false;
 		var name: String = root.substr(node.owner.length + 1);
-		for (s in ID_SUFFIXES) {
+		for (s in FactKinds.ID_SUFFIXES) {
 			final cut: Int = name.indexOf(s);
 			if (cut >= 0) name = name.substr(0, cut);
 		}
@@ -277,10 +253,10 @@ final class FactsMethodValues {
 				final declared: Null<TypeFact> = _table.type(id);
 				if (declared == null || !declared.alike)
 					true
-				else if (OBJECT_KINDS.contains(declared.kind))
+				else if (FactKinds.OBJECT_KINDS.contains(declared.kind))
 					!statics && (hierarchy.contains(id) || (!exact && (left || _table.subtypesOf(id).exists(s -> hierarchy.contains(s)))))
 				else
-					declared.kind != ENUM_KIND;
+					declared.kind != FactKinds.ENUM;
 			case Parameter(path):
 				final types: Null<Array<FactsType>> = bound(path);
 				types == null || types.exists(b -> mayHold(b, false, hierarchy, escaped, bound, statics, depth + 1));
@@ -344,14 +320,14 @@ final class FactsMethodValues {
 			final target: String = r.target;
 			if (REBINDING_CALLS.contains(target)) out.rebinds = true;
 			if (memberless(_table, target)) continue;
-			if (r.isValue || REFLECTION_CLASSES.contains(target)) {
+			if (r.isValue || FactKinds.REFLECTION_CLASSES.contains(target)) {
 				// whatever calls it later hands it a name computed there, and any object: the project's declaration bounds
 				// what that obtains (`declaredHolders`); a reflective class as a value may also rebind
 				if (_holders == null) {
 					out.unknown = '`$target` is read as a value in `$id`';
 					return false;
 				}
-				if (REFLECTION_CLASSES.contains(target)) out.rebinds = true;
+				if (FactKinds.REFLECTION_CLASSES.contains(target)) out.rebinds = true;
 				out.computed.push({ receiver: null, exact: false, typeless: true });
 				continue;
 			}
@@ -384,7 +360,7 @@ final class FactsMethodValues {
 		if (access != INSTANCE_ACCESS) return true;
 		final declaring: Null<TypeFact> = owner == null ? null : _table.type(owner);
 		final declared: Null<FieldDeclFact> = declaring?.fields.find(f -> f.name == field);
-		return declared == null || declared.kinds.exists(k -> METHOD_KINDS.contains(k));
+		return declared == null || declared.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k));
 	}
 
 	/**

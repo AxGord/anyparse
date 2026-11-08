@@ -60,32 +60,14 @@ using Lambda;
 @:nullSafety(Strict)
 final class FunctionValueTypes {
 
-	/** The kind of a typed class (`TypeFact.kind`). */
-	private static inline final CLASS_KIND: String = 'class';
-
-	/** The field kind of a method no assignment replaces (`FieldDeclFact.kinds`). */
-	private static inline final METHOD_KIND: String = 'method';
-
-	/** The field kind of a method an assignment may replace (`FieldDeclFact.kinds`). */
-	private static inline final DYNAMIC_KIND: String = 'dynamic';
-
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
 	private static inline final INLINED: String = 'inlined';
-
-	/** The reflective class whose members write fields by name: read as a value, whatever calls it may. */
-	private static inline final REFLECT: String = 'Reflect';
-
-	/** The reflective class whose members construct a class value's instance: read as a value, whatever calls it may. */
-	private static inline final TYPE: String = 'Type';
 
 	/** The type of a class as a value (`Class<T>`). */
 	private static inline final CLASS_VALUE: String = 'Class';
 
 	/** The reflective member that runs a class value's constructor with the arguments an array hands it. */
 	private static inline final CONSTRUCTING: String = 'Type.createInstance';
-
-	/** The kind of a typed typedef (`TypeFact.kind`). */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
 
 	/** The nullable wrapper: it unifies as what it wraps. */
 	private static inline final NULLABLE: String = 'Null';
@@ -101,9 +83,6 @@ final class FunctionValueTypes {
 
 	/** What a nested function's graph id holds (`FactsView.NESTED_MARK`): a lambda's or a local function's value is typed. */
 	private static inline final NESTED: String = '#';
-
-	/** The kinds of a typed type no value of another such type unifies with but its subtypes' (`TypeFact.kind`). */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
 
 	/** The call accesses that may run an instance method a type declares (`CallFact.access`). */
 	private static final INVOKING: Array<String> = ['FInstance', 'FClosure', 'super'];
@@ -133,9 +112,6 @@ final class FunctionValueTypes {
 
 	/** The reflective members that write a field an object's name names. */
 	private static final REFLECTIVE_WRITERS: Array<String> = ['Reflect.setField', 'Reflect.setProperty'];
-
-	/** The facts node kinds of a function expression and of a local function (`TypedFactsProbe`). */
-	private static final EXPRESSION_KINDS: Array<String> = ['fn', 'local'];
 
 	/**
 	 * Among the places function values are written (`argumentValues`, `storedValues`), the one standing for every function
@@ -342,7 +318,7 @@ final class FunctionValueTypes {
 		final fact: Null<TypeFact> = dot < 0 ? null : table.type(owner);
 		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
 		if (fact == null || field == null) return null;
-		if (fact.kind != CLASS_KIND || !fact.alike || field.isStatic || !field.kinds.foreach(k -> k == DYNAMIC_KIND)) return null;
+		if (fact.kind != FactKinds.CLASS || !fact.alike || field.isStatic || !field.kinds.foreach(k -> k == FactKinds.DYNAMIC)) return null;
 		final hierarchy: Array<String> = [owner].concat(table.subtypesOf(owner));
 		final escaped: Null<Array<String>> = _escapedTypes();
 		if (escaped == null) return null;
@@ -448,10 +424,10 @@ final class FunctionValueTypes {
 	 * declares the classes such a name may name a method of (`computedNames`).
 	 */
 	private function reflectiveStores(n: FactNode, name: String, computedNames: Bool, out: Array<FactPos>): Bool {
-		for (r in n.reflection) if (r.target == REFLECT || REFLECTIVE_WRITERS.contains(r.target)) {
+		for (r in n.reflection) if (r.target == FactKinds.REFLECT || REFLECTIVE_WRITERS.contains(r.target)) {
 			// the literal at the call's NAME argument; another argument's (the value written) names nothing
 			final literal: Null<String> = r.memberName;
-			final computed: Bool = r.target == REFLECT || r.isValue || literal == null;
+			final computed: Bool = r.target == FactKinds.REFLECT || r.isValue || literal == null;
 			if (computed && computedNames) return false;
 			if (computed || literal != name) continue;
 			final values: Null<Array<FactPos>> = reflectiveStore(n, r.at);
@@ -595,7 +571,12 @@ final class FunctionValueTypes {
 		final fact: Null<TypeFact> = table.type(owner);
 		final ctor: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == ctorName && !f.isStatic);
 		if (fact == null || ctor == null) return null;
-		if (fact.kind != CLASS_KIND || !fact.alike || !ctor.kinds.foreach(k -> k == METHOD_KIND) || table.subtypesOf(owner).length > 0)
+		if (
+			fact.kind != FactKinds.CLASS
+			|| !fact.alike
+			|| !ctor.kinds.foreach(k -> k == FactKinds.METHOD)
+			|| table.subtypesOf(owner).length > 0
+		)
 			return null;
 		final omissible: Bool = defaultHoldsNoFunction(param);
 		final arity: Null<Int> = parameterArity('$owner.$ctorName', index);
@@ -677,7 +658,8 @@ final class FunctionValueTypes {
 			if (made == null) continue;
 			final n: FactNode = made;
 			if (constructionLost(n)) escapedValues(out);
-			for (r in n.reflection) if (r.target == TYPE || r.target == CONSTRUCTING) reflectiveConstruction(r, owner, index, arity, out);
+			for (r in n.reflection) if (r.target == FactKinds.TYPE || r.target == CONSTRUCTING)
+				reflectiveConstruction(r, owner, index, arity, out);
 		}
 	}
 
@@ -687,7 +669,7 @@ final class FunctionValueTypes {
 	 */
 	private function reflectiveConstruction(r: ReflectionFact, owner: String, index: Int, arity: Null<Int>, out: Array<FactPos>): Void {
 		final shape: RefShape = _scope.shape;
-		if (r.target == TYPE || r.isValue) {
+		if (r.target == FactKinds.TYPE || r.isValue) {
 			escapedValues(out);
 			return;
 		}
@@ -730,7 +712,11 @@ final class FunctionValueTypes {
 			case Named(NULLABLE, [inner]): classMayBe(inner, owner, depth + 1);
 			case Named(id, _):
 				final fact: Null<TypeFact> = table.type(id);
-				fact == null || !fact.alike || !NOMINAL_KINDS.contains(fact.kind) || id == owner || table.supertypesOf(owner).contains(id);
+				fact == null
+					|| !fact.alike
+					|| !FactKinds.NOMINAL_KINDS.contains(fact.kind)
+					|| id == owner
+					|| table.supertypesOf(owner).contains(id);
 			case Parameter(path):
 				final bound: Null<Array<FactsType>> = _bindings(path);
 				bound == null || bound.exists(b -> classMayBe(b, owner, depth + 1));
@@ -815,9 +801,9 @@ final class FunctionValueTypes {
 		final fact: Null<TypeFact> = _view._table.type(owner);
 		final field: Null<FieldDeclFact> = fact?.fields.find(f -> f.name == name);
 		if (fact == null || field == null) return false;
-		if (fact.kind != CLASS_KIND || !fact.alike || field.isStatic) return false;
+		if (fact.kind != FactKinds.CLASS || !fact.alike || field.isStatic) return false;
 		// a `dynamic` method's field holds whatever is assigned to it: a call of the field runs that
-		if (!field.kinds.foreach(k -> k == METHOD_KIND)) return false;
+		if (!field.kinds.foreach(k -> k == FactKinds.METHOD)) return false;
 		return field.types.foreach(t -> arity(t) == count);
 	}
 
@@ -989,7 +975,7 @@ final class FunctionValueTypes {
 		final table: CompilerFacts = _view._table;
 		for (id in table.nodeIds()) {
 			final n: Null<FactNode> = table.node(id);
-			if (n == null || !EXPRESSION_KINDS.contains(n.kind)) continue;
+			if (n == null || !FactKinds.NESTED_FUNCTION_KINDS.contains(n.kind)) continue;
 			for (c in n.calls) {
 				final target: Null<String> = c.target;
 				if (target == null) continue;
@@ -1038,7 +1024,7 @@ final class FunctionValueTypes {
 		return switch aliased(t) {
 			case Named(id, _):
 				final fact: Null<TypeFact> = _view._table.type(id);
-				fact != null && fact.alike && NOMINAL_KINDS.contains(fact.kind) ? id : null;
+				fact != null && fact.alike && FactKinds.NOMINAL_KINDS.contains(fact.kind) ? id : null;
 			case _: null;
 		};
 	}
@@ -1051,7 +1037,7 @@ final class FunctionValueTypes {
 				case Named(NULLABLE, [inner]): inner;
 				case Named(id, _):
 					final fact: Null<TypeFact> = _view._table.type(id);
-					fact != null && fact.kind == TYPEDEF_KIND && fact.targets.length == 1 ? FactsTypeTree.read(fact.targets[0]) : null;
+					fact != null && fact.kind == FactKinds.TYPEDEF && fact.targets.length == 1 ? FactsTypeTree.read(fact.targets[0]) : null;
 				case _: null;
 			};
 			if (next == null) return current;

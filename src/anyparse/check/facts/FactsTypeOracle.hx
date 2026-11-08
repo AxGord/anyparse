@@ -6,6 +6,7 @@ import anyparse.check.facts.FactsTypeSpelling.TypeScope;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
+import anyparse.query.FactKinds;
 import anyparse.query.FactsTypeText;
 import anyparse.query.FactsTypeTree;
 import anyparse.query.LexicalRegions;
@@ -48,12 +49,6 @@ final class FactsTypeOracle implements TypeOracle {
 
 	/** A supertype's metadata whose macro runs over every subtype as its own `@:build` (`inheritedMember`). */
 	private static inline final AUTO_BUILD_META: String = ':autoBuild';
-
-	/** The node kinds that are a member function's own body (`TypedFactsProbe`). */
-	private static final MEMBER_FUNCTION_KINDS: Array<String> = ['method', 'ctor'];
-
-	/** The kinds the facts give a type no operator overload can be declared on (`CompilerFacts.TypeFact`). */
-	private static final PLAIN_KINDS: Array<String> = ['class', 'interface', CompilerFacts.ENUM_TYPE_KIND];
 
 	/** The table this oracle reads. */
 	public final facts: CompilerFacts;
@@ -181,7 +176,8 @@ final class FactsTypeOracle implements TypeOracle {
 		final declared: Null<TypeFact> = id == null ? null : facts.type(id);
 		final shape: RefShape = _plugin.refShape();
 		final builtins: Array<String> = [for (name in shape.literalTypeNames ?? []) name].concat(shape.nonNullableTypeNames ?? []);
-		return id != null && (builtins.contains(id) || (declared != null && declared.alike && PLAIN_KINDS.contains(declared.kind)))
+		return id != null
+			&& (builtins.contains(id) || (declared != null && declared.alike && FactKinds.NOMINAL_KINDS.contains(declared.kind)))
 			? SourceText.lastSegment(id)
 			: null;
 	}
@@ -236,8 +232,7 @@ final class FactsTypeOracle implements TypeOracle {
 			final declared: Array<FieldDeclFact> = (facts.type(target.substr(0, dot))?.fields ?? []).filter(f -> f.name == name);
 			if (declared.length != 1) return false;
 			final field: FieldDeclFact = declared[0];
-			if (field.types.length != 1 || field.kinds.contains(CompilerFacts.MACRO_FIELD_KIND) || field.overloads.exists(n -> n > 0))
-				return false;
+			if (field.types.length != 1 || field.kinds.contains(FactKinds.MACRO) || field.overloads.exists(n -> n > 0)) return false;
 			return switch FactsTypeTree.read(field.type) {
 				case Function(_, result): FactsTypeTree.isClosed(result);
 				case _: false;
@@ -256,16 +251,15 @@ final class FactsTypeOracle implements TypeOracle {
 		var seen: Bool = false;
 		for (id in facts.typeIds()) {
 			final t: Null<TypeFact> = facts.type(id);
-			if (t != null && t.kind == CompilerFacts.ENUM_TYPE_KIND)
-				for (c in t.constructors) if (c.name == callee) switch FactsTypeTree.read(c.type) {
-					// one taking no argument, or fewer, is no constructor a pattern with this argument can be of
-					case Named(_, _):
-					case Function(args, _) if (index >= args.length):
-					case Function(args, _) if (FactsTypeTree.isClosed(args[index].type)):
-						seen = true;
-					case _:
-						return false;
-				}
+			if (t != null && t.kind == FactKinds.ENUM) for (c in t.constructors) if (c.name == callee) switch FactsTypeTree.read(c.type) {
+				// one taking no argument, or fewer, is no constructor a pattern with this argument can be of
+				case Named(_, _):
+				case Function(args, _) if (index >= args.length):
+				case Function(args, _) if (FactsTypeTree.isClosed(args[index].type)):
+					seen = true;
+				case _:
+					return false;
+			}
 		}
 		return seen;
 	}
@@ -444,7 +438,7 @@ final class FactsTypeOracle implements TypeOracle {
 		return [
 			for (n in site.facts.nodesIn(site.file))
 				if (
-					MEMBER_FUNCTION_KINDS.contains(n.kind)
+					FactKinds.OWN_BODY_KINDS.contains(n.kind)
 					&& !n.generated
 					&& n.inlinedFrom == null
 					&& owners.contains(n.owner)
@@ -559,7 +553,7 @@ final class FactsTypeOracle implements TypeOracle {
 	private static function memberOf(n: FactNode): Null<String> {
 		if (!n.id.startsWith('${n.owner}.')) return null;
 		var member: String = n.id.substr(n.owner.length + 1);
-		for (mark in ['@', '~', '#']) {
+		for (mark in [FactKinds.NESTED_ID, FactKinds.OVERLOAD_ID, FactKinds.UNIQUE_ID]) {
 			final cut: Int = member.indexOf(mark);
 			if (cut >= 0) member = member.substr(0, cut);
 		}

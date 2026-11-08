@@ -221,12 +221,6 @@ final class MemberReach {
 	/** How deep a chain of calls handing a fresh value on (`freshCall`) is followed before the value counts as shared. */
 	private static inline final MAX_FRESH_DEPTH: Int = 4;
 
-	/** The fact kind of a class constructor's body (`TypedFactsProbe`). */
-	private static inline final FACT_CONSTRUCTOR: String = 'ctor';
-
-	/** The fact kind of a field's initializer (`TypedFactsProbe`). */
-	private static inline final FACT_INITIALIZER: String = 'var';
-
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
 	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
 
@@ -1634,7 +1628,7 @@ final class MemberReach {
 			return Unconfined(node.file, node.span, 'the compiler facts do not describe the body of `${node.id}`');
 		// a class constructor, or the initializers it runs first, works on the object a construction of the walk built
 		final constructs: Bool = bodies.foreach(n ->
-			n.kind == FACT_CONSTRUCTOR || (node.name == CallGraph.INIT_NAME && n.kind == FACT_INITIALIZER)
+			n.kind == FactKinds.CTOR || (node.name == CallGraph.INIT_NAME && n.kind == FactKinds.VAR)
 		);
 		final work: Array<{ n: FactNode, fresh: Bool }> = bodies.map(n -> {n: n, fresh: constructs });
 		while (work.length > 0) {

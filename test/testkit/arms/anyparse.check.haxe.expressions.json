@@ -62,7 +62,7 @@
 			"name": "M-PSE-FACTS-HOSTS",
 			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
-			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"find": "if (t == null || !FactKinds.OBJECT_KINDS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
 			"replace": "if (t == null || t.meta.contains(USING_META)) return Unproven;",
 			"note": "a forwarding abstract counts as a member host whose own fields are its members"
 		},
@@ -70,8 +70,8 @@
 			"name": "M-PSE-FACTS-USING",
 			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "judge",
-			"find": "if (t == null || !MEMBER_HOSTS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
-			"replace": "if (t == null || !MEMBER_HOSTS.contains(t.kind)) return Unproven;",
+			"find": "if (t == null || !FactKinds.OBJECT_KINDS.contains(t.kind) || t.meta.contains(USING_META)) return Unproven;",
+			"replace": "if (t == null || !FactKinds.OBJECT_KINDS.contains(t.kind)) return Unproven;",
 			"note": "a receiver type's own @:using, which wins over the file's, is ignored"
 		},
 		{

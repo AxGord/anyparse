@@ -32,17 +32,8 @@ final class FactsNativeReach {
 	/** The prefix a target gives a Haxe name it cannot spell as it is (hxcpp's `_hx_new`): the name stands behind it. */
 	private static inline final MANGLED: String = '_hx_';
 
-	/** What separates a nested function's id from its parent's (`TypedFactsWalk`): `<parent id>@<offset>`. */
-	private static inline final NESTED_ID: String = '@';
-
-	/** What separates a further overload's index from its field's node id (`TypedFactsWalk`): `<field id>~<n>`. */
-	private static inline final OVERLOAD_ID: String = '~';
-
 	/** The names target code spells the object its method runs on by (`reach`), besides a member of it. */
 	private static final THIS_SPELLINGS: Array<String> = ['this', '_hx_this', '__this', '__this__', 'self', '_gthis'];
-
-	/** The kinds of a typed type whose statics and constructor code naming it may run (`classesNamed`). */
-	private static final CLASS_KINDS: Array<String> = ['class', 'impl'];
 
 	/** Class id -> the names target code in its methods reaches a member of `this` by (`memberNames`), read once per class. */
 	private final _members: Map<String, Array<String>> = [];
@@ -89,7 +80,9 @@ final class FactsNativeReach {
 		for (f in fact.fields) if (f.code.length > 0) {
 			final base: String = '$id.${f.name}';
 			final ids: Array<String> = [base];
-			for (count in f.overloads) for (i in 1...count + 1) if (!ids.contains('$base$OVERLOAD_ID$i')) ids.push('$base$OVERLOAD_ID$i');
+			for (count in f.overloads)
+				for (i in 1...count + 1)
+					if (!ids.contains('$base${FactKinds.OVERLOAD_ID}$i')) ids.push('$base${FactKinds.OVERLOAD_ID}$i');
 			for (node in ids) {
 				final self: Null<String> = f.isStatic ? null : id;
 				final described: Bool = _table.node(node) != null;
@@ -155,7 +148,7 @@ final class FactsNativeReach {
 	 * captures, unless that is static. Null for none.
 	 */
 	private function selfOf(id: String): Null<String> {
-		final nested: Int = id.indexOf(NESTED_ID);
+		final nested: Int = id.indexOf(FactKinds.NESTED_ID);
 		final root: Null<FactNode> = _table.node(nested < 0 ? id : id.substr(0, nested));
 		return root == null || root.isStatic ? null : root.owner;
 	}
@@ -170,7 +163,7 @@ final class FactsNativeReach {
 				for (p in n.params) out.push(p);
 				for (v in n.vars) out.push({ name: v.name, type: v.type });
 			}
-			final cut: Int = current.lastIndexOf(NESTED_ID);
+			final cut: Int = current.lastIndexOf(FactKinds.NESTED_ID);
 			if (cut < 0) return out;
 			current = current.substr(0, cut);
 		}
@@ -250,7 +243,7 @@ final class FactsNativeReach {
 	 * extern — an extern's members are target code themselves, its `inline` ones spliced where Haxe code calls them.
 	 */
 	private static function programClass(fact: Null<TypeFact>): Bool {
-		return fact != null && CLASS_KINDS.contains(fact.kind) && !fact.isExtern;
+		return fact != null && FactKinds.CODE_KINDS.contains(fact.kind) && !fact.isExtern;
 	}
 
 	/**

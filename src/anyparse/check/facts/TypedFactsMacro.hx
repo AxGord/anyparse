@@ -14,6 +14,7 @@ import sys.io.FileOutput;
 import anyparse.check.facts.TypedFactsTypeStrings.*;
 import anyparse.query.FileIdentity;
 import anyparse.grammar.json.JsonText;
+import anyparse.query.FactKinds;
 
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
@@ -117,7 +118,7 @@ final class TypedFactsMacro {
 	public function uniqueId(base: String): String {
 		var id: String = base;
 		var n: Int = 1;
-		while (_taken.exists(id)) id = '$base#${n++}';
+		while (_taken.exists(id)) id = '$base${FactKinds.UNIQUE_ID}${n++}';
 		_taken[id] = true;
 		return id;
 	}
@@ -244,10 +245,13 @@ final class TypedFactsMacro {
 				final ctors: Array<String> = [
 					for (name in e.names) '{"n":${q(name)},"t":${q(typeString(e.constructs[name]?.type, 0))}}'
 				];
-				typeLine(e.pack, e.name, 'enum', e.pos, e.params, e.meta.get(), e.isExtern, [',"ctors":' + arr(ctors)]);
+				typeLine(e.pack, e.name, FactKinds.ENUM, e.pos, e.params, e.meta.get(), e.isExtern, [',"ctors":' + arr(ctors)]);
 			case TTypeDecl(r):
 				final d: DefType = r.get();
-				typeLine(d.pack, d.name, 'typedef', d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]);
+				typeLine(
+					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern,
+					[',"target":' + q(typeString(d.type, 0))]
+				);
 			case TAbstract(r):
 				final a: AbstractType = r.get();
 				final extra: Array<String> = [
@@ -257,7 +261,7 @@ final class TypedFactsMacro {
 				];
 				final impl: Null<Ref<ClassType>> = a.impl;
 				if (impl != null) extra.push(',"impl":' + q(impl.toString()));
-				typeLine(a.pack, a.name, 'abstract', a.pos, a.params, a.meta.get(), a.isExtern, extra);
+				typeLine(a.pack, a.name, FactKinds.ABSTRACT, a.pos, a.params, a.meta.get(), a.isExtern, extra);
 		}
 	}
 
@@ -270,13 +274,13 @@ final class TypedFactsMacro {
 		final kind: String = switch c.kind {
 			case KAbstractImpl(a):
 				extra.push(',"abs":' + q(a.toString()));
-				'impl';
+				FactKinds.IMPL;
 			case KGenericInstance(base, params):
 				// a `@:generic` class compiles one class per argument list: its own code, typed at those arguments
 				extra.push(',"of":' + q(instString(base, params, 0)));
-				'class';
-			case _ if (c.isInterface): 'interface';
-			case _: 'class';
+				FactKinds.CLASS;
+			case _ if (c.isInterface): FactKinds.INTERFACE;
+			case _: FactKinds.CLASS;
 		};
 		final genericCopy: Bool = c.kind.match(KGenericInstance(_, _));
 		final home: String = fileOf(c.pos);
@@ -288,17 +292,20 @@ final class TypedFactsMacro {
 		typeLine(c.pack, c.name, kind, c.pos, c.params, c.meta.get(), c.isExtern, extra);
 		for (m in members) {
 			final nodeKind: String = switch m.f.kind {
-				case FMethod(_) if (m.f.name == 'new' && !m.s): 'ctor';
-				case FMethod(_): 'method';
-				case FVar(_, _): 'var';
+				case FMethod(_) if (m.f.name == 'new' && !m.s): FactKinds.CTOR;
+				case FMethod(_): FactKinds.METHOD;
+				case FVar(_, _): FactKinds.VAR;
 			};
 			walkBody(m.f.expr(), '$id.${m.f.name}', nodeKind, id, m.s, typeString(m.f.type, 0), home, 0, genericCopy);
 			var index: Int = 0;
 			for (o in m.f.overloads.get())
-				walkBody(o.expr(), '$id.${m.f.name}~${++index}', nodeKind, id, m.s, typeString(o.type, 0), home, index, genericCopy);
+				walkBody(
+					o.expr(), '$id.${m.f.name}${FactKinds.OVERLOAD_ID}${++index}', nodeKind, id, m.s, typeString(o.type, 0), home, index,
+					genericCopy
+				);
 		}
 		final init: Null<TypedExpr> = c.init;
-		walkBody(init, '$id.__init__', 'init', id, true, '()->Void', home, 0, genericCopy);
+		walkBody(init, '$id.__init__', FactKinds.INIT, id, true, '()->Void', home, 0, genericCopy);
 	}
 
 	/**
@@ -323,10 +330,10 @@ final class TypedFactsMacro {
 	private function fieldRecord(f: ClassField, isStatic: Bool, home: String): String {
 		final kind: String = switch f.kind {
 			case FVar(read, write): 'var(${access(read)},${access(write)})';
-			case FMethod(MethNormal): 'method';
-			case FMethod(MethInline): 'inline';
-			case FMethod(MethDynamic): 'dynamic';
-			case FMethod(MethMacro): 'macro';
+			case FMethod(MethNormal): FactKinds.METHOD;
+			case FMethod(MethInline): FactKinds.INLINE;
+			case FMethod(MethDynamic): FactKinds.DYNAMIC;
+			case FMethod(MethMacro): FactKinds.MACRO;
 		};
 		final out: StringBuf = new StringBuf();
 		out.add('{"n":${q(f.name)},"k":"$kind","t":${q(typeString(f.type, 0))},"p":${pos(f.pos, home)}');
@@ -370,7 +377,10 @@ final class TypedFactsMacro {
 				_written[key] = true;
 				if (r == null) continue;
 				final d: DefType = r.get();
-				typeLine(d.pack, d.name, 'typedef', d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]);
+				typeLine(
+					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern,
+					[',"target":' + q(typeString(d.type, 0))]
+				);
 			}
 			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
 		}

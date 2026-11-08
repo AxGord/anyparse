@@ -30,9 +30,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class ReachGraph {
 
-	/** The kinds of a typed type (`CompilerFacts.TypeFact`) a value of which is an instance of it or of a subtype. */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface'];
-
 	/**
 	 * How many placeholders for implicitly-called library members this analysis has added to the graph — a node the
 	 * admission closure did not hold when it was computed, so a walk re-asks its admissions when this moves.
@@ -982,7 +979,7 @@ final class ReachGraph {
 			if (at.family == Text && library.inertType(t)) continue;
 			final owner: Null<String> = i < owners.length ? owners[i] : null;
 			final kind: Null<String> = owner == null ? null : view.type(owner)?.kind;
-			if (owner == null || !NOMINAL_KINDS.contains(kind ?? '')) return null;
+			if (owner == null || !FactKinds.OBJECT_KINDS.contains(kind ?? '')) return null;
 			noteTyped(at.exact ? [owner] : [owner].concat(view.subtypesOf(owner)));
 			if (!at.exact) escapes = true;
 		}

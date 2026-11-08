@@ -85,14 +85,8 @@ final class FactsEscapes {
 	/** The type of an abstract as a value: its statics, which its implementation class holds. */
 	private static inline final ABSTRACT_VALUE: String = 'Abstract';
 
-	/** The classes whose members are reflection (`TypedFactsProbe`). */
-	private static final REFLECTION_CLASSES: Array<String> = ['Reflect', 'Type'];
-
-	/** The kinds of a typed type a place keeps the nominal type of what it holds by (`TypeFact.kind`). */
-	private static final NOMINAL_KINDS: Array<String> = ['class', 'interface', 'enum'];
-
 	/** The kinds of a typed type a class value may be of (`TypeFact.kind`): an abstract's implementation class holds its statics. */
-	private static final CLASS_KINDS: Array<String> = ['class', 'interface', 'impl'];
+	private static final CLASS_KINDS: Array<String> = [FactKinds.CLASS, FactKinds.INTERFACE, FactKinds.IMPL];
 
 	/** Why the escapes are not known, once something says so (`compute`). */
 	public var failure(default, null): Null<String> = null;
@@ -234,7 +228,7 @@ final class FactsEscapes {
 			final target: Null<String> = c.target;
 			if (c.access != INLINED || target == null) continue;
 			final dot: Int = target.lastIndexOf('.');
-			if (dot < 0 || !REFLECTION_CLASSES.contains(target.substr(0, dot))) continue;
+			if (dot < 0 || !FactKinds.REFLECTION_CLASSES.contains(target.substr(0, dot))) continue;
 			named = true;
 			final field: Null<FieldDeclFact> = declaredField(target);
 			if (field != null && producer(field)) return false;
@@ -307,7 +301,7 @@ final class FactsEscapes {
 	/** Whether the typed class `id` extends an extern class, directly or not, being none itself. */
 	private function extendsExtern(id: String): Bool {
 		final fact: Null<TypeFact> = _table.type(id);
-		if (fact == null || fact.kind != 'class' || fact.isExtern) return false;
+		if (fact == null || fact.kind != FactKinds.CLASS || fact.isExtern) return false;
 		var up: Null<String> = fact.superClass;
 		final seen: Array<String> = [];
 		while (up != null) {
@@ -340,13 +334,13 @@ final class FactsEscapes {
 					true
 				else if (fact == null || !fact.alike)
 					false
-				else if (fact.kind == 'typedef')
+				else if (fact.kind == FactKinds.TYPEDEF)
 					fact.targets.length > 0 && fact.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read != null && placeKeeps(substitute(read, bindings(id, fact, args)));
 					})
 				else
-					NOMINAL_KINDS.contains(fact.kind) && args.length == fact.params.length && args.foreach(placeKeeps);
+					FactKinds.NOMINAL_KINDS.contains(fact.kind) && args.length == fact.params.length && args.foreach(placeKeeps);
 			case _: false;
 		};
 	}
@@ -411,10 +405,10 @@ final class FactsEscapes {
 				if (!args.foreach(escapeType)) return false;
 				final bound: Map<String, FactsType> = bindings(id, fact, args);
 				return switch fact.kind {
-					case 'class', 'interface', 'impl': escapeClass(id, fact, bound);
-					case 'enum': fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));
-					case 'abstract': within(fact.underlying, bound);
-					case 'typedef': within(fact.targets, bound);
+					case FactKinds.CLASS, FactKinds.INTERFACE, FactKinds.IMPL: escapeClass(id, fact, bound);
+					case FactKinds.ENUM: fact.constructors.foreach(c -> constructorEscapes(id, c.name, c.type, bound));
+					case FactKinds.ABSTRACT: within(fact.underlying, bound);
+					case FactKinds.TYPEDEF: within(fact.targets, bound);
 					case kind: refuse('a value of `$id` escapes, a $kind');
 				};
 		}
