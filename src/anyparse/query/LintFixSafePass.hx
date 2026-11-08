@@ -4,6 +4,7 @@ import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.util.Strings;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -379,11 +380,6 @@ final class LintFixSafePass {
 		return code >= '0'.code && code <= '9'.code;
 	}
 
-	/** Whether the character code is a space or a tab — the token boundary a path ends at. */
-	private static inline function isSpace(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code;
-	}
-
 	/**
 	 * The path a diagnostic line carries: the whitespace-delimited token that ends at the
 	 * first `:<digits>:` on the line, or null when the line holds no position at all.
@@ -398,7 +394,7 @@ final class LintFixSafePass {
 			while (scan < line.length && isDigit(line.fastCodeAt(scan))) scan++;
 			if (scan == from || line.charAt(scan) != ':') continue;
 			var start: Int = colon;
-			while (start > 0 && !isSpace(line.fastCodeAt(start - 1))) start--;
+			while (start > 0 && !Strings.isSpaceOrTab(line.fastCodeAt(start - 1))) start--;
 			final path: String = line.substring(start, colon);
 			// No extension, no file: a message can carry its own `word:12:` and must not be
 			// read as a position (nothing would match it, but it would be PRINTED as blamed).

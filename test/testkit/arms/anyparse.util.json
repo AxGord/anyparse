@@ -506,6 +506,30 @@
 			"find": ".trim()",
 			"replace": "",
 			"note": "white space inside a stripped pair is kept, so the pair beneath it is no longer found"
+		},
+		{
+			"name": "M-UTIL-SPACE-OR-TAB-TAB",
+			"type": "anyparse.util.Strings",
+			"method": "isSpaceOrTab",
+			"find": "c == ' '.code || c == '\\t'.code",
+			"replace": "c == ' '.code",
+			"note": "a tab is no longer a blank within a line"
+		},
+		{
+			"name": "M-UTIL-SPACE-OR-TAB-SPACE",
+			"type": "anyparse.util.Strings",
+			"method": "isSpaceOrTab",
+			"find": "c == ' '.code || c == '\\t'.code",
+			"replace": "c == '\\t'.code",
+			"note": "a space is no longer a blank within a line"
+		},
+		{
+			"name": "M-UTIL-SPACE-OR-TAB-CR",
+			"type": "anyparse.util.Strings",
+			"method": "isSpaceOrTab",
+			"find": "c == ' '.code || c == '\\t'.code",
+			"replace": "c == ' '.code || c == '\\t'.code || c == '\\r'.code",
+			"note": "a carriage return counts as a blank within a line"
 		}
 	]
 }

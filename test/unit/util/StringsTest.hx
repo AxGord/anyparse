@@ -384,10 +384,6 @@ final class StringsTest extends Test {
 		Assert.equals(5, closing('x}y{a}b', 3));
 	}
 
-	private static function closing(text: String, open: Int): Int {
-		return Strings.closingBrace(text.length, k -> text.charCodeAt(k), open);
-	}
-
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-CLOSE-DEPTH')
 	public function testOnePairAroundEverythingIsWrapped(): Void {
@@ -435,6 +431,28 @@ final class StringsTest extends Test {
 	@:killer('M-UTIL-PARENS-STRIP-TRIM')
 	public function testWhiteSpaceInsideAPairIsTrimmedAtEachStep(): Void {
 		Assert.equals('a', Strings.stripOuterParens('( (a) )'));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-SPACE-OR-TAB-SPACE')
+	public function testASpaceIsABlankWithinALine(): Void {
+		Assert.isTrue(Strings.isSpaceOrTab(' '.code));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-SPACE-OR-TAB-TAB')
+	public function testATabIsABlankWithinALine(): Void {
+		Assert.isTrue(Strings.isSpaceOrTab('\t'.code));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-SPACE-OR-TAB-CR')
+	public function testNothingElseIsABlankWithinALine(): Void {
+		for (c in 0...128) if (c != ' '.code && c != '\t'.code) Assert.isFalse(Strings.isSpaceOrTab(c), 'code $c');
+	}
+
+	private static function closing(text: String, open: Int): Int {
+		return Strings.closingBrace(text.length, k -> text.charCodeAt(k), open);
 	}
 
 }

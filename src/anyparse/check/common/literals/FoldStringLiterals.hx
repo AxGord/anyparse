@@ -219,7 +219,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	private static inline final MAX_BACKOFF_PASSES: Int = 3;
 
 	/** The glue between two rendered groups. */
-	private static inline final GROUP_JOIN: String = ' + ';
+	private static final GROUP_JOIN: String = ' + ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -339,11 +339,6 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	/** The column width of `source[from...to)`, counting a tab as `indentWidth` columns. */
 	private static inline function columnWidth(ctx: PlanContext, from: Int, to: Int): Int {
 		return CheckScan.displayColumn(ctx.source, from, to, ctx.metrics.indentWidth);
-	}
-
-	/** Whether `code` is a space or a tab. */
-	private static inline function isBlank(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code;
 	}
 
 	/** `line`'s width in columns, counting a tab as `indentWidth`. */
@@ -1108,7 +1103,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	private static function budgetBase(ctx: PlanContext, span: Span): Int {
 		final lineStart: Int = Strings.lineStart(ctx.source, span.from);
 		var indent: Int = lineStart;
-		while (indent < ctx.source.length && isBlank(ctx.source.fastCodeAt(indent))) indent++;
+		while (indent < ctx.source.length && Strings.isSpaceOrTab(ctx.source.fastCodeAt(indent))) indent++;
 		final continuation: Int = columnWidth(ctx, lineStart, indent) + ctx.metrics.indentWidth;
 		final own: Int = columnWidth(ctx, lineStart, span.from);
 		return own < continuation ? own : continuation;
@@ -1477,16 +1472,16 @@ private typedef MemberScope = {
 private class PlanContext {
 
 	/** The synthetic wrapper a member is measured inside — a one-member type at the depth its own type puts it at. */
-	private static inline final SCOPE_HEAD: String = 'class Scope {\n\t';
+	private static final SCOPE_HEAD: String = 'class Scope {\n\t';
 
 	/** The closing half of `SCOPE_HEAD`. */
-	private static inline final SCOPE_TAIL: String = '\n}\n';
+	private static final SCOPE_TAIL: String = '\n}\n';
 
 	/** The synthetic wrapper a body STATEMENT is measured inside — a one-statement function, two indents deep like its own. */
-	private static inline final STATEMENT_SCOPE_HEAD: String = 'class Scope {\n\tfunction scope() {\n\t\t';
+	private static final STATEMENT_SCOPE_HEAD: String = 'class Scope {\n\tfunction scope() {\n\t\t';
 
 	/** The closing half of `STATEMENT_SCOPE_HEAD`. */
-	private static inline final STATEMENT_SCOPE_TAIL: String = '\n\t}\n}\n';
+	private static final STATEMENT_SCOPE_TAIL: String = '\n\t}\n}\n';
 
 	public final plugin: GrammarPlugin;
 	public final seams: Seams;
@@ -1737,7 +1732,7 @@ private class PlanContext {
 	private function lineStartAtDepth(pos: Int, depth: Int): Int {
 		final lineStart: Int = Strings.lineStart(source, pos);
 		var indent: Int = lineStart;
-		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
+		while (indent < source.length && Strings.isSpaceOrTab(source.fastCodeAt(indent))) indent++;
 		return FoldStringLiterals.columnWidth(this, lineStart, indent) == depth * metrics.indentWidth ? indent : -1;
 	}
 

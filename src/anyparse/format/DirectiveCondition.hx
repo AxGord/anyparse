@@ -57,7 +57,7 @@ final class DirectiveCondition {
 			}
 			final lead: Int = trimmedEnd(out);
 			var j: Int = i + 2;
-			while (j < n && isBlank(text.fastCodeAt(j))) j++;
+			while (j < n && Strings.isSpaceOrTab(text.fastCodeAt(j))) j++;
 			// A newline on either side is the author's layout, not spacing - leave the
 			// whole occurrence alone and resume after it.
 			if (lead < 0 || hasNewline(text, i + 2, j)) {
@@ -79,11 +79,6 @@ final class DirectiveCondition {
 		return (c == '|'.code || c == '&'.code) && i + 1 < n && text.fastCodeAt(i + 1) == c;
 	}
 
-	/** A space or a tab - the whitespace this transform owns. A newline is not one. */
-	private static inline function isBlank(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
-	}
-
 	/**
 	 * The length of `out` with its trailing spaces and tabs removed, or `-1` when a
 	 * NEWLINE sits in that trailing run - the caller then leaves the occurrence alone.
@@ -93,7 +88,7 @@ final class DirectiveCondition {
 		while (k > 0) {
 			final c: Int = out.fastCodeAt(k - 1);
 			if (c == '\n'.code || c == '\r'.code) return -1;
-			if (!isBlank(c)) break;
+			if (!Strings.isSpaceOrTab(c)) break;
 			k--;
 		}
 		return k;

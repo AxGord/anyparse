@@ -101,7 +101,7 @@ final class SourceSlice {
 		// call merges a contiguous run of full-line line comments into one block, which
 		// is what the hand-rolled `//` walk did.
 		var cursor: Int = lineEnd[i] - 1;
-		while (cursor > lineStart[i] && isBlank(source.fastCodeAt(cursor))) cursor--;
+		while (cursor > lineStart[i] && SourceText.isHorizontalSpace(source.fastCodeAt(cursor))) cursor--;
 		final block: Null<Span> = SourceComments.commentBlockAt(source, cursor, regions);
 		// A comment that does not START its line trails the CODE before it — the line
 		// `var keep:Int; /* about keep */` ends in `*/` like any doc line, so the line
@@ -124,11 +124,6 @@ final class SourceSlice {
 		var start: Int = 0;
 		while (start < text.length && text.fastCodeAt(start) == marker) start++;
 		return ~/\s+/g.replace(text.substr(start), ' ').trim();
-	}
-
-	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */
-	private static inline function isBlank(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
 	/**

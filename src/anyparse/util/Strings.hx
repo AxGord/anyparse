@@ -21,6 +21,13 @@ typedef Split = {
 final class Strings {
 
 	/**
+	 * Whether the character code `c` is a space or a tab: the blanks within a line, not a carriage return, a break, `\v` or `\f`.
+	 */
+	public static inline function isSpaceOrTab(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
+	/**
 	 * Start offset of the line holding `at`, where a position on a `\n`
 	 * belongs to the line that ends there; `at` is clamped to the text.
 	 */
