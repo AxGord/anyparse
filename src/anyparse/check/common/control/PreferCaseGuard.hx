@@ -4,10 +4,10 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.IndexScope;
-import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -456,7 +456,7 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 
 	/** The display column `at` sits at on its own line, tabs counted as the writer's indent width. */
 	private static function columnOf(scan: Scan, at: Int): Int {
-		final start: Int = SourceText.lineStartAt(scan.source, at);
+		final start: Int = Strings.lineStart(scan.source, at);
 		return CheckScan.displayColumn(scan.source, start, at, scan.metrics.indentWidth);
 	}
 

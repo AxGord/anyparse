@@ -9,10 +9,10 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
-import anyparse.query.SourceText;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.SameItems;
+import anyparse.util.Strings;
 import haxe.Exception;
 
 /**
@@ -613,7 +613,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		final span: Span = decomposition.editSpan;
 		if (!SameItems.of(filled, decomposition.current) || !overLong(ctx, span)) return { groups: filled, budget: budget };
 		final own: Int = ctx.metrics.lineWidth
-			- columnWidth(ctx, SourceText.lineStartAt(ctx.source, span.from), span.from)
+			- columnWidth(ctx, Strings.lineStart(ctx.source, span.from), span.from)
 			- GROUP_JOIN.length
 			+ 1;
 		if (own >= budget) return { groups: filled, budget: budget };
@@ -1106,7 +1106,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 * over-pessimism would not be, since the back-off only ever narrows.
 	 */
 	private static function budgetBase(ctx: PlanContext, span: Span): Int {
-		final lineStart: Int = SourceText.lineStartAt(ctx.source, span.from);
+		final lineStart: Int = Strings.lineStart(ctx.source, span.from);
 		var indent: Int = lineStart;
 		while (indent < ctx.source.length && isBlank(ctx.source.fastCodeAt(indent))) indent++;
 		final continuation: Int = columnWidth(ctx, lineStart, indent) + ctx.metrics.indentWidth;
@@ -1132,7 +1132,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 */
 	private static function sourceMaxWidth(ctx: PlanContext, span: Span): Int {
 		final source: String = ctx.source;
-		var lineStart: Int = SourceText.lineStartAt(source, span.from);
+		var lineStart: Int = Strings.lineStart(source, span.from);
 		var widest: Int = 0;
 		while (lineStart <= source.length) {
 			final lineEnd: Int = lineEndOf(source, lineStart);
@@ -1735,7 +1735,7 @@ private class PlanContext {
 
 	/** The first non-blank offset on `pos`'s line when that line opens exactly `depth` indents deep, else -1. */
 	private function lineStartAtDepth(pos: Int, depth: Int): Int {
-		final lineStart: Int = SourceText.lineStartAt(source, pos);
+		final lineStart: Int = Strings.lineStart(source, pos);
 		var indent: Int = lineStart;
 		while (indent < source.length && FoldStringLiterals.isBlank(source.fastCodeAt(indent))) indent++;
 		return FoldStringLiterals.columnWidth(this, lineStart, indent) == depth * metrics.indentWidth ? indent : -1;

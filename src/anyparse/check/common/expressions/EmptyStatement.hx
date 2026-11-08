@@ -4,6 +4,7 @@ import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.query.ElementSpan;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -110,8 +111,7 @@ final class EmptyStatement extends RuleBase implements QuotationAware {
 	 * batched re-emit leaves no blank line; otherwise only the `;` itself.
 	 */
 	private static function deletionSpan(source: String, span: Span): Span {
-		var lineStart: Int = span.from;
-		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
+		final lineStart: Int = Strings.lineStart(source, span.from);
 		var lineEnd: Int = span.to;
 		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
 		final alone: Bool = source.substring(lineStart, span.from).trim() == '' && source.substring(span.to, lineEnd).trim() == '';

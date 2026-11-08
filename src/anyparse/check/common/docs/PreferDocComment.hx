@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.CommentProse;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 /**
  * Flags a `//` comment that documents a TYPE or MEMBER declaration — prose in the one
@@ -179,7 +180,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 
 	/** The whitespace between `at`'s line start and `at`. */
 	private static inline function indentOf(source: String, at: Int): String {
-		return source.substring(SourceText.startOfLine(source, at), at);
+		return source.substring(Strings.lineStart(source, at), at);
 	}
 
 	/** Every convertible run in `source`, in source order. */
@@ -237,7 +238,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static function trailingRewriteOf(
 		source: String, tok: CommentTok, byDeclLine: Map<Int, Anchor>, docEnds: Map<Int, Bool>, owned: Array<CommentTok>
 	): Null<DocCommentRewrite> {
-		final lineStart: Int = SourceText.startOfLine(source, tok.from);
+		final lineStart: Int = Strings.lineStart(source, tok.from);
 		final anchor: Null<Anchor> = byDeclLine[lineStart];
 		if (anchor == null || anchor.count > 1) return null;
 		final codeEnd: Int = trimmedEnd(source, lineStart, tok.from);
@@ -315,7 +316,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 		final runs: Array<Array<CommentTok>> = [];
 		var current: Array<CommentTok> = [];
 		for (tok in toks) {
-			if (current.length > 0 && SourceText.startOfLine(source, tok.from) != current[current.length - 1].to + 1) {
+			if (current.length > 0 && Strings.lineStart(source, tok.from) != current[current.length - 1].to + 1) {
 				runs.push(current);
 				current = [];
 			}
@@ -446,7 +447,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static function groupStart(source: String, lineStart: Int): Int {
 		var at: Int = lineStart;
 		while (at > 0) {
-			final previous: Int = SourceText.startOfLine(source, at - 1);
+			final previous: Int = Strings.lineStart(source, at - 1);
 			if (source.substring(previous, at - 1).trim() == '') break;
 			at = previous;
 		}
@@ -533,7 +534,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static function record(
 		source: String, from: Int, declFrom: Int, to: Int, kind: String, owner: Span, out: Map<Int, Anchor>
 	): Void {
-		final line: Int = SourceText.startOfLine(source, from);
+		final line: Int = Strings.lineStart(source, from);
 		final known: Null<Anchor> = out[line];
 		if (known == null) {
 			out[line] = {
@@ -565,7 +566,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static function declLineIndex(source: String, anchors: Map<Int, Anchor>): Map<Int, Anchor> {
 		final out: Map<Int, Anchor> = [];
 		for (anchor in anchors) {
-			final line: Int = SourceText.startOfLine(source, anchor.declFrom);
+			final line: Int = Strings.lineStart(source, anchor.declFrom);
 			final known: Null<Anchor> = out[line];
 			if (known == null || known.declFrom > anchor.declFrom) out[line] = anchor;
 		}

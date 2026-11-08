@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.query.ImportOrder;
 import anyparse.query.SymbolIndex;
 import anyparse.query.WildcardImportGate;
+import anyparse.util.Strings;
 import haxe.ds.ArraySort;
 
 /**
@@ -357,7 +358,7 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 		// line start (`ImportOrder.withLeadingComments`), so this asks the one question it can answer —
 		// does this run's head carry an absorbed leading comment. Spelled `!=`, it read as a
 		// line-boundary check, which is a question `ImportOrder.lineOf` has already refused to hand it.
-		for (head in wedge.heads) if (head.chunkFrom < SourceText.startOfLine(source, head.declFrom)) return false;
+		for (head in wedge.heads) if (head.chunkFrom < Strings.lineStart(source, head.declFrom)) return false;
 		// A wildcard BELOW the group stays below it (`stayingBelow`), so it must sit below EVERY wedged
 		// `using`: one between two of them would cross the later one, and what a `using` binds against a
 		// wildcard's names was never measured.
@@ -438,7 +439,7 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 		// (`lineOf` answers null for it). Spelled `!=` this guard would report exactly that unreachable
 		// cause, and a file carrying a comment that says why its import order is deliberate would be
 		// told its first import shared its line with something else.
-		if (block[0].chunkFrom < SourceText.startOfLine(source, block[0].declFrom))
+		if (block[0].chunkFrom < Strings.lineStart(source, block[0].declFrom))
 			return 'the block\'s first import carries an absorbed leading comment, written directly above it — such a comment belongs to '
 				+ 'the whole block, so permuting the block would relocate it into the middle or strand it above a different import';
 		// Every PAIR, wildcard members included: the gate that admitted a wildcard asked it the same question,

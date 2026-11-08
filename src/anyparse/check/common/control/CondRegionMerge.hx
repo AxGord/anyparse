@@ -2,7 +2,6 @@ package anyparse.check.common.control;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.SourceComments;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Strings;
 
@@ -198,9 +197,9 @@ final class CondRegionMerge extends RuleBase {
 		final open: CondDirective = directives[second.open];
 		final closeFrom: Int = close.span.from;
 		final openTo: Int = open.span.to;
-		final closeLineFrom: Int = SourceText.startOfLine(source, closeFrom);
+		final closeLineFrom: Int = Strings.lineStart(source, closeFrom);
 		final closeLineTo: Int = lineEnd(source, close.span.to);
-		final openLineFrom: Int = SourceText.startOfLine(source, open.span.from);
+		final openLineFrom: Int = Strings.lineStart(source, open.span.from);
 		final openLineTo: Int = lineEnd(source, openTo);
 		if (source.substring(closeLineFrom, closeFrom).trim() != '') return null;
 		if (source.substring(openLineFrom, open.span.from).trim() != '') return null;

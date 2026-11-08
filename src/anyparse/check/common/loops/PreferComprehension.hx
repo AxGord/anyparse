@@ -11,9 +11,9 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -504,7 +504,7 @@ final class PreferComprehension extends RuleBase {
 	): Null<Array<{ span: Span, text: String }>> {
 		final line: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		final declOwnsLine: Bool = line.from != declSpan.from || line.to != declSpan.to;
-		final loopOwnsLine: Bool = source.substring(SourceText.startOfLine(source, forSpan.from), forSpan.from).trim() == '';
+		final loopOwnsLine: Bool = source.substring(Strings.lineStart(source, forSpan.from), forSpan.from).trim() == '';
 		return declOwnsLine && loopOwnsLine ? [{ span: line, text: '' }, { span: forSpan, text: text }] : null;
 	}
 
@@ -1039,7 +1039,7 @@ final class PreferComprehension extends RuleBase {
 	 */
 	private static function hoistLeadOrRefuse(anchor: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
 		if (acc.hoisted.length == 0) return '';
-		final lineStart: Int = SourceText.startOfLine(ctx.source, anchor.from);
+		final lineStart: Int = Strings.lineStart(ctx.source, anchor.from);
 		final indent: String = ctx.source.substring(lineStart, anchor.from);
 		if (indent.trim() != '') return null;
 		acc.hoisted.sort((a, b) -> a.from - b.from);
