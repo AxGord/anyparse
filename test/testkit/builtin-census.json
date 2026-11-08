@@ -53,6 +53,7 @@
 	"group-safe-nav",
 	"guard-continue",
 	"guard-pin-arm-reach",
+	"hand-source-scanner",
 	"guard-return",
 	"hoist-branch-string-affix",
 	"hoist-common-branch-head",

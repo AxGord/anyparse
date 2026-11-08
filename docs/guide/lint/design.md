@@ -82,6 +82,26 @@ question — answer it with a killer, a `control` pin, or a `noqa` beside the re
     "armRegistry": "testkit/arms" }
 ```
 
+## `hand-source-scanner`
+
+A loop that reads the characters of a text and tracks its own lexical state by hand: the strings, escapes, comment openers, `#if` directives or bracket depth of source text that `LexicalRegions` (strings, comments, regexes), `CondDirectives` (`#if` / `#end`), `HxInterpProjection` (string interpolation) or the AST already answer. `Info`, DEFAULT OFF and report-only, enabled in this project's `apq.json`, where the lint gate refuses growth of its findings against the base: a new scanner is added through an owner, not beside one. Haxe only.
+
+A loop is reported when it reads characters (`fastCodeAt`, `charCodeAt`, `charAt`, or a `'x'.code`) and also: compares at least two of {a quote, a backslash, a comment opener, `#if`}; or compares a quote and assigns a flag or constant to a local declared outside the loop; or compares an open / close bracket pair (`()`, `{}`, `[]`) and steps an Int local both up and down by one. A character is named by a one-character string literal or its code that is an operand of an equality test or a case pattern (one only emitted or stored names nothing); a comment opener is a spelled `/*` or `//`, a `/` beside a `*`, or two compared `/`. The outermost loop of a nested scanner carries the finding, and its message names the enclosing function.
+
+```haxe
+while (i < s.length) {
+    final c = s.fastCodeAt(i);
+    if (c == 34) inString = !inString;   // reported: a quote beside a state variable
+    i++;
+}
+```
+
+Option `allow`: an object of path fragments, each with the reason the file may scan by hand — the owners themselves and code that scans another alphabet (a regex source, a command template).
+
+```json
+"hand-source-scanner": { "allow": { "src/anyparse/query/LexicalRegions.hx": "the owner of the lexical-region model" } }
+```
+
 ## `listener-symmetry`
 
 A listener method without its twin: a type declaring `add<Name>Listener` (or `…Listeners`) and no

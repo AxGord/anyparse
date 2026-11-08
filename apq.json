@@ -265,6 +265,14 @@
 	},
 	"rules": {
 		"explicit-local-type": true,
+		"hand-source-scanner": {
+			"allow": {
+				"src/anyparse/query/LexicalRegions.hx": "the owner of the lexical-region model: it is the scanner every other consumer asks",
+				"src/anyparse/macro/RegexFirstBytes.hx": "reads a regex source (classes, groups, alternation), not a Haxe source text: LexicalRegions has no region for it",
+				"src/anyparse/runtime/BodySkip.hx": "the declarations-only skip over a function body: it balances the grammar's own delimiters over gaps and marks the grammar's lexer supplies, spelling no character class",
+				"tools/src/devkit/CmdTemplate.hx": "parses its own command-template mini-language at compile time, not a source text of a grammar"
+			}
+		},
 		"anon-type-dup": true,
 		"asymmetric-branch-braces": true,
 		"avoid-any": {

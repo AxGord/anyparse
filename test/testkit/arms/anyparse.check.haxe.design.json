@@ -1,0 +1,172 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.design. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-HSS-ONE-FEATURE-ENOUGH",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "if (named.length >= 2) return",
+			"replace": "if (named.length >= 1) return",
+			"note": "one named character is already a scanner, so a lone quote test or a lone backslash test is reported"
+		},
+		{
+			"name": "M-HSS-READ-UNREQUIRED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "if (!facts.reads) return null;",
+			"replace": "if (false) return null;",
+			"note": "a loop that reads no character is reported for the numbers it compares"
+		},
+		{
+			"name": "M-HSS-STATE-FLAG-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "final state: Bool = facts.flagged.exists(n -> !facts.declared.contains(n));",
+			"replace": "final state: Bool = false;",
+			"note": "a quote beside a flag the loop toggles is never reported"
+		},
+		{
+			"name": "M-HSS-STATE-DECLARED-IN-LOOP",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "final state: Bool = facts.flagged.exists(n -> !facts.declared.contains(n));",
+			"replace": "final state: Bool = facts.flagged.length > 0;",
+			"note": "a flag declared inside the iteration counts as state carried between characters"
+		},
+		{
+			"name": "M-HSS-DEPTH-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "return paired && depth ? 'compares characters with a bracket pair and counts its depth in a variable' : null;",
+			"replace": "return null;",
+			"note": "a bracket pair beside a depth counter is never reported"
+		},
+		{
+			"name": "M-HSS-DEPTH-ONE-WAY",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "facts.up.exists(n -> facts.down.contains(n) && !facts.declared.contains(n))",
+			"replace": "facts.up.exists(n -> !facts.declared.contains(n))",
+			"note": "a counter that only grows, which is a position, counts as a depth"
+		},
+		{
+			"name": "M-HSS-ALLOW-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "skipReason",
+			"force": "null",
+			"note": "a path under an allow key is scanned like any other"
+		},
+		{
+			"name": "M-HSS-COMPARED-ONLY-STRING",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "collect",
+			"find": "if (compared) literal(textOf(node, source), facts);",
+			"replace": "literal(textOf(node, source), facts);",
+			"note": "a one-character string only emitted or stored names a character like a compared one"
+		},
+		{
+			"name": "M-HSS-COMPARED-ONLY-NUMBER",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "collect",
+			"find": "if (compared && code != null) facts.codes.push(code);",
+			"replace": "if (code != null) facts.codes.push(code);",
+			"note": "a number only assigned names a character like a compared one"
+		},
+		{
+			"name": "M-HSS-CASE-PATTERN-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "vocabOf",
+			"find": "for (kind in [shape.plainCasePatternKind, shape.orPatternKind]) if (kind != null) kind",
+			"replace": "for (kind in [shape.orPatternKind]) if (kind != null) kind",
+			"note": "a case value is not an operand of a comparison, so a switch over character codes names nothing"
+		},
+		{
+			"name": "M-HSS-CODE-FIELD",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "CODE_FIELD",
+			"kind": "FinalMember",
+			"find": "'code'",
+			"replace": "'codeX'",
+			"note": "a misspelt field name reads no character through a `.code`"
+		},
+		{
+			"name": "M-HSS-CODE-PASSTHROUGH",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "passesComparison",
+			"find": "|| (node.kind == vocab.accessKind && node.name == CODE_FIELD)",
+			"replace": "|| false",
+			"note": "the literal under a compared `.code` is no longer a compared operand"
+		},
+		{
+			"name": "M-HSS-PREDECR-KIND",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "DECREMENT_KINDS",
+			"kind": "FinalMember",
+			"find": "'PreDecr'",
+			"replace": "'PreDecrX'",
+			"note": "a misspelt kind name leaves a prefix decrement unseen"
+		},
+		{
+			"name": "M-HSS-POSTDECR-KIND",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "DECREMENT_KINDS",
+			"kind": "FinalMember",
+			"find": "'PostDecr'",
+			"replace": "'PostDecrX'",
+			"note": "a misspelt kind name leaves a postfix decrement unseen"
+		},
+		{
+			"name": "M-HSS-SUB-ASSIGN-KIND",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "SUB_ASSIGN_KIND",
+			"kind": "FinalMember",
+			"find": "'SubAssign'",
+			"replace": "'SubAssignX'",
+			"note": "a misspelt kind name leaves `d -= 1` unseen"
+		},
+		{
+			"name": "M-HSS-ADD-ASSIGN-ONE",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "movement",
+			"find": "if (kind == vocab.addAssignKind)\n\t\t\tfacts.up.push(target);",
+			"replace": "if (false)\n\t\t\tfacts.up.push(target);",
+			"note": "`d += 1` no longer counts as stepping up"
+		},
+		{
+			"name": "M-HSS-OPENERS-LITERAL",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "OPENERS",
+			"kind": "FinalMember",
+			"find": "['/*', '//']",
+			"replace": "['/x', '/y']",
+			"note": "a spelled `/*` or `//` names no comment opener"
+		},
+		{
+			"name": "M-HSS-DIRECTIVES-LITERAL",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "DIRECTIVES",
+			"kind": "FinalMember",
+			"find": "['#if', '#elseif', '#else', '#end']",
+			"replace": "['#x']",
+			"note": "a spelled `#if` names no directive"
+		},
+		{
+			"name": "M-HSS-SLASH-STAR",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "(facts.codes.contains(SLASH) && facts.codes.contains(STAR))",
+			"replace": "false",
+			"note": "a compared `/` beside a compared `*` names no comment opener"
+		},
+		{
+			"name": "M-HSS-DOUBLE-SLASH",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "verdict",
+			"find": "slashes >= 2 ||",
+			"replace": "false ||",
+			"note": "two compared `/` name no comment opener"
+		}
+	]
+}

@@ -149,6 +149,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'english-comments',
 			'extract-repeated-expression',
 			'guard-pin-arm-reach',
+			'hand-source-scanner',
 			'identical-operands',
 			'impossible-cast',
 			'loop-bound-length-mismatch',
