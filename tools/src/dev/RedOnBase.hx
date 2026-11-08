@@ -129,11 +129,14 @@ final class RedOnBase {
 			);
 	}
 
-	/** The kit areas `candidate` fails, run on the base. */
+	/**
+	 * The kit rows (`KitsReport.rows`) `candidate` fails, the base's kits run: a row is red there only where the same row of the same
+	 * area is, so a second broken row of an area already red on the base reads as the candidate's own.
+	 */
 	public static function kits(request: BaseRerun, candidate: Array<String>): OnBase {
 		return onBase(
 			request, checkout -> Binaries.compileBuilds(checkout, request.log, [['bin/apq-js.hxml']], request.mode),
-			checkout -> compare(candidate, Probe.checkAll(checkout, Probe.GATE_THREADS).failed)
+			checkout -> compare(candidate, Probe.checkAll(checkout).rows)
 		);
 	}
 

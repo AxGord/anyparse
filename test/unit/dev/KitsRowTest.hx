@@ -53,6 +53,7 @@ final class KitsRowTest extends Test {
 			invocations: 100,
 			failing: failed.length,
 			failed: failed,
+			rows: [],
 			lines: lines
 		};
 	}

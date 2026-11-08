@@ -196,11 +196,17 @@ final class Probe {
 	 * counted apart, since a fix to a defect the kit recorded is not a regression.
 	 */
 	public static function judge(kit: Kit, seen: Array<Seen>, compiled: Bool): Verdict {
-		final verdict: Verdict = { lines: [], deviating: 0, knownMoved: 0 };
+		final verdict: Verdict = {
+			lines: [],
+			rows: [],
+			deviating: 0,
+			knownMoved: 0
+		};
 		for (i => row in seen) {
 			final lines: Array<String> = deviations(kit.cases[i].expect, row, compiled);
 			if (lines.length == 0) continue;
 			final invocation: Invocation = kit.invocations[i];
+			verdict.rows.push('#$i ${invocation.name}');
 			final known: Null<String> = kit.cases[i].knownDefect;
 			if (known == null) {
 				verdict.deviating++;
@@ -286,7 +292,7 @@ final class Probe {
 	 * the one answer to "does every probe kit still answer as recorded" for the slice gate and the battery. A row that deviates
 	 * and a known-defect row that moved both fail (the slice that fixed a defect re-records the row and drops the field).
 	 */
-	public static function checkAll(repo: String, threads: Int): KitsReport {
+	public static function checkAll(repo: String, threads: Int = GATE_THREADS): KitsReport {
 		final engine: String = FileSystem.fullPath(Path.join([repo, 'bin', 'apq.js']));
 		final oneProcess: Bool = Parity.oneProcessFor(repo, engine, true);
 		final report: KitsReport = {
@@ -294,6 +300,7 @@ final class Probe {
 			invocations: 0,
 			failing: 0,
 			failed: [],
+			rows: [],
 			lines: []
 		};
 		for (area in areas(repo)) {
@@ -305,6 +312,7 @@ final class Probe {
 			if (holds(verdict, true)) continue;
 			report.failing += verdict.deviating + verdict.knownMoved;
 			report.failed.push(area);
+			for (row in verdict.rows) report.rows.push('$area $row');
 			for (line in verdict.lines) report.lines.push(line.startsWith('  ') ? line : '[$area] $line');
 		}
 		return report;
@@ -520,16 +528,26 @@ typedef Seen = {
 
 /** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */
 typedef Verdict = {
+
 	var lines: Array<String>;
+
+	/** The rows behind `lines`, each as `#<index> <name>`: what a comparison with another run of the kit matches on. */
+	var rows: Array<String>;
 	var deviating: Int;
 	var knownMoved: Int;
+
 }
 
 /** What `Probe.checkAll` read: the areas and invocations run, the rows that fail, the areas holding them, and their report lines. */
 typedef KitsReport = {
+
 	var areas: Int;
 	var invocations: Int;
 	var failing: Int;
 	var failed: Array<String>;
+
+	/** The failing rows, each as `<area> #<index> <name>`: red on another tree only where the same row is. */
+	var rows: Array<String>;
 	var lines: Array<String>;
+
 }

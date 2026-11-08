@@ -1732,6 +1732,78 @@
 			"find": "if (base == null) return Unknown('the run compares with no base');",
 			"replace": "if (base == null) return Green;",
 			"note": "a run that compares with no base reads green, so a red main is taken for the candidate's failure"
+		},
+		{
+			"name": "M-REDONBASE-SUITE-BASE-NOT-BUILT",
+			"type": "dev.RedOnBase",
+			"method": "suite",
+			"find": "checkout -> Binaries.compileBuilds(checkout, request.log, BaseSuite.builds(), request.mode)",
+			"replace": "checkout -> Passed",
+			"note": "the base is re-run without being built, so its stale or absent binaries read as the base's own failure"
+		},
+		{
+			"name": "M-REDONBASE-RERUN-FAILING-NOT-COLLECTED",
+			"type": "dev.RedOnBase",
+			"method": "rerun",
+			"find": "failing.push(name)",
+			"replace": "name.length",
+			"note": "the tests the base re-run names red are dropped, so a red base reads unknown and its failures never match the candidate's"
+		},
+		{
+			"name": "M-REDONBASE-RERUN-UNLISTED-CLASS-RUN",
+			"type": "dev.RedOnBase",
+			"method": "rerun",
+			"find": "final here: Array<String> = present(classes, listed.out);",
+			"replace": "final here: Array<String> = classes;",
+			"note": "a class the base does not register is asked of its runner all the same, so a test the candidate added reads as a broken re-run"
+		},
+		{
+			"name": "M-REDONBASE-SUITE-NO-CLASS-RUN",
+			"type": "dev.RedOnBase",
+			"method": "suite",
+			"find": "? Unknown('the failing run names no test class')",
+			"replace": "? Green",
+			"note": "a failing run that names no test class reads green on the base, so nothing is known about the candidate's failure"
+		},
+		{
+			"name": "M-REDONBASE-KITS-COMPARE-BY-AREA",
+			"type": "dev.RedOnBase",
+			"method": "kits",
+			"find": "Probe.checkAll(checkout).rows",
+			"replace": "Probe.checkAll(checkout).failed",
+			"note": "kit rows are matched against the base's failing areas, so no failing row ever matches and every red kit reads as the candidate's"
+		},
+		{
+			"name": "M-REDONBASE-KITS-BASE-NOT-BUILT",
+			"type": "dev.RedOnBase",
+			"method": "kits",
+			"find": "Binaries.compileBuilds(checkout, request.log, [['bin/apq-js.hxml']], request.mode)",
+			"replace": "Passed",
+			"note": "the base's kits run on an engine nobody built, so every row reads red there and a red kit is taken for main's"
+		},
+		{
+			"name": "M-PROBE-ROWS-NOT-NAMED",
+			"type": "dev.Probe",
+			"method": "judge",
+			"find": "verdict.rows.push('#$i ${invocation.name}');",
+			"replace": "verdict.rows.push('#$i');",
+			"note": "a failing kit row is named by its index alone, so a row replaced at the same index by another invocation is taken for the same row"
+		},
+		{
+			"name": "M-PROBE-CHECKALL-ROWS-WITHOUT-AREA",
+			"type": "dev.Probe",
+			"method": "checkAll",
+			"find": "report.rows.push('$area $row')",
+			"replace": "report.rows.push(row)",
+			"note": "a failing row carries no area, so the same row of two kits is one row"
+		},
+		{
+			"name": "M-KITSROW-HOOK-GETS-AREAS",
+			"type": "dev.KitsRow",
+			"method": "outcome",
+			"find": "failedRows(report.rows)",
+			"replace": "failedRows(report.failed)",
+			"note": "the kits row hands its hook the failing areas, so the battery's kit rows never match the base's and every red kit reads as the candidate's"
 		}
 	]
 }

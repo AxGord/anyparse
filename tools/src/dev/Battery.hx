@@ -188,7 +188,7 @@ final class Battery {
 			case 'kit probes': () -> {
 				var failed: Array<String> = [];
 				final outcome: Outcome = KitsRow.outcome(
-					_plan.repo, _summary, lines -> Sys.println(lines.join('\n')), areas -> failed = areas
+					_plan.repo, _summary, lines -> Sys.println(lines.join('\n')), rows -> failed = rows
 				);
 				return RedOnBase.after(outcome, () -> RedOnBase.kits(RedOnBase.requestFor(_plan, 'kits', _mode), failed));
 			};

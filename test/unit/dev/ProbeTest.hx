@@ -261,9 +261,24 @@ final class ProbeTest extends Test {
 	 * row that moved; the areas are the directories holding a kit.
 	 */
 	public function testAStrictRunFailsOnAMovedKnownDefectAndTheAreasAreTheKitDirectories(): Void {
-		Assert.isTrue(Probe.holds({ lines: [], deviating: 0, knownMoved: 1 }, false));
-		Assert.isFalse(Probe.holds({ lines: [], deviating: 0, knownMoved: 1 }, true));
-		Assert.isFalse(Probe.holds({ lines: [], deviating: 1, knownMoved: 0 }, false));
+		Assert.isTrue(Probe.holds({
+			lines: [],
+			rows: [],
+			deviating: 0,
+			knownMoved: 1
+		}, false));
+		Assert.isFalse(Probe.holds({
+			lines: [],
+			rows: [],
+			deviating: 0,
+			knownMoved: 1
+		}, true));
+		Assert.isFalse(Probe.holds({
+			lines: [],
+			rows: [],
+			deviating: 1,
+			knownMoved: 0
+		}, false));
 		TempDir.with(dir -> {
 			final kits: String = dir.file(Probe.KITS);
 			sys.FileSystem.createDirectory(dir.file('test'));
