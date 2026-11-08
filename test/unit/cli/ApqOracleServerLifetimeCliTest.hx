@@ -1,5 +1,6 @@
 package unit.cli;
 
+import anyparse.proc.Sleep;
 import unit.check.ProcessProbe;
 
 /**
@@ -97,7 +98,7 @@ class ApqOracleServerLifetimeCliTest extends Test {
 		});
 		final pid: Int = run.pid;
 		final until: Float = Sys.time() + START_S;
-		while (!sys.FileSystem.exists('$dir/$HELD') && Sys.time() < until && ProcessProbe.alive(pid)) Sys.sleep(0.05);
+		while (!sys.FileSystem.exists('$dir/$HELD') && Sys.time() < until && ProcessProbe.alive(pid)) Sleep.pause(50);
 		final servers: Array<Int> = ProcessProbe.descendantsRunning(pid, 'haxe --wait');
 		Assert.isTrue(servers.length > 0, 'the run started a server before it ended');
 		try js.Node.process.kill(group ? -pid : pid, signal) catch (exception: haxe.Exception) { // noqa: swallowed-exception

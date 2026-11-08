@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.proc.PendingRuns;
+import anyparse.proc.Sleep;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -28,7 +29,7 @@ final class BaselineWarm {
 		'usage: dev baseline-warm run <sha> [--repo <dir>] [--frozen <dir>]... [--infra-tree <dir>]...';
 
 	private static inline final DIRECTORY: String = 'baseline-warm';
-	private static inline final POLL_SECONDS: Float = 5;
+	private static inline final POLL_MS: Int = 5000;
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
@@ -157,7 +158,7 @@ final class BaselineWarm {
 		if (!built.ok) return Failed('bin/dev.js of $sha did not build: ${built.firstError()}');
 		var round: Int = 0;
 		function pause(): Void {
-			Sys.sleep(POLL_SECONDS);
+			Sleep.pause(POLL_MS);
 		}
 		final gates: Outcome = warm(sha, variants(recipe), tip, variant -> {
 			final logs: String = Path.join([work, 'logs-${round++}']);

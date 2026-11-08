@@ -145,7 +145,7 @@ final class PendingRuns {
 				);
 			}
 			if (++polls % POLLS_PER_PROBE == 0 && !living(pid)) break;
-			pause(POLL_MS);
+			Sleep.pause(POLL_MS);
 		}
 		final text: Null<String> = try sys.io.File.getContent(_result) catch (exception: Exception) null;
 		forget();
@@ -176,11 +176,6 @@ final class PendingRuns {
 		if (res.error != null) return true;
 		final state: String = StringTools.trim(res.stdout == null ? '' : '${res.stdout}');
 		return state != '' && !state.startsWith('Z');
-	}
-
-	/** Block this thread for `ms` milliseconds without spawning anything. */
-	private static inline function pause(ms: Int): Void {
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);
 	}
 	#end
 

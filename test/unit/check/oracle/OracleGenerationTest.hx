@@ -14,6 +14,7 @@ import anyparse.check.oracle.OracleGenerationLock;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
+import anyparse.proc.Sleep;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
@@ -680,7 +681,7 @@ final class OracleGenerationTest extends Test {
 		);
 		final job: Null<Int> = Std.parseInt('${started.stdout}'.trim());
 		Assert.notNull(job, 'the left-over job runs');
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
+		Sleep.pause(200);
 		File.saveContent('$lock/writer/job', '$job\n${job == null ? '' : OracleGenerationLock.startTime(job)}');
 		OracleGeneration.prepare([config], 5000);
 		final alive: Bool = job != null && OracleGenerationLock.startTime(job) != '';
@@ -933,7 +934,7 @@ final class OracleGenerationTest extends Test {
 			'sh', ['-c', "perl -e 'setpgrp(0, 0); exec q(sleep), 30' >/dev/null 2>&1 & echo $!"], { encoding: 'utf8' }
 		);
 		final job: Null<Int> = Std.parseInt('${started.stdout}'.trim());
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)');
+		Sleep.pause(200);
 		File.saveContent('$lock/writer/job', '$job\n');
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([config], 5000).oracles;
 		final alive: Bool = job != null && OracleGenerationLock.startTime(job) != '';

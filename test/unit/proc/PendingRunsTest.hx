@@ -1,6 +1,7 @@
 package unit.proc;
 
 import anyparse.proc.PendingRuns;
+import anyparse.proc.Sleep;
 import unit.check.ProcessProbe;
 
 /**
@@ -28,7 +29,7 @@ final class PendingRunsTest extends Test {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingruns', []);
 		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 2 && echo done' }], BUFFER, 1);
-		Sys.sleep(3);
+		Sleep.pause(3000);
 		final asked: Float = Sys.time();
 		final runs: Array<ProcessRun> = pending.await();
 		Assert.isTrue(Sys.time() - asked < 1, 'the answer was ready: the job ran while the caller slept');
@@ -52,7 +53,7 @@ final class PendingRunsTest extends Test {
 		final dir: String = CliFixture.writeDir('pendingfiles', []);
 		final before: Array<String> = pendingDirs();
 		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1' }], BUFFER, 1);
-		Sys.sleep(0.5);
+		Sleep.pause(500);
 		final made: Array<String> = [for (d in pendingDirs()) if (!before.contains(d)) d];
 		Assert.equals(1, made.length, 'one directory for the batch');
 		final own: String = haxe.io.Path.join([anyparse.core.TempScratch.root(), made[0] ?? '']);
@@ -74,9 +75,9 @@ final class PendingRunsTest extends Test {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingcancel', []);
 		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1.5 && touch marker' }], BUFFER, 1);
-		Sys.sleep(0.5);
+		Sleep.pause(500);
 		pending.cancel();
-		Sys.sleep(2.5);
+		Sleep.pause(2500);
 		Assert.isFalse(sys.FileSystem.exists('$dir/marker'), 'the job was ended before its last step');
 		Assert.isTrue(pending.await()[0].cancelled == true, 'and the batch answers it as cancelled');
 		CliFixture.removeDir(dir);
@@ -154,7 +155,7 @@ final class PendingRunsTest extends Test {
 			final pid: Null<Int> = Std.parseInt(text);
 			// the look after the last sleep is taken even past the bound: a stalled fixture must not miss a pid already there
 			if (pid != null || Sys.time() >= until) return pid;
-			Sys.sleep(0.05);
+			Sleep.pause(50);
 		}
 	}
 

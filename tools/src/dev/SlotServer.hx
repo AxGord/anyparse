@@ -3,6 +3,7 @@ package dev;
 import anyparse.check.oracle.CompilerServer;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
+import anyparse.proc.Sleep;
 import devkit.Cmd.cmd;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -104,7 +105,7 @@ final class SlotServer {
 				CompilerServer.connect(port, hxml, wt, ['--display', CompilerServer.invalidateRequest(hxml)]);
 			if (reply == null) return false;
 			if (CompilerServer.isServerReply(reply.output)) return true;
-			MutationSlot.pause(READY_PAUSE_MS);
+			Sleep.pause(READY_PAUSE_MS);
 		}
 		return false;
 	}

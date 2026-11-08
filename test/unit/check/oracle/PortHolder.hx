@@ -3,6 +3,7 @@ package unit.check.oracle;
 import anyparse.check.oracle.CompilerServer;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
+import anyparse.proc.Sleep;
 
 /**
  * A loopback port something other than a haxe server holds, for the tests of every starter that must keep off one. The one
@@ -60,7 +61,7 @@ final class PortHolder {
 			CliFixture.removeDir(dir);
 		}, () -> {
 			var tries: Int = 0;
-			while (!sys.FileSystem.exists(said) && ++tries < HOLDER_TRIES) Sys.sleep(0.1);
+			while (!sys.FileSystem.exists(said) && ++tries < HOLDER_TRIES) Sleep.pause(100);
 			final state: String = sys.FileSystem.exists(said) ? sys.io.File.getContent(said) : 'nothing after $tries tries';
 			Assert.equals('listening', state, 'the holder binds $port');
 			if (state == 'listening') body(() -> sys.FileSystem.exists(seen) ? sys.io.File.getContent(seen).length : 0);

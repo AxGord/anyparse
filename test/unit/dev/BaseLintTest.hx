@@ -2,6 +2,7 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.proc.Sleep;
 import dev.BaseBranch.BaseGot;
 import dev.BaseEngine;
 import dev.BaseLint;
@@ -26,7 +27,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class BaseLintTest extends Test {
 
-	private static inline final POLL_SECONDS: Float = 0.05;
+	private static inline final POLL_MS: Int = 50;
 
 	/**
 	 * A gate announces the base lint branch only when its `infra4` row will compare and the report is not kept: a gate that moved
@@ -188,7 +189,7 @@ final class BaseLintTest extends Test {
 			final work: String = dir.file('work');
 			FileSystem.createDirectory(work);
 			final warming: Warming = BaselineWarm.baseLint(landed, work);
-			while (warming.running()) Sys.sleep(POLL_SECONDS);
+			while (warming.running()) Sleep.pause(POLL_MS);
 			Assert.isTrue(warming.ended().match(Passed));
 			Assert.isFalse(BaseLint.plan(gate), 'the warm kept the report');
 			switch BaseLint.read(gate) {

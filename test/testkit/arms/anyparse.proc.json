@@ -304,6 +304,22 @@
 			"find": "if (Date.now().getTime() - _started > _bound) {",
 			"replace": "if (false) {",
 			"note": "await polls a wedged background driver forever: a stopped driver still answers the liveness probe, so the run never ends"
+		},
+		{
+			"name": "M-SLEEP-RETURNS-AT-ONCE",
+			"type": "anyparse.proc.Sleep",
+			"method": "pause",
+			"find": "0, 0, {0})', ms)",
+			"replace": "0, 0, {0})', 0)",
+			"note": "the pause waits no time at all, so every poll loop that sleeps between probes spins and the lock and batch waiters burn a CPU"
+		},
+		{
+			"name": "M-SLEEP-SPINS",
+			"type": "anyparse.proc.Sleep",
+			"method": "pause",
+			"find": "js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);",
+			"replace": "{ final end: Float = Date.now().getTime() + ms; while (Date.now().getTime() < end) {} }",
+			"note": "the pause polls the clock instead of parking the thread, so a waiting run holds a core for its whole wait and a parallel fan-out starves the very runs it waits on"
 		}
 	]
 }

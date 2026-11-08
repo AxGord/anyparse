@@ -1,5 +1,6 @@
 package unit.proc;
 
+import anyparse.proc.Sleep;
 import anyparse.proc.SpawnJob;
 
 using StringTools;
@@ -94,7 +95,7 @@ final class ProcessSpawnTest extends Test {
 		];
 		final runs: Array<ProcessRun> = ProcessSpawn.runAll(jobs, ROOMY, 2, true);
 		Assert.isTrue(runs[1].cancelled == true, 'the later job was cancelled');
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 3000)');
+		Sleep.pause(3000);
 		Assert.isFalse(sys.FileSystem.exists('$dir/leak.txt'), 'and the process it started died with it');
 		CliFixture.removeDir(dir);
 		#else
@@ -150,7 +151,7 @@ final class ProcessSpawnTest extends Test {
 				gone = true;
 				break;
 			}
-			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+			Sleep.pause(100);
 		}
 		if (!gone && child != null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
 		Assert.isTrue(gone, 'the job\'s child died with the driver');
@@ -190,7 +191,7 @@ final class ProcessSpawnTest extends Test {
 				gone = true;
 				break;
 			}
-			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+			Sleep.pause(100);
 		}
 		if (!gone && child != null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
 		Assert.isTrue(gone, 'the job\'s child died once its apq was gone');
@@ -387,7 +388,7 @@ final class ProcessSpawnTest extends Test {
 		var outlived: Null<Float> = null;
 		while (outlived == null && Date.now().getTime() - signalled < waitMs) {
 			if (signalable(child))
-				js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+				Sleep.pause(100);
 			else
 				outlived = Date.now().getTime() - signalled;
 		}
@@ -422,7 +423,7 @@ final class ProcessSpawnTest extends Test {
 			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
 			final pid: Null<Int> = Std.parseInt(StringTools.trim(text ?? ''));
 			if (pid != null) return pid;
-			js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)');
+			Sleep.pause(100);
 		}
 		return null;
 	}

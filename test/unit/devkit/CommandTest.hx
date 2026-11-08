@@ -1,6 +1,7 @@
 package unit.devkit;
 
 import anyparse.grammar.json.JValueParser;
+import anyparse.proc.Sleep;
 import devkit.Cmd.cmd;
 import devkit.CommandFailed;
 import devkit.Pool;
@@ -374,7 +375,7 @@ final class CommandTest extends Test {
 			} catch (exception: Exception) {
 				return false;
 			}
-			Sys.sleep(0.1);
+			Sleep.pause(100);
 		}
 		return true;
 	}

@@ -2,6 +2,7 @@ package anyparse.query.cli;
 
 using Lambda;
 
+import anyparse.proc.Sleep;
 import haxe.io.Path;
 #if (sys || nodejs)
 import sys.io.File;
@@ -116,7 +117,9 @@ final class CliIo {
 		#if nodejs
 		final bytes: js.node.Buffer = js.node.Buffer.from(s, 'utf8');
 		try {
-			writeFully(bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> pause(BLOCKED_RETRY_MS));
+			writeFully(
+				bytes.length, at -> js.node.Fs.writeSync(STDERR_FD, bytes, at, bytes.length - at), () -> Sleep.pause(BLOCKED_RETRY_MS)
+			);
 		} catch (exception: Exception) {
 			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
 			throw exception;
@@ -395,13 +398,6 @@ final class CliIo {
 		return value != null && value != '' && value != '0';
 		#else
 		return false;
-		#end
-	}
-
-	/** Block this thread for `ms` milliseconds without spawning anything. */
-	private static inline function pause(ms: Int): Void {
-		#if nodejs
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);
 		#end
 	}
 

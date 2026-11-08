@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.proc.ProcessSpawn;
+import anyparse.proc.Sleep;
 import anyparse.query.BuildFailure;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.MutationVerdict;
@@ -78,11 +79,6 @@ final class MutationSlot {
 	private static inline final NO_NARROW: String = 'APQ_MUTATION_NO_NARROW';
 
 	private static final TEST_JS: String = 'test.js';
-
-	/** Block this thread for `ms` milliseconds without spawning anything. */
-	public static inline function pause(ms: Int): Void {
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);
-	}
 
 	/**
 	 * Whether a track may try a narrow build: only under killer-first, never in a build-only run — `--check-apply` asks
@@ -352,7 +348,7 @@ final class MutationSlot {
 		final candidates: String = Path.join([dir, 'candidates']);
 		if (!FileSystem.exists(candidates) || !File.getContent(candidates).split('\n').contains(name)) return null;
 		final state: String = Path.join([dir, 'state']);
-		while (!FileSystem.exists(state)) pause(SCHEMA_POLL_MS);
+		while (!FileSystem.exists(state)) Sleep.pause(SCHEMA_POLL_MS);
 		if (File.getContent(state).trim() != 'ready') return null;
 		for (line in File.getContent(Path.join([dir, 'map'])).split('\n')) {
 			final cells: Array<String> = line.split(' ');

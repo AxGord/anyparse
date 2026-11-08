@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.proc.Sleep;
 import devkit.Summary.Outcome;
 import haxe.Exception;
 import haxe.Timer;
@@ -100,7 +101,7 @@ final class BaseBranch {
 		if (failed != null) return NotGot(failed);
 		if (pending(gate)) {
 			final deadline: Float = Timer.stamp() + BranchWatch.idleOf([row]) / MS_PER_SECOND;
-			while (pending(gate) && Timer.stamp() < deadline) sleep();
+			while (pending(gate) && Timer.stamp() < deadline) Sleep.pause(POLL_MS);
 		} else {
 			final why: Null<String> = measure();
 			if (why != null) return NotGot(unread(gate, why));
@@ -119,11 +120,6 @@ final class BaseBranch {
 	public function unread(gate: GateTree, why: String): String {
 		File.saveContent(gate.log(unreadFile), why);
 		return why;
-	}
-
-	/** Block this process for one poll interval. */
-	private static inline function sleep(): Void {
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', POLL_MS);
 	}
 
 }

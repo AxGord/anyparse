@@ -1,5 +1,9 @@
 package unit.check;
 
+import anyparse.proc.Sleep;
+
+using StringTools;
+
 /**
  * What a lifetime fixture asks of the machine's process table: which processes run a command line, whether a pid still
  * runs, and a bounded wait for a set of pids to be gone. Off node every answer is empty; a `ps` that could not answer
@@ -42,13 +46,12 @@ final class ProcessProbe {
 	public static function descendantsRunning(root: Int, fragment: String): Array<Int> {
 		#if nodejs
 		final out: String = table(['-A', '-o', 'pid=,ppid=,command=']);
-		final rows: Array<{ pid: Int, ppid: Int, command: String }> = [];
 		final row: EReg = ~/^\s*(\d+)\s+(\d+)\s+(.*)$/;
-		for (line in out.split('\n')) if (row.match(line)) rows.push({
-			pid: Std.parseInt(row.matched(1)) ?? 0,
-			ppid: Std.parseInt(row.matched(2)) ?? 0,
-			command: row.matched(3)
-		});
+		final rows: Array<{ pid: Int, ppid: Int, command: String }> = [
+			for (line in out.split('\n'))
+				if (row.match(line))
+					{ pid: Std.parseInt(row.matched(1)) ?? 0, ppid: Std.parseInt(row.matched(2)) ?? 0, command: row.matched(3) }
+		];
 		final found: Array<Int> = [];
 		var front: Array<Int> = [root];
 		while (front.length > 0) {
@@ -69,7 +72,7 @@ final class ProcessProbe {
 		// `ps -p` of a pid that is gone exits non-zero with nothing printed: only a `ps` that could not run is no answer
 		if (res.error != null) throw new haxe.Exception('ps could not run: ${res.error}');
 		final state: String = StringTools.trim(res.stdout == null ? '' : '${res.stdout}');
-		return state != '' && !StringTools.startsWith(state, 'Z');
+		return state != '' && !state.startsWith('Z');
 		#else
 		return false;
 		#end
@@ -80,7 +83,7 @@ final class ProcessProbe {
 		final until: Float = Sys.time() + ms / 1000;
 		var left: Array<Int> = pids.filter(alive);
 		while (left.length > 0 && Sys.time() < until) {
-			Sys.sleep(POLL_MS / 1000);
+			Sleep.pause(POLL_MS);
 			left = left.filter(alive);
 		}
 		return left;

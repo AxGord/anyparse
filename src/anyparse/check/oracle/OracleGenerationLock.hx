@@ -1,5 +1,6 @@
 package anyparse.check.oracle;
 
+import anyparse.proc.Sleep;
 import haxe.io.Path;
 
 /**
@@ -58,7 +59,7 @@ final class OracleGenerationLock {
 			// a takeover that did not happen (another run's claim) is waited out like a live writer, never spun on
 			if (writer.abandoned && takeOver(dir, writer)) continue;
 			if (Date.now().getTime() > deadline) return 'another apq run (pid ${writer.pid}) is regenerating it';
-			pause();
+			Sleep.pause(LOCK_POLL);
 		}
 		#else
 		return null;
@@ -91,7 +92,7 @@ final class OracleGenerationLock {
 			if (held != null && isMe(held, me)) break;
 			if (held != null && held.abandoned && takeOver(dir, held)) continue;
 			if (Date.now().getTime() > deadline) return 'another apq run (pid ${held?.pid}) is regenerating it';
-			pause();
+			Sleep.pause(LOCK_POLL);
 		}
 		while (true) {
 			final others: Array<Int> = liveReaders(dir, me);
@@ -100,7 +101,7 @@ final class OracleGenerationLock {
 				dropExclusive(dir, me);
 				return '${others.length} other apq run(s) (pid ${others.join(', ')}) are still compiling it';
 			}
-			pause();
+			Sleep.pause(LOCK_POLL);
 		}
 		#else
 		return null;
@@ -265,7 +266,7 @@ final class OracleGenerationLock {
 		try js.Syntax.code('process.kill(-{0}, "SIGKILL")', pid) catch (exception: haxe.Exception) {} // noqa: swallowed-exception
 		for (_ in 0...JOB_END_POLLS) {
 			if (!living(pid, start)) return;
-			pause();
+			Sleep.pause(LOCK_POLL);
 		}
 	}
 
@@ -289,10 +290,6 @@ final class OracleGenerationLock {
 		try js.Syntax.code(
 			"require('fs').rmSync({0}, { recursive: true, force: true })", path
 		) catch (exception: haxe.Exception) {} // noqa: swallowed-exception
-	}
-
-	private static inline function pause(): Void {
-		js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', LOCK_POLL);
 	}
 
 	/** `path`'s modification time in ms, or now when it cannot be read. */
