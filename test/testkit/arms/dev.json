@@ -1828,6 +1828,45 @@
 			"find": "while (lead < whole.length && DOC_STAR.match(whole[lead])) lead++;",
 			"replace": "lead = 0;",
 			"note": "the lines that continue a block comment at a hunk's start are lexed with the rest, so an apostrophe in them opens a string that turns the code after it into text and the comments after it into code"
+		},
+		{
+			"name": "M-FORK-FMT-DIVERGENCE-BLIND",
+			"type": "dev.ForkFmt",
+			"method": "verify",
+			"find": "if (text.indexOf(DIVERGED) >= 0) {",
+			"replace": "if (false) {",
+			"note": "a rewrite that changes more than whitespace on the fork's tree is no longer a failure, so a writer slice that corrupts the fork passes its gate"
+		},
+		{
+			"name": "M-FORK-FMT-ONE-PASS-BLIND",
+			"type": "dev.ForkFmt",
+			"method": "verify",
+			"find": "if (text.indexOf(ONE_PASS) >= 0) {",
+			"replace": "if (false) {",
+			"note": "a file on the fork's tree needing a second rewrite is no longer a failure, so a writer slice that stops converging passes its gate"
+		},
+		{
+			"name": "M-FORK-FMT-EXIT-STATUS",
+			"type": "dev.ForkFmt",
+			"method": "verify",
+			"find": "return { shown: shown, why: why };",
+			"replace": "if (!run.ok) why.push('exit');\n\treturn { shown: shown, why: why };",
+			"note": "the exit status becomes a verdict, so the one fork file the grammar cannot parse fails every writer slice"
+		},
+		{
+			"name": "M-FORK-FMT-UNSET-PASSES",
+			"type": "dev.ForkFmt",
+			"method": "verify",
+			"find": "if (fork == null || fork == '') return",
+			"replace": "if (false) return",
+			"note": "a gate without the fork variable verifies a path named null, finds nothing wrong and passes"
+		},
+		{
+			"name": "M-FORK-FMT-OWED-NEVER",
+			"type": "dev.ForkFmt",
+			"method": "owedBy",
+			"force": "false",
+			"note": "no slice owes the fork verify, so the gate never runs it for a writer or formatter-config change"
 		}
 	]
 }

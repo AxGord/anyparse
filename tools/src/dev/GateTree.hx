@@ -40,6 +40,9 @@ final class GateTree {
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
 
+	/** The file names the formatter reads its options from, in any folder. */
+	public static final FORMATTER_CONFIGS: Array<String> = ['hxformat.json', '.hxformat.json'];
+
 	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
 	private static inline final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
 
@@ -60,9 +63,6 @@ final class GateTree {
 
 	/** The sources, build files, launch shims and configuration `bin/apq.js` is made from, run through and reads. */
 	private static final ENGINE_INPUT: EReg = ~/^(src\/|bin\/(apq|hxq)$|bin\/apq-[^\/]*\.hxml$|apq\.json$)/;
-
-	/** The file names the formatter reads its options from, in any folder. */
-	private static final FORMATTER_CONFIGS: Array<String> = ['hxformat.json', '.hxformat.json'];
 
 	public final summary: Summary = new Summary();
 
@@ -313,9 +313,7 @@ final class GateTree {
 	 * `.hx` files, since every other file formats as it did at the base. Empty when there is nothing to format.
 	 */
 	public static function fmtScope(touched: Array<String>): Array<String> {
-		return touched.exists(file -> isEngineInput(file) || FORMATTER_CONFIGS.contains(Path.withoutDirectory(file)))
-			? TREE_SCOPE.copy()
-			: XconfigFmt.hxFilesOf(touched);
+		return ForkFmt.owedBy(touched) ? TREE_SCOPE.copy() : XconfigFmt.hxFilesOf(touched);
 	}
 
 	/**

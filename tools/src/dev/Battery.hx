@@ -4,6 +4,7 @@ import anyparse.core.PoolLease;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.ShardPlan;
+import dev.ForkFmt.ForkVerdict;
 import dev.GateReuse.GateOffer;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigFailure;
@@ -312,20 +313,9 @@ final class Battery {
 				'fmt --list --one-pass is not empty (or exited ${list.status} — a non-zero exit with an EMPTY list is the one-pass gate)'
 			);
 		}
-		final fork: String = '${Sys.getEnv('ANYPARSE_HXFORMAT_FORK') ?? ''}/src';
-		final verify: Result = hxq(['fmt', '--verify', '--one-pass', fork]).run();
-		final text: String = verify.out + verify.err;
-		final lines: Array<String> = text.split('\n');
-		for (line in lines) if (line.indexOf('fmt --verify:') >= 0) Sys.println(line);
-		if (text.indexOf('formatting changed more than whitespace') >= 0) {
-			Sys.print(text);
-			why.push('fmt --verify found a non-whitespace divergence in $fork');
-		}
-		if (text.indexOf('fmt --one-pass:') >= 0) {
-			for (line in lines) if (line.indexOf('fmt --one-pass:') >= 0 || line.indexOf('rewrites to reach its fixed point') >= 0)
-				Sys.println(line);
-			why.push('the writer needed more than one rewrite on a file in $fork');
-		}
+		final fork: ForkVerdict = ForkFmt.verify(hxq, Sys.getEnv(GateTree.FORK_VAR));
+		for (line in fork.shown) Sys.println(line);
+		for (reason in fork.why) why.push(reason);
 		return why.length == 0 ? Passed : Failed(why.join('; '));
 	}
 

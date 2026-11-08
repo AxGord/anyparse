@@ -487,9 +487,15 @@ final class SliceGate {
 		final fmt: Result = _gate.hxq(_gate.tree, ['fmt', '--list', '--one-pass'].concat(scope)).run();
 		final line: String = '${fmt.out}\n${fmt.err}'.split('\n').find(l -> l.indexOf('would be rewritten') >= 0) ?? '';
 		_gate.summary.detail(line.replace('apq fmt --list: ', ''));
-		if (fmt.ok && line.indexOf(': 0 of ') >= 0) return Passed;
-		_gate.summary.excerpt(Excerpt.linesOf('${fmt.out}\n${fmt.err}').filter(l -> l != line));
-		return Failed(line == '' ? GateTree.quote(fmt) : GateTree.clip(line));
+		final listed: Outcome = if (fmt.ok && line.indexOf(': 0 of ') >= 0) {
+			Passed;
+		} else {
+			_gate.summary.excerpt(Excerpt.linesOf('${fmt.out}\n${fmt.err}').filter(l -> l != line));
+			Failed(line == '' ? GateTree.quote(fmt) : GateTree.clip(line));
+		};
+		return ForkFmt.owedBy(_gate.touched)
+			? fmtCombined(listed, ForkFmt.outcome(args -> _gate.hxq(_gate.tree, args), _gate.summary))
+			: listed;
 	}
 
 	/** The jvm row, for a slice that touched `src/`: `dev jvm-portability` and its gate line. */
