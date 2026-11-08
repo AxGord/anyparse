@@ -270,11 +270,11 @@ final class ModuleScan {
 	}
 
 	/**
-	 * `stmt`s maximal runs of identifier characters and `.`, comments stripped first so comment
-	 * text cannot read as code.
+	 * `stmt`s maximal runs of identifier characters and `.`, comments and string literals stripped
+	 * first so their text cannot read as code.
 	 */
 	private static function identRuns(stmt: String): Array<String> {
-		final bare: String = stripComments(stmt);
+		final bare: String = stripNonCode(stmt);
 		final runs: Array<String> = [];
 		final n: Int = bare.length;
 		var i: Int = 0;
@@ -420,16 +420,14 @@ final class ModuleScan {
 	}
 
 	/**
-	 * `text` with every `//` line comment and `/* … *\/` block comment replaced
-	 * by a space, so a lexical scan cannot read comment content as code. A comment marker inside a
-	 * quoted literal is text and survives: the regions come from `LexicalRegions.ofFragment`.
+	 * `text` with every comment and every string literal replaced by a space, so a lexical scan cannot
+	 * read their content as code. The regions come from `LexicalRegions.ofFragment`, which is also why a
+	 * comment marker inside a literal is not a comment.
 	 */
-	private static function stripComments(text: String): String {
+	private static function stripNonCode(text: String): String {
 		final buf: StringBuf = new StringBuf();
 		var at: Int = 0;
-		for (region in LexicalRegions.ofFragment(text)) if (
-			region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment
-		) {
+		for (region in LexicalRegions.ofFragment(text)) if (region.kind != LexRegionKind.RegexLit) {
 			buf.addSub(text, at, region.from - at);
 			buf.addChar(' '.code);
 			at = region.to;

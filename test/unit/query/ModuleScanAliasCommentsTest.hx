@@ -23,6 +23,12 @@ class ModuleScanAliasCommentsTest extends Test {
 		Assert.equals('', ModuleScan.aliasTargetOf('import a.b.C /* z.W as'));
 	}
 
+	@:pin('control') @:killer('M-MODULESCAN-STRINGS-KEPT')
+	public function testWordsInsideAStringLiteralAreNotDecoded(): Void {
+		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C "z.W as" as D;'));
+		Assert.equals('as', ModuleScan.aliasKeywordOf('import a.b.C \'z.W in\' as D;'));
+	}
+
 	@:pin('guard')
 	public function testAnAliasWithoutCommentsDecodes(): Void {
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C as D;'));

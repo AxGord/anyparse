@@ -15693,9 +15693,17 @@
 		{
 			"name": "M-MODULESCAN-COMMENTS-KEPT",
 			"type": "anyparse.query.ModuleScan",
-			"method": "stripComments",
+			"method": "stripNonCode",
 			"force": "text",
 			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
+		},
+		{
+			"name": "M-MODULESCAN-STRINGS-KEPT",
+			"type": "anyparse.query.ModuleScan",
+			"method": "stripNonCode",
+			"find": "region.kind != LexRegionKind.RegexLit",
+			"replace": "region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment",
+			"note": "a string literal stays in an alias import's text, so a `z.W as` inside one decodes as the aliased path"
 		},
 		{
 			"name": "M-MODULESCAN-SUBTYPE-PATH-BARE",
