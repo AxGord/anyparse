@@ -55,9 +55,6 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 	public static inline final RULE_ID: String = 'invert-negated-if-else';
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
 	private static inline final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
 	private static inline final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
@@ -127,7 +124,7 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	 */
 	private static function walk(out: Array<Violation>, scan: Scan, node: QueryNode): Void {
 		final span: Null<Span> = node.span;
-		if (span != null && node.children.length == IF_WITH_ELSE_CHILD_COUNT) {
+		if (span != null && BranchChain.hasElse(node)) {
 			final seams: Seams = scan.seams;
 			final swap: Null<Swap> = seams.ifKinds.contains(node.kind) ? statementSwap(node, scan) : null;
 			if (swap != null) {
@@ -174,9 +171,9 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	 * drops no comment.
 	 */
 	private static function statementSwap(ifNode: QueryNode, scan: Scan): Null<Swap> {
-		final elseBranch: QueryNode = ifNode.children[2];
+		final elseBranch: QueryNode = BranchChain.elseBranch(ifNode);
 		if (scan.seams.ifKinds.contains(elseBranch.kind)) return null;
-		final swap: Null<Swap> = NegatedCondition.swapOf(ifNode.children[0], ifNode.children[1], elseBranch, scan.site);
+		final swap: Null<Swap> = NegatedCondition.swapOf(BranchChain.condOf(ifNode), BranchChain.thenOf(ifNode), elseBranch, scan.site);
 		return swap == null || swap.dropsComment ? null : swap;
 	}
 
@@ -188,9 +185,9 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	 * stays where it is while the branches move), else `Fixable`.
 	 */
 	private static function valueVerdict(node: QueryNode, scan: Scan): ValueVerdict {
-		final cond: QueryNode = node.children[0];
-		final thenBranch: QueryNode = node.children[1];
-		final elseBranch: QueryNode = node.children[2];
+		final cond: QueryNode = BranchChain.condOf(node);
+		final thenBranch: QueryNode = BranchChain.thenOf(node);
+		final elseBranch: QueryNode = BranchChain.elseBranch(node);
 		if (sameConstruct(thenBranch, node, scan.seams) || sameConstruct(elseBranch, node, scan.seams)) return Skip;
 		final swap: Null<Swap> = NegatedCondition.swapOf(cond, thenBranch, elseBranch, scan.site);
 		final condSpan: Null<Span> = tight(cond, scan);
@@ -216,17 +213,17 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	 * branch source swapped.
 	 */
 	private static function statementEdits(ifNode: QueryNode, scan: Scan, edits: Array<{ span: Span, text: String }>): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
+		if (!BranchChain.hasElse(ifNode)) return;
 		final swap: Null<Swap> = statementSwap(ifNode, scan);
 		if (swap == null) return;
 		final source: String = scan.site.source;
 		final shape: RefShape = scan.seams.shape;
-		final thenBranch: QueryNode = ifNode.children[1];
-		final elseBranch: QueryNode = ifNode.children[2];
+		final thenBranch: QueryNode = BranchChain.thenOf(ifNode);
+		final elseBranch: QueryNode = BranchChain.elseBranch(ifNode);
 		// A region then-body closed only by the `else` after it would land in the tail slot with no
 		// terminator it can be proved not to need; every branch travels with the one it owns.
 		if (RegionTerminator.unterminatedRegion(thenBranch, source, shape)) return;
-		final condSpan: Null<Span> = tight(ifNode.children[0], scan);
+		final condSpan: Null<Span> = tight(BranchChain.condOf(ifNode), scan);
 		final thenSpan: Null<Span> = RegionTerminator.ownedSpan(thenBranch, source, shape);
 		final elseSpan: Null<Span> = RegionTerminator.ownedSpan(elseBranch, source, shape);
 		if (condSpan == null || thenSpan == null || elseSpan == null) return;
@@ -242,15 +239,15 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	 * the parser, not this rule, decides about.
 	 */
 	private static function valueEdits(node: QueryNode, scan: Scan, out: Array<GuardedEdit>): Void {
-		if (node.children.length != IF_WITH_ELSE_CHILD_COUNT) return;
+		if (!BranchChain.hasElse(node)) return;
 		final swap: Null<Swap> = switch valueVerdict(node, scan) {
 			case Fixable(fixable): fixable;
 			case CommentBlocked(_), Skip: null;
 		};
 		final source: String = scan.site.source;
-		final condSpan: Null<Span> = tight(node.children[0], scan);
-		final thenSpan: Null<Span> = tight(node.children[1], scan);
-		final elseSpan: Null<Span> = tight(node.children[2], scan);
+		final condSpan: Null<Span> = tight(BranchChain.condOf(node), scan);
+		final thenSpan: Null<Span> = tight(BranchChain.thenOf(node), scan);
+		final elseSpan: Null<Span> = tight(BranchChain.elseBranch(node), scan);
 		if (swap == null || condSpan == null || thenSpan == null || elseSpan == null) return;
 		out.push(write(condSpan, swap.condition));
 		out.push(splice(thenSpan, elseSpan, source));

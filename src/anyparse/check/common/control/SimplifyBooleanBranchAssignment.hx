@@ -79,9 +79,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class SimplifyBooleanBranchAssignment extends RuleBase {
 
-	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	/** Fewer targets than this is `prefer-ternary-assignment`'s single-l-value case. */
 	private static inline final MIN_TARGETS: Int = 2;
 
@@ -173,10 +170,10 @@ final class SimplifyBooleanBranchAssignment extends RuleBase {
 	private static function match(
 		ifNode: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
-		if (ifNode.children.length != IF_ELSE_CHILD_COUNT) return null;
-		final condition: QueryNode = ifNode.children[0];
-		final thenAssigns: Null<Array<QueryNode>> = assignmentsIn(ifNode.children[1], s);
-		final elseAssigns: Null<Array<QueryNode>> = assignmentsIn(ifNode.children[2], s);
+		if (!BranchChain.hasElse(ifNode)) return null;
+		final condition: QueryNode = BranchChain.condOf(ifNode);
+		final thenAssigns: Null<Array<QueryNode>> = assignmentsIn(BranchChain.thenOf(ifNode), s);
+		final elseAssigns: Null<Array<QueryNode>> = assignmentsIn(BranchChain.elseBranch(ifNode), s);
 		if (thenAssigns == null || elseAssigns == null) return null;
 		if (thenAssigns.length < MIN_TARGETS || thenAssigns.length != elseAssigns.length) return null;
 		final condPath: Null<Array<String>> = readPathSegments(condition, source, s);

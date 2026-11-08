@@ -211,7 +211,7 @@ final class PreferIfExpressionAssignment extends RuleBase {
 		node: QueryNode, out: Array<Violation>, file: String, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		s: Seams, ?parent: QueryNode
 	): Void {
-		if (s.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)) {
+		if (s.ifKinds.contains(node.kind) && !BranchChain.isElseIfLink(node, parent, s.ifKinds)) {
 			final m: Null<Match> = match(node, source, comments, s);
 			if (m != null) {
 				final span: Null<Span> = node.span;

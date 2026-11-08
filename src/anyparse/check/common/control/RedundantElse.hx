@@ -73,9 +73,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class RedundantElse extends RuleBase {
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
 	private static inline final MESSAGE: String = 'this else is redundant — the if branch always exits';
 
 	/** ASCII-only note appended when a comment the de-nest would delete withholds the autofix. */
@@ -139,8 +136,8 @@ final class RedundantElse extends RuleBase {
 		out: Array<Violation>, file: String, source: String, ifNode: QueryNode, seams: Seams,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
-		if (!CheckScan.branchAlwaysExits(ifNode.children[1], seams.support)) return;
+		if (!BranchChain.hasElse(ifNode)) return;
+		if (!CheckScan.branchAlwaysExits(BranchChain.thenOf(ifNode), seams.support)) return;
 		// An else-CHAIN of valued returns is `prefer-if-expression-return`'s, and that rule's single fix
 		// IS the canon. De-nesting it here takes the chain away from it: the cascade left behind is
 		// collapsed pairwise into a three-rung ternary, which `prefer-if-expression-chain` then unrolls
@@ -149,7 +146,7 @@ final class RedundantElse extends RuleBase {
 		// finding the run before it never mentioned. Asked of that rule directly, gates and all, so a
 		// chain it refuses (a comment in a folded region) keeps its `redundant-else` finding.
 		if (PreferIfExpressionReturn.claimsChain(ifNode, source, comments, seams.shape)) return;
-		final elseSpan: Null<Span> = ifNode.children[2].span;
+		final elseSpan: Null<Span> = BranchChain.elseBranch(ifNode).span;
 		if (elseSpan != null) out.push({
 			file: file,
 			span: elseSpan,
@@ -170,10 +167,10 @@ final class RedundantElse extends RuleBase {
 	private static function deNestDropsComment(
 		ifNode: QueryNode, source: String, seams: Seams, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Bool {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return false;
+		if (!BranchChain.hasElse(ifNode)) return false;
 		final ifSpan: Null<Span> = ifNode.span;
-		final thenSpan: Null<Span> = ifNode.children[1].span;
-		final run: Null<Span> = deNestedRun(ifNode.children[2], source, seams);
+		final thenSpan: Null<Span> = BranchChain.thenOf(ifNode).span;
+		final run: Null<Span> = deNestedRun(BranchChain.elseBranch(ifNode), source, seams);
 		return ifSpan != null
 			&& thenSpan != null
 			&& run != null
@@ -263,14 +260,14 @@ final class RedundantElse extends RuleBase {
 		ifNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
 	): Void {
-		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
-		final elseNode: QueryNode = ifNode.children[2];
+		if (!BranchChain.hasElse(ifNode)) return;
+		final elseNode: QueryNode = BranchChain.elseBranch(ifNode);
 		final elseSpan: Null<Span> = elseNode.span;
 		if (elseSpan == null || !flagged.contains('${elseSpan.from}:${elseSpan.to}')) return;
 		if (deNestDropsComment(ifNode, source, seams, comments)) return;
 		if (narrowingLapses(ifNode, elseNode, seams, narrowed)) return;
 		final ifSpan: Null<Span> = ifNode.span;
-		final thenSpan: Null<Span> = ifNode.children[1].span;
+		final thenSpan: Null<Span> = BranchChain.thenOf(ifNode).span;
 		if (ifSpan == null || thenSpan == null) return;
 		final deNested: Null<String> = deNestText(elseNode, source, seams, scopeNames);
 		if (deNested == null) return;
@@ -308,7 +305,7 @@ final class RedundantElse extends RuleBase {
 	 */
 	private static function narrowingLapses(ifNode: QueryNode, elseNode: QueryNode, seams: Seams, narrowed: Array<String>): Bool {
 		return narrowed.length != 0
-			&& MemberKinds.subtreeContainsAnyKind(ifNode.children[1], seams.resetKinds)
+			&& MemberKinds.subtreeContainsAnyKind(BranchChain.thenOf(ifNode), seams.resetKinds)
 			&& narrowed.exists(subject -> dereferences(elseNode, subject, seams));
 	}
 

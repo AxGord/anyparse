@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CondRegionScan;
 import anyparse.query.MemberKinds;
@@ -146,20 +147,8 @@ typedef ShieldSeams = {
 @:nullSafety(Strict)
 final class IfExpressionChain {
 
-	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	/** A real chain is a head plus at least one `else if` — a 2-branch `if`/`else` (one branch) is left to the ternary rules. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
-
-	/** A no-`else` `if` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
-	/** The else-slot of a conditional and of a ternary alike — `children[2]`, past condition and then-value. */
-	private static inline final ELSE_SLOT_INDEX: Int = 2;
-
-	/** A conditional's then-branch is `children[1]`, between the condition and the else-branch. */
-	private static inline final THEN_BRANCH_INDEX: Int = 1;
 
 	/** `span`'s `from:to` key — how a carried comment finds the copied piece it rides. */
 	public static inline function spanKey(span: Span): String {
@@ -180,11 +169,9 @@ final class IfExpressionChain {
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var current: QueryNode = head;
 		while (true) {
-			if (current.children.length != IF_ELSE_CHILD_COUNT) return null; // no `else` -> not collapsible
-			final thenStmt: Null<QueryNode> = singleStmt(current.children[1], blockStmtKind);
-			if (thenStmt == null) return null;
-			branches.push({ cond: current.children[0], stmt: thenStmt });
-			final elseBranch: QueryNode = current.children[2];
+			if (!BranchChain.hasElse(current)) return null; // no `else` -> not collapsible
+			if (!pushPair(branches, current, blockStmtKind)) return null;
+			final elseBranch: QueryNode = BranchChain.elseBranch(current);
 			if (ifKinds.contains(elseBranch.kind)) {
 				current = elseBranch; // `else if` -> continue the chain
 			} else {
@@ -211,12 +198,10 @@ final class IfExpressionChain {
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var current: QueryNode = head;
 		while (true) {
-			final thenStmt: Null<QueryNode> = current.children.length < 2 ? null : singleStmt(current.children[1], blockStmtKind);
-			if (thenStmt == null) return null;
-			branches.push({ cond: current.children[0], stmt: thenStmt });
-			if (current.children.length == 2) return branches;
-			final elseBranch: QueryNode = current.children[2];
-			if (current.children.length != IF_ELSE_CHILD_COUNT || !ifKinds.contains(elseBranch.kind)) return null;
+			if (!pushPair(branches, current, blockStmtKind)) return null;
+			if (!BranchChain.hasElse(current)) return branches;
+			final elseBranch: QueryNode = BranchChain.elseBranch(current);
+			if (!ifKinds.contains(elseBranch.kind)) return null;
 			current = elseBranch;
 		}
 	}
@@ -261,9 +246,7 @@ final class IfExpressionChain {
 	 * `if (x) g();`, which is a rung by shape and by nothing else.
 	 */
 	public static function cascadeRungStatement(node: QueryNode, ifKinds: Array<String>, blockStmtKind: String): Null<QueryNode> {
-		return ifKinds.contains(node.kind) && node.children.length == IF_NO_ELSE_CHILD_COUNT
-			? singleStmt(node.children[THEN_BRANCH_INDEX], blockStmtKind)
-			: null;
+		return ifKinds.contains(node.kind) && !BranchChain.hasElse(node) ? singleStmt(BranchChain.thenOf(node), blockStmtKind) : null;
 	}
 
 	/**
@@ -286,23 +269,11 @@ final class IfExpressionChain {
 	public static function unrollTernaryTail(value: QueryNode, ternaryKind: Null<String>, parenKind: Null<String>): TernaryTail {
 		final pairs: Array<{ cond: QueryNode, value: QueryNode }> = [];
 		var cur: QueryNode = value;
-		while (ternaryKind != null && cur.kind == ternaryKind && cur.children.length == IF_ELSE_CHILD_COUNT) {
-			pairs.push({ cond: BoolExprShape.unwrapParens(cur.children[0], parenKind), value: cur.children[THEN_BRANCH_INDEX] });
-			cur = cur.children[ELSE_SLOT_INDEX];
+		while (ternaryKind != null && cur.kind == ternaryKind && BranchChain.hasElse(cur)) {
+			pairs.push({ cond: BoolExprShape.unwrapParens(BranchChain.condOf(cur), parenKind), value: BranchChain.thenOf(cur) });
+			cur = BranchChain.elseBranch(cur);
 		}
 		return { pairs: pairs, terminal: cur };
-	}
-
-	/**
-	 * Whether `node` is an `else if` LINK — the else-branch (`children[2]`) of a parent
-	 * `if`. Only a chain HEAD is flagged; a link is part of the head's chain and is
-	 * skipped when the walk reaches it on its own.
-	 */
-	public static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, ifKinds: Array<String>): Bool {
-		return parent != null
-			&& ifKinds.contains(parent.kind)
-			&& parent.children.length == IF_ELSE_CHILD_COUNT
-			&& parent.children[2] == node;
 	}
 
 	/** Whether two subtrees are the SAME token-for-token — the l-value equality key. */
@@ -460,7 +431,7 @@ final class IfExpressionChain {
 	 * cannot drift apart on what counts.
 	 */
 	public static function isElseLessConditional(node: QueryNode, conditionalKinds: Array<String>): Bool {
-		return conditionalKinds.contains(node.kind) && node.children.length < IF_ELSE_CHILD_COUNT;
+		return conditionalKinds.contains(node.kind) && !BranchChain.hasElse(node);
 	}
 
 	/**
@@ -545,7 +516,7 @@ final class IfExpressionChain {
 		return if (CondRegionScan.isConditionalKind(parent.kind, seams.shape))
 			shielded
 		else if (index < parent.children.length - 1)
-			!(index == THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind))
+			!(index == BranchChain.THEN_BRANCH_INDEX && seams.conditionalKinds.contains(parent.kind))
 		else
 			shielded;
 	}
@@ -649,6 +620,17 @@ final class IfExpressionChain {
 			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code && c != ';'.code && c != '}'.code) return false;
 		}
+		return true;
+	}
+
+	/**
+	 * Appends the `(condition, single statement)` pair of the if link
+	 * `link` to `branches`; false when its then branch is not one statement.
+	 */
+	private static function pushPair(branches: Array<{ cond: QueryNode, stmt: QueryNode }>, link: QueryNode, blockStmtKind: String): Bool {
+		final stmt: Null<QueryNode> = singleStmt(BranchChain.thenOf(link), blockStmtKind);
+		if (stmt == null) return false;
+		branches.push({ cond: BranchChain.condOf(link), stmt: stmt });
 		return true;
 	}
 

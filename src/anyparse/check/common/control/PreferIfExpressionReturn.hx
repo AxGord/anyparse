@@ -356,7 +356,7 @@ final class PreferIfExpressionReturn extends RuleBase {
 		if (
 			span != null
 			&& s.ifKinds.contains(node.kind)
-			&& !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)
+			&& !BranchChain.isElseIfLink(node, parent, s.ifKinds)
 			&& flagged.contains(IfExpressionChain.spanKey(span))
 		) {
 			final m: Null<Match> = match(node, source, comments, s, false);
@@ -391,7 +391,7 @@ final class PreferIfExpressionReturn extends RuleBase {
 		node: QueryNode, out: Array<Violation>, file: String, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		s: Seams, ?parent: QueryNode
 	): Void {
-		if (s.ifKinds.contains(node.kind) && !IfExpressionChain.isElseIfLink(node, parent, s.ifKinds)) {
+		if (s.ifKinds.contains(node.kind) && !BranchChain.isElseIfLink(node, parent, s.ifKinds)) {
 			final m: Null<Match> = match(node, source, comments, s, false);
 			final span: Null<Span> = node.span;
 			if (m != null && rewritesChain(m) && span != null) out.push({

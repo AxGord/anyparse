@@ -220,12 +220,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class PreferIfExpressionChain extends RuleBase {
 
-	/** A chain node carrying an else-slot has children `[cond, then, else]`. */
-	private static inline final CHAIN_WITH_ELSE_CHILD_COUNT: Int = 3;
-
-	/** The else-slot's index among a chain node's children — where the next rung hangs. */
-	private static inline final ELSE_SLOT_INDEX: Int = 2;
-
 	/** Two conditions (three leaf values) — below this, the ternary IS the canon. */
 	private static inline final MIN_RUNGS: Int = 2;
 
@@ -375,7 +369,7 @@ final class PreferIfExpressionChain extends RuleBase {
 			final m: Null<Match> = match(node, source, comments, s, plugin, lazy, parentKind);
 			if (m != null) out.push(m);
 		}
-		final elseSlot: Int = isChain ? ELSE_SLOT_INDEX : -1;
+		final elseSlot: Int = isChain ? BranchChain.ELSE_BRANCH_INDEX : -1;
 		final childHost: String = slotKindOf(node, parentKind, s);
 		for (i in 0...node.children.length) walk(node.children[i], source, comments, s, plugin, lazy, out, childHost, i == elseSlot);
 	}
@@ -471,10 +465,10 @@ final class PreferIfExpressionChain extends RuleBase {
 	/** Whether any node on `head`'s else-spine carries a claim, mirroring `spine`'s own descent. */
 	private static function spineHoldsClaim(head: QueryNode, s: Seams, claims: Map<String, Bool>): Bool {
 		var cur: QueryNode = head;
-		while (s.chainKinds.contains(cur.kind) && cur.children.length == CHAIN_WITH_ELSE_CHILD_COUNT) {
+		while (s.chainKinds.contains(cur.kind) && BranchChain.hasElse(cur)) {
 			final span: Null<Span> = cur.span;
 			if (span != null && claims.exists('${span.from}:${span.to}')) return true;
-			cur = cur.children[ELSE_SLOT_INDEX];
+			cur = BranchChain.elseBranch(cur);
 		}
 		return false;
 	}
@@ -489,13 +483,15 @@ final class PreferIfExpressionChain extends RuleBase {
 		final rungs: Array<Rung> = [];
 		var ternaryRungs: Int = 0;
 		var cur: QueryNode = head;
-		while (s.chainKinds.contains(cur.kind) && cur.children.length == CHAIN_WITH_ELSE_CHILD_COUNT) {
+		while (s.chainKinds.contains(cur.kind) && BranchChain.hasElse(cur)) {
 			if (cur.kind == s.ternaryKind) ternaryRungs++;
 			// The emitted `if (` … `)` supplies its own delimiters, so a copied paren pair would
 			// only draw a `redundant-parens` finding on the result; nothing inside a condition
 			// slot can be load-bearing, the construct bounding it on both sides.
-			rungs.push({ cond: BoolExprShape.unwrapParens(cur.children[0], s.parenKind), value: cur.children[1], invert: false });
-			cur = cur.children[ELSE_SLOT_INDEX];
+			rungs.push(
+				{ cond: BoolExprShape.unwrapParens(BranchChain.condOf(cur), s.parenKind), value: BranchChain.thenOf(cur), invert: false }
+			);
+			cur = BranchChain.elseBranch(cur);
 		}
 		return {
 			rungs: rungs,
@@ -537,7 +533,7 @@ final class PreferIfExpressionChain extends RuleBase {
 			if (count == 0) break;
 			final last: Rung = chain.rungs[count - 1];
 			final nested: QueryNode = last.value;
-			if (nested.kind != s.ternaryKind || nested.children.length != CHAIN_WITH_ELSE_CHILD_COUNT) break;
+			if (nested.kind != s.ternaryKind || !BranchChain.hasElse(nested)) break;
 			final condSpan: Null<Span> = last.cond.span;
 			// The negation engine REBUILDS the condition from its operands, dropping the glue between
 			// them — so a comment anywhere in that span would be lost or welded into a position the

@@ -88,9 +88,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 
-	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
@@ -186,7 +183,7 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 		node: QueryNode, out: Array<Violation>, file: String, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		s: Seams, ?parent: QueryNode
 	): Void {
-		if (s.ifKinds.contains(node.kind) && !isElseIfLink(node, parent, s)) {
+		if (s.ifKinds.contains(node.kind) && !BranchChain.isElseIfLink(node, parent, s.ifKinds)) {
 			final m: Null<Match> = match(node, source, comments, s);
 			if (m != null) {
 				final span: Null<Span> = node.span;
@@ -211,11 +208,11 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 	private static function match(
 		ifNode: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
-		if (ifNode.children.length != IF_ELSE_CHILD_COUNT) return null;
-		final condition: QueryNode = ifNode.children[0];
-		final elseBranch: QueryNode = ifNode.children[2];
+		if (!BranchChain.hasElse(ifNode)) return null;
+		final condition: QueryNode = BranchChain.condOf(ifNode);
+		final elseBranch: QueryNode = BranchChain.elseBranch(ifNode);
 		if (s.ifKinds.contains(elseBranch.kind)) return null;
-		final thenRaw: Null<QueryNode> = assignmentIn(ifNode.children[1], s);
+		final thenRaw: Null<QueryNode> = assignmentIn(BranchChain.thenOf(ifNode), s);
 		final elseRaw: Null<QueryNode> = assignmentIn(elseBranch, s);
 		if (thenRaw == null || elseRaw == null) return null;
 		final thenAssign: QueryNode = thenRaw;
@@ -355,19 +352,6 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 		return false;
 	}
 
-
-	/**
-	 * Whether `node` is an `else if` link -- the else-branch (children[2]) of a
-	 * parent `if`. Such a link belongs to a chain that is prefer-switch territory,
-	 * so it is left unflagged (collapsing it would unravel the chain into nested
-	 * ternaries rather than a switch).
-	 */
-	private static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, s: Seams): Bool {
-		return parent != null
-			&& s.ifKinds.contains(parent.kind)
-			&& parent.children.length == IF_ELSE_CHILD_COUNT
-			&& parent.children[2] == node;
-	}
 
 	/**
 	 * The `<head><value>;` edit for a collapse whose ternary would only pass a nullable value through —

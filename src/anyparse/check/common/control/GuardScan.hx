@@ -43,9 +43,6 @@ typedef GuardSplice = {
 @:nullSafety(Strict)
 final class GuardScan {
 
-	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/** The seams of `plugin` every guard rewrite needs, or null when the grammar names no `if` statement or no control flow. */
 	public static function seamsOf(plugin: GrammarPlugin): Null<GuardSeams> {
 		final shape: RefShape = plugin.refShape();
@@ -59,10 +56,10 @@ final class GuardScan {
 	 * holding at least `minThen` statements; null otherwise.
 	 */
 	public static function guardedIf(ifNode: QueryNode, ifKinds: Array<String>, blockKinds: Array<String>, minThen: Int): Null<GuardedIf> {
-		if (!ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final thenBlock: QueryNode = ifNode.children[1];
+		if (!ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
+		final thenBlock: QueryNode = BranchChain.thenOf(ifNode);
 		return blockKinds.contains(thenBlock.kind) && thenBlock.children.length >= minThen
-			? { ifNode: ifNode, cond: ifNode.children[0], thenBlock: thenBlock }
+			? { ifNode: ifNode, cond: BranchChain.condOf(ifNode), thenBlock: thenBlock }
 			: null;
 	}
 

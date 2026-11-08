@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.CaseValueKey.CaseValueSeams;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CondRegionScan;
@@ -200,12 +201,6 @@ import anyparse.query.TypeResolver;
  */
 @:nullSafety(Strict)
 final class SwitchChain {
-
-	/** A chain node carrying an else-slot has children `[cond, then, else]`. */
-	private static inline final CHAIN_WITH_ELSE_CHILD_COUNT: Int = 3;
-
-	/** The else-slot's index among a chain node's children. */
-	private static inline final ELSE_SLOT_INDEX: Int = 2;
 
 	/** A binary operator node has exactly `[left, right]` children. */
 	private static inline final BINARY_CHILD_COUNT: Int = 2;
@@ -463,7 +458,7 @@ final class SwitchChain {
 				return null;
 			}
 			rungs.push({ patterns: pairs.map(p -> p.pattern), values: pairs.map(p -> p.value), body: bodySpan });
-			final elseChild: Null<QueryNode> = cur.children.length >= CHAIN_WITH_ELSE_CHILD_COUNT ? cur.children[ELSE_SLOT_INDEX] : null;
+			final elseChild: Null<QueryNode> = BranchChain.hasElse(cur) ? BranchChain.elseBranch(cur) : null;
 			if (elseChild == null) break;
 			if (seams.chainKinds.contains(elseChild.kind)) {
 				cur = elseChild;
@@ -592,7 +587,7 @@ final class SwitchChain {
 	): Void {
 		final isChain: Bool = seams.chainKinds.contains(node.kind);
 		if (isChain && !inElseSlot && hostAccepts(parent?.kind)) visit(node, closesWithWildcard(parent, index, seams));
-		final elseSlot: Int = isChain ? ELSE_SLOT_INDEX : -1;
+		final elseSlot: Int = isChain ? BranchChain.ELSE_BRANCH_INDEX : -1;
 		for (i in 0...node.children.length) walkHeads(node.children[i], node, i, i == elseSlot, seams, hostAccepts, visit);
 	}
 

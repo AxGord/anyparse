@@ -130,9 +130,6 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 	/** The finding message when a comment in a dropped region keeps the site report-only. */
 	private static inline final MSG_COMMENT: String = MSG_FIXABLE + ' (a comment blocks the autofix)';
 
-	/** A no-else `if` projects exactly [condition, then-branch]. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -263,14 +260,14 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 		ifNode: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
 		tree: QueryNode, lambdaSpans: Array<Span>, site: Null<InversionSite>
 	): Null<Match> {
-		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final assign: Null<QueryNode> = assignmentIn(ifNode.children[1], s);
+		if (!s.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
+		final assign: Null<QueryNode> = assignmentIn(BranchChain.thenOf(ifNode), s);
 		if (assign == null) return null;
 		final returned: Null<ReturnedAssignment> = NodeShape.returnedAssignment(assign, ret, s.identKind, s.returnKind);
 		if (returned == null) return null;
 		final name: String = returned.name;
 
-		final condition: QueryNode = ifNode.children[0];
+		final condition: QueryNode = BranchChain.condOf(ifNode);
 		final rhs: QueryNode = assign.children[1];
 		final ifSpan: Null<Span> = ifNode.span;
 		final condSpan: Null<Span> = condition.span;

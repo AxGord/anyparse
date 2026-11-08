@@ -112,9 +112,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 
-	/** An `if`-expression has exactly [condition, then-branch, else-branch] children -- its `else` is mandatory. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -260,10 +257,10 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 	 */
 	private static function match(node: QueryNode, scan: Scan): Null<Match> {
 		final s: Seams = scan.seams;
-		if (node.children.length != IF_ELSE_CHILD_COUNT) return null;
-		final condition: QueryNode = node.children[0];
-		final thenBranch: QueryNode = node.children[1];
-		final elseBranch: QueryNode = node.children[2];
+		if (!BranchChain.hasElse(node)) return null;
+		final condition: QueryNode = BranchChain.condOf(node);
+		final thenBranch: QueryNode = BranchChain.thenOf(node);
+		final elseBranch: QueryNode = BranchChain.elseBranch(node);
 		if (!s.branchKinds.contains(thenBranch.kind) || !s.branchKinds.contains(elseBranch.kind)) return null;
 		// `join-branch-call` owns a chain whose branches are the SAME call differing in one
 		// argument: it writes the callee once, a ternary writes it twice. Both match this span and

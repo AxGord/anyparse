@@ -90,12 +90,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
-	/** The else branch is the third child of an if node — `[cond, then, else]`. */
-	private static inline final ELSE_BRANCH_INDEX: Int = 2;
-
 	public function new() {
 		super('collapsible-else-if', 'an else whose sole statement is an if — collapses to else if', RuleCategory.Control);
 	}
@@ -171,14 +165,14 @@ final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 	 */
 	private static function walk(node: QueryNode, source: String, seams: Seams, safe: Bool, out: Array<Span>): Void {
 		final isIf: Bool = seams.ifKinds.contains(node.kind);
-		if (safe && isIf && node.children.length == IF_WITH_ELSE_CHILD_COUNT) {
-			final elseBranch: QueryNode = node.children[ELSE_BRANCH_INDEX];
+		if (safe && isIf && BranchChain.hasElse(node)) {
+			final elseBranch: QueryNode = BranchChain.elseBranch(node);
 			final span: Null<Span> = elseBranch.span;
 			if (span != null && isSingleIfBlock(elseBranch, span, source, seams)) out.push(span);
 		}
 		final childrenAreStatements: Bool = seams.blockKinds.contains(node.kind);
 		for (i in 0...node.children.length)
-			walk(node.children[i], source, seams, childrenAreStatements || (safe && isIf && i == ELSE_BRANCH_INDEX), out);
+			walk(node.children[i], source, seams, childrenAreStatements || (safe && isIf && i == BranchChain.ELSE_BRANCH_INDEX), out);
 	}
 
 	/**

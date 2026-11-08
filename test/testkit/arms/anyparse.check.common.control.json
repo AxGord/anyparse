@@ -160,7 +160,7 @@
 			"name": "M-GUARD-ELSE-ADMITTED",
 			"type": "anyparse.check.common.control.GuardScan",
 			"method": "guardedIf",
-			"find": " || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT",
+			"find": " || BranchChain.hasElse(ifNode)",
 			"replace": "",
 			"note": "an `if` with an `else` is inverted as if it had none, so both guard rules drop the else branch"
 		},
@@ -443,8 +443,8 @@
 			"name": "M-INVERT-KEEP-DEFAULT-STATEMENT-THEN-ARM",
 			"type": "anyparse.check.common.control.InvertNegatedIfElse",
 			"method": "statementSwap",
-			"find": "NegatedCondition.swapOf(ifNode.children[0], ifNode.children[1], elseBranch, scan.site)",
-			"replace": "NegatedCondition.swapOf(ifNode.children[0], elseBranch, ifNode.children[1], scan.site)",
+			"find": "NegatedCondition.swapOf(BranchChain.condOf(ifNode), BranchChain.thenOf(ifNode), elseBranch, scan.site)",
+			"replace": "NegatedCondition.swapOf(BranchChain.condOf(ifNode), elseBranch, BranchChain.thenOf(ifNode), scan.site)",
 			"note": "an if statement is gated on its THEN branch: `if (!a) return null; else return x;` is no longer inverted under the option"
 		},
 		{
@@ -1079,6 +1079,46 @@
 			"find": "Strings.stripOuterParens(text)",
 			"replace": "(text.charAt(0) == '(' ? text.substring(1, text.length - 1).trim() : text)",
 			"note": "only ONE layer of parentheses around the literal is peeled, so `#if ((false))` stops reading as the literal"
+		},
+		{
+			"name": "M-BRANCHCHAIN-COND-IS-THEN",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "condOf",
+			"find": "node.children[COND_INDEX]",
+			"replace": "node.children[THEN_BRANCH_INDEX]",
+			"note": "the condition accessor reads the then branch, so every rule that tests a condition tests its body"
+		},
+		{
+			"name": "M-BRANCHCHAIN-THEN-IS-COND",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "thenOf",
+			"find": "node.children[THEN_BRANCH_INDEX]",
+			"replace": "node.children[COND_INDEX]",
+			"note": "the then accessor reads the condition, so every rule that rewrites a then branch rewrites the condition"
+		},
+		{
+			"name": "M-BRANCHCHAIN-ELSE-IS-THEN",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "elseBranch",
+			"find": "node.children[ELSE_BRANCH_INDEX]",
+			"replace": "node.children[THEN_BRANCH_INDEX]",
+			"note": "the else accessor reads the then branch, so an else-if spine never descends"
+		},
+		{
+			"name": "M-BRANCHCHAIN-HAS-ELSE-ALWAYS",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "hasElse",
+			"find": "node.children.length >= IF_WITH_ELSE_CHILD_COUNT",
+			"replace": "true",
+			"note": "every if reads as having an else, so an else-less if is handed a third child it does not have"
+		},
+		{
+			"name": "M-BRANCHCHAIN-ELSEIF-ANY-CHILD",
+			"type": "anyparse.check.common.control.BranchChain",
+			"method": "isElseIfLink",
+			"find": "elseOf(parent, ifKinds) == node",
+			"replace": "ifKinds.contains(parent.kind) && parent.children.contains(node)",
+			"note": "a then branch counts as an else-if link, so the ternary rules skip the head of every if they should rewrite"
 		}
 	]
 }

@@ -301,7 +301,7 @@ final class JoinBranchCall extends RuleBase {
 	/** Walk `node`, flagging each chain HEAD whose branches are the same call differing in one argument. */
 	private static function walk(node: QueryNode, out: Array<Violation>, file: String, ctx: Ctx, ?parent: QueryNode): Void {
 		final pos: Null<IfPosition> = positionOf(node, ctx.seams);
-		if (pos != null && !IfExpressionChain.isElseIfLink(node, parent, pos.kinds)) {
+		if (pos != null && !BranchChain.isElseIfLink(node, parent, pos.kinds)) {
 			final span: Null<Span> = node.span;
 			if (span != null && match(node, ctx, pos) != null) out.push({
 				file: file,

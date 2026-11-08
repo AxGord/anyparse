@@ -550,7 +550,7 @@
 			"name": "M-ELSELESS-FINAL-ELSE",
 			"type": "anyparse.check.scan.IfExpressionChain",
 			"method": "collectElseLess",
-			"find": " || !ifKinds.contains(elseBranch.kind)",
+			"find": "if (!ifKinds.contains(elseBranch.kind)) return null;",
 			"replace": "",
 			"note": "whatever follows an `else` is read as another `if` link, so `else while (b) x = 3;` becomes a branch guarded by the loop's condition"
 		},

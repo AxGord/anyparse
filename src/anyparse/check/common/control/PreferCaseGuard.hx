@@ -138,9 +138,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferCaseGuard extends RuleBase implements RiskyFix {
 
-	/** An `if` with no `else` has exactly [cond, then]. */
-	private static inline final IF_WITHOUT_ELSE_CHILD_COUNT: Int = 2;
-
 	/** All that may separate the last pattern from the `if`: the label's own colon. */
 	private static inline final LABEL_TERMINATOR: String = ':';
 
@@ -407,15 +404,15 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 		final own: BranchParts = parts[at];
 		if (own.body.length != 1) return null;
 		final ifNode: QueryNode = own.body[0];
-		if (!scan.seams.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_WITHOUT_ELSE_CHILD_COUNT) return null;
+		if (!scan.seams.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
 		final branchSpan: Null<Span> = branch.span;
 		final ifSpan: Null<Span> = ifNode.span;
-		final condSpan: Null<Span> = ifNode.children[0].span;
+		final condSpan: Null<Span> = BranchChain.condOf(ifNode).span;
 		final patternSpan: Null<Span> = own.patterns[own.patterns.length - 1].span;
 		if (branchSpan == null || ifSpan == null || condSpan == null || patternSpan == null) return null;
 		if (repeatedLater(keys, at)) return null;
 		if (source.substring(patternSpan.to, ifSpan.from).trim() != LABEL_TERMINATOR) return null;
-		final body: Null<String> = bodyText(scan, ifNode.children[1]);
+		final body: Null<String> = bodyText(scan, BranchChain.thenOf(ifNode));
 		if (body == null) return null;
 		final guard: String = ' if (${source.substring(condSpan.from, condSpan.to)}):';
 		final label: String = source.substring(branchSpan.from, patternSpan.to) + guard;

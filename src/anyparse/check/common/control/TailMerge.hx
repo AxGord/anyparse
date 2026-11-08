@@ -112,9 +112,6 @@ final class TailMerge extends RuleBase {
 	/** An if node carries at least [cond, then]. */
 	private static inline final IF_CHILD_COUNT: Int = 2;
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
 	/**
 	 * No fall-through at all — what every non-block, non-if node hands its children. Shared
 	 * across every `run` / `fix` on every thread, so its arrays are READ-ONLY: a `Fall` is
@@ -242,10 +239,10 @@ final class TailMerge extends RuleBase {
 	private static function visitIf(ifNode: QueryNode, fall: Fall, source: String, seams: Seams, out: Array<Candidate>): Void {
 		final kids: Array<QueryNode> = ifNode.children;
 		if (kids.length < IF_CHILD_COUNT) return;
-		visit(kids[0], EMPTY_FALL, source, seams, out);
-		branch(kids[1], fall, source, seams, out);
-		if (kids.length < IF_WITH_ELSE_CHILD_COUNT) return;
-		final elseNode: QueryNode = kids[2];
+		visit(BranchChain.condOf(ifNode), EMPTY_FALL, source, seams, out);
+		branch(BranchChain.thenOf(ifNode), fall, source, seams, out);
+		if (!BranchChain.hasElse(ifNode)) return;
+		final elseNode: QueryNode = BranchChain.elseBranch(ifNode);
 		if (seams.ifKinds.contains(elseNode.kind))
 			visit(elseNode, fall, source, seams, out);
 		else

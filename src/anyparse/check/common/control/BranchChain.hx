@@ -46,18 +46,46 @@ typedef ChainSeams = {
 @:nullSafety(Strict)
 final class BranchChain {
 
+	/** The else branch is the third child of an if node - `[cond, then, else]`. */
+	public static inline final ELSE_BRANCH_INDEX: Int = 2;
+
+	/** The then branch is the second child of an if node - `[cond, then, else]`. */
+	public static inline final THEN_BRANCH_INDEX: Int = 1;
+
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
 
-	/** The else branch is the third child of an if node - `[cond, then, else]`. */
-	private static inline final ELSE_BRANCH_INDEX: Int = 2;
+	/** The condition is the first child of an if (or ternary) node - `[cond, then, else]`. */
+	private static inline final COND_INDEX: Int = 0;
 
-	/** The then branch is the second child of an if node - `[cond, then, else]`. */
-	private static inline final THEN_BRANCH_INDEX: Int = 1;
+	/** Whether the if (or ternary) `node` has an else branch. */
+	public static inline function hasElse(node: QueryNode): Bool {
+		return node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
+	}
+
+	/** The condition of the if (or ternary) `node`. */
+	public static function condOf(node: QueryNode): QueryNode {
+		return node.children[COND_INDEX];
+	}
+
+	/** The then branch of the if (or ternary) `node`. */
+	public static function thenOf(node: QueryNode): QueryNode {
+		return node.children[THEN_BRANCH_INDEX];
+	}
+
+	/** The else branch of the if (or ternary) `node`; the caller has established `hasElse(node)`. */
+	public static function elseBranch(node: QueryNode): QueryNode {
+		return node.children[ELSE_BRANCH_INDEX];
+	}
 
 	/** The else branch of `node` when it is an `if` (one of `ifKinds`) with one, else null. */
 	public static function elseOf(node: QueryNode, ifKinds: Array<String>): Null<QueryNode> {
-		return ifKinds.contains(node.kind) && node.children.length == IF_WITH_ELSE_CHILD_COUNT ? node.children[ELSE_BRANCH_INDEX] : null;
+		return ifKinds.contains(node.kind) && hasElse(node) ? elseBranch(node) : null;
+	}
+
+	/** Whether `node` is the else branch of its `parent` when that is an `if` (one of `ifKinds`) - an `else if` link. */
+	public static function isElseIfLink(node: QueryNode, parent: Null<QueryNode>, ifKinds: Array<String>): Bool {
+		return parent != null && elseOf(parent, ifKinds) == node;
 	}
 
 	/** The links of the chain `head` starts: `head`, then every `if` down its else-if spine. */
@@ -141,7 +169,7 @@ final class BranchChain {
 		final links: Array<QueryNode> = linksFrom(head, ifKinds);
 		final finalElse: Null<QueryNode> = elseOf(links[links.length - 1], ifKinds);
 		if (finalElse == null) return null;
-		final branches: Array<QueryNode> = links.map(link -> link.children[THEN_BRANCH_INDEX]);
+		final branches: Array<QueryNode> = links.map(thenOf);
 		branches.push(finalElse);
 		return branches;
 	}

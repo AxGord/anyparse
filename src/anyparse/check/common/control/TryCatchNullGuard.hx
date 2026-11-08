@@ -125,9 +125,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/** A binary comparison node has exactly [left, right] children. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
@@ -367,11 +364,11 @@ final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 	 * null otherwise.
 	 */
 	private static function terminator(guard: QueryNode, name: String, s: Seams): Null<QueryNode> {
-		if (!s.ifKinds.contains(guard.kind) || guard.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final cond: QueryNode = BoolExprShape.unwrapParens(guard.children[0], s.parenKind);
+		if (!s.ifKinds.contains(guard.kind) || BranchChain.hasElse(guard)) return null;
+		final cond: QueryNode = BoolExprShape.unwrapParens(BranchChain.condOf(guard), s.parenKind);
 		if (cond.kind != s.eqKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
 		if (!comparesToNull(cond, name, s)) return null;
-		final body: Null<QueryNode> = TryExpressionShape.singleBody(guard.children[1], s.blockStmtKind);
+		final body: Null<QueryNode> = TryExpressionShape.singleBody(BranchChain.thenOf(guard), s.blockStmtKind);
 		return body != null && s.termKinds.contains(body.kind) ? body : null;
 	}
 

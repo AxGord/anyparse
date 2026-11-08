@@ -57,12 +57,6 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'asymmetric-branch-braces';
 
-	/** The then branch is the second child of an if node - `[cond, then, else]`. */
-	private static inline final THEN_BRANCH_INDEX: Int = 1;
-
-	/** The else branch is the third child of an if node - `[cond, then, else]`. */
-	private static inline final ELSE_BRANCH_INDEX: Int = 2;
-
 	public function new() {
 		super(
 			RULE_ID, 'an if/else chain or a try/catch that braces some branches and not others - the bare ones read as an accident',
@@ -177,8 +171,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 		final tail: QueryNode = links[links.length - 1];
 		final last: Null<QueryNode> = elseOf(tail, seams);
 		final headSpan: Null<Span> = head.span;
-		final braced: Bool = last?.kind == seams.blockStmtKind
-			|| links.exists(l -> l.children[THEN_BRANCH_INDEX].kind == seams.blockStmtKind);
+		final braced: Bool = last?.kind == seams.blockStmtKind || links.exists(l -> BranchChain.thenOf(l).kind == seams.blockStmtKind);
 		return pairFinding(tail, last, seams) ?? (
 			headSpan != null && braced && bareBranches(links, seams).length > 0
 				? { span: headSpan, node: head, message: 'the if/else-if chain braces some branches and not others - brace all or none' }
@@ -192,13 +185,13 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 	 */
 	private static function pairFinding(tail: QueryNode, last: Null<QueryNode>, seams: Seams): Null<Asymmetry> {
 		final span: Null<Span> = tail.span;
-		final thenBraced: Bool = tail.children[THEN_BRANCH_INDEX].kind == seams.blockStmtKind;
+		final thenBraced: Bool = BranchChain.thenOf(tail).kind == seams.blockStmtKind;
 		return if (
 			last == null
 			|| span == null
 			|| thenBraced == (last.kind == seams.blockStmtKind)
 			|| (thenBraced && seams.exemptElseKinds.contains(last.kind))
-			|| BranchChain.isSplice(tail.children[THEN_BRANCH_INDEX], seams)
+			|| BranchChain.isSplice(BranchChain.thenOf(tail), seams)
 			|| BranchChain.isSplice(last, seams)
 		)
 			null
@@ -370,7 +363,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 	 */
 	private static function bareBranches(links: Array<QueryNode>, seams: Seams): Array<QueryNode> {
 		final out: Array<QueryNode> = [
-			for (link in links) if (link.children[THEN_BRANCH_INDEX].kind != seams.blockStmtKind) link.children[THEN_BRANCH_INDEX]
+			for (link in links) if (BranchChain.thenOf(link).kind != seams.blockStmtKind) BranchChain.thenOf(link)
 		];
 		final last: Null<QueryNode> = elseOf(links[links.length - 1], seams);
 		if (last != null && last.kind != seams.blockStmtKind && !seams.exemptElseKinds.contains(last.kind)) out.push(last);
@@ -404,7 +397,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 		final before: Array<QueryNode> = bareBranches(links, site.seams);
 		final braced: Array<QueryNode> = [
 			for (i => link in after)
-				for (b in [THEN_BRANCH_INDEX, ELSE_BRANCH_INDEX])
+				for (b in [BranchChain.THEN_BRANCH_INDEX, BranchChain.ELSE_BRANCH_INDEX])
 					if (b < link.children.length && before.contains(links[i].children[b])) link.children[b]
 		];
 		return braced.length == before.length && [

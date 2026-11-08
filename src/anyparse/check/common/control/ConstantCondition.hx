@@ -43,9 +43,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class ConstantCondition extends RuleBase {
 
-	/** An if node with an else branch has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
 	/** ASCII-only note appended when a non-trivial dead branch withholds the autofix. */
 	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
 
@@ -148,9 +145,9 @@ final class ConstantCondition extends RuleBase {
 		if (nspan == null) return null;
 		final isFalse: Bool = source.substring(cspan.from, cspan.to) == 'false';
 		if (!isTrivialEliminated(eliminatedBranch(node, isFalse), source, blockKinds, emptyStmtKind)) return null;
-		final hasElse: Bool = node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
-		// Taken branch: then (children[1]) when true, else (children[2]) when false.
-		final taken: Null<QueryNode> = isFalse ? (hasElse ? node.children[2] : null) : node.children[1];
+		final hasElse: Bool = BranchChain.hasElse(node);
+		// Taken branch: then when true, else when false.
+		final taken: Null<QueryNode> = isFalse ? (hasElse ? BranchChain.elseBranch(node) : null) : BranchChain.thenOf(node);
 		if (taken == null) {
 			// A no-else `if (false)`: only a STATEMENT-position if is fixable (an
 			// expression-position one sits in a value slot, so it stays report-only).
@@ -180,9 +177,9 @@ final class ConstantCondition extends RuleBase {
 	 */
 	private static function eliminatedBranch(node: QueryNode, isFalse: Bool): Null<QueryNode> {
 		return if (isFalse)
-			(node.children.length > 1 ? node.children[1] : null)
-		else if (node.children.length >= IF_WITH_ELSE_CHILD_COUNT)
-			node.children[2]
+			BranchChain.thenOf(node)
+		else if (BranchChain.hasElse(node))
+			BranchChain.elseBranch(node)
 		else
 			null;
 	}

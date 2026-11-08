@@ -45,12 +45,6 @@ final class RedundantBraces extends RuleBase implements DefaultOff implements Qu
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'redundant-braces';
 
-	/** The then branch is the second child of an if node - `[cond, then, else]`. */
-	private static inline final THEN_BRANCH_INDEX: Int = 1;
-
-	/** The else branch is the third child of an if node - `[cond, then, else]`. */
-	private static inline final ELSE_BRANCH_INDEX: Int = 2;
-
 	public function new() {
 		super(
 			RULE_ID, 'braces around the one statement of every branch of an if/else chain, or of a loop body, that nothing needs',
@@ -130,11 +124,11 @@ final class RedundantBraces extends RuleBase implements DefaultOff implements Qu
 		final blocks: Array<QueryNode> = [];
 		var at: Bool = shielded;
 		for (link in BranchChain.linksFrom(head, seams.ifKinds)) {
-			final then: QueryNode = link.children[THEN_BRANCH_INDEX];
-			if (!removable(then, site, IfExpressionChain.childShielded(link, THEN_BRANCH_INDEX, seams.shield, at))) return null;
+			final then: QueryNode = BranchChain.thenOf(link);
+			if (!removable(then, site, IfExpressionChain.childShielded(link, BranchChain.THEN_BRANCH_INDEX, seams.shield, at))) return null;
 			blocks.push(then);
 			final last: Null<QueryNode> = BranchChain.elseOf(link, seams.ifKinds);
-			at = IfExpressionChain.childShielded(link, ELSE_BRANCH_INDEX, seams.shield, at);
+			at = IfExpressionChain.childShielded(link, BranchChain.ELSE_BRANCH_INDEX, seams.shield, at);
 			if (last == null || seams.ifKinds.contains(last.kind) || seams.switchKinds.contains(last.kind)) continue;
 			if (!removable(last, site, at)) return null;
 			blocks.push(last);
