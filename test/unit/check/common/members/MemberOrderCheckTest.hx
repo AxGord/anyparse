@@ -1311,7 +1311,7 @@ class MemberOrderCheckTest extends Test {
 	 *
 	 * RED before the budget measured the genuinely-moved SET: counting the slots whose occupant
 	 * changed charged this reorder with the whole class and declined it - the shape a long UI type
-	 * like `DayPicker` reports, where one `TEXT_GUTTER` constant sat below `dispose()` for ever.
+	 * like a date-grid class reports, where one `TEXT_GUTTER` constant sat below `dispose()` for ever.
 	 */
 	public function testALoneConstantCrossingAWholeClassReorders(): Void {
 		final src: String = trailingConstant(250);

@@ -291,7 +291,7 @@ class ShadowingLocalCheckTest extends Test {
 		Assert.isTrue((declineOf(src) ?? '').indexOf('read after this declaration') != -1, 'got: ${declineOf(src)}');
 	}
 
-	/** client `DayPicker`: a same-block `var` redeclared with the same written type becomes an assignment. */
+	/** a date-grid class: a same-block `var` redeclared with the same written type becomes an assignment. */
 	@:pin('control')
 	@:killer('M-SHADOWING-LOCAL-NO-ASSIGNMENT')
 	public function testFixTurnsASameBlockRedeclarationIntoAnAssignment(): Void {

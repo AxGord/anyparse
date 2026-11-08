@@ -218,7 +218,7 @@
 			"type": "anyparse.check.common.naming.ShadowingLocal",
 			"method": "assignmentEdit",
 			"force": "null",
-			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (client DayPicker dayPos stays a finding)"
+			"note": "a same-block `var` redeclaration of the same type is never turned into an assignment (a block-local `pos` of a date-grid class stays a finding)"
 		},
 		{
 			"name": "M-SHADOWING-LOCAL-CAPTURE-IGNORED",
