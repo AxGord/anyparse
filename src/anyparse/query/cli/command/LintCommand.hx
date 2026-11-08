@@ -7,6 +7,7 @@ import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ThreadSafety;
+import anyparse.check.common.members.MemberOrder;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
@@ -71,6 +72,12 @@ typedef LintOpts = {
 
 	/** `--fix-probes` — the typechecks the `--fix` safe-pass net may spend isolating culprits in one run. */
 	var fixProbes: Int;
+
+	/**
+	 * `--review-budget` — the source lines a single `member-order` reorder may move before the fix declines it, replacing the
+	 * rule's default for this run only; null = the configured or default budget.
+	 */
+	var reviewBudget: Null<Int>;
 	var failOn: Null<Severity>;
 	var format: String;
 	var ruleFilters: Array<String>;
@@ -154,6 +161,7 @@ final class LintCommand implements CliCommand {
 				'--fix-probes',
 				'--format',
 				'--range',
+				'--review-budget',
 				'--rule'
 			]
 		);
@@ -234,7 +242,7 @@ final class LintCommand implements CliCommand {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
-			final discovered: LintConfig = LintConfig.discover(file);
+			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file), o.reviewBudget);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
@@ -303,7 +311,7 @@ final class LintCommand implements CliCommand {
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, o.range, o.verbose, o.fixProbes
+						o.noOracle, o.range, o.verbose, o.fixProbes, o.reviewBudget
 					)
 			);
 
@@ -627,6 +635,14 @@ final class LintCommand implements CliCommand {
 			if (src != null) out.push({ file: path, source: src });
 		}
 		return out;
+	}
+
+	/**
+	 * `config` under this run's `--review-budget`: the run-scoped overlay, applied where the memoised per-directory configs are
+	 * made, so every reader of the run (report, fix passes, oracle verifier) sees one budget and no `apq.json` is touched.
+	 */
+	private static function withReviewBudget(config: LintConfig, budget: Null<Int>): LintConfig {
+		return budget == null ? config : MemberOrder.withBudget(config, budget);
 	}
 
 }

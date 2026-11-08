@@ -33,6 +33,9 @@ final class SourceText {
 	/** The lowest byte value that TERMINATES an ANSI CSI sequence (`stripAnsi`); everything below it is a parameter. */
 	private static inline final CSI_FINAL_MIN: Int = 0x40;
 
+	/** The largest value an `Int` holds; `parseStrictInt` refuses anything above it. */
+	private static inline final MAX_INT: Float = 2147483647;
+
 	/**
 	 * The last dotted segment of `dotted` — the simple name a plain import binds
 	 * (`pkg.sub.Foo` -> `Foo`), and the whole string when it carries no dot at all.
@@ -163,7 +166,9 @@ final class SourceText {
 			final c: Int = s.fastCodeAt(j);
 			if (c < '0'.code || c > '9'.code) return null;
 		}
-		return Std.parseInt(s);
+		// Past Int32 a JS target hands back a double that is no Int, which every later `Std.int` would wrap.
+		final value: Float = Std.parseFloat(s);
+		return value > MAX_INT ? null : Std.int(value);
 	}
 
 	/**

@@ -15949,6 +15949,14 @@
 			"find": "importedPaths(source, plugin).contains(module)",
 			"replace": "false",
 			"note": "the declared builds are compiled for a remedy module the file already imports, so a report pays a compile for a question the file itself answers"
+		},
+		{
+			"name": "M-STRICT-INT-ABOVE-INT32",
+			"type": "anyparse.query.SourceText",
+			"method": "parseStrictInt",
+			"find": "value > MAX_INT ? null : Std.int(value)",
+			"replace": "Std.int(value)",
+			"note": "a digit string past Int32 wraps through Std.int instead of being refused, so --review-budget 2147483648 is accepted as a negative or small budget"
 		}
 	]
 }

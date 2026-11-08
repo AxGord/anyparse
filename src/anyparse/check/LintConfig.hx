@@ -515,6 +515,23 @@ final class LintConfig {
 		return rc?.props[key];
 	}
 
+	/**
+	 * This config with rule `id`'s integer option `key` set to `value`, every other key, rule and setting as it was: the seam a RUN uses
+	 * to override one option for itself (a command-line flag) without touching any `apq.json` or sharing state between runs.
+	 */
+	public function withIntOption(id: String, key: String, value: Int): LintConfig {
+		final rules: Map<String, RuleConfig> = [for (ruleId => rule in _rules) ruleId => rule];
+		final current: Null<RuleConfig> = rules[id];
+		final props: Map<String, JValue> = current == null ? [] : [for (name => prop in current.props) name => prop];
+		props[key] = JNumber(value);
+		rules[id] = { enabled: current?.enabled, severity: current?.severity, props: props };
+		return new LintConfig(
+			rules, _compilerOracles, _resolutionRoots, _resolutionLibs, _resolutionStd, _compilerOracleServer, _languageVersion,
+			_frameworks, _drops, _reachConfigurationsComplete, _reportSummaryThreshold, _reflectiveClasses, _reflectiveMethodHolders,
+			_ownedTypes, _switches
+		);
+	}
+
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
 	private function arrayOption(id: String, key: String): Null<Array<JValue>> {
 		return switch jsonOption(id, key) {

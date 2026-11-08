@@ -41,6 +41,7 @@ typedef SortPlan = {
  */
 private typedef FixOptions = {
 	var movableArglessNew: Bool;
+	var budget: Int;
 	var spacing: SpacingPolicy;
 }
 
@@ -114,9 +115,15 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * much of the type has to be re-read. What it still refuses is a canonical order that is a
 	 * wholesale reshuffle of a large type - a diff a reviewer reverts rather than checks, which is
 	 * what a whole-container permutation of such a type produced twice before the budget existed.
-	 * Splitting the type is `apq move-member` territory anyway.
+	 * Splitting the type is `apq move-member` territory anyway. A project or one run may raise it: the `maxRelocatedLines`
+	 * option of `apq.json`, which `lint --fix --review-budget` overlays for its run (`withBudget`).
 	 */
 	private static inline final MAX_RELOCATED_LINES: Int = 200;
+
+	private static inline final RULE_ID: String = 'member-order';
+
+	/** The `apq.json` option key that replaces `MAX_RELOCATED_LINES`. */
+	private static inline final BUDGET_OPTION: String = 'maxRelocatedLines';
 
 	/**
 	 * The linter's memoised per-file config resolver; null when run outside it (falls
@@ -126,7 +133,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 
 	public function new() {
 		super(
-			'member-order',
+			RULE_ID,
 			'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
 			+ 'methods; public before private; within one rank inline members lead, then initialized declarations lead init-less ones; '
 			+ 'conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share and '
@@ -191,9 +198,12 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				// Null when the pass carries no violation — nothing to reorder anyway — which the gate reads
 				// as "no file named" and answers from the whole index, as it did before it could be told.
 				final file: Null<String> = violations.length > 0 ? violations[0].file : null;
+				final budget: Int = violations.length > 0
+					? LintConfig.resolveWith(_resolveConfig, violations[0].file).intOption(id(), BUDGET_OPTION) ?? MAX_RELOCATED_LINES
+					: MAX_RELOCATED_LINES;
 				fixWalk(
-					edits, source, tree, shape, flagged, accessors, { movableArglessNew: movableArglessNew, spacing: spacing },
-					index, file, plugin.lexicalRegions(source)
+					edits, source, tree, shape, flagged, accessors,
+					{ movableArglessNew: movableArglessNew, budget: budget, spacing: spacing }, index, file, plugin.lexicalRegions(source)
 				);
 				return edits;
 			})
@@ -208,6 +218,14 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 */
 	private function optionOn(file: String, key: String): Bool {
 		return LintConfig.resolveWith(_resolveConfig, file).boolOption(id(), key) == true;
+	}
+
+	/**
+	 * `config` with this rule's review budget set to `lines`: the one place that knows the rule id and the option key, so a
+	 * run-wide override never names either.
+	 */
+	public static inline function withBudget(config: LintConfig, lines: Int): LintConfig {
+		return config.withIntOption(RULE_ID, BUDGET_OPTION, lines);
 	}
 
 	/**
@@ -403,13 +421,14 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}
-		if (relocatedLines(members, sorted, source) > MAX_RELOCATED_LINES) {
+		if (relocatedLines(members, sorted, source) > options.budget) {
 			// The number is deliberately NOT in the sentence: the ledger buckets by exact text, so a
 			// per-container measurement would make one row per file and bury the shared cause under
 			// its own detail. The budget IS the cause; the measurement is one `--rule member-order`
 			// run away.
-			reported.declineReason = 'the reorder is a whole-container permutation and this one would move more than $MAX_RELOCATED_LINES'
-				+ ' lines for a single reported member, over the review budget — split the type, or move the member with `apq move-member`';
+			reported.declineReason = 'the reorder is a whole-container permutation and this one would move more than ${options.budget}'
+				+ ' lines for a single reported member, over the review budget — split the type, move the member with `apq move-member`,'
+				+ ' or lift the budget for the run with `lint --fix --review-budget <lines>`';
 			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
 			return;
 		}

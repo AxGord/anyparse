@@ -68,8 +68,8 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int, reach: ImportReach,
-		?resolution: ResolutionScope
+		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int, reviewBudget: Null<Int>,
+		reach: ImportReach, ?resolution: ResolutionScope
 	): Int {
 		final oracleConfigured: Bool = oracles.length > 0;
 		final split: CheckPartition = LintArgs.partitionChecks(checks, oracleConfigured);
@@ -258,8 +258,8 @@ final class LintFixDriver {
 		// the round budget in one parenthesis — a line that reads as a contradiction rather than as the two budgets it actually reports.
 		final capTail: String = hitCap ? ' (a round stopped at its $maxPasses-pass budget — re-run if more remain)' : '';
 		CliIo.stderr(
-			'${LintFixLedger.lintFixSummary(fixedCount, changedFiles.length, passes)}$skipTail$capTail$baselineTail$riskyTail$oracleTail'
-			+ '${followUp.tail}\n'
+			'${LintFixLedger.lintFixSummary(fixedCount, changedFiles.length, passes, reviewBudget)}$skipTail$capTail$baselineTail'
+			+ '$riskyTail$oracleTail${followUp.tail}\n'
 		);
 		// What the run did NOT fix, per rule. Its own block, not a tail on the line above, which is
 		// what every gate and doc quotes and stays one sentence. It also prints on a PRODUCTIVE
@@ -1387,7 +1387,7 @@ final class LintFixDriver {
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, range: Null<LintRange>,
-		verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP
+		verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP, ?reviewBudget: Int
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
@@ -1399,7 +1399,7 @@ final class LintFixDriver {
 		// "behave as if the project configured no compilerOracle" — the flag and the missing key
 		// then cannot drift apart by construction.
 		return applyLintFixes(
-			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap,
+			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
 			new ImportReach(OracleProviders.of(plugin), oracles), resolution
 		);
 	}

@@ -1012,6 +1012,46 @@
 			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)",
 			"replace": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached).filter(v -> v.remedy == null)",
 			"note": "every finding naming a remedy module is withheld, so a build that holds the helper never hears of the site"
+		},
+		{
+			"name": "M-LINT-REVIEW-BUDGET-UNWIRED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "withReviewBudget",
+			"find": "budget == null ? config : MemberOrder.withBudget(config, budget)",
+			"replace": "config",
+			"note": "the run resolves its configs without the --review-budget overlay, so the flag parses and is named in the headline yet no reorder is lifted"
+		},
+		{
+			"name": "M-LINT-REVIEW-BUDGET-NEEDS-FIX",
+			"type": "anyparse.query.cli.command.LintArgs",
+			"method": "optionScopeError",
+			"find": "o.reviewBudget != null && !o.fix",
+			"replace": "false",
+			"note": "a report run is accepted with --review-budget although it reorders nothing, so the flag reads as lifting a budget that was never consulted"
+		},
+		{
+			"name": "M-LINT-REVIEW-BUDGET-ZERO",
+			"type": "anyparse.query.cli.command.LintArgs",
+			"method": "parseLintArgs",
+			"find": "lines == null || lines < 1",
+			"replace": "lines == null",
+			"note": "a budget of zero is accepted and declines every reorder of the run while the headline names it as a lift"
+		},
+		{
+			"name": "M-FIX-HEADLINE-BUDGET-DROPPED",
+			"type": "anyparse.query.cli.command.LintFixLedger",
+			"method": "lintFixSummary",
+			"find": "reviewBudget == null ? '' :",
+			"replace": "reviewBudget == null || true ? '' :",
+			"note": "the --fix headline stops naming a lifted budget, so a reorder the flag allowed reads as one the default budget would have made"
+		},
+		{
+			"name": "M-FIX-BUDGET-NOT-PASSED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "o.fixProbes, o.reviewBudget",
+			"replace": "o.fixProbes, null",
+			"note": "the fix driver is not told the run's budget, so the headline never names it though the configs carry it"
 		}
 	]
 }

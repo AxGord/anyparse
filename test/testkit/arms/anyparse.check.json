@@ -431,6 +431,22 @@
 			"find": "return withoutSuperseded(narrow == null ? gated : narrow(gated), checks);",
 			"replace": "final superseded: Array<Violation> = withoutSuperseded(gated, checks); return narrow == null ? superseded : narrow(superseded);",
 			"note": "the caller withholds findings after supersession, so a withheld finding has already taken the one it supersedes with it"
+		},
+		{
+			"name": "M-CONFIG-OPTION-SHARES-RULES",
+			"type": "anyparse.check.LintConfig",
+			"method": "withIntOption",
+			"find": "final rules: Map<String, RuleConfig> = [for (ruleId => rule in _rules) ruleId => rule];",
+			"replace": "final rules: Map<String, RuleConfig> = _rules;",
+			"note": "the overlay writes into the config it was made from, which discover memoises per directory, so one run's budget leaks into every later reader of that config"
+		},
+		{
+			"name": "M-CONFIG-OPTION-DROPS-PROPS",
+			"type": "anyparse.check.LintConfig",
+			"method": "withIntOption",
+			"find": "current == null ? [] : [for (name => prop in current.props) name => prop]",
+			"replace": "[]",
+			"note": "the overlay keeps only its own key, so the rule's other options of apq.json are lost for the run"
 		}
 	]
 }

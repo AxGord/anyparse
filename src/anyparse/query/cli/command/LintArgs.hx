@@ -222,6 +222,10 @@ final class LintArgs {
 		CliIo.sysPrint('  --fix-probes <n>  With --fix: the typechecks the safe-pass net may spend in one\n');
 		CliIo.sysPrint('                    run isolating the edits that broke the build (default 32);\n');
 		CliIo.sysPrint('                    past it the safe pass is reverted whole\n');
+		CliIo.sysPrint('  --review-budget <n>  With --fix: the source lines one member-order reorder may\n');
+		CliIo.sysPrint('                    move before it is declined as too large to review (default\n');
+		CliIo.sysPrint('                    200, or the rule\'s maxRelocatedLines); n replaces it for\n');
+		CliIo.sysPrint('                    this run only, and the --fix summary line names it\n');
 		CliIo.sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
 		CliIo.sysPrint('                    (error|warning|info)\n');
 		CliIo.sysPrint('  --no-oracle       Skip the compiler-oracle typecheck (a PROJECT-WIDE build\n');
@@ -285,6 +289,7 @@ final class LintArgs {
 		var fix: Bool = false;
 		var noOracle: Bool = false;
 		var fixProbes: Int = LintFixSafePass.PROBE_CAP;
+		var reviewBudget: Null<Int> = null;
 		var failOn: Null<Severity> = null;
 		var format: String = FORMAT_TEXT;
 		final ruleFilters: Array<String> = [];
@@ -321,6 +326,13 @@ final class LintArgs {
 						return lintParseExit(EXIT_USAGE);
 					}
 					fixProbes = count;
+				case '--review-budget':
+					final lines: Null<Int> = SourceText.parseStrictInt(arg.value());
+					if (lines == null || lines < 1) {
+						CliIo.stderr('apq lint: --review-budget expects a number of source lines, 1 or more\n');
+						return lintParseExit(EXIT_USAGE);
+					}
+					reviewBudget = lines;
 				case '--verbose':
 					verbose = true;
 				case '--explain-long':
@@ -378,6 +390,7 @@ final class LintArgs {
 			fix: fix,
 			noOracle: noOracle,
 			fixProbes: fixProbes,
+			reviewBudget: reviewBudget,
 			failOn: failOn,
 			format: format,
 			ruleFilters: ruleFilters,
@@ -430,6 +443,10 @@ final class LintArgs {
 			CliIo.stderr('apq lint: --baseline narrows the REPORT and cannot be combined with --fix (--range narrows both)\n');
 			return EXIT_USAGE;
 		}
+		if (o.reviewBudget != null && !o.fix) {
+			CliIo.stderr('apq lint: --review-budget sets the budget of a REORDER and applies to --fix only\n');
+			return EXIT_USAGE;
+		}
 		if (o.explainLong && o.fix) {
 			CliIo.stderr('apq lint: --explain-long explains a REPORT and cannot be combined with --fix\n');
 			return EXIT_USAGE;
@@ -467,6 +484,7 @@ final class LintArgs {
 			fix: false,
 			noOracle: false,
 			fixProbes: LintFixSafePass.PROBE_CAP,
+			reviewBudget: null,
 			failOn: null,
 			format: FORMAT_TEXT,
 			ruleFilters: [],
@@ -598,6 +616,7 @@ final class LintArgs {
 		final given: Array<{ flag: String, set: Bool }> = [
 			{ flag: '--rule', set: o.ruleFilters.length > 0 },
 			{ flag: '--fix', set: o.fix },
+			{ flag: '--review-budget', set: o.reviewBudget != null },
 			{ flag: '--all', set: o.includeInfo },
 			{ flag: '--flat', set: o.flat },
 			{ flag: '--no-oracle', set: o.noOracle },

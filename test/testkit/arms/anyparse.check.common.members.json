@@ -1006,6 +1006,30 @@
 			"method": "messageIdentity",
 			"force": "message",
 			"note": "member-order names no identity of its own again, so the neighbour in its message keys the finding"
+		},
+		{
+			"name": "M-MO-BUDGET-OPTION-IGNORED",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "fix",
+			"find": "intOption(id(), BUDGET_OPTION)",
+			"replace": "intOption(id(), 'unread')",
+			"note": "the fix path stops reading the review-budget option, so a run that raises it still has an oversized type declined at the default"
+		},
+		{
+			"name": "M-MO-BUDGET-OVERLAY-KEY",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "withBudget",
+			"find": "withIntOption(RULE_ID, BUDGET_OPTION, lines)",
+			"replace": "withIntOption(RULE_ID, 'unread', lines)",
+			"note": "the run-wide overlay writes a key the fix never reads, so --review-budget is accepted and changes nothing"
+		},
+		{
+			"name": "M-MO-BUDGET-REASON-DEFAULT",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "emitReorder",
+			"find": "more than ${options.budget}",
+			"replace": "more than $MAX_RELOCATED_LINES",
+			"note": "the decline names the default budget whatever the run set, so a run that lowered it reads a number that is not the one declining it"
 		}
 	]
 }

@@ -41,8 +41,9 @@ final class LintFixLedger {
 	 * every rule once under its own config; what each rule DECLINED is `unfixedFixLedger`'s block
 	 * below.
 	 */
-	public static function lintFixSummary(edits: Int, files: Int, passes: Int): String {
-		return 'apq lint --fix: $edits edit(s) in $files file(s) over $passes pass(es)';
+	public static function lintFixSummary(edits: Int, files: Int, passes: Int, ?reviewBudget: Int): String {
+		final budget: String = reviewBudget == null ? '' : ', review budget set to $reviewBudget lines (--review-budget)';
+		return 'apq lint --fix: $edits edit(s) in $files file(s) over $passes pass(es)$budget';
 	}
 
 	/**
@@ -195,7 +196,7 @@ final class LintFixLedger {
 			else
 				reportedOnly++;
 		}
-		exercised.sort(Reflect.compare);
+		exercised.sort(anyparse.util.Compare.compareString);
 		return [
 			'apq lint --fix: rule census — of the ${ruleIds.length} rule(s) this run was given, ${exercised.length} produced an edit, '
 				+ '$reportedOnly reported and got none, $never were never asked, $silent reported nothing at all. Comparing what this run '
@@ -245,7 +246,7 @@ final class LintFixLedger {
 		// `RiskyArm` rule is never absent either way: it runs in the safe loop as well, whose row
 		// counts its arm's findings as hand-off declines until the risky phase answers for them.
 		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) if (!(c is RiskyArm)) c.id()];
-		riskyIds.sort(Reflect.compare);
+		riskyIds.sort(anyparse.util.Compare.compareString);
 		final oracleIds: Array<String> = oracleAssisted.map(c -> c.id());
 		final reasons: Map<String, String> = [
 			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
