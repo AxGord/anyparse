@@ -81,6 +81,30 @@
 			"note": "the documented placeholder name is refused like a real one, so a fixture or a doc that follows the convention is rejected"
 		},
 		{
+			"name": "M-SCRUB-LOCAL-BARE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "localPaths",
+			"find": "if (HOME_PATH.matched(HOME_NAME) != PLACEHOLDER_HOME) {",
+			"replace": "if (HOME_PATH.matched(HOME_NAME) != PLACEHOLDER_HOME && text.charAt(text.length - HOME_PATH.matchedRight().length - 1) == \"/\") {",
+			"note": "a home path with no trailing slash (at the end of a line or before a quote) passes the guard"
+		},
+		{
+			"name": "M-SCRUB-LOCAL-MESSAGE-BLIND",
+			"type": "dev.ScrubGuard",
+			"method": "scanRange",
+			"find": ".concat(localPaths(log, messages))",
+			"replace": "",
+			"note": "the commit messages of a range are not read for home paths, so a personal path reaches the history through a message"
+		},
+		{
+			"name": "M-SCRUB-PUSHED-CWD-ROOT",
+			"type": "dev.ScrubGuard",
+			"method": "pushed",
+			"find": "scanRange(range, rules, root, privates)",
+			"replace": "scanRange(range, rules, Sys.getCwd(), privates)",
+			"note": "the pre-push path reads the process working directory instead of the root it is given, so an in-process drive of it scans the wrong repository"
+		},
+		{
 			"name": "M-SCRUB-RANGE-UNCONFIGURED-SKIPPED",
 			"type": "dev.ScrubGuard",
 			"method": "run",

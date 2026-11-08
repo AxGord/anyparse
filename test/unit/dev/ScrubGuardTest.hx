@@ -10,6 +10,8 @@ import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * `dev scrub-guard` over a SYNTHETIC list: the real one names what must not be published, so it never enters the
  * repository. What is pinned is the filter-repo list format, the row each match prints, and the two scan modes.
@@ -273,12 +275,14 @@ final class ScrubGuardTest extends Test {
 	@:killer('M-SCRUB-LOCAL-PLACEHOLDER-REFUSED')
 	public function testThePlaceholderAndTheTailOfAnotherPathAreNoLocalPath(): Void {
 		Assert.same(
-			[], ScrubGuard.localPaths('f', '$USERS/me/dev\n$HOMES/me/x\nhttps://example.com$HOMES/bob/x\nUsers/alice/x\n$USERS/alice')
+			[],
+			ScrubGuard.localPaths('f', '$USERS/me/dev\n$HOMES/me/x\nhttps://example.com$HOMES/bob/x\nUsers/alice/x\n$USERS/me\n"$HOMES/me"')
 		);
 	}
 
 	/** A line a base already holds is the owner's of that commit, not this range's; only what the range adds is read, with no list. */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-SCRUB-LOCAL-PATH-BLIND')
 	public function testARangeRefusesTheHomePathItAddsAndNotOneItsBaseHolds(): Void {
 		TempDir.with(dir -> {
 			final root: String = dir.file('repo');
@@ -326,6 +330,57 @@ final class ScrubGuardTest extends Test {
 			commit(root, 'path line');
 			Assert.equals(1, ScrubGuard.run(['--range', 'HEAD~1..HEAD', '--quiet'], root, unset), 'an added home path refuses the range');
 			Assert.equals(0, ScrubGuard.run(['--quiet'], root, unset), 'the tree scan has nothing configured and says so');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-LOCAL-BARE-BLIND')
+	public function testABareHomePathIsALocalPath(): Void {
+		Assert.same(
+			['f:1: local path', 'f:2: local path', 'f:3: local path', 'f:4: local path'],
+			ScrubGuard.localPaths('f', 'cd $USERS/alice\n"$HOMES/bob"\n\'$USERS/carol\'\n`$HOMES/dave`')
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-LOCAL-MESSAGE-BLIND')
+	public function testARangeRefusesAHomePathInACommitMessage(): Void {
+		TempDir.with(dir -> {
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory(root);
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'one\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'base');
+			File.saveContent('$root/a.txt', 'one\ntwo\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'fix at $USERS/me and $USERS/me/dev');
+			Assert.same([], ScrubGuard.scanRange('HEAD~1..HEAD', [], root), 'the placeholder form is allowed in a message');
+			File.saveContent('$root/a.txt', 'one\ntwo\nthree\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'fix\n\nran in $USERS/alice');
+			Assert.same(['messages HEAD~1..HEAD:4: local path'], ScrubGuard.scanRange('HEAD~1..HEAD', [], root));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-SCRUB-PUSHED-CWD-ROOT')
+	public function testThePrePushPathReadsTheRootItIsGivenNotTheWorkingDirectory(): Void {
+		TempDir.with(dir -> {
+			final root: String = dir.file('repo');
+			FileSystem.createDirectory(root);
+			cmd('git init -q $root').check();
+			File.saveContent('$root/a.txt', 'one\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'base');
+			final base: String = cmd('git -C $root rev-parse HEAD').text().trim();
+			File.saveContent('$root/a.txt', 'one\ncd $USERS/alice\n');
+			cmd('git -C $root add a.txt').check();
+			commit(root, 'path line');
+			final tip: String = cmd('git -C $root rev-parse HEAD').text().trim();
+			final stdin: String = 'refs/heads/main $tip refs/heads/main $base\n';
+			Assert.equals(1, ScrubGuard.pushed(stdin, root, [], [], true), 'an added bare home path refuses the push');
+			Assert.equals(0, ScrubGuard.pushed('refs/heads/main $base refs/heads/main $base\n', root, [], [], true));
 		});
 	}
 

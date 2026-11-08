@@ -58,8 +58,8 @@ final class ScrubGuard {
 	/** Directory names a project keeps its modules under, which say nothing about the project. */
 	private static final SOURCE_ROOT_NAMES: Array<String> = ['src', 'source', 'lib', 'test', 'tests'];
 
-	/** A `/Users/<name>/` or `/home/<name>/` path, not the tail of a longer name (`example.com/home/x/`). */
-	private static final HOME_PATH: EReg = ~/(^|[^A-Za-z0-9_.-])\/(?:Users|home)\/([A-Za-z0-9_.-]+)\//;
+	/** A `/Users/<name>` or `/home/<name>` path, bare or before `/` or a quote; not the tail of a longer name (`example.com/home/x/`). */
+	private static final HOME_PATH: EReg = ~/(^|[^A-Za-z0-9_.-])\/(?:Users|home)\/([A-Za-z0-9_.-]+)(?:\/|["'`]|$)/;
 
 	/**
 	 * Run the subcommand over `argv` on the work tree `tree`, reading the environment through `env`; answers the exit status.
@@ -97,7 +97,7 @@ final class ScrubGuard {
 			rules = loadRules(sys.io.File.getContent(list));
 		}
 		final privates: Array<PathIndex> = roots.map(root -> new PathIndex(privateFiles(root)));
-		if (prePush) return pushed(js.Syntax.code("require('fs').readFileSync(0, 'utf8')"), rules, privates, quiet);
+		if (prePush) return pushed(js.Syntax.code("require('fs').readFileSync(0, 'utf8')"), tree, rules, privates, quiet);
 		final rows: Array<String> = range == null ? scanTree(rules, tree, privates) : scanRange(range, rules, tree, privates);
 		report(rows, rules, privates, quiet);
 		return rows.length > 0 ? 1 : 0;
@@ -214,7 +214,7 @@ final class ScrubGuard {
 		final log: String = 'messages $span';
 		final lines: String = added.join('\n');
 		final rows: Array<String> = scan(diff, lines, rules).concat(privatePaths(diff, lines, own, trees)).concat(localPaths(diff, lines));
-		return rows.concat(scan(log, messages, rules)).concat(privatePaths(log, messages, own, trees));
+		return rows.concat(scan(log, messages, rules)).concat(privatePaths(log, messages, own, trees)).concat(localPaths(log, messages));
 	}
 
 	/**
@@ -326,8 +326,7 @@ final class ScrubGuard {
 	 * range scanned as `--range` scans it (`pushRanges`). A ref reaching a root commit no remote holds has no range and refuses
 	 * the push. Answers the exit status.
 	 */
-	private static function pushed(stdin: String, rules: Array<Rule>, privates: Array<PathIndex>, quiet: Bool): Int {
-		final root: String = Sys.getCwd();
+	public static function pushed(stdin: String, root: String, rules: Array<Rule>, privates: Array<PathIndex>, quiet: Bool): Int {
 		final refused: Array<String> = [];
 		var status: Int = 0;
 		for (push in pushRanges(stdin, root)) {
