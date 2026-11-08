@@ -1,5 +1,6 @@
 package testkit;
 
+import anyparse.query.ArmTypePath;
 import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
 import haxe.Json;
@@ -135,7 +136,7 @@ final class MutationArms {
 	 * parser instead, which reads conditional regions like any other bytes.
 	 */
 	public static function candidateFiles(type: String): Array<String> {
-		final relative: String = '${type.split('.').join('/')}.hx';
+		final relative: String = '${ArmTypePath.moduleOf(type).split('.').join('/')}.hx';
 		return SOURCE_ROOTS.map(root -> '$root/$relative');
 	}
 

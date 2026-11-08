@@ -180,6 +180,7 @@ final class MutationArmsTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-ARM-PATH-FLAT')
+	@:killer('M-ARM-PATH-SUB-OWN-FILE')
 	public function testAModulePathBecomesOneCandidateFilePerRoot(): Void {
 		Assert.same(
 			['src/Bare.hx', 'test/Bare.hx', 'tools/src/Bare.hx'],
@@ -190,6 +191,10 @@ final class MutationArmsTest extends Test {
 			'test/pack/deep/Layer.hx',
 			'tools/src/pack/deep/Layer.hx'
 		], MutationArms.candidateFiles('pack.deep.Layer'), 'and every dot becomes a directory');
+		Assert.same(
+			MutationArms.candidateFiles('pack.deep.Layer'), MutationArms.candidateFiles('pack.deep.Layer.Side'),
+			'a type declared beside the module lives in the module\'s file'
+		);
 	}
 
 	/** The `--list-arms` line: name, member, cut and reason, in the order a reader needs them. */

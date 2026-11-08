@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.query.ArmTypePath;
 import anyparse.query.format.json.CodeGraphJson;
 import anyparse.query.format.json.CodeGraphJsonParser;
 import dev.ArmRegistry.ArmRecord;
@@ -39,7 +40,7 @@ final class GateArms {
 	public static inline final KILL_FLOOR: Int = 400;
 
 	/** The logs file a kill run leaves: the commit it ran at, then the arms it killed, one per line. */
-	public static inline final KILLED_FILE: String = 'arms-killed.txt';
+	public static final KILLED_FILE: String = 'arms-killed.txt';
 
 	/** What a command of the plan may run before it is killed: a hung call, not a slow one; the plan runs in the gate's own process. */
 	private static inline final PLAN_TIMEOUT_MS: Int = 10 * 60 * 1000;
@@ -458,7 +459,9 @@ final class GateArms {
 	/** Whether `record` cuts one of `members` (`<type>.<method>`). */
 	private static function cutsMember(record: ArmRecord, members: Array<String>): Bool {
 		final head: ArmHead = ArmHeadParser.parse(record.text);
-		return head.type != null && head.method != null && members.contains('${head.type}.${head.method}');
+		final type: Null<String> = head.type;
+		final method: Null<String> = head.method;
+		return type != null && method != null && members.contains(ArmTypePath.graphMember(type, method));
 	}
 
 	/**

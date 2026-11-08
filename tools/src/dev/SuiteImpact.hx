@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ArmTypePath;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegionKind;
@@ -34,10 +35,10 @@ final class SuiteImpact {
 	public static inline final MACROS: String = 'src/anyparse/macro/';
 
 	/** The build output the suite runs as: its main module is the runner every test class runs inside. */
-	public static inline final SUITE_OUTPUT: String = 'test.js';
+	public static final SUITE_OUTPUT: String = 'test.js';
 
 	/** The call that sets an environment variable: it reaches the next class only through a key some file reads. */
-	public static inline final ENV_WRITER: String = 'Sys.putEnv';
+	public static final ENV_WRITER: String = 'Sys.putEnv';
 
 	/** The classpath roots, a nested root before the one holding it so a file takes its own package. */
 	public static final ROOTS: Array<String> = ['tools/src', 'src', 'test'];
@@ -57,14 +58,14 @@ final class SuiteImpact {
 	/** The calls that leave a working directory behind for whatever runs next in the process, whatever they name. */
 	public static final STATE_WRITERS: Array<String> = ['Sys.setCwd'];
 
-	private static inline final BUILD_EXTENSION: String = 'hxml';
-	private static inline final TEST_ROOT: String = 'test/';
-	private static inline final TEST_SUFFIX: String = 'Test.hx';
-	private static inline final HX: String = '.hx';
 	private static inline final BLOCK_MIN: Int = 4;
 	private static inline final MS_PER_SECOND: Float = 1000;
 	private static inline final SHORT_HASH: Int = 9;
 	private static inline final SUBJECT_WIDTH: Int = 70;
+	private static final BUILD_EXTENSION: String = 'hxml';
+	private static final TEST_ROOT: String = 'test/';
+	private static final TEST_SUFFIX: String = 'Test.hx';
+	private static final HX: String = '.hx';
 
 	public static inline function isTest(path: String): Bool {
 		return path.startsWith(TEST_ROOT);
@@ -552,13 +553,8 @@ final class SuiteImpact {
 
 	/** The source file declaring `type`, a module's own type or one it holds beside it; null when no file does. */
 	private static function fileOfType(sources: Array<ImpactSource>, type: String): Null<String> {
-		final parts: Array<String> = type.split('.');
-		while (parts.length > 0) {
-			final relative: String = parts.join('/') + HX;
-			for (root in ROOTS) if (sources.exists(source -> source.path == '$root/$relative')) return '$root/$relative';
-			parts.pop();
-		}
-		return null;
+		final relative: String = ArmTypePath.moduleOf(type).split('.').join('/') + HX;
+		return ROOTS.map(root -> '$root/$relative').find(path -> sources.exists(source -> source.path == path));
 	}
 
 	/** `touched` and the files that read an environment key a touched file sets. */
@@ -590,8 +586,8 @@ final class SuiteImpact {
 @:nullSafety(Strict)
 private final class ImpactGraph {
 
-	private static inline final AMBIENT: String = 'import.hx';
 	private static inline final TOUCHED: Int = -1;
+	private static final AMBIENT: String = 'import.hx';
 	private static final CHAIN: EReg = ~/[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\.\*)?/g;
 	private static final WORD: EReg = ~/[A-Za-z_][A-Za-z0-9_]*/g;
 

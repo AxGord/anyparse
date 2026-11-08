@@ -1,5 +1,6 @@
 package testkit;
 
+import anyparse.query.ArmTypePath;
 import devkit.NarrowBuild;
 import haxe.io.Path;
 import haxe.macro.Context;
@@ -422,7 +423,7 @@ class TestDiscovery {
 					+ ' — an arm exists to kill a pin, so give it one or drop it',
 					Context.currentPos()
 				);
-			final types: Null<Array<Type>> = moduleTypes(arm.type);
+			final types: Null<Array<Type>> = moduleTypes(ArmTypePath.moduleOf(arm.type));
 			if (types == null) {
 				Context.error(
 					'$ARMS_LABEL: "${arm.name}" names the type ${arm.type}, and no module of that path is on the classpath'
@@ -522,6 +523,7 @@ class TestDiscovery {
 	 * cannot do is let a MISSING member through, which is the regression the check exists to catch.
 	 */
 	private static function classIn(types: Array<Type>, path: String, method: String): Null<ClassType> {
+		final sub: Null<String> = ArmTypePath.subTypeOf(path);
 		final parts: Array<String> = path.split('.');
 		final named: Array<ClassType> = [];
 		final owning: Array<ClassType> = [];
@@ -529,7 +531,7 @@ class TestDiscovery {
 			case TInst(ref, _):
 				final c: ClassType = ref.get();
 				if (c.name == parts[parts.length - 1]) named.push(c);
-				if (declaresMethod(c, method)) owning.push(c);
+				if (sub == null && declaresMethod(c, method)) owning.push(c);
 			case _:
 		}
 		return if (named.length > 0 && declaresMethod(named[0], method))

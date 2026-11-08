@@ -198,6 +198,25 @@ final class MutationArmTest extends Test {
 		for (row in split.failed) Assert.isTrue(row.startsWith('APPLY-FAIL  '));
 	}
 
+	/** A sub-module type is cut in the module's file, and its member is selected inside the sub-type. */
+	@:pin('control')
+	@:killer('M-ARM-TARGET-SUB-UNSCOPED')
+	@:killer('M-ARM-TARGET-SUB-OWN-FILE')
+	public function testAnArmOnASubModuleTypeCutsTheModuleFileInsideTheSubType(): Void {
+		TempDir.with(dir -> {
+			final gen: String = dir.file('gen');
+			FileSystem.createDirectory(Path.join([gen, 'src/pack']));
+			File.saveContent(Path.join([gen, 'src/pack/Mod.hx']), 'package pack;\n\nclass Mod {}\n\nclass Sub {}\n');
+			final sub: ArmTarget = MutationArm.target('base', 'M-SUB', 'pack.Mod.Sub', 'go', 'FnMember', gen);
+			Assert.isNull(sub.failure);
+			Assert.equals('src/pack/Mod.hx', sub.file);
+			Assert.equals('ClassForm:Sub >> FnMember:go', sub.selector);
+			final main: ArmTarget = MutationArm.target('base', 'M-MAIN', 'pack.Mod', 'go', 'FnMember', gen);
+			Assert.equals('src/pack/Mod.hx', main.file);
+			Assert.equals('FnMember:go', main.selector, 'a module\'s own member keeps the plain selector');
+		});
+	}
+
 	public function testALongMemberWithBracesInStringsIsForcedWhole(): Void {
 		TempDir.with(dir -> {
 			final repo: String = dir.file('repo');

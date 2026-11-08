@@ -5,6 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.ArmTypePath;
 import anyparse.query.ElementSpan;
 import anyparse.query.Engine;
 import anyparse.query.Patch;
@@ -108,7 +109,7 @@ final class MutationArmAddressTest extends Test {
 			};
 			// The kind is the arm's own — `FnMember` for a member cut, and whatever a record
 			// spells for one that addresses a grammar DECLARATION instead.
-			final address: String = MutationArms.selectorOf(parts[1]);
+			final address: String = ArmTypePath.select(parts[0], MutationArms.selectorOf(parts[1]));
 			final selector: Selector = Selector.parse(address);
 			if (Engine.select(tree, selector, plugin.selectKindEquivalence()).length == 0)
 				unaddressed.push('$member: $file has no $address');
@@ -312,7 +313,7 @@ final class MutationArmAddressTest extends Test {
 		}
 		final tree: Null<QueryNode> = trees[file];
 		if (tree == null) throw 'the tree is written beside the source it was parsed from';
-		final selector: String = '${arm.kind}:${arm.method}';
+		final selector: String = ArmTypePath.select(arm.type, '${arm.kind}:${arm.method}');
 		final matches: Array<QueryNode> = Engine.select(tree, Selector.parse(selector), plugin.selectKindEquivalence());
 		if (matches.length != 1) {
 			stale.push('$address: $file holds ${matches.length} "$selector" nodes, and the cut needs exactly one');

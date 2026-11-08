@@ -2010,6 +2010,46 @@
 			"find": "LintScope.ofImpact(tree, '$sha^', true)",
 			"replace": "null",
 			"note": "the backstop compares everything, so a scope-dependent rule on a file of the land it carried by design turns a good land red"
+		},
+		{
+			"name": "M-SUITE-IMPACT-LAYER-BLIND",
+			"type": "dev.SuiteImpact.ImpactGraph",
+			"method": "reach",
+			"find": "SuiteImpact.layer(_paths[i]) < SuiteImpact.layer(_paths[from])",
+			"replace": "false",
+			"note": "a lower layer is reached from a higher one, so a test class selects the source and tool files that merely name it and, through their importers, tests that never call it"
+		},
+		{
+			"name": "M-GATE-ARMS-NEIGHBOUR-SUB-SPELLING",
+			"type": "dev.GateArms",
+			"method": "cutsMember",
+			"find": "ArmTypePath.graphMember(type, method)",
+			"replace": "'$type.$method'",
+			"note": "an arm on a sub-module type is compared to the call graph under its record's spelling, which the graph never uses, so a change to a callee of its member does not run it"
+		},
+		{
+			"name": "M-ARM-TARGET-SUB-UNSCOPED",
+			"type": "dev.MutationArm",
+			"method": "target",
+			"find": "selector: ArmTypePath.select(type, '$kind:$method'),",
+			"replace": "selector: '$kind:$method',",
+			"note": "the runner selects a sub-module type's member anywhere in the module, so a same-named member of a sibling type is cut or reported ambiguous in its place"
+		},
+		{
+			"name": "M-ARM-TARGET-SUB-OWN-FILE",
+			"type": "dev.MutationArm",
+			"method": "target",
+			"find": "ArmTypePath.moduleOf(type).split",
+			"replace": "type.split",
+			"note": "the runner looks a sub-module type up as a file of its own, so an arm on one renders no cut"
+		},
+		{
+			"name": "M-SUITE-IMPACT-ARM-FILE-OF-SUB-TYPE",
+			"type": "dev.SuiteImpact",
+			"method": "fileOfType",
+			"find": "ArmTypePath.moduleOf(type)",
+			"replace": "type",
+			"note": "the arm census finds no file for an arm on a sub-module type, so it names the type and scopes nothing for the arm"
 		}
 	]
 }

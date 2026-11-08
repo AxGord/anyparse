@@ -4,6 +4,7 @@ import anyparse.core.PoolLease;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
+import anyparse.query.ArmTypePath;
 import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
 import devkit.Args;
@@ -272,6 +273,19 @@ final class MutationArm {
 			&& !built.contains(file);
 	}
 
+	/** Where the arm `name` cuts: the file its `type` lives in under one of `ROOTS` of `gen`, and the member's address. */
+	public static function target(base: String, name: String, type: String, method: String, kind: String, gen: String): ArmTarget {
+		final relative: String = ArmTypePath.moduleOf(type).split('.').join('/') + '.hx';
+		final root: Null<String> = ROOTS.find(r -> FileSystem.exists(Path.join([gen, r, relative])));
+		return {
+			type: type,
+			method: method,
+			file: root == null ? '' : '$root/$relative',
+			selector: ArmTypePath.select(type, '$kind:$method'),
+			failure: root == null ? '$name names $type, which is under none of src/, test/, tools/src/ at $base' : null
+		};
+	}
+
 	/** Render every arm of `job`, write the manifest, and run it through `dev mutation-check`; answers the exit status. */
 	private static function run(job: ArmJob): Int {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
@@ -342,11 +356,11 @@ final class MutationArm {
 		final targets: Map<String, ArmTarget> = [];
 		for (name in job.names) switch cuts[name] {
 			case Find(type, method, kind, payload):
-				final t: ArmTarget = target(job, name, type, method, kind, gen);
+				final t: ArmTarget = target(job.base, name, type, method, kind, gen);
 				targets[name] = t;
 				if (t.failure == null) File.saveContent(Path.join([workroot, '$name.payload']), payload);
 			case Force(type, method, kind, _):
-				targets[name] = target(job, name, type, method, kind, gen);
+				targets[name] = target(job.base, name, type, method, kind, gen);
 			case _:
 		}
 		forcePayloads(job, cuts, targets, gen, workroot, cores);
@@ -379,19 +393,6 @@ final class MutationArm {
 			if (t != null) t.failure = patchOf(name, diffs[i], workroot);
 		}
 		return targets;
-	}
-
-	/** Where the arm `name` cuts: the file its `type` lives in under one of `ROOTS` of `gen`, and the member's address. */
-	private static function target(job: ArmJob, name: String, type: String, method: String, kind: String, gen: String): ArmTarget {
-		final relative: String = type.split('.').join('/') + '.hx';
-		final root: Null<String> = ROOTS.find(r -> FileSystem.exists(Path.join([gen, r, relative])));
-		return {
-			type: type,
-			method: method,
-			file: root == null ? '' : '$root/$relative',
-			selector: '$kind:$method',
-			failure: root == null ? '$name names $type, which is under none of src/, test/, tools/src/ at ${job.base}' : null
-		};
 	}
 
 	/**

@@ -103,6 +103,19 @@ final class GateArmsTest extends Test {
 		Assert.same(['M-LAYOUT', 'M-LAYOUT-SUB'], picked.applyOnly);
 	}
 
+	/** `hxq graph` names a member of a sub-module type by the sub-type, not by the module that holds it. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-NEIGHBOUR-SUB-SPELLING')
+	public function testAnArmOnASubModuleTypeIsANeighbourUnderTheGraphsSpelling(): Void {
+		final records: Array<ArmRecord> = ArmRegistry.parse(
+			'{"arms": [{"name": "M-SUB", "type": "dev.Mod.Inner", "method": "go", "force": "1"},'
+			+ '{"name": "M-MAIN", "type": "dev.Mod", "method": "go", "force": "1"}]}'
+		);
+		Assert.same(['M-SUB'], GateArms.select(records, records, [], [], [], [], ['dev.Inner.go']).fast);
+		Assert.same(['M-MAIN'], GateArms.select(records, records, [], [], [], [], ['dev.Mod.go']).fast);
+		Assert.same([], GateArms.select(records, records, [], [], [], [], ['dev.Mod.Inner.go']).fast);
+	}
+
 	/** A survivor that survives at the base too is named apart from the slice's own, an arm the base does not have is not asked. */
 	@:pin('control')
 	@:killer('M-GATE-ARMS-ROT-UNREAD')

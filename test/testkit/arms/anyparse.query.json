@@ -15957,6 +15957,38 @@
 			"find": "value > MAX_INT ? null : Std.int(value)",
 			"replace": "Std.int(value)",
 			"note": "a digit string past Int32 wraps through Std.int instead of being refused, so --review-budget 2147483648 is accepted as a negative or small budget"
+		},
+		{
+			"name": "M-ARM-TYPE-SUB-NEVER",
+			"type": "anyparse.query.ArmTypePath",
+			"method": "subTypeOf",
+			"find": "segments.length - packageLength == 2",
+			"replace": "false",
+			"note": "no type path names a sub-module type, so an arm on one is looked up as a file of its own and the member it cuts is never found"
+		},
+		{
+			"name": "M-ARM-TYPE-SUB-ALWAYS",
+			"type": "anyparse.query.ArmTypePath",
+			"method": "subTypeOf",
+			"find": "segments.length - packageLength == 2",
+			"replace": "segments.length - packageLength >= 1",
+			"note": "every type path names a sub-module type, so a module's own main type is cut as a type inside a module named for its package"
+		},
+		{
+			"name": "M-ARM-TYPE-SELECT-UNSCOPED",
+			"type": "anyparse.query.ArmTypePath",
+			"method": "select",
+			"find": "'$SUB_KIND:$sub >> $member'",
+			"replace": "member",
+			"note": "a member of a sub-module type is selected anywhere in the module, so a same-named member of a sibling type is cut or reported ambiguous in its place"
+		},
+		{
+			"name": "M-ARM-TYPE-GRAPH-MEMBER-MODULE-SPELLING",
+			"type": "anyparse.query.ArmTypePath",
+			"method": "graphMember",
+			"find": "'$pack.$sub.$method'",
+			"replace": "'$type.$method'",
+			"note": "a sub-module type's member keeps the record's spelling, which the call graph never prints, so no graph neighbour matches it"
 		}
 	]
 }

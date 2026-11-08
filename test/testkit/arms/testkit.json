@@ -58,9 +58,17 @@
 			"name": "M-ARM-PATH-FLAT",
 			"type": "testkit.MutationArms",
 			"method": "candidateFiles",
-			"find": "final relative: String = '${type.split('.').join('/')}.hx';",
+			"find": "final relative: String = '${ArmTypePath.moduleOf(type).split('.').join('/')}.hx';",
 			"replace": "final relative: String = '$type.hx';",
 			"note": "a dotted type path stops becoming a directory path, so every arm resolves to a file that does not exist and the addressability gate can check nothing"
+		},
+		{
+			"name": "M-ARM-PATH-SUB-OWN-FILE",
+			"type": "testkit.MutationArms",
+			"method": "candidateFiles",
+			"find": "ArmTypePath.moduleOf(type)",
+			"replace": "type",
+			"note": "a sub-module type is looked up as a file of its own, so an arm cutting a type declared beside a module's main type resolves to no file"
 		},
 		{
 			"name": "M-ARM-KIND-UNSPELLED",

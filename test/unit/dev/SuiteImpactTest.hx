@@ -57,6 +57,7 @@ final class SuiteImpactTest extends Test {
 
 	@:pin('control')
 	@:killer('M-SUITE-IMPACT-NOTHING-REACHED')
+	@:killer('M-SUITE-IMPACT-LAYER-BLIND')
 	public function testATestClassReachesTheTestsThatCallItAndNothingBelowTheTestLayer(): Void {
 		final tree: Array<ImpactSource> = TREE.concat([
 			source('test/unit/query/SiblingTest.hx', 'package unit.query;\n// after OtherTest\nclass SiblingTest {}'),
@@ -261,6 +262,15 @@ final class SuiteImpactTest extends Test {
 		Assert.same(['M-ARM src/anyparse/check/common/naming/Rule.hx unit.query.OtherTest'], reach.misses);
 		Assert.equals(2, reach.files);
 		Assert.equals(0, reach.whole);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-ARM-FILE-OF-SUB-TYPE')
+	public function testAnArmOnASubModuleTypeIsScopedByTheFileOfItsModule(): Void {
+		final pinned: Map<String, String> = ['M-SUB' => 'unit.query.OtherTest,unit.check.common.naming.RuleTest'];
+		final reach: ArmReach = SuiteImpact.armMisses(TREE, ENTRIES, [arm('M-SUB', 'anyparse.query.Other.Inner')], pinned);
+		Assert.same(['M-SUB src/anyparse/query/Other.hx unit.check.common.naming.RuleTest'], reach.misses);
+		Assert.equals(1, reach.files);
 	}
 
 	@:pin('control')
