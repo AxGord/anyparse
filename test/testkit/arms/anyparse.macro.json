@@ -2024,6 +2024,30 @@
 			"find": "if (nlRun >= 2) hadBlank = true;",
 			"replace": "if (nlRun >= 2) hadBlank = false;",
 			"note": "two line breaks in the run an operator loop consumed stash only a line break, so the blank line after a brace-ended value with no terminator collapses"
+		},
+		{
+			"name": "M-CALL-AFTER-LAST-SEP-BLOCK-LEFT",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "(StringTools.startsWith(_afterSepRaw, '//') || !($closeNotNextExpr))",
+			"replace": "StringTools.startsWith(_afterSepRaw, '//')",
+			"note": "a block comment after the last comma of a call goes back to a leading slot nothing reads, so the round trip refuses `g(a, b, /* c */)`"
+		},
+		{
+			"name": "M-CALL-AFTER-LAST-SEP-TAIL-LEFT",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "if (_tail.leadingComments.length > 0 && !($closeNotNextExpr)) {",
+			"replace": "if (false) {",
+			"note": "own-line comments after the last comma of a call are left to a leading slot nothing reads, so the round trip drops them"
+		},
+		{
+			"name": "M-CALL-BEFORE-CLOSE-TAIL-LEFT",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "} else if (_swept.leadingComments.length > 0 && !($closeNotNextExpr)) {",
+			"replace": "} else if (false) {",
+			"note": "a second comment before the close of a call with no trailing comma is left to a leading slot nothing reads, so the round trip drops it"
 		}
 	]
 }

@@ -131,6 +131,12 @@ final class OperatorLoopLowering {
 				if (_atSep && _swept.leadingComments.length > 0) {
 					final _addl: String = _swept.leadingComments.join('\n');
 					_trailing = _trailing != null ? _trailing + '\n' + _addl : _addl;
+				} else if (_swept.leadingComments.length > 0 && !($closeNotNextExpr)) {
+					// A comment between the last argument and the close (`b /* c */ /* d */)`)
+					// has no next argument to lead, so it trails this one.
+					_trailing = anyparse.runtime.CommentRun.join(
+						_trailing != null ? [_trailing].concat(_swept.leadingComments) : _swept.leadingComments
+					);
 				} else if (_swept.leadingComments.length > 0) {
 					// Comments belong to next iter's _lead —
 					// rewind so they're re-captured (and to
@@ -152,10 +158,24 @@ final class OperatorLoopLowering {
 				// and was silently DROPPED, so claiming it here is pure recovery.
 				// A block comment after the separator already round-trips through
 				// the next element's leading slot (`f(a, /* c */ b)`) — leaving it
-				// there keeps every existing layout byte-identical.
+				// there keeps every existing layout byte-identical. After the LAST
+				// separator (`f(a, b, /* c */)`) no element follows: every comment up
+				// to the close trails this argument, whatever its style.
 				final _postSepPos: Int = ctx.pos;
-				final _afterSepRaw: Null<String> = _sepAfter && _trailing == null ? collectTrailingFull(ctx) : null;
-				final _afterSep: Null<String> = _afterSepRaw != null && StringTools.startsWith(_afterSepRaw, '//') ? _afterSepRaw : null;
+				var _afterSep: Null<String> = null;
+				if (_sepAfter && _trailing == null) {
+					final _afterSepRaw: Null<String> = collectTrailingFull(ctx);
+					final _afterLinePos: Int = ctx.pos;
+					final _tail = collectTrivia(ctx);
+					if (_tail.leadingComments.length > 0 && !($closeNotNextExpr)) {
+						_afterSep = anyparse.runtime.CommentRun.join(
+							_afterSepRaw != null ? [_afterSepRaw].concat(_tail.leadingComments) : _tail.leadingComments
+						);
+					} else if (_afterSepRaw != null && (StringTools.startsWith(_afterSepRaw, '//') || !($closeNotNextExpr))) {
+						ctx.pos = _afterLinePos;
+						_afterSep = _afterSepRaw;
+					}
+				}
 				if (_afterSep == null)
 					ctx.pos = _postSepPos
 				else

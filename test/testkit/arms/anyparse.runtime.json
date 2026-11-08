@@ -111,6 +111,14 @@
 			"find": ": pending.leadingComments.splice(mark, pending.leadingComments.length - mark);",
 			"replace": ": [];",
 			"note": "a chain operator leaves its own-line comments on the stash, so they drift into whatever its operand parses next"
+		},
+		{
+			"name": "M-COMMENT-RUN-BLOCKS-SPLIT",
+			"type": "anyparse.runtime.CommentRun",
+			"method": "join",
+			"find": "out + (prevLine ? '\\n' : ' ') + c",
+			"replace": "out + '\\n' + c",
+			"note": "block comments joined into one trailing slot each start a line of their own, so `b, /* c */ /* d */` breaks apart"
 		}
 	]
 }
