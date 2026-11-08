@@ -103,7 +103,7 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	}
 
 	/**
-	 * The client `StageZoneX.addShapeToZoneX` shape (anonymized): a braced branch whose own-line
+	 * A braced branch whose own-line
 	 * comment precedes its single assignment. It rides the branch's leading slot and KEEPS its
 	 * line — pulled onto the `else if (…)` line it would re-read as being about the condition.
 	 */

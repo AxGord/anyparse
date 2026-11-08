@@ -4673,7 +4673,7 @@ class MemberReachFactsTest extends Test {
 	public function testAFieldReadJoinedFromAnIndexAccessToTheAccessAnotherInlinedMethodWritesIsItsTextUnderTheTruth(): Void {
 		// the inline `Pa.frameOf` reads `a[0].frame` through the inline `get` of an abstract in another file: the compiler
 		// joins the read from `get`'s code to `.frame` in `frameOf`'s, keeping `get`'s file for both offsets — whichever
-		// comes first (the client's `ReadOnlyArray` read of `.frame` in `StageZone.getFrameByFieldId`, `Map.get` of `.box`)
+		// comes first (a read-only array abstract's `get` read of a field, as with a `Map.get` read)
 		final ro: String = 'class Fr {\n\tpublic var frame:Int = 0;\n\n\tpublic function new() {}\n}\n\n'
 			+ 'abstract RoArr(Array<Fr>) from Array<Fr> {\n\t@:arrayAccess public inline function get(i:Int):Fr return this[i];\n}\n';
 		function pa(padding: Int): String {

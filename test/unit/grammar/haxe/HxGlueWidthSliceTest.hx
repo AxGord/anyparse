@@ -49,10 +49,8 @@ final class HxGlueWidthSliceTest extends Test {
 
 	/**
 	 * A `for` whose body is an `if` statement holding a block — the body's Doc
-	 * carries a hardline, so `fitLine` glues it. Anonymised from the reported
-	 * site (`client editor/stage/StageZone.hx rePositionSpareSprites`), preserving
-	 * its lengths. Glued, the header line is 131 columns; broken, the body line
-	 * is 105.
+	 * carries a hardline, so `fitLine` glues it. The lengths make the glued header
+	 * line 131 columns; broken, the body line is 105.
 	 */
 	private static final GLUE_SRC: String = 'class M {\n\tfunction f():Void {\n\t\tfor (subItem in listedThings) if ('
 		+ 'subItem.kind == ItemData.KIND_SUBSTITUTE /*&& cast( subItem, ItemBase ).markedOnDeck*/) {\n'
