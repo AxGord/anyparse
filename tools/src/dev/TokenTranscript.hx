@@ -4,6 +4,11 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueTools;
 import devkit.RawJson;
 import haxe.Exception;
+import haxe.io.Bytes;
+import haxe.io.BytesBuffer;
+import haxe.io.Eof;
+import sys.io.File;
+import sys.io.FileInput;
 
 using StringTools;
 
@@ -34,6 +39,9 @@ final class TokenTranscript {
 	public static inline final ROLE_ENGINE_REVIEWER: String = 'engine reviewer';
 	public static inline final ROLE_OTHER: String = 'other';
 
+	/** The size of one read of a transcript file. */
+	public static inline final CHUNK_BYTES: Int = 65536;
+
 	/** How many leading-command rounds of `cd`, `export`, `VAR=` and `rtk` prefixes a command line is stripped of. */
 	private static inline final PREFIX_ROUNDS: Int = 6;
 
@@ -52,6 +60,8 @@ final class TokenTranscript {
 
 	private static inline final HOOK_DENIAL: String = 'PreToolUse:';
 	private static inline final BASH: String = 'Bash';
+	private static inline final NEWLINE: Int = 10;
+	private static inline final CARRIAGE_RETURN: Int = 13;
 
 	/**
 	 * The role of each known prompt opening; the first prefix that opens the prompt wins, no prefix means `ROLE_OTHER`.
@@ -99,6 +109,29 @@ final class TokenTranscript {
 	 * slice id when its prompt names none. A line that is not JSON is skipped.
 	 */
 	public static function read(id: String, text: String, description: Null<String>): AgentReading {
+		final lines: Array<String> = text.split('\n');
+		var next: Int = 0;
+		return readLines(id, () -> next < lines.length ? lines[next++] : null, description);
+	}
+
+	/**
+	 * The reading of the transcript file `path` of the agent `id`, one line at a time: the file is never held whole, so a
+	 * transcript of any size reads in the memory of its largest line.
+	 */
+	public static function readFile(id: String, path: String, description: Null<String>): AgentReading {
+		final input: FileInput = File.read(path, false);
+		try {
+			final agent: AgentReading = readLines(id, lineReader(input), description);
+			input.close();
+			return agent;
+		} catch (exception: Exception) {
+			input.close();
+			throw exception;
+		}
+	}
+
+	/** The reading of the transcript whose lines `nextLine` yields in order, null at the end. A line that is not JSON is skipped. */
+	public static function readLines(id: String, nextLine: () -> Null<String>, description: Null<String>): AgentReading {
 		final agent: AgentReading = {
 			id: id,
 			role: ROLE_OTHER,
@@ -116,7 +149,9 @@ final class TokenTranscript {
 		final pending: Map<String, PendingCall> = [];
 		final byMessage: Map<String, Int> = [];
 		var promptSeen: Bool = false;
-		for (line in text.split('\n')) {
+		while (true) {
+			final line: Null<String> = nextLine();
+			if (line == null) break;
 			final entry: Null<TranscriptEntry> = line == '' ? null : parse(line);
 			final message: Null<TranscriptMessage> = entry?.message;
 			if (entry == null || message == null) continue;
@@ -356,6 +391,52 @@ final class TokenTranscript {
 			content: RawJson.stringAt(value, 'content'),
 			json: RawJson.print(value)
 		};
+	}
+
+	/**
+	 * The lines of `input` one call at a time, null at its end. It reads 64 KiB chunks (`FileInput.readLine` is one system call per
+	 * byte on node) and decodes each line's own bytes, so a line straddling chunks keeps its multi-byte characters and no line string
+	 * is a slice that pins a chunk. A trailing carriage return is dropped.
+	 */
+	private static function lineReader(input: FileInput): () -> Null<String> {
+		final chunk: Bytes = Bytes.alloc(CHUNK_BYTES);
+		var start: Int = 0;
+		var end: Int = 0;
+		var ended: Bool = false;
+		var carry: BytesBuffer = new BytesBuffer();
+		return () -> {
+			while (true) {
+				var cut: Int = start;
+				while (cut < end && chunk.get(cut) != NEWLINE) cut++;
+				if (cut < end) {
+					final line: String = decodeLine(chunk, start, cut, carry);
+					carry = new BytesBuffer();
+					start = cut + 1;
+					return line;
+				}
+				carry.addBytes(chunk, start, end - start);
+				start = end;
+				final got: Int = ended ? 0 : try input.readBytes(chunk, 0, CHUNK_BYTES) catch (_: Eof) 0;
+				if (got == 0) {
+					ended = true;
+					if (carry.length == 0) return null;
+					final last: String = decodeLine(chunk, 0, 0, carry);
+					carry = new BytesBuffer();
+					return last;
+				}
+				start = 0;
+				end = got;
+			}
+			return null;
+		};
+	}
+
+	/** The line made of what `carry` holds followed by `chunk[from...to]`, without a trailing carriage return. */
+	private static function decodeLine(chunk: Bytes, from: Int, to: Int, carry: BytesBuffer): String {
+		carry.addBytes(chunk, from, to - from);
+		final bytes: Bytes = carry.getBytes();
+		final length: Int = bytes.length > 0 && bytes.get(bytes.length - 1) == CARRIAGE_RETURN ? bytes.length - 1 : bytes.length;
+		return bytes.getString(0, length);
 	}
 
 }

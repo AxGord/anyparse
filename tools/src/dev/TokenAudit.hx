@@ -2,6 +2,7 @@ package dev;
 
 import anyparse.ds.Set;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.util.Compare;
 import dev.SliceStats.Landing;
 import dev.TokenTranscript.AgentReading;
 import devkit.Args;
@@ -87,14 +88,12 @@ final class TokenAudit {
 		final agents: Array<AgentReading> = [];
 		for (dir in dirs) {
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort(Reflect.compare);
+			names.sort(Compare.compareString);
 			for (name in names) if (TRANSCRIPT.match(name)) {
 				final real: Null<String> = try FileSystem.fullPath(Path.join([dir, name])) catch (_: Exception) null;
 				if (real == null || seen.has(real) || !FileSystem.exists(real)) continue;
 				seen.add(real);
-				agents.push(
-					TokenTranscript.read(Path.withoutExtension(Path.withoutDirectory(real)), File.getContent(real), describe(real))
-				);
+				agents.push(TokenTranscript.readFile(Path.withoutExtension(Path.withoutDirectory(real)), real, describe(real)));
 			}
 		}
 		return agents;
@@ -148,7 +147,7 @@ final class TokenAudit {
 	public static function subagentDirs(project: String): Array<String> {
 		if (!FileSystem.exists(project) || !FileSystem.isDirectory(project)) throw new UsageError('no project directory $project');
 		final names: Array<String> = FileSystem.readDirectory(project);
-		names.sort(Reflect.compare);
+		names.sort(Compare.compareString);
 		return [
 			for (name in names) if (FileSystem.exists(Path.join([project, name, SUBAGENTS]))) Path.join([project, name, SUBAGENTS])
 		];

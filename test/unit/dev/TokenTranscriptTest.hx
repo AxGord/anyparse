@@ -2,6 +2,9 @@ package unit.dev;
 
 import anyparse.grammar.json.JsonText;
 import dev.TokenTranscript;
+import devkit.TempDir;
+import haxe.io.Bytes;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -258,6 +261,33 @@ final class TokenTranscriptTest extends Test {
 		]), null);
 		Assert.equals(0, denied.scriptWrites.length);
 		Assert.equals(1, denied.deniedWrites.length);
+	}
+
+	/** A transcript file is read a line at a time, whatever its line count: the file reading equals the reading of its text. */
+	@:pin('guard')
+	public function testATranscriptFileOfManyLinesIsReadLineByLineAndEqualsTheReadingOfItsText(): Void {
+		final pairs: Int = 30000;
+		final events: Array<String> = [user('slice STREAM-1 please'), call('wide', 'Bash', ['command' => 'git log'])];
+		final probe: String = result('wide', '€');
+		Assert.isTrue(probe.indexOf('€') >= 0);
+		final euroAt: Int = events.join('\n').length + 1 + Bytes.ofString(probe.substr(0, probe.indexOf('€'))).length;
+		events.push(result('wide', 'a'.lpad('a', TokenTranscript.CHUNK_BYTES - 1 - euroAt) + '€'));
+		events.push(call('long', 'Bash', ['command' => 'git log']));
+		events.push(result('long', 'y'.lpad('y', TokenTranscript.CHUNK_BYTES * 2) + 'é'));
+		for (index in 0...pairs) {
+			events.push(call('t$index', 'Bash', ['command' => 'git log']));
+			events.push(result('t$index', 'commit $index'));
+		}
+		final text: String = transcript(events);
+		TempDir.with(dir -> {
+			File.saveContent(dir.file('agent-big.jsonl'), text);
+			final streamed: AgentReading = TokenTranscript.readFile('big', dir.file('agent-big.jsonl'), null);
+			final whole: AgentReading = TokenTranscript.read('big', text, null);
+			Assert.equals(pairs + 2, streamed.tools['git log']?.calls);
+			Assert.equals(whole.tools['git log']?.outChars, streamed.tools['git log']?.outChars);
+			Assert.equals('STREAM-1', streamed.slice);
+			Assert.equals(whole.role, streamed.role);
+		});
 	}
 
 	/** The JSONL text of `events`, each a line of JSON. */
