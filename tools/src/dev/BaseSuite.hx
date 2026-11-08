@@ -22,6 +22,13 @@ typedef BaseReading = {
 	var sweep: Null<String>;
 }
 
+/** One run of a base checkout's suite: its exit status, its totals when it counted any, and the transcript lines. */
+typedef BaseSuiteRun = {
+	var status: Int;
+	var totals: Null<Tally>;
+	var lines: Array<String>;
+}
+
 /** A base suite reading, or why there is none. */
 enum BaseRead {
 	Read(reading: BaseReading);
@@ -206,6 +213,37 @@ final class BaseSuite {
 		});
 	}
 
+	/**
+	 * The classes `only` (every one when null) of `checkout`'s suite run in `shards` shards under that checkout's own engine, the
+	 * transcript saved to `log`; `failing` is handed the tests that went red as `Class.method`.
+	 */
+	public static function runIn(
+		checkout: String, shards: Int, only: Null<Array<String>>, log: String, ?failing: Array<String> -> Void
+	): BaseSuiteRun {
+		final lines: Array<String> = [];
+		var totals: Null<Tally> = null;
+		final status: Int = withEngine(
+			checkout, () -> Shard.run({
+				repo: checkout,
+				testJs: Path.join([checkout, 'bin/test.js']),
+				shards: shards,
+				verify: false,
+				expect: null,
+				planOnly: false,
+				keep: false,
+				timings: null,
+				fixtureCache: Shard.fixtureCacheOfEnv(),
+				print: line -> lines.push(line),
+				warn: line -> lines.push(line),
+				counted: sum -> totals = sum,
+				failing: failing,
+				only: only
+			})
+		);
+		File.saveContent(log, lines.join('\n') + '\n');
+		return { status: status, totals: totals, lines: lines };
+	}
+
 	/** The reading kept for `stamp` in the gate's logs, or else in the shared cache (copied into the logs), or null. */
 	private static function keptReading(gate: GateTree, stamp: String): Null<BaseReading> {
 		final record: String = gate.log(FILE);
@@ -219,12 +257,14 @@ final class BaseSuite {
 	private static function measured(gate: GateTree, mode: LeaseMode, stamp: String): Null<String> {
 		final record: String = gate.log(FILE);
 		final got: Array<BaseReading> = [];
-		final outcome: Outcome = gate.withBaseCheckout(checkout -> switch measure(gate, checkout, mode) {
-			case Read(reading):
-				got.push(reading);
-				Passed;
-			case Unread(why): Failed(why);
-		});
+		final outcome: Outcome = GateTree.withCheckout(
+			gate.tree, gate.base, checkout -> switch measure(gate, checkout, mode) {
+				case Read(reading):
+					got.push(reading);
+					Passed;
+				case Unread(why): Failed(why);
+			}
+		);
 		if (got.length == 0) return switch outcome {
 			case Failed(why), NotRun(why): why;
 			case _: 'the base suite was not read';
@@ -242,27 +282,10 @@ final class BaseSuite {
 			case _:
 		}
 		GateTree.clearSnapshotIn(checkout);
-		final lines: Array<String> = [];
-		var totals: Null<Tally> = null;
-		final status: Int = withEngine(
-			checkout, () -> Shard.run({
-				repo: checkout,
-				testJs: Path.join([checkout, 'bin/test.js']),
-				shards: gate.options.threads ?? Shard.DEFAULT_SHARDS,
-				verify: false,
-				expect: null,
-				planOnly: false,
-				keep: false,
-				timings: null,
-				fixtureCache: Shard.fixtureCacheOfEnv(),
-				print: line -> lines.push(line),
-				warn: line -> lines.push(line),
-				counted: sum -> totals = sum,
-				only: null
-			})
-		);
-		File.saveContent(gate.log(SUITE_LOG), lines.join('\n') + '\n');
-		final sum: Null<Tally> = totals;
+		final run: BaseSuiteRun = runIn(checkout, gate.options.threads ?? Shard.DEFAULT_SHARDS, null, gate.log(SUITE_LOG));
+		final status: Int = run.status;
+		final lines: Array<String> = run.lines;
+		final sum: Null<Tally> = run.totals;
 		if (sum == null || sum.tests == 0) return Unread(GateTree.clip('the base suite counted no tests — ${gate.log(SUITE_LOG)}'));
 		if (status != 0) {
 			final verdict: String = lines.find(l -> l.startsWith('suite-shard: FAILED')) ?? 'dev shard exited $status';

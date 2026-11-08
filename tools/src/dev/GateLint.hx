@@ -80,7 +80,7 @@ final class GateLint {
 		final key: Null<String> = cacheKey('base ${_gate.base}${_oracle ? '' : ' no-oracle'}', scope);
 		final cached: Null<String> = scope.length == 0 ? '[]' : cachedWithRejections(key);
 		final linted: Outcome = cached == null
-			? _gate.withBaseCheckout(checkout -> lintPair(files, checkout, scope, key, null))
+			? GateTree.withCheckout(_gate.tree, _gate.base, checkout -> lintPair(files, checkout, scope, key, null))
 			: lintPair(files, null, scope, key, cached);
 		if (!linted.match(Passed)) return linted;
 		final old: String = _gate.log(TOUCHED_BASE_REPORT);
@@ -133,7 +133,7 @@ final class GateLint {
 	private function compareScoped(baseline: Baseline, baseLint: String, scope: Null<Array<String>>): Outcome {
 		final baseKey: Null<String> = cacheKey('base ${_gate.base}', GateTree.TREE_SCOPE, scope);
 		return cachedLint(baseKey) == null
-			? _gate.withBaseCheckout(checkout -> compareInfra(checkout, baseKey, baseline, baseLint, scope))
+			? GateTree.withCheckout(_gate.tree, _gate.base, checkout -> compareInfra(checkout, baseKey, baseline, baseLint, scope))
 			: compareInfra(null, baseKey, baseline, baseLint, scope);
 	}
 

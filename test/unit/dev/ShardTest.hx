@@ -1,6 +1,7 @@
 package unit.dev;
 
 import anyparse.query.ShardPlan;
+import anyparse.util.Compare;
 import dev.Shard;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
@@ -52,7 +53,7 @@ if (hit && mode === 'die') { process.exitCode = 1; return process.stdout.write('
 if (process.env.APQ_TEST_TIMING) fs.writeFileSync(process.env.APQ_TEST_TIMING, run.map(t => '3\\t1\\t' + t.split('#')[0] + '\\n').join(''));
 const failed = hit && mode === 'red' ? 1 : 0;
 const n = counted.length;
-process.stdout.write((failed ? classes[0] + '\\n  testBroken: FAIL: nope\\n' : '') + 'tests executed: ' + n + '\\nassertations: ' + 2 * n
+process.stdout.write((failed ? classes[0] + '\\n  testBroken: FAIL\\n    line: 1, nope\\n' : '') + 'tests executed: ' + n + '\\nassertations: ' + 2 * n
   + '\\nsuccesses: ' + (2 * n - failed) + '\\nerrors: 0\\nfailures: ' + failed + '\\nwarnings: 0\\nresults: (success: ' + (failed === 0) + ')\\n');
 process.exitCode = failed;
 })();
@@ -243,9 +244,23 @@ process.exitCode = failed;
 		});
 	}
 
+	/** A red run hands the job the failing tests as `Class.method`, a green one an empty list. */
+	@:pin('control')
+	@:killer('M-SHARD-FAILING-NOT-COLLECTED')
+	@:killer('M-SHARD-FAILING-NOT-HANDED')
+	public function testARedRunHandsItsFailingTestsToTheJob(): Void {
+		final handed: Array<Array<String>> = [];
+		TempDir.with(dir -> runFake(dir, 'red', 2, false, null, null, null, names -> handed.push(names)));
+		Assert.same([['${TestRegistry.classNames()[0]}.testBroken']], handed);
+		handed.resize(0);
+		TempDir.with(dir -> runFake(dir, 'green', 2, false, null, null, null, names -> handed.push(names)));
+		Assert.same([[]], handed);
+	}
+
 	/** `dev shard` over the fake runner in `dir` in `mode`; a kept work directory is removed again. */
 	private static function runFake(
-		dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts, ?idleMs: Int, ?only: Array<String>
+		dir: TempDir, mode: String, shards: Int, verify: Bool, ?expect: SuiteCounts, ?idleMs: Int, ?only: Array<String>,
+		?failing: Array<String> -> Void
 	): Ran {
 		File.saveContent(dir.file('fake.js'), RUNNER);
 		File.saveContent(dir.file('classes.txt'), TestRegistry.classNames().join('\n') + '\n');
@@ -266,6 +281,7 @@ process.exitCode = failed;
 			print: printed.push,
 			warn: warned.push,
 			idleMs: idleMs,
+			failing: failing,
 			only: only
 		});
 		for (line in warned) if (line.startsWith('dev shard: work files kept in '))
@@ -278,7 +294,7 @@ process.exitCode = failed;
 	/** The runs the fake runner was started for, sorted: `mono` or `shard` each. */
 	private static function runsOf(dir: TempDir): Array<String> {
 		final lines: Array<String> = File.getContent(dir.file('runs')).split('\n').filter(l -> l != '');
-		lines.sort(Reflect.compare);
+		lines.sort(Compare.compareString);
 		return lines;
 	}
 

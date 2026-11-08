@@ -152,21 +152,6 @@ final class GateTree {
 		return logged(['sh', shim].concat(args), errLog).at(dir).env(ENGINE_VAR, apq());
 	}
 
-	/** `body` over a detached checkout of the base, removed afterwards; a step that throws is `NotRun`. */
-	public function withBaseCheckout(body: String -> Outcome): Outcome {
-		final scratch: TempDir = TempDir.create();
-		final checkout: String = scratch.file('base');
-		final outcome: Outcome = try {
-			cmd('git -C $tree worktree add --detach $checkout $base').check();
-			body(checkout);
-		} catch (exception: Exception) {
-			NotRun(clip(exception.message));
-		};
-		cmd('git -C $tree worktree remove --force $checkout').run();
-		scratch.dispose();
-		return outcome;
-	}
-
 	/** The path the touched file `file` had at the base. */
 	public function baseOf(file: String): String {
 		return _moved[file] ?? file;
@@ -339,6 +324,24 @@ final class GateTree {
 	 */
 	public static function isJvmInput(file: String): Bool {
 		return isEngineInput(file) || JVM_PROBE_FILES.contains(file);
+	}
+
+	/**
+	 * `body` over a detached checkout of `commit` made from the repository of `tree`, removed afterwards whatever `body` did; a step
+	 * that throws, or a commit that cannot be checked out, is `NotRun`.
+	 */
+	public static function withCheckout(tree: String, commit: String, body: String -> Outcome): Outcome {
+		final scratch: TempDir = TempDir.create();
+		final checkout: String = scratch.file('base');
+		final outcome: Outcome = try {
+			cmd('git -C $tree worktree add --detach $checkout $commit').check();
+			body(checkout);
+		} catch (exception: Exception) {
+			NotRun(clip(exception.message));
+		};
+		cmd('git -C $tree worktree remove --force $checkout').run();
+		scratch.dispose();
+		return outcome;
 	}
 
 	/** The path (under `dir`, from `prefix`), size and modification time of every file below `dir/prefix`, in name order. */

@@ -185,7 +185,13 @@ final class Battery {
 			case 'oracle': oracle;
 			case 'lint': lint;
 			case 'blast': blast;
-			case 'kit probes': () -> KitsRow.outcome(_plan.repo, _summary, lines -> Sys.println(lines.join('\n')));
+			case 'kit probes': () -> {
+				var failed: Array<String> = [];
+				final outcome: Outcome = KitsRow.outcome(
+					_plan.repo, _summary, lines -> Sys.println(lines.join('\n')), areas -> failed = areas
+				);
+				return RedOnBase.after(outcome, () -> RedOnBase.kits(RedOnBase.requestFor(_plan, 'kits', _mode), failed));
+			};
 			case _: () -> NotRun('no step named $name');
 		};
 		return reusedRow.bind(name, gate);
@@ -243,6 +249,7 @@ final class Battery {
 		final only: Null<Array<String>> = _plan.only;
 		if (only != null) return impactSuite(only);
 		var totals: Null<Tally> = null;
+		var failing: Array<String> = [];
 		final status: Int = Shard.run({
 			repo: _plan.repo,
 			testJs: Path.join([_plan.repo, 'bin/test.js']),
@@ -255,7 +262,8 @@ final class Battery {
 			fixtureCache: Shard.fixtureCacheOfEnv(),
 			print: Sys.println,
 			warn: Sys.println,
-			counted: sum -> totals = sum
+			counted: sum -> totals = sum,
+			failing: names -> failing = names
 		});
 		final sum: Null<Tally> = totals;
 		if (sum != null) {
@@ -264,7 +272,10 @@ final class Battery {
 			_summary.detail('${sum.tests} tests / ${sum.assertions} assertions');
 		}
 		_suiteGreen = status == 0;
-		return _suiteGreen ? Passed : Failed('the suite is not green (dev shard keeps its own per-shard logs on failure)');
+		return RedOnBase.after(
+			_suiteGreen ? Passed : Failed('the suite is not green (dev shard keeps its own per-shard logs on failure)'),
+			() -> RedOnBase.suite(RedOnBase.requestFor(_plan, SUITE_ROW, _mode), failing)
+		);
 	}
 
 	/**
@@ -478,6 +489,7 @@ final class Battery {
 		_suiteGreen = true;
 		if (only.length == 0) return Skipped('impact — no test class depends on the change');
 		var totals: Null<Tally> = null;
+		var failing: Array<String> = [];
 		final status: Int = Shard.run({
 			repo: _plan.repo,
 			testJs: Path.join([_plan.repo, 'bin/test.js']),
@@ -491,6 +503,7 @@ final class Battery {
 			print: Sys.println,
 			warn: Sys.println,
 			counted: sum -> totals = sum,
+			failing: names -> failing = names,
 			only: only
 		});
 		final sum: Null<Tally> = totals;
@@ -502,7 +515,10 @@ final class Battery {
 		_readings[IMPACT_ASSERTIONS] = sum.assertions;
 		_summary.detail('impact — ${only.length} class(es), ${sum.tests} tests / ${sum.assertions} assertions');
 		_suiteGreen = status == 0;
-		return _suiteGreen ? Passed : Failed('the impact suite is not green (dev shard keeps its own per-shard logs on failure)');
+		return RedOnBase.after(
+			_suiteGreen ? Passed : Failed('the impact suite is not green (dev shard keeps its own per-shard logs on failure)'),
+			() -> RedOnBase.suite(RedOnBase.requestFor(_plan, SUITE_ROW, _mode), failing)
+		);
 	}
 
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */

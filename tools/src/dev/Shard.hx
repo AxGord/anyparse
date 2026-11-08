@@ -273,6 +273,7 @@ final class Shard {
 				'fixture cache: ${FixtureCache.tally(tally) ?? ''}'
 		);
 		handTotals(job, sum);
+		handFailing(job, verdict);
 		if (verdict.partial) job.warn('dev shard: the totals above are a SUM OF WHAT RAN, not a total — at least one shard did not finish');
 		if (sum.failures != 0 || sum.errors != 0) verdict.red = true;
 		final checked: Null<String> = crossCheck(job, work, sum, verdict, split.classes);
@@ -370,6 +371,12 @@ final class Shard {
 		if (counted != null) counted(sum);
 	}
 
+	/** Hand the tests the red shards named to the job's `failing`, when it asks for them. */
+	private static function handFailing(job: ShardJob, verdict: Verdict): Void {
+		final failing: Null<Array<String> -> Void> = job.failing;
+		if (failing != null) failing(verdict.failing);
+	}
+
 	/** Save shard `s`'s transcript, print its line (and its first failure), record what is wrong; answers its counts. */
 	private static function reportShard(job: ShardJob, work: String, s: Int, classes: Int, result: Result, verdict: Verdict): Tally {
 		final exit: Int = result.ok ? 0 : 1;
@@ -396,6 +403,7 @@ final class Shard {
 			final locus: Null<String> = summary.locus;
 			if (locus != null) job.print('  shard $s $locus');
 			if (summary.failing.length > 1) job.print('  shard $s ${failingLine(summary.failing)}');
+			for (name in summary.failing) verdict.failing.push(name);
 			verdict.fail('shard $s is red (${counts.failures} failures / ${counts.errors} errors)');
 		}
 		if (counts.tests == 0) {
@@ -580,6 +588,9 @@ private final class Verdict {
 
 	public final reasons: Array<String> = [];
 
+	/** The tests the red shards name as not passing, `Class.method`. */
+	public final failing: Array<String> = [];
+
 	public var red: Bool = false;
 	public var partial: Bool = false;
 
@@ -616,6 +627,9 @@ typedef ShardJob = {
 
 	/** Handed the run's totals once every shard has ended — a sum of what ran when a shard did not finish. */
 	var ?counted: Tally -> Void;
+
+	/** Handed every test a red shard names as not passing (`Class.method`) once every shard has ended. */
+	var ?failing: Array<String> -> Void;
 
 	/** How long a shard may be silent before it is cut; `Shard.IDLE_MS` when absent. */
 	var ?idleMs: Int;

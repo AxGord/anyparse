@@ -135,7 +135,7 @@ final class BaseLint {
 	/** The base linted by its own engine in a checkout of the base, kept in the gate's logs and in the shared cache: null, else why not. */
 	private static function measured(gate: GateTree, stamp: String): Null<String> {
 		final report: String = gate.log(FILE);
-		final outcome: Outcome = gate.withBaseCheckout(checkout -> {
+		final outcome: Outcome = GateTree.withCheckout(gate.tree, gate.base, checkout -> {
 			final engine: String = BaseEngine.forCommit(gate.tree, gate.base, BaseEngine.defaultCache());
 			final errLog: String = Path.withExtension(report, 'err');
 			final why: Null<String> = keep(command(checkout, engine, errLog).run(), stamp, report, defaultCache());

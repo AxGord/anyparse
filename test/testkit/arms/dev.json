@@ -1581,6 +1581,157 @@
 			"find": "(run.from < from ? from : run.from)",
 			"replace": "run.from",
 			"note": "the brace count starts at the head of the code run instead of at the body, so the opening brace is counted twice and the body runs to the end of the next function"
+		},
+		{
+			"name": "M-REDONBASE-CLASS-IS-THE-TEST",
+			"type": "dev.RedOnBase",
+			"method": "classesOf",
+			"find": "final cls: String = dot < 0 ? name : name.substr(0, dot);",
+			"replace": "final cls: String = name;",
+			"note": "a failing test is taken for its own class, so the base is asked to run a class named Class.method that no runner registers"
+		},
+		{
+			"name": "M-REDONBASE-CLASS-REPEATED",
+			"type": "dev.RedOnBase",
+			"method": "classesOf",
+			"find": "if (!classes.contains(cls)) classes.push(cls);",
+			"replace": "classes.push(cls);",
+			"note": "a class with several failing tests is listed once per test, so the note names it again and again"
+		},
+		{
+			"name": "M-REDONBASE-PRESENT-KEEPS-ALL",
+			"type": "dev.RedOnBase",
+			"method": "present",
+			"force": "classes",
+			"note": "a class the candidate added is re-run on a base that lacks it, so the base reads as failing to run it"
+		},
+		{
+			"name": "M-REDONBASE-SUITE-EMPTY-TRUSTED",
+			"type": "dev.RedOnBase",
+			"method": "ofSuite",
+			"find": "if (totals == null || totals.tests == 0) return",
+			"replace": "if (false) return",
+			"note": "a re-run that counted nothing is read by its exit status, so a runner that ran no test answers for the base"
+		},
+		{
+			"name": "M-REDONBASE-AFTER-DROPS-NOTE",
+			"type": "dev.RedOnBase",
+			"method": "after",
+			"find": "case Failed(why): Failed(reason(why, rerun()));",
+			"replace": "case Failed(why): Failed(why);",
+			"note": "a failed row loses what the base reads, so the verdict never says whether main was red"
+		},
+		{
+			"name": "M-REDONBASE-AFTER-ASKS-ALWAYS",
+			"type": "dev.RedOnBase",
+			"method": "after",
+			"find": "case other: other;",
+			"replace": "case other: {\n\t\t\trerun();\n\t\t\tother;\n\t\t};",
+			"note": "a row that did not fail also pays for a build of the base"
+		},
+		{
+			"name": "M-SHARD-FAILING-NOT-COLLECTED",
+			"type": "dev.Shard",
+			"method": "reportShard",
+			"find": "for (name in summary.failing) verdict.failing.push(name);",
+			"replace": "",
+			"note": "a red shard names no failing test to the job, so a caller cannot re-run the classes that went red"
+		},
+		{
+			"name": "M-SHARD-FAILING-NOT-HANDED",
+			"type": "dev.Shard",
+			"method": "handFailing",
+			"find": "if (failing != null) failing(verdict.failing);",
+			"replace": "",
+			"note": "the job's failing hook is never called, so a red run hands no test to its caller"
+		},
+		{
+			"name": "M-REDONBASE-SUITE-GREEN-NOT-READ",
+			"type": "dev.RedOnBase",
+			"method": "ofSuite",
+			"find": "if (status == 0) return compare(candidate, []);",
+			"replace": "",
+			"note": "a green re-run on the base is read as a red run that named nothing, so a candidate-only failure reads unknown instead of no"
+		},
+		{
+			"name": "M-REDONBASE-SUITE-UNNAMED-RED-TRUSTED",
+			"type": "dev.RedOnBase",
+			"method": "ofSuite",
+			"find": "if (baseRed.length == 0) return Unknown('the base re-run was red but named no failing test');",
+			"replace": "",
+			"note": "a base re-run that was red but named no test (a shard that died) reads no, as if the base were green"
+		},
+		{
+			"name": "M-REDONBASE-ALL-RED-READ-PARTLY",
+			"type": "dev.RedOnBase",
+			"method": "compare",
+			"find": "if (green.length == 0) return Red(red);",
+			"replace": "if (false) return Red(red);",
+			"note": "a candidate whose every failure is red on the base reads partly, so a red main is half-blamed on the candidate"
+		},
+		{
+			"name": "M-REDONBASE-PARTLY-READ-YES",
+			"type": "dev.RedOnBase",
+			"method": "compare",
+			"find": "return red.length == 0 ? Green : Partly(red, green);",
+			"replace": "return Red(red);",
+			"note": "a candidate with failures the base does not have reads yes, so its own failures are taken for main's"
+		},
+		{
+			"name": "M-REDONBASE-PARTLY-READ-NO",
+			"type": "dev.RedOnBase",
+			"method": "compare",
+			"find": "return red.length == 0 ? Green : Partly(red, green);",
+			"replace": "return Green;",
+			"note": "a candidate with some failures red on the base reads no, so main's red is taken for the candidate's"
+		},
+		{
+			"name": "M-REDONBASE-NONE-RED-READ-PARTLY",
+			"type": "dev.RedOnBase",
+			"method": "compare",
+			"find": "return red.length == 0 ? Green : Partly(red, green);",
+			"replace": "return Partly(red, green);",
+			"note": "a candidate with no failure red on the base reads partly with an empty yes side"
+		},
+		{
+			"name": "M-REDONBASE-COMPARE-EMPTY-CANDIDATE",
+			"type": "dev.RedOnBase",
+			"method": "compare",
+			"find": "if (candidate.length == 0) return",
+			"replace": "if (false) return",
+			"note": "a row that names no failing item reads yes, vacuously"
+		},
+		{
+			"name": "M-REDONBASE-UNBUILT-BASE-RUN",
+			"type": "dev.RedOnBase",
+			"method": "onBase",
+			"find": "case Failed(why), NotRun(why): Failed('the base did not build: $why');",
+			"replace": "case Failed(_), NotRun(_):\n\t\t\tanswered.push(body(checkout));\n\t\t\tPassed;",
+			"note": "a base that did not build is run all the same, and its absent binaries read as a red base"
+		},
+		{
+			"name": "M-GATETREE-CHECKOUT-TREE-KEPT",
+			"type": "dev.GateTree",
+			"method": "withCheckout",
+			"find": "cmd('git -C $tree worktree remove --force $checkout').run();",
+			"replace": "",
+			"note": "the detached checkout stays registered with git, so the next checkout of a commit into a reused path is refused"
+		},
+		{
+			"name": "M-GATETREE-CHECKOUT-THROW-ESCAPES",
+			"type": "dev.GateTree",
+			"method": "withCheckout",
+			"find": "NotRun(clip(exception.message));",
+			"replace": "throw exception;",
+			"note": "a step that throws aborts the caller and leaves the checkout behind instead of reading NotRun"
+		},
+		{
+			"name": "M-REDONBASE-NO-BASE-READ-GREEN",
+			"type": "dev.RedOnBase",
+			"method": "onBase",
+			"find": "if (base == null) return Unknown('the run compares with no base');",
+			"replace": "if (base == null) return Green;",
+			"note": "a run that compares with no base reads green, so a red main is taken for the candidate's failure"
 		}
 	]
 }

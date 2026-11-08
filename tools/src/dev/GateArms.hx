@@ -396,7 +396,7 @@ final class GateArms {
 	private static function rotOnBase(gate: GateTree, names: Array<String>): RotReading {
 		final dev: String = Path.join([gate.tree, 'bin/dev.js']);
 		var rot: Array<String> = [];
-		final read: Outcome = gate.withBaseCheckout(checkout -> {
+		final read: Outcome = GateTree.withCheckout(gate.tree, gate.base, checkout -> {
 			final built: Result = cmd('node $dev worker-build $checkout/bin --repo $checkout').at(gate.tree).run();
 			if (!built.ok) return NotRun('worker-build — ${GateTree.quote(built)}');
 			final run: Result = cmd('node $dev mutation-arm $names --fast ${jobsOf(gate)} --repo $checkout')
