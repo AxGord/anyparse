@@ -13,7 +13,8 @@
 		"mixed/b.json": "{\"k\": \"zz\"}\n",
 		"verify/flat-comma/A.hx": "class A {\n\tstatic var x = [1, 2,];\n\tstatic function f() {\n\t\tg(1, 2,);\n\t}\n}\n",
 		"verify/comment-comma/A.hx": "class A {\n\tstatic var b = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var e = [\n\t\t1,\n\t\t2,\n\t\t// tail\n\t];\n}\n",
-		"cond/Br.hx": "class Br {\n\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\tvar r = a\n\t\t#if !sys\n\t\t|| b\n\t\t#elseif js\n\t\t&& c\n\t\t#end\n\t\t;\n\t\treturn r;\n\t}\n\n}\n"
+		"cond/Br.hx": "class Br {\n\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\tvar r = a\n\t\t#if !sys\n\t\t|| b\n\t\t#elseif js\n\t\t&& c\n\t\t#end\n\t\t;\n\t\treturn r;\n\t}\n\n}\n",
+		"cond/Binop.hx": "class Binop {\n\n\tstatic function main() {\n\t\t#if lime && renderer.__type == OPENGL trace(1); #end\n\t\t#if (lime && x) trace(2); #end\n\t\t#if !sys || js trace(3); #end\n\t}\n\n}\n"
 	},
 	"invocations": [
 		{
@@ -8146,6 +8147,74 @@
 				"exit": 0,
 				"out": "065350b38567feb8",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cond lime cond/Binop.hx",
+			"note": "an unparenthesised condition ends after its first operand, so a same-line binary operator opens the region body; a parenthesised group stays one condition",
+			"argv": [
+				"apq",
+				"cond",
+				"lime",
+				"cond/Binop.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b1d12e8c51428b3a",
+				"err": "baffbb3b709d5baa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq cond sys cond/Binop.hx",
+			"note": "an unparenthesised condition ends after its first operand, so a same-line binary operator opens the region body; a parenthesised group stays one condition",
+			"argv": [
+				"apq",
+				"cond",
+				"sys",
+				"cond/Binop.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9e04254fb00e81e8",
+				"err": "baffbb3b709d5baa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cond lime cond/Binop.hx",
+			"note": "an unparenthesised condition ends after its first operand, so a same-line binary operator opens the region body; a parenthesised group stays one condition",
+			"argv": [
+				"hxq",
+				"cond",
+				"lime",
+				"cond/Binop.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "b1d12e8c51428b3a",
+				"err": "baffbb3b709d5baa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq cond sys cond/Binop.hx",
+			"note": "an unparenthesised condition ends after its first operand, so a same-line binary operator opens the region body; a parenthesised group stays one condition",
+			"argv": [
+				"hxq",
+				"cond",
+				"sys",
+				"cond/Binop.hx"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "9e04254fb00e81e8",
+				"err": "baffbb3b709d5baa",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

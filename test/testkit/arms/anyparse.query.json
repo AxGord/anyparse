@@ -83,9 +83,9 @@
 			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
 			"type": "anyparse.query.CondDirectives",
 			"method": "scanExpression",
-			"find": "i = skipInlineSpace(source, afterOperand + binaryOp.length);",
-			"replace": "i = skipBlank(source, afterOperand + binaryOp.length);",
-			"note": "a binary operator carries the condition onto the next line, so `sys &&` / `js` on two lines swallows the body into the condition"
+			"find": "return operandEnd > operand ? operandEnd : at;",
+			"replace": "return operandEnd > operand ? (source.substr(operandEnd, 3) == ' &&' ? scanExpression(source, skipBlank(source, operandEnd + 3)) : operandEnd) : at;",
+			"note": "a `&&` after the operand and the operand after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
 		},
 		{
 			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
@@ -94,14 +94,6 @@
 			"find": "operand = skipBlank(source, operand + 1);",
 			"replace": "operand = operand + 1;",
 			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
-		},
-		{
-			"name": "M-COND-LEADING-OPERATOR-SAME-LINE",
-			"type": "anyparse.query.CondDirectives",
-			"method": "scanExpression",
-			"find": "final afterOperand: Int = skipInlineSpace(source, operandEnd);",
-			"replace": "final afterOperand: Int = skipBlank(source, operandEnd);",
-			"note": "a leading binary operator on the next line continues the condition, so `sys` / `|| js` on two lines swallows the region body into the condition"
 		},
 		{
 			"name": "M-DECLARINGFILES-EMPTY",

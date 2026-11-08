@@ -47,8 +47,7 @@ final class CondDirectivesTest extends Test {
 		Assert.same(['!\n\tsys'], conditions('#if !\n\tsys\nclass C {}\n#end'));
 	}
 
-	@:pin('control')
-	@:killer('M-COND-LEADING-OPERATOR-SAME-LINE')
+	@:pin('guard')
 	public function testALeadingBinaryOperatorOnTheNextLineIsTheRegionBody(): Void {
 		Assert.same(['sys'], conditions('#if sys\n\t|| js\nclass C {}\n#end'));
 		Assert.equals('#if sys', directiveText('#if sys\n\t|| js\nclass C {}\n#end', 0));
@@ -64,7 +63,21 @@ final class CondDirectivesTest extends Test {
 	@:pin('guard')
 	public function testAnInlineRegionKeepsItsCodeOutOfTheCondition(): Void {
 		Assert.same(['sys'], conditions('#if sys trace(1); #end'));
-		Assert.same(['sys && js'], conditions('#if sys && js trace(1); #end'));
+		Assert.same(['sys'], conditions('#if sys && js trace(1); #end'));
+	}
+
+	@:pin('control')
+	@:killer('M-COND-OPERATOR-OPERAND-SAME-LINE')
+	public function testABinaryOperatorAfterTheOperandOpensTheBody(): Void {
+		Assert.same(['lime'], conditions('#if lime && renderer.__type == OPENGL trace(1); #end'));
+		Assert.equals('#if lime', directiveText('#if lime && x == y trace(1); #end', 0));
+		Assert.same(['!sys'], conditions('#if !sys || js trace(1); #end'));
+	}
+
+	@:pin('guard')
+	public function testAParenthesisedGroupWithOperatorsStaysOneCondition(): Void {
+		Assert.same(['(lime && renderer.__type == OPENGL)'], conditions('#if (lime && renderer.__type == OPENGL) trace(1); #end'));
+		Assert.same(['!(sys || js)'], conditions('#if !(sys || js) trace(1); #end'));
 	}
 
 	@:pin('control')

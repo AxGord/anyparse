@@ -7,8 +7,6 @@ import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
-using Lambda;
-
 /**
  * The shared conditional-compilation directive reader: the one place its consumers locate a
  * grammar's `#if` / `#elseif` / `#else` / `#end` occurrences in a source text and delimit each one's
@@ -46,9 +44,6 @@ using Lambda;
  */
 @:nullSafety(Strict)
 final class CondDirectives {
-
-	/** The condition operators recognised between two operands, longest first so `>` never shadows `>=`. */
-	private static final OPERATORS: Array<String> = ['&&', '||', '==', '!=', '>=', '<=', '>', '<'];
 
 	/** The verbatim directive text of `directive` — its keyword plus its condition, e.g. `#if (sys)` / `#elseif js` / `#end`. */
 	public static inline function text(source: String, directive: CondDirective): String {
@@ -256,7 +251,7 @@ final class CondDirectives {
 	 * The condition span starting after a keyword at `from`, or null when the directive carries
 	 * none. A line break continues the condition only after the keyword, after `!` and inside a
 	 * parenthesised group. Outside parentheses Haxe reads `!`* and ONE operand, so a binary operator
-	 * never carries the condition across a line: the next line's leading `||` is the region's body.
+	 * ends the condition on any line: the rest, on the same line or the next, is the region's body.
 	 */
 	public static function conditionAt(source: String, from: Int): Null<Span> {
 		final start: Int = skipBlank(source, from);
@@ -329,27 +324,17 @@ final class CondDirectives {
 	/**
 	 * The end of the conditional expression at `at`, or `at` when the text holds none.
 	 *
-	 * The scan is a operand / operator alternation — optional `!` prefixes, then an operand,
-	 * then an operator that demands another operand — and it stops at the first token that
-	 * continues neither. Stopping there rather than at the end of the line is the whole point:
-	 * a region may be written inline (`#if sys trace(1); #end`), where the tokens after the
-	 * condition are ordinary code, and swallowing them would report — and let a fixer rewrite —
-	 * a span that is not the directive.
+	 * Outside parentheses Haxe reads optional `!` prefixes and ONE operand; a binary operator after
+	 * it starts the region's body, not the condition (`#if lime && x` reads `lime`). Stopping there
+	 * rather than at the end of the line is the whole point: a region may be written inline
+	 * (`#if sys trace(1); #end`), where the tokens after the condition are ordinary code, and
+	 * swallowing them would report — and let a fixer rewrite — a span that is not the directive.
 	 */
 	private static function scanExpression(source: String, at: Int): Int {
-		var i: Int = at;
-		var end: Int = at;
-		while (true) {
-			var operand: Int = i;
-			while (operand < source.length && source.fastCodeAt(operand) == '!'.code) operand = skipBlank(source, operand + 1);
-			final operandEnd: Int = scanOperand(source, operand);
-			if (operandEnd <= operand) return end;
-			end = operandEnd;
-			final afterOperand: Int = skipInlineSpace(source, operandEnd);
-			final binaryOp: Null<String> = operatorAt(source, afterOperand);
-			if (binaryOp == null) return end;
-			i = skipInlineSpace(source, afterOperand + binaryOp.length);
-		}
+		var operand: Int = at;
+		while (operand < source.length && source.fastCodeAt(operand) == '!'.code) operand = skipBlank(source, operand + 1);
+		final operandEnd: Int = scanOperand(source, operand);
+		return operandEnd > operand ? operandEnd : at;
 	}
 
 	/** The end of the single operand at `at` — a parenthesised group, a quoted string, an identifier or a number — or `at` when none. */
@@ -392,28 +377,12 @@ final class CondDirectives {
 		return at;
 	}
 
-	/** The condition operator `source` carries at `at`, or null. */
-	private static function operatorAt(source: String, at: Int): Null<String> {
-		return OPERATORS.find(candidate -> source.substring(at, at + candidate.length) == candidate);
-	}
-
 	/** The index of the first character at or after `at` that is not whitespace, line breaks included. */
 	private static function skipBlank(source: String, at: Int): Int {
 		var i: Int = at;
 		while (i < source.length) {
 			final c: Int = source.fastCodeAt(i);
 			if (c != ' '.code && c != '\t'.code && !isLineBreak(c)) return i;
-			i++;
-		}
-		return i;
-	}
-
-	/** The index of the first character at or after `at` that is neither a space nor a tab; a line break stops the skip. */
-	private static function skipInlineSpace(source: String, at: Int): Int {
-		var i: Int = at;
-		while (i < source.length) {
-			final c: Int = source.fastCodeAt(i);
-			if (c != ' '.code && c != '\t'.code) return i;
 			i++;
 		}
 		return i;
