@@ -208,6 +208,23 @@ class PreferMapCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * The identity keeps the lead and drops the quoted rewrite, so a comprehension
+	 * whose rewrite moved keeps its key. Pinned against messages `run` produced.
+	 */
+	@:pin('control')
+	@:killer('M-PREFER-MAP-IDENTITY-UNWIRED')
+	public function testIdentityMasksTheQuotedRewrite(): Void {
+		final check: PreferMap = new PreferMap();
+		final a: String = violations(wrap('final ys = [for (p in ps) p.a];'))[0].message;
+		final b: String = violations(wrap('final ys = [for (p in ps) p.b.a];'))[0].message;
+		Assert.notEquals(a, b);
+		final identity: String = check.messageIdentity(a);
+		Assert.equals('this comprehension maps each element — it can be #', identity);
+		Assert.equals(identity, check.messageIdentity(b));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferMap(), src);
 	}

@@ -119,4 +119,15 @@ class MessageMaskTest extends Test {
 		Assert.equals('от 5 до # — конец', MessageMask.maskAfter('от 5 до 900 — конец', 'до '));
 	}
 
+	/** The whole tail after the first anchor becomes one mask; the lead stays. */
+	@:pin('control')
+	@:killer('M-MASK-REST-KEPT')
+	public function testMaskRestAfterBlanksTheTail(): Void {
+		Assert.equals('it can be #', MessageMask.maskRestAfter('it can be xs.map(f.bind(a)) — and it can be more', 'it can be '));
+		Assert.equals('x', MessageMask.maskRestAfter('x', 'it can be '));
+		Assert.equals('x', MessageMask.maskRestAfter('x', ''));
+		Assert.equals('it can be ', MessageMask.maskRestAfter('it can be ', 'it can be '));
+		Assert.equals('it can be #', MessageMask.maskRestAfter('it can be #', 'it can be '));
+	}
+
 }

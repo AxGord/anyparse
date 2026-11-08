@@ -3,9 +3,10 @@ package anyparse.check;
 using StringTools;
 
 /**
- * The two masking primitives a `Check.VolatileMessage` builds its message IDENTITY from:
+ * The masking primitives a `Check.VolatileMessage` builds its message IDENTITY from:
  * blank out the source COORDINATE that sits immediately after — or immediately before —
- * a literal fragment of the message the check itself wrote.
+ * a literal fragment of the message the check itself wrote, or (`maskRestAfter`) the
+ * whole TAIL after such a fragment.
  *
  * A coordinate here is one run of decimal digits. AFTER an anchor it continues through `:`
  * into further digit groups, so a `line:col` pair (`43:12`) masks as one unit rather than as
@@ -70,9 +71,25 @@ final class MessageMask {
 		return maskAnchored(text, anchor, true);
 	}
 
+	/**
+	 * `text` with everything AFTER the first occurrence of `anchor` replaced by `#` - the form a message
+	 * needs when its tail quotes a rewrite, whose text moves with every edit of the code it quotes.
+	 * An absent anchor, an empty anchor and an empty tail leave the text alone.
+	 */
+	public static function maskRestAfter(text: String, anchor: String): String {
+		final past: Int = tailStart(text, anchor);
+		return past < 0 || past >= text.length ? text : text.substr(0, past) + MASK;
+	}
+
 	/** Whether `code` is an ASCII decimal digit. Byte-safe: UTF-8 continuation bytes are all >= 0x80. */
 	private static inline function isDigit(code: Int): Bool {
 		return code >= '0'.code && code <= '9'.code;
+	}
+
+	/** Where the text after the first occurrence of `anchor` starts, or -1 for an absent or empty anchor. */
+	private static function tailStart(text: String, anchor: String): Int {
+		final at: Int = anchor == '' ? -1 : text.indexOf(anchor);
+		return at < 0 ? -1 : at + anchor.length;
 	}
 
 	/**

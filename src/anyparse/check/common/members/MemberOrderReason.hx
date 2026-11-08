@@ -43,6 +43,12 @@ typedef OrderKeys = {
 @:nullSafety(Strict)
 final class MemberOrderReason {
 
+	/**
+	 * What stands between the flagged member's name and the reason - the anchor
+	 * `MemberOrder.messageIdentity` masks the whole reason after: it names the neighbour and its rank.
+	 */
+	public static inline final REASON_LEAD: String = ' is out of canonical order: ';
+
 	/** The member's own name, quoted for a message; a placeholder when the grammar projects none. */
 	public static function nameOf(m: OrderedMember): String {
 		final name: Null<String> = m.node.name;

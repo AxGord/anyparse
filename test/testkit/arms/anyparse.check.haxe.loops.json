@@ -178,6 +178,13 @@
 			"find": "!CheckScan.hasCommentMarker(source, p.bodySpan.to, q.bodySpan.from)",
 			"replace": "true",
 			"note": "a comment between the two lambdas goes with the rewrite punctuation"
+		},
+		{
+			"name": "M-PREFER-MAP-IDENTITY-UNWIRED",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "messageIdentity",
+			"force": "message",
+			"note": "prefer-map names no identity of its own again, so the rewrite its message quotes keys the finding"
 		}
 	]
 }

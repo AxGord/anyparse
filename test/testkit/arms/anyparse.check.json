@@ -416,6 +416,13 @@
 			"find": "scopeDependent: c is ScopeDependent",
 			"replace": "scopeDependent: false",
 			"note": "the rule listing names no rule scope-dependent, so a scoped land carries nothing from the base for a blind rule and turns the post-land backstop red"
+		},
+		{
+			"name": "M-MASK-REST-KEPT",
+			"type": "anyparse.check.MessageMask",
+			"method": "maskRestAfter",
+			"force": "text",
+			"note": "the tail after an anchor stays in the message identity again, so a quoted rewrite that moves re-keys a finding that never changed"
 		}
 	]
 }

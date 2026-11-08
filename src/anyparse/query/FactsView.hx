@@ -259,7 +259,6 @@ final class FactsView {
 	}
 
 	/** The table key of `file`: what a fact's `FactPos.file` spells it as (`CompilerFacts.keyOf`). */
-	// noqa: member-order
 	public inline function keyOf(file: String): String {
 		return _table.keyOf(file);
 	}

@@ -112,6 +112,30 @@ final class MemberOrderMessageTest extends Test {
 		Assert.equals(0, violations('class C { public static inline final B:String = "b"; public static final A:String = "a"; }').length);
 	}
 
+	/**
+	 * The identity keeps the flagged member and drops the neighbour it lost to: moving unrelated code
+	 * renames the neighbour in the sentence, and the same standing finding must keep its key. Pinned
+	 * against messages `run` produced.
+	 */
+	@:pin('control')
+	@:killer('M-MEMBER-ORDER-IDENTITY-UNWIRED')
+	public function testIdentityMasksTheNeighbourAndKeepsTheSubject(): Void {
+		final check: MemberOrder = new MemberOrder();
+		final before: String = messageFor('class C { public function m():Void {} public var x:Int = 0; }');
+		final after: String = messageFor('class C { public function renamed():Void {} public var x:Int = 0; }');
+		final other: String = messageFor('class C { public function m():Void {} public var y:Int = 0; }');
+		Assert.notEquals(before, after);
+		Assert.isTrue(before.indexOf('\'m\'') >= 0 && after.indexOf('\'renamed\'') >= 0);
+		final identity: String = check.messageIdentity(before);
+		final reranked: String = messageFor('class C { private function m():Void {} public var x:Int = 0; }');
+		Assert.notEquals(before, reranked);
+		Assert.equals('type member \'x\' is out of canonical order: #', identity);
+		Assert.equals(identity, check.messageIdentity(after));
+		Assert.equals(identity, check.messageIdentity(reranked), 'the neighbour\'s rank is part of the tail');
+		Assert.notEquals(identity, check.messageIdentity(other));
+		Assert.equals(identity, check.messageIdentity(identity));
+	}
+
 	/** The single message of a source that has exactly one order finding. */
 	private function messageFor(src: String): String {
 		final vs: Array<Violation> = violations(src);

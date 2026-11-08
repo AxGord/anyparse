@@ -1,6 +1,7 @@
 package anyparse.check.common.members;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.members.MemberInitDeps.InitConstraintKind;
 import anyparse.check.common.members.MemberInitDeps.InitOrderConstraint;
 import anyparse.check.common.members.MemberOrderReason.OrderKeys;
@@ -102,7 +103,7 @@ private typedef FixOptions = {
  * relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
-final class MemberOrder extends RuleBase implements ConfigAware {
+final class MemberOrder extends RuleBase implements ConfigAware implements VolatileMessage {
 
 	/**
 	 * The source lines a single reorder may MOVE before `fix` declines it and emits only the
@@ -137,6 +138,10 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
 		_resolveConfig = resolve;
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskRestAfter(message, MemberOrderReason.REASON_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -780,7 +785,7 @@ final class MemberOrder extends RuleBase implements ConfigAware {
 		};
 		return {
 			member: bad,
-			message: 'type member ${MemberOrderReason.nameOf(bad)} is out of canonical order: ${MemberOrderReason.of(bad, prev, keys)}'
+			message: 'type member ${MemberOrderReason.nameOf(bad)}${MemberOrderReason.REASON_LEAD}${MemberOrderReason.of(bad, prev, keys)}'
 		};
 	}
 

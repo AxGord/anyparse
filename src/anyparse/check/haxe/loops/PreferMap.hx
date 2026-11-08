@@ -2,6 +2,7 @@ package anyparse.check.haxe.loops;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.scan.RunScan;
@@ -36,9 +37,12 @@ import anyparse.query.SymbolIndex;
  * `"prefer-map": { "enabled": true }`.
  */
 @:nullSafety(Strict)
-final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix {
+final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix implements VolatileMessage {
 
 	private static inline final RULE_ID: String = 'prefer-map';
+
+	/** The lead-in of a finding's message; the rewrite it quotes follows, and `messageIdentity` masks that tail. */
+	private static inline final MESSAGE_LEAD: String = 'this comprehension maps each element — it can be ';
 
 	/** The longest rewrite a finding's message quotes before it is cut. */
 	private static inline final MESSAGE_EXCERPT_MAX: Int = 80;
@@ -50,6 +54,10 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		);
 	}
 
+	public function messageIdentity(message: String): String {
+		return MessageMask.maskRestAfter(message, MESSAGE_LEAD);
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: String -> Null<SymbolIndex> = PreferBind.coveringIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
@@ -58,7 +66,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 				span: m.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'this comprehension maps each element — it can be ${SourceText.excerpt(m.text, MESSAGE_EXCERPT_MAX)}'
+				message: '$MESSAGE_LEAD${SourceText.excerpt(m.text, MESSAGE_EXCERPT_MAX)}'
 			});
 		});
 	}

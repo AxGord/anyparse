@@ -999,6 +999,13 @@
 			"find": "!hosted.members.exists(m -> StaticExtensions.accessible(m, host))",
 			"replace": "true",
 			"note": "a public member read under the waiver gets its type granted too"
+		},
+		{
+			"name": "M-MEMBER-ORDER-IDENTITY-UNWIRED",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "messageIdentity",
+			"force": "message",
+			"note": "member-order names no identity of its own again, so the neighbour in its message keys the finding"
 		}
 	]
 }

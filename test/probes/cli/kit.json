@@ -18,7 +18,9 @@
 		"cond/Binop.hx": "class Binop {\n\n\tstatic function main() {\n\t\t#if lime && renderer.__type == OPENGL trace(1); #end\n\t\t#if (lime && x) trace(2); #end\n\t\t#if !sys || js trace(3); #end\n\t}\n\n}\n",
 		"regex/R.hx": "var r = ~/a$x/;\n",
 		"oraclejson/apq.json": "{\"compilerOracle\":\"b.hxml\"}\n",
-		"oraclejson/a.json": "{}\n"
+		"oraclejson/a.json": "{}\n",
+		"identity/a.json": "[{\"file\":\"C.hx\",\"line\":3,\"col\":2,\"endLine\":3,\"endCol\":23,\"severity\":\"info\",\"rule\":\"member-order\",\"message\":\"type member 'x' is out of canonical order: a public var field must precede the public instance method 'p'\",\"address\":\"ClassDecl:C >> Public --nth 2\"}]\n",
+		"identity/b.json": "[{\"file\":\"C.hx\",\"line\":4,\"col\":2,\"endLine\":4,\"endCol\":23,\"severity\":\"info\",\"rule\":\"member-order\",\"message\":\"type member 'x' is out of canonical order: a public var field must precede the private instance method 'q'\",\"address\":\"ClassDecl:C >> Public --nth 2\"}]\n"
 	},
 	"invocations": [
 		{
@@ -8283,6 +8285,42 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "9e9e670f08b925da",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint-diff --old identity/a.json --new identity/b.json",
+			"argv": [
+				"apq",
+				"lint-diff",
+				"--old",
+				"identity/a.json",
+				"--new",
+				"identity/b.json"
+			],
+			"stdin": "",
+			"expect": {
+				"exit": 0,
+				"out": "375db4bb8312611d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq lint-diff --old identity/a.json --new identity/b.json",
+			"argv": [
+				"hxq",
+				"lint-diff",
+				"--old",
+				"identity/a.json",
+				"--new",
+				"identity/b.json"
+			],
+			"stdin": "",
+			"expect": {
+				"exit": 0,
+				"out": "375db4bb8312611d",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

@@ -781,6 +781,11 @@ interface VolatileMessage {
 	 * threshold, and any number that is the last discriminator between two neighbouring
 	 * findings.
 	 *
+	 * A volatile part need not be a number: the reason `member-order` gives (it names the NEIGHBOUR the member lost to,
+	 * and that neighbour's rank) and the REWRITE `prefer-map` quotes move with unrelated edits just as a line does, and
+	 * mask through `maskRestAfter`. The price is the same collapse as above: findings of one rule in one file that
+	 * differ only in that part share a key, while the subject (`member-order`'s flagged member) stays.
+	 *
 	 * Build it with `MessageMask.maskAfter` / `maskBefore`, anchored on the SAME constant the
 	 * message was built from, so the two cannot drift apart; and pin it in the check's own
 	 * test against a message `run` produced, never against a hand-written one — a missing
