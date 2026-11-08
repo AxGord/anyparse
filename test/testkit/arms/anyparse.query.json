@@ -15911,6 +15911,20 @@
 			"find": "bodyStart >= source.length",
 			"replace": "bodyStart > source.length",
 			"note": "a body starting at the source end is accepted, so an unterminated block comment that runs to the end reads as a closed gap and the slot is proven"
+		},
+		{
+			"name": "M-ORACLE-ABSENT-FINGERPRINTS",
+			"type": "anyparse.query.OracleProviders",
+			"method": "fingerprint",
+			"force": "'a-fingerprint'",
+			"note": "a grammar with no compiler would hand out a fingerprint, so a verdict is looked up and stored for builds nothing compiles"
+		},
+		{
+			"name": "M-ORACLE-FIRST-OF-ABSENT",
+			"type": "anyparse.query.OracleProviders",
+			"method": "firstOf",
+			"force": "new AbsentOracle()",
+			"note": "a write mixing grammars would be judged by no compiler"
 		}
 	]
 }

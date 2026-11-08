@@ -54,6 +54,47 @@ interface OracleProvider {
 		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>
 	): Null<DisplayTypeOracle>;
 
+	/** The identity of one configured build: two configurations with one key are one build. */
+	public function oracleKey(oracle: OracleConfig): String;
+
+	/** One configured build named for a diagnostic line. */
+	public function describeOracle(oracle: OracleConfig): String;
+
+	/** A fingerprint of everything one build would read, or null when that cannot be told; `memo` shares file reads across builds. */
+	public function fingerprint(hxml: String, cwd: Null<String>, defines: Array<String>, memo: Map<String, String>): Null<String>;
+
+	/** The verdict recorded for one build under `fingerprint`, or null when none is. */
+	public function lookupVerdict(hxml: String, cwd: Null<String>, fingerprint: String, defines: Array<String>): Null<OracleOutcome>;
+
+	/** Records a verdict unless the input moved from `fingerprint` or the compile read a file it did not hash; whether it was recorded. */
+	public function storeVerdictIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Array<String>, memo: Map<String, String>,
+		parsed: Null<Array<String>>
+	): Bool;
+
+	/** The class paths one build spells explicitly. */
+	public function classPaths(hxml: String, cwd: Null<String>): Array<String>;
+
+	/** Every class path one build reads, libraries and standard library included, or null when the compiler could not be asked. */
+	public function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>>;
+
+	/** Brings each build's generated inputs up to date and holds them for this run, until `releaseBuilds`. */
+	public function prepareBuilds(oracles: Array<OracleConfig>): PreparedOracles;
+
+	/** The run's compiles are done: another run may regenerate these builds. */
+	public function releaseBuilds(oracles: Array<OracleConfig>): Void;
+
+	/** `oracles` carrying a fresh RUN-scoped memo of what the compilers answer; `written` lists the run's files at each question. */
+	public function attachRun(
+		oracles: Array<OracleConfig>, persisted: Bool, written: () -> Array<String>, grammar: GrammarPlugin
+	): Array<OracleConfig>;
+
+	/** Starts the warm servers of the run `attachRun` gave `oracles`, if any. */
+	public function startServers(oracles: Array<OracleConfig>): Void;
+
+	/** Stops the warm servers of the run `attachRun` gave `oracles`, if any. */
+	public function stopServers(oracles: Array<OracleConfig>): Void;
+
 }
 
 /** What one configuration's compile reads, as far as an edit's verifiability goes. */
@@ -223,4 +264,10 @@ typedef UsableCoverage = {
 	var unknown: Array<OracleConfig>;
 	var excluded: Array<OracleExclusion>;
 	var stop: Null<String>;
+}
+
+/** `OracleProvider.prepareBuilds`' answer: the configurations ready to use, and a line per command that ran. */
+typedef PreparedOracles = {
+	var oracles: Array<OracleConfig>;
+	var notes: Array<String>;
 }

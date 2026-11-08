@@ -5,7 +5,11 @@ import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerNameProof;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.CompilerServer;
+import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
+import anyparse.check.oracle.OracleDeclaration;
+import anyparse.check.oracle.OracleGeneration;
+import anyparse.check.oracle.OracleRunMemo;
 import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
@@ -147,7 +151,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final SELECT_KIND_EQUIVALENCE: KindEquivalence = new KindEquivalence(
 		[['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]
 	);
-
 
 	/**
 	 * FALLBACK table of `using`-eligible extension-method names, consulted only when `StdResolver` cannot discover the std
@@ -757,6 +760,59 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>
 	): Null<DisplayTypeOracle> {
 		return CompilerDisplayOracle.start(typeSyntax, hxml, cwd, defines);
+	}
+
+	public function oracleKey(oracle: OracleConfig): String {
+		return OracleDeclaration.oracleKey(oracle);
+	}
+
+	public function describeOracle(oracle: OracleConfig): String {
+		return OracleDeclaration.describeOracle(oracle);
+	}
+
+	public function fingerprint(hxml: String, cwd: Null<String>, defines: Array<String>, memo: Map<String, String>): Null<String> {
+		return OracleCache.fingerprint(hxml, cwd, defines, memo);
+	}
+
+	public function lookupVerdict(hxml: String, cwd: Null<String>, fingerprint: String, defines: Array<String>): Null<OracleOutcome> {
+		return OracleCache.lookup(hxml, cwd, fingerprint, defines);
+	}
+
+	public function storeVerdictIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Array<String>, memo: Map<String, String>,
+		parsed: Null<Array<String>>
+	): Bool {
+		return OracleCache.storeIfUnchanged(hxml, cwd, fingerprint, outcome, defines, memo, parsed);
+	}
+
+	public function classPaths(hxml: String, cwd: Null<String>): Array<String> {
+		return OracleCache.classPaths(hxml, cwd);
+	}
+
+	public function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>> {
+		return OracleCache.classRoots(hxml, cwd);
+	}
+
+	public function prepareBuilds(oracles: Array<OracleConfig>): PreparedOracles {
+		return OracleGeneration.prepare(oracles);
+	}
+
+	public function releaseBuilds(oracles: Array<OracleConfig>): Void {
+		OracleGeneration.release(oracles);
+	}
+
+	public function attachRun(
+		oracles: Array<OracleConfig>, persisted: Bool, written: () -> Array<String>, grammar: GrammarPlugin
+	): Array<OracleConfig> {
+		return OracleRunMemo.attach(oracles, new OracleRunMemo(persisted, written, grammar));
+	}
+
+	public function startServers(oracles: Array<OracleConfig>): Void {
+		OracleRunMemo.of(oracles)?.servers.start(oracles);
+	}
+
+	public function stopServers(oracles: Array<OracleConfig>): Void {
+		OracleRunMemo.of(oracles)?.servers.stop();
 	}
 
 	/**

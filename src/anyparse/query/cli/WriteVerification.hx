@@ -2,14 +2,11 @@ package anyparse.query.cli;
 
 import anyparse.check.LintConfig;
 import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.OracleCache;
 import anyparse.check.oracle.OracleCoverage;
-import anyparse.check.oracle.OracleDeclaration;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
-import anyparse.query.OracleProvider.OracleOutcome;
-import anyparse.query.OracleProvider.OracleReading;
+import anyparse.query.OracleProvider;
 import anyparse.query.cli.WriteJournal.JournalState;
 import haxe.io.Path;
 
@@ -85,10 +82,11 @@ final class WriteVerification {
 			final dir: String = Path.directory(path);
 			if (!dirs.contains(dir)) dirs.push(dir);
 		}
+		final compiler: OracleProvider = compilerOf(paths);
 		final out: Array<OracleConfig> = [];
 		final keys: Array<String> = [];
 		for (dir in dirs) for (oracle in LintConfig.discover(Path.join([dir, '_'])).compilerOracles()) {
-			final key: String = OracleDeclaration.oracleKey(oracle);
+			final key: String = compiler.oracleKey(oracle);
 			if (keys.contains(key)) continue;
 			keys.push(key);
 			out.push(oracle);
@@ -143,9 +141,10 @@ final class WriteVerification {
 
 	/** Each of `oracles` whose explicit class path holds one of `files`, naming those files' modules on its command line. */
 	private static function naming(oracles: Array<OracleConfig>, files: Array<String>): Array<OracleConfig> {
+		final compiler: OracleProvider = compilerOf(files);
 		final out: Array<OracleConfig> = [];
 		for (oracle in oracles) {
-			final roots: Array<String> = OracleCache.classPaths(oracle.hxml, oracle.dir);
+			final roots: Array<String> = compiler.classPaths(oracle.hxml, oracle.dir);
 			final modules: Array<String> = [];
 			for (file in files) {
 				final module: Null<String> = OracleCoverage.moduleUnder(roots, file);
@@ -265,14 +264,14 @@ final class WriteVerification {
 	}
 
 	/** The sources a build's explicit class paths hold: what a compile of it can be told apart by, without running one. */
-	private static function sourcesOf(oracle: OracleConfig): Int {
-		return sourcesIn(oracle).length;
+	private static function sourcesOf(compiler: OracleProvider, oracle: OracleConfig): Int {
+		return sourcesIn(compiler, oracle).length;
 	}
 
 	/** `oracles` with the build holding the fewest sources first, ties in the configured order. */
-	private static function cheapestFirst(oracles: Array<OracleConfig>): Array<OracleConfig> {
+	private static function cheapestFirst(compiler: OracleProvider, oracles: Array<OracleConfig>): Array<OracleConfig> {
 		final weighed: Array<{ oracle: OracleConfig, weight: Int, order: Int }> = [
-			for (i => oracle in oracles) { oracle: oracle, weight: sourcesOf(oracle), order: i }
+			for (i => oracle in oracles) { oracle: oracle, weight: sourcesOf(compiler, oracle), order: i }
 		];
 		weighed.sort((a, b) -> a.weight != b.weight ? a.weight - b.weight : a.order - b.order);
 		return weighed.map(w -> w.oracle);
@@ -289,7 +288,7 @@ final class WriteVerification {
 	): Null<Bool> {
 		final blamed: Array<BuildAnswer> = [];
 		var pending: Array<String> = sources.copy();
-		for (oracle in cheapestFirst(oracles)) {
+		for (oracle in cheapestFirst(compilerOf(sources), oracles)) {
 			if (pending.length == 0) break;
 			final asked: Array<OracleConfig> = naming([oracle], pending);
 			if (asked.length == 0) continue;
@@ -319,9 +318,9 @@ final class WriteVerification {
 	}
 
 	/** The sources under the explicit class paths of `oracle`, as the canonical paths the class paths spell. */
-	private static function sourcesIn(oracle: OracleConfig): Array<String> {
+	private static function sourcesIn(compiler: OracleProvider, oracle: OracleConfig): Array<String> {
 		final out: Array<String> = [];
-		for (root in OracleCache.classPaths(oracle.hxml, oracle.dir)) collectSources(FileIdentity.canonical(Sys.getCwd(), root), out);
+		for (root in compiler.classPaths(oracle.hxml, oracle.dir)) collectSources(FileIdentity.canonical(Sys.getCwd(), root), out);
 		return out;
 	}
 
@@ -343,7 +342,8 @@ final class WriteVerification {
 	 * hold one of `files`; all of them when none does, since nothing then says what reads the files.
 	 */
 	private static function holding(oracles: Array<OracleConfig>, files: Array<String>): Array<OracleConfig> {
-		final held: Array<OracleConfig> = [for (oracle in oracles) if (holdsAny(oracle, files)) oracle];
+		final compiler: OracleProvider = compilerOf(files);
+		final held: Array<OracleConfig> = [for (oracle in oracles) if (holdsAny(compiler, oracle, files)) oracle];
 		return held.length > 0 ? held : oracles;
 	}
 
@@ -351,8 +351,8 @@ final class WriteVerification {
 	 * Whether a class path of `oracle` is a folder above one of `files`; true when the compiler could not be asked. Whatever
 	 * such a build reads from that folder (a lookup, a shadow, a macro walking it) is only learnt by compiling it.
 	 */
-	private static function holdsAny(oracle: OracleConfig, files: Array<String>): Bool {
-		final roots: Null<Array<String>> = OracleCache.classRoots(oracle.hxml, oracle.dir);
+	private static function holdsAny(compiler: OracleProvider, oracle: OracleConfig, files: Array<String>): Bool {
+		final roots: Null<Array<String>> = compiler.classRoots(oracle.hxml, oracle.dir);
 		if (roots == null) return true;
 		final base: String = oracle.dir ?? Sys.getCwd();
 		for (root in roots) {
@@ -374,6 +374,16 @@ final class WriteVerification {
 	): Bool {
 		final named: Null<Bool> = onlyCreated ? namedCheapestFirst(op, journal, judges, unreached, vouching, parallel) : null;
 		return named ?? keptUnreached(op, journal, judges, unreached, vouching, parallel);
+	}
+
+	/** The compiler a write of `paths` is judged by: the first written file's grammar that supplies one. */
+	private static function compilerOf(paths: Array<String>): OracleProvider {
+		final plugins: Array<GrammarPlugin> = [];
+		for (path in paths) {
+			final lang: Null<String> = CliArgs.langOfFile(path);
+			if (lang != null) plugins.push(CliArgs.pickPlugin(lang));
+		}
+		return OracleProviders.firstOf(plugins);
 	}
 
 }

@@ -5,8 +5,6 @@ import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.facts.FactsTypeOracle;
-import anyparse.check.oracle.OracleCache;
-import anyparse.check.oracle.OracleDeclaration;
 import anyparse.core.EnvFlag;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
@@ -383,17 +381,13 @@ final class LintFixVerify {
 			case Confirmed:
 				confirmed.push(oracles[i]);
 			case Unavailable(reason):
-				CliIo.stderr(
-					'apq lint: compiler oracle unavailable for ${OracleDeclaration.describeOracle(oracles[i])} — $reason (skipped)\n'
-				);
+				CliIo.stderr('apq lint: compiler oracle unavailable for ${compiler.describeOracle(oracles[i])} — $reason (skipped)\n');
 			case Rejected(errors):
-				CliIo.stderr(
-					'apq lint: compiler oracle REJECTED ${OracleDeclaration.describeOracle(oracles[i])} — build does not typecheck:\n'
-				);
+				CliIo.stderr('apq lint: compiler oracle REJECTED ${compiler.describeOracle(oracles[i])} — build does not typecheck:\n');
 				CliIo.stderr('$errors\n');
 				return EXIT_RUNTIME;
 		}
-		if (confirmed.length > 0) CliIo.stderr(trustNote(confirmed, oracles.length));
+		if (confirmed.length > 0) CliIo.stderr(trustNote(compiler, confirmed, oracles.length));
 		return null;
 	}
 
@@ -407,17 +401,17 @@ final class LintFixVerify {
 	 * of builds no compile ever ran, and one that named all of them while only some answered
 	 * would repeat that in a smaller way.
 	 */
-	private static function trustNote(confirmed: Array<OracleConfig>, configured: Int): String {
+	private static function trustNote(compiler: OracleProvider, confirmed: Array<OracleConfig>, configured: Int): String {
 		final unanswered: Int = configured - confirmed.length;
 		final partial: String = unanswered == 0 ? '' : ' ($unanswered configuration(s) could not be asked)';
 		return 'apq lint: compiler oracle confirmed$partial — build typechecks (nullSafety trust: compiler-confirmed for the code'
-			+ ' these configuration(s) compile: ${describeOracles(confirmed)} — not for a file none of them reads, nor for a #if'
+			+ ' these configuration(s) compile: ${describeOracles(compiler, confirmed)} — not for a file none of them reads, nor for a #if'
 			+ ' branch every one of their define sets excludes)\n';
 	}
 
 	/** Every configuration named for one diagnostic line, in declared order. */
-	private static function describeOracles(oracles: Array<OracleConfig>): String {
-		return oracles.map(OracleDeclaration.describeOracle).join(', ');
+	private static function describeOracles(compiler: OracleProvider, oracles: Array<OracleConfig>): String {
+		return oracles.map(compiler.describeOracle).join(', ');
 	}
 
 	/**
@@ -453,14 +447,14 @@ final class LintFixVerify {
 			final unavailable: Null<String> = oracle.unavailable;
 			final fingerprint: Null<String> = unavailable != null || EnvFlag.isSet('APQ_NO_ORACLE_CACHE')
 				? null
-				: OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before);
+				: compiler.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before);
 			fingerprints.push(fingerprint);
 			final cached: Null<OracleOutcome> = fingerprint == null
 				? null
-				: OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
+				: compiler.lookupVerdict(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
 			if (cached != null)
 				CliIo.stderr(
-					'apq lint: compiler oracle verdict reused for ${OracleDeclaration.describeOracle(oracle)} — the compile input hashes'
+					'apq lint: compiler oracle verdict reused for ${compiler.describeOracle(oracle)} — the compile input hashes'
 					+ ' identical to the last typecheck (no compile)\n'
 				);
 			outcomes.push(unavailable == null ? cached : Unavailable(unavailable));
@@ -478,7 +472,7 @@ final class LintFixVerify {
 			// stored only while the input still hashes as it did before the compile: a tree that moved meanwhile
 			// produced a verdict about neither state
 			if (fingerprint != null)
-				OracleCache.storeIfUnchanged(
+				compiler.storeVerdictIfUnchanged(
 					oracles[i].hxml, oracles[i].dir, fingerprint, outcome, oracles[i].defines, after, compiled[k].parsed
 				);
 		}

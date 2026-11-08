@@ -10,6 +10,7 @@ import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
+import anyparse.query.OracleProvider.PreparedOracles;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -729,12 +730,6 @@ typedef GenerationRun = {
 	/** Why each group this run regenerated while an input moved is no snapshot of the tree, by key. */
 	var raced: Map<String, String>;
 
-}
-
-/** `OracleGeneration.prepare`'s answer: the configurations ready to use, and a line per command that ran. */
-typedef PreparedOracles = {
-	var oracles: Array<OracleConfig>;
-	var notes: Array<String>;
 }
 
 /**

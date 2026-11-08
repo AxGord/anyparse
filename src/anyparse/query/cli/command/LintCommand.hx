@@ -13,6 +13,7 @@ import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ExitCode.*;
+import anyparse.query.OracleProvider;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import haxe.io.Path;
 
@@ -278,6 +279,7 @@ final class LintCommand implements CliCommand {
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
+		final compiler: OracleProvider = OracleProviders.of(plugin);
 		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
 		final early: Null<FactsProbe> = LintOracleRun.earlyFacts(unconfigured != null, oracles, o);
 		final ahead: AheadBuilds = { probe: null };
@@ -289,8 +291,9 @@ final class LintCommand implements CliCommand {
 			'a computed member name may obtain any method'
 		);
 		final resolution: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
+			compiler,
 			LintOracleRun.withReachConfigurations(
-				unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(paths, resolveConfig), ahead, reflective, holders,
+				unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(compiler, paths, resolveConfig), ahead, reflective, holders,
 				paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
 			),
 			oracles, early, reflective, holders, ahead, o
@@ -298,7 +301,7 @@ final class LintCommand implements CliCommand {
 
 		if (o.fix)
 			return LintOracleRun.endingCompiles(
-				early, ahead, oracles,
+				compiler, early, ahead, oracles,
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
@@ -334,7 +337,7 @@ final class LintCommand implements CliCommand {
 		final oracleExit: Null<Int> = o.noOracle
 			? LintFixVerify.oracleSkippedNote(oracles)
 			: LintFixVerify.reportModeOracle(OracleProviders.of(cached), oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
-		LintOracleRun.endCompiles(early, ahead, oracles);
+		LintOracleRun.endCompiles(compiler, early, ahead, oracles);
 		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;

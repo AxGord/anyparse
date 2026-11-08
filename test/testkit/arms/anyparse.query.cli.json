@@ -442,7 +442,7 @@
 			"name": "M-WRITE-VERIFY-ONLY-HOLDERS",
 			"type": "anyparse.query.cli.WriteVerification",
 			"method": "holding",
-			"find": "if (holdsAny(oracle, files)) oracle",
+			"find": "if (holdsAny(compiler, oracle, files)) oracle",
 			"replace": "oracle",
 			"note": "a run that only created modules compiles every configured build, including one whose class paths hold none of them"
 		},

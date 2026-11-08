@@ -118,7 +118,7 @@ final class OracleRunWiringTest extends Test {
 		function carried(args: Array<String>): Bool {
 			final ahead: AheadBuilds = { probe: null };
 			final scope: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
-				resolution, oracles, null, null, null, ahead, LintArgs.parseLintArgs(args.concat(['Main.hx']))
+				new HaxeQueryPlugin(), resolution, oracles, null, null, null, ahead, LintArgs.parseLintArgs(args.concat(['Main.hx']))
 			);
 			return scope?.facts != null && ahead.facts != null;
 		}
@@ -144,7 +144,11 @@ final class OracleRunWiringTest extends Test {
 		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: dir, defines: [] }];
 		final early: FactsProbe = TypedFactsProbe.start(oracles);
 		Assert.equals(before.length + 1, factsDirs().length, 'the early compile was given its probe directory');
-		Assert.raises(() -> LintOracleRun.endingCompiles(early, { probe: null }, oracles, () -> throw new Exception('a check failed')));
+		Assert.raises(() ->
+			LintOracleRun.endingCompiles(
+				new HaxeQueryPlugin(), early, { probe: null }, oracles, () -> throw new Exception('a check failed')
+			)
+		);
 		Assert.same(before, factsDirs(), 'no probe directory outlives a run a failure ended');
 		CliFixture.removeDir(dir);
 		#else
@@ -196,7 +200,7 @@ final class OracleRunWiringTest extends Test {
 			for (entry in sys.FileSystem.readDirectory(TempScratch.root()))
 				if (StringTools.startsWith(entry, 'anyparse-typed-facts-')) entry
 		];
-		found.sort(Reflect.compare);
+		found.sort(anyparse.util.Compare.compareString);
 		return found;
 	}
 	#end

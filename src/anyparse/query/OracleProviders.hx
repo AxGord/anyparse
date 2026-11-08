@@ -10,6 +10,7 @@ import anyparse.query.OracleProvider.OracleCoverageMemo;
 import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.OracleProvider.OracleReading;
+import anyparse.query.OracleProvider.PreparedOracles;
 import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
@@ -27,8 +28,16 @@ final class OracleProviders {
 
 	/** `plugin`'s compiler oracle — never null; see the type's doc for a grammar that has none. */
 	public static function of(plugin: GrammarPlugin): OracleProvider {
-		final grammar: GrammarPlugin = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin)._inner : plugin;
-		return grammar is OracleProvider ? cast grammar : new AbsentOracle();
+		return firstOf([plugin]);
+	}
+
+	/** The compiler oracle of the first of `plugins` that supplies one: a run touching several grammars asks the one with a compiler. */
+	public static function firstOf(plugins: Array<GrammarPlugin>): OracleProvider {
+		for (plugin in plugins) {
+			final grammar: GrammarPlugin = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin)._inner : plugin;
+			if (grammar is OracleProvider) return cast grammar;
+		}
+		return new AbsentOracle();
 	}
 
 }
@@ -100,5 +109,52 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	): Array<Bool> {
 		return [for (_ in sites) false];
 	}
+
+	public function oracleKey(oracle: OracleConfig): String {
+		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
+	}
+
+	public function describeOracle(oracle: OracleConfig): String {
+		return oracle.defines.length == 0 ? oracle.hxml : '${oracle.hxml} -D ${oracle.defines.join(' -D ')}';
+	}
+
+	public function fingerprint(hxml: String, cwd: Null<String>, defines: Array<String>, memo: Map<String, String>): Null<String> {
+		return null;
+	}
+
+	public function lookupVerdict(hxml: String, cwd: Null<String>, fingerprint: String, defines: Array<String>): Null<OracleOutcome> {
+		return null;
+	}
+
+	public function storeVerdictIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Array<String>, memo: Map<String, String>,
+		parsed: Null<Array<String>>
+	): Bool {
+		return false;
+	}
+
+	public function classPaths(hxml: String, cwd: Null<String>): Array<String> {
+		return [];
+	}
+
+	public function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>> {
+		return null;
+	}
+
+	public function prepareBuilds(oracles: Array<OracleConfig>): PreparedOracles {
+		return { oracles: oracles, notes: [] };
+	}
+
+	public function releaseBuilds(oracles: Array<OracleConfig>): Void {}
+
+	public function attachRun(
+		oracles: Array<OracleConfig>, persisted: Bool, written: () -> Array<String>, grammar: GrammarPlugin
+	): Array<OracleConfig> {
+		return oracles;
+	}
+
+	public function startServers(oracles: Array<OracleConfig>): Void {}
+
+	public function stopServers(oracles: Array<OracleConfig>): Void {}
 
 }

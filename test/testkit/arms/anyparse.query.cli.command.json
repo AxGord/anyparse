@@ -214,7 +214,7 @@
 			"name": "M-RUNMEMO-NOT-ATTACHED",
 			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "oraclesOf",
-			"find": "return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> files.map(f -> f.file), grammar));",
+			"find": "return compiler.attachRun(prepared.oracles, persisted, () -> files.map(f -> f.file), grammar);",
 			"replace": "return prepared.oracles;",
 			"note": "a lint run's configurations carry no memo, so every phase compiles the tree it asks about again"
 		},
@@ -981,6 +981,21 @@
 			"find": "${CliArgs.sourceExtensionOf(lang)}",
 			"replace": ".txt",
 			"note": "the new helper module takes a literal extension instead of the grammar's"
+		},
+		{
+			"name": "M-ORACLE-NO-SERVER-NOT-COLD",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "compiledOracleVerdict",
+			"force": "Rejected('no server answered')",
+			"note": "a grammar whose provider has no warm server would be reported as rejected instead of falling through to the cold verdict"
+		},
+		{
+			"name": "M-ORACLE-COMMAND-COMPILES-WITHOUT-PROVIDER",
+			"type": "anyparse.query.cli.command.OracleCommand",
+			"method": "recordOracleVerdicts",
+			"find": "= compiler.typecheckEachReading(ready, false);",
+			"replace": "= anyparse.check.oracle.CompilerOracle.typecheckEachReading(ready, false);",
+			"note": "apq oracle on a grammar with no compiler runs the Haxe compiler and claims a verdict it cannot record"
 		}
 	]
 }

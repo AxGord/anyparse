@@ -2,12 +2,10 @@ package anyparse.query.cli.command;
 
 import anyparse.check.LintConfig;
 import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.OracleDeclaration;
-import anyparse.check.oracle.OracleGeneration;
-import anyparse.check.oracle.OracleRunMemo;
 import anyparse.check.oracle.ReachBuildsCache;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.OracleProvider;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.cli.command.LintCommand.LintOpts;
 
@@ -53,11 +51,12 @@ final class LintOracleRun {
 	): Array<OracleConfig> {
 		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
 		if (noOracle) return declared;
-		final prepared: PreparedOracles = OracleGeneration.prepare(declared);
+		final compiler: OracleProvider = OracleProviders.of(grammar);
+		final prepared: PreparedOracles = compiler.prepareBuilds(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
 		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
 		// the run's grammar reads the compilers' sources, so each facts compile carries the baseline and the builds' probe
-		return OracleRunMemo.attach(prepared.oracles, new OracleRunMemo(persisted, () -> files.map(f -> f.file), grammar));
+		return compiler.attachRun(prepared.oracles, persisted, () -> files.map(f -> f.file), grammar);
 	}
 
 	/**
@@ -148,14 +147,16 @@ final class LintOracleRun {
 	 * `body`'s answer, with the run's compiles ended (`endCompiles`) on every way out, a throw included: an early facts
 	 * batch must not run on after a failed run.
 	 */
-	public static function endingCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int): Int {
+	public static function endingCompiles(
+		compiler: OracleProvider, early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int
+	): Int {
 		final answer: Int = try {
 			body();
 		} catch (exception: Exception) {
-			endCompiles(early, ahead, oracles);
+			endCompiles(compiler, early, ahead, oracles);
 			throw exception;
 		};
-		endCompiles(early, ahead, oracles);
+		endCompiles(compiler, early, ahead, oracles);
 		return answer;
 	}
 
@@ -163,11 +164,13 @@ final class LintOracleRun {
 	 * Every compile of the run is done: end the facts compiles no check asked for (`early`), then release the builds, so
 	 * another run may regenerate them.
 	 */
-	public static function endCompiles(early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>): Void {
+	public static function endCompiles(
+		compiler: OracleProvider, early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>
+	): Void {
 		if (early != null) TypedFactsProbe.abandon(early);
-		OracleRunMemo.of(oracles)?.servers.stop();
+		compiler.stopServers(oracles);
 		dropAhead(ahead);
-		OracleGeneration.release(oracles);
+		compiler.releaseBuilds(oracles);
 	}
 
 	/**
@@ -178,8 +181,8 @@ final class LintOracleRun {
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	public static function withCompilerFacts(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<FactsProbe>, reflective: Null<Array<String>>,
-		holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
+		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<FactsProbe>,
+		reflective: Null<Array<String>>, holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || o.noOracle) return resolution;
 		var probed: Bool = false;
@@ -192,7 +195,7 @@ final class LintOracleRun {
 				if (!settling) startBuildsWithFacts(early != null, resolution);
 				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
 				// the facts compiles are done and their cores free: the run's warm servers start, and compile, now
-				if (early != null) OracleRunMemo.of(oracles)?.servers.start(oracles);
+				if (early != null) compiler.startServers(oracles);
 				facts = built;
 				if (built != null) {
 					for (d in built.dropped) CliIo.stderr('apq lint: compilerOracle ${d.name}: no compiler facts — ${d.reason}\n');
@@ -258,9 +261,9 @@ final class LintOracleRun {
 	 * run probes. A path whose config says otherwise may ship a build that list does not name, so a run whose paths
 	 * disagree walks every branch, and says so once when any of them declared the flag.
 	 */
-	public static function reachComplete(paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
+	public static function reachComplete(compiler: OracleProvider, paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
 		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> c.compilerOracles().map(OracleDeclaration.oracleKey).join('|');
+		final list: LintConfig -> String = c -> c.compilerOracles().map(compiler.oracleKey).join('|');
 		final first: String = list(resolveConfig(paths[0]));
 		var declared: Bool = false;
 		var all: Bool = true;

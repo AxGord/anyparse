@@ -2,13 +2,8 @@ package anyparse.query.cli.command;
 
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.OracleCache;
-import anyparse.check.oracle.OracleDeclaration;
-import anyparse.check.oracle.OracleGeneration;
 import anyparse.query.ExitCode.*;
-import anyparse.query.OracleProvider.OracleOutcome;
-import anyparse.query.OracleProvider.OracleReading;
+import anyparse.query.OracleProvider;
 import haxe.io.Path;
 
 /**
@@ -96,7 +91,7 @@ final class OracleCommand implements CliCommand {
 		}
 		ConfigDisagreement.warnOracle(resolveConfig, paths);
 		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles();
-		if (oracles.length > 0) return recordOracleVerdicts(oracles);
+		if (oracles.length > 0) return recordOracleVerdicts(OracleProviders.of(CliArgs.pickPlugin(lang)), oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;
 	}
@@ -110,18 +105,18 @@ final class OracleCommand implements CliCommand {
 	 * each fingerprint is taken BEFORE them, since it describes the input the compiler is about to
 	 * read. A configuration whose `generate` command failed is reported unavailable and records nothing.
 	 */
-	private static function recordOracleVerdicts(oracles: Array<OracleConfig>): Int {
-		final prepared: PreparedOracles = OracleGeneration.prepare(oracles);
+	private static function recordOracleVerdicts(compiler: OracleProvider, oracles: Array<OracleConfig>): Int {
+		final prepared: PreparedOracles = compiler.prepareBuilds(oracles);
 		for (note in prepared.notes) CliIo.stderr('apq oracle: compilerOracle $note\n');
 		final ready: Array<OracleConfig> = prepared.oracles;
 		// one read of each source across every configuration, before the compiles and again after them
 		final before: Map<String, String> = [];
 		final after: Map<String, String> = [];
 		final fingerprints: Array<Null<String>> = ready.map(
-			oracle -> oracle.unavailable == null ? OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before) : null
+			oracle -> oracle.unavailable == null ? compiler.fingerprint(oracle.hxml, oracle.dir, oracle.defines, before) : null
 		);
 		// the compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
-		final readings: Array<OracleReading> = CompilerOracle.typecheckEachReading(ready, false);
+		final readings: Array<OracleReading> = compiler.typecheckEachReading(ready, false);
 		var exit: Int = EXIT_OK;
 		final answered: Array<OracleOutcome> = [];
 		for (i in 0...ready.length) {
@@ -130,25 +125,27 @@ final class OracleCommand implements CliCommand {
 			answered.push(outcome);
 			final fingerprint: Null<String> = fingerprints[i];
 			final stored: Bool = fingerprint != null
-				&& OracleCache.storeIfUnchanged(oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after, readings[i].parsed);
-			if (reportOracleRun(oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
-			if (fingerprint == null && oracle.unavailable == null)
-				CliIo.stderr('apq oracle: no fingerprint for ${OracleDeclaration.describeOracle(oracle)} — the verdict was not recorded\n');
+				&& compiler.storeVerdictIfUnchanged(
+					oracle.hxml, oracle.dir, fingerprint, outcome, oracle.defines, after, readings[i].parsed
+				);
+			if (reportOracleRun(compiler, oracle, outcome) != EXIT_OK) exit = EXIT_RUNTIME;
+			if (fingerprint == null && !outcome.match(Unavailable(_)))
+				CliIo.stderr('apq oracle: no fingerprint for ${compiler.describeOracle(oracle)} — the verdict was not recorded\n');
 			else if (fingerprint != null && !stored)
 				CliIo.stderr(
-					'apq oracle: the compile input of ${OracleDeclaration.describeOracle(oracle)}'
+					'apq oracle: the compile input of ${compiler.describeOracle(oracle)}'
 					+ ' changed during the typecheck — the verdict was not recorded\n'
 				);
 		}
 		CliIo.stderr(verdictSummary(answered));
 		// the compiles are done: another run may regenerate these builds now
-		OracleGeneration.release(ready);
+		compiler.releaseBuilds(ready);
 		return exit;
 	}
 
 	/** One stderr line per configuration's `apq oracle` outcome, plus the exit status that goes with it. */
-	private static function reportOracleRun(oracle: OracleConfig, outcome: OracleOutcome): Int {
-		final named: String = OracleDeclaration.describeOracle(oracle);
+	private static function reportOracleRun(compiler: OracleProvider, oracle: OracleConfig, outcome: OracleOutcome): Int {
+		final named: String = compiler.describeOracle(oracle);
 		switch outcome {
 			case Confirmed:
 				CliIo.stderr('apq oracle: $named typechecks — verdict recorded (lint will not recompile an unchanged tree)\n');

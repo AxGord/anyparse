@@ -18,6 +18,7 @@ import anyparse.proc.Sleep;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.OracleProvider.PreparedOracles;
 import anyparse.query.cli.command.LintFixVerify;
 import haxe.io.Path;
 
