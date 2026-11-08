@@ -1030,6 +1030,94 @@
 			"find": "more than ${options.budget}",
 			"replace": "more than $MAX_RELOCATED_LINES",
 			"note": "the decline names the default budget whatever the run set, so a run that lowered it reads a number that is not the one declining it"
+		},
+		{
+			"name": "M-INLSTR-FIX-DROP",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "fix",
+			"find": "else if (source.substring(span.from, span.from + INLINE_KEYWORD.length) == INLINE_KEYWORD)",
+			"replace": "else if (false)",
+			"note": "the String arm reports but never removes inline"
+		},
+		{
+			"name": "M-INLSTR-PLAIN-LITERAL",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerInlineString",
+			"find": "|| !ConstantFieldScan.isPlainStringLiteral(init, source, seams)",
+			"replace": "|| false",
+			"note": "a String constant of concatenation or interpolation is dropped too"
+		},
+		{
+			"name": "M-INLSTR-EARLIER-CALL",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerFinal",
+			"find": "else if (!mods.isExtern && !precededByCode)",
+			"replace": "else if (!mods.isExtern)",
+			"note": "a constant after a call-bearing static initializer loses inline and may be read before assignment"
+		},
+		{
+			"name": "M-INLSTR-EXTERN-FIELD",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerFinal",
+			"find": "else if (!mods.isExtern && !precededByCode)",
+			"replace": "else if (!precededByCode)",
+			"note": "an extern field loses inline: on extern non-inline variable"
+		},
+		{
+			"name": "M-INLSTR-PINNED",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerFinal",
+			"find": "if (pinned) return;",
+			"replace": "if (pinned && !mods.isInline) return;",
+			"note": "a @:keep / @:rtti String constant loses inline"
+		},
+		{
+			"name": "M-INLSTR-EXTERN-CLASS",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "walk",
+			"find": "classPinned = true;",
+			"replace": "classPinned = false;",
+			"note": "a constant of an extern class loses inline: on extern non-inline variable"
+		},
+		{
+			"name": "M-INLSTR-MACRO",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerInlineString",
+			"find": "if (mods.exported && containerName != null && facts.macroConsumed.contains(containerName)) return;",
+			"replace": "if (false) return;",
+			"note": "a macro-consumed public String loses inline, so a macro reading its folded value or access sees a field instead"
+		},
+		{
+			"name": "M-INLSTR-UNREADABLE",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "considerInlineString",
+			"find": "if (facts.reflected.unreadable.exists(unreadable -> RawSourceScan.mentionsWord(unreadable, name))) return;",
+			"replace": "if (false) return;",
+			"note": "a String constant is dropped although an unreadable file may spell it in a position needing the value"
+		},
+		{
+			"name": "M-INLSTR-RUNS-CODE-LATER",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "scanContainer",
+			"find": "final precededByCode: Bool = earlierInitRunsCode;",
+			"replace": "final precededByCode: Bool = true;",
+			"note": "a call initializer AFTER the constant holds it, as if it ran first"
+		},
+		{
+			"name": "M-INLSTR-VISIBILITY-CARRIES-PIN",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "walk",
+			"find": "} else if (!seams.visibility.contains(child.kind)) {",
+			"replace": "} else {",
+			"note": "a visibility modifier between a class-level @:keep, @:nativeGen or extern and its class clears the flag, so the constants are flagged"
+		},
+		{
+			"name": "M-INLSTR-INIT-FUNCTION-RUNS",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "scanContainer",
+			"find": "if (facts.demand.staticInitRunsCode(member)) earlierInitRunsCode = true;",
+			"replace": "",
+			"note": "a __init__ calling a helper does not hold, and the plain form reads the constant unset"
 		}
 	]
 }

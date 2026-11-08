@@ -3829,6 +3829,19 @@ typedef CoreValueTypes = {
 typedef ExecutionShape = {
 
 	/**
+	 * The static function NAMES the language runs while a type initialises, before any static field's own initializer
+	 * (Haxe `__init__`): such a function reads a field its statics have not yet assigned. Optional; unset means none.
+	 */
+	@:optional var staticInitFunctionNames: Array<String>;
+
+	/**
+	 * The callee names (a bare intrinsic or the last segment of a qualified call) whose FIRST argument the compiler pastes
+	 * into the output as target code and so requires as a compile-time constant (Haxe `__js__`, `js.Syntax.code`).
+	 * Optional; unset means none.
+	 */
+	@:optional var targetCodeCallNames: Array<String>;
+
+	/**
 	 * The ABSTRACT types a value can have although no code writes their name, by the node kind whose syntax builds one:
 	 * a rest parameter (Haxe `haxe.Rest`), a map literal's key-value pair (Haxe `Map`). `MemberReach` counts their
 	 * implicitly-called members as visible to code holding such a node. Optional; unset means the language has none.

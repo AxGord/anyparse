@@ -26,21 +26,6 @@ final class TypedFactsShapes {
 		'eval.Syntax'
 	];
 
-	/** The `*.Syntax` members that paste their first argument into the output as target code. */
-	public static final SYNTAX_CODE_MEMBERS: Array<String> = ['code', 'plainCode'];
-
-	/** The target intrinsics whose first argument is target code pasted into the output. */
-	public static final CODE_INTRINSICS: Array<String> = [
-		'__cpp__',
-		'__js__',
-		'__php__',
-		'__python__',
-		'__lua__',
-		'__java__',
-		'__cs__',
-		'__hl__'
-	];
-
 	/** The metadata whose argument is target code pasted into the output: a field's, around its body, or a type's. */
 	public static final CODE_METAS: Array<String> = [
 		':functionCode',
@@ -68,10 +53,10 @@ final class TypedFactsShapes {
 	];
 
 	/** The package of the class every exception the language throws as it is extends (`isException`). */
-	private static inline final EXCEPTION_PACKAGE: String = 'haxe';
+	private static final EXCEPTION_PACKAGE: String = 'haxe';
 
 	/** The name of that class. */
-	private static inline final EXCEPTION_NAME: String = 'Exception';
+	private static final EXCEPTION_NAME: String = 'Exception';
 
 	/** The classes a construction of which only the place it is stored into holds (`isFresh`): a `new Map` makes its implementation. */
 	private static final FRESH_CLASSES: Array<String> = ['Array', 'haxe.ds._Map.Map_Impl_'];

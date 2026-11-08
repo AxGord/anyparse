@@ -498,6 +498,191 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(1, violations('@:nativeGen class C { public static inline var A:Int = 5; }').length);
 	}
 
+	/** A `static inline final` whose initializer is a plain string literal is flagged at its `inline`, and the fix drops the keyword. */
+	@:pin('control')
+	@:killer('M-INLSTR-FIX-DROP')
+	public function testStringConstantDropsInline(): Void {
+		final src: String = "class C { static inline final S: String = 'x'; }";
+		final vs: Array<Violation> = violations(src);
+		Assert.isTrue(vs.length == 1 && vs[0].message.indexOf('drop inline') > 0);
+		Assert.equals("class C { static final S: String = 'x'; }", fixedSource(src));
+	}
+
+	/** Modifier order does not matter: the span is the `inline` token, wherever it sits. */
+	@:pin('control')
+	@:killer('M-INLSTR-FIX-DROP')
+	public function testStringConstantDropsInlineAnyModifierOrder(): Void {
+		Assert.equals(
+			"class C { static public final S: String = 'x'; }", fixedSource("class C { inline static public final S: String = 'x'; }")
+		);
+	}
+
+	/** A self-named constant (`X = 'X'`) is not held by its own initializer, which reads nothing. */
+	@:pin('control')
+	@:killer('M-DEMAND-LITERAL-NO-READ')
+	public function testSelfNamedStringFlagged(): Void {
+		Assert.equals(1, violations("class C { static inline final S: String = 'S'; }").length);
+	}
+
+	/** Only a plain string literal: concatenation and interpolation are other shapes this arm does not judge. */
+	@:pin('control')
+	@:killer('M-INLSTR-PLAIN-LITERAL')
+	public function testNonLiteralStringNotFlagged(): Void {
+		Assert.equals(0, violations("class C { static inline final S: String = 'a' + 'b'; }").length);
+	}
+
+	/** An interpolated string is a kind of string literal but no plain one. */
+	@:pin('guard')
+	public function testInterpolatedStringNotFlagged(): Void {
+		Assert.equals(0, violations("class C { static inline final B: String = 'b'; static inline final S: String = 'a$B'; }").length);
+	}
+
+	/** A scalar stays inline: only the String arm drops it. */
+	@:pin('guard')
+	public function testScalarInlineNotFlagged(): Void {
+		Assert.equals(0, violations('class C { static inline final N: Int = 1; }').length);
+	}
+
+	/** A name read as a reflection key does not hold it: the field stays and the value becomes readable. */
+	@:pin('guard')
+	public function testReflectedNameDoesNotHoldString(): Void {
+		Assert.equals(
+			1, violations("class C { static inline final S: String = 'x'; static function g() { return Reflect.field(C, 'S'); } }").length
+		);
+	}
+
+	/** A `static inline var` of a String goes `final` first and drops `inline` on the next pass; the `--fix` loop converges. */
+	@:pin('control')
+	@:killer('M-INLSTR-FIX-DROP')
+	public function testStringInlineVarConvergesOverPasses(): Void {
+		final once: String = fixedSource("class C { static inline var S: String = 'x'; }");
+		Assert.equals("class C { static inline final S: String = 'x'; }", once);
+		Assert.equals("class C { static final S: String = 'x'; }", fixedSource(once));
+	}
+
+	/** A read in a parameter default needs a constant: `Default argument value should be constant`. */
+	@:pin('control')
+	@:killer('M-DEMAND-DEFAULT-ARG')
+	public function testDefaultArgumentHoldsString(): Void {
+		Assert.equals(0, violations("class C { static inline final S: String = 'x'; static function f(a = S) {} }").length);
+	}
+
+	/** A constructor's default holds it too. */
+	@:pin('control')
+	@:killer('M-DEMAND-DEFAULT-ARG')
+	public function testConstructorDefaultHoldsString(): Void {
+		Assert.equals(0, violations("class C { static inline final S: String = 'x'; public function new(a = S) {} }").length);
+	}
+
+	/** A qualified default in ANOTHER file holds it: the scan answers over the whole scope. */
+	@:pin('control')
+	@:killer('M-DEMAND-DEFAULT-ARG')
+	public function testForeignQualifiedDefaultHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { public static inline final S: String = 'x'; }" },
+			{ file: 'D.hx', source: 'class D { static function f(a = C.S) {} }' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
+	/** The initializer of another `static inline` requires a compile-time value. */
+	@:pin('control')
+	@:killer('M-DEMAND-STATIC-INIT')
+	public function testInlineInitializerHoldsString(): Void {
+		Assert.equals(0, violations("class C { static inline final S: String = 'x'; static inline final T: String = S + 'y'; }").length);
+	}
+
+	/** A plain static initializer reading it may run first once the read stops folding. */
+	@:pin('control')
+	@:killer('M-DEMAND-STATIC-INIT')
+	public function testStaticInitializerReadHoldsString(): Void {
+		Assert.equals(0, violations("class C { static final T: String = S + 'y'; static inline final S: String = 'x'; }").length);
+	}
+
+	/** An enum-abstract value is implicitly inline and refuses a non-inline read. */
+	@:pin('control')
+	@:killer('M-DEMAND-ENUM-ABSTRACT')
+	public function testEnumAbstractValueHoldsString(): Void {
+		Assert.equals(
+			0, violations("class C { public static inline final S: String = 'x'; }\nenum abstract E(String) { var V = C.S; }").length
+		);
+	}
+
+	/** A module-level value is initialised among the statics. */
+	@:pin('control')
+	@:killer('M-DEMAND-MODULE-VALUE')
+	public function testModuleValueHoldsString(): Void {
+		Assert.equals(0, violations("class C { public static inline final S: String = 'x'; }\nfinal M: String = C.S;").length);
+	}
+
+	/** `__init__` runs before any static initializer: a non-inline read is unset there. */
+	@:pin('control')
+	@:killer('M-DEMAND-INIT-FUNCTION')
+	public function testStaticInitFunctionHoldsString(): Void {
+		Assert.equals(0, violations("class C { static inline final S: String = 'x'; static function __init__() { var v = S; } }").length);
+	}
+
+	/** An earlier static initializer holding a call may reach the constant before it is assigned. */
+	@:pin('control')
+	@:killer('M-INLSTR-EARLIER-CALL')
+	public function testEarlierCallInitializerHoldsString(): Void {
+		Assert.equals(
+			0, violations("class C { static var u = g(); static inline final S: String = 'x'; static function g() { return 1; } }").length
+		);
+	}
+
+	/** A call initializer AFTER the constant runs once it is assigned. */
+	@:pin('control')
+	@:killer('M-INLSTR-RUNS-CODE-LATER')
+	public function testLaterCallInitializerDoesNotHoldString(): Void {
+		Assert.equals(
+			1, violations("class C { static inline final S: String = 'x'; static var u = g(); static function g() { return 1; } }").length
+		);
+	}
+
+	/** An extern class's field may not lose `inline`: `on extern non-inline variable`. */
+	@:pin('control')
+	@:killer('M-INLSTR-EXTERN-CLASS')
+	public function testExternClassHoldsString(): Void {
+		Assert.equals(0, violations("extern class C { public static inline final S: String = 'x'; }").length);
+	}
+
+	/** An extern field likewise. */
+	@:pin('control')
+	@:killer('M-INLSTR-EXTERN-FIELD')
+	public function testExternFieldHoldsString(): Void {
+		Assert.equals(0, violations("class C { extern public static inline final S: String = 'x'; }").length);
+	}
+
+	/** A retained or reflected member keeps its access. */
+	@:pin('control')
+	@:killer('M-INLSTR-PINNED')
+	public function testKeepHoldsString(): Void {
+		Assert.equals(0, violations("class C { @:keep static inline final S: String = 'x'; }").length);
+	}
+
+	/** A public constant of a macro-consumed module keeps it: macros read the folded value and `FVar(AccInline, _)`. */
+	@:pin('control')
+	@:killer('M-INLSTR-MACRO')
+	public function testMacroConsumedPublicHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { public static inline final S: String = 'x'; }" },
+			{ file: 'M.hx', source: 'import haxe.macro.Expr;\nclass M { static var c = C; }' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
+	/** A file the parser cannot read may spell the name in any of those positions. */
+	@:pin('control')
+	@:killer('M-INLSTR-UNREADABLE')
+	public function testUnreadableFileMentioningHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { static inline final S: String = 'x'; }" },
+			{ file: 'D.hx', source: 'class D { var x = S ' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new InlineConstant(), src);
 	}

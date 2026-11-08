@@ -40,6 +40,18 @@ constant, missing the `inline` that folds it into an immediate at every use. Als
 var` constant, which can be `final` with no other change. `Info`; `--fix` inserts `inline` (or swaps
 `var` for `final`) and keeps the type annotation, so a `Float` constant written `5` stays `Float`.
 
+A `static inline final` of a plain string literal is flagged the other way: an inlined String copies
+its literal to every use (on hxcpp, once per translation unit), so `--fix` drops `inline` and leaves
+one shared `static final`. It stays inline while something needs its compile-time value or reads it
+before it is assigned: a parameter default (in any file), a `static inline` initializer, a field
+value of any abstract (`enum abstract` or legacy `@:enum abstract`), another static, module-level or
+local `static` initializer, the code argument of `js.Syntax.code` or `__js__`, a `__init__` function
+(or a `__init__` holding a call: the type's constants all stay), an earlier static initializer
+holding a call or `new`, an `extern` field or type (`private` before it too), `@:keep` / `@:rtti`,
+and a `public` one whose class is mentioned in macro code. A `static inline var` of a string goes `final` first and
+loses `inline` on the next pass. `member-order` then ranks it after its inline siblings; its `--fix`
+moves them up.
+
 The initializer is a literal, a negated number, or a bare reference to another `static inline`
 constant of a literal (a chain converges over successive `--fix` passes). `String` is not inlined:
 on hxcpp an inlined string is copied at every use. Inlining erases the runtime field, so a constant

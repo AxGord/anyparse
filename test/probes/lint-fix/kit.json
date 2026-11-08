@@ -1375,6 +1375,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "IC1",
+			"note": "inline-constant --fix drops inline from Strings read only by case patterns (a plain and an abstract-typed constant, an array pattern); the program must print what it printed",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"inline-constant",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "enum abstract T(String) from String to String {\n\tvar Q = 'q';\n}\n\nclass K {\n\n\tpublic static inline final C1:String = 'x';\n\tpublic static inline final C2:T = 'q';\n\n}\n\nclass Main {\n\n\tstatic function main():Void {\n\t\tfinal s:String = 'x';\n\t\tswitch (s) {\n\t\t\tcase K.C1: trace(1);\n\t\t\tcase _: trace(2);\n\t\t}\n\t\tfinal t:T = 'q';\n\t\tswitch (t) {\n\t\t\tcase K.C2: trace(3);\n\t\t\tcase _: trace(4);\n\t\t}\n\t\tswitch ([s, 'a']) {\n\t\t\tcase [K.C1, 'a']: trace(5);\n\t\t\tcase _:\n\t\t}\n\t}\n\n}\n",
+				"apq.json": "{}"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "416eaa080dfacf95",
+				"files": "9bf3ed3c17af65dc",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

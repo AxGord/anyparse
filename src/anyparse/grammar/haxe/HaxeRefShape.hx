@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.query.FactKinds;
 import anyparse.query.GrammarPlugin.RefShape;
 
 /**
@@ -394,6 +395,8 @@ final class HaxeRefShape {
 		table.optionalValueTypeName = 'Null';
 		table.optionalFieldMetaName = '@:optional';
 		table.execution = {
+			staticInitFunctionNames: ['__init__'],
+			targetCodeCallNames: FactKinds.SYNTAX_CODE_MEMBERS.concat(FactKinds.CODE_INTRINSICS),
 			implicitConversionMetaName: '@:from',
 			implicitOutwardConversionMetaName: '@:to',
 			// what `thread-safety` counts as blocking with no configuration: each one waits on a file, a process, a socket, a

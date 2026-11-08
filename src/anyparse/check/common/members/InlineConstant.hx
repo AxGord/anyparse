@@ -1,11 +1,13 @@
 package anyparse.check.common.members;
 
+import anyparse.check.scan.ConstantDemandScan;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
+import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
@@ -73,15 +75,28 @@ import anyparse.util.Strings;
  * type and every use — the classic Float-constant-becomes-Int hazard. So `static final X:Int = 5`
  * becomes `static inline final X:Int = 5`.
  *
- * ## Why String is excluded (hxcpp)
+ * ## Why String goes the other way (hxcpp, and every target's bytes)
  *
  * `inlineConstantLiteralKinds` (the grammar's policy seam) lists only `IntLit` / `HexLit` /
  * `FloatLit` / `BoolLit` and OMITS the string kinds. Under hxcpp an inlined String re-emits its
  * full literal (`HX_("...")`) at EVERY use site, duplicating the string's bytes once per use
  * across translation units, whereas a non-inline `static final` keeps exactly one shared copy —
  * with no compensating runtime benefit (both are static-backed, allocation-free). A scalar instead
- * constant-folds to a tiny immediate with zero duplication. So String constants stay
- * `static final`; only scalars are inlined.
+ * constant-folds to a tiny immediate with zero duplication. So only scalars are inlined, and the
+ * reverse arm drops `inline` from a `static inline final` of a plain string literal
+ * (`considerInlineString`; `--fix` deletes the keyword, and a `static inline var` reaches it one
+ * `--fix` pass after going `final`). It keys on the literal, not the declared type: a `:String`
+ * retyped to an abstract over String has the same copy per use.
+ *
+ * What holds the `inline` is what the value is needed for at compile time or before it is
+ * assigned — `ConstantDemandScan` names those positions: a parameter default, a `static inline`
+ * or enum-abstract initializer, a plain static or module-level initializer (Haxe 4.3.7 js, neko
+ * and interp read an unset field across an init-order forward read, where `inline` folded it), and
+ * a `__init__`-shaped function. An earlier static initializer holding a call or allocation holds
+ * it too, since it may reach the field indirectly (`runsCodeInStaticInit`). So does an extern
+ * field or an extern type (`on extern non-inline variable`), a pin meta, the macro-consumption
+ * gate, and an unreadable file spelling the name. The reflection gate does NOT apply here: the
+ * field remains, its value only becomes readable.
  *
  * ## Reflection visibility: the name-as-string gate is MANDATORY (hxcpp)
  *
@@ -143,7 +158,7 @@ import anyparse.util.Strings;
  *    constant non-inline.
  * 5. NO `@:keep` / `@:rtti`. A `@:keep`- or `@:rtti`-annotated field, or any member of a class
  *    carrying class-level `@:keep` / `@:rtti`, is explicitly retained for reflection / external
- *    tooling; inlining would erase its reflective value.
+ *    tooling; inlining would erase its reflective value, and the String arm declines them too.
  * 6. NO macro-built OWNER. A `@:build` / `@:autoBuild` / `@:genericBuild` type's fields are not the
  *    fields the declaration holds, so neither arm can reason about them:
  *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container. A builder that
@@ -179,9 +194,14 @@ final class InlineConstant extends RuleBase {
 	/** The `var` keyword a `static inline var` host span starts at - swapped to `final`. */
 	private static inline final VAR_KEYWORD: String = 'var';
 
+	/** The modifier a String constant's flag span starts at - deleted through to the next word. */
+	private static inline final INLINE_KEYWORD: String = 'inline';
+
 	public function new() {
 		super(
-			'inline-constant', 'a static final scalar that can be inline, or a static inline var that can be final', RuleCategory.Members
+			'inline-constant',
+			'a static final scalar that can be inline, a String constant that should not be, or a static inline var that can be final',
+			RuleCategory.Members
 		);
 	}
 
@@ -192,6 +212,12 @@ final class InlineConstant extends RuleBase {
 		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
 		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
+		final facts: RunFacts = {
+			reflected: reflected,
+			macroConsumed: macroConsumed,
+			proof: proof,
+			demand: ConstantDemandScan.of(files, plugin, seams)
+		};
 		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer`. This rule
 		// asked no index before; the four field rules, `member-order` and `prefer-inline` all did,
 		// and the gap was measured rather than argued (see the class doc).
@@ -206,7 +232,7 @@ final class InlineConstant extends RuleBase {
 			// access than core type".
 			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
 				walk(
-					violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false, false, proof,
+					violations, entry.file, entry.source, tree, seams, facts, false, false,
 					MemberBranchScan.seamsOf(plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)), index
 				);
 		}
@@ -214,10 +240,10 @@ final class InlineConstant extends RuleBase {
 	}
 
 	/**
-	 * Insert `inline ` before the `final` keyword of each flagged member. The candidate is
-	 * a static, non-inline final field by construction, so the insertion yields the
-	 * canonical `static inline final`; the edit fires only when the bytes at the span start
-	 * are literally `final` (so an unexpected span simply fails the equality).
+		 * The three flag shapes are told apart by the bytes at the span start, so an unexpected
+		 * span produces no edit: `final` (a static non-inline scalar) gets `inline ` inserted,
+		 * `var` (a `static inline var`) is swapped to `final`, and `inline` (a String constant)
+		 * is deleted through to the next word.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -226,14 +252,20 @@ final class InlineConstant extends RuleBase {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			// Two flag shapes share this rule. The add-inline case flags a `static final`
+			// Three flag shapes share this rule. The add-inline case flags a `static final`
 			// host (span starts at `final`) - insert `inline `. The var->final case flags a
-			// `static inline var` host (span starts at `var`) - swap the keyword. The byte
-			// check gates each, so an unexpected span simply produces no edit.
+			// `static inline var` host (span starts at `var`) - swap the keyword. The String
+			// arm flags the `inline` token - delete it. The byte check gates each, so an
+			// unexpected span simply produces no edit.
 			if (source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
 				edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
 			else if (source.substring(span.from, span.from + VAR_KEYWORD.length) == VAR_KEYWORD)
 				edits.push({ span: new Span(span.from, span.from + VAR_KEYWORD.length), text: FINAL_KEYWORD });
+			else if (source.substring(span.from, span.from + INLINE_KEYWORD.length) == INLINE_KEYWORD)
+				edits.push({
+					span: new Span(span.from, SourceText.skipSpaces(source, span.from + INLINE_KEYWORD.length, source.length)),
+					text: ''
+				});
 		}
 		return edits;
 	}
@@ -265,15 +297,15 @@ final class InlineConstant extends RuleBase {
 	 * Walk `node`; scan every visibility-bearing container's direct children for inlinable static
 	 * final constants. Class-level `@:keep` / `@:rtti` meta projects as `Meta` siblings PRECEDING the
 	 * container (not as its children), so a running pin flag over each node's direct children — set by
-	 * such a meta, cleared at the next non-meta node — marks the container it attaches to; a pinned
+	 * such a meta or the extern modifier, carried across a visibility modifier, cleared at the next other
+	 * node — marks the container it attaches to; a pinned
 	 * container's members are retained for reflection / tooling and never inlined. A `final class`
 	 * nests its body in a `FinalDecl(ClassForm …)` wrapper, so the pin is carried into the recursion
 	 * (`inheritedPin`) to reach the container one level down.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
-		macroConsumed: Array<String>, inheritedPin: Bool, inheritedNative: Bool, proof: InitProof, branch: MemberBranchSeams,
-		index: SymbolIndex
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: ConstantFieldSeams, facts: RunFacts,
+		inheritedPin: Bool, inheritedNative: Bool, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		var classPinned: Bool = inheritedPin;
 		var classNative: Bool = inheritedNative;
@@ -281,12 +313,13 @@ final class InlineConstant extends RuleBase {
 			if (seams.metaKinds.contains(child.kind)) {
 				classPinned = classPinned || isPinMeta(child.name, seams);
 				classNative = classNative || (seams.nativeInteropMetaName != null && child.name == seams.nativeInteropMetaName);
-			} else {
+			} else if (seams.externKind != null && child.kind == seams.externKind) {
+				// Extern precedes its container like a pin: the compiler refuses a non-inline extern field with an initializer.
+				classPinned = true;
+			} else if (!seams.visibility.contains(child.kind)) {
 				if (seams.containers.contains(child.kind))
-					scanContainer(
-						out, file, source, child, seams, reflected, macroConsumed, classPinned, classNative, proof, branch, index
-					);
-				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned, classNative, proof, branch, index);
+					scanContainer(out, file, source, child, seams, facts, classPinned, classNative, branch, index);
+				walk(out, file, source, child, seams, facts, classPinned, classNative, branch, index);
 				classPinned = false;
 				classNative = false;
 			}
@@ -294,31 +327,38 @@ final class InlineConstant extends RuleBase {
 	}
 
 	/**
-	 * The four questions a member's leading modifier run answers for this rule, read in one pass:
-	 * is it `static`, is it already `inline`, is its visibility exported, and does it carry a pin
-	 * meta (`@:keep` / `@:rtti`). Extracted from `scanContainer` so the arm conditions there read as
-	 * conditions rather than as the tail of a scan.
+	 * The answers a member's leading modifier run gives this rule, read in one pass: `static`, `inline` and the span of
+	 * that token, exported visibility, a pin meta (`@:keep` / `@:rtti`), `extern`. Extracted from `scanContainer` so the arm
+	 * conditions there read as conditions rather than as the tail of a scan.
 	 */
 	private static function modifierRunOf(run: Array<QueryNode>, source: String, seams: ConstantFieldSeams): ModifierRun {
 		var isStatic: Bool = false;
 		var isInline: Bool = false;
 		var exported: Bool = false;
 		var pinned: Bool = false;
+		var isExtern: Bool = false;
+		var inlineSpan: Null<Span> = null;
 		for (mod in run) {
-			if (mod.kind == seams.staticKind)
+			if (mod.kind == seams.staticKind) {
 				isStatic = true;
-			else if (seams.inlineKind != null && mod.kind == seams.inlineKind)
+			} else if (seams.inlineKind != null && mod.kind == seams.inlineKind) {
 				isInline = true;
-			else if (seams.visibility.contains(mod.kind))
+				inlineSpan = mod.span;
+			} else if (seams.externKind != null && mod.kind == seams.externKind) {
+				isExtern = true;
+			} else if (seams.visibility.contains(mod.kind)) {
 				exported = exported || ConstantFieldScan.isExportedVisibility(source, mod, seams.defaultVis);
-			else if (seams.metaKinds.contains(mod.kind))
+			} else if (seams.metaKinds.contains(mod.kind)) {
 				pinned = pinned || isPinMeta(mod.name, seams);
+			}
 		}
 		return {
 			isStatic: isStatic,
 			isInline: isInline,
 			exported: exported,
-			pinned: pinned
+			pinned: pinned,
+			isExtern: isExtern,
+			inlineSpan: inlineSpan
 		};
 	}
 
@@ -334,8 +374,8 @@ final class InlineConstant extends RuleBase {
 	 * member is skipped.
 	 */
 	private static function scanContainer(
-		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
-		macroConsumed: Array<String>, classPinned: Bool, classNative: Bool, proof: InitProof, branch: MemberBranchSeams, index: SymbolIndex
+		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: ConstantFieldSeams, facts: RunFacts,
+		classPinned: Bool, classNative: Bool, branch: MemberBranchSeams, index: SymbolIndex
 	): Void {
 		// Build-macro bail. A macro-built type's fields are not the fields the declaration holds, and
 		// BOTH arms of this rule act on the declaration alone: a `@:build` builder that rewrites this
@@ -345,12 +385,22 @@ final class InlineConstant extends RuleBase {
 		// `@:coreApi` bail above would miss it — the same per-owner question the sibling field rules
 		// ask.
 		if (ownerIsMacroBuilt(container, file, index)) return;
-		MemberBranchScan.eachMember(branch, container, child -> seams.members.contains(child.kind), (member, run, certain) -> {
+		// Whether code may have run before this member: a static-init function runs before every initializer, an earlier
+		// initializer before the member below it (`eachMember` visits in source order).
+		var earlierInitRunsCode: Bool = false;
+		final isMember: (QueryNode) -> Bool = child -> seams.members.contains(child.kind);
+		MemberBranchScan.eachMember(branch, container, isMember, (member, _, _) -> {
+			if (facts.demand.staticInitRunsCode(member)) earlierInitRunsCode = true;
+		});
+		MemberBranchScan.eachMember(branch, container, isMember, (member, run, certain) -> {
+			final kind: String = member.kind;
+			final mods: ModifierRun = modifierRunOf(run, source, seams);
+			final initRunsCode: Bool = runsCodeInStaticInit(member, mods, seams, facts.demand);
+			final precededByCode: Bool = earlierInitRunsCode;
+			earlierInitRunsCode = earlierInitRunsCode || initRunsCode;
 			// A modifier run only SOME builds see cannot answer `static` / `inline`, both of which
 			// this rule reads as enabling — see `MemberBranchScan.joinRuns`.
 			if (!certain) return;
-			final kind: String = member.kind;
-			final mods: ModifierRun = modifierRunOf(run, source, seams);
 			final sawStatic: Bool = mods.isStatic;
 			final sawInline: Bool = mods.isInline;
 			final exported: Bool = mods.exported;
@@ -365,10 +415,10 @@ final class InlineConstant extends RuleBase {
 			// PUBLIC only — a private constant is on no foreign surface, and the `static inline
 			// var` -> `static inline final` arm below changes no emission at all, only the keyword.
 			final pinned: Bool = sawKeep || classPinned || (classNative && exported);
-			if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !pinned)
-				consider(out, file, member, seams, reflected, macroConsumed, container, exported, proof);
+			if (seams.finalFieldKinds.contains(kind) && sawStatic)
+				considerFinal(out, file, source, member, seams, facts, container, mods, pinned, precededByCode);
 			else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
-				considerInlineVar(out, file, source, member, seams, reflected);
+				considerInlineVar(out, file, source, member, seams, facts.reflected);
 		});
 	}
 
@@ -381,17 +431,17 @@ final class InlineConstant extends RuleBase {
 	 * module surface).
 	 */
 	private static function consider(
-		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, reflected: ReflectionSurface,
-		macroConsumed: Array<String>, container: QueryNode, exported: Bool, proof: InitProof
+		out: Array<Violation>, file: String, field: QueryNode, seams: ConstantFieldSeams, facts: RunFacts, container: QueryNode,
+		exported: Bool
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		if (ReflectionScan.runtimeName(reflected, name)) return;
+		if (ReflectionScan.runtimeName(facts.reflected, name)) return;
 		final containerName: Null<String> = container.name;
-		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
+		if (exported && containerName != null && facts.macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
-		if (init == null || !proof(container, init)) return;
+		if (init == null || !facts.proof(container, init)) return;
 		final detail: String = ConstantFieldScan.isScalarLiteral(init, seams) ? 'is a scalar literal' : 'folds to an inline constant';
 		flag(out, file, span, 'static constant \'$name\' $detail; use inline');
 	}
@@ -597,6 +647,50 @@ final class InlineConstant extends RuleBase {
 		}
 	}
 
+	/** The `static final` arms: add `inline` to a scalar, or drop it from a String literal the demand scan holds no reader for. */
+	private static function considerFinal(
+		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: ConstantFieldSeams, facts: RunFacts,
+		container: QueryNode, mods: ModifierRun, pinned: Bool, precededByCode: Bool
+	): Void {
+		if (pinned) return;
+		if (!mods.isInline)
+			consider(out, file, field, seams, facts, container, mods.exported)
+		else if (!mods.isExtern && !precededByCode)
+			considerInlineString(out, file, source, field, seams, facts, container, mods);
+	}
+
+	/**
+	 * Flag a `static inline final` of a plain string literal to drop `inline`: the literal then has one
+	 * shared copy. Declines when a position that needs the compile-time value (or an initializer that may
+	 * read the field before it is assigned) spells the name, when an unreadable file might, and when a
+	 * macro may read the public field's inline access (`Context.typeExpr` folds it, `FVar(AccInline, _)`
+	 * names it). The reflection gate does not apply: the field stays, its value becomes readable.
+	 */
+	private static function considerInlineString(
+		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: ConstantFieldSeams, facts: RunFacts,
+		container: QueryNode, mods: ModifierRun
+	): Void {
+		final name: Null<String> = field.name;
+		final inlineSpan: Null<Span> = mods.inlineSpan;
+		if (name == null || inlineSpan == null) return;
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
+		if (init == null || !ConstantFieldScan.isPlainStringLiteral(init, source, seams)) return;
+		if (facts.demand.names.exists(name)) return;
+		if (facts.reflected.unreadable.exists(unreadable -> RawSourceScan.mentionsWord(unreadable, name))) return;
+		final containerName: Null<String> = container.name;
+		if (mods.exported && containerName != null && facts.macroConsumed.contains(containerName)) return;
+		flag(out, file, inlineSpan, 'static constant \'$name\' is a String literal; drop inline');
+	}
+
+	/** Whether `member` is a static field whose initializer may run code, reading a later constant before it is assigned. */
+	private static function runsCodeInStaticInit(
+		member: QueryNode, mods: ModifierRun, seams: ConstantFieldSeams, demand: ConstantDemandScan
+	): Bool {
+		if (!mods.isStatic || !(seams.finalFieldKinds.contains(member.kind) || seams.mutableFieldKinds.contains(member.kind))) return false;
+		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(member);
+		return init != null && demand.runsCode(init);
+	}
+
 }
 
 /**
@@ -606,13 +700,29 @@ final class InlineConstant extends RuleBase {
  * never pays for an index.
  */
 private typedef InitProof = (container:QueryNode, init:QueryNode) -> Bool;
+/** What `run` resolves once and every container scan reads. */
+private typedef RunFacts = {
+	final reflected: ReflectionSurface;
+	final macroConsumed: Array<String>;
+	final proof: InitProof;
+	final demand: ConstantDemandScan;
+};
+
 /**
  * What a member's leading modifier run says about it, resolved once by `modifierRunOf`:
- * `static` / already-`inline` / exported visibility / carrying a pin meta (`@:keep`, `@:rtti`).
+ * `static` / already-`inline` and that token's span / exported visibility / carrying a pin meta (`@:keep`, `@:rtti`) / `extern`.
  */
 private typedef ModifierRun = {
+
 	final isStatic: Bool;
 	final isInline: Bool;
 	final exported: Bool;
 	final pinned: Bool;
+
+	/** The member carries the extern modifier; a non-inline extern field with an initializer is a compile error. */
+	final isExtern: Bool;
+
+	/** The `inline` modifier's own span, which the String arm flags and its fix deletes; null when absent. */
+	final inlineSpan: Null<Span>;
+
 };

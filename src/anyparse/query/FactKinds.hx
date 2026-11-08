@@ -102,4 +102,19 @@ final class FactKinds {
 	/** What ends a field node's id before an overload index (`~n`) or a uniqueness index (`#n`). */
 	public static final ID_SUFFIXES: Array<String> = [OVERLOAD_ID, UNIQUE_ID];
 
+	/** The `*.Syntax` members that paste their first argument into the output as target code. */
+	public static final SYNTAX_CODE_MEMBERS: Array<String> = ['code', 'plainCode'];
+
+	/** The target intrinsics whose first argument is target code pasted into the output. */
+	public static final CODE_INTRINSICS: Array<String> = [
+		'__cpp__',
+		'__js__',
+		'__php__',
+		'__python__',
+		'__lua__',
+		'__java__',
+		'__cs__',
+		'__hl__'
+	];
+
 }

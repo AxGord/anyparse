@@ -923,7 +923,7 @@ final class TypedFactsWalk {
 				'{"a":"super"$sup,$head}';
 			case TLocal(v) if (_locals.exists(v.id)): '{"t":${q(_locals[v.id] ?? '')},"a":"local",$head}';
 			case TIdent(identifier):
-				final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.CODE_INTRINSICS.contains(identifier));
+				final code: String = TypedFactsShapes.nativeCode(args, FactKinds.CODE_INTRINSICS.contains(identifier));
 				add('native', '{"w":"ident","n":${q(identifier)},"p":$where$code${handedText(args)}}');
 				'{"t":${q(identifier)},"a":"ident",$head}';
 			case _:
@@ -947,7 +947,7 @@ final class TypedFactsWalk {
 		if (access.kind == 'FStatic' && declaring != null && FactKinds.REFLECTION_CLASSES.contains(declaring))
 			reflection(targetName, args, where);
 		if (access.kind == 'FStatic' && declaring != null && TypedFactsShapes.SYNTAX_CLASSES.contains(declaring)) {
-			final code: String = TypedFactsShapes.nativeCode(args, TypedFactsShapes.SYNTAX_CODE_MEMBERS.contains(access.field));
+			final code: String = TypedFactsShapes.nativeCode(args, FactKinds.SYNTAX_CODE_MEMBERS.contains(access.field));
 			add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code${handedText(args)}}');
 		}
 		final chained: Bool = nativeChain(callee, args);

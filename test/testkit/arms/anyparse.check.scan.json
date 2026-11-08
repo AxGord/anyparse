@@ -597,7 +597,7 @@
 		{
 			"name": "M-CONST-EXPR-INTERPOLATED",
 			"type": "anyparse.check.scan.ConstantFieldScan",
-			"method": "isConstantLiteral",
+			"method": "isPlainStringLiteral",
 			"find": "return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;",
 			"replace": "return seams.stringLiteralKinds.contains(init.kind);",
 			"note": "an interpolated string is read as a plain literal"
@@ -1278,6 +1278,118 @@
 			"find": "return node.children.length == WHILE_CHILD_COUNT;",
 			"replace": "final FIELD_ACCESS_CHILD_COUNT: Int = 1;\n\treturn node.children.length == WHILE_CHILD_COUNT;",
 			"note": "the loop-slot owner keeps its own field-access child count instead of asking NodeShape, so the operand-count guard finds a second copy in a file exempt from the slot guard"
+		},
+		{
+			"name": "M-DEMAND-DEFAULT-ARG",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": " || seams.paramKinds.contains(kind)",
+			"replace": "",
+			"note": "a constant read in a parameter default loses inline: Default argument value should be constant"
+		},
+		{
+			"name": "M-DEMAND-MODULE-VALUE",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "seams.moduleValueKinds.contains(kind) || ",
+			"replace": "",
+			"note": "a module-level value read loses inline and may read an unset field"
+		},
+		{
+			"name": "M-DEMAND-STATIC-INIT",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "(sawStatic || implicitlyStatic)",
+			"replace": "implicitlyStatic",
+			"note": "a static or static-inline initializer read loses inline"
+		},
+		{
+			"name": "M-DEMAND-ENUM-ABSTRACT",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "(sawStatic || implicitlyStatic)",
+			"replace": "sawStatic",
+			"note": "an enum-abstract value read loses inline: Inline variable initialization must be a constant value"
+		},
+		{
+			"name": "M-DEMAND-INIT-FUNCTION",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "if (seams.staticInitFunctionNames.contains(child.name ?? '')) spellNames(child, out);",
+			"replace": "if (false) spellNames(child, out);",
+			"note": "a __init__ read loses inline and sees the field unset"
+		},
+		{
+			"name": "M-DEMAND-LITERAL-NO-READ",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "demand",
+			"find": "!ConstantFieldScan.isPlainStringLiteral(value, source, seams.constants)",
+			"replace": "true",
+			"note": "a self-named String constant holds itself through its own literal"
+		},
+		{
+			"name": "M-DEMAND-INIT-RUNS-BODY",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "staticInitRunsCode",
+			"find": " && runsCode(member)",
+			"replace": "",
+			"note": "a __init__ that calls nothing holds every constant of its type"
+		},
+		{
+			"name": "M-DEMAND-INIT-ONLY-INIT",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "staticInitRunsCode",
+			"find": "_staticInitFunctionNames.contains(member.name ?? '') && ",
+			"replace": "",
+			"note": "any function holding a call counts as running at static-init time"
+		},
+		{
+			"name": "M-DEMAND-LEGACY-ENUM-ABSTRACT",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "seams.implicitStaticHostKinds.contains(node.kind)",
+			"replace": "node.kind == 'EnumAbstractDecl'",
+			"note": "a legacy @:enum abstract projects as a plain abstract; its value is no longer a demanding position"
+		},
+		{
+			"name": "M-DEMAND-TARGET-CODE",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "} else if (isTargetCodeCall(child, seams)) {",
+			"replace": "} else if (false) {",
+			"note": "the code argument of a target-code call loses its constant: must be a string constant"
+		},
+		{
+			"name": "M-DEMAND-TARGET-CODE-FIRST-ONLY",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "demand(child.children[1], source, seams, out);",
+			"replace": "spellNames(child, out);",
+			"note": "every argument of a target-code call holds, not only the code argument"
+		},
+		{
+			"name": "M-DEMAND-STATIC-LOCAL",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "} else if (seams.staticLocalKinds.contains(kind)) {",
+			"replace": "} else if (false) {",
+			"note": "a local static initializer read loses inline and sees the field unset"
+		},
+		{
+			"name": "M-DEMAND-STATIC-LOCAL-EVERY-BINDING",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": "// The whole declaration: a multi-binding form nests the later initializers in continuation nodes.\nspellNames(child, out);",
+			"replace": "demand(ConstantFieldScan.initializerOf(child), source, seams, out);",
+			"note": "only the last binding of a multi-binding local static is read"
+		},
+		{
+			"name": "M-DEMAND-SPELLS-DESCENDANTS",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "spellNames",
+			"find": "for (child in node.children) spellNames(child, out);",
+			"replace": "",
+			"note": "a read spelled below the position (a qualified path, an interpolated segment) holds nothing"
 		}
 	]
 }

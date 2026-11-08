@@ -56,6 +56,7 @@ final class ConstantFieldScan {
 			staticKind: staticKind,
 			inlineKind: shape.inlineModifierKind,
 			identKind: shape.identKind,
+			externKind: shape.externModifierKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			nativeInteropMetaName: shape.nativeInteropDeclMetaName,
 			retainedMetaName: shape.retainedDeclMetaName,
@@ -103,9 +104,7 @@ final class ConstantFieldScan {
 	 * question rather than writing a second literal test of its own.
 	 */
 	public static function isConstantLiteral(init: QueryNode, source: String, seams: ConstantFieldSeams): Bool {
-		if (isScalarLiteral(init, seams)) return true;
-		final fold: Null<StringFoldSupport> = seams.stringFold;
-		return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;
+		return isScalarLiteral(init, seams) || isPlainStringLiteral(init, source, seams);
 	}
 
 	/**
@@ -145,6 +144,12 @@ final class ConstantFieldScan {
 		return resolved != null && isScalarLiteral(init, resolved);
 	}
 
+	/** Whether `init` is a PLAIN string literal: `literalOf` answers null for an interpolated one, whose expressions run. */
+	public static function isPlainStringLiteral(init: QueryNode, source: String, seams: ConstantFieldSeams): Bool {
+		final fold: Null<StringFoldSupport> = seams.stringFold;
+		return seams.stringLiteralKinds.contains(init.kind) && fold?.literalOf(init, source) != null;
+	}
+
 }
 
 /**
@@ -164,6 +169,9 @@ typedef ConstantFieldSeams = {
 	final staticKind: String;
 	final inlineKind: Null<String>;
 	final identKind: String;
+
+	/** `RefShape.externModifierKind` — a modifier whose field may only be inline, read by `inline-constant`. */
+	final externKind: Null<String>;
 	final metaKinds: Array<String>;
 
 	/** `RefShape.nativeInteropDeclMetaName` — read by `inline-constant` alone; null when the grammar leaves it unset. */
