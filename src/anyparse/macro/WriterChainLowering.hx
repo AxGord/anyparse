@@ -367,7 +367,10 @@ final class WriterChainLowering {
 				final _mTc: Null<String> = _args[_mj].trailingComment;
 				final _mLast: Bool = _mj == _docs.length - 1;
 				// The element loop's own answer: a comment not written after the separator is in the element's Doc.
-				final _mAfterSep: Null<String> = ${argCommentAfterSepExpr(c, macro _mj)} ? _mTc : null;
+				// A last argument's comment after the kept separator, beside one before it, takes the after-separator place.
+				final _mAfterSep: Null<String> = (_mLast && $tcExpr ? _args[_mj].afterSepComment : null) ?? (
+					${argCommentAfterSepExpr(c, macro _mj)} ? _mTc : null
+				);
 				// Between elements only when the source wrote a separator there; on the
 				// last element when the config asks for a trailing one OR the source
 				// itself put one (which is what an after-separator comment proves).
@@ -393,11 +396,19 @@ final class WriterChainLowering {
 	private static function lowerPostfixPushElem(c: PostfixStarCtx): Expr {
 		final elemCall: Expr = c.elemCall;
 		final bareArgPush: Expr = c.relocateTrailingComments ? macro _bareArgs.push(_elem) : macro {};
+		final tcExpr: Expr = c.tcExpr;
 		return c.isTriviaStar
 			? macro {
 				final _elem: anyparse.core.Doc = $elemCall;
 				$bareArgPush;
-				final _tc: Null<String> = _args[_i].trailingComment;
+				// A comment after the last separator beside one before it: the force-multi shape writes it after the
+				// kept separator; with the separator dropped it joins the run beside the argument, as the next parse reads it.
+				final _afterSepTc: Null<String> = _args[_i].afterSepComment;
+				final _beforeSepTc: Null<String> = _args[_i].trailingComment;
+				final _tc: Null<String> = _afterSepTc != null && !$tcExpr
+					? anyparse.runtime.CommentRun.join(_beforeSepTc != null ? [_beforeSepTc, _afterSepTc] : [_afterSepTc])
+					: _beforeSepTc;
+				if (_afterSepTc != null && $tcExpr) _forceArgMulti = true;
 				// ω-callarg-after-sep-comment: the parser routes a same-line LINE
 				// comment that followed the separator into THIS element's trailing
 				// slot with `trailingBeforeSep == false`. The separator itself belongs

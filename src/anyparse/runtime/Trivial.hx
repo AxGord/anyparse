@@ -63,6 +63,13 @@ typedef Trivial<T> = {
 	var trailingBeforeSep: Bool;
 
 	/**
+	 * A comment run the source wrote AFTER the separator when `trailingComment` already holds one written before it
+	 * (`g(a, b /* x *\/, /* c *\/)`); null otherwise. Only a call's last argument carries one, since a comment after any
+	 * other separator leads the next argument.
+	 */
+	@:optional var afterSepComment: Null<String>;
+
+	/**
 	 * Source had a separator (e.g. `,`) immediately AFTER this element, before the next element's
 	 * leading trivia or the close literal. Defaults to `true` so non-tracking sites (postfix args,
 	 * tryparse Stars, the raw→paired bridge) keep "always emit sep"; the `@:sep` + `@:trivia` +

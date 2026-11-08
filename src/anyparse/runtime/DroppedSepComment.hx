@@ -21,7 +21,8 @@ final class DroppedSepComment {
 	 * Whether the source wrote the comment before or after its separator does not matter: with no separator written,
 	 * the next parse meets the element and the comment either way. A parsed tree never even holds a before-separator
 	 * comment on a tail that captures — that tail took it when the source was parsed. A block comment stays where it
-	 * is: one after a dropped separator already reads back the way the first write lays it out.
+	 * is: one after a dropped separator already reads back the way the first write lays it out,
+	 * so an `afterSepComment` becomes the trailing comment the next parse finds after the tail.
 	 */
 	public static function last<T>(arr: Array<Trivial<T>>, sepEmitted: Bool, rehome: (T, String) -> Null<T>): Array<Trivial<T>> {
 		if (sepEmitted || arr.length == 0) return arr;
@@ -38,8 +39,8 @@ final class DroppedSepComment {
 			blankAfterLeadingComments: t.blankAfterLeadingComments,
 			newlineBefore: t.newlineBefore,
 			leadingComments: t.leadingComments,
-			trailingComment: null,
-			trailingBeforeSep: false,
+			trailingComment: t.afterSepComment,
+			trailingBeforeSep: t.afterSepComment != null,
 			sepAfter: false,
 			leadingCommentsGlued: t.leadingCommentsGlued,
 			node: node

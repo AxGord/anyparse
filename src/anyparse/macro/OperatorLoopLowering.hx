@@ -120,10 +120,12 @@ final class OperatorLoopLowering {
 				}
 				final _node: $elemCT = $elemCall;
 				var _trailing: Null<String> = null;
-				// Step 1: same-line trail capture. Returns
-				// captured slice with delimiters or null.
-				final _sameLine: Null<String> = collectTrailingFull(ctx);
-				if (_sameLine != null) _trailing = _sameLine;
+				// Step 1: same-line trail capture — every comment left on the argument's line (`b /* x */ // c`) is one run.
+				var _sameLine: Null<String> = collectTrailingFull(ctx);
+				while (_sameLine != null) {
+					_trailing = _trailing != null ? anyparse.runtime.CommentRun.join([_trailing, _sameLine]) : _sameLine;
+					_sameLine = StringTools.startsWith(_sameLine, '//') ? null : collectTrailingFull(ctx);
+				}
 				// Step 2: multi-line trail look-ahead.
 				final _preSweepPos: Int = ctx.pos;
 				final _swept = collectTrivia(ctx);
@@ -160,10 +162,13 @@ final class OperatorLoopLowering {
 				// the next element's leading slot (`f(a, /* c */ b)`) — leaving it
 				// there keeps every existing layout byte-identical. After the LAST
 				// separator (`f(a, b, /* c */)`) no element follows: every comment up
-				// to the close trails this argument, whatever its style.
+				// to the close trails this argument, whatever its style — in the
+				// after-separator slot of its own when one already sits before the
+				// separator (`f(a, b /* x */, /* c */)`), so each keeps its side.
 				final _postSepPos: Int = ctx.pos;
+				final _beforeSep: Null<String> = _trailing;
 				var _afterSep: Null<String> = null;
-				if (_sepAfter && _trailing == null) {
+				if (_sepAfter) {
 					final _afterSepRaw: Null<String> = collectTrailingFull(ctx);
 					final _afterLinePos: Int = ctx.pos;
 					final _tail = collectTrivia(ctx);
@@ -171,14 +176,16 @@ final class OperatorLoopLowering {
 						_afterSep = anyparse.runtime.CommentRun.join(
 							_afterSepRaw != null ? [_afterSepRaw].concat(_tail.leadingComments) : _tail.leadingComments
 						);
-					} else if (_afterSepRaw != null && (StringTools.startsWith(_afterSepRaw, '//') || !($closeNotNextExpr))) {
+					} else if (
+						_afterSepRaw != null && (StringTools.startsWith(_afterSepRaw, '//') && _beforeSep == null || !($closeNotNextExpr))
+					) {
 						ctx.pos = _afterLinePos;
 						_afterSep = _afterSepRaw;
 					}
 				}
 				if (_afterSep == null)
 					ctx.pos = _postSepPos
-				else
+				else if (_beforeSep == null)
 					_trailing = _afterSep;
 				_args.push({
 					blankBefore: _lead.blankBefore,
@@ -187,7 +194,8 @@ final class OperatorLoopLowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
-					trailingBeforeSep: _afterSep == null,
+					trailingBeforeSep: _beforeSep != null || _afterSep == null,
+					afterSepComment: _beforeSep != null ? _afterSep : null,
 					sepAfter: _sepAfter,
 					node: _node
 				});

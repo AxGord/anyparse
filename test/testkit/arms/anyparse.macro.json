@@ -2029,8 +2029,8 @@
 			"name": "M-CALL-AFTER-LAST-SEP-BLOCK-LEFT",
 			"type": "anyparse.macro.OperatorLoopLowering",
 			"method": "buildPostfixCallArgsTriviaLoop",
-			"find": "(StringTools.startsWith(_afterSepRaw, '//') || !($closeNotNextExpr))",
-			"replace": "StringTools.startsWith(_afterSepRaw, '//')",
+			"find": "(StringTools.startsWith(_afterSepRaw, '//') && _beforeSep == null || !($closeNotNextExpr))",
+			"replace": "StringTools.startsWith(_afterSepRaw, '//') && _beforeSep == null",
 			"note": "a block comment after the last comma of a call goes back to a leading slot nothing reads, so the round trip refuses `g(a, b, /* c */)`"
 		},
 		{
@@ -2048,6 +2048,62 @@
 			"find": "} else if (_swept.leadingComments.length > 0 && !($closeNotNextExpr)) {",
 			"replace": "} else if (false) {",
 			"note": "a second comment before the close of a call with no trailing comma is left to a leading slot nothing reads, so the round trip drops it"
+		},
+		{
+			"name": "M-CALL-AFTER-SEP-BESIDE-BEFORE-DROPPED",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "afterSepComment: _beforeSep != null ? _afterSep : null,",
+			"replace": "afterSepComment: null,",
+			"note": "a comment after the last comma of a call whose last argument already has one before the comma is captured into no slot, so `g(a, b /* x */, /* c */)` loses `/* c */`"
+		},
+		{
+			"name": "M-CALL-SAME-LINE-RUN-FIRST-ONLY",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "_sameLine = StringTools.startsWith(_sameLine, '//') ? null : collectTrailingFull(ctx);",
+			"replace": "_sameLine = null;",
+			"note": "only the first comment on an argument's line is read as its same-line run, so `b /* x */ // c` reads back with `// c` on a line of its own and the write takes two passes"
+		},
+		{
+			"name": "M-CALL-AFTER-SEP-KEPT-UNWRITTEN",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixForceMultiDoc",
+			"find": "(_mLast && $tcExpr ? _args[_mj].afterSepComment : null) ??",
+			"replace": "(null: Null<String>) ??",
+			"note": "the force-multi call layout never writes a last argument's after-separator comment, so the kept comma loses `/* c */`"
+		},
+		{
+			"name": "M-CALL-AFTER-SEP-DROPPED-UNJOINED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "lowerPostfixPushElem",
+			"find": "? anyparse.runtime.CommentRun.join(_beforeSepTc != null ? [_beforeSepTc, _afterSepTc] : [_afterSepTc])",
+			"replace": "? _beforeSepTc",
+			"note": "with the last comma dropped the after-separator comment is not joined beside the argument, so `remove` loses `/* c */`"
+		},
+		{
+			"name": "M-TRAILING-RUN-COLUMN-ZERO",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "trailingCommentDocVerbatimField",
+			"find": "if (_runLines.length == 1) return",
+			"replace": "if (true) return",
+			"note": "a trailing run on several lines is written as one verbatim text, so the comment after a line comment lands at column 0"
+		},
+		{
+			"name": "M-TRAILING-GUARD-FIRST-COMMENT",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "trailingCommentDocGuardedField",
+			"find": "anyparse.runtime.CommentRun.endsWithLineComment(content)",
+			"replace": "StringTools.startsWith(content, '//')",
+			"note": "a run that opens with a block comment and ends with a line comment is not guarded, so `b /* x */ // c` swallows the close paren"
+		},
+		{
+			"name": "M-CALL-AFTER-SEP-LINE-NON-LAST-CLAIMED",
+			"type": "anyparse.macro.OperatorLoopLowering",
+			"method": "buildPostfixCallArgsTriviaLoop",
+			"find": "StringTools.startsWith(_afterSepRaw, '//') && _beforeSep == null ||",
+			"replace": "StringTools.startsWith(_afterSepRaw, '//') ||",
+			"note": "a line comment after a non-last comma beside a before-comma comment goes to the after-separator slot only the last argument's writer reads, so `g(a /* x */, // c\\n b)` loses `// c`"
 		}
 	]
 }

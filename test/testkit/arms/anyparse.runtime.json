@@ -119,6 +119,30 @@
 			"find": "out + (prevLine ? '\\n' : ' ') + c",
 			"replace": "out + '\\n' + c",
 			"note": "block comments joined into one trailing slot each start a line of their own, so `b, /* c */ /* d */` breaks apart"
+		},
+		{
+			"name": "M-COMMENT-RUN-LINES-BLOCK-BLIND",
+			"type": "anyparse.runtime.CommentRun",
+			"method": "lines",
+			"find": "i = close < 0 ? slot.length : close + 2;",
+			"replace": "i += 2;",
+			"note": "a newline inside a block comment ends a line of the run, so a multi-line block comment in a trailing slot is cut in two"
+		},
+		{
+			"name": "M-COMMENT-RUN-LINES-LINE-BLIND",
+			"type": "anyparse.runtime.CommentRun",
+			"method": "lines",
+			"find": "i = eol < 0 ? slot.length : eol;",
+			"replace": "i += 2;",
+			"note": "a block opener inside a line comment hides the newline that ends it, so the next comment of the run is read onto the same line"
+		},
+		{
+			"name": "M-COMMENT-RUN-ENDS-ANY-LINE",
+			"type": "anyparse.runtime.CommentRun",
+			"method": "endsWithLineComment",
+			"find": "final last: String = run[run.length - 1];",
+			"replace": "final last: String = slot;",
+			"note": "a line comment on an earlier line of the run counts as its end, so a run that ends in a block comment is guarded as if a line comment closed it"
 		}
 	]
 }

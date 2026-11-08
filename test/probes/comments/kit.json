@@ -119,7 +119,13 @@
 		"w2e/p3.hx": "class A {\n\tfunction f() {\n\t\tvar x = [a ? b /* m\n\t\tn */ : c, 2];\n\t}\n}\n",
 		"w2e/p8.hx": "class A {\n\tfunction f() {\n\t\tvar x = {k: a ? b /* m\n\t\tn */ : c};\n\t}\n}\n",
 		"trailcomma-add/A.hx": "class A {\n\tstatic function f() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t\tvar b = [\n\t\t\t1111111111111111111111111111111, 2222222222222222222222222222222222, 33333333333333333333333333333333333\n\t\t];\n\t}\n}\n",
-		"trailcomma-add/hxformat.json": "{\"trailingCommas\":{\"arrayLiteralDefault\":\"yes\"}}\n"
+		"trailcomma-add/hxformat.json": "{\"trailingCommas\":{\"arrayLiteralDefault\":\"yes\"}}\n",
+		"tce-keep/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\"}}\n",
+		"tce-keep/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
+		"tce-remove/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"remove\"}}\n",
+		"tce-remove/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
+		"tce-add/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"callParameter\": {\"defaultWrap\": \"onePerLine\", \"rules\": []}}, \"trailingCommas\": {\"callArgumentDefault\": \"yes\"}}\n",
+		"tce-add/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -2105,6 +2111,60 @@
 			"expect": {
 				"exit": 0,
 				"out": "c010ab4f5ea737ef",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "tce-keep/c1.hx",
+			"fixpoint": "tce-keep/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"tce-keep/c1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "273f0abddee4433b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "tce-remove/c1.hx",
+			"fixpoint": "tce-remove/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"tce-remove/c1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "924db547b41a8b1e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "tce-add/c1.hx",
+			"fixpoint": "tce-add/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"tce-add/c1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "273f0abddee4433b",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

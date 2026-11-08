@@ -795,7 +795,17 @@ class WriterCodegen {
 	 * style trailing (`/* foo *\/`) passes through unchanged.
 	 */
 	private static function trailingCommentDocVerbatimField(): Field {
-		final body: Expr = macro return _dtv(' ' + lineCommentStr([content], 0, opt));
+		// A run that `CommentRun.join` put on several lines writes each at the current indent, never at column 0.
+		final body: Expr = macro {
+			final _runLines: Array<String> = anyparse.runtime.CommentRun.lines(content);
+			if (_runLines.length == 1) return _dtv(' ' + lineCommentStr([content], 0, opt));
+			final _runParts: Array<anyparse.core.Doc> = [_dtv(' ' + lineCommentStr([_runLines[0]], 0, opt))];
+			for (_k in 1..._runLines.length) {
+				_runParts.push(_dhl());
+				_runParts.push(_dtv(lineCommentStr([_runLines[_k]], 0, opt)));
+			}
+			return _dc(_runParts);
+		};
 		return {
 			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],
@@ -832,7 +842,7 @@ class WriterCodegen {
 	private static function trailingCommentDocGuardedField(): Field {
 		final body: Expr = macro {
 			final _doc: anyparse.core.Doc = trailingCommentDocVerbatim(content, opt);
-			return StringTools.startsWith(content, '//') ? _dc([_doc, _dohsbh()]) : _doc;
+			return anyparse.runtime.CommentRun.endsWithLineComment(content) ? _dc([_doc, _dohsbh()]) : _doc;
 		};
 		return {
 			name: 'trailingCommentDocGuarded',
