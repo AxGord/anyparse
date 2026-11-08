@@ -157,8 +157,10 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 		final out: Array<Null<TypeReplyPosition>> = [for (_ in requests) null];
 		#if nodejs
 		if (requests.length == 0) return out;
-		final dir: Null<String> =
-			try js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-display-'])) catch (exception: haxe.Exception) null;
+		final dir: Null<String> = try
+			js.node.Fs.mkdtempSync(Path.join([TempScratch.root(), 'apq-display-']))
+		catch (exception: haxe.Exception)
+			null;
 		if (dir == null) return out;
 		final inputs: Null<Map<String, String>> = stdinFiles(dir, requests);
 		if (inputs == null) {

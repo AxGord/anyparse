@@ -287,9 +287,10 @@ final class OracleGenerationLock {
 
 	/** Remove `path` and everything under it; a part already gone is no error. */
 	private static function removeTree(path: String): Void {
-		try js.Syntax.code(
-			"require('fs').rmSync({0}, { recursive: true, force: true })", path
-		) catch (exception: haxe.Exception) {} // noqa: swallowed-exception
+		try
+			js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", path)
+		catch (exception: haxe.Exception)
+			{} // noqa: swallowed-exception
 	}
 
 	/** `path`'s modification time in ms, or now when it cannot be read. */

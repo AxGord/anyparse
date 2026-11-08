@@ -134,9 +134,10 @@ final class ReplaceNode {
 	public static function resolveTarget(source: String, tree: QueryNode, target: ReplaceTarget, plugin: GrammarPlugin): ResolvedTarget {
 		return switch target {
 			case BySelector(selectorExpr):
-				final selector: Selector = try Selector.parse(selectorExpr) catch (exception: Exception) return Failed(
-					'malformed selector "$selectorExpr": ${exception.message}'
-				);
+				final selector: Selector = try
+					Selector.parse(selectorExpr)
+				catch (exception: Exception)
+					return Failed('malformed selector "$selectorExpr": ${exception.message}');
 				final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
 				if (matches.length == 0) return Failed('--select "$selectorExpr" matched no nodes');
 				if (matches.length > 1)

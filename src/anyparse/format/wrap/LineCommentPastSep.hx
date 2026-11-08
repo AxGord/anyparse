@@ -66,6 +66,14 @@ class LineCommentPastSep {
 		return orphans.length == 1 && orphans[0].startsWith('//') ? orphans[0] : null;
 	}
 
+	/** A trailing line comment followed by the guard that keeps the next token off its line. */
+	public static function isGuardedLineComment(d: Doc): Bool {
+		return switch d {
+			case Concat([Text(s, _), OptHardlineSkipBeforeHardline]): s.trim().startsWith('//');
+			case _: false;
+		};
+	}
+
 	/**
 	 * `d` with `sep` inserted before its closing line comment, or null when `d` does not close on one. The comment is
 	 * found on the right spine through `Concat` only, so no group's fit decision changes: the separator lands in the
@@ -91,14 +99,6 @@ class LineCommentPastSep {
 					}
 				}
 			case _: null;
-		};
-	}
-
-	/** A trailing line comment followed by the guard that keeps the next token off its line. */
-	private static function isGuardedLineComment(d: Doc): Bool {
-		return switch d {
-			case Concat([Text(s, _), OptHardlineSkipBeforeHardline]): s.trim().startsWith('//');
-			case _: false;
 		};
 	}
 

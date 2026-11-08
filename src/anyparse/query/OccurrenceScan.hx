@@ -266,7 +266,12 @@ final class OccurrenceScan {
 	public static function classifyOccurrences(
 		source: String, name: String, plugin: GrammarPlugin, from: Int, end: Int, excluded: Array<Span>
 	): Null<Array<ClassifiedOccurrence>> {
-		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return null catch (exception: Exception) return null;
+		final tree: QueryNode = try
+			plugin.parseFile(source)
+		catch (exception: ParseError)
+			return null
+		catch (exception: Exception)
+			return null;
 		final out: Array<ClassifiedOccurrence> = [];
 		final len: Int = name.length;
 		if (len == 0) return out;

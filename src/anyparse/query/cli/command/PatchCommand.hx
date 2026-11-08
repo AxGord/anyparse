@@ -163,8 +163,10 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 				CliIo.stderr('apq patch: --batch: a row is <file>\\t<selector>\\t<payload-file>\\t<out-file>, got "$line"\n');
 				return EXIT_USAGE;
 			}
-			final refusal: Null<String> =
-				try batchRow(cells[0], cells[1], cells[2], cells[3], sep, plugin, canonical) catch (exception: Exception) exception.message;
+			final refusal: Null<String> = try
+				batchRow(cells[0], cells[1], cells[2], cells[3], sep, plugin, canonical)
+			catch (exception: Exception)
+				exception.message;
 			if (refusal != null) CliIo.writeFile('${cells[3]}.err', '$refusal\n');
 		}
 		return EXIT_OK;

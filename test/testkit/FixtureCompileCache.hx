@@ -326,8 +326,10 @@ final class FixtureCompileCache {
 			final shared: Null<String> = readEntry(entry);
 			if (shared != null) return shared;
 			if (!Fs.existsSync(lock)) return readEntry(entry);
-			final holder: Null<Int> = try Std.parseInt(Fs.readFileSync(Path.join([lock, 'pid']))
-				.toString('utf8')) catch (exception: Exception) null;
+			final holder: Null<Int> = try
+				Std.parseInt(Fs.readFileSync(Path.join([lock, 'pid'])).toString('utf8'))
+			catch (exception: Exception)
+				null;
 			if (holder != null && !alive(holder)) {
 				release(lock);
 				return null;

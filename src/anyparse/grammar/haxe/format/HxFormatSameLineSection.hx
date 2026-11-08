@@ -48,6 +48,7 @@ package anyparse.grammar.haxe.format;
 	@:optional var conditionalExprFit: Bool;
 	@:optional var ifElseSemicolonNextLine: Bool;
 	@:optional var expressionTry: HxFormatSameLinePolicy;
+	@:optional var expressionTryOverflow: HxFormatSameLinePolicy;
 	@:optional var returnBody: HxFormatBodyPolicy;
 	@:optional var returnBodySingleLine: HxFormatBodyPolicy;
 	@:optional var catchBody: HxFormatBodyPolicy;

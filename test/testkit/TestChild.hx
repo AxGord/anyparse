@@ -100,8 +100,10 @@ class TestChild {
 		final pid: String = try sys.io.File.getContent('$dir/driver.txt') catch (exception: haxe.Exception) '';
 		final driver: Null<Int> = Std.parseInt(pid.trim());
 		if (driver != null && stopped(driver)) js.Syntax.code('process.kill({0}, "SIGKILL")', driver);
-		final written: Null<Array<ChildRun>> = try TestChildDocumentParser.parse(sys.io.File.getContent('$dir/runs.json'))
-			.runs catch (exception: haxe.Exception) null;
+		final written: Null<Array<ChildRun>> = try
+			TestChildDocumentParser.parse(sys.io.File.getContent('$dir/runs.json')).runs
+		catch (exception: haxe.Exception)
+			null;
 		return written?.map(processRun);
 	}
 

@@ -225,8 +225,10 @@ final class TyperConformance {
 		final refused: Array<String> = [];
 		for (name in names) {
 			Sys.setCwd(Path.join([root, name]));
-			final why: Null<String> =
-				try probeRefusal(facts(null, report)) catch (exception: Exception) 'the run threw: ${exception.message}';
+			final why: Null<String> = try
+				probeRefusal(facts(null, report))
+			catch (exception: Exception)
+				'the run threw: ${exception.message}';
 			if (why == null) continue;
 			refused.push('$name: $why');
 			Sys.println('probes: $name is no reading — $why');
@@ -827,9 +829,10 @@ private final class FileTyper {
 
 	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
 	public function source(node: QueryNode): Null<String> {
-		return try NominalTypes.expressionTypeSource(
-			node, _tree, _shape, _declared, _index, _file, _chain
-		) catch (exception: Exception) null;
+		return try
+			NominalTypes.expressionTypeSource(node, _tree, _shape, _declared, _index, _file, _chain)
+		catch (exception: Exception)
+			null;
 	}
 
 	/** The nominal the checks' door gives `node` (`CheckScan.typeNominalResolver`), or null. */

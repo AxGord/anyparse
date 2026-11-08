@@ -1718,7 +1718,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "d9a1f156e8f5467e",
+				"out": "4263c02c55498f4b",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

@@ -105,8 +105,10 @@ final class MutationSlot {
 			killerFirst: FileSystem.exists(Path.join([workroot, KILLER_FIRST])),
 			schema: schema
 		};
-		if (!FileSystem.exists(Path.join([workroot, CLAIMS])))
-			try js.node.Fs.mkdirSync(Path.join([workroot, CLAIMS])) catch (exception: Exception) { // noqa: swallowed-exception
+		if (!FileSystem.exists(Path.join([workroot, CLAIMS]))) try
+			js.node.Fs.mkdirSync(Path.join([workroot, CLAIMS]))
+		catch (exception: Exception)
+			{ // noqa: swallowed-exception
 				// another slot made it first
 			}
 		for (name in order) {

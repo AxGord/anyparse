@@ -176,6 +176,27 @@ final class WriterCtorPatternLowering {
 		];
 	}
 
+	/**
+	 * The block-body patterns a tryparse catch separator switches on, or empty without a previous
+	 * bare-Ref body. Under a construct-fit seam only curly blocks count (see `fitValueListPatterns`).
+	 */
+	private static function blockBodyPatterns(
+		ctx: CtorPatternCtx, bodyType: Null<String>, blockShapes: Bool, fitValueLists: Bool
+	): Array<Expr> {
+		if (bodyType == null) return [];
+		return if (blockShapes)
+			collectBlockShapeEquivalentPatterns(ctx, bodyType);
+		else if (fitValueLists)
+			collectCurlyBlockCtorPatterns(ctx, bodyType);
+		else
+			collectBlockCtorPatterns(ctx, bodyType);
+	}
+
+	/** The bracket-list ctors that a construct-fit seam treats as values, or empty without a body. */
+	private static function fitValueListPatterns(ctx: CtorPatternCtx, bodyType: Null<String>): Array<Expr> {
+		return bodyType == null ? [] : collectNonCurlyBlockCtorPatterns(ctx, bodyType);
+	}
+
 	private static function collectBlockShapeEquivalentPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[bodyTypePath];
 		return rule == null || rule.kind != Alt ? [] : [

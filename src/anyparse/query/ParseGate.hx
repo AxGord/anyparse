@@ -25,8 +25,12 @@ final class ParseGate {
 
 	/** Parse `source` through `plugin`, or name why it does not parse under `label`. */
 	public static function parse(plugin: GrammarPlugin, source: String, label: String): ParseOutcome {
-		return try Parsed(plugin.parseFile(source)) catch (exception: ParseError) Unparsed('$label does not parse: $exception')
-		catch (exception: Exception) Unparsed('$label does not parse: ${exception.message}');
+		return try
+			Parsed(plugin.parseFile(source))
+		catch (exception: ParseError)
+			Unparsed('$label does not parse: $exception')
+		catch (exception: Exception)
+			Unparsed('$label does not parse: ${exception.message}');
 	}
 
 	/** The diagnostic `parse` would give `source` under `label`, or null when it parses. */

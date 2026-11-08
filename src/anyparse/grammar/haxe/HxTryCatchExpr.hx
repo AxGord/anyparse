@@ -38,12 +38,13 @@ package anyparse.grammar.haxe;
  * would need a terminator only the enclosing statement can supply, and this rule cannot see
  * its parent (the wrap-only stance `valueBraceSymmetry` takes on a value-`if`). The third
  * argument names the ctor that raises the wrapped EXPRESSION into the block element type.
+ * The bare layout under `expressionTry=Same` is one fit verdict per construct (`docs/guide/formatting.md`, `expressionTryOverflow`).
  */
 @:peg
+@:fmt(constructFitGroup('body', 'catches', 'expressionTryOverflow'), constructFitExpr)
 typedef HxTryCatchExpr = {
-	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, tryBraceSymmetry(
-		'catches', 'BlockExpr', 'ExprStmt'
-	)) var body: HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch'),
+	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow'),
+		tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt')) var body: HxExpr;
+	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch'), constructFitSep,
 		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt')) var catches: Array<HxCatchClauseExpr>;
 };

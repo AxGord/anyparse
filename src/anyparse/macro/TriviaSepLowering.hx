@@ -969,6 +969,7 @@ final class TriviaSepLowering {
 			// trivia, `_parts.length==1`
 			// collapses to the bare
 			// `_elemBase` Doc.
+			final keptListCountsInFit: Expr = c.reflowSourceMultiline ? macro opt._keptListCountsInFit : macro false;
 			macro {
 				final _docs: Array<anyparse.core.Doc> = [];
 				// ω-sep-faithful: per-pair `sepBefore` flags so `WrapList.emit`
@@ -1111,9 +1112,13 @@ final class TriviaSepLowering {
 				// pass already; a chain or an arrow around it measured it full-width once and deferred
 				// the next time. Only a result carrying a hardline (`flatLength < 0`): an answer the
 				// RENDERER still decides stays counted, as the next pass may read it back flat.
+				// A construct-fit group counts a kept multi-line array too: it is what the group's own
+				// ladder wrote on the previous pass, and deferring it there would flip the verdict.
 				_matrixDoc != null
 					? _dbg(_matrixDoc)
-					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0) && !_isComprehension
+					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)
+						&& !_isComprehension
+						&& !$keptListCountsInFit
 						? _dbg(_wlResult)
 						: _wlResult;
 			};

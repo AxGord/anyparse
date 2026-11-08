@@ -64,13 +64,13 @@ final class WriterStarEmitLowering {
 	 * (`emitSepStarList`), and each element's captured comments are glued around its own Doc instead of
 	 * routing the whole list through the trivia sep emitter, whose comment-bearing branch breaks every element.
 	 */
-	private static inline final INLINE_ELEM_TRIVIA: String = 'inlineElemTrivia';
+	private static final INLINE_ELEM_TRIVIA: String = 'inlineElemTrivia';
 
 	/**
 	 * `@:fmt(elemChainOp('<op>'))`: the Star's elements may be chains
 	 * of `<op>`, which then count as gaps of the list (`ElemChainEmit`).
 	 */
-	private static inline final ELEM_CHAIN_OP: String = 'elemChainOp';
+	private static final ELEM_CHAIN_OP: String = 'elemChainOp';
 
 	/**
 	 * The three-way blockEnded predicate channel, shared by the plain
@@ -717,14 +717,15 @@ final class WriterStarEmitLowering {
 		// path comment for rationale.
 		final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
 		final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
+		// The plain-mode twin of the trivia path's construct-fit seam.
+		final bareSep: Expr = blockShapeAware && starNode.fmtHasFlag('constructFitSep') ? softSameLinePolicySwitch(optFlag) : sepExpr;
 		final shapeAware: Bool = blockShapeAware || bareShapeAware;
+		final fitValueLists: Bool = blockShapeAware && starNode.fmtHasFlag('constructFitSep');
+		final bodyType: Null<String> = prevBareRefBody?.typePath;
 		final blockPatterns: Array<Expr> = prevBareRefBody != null && shapeAware
-			? (
-				bareShapeAware
-					? collectBlockShapeEquivalentPatterns(ctx.ctorPat, prevBareRefBody.typePath)
-					: collectBlockCtorPatterns(ctx.ctorPat, prevBareRefBody.typePath)
-			)
+			? blockBodyPatterns(ctx.ctorPat, bodyType, bareShapeAware, fitValueLists)
 			: [];
+		final listPatterns: Array<Expr> = fitValueLists ? fitValueListPatterns(ctx.ctorPat, bodyType) : [];
 		final elemBodyField: Null<String> = blockPatterns.length > 0
 			? findElementBodyField(ctx.ctorPat, elemRefName, prevBareRefBody.typePath)
 			: null;
@@ -743,11 +744,8 @@ final class WriterStarEmitLowering {
 		} else {
 			final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
 			final firstBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-			final firstBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
-			final firstShapeCases: Array<Case> = [
-				{ values: blockPatterns, expr: firstBlockBranch, guard: null },
-				{ values: [macro _], expr: firstBareBranch, guard: null }
-			];
+			final firstBareBranch: Expr = blockShapeAware ? bareSep : (macro _dhl());
+			final firstShapeCases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, optFlag, firstBlockBranch, firstBareBranch);
 			final firstSepShape: Expr = {
 				expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
 				pos: Context.currentPos()
@@ -760,11 +758,8 @@ final class WriterStarEmitLowering {
 					pos: Context.currentPos()
 				};
 				final subBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-				final subBareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
-				final cases: Array<Case> = [
-					{ values: blockPatterns, expr: subBlockBranch, guard: null },
-					{ values: [macro _], expr: subBareBranch, guard: null }
-				];
+				final subBareBranch: Expr = blockShapeAware ? bareSep : (macro _dhl());
+				final cases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, optFlag, subBlockBranch, subBareBranch);
 				{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
 			};
 			parts.push(macro {

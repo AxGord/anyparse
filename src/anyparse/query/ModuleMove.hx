@@ -941,9 +941,10 @@ final class ModuleMove {
 					for (e in request.textFiles)
 						if (e.file == r.file) { file: e.file, source: current.find(c -> c.file == e.file)?.newSource ?? e.source }
 			];
-			final carried: CarriedDocuments = try PackageDocumentCarry.carry(
-				documents, members[0].keys
-			) catch (exception: Exception) return Left(['a "byPackage" registry cannot be carried: ${exception.message}']);
+			final carried: CarriedDocuments = try
+				PackageDocumentCarry.carry(documents, members[0].keys)
+			catch (exception: Exception)
+				return Left(['a "byPackage" registry cannot be carried: ${exception.message}']);
 			for (emptied in carried.emptied) {
 				current = current.filter(c -> c.file != emptied);
 				removed.push(emptied);

@@ -159,9 +159,14 @@ final class SweepCorpus {
 			plugin.layoutMetrics(config)
 		catch (_: Exception)
 			return STATUS_SKIP_CONFIG;
-		final emitted: Null<String> = try plugin.writeRoundTrip(input, config) catch (_: ParseError) return STATUS_SKIP_PARSE
-		catch (_: CommentLossException) return STATUS_FAIL
-		catch (_: Exception) return STATUS_SKIP_WRITE;
+		final emitted: Null<String> = try
+			plugin.writeRoundTrip(input, config)
+		catch (_: ParseError)
+			return STATUS_SKIP_PARSE
+		catch (_: CommentLossException)
+			return STATUS_FAIL
+		catch (_: Exception)
+			return STATUS_SKIP_WRITE;
 		if (emitted == null) return STATUS_SKIP_WRITE;
 		final text: String = (emitted: String);
 		final actual: String = text.length > 0 && text.fastCodeAt(text.length - 1) == '\n'.code ? text.substr(0, text.length - 1) : text;

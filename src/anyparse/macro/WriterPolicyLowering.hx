@@ -172,6 +172,45 @@ final class WriterPolicyLowering {
 	}
 
 	/**
+	 * The `Same` half of `sameLinePolicySwitch` as a SOFT line, so a `@:fmt(constructFitSep)` seam
+	 * breaks with the enclosing construct group; `Next` keeps its hardline.
+	 */
+	private static function softSameLinePolicySwitch(optFlag: Expr): Expr {
+		return buildPolicySwitch(
+			['anyparse', 'format', 'SameLinePolicy'], optFlag,
+			[{ values: ['Next'], expr: macro _dhl() }],
+			macro _dl()
+		);
+	}
+
+	/**
+	 * The switch arm for a bracket-list body under a construct-fit seam: `nextBranch` when the
+	 * policy forces `Next` (the list keeps the glue it always had) and `fitBranch` otherwise. The
+	 * arm is empty when the body type has no such ctor, so the caller's switch stays exhaustive.
+	 */
+	private static function fitValueListCases(listPatterns: Array<Expr>, optFlag: Expr, nextBranch: Expr, fitBranch: Expr): Array<Case> {
+		return listPatterns.length == 0 ? [] : [
+			{
+				values: listPatterns,
+				expr: buildPolicySwitch(
+					['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextBranch }], fitBranch
+				),
+				guard: null
+			}
+		];
+	}
+
+	/** The cases of a shape-aware catch separator: blocks, then the construct-fit list arm, then bare bodies. */
+	private static function shapeSepCases(
+		blockPatterns: Array<Expr>, listPatterns: Array<Expr>, seamFlag: Expr, blockBranch: Expr, bareBranch: Expr
+	): Array<Case> {
+		final cases: Array<Case> = [{ values: blockPatterns, expr: blockBranch, guard: null }];
+		for (listCase in fitValueListCases(listPatterns, seamFlag, blockBranch, bareBranch)) cases.push(listCase);
+		cases.push({ values: [macro _], expr: bareBranch, guard: null });
+		return cases;
+	}
+
+	/**
 	 * ω-same-on-block — the sibling of `sameLinePolicySwitch` for a
 	 * `@:fmt(shapeAware)` site whose preceding sibling is a block ctor that
 	 * is NOT a curly one (a `[ … ]` list ctor). The only difference is where

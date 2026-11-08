@@ -147,7 +147,10 @@ final class HaxelibResolver {
 	private static function readHaxelibJson(root: Null<String>): Null<String> {
 		return root == null
 			? null
-			: #if (sys || nodejs) try sys.io.File.getContent(haxe.io.Path.join([root, 'haxelib.json'])) catch (exception: haxe.Exception) null #else null #end;
+			: #if (sys || nodejs) try
+				sys.io.File.getContent(haxe.io.Path.join([root, 'haxelib.json']))
+			catch (exception: haxe.Exception)
+				null #else null #end;
 	}
 
 }

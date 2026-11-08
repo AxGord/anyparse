@@ -58,6 +58,28 @@ and still takes edits that leave it alone. Whether a seam-adjacent `else` compil
 on the defines (`#if a if (c) f(); #end else g();` compiles only with `-D a`), which no
 whole-file parse knows, so a seam makes an `else` acceptable, never proven valid.
 
+## A value `try` that does not fit: `sameLine.expressionTryOverflow`
+
+A brace-less value `try` (`final x = try f() catch (e: E) g()`) that fits the line stays on it. One that does not fit breaks at its seams, never inside the first call or the tail, with `sameLine.expressionTry` left at `same`. `next` (the default) puts each body on its own indented line with `catch` at the statement's indent, the shape a value `if` takes under `sameLine.expressionIf: next`:
+
+```haxe
+final carried: CarriedDocuments = try
+	PackageDocumentCarry.carry(documents, members[0].keys)
+catch (exception: Exception)
+	return Left(reasons);
+```
+
+`same` keeps the body on the `try` line and breaks before `catch` only, each `catch` one indent in:
+
+```haxe
+final carried: CarriedDocuments = try PackageDocumentCarry.carry(documents, members[0].keys)
+	catch (exception: Exception) return Left(reasons);
+```
+
+An array that does not fit on one line, or one written across several lines, counts as not fitting: the seams break and the array wraps in its body position. A `[]` body is an ordinary body with its own line; a curly block, an object literal and a function body keep the head's line.
+
+`sameLine.expressionTry: next` keeps breaking every body unconditionally, and a statement `try` follows `sameLine.tryBody` and `sameLine.catchBody` as before.
+
 ## A case label that wrapped: `sameLine.caseBody`, `sameLine.expressionCase`
 
 `fitLine` means the whole branch fits on one line, and a label that took more than one no longer does: its body goes below

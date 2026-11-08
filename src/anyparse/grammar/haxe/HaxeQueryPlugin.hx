@@ -429,8 +429,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// proper category with correct spans (a single-category retry mis-spans).
 		for (variant in [substituted, '$substituted;']) for (attempt in attempts) {
 			final wrapped: String = attempt.wrap(variant);
-			final tree: Null<QueryNode> = try parseFile(wrapped) catch (exception: ParseError) null
-			catch (exception: Exception) null;
+			final tree: Null<QueryNode> = try
+				parseFile(wrapped)
+			catch (exception: ParseError)
+				null
+			catch (exception: Exception)
+				null;
 			if (tree == null) continue;
 			final extracted: Null<QueryNode> = attempt.extract(tree);
 			if (extracted == null) continue;

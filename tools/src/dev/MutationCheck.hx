@@ -322,10 +322,10 @@ final class MutationCheck {
 		FixtureCache.prune(entries, FixtureCache.maxAgeDays());
 		final cache: String = Path.join([workroot, 'fixture-cache']);
 		FileSystem.createDirectory(cache);
-		final why: Null<String> =
-			try FixtureCache.shim(
-				job.repo, entries, Path.join([cache, 'bin']), Path.join([cache, 'tally'])
-			) catch (exception: Exception) exception.message;
+		final why: Null<String> = try
+			FixtureCache.shim(job.repo, entries, Path.join([cache, 'bin']), Path.join([cache, 'tally']))
+		catch (exception: Exception)
+			exception.message;
 		if (why != null)
 			Sys.stderr()
 				.writeString('dev mutation-check: the fixture cache could not be set up ($why) — every fixture compile runs for real\n');

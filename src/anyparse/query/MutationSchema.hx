@@ -167,8 +167,10 @@ final class MutationSchema {
 		final switchAt: Map<Int, Int> = [];
 		final owners: Map<Int, String> = [];
 		for (arm in arms) {
-			final reason: Null<String> =
-				try plan(source, tree, plugin, arm, inserts, switchAt, owners) catch (exception: Exception) exception.message;
+			final reason: Null<String> = try
+				plan(source, tree, plugin, arm, inserts, switchAt, owners)
+			catch (exception: Exception)
+				exception.message;
 			if (reason != null) skips[arm.id] = reason;
 		}
 		final ordered: Array<SchemaInsert> = inserts.filter(insert -> !skips.exists(insert.id));

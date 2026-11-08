@@ -539,6 +539,36 @@
 			"find": "pending = -1;\n\t\t\tif (c != '\\r'.code) {",
 			"replace": "if (c != '\\r'.code) {",
 			"note": "a literal no longer ends the comma window, so a comma lost before a literal that opens with a closer verifies clean"
+		},
+		{
+			"name": "M-TRY-FIT-GROUP-NONE",
+			"type": "anyparse.format.ConstructFit",
+			"method": "group",
+			"force": "inner",
+			"note": "no group, so the soft seams break everywhere and a fitting try explodes"
+		},
+		{
+			"name": "M-TRY-FIT-COMMENT-INSIDE",
+			"type": "anyparse.format.ConstructFit",
+			"method": "peelClosingLineComment",
+			"force": "doc",
+			"note": "the closing comment stays inside the group and its hardline refuses flat"
+		},
+		{
+			"name": "M-TRY-FIT-REST-DEFER",
+			"type": "anyparse.format.ConstructFit",
+			"method": "group",
+			"find": "return comments.length == 0 ? GroupWithRestProbe(inner) : Concat([GroupWithRestProbe(peeled), comments[0]]);",
+			"replace": "return comments.length == 0 ? BodyGroup(inner) : Concat([BodyGroup(peeled), comments[0]]);",
+			"note": "the construct group defers in an enclosing fit, so the call or ternary around an overflowing try no longer breaks first"
+		},
+		{
+			"name": "M-TRY-FIT-GROUP-PLAIN",
+			"type": "anyparse.format.ConstructFit",
+			"method": "group",
+			"find": "return comments.length == 0 ? GroupWithRestProbe(inner) : Concat([GroupWithRestProbe(peeled), comments[0]]);",
+			"replace": "return comments.length == 0 ? Group(inner) : Concat([Group(peeled), comments[0]]);",
+			"note": "the construct group stops counting the rest of the line, so a try one column past the limit stays on one line"
 		}
 	]
 }

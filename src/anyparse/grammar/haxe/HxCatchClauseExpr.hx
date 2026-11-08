@@ -30,10 +30,12 @@ package anyparse.grammar.haxe;
  * the catch body's runtime ctor is `BlockExpr`, the layout stays
  * inline (`catch (e:T) { … }`) regardless of `expressionTry=Next`.
  * See the parallel paragraph on `HxTryCatchExpr` for the rationale.
+ * `@:fmt(constructFitBody('expressionTryOverflow'))` turns the `Same`
+ * gap into the construct group's soft line (the catch seam's partner).
  */
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClauseExpr = {
 	@:kw('catch') @:lead('(') @:trail(')') var param: HxCatchParam;
-	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline) var body: HxExpr;
+	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow')) var body: HxExpr;
 };

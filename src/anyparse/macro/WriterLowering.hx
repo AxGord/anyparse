@@ -156,7 +156,7 @@ class WriterLowering {
 	 * class has no other flag-name constants, so this is the convention's
 	 * first member rather than an existing group.
 	 */
-	private static inline final ARROW_VALUE_IF_SITE: String = 'arrowValueIfReflowSite';
+	private static final ARROW_VALUE_IF_SITE: String = 'arrowValueIfReflowSite';
 
 	/**
 	 * omega-strict-fitline-body: the field flag that makes a `FitLine` body policy answer
@@ -164,10 +164,10 @@ class WriterLowering {
 	 * `bodyPolicyWrap` seats a body field can arrive through, for the same reason
 	 * `ARROW_VALUE_IF_SITE` is named once.
 	 */
-	private static inline final STRICT_FIT_LINE_BODY: String = 'strictFitLineBody';
+	private static final STRICT_FIT_LINE_BODY: String = 'strictFitLineBody';
 
 	/** omega-bracket-body-glue: the `@:fmt` entry naming the knob that hugs a `[` body to its branch head. */
-	private static inline final BRACKET_BODY_GLUE: String = 'bracketBodyGlueIfFlag';
+	private static final BRACKET_BODY_GLUE: String = 'bracketBodyGlueIfFlag';
 
 	/**
 	 * The grammar-supplied predicate that classifies an array-`[…]` ctor by its
@@ -177,7 +177,7 @@ class WriterLowering {
 	 * a list that is a map to one of them and an array to another is a bug the
 	 * user sees as inconsistent formatting.
 	 */
-	private static inline final ARRAY_BRACKET_KIND_PRED: String = 'arrayBracketKind';
+	private static final ARRAY_BRACKET_KIND_PRED: String = 'arrayBracketKind';
 
 	/**
 	 * The grammar-supplied classifier behind `@:fmt(complexItems)` — one
@@ -192,7 +192,7 @@ class WriterLowering {
 	 * grammar type this package named, and the reason a second grammar
 	 * could not have opted into `complexItems` at all.
 	 */
-	private static inline final COMPLEX_ITEM_KINDS_PRED: String = 'complexItemKinds';
+	private static final COMPLEX_ITEM_KINDS_PRED: String = 'complexItemKinds';
 
 	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
@@ -201,7 +201,7 @@ class WriterLowering {
 	 * site spelling it differently would emit a read of a slot that does not
 	 * exist, or drop a separator whose signal was captured.
 	 */
-	private static inline final BEFORE_NEWLINE_SLOT_FIRST: String = 'beforeNewlineSlotFirst';
+	private static final BEFORE_NEWLINE_SLOT_FIRST: String = 'beforeNewlineSlotFirst';
 
 	/**
 	 * Build-scoped mirrors of `_shape.root` / `_formatInfo.astPreds` for
@@ -1112,6 +1112,7 @@ class WriterLowering {
 			if (isStar) {
 				condFitGroupStartIdx = -1;
 				final closesConstructFit: Bool = constructFitArgs != null && constructFitStartIdx >= 0 && fieldName == constructFitArgs[1];
+				final constructFitTailIdx: Int = parts.length;
 				final starResult = emitStarField(
 					_starEmit, child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead,
 					fieldName, prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional,
@@ -1128,9 +1129,41 @@ class WriterLowering {
 				prevPadTrailing = starResult.prevPadTrailing;
 				isFirstField = false;
 				if (closesConstructFit) {
+					// Third meta arg: a `SameLinePolicy` knob whose `Same` nests the tail Star one step, so
+					// each seam of a body-stays-on-the-head layout lands indented under the head.
+					if (constructFitArgs.length > 2) {
+						final tail: Array<Expr> = parts.splice(constructFitTailIdx, parts.length - constructFitTailIdx);
+						final tailDoc: Expr = tail.length == 1 ? tail[0] : dcCall(tail);
+						final knob: Expr = optFieldAccess(constructFitArgs[2]);
+						final seamFlag: Null<Expr> = child.fmtReadString('sameLine') == null
+							? null
+							: optFieldAccess(child.fmtReadString('sameLine'));
+						// The seam policy's `Next` lays the construct out on its own: the knob's nest belongs only to
+						// the Same-seam layout, so every other combination keeps the statement's indent.
+						final seamKeepsSame: Expr = seamFlag == null ? macro true : macro $seamFlag != anyparse.format.SameLinePolicy.Next;
+						parts.push(macro {
+							// A wrap boundary would pull the seams out of a force-flat region this group sits in,
+							// breaking them while the body stays flat, so the group owns its star outright.
+							final _tail: anyparse.core.Doc = switch ($tailDoc) {
+								case WrapBoundary(_inner): _inner;
+								case _star: _star;
+							};
+							final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+							$knob == anyparse.format.SameLinePolicy.Same && $seamKeepsSame ? _dn(_cols, _tail) : _tail;
+						});
+					}
 					final grpBuf: Array<Expr> = parts.slice(constructFitStartIdx, parts.length);
 					parts.splice(constructFitStartIdx, parts.length - constructFitStartIdx);
-					parts.push(macro _dbg(${grpBuf.length == 1 ? grpBuf[0] : dcCall(grpBuf)}));
+					final grpDoc: Expr = grpBuf.length == 1 ? grpBuf[0] : dcCall(grpBuf);
+					// A body group DEFERS in an enclosing fit question, so a construct in expression
+					// position (`@:fmt(constructFitExpr)`) groups with the rest of its line instead: the
+					// outer call or ternary keeps measuring it, and a trailing `;` or `)` counts.
+					parts.push(node.fmtHasFlag('constructFitExpr')
+						? macro {
+							final opt = _setKeptListCountsInFit(opt);
+							anyparse.format.ConstructFit.group($grpDoc);
+						}
+						: macro _dbg($grpDoc));
 					constructFitStartIdx = -1;
 				}
 				continue;

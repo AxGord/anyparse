@@ -94,12 +94,14 @@ final class CanonicalEdit {
 		?carried: Array<CarriedEdit>
 	): EditResult {
 		if (!reformat) {
-			final canon: Null<String> =
-				try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) return Err('source does not parse: $exception')
-				catch (exception: CommentLossException) return Err(
-					'this file cannot be rewritten without losing the comment `${exception.comment}`'
-				)
-				catch (exception: Exception) return Err('source does not parse: ${exception.message}');
+			final canon: Null<String> = try
+				plugin.writeRoundTrip(source, optsJson)
+			catch (exception: ParseError)
+				return Err('source does not parse: $exception')
+			catch (exception: CommentLossException)
+				return Err('this file cannot be rewritten without losing the comment `${exception.comment}`')
+			catch (exception: Exception)
+				return Err('source does not parse: ${exception.message}');
 			if (canon == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
 			// The remedy names `apq fmt --write` FIRST and `--reformat` only as a
 			// conditional: this gate is shared with `lint --fix`, which has no
@@ -115,10 +117,12 @@ final class CanonicalEdit {
 		// A FORMAT-PRESERVING grammar lays the edits in itself (`GrammarPlugin.layoutSplice`): its writer hands every source
 		// back unchanged, so the fixed point below would keep the raw splice, layout and all. A re-emitting grammar answers
 		// null and gets the raw splice, which the fixed point then formats.
-		final spliced: String = try plugin.layoutSplice(source, edits) ?? applyEdits(source, edits) catch (exception: ParseError) return Err(
-			'result does not parse: $exception'
-		)
-		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
+		final spliced: String = try
+			plugin.layoutSplice(source, edits) ?? applyEdits(source, edits)
+		catch (exception: ParseError)
+			return Err('result does not parse: $exception')
+		catch (exception: Exception)
+			return Err('result does not parse: ${exception.message}');
 
 		// Every question about the EDIT rather than about the writer — see `editRefusal`.
 		final refused: Null<String> = editRefusal(source, edits, spliced, plugin, carried);
@@ -152,13 +156,14 @@ final class CanonicalEdit {
 		// disagreement: a source that passes it is by definition a fixed point
 		// (`writeRoundTrip(source) == source` is exactly `run`'s pass-1 short-cut),
 		// so looping there would answer the same and buy a round trip.
-		final fixedPoint: FormatFixedPointResult = try FormatFixedPoint.run(
-			text -> plugin.writeRoundTrip(text, optsJson), spliced
-		) catch (exception: ParseError) return Err('result does not parse: $exception')
-		catch (exception: CommentLossException) return Err(
-			'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
-		)
-		catch (exception: Exception) return Err('result does not parse: ${exception.message}');
+		final fixedPoint: FormatFixedPointResult = try
+			FormatFixedPoint.run(text -> plugin.writeRoundTrip(text, optsJson), spliced)
+		catch (exception: ParseError)
+			return Err('result does not parse: $exception')
+		catch (exception: CommentLossException)
+			return Err('the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)')
+		catch (exception: Exception)
+			return Err('result does not parse: ${exception.message}');
 		final settled: Null<String> = fixedPoint.text;
 		// the run's journal of rewrites, when it keeps one: the one record of where a declaration of `source` now stands
 		if (settled != null && fixedPoint.converged && plugin is CachingGrammarPlugin)

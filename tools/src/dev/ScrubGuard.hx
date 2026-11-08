@@ -157,9 +157,10 @@ final class ScrubGuard {
 		final leading: Bool = flags.match(source);
 		final options: String = 'g' + (leading ? flags.matched(1) : '');
 		final body: String = leading ? source.substr(flags.matchedPos().len) : source;
-		return try new EReg(body, options) catch (exception: haxe.Exception) throw new UsageError(
-			'rule $n is not a regular expression JavaScript can compile: ${exception.message}'
-		);
+		return try
+			new EReg(body, options)
+		catch (exception: haxe.Exception)
+			throw new UsageError('rule $n is not a regular expression JavaScript can compile: ${exception.message}');
 	}
 
 	/** One `<where>:<line>: rule <n>` row per match of every rule in `data`, rule by rule, each rule's in text order. */

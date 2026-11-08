@@ -96,7 +96,7 @@ import haxe.Exception;
 final class HaxeFormatConfigLoader {
 
 	/** The `RunLedger` topic of the `indentation.character` values already reported — one line per value per run. */
-	private static inline final INDENT_CHARACTER_TOPIC: String = 'hxformat-indent-character';
+	private static final INDENT_CHARACTER_TOPIC: String = 'hxformat-indent-character';
 
 	/**
 	 * Parses a `hxformat.json` document and returns the equivalent
@@ -342,6 +342,8 @@ final class HaxeFormatConfigLoader {
 		if (section.conditionalExprFit != null) opt.conditionalExprFit = section.conditionalExprFit;
 		if (section.ifElseSemicolonNextLine != null) opt.ifElseSemicolonNextLine = section.ifElseSemicolonNextLine;
 		if (section.expressionTry != null) opt.expressionTry = HaxeFormatValues.sameLineToRuntime(section.expressionTry, opt.expressionTry);
+		if (section.expressionTryOverflow != null)
+			opt.expressionTryOverflow = HaxeFormatValues.sameLineToRuntime(section.expressionTryOverflow, opt.expressionTryOverflow);
 		if (section.expressionIfWithBlocks != null) opt.expressionIfWithBlocks = section.expressionIfWithBlocks;
 		// omega-bracket-body-glue: the `[` sibling of `expressionIfWithBlocks`, and a
 		// SEPARATE key rather than an extension of it — that one collapses a block

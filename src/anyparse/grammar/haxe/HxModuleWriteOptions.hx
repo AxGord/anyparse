@@ -693,6 +693,7 @@ final class HxModuleWriteOptions {
 	public var expressionWrappingWrap: WrapRules = HaxeFormat.defaultExpressionWrappingWrap();
 	public var implementsExtendsWrap: WrapRules = HaxeFormat.defaultImplementsExtendsWrap();
 	public var expressionTry: SameLinePolicy = SameLinePolicy.Same;
+	public var expressionTryOverflow: SameLinePolicy = SameLinePolicy.Next;
 	public var indentCaseLabels: Bool = true;
 	public var indentObjectLiteral: Bool = true;
 	// An object-literal body of a comprehension `for` stays glued to the header instead of taking the Allman placement.
@@ -987,6 +988,9 @@ final class HxModuleWriteOptions {
 	// the calls inside it inherit it. Default false → every value-position
 	// construct keeps its rest probe.
 	public var _suppressPatternRestProbe: Bool = false; // noqa: naming
+	// Set while the writer emits the body and the catches of a `@:fmt(constructFitExpr)` group,
+	// so a kept multi-line array counts in the group's fit verdict instead of deferring like a block body.
+	public var _keptListCountsInFit: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a class-member `var` / `final` initializer (NOT a local statement) via

@@ -985,6 +985,14 @@
 			"method": "factsForFiles",
 			"force": "null",
 			"note": "the assisted phase is offered no facts oracle and goes to the display server"
+		},
+		{
+			"name": "M-TRY-OVERFLOW-KEY",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionTryOverflow = HaxeFormatValues.sameLineToRuntime(section.expressionTryOverflow, opt.expressionTryOverflow);",
+			"replace": "opt.expressionTryOverflow = anyparse.format.SameLinePolicy.Next;",
+			"note": "the key is ignored, so A cannot be selected"
 		}
 	]
 }

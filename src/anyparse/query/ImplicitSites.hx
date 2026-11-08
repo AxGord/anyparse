@@ -54,9 +54,10 @@ final class ImplicitSites {
 		final literal: Null<String> = (_shape.literalTypeNames ?? [])[node.kind];
 		if (literal != null) return literal;
 		// the self reference, a binding, a path and a call chain: the shared walk
-		return try NominalTypes.expressionTypeNominal(
-			node, tree, _shape, declaredOf(file, source), _index, file, null, true
-		) catch (exception: haxe.Exception) null;
+		return try
+			NominalTypes.expressionTypeNominal(node, tree, _shape, declaredOf(file, source), _index, file, null, true)
+		catch (exception: haxe.Exception)
+			null;
 	}
 
 	/** The sites of `tree` (the text of `file` is `source`) inside `span`, in document order. */

@@ -1069,9 +1069,10 @@ final class WriterRefFieldLowering {
 			// sole separator) and by `HxCatchClauseExpr.body` (last
 			// field; replaces the fixed `_dt(' ')` between `)` and the
 			// catch body).
-			parts.push(
-				bodyBreakWrap(ctx, bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline'), headGap)
-			);
+			parts.push(bodyBreakWrap(
+				ctx, bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline'), headGap,
+				child.fmtReadString('constructFitBody')
+			));
 		} else if (bareBodyBreaksFlag && noLeadNoRaw) {
 			// ω-statement-bare-break: shape-only wrap — block body
 			// emits inline ` ` + body, bare body emits hardline +
@@ -1182,15 +1183,33 @@ final class WriterRefFieldLowering {
 	 */
 	private static function bodyBreakWrap(
 		ctx: RefFieldCtx, flagName: String, writeCall: Expr, bodyAccess: Expr, bodyTypePath: String, shapeAware: Bool,
-		headGap: Null<HeadGapSlots>
+		headGap: Null<HeadGapSlots>, constructFitKnob: Null<String>
 	): Expr {
 		final optFlag: Expr = optFieldAccess(flagName);
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		// `@:fmt(constructFitBody('<knob>'))` makes the `Same` gap a soft line owned by the enclosing
+		// construct group, unless the knob reads `Same` — then the body keeps the head's line and only
+		// the group's other seams break.
+		final inlineLayoutExpr: Expr = if (constructFitKnob == null) {
+			sameLayoutExpr;
+		} else {
+			final knob: Expr = optFieldAccess(constructFitKnob);
+			macro $knob == anyparse.format.SameLinePolicy.Same ? $sameLayoutExpr : _dn(_cols, _dc([_dl(), $writeCall]));
+		};
 		final flagSwitch: Expr = buildPolicySwitch(
-			['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextLayoutExpr }], sameLayoutExpr
+			['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextLayoutExpr }], inlineLayoutExpr
 		);
-		final blockPatterns: Array<Expr> = shapeAware ? collectBlockCtorPatterns(ctx.ctorPat, bodyTypePath) : [];
+		// Under a construct-fit body only a curly block keeps the head line; a bracket list is a
+		// value, so it follows the soft seam unless the policy forces `Next` (where it stays glued).
+		final fitValueLists: Bool = shapeAware && constructFitKnob != null;
+		final listPatterns: Array<Expr> = fitValueLists ? collectNonCurlyBlockCtorPatterns(ctx.ctorPat, bodyTypePath) : [];
+		final blockPatterns: Array<Expr> = if (!shapeAware)
+			[]
+		else if (fitValueLists)
+			collectCurlyBlockCtorPatterns(ctx.ctorPat, bodyTypePath)
+		else
+			collectBlockCtorPatterns(ctx.ctorPat, bodyTypePath);
 		// ω-block-allman-leftcurly: when the body's runtime ctor is a block,
 		// the inline `' ' + body` layout cuddles the brace (`try { … }`). That
 		// is correct under `blockLeftCurly = Same`, but Allman (`Next`,
@@ -1212,16 +1231,20 @@ final class WriterRefFieldLowering {
 		final wrapExpr: Expr = if (blockPatterns.length == 0) {
 			flagSwitch;
 		} else {
+			final listCases: Array<Case> = fitValueListCases(listPatterns, optFlag, blockLayoutExpr, inlineLayoutExpr);
 			final shapeCases: Array<Case> = [
-				{ values: blockPatterns, expr: blockLayoutExpr, guard: null },
-				{ values: [macro _], expr: flagSwitch, guard: null }
-			];
+				{
+					values: blockPatterns,
+					expr: blockLayoutExpr,
+					guard: null
+				}
+			].concat(listCases).concat([{ values: [macro _], expr: flagSwitch, guard: null }]);
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
 		// mirrors `bodyPolicyWrap`'s tail block (line 1721) and the Star
 		// `_dn(_cols, _dc(_docs))` site at line 2337.
-		final gapped: Expr = withHeadGap(headGap, blockPatterns, bodyAccess, wrapExpr, writeCall);
+		final gapped: Expr = withHeadGap(headGap, blockPatterns.concat(listPatterns), bodyAccess, wrapExpr, writeCall);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			$gapped;

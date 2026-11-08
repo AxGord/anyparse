@@ -49,7 +49,7 @@ import haxe.io.Path;
 final class OracleGeneration {
 
 	/** The per-project directory, directly under a generation's root, that holds hxq's generation state. */
-	public static inline final STATE_DIR: String = '.apq';
+	public static final STATE_DIR: String = '.apq';
 
 	/** Files read (not answered from a memo) by `hashOf` in this process — tests read it to prove a file is read once per step. */
 	public static var hashReads(default, null): Int = 0;
@@ -59,12 +59,6 @@ final class OracleGeneration {
 
 	/** How much of a failed command's output an unavailability reason quotes, from its END (where the error is). */
 	private static inline final QUOTED_TAIL: Int = 4000;
-
-	/** The scheme tag in every record: bump it and every recorded generation is stale. */
-	private static inline final FORMAT_TAG: String = 'apq-oracle-generate v2';
-
-	/** What a missing file hashes as, so its appearance or disappearance is a change like any other. */
-	private static inline final MISSING: String = 'missing';
 
 	/** How long `prepare` waits for another run's generation lock by default, in ms. */
 	private static inline final LOCK_WAIT: Int = 10 * 60 * 1000;
@@ -80,6 +74,12 @@ final class OracleGeneration {
 
 	/** How often `prepare` sends a group found stale under its compile hold back through regeneration. */
 	private static inline final MAX_REJUDGE: Int = 3;
+
+	/** The scheme tag in every record: bump it and every recorded generation is stale. */
+	private static final FORMAT_TAG: String = 'apq-oracle-generate v2';
+
+	/** What a missing file hashes as, so its appearance or disappearance is a change like any other. */
+	private static final MISSING: String = 'missing';
 
 	/**
 	 * `oracles` made ready to use: every `generate` entry whose recorded generation is not current has its command run
@@ -567,12 +567,12 @@ final class OracleGeneration {
 	 */
 	private static function hold(run: GenerationRun, group: GenerationGroup, exclusive: Bool): Null<String> {
 		final lock: String = lockDir(group);
-		return try exclusive
-			? OracleGenerationLock.holdExclusive(lock, run.me, run.deadline)
-			: OracleGenerationLock.holdShared(
-				lock, run.me, run.deadline
-			) catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '
-			+ exception.message;
+		return try
+			exclusive
+				? OracleGenerationLock.holdExclusive(lock, run.me, run.deadline)
+				: OracleGenerationLock.holdShared(lock, run.me, run.deadline)
+		catch (exception: Exception)
+			'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';
 	}
 
 	#if (sys || nodejs)

@@ -847,8 +847,8 @@
 			"name": "M-STMT-LIST-CALLARG-BARRIER",
 			"type": "anyparse.macro.WriterOptFanout",
 			"method": "statementListElemOpt",
-			"find": "return macro _clearCallArgChainNest($optExpr);",
-			"replace": "return optExpr;",
+			"find": "_clearCallArgChainNest($optExpr)",
+			"replace": "$optExpr",
 			"note": "a statement-list element keeps the call-argument chain flag: the first chain in a lambda argument's body wraps its operator at the statement's indent"
 		},
 		{
@@ -2240,6 +2240,94 @@
 			"find": "case 'callParameterWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, true, opt), false, opt);",
 			"replace": "case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true, opt);",
 			"note": "a noWrap new-expression argument nested in an array element keeps the mark and opens its chain paren"
+		},
+		{
+			"name": "M-TRY-FIT-BODY-HARD",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "bodyBreakWrap",
+			"find": "final inlineLayoutExpr: Expr = if (constructFitKnob == null) {",
+			"replace": "final inlineLayoutExpr: Expr = if (true) {",
+			"note": "the try body keeps the head line even when the construct group breaks, so a two-argument overflow glues its body to `try`"
+		},
+		{
+			"name": "M-TRY-FIT-SEP-HARD",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildTryparseSepOverrides",
+			"find": "final softBareSep: Null<Expr> = constructFitBareSep(blockShapeAware, softSeam, sameLineName);",
+			"replace": "final softBareSep: Null<Expr> = null;",
+			"note": "the catch seam stays a hard space, so a broken construct keeps catch on the body line"
+		},
+		{
+			"name": "M-TRY-FIT-STAR-BOUNDARY",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStruct",
+			"find": "case WrapBoundary(_inner): _inner;",
+			"replace": "case WrapBoundary(_inner): WrapBoundary(_inner);",
+			"note": "the star keeps its wrap boundary under a force-flat region, so the soft seams break inside a flat argument list"
+		},
+		{
+			"name": "M-TRY-A-TAIL-NEST",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStruct",
+			"find": "$knob == anyparse.format.SameLinePolicy.Same && $seamKeepsSame ? _dn(_cols, _tail) : _tail;",
+			"replace": "_tail;",
+			"note": "the body-on-head layout loses the indent of its catch lines"
+		},
+		{
+			"name": "M-TRY-KEPT-LIST-DEFERS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": " && !$keptListCountsInFit",
+			"replace": "",
+			"note": "a kept multi-line array defers in the try group again, so the ladder the writer produced flips back to the hug on the next pass"
+		},
+		{
+			"name": "M-TRY-LIST-BODY",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "bodyBreakWrap",
+			"find": "final fitValueLists: Bool = shapeAware && constructFitKnob != null;",
+			"replace": "final fitValueLists: Bool = false;",
+			"note": "a bracket-list catch body glues to the catch line like a block instead of taking its own line"
+		},
+		{
+			"name": "M-TRY-LIST-SEP",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "buildTryparseSepOverrides",
+			"find": "final fitValueLists: Bool = softBareSep != null;",
+			"replace": "final fitValueLists: Bool = false;",
+			"note": "a bracket-list try body keeps the catch glued to its line on the trivia path"
+		},
+		{
+			"name": "M-TRY-LIST-SEP-PLAIN",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "emitTryparseSameLineStar",
+			"find": "final fitValueLists: Bool = blockShapeAware && starNode.fmtHasFlag('constructFitSep');",
+			"replace": "final fitValueLists: Bool = false;",
+			"note": "a bracket-list try body keeps the catch glued to its line on the plain path"
+		},
+		{
+			"name": "M-TRY-LIST-NEXT-GLUE",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "fitValueListCases",
+			"find": "[{ values: ['Next'], expr: nextBranch }]",
+			"replace": "[{ values: ['Next'], expr: fitBranch }]",
+			"note": "expressionTry next loses the array body's glue and takes the soft seam instead"
+		},
+		{
+			"name": "M-TRY-A-TAIL-NEST-NEXT",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStruct",
+			"find": " && $seamKeepsSame ? _dn(_cols, _tail)",
+			"replace": " ? _dn(_cols, _tail)",
+			"note": "expressionTryOverflow same moves the catch lines right under expressionTry next, a combination the key does not name"
+		},
+		{
+			"name": "M-TRY-KEPT-LIST-STATEMENT-BARRIER",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "statementListElemOpt",
+			"find": "_clearKeptListCountsInFit(_clearCallArgChainNest($optExpr))",
+			"replace": "_clearCallArgChainNest($optExpr)",
+			"note": "the kept-list flag crosses the statement list below a value try, so an if statement in its braced body or a closure breaks its fit-line body where outside a try it stays glued"
 		}
 	]
 }

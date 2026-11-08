@@ -117,15 +117,17 @@ final class PackageDocumentCarry {
 
 	/** The records of `document` in the array `arrayKey`, and the text around them. */
 	private static function parse(document: RegistryDocument, arrayKey: String, field: String): ParsedDocument {
-		final cut: Null<RecordCut> =
-			try cut(document.source, arrayKey) catch (exception: Exception) throw new Exception('${document.file}: ${exception.message}');
+		final cut: Null<RecordCut> = try
+			cut(document.source, arrayKey)
+		catch (exception: Exception)
+			throw new Exception('${document.file}: ${exception.message}');
 		if (cut == null) throw new Exception('${document.file} has no "$arrayKey" array');
 		final records: Array<Record> = [];
 		for (body in cut.records) {
-			final type: Null<String> =
-				try JsonNative.stringField(
-					body, field
-				) catch (exception: Exception) throw new Exception('${document.file}: a record does not parse: ${exception.message}');
+			final type: Null<String> = try
+				JsonNative.stringField(body, field)
+			catch (exception: Exception)
+				throw new Exception('${document.file}: a record does not parse: ${exception.message}');
 			records.push({ text: body, type: type ?? throw new Exception('${document.file}: a record carries no string "$field"') });
 		}
 		return {

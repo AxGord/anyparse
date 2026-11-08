@@ -172,6 +172,7 @@
 		"multiVarWrap",
 		"noSiblingFallback",
 		"preWrite",
+		"sameLine",
 		"trailingCommaRemovable",
 		"wrapRules"
 	],
@@ -285,6 +286,7 @@
 		"captureTrailComment",
 		"clearExprPositionNonTail",
 		"complexItems",
+		"constructFitSep",
 		"cuddle",
 		"elemChainOp",
 		"emptyCurlyBreak",

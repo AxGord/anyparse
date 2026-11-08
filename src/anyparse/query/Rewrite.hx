@@ -45,9 +45,10 @@ final class Rewrite {
 			case Parsed(parsed): parsed;
 		};
 
-		final pattern: Pattern = try plugin.parsePattern(patternText) catch (exception: Exception) return Err(
-			'pattern: ${exception.message}'
-		);
+		final pattern: Pattern = try
+			plugin.parsePattern(patternText)
+		catch (exception: Exception)
+			return Err('pattern: ${exception.message}');
 
 		// A `...` cannot survive a rewrite. The star absorbs a RUN of children
 		// and does not bind, so the replacement template has no name for what it

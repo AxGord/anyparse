@@ -171,8 +171,8 @@
 			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hold",
 			"note": "every run takes every generation exclusively, so one agent's long --fix run blocks every other lint over a tree nobody regenerates",
-			"find": ": OracleGenerationLock.holdShared(\n\t\t\t\tlock, run.me, run.deadline",
-			"replace": ": OracleGenerationLock.holdExclusive(\n\t\t\t\tlock, run.me, run.deadline"
+			"find": ": OracleGenerationLock.holdShared(lock, run.me, run.deadline)",
+			"replace": ": OracleGenerationLock.holdExclusive(lock, run.me, run.deadline)"
 		},
 		{
 			"name": "M-GENERATE-WRITER-IGNORES-READERS",
@@ -391,8 +391,8 @@
 			"name": "M-GENERATE-READ-ONLY-ROOT-THROWS",
 			"type": "anyparse.check.oracle.OracleGeneration",
 			"method": "hold",
-			"find": "catch (exception: Exception) 'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: '\n\t\t\t+ exception.message;",
-			"replace": "catch (exception: Exception) throw exception;",
+			"find": "'cannot create its generation state under ${Path.directory(Path.directory(stateDir(group)))}: ${exception.message}';",
+			"replace": "throw exception;",
 			"note": "a generation root where the state cannot be created crashes the run instead of making its configurations unavailable"
 		},
 		{

@@ -450,18 +450,23 @@ final class WriterTriviaStarEmitLowering {
 		final barePolicyFields: Array<String> = starNode.fmtReadStringArgs('bareBodyBreaks') ?? [];
 		final softSeam: Bool = starNode.fmtHasFlag('constructFitSep');
 		final shapeAware: Bool = blockShapeAware || bareShapeAware;
+		// Under `blockBodyKeepsInline` the bare branch answers from the policy separator, so a
+		// construct-fit seam swaps that separator's `Same` for the group's soft line.
+		final softBareSep: Null<Expr> = constructFitBareSep(blockShapeAware, softSeam, sameLineName);
+		final bareSep: Expr = softBareSep ?? sepExpr;
 		// `bareBodyBreaks` includes blockShape opt-in ctors (e.g.
 		// `UntypedBlockStmt`) — they end with `}` and should be
 		// treated as block for the catch-separator decision while
 		// staying non-block in `bodyPolicyWrap`'s strict block-ctor
 		// override path.
-		final blockPatterns: Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
-			? (
-				bareShapeAware
-					? collectBlockShapeEquivalentPatterns(ctx.ctorPat, prevBareRefBody.typePath)
-					: collectBlockCtorPatterns(ctx.ctorPat, prevBareRefBody.typePath)
-			)
+		// A bracket list is a value under a construct-fit seam, not a block (see `bodyBreakWrap`).
+		final fitValueLists: Bool = softBareSep != null;
+		final bodyType: Null<String> = prevBareRefBody?.typePath;
+		final blockPatterns: Array<Expr> = sameLineName != null && shapeAware
+			? blockBodyPatterns(ctx.ctorPat, bodyType, bareShapeAware, fitValueLists)
 			: [];
+		final listPatterns: Array<Expr> = fitValueLists ? fitValueListPatterns(ctx.ctorPat, bodyType) : [];
+		final seamFlag: Expr = sameLineName == null ? macro null : optFieldAccess(sameLineName);
 		final elemBodyField: Null<String> = sameLineName != null && blockPatterns.length > 0
 			? findElementBodyField(ctx.ctorPat, elemRefName, prevBareRefBody.typePath)
 			: null;
@@ -471,11 +476,11 @@ final class WriterTriviaStarEmitLowering {
 		} else {
 			final fallback: Expr = closeTrailingFirstOverride ?? sepExpr;
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
-			final bareBranch: Expr = blockShapeAware ? fallback : bareSepBreak(barePolicyFields[0], sepExpr, softSeam);
-			final cases: Array<Case> = [
-				{ values: blockPatterns, expr: blockBranch, guard: null },
-				{ values: [macro _], expr: bareBranch, guard: null }
-			];
+			final bareFallback: Expr = softBareSep == null
+				? fallback
+				: (buildCloseTrailingFirstSepOverride(ctx, prevBareRefBody, softBareSep) ?? softBareSep);
+			final bareBranch: Expr = blockShapeAware ? bareFallback : bareSepBreak(barePolicyFields[0], sepExpr, softSeam);
+			final cases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, seamFlag, blockBranch, bareBranch);
 			{ expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos() };
 		};
 		final subsequentSepOverride: Null<Expr> = if (elemBodyField == null) {
@@ -486,14 +491,16 @@ final class WriterTriviaStarEmitLowering {
 				pos: Context.currentPos()
 			};
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-			final bareBranch: Expr = blockShapeAware ? sepExpr : bareSepBreak(barePolicyFields[1], sepExpr, softSeam);
-			final cases: Array<Case> = [
-				{ values: blockPatterns, expr: blockBranch, guard: null },
-				{ values: [macro _], expr: bareBranch, guard: null }
-			];
+			final bareBranch: Expr = blockShapeAware ? bareSep : bareSepBreak(barePolicyFields[1], sepExpr, softSeam);
+			final cases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, seamFlag, blockBranch, bareBranch);
 			{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
 		};
 		return { firstSepOverride: firstSepOverride, subsequentSepOverride: subsequentSepOverride };
+	}
+
+	/** The soft `Same` separator of a `@:fmt(constructFitSep)` Star under `blockBodyKeepsInline`; null otherwise. */
+	private static function constructFitBareSep(blockShapeAware: Bool, softSeam: Bool, sameLineName: Null<String>): Null<Expr> {
+		return blockShapeAware && softSeam && sameLineName != null ? softSameLinePolicySwitch(optFieldAccess(sameLineName)) : null;
 	}
 
 	/**
