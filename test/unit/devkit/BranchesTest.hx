@@ -300,7 +300,7 @@ final class BranchesTest extends Test {
 			return;
 		}
 		TempDir.with(dir -> {
-			sys.io.File.saveContent(dir.file('config.json'), '{"budget": 6, "load_threshold": 1000}');
+			sys.io.File.saveContent(dir.file('config.yaml'), 'budget: 6\nload_threshold: 1000\n');
 			final started: Float = Date.now().getTime();
 			final elapsed: String = 'console.log(Date.now() - ${started})';
 			final after: Float -> Command -> Command = (seconds, command) ->
