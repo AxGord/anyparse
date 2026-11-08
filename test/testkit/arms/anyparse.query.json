@@ -15808,6 +15808,30 @@
 			"find": "\t\t\tif (c == ' '.code || c == '\\t'.code || isLineBreak(c)) break;\n",
 			"replace": "",
 			"note": "the atom no longer stops at whitespace, so the else keyword after a condition is swallowed"
+		},
+		{
+			"name": "M-COND-OWN-BRANCHES",
+			"type": "anyparse.query.CondDirectives",
+			"method": "ownRegions",
+			"find": "} else if (depth == 1 && elseKeywords.contains(directive.keyword)) {",
+			"replace": "} else if (false && elseKeywords.contains(directive.keyword)) {",
+			"note": "a region's same-depth #elseif / #else are not collected, so it owns only its opener and closer and reads as a single-branch region"
+		},
+		{
+			"name": "M-COND-OWN-SKIPS-NESTED",
+			"type": "anyparse.query.CondDirectives",
+			"method": "ownRegions",
+			"find": "} else if (depth == 1 && elseKeywords.contains(directive.keyword)) {",
+			"replace": "} else if (depth >= 1 && elseKeywords.contains(directive.keyword)) {",
+			"note": "the #else of a nested region is collected as the outer region's own branch"
+		},
+		{
+			"name": "M-COND-OWN-REJECTS-STRAY-CLOSER",
+			"type": "anyparse.query.CondDirectives",
+			"method": "ownDirectives",
+			"find": "return own[0] == inside[0] && own[own.length - 1] == inside[inside.length - 1] ? own : null;",
+			"replace": "return own;",
+			"note": "a closer after the region's own closer no longer makes the span ambiguous, so the first region is returned as if it were the whole span"
 		}
 	]
 }

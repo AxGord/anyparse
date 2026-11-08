@@ -303,21 +303,10 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 	 * of a NESTED region is skipped by depth, so this reads the region's own branch structure only.
 	 */
 	private static function ownDirectives(region: Span, ctx: Ctx): Null<Array<CondDirective>> {
-		final out: Array<CondDirective> = [];
-		var depth: Int = 0;
-		for (d in ctx.directives) if (d.span.from >= region.from && d.span.to <= region.to) {
-			if (d.keyword == ctx.seams.ifKeyword) {
-				if (depth == 0) out.push(d);
-				depth++;
-			} else if (d.keyword == ctx.seams.endKeyword) {
-				depth--;
-				if (depth < 0) return null;
-				if (depth == 0) out.push(d);
-			} else if (depth == 1 && ctx.seams.elseKeywords.contains(d.keyword)) {
-				out.push(d);
-			}
-		}
-		return depth != 0 || out.length < MIN_BRANCHES + 1 ? null : out;
+		final own: Null<Array<CondDirective>> = CondDirectives.ownDirectives(
+			ctx.directives, region, ctx.seams.ifKeyword, ctx.seams.elseKeywords, ctx.seams.endKeyword
+		);
+		return own == null || own.length < MIN_BRANCHES + 1 ? null : own;
 	}
 
 	/**

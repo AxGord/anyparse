@@ -115,43 +115,74 @@ final class CondDirectives {
 		final endKeyword: Null<String> = shape.conditionalEndKeyword;
 		if (ifKeyword == null || endKeyword == null) return [];
 		final out: Array<CondBlock> = [];
-		var depth: Int = 0;
-		var openAt: Int = -1;
-		var flat: Bool = true;
-		var single: Bool = true;
-		for (i => directive in directives) {
-			if (directive.keyword == ifKeyword) {
-				if (depth == 0) {
-					openAt = i;
-					flat = true;
-					single = true;
-				} else {
-					flat = false;
-				}
-				depth++;
-				continue;
-			}
-			if (directive.keyword == endKeyword) {
-				if (depth == 0) return out;
-				depth--;
-				if (depth == 0 && openAt >= 0) {
-					final open: CondDirective = directives[openAt];
-					out.push({
-						span: new Span(open.span.from, directive.span.to),
-						condition: open.condition,
-						headerEnd: open.span.to,
-						closeFrom: directive.span.from,
-						singleBranch: single,
-						flat: flat,
-						linewise: endsItsLine(source, open.span.to) && SourceText.startsItsLine(source, directive.span.from)
-					});
-					openAt = -1;
-				}
-				continue;
-			}
-			if (depth == 1) single = false;
+		for (region in ownRegions(directives, ifKeyword, shape.conditionalElseKeywords ?? [], endKeyword)) {
+			final open: CondDirective = region.directives[0];
+			final close: CondDirective = region.directives[region.directives.length - 1];
+			out.push({
+				span: new Span(open.span.from, close.span.to),
+				condition: open.condition,
+				headerEnd: open.span.to,
+				closeFrom: close.span.from,
+				singleBranch: region.directives.length == 2,
+				flat: !region.nested,
+				linewise: endsItsLine(source, open.span.to) && SourceText.startsItsLine(source, close.span.from)
+			});
 		}
 		return out;
+	}
+
+	/**
+	 * The one answer to "which directives does a region own at its own depth": for every `#if` that no
+	 * other region encloses, its opener, its same-depth `#elseif` / `#else` and its closer, in source
+	 * order — the directives of a NESTED region are skipped by depth. `nested` records that a region
+	 * sat between them.
+	 *
+	 * An UNBALANCED list stops the walk at a closer with no opener: the regions read so far are
+	 * returned. A region left open at the end is not returned at all.
+	 */
+	public static function ownRegions(
+		directives: Array<CondDirective>, ifKeyword: String, elseKeywords: Array<String>, endKeyword: String
+	): Array<OwnRegion> {
+		final out: Array<OwnRegion> = [];
+		var own: Array<CondDirective> = [];
+		var nested: Bool = false;
+		var depth: Int = 0;
+		for (directive in directives) {
+			if (directive.keyword == ifKeyword) {
+				if (depth == 0) {
+					own = [directive];
+					nested = false;
+				} else {
+					nested = true;
+				}
+				depth++;
+			} else if (directive.keyword == endKeyword) {
+				if (depth == 0) return out;
+				depth--;
+				if (depth == 0) {
+					own.push(directive);
+					out.push({ directives: own, nested: nested });
+				}
+			} else if (depth == 1 && elseKeywords.contains(directive.keyword)) {
+				own.push(directive);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The own directives (`ownRegions`) of the ONE region that `region` spans, or null when the
+	 * directives inside it do not form exactly one cleanly closed region — a stray closer, an
+	 * unclosed opener, a second sibling region or a branch keyword outside any region.
+	 */
+	public static function ownDirectives(
+		directives: Array<CondDirective>, region: Span, ifKeyword: String, elseKeywords: Array<String>, endKeyword: String
+	): Null<Array<CondDirective>> {
+		final inside: Array<CondDirective> = directives.filter(d -> d.span.from >= region.from && d.span.to <= region.to);
+		final regions: Array<OwnRegion> = ownRegions(inside, ifKeyword, elseKeywords, endKeyword);
+		if (regions.length != 1) return null;
+		final own: Array<CondDirective> = regions[0].directives;
+		return own[0] == inside[0] && own[own.length - 1] == inside[inside.length - 1] ? own : null;
 	}
 
 	/**
@@ -474,6 +505,15 @@ typedef CondBlock = {
 	final singleBranch: Bool;
 	final flat: Bool;
 	final linewise: Bool;
+};
+
+/**
+ * One top-level region's OWN directives as `CondDirectives.ownRegions` reads them (opener, same-depth
+ * `#elseif` / `#else`, closer, in source order); `nested` is true once a region sat between them.
+ */
+typedef OwnRegion = {
+	final directives: Array<CondDirective>;
+	final nested: Bool;
 };
 
 /**

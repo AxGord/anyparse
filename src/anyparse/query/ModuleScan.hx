@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
@@ -394,19 +395,10 @@ final class ModuleScan {
 		final closer: Null<String> = shape.conditionalEndKeyword;
 		final seams: Null<Array<String>> = shape.conditionalElseKeywords;
 		if (span == null || opener == null || closer == null || seams == null) return false;
-		var depth: Int = 0;
-		for (directive in CondDirectives.scan(source, shape, () -> regions)) {
-			if (directive.span.from < span.from || directive.span.to > span.to) continue;
-			if (directive.keyword == opener) {
-				depth++;
-			} else if (directive.keyword == closer) {
-				depth--;
-				if (depth == 0) return true;
-			} else if (depth == 1 && seams.contains(directive.keyword)) {
-				return false;
-			}
-		}
-		return false;
+		final own: Null<Array<CondDirective>> = CondDirectives.ownDirectives(
+			CondDirectives.scan(source, shape, () -> regions), span, opener, seams, closer
+		);
+		return own != null && own.length == 2;
 	}
 
 	/**

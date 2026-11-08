@@ -117,6 +117,39 @@ final class CondDirectivesTest extends Test {
 		Assert.equals(strayClose.length, CondDirectives.skipConditionAtom(strayClose, 0));
 	}
 
+	@:pin('control')
+	@:killer('M-COND-OWN-BRANCHES')
+	public function testARegionOwnsItsOpenerItsBranchesAndItsCloser(): Void {
+		final source: String = '#if a\nx();\n#elseif b\ny();\n#else\nz();\n#end';
+		Assert.same(['#if a', '#elseif b', '#else', '#end'], owned(source));
+	}
+
+	@:pin('control')
+	@:killer('M-COND-OWN-SKIPS-NESTED')
+	public function testADirectiveOfANestedRegionIsNotOwn(): Void {
+		final source: String = '#if a\n#if b\nx();\n#else\ny();\n#end\n#end';
+		Assert.same(['#if a', '#end'], owned(source));
+	}
+
+	@:pin('control')
+	@:killer('M-COND-OWN-REJECTS-STRAY-CLOSER')
+	public function testADirectiveSetThatIsNotOneClosedRegionIsNotOwn(): Void {
+		Assert.isNull(owned('#if a\nx();\n#end\n#end'));
+		Assert.isNull(owned('#if a\nx();\n#end\n#if b\ny();\n#end'));
+		Assert.isNull(owned('#if a\n#if b\nx();\n#end'));
+		Assert.isNull(owned('#else\n#if a\nx();\n#end'));
+	}
+
+	/** The text of the directives the whole of `source` owns as one region, null when it is not one. */
+	private static function owned(source: String): Null<Array<String>> {
+		final directives: Array<CondDirective> = CondDirectives.scan(source, SHAPE, new HaxeQueryPlugin().lexicalRegions.bind(source));
+		final own: Null<Array<CondDirective>> = CondDirectives.ownDirectives(
+			directives, new Span(0, source.length), SHAPE.conditionalIfKeyword ?? '', SHAPE.conditionalElseKeywords ?? [],
+			SHAPE.conditionalEndKeyword ?? ''
+		);
+		return own?.map(d -> CondDirectives.text(source, d));
+	}
+
 	/** The condition text of every directive `source` carries one for, in source order. */
 	private static function conditions(source: String): Array<String> {
 		final out: Array<String> = [];
