@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.query.PackageDocumentCarry;
 import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
 import haxe.Exception;
@@ -32,7 +33,7 @@ final class ArmRegistry {
 	/** The records of the registry document `text`, in its order; a name declared twice in it is refused. */
 	public static function parse(text: String): Array<ArmRecord> {
 		final cut: Null<RecordCut> =
-			try PackageDocuments.cut(text, ARRAY_NAME) catch (exception: Exception) throw new ArmRegistryError(exception.message);
+			try PackageDocumentCarry.cut(text, ARRAY_NAME) catch (exception: Exception) throw new ArmRegistryError(exception.message);
 		if (cut == null) throw new ArmRegistryError('no $ARRAY_KEY array');
 		final records: Array<ArmRecord> = cut.records.map(body -> {key: keyOf(body), text: body });
 		final keys: Array<String> = [];

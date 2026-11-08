@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.query.ModuleMove;
 import anyparse.query.MoveDeclaration;
+import anyparse.query.PackageDocumentCarry;
 import anyparse.query.PackageDocuments;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import testkit.MutationArms;
@@ -28,13 +29,13 @@ final class PackageDocumentsTest extends Test {
 	}
 
 	public function testARecordInItsOwnDocumentStays(): Void {
-		final carried: CarriedDocuments = PackageDocuments.carry([{ file: 'reg/a.json', source: doc('a', ['a.X', 'a.Y']) }], KEYS);
+		final carried: CarriedDocuments = PackageDocumentCarry.carry([{ file: 'reg/a.json', source: doc('a', ['a.X', 'a.Y']) }], KEYS);
 		Assert.same([], carried.written);
 		Assert.same([], carried.emptied);
 	}
 
 	public function testARecordMovesToTheDocumentOfItsPackageAndAnEmptiedDocumentGoes(): Void {
-		final carried: CarriedDocuments = PackageDocuments.carry([
+		final carried: CarriedDocuments = PackageDocumentCarry.carry([
 			{ file: 'reg/a.json', source: doc('a', ['b.X']) },
 			{ file: 'reg/b.json', source: doc('b', ['b.Y']) }
 		], KEYS);
@@ -44,10 +45,10 @@ final class PackageDocumentsTest extends Test {
 	}
 
 	public function testAMissingDocumentIsMadeInTheShapeOfTheOneThatSentTheRecord(): Void {
-		final carried: CarriedDocuments = PackageDocuments.carry([{ file: 'reg/a.json', source: doc('a', ['a.X', 'c.d.Z']) }], KEYS);
+		final carried: CarriedDocuments = PackageDocumentCarry.carry([{ file: 'reg/a.json', source: doc('a', ['a.X', 'c.d.Z']) }], KEYS);
 		Assert.equals(doc('a', ['a.X']), carried.written.find(c -> c.file == 'reg/a.json')?.source);
 		Assert.equals(doc('c.d', ['c.d.Z']), carried.written.find(c -> c.file == 'reg/c.d.json')?.source);
-		final root: CarriedDocuments = PackageDocuments.carry([{ file: 'reg/a.json', source: doc('a', ['Top']) }], KEYS);
+		final root: CarriedDocuments = PackageDocumentCarry.carry([{ file: 'reg/a.json', source: doc('a', ['Top']) }], KEYS);
 		Assert.equals(doc('(root)', ['Top']), root.written.find(c -> c.file == 'reg/_root.json')?.source);
 	}
 
@@ -118,6 +119,43 @@ final class PackageDocumentsTest extends Test {
 			case Right(_):
 				Assert.fail('a byPackage registry with no <array>.<field> key would carry nothing');
 		}
+	}
+
+	@:pin('control')
+	@:killer('M-PACKAGEDOCUMENTS-RECORD-ENDS-AT-FIRST-BRACE')
+	public function testARecordIsCutAtItsParseSpanWhateverBracesAndEscapesItsStringsHold(): Void {
+		final text: String = '{\n"arms": [\n{"type": "a.X", "note": "} \\" {"},\n{"type": "a.Y"}\n]\n}';
+		final cut: Null<RecordCut> = PackageDocumentCarry.cut(text, 'arms');
+		Assert.same(['{"type": "a.X", "note": "} \\" {"}', '{"type": "a.Y"}'], cut?.records);
+		Assert.equals(',\n', cut?.gap);
+		Assert.equals('\n]\n}', cut?.suffix);
+	}
+
+	@:pin('control')
+	@:killer('M-PACKAGEDOCUMENTS-EMPTY-ARRAY-PREFIX-STOPS-AT-BRACKET')
+	public function testTheTextBeforeTheRecordsOfAnEmptyArrayRunsToItsClosingBracket(): Void {
+		final cut: Null<RecordCut> = PackageDocumentCarry.cut('{"arms": [ \n ]}', 'arms');
+		Assert.same([], cut?.records);
+		Assert.equals('{"arms": [ \n ', cut?.prefix);
+		Assert.equals(']}', cut?.suffix);
+	}
+
+	@:pin('control')
+	@:killer('M-PACKAGEDOCUMENTS-ANY-VALUE-IS-THE-ARRAY')
+	public function testADocumentWithoutTheArrayAtItsTopLevelIsNotCutAndOneThatDoesNotParseThrows(): Void {
+		Assert.isNull(PackageDocumentCarry.cut('{"other": {"arms": [{"type": "a.X"}]}}', 'arms'));
+		Assert.isNull(PackageDocumentCarry.cut('{"arms": 1}', 'arms'));
+		Assert.raises(PackageDocumentCarry.cut.bind('{"arms": [{"type": "a.X"', 'arms'));
+	}
+
+	@:pin('control')
+	@:killer('M-PACKAGEDOCUMENTS-SPANS-READ-AS-BYTE-OFFSETS')
+	public function testRecordsAreCutAtTheirSpansOfADocumentHoldingNonAsciiText(): Void {
+		final text: String = '{"$$comment": "«é»", "arms": [{"type": "a.X", "note": "— ü"}, {"type": "a.Y"}]}';
+		final cut: Null<RecordCut> = PackageDocumentCarry.cut(text, 'arms');
+		Assert.same(['{"type": "a.X", "note": "— ü"}', '{"type": "a.Y"}'], cut?.records);
+		Assert.equals(', ', cut?.gap);
+		Assert.equals(']}', cut?.suffix);
 	}
 
 	/** A registry document of package `pkg` holding one arm per type path in `types`, in the layout the registry is written in. */

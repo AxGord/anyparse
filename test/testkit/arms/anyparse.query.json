@@ -15752,6 +15752,38 @@
 			"find": "drop(regionsAt, depth);",
 			"replace": "",
 			"note": "an abandoned hole leaves the regions it found pending, so the next hole at that depth claims them: a later literal hole holds text and comments written outside it"
+		},
+		{
+			"name": "M-PACKAGEDOCUMENTS-RECORD-ENDS-AT-FIRST-BRACE",
+			"type": "anyparse.query.PackageDocumentCarry",
+			"method": "cut",
+			"find": "spans.map(span -> text.substring(span.from, span.to))",
+			"replace": "spans.map(span -> text.substring(span.from, text.indexOf('}', span.from) + 1))",
+			"note": "a record ends at the first closing brace after its start, so a brace inside one of its strings cuts it short"
+		},
+		{
+			"name": "M-PACKAGEDOCUMENTS-EMPTY-ARRAY-PREFIX-STOPS-AT-BRACKET",
+			"type": "anyparse.query.PackageDocumentCarry",
+			"method": "cut",
+			"find": "skipSpace(text, JsonProjection.spanOf(array).from + 1)",
+			"replace": "JsonProjection.spanOf(array).from + 1",
+			"note": "the text before the records of an empty array ends at the bracket, so the white space inside it falls into the suffix and a record added later lands before it"
+		},
+		{
+			"name": "M-PACKAGEDOCUMENTS-ANY-VALUE-IS-THE-ARRAY",
+			"type": "anyparse.query.PackageDocumentCarry",
+			"method": "arrayAt",
+			"find": "return value.kind == JsonProjection.ARRAY ? value : null;",
+			"replace": "return value;",
+			"note": "the member named like the array is taken whatever it holds, so a number there is cut as an empty array instead of reported as having no array"
+		},
+		{
+			"name": "M-PACKAGEDOCUMENTS-SPANS-READ-AS-BYTE-OFFSETS",
+			"type": "anyparse.query.PackageDocumentCarry",
+			"method": "cut",
+			"find": "spans.map(span -> text.substring(span.from, span.to))",
+			"replace": "spans.map(span -> haxe.io.Bytes.ofString(text).sub(span.from, span.to - span.from).toString())",
+			"note": "a record is read at its parse span taken as UTF-8 byte offsets, so non-ASCII text before it or inside the document shifts every record that follows"
 		}
 	]
 }

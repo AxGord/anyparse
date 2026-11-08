@@ -170,7 +170,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/LintScore.hx',
 			'src/anyparse/query/MoveDeclaration.hx',
 			'src/anyparse/query/MoveToHelperArms.hx',
-			'src/anyparse/query/PackageDocuments.hx',
+			'src/anyparse/query/PackageDocumentCarry.hx',
 			'src/anyparse/query/ParseDiskCache.hx',
 			'src/anyparse/query/TypePathRegistries.hx',
 			'src/anyparse/query/cli/BatchRun.hx',

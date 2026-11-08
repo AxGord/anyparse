@@ -10,8 +10,8 @@ import anyparse.query.ModuleMoveBindings.BindingProbe;
 import anyparse.query.ModulePathTokens.ModuleRename;
 import anyparse.query.ModulePathTokens.TextEdit;
 import anyparse.query.MoveSymbol.MoveChange;
-import anyparse.query.PackageDocuments.CarriedDocuments;
-import anyparse.query.PackageDocuments.RegistryDocument;
+import anyparse.query.PackageDocumentCarry.CarriedDocuments;
+import anyparse.query.PackageDocumentCarry.RegistryDocument;
 import anyparse.query.SymbolIndex.AmbientImportGroup;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -941,7 +941,7 @@ final class ModuleMove {
 					for (e in request.textFiles)
 						if (e.file == r.file) { file: e.file, source: current.find(c -> c.file == e.file)?.newSource ?? e.source }
 			];
-			final carried: CarriedDocuments = try PackageDocuments.carry(
+			final carried: CarriedDocuments = try PackageDocumentCarry.carry(
 				documents, members[0].keys
 			) catch (exception: Exception) return Left(['a "byPackage" registry cannot be carried: ${exception.message}']);
 			for (emptied in carried.emptied) {
