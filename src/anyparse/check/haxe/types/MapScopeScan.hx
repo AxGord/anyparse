@@ -1,6 +1,7 @@
 package anyparse.check.haxe.types;
 
 import anyparse.check.scan.UsingScan;
+import anyparse.query.ImportBindings;
 
 /**
  * What one file's header binds, for the two name-resolution questions `prefer-map-type` asks: does a
@@ -56,9 +57,6 @@ final class MapScopeScan {
 
 	/** The package the four rewritable map implementations live in — the target of every name proof. */
 	public static inline final MAP_MODULE_PACKAGE: String = 'haxe.ds';
-
-	/** The wildcard import's trailing segment, stripped to recover the imported package. */
-	private static inline final WILDCARD_SUFFIX: String = '.*';
 
 	/** The plain `import a.b.X;` declaration kind (spelled literally, as `UsingScan`'s import anchors are). */
 	private static inline final IMPORT_DECL_KIND: String = 'ImportDecl';
@@ -116,7 +114,7 @@ final class MapScopeScan {
 			case IMPORT_DECL_KIND, UsingScan.USING_DECL_KIND:
 				scope.imports[CheckScan.simpleModuleName(name)] = name;
 			case WILDCARD_IMPORT_KIND, WILDCARD_USING_KIND:
-				if (name.endsWith(WILDCARD_SUFFIX)) scope.wildcards.push(name.substr(0, name.length - WILDCARD_SUFFIX.length));
+				if (ImportBindings.isWildcard(name)) scope.wildcards.push(ImportBindings.wildcardBase(name));
 			case _:
 				if (ALIAS_IMPORT_KINDS.contains(node.kind)) scope.aliases.push(name);
 		}

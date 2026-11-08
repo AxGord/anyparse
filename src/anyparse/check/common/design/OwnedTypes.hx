@@ -7,7 +7,9 @@ import anyparse.check.common.design.ConfiguredTypes.OwnedMember;
 import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.Glob;
+import anyparse.query.ImportBindings;
 import anyparse.query.IndexScope;
+import anyparse.query.ModuleScan;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
@@ -132,9 +134,6 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	/** The member name a constructor is declared and owned under. */
 	private static inline final CONSTRUCTOR: String = 'new';
 
-	/** The suffix a wildcard import's path carries. */
-	private static inline final WILDCARD_SUFFIX: String = '.*';
-
 	/** Each glob of a declaration, compiled once per run. */
 	private final _globs: Map<String, EReg> = [];
 
@@ -239,9 +238,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 		for (imp in scan.info.imports) {
 			final imported: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (imported == null) continue;
-			final path: String = imported.endsWith(WILDCARD_SUFFIX)
-				? imported.substr(0, imported.length - WILDCARD_SUFFIX.length)
-				: imported;
+			final path: String = ImportBindings.wildcardBase(imported);
 			for (s in scan.subjects) if (s.member != null ? path == s.label : importNames(path, s, scan.index)) report(scan, s, imp.span);
 		}
 	}
@@ -297,7 +294,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 		if (subject.modules.contains(info.module)) return true;
 		final names: Array<String> = [info.module];
 		final enclosing: Null<TypeDeclInfo> = info.types.find(t -> t.span.from <= offset && offset < t.span.to);
-		if (enclosing != null) names.push(TypeRefIndex.importPathFor(info, enclosing));
+		if (enclosing != null) names.push(ModuleScan.pathOfDecl(info, enclosing));
 		return subject.declaration.owners.exists(glob -> {
 			final re: EReg = globOf(glob);
 			names.exists(n -> re.match(n));

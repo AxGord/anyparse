@@ -171,7 +171,7 @@ final class TypingService {
 	 */
 	public function bindsAlike(file: FileInfo, other: FileInfo, name: String): Bool {
 		final path: Null<String> = switch _refs.names.bindingsOf(name, other).bound {
-			case InIndex(decls): decls.length == 1 ? TypeRefIndex.importPathFor(decls[0].file, decls[0].type) : null;
+			case InIndex(decls): decls.length == 1 ? ModuleScan.pathOfDecl(decls[0].file, decls[0].type) : null;
 			case OutOfIndex(path): path;
 			case null: StdTypes.toplevelPath(name);
 		};
@@ -499,7 +499,7 @@ final class TypingService {
 	private static function aliases(decl: ResolvedType, canonical: String): Bool {
 		// The index keeps one declaration per name, and another `#if` branch may declare it differently or not at all.
 		if (decl.type.guarded) return false;
-		if (TypeRefIndex.importPathFor(decl.file, decl.type) == canonical) return true;
+		if (ModuleScan.pathOfDecl(decl.file, decl.type) == canonical) return true;
 		final written: Null<String> = decl.type.aliasTargetWritten;
 		if (written == null || decl.type.aliasTargetRaw != canonical) return false;
 		final params: Array<String> = decl.type.typeParamNames;

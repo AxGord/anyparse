@@ -709,7 +709,7 @@
 			"name": "M-OWNED-ENCLOSING-TYPE",
 			"type": "anyparse.check.common.design.OwnedTypes",
 			"method": "ownedAt",
-			"find": "if (enclosing != null) names.push(TypeRefIndex.importPathFor(info, enclosing));",
+			"find": "if (enclosing != null) names.push(ModuleScan.pathOfDecl(info, enclosing));",
 			"replace": "",
 			"note": "an owner naming a sub-type owns nothing, since only the module path is matched"
 		},

@@ -318,7 +318,7 @@ class RedundantThisCheckTest extends Test {
 
 	// Qualified POSITIVE → flagged. `extends pkg.T` where `pkg.T` is IN-set and declares
 	// `bump`, resolved by import-path identity — so `this.bump()` is flagged. Pins the
-	// `importPathFor == raw` positive branch (the Vector-B-qualified test only exercises the
+	// `pathOfDecl == raw` positive branch (the Vector-B-qualified test only exercises the
 	// external/negative direction).
 	public function testQualifiedInheritedFlagged(): Void {
 		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [

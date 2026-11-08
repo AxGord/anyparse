@@ -250,10 +250,12 @@ final class ModuleScan {
 		return at < 0 ? '' : runs[at];
 	}
 
-	/** The import path a type named `name` declared in `file` carries: the module itself for the main type, else `module.name`. */
-	public static function pathOfTypeIn(file: FileInfo, name: String): String {
-		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
-		return decl != null && decl.isMain ? file.module : '${file.module}.$name';
+	/**
+	 * The import path the declaration `decl` of `file` carries: the module itself for its main type, else
+	 * `module.name`. The owner of that rule; a site that spells it inline should call this.
+	 */
+	public static function pathOfDecl(file: FileInfo, decl: TypeDeclInfo): String {
+		return decl.isMain ? file.module : '${file.module}.${decl.name}';
 	}
 
 	/**

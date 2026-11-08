@@ -210,7 +210,7 @@ final class TypeRefIndex {
 		final simple: String = SourceText.lastSegment(raw);
 		final matches: Array<ResolvedType> = [];
 		final seen: Array<String> = [];
-		for (r in named(simple)) if (importPathFor(r.file, r.type) == raw) {
+		for (r in named(simple)) if (ModuleScan.pathOfDecl(r.file, r.type) == raw) {
 			final key: String = '${r.file.file}#${r.type.name}';
 			if (!seen.contains(key)) {
 				seen.push(key);
@@ -358,19 +358,14 @@ final class TypeRefIndex {
 		return table[name] ?? [];
 	}
 
-	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
-	public static inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
-		return t.isMain ? fi.module : '${fi.module}.${t.name}';
-	}
-
 	/**
 	 * The one declaration `found` holds: its only one, or — every one a copy of one std module a target's `_std` re-declares
 	 * (`std/Array.hx` beside `js/_std/Array.hx`) — the first by file. Null otherwise.
 	 */
 	public static function oneDeclaration(found: Array<ResolvedType>): Null<ResolvedType> {
 		if (found.length < 2) return found.length == 1 ? found[0] : null;
-		final module: String = ModuleScan.pathOfTypeIn(found[0].file, found[0].type.name);
-		if (!found.foreach(r -> StdResolver.isStdFile(r.file.file) && ModuleScan.pathOfTypeIn(r.file, r.type.name) == module)) return null;
+		final module: String = ModuleScan.pathOfDecl(found[0].file, found[0].type);
+		if (!found.foreach(r -> StdResolver.isStdFile(r.file.file) && ModuleScan.pathOfDecl(r.file, r.type) == module)) return null;
 		final ordered: Array<ResolvedType> = found.copy();
 		ordered.sort((a, b) -> Reflect.compare(a.file.file, b.file.file));
 		return ordered[0];

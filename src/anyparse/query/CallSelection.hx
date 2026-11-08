@@ -323,13 +323,13 @@ final class CallSelection {
 	}
 
 	/**
-	 * The end `e` written so it names it in every file: a core value type by its name, a declaration by its module path
-	 * (`ModuleScan.pathOfTypeIn`); null for any other end.
+	 * The end `e` written so it names it in every file: a core value type by its name, a declaration by
+	 * its module path (`ModuleScan.pathOfDecl`); null for any other end.
 	 */
 	private static function spelledEnd(e: TypeEnd): Null<String> {
 		return switch e {
 			case Core(name): name;
-			case Declared(r): ModuleScan.pathOfTypeIn(r.file, r.type.name);
+			case Declared(r): ModuleScan.pathOfDecl(r.file, r.type);
 			case _: null;
 		};
 	}

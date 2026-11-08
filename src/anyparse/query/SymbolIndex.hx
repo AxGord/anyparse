@@ -930,12 +930,7 @@ final class SymbolIndex {
 		if (declarers.length != 1) return null;
 		final file: FileInfo = declarers[0];
 		final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
-		return if (type == null)
-			null
-		else if (type.isMain)
-			file.module
-		else
-			'${file.module}.$typeName';
+		return type == null ? null : ModuleScan.pathOfDecl(file, type);
 	}
 
 	/**
@@ -952,7 +947,7 @@ final class SymbolIndex {
 		for (file in refs.declaringFiles(typeName)) {
 			final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
 			if (type == null) continue;
-			final path: String = type.isMain ? file.module : '${file.module}.$typeName';
+			final path: String = ModuleScan.pathOfDecl(file, type);
 			if (!out.contains(path)) out.push(path);
 		}
 		return out;

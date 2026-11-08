@@ -92,9 +92,7 @@ final class ImportBindings {
 	 */
 	public function ofImport(path: String): Null<ImportBinding> {
 		if (_imports.exists(path)) return _imports[path];
-		final binding: Null<ImportBinding> = isWildcard(path)
-			? readWildcard(path.substring(0, path.length - WILDCARD_SUFFIX.length))
-			: readExplicit(path);
+		final binding: Null<ImportBinding> = isWildcard(path) ? readWildcard(wildcardBase(path)) : readExplicit(path);
 		_imports[path] = binding;
 		return binding;
 	}
@@ -325,6 +323,11 @@ final class ImportBindings {
 	/** Whether `path` is a wildcard import's path. */
 	public static inline function isWildcard(path: String): Bool {
 		return path.endsWith(WILDCARD_SUFFIX);
+	}
+
+	/** The path a wildcard import `p.*` names — `p`, a package or a type; any other path unchanged. */
+	public static inline function wildcardBase(path: String): String {
+		return isWildcard(path) ? path.substring(0, path.length - WILDCARD_SUFFIX.length) : path;
 	}
 
 	/**

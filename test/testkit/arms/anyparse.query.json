@@ -13159,7 +13159,7 @@
 			"name": "M-CALLS-PARAM-SPELLED",
 			"type": "anyparse.query.CallSelection",
 			"method": "spelledEnd",
-			"find": "case Declared(r): ModuleScan.pathOfTypeIn(r.file, r.type.name);",
+			"find": "case Declared(r): ModuleScan.pathOfDecl(r.file, r.type);",
 			"replace": "case Declared(r): r.type.name;",
 			"note": "a bound type is spelled by its simple name, which the declaring file may resolve to another type"
 		},
@@ -15696,6 +15696,22 @@
 			"method": "stripComments",
 			"force": "text",
 			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
+		},
+		{
+			"name": "M-MODULESCAN-SUBTYPE-PATH-BARE",
+			"type": "anyparse.query.ModuleScan",
+			"method": "pathOfDecl",
+			"find": "decl.isMain ? file.module : '${file.module}.${decl.name}'",
+			"replace": "file.module",
+			"note": "a sub-module type is named by its bare module, so the import path of a type declared beside the main one no longer carries the type name"
+		},
+		{
+			"name": "M-MODULESCAN-MAIN-PATH-QUALIFIED",
+			"type": "anyparse.query.ModuleScan",
+			"method": "pathOfDecl",
+			"find": "decl.isMain ? file.module : '${file.module}.${decl.name}'",
+			"replace": "'${file.module}.${decl.name}'",
+			"note": "a module's main type is named like any sub-module type, so the import path of the type a file is named for repeats the type name after the module"
 		},
 		{
 			"name": "M-FRAGMENT-REGIONS-STRING-BLIND",
