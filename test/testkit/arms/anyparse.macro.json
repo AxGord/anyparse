@@ -2120,6 +2120,14 @@
 			"find": "final _deferIfHardline: Bool = _breakAsOnePerLine || $v{c.deferUnderIgnore} && _ignoreEmit;",
 			"replace": "final _deferIfHardline: Bool = _breakAsOnePerLine;",
 			"note": "a hardline-carrying list under Ignore is counted again by its host, so a signature wraps around a rule-broken anon type"
+		},
+		{
+			"name": "M-IGNORE-DEFER-BRACED-ONLY",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "deferUnderIgnore: openText == '{' && !reflowInExprPosition",
+			"replace": "deferUnderIgnore: openText == '{'",
+			"note": "an object literal in expression position is deferred from its host's width like an anon type, so a parameter default holding one no longer wraps its signature"
 		}
 	]
 }

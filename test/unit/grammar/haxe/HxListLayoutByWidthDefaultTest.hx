@@ -87,6 +87,20 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		);
 	}
 
+	/**
+	 * An object literal in expression position keeps its count in its host's width: a
+	 * parameter default holding a rule-broken one wraps the signature, unlike an anon type.
+	 */
+	@:pin('control')
+	@:killer('M-IGNORE-DEFER-BRACED-ONLY')
+	public function testAParameterDefaultObjectLiteralWrapsTheSignature(): Void {
+		Assert.equals(
+			'class C {\n\tfunction f(a:Int,\n\t\to:Dynamic = {\n\t\t\tc: 1,\n\t\t\td: 2,\n\t\t\te: 3,\n\t\t\tf: 4,\n\t\t\tg: 5\n'
+			+ '\t\t}, z:Int = 0):Void {}\n}',
+			write('class C {\n\tfunction f(a:Int, o:Dynamic = {c: 1, d: 2, e: 3, f: 4, g: 5}, z:Int = 0):Void {}\n}')
+		);
+	}
+
 	private static function write(src: String): String {
 		return HxWriteFixture.triviaWrite(src, '{}');
 	}
