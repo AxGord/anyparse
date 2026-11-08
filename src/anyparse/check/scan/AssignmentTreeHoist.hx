@@ -5,6 +5,7 @@ import anyparse.check.scan.IfExpressionChain.CarryGap;
 import anyparse.check.scan.IfExpressionChain.CarrySeat;
 import anyparse.check.scan.IfExpressionChain.IfChain;
 import anyparse.check.scan.IfExpressionChain.TernaryTail;
+import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
 
 /**
@@ -34,9 +35,6 @@ import anyparse.query.ShapeVocab;
  */
 @:nullSafety(Strict)
 final class AssignmentTreeHoist {
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/**
 	 * Bundle the kinds the recursion reads from `shape`, or null when a required kind is unset
@@ -391,7 +389,7 @@ final class AssignmentTreeHoist {
 		final inner: QueryNode = stmt.kind == s.blockStmtKind ? (stmt.children.length == 1 ? stmt.children[0] : stmt) : stmt;
 		if (inner.kind != s.exprStmtKind || inner.children.length != 1) return null;
 		final assign: QueryNode = inner.children[0];
-		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
+		return assign.kind == s.assignKind && NodeShape.hasAssignShape(assign) ? assign : null;
 	}
 
 	/**

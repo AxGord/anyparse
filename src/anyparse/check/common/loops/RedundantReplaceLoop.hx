@@ -1,9 +1,11 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -171,17 +173,8 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'redundant-replace-loop';
 
-	/** A `!=` comparison node has exactly [left, right] children. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
-
 	/** A unary-minus (`Neg`) node has exactly [operand] children. */
 	private static inline final NEG_CHILD_COUNT: Int = 1;
-
-	/** A plain assignment node has exactly [target, value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
-
-	/** `x.indexOf(S)` / `x.contains(S)`: callee + one argument. */
-	private static inline final ONE_ARG_CALL_CHILD_COUNT: Int = 2;
 
 	/** `x.replace(S, B)`: callee + two arguments. */
 	private static inline final REPLACE_CALL_CHILD_COUNT: Int = 3;
@@ -367,7 +360,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 		final stmt: Null<QueryNode> = singleStatementOf(body, s);
 		if (stmt == null || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != s.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		if (assign.kind != s.assignKind || !NodeShape.hasAssignShape(assign)) return null;
 		final target: QueryNode = assign.children[0];
 		if (target.kind != s.identKind || TypeResolver.identBindingFrom(target, root, s.shape) != bindingFrom) return null;
 		final value: QueryNode = assign.children[1];
@@ -436,7 +429,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	 * shapes (`x.indexOf(S) != -1`, `-1 != x.indexOf(S)`, `x.contains(S)`), else null.
 	 */
 	private static function matchGuard(cond: QueryNode, source: String, s: Seams): Null<{ receiver: QueryNode, search: QueryNode }> {
-		if (cond.kind == s.notEqKind && cond.children.length == COMPARISON_CHILD_COUNT) {
+		if (cond.kind == s.notEqKind && NodeShape.hasComparisonShape(cond)) {
 			final left: QueryNode = cond.children[0];
 			final right: QueryNode = cond.children[1];
 			final leftCall: Null<MethodCall> = indexOfCallParts(left, s);
@@ -447,7 +440,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 				: null;
 		}
 		final call: Null<MethodCall> = methodCallParts(cond, s);
-		return call != null && call.method == CONTAINS_METHOD && cond.children.length == ONE_ARG_CALL_CHILD_COUNT ? {
+		return call != null && call.method == CONTAINS_METHOD && NodeShape.hasOneArgCallShape(cond) ? {
 			receiver: call.recv,
 			search: cond.children[1]
 		} : null;
@@ -561,7 +554,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	): Bool {
 		final eqKind: Null<String> = s.eqKind;
 		if (eqKind == null) return false;
-		for (cond in guards) if (cond.kind == eqKind && cond.children.length == COMPARISON_CHILD_COUNT) {
+		for (cond in guards) if (cond.kind == eqKind && NodeShape.hasComparisonShape(cond)) {
 			final left: Null<Operand> = operandOf(cond.children[0], root, fns, source, s);
 			final right: Null<Operand> = operandOf(cond.children[1], root, fns, source, s);
 			if (left == null || right == null) continue;
@@ -611,7 +604,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	 * else null. One optional paren layer is unwrapped, as in the loop's own condition.
 	 */
 	private static function exitGuardCondition(guard: QueryNode, flow: ControlFlowSupport, s: Seams): Null<QueryNode> {
-		if (!s.ifStatementKinds.contains(guard.kind) || guard.children.length < COMPARISON_CHILD_COUNT) return null;
+		if (!s.ifStatementKinds.contains(guard.kind) || !BranchChain.hasThen(guard)) return null;
 		if (!CheckScan.branchAlwaysExits(guard.children[1], flow)) return null;
 		final cond: QueryNode = guard.children[0];
 		return s.parenKind != null && cond.kind == s.parenKind && cond.children.length == 1 ? cond.children[0] : cond;
@@ -630,7 +623,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	/** `x.indexOf(S)` destructured into its receiver, or null when `node` is not exactly that one-argument call. */
 	private static function indexOfCallParts(node: QueryNode, s: Seams): Null<MethodCall> {
 		final parts: Null<MethodCall> = methodCallParts(node, s);
-		return parts != null && parts.method == SEARCH_METHOD && node.children.length == ONE_ARG_CALL_CHILD_COUNT ? parts : null;
+		return parts != null && parts.method == SEARCH_METHOD && NodeShape.hasOneArgCallShape(node) ? parts : null;
 	}
 
 	/** Whether `node` is a unary-minus wrapping the integer literal `1` — the `-1` "not found" sentinel. */

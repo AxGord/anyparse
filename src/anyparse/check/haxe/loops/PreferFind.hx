@@ -7,6 +7,7 @@ import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParenGuard;
 import anyparse.query.SourceText;
@@ -83,9 +84,6 @@ final class PreferFind extends HaxeRule {
 
 	/** A Form-B `if`-body block has exactly [assignment-statement, break] children. */
 	private static inline final BREAK_BODY_CHILD_COUNT: Int = 2;
-
-	/** An assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** Cap on the condition (and fallback) excerpt length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
@@ -353,7 +351,7 @@ final class PreferFind extends HaxeRule {
 		final assignStmt: QueryNode = body.children[0];
 		if (assignStmt.kind != exprStmtKind || assignStmt.children.length != 1) return false;
 		final assign: QueryNode = assignStmt.children[0];
-		if (assign.kind != assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return false;
+		if (assign.kind != assignKind || !NodeShape.hasAssignShape(assign)) return false;
 		final lhs: QueryNode = assign.children[0];
 		final rhs: QueryNode = assign.children[1];
 		return lhs.kind == s.identKind && lhs.name == declName && rhs.kind == s.identKind && rhs.name == loopVar;

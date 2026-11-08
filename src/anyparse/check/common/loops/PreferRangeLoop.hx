@@ -2,6 +2,7 @@ package anyparse.check.common.loops;
 
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -75,9 +76,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class PreferRangeLoop extends RuleBase {
-
-	/** A `<` comparison node has exactly [left, right] children. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
 	/** Minimum body statements: at least one real statement plus the trailing `i++`. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
@@ -258,7 +256,7 @@ final class PreferRangeLoop extends RuleBase {
 	private static function matchCondition(whileNode: QueryNode, loopVar: String, s: Seams): Null<QueryNode> {
 		if (whileNode.kind != s.whileStmtKind || !LoopScan.hasWhileShape(whileNode)) return null;
 		final cond: QueryNode = LoopScan.whileCondition(whileNode);
-		if (cond.kind != s.ltKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
+		if (cond.kind != s.ltKind || !NodeShape.hasComparisonShape(cond)) return null;
 		final left: QueryNode = cond.children[0];
 		if (left.kind != s.identKind || left.name != loopVar) return null;
 		final bound: QueryNode = cond.children[1];

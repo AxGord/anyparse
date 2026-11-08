@@ -8,6 +8,7 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -217,9 +218,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class PreferComprehension extends RuleBase {
-
-	/** A `push` call has exactly [callee, single-argument] children. */
-	private static inline final PUSH_CALL_CHILD_COUNT: Int = 2;
 
 	/** The declaration keyword the fix always emits, and its length for the `var`→`final` swap. */
 	private static inline final VAR_KEYWORD: String = 'var';
@@ -1069,7 +1067,7 @@ final class PreferComprehension extends RuleBase {
 	private static function pushCallArgument(node: QueryNode, name: String, s: ComprehensionSeams): Null<QueryNode> {
 		if (node.kind != s.exprStmtKind || node.children.length != 1) return null;
 		final call: QueryNode = node.children[0];
-		if (call.kind != s.callKind || call.children.length != PUSH_CALL_CHILD_COUNT) return null;
+		if (call.kind != s.callKind || !NodeShape.hasOneArgCallShape(call)) return null;
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != s.fieldAccessKind || callee.name != 'push' || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];

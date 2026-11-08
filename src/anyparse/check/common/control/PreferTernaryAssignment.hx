@@ -10,6 +10,7 @@ import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
@@ -87,9 +88,6 @@ import anyparse.query.SymbolIndex;
  */
 @:nullSafety(Strict)
 final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** The finding message for the decl arm (a declaration and the one-branch `if` after it). */
 	private static inline final DECL_MESSAGE: String =
@@ -248,7 +246,7 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 		final stmt: QueryNode = branch.kind == s.blockStmtKind && branch.children.length == 1 ? branch.children[0] : branch;
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
+		return assign.kind == s.assignKind && NodeShape.hasAssignShape(assign) ? assign : null;
 	}
 
 	/**

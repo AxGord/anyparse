@@ -54,6 +54,14 @@ final class BranchChainTest extends Test {
 		Assert.isFalse(BranchChain.isElseIfLink(shape.elseNode, shape.node, ['Other']));
 	}
 
+	@:pin('guard')
+	public function testHasThenNeedsTheConditionAndTheThenBranch(): Void {
+		final shape: Shape = withElse();
+		Assert.isTrue(BranchChain.hasThen(shape.node));
+		Assert.isTrue(BranchChain.hasThen(new QueryNode('IfStmt', null, [shape.cond, shape.then])));
+		Assert.isFalse(BranchChain.hasThen(new QueryNode('IfStmt', null, [shape.cond])));
+	}
+
 	private static function leaf(kind: String): QueryNode {
 		return new QueryNode(kind, null, []);
 	}

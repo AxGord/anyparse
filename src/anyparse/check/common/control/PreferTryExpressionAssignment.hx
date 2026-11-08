@@ -7,6 +7,7 @@ import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -113,9 +114,6 @@ import anyparse.query.SymbolIndex;
  */
 @:nullSafety(Strict)
 final class PreferTryExpressionAssignment extends RuleBase {
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** The finding message for the decl-pairing arm (a `var` and its following try/catch). */
 	private static inline final DECL_MESSAGE: String =
@@ -345,7 +343,7 @@ final class PreferTryExpressionAssignment extends RuleBase {
 	/** The plain `=` assignment a body holds — bare, or wrapped in an expression statement. Null for anything else. */
 	private static function plainAssignment(body: QueryNode, s: Seams): Null<QueryNode> {
 		final expr: QueryNode = body.kind == s.exprStmtKind && body.children.length == 1 ? body.children[0] : body;
-		return expr.kind == s.assignKind && expr.children.length == ASSIGN_CHILD_COUNT ? expr : null;
+		return expr.kind == s.assignKind && NodeShape.hasAssignShape(expr) ? expr : null;
 	}
 
 	/**

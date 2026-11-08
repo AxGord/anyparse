@@ -131,9 +131,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 
-	/** A binary node — a comparison or a logical operator — has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
-
 	/** A run needs at least two conjuncts — one null-check alone is not a chain. */
 	private static inline final MIN_RUN_LENGTH: Int = 2;
 
@@ -266,7 +263,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	private static function flatten(node: QueryNode): Array<QueryNode> {
 		final conjuncts: Array<QueryNode> = [];
 		var n: QueryNode = node;
-		while (n.kind == node.kind && n.children.length == BINARY_CHILD_COUNT) {
+		while (n.kind == node.kind && NodeShape.hasBinaryShape(n)) {
 			conjuncts.push(n.children[1]);
 			n = n.children[0];
 		}

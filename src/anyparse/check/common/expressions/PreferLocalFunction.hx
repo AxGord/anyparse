@@ -3,6 +3,7 @@ package anyparse.check.common.expressions;
 import anyparse.ds.Set;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -88,9 +89,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class PreferLocalFunction extends RuleBase {
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	private static inline final RULE_ID: String = 'prefer-local-function';
 	private static inline final MSG: String = 'this function literal is bound to a local — declare it as a local function';
@@ -322,7 +320,7 @@ final class PreferLocalFunction extends RuleBase {
 	/** Whether `node` is a plain `<ident> = <function literal>` assignment. */
 	private static function isBinding(node: QueryNode, s: Seams): Bool {
 		return node.kind == s.assignKind
-			&& node.children.length == ASSIGN_CHILD_COUNT
+			&& NodeShape.hasAssignShape(node)
 			&& node.children[0].kind == s.identKind
 			&& s.literalKinds.contains(node.children[1].kind);
 	}

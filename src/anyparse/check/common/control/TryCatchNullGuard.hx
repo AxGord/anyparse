@@ -125,9 +125,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 
-	/** A binary comparison node has exactly [left, right] children. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
-
 	private static inline final MESSAGE: String =
 		'this null-defaulting try-expression and its following null guard can collapse into the catch clauses';
 
@@ -366,7 +363,7 @@ final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 	private static function terminator(guard: QueryNode, name: String, s: Seams): Null<QueryNode> {
 		if (!s.ifKinds.contains(guard.kind) || BranchChain.hasElse(guard)) return null;
 		final cond: QueryNode = BoolExprShape.unwrapParens(BranchChain.condOf(guard), s.parenKind);
-		if (cond.kind != s.eqKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
+		if (cond.kind != s.eqKind || !NodeShape.hasComparisonShape(cond)) return null;
 		if (!comparesToNull(cond, name, s)) return null;
 		final body: Null<QueryNode> = TryExpressionShape.singleBody(BranchChain.thenOf(guard), s.blockStmtKind);
 		return body != null && s.termKinds.contains(body.kind) ? body : null;

@@ -13,6 +13,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.PurityScan;
+import anyparse.query.NodeShape;
 
 using StringTools;
 
@@ -210,9 +211,6 @@ final class JoinArrayPushes extends RuleBase {
 
 	/** The appending method whose argument becomes one literal element. */
 	private static inline final PUSH_METHOD: String = 'push';
-
-	/** A `push` call has exactly [callee, single-argument] children. */
-	private static inline final PUSH_CALL_CHILD_COUNT: Int = 2;
 
 	/** A field whose array is filled only by the folded run carries no assignment at all. */
 	private static inline final NO_WRITES: Int = 0;
@@ -442,7 +440,7 @@ final class JoinArrayPushes extends RuleBase {
 		final stmtSpan: Null<Span> = stmt.span;
 		if (stmtSpan == null || stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final call: QueryNode = stmt.children[0];
-		if (call.kind != s.callKind || call.children.length != PUSH_CALL_CHILD_COUNT) return null;
+		if (call.kind != s.callKind || !NodeShape.hasOneArgCallShape(call)) return null;
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != s.fieldAccessKind || callee.name != PUSH_METHOD || callee.children.length != 1) return null;
 		final arg: QueryNode = call.children[1];

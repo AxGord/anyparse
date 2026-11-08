@@ -10,6 +10,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
@@ -62,9 +63,6 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'scratch-field';
-
-	/** A binary node has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/** The declined fix of a field some read sees before a write of the same call. */
 	private static inline final DECLINE_NOT_DOMINATED: String = 'a read is not preceded by a write of the same call on every path, '
@@ -380,12 +378,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			if (slot != null) return;
 			if (s.statementListKinds.contains(node.kind)) for (stmt in node.children) {
 				final assign: Null<QueryNode> = stmt.kind == s.exprStmtKind && stmt.children.length == 1 ? stmt.children[0] : null;
-				if (
-					assign == null
-					|| assign.kind != s.assignKind
-					|| assign.children.length != BINARY_CHILD_COUNT
-					|| assign.children[0] != first
-				)
+				if (assign == null || assign.kind != s.assignKind || !NodeShape.hasAssignShape(assign) || assign.children[0] != first)
 					continue;
 				slot = { stmt: stmt, assign: assign, block: node };
 				return;
@@ -622,7 +615,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		final self: Null<String> = shape.selfReferenceText;
 		return body.kind == shape.blockBodyKind && body.children.foreach(stmt -> {
 			final assign: Null<QueryNode> = stmt.kind == shape.exprStatementKind && stmt.children.length == 1 ? stmt.children[0] : null;
-			if (assign == null || assign.kind != shape.assignKind || assign.children.length != BINARY_CHILD_COUNT) return false;
+			if (assign == null || assign.kind != shape.assignKind || !NodeShape.hasAssignShape(assign)) return false;
 			final target: QueryNode = assign.children[0];
 			final bare: Bool = target.kind == shape.identKind;
 			final throughSelf: Bool = target.kind == shape.fieldAccessKind

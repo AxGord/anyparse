@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
 import anyparse.query.CondRegionScan;
+import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 
 /**
@@ -95,7 +96,7 @@ final class AllocationSets {
 		final found: Array<String> = own ?? [];
 		var sealed: Bool = own != null;
 		for (w in _writes.of(name)) if (sealed && _writes.mayWrite(w, owner)) {
-			final values: Null<Array<String>> = w.write.kind == _shape.assignKind && w.write.children.length == 2
+			final values: Null<Array<String>> = w.write.kind == _shape.assignKind && NodeShape.hasAssignShape(w.write)
 				? constructed(w.write.children[1], w.file)
 				: null;
 			if (values == null)

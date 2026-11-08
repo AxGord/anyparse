@@ -15,6 +15,7 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PurityScan;
+import anyparse.query.NodeShape;
 
 /**
  * Rewrites consecutive writes of a type's fields into the one method call the PROJECT declares equivalent —
@@ -359,7 +360,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	private static function writeOf(stmt: QueryNode, seams: Seams): Null<Write> {
 		if (stmt.kind != seams.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != seams.assignKind || assign.children.length != 2) return null;
+		if (assign.kind != seams.assignKind || !NodeShape.hasAssignShape(assign)) return null;
 		final lhs: QueryNode = assign.children[0];
 		final field: Null<String> = lhs.name;
 		final stmtSpan: Null<Span> = stmt.span;

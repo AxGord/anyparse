@@ -13,6 +13,7 @@ import anyparse.query.FieldRename;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
@@ -938,7 +939,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			null;
 		if (retKind == null || ret.kind != retKind || ret.children.length != 1) return null;
 		final assign: QueryNode = ret.children[0];
-		if (assign.kind != shape.assignKind || assign.children.length != 2) return null;
+		if (assign.kind != shape.assignKind || !NodeShape.hasAssignShape(assign)) return null;
 		final value: QueryNode = assign.children[1];
 		return value.kind != shape.identKind || value.name != paramName ? null : FieldRefScan.fieldRefName(assign.children[0], shape);
 	}
@@ -976,7 +977,11 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
 		if (stmt.kind != shape.exprStatementKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != shape.assignKind || assign.children.length != 2 || FieldRefScan.fieldRefName(assign.children[0], shape) != field)
+		if (
+			assign.kind != shape.assignKind
+			|| !NodeShape.hasAssignShape(assign)
+			|| FieldRefScan.fieldRefName(assign.children[0], shape) != field
+		)
 			return null;
 		final rhs: QueryNode = assign.children[1];
 		if (!MemberKinds.isMovableLiteral(rhs, shape)) return null;

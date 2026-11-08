@@ -368,7 +368,7 @@ final class FunctionValueTypes {
 		final read: Null<ParsedFile> = parsed(at.file);
 		final shape: RefShape = _scope.shape;
 		final assign: Null<QueryNode> = read == null ? null : nodeAt(read.tree, at.span, shape.assignKind, true);
-		return assign == null || assign.children.length != 2 ? null : storedValue(n, at, assign.children[1]);
+		return assign == null || !NodeShape.hasAssignShape(assign) ? null : storedValue(n, at, assign.children[1]);
 	}
 
 	/**

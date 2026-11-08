@@ -14,6 +14,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.LoopScan;
 import anyparse.util.Strings;
+import anyparse.query.NodeShape;
 
 using StringTools;
 
@@ -65,9 +66,6 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** The lead-in of the line the length comes from — the coordinate `messageIdentity` masks. */
 	private static inline final LINE_LEAD: String = '(line ';
-
-	/** An interval and every binary node have exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/** How deep a constant may refer to another constant before folding gives up — a cycle stops here. */
 	private static inline final MAX_FOLD_DEPTH: Int = 16;
@@ -314,7 +312,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (loop.kind != kind || loop.name == null || !LoopScan.hasForShape(loop.children)) return null;
 		final range: QueryNode = LoopScan.forHead(loop.children);
 		return range.kind != ctx.seams.intervalKind
-			|| range.children.length != BINARY_CHILD_COUNT
+			|| !NodeShape.hasBinaryShape(range)
 			|| !LoopScan.isZeroLiteral(range.children[0], ctx.source, ctx.seams.core)
 			? null
 			: range.children[1];
@@ -325,7 +323,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final s: Seams = ctx.seams;
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final call: QueryNode = stmt.children[0];
-		if (call.kind != s.core.callKind || call.children.length != BINARY_CHILD_COUNT) return null;
+		if (call.kind != s.core.callKind || !NodeShape.hasOneArgCallShape(call)) return null;
 		final callee: QueryNode = call.children[0];
 		return callee.kind == s.core.fieldAccessKind
 			&& callee.name == s.appendMethod
@@ -341,7 +339,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
 		return assign.kind == s.assignKind
-			&& assign.children.length == BINARY_CHILD_COUNT
+			&& NodeShape.hasAssignShape(assign)
 			&& isEmptyArray(assign.children[1], s)
 			&& isPlainRef(assign.children[0], name, s)
 			? assign
@@ -490,8 +488,8 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		var reach: Null<Int> = null;
 		function offset(node: QueryNode): Null<Int> {
 			if (node.kind == s.core.identKind) return node.name == index ? 0 : null;
-			if (s.foldOps[node.kind] != 'add' || node.children.length != BINARY_CHILD_COUNT) return null;
-			for (i in 0...BINARY_CHILD_COUNT) {
+			if (s.foldOps[node.kind] != 'add' || !NodeShape.hasBinaryShape(node)) return null;
+			for (i in 0...node.children.length) {
 				final indexSide: QueryNode = node.children[i];
 				if (indexSide.kind != s.core.identKind || indexSide.name != index) continue;
 				final k: Null<Int> = fold(node.children[1 - i], ctx.source, owner, _ -> true, ctx, 0);
@@ -503,7 +501,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 			if (s.core.opaqueKinds.contains(node.kind)) return;
 			if (
 				node.kind == s.core.indexAccessKind
-				&& node.children.length == BINARY_CHILD_COUNT
+				&& NodeShape.hasBinaryShape(node)
 				&& isRef(node.children[0], name, owner, isField, s)
 				&& !isWriteTarget(node, parent, s)
 			) {
@@ -580,7 +578,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 			return inner == null ? null : -inner;
 		}
 		final op: Null<String> = s.foldOps[node.kind];
-		if (op != null && kids.length == BINARY_CHILD_COUNT)
+		if (op != null && NodeShape.hasBinaryShape(node))
 			return applied(op, fold(kids[0], source, owner, shadowed, ctx, depth), fold(kids[1], source, owner, shadowed, ctx, depth));
 		final key: Null<String> = constantKey(node, owner, shadowed, s);
 		final constant: Null<Constant> = key == null ? null : ctx.constants[key];

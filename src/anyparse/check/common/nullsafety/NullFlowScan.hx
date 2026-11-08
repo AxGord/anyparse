@@ -31,9 +31,6 @@ typedef IdentOperand = {
 @:nullSafety(Strict)
 final class NullFlowScan {
 
-	/** A comparison has exactly two operands. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
-
 	/** The equality / identifier / null-literal seams, or null when the grammar leaves one unset (the check is then a no-op). */
 	public static function seamsOf(shape: RefShape): Null<NullFlowSeams> {
 		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
@@ -49,7 +46,7 @@ final class NullFlowScan {
 
 	/** `node` as an equality of an identifier against the null literal: the identifier, its name and the comparison's span, or null. */
 	public static function nullComparedOperand(node: QueryNode, s: NullFlowSeams): Null<IdentOperand> {
-		return !s.equalityKinds.contains(node.kind) || node.children.length != COMPARISON_CHILD_COUNT
+		return !s.equalityKinds.contains(node.kind) || !NodeShape.hasComparisonShape(node)
 			? null
 			: identOperand(node, NodeShape.nullComparedIdent(node, s.identKind, s.nullLitKind), s.identKind);
 	}

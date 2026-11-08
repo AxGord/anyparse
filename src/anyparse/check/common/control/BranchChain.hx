@@ -63,6 +63,11 @@ final class BranchChain {
 		return node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
 	}
 
+	/** Whether the if (or ternary) `node` has the condition and the then branch. */
+	public static inline function hasThen(node: QueryNode): Bool {
+		return node.children.length > COND_INDEX + 1;
+	}
+
 	/** The condition of the if (or ternary) `node`. */
 	public static function condOf(node: QueryNode): QueryNode {
 		return node.children[COND_INDEX];

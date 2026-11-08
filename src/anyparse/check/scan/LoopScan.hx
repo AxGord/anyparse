@@ -1,6 +1,7 @@
 package anyparse.check.scan;
 
 import anyparse.check.common.control.BranchChain;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -46,9 +47,6 @@ import anyparse.query.TypeSyntax;
  */
 @:nullSafety(Strict)
 final class LoopScan {
-
-	/** A field access has exactly [receiver] as its children — the member name lives on the node. */
-	private static inline final FIELD_ACCESS_CHILD_COUNT: Int = 1;
 
 	/** An index access has exactly [receiver, index] children. */
 	private static inline final INDEX_ACCESS_CHILD_COUNT: Int = 2;
@@ -374,7 +372,7 @@ final class LoopScan {
 
 	/** The receiver name of a plain `<ident>.<member>` read, or null when `node` is not one. */
 	public static function memberReadReceiver(node: QueryNode, member: String, s: LoopSeams): Null<String> {
-		return node.kind != s.fieldAccessKind || node.name != member || node.children.length != FIELD_ACCESS_CHILD_COUNT
+		return node.kind != s.fieldAccessKind || node.name != member || !NodeShape.hasFieldAccessShape(node)
 			? null
 			: bareIdentName(node.children[0], s);
 	}
@@ -567,7 +565,7 @@ final class LoopScan {
 	): Bool {
 		if (parent == null || isWriteTarget(parent, grandParent, s)) return false;
 		return s.accessKinds.contains(parent.kind)
-			? parent.name == sizeMember && parent.children.length == FIELD_ACCESS_CHILD_COUNT && parent.children[0] == ident
+			? parent.name == sizeMember && NodeShape.hasFieldAccessShape(parent) && parent.children[0] == ident
 			: parent.kind == s.indexAccessKind && parent.children.length == INDEX_ACCESS_CHILD_COUNT && parent.children[0] == ident;
 	}
 

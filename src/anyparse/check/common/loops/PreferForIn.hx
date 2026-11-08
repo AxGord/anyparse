@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -83,9 +84,6 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 
 	/** The protocol method the body's first statement must be initialized from. */
 	private static inline final NEXT_METHOD: String = 'next';
-
-	/** A no-argument call has exactly [callee] children, and a field access exactly [receiver]. */
-	private static inline final SOLE_CHILD_COUNT: Int = 1;
 
 	/** The binding plus at least one real statement — a body that only drains would become an empty loop. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
@@ -230,7 +228,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		final binding: QueryNode = body.children[0];
 		final binder: Null<String> = binding.name;
 		if (loop.kind != s.whileStmtKind) return tryUnbound(loop, body, iterator, scope, decl, ctx);
-		if (!s.localDeclKinds.contains(binding.kind) || binding.children.length != SOLE_CHILD_COUNT) return null;
+		if (!s.localDeclKinds.contains(binding.kind) || !NodeShape.hasSoleChild(binding)) return null;
 		if (binder == null || binder == iterator) return null;
 		if (protocolReceiver(binding.children[0], NEXT_METHOD, s) != iterator) return null;
 		if (occurrences(loop, iterator, s) != PROTOCOL_OCCURRENCES) return null;
@@ -366,7 +364,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 	): Null<Match> {
 		final s: Seams = ctx.seams;
 		if (prev == null || !s.localDeclKinds.contains(prev.kind)) return null;
-		if (prev.name != iterator || prev.children.length != SOLE_CHILD_COUNT) return null;
+		if (prev.name != iterator || !NodeShape.hasSoleChild(prev)) return null;
 		final declSpan: Null<Span> = prev.span;
 		final initSpan: Null<Span> = prev.children[0].span;
 		if (declSpan == null || initSpan == null) return null;
@@ -385,9 +383,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 	 * the identifier must be, and misses.
 	 */
 	private static function protocolReceiver(node: QueryNode, method: String, s: Seams): Null<String> {
-		if (node.kind != s.callKind || node.children.length != SOLE_CHILD_COUNT) return null;
+		if (node.kind != s.callKind || !NodeShape.hasSoleChild(node)) return null;
 		final callee: QueryNode = node.children[0];
-		if (callee.kind != s.fieldAccessKind || callee.name != method || callee.children.length != SOLE_CHILD_COUNT) return null;
+		if (callee.kind != s.fieldAccessKind || callee.name != method || !NodeShape.hasSoleChild(callee)) return null;
 		final receiver: QueryNode = callee.children[0];
 		return receiver.kind == s.identKind ? receiver.name : null;
 	}

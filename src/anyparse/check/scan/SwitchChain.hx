@@ -7,6 +7,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberLookup.MemberDeclaration;
+import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -201,9 +202,6 @@ import anyparse.query.TypeResolver;
  */
 @:nullSafety(Strict)
 final class SwitchChain {
-
-	/** A binary operator node has exactly `[left, right]` children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/**
 	 * Resolve the configuration both switch checks scan and render against: the caller's `chainKinds`,
@@ -437,7 +435,7 @@ final class SwitchChain {
 		// `return null`, and the arity guard inside the body is the one remaining rejection.
 		// A fall-out would in any case leave `elseBody` null, which `completeScan` rejects unless gate 7 lets the chain close else-less.
 		while (seams.chainKinds.contains(cur.kind)) {
-			if (cur.children.length < BINARY_CHILD_COUNT) return null;
+			if (!BranchChain.hasThen(cur)) return null;
 			final pairs: Null<Array<EqPair>> = conditionPairs(cur.children[0], seams, scope, source);
 			// A tuple subject cannot be spelled without the grammar's delimiters.
 			if (pairs == null || (pairs.length > 1 && seams.tuple == null) || cannotProveEvaluationSafe(pairs, seams)) return null;
@@ -615,7 +613,7 @@ final class SwitchChain {
 	private static function flattenConjunction(node: QueryNode, seams: ChainSeams): Array<QueryNode> {
 		final n: QueryNode = BoolExprShape.unwrapParens(node, seams.parenKind);
 		final andKind: Null<String> = seams.andKind;
-		return andKind != null && n.kind == andKind && n.children.length == BINARY_CHILD_COUNT
+		return andKind != null && n.kind == andKind && NodeShape.hasBinaryShape(n)
 			? flattenConjunction(n.children[0], seams).concat(flattenConjunction(n.children[1], seams))
 			: [n];
 	}
@@ -626,7 +624,7 @@ final class SwitchChain {
 	 * operands are both / neither pattern-valid constants.
 	 */
 	private static function eqPair(node: QueryNode, seams: ChainSeams, scope: ChainScope, source: String): Null<EqPair> {
-		if (node.kind != seams.eqKind || node.children.length != BINARY_CHILD_COUNT) return null;
+		if (node.kind != seams.eqKind || !NodeShape.hasBinaryShape(node)) return null;
 		final a: QueryNode = node.children[0];
 		final b: QueryNode = node.children[1];
 		final aPattern: Null<CasePattern> = patternOf(a, seams, scope, source);

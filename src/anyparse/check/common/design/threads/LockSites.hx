@@ -4,6 +4,7 @@ import anyparse.check.common.design.threads.LockAliases.Occurrence;
 import anyparse.check.common.design.threads.LockWindow.HeldWindow;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.ReachAdmission;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -514,7 +515,7 @@ final class LockSites {
 			&& namedCalls.contains('${call.span?.from}:${node.name}');
 		return receiver || (
 			host.kind == _shape.assignKind
-			&& host.children.length == 2
+			&& NodeShape.hasAssignShape(host)
 			&& host.children[0] == node
 			&& host.children[1].kind == _shape.newExprKind
 		);

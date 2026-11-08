@@ -39,13 +39,65 @@ final class NodeShape {
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
 	/**
+	 * A binary operator node, a comparison and an interval have exactly [left, right] children.
+	 */
+	private static inline final BINARY_CHILD_COUNT: Int = 2;
+
+	/**
+	 * A field access has exactly [receiver] as its children - the member name lives on the node.
+	 */
+	private static inline final FIELD_ACCESS_CHILD_COUNT: Int = 1;
+
+	/**
+	 * A no-argument call has exactly [callee] children, and a local declaration with an initializer exactly [initializer].
+	 */
+	private static inline final SOLE_CHILD_COUNT: Int = 1;
+
+	/**
+	 * A call with one argument has exactly [callee, argument] children.
+	 */
+	private static inline final ONE_ARG_CALL_CHILD_COUNT: Int = 2;
+
+	/** Whether `node` has exactly the [target, value] children of a binary assignment. */
+	public static inline function hasAssignShape(node: QueryNode): Bool {
+		return node.children.length == ASSIGN_CHILD_COUNT;
+	}
+
+	/**
+	 * Whether `node` has exactly the [left, right] children of a binary operator, a comparison or an interval.
+	 */
+	public static inline function hasBinaryShape(node: QueryNode): Bool {
+		return node.children.length == BINARY_CHILD_COUNT;
+	}
+
+	/** Whether `node` has exactly the [left, right] operands of a comparison. */
+	public static inline function hasComparisonShape(node: QueryNode): Bool {
+		return node.children.length == COMPARISON_CHILD_COUNT;
+	}
+
+	/** Whether `node` has exactly the one receiver child of a field access. */
+	public static inline function hasFieldAccessShape(node: QueryNode): Bool {
+		return node.children.length == FIELD_ACCESS_CHILD_COUNT;
+	}
+
+	/** Whether `node` has exactly one child: a no-argument call's callee, a declaration's initializer. */
+	public static inline function hasSoleChild(node: QueryNode): Bool {
+		return node.children.length == SOLE_CHILD_COUNT;
+	}
+
+	/** Whether `node` has exactly the [callee, argument] children of a call with one argument. */
+	public static inline function hasOneArgCallShape(node: QueryNode): Bool {
+		return node.children.length == ONE_ARG_CALL_CHILD_COUNT;
+	}
+
+	/**
 	 * The operand the two-operand node `node` holds against the null literal — the other side when EXACTLY ONE side is
 	 * `nullLitKind` (each side read through `parenKind` parentheses when given), null when neither or both are, when
 	 * `node` has another arity, or when the grammar names no null literal. Which comparison `node` is (`==`, `!=`, any
 	 * equality) stays the caller's to check: the questions differ per caller, the shape does not.
 	 */
 	public static function nullComparedSide(node: QueryNode, nullLitKind: Null<String>, ?parenKind: String): Null<QueryNode> {
-		if (nullLitKind == null || node.children.length != COMPARISON_CHILD_COUNT) return null;
+		if (nullLitKind == null || !hasComparisonShape(node)) return null;
 		final left: QueryNode = BoolExprShape.unwrapParens(node.children[0], parenKind);
 		final right: QueryNode = BoolExprShape.unwrapParens(node.children[1], parenKind);
 		final leftIsNull: Bool = left.kind == nullLitKind;
@@ -73,7 +125,7 @@ final class NodeShape {
 		if (exprStmtKind == null || assignKind == null) return null;
 		if (stmt.kind != exprStmtKind || stmt.children.length != EXPR_STMT_CHILD_COUNT) return null;
 		final assign: QueryNode = stmt.children[0];
-		return assign.kind == assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
+		return assign.kind == assignKind && hasAssignShape(assign) ? assign : null;
 	}
 
 	/**

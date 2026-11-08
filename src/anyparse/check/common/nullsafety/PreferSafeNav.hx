@@ -151,14 +151,8 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferSafeNav extends RuleBase implements VersionGated {
 
-	/** A binary comparison node has exactly [left, right] children. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
-
 	/** A logical-AND node has exactly [preceding-conjuncts, last-conjunct] children. */
 	private static inline final AND_CHILD_COUNT: Int = 2;
-
-	/** An assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	public function new() {
 		super(
@@ -367,7 +361,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final stmt: Null<QueryNode> = soleExprStatement(BranchChain.thenOf(ifNode), s);
 		if (stmt == null) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		if (assign.kind != assignKind || !NodeShape.hasAssignShape(assign)) return null;
 		final lhs: QueryNode = assign.children[0];
 		if (lhs.kind != s.identKind || lhs.name != declName) return null;
 		final rhs: QueryNode = assign.children[1];
@@ -444,7 +438,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	private static function matchTernary(ternary: QueryNode, source: String, s: Seams): Null<Candidate> {
 		if (!BranchChain.hasElse(ternary)) return null;
 		final cond: QueryNode = BoolExprShape.unwrapParens(BranchChain.condOf(ternary), s.parenKind);
-		if (cond.children.length != COMPARISON_CHILD_COUNT) return null;
+		if (!NodeShape.hasComparisonShape(cond)) return null;
 		// `==` puts `null` in the THEN branch and the guarded chain in the ELSE branch; `!=` mirrors that.
 		final elseIsGuarded: Bool = cond.kind == s.eqKind;
 		if (!elseIsGuarded && cond.kind != s.notEqKind) return null;
@@ -682,7 +676,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	/** The guard SUBJECT of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
 		final c: QueryNode = BoolExprShape.unwrapParens(cond, s.parenKind);
-		return c.kind == s.notEqKind && c.children.length == COMPARISON_CHILD_COUNT ? subjectOperand(c, s) : null;
+		return c.kind == s.notEqKind && NodeShape.hasComparisonShape(c) ? subjectOperand(c, s) : null;
 	}
 
 	/**

@@ -133,9 +133,6 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 final class JoinSingleUseLocal extends RuleBase {
 
-	/** A trivial field-access link wraps exactly one child: its receiver. */
-	private static inline final FIELD_ACCESS_CHILD_COUNT: Int = 1;
-
 	public function new() {
 		super(
 			'join-single-use-local', 'a single-use local capturing a trivial read, inlinable into its one read', RuleCategory.Expressions
@@ -371,7 +368,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	private static function isTrivialPureRead(node: QueryNode, s: Seams): Bool {
 		if (node.kind == s.identKind) return node.children.length == 0;
 		final fieldKind: Null<String> = s.fieldAccessKind;
-		if (fieldKind == null || node.kind != fieldKind || node.children.length != FIELD_ACCESS_CHILD_COUNT) return false;
+		if (fieldKind == null || node.kind != fieldKind || !NodeShape.hasFieldAccessShape(node)) return false;
 		return isTrivialPureRead(node.children[0], s);
 	}
 

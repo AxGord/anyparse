@@ -8,6 +8,7 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -325,7 +326,7 @@ final class GuardContinue extends RuleBase {
 		if (stmt.kind != h.exprStmtKind || stmt.children.length != 1) return false;
 		final assign: QueryNode = stmt.children[0];
 		return assign.kind == h.assignKind
-			&& assign.children.length == 2
+			&& NodeShape.hasAssignShape(assign)
 			&& assign.children[0].kind == h.identKind
 			&& h.literalKinds.contains(assign.children[1].kind);
 	}

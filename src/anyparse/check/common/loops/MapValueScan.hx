@@ -3,6 +3,7 @@ package anyparse.check.common.loops;
 import anyparse.query.BoolExprShape;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -67,9 +68,6 @@ final class MapValueScan {
 
 	/** `set(key, value)` plus the callee child: the exact child count of a storing call. */
 	private static inline final SET_CALL_CHILDREN: Int = 3;
-
-	/** A binary assignment has [target, value]. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	/** A map-literal entry has [key, value]. */
 	private static inline final ENTRY_CHILD_COUNT: Int = 2;
@@ -268,10 +266,7 @@ final class MapValueScan {
 		else if (seams.iterationKinds.contains(p.kind))
 			claim == NoNullValue && parentSlot == p.children.length - 2
 		else
-			p.kind == seams.assignKind
-				&& parentSlot == 0
-				&& p.children.length == ASSIGN_CHILD_COUNT
-				&& provenMapExpr(p.children[1], seams, claim);
+			p.kind == seams.assignKind && parentSlot == 0 && NodeShape.hasAssignShape(p) && provenMapExpr(p.children[1], seams, claim);
 	}
 
 	/**
@@ -284,7 +279,7 @@ final class MapValueScan {
 		if (grand == null) return true;
 		final g: QueryNode = grand;
 		return g.kind == seams.assignKind && grandSlot == 0
-			? g.children.length == ASSIGN_CHILD_COUNT && provenValue(g.children[1], seams, claim)
+			? NodeShape.hasAssignShape(g) && provenValue(g.children[1], seams, claim)
 			: !seams.writeParentKinds.contains(g.kind);
 	}
 

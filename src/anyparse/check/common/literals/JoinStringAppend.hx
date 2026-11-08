@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperatorSelection;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -98,9 +99,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 final class JoinStringAppend extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'join-string-append';
-
-	/** A binary op node (`Assign` / `AddAssign`) has exactly [target, value] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/** Declared target types associative accumulation is sound for. */
 	private static final ACCEPTED_TARGET_TYPES: Array<String> = ['String', 'Int'];
@@ -308,7 +306,7 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 	private static function openingTerm(stmt: QueryNode, s: Seams): Null<{ target: QueryNode, rhs: QueryNode, isBonus: Bool }> {
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final binary: QueryNode = stmt.children[0];
-		if (binary.children.length != BINARY_CHILD_COUNT) return null;
+		if (!NodeShape.hasBinaryShape(binary)) return null;
 		final target: QueryNode = binary.children[0];
 		return if (target.kind != s.identKind || target.name == null)
 			null
@@ -324,7 +322,7 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 	private static function continuationRhs(stmt: QueryNode, name: String, s: Seams): Null<QueryNode> {
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final binary: QueryNode = stmt.children[0];
-		if (binary.kind != s.addAssignKind || binary.children.length != BINARY_CHILD_COUNT) return null;
+		if (binary.kind != s.addAssignKind || !NodeShape.hasBinaryShape(binary)) return null;
 		final target: QueryNode = binary.children[0];
 		return target.kind == s.identKind && target.name == name ? binary.children[1] : null;
 	}

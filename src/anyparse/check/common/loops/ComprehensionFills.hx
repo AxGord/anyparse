@@ -5,6 +5,7 @@ import anyparse.check.common.loops.PreferComprehension.ComprehensionCtx;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CtorFieldFold;
+import anyparse.query.NodeShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using StringTools;
@@ -22,9 +23,6 @@ using StringTools;
 @:nullSafety(Strict)
 @:access(anyparse.check.common.loops.PreferComprehension)
 final class ComprehensionFills {
-
-	/** An interval `lo...hi` and an assignment `target = value` each have exactly two children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
 	/** The type name whose index write appends — the one container an index fill is admitted for. */
 	private static inline final ARRAY_HEAD: String = 'Array';
@@ -63,8 +61,7 @@ final class ComprehensionFills {
 		if (intervalKind == null) return null;
 		final range: QueryNode = LoopScan.forHead(node.children);
 		final body: QueryNode = LoopScan.forBody(node.children);
-		if (range.kind != intervalKind || range.children.length != BINARY_CHILD_COUNT || !isZeroLiteral(range.children[0], ctx))
-			return null;
+		if (range.kind != intervalKind || !NodeShape.hasBinaryShape(range) || !isZeroLiteral(range.children[0], ctx)) return null;
 		final braced: Bool = body.kind == s.blockStmtKind;
 		if (braced && body.children.length != 1) return null;
 		final stmt: QueryNode = braced ? body.children[0] : body;
@@ -153,11 +150,10 @@ final class ComprehensionFills {
 
 	/** The value `v` of an expression statement `name[binder] = v`, or null when `stmt` is not exactly that. */
 	private static function indexWriteValue(stmt: QueryNode, name: String, binder: String, s: ComprehensionSeams): Null<QueryNode> {
-		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
-		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != s.assignKind || assign.children.length != BINARY_CHILD_COUNT) return null;
+		final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, s.exprStmtKind, s.assignKind);
+		if (assign == null) return null;
 		final target: QueryNode = assign.children[0];
-		if (target.kind != s.indexAccessKind || target.children.length != BINARY_CHILD_COUNT) return null;
+		if (target.kind != s.indexAccessKind || !NodeShape.hasBinaryShape(target)) return null;
 		final receiver: QueryNode = target.children[0];
 		final index: QueryNode = target.children[1];
 		final plain: Bool = receiver.kind == s.identKind && receiver.name == name && index.kind == s.identKind && index.name == binder;

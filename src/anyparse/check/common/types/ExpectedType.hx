@@ -1,6 +1,7 @@
 package anyparse.check.common.types;
 
 import anyparse.query.IndexScope;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -104,7 +105,7 @@ final class ExpectedType {
 			declAnnotation(parent, castNode, types.declaredTypeSources)
 		else if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
 			enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source)
-		else if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
+		else if (parent.kind == shape.assignKind && NodeShape.hasAssignShape(parent) && parent.children[1] == castNode)
 			assignTargetAnnotation(parent.children[0], site.enclosingContainer, root, types)
 		else if (parent.kind == shape.callKind)
 			paramAnnotation(castNode, parent, root, types, resolutionIndex)

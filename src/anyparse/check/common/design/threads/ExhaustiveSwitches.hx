@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.check.common.design.threads.FieldWrites.FieldWriteSite;
 import anyparse.check.common.design.threads.HeldTrees.HeldDecl;
 import anyparse.query.CallGraph;
+import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -556,7 +557,7 @@ final class ExhaustiveSwitches {
 
 	/** Whether the write `w` assigns a value of `closed`: a plain `=` of a value (`valueExpr`), never a compound one or an increment. */
 	private function assignsValue(w: WriteSite, closed: ClosedAbstract): Bool {
-		return w.node.kind == _shape.assignKind && w.node.children.length == 2 && valueExpr(w.node.children[1], w.at, closed);
+		return w.node.kind == _shape.assignKind && NodeShape.hasAssignShape(w.node) && valueExpr(w.node.children[1], w.at, closed);
 	}
 
 	/**

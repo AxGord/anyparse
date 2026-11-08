@@ -712,6 +712,14 @@
 			"find": "if (loop.kind != s.whileKind || !LoopScan.hasWhileShape(loop)) return null;",
 			"replace": "final WHILE_CHILD_COUNT: Int = 2;\n\tif (loop.kind != s.whileKind || loop.children.length != WHILE_CHILD_COUNT) return null;",
 			"note": "the rule keeps its own while child count instead of asking LoopScan, so the slot-constant guard finds a second copy of the answer"
+		},
+		{
+			"name": "M-OPERAND-SHAPE-COUNT-REDECLARED",
+			"type": "anyparse.check.common.loops.PreferForIn",
+			"method": "tryMatch",
+			"find": "if (!s.localDeclKinds.contains(binding.kind) || !NodeShape.hasSoleChild(binding)) return null;",
+			"replace": "final SOLE_CHILD_COUNT: Int = 1;\n\tif (!s.localDeclKinds.contains(binding.kind) || binding.children.length != SOLE_CHILD_COUNT) return null;",
+			"note": "the rule keeps its own sole-child count instead of asking NodeShape, so the operand-count guard finds a second copy of the answer"
 		}
 	]
 }

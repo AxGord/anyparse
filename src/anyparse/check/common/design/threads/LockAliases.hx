@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
 import anyparse.query.TreePath;
@@ -192,7 +193,7 @@ final class LockAliases {
 		if (
 			assign == null
 			|| assign.kind != _shape.assignKind
-			|| assign.children.length != 2
+			|| !NodeShape.hasAssignShape(assign)
 			|| assign.children[0] != o.node
 			|| !_sites.readsOwnMember(o.node)
 		)

@@ -104,6 +104,30 @@ class NodeShapeTest extends Test {
 		Assert.isNull(NodeShape.initOf(new QueryNode('VarStmt', 'x', [init, init])));
 	}
 
+	@:pin('guard')
+	public function testChildCountPredicatesAnswerOnTheirOwnArity(): Void {
+		final none: QueryNode = new QueryNode(ASSIGN, null, []);
+		final one: QueryNode = new QueryNode(ASSIGN, null, [ident('a')]);
+		final two: QueryNode = new QueryNode(ASSIGN, null, [ident('a'), ident('b')]);
+		final three: QueryNode = new QueryNode(ASSIGN, null, [ident('a'), ident('b'), ident('c')]);
+		for (node in [none, one, three]) {
+			Assert.isFalse(NodeShape.hasAssignShape(node));
+			Assert.isFalse(NodeShape.hasBinaryShape(node));
+			Assert.isFalse(NodeShape.hasComparisonShape(node));
+			Assert.isFalse(NodeShape.hasOneArgCallShape(node));
+		}
+		Assert.isTrue(NodeShape.hasAssignShape(two));
+		Assert.isTrue(NodeShape.hasBinaryShape(two));
+		Assert.isTrue(NodeShape.hasComparisonShape(two));
+		Assert.isTrue(NodeShape.hasOneArgCallShape(two));
+		for (node in [none, two, three]) {
+			Assert.isFalse(NodeShape.hasFieldAccessShape(node));
+			Assert.isFalse(NodeShape.hasSoleChild(node));
+		}
+		Assert.isTrue(NodeShape.hasFieldAccessShape(one));
+		Assert.isTrue(NodeShape.hasSoleChild(one));
+	}
+
 	private static function ident(name: String): QueryNode {
 		return new QueryNode(IDENT, name, [], new Span(0, name.length));
 	}

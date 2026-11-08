@@ -1270,6 +1270,14 @@
 			"find": "c.edits.length != 0 && ",
 			"replace": "",
 			"note": "a report-only outer chain counts as one being rewritten, so the chain nested in it waits for a pass that never rewrites its parent and its tail is never moved"
+		},
+		{
+			"name": "M-OPERAND-SHAPE-COUNT-REDECLARED-IN-OWNER",
+			"type": "anyparse.check.scan.LoopScan",
+			"method": "hasWhileShape",
+			"find": "return node.children.length == WHILE_CHILD_COUNT;",
+			"replace": "final FIELD_ACCESS_CHILD_COUNT: Int = 1;\n\treturn node.children.length == WHILE_CHILD_COUNT;",
+			"note": "the loop-slot owner keeps its own field-access child count instead of asking NodeShape, so the operand-count guard finds a second copy in a file exempt from the slot guard"
 		}
 	]
 }

@@ -8,6 +8,7 @@ import anyparse.check.scan.SpanRender;
 import anyparse.query.BinderScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -674,7 +675,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 		if (stmt.kind != k.shape.exprStatementKind || stmt.children.length != 1) return false;
 		final assign: QueryNode = stmt.children[0];
 		return assign.kind == k.shape.assignKind
-			&& assign.children.length == 2
+			&& NodeShape.hasAssignShape(assign)
 			&& isName(k, assign.children[0])
 			&& isSlotValue(k, assign.children[1]);
 	}

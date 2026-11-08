@@ -9,6 +9,7 @@ import anyparse.query.CompilerFacts.ReflectionFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.NodeShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
 
@@ -411,7 +412,7 @@ final class NullGuardedCode {
 		if (parent == null) return false;
 		if (parent.kind == _shape.callKind) return neverCalled(node, at, depth);
 		final statement: Null<QueryNode> = i > 1 ? chain[i - 2] : null;
-		if (parent.kind != _shape.assignKind || parent.children.length != 2 || parent.children[1] != chain[i]) return false;
+		if (parent.kind != _shape.assignKind || !NodeShape.hasAssignShape(parent) || parent.children[1] != chain[i]) return false;
 		if (statement == null || statement.kind != _shape.exprStatementKind) return false;
 		final place: QueryNode = unwrap(parent.children[0]);
 		final element: Bool = place.kind == _shape.indexAccessKind && place.children.length == 2;

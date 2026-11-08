@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
@@ -162,9 +163,6 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 
 	/** ASCII-only note appended when the statement AFTER the region is merged in as the implicit else. */
 	private static inline final FOLLOWER_NOTE: String = ' (the statement after the region is the implicit else and is merged in)';
-
-	/** A binary assignment node has exactly [l-value, r-value] children. */
-	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	private static inline final END_KEYWORD: String = '#end';
 	private static inline final ELSEIF_KEYWORD: String = '#elseif';
@@ -490,7 +488,7 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	private static function assignParts(source: String, stmt: QueryNode, seams: Seams): Null<Parts> {
 		if (stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != seams.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		if (assign.kind != seams.assignKind || !NodeShape.hasAssignShape(assign)) return null;
 		final rhs: QueryNode = assign.children[1];
 		if (rhs.kind == seams.assignKind) return null; // `a = b = c` — the inner assignment cannot go inline
 		final lhsSpan: Null<Span> = assign.children[0].span;

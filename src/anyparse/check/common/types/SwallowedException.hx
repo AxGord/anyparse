@@ -197,7 +197,7 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 	 */
 	private static function outcomeLocal(stmt: QueryNode, tree: QueryNode, shape: RefShape): Null<RefHit> {
 		final write: QueryNode = stmt.kind == shape.exprStatementKind && stmt.children.length == 1 ? stmt.children[0] : stmt;
-		final plain: Bool = write.kind == shape.assignKind && write.children.length == 2;
+		final plain: Bool = write.kind == shape.assignKind && NodeShape.hasAssignShape(write);
 		final counter: Bool = (shape.operatorWriteKinds ?? []).contains(write.kind);
 		if (!plain && !counter) return null;
 		final target: QueryNode = write.children[0];
