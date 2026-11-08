@@ -282,12 +282,12 @@ final class CliArgs {
 
 	/** The files grammar `lang` reads, named for a diagnostic by their extensions: `.hx files`, `.json files`. */
 	public static function filesOf(lang: String): String {
-		return '${grammarOf(lang).extensions.join(' / ')} files';
+		return filesNamed(grammarOf(lang).extensions);
 	}
 
 	/** The one wording of scope `specs` holding no file of grammar `lang`, for `apq <cmd>: <this>` to print. */
 	public static function noFilesMatched(lang: String, specs: Array<String>): String {
-		return '${quotedSpecs(specs)} matched no ${filesOf(lang)}';
+		return noFilesIn(specs, grammarOf(lang).extensions);
 	}
 
 	/** `--limit`'s value as a non-negative count; anything else throws a usage failure. */
@@ -392,6 +392,41 @@ final class CliArgs {
 		return grammarOf(lang).merge;
 	}
 
+	/**
+	 * The name of the type a file of grammar `lang` declares when no `--type` is given: its basename without one of the
+	 * grammar's own extensions, so a grammar whose files are not `.hx` names its types the same way.
+	 */
+	public static function typeNameOfFile(lang: String, file: String): String {
+		return RefactorSupport.baseNameOf(file, grammarOf(lang).extensions);
+	}
+
+	/**
+	 * Whether the refactor `op` is refused, by meaning, because the grammar `plugin` reads documents as value trees
+	 * (`DataDelta.reads`): there is no type for it to name. Says so on stderr when it is.
+	 */
+	public static function refuseDataGrammar(op: String, plugin: GrammarPlugin): Bool {
+		if (!DataDelta.reads(plugin.refShape())) return false;
+		CliIo.stderr('apq $op: the ${plugin.langName()} grammar describes data documents, which declare no types — $op rewrites a type\n');
+		return true;
+	}
+
+	/** The extensions of every grammar whose documents are value trees (`DataDelta.reads`) — the files a data search walks. */
+	public static function dataDocumentExtensions(): Array<String> {
+		return [
+			for (entry in grammars()) if (DataDelta.reads(pickPlugin(entry.lang).refShape())) for (extension in entry.extensions) extension
+		];
+	}
+
+	/** `specs` expanded as the files of EVERY data grammar, each read later by the grammar its extension names. */
+	public static function expandDataDocuments(specs: Array<String>): ExpandedInputs {
+		return expandEach(specs, dataDocumentExtensions());
+	}
+
+	/** The one wording of scope `specs` holding no data document, for `apq <cmd>: <this>` to print. */
+	public static function noDataDocumentsMatched(specs: Array<String>): String {
+		return noFilesIn(specs, dataDocumentExtensions());
+	}
+
 	/** `expandFor` over several extensions: a directory walks once per extension, a file or glob names its own paths. */
 	private static function expandEach(specs: Array<String>, extensions: Array<String>): ExpandedInputs {
 		final paths: Array<String> = [];
@@ -425,6 +460,16 @@ final class CliArgs {
 			s.substring(0, s.length - 1)
 		else
 			s;
+	}
+
+	/** Files carrying one of `extensions`, named for a diagnostic: `.hx files`, `.json files`. */
+	private static function filesNamed(extensions: Array<String>): String {
+		return '${extensions.join(' / ')} files';
+	}
+
+	/** The one wording of scope `specs` holding no file carrying one of `extensions`. */
+	private static function noFilesIn(specs: Array<String>, extensions: Array<String>): String {
+		return '${quotedSpecs(specs)} matched no ${filesNamed(extensions)}';
 	}
 
 }

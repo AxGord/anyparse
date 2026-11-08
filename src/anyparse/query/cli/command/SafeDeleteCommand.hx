@@ -77,7 +77,7 @@ final class SafeDeleteCommand implements CliCommand {
 		}
 		final srcFileNN: String = srcFile;
 		final memberNameNN: String = memberName;
-		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		final op: String = 'safe-delete';

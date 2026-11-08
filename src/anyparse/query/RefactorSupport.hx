@@ -429,11 +429,16 @@ final class RefactorSupport {
 		return dot > 0 ? base.substr(0, dot) : base;
 	}
 
-	/** File basename: the path tail after the last `/`, with a `.hx` suffix removed. */
-	public static function baseNameOf(file: String): String {
+	/**
+	 * File basename: the path tail after the last `/`, with the first of `extensions` it ends with
+	 * removed (`.hx` when none are given). A command that knows its grammar passes that grammars own
+	 * extensions, through `CliArgs.typeNameOfFile`.
+	 */
+	public static function baseNameOf(file: String, ?extensions: Array<String>): String {
 		final slash: Int = file.lastIndexOf('/');
 		final tail: String = slash < 0 ? file : file.substr(slash + 1);
-		return tail.endsWith('.hx') ? tail.substr(0, tail.length - '.hx'.length) : tail;
+		for (extension in extensions ?? ['.hx']) if (tail.endsWith(extension)) return tail.substr(0, tail.length - extension.length);
+		return tail;
 	}
 
 	/**

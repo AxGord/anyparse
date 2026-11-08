@@ -77,7 +77,7 @@ final class PullUpCommand implements CliCommand {
 			return EXIT_USAGE;
 		}
 		final srcFileNN: String = srcFile;
-		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final targetTypeName: String = targetType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 

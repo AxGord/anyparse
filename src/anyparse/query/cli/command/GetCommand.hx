@@ -71,13 +71,13 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 
 	/**
 	 * `--where`: every document the specs name, searched for the records whose `<path>` prints as `<value>`;
-	 * one `<file> <record path>` line per record. Exit 1 when none matches, or when a spec names no `.json`
-	 * file or a file is not a data document.
+	 * one `<file> <record path>` line per record. Exit 1 when none matches, or when a spec names no data
+	 * document file or a file is not a data document.
 	 */
 	private static function runWhere(o: GetArgs, where: WhereClause, ctx: CliContext): Int {
-		final expanded: ExpandedInputs = CliArgs.expandFor(CliArgs.JSON_LANG, o.files);
+		final expanded: ExpandedInputs = CliArgs.expandDataDocuments(o.files);
 		var failed: Bool = expanded.unmatched.length > 0;
-		for (spec in expanded.unmatched) CliIo.stderr('apq get: "$spec" matched no .json file\n');
+		for (spec in expanded.unmatched) CliIo.stderr('apq get: ${CliArgs.noDataDocumentsMatched([spec])}\n');
 		var matches: Int = 0;
 		for (file in expanded.paths) {
 			final doc: Null<LoadedDocument> = load(file, o.lang, ctx);
@@ -219,7 +219,7 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 		CliIo.sysPrint("  --select '<sel>'    Start from the node the selector names (`Member:rules`); the\n");
 		CliIo.sysPrint('                      path, if any, continues from there\n');
 		CliIo.sysPrint('  --nth <k>           Pick the k-th of several --select matches\n');
-		CliIo.sysPrint('  --where <p>=<v>     Search the documents (a directory names its .json files) for the\n');
+		CliIo.sysPrint('  --where <p>=<v>     Search the documents (a directory names its data documents) for the\n');
 		CliIo.sysPrint('                      records — the object holding it, at any depth — where <p> prints as\n');
 		CliIo.sysPrint('                      <v>; one `<file> <record path>` line each ("." = the root), exit 1 on none\n');
 		CliIo.sysPrint('  --lang <name>       The grammar; stdin (-) with no --lang is read as JSON when it\n');

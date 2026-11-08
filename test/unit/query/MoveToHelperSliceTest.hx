@@ -475,7 +475,7 @@ class MoveToHelperSliceTest extends Test {
 		names: String, helper: String, files: Array<{ file: String, source: String }>, ?param: String
 	): MoveResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return MoveToHelper.move('a/Src.hx', 'Src', names.split(','), helper, null, param, files, plugin, plugin.typeRefShape());
+		return MoveToHelper.move('a/Src.hx', 'Src', names.split(','), helper, 'a/$helper.hx', param, files, plugin, plugin.typeRefShape());
 	}
 
 	private static function okSource(result: MoveResult, file: String): String {

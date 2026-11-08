@@ -89,7 +89,7 @@ final class MoveMemberCommand implements CliCommand {
 		}
 		final memberNames: Array<String> = memberArg.split(',').map(StringTools.trim).filter(n -> n != '');
 		final srcFileNN: String = srcFile;
-		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final destTypeName: String = destType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 

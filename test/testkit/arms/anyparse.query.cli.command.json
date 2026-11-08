@@ -933,6 +933,54 @@
 			"method": "sliceFirstQuotedArg",
 			"force": "inner.indexOf(',') < 0 ? inner.trim() : inner.substring(0, inner.indexOf(',')).trim()",
 			"note": "the first argument ends at the first comma whether or not a quote encloses it, so a predicate name holding a comma is cut short"
+		},
+		{
+			"name": "M-AST-PATH-EXTENSION-IGNORED",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "looksLikePath",
+			"find": "CliArgs.langOfFile(s) != null",
+			"replace": "false",
+			"note": "an argument carrying a registered grammar's extension no longer reads as a path, so the `ast <TypeName> <file>` miss gets the plain message"
+		},
+		{
+			"name": "M-AST-PATH-SLASH-IGNORED",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "looksLikePath",
+			"find": "s.indexOf('/') >= 0",
+			"replace": "false",
+			"note": "an argument with a slash no longer reads as a path, so the `ast <TypeName> <dir>` miss gets the plain message"
+		},
+		{
+			"name": "M-RECON-DEFINITIONS-WALK-ONE-GRAMMAR",
+			"type": "anyparse.query.cli.command.ReconPredict",
+			"method": "collectPermissiveCandidates",
+			"find": "CliArgs.expandAnyGrammar([grammarDir])",
+			"replace": "CliArgs.expandFor('json', [grammarDir])",
+			"note": "the definition sources are walked as the files of one other grammar, so none is read and the mode reports no candidate"
+		},
+		{
+			"name": "M-EXTRACT-INTERFACE-DESTINATION-EXTENSION",
+			"type": "anyparse.query.cli.command.ExtractInterfaceCommand",
+			"method": "runExtractInterface",
+			"find": "${CliArgs.sourceExtensionOf(lang)}",
+			"replace": ".txt",
+			"note": "the interface file takes a literal extension instead of the grammar's"
+		},
+		{
+			"name": "M-EXTRACT-SUPERCLASS-DESTINATION-EXTENSION",
+			"type": "anyparse.query.cli.command.ExtractSuperclassCommand",
+			"method": "runExtractSuperclass",
+			"find": "${CliArgs.sourceExtensionOf(lang)}",
+			"replace": ".txt",
+			"note": "the superclass file takes a literal extension instead of the grammar's"
+		},
+		{
+			"name": "M-HELPER-DESTINATION-EXTENSION",
+			"type": "anyparse.query.cli.command.MoveToHelperCommand",
+			"method": "runMoveToHelper",
+			"find": "${CliArgs.sourceExtensionOf(lang)}",
+			"replace": ".txt",
+			"note": "the new helper module takes a literal extension instead of the grammar's"
 		}
 	]
 }

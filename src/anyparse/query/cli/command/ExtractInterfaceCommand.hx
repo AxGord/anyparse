@@ -18,10 +18,12 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class ExtractInterfaceCommand implements CliCommand {
 
+	private static inline final OP: String = 'extract-interface';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'extract-interface';
+		return OP;
 	}
 
 	public function summary(): String {
@@ -109,12 +111,12 @@ final class ExtractInterfaceCommand implements CliCommand {
 		}
 		final srcFileNN: String = srcFile;
 		final ifaceNameNN: String = ifaceName;
-		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final memberNames: Null<Array<String>> = members?.split(',').map(StringTools.trim).filter(n -> n != '');
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final ifaceFile: String = out ?? '$dir$ifaceNameNN${CliArgs.sourceExtensionOf(lang)}';
-		if (refuseOccupiedDestination('extract-interface', ifaceFile)) return EXIT_RUNTIME;
+		if (refuseOccupiedDestination(OP, ifaceFile)) return EXIT_RUNTIME;
 
 		final source: String = try {
 			CliIo.readFile(srcFileNN);
@@ -123,6 +125,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		if (CliArgs.refuseDataGrammar(OP, plugin)) return EXIT_RUNTIME;
 		// One config per FILE, because each is judged by the one that governs where IT lands
 		// and `--out` can put the interface under a different `hxformat.json` from the class.
 		// Passing null for the created file styled it by compiled defaults, so `fmt --list`

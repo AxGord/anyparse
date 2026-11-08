@@ -65,8 +65,10 @@ final class MoveToHelperCommand implements CliCommand {
 		}
 		final srcFile: String = positional[0];
 		final names: Array<String> = positional[1].split(',').map(StringTools.trim).filter(n -> n != '');
-		final srcTypeName: String = opts['--type'] ?? RefactorSupport.baseNameOf(srcFile);
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(opts['--lang'] ?? 'haxe'));
+		final lang: String = opts['--lang'] ?? 'haxe';
+		final srcTypeName: String = opts['--type'] ?? CliArgs.typeNameOfFile(lang, srcFile);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		if (CliArgs.refuseDataGrammar('move-to-helper', plugin)) return EXIT_RUNTIME;
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
 			'move-to-helper', plugin.langName(), scopeDir, [srcFile]
 		);
@@ -76,8 +78,11 @@ final class MoveToHelperCommand implements CliCommand {
 			CliIo.stderr('apq move-to-helper: $helperFile exists but is not under --scope\n');
 			return EXIT_USAGE;
 		}
+		final slash: Int = srcFile.lastIndexOf('/');
+		final defaultHelperFile: String = '${slash < 0 ? '' : srcFile.substring(0, slash + 1)}$helper${CliArgs.sourceExtensionOf(lang)}';
 		final result: MoveResult = MoveToHelper.move(
-			srcFile, srcTypeName, names, helper, helperFile, opts['--param'], scopeFiles, plugin, plugin.typeRefShape()
+			srcFile, srcTypeName, names, helper, helperFile ?? defaultHelperFile, opts['--param'], scopeFiles, plugin,
+			plugin.typeRefShape()
 		);
 		return emit(result, scopeFiles, srcTypeName, helper, opts['--arms'], flags, plugin);
 	}

@@ -64,13 +64,13 @@ final class MoveToHelper {
 
 	/**
 	 * Move `memberNames` of `srcTypeName` (declared in `srcFile`) into the static helper `helperName`: the type of that
-	 * name under scope when there is one, else a new `final class` created at `helperFile` (default: beside the source).
-	 * `param` names the source parameter every moved instance member gains (default: the source type's name with a
-	 * lower-case initial). Returns every rewritten file plus an advisory, or the refusal.
+	 * name under scope when there is one, else a new `final class` created at `helperFile`. `param` names the source
+	 * parameter every moved instance member gains (default: the source type's name with a lower-case initial). Returns
+	 * every rewritten file plus an advisory, or the refusal.
 	 */
 	public static function move(
-		srcFile: String, srcTypeName: String, memberNames: Array<String>, helperName: String, helperFile: Null<String>,
-		param: Null<String>, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape
+		srcFile: String, srcTypeName: String, memberNames: Array<String>, helperName: String, helperFile: String, param: Null<String>,
+		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape
 	): MoveResult {
 		if (srcTypeName == helperName) return Err('the helper must be another type than "$srcTypeName"');
 		if (memberNames.length == 0) return Err('no members named — nothing to move');
@@ -130,13 +130,12 @@ final class MoveToHelper {
 
 	/**
 	 * The scope the move runs over: the given one when it declares `helperName` already, else the given one plus the NEW
-	 * helper module — `package <src pkg>;`, the source type's null-safety grant if it has one, an empty `final class`.
-	 * A new helper lands at `helperFile`, or beside the source as `<Helper>.hx`; a path the scope already holds is refused,
-	 * since that module exists and does not declare the helper.
+	 * helper module at `helperFile` — `package <src pkg>;`, the source type's null-safety grant if it has one, an empty
+	 * `final class`. A path the scope already holds is refused, since that module exists and does not declare the helper.
 	 */
 	private static function helperScope(
-		srcFile: String, srcTypeName: String, helperName: String, helperFile: Null<String>,
-		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+		srcFile: String, srcTypeName: String, helperName: String, helperFile: String, scopeFiles: Array<{ file: String, source: String }>,
+		plugin: GrammarPlugin
 	): Either<String, Array<{ file: String, source: String }>> {
 		final trees: Map<String, QueryNode> = [];
 		for (entry in scopeFiles) switch ParseGate.parse(plugin, entry.source, entry.file) {
@@ -156,16 +155,16 @@ final class MoveToHelper {
 		if (srcTree == null || srcSource == null) return Left('source file $srcFile is not in the scope file set');
 		final srcDecl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(srcTree, srcTypeName);
 		if (srcDecl == null) return Left('no unique type "$srcTypeName" in $srcFile');
-		final cut: Int = srcFile.lastIndexOf('/');
-		final path: String = helperFile ?? (cut < 0 ? '$helperName.hx' : '${srcFile.substring(0, cut)}/$helperName.hx');
-		if (scopeFiles.exists(e -> e.file == path)) return Left('$path exists and declares no type "$helperName"');
+		if (scopeFiles.exists(e -> e.file == helperFile)) return Left('$helperFile exists and declares no type "$helperName"');
 		final pkg: String = ModuleScan.packageOf(srcTree);
 		final header: String = pkg == '' ? 'package;' : 'package $pkg;';
 		final nullSafety: Null<String> = nullSafetyGrant(srcSource, srcTree, srcDecl, plugin.refShape().nullSafetyMetaName);
 		final meta: String = nullSafety == null ? '' : '$nullSafety\n';
 		final doc: String =
 			'/**\n * Static helpers taken out of `$srcTypeName`: each reads the `$srcTypeName` it is handed as its first parameter.\n */\n';
-		return Right(scopeFiles.concat([{ file: path, source: '$header\n\n$doc${meta}final class $helperName {}\n' }]));
+		return Right(scopeFiles.concat([
+			{ file: helperFile, source: '$header\n\n$doc${meta}final class $helperName {}\n' }
+		]));
 	}
 
 	/** The source text of the null-safety entry (`RefShape.nullSafetyMetaName`) the source type carries, or null. */

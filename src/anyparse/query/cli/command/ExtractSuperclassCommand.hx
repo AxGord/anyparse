@@ -12,10 +12,12 @@ import anyparse.query.MoveSymbol;
 @:nullSafety(Strict)
 final class ExtractSuperclassCommand implements CliCommand {
 
+	private static inline final OP: String = 'extract-superclass';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'extract-superclass';
+		return OP;
 	}
 
 	public function summary(): String {
@@ -78,12 +80,12 @@ final class ExtractSuperclassCommand implements CliCommand {
 		final srcFileNN: String = srcFile;
 		final superNameNN: String = superName;
 		final membersNN: String = members;
-		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final memberNames: Array<String> = membersNN.split(',').map(StringTools.trim).filter(n -> n != '');
 		final slash: Int = srcFileNN.lastIndexOf('/');
 		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
 		final superFile: String = out ?? '$dir$superNameNN${CliArgs.sourceExtensionOf(lang)}';
-		if (ExtractInterfaceCommand.refuseOccupiedDestination('extract-superclass', superFile)) return EXIT_RUNTIME;
+		if (ExtractInterfaceCommand.refuseOccupiedDestination(OP, superFile)) return EXIT_RUNTIME;
 
 		final source: String = try {
 			CliIo.readFile(srcFileNN);
@@ -92,6 +94,7 @@ final class ExtractSuperclassCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		if (CliArgs.refuseDataGrammar(OP, plugin)) return EXIT_RUNTIME;
 		// One config per FILE — see `runExtractInterface` for why each needs its own.
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(superFile);
 		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);

@@ -644,6 +644,34 @@
 			"find": "final target: String = FileIdentity.realPath(path);",
 			"replace": "final target: String = haxe.io.Path.normalize(sys.FileSystem.absolutePath(path));",
 			"note": "a path is judged by its spelling, normalised but with symlinks unresolved, so a write through a link into the protected tree is let through while a dot-dot spelling is still caught"
+		},
+		{
+			"name": "M-TYPE-NAME-FROM-HX",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "typeNameOfFile",
+			"force": "RefactorSupport.baseNameOf(file)",
+			"note": "a file's type name drops only a literal .hx, so a data file is named by its whole basename (`d.json`) again"
+		},
+		{
+			"name": "M-DATA-GRAMMAR-NOT-REFUSED",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "refuseDataGrammar",
+			"force": "false",
+			"note": "a type refactor over a data grammar is never refused by meaning, so it falls through to a lookup that names the file as the missing class"
+		},
+		{
+			"name": "M-DATA-WALK-EVERY-GRAMMAR",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "dataDocumentExtensions",
+			"force": "[for (entry in grammars()) for (extension in entry.extensions) extension]",
+			"note": "a data search walks the files of every grammar, so a code file or a diagram beside the documents is read and refused"
+		},
+		{
+			"name": "M-DATA-WALK-WORDING-HX",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "noDataDocumentsMatched",
+			"force": "'${quotedSpecs(specs)} matched no .hx files'",
+			"note": "a data search whose spec matches nothing names the Haxe extension, not the data grammars'"
 		}
 	]
 }

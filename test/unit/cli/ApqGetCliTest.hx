@@ -185,6 +185,48 @@ class ApqGetCliTest extends Test {
 		#end
 	}
 
+	/** A directory holding a code file and a diagram beside its documents is searched for the documents only: the run is clean. */
+	@:killer('M-DATA-WALK-EVERY-GRAMMAR')
+	@:pin('control')
+	public function testWhereWalksOnlyTheDataDocumentsOfADirectory(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('apq_get_where_mixed', [
+			{ name: 'a.json', source: WHERE_A },
+			{ name: 'c.hx', source: 'class C {}' },
+			{ name: 'm.mmd', source: 'flowchart TD\n  A --> B\n' }
+		]);
+		var exit: Int = -1;
+		var out: String = '';
+		final err: String = CliFixture.captureStderr(() ->
+			out = CliFixture.captureStdout(() -> exit = Cli.run(['get', '--where', 'member=run', dir]))
+		);
+		Assert.equals(0, exit, err);
+		Assert.equals('', err);
+		Assert.equals('$dir/a.json arms.0\n', out);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A spec that matches no data document is named by the extensions of the data grammars. */
+	@:killer('M-DATA-WALK-WORDING-HX')
+	@:pin('control')
+	public function testWhereNamesTheDataExtensionsOfAnUnmatchedSpec(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('apq_get_where_unmatched', [{ name: 'a.json', source: WHERE_A }]);
+		var exit: Int = -1;
+		final err: String = CliFixture.captureStderr(
+			() -> CliFixture.captureStdout(() -> exit = Cli.run(['get', '--where', 'member=run', '$dir/a.json', '$dir/none.json']))
+		);
+		Assert.equals(1, exit, err);
+		Assert.isTrue(err.indexOf('apq get: "$dir/none.json" matched no .json files') >= 0, err);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** Run `apq get <fixture> a` on a `.extension` file holding `source`, and assert exit 1 with `reason` on stderr. */
 	private function assertRefused(prefix: String, extension: String, source: String, reason: String): Void {
 		#if (sys || nodejs)

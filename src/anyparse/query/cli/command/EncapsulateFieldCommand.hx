@@ -74,7 +74,7 @@ final class EncapsulateFieldCommand implements CliCommand {
 		}
 		final filePath: String = file;
 		final fieldNameNN: String = fieldName;
-		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
+		final typeNameNN: String = typeName ?? CliArgs.typeNameOfFile(lang, filePath);
 		final source: String = try {
 			CliIo.readFile(filePath);
 		} catch (exception: Exception) {

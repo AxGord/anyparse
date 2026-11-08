@@ -70,7 +70,7 @@ final class MakeFinalCommand implements CliCommand {
 		}
 		final filePath: String = file;
 		final fieldNameNN: String = fieldName;
-		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
+		final typeNameNN: String = typeName ?? CliArgs.typeNameOfFile(lang, filePath);
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [

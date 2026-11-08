@@ -5,6 +5,7 @@
 		"src/anyparse/grammar/json/JKw.hx": "package anyparse.grammar.json;\n\n/** A grammar definition of the json grammar, written in Haxe. */\nenum JKw {\n\t@:kw(\"call\") Call(name: String);\n}\n",
 		"pkg/Bar.hx": "package pkg;\n\nclass Bar extends Base {\n\tpublic function run(): Int {\n\t\tfinal f = new Foo();\n\t\treturn f.bump(2, 'x') + Foo.LIMIT;\n\t}\n}\n\nclass Base {\n\tpublic var shared: Int = 1;\n\n\tpublic function new() {}\n\n\tpublic function inherited(): Int {\n\t\treturn shared;\n\t}\n}\n",
 		"data.json": "{\"a\": [1, 2], \"b\": \"x\"}\n",
+		"d.json": "{\"a\":1}\n",
 		"arms/a.json": "{\"arms\": [{\"name\": \"X\", \"member\": \"run\"}, {\"name\": \"Y\", \"member\": \"walk\"}]}\n",
 		"arms/b.json": "{\"arms\": [{\"name\": \"Z\", \"member\": \"run\"}]}\n",
 		"walk/Lit.hx": "package walk;\n\nclass Lit {\n\tpublic static final SNAPSHOT: String = 'bin/.last-sweep.json';\n}\n",
@@ -8231,6 +8232,39 @@
 				"exit": 0,
 				"out": "7f0d099e45918694",
 				"err": "0a8da3948d231038",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-interface d.json I --lang json",
+			"argv": [
+				"apq",
+				"extract-interface",
+				"d.json",
+				"I",
+				"--lang",
+				"json"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "a44f7574f15a472a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get --where a=1 nonexist",
+			"argv": [
+				"apq",
+				"get",
+				"--where",
+				"a=1",
+				"nonexist"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "d819807e5aa76d27",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

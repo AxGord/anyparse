@@ -798,6 +798,28 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * `--permissive-construct` reads the grammar's definition sources by the grammar each file's extension names,
+	 * so it finds candidates.
+	 */
+	@:killer('M-RECON-DEFINITIONS-WALK-ONE-GRAMMAR')
+	@:pin('control')
+	public function testPermissiveConstructReadsTheGrammarDefinitions(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('apq_recon_permissive', []);
+		var out: String = '';
+		final err: String = CliFixture.captureStderr(
+			() -> out = CliFixture.captureStdout(() -> Cli.run(['recon', '--permissive-construct', dir, '--lang', 'haxe']))
+		);
+		Assert.equals(-1, err.indexOf('no mandatory-ref-lead-trail candidates'), err);
+		Assert.isTrue(out.indexOf('=== permissive-construct: ') >= 0, out);
+		Assert.isTrue(out.indexOf('src/anyparse/grammar/haxe/Hx') >= 0, 'a candidate is named by its definition file: $out');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	private static function mkTempDir(prefix: String): String {
 		counter++;
