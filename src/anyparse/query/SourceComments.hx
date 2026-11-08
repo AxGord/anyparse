@@ -8,6 +8,7 @@ import anyparse.format.comment.CommentDirective;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 /**
  * One comment token collected by `collectCommentTokens`: its byte span and
@@ -150,7 +151,7 @@ final class SourceComments {
 		var from: Int = span.from;
 		var to: Int = span.to;
 		while (from < to) {
-			if (isSpaceAt(source, from)) {
+			if (SourceText.isSpace(source.fastCodeAt(from))) {
 				from++;
 				continue;
 			}
@@ -159,7 +160,7 @@ final class SourceComments {
 			from = token.to < to ? token.to : to;
 		}
 		while (to > from) {
-			if (isSpaceAt(source, to - 1)) {
+			if (SourceText.isSpace(source.fastCodeAt(to - 1))) {
 				to--;
 				continue;
 			}
@@ -308,9 +309,7 @@ final class SourceComments {
 	 * splicers prefix with instead.
 	 */
 	public static function commentContinuation(source: String, tok: CommentTok): String {
-		var lineStart: Int = tok.from;
-		while (lineStart > 0 && source.fastCodeAt(lineStart - 1) != '\n'.code) lineStart--;
-		var indent: String = source.substring(lineStart, tok.from);
+		var indent: String = source.substring(Strings.lineStart(source, tok.from), tok.from);
 		if (indent.trim() != '') indent = indent.substring(0, indent.length - indent.ltrim().length);
 		if (tok.isLine) return '$indent// ';
 		final body: String = source.substring(tok.from + 2, tok.to);
@@ -777,12 +776,6 @@ final class SourceComments {
 			buf.addChar(c == '\t'.code ? ' '.code : c);
 		}
 		return buf.toString().trim();
-	}
-
-	/** Whether the byte at `at` is a space, tab, carriage return or newline. */
-	private static inline function isSpaceAt(source: String, at: Int): Bool {
-		final code: Int = source.fastCodeAt(at);
-		return code == ' '.code || code == '\t'.code || code == '\n'.code || code == '\r'.code;
 	}
 
 	/**

@@ -14,8 +14,7 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.NodeShape;
-
-using StringTools;
+import anyparse.util.Strings;
 
 /**
  * Flags an EMPTY-ARRAY binding followed by a run of `a.push(<expr>);` statements — an array
@@ -209,11 +208,11 @@ final class JoinArrayPushes extends RuleBase {
 	/** The rule id, also the `rule` field of every violation it reports. */
 	private static inline final RULE_ID: String = 'join-array-pushes';
 
-	/** The appending method whose argument becomes one literal element. */
-	private static inline final PUSH_METHOD: String = 'push';
-
 	/** A field whose array is filled only by the folded run carries no assignment at all. */
 	private static inline final NO_WRITES: Int = 0;
+
+	/** The appending method whose argument becomes one literal element. */
+	private static final PUSH_METHOD: String = 'push';
 
 	public function new() {
 		super(RULE_ID, 'an empty-array binding followed by push statements that fold into the array literal', RuleCategory.Loops);
@@ -474,7 +473,7 @@ final class JoinArrayPushes extends RuleBase {
 	private static function localMatch(decl: LocalDecl, run: Array<Push>, scope: Span, ctx: Ctx): Null<Match> {
 		final source: String = ctx.source;
 		final end: Int = run[run.length - 1].stmt.to;
-		if (CheckScan.hasCommentMarker(source, decl.span.from, endOfLine(source, end))) return null;
+		if (CheckScan.hasCommentMarker(source, decl.span.from, Strings.lineEnd(source, end))) return null;
 		for (push in run) if (referencesName(push.arg, decl.name, ctx.seams)) return null;
 		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, []) ? {
 			span: decl.span,
@@ -542,7 +541,7 @@ final class JoinArrayPushes extends RuleBase {
 		final end: Int = run[run.length - 1].stmt.to;
 		if (!receiversDenoteField(run, container, decl.span.from, ctx)) return null;
 		if (CheckScan.hasCommentMarker(source, decl.span.from, decl.span.to)) return null;
-		if (CheckScan.hasCommentMarker(source, from, endOfLine(source, end))) return null;
+		if (CheckScan.hasCommentMarker(source, from, Strings.lineEnd(source, end))) return null;
 		if (OccurrenceScan.referencedInRange(source, name, ctorSpan.from, from, [])) return null;
 		// The field's OWN declaration is excluded: a field declared BELOW the constructor lies in
 		// this range and would satisfy the read-after gate with nothing but itself.
@@ -600,13 +599,6 @@ final class JoinArrayPushes extends RuleBase {
 	/** Whether `node`'s subtree holds a call or a construction — anything that runs code of its own. */
 	private static function runsCode(node: QueryNode, s: Seams): Bool {
 		return node.kind == s.callKind || node.kind == s.newExprKind || node.children.exists(child -> runsCode(child, s));
-	}
-
-	/** The offset of the newline ending `at`'s line, or the source length when it is the last line. */
-	private static function endOfLine(source: String, at: Int): Int {
-		var to: Int = at;
-		while (to < source.length && source.fastCodeAt(to) != '\n'.code) to++;
-		return to;
 	}
 
 	/**

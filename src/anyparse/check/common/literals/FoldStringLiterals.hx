@@ -1130,19 +1130,13 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		var lineStart: Int = Strings.lineStart(source, span.from);
 		var widest: Int = 0;
 		while (lineStart <= source.length) {
-			final lineEnd: Int = lineEndOf(source, lineStart);
+			final lineEnd: Int = Strings.lineEnd(source, lineStart);
 			final width: Int = displayWidth(source.substring(lineStart, lineEnd), ctx.metrics.indentWidth);
 			if (width > widest) widest = width;
 			if (lineEnd >= source.length || lineEnd >= span.to) return widest;
 			lineStart = lineEnd + 1;
 		}
 		return widest;
-	}
-
-	/** The offset of the line break that ends `pos`'s line, or the source length when none follows. */
-	private static function lineEndOf(source: String, pos: Int): Int {
-		final nextBreak: Int = source.indexOf('\n', pos);
-		return nextBreak == -1 ? source.length : nextBreak;
 	}
 
 	/**
@@ -1656,7 +1650,7 @@ private class PlanContext {
 		if (span != null) {
 			final start: Int = memberLineStart(span.from);
 			if (start != -1) {
-				final end: Int = FoldStringLiterals.lineEndOf(source, span.to);
+				final end: Int = Strings.lineEnd(source, span.to);
 				if (end > start) out.push(new Span(start, end));
 				return;
 			}
@@ -1722,7 +1716,7 @@ private class PlanContext {
 			if (span == null) continue;
 			final start: Int = lineStartAtDepth(span.from, 2);
 			if (start == -1) continue;
-			final end: Int = FoldStringLiterals.lineEndOf(source, span.to);
+			final end: Int = Strings.lineEnd(source, span.to);
 			if (end > start) out.push(new Span(start, end));
 		}
 		for (child in node.children) collectStatements(child, bodyKind, out);

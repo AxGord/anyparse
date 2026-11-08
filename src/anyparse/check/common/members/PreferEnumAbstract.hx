@@ -6,6 +6,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.ParseGate;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -558,7 +559,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final keyword: String = source.substring(span.from, nameStart).trim();
 		if (keyword.length == 0 || !isBareWord(keyword)) return null;
 		var after: Int = nameStart + name.length;
-		while (after < limit && isSpace(source.charAt(after))) after++;
+		while (after < limit && SourceText.isSpace(source.fastCodeAt(after))) after++;
 		return after >= source.length || source.charAt(after) != syntax.bodyOpen ? null : {
 			span: new Span(span.from, nameStart + name.length),
 			text: syntax.head.replace(NAME_SLOT, name).replace(UNDER_SLOT, typeName)
@@ -604,7 +605,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final annSpan: Null<Span> = annotation.span;
 		if (annSpan == null) return false;
 		var sep: Int = annSpan.from - 1;
-		while (sep > memberSpan.from && isSpace(source.charAt(sep))) sep--;
+		while (sep > memberSpan.from && SourceText.isSpace(source.fastCodeAt(sep))) sep--;
 		if (sep <= memberSpan.from || source.charAt(sep) != ANNOTATION_SEPARATOR) return false;
 		if (CheckScan.hasCommentMarker(source, sep, annSpan.to)) return false;
 		edits.push({ span: new Span(sep, annSpan.to), text: '' });
@@ -635,11 +636,6 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	/** Whether `c` can appear inside an identifier — a letter, a digit or an underscore. */
 	private static function isWordChar(c: String): Bool {
 		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
-	}
-
-	/** Whether `c` is source whitespace (space, tab, CR or LF). */
-	private static function isSpace(c: String): Bool {
-		return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 	}
 
 	/** Whether the member at `kids[i]` carries BOTH a `Static` and an `inline` modifier. */

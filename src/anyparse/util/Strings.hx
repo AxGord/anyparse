@@ -37,6 +37,15 @@ final class Strings {
 		return i < 0 ? 0 : i;
 	}
 
+	/**
+	 * End offset of the line holding `at`: the first `\n` at or after `at`, else the text length;
+	 * an `at` past the text ends at the text length, and a `\r` of a CRLF break stays inside the line.
+	 */
+	public static function lineEnd(source: String, at: Int): Int {
+		final nl: Int = source.indexOf('\n', at);
+		return nl < 0 ? source.length : nl;
+	}
+
 	/** 1-based number of the line holding `at`, counting only `\n`; `at` is clamped to the text. */
 	public static function lineOf(source: String, at: Int): Int {
 		final end: Int = at < source.length ? at : source.length;

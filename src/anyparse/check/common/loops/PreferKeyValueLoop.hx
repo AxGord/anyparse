@@ -9,6 +9,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.common.naming.ShadowingLocal;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -97,12 +98,6 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-keyvalue-loop';
 
-	/** The element-count member an indexed loop bounds itself by. */
-	private static inline final LENGTH_MEMBER: String = 'length';
-
-	/** The one container nominal whose key-value iteration yields the `0...length` indices. */
-	private static inline final ARRAY_TYPE: String = 'Array';
-
 	/** Minimum body statements: the consumed declaration plus at least one real statement. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
 
@@ -116,8 +111,14 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	private static inline final ELEMENT_TYPE_DECLINE: String = 'the collection is not a declared `Array<E>` whose `E` the dropped declaration '
 		+ 'carries, so dropping it could change the value binder\'s type';
 
+	/** The element-count member an indexed loop bounds itself by. */
+	private static final LENGTH_MEMBER: String = 'length';
+
+	/** The one container nominal whose key-value iteration yields the `0...length` indices. */
+	private static final ARRAY_TYPE: String = 'Array';
+
 	/** The opener arm's decline when a trailing comment on the dropped declaration's line would move onto the loop header. */
-	private static inline final TRAILING_COMMENT_DECLINE: String =
+	private static final TRAILING_COMMENT_DECLINE: String =
 		'a trailing comment on the dropped declaration\'s line would move onto the loop header';
 
 	public function new() {
@@ -262,12 +263,6 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		return { span: new Span(m.forSpan.from, m.declSpan.to), text: 'for (${m.keyVar} => ${m.valueVar} in ${m.collection}) {' };
 	}
 
-	/** The offset of the newline ending the line `from` sits on, or the source end — how far a trailing comment can reach. */
-	private static function lineEndAfter(source: String, from: Int): Int {
-		final at: Int = source.indexOf('\n', from);
-		return at == -1 ? source.length : at;
-	}
-
 	/**
 	 * Whether dropping the declaration provably keeps the value binder's type: the collection is
 	 * a declared `Array<E>`, and the declaration either carries no annotation or carries exactly
@@ -401,7 +396,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 			ELEMENT_TYPE_DECLINE
 		else if (CheckScan.hasCommentMarker(source, m.forSpan.from, declEnd))
 			ElementLoopRewrite.COMMENT_DECLINE
-		else if (CheckScan.hasCommentMarker(source, declEnd, lineEndAfter(source, declEnd)))
+		else if (CheckScan.hasCommentMarker(source, declEnd, Strings.lineEnd(source, declEnd)))
 			TRAILING_COMMENT_DECLINE
 		else
 			null;

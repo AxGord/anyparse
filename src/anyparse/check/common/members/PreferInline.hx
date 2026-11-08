@@ -14,6 +14,7 @@ import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -388,12 +389,6 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			|| kind == shape.macroModifierKind
 			|| kind == shape.overrideModifierKind
 			|| kind == shape.externModifierKind;
-	}
-
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static inline function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		return segments[segments.length - 1] ?? path;
 	}
 
 	/**
@@ -841,7 +836,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		final out: Array<String> = [];
 		for (child in cls.children) if (child.kind == implementsKind) for (named in child.children) {
 			final nm: Null<String> = named.name;
-			if (nm != null) out.push(simpleName(nm));
+			if (nm != null) out.push(SourceText.lastSegment(nm));
 		}
 		return out;
 	}

@@ -28,6 +28,22 @@
 			"note": "a negative position is returned as it is instead of the text start"
 		},
 		{
+			"name": "M-UTIL-LINE-END-BREAK",
+			"type": "anyparse.util.Strings",
+			"method": "lineEnd",
+			"find": "source.indexOf('\\n'",
+			"replace": "source.indexOf('\\r'",
+			"note": "a carriage return ends the line instead of the newline, so a line stops inside its CRLF break or runs to the text end"
+		},
+		{
+			"name": "M-UTIL-LINE-END-LAST",
+			"type": "anyparse.util.Strings",
+			"method": "lineEnd",
+			"find": "nl < 0 ? source.length : nl",
+			"replace": "nl < 0 ? 0 : nl",
+			"note": "the last line, and a position past the text, end at the text start instead of the text end"
+		},
+		{
 			"name": "M-UTIL-LINE-OF-BASE",
 			"type": "anyparse.util.Strings",
 			"method": "lineOf",

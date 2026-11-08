@@ -59,10 +59,6 @@ final class Selector {
 		return new Selector(segments);
 	}
 
-	private static inline function isWs(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	private static function parseSegment(s: String, descendant: Bool): SelectorSegment {
 		final colon: Int = s.indexOf(':');
 		if (colon >= 0) {
@@ -83,15 +79,15 @@ final class Selector {
 	}
 
 	private static function firstWs(s: String): Int {
-		for (i in 0...s.length) if (isWs(s.fastCodeAt(i))) return i;
+		for (i in 0...s.length) if (SourceText.isSpace(s.fastCodeAt(i))) return i;
 		return -1;
 	}
 
 	private static function trim(s: String): String {
 		var start: Int = 0;
 		var end: Int = s.length;
-		while (start < end && isWs(s.fastCodeAt(start))) start++;
-		while (end > start && isWs(s.fastCodeAt(end - 1))) end--;
+		while (start < end && SourceText.isSpace(s.fastCodeAt(start))) start++;
+		while (end > start && SourceText.isSpace(s.fastCodeAt(end - 1))) end--;
 		return s.substring(start, end);
 	}
 

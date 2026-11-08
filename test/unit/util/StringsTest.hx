@@ -451,6 +451,38 @@ final class StringsTest extends Test {
 		for (c in 0...128) if (c != ' '.code && c != '\t'.code) Assert.isFalse(Strings.isSpaceOrTab(c), 'code $c');
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-LINE-END-BREAK')
+	public function testALineEndsAtItsBreak(): Void {
+		Assert.equals(2, Strings.lineEnd(LINES, 0));
+		Assert.equals(2, Strings.lineEnd(LINES, 1));
+		Assert.equals(2, Strings.lineEnd(LINES, 2));
+		Assert.equals(5, Strings.lineEnd(LINES, 3));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-LINE-END-LAST')
+	public function testTheLastLineEndsAtTheTextEnd(): Void {
+		Assert.equals(8, Strings.lineEnd(LINES, 6));
+		Assert.equals(8, Strings.lineEnd(LINES, 7));
+		Assert.equals(8, Strings.lineEnd(LINES, 8));
+		Assert.equals(0, Strings.lineEnd('', 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-LINE-END-LAST')
+	public function testAPositionPastTheTextEndsAtTheTextEnd(): Void {
+		Assert.equals(8, Strings.lineEnd(LINES, 99));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-LINE-END-BREAK')
+	public function testTheCarriageReturnOfABreakStaysInTheLine(): Void {
+		Assert.equals(2, Strings.lineEnd('a\r\nb', 0));
+		Assert.equals(2, Strings.lineEnd('a\r\nb', 1));
+		Assert.equals(4, Strings.lineEnd('a\r\nb', 3));
+	}
+
 	private static function closing(text: String, open: Int): Int {
 		return Strings.closingBrace(text.length, k -> text.charCodeAt(k), open);
 	}

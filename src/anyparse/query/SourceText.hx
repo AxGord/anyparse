@@ -27,14 +27,14 @@ final class SourceText {
 	 */
 	public static inline final REGION_EXCERPT_CHARS: Int = 60;
 
-	/** The ESC that opens every ANSI control sequence (`stripAnsi`). */
-	private static inline final ESCAPE: String = '\x1b';
-
 	/** The lowest byte value that TERMINATES an ANSI CSI sequence (`stripAnsi`); everything below it is a parameter. */
 	private static inline final CSI_FINAL_MIN: Int = 0x40;
 
 	/** The largest value an `Int` holds; `parseStrictInt` refuses anything above it. */
 	private static inline final MAX_INT: Float = 2147483647;
+
+	/** The ESC that opens every ANSI control sequence (`stripAnsi`). */
+	private static final ESCAPE: String = '\x1b';
 
 	/**
 	 * The last dotted segment of `dotted` — the simple name a plain import binds
@@ -196,13 +196,6 @@ final class SourceText {
 		return inner.trim() == '';
 	}
 
-	/** The offset of the start of the line `at` sits on. */
-	public static function startOfLine(source: String, at: Int): Int {
-		var from: Int = at;
-		while (from > 0 && source.fastCodeAt(from - 1) != '\n'.code) from--;
-		return from;
-	}
-
 	/**
 	 * The offset just past the first token at `from` — the run of identifier characters
 	 * when `from` is on one (a name / keyword), else the single delimiter / operator
@@ -334,17 +327,6 @@ final class SourceText {
 	public static function lineStartOf(source: String, i: Int): Int {
 		final nl: Int = source.lastIndexOf('\n', i);
 		return nl < 0 ? 0 : nl + 1;
-	}
-
-	/**
-	 * Index of the first character of the line `offset` sits on, where an offset ON a newline
-	 * belongs to the line that newline ENDS — `lineStartOf` answers the line after it there. The scan
-	 * the span-splice ops position by; an offset past the end counts from the end.
-	 */
-	public static function lineStartAt(source: String, offset: Int): Int {
-		var i: Int = offset < source.length ? offset : source.length;
-		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
-		return i;
 	}
 
 	/** The source text under `node`'s span, or null when the node carries none. */

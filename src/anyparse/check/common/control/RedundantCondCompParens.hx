@@ -98,12 +98,6 @@ final class RedundantCondCompParens extends RuleBase {
 		return edits;
 	}
 
-	/** Whether `source` holds a space or a tab at `at`. */
-	private static inline function isSpaceAt(source: String, at: Int): Bool {
-		final c: Int = source.fastCodeAt(at);
-		return c == ' '.code || c == '\t'.code;
-	}
-
 	/** Every parenthesised-single-flag condition in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<FlagParens> {
 		final out: Array<FlagParens> = [];
@@ -131,12 +125,12 @@ final class RedundantCondCompParens extends RuleBase {
 		final close: Int = condition.to - 1;
 		if (source.fastCodeAt(condition.from) != '('.code || source.fastCodeAt(close) != ')'.code) return null;
 		var from: Int = condition.from + 1;
-		while (from < close && isSpaceAt(source, from)) from++;
+		while (from < close && Strings.isSpaceOrTab(source.fastCodeAt(from))) from++;
 		if (from >= close || !Strings.isIdentStart(source.fastCodeAt(from))) return null;
 		var to: Int = from;
 		while (to < close && Strings.isIdentChar(source.fastCodeAt(to))) to++;
 		final flag: String = source.substring(from, to);
-		while (to < close && isSpaceAt(source, to)) to++;
+		while (to < close && Strings.isSpaceOrTab(source.fastCodeAt(to))) to++;
 		return to == close ? flag : null;
 	}
 

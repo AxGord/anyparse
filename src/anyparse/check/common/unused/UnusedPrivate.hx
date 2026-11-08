@@ -17,6 +17,7 @@ import anyparse.query.OracleProviders;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.ShapeVocab;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
@@ -405,11 +406,6 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 */
 	private static inline function fileHasConditional(source: String): Bool {
 		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;
-	}
-
-	/** Space / tab / newline / carriage-return. */
-	private static inline function isWhitespace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
@@ -1021,7 +1017,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	/** The last index at or before `j` that is not whitespace, or -1. */
 	private static function skipWhitespaceBack(source: String, j: Int): Int {
 		var at: Int = j;
-		while (at >= 0 && isWhitespace(source.fastCodeAt(at))) at--;
+		while (at >= 0 && SourceText.isSpace(source.fastCodeAt(at))) at--;
 		return at;
 	}
 

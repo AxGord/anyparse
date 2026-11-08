@@ -16,6 +16,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 import haxe.ds.Either;
 
 using Lambda;
@@ -872,7 +873,7 @@ final class MoveMember {
 	): Void {
 		final accessPath: Null<String> = missingAccessGrant(prep);
 		if (accessPath == null) return;
-		final lineStart: Int = SourceText.lineStartAt(prep.srcSource, m.group.groupSpan.from);
+		final lineStart: Int = Strings.lineStart(prep.srcSource, m.group.groupSpan.from);
 		final indent: String = prep.srcSource.substring(lineStart, m.group.groupSpan.from);
 		// A decl sharing its line with other code (one-line class) gets the
 		// meta inline — the "indent" would otherwise capture that code.

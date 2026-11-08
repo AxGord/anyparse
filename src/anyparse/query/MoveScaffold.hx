@@ -7,6 +7,7 @@ import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.MoveMember.ScaffoldField;
 import anyparse.query.MoveMember.ViaResult;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -31,7 +32,7 @@ using Lambda;
  *
  * Reaches back into `MoveMember` for the member-group scans every op in that file shares (`membersOf`,
  * `memberGroupOf`, `constructorGroupOf`, `isAllWhitespace`) — a hub set, not a dependency this split could
- * take with it. The edit accumulator is `ScopeFiles.editsFor`, the line scan `SourceText.lineStartAt`.
+ * take with it. The edit accumulator is `ScopeFiles.editsFor`, the line scan `Strings.lineStart`.
  */
 @:access(anyparse.query.MoveMember)
 @:nullSafety(Strict)
@@ -129,7 +130,7 @@ final class MoveScaffold {
 				+ '(a bare `new() {}` or no constructor)',
 			prependBlock: ''
 		};
-		final from: Int = SourceText.lineStartAt(prep.destSource, ctor.groupSpan.from);
+		final from: Int = Strings.lineStart(prep.destSource, ctor.groupSpan.from);
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
 		return { error: null, prependBlock: '' };
 	}
@@ -145,7 +146,7 @@ final class MoveScaffold {
 	): Null<String> {
 		final ctor: Null<MemberGroup> = MoveMember.constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, lexicalRegions);
 		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
-		final fieldFrom: Int = SourceText.lineStartAt(prep.srcSource, ctor.groupSpan.from);
+		final fieldFrom: Int = Strings.lineStart(prep.srcSource, ctor.groupSpan.from);
 		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
 			span: new Span(fieldFrom, fieldFrom),
 			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'

@@ -338,14 +338,14 @@ final class SymbolIndexBuilder {
 					typeParamArity: paramNames.length,
 					typeParamNames: paramNames,
 					typeParamDefaults: declTypeParamDefaults(maps.typeParamDefaults, typeDecl, paramNames),
-					supertypes: supersRaw.map(simpleName),
+					supertypes: supersRaw.map(SourceText.lastSegment),
 					supertypesRaw: supersRaw,
 					supertypesWritten: collectSupertypesWritten(node, source),
-					interfaces: collectImplementsRaw(node).map(simpleName),
+					interfaces: collectImplementsRaw(node).map(SourceText.lastSegment),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
-					aliasTargetNominal: aliasPath == null ? null : simpleName(aliasPath),
+					aliasTargetNominal: aliasPath == null ? null : SourceText.lastSegment(aliasPath),
 					aliasTargetRaw: aliasPath,
 					aliasTargetWritten: writtenAliasOf(source, node, aliasPath),
 					hasRtti: carriesMeta(pendingMeta, shape.reflectedDeclMetaName),
@@ -560,15 +560,6 @@ final class SymbolIndexBuilder {
 	}
 
 	/**
-	 * The last `.`-separated segment of `path` (its simple name).
-	 */
-	private static function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		final last: Null<String> = segments[segments.length - 1];
-		return last ?? path;
-	}
-
-	/**
 	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries any
 	 * build-macro tag the grammar names (any macro-generated member is invisible to the scan, so
 	 * treat it as possibly-rebinding) or writes `this` in a member other than the constructor.
@@ -632,7 +623,7 @@ final class SymbolIndexBuilder {
 		final named: Null<QueryNode> = node.children.find(c -> c.kind == NAMED_KIND);
 		if (named == null) return null;
 		final raw: Null<String> = named.name;
-		return raw == null ? null : simpleName(raw);
+		return raw == null ? null : SourceText.lastSegment(raw);
 	}
 
 	/**

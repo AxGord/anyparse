@@ -83,11 +83,6 @@ final class EmptyComment extends RuleBase {
 		return RunScan.spanEdits(violations, (_, span) -> ({ span: deletionSpan(source, span), text: '' }));
 	}
 
-	/** Whether code unit `c` is horizontal or vertical whitespace. */
-	private static inline function isWs(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 	/** Scan every comment token in `source`, flagging each content-free one that is not a paragraph separator. */
 	private static function scan(out: Array<Violation>, file: String, source: String, regions: Array<LexRegion>): Void {
 		final toks: Array<CommentToken> = SourceComments.collectCommentTokens(regions);
@@ -157,7 +152,7 @@ final class EmptyComment extends RuleBase {
 			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code)
 				newlines++
-			else if (!isWs(c))
+			else if (!SourceText.isSpace(c))
 				return false;
 		}
 		return newlines == 1;
@@ -171,7 +166,7 @@ final class EmptyComment extends RuleBase {
 	 */
 	private static function isEmpty(source: String, tok: CommentToken): Bool {
 		if (!tok.isLine) return SourceComments.blockCommentIsBlank(source, tok);
-		for (i in tok.from + 2...tok.to) if (!isWs(source.fastCodeAt(i))) return false;
+		for (i in tok.from + 2...tok.to) if (!SourceText.isSpace(source.fastCodeAt(i))) return false;
 		return true;
 	}
 

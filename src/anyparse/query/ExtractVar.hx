@@ -146,7 +146,7 @@ final class ExtractVar {
 		// A PEG span can swallow trailing trivia — trim it so neither the hoisted
 		// text nor the replaced range carries a dangling space.
 		var effTo: Int = targetSpan.to;
-		while (effTo > targetSpan.from && isWsCode(source.fastCodeAt(effTo - 1))) effTo--;
+		while (effTo > targetSpan.from && SourceText.isSpace(source.fastCodeAt(effTo - 1))) effTo--;
 
 		final enclosingStmt: Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
 		if (enclosingStmt == null) return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
@@ -163,7 +163,7 @@ final class ExtractVar {
 
 		// The hoisted decl is inserted at the start of the enclosing
 		// statement's line, carrying that statement's leading indentation.
-		final lineStart: Int = SourceText.lineStartAt(source, hoistSpan.from);
+		final lineStart: Int = Strings.lineStart(source, hoistSpan.from);
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
@@ -188,11 +188,6 @@ final class ExtractVar {
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
 	private static inline function isStatement(kind: String): Bool {
 		return kind.endsWith('Stmt');
-	}
-
-	/** Whitespace test for the trailing-trivia trim. */
-	private static inline function isWsCode(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**

@@ -17,6 +17,7 @@ import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -376,12 +377,6 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		);
 	}
 
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static inline function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		return segments[segments.length - 1] ?? path;
-	}
-
 	/**
 	 * The collapse target of a read-only property (`(get, never)` / `(get, null)`): `(default,
 	 * null)`, except for a SELF-BACKED `(get, never)`, which becomes `(default, never)`. The
@@ -638,7 +633,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final out: Array<String> = [];
 		for (child in cls.children) if (child.kind == shape.implementsClauseKind) for (named in child.children) {
 			final nm: Null<String> = named.name;
-			if (nm != null) out.push(simpleName(nm));
+			if (nm != null) out.push(SourceText.lastSegment(nm));
 		}
 		return out;
 	}

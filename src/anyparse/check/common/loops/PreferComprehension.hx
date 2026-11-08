@@ -220,7 +220,7 @@ using StringTools;
 final class PreferComprehension extends RuleBase {
 
 	/** The declaration keyword the fix always emits, and its length for the `var`→`final` swap. */
-	private static inline final VAR_KEYWORD: String = 'var';
+	private static final VAR_KEYWORD: String = 'var';
 
 	public function new() {
 		super(
@@ -467,7 +467,7 @@ final class PreferComprehension extends RuleBase {
 	 * the same block makes the loop's `a` a different binding, and the declaration must not cross it.
 	 */
 	private static function gapAdmits(source: String, declName: String, declSpan: Span, forSpan: Span, gapped: Bool): Bool {
-		final lineEnd: Int = endOfLine(source, declSpan.to);
+		final lineEnd: Int = Strings.lineEnd(source, declSpan.to);
 		final commentTo: Int = gapped || lineEnd < forSpan.from ? lineEnd : forSpan.from;
 		return !CheckScan.hasCommentMarker(source, declSpan.to, commentTo)
 			&& (!gapped || !OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
@@ -506,12 +506,6 @@ final class PreferComprehension extends RuleBase {
 		final declOwnsLine: Bool = line.from != declSpan.from || line.to != declSpan.to;
 		final loopOwnsLine: Bool = source.substring(Strings.lineStart(source, forSpan.from), forSpan.from).trim() == '';
 		return declOwnsLine && loopOwnsLine ? [{ span: line, text: '' }, { span: forSpan, text: text }] : null;
-	}
-
-	/** The offset of the newline ending the line `at` sits on, or the source length on the last line. */
-	private static function endOfLine(source: String, at: Int): Int {
-		final nl: Int = source.indexOf('\n', at);
-		return nl == -1 ? source.length : nl;
 	}
 
 	/**

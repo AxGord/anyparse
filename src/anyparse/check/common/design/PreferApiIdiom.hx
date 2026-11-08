@@ -16,6 +16,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.NodeShape;
+import anyparse.util.Strings;
 
 /**
  * Rewrites consecutive writes of a type's fields into the one method call the PROJECT declares equivalent —
@@ -418,7 +419,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final copy: Null<String> = idiom.spec.copy;
 		final from: Int = window[0].span.from;
 		final last: Write = window[window.length - 1];
-		final lineEnd: Int = endOfLine(ctx.source, last.span.to);
+		final lineEnd: Int = Strings.lineEnd(ctx.source, last.span.to);
 		final recvSpan: Null<Span> = window[0].recv.span;
 		if (recvSpan == null) return null;
 		final recvText: String = ctx.source.substring(recvSpan.from, recvSpan.to);
@@ -555,12 +556,6 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	private static function enclosingType(span: Span, ctx: Ctx): Null<ResolvedType> {
 		final name: Null<String> = TypeResolver.enclosingTypeName(ctx.root, span);
 		return name == null ? null : ctx.index.refs.findDeclaredType(ctx.file, name);
-	}
-
-	/** The offset of the line break ending the line `pos` sits on, or the source end. */
-	private static function endOfLine(source: String, pos: Int): Int {
-		final nl: Int = source.indexOf('\n', pos);
-		return nl < 0 ? source.length : nl;
 	}
 
 }
