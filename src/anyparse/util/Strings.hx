@@ -13,7 +13,7 @@ typedef Split = {
 /**
  * The one answer to "how does the project read a piece of plain text": the line a position sits on, whether a string is
  * blank, whether it is an identifier, a quoted literal of it, where a
- * quoted literal ends, and the part of it before or after a delimiter. A
+ * quoted literal ends, whether one pair of parentheses wraps all of it, and the part of it before or after a delimiter. A
  * delimiter is always a non-empty string. Where the delimiter is missing, the plain form returns the input unchanged
  * (nothing to cut) and the `OrNull` form returns null, so the caller who needs the difference asks for it by name. This
  * package imports nothing from `anyparse.*`, and it holds no state.
@@ -201,6 +201,31 @@ final class Strings {
 				return i;
 		}
 		return -1;
+	}
+
+	/**
+	 * Whether `text` is one pair of parentheses around all of it: the `(` it opens with is closed by its last
+	 * character. `(a)+(b)` and an unclosed `(()` are not; text inside quotes or comments counts like any other.
+	 */
+	public static function wrappedInParens(text: String): Bool {
+		if (text.length < 2 || fastCodeAt(text, 0) != '('.code) return false;
+		final last: Int = text.length - 1;
+		var depth: Int = 0;
+		for (i in 0...text.length) {
+			final c: Int = fastCodeAt(text, i);
+			if (c == '('.code)
+				depth++;
+			else if (c == ')'.code && --depth == 0)
+				return i == last;
+		}
+		return false;
+	}
+
+	/** `text` without the pairs of parentheses wrapping all of it, white space inside each pair trimmed: `( (sys) )` reads as `sys`. */
+	public static function stripOuterParens(text: String): String {
+		var t: String = text;
+		while (wrappedInParens(t)) t = t.substring(1, t.length - 1).trim();
+		return t;
 	}
 
 }

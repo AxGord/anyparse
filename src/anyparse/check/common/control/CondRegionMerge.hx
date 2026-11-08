@@ -4,6 +4,7 @@ import anyparse.query.CondDirectives;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -250,8 +251,7 @@ final class CondRegionMerge extends RuleBase {
 
 	/** Whether `negated` negates `plain`. */
 	private static function negates(plain: String, negated: String): Bool {
-		return negated.startsWith('!')
-			&& CondDirectives.stripOuterParens(negated.substring(1).trim()) == CondDirectives.stripOuterParens(plain);
+		return negated.startsWith('!') && Strings.stripOuterParens(negated.substring(1).trim()) == Strings.stripOuterParens(plain);
 	}
 
 

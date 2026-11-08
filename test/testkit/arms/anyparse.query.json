@@ -37,7 +37,7 @@
 			"name": "M-COND-FRAME-CONDITION-RAW",
 			"type": "anyparse.query.CondBranchPath",
 			"method": "conditionText",
-			"find": "return span == null ? '' : CondDirectives.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));",
+			"find": "return span == null ? '' : Strings.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));",
 			"replace": "return span == null ? '' : source.substring(span.from, span.to);",
 			"note": "a branch key is the condition's raw bytes, so `#if (js)` and `#if js` stop comparing equal and two sibling regions guarding one build read as different branches again"
 		},

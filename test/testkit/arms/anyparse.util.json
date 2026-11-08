@@ -458,6 +458,54 @@
 			"find": "open ... length",
 			"replace": "0 ... length",
 			"note": "the scan starts at the text start instead of at the opening brace, so a closing brace before it unbalances the count"
+		},
+		{
+			"name": "M-UTIL-PARENS-CLOSE-DEPTH",
+			"type": "anyparse.util.Strings",
+			"method": "wrappedInParens",
+			"find": "--depth == 0",
+			"replace": "--depth < 0",
+			"note": "the closing parenthesis is looked for below depth zero, so no wrapped text is ever found wrapped"
+		},
+		{
+			"name": "M-UTIL-PARENS-CLOSE-AT-END",
+			"type": "anyparse.util.Strings",
+			"method": "wrappedInParens",
+			"find": "return i == last;",
+			"replace": "return true;",
+			"note": "the first parenthesis closing anywhere counts as the wrap, so two separate pairs read as one"
+		},
+		{
+			"name": "M-UTIL-PARENS-UNCLOSED",
+			"type": "anyparse.util.Strings",
+			"method": "wrappedInParens",
+			"find": "\t}\n\treturn false;",
+			"replace": "\t}\n\treturn true;",
+			"note": "text whose opener never closes reads as wrapped"
+		},
+		{
+			"name": "M-UTIL-PARENS-OPENER",
+			"type": "anyparse.util.Strings",
+			"method": "wrappedInParens",
+			"find": " || fastCodeAt(text, 0) != '('.code",
+			"replace": "",
+			"note": "text that does not open with a parenthesis is read from its first inner pair"
+		},
+		{
+			"name": "M-UTIL-PARENS-STRIP-ALL",
+			"type": "anyparse.util.Strings",
+			"method": "stripOuterParens",
+			"find": "while (wrappedInParens(t))",
+			"replace": "if (wrappedInParens(t))",
+			"note": "only the outermost wrapping pair is stripped"
+		},
+		{
+			"name": "M-UTIL-PARENS-STRIP-TRIM",
+			"type": "anyparse.util.Strings",
+			"method": "stripOuterParens",
+			"find": ".trim()",
+			"replace": "",
+			"note": "white space inside a stripped pair is kept, so the pair beneath it is no longer found"
 		}
 	]
 }

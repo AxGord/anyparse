@@ -4,6 +4,7 @@ import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -166,7 +167,7 @@ final class CondBranchPath {
 	 */
 	private static function conditionText(source: String, directive: CondDirective): String {
 		final span: Null<Span> = directive.condition;
-		return span == null ? '' : CondDirectives.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));
+		return span == null ? '' : Strings.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));
 	}
 
 }

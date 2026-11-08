@@ -13,6 +13,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.LoopScan;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -645,21 +646,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** The comparison key of a bound's text: no whitespace at all, and no parentheses wrapping the whole. */
 	private static function normalized(text: String): String {
-		var t: String = ~/\s+/g.replace(text, '');
-		while (t.length >= 2 && t.charAt(0) == '(' && t.charAt(t.length - 1) == ')' && balanced(t.substring(1, t.length - 1)))
-			t = t.substring(1, t.length - 1);
-		return t;
-	}
-
-	/** Whether every parenthesis of `text` closes one it opened — so stripping a wrapping pair keeps the text whole. */
-	private static function balanced(text: String): Bool {
-		var depth: Int = 0;
-		for (i in 0...text.length) {
-			final c: String = text.charAt(i);
-			if (c == '(') depth++;
-			if (c == ')' && --depth < 0) return false;
-		}
-		return depth == 0;
+		return Strings.stripOuterParens(~/\s+/g.replace(text, ''));
 	}
 
 	/** Bundle the kinds this check reads, or null when one it cannot work without is unset (the check is then a no-op). */

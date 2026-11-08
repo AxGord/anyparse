@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Strings;
 
 using StringTools;
 
@@ -179,7 +180,7 @@ final class IfFalseDeadCode extends RuleBase {
 		final condition: Null<Span> = CondDirectives.conditionAt(source, from + '#if'.length);
 		if (condition == null) return false;
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
-		return CondDirectives.stripOuterParens(text) == literal;
+		return Strings.stripOuterParens(text) == literal;
 	}
 
 	/**

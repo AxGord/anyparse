@@ -404,24 +404,10 @@ final class PreferLocalFunction extends RuleBase {
 
 	/** `type` with every space dropped and any redundant outer parentheses peeled. */
 	private static function normalizedType(type: String): String {
-		var t: String = [
+		final t: String = [
 			for (k in 0...type.length) if (!SourceText.isSpace(type.fastCodeAt(k))) type.charAt(k)
 		].join('');
-		while (enclosedInParens(t)) t = t.substring(1, t.length - 1);
-		return t;
-	}
-
-	/** Whether `text` opens with `(` whose matching `)` is its last character. */
-	private static function enclosedInParens(text: String): Bool {
-		if (text.length < 2 || text.fastCodeAt(0) != '('.code || text.fastCodeAt(text.length - 1) != ')'.code) return false;
-		var depth: Int = 0;
-		for (k in 0...text.length) {
-			final c: Int = text.fastCodeAt(k);
-			if (c == '('.code) depth++;
-			if (c == ')'.code) depth--;
-			if (depth == 0 && k < text.length - 1) return false;
-		}
-		return true;
+		return Strings.stripOuterParens(t);
 	}
 
 	/**

@@ -388,4 +388,53 @@ final class StringsTest extends Test {
 		return Strings.closingBrace(text.length, k -> text.charCodeAt(k), open);
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-CLOSE-DEPTH')
+	public function testOnePairAroundEverythingIsWrapped(): Void {
+		Assert.isTrue(Strings.wrappedInParens('(a)'));
+		Assert.isTrue(Strings.wrappedInParens('()'));
+		Assert.isTrue(Strings.wrappedInParens('((a))'));
+		Assert.isTrue(Strings.wrappedInParens('(a(b)c)'));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-CLOSE-AT-END')
+	public function testTwoSeparatePairsAreNotOneWrap(): Void {
+		Assert.isFalse(Strings.wrappedInParens('(a)+(b)'));
+		Assert.isFalse(Strings.wrappedInParens('(a)(b)'));
+		Assert.isFalse(Strings.wrappedInParens('()()'));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-UNCLOSED')
+	public function testAnUnclosedOpenerIsNotWrapped(): Void {
+		Assert.isFalse(Strings.wrappedInParens('(()'));
+		Assert.isFalse(Strings.wrappedInParens('((a)'));
+		Assert.isFalse(Strings.wrappedInParens('('));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-OPENER')
+	public function testTextNotOpeningWithAParenthesisIsNotWrapped(): Void {
+		Assert.isFalse(Strings.wrappedInParens('a(b)'));
+		Assert.isFalse(Strings.wrappedInParens(')('));
+		Assert.isFalse(Strings.wrappedInParens('a'));
+		Assert.isFalse(Strings.wrappedInParens(''));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-STRIP-ALL')
+	public function testEveryWrappingPairIsStripped(): Void {
+		Assert.equals('a', Strings.stripOuterParens('((a))'));
+		Assert.equals('a', Strings.stripOuterParens('a'));
+		Assert.equals('(a)+(b)', Strings.stripOuterParens('(a)+(b)'));
+		Assert.equals('(a)+(b)', Strings.stripOuterParens('((a)+(b))'));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-PARENS-STRIP-TRIM')
+	public function testWhiteSpaceInsideAPairIsTrimmedAtEachStep(): Void {
+		Assert.equals('a', Strings.stripOuterParens('( (a) )'));
+	}
+
 }

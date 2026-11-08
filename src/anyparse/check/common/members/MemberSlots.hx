@@ -6,6 +6,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
+import anyparse.util.Strings;
 
 /**
  * One type-member paired with its canonical-order rank and its full source slot (leading doc +
@@ -301,7 +302,7 @@ final class MemberSlots {
 
 	/** Wrap `cond` in parentheses unless it is already a single balanced parenthesised group. */
 	private static function parenthesiseConjunct(cond: String): String {
-		return CondDirectives.isBalancedParenWrapped(cond) ? cond : '($cond)';
+		return Strings.wrappedInParens(cond) ? cond : '($cond)';
 	}
 
 	/**
