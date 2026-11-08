@@ -3,12 +3,12 @@ package anyparse.check;
 import anyparse.check.LintDocuments.DocumentMemo;
 import anyparse.check.LintDocuments.LintDocument;
 import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
-import anyparse.check.oracle.OracleRunMemo;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.RunLedger;
 import anyparse.query.format.LintFormat;
+import anyparse.util.Compare;
 import haxe.io.Path;
 
 using StringTools;
@@ -81,7 +81,7 @@ typedef OracleConfig = {
 	 * What the compiler already answered in the run this configuration belongs to — set by the lint command on the
 	 * configurations it prepares for ONE run, absent everywhere else, and then every compile goes to the compiler.
 	 */
-	var ?runs: OracleRunMemo;
+	var ?runs: OracleRunScope;
 
 	/**
 	 * Modules (`pkg.Type`) named on the command line beside the hxml, so a compile types a file no root of the build reaches
@@ -445,7 +445,7 @@ final class LintConfig {
 		final rule: Null<RuleConfig> = _rules[id];
 		if (rule == null) return [];
 		final keys: Array<String> = [for (key in rule.props.keys()) key];
-		keys.sort(Reflect.compare);
+		keys.sort(Compare.compareString);
 		return keys;
 	}
 

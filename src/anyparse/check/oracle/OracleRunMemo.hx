@@ -22,7 +22,7 @@ import anyparse.util.Compare;
  * (`docs/decisions.md`).
  */
 @:nullSafety(Strict)
-final class OracleRunMemo {
+final class OracleRunMemo implements OracleRunScope {
 
 	/**
 	 * Whether this run answers a baseline from the persisted report-mode cache when it can (`OracleCache`), so a
@@ -169,7 +169,7 @@ final class OracleRunMemo {
 	/** The memo the configurations of `oracles` carry, or null when none does — every configuration outside a lint run. */
 	public static function of(oracles: Array<OracleConfig>): Null<OracleRunMemo> {
 		for (oracle in oracles) {
-			final memo: Null<OracleRunMemo> = oracle.runs;
+			final memo: Null<OracleRunMemo> = Std.downcast(oracle.runs, OracleRunMemo);
 			if (memo != null) return memo;
 		}
 		return null;

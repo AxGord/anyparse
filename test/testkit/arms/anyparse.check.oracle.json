@@ -1011,6 +1011,14 @@
 			"find": "length--;",
 			"replace": "length = 0;",
 			"note": "only the whole dotted path is tried as a file, so an import of a member or a sub-type of a module the build does see is read as unreachable"
+		},
+		{
+			"name": "M-RUNMEMO-OF-LOSES-THE-MEMO",
+			"type": "anyparse.check.oracle.OracleRunMemo",
+			"method": "of",
+			"find": "Std.downcast(oracle.runs, OracleRunMemo)",
+			"replace": "null",
+			"note": "a configuration's run memo is never found again once it is typed by the check package's marker, so every compile of a lint run goes to the compiler"
 		}
 	]
 }

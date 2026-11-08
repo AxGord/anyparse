@@ -614,6 +614,19 @@ final class OracleRunMemoTest extends Test {
 		#end
 	}
 
+	/**
+	 * A configuration carries its run memo as the `OracleRunScope` the check package names, so `OracleRunMemo.of` has to
+	 * narrow it back: the memo `attach` hung off a configuration is the one `of` returns, and a configuration of no run has none.
+	 */
+	@:pin('control')
+	@:killer('M-RUNMEMO-OF-LOSES-THE-MEMO')
+	public function testTheMemoAConfigurationCarriesIsFoundAgain(): Void {
+		final memo: OracleRunMemo = new OracleRunMemo(false, () -> []);
+		final plain: OracleConfig = { hxml: 'build.hxml', dir: null, defines: [] };
+		Assert.isNull(OracleRunMemo.of([plain]), 'a configuration prepared for no run carries none');
+		Assert.equals(memo, OracleRunMemo.of(OracleRunMemo.attach([plain], memo)), 'the attached memo is the one found');
+	}
+
 	private static function errorsOf(outcome: OracleOutcome): String {
 		return switch outcome {
 			case Rejected(errors): errors;

@@ -148,7 +148,7 @@ final class CompilerNameProof implements NameProof {
 	private static function poolsOf(configs: Array<OracleConfig>): Array<OracleServerPool> {
 		final out: Array<OracleServerPool> = [];
 		for (config in configs) {
-			final pool: Null<OracleServerPool> = config.runs?.servers;
+			final pool: Null<OracleServerPool> = OracleRunMemo.of([config])?.servers;
 			if (pool != null && !out.contains(pool)) out.push(pool);
 		}
 		return out;
@@ -180,7 +180,7 @@ final class CompilerNameProof implements NameProof {
 		for (pool in poolsOf(configs)) {
 			// a run that verifies before its facts compiles freed the cores has not started its servers yet
 			pool.start(usable.configs.concat(usable.unknown));
-			final mine: Array<Int> = [for (c => config in configs) if (config.runs?.servers == pool) c];
+			final mine: Array<Int> = [for (c => config in configs) if (OracleRunMemo.of([config])?.servers == pool) c];
 			final replies: Array<Null<Array<Null<TypeReplyPosition>>>> = pool.positionsIn(
 				mine.map(c -> configs[c]), file, mine.map(c -> asks[c])
 			);
