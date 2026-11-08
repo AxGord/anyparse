@@ -127,9 +127,58 @@ class LexicalRegionsTest extends Test {
 		);
 	}
 
+	/**
+	 * An interpolating literal stays ONE outermost region, and carries its holes: each hole spans its delimiters and
+	 * holds what is written inside it, a literal there with holes of its own.
+	 */
+	@:pin('control')
+	@:killer('M-LEX-HOLES-CLAIMED-AT-OWN-DEPTH')
+	public function testAnInterpolatingLiteralCarriesItsHolesAndWhatIsWrittenInThem(): Void {
+		final source: String = "var s = 'a${\"x\"}b${/*c*/'${y}'}d';\nvar t = \"${z}\";";
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
+		Assert.equals(2, regions.length, dump(source, regions));
+		final holes: Array<LexHole> = regions[0].holes ?? [];
+		Assert.equals(2, holes.length);
+		if (holes.length != 2) return;
+		Assert.equals("${\"x\"}", source.substring(holes[0].from, holes[0].to));
+		Assert.equals('\"x\"', [for (r in holes[0].regions) source.substring(r.from, r.to)].join('|'));
+		Assert.equals("${/*c*/'${y}'}", source.substring(holes[1].from, holes[1].to));
+		Assert.equals("/*c*/|'${y}'", [for (r in holes[1].regions) source.substring(r.from, r.to)].join('|'));
+		final inner: Array<LexHole> = holes[1].regions[holes[1].regions.length - 1].holes ?? [];
+		Assert.equals("${y}", inner.map(h -> source.substring(h.from, h.to)).join('|'));
+		Assert.isNull(regions[1].holes, 'a double-quoted literal has no hole');
+	}
+
+	/**
+	 * An unterminated hole is abandoned whole: what the walk found inside it is never claimed by the next hole at that
+	 * depth, so a later literal's hole holds only what is written in it.
+	 */
+	@:pin('control')
+	@:killer('M-LEX-ABANDONED-HOLE-KEPT')
+	public function testAnAbandonedHoleLeavesNothingForTheNextHole(): Void {
+		final source: String = "var a = 'u ${ { ';\nvar b = '${x /* k */}';\n";
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
+		Assert.equals("'u ${ { '|'${x /* k */}'", regions.map(r -> source.substring(r.from, r.to)).join('|'));
+		if (regions.length != 2) return;
+		Assert.isNull(regions[0].holes);
+		final holes: Array<LexHole> = regions[1].holes ?? [];
+		Assert.equals("${x /* k */}", holes.map(h -> source.substring(h.from, h.to)).join('|'));
+		Assert.equals('/* k */', [for (h in holes) for (r in h.regions) source.substring(r.from, r.to)].join('|'));
+		for (region in regions) Assert.isTrue(nestsWithin(region), 'every hole within its literal: ${dump(source, regions)}');
+	}
+
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');
+	}
+
+	/** Whether every hole of `region` lies within it and every region of a hole within that hole, at every depth. */
+	private function nestsWithin(region: LexRegion): Bool {
+		for (hole in region.holes ?? []) {
+			if (hole.from < region.from || hole.to > region.to) return false;
+			for (inner in hole.regions) if (inner.from < hole.from || inner.to > hole.to || !nestsWithin(inner)) return false;
+		}
+		return true;
 	}
 
 }

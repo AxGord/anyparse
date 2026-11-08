@@ -16,10 +16,38 @@ enum abstract LexRegionKind(Int) {
 
 /** A lexically-scanned non-code region: `[from, to)` and its kind. */
 typedef LexRegion = {
+
 	final from: Int;
 	final to: Int;
 	final kind: LexRegionKind;
+
+	/**
+	 * The code holes of an interpolating literal, in source order; absent on every other region. The bytes
+	 * between the holes are the literal's text.
+	 */
+	@:optional final holes: Null<Array<LexHole>>;
+
 };
+
+/**
+ * A code hole of an interpolating literal: `[from, to)` spans the hole's delimiters too (`${` through `}`), and
+ * `regions` are the comments and literals written inside it, nested the same way.
+ */
+typedef LexHole = {
+	final from: Int;
+	final to: Int;
+	final regions: Array<LexRegion>;
+};
+
+/**
+ * A grammar's lexical walk: `onRegion(from, to, kind, depth)` for every region at every nesting depth and
+ * `onHole(from, to, depth)` for every code hole, each reported AFTER everything nested inside it (a hole of a
+ * depth-0 literal and the regions in it are at depth 1). A region or hole the walk ABANDONED (unterminated) is
+ * reported with `to == -1`, and everything reported inside it is void.
+ */
+typedef LexWalk = (
+	onRegion:(from:Int, to:Int, kind:LexRegionKind, depth:Int) -> Void, onHole:(from:Int, to:Int, depth:Int) -> Void
+) -> Void;
 
 /**
  * The grammar-agnostic half of the lexical-region model: the region TYPES above, and the two
@@ -129,6 +157,58 @@ final class LexicalRegions {
 			case LineComment, BlockComment: true;
 			case StringLit, RegexLit: false;
 		});
+	}
+
+	/**
+	 * The OUTERMOST regions `walk` reports, each interpolating literal carrying its holes and each hole the regions
+	 * written inside it: the one answer to "which hole and which literal does a nested region belong to". A walk
+	 * reports a region after everything nested in it, so the regions and holes still pending one level deeper
+	 * are exactly the ones it encloses, and an abandoned one voids them before the next can claim them.
+	 */
+	public static function assemble(walk: LexWalk): Array<LexRegion> {
+		final regionsAt: Array<Array<LexRegion>> = [];
+		final holesAt: Array<Array<LexHole>> = [];
+		walk((from, to, kind, depth) -> {
+			if (to < 0) {
+				drop(regionsAt, depth + 1);
+				drop(holesAt, depth + 1);
+				return;
+			}
+			final holes: Array<LexHole> = claim(holesAt, depth + 1);
+			final region: LexRegion = holes.length == 0 ? { from: from, to: to, kind: kind } : {
+				from: from,
+				to: to,
+				kind: kind,
+				holes: holes
+			};
+			pending(regionsAt, depth).push(region);
+		}, (from, to, depth) -> {
+			if (to < 0) {
+				drop(regionsAt, depth);
+				drop(holesAt, depth + 1);
+				return;
+			}
+			pending(holesAt, depth).push({ from: from, to: to, regions: claim(regionsAt, depth) });
+		});
+		return claim(regionsAt, 0);
+	}
+
+	/** The entries waiting at `depth`, the level created on first use. */
+	private static function pending<T>(levels: Array<Array<T>>, depth: Int): Array<T> {
+		while (levels.length <= depth) levels.push([]);
+		return levels[depth];
+	}
+
+	/** The entries waiting at `depth`, handed over and the level emptied. */
+	private static function claim<T>(levels: Array<Array<T>>, depth: Int): Array<T> {
+		final out: Array<T> = pending(levels, depth);
+		levels[depth] = [];
+		return out;
+	}
+
+	/** Every entry waiting at `depth` or deeper discarded: what an abandoned region or hole reported inside itself. */
+	private static function drop<T>(levels: Array<Array<T>>, depth: Int): Void {
+		for (d in depth ... levels.length) levels[d] = [];
 	}
 
 }

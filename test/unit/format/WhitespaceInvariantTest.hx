@@ -168,4 +168,23 @@ class WhitespaceInvariantTest extends Test {
 		Assert.isNull(WhitespaceInvariant.firstDivergence('var s = "a  b,]";\n', 'var s = "a b]";\n', bare));
 	}
 
+	/**
+	 * The TEXT of an interpolating string is a literal: a `,]` there is compared, not exempted, and so is its
+	 * whitespace, while the code of a hole keeps the whitespace-only rule.
+	 */
+	@:pin('control')
+	@:killer('M-VERIFY-INTERP-HOLES-OFF')
+	public function testTheTextOfAnInterpolatingStringIsComparedByteForByte(): Void {
+		Assert.notNull(WhitespaceInvariant.firstDivergence("var s = '${a},]';\n", "var s = '${a}]';\n", HAXE));
+		Assert.notNull(WhitespaceInvariant.firstDivergence("var s = '${a}  b';\n", "var s = '${a} b';\n", HAXE));
+		Assert.isNull(WhitespaceInvariant.firstDivergence("var s = '${ f(a,) }  b';\n", "var s = '${f(a)}  b';\n", HAXE));
+	}
+
+	/** A comment written inside a hole is a comment zone, so a trailing comma dropped before it holds. */
+	@:pin('control')
+	@:killer('M-VERIFY-INTERP-HOLES-OFF')
+	public function testACommentInsideAHoleIsACommentZone(): Void {
+		Assert.isNull(WhitespaceInvariant.firstDivergence("var s = '${f(a, /* c */)}';\n", "var s = '${f(a /* c */)}';\n", HAXE));
+	}
+
 }

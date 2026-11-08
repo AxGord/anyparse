@@ -87,17 +87,14 @@ class LexicalCodegen {
 
 	private static function scanField(specs: Array<LexRegionSpec>): Field {
 		final origins: String = [for (spec in specs) spec.origin].join(', ');
-		final body: Expr = macro {
-			final out: Array<anyparse.query.LexicalRegions.LexRegion> = [];
-			$i{CODE_FN}(source, 0, 0, (from: Int, to: Int, kind: anyparse.query.LexicalRegions.LexRegionKind, depth: Int) -> {
-				if (depth == 0) out.push({ from: from, to: to, kind: kind });
-			});
-			return out;
-		};
+		final body: Expr = macro return anyparse.query.LexicalRegions.assemble((onRegion, onHole) ->
+			$i{CODE_FN}(source, 0, 0, onRegion, onHole)
+		);
 		return {
 			name: 'scan',
 			doc: ' Every OUTERMOST non-code region of `source` - comment, string literal, regex literal - as\n'
-				+ ' `[from, to)` byte offsets in source order.\n\n Generated from the declarations of: $origins.',
+				+ ' `[from, to)` byte offsets in source order; an interpolating literal carries its code holes, and\n'
+				+ ' each hole the regions written inside it.\n\n Generated from the declarations of: $origins.',
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [{ name: 'source', type: macro : String }],
@@ -112,16 +109,16 @@ class LexicalCodegen {
 		final test: Expr = commentKindTest(specs);
 		final body: Expr = macro {
 			$i{CODE_FN}(src, 0, 0, (from: Int, to: Int, kind: anyparse.query.LexicalRegions.LexRegionKind, depth: Int) -> {
-				if ($test) onComment(from, to);
-			});
+				if (to >= 0 && ($test)) onComment(from, to);
+			}, (from: Int, to: Int, depth: Int) -> {});
 		};
 		return {
 			name: 'scanComments',
 			doc: ' Every comment of `src` as a `[start, end)` span, in source order, with the grammar\'s\n'
 				+ ' literals skipped so an opener inside one never counts - the `CommentScan` the writer\'s\n comment-loss guard is '
 				+ 'handed.\n\n DELIBERATELY NOT `scan` FILTERED TO ITS COMMENT REGIONS: this reports a comment written\n inside an '
-				+ 'interpolation hole, which `scan` cannot, because its flat region model says the\n literal rather than the hole. Both '
-				+ 'answers are right for their reader, and here they are\n two filters over ONE generated walk rather than two lexers.',
+				+ 'interpolation hole flat, where `scan` nests it under the hole of its literal. Both\n answers are right for their '
+				+ 'reader, and here they are two readings of ONE generated walk rather than\n two lexers.',
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
@@ -262,7 +259,8 @@ class LexicalCodegen {
 					{ name: 'source', type: macro : String },
 					{ name: 'from', type: macro : Int },
 					{ name: 'depth', type: macro : Int },
-					{ name: 'emit', type: TFunction([macro : Int, macro : Int, kindCT(), macro : Int], macro : Void) }
+					{ name: 'emit', type: TFunction([macro : Int, macro : Int, kindCT(), macro : Int], macro : Void) },
+					{ name: 'hole', type: TFunction([macro : Int, macro : Int, macro : Int], macro : Void) }
 				],
 				ret: ret,
 				expr: body
@@ -278,7 +276,7 @@ class LexicalCodegen {
 		return [
 			for (k in 0...specs.length) {
 				final test: Expr = literalTest(specs[k].open);
-				final call: Expr = macro $i{regionFn(k)}(source, i, depth, emit);
+				final call: Expr = macro $i{regionFn(k)}(source, i, depth, emit, hole);
 				final kind: Expr = kindValue(specs[k].kind);
 				macro if ($test) {
 					final end: Int = $call;
@@ -287,6 +285,7 @@ class LexicalCodegen {
 						i = end;
 						continue;
 					}
+					emit(i, -1, $kind, depth);
 				};
 			}
 		];
@@ -302,13 +301,15 @@ class LexicalCodegen {
 				};
 			case Hole(open, _, _, _):
 				final test: Expr = literalTest(open);
-				final call: Expr = macro $i{holeFn(k, h)}(source, i + $v{open.length}, depth + 1, emit);
+				final call: Expr = macro $i{holeFn(k, h)}(source, i + $v{open.length}, depth + 1, emit, hole);
 				macro if ($test) {
 					final end: Int = $call;
 					if (end >= 0) {
+						hole(i, end, depth + 1);
 						i = end;
 						continue;
 					}
+					hole(i, -1, depth + 1);
 					i++;
 					continue;
 				};

@@ -36,8 +36,8 @@ using StringTools;
  * whitespace included, and a `,]` inside one is never the exempt token. The
  * regions come from the grammar's lexical scan, which shares nothing with the
  * parse tree or the writer under audit. Text the scan leaves out of its
- * literals (no literal regions, an unscannable source, a string holding code
- * the writer re-lays) keeps the whitespace-only rule.
+ * literals (no literal regions, an unscannable source, the code holes of an
+ * interpolating string, which the writer re-lays) keeps the whitespace-only rule.
  *
  * Pure and grammar-agnostic: whitespace is not a property of any one language,
  * and what a comment or a literal is arrives as the caller's `InertScan`.
@@ -155,6 +155,7 @@ private typedef Stripped = {
  *
  * `scan(source, onRegion)` reports every comment, string literal and regex literal of `source` as a
  * `[start, end)` byte span in source order, with `literal` true for a string or regex and false for a comment.
+ * A literal holding code reports only its text around that code, and the comments and literals inside the code.
  * Source the grammar cannot scan reports nothing, so all of it is code.
  */
 typedef InertScan = (source:String, onRegion:(start:Int, end:Int, literal:Bool) -> Void) -> Void;

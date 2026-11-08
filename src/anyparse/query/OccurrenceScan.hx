@@ -406,7 +406,7 @@ final class OccurrenceScan {
 
 	/**
 	 * Whether `region` is inert to a reference scan: a comment, a regex literal, or a string literal that cannot
-	 * interpolate. The one place that classification lives; `inertRegions` and `inertScan` both ask it.
+	 * interpolate. The one place that classification lives for a reference scan, which masks a literal whole.
 	 */
 	public static function isInert(source: String, region: LexRegion): Bool {
 		return switch region.kind {
@@ -417,16 +417,26 @@ final class OccurrenceScan {
 
 	/**
 	 * The grammar's inert regions as the `InertScan` that `WhitespaceInvariant` reads: a comment is reported apart from a
-	 * string or regex literal. A string that interpolates is not inert (`isInert`) and so stays code there: the writer re-lays
-	 * the code of its holes, and the lexical regions do not yet mark where a hole ends.
+	 * string or regex literal. A literal with code holes is reported as its text around them, and what is written
+	 * inside a hole is reported in its turn: the writer re-lays the code of a hole, never the text between.
 	 */
 	public static function inertScan(plugin: GrammarPlugin): InertScan {
-		return (source, onRegion) -> for (region in plugin.lexicalRegions(source)) if (isInert(source, region)) onRegion(
-			region.from, region.to, switch region.kind {
-				case LineComment, BlockComment: false;
-				case StringLit, RegexLit: true;
-			}
-		);
+		return (source, onRegion) -> for (region in plugin.lexicalRegions(source)) reportInert(region, onRegion);
+	}
+
+	/** `region` to an `InertScan` reader in source order: its text spans, then each hole's own regions between them. */
+	private static function reportInert(region: LexRegion, onRegion: (start:Int, end:Int, literal:Bool) -> Void): Void {
+		final literal: Bool = switch region.kind {
+			case LineComment, BlockComment: false;
+			case StringLit, RegexLit: true;
+		};
+		var at: Int = region.from;
+		for (hole in region.holes ?? []) {
+			onRegion(at, hole.from, literal);
+			for (inner in hole.regions) reportInert(inner, onRegion);
+			at = hole.to;
+		}
+		onRegion(at, region.to, literal);
 	}
 
 	/**

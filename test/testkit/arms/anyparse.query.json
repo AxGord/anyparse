@@ -15728,6 +15728,30 @@
 			"method": "stripComments",
 			"force": "text",
 			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
+		},
+		{
+			"name": "M-LEX-HOLES-CLAIMED-AT-OWN-DEPTH",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "assemble",
+			"find": "claim(holesAt, depth + 1)",
+			"replace": "claim(holesAt, depth)",
+			"note": "a region claims the holes pending at its own depth instead of one level deeper, so no interpolating literal carries its holes and every hole boundary is lost again"
+		},
+		{
+			"name": "M-VERIFY-INTERP-HOLES-OFF",
+			"type": "anyparse.query.OccurrenceScan",
+			"method": "inertScan",
+			"find": "reportInert(region, onRegion);",
+			"replace": "if (region.holes == null) reportInert(region, onRegion);",
+			"note": "a literal with holes is left out of the inert scan again, so its text is code (a `,]` there is exempted) and a comment in a hole is code"
+		},
+		{
+			"name": "M-LEX-ABANDONED-HOLE-KEPT",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "assemble",
+			"find": "drop(regionsAt, depth);",
+			"replace": "",
+			"note": "an abandoned hole leaves the regions it found pending, so the next hole at that depth claims them: a later literal hole holds text and comments written outside it"
 		}
 	]
 }
