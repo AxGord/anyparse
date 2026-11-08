@@ -9,7 +9,8 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
- * The branch-aware member-run fold: how a member-scanning check reads a container's children
+ * The branch-aware member-run fold: how a member-scanning check reads
+ * members declared under conditional compilation — a container's children
  * when one of them is a member-position conditional-compilation region.
  *
  * A `#if … #else … #end` written in MEMBER position is ONE node

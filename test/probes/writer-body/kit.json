@@ -26,7 +26,9 @@
 		"trailing-flat/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tvar a = [1, 2,];\n\t\tvar n = [[1,], [2, 3,],];\n\t\tvar m = [1 => 2, 3 => 4,];\n\t\tvar o = {a: 1, b: 2,};\n\t\tg(1, 2,);\n\t\tvar c = new B(1, 2,);\n\t}\n}\n",
 		"trailing-flat/hxformat.json": "{}",
 		"trailing-keep/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"maxLineLength\": 60, \"callParameter\": {\"defaultWrap\": \"fillLine\", \"rules\": []}}}",
-		"trailing-keep/Probe.hx": "class A {\n\tfunction f() {\n\t\tf(a, b, {x: 1, y: 2},);\n\t\tf(a, b, [1, 2, 3],);\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c,);\n\t\tf(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbb, {xxxxxxxxxxxxxxx: 1, yyyyyyyyyyyyyyyyyy: 2},);\n\t\tfoo.bar(a, {x: 1},).baz();\n\t\tfoo.bar(a, b,).baz(c,);\n\t\tfoo.bar(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccc, ddddddddd,).baz();\n\t\tfoo.bar(function() {\n\t\t\treturn 1;\n\t\t}, b,).baz();\n\t\tg(function() {\n\t\t\treturn 1;\n\t\t}, b,);\n\t\tg(a,);\n\t\tfoo.bar(a,).baz();\n\t}\n}\n"
+		"trailing-keep/Probe.hx": "class A {\n\tfunction f() {\n\t\tf(a, b, {x: 1, y: 2},);\n\t\tf(a, b, [1, 2, 3],);\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c,);\n\t\tf(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbb, {xxxxxxxxxxxxxxx: 1, yyyyyyyyyyyyyyyyyy: 2},);\n\t\tfoo.bar(a, {x: 1},).baz();\n\t\tfoo.bar(a, b,).baz(c,);\n\t\tfoo.bar(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccc, ddddddddd,).baz();\n\t\tfoo.bar(function() {\n\t\t\treturn 1;\n\t\t}, b,).baz();\n\t\tg(function() {\n\t\t\treturn 1;\n\t\t}, b,);\n\t\tg(a,);\n\t\tfoo.bar(a,).baz();\n\t}\n}\n",
+		"cond-splice-quoted/C2.hx": "class C {\n\tfunction f() {\n\t\tif (x) a() #if (v == \")\") else b(); #end\n\t\treturn 1;\n\t}\n}\n",
+		"cond-splice-stray-close/C11.hx": "class C {\n\tfunction f() {\n\t\tif (x) a() #if a) else b() #end\n\t\treturn 1;\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -279,6 +281,36 @@
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
 				"commentsKept": true
+			}
+		},
+		{
+			"name": "cond-splice-quoted/C2.hx",
+			"note": "an else-led #if splice whose condition holds a quoted paren: the generated splice predicate skips the operand through CondDirectives.skipConditionAtom (quote-aware), so the fragment takes the raw-capture fallback instead of unexpected input",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cond-splice-quoted/C2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "5cd82dd609263a5f",
+				"err": "e125cc24f6ff0df8",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "cond-splice-stray-close/C11.hx",
+			"note": "a stray close paren in the #if operand runs the operand to the end, so the splice is not else-led and fmt refuses it (exit 1)",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cond-splice-stray-close/C11.hx"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "01118c41144242e9",
+				"files": "e3b0c44298fc1c14"
 			}
 		}
 	]

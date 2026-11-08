@@ -103,6 +103,20 @@ final class CondDirectivesTest extends Test {
 		Assert.same([], conditions('#if (sys\nclass C {}\n#end'));
 	}
 
+	/** The leading atom of a spliced fragment ends at whitespace outside parentheses; the whitespace after it is skipped too. */
+	@:pin('control')
+	@:killer('M-COND-ATOM-ENDS-AT-WS')
+	public function testTheConditionAtomEndsAtWhitespaceOutsideParentheses(): Void {
+		final fragment: String = '  !(a || b) else x';
+		Assert.equals(fragment.indexOf('else'), CondDirectives.skipConditionAtom(fragment, 0));
+		final quoted: String = "(a == ')' && b)\n\telse x";
+		Assert.equals(quoted.indexOf('else'), CondDirectives.skipConditionAtom(quoted, 0));
+		final unbalanced: String = '(a b else';
+		Assert.equals(unbalanced.length, CondDirectives.skipConditionAtom(unbalanced, 0));
+		final strayClose: String = 'a) else';
+		Assert.equals(strayClose.length, CondDirectives.skipConditionAtom(strayClose, 0));
+	}
+
 	/** The condition text of every directive `source` carries one for, in source order. */
 	private static function conditions(source: String): Array<String> {
 		final out: Array<String> = [];

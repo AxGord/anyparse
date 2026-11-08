@@ -15784,6 +15784,14 @@
 			"find": "for (hole in region.holes ?? []) eachComment(hole.regions, onComment);",
 			"replace": "",
 			"note": "a comment written inside an interpolation hole is not reported, so the comment-loss guard never sees it and a writer that drops it passes"
+		},
+		{
+			"name": "M-COND-ATOM-ENDS-AT-WS",
+			"type": "anyparse.query.CondDirectives",
+			"method": "skipConditionAtom",
+			"find": "\t\t\tif (c == ' '.code || c == '\\t'.code || isLineBreak(c)) break;\n",
+			"replace": "",
+			"note": "the atom no longer stops at whitespace, so the else keyword after a condition is swallowed"
 		}
 	]
 }

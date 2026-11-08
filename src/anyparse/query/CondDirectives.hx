@@ -259,6 +259,29 @@ final class CondDirectives {
 		return end > start ? new Span(start, end) : null;
 	}
 
+	/**
+	 * Where the leading `#if` operand of a spliced fragment ends: skips leading whitespace, one operand
+	 * delimited by whitespace outside parentheses (a parenthesised run is skipped by `scanParens`,
+	 * an unbalanced one, like a stray `)`, runs to the end), and the whitespace after it.
+	 */
+	public static function skipConditionAtom(source: String, at: Int): Int {
+		final n: Int = source.length;
+		var i: Int = skipBlank(source, at);
+		while (i < n) {
+			final c: Int = source.fastCodeAt(i);
+			if (c == ' '.code || c == '\t'.code || isLineBreak(c)) break;
+			if (c == ')'.code) return n;
+			if (c == '('.code) {
+				final close: Int = scanParens(source, i);
+				if (close == i) return n;
+				i = close;
+				continue;
+			}
+			i++;
+		}
+		return skipBlank(source, i);
+	}
+
 	/** Whether `c` opens a string literal. */
 	private static inline function isQuote(c: Int): Bool {
 		return c == '"'.code || c == '\''.code;

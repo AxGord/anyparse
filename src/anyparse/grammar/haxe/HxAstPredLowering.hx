@@ -671,22 +671,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function condSpliceTailElseLedField(): Field {
 		final verdict: Expr = condSpliceElseVerdictExpr();
 		final body: Expr = macro {
-			inline function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 			final n: Int = raw.length;
-			var i: Int = 0;
-			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
-			var depth: Int = 0;
-			while (i < n) {
-				final c: Int = StringTools.fastCodeAt(raw, i);
-				if (c == '('.code)
-					depth++;
-				else if (c == ')'.code)
-					depth--;
-				else if (depth == 0 && isWs(c))
-					break;
-				i++;
-			}
-			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+			final i: Int = anyparse.query.CondDirectives.skipConditionAtom(raw, 0);
 			$verdict;
 		};
 		return predField(
