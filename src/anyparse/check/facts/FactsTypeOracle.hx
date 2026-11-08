@@ -2,6 +2,7 @@ package anyparse.check.facts;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
+import anyparse.check.FactsOracle.InheritedMember;
 import anyparse.check.facts.FactsTypeSpelling.TypeScope;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
@@ -39,7 +40,7 @@ using StringTools;
  * holding it in the file as it is now (`FactsDecline.Elsewhere`).
  */
 @:nullSafety(Strict)
-final class FactsTypeOracle implements TypeOracle {
+final class FactsTypeOracle implements FactsOracle {
 
 	/** The nullable wrapper's own name: never the type of a value `typeIdAt` names. */
 	private static inline final NULL_TYPE: String = 'Null';
@@ -285,6 +286,13 @@ final class FactsTypeOracle implements TypeOracle {
 		return Undeclared;
 	}
 
+	/** Whether every configuration gave `expr` one type and declared it a class, extern in none. */
+	public function compiledClassAt(file: String, expr: Span): Bool {
+		final id: Null<String> = typeIdAt(file, expr, false);
+		final declared: Null<TypeFact> = id == null ? null : facts.type(id);
+		return declared != null && declared.alike && declared.kind == FactKinds.CLASS && !declared.isExtern;
+	}
+
 	/**
 	 * The type the facts of `site` give the expression at `at`, held in the member and type `here` — with `flows`, also
 	 * the type a value flowing from that very range had (`expressionType`), else only the expression's own (`valueType`).
@@ -449,25 +457,13 @@ final class FactsTypeOracle implements TypeOracle {
 	}
 
 	/**
-	 * The compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`), when every configuration contributed
-	 * to them: a configuration missing from the table could type a declaration differently, and agreement is what a facts
-	 * answer rests on. Null otherwise, or when the run reads none.
-	 */
-	public static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
-		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
-		return facts == null || !facts.complete() ? null : facts;
-	}
-
-	/**
 	 * The oracle a check or a fix of `file`, whose text is `source` now, asks over the run's facts (`runFacts`) — the door a
 	 * structural rule reads the compiler's facts through — placing a rewritten file through the run's edit journal; null
 	 * when the run has no such facts. It has no fallback: a file whose compiled text is gone declines.
 	 */
 	public static function forFix(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
 		final facts: Null<CompilerFacts> = runFacts(plugin);
-		if (facts == null) return null;
-		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
-		return new FactsTypeOracle(facts, f -> f == file ? source : null, journal, plugin);
+		return facts == null ? null : new FactsTypeOracle(facts, f -> f == file ? source : null, journalOf(plugin), plugin);
 	}
 
 	/**
@@ -478,8 +474,17 @@ final class FactsTypeOracle implements TypeOracle {
 	 * that will fix it.
 	 */
 	public static function forFixRun(plugin: GrammarPlugin, file: String, source: String): Null<FactsTypeOracle> {
-		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
-		return journal == null ? null : forFix(plugin, file, source);
+		return journalOf(plugin) == null ? null : forFix(plugin, file, source);
+	}
+
+	/** The run's facts as the oracle over `files`, each read as it is now; `fallback` answers for a file whose compiled text is gone. */
+	public static function forFiles(
+		plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
+	): Null<FactsTypeOracle> {
+		final facts: Null<CompilerFacts> = runFacts(plugin);
+		if (facts == null) return null;
+		final current: Map<String, String> = [for (entry in files) entry.file => entry.source];
+		return new FactsTypeOracle(facts, file -> current[file], journalOf(plugin), plugin, fallback);
 	}
 
 	/** The token of `name` ending at `nameEnd`. */
@@ -490,6 +495,16 @@ final class FactsTypeOracle implements TypeOracle {
 	/** Whether `inner` lies within `outer`. */
 	private static inline function within(inner: Span, outer: Span): Bool {
 		return outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/**
+	 * The compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`), when every configuration contributed
+	 * to them: a configuration missing from the table could type a declaration differently, and agreement is what a facts
+	 * answer rests on. Null otherwise, or when the run reads none.
+	 */
+	private static function runFacts(plugin: GrammarPlugin): Null<CompilerFacts> {
+		final facts: Null<CompilerFacts> = plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null;
+		return facts == null || !facts.complete() ? null : facts;
 	}
 
 	/** The span of the parentheses directly around `at` in `source`, or null. */
@@ -560,6 +575,11 @@ final class FactsTypeOracle implements TypeOracle {
 		return member;
 	}
 
+	/** The edits the run behind `plugin` recorded applying since the compile, null when it records none. */
+	private static function journalOf(plugin: GrammarPlugin): Null<EditJournal> {
+		return plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
+	}
+
 }
 
 /** Why the facts oracle names no type (`OracleType.Declined`): the reasons it gives of its own, besides a disagreement it spells out. */
@@ -602,21 +622,4 @@ private typedef Home = {
 	final member: Null<String>;
 	final type: Null<String>;
 	final span: Null<Span>;
-}
-
-/** What the builds typed of a type's supertypes about a member name (`FactsTypeOracle.inheritedMember`). */
-enum InheritedMember {
-
-	/** No build typed the type where it is declared, or one of its supertypes. */
-	Untyped;
-
-	/** The supertype `supertype` declares a member of the name in some build. */
-	Declared(supertype: String);
-
-	/** The supertype `supertype` carries `@:autoBuild`: its macro builds the type as its own `@:build`. */
-	AutoBuilt(supertype: String);
-
-	/** No supertype declares the name, and none is `@:autoBuild`. */
-	Undeclared;
-
 }

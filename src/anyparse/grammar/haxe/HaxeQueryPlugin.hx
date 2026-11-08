@@ -1,6 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.check.Check.TypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.TypedFactsRun;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerNameProof;
@@ -834,6 +837,20 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
 		return ReachBuildsCache.load(oracles);
+	}
+
+	public function factsForFix(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle> {
+		return FactsTypeOracle.forFix(grammar, file, source);
+	}
+
+	public function factsForFixRun(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle> {
+		return FactsTypeOracle.forFixRun(grammar, file, source);
+	}
+
+	public function factsForFiles(
+		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
+	): Null<FactsOracle> {
+		return FactsTypeOracle.forFiles(grammar, files, fallback);
 	}
 
 	/**

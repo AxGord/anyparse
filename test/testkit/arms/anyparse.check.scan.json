@@ -302,7 +302,7 @@
 			"name": "M-FOLD-FACTS-OPERAND",
 			"type": "anyparse.check.scan.OperatorSelection",
 			"method": "factsProof",
-			"find": "oracle = FactsTypeOracle.forFixRun(_plugin, file, source);",
+			"find": "oracle = OracleProviders.of(_plugin).factsForFixRun(_plugin, file, source);",
 			"replace": "oracle = null;",
 			"note": "an operand the binding leaves unproven is never asked of the compiler's facts, so a construct only they type stays report-only (fold) or unreported (the negation family)"
 		},

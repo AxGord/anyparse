@@ -90,14 +90,13 @@
 				"anyparse.query.CachingGrammarPlugin",
 				"anyparse.query.SymbolIndexHost",
 				"anyparse.query.cli.command.LintOracleRun",
-				"anyparse.query.cli.command.LintFixVerify",
 				"anyparse.query.cli.command.LintCommand",
 				"anyparse.check.facts.TypedFactsRun",
 				"anyparse.grammar.haxe.HaxeQueryPlugin",
 				"anyparse.query.OracleProviders",
 				"anyparse.query.OracleProvider"
 			],
-			"why": "the compiler's facts are produced by TypedFactsProbe for the run host and read through two doors: FactsView (the facts against the project, the reach analyses) and FactsTypeOracle (the facts placed in a file's text now, the TypeOracle a structural rule asks); the other owners are parts of the facts layer a door builds or reads through, answering from the facts alone. A rule or an analysis naming CompilerFacts grows another facts reader"
+			"why": "the compiler's facts are produced by TypedFactsProbe for the run host and read through two doors: FactsView (the facts against the project, the reach analyses) and FactsTypeOracle (the facts placed in a file's text now, reached by a rule as FactsOracle through OracleProvider); the other owners are parts of the facts layer a door builds or reads through, answering from the facts alone. A rule or an analysis naming CompilerFacts grows another facts reader"
 		},
 		{
 			"types": [
@@ -169,6 +168,19 @@
 				"anyparse.query.graph.ImportGraph"
 			],
 			"why": "the tables of what a file's import statements say: the name layer reads them to answer what a name denotes, the import graph to draw the statements themselves; a rule or an op reading them decides a name's meaning a second time"
+		},
+		{
+			"types": [
+				"anyparse.check.facts.FactsTypeOracle"
+			],
+			"owners": [
+				"anyparse.check.haxe.expressions.FactsBindings",
+				"anyparse.check.haxe.expressions.PreferStaticExtension",
+				"anyparse.check.haxe.expressions.StaticExtensionFacts",
+				"anyparse.grammar.haxe.HaxeQueryPlugin",
+				"dev.TyperConformance"
+			],
+			"why": "the Haxe build of the compiler facts: a generic rule, gate or fix phase asks a FactsOracle through OracleProvider, and only the Haxe side of the checks names the class behind it"
 		}
 	],
 	"move": {

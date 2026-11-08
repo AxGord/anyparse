@@ -1,6 +1,8 @@
 package anyparse.query;
 
 import anyparse.check.Check.NameSite;
+import anyparse.check.Check.TypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.OracleProvider.CompiledSet;
 import anyparse.query.OracleProvider.DisplayTypeOracle;
@@ -186,6 +188,20 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	}
 
 	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		return null;
+	}
+
+	public function factsForFix(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle> {
+		return null;
+	}
+
+	public function factsForFixRun(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle> {
+		return null;
+	}
+
+	public function factsForFiles(
+		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
+	): Null<FactsOracle> {
 		return null;
 	}
 

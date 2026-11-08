@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.Check.NameOracle;
 import anyparse.check.Check.TypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -107,6 +108,20 @@ interface OracleProvider {
 
 	/** The builds an earlier run stored for exactly the input `oracles` read now, or null when none is. */
 	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
+
+	/** The facts of the run behind `grammar` as a fix of `file`, read as `source`, asks them; null when it holds no complete facts. */
+	public function factsForFix(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
+
+	/** `factsForFix` when the facts are the second proof of a fix, read only where a `--fix` run compiles them anyway. */
+	public function factsForFixRun(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
+
+	/**
+	 * The compiler facts of the run behind `grammar` over `files`, each read as it is now, or null when the run holds no
+	 * complete facts; `fallback` answers for a file whose compiled text is gone.
+	 */
+	public function factsForFiles(
+		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
+	): Null<FactsOracle>;
 
 }
 

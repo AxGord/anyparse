@@ -1,12 +1,11 @@
 package anyparse.check.common.literals;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.check.scan.OperandBinder;
-import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.FactKinds;
 import anyparse.query.IndexScope;
+import anyparse.query.OracleProviders;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -141,7 +140,9 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		if (seams == null) return [];
 		final scope: SymbolIndex = index ?? IndexScope.over([{ file: '', source: source }], plugin);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
-		final context: Null<Ctx> = contextFor(plugin, file, source, seams, scope, FactsTypeOracle.forFix(plugin, file, source));
+		final context: Null<Ctx> = contextFor(
+			plugin, file, source, seams, scope, OracleProviders.of(plugin).factsForFix(plugin, file, source)
+		);
 		if (context == null) return [];
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -164,7 +165,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 	 * null proof resolves written types against the run's resolution scope when there is one.
 	 */
 	private static function contextFor(
-		plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex, facts: Null<FactsTypeOracle>
+		plugin: GrammarPlugin, file: String, source: String, seams: Seams, index: SymbolIndex, facts: Null<FactsOracle>
 	): Null<Ctx> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
@@ -320,11 +321,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 	 * nullable type proves nothing: the non-null proof is the resolver's, never the facts'.
 	 */
 	private static function compiledClass(recvSpan: Span, ctx: Ctx): Bool {
-		final facts: Null<FactsTypeOracle> = ctx.facts;
-		final id: Null<String> = facts?.typeIdAt(ctx.file, recvSpan, false);
-		if (facts == null || id == null) return false;
-		final declared: Null<TypeFact> = facts.facts.type(id);
-		return declared != null && declared.alike && declared.kind == FactKinds.CLASS && !declared.isExtern;
+		return ctx.facts?.compiledClassAt(ctx.file, recvSpan) == true;
 	}
 
 	/** The human-facing half of a finding's message — why this position already stringifies. */
@@ -631,7 +628,7 @@ private typedef Ctx = {
 	final file: String;
 
 	/** The compiler's facts, asked by `fix` for a receiver type the resolution scope cannot place; null in `run`. */
-	final facts: Null<FactsTypeOracle>;
+	final facts: Null<FactsOracle>;
 
 };
 

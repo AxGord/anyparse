@@ -2,7 +2,7 @@ package anyparse.check.common.unused;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FrameworkAware;
-import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.IndexScope;
@@ -13,6 +13,7 @@ import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.OracleProviders;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.ShapeVocab;
@@ -440,7 +441,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		plugin: GrammarPlugin, file: String, source: String, owner: Null<String>, name: Null<String>, scopeIndex: Null<SymbolIndex>
 	): Null<String> {
 		if (owner == null || name == null) return DECLINE_ABSTRACT_IMPL;
-		final oracle: Null<FactsTypeOracle> = FactsTypeOracle.forFix(plugin, file, source);
+		final oracle: Null<FactsOracle> = OracleProviders.of(plugin).factsForFix(plugin, file, source);
 		final facts: InheritedMember = oracle == null ? Untyped : oracle.inheritedMember(file, owner, name);
 		return switch facts {
 			case Undeclared: null;

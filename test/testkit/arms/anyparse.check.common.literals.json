@@ -58,22 +58,6 @@
 			"note": "a receiver the resolution scope does not declare keeps its `.toString()` whatever the compiler's facts say"
 		},
 		{
-			"name": "M-TOSTRING-FACTS-EXTERN",
-			"type": "anyparse.check.common.literals.RedundantToString",
-			"method": "compiledClass",
-			"find": "&& declared.kind == FactKinds.CLASS && !declared.isExtern;",
-			"replace": "&& declared.kind == FactKinds.CLASS;",
-			"note": "an extern class's `.toString()` is dropped, though the string coercion may call the native one"
-		},
-		{
-			"name": "M-FACTS-ALIKE-TOSTRING",
-			"type": "anyparse.check.common.literals.RedundantToString",
-			"method": "compiledClass",
-			"find": "declared != null && declared.alike && declared.kind == FactKinds.CLASS",
-			"replace": "declared != null && declared.kind == FactKinds.CLASS",
-			"note": "a class extern in one configuration and not in another is proven by the first one's record"
-		},
-		{
 			"name": "M-TOSTRING-CALL-BY-NAME",
 			"type": "anyparse.check.common.literals.RedundantToString",
 			"method": "callReceiver",

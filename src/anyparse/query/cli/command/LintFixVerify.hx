@@ -4,14 +4,10 @@ import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
-import anyparse.check.facts.FactsTypeOracle;
 import anyparse.core.EnvFlag;
-import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.Cli.RuleFixOutcome;
-import anyparse.query.CompilerFacts;
-import anyparse.query.EditJournal;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.ParseGate;
@@ -672,11 +668,8 @@ final class LintFixVerify {
 	private static function assistedOracle(
 		plugin: GrammarPlugin, display: DisplayHandle, files: Array<{ file: String, source: String }>
 	): Null<TypeOracle> {
-		final facts: Null<CompilerFacts> = FactsTypeOracle.runFacts(plugin);
-		if (facts == null) return displayOf(display);
-		final current: Map<String, String> = [for (entry in files) entry.file => entry.source];
-		final journal: Null<EditJournal> = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin).editJournal : null;
-		return new FactsTypeOracle(facts, file -> current[file], journal, plugin, displayOf.bind(display));
+		final facts: Null<TypeOracle> = OracleProviders.of(plugin).factsForFiles(plugin, files, displayOf.bind(display));
+		return facts ?? displayOf(display);
 	}
 
 	/** The display server of `handle`, started on the first call (`startDisplay`); null when none would start. */

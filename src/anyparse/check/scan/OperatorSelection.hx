@@ -1,8 +1,9 @@
 package anyparse.check.scan;
 
-import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.FactsOracle;
 import anyparse.query.BoolExprShape;
 import anyparse.query.IndexScope;
+import anyparse.query.OracleProviders;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.Tier;
 
@@ -66,8 +67,8 @@ enum OperatorVerdict {
  *    operand no binding types included, since the whole point is that an overloading type does not
  *    look different from any other. An operand the binding leaves unproven is asked of the
  *    compiler's facts next, the second proof source, inside a `--fix` run that compiles them anyway
- *    (`FactsTypeOracle.forFixRun`): the facts vouch only for a type no overload can be declared on
- *    (`FactsTypeOracle.nonOverloadingName`), so they can turn `Unproven` into `Builtin` and nothing
+ *    (`OracleProvider.factsForFixRun`): the facts vouch only for a type no overload can be declared on
+ *    (`FactsOracle.nonOverloadingName`), so they can turn `Unproven` into `Builtin` and nothing
  *    else. Every rule that asks gets both sources from here — none types an operand on its own.
  *
  * ## Two subtleties, both load-bearing
@@ -360,19 +361,19 @@ final class OperatorSelection {
 
 	/**
 	 * The compiler's facts as the second proof for `file`: whether every configuration typed an operand with
-	 * a type no operator overload can be declared on (`FactsTypeOracle.nonOverloadingName`). Read only inside a
-	 * `--fix` run, which compiles them anyway (`FactsTypeOracle.forFixRun`), and asked of the table on the first
+	 * a type no operator overload can be declared on (`FactsOracle.nonOverloadingName`). Read only inside a
+	 * `--fix` run, which compiles them anyway (`OracleProvider.factsForFixRun`), and asked of the table on the first
 	 * operand the binding leaves unproven, so a run whose operands all bind never waits on the compile.
 	 */
 	private function factsProof(file: String, source: String): (QueryNode) -> Bool {
 		var asked: Bool = false;
-		var oracle: Null<FactsTypeOracle> = null;
+		var oracle: Null<FactsOracle> = null;
 		return operand -> {
 			if (!asked) {
 				asked = true;
-				oracle = FactsTypeOracle.forFixRun(_plugin, file, source);
+				oracle = OracleProviders.of(_plugin).factsForFixRun(_plugin, file, source);
 			}
-			final facts: Null<FactsTypeOracle> = oracle;
+			final facts: Null<FactsOracle> = oracle;
 			return facts?.nonOverloadingName(file, source, operand.span) != null;
 		};
 	}

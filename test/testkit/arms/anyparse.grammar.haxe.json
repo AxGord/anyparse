@@ -964,6 +964,27 @@
 			"find": "{ cond: WrapConditionType.HasMultilineItems, value: 1 }",
 			"replace": "{ cond: WrapConditionType.ItemCountLessThan, value: 0 }",
 			"note": "the head rule of the anonymous-type cascade never fires, so an item a comment holds open is answered by a NoWrap rule"
+		},
+		{
+			"name": "M-HAXE-FACTS-FOR-FIX",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "factsForFix",
+			"force": "null",
+			"note": "the Haxe grammar hands a fix no facts oracle, so every facts proof of a rule is silently off"
+		},
+		{
+			"name": "M-HAXE-FACTS-FIX-RUN",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "factsForFixRun",
+			"force": "null",
+			"note": "the fix-run door offers no facts oracle although the run recorded its edits"
+		},
+		{
+			"name": "M-HAXE-FACTS-FOR-FILES",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "factsForFiles",
+			"force": "null",
+			"note": "the assisted phase is offered no facts oracle and goes to the display server"
 		}
 	]
 }
