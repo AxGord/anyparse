@@ -926,8 +926,8 @@ class Codegen {
 	 * All four of those were live PASS shapes that a newline-blind relaxation
 	 * broke; the infix test is what keeps them with their own productions.
 	 *
-	 * CONDITION-ATOM SKIP. The atom is a `(`-balanced group or a run of
-	 * identifier / dot bytes, optionally preceded by `!`. An unparenthesised
+	 * CONDITION-ATOM SKIP. The atom is `CondCondition.conditionAt`'s: `!`*
+	 * and one operand. An unparenthesised
 	 * multi-term condition (`#if a && b`) is deliberately read as atom `a`
 	 * plus an infix fragment: both readings agree that nothing scope-level
 	 * follows, which is all this predicate has to decide. Comments between
@@ -963,42 +963,15 @@ class Codegen {
 
 	/**
 	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
-	 * past the preprocessor CONDITION ATOM. Leading whitespace and `!`
-	 * negations are skipped, then either a `(`-balanced group or a run of
-	 * identifier / digit / `_` / `.` bytes. Bails out at end of input, which
-	 * the caller reads as "no infix fragment".
+	 * past the preprocessor CONDITION ATOM as `CondCondition.conditionAt`
+	 * reads it, so the parser and the query side agree on where a condition
+	 * ends. No operand is read as "no infix fragment".
 	 */
 	private static function spliceCondAtomSkipExpr(): Expr {
-		final atomByteTest: Expr = condAtomByteTestExpr();
 		return macro {
-			while (i < input.length) {
-				final c: Int = input.charCodeAt(i);
-				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == '!'.code) {
-					i++;
-					continue;
-				}
-				break;
-			}
-			if (i >= input.length) return false;
-			if (input.charCodeAt(i) == '('.code) {
-				var depth: Int = 0;
-				while (i < input.length) {
-					final c: Int = input.charCodeAt(i);
-					i++;
-					if (c == '('.code) {
-						depth++;
-					} else if (c == ')'.code) {
-						depth--;
-						if (depth == 0) break;
-					}
-				}
-			} else {
-				while (i < input.length) {
-					final c: Int = input.charCodeAt(i);
-					if (!$atomByteTest) break;
-					i++;
-				}
-			}
+			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionAt(input.substring(from, input.length), 0);
+			if (atom == null) return false;
+			i = from + atom.to;
 		};
 	}
 
@@ -1027,19 +1000,6 @@ class Codegen {
 			}
 			break;
 		};
-	}
-
-	/**
-	 * Expression fragment of `spliceCondAtomSkipExpr`: is byte `c` part of an
-	 * unparenthesised preprocessor condition atom? Identifier bytes plus `.`,
-	 * which covers the dotted `#if haxe.something` form.
-	 */
-	private static function condAtomByteTestExpr(): Expr {
-		return macro (c >= 'a'.code && c <= 'z'.code)
-			|| (c >= 'A'.code && c <= 'Z'.code)
-			|| (c >= '0'.code && c <= '9'.code)
-			|| c == '_'.code
-			|| c == '.'.code;
 	}
 
 	/**

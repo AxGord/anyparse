@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
+import anyparse.runtime.CondCondition;
 import anyparse.util.Strings;
 
 using StringTools;
@@ -177,7 +178,7 @@ final class IfFalseDeadCode extends RuleBase {
 	 */
 	private static function isIfLiteralAt(source: String, from: Int, literal: String): Bool {
 		if (!sliceStartsWith(source, from, '#if')) return false;
-		final condition: Null<Span> = CondDirectives.conditionAt(source, from + '#if'.length);
+		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length);
 		if (condition == null) return false;
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
 		return Strings.stripOuterParens(text) == literal;
@@ -188,7 +189,7 @@ final class IfFalseDeadCode extends RuleBase {
 	 * condition, where the THEN body begins — the same condition `isIfLiteralAt` read, restarted at `slice[0]`.
 	 */
 	private static function bodyStart(slice: String): Int {
-		final condition: Null<Span> = CondDirectives.conditionAt(slice, '#if'.length);
+		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length);
 		return condition == null ? '#if'.length : condition.to;
 	}
 

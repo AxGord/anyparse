@@ -143,6 +143,62 @@
 			"find": "final last: String = run[run.length - 1];",
 			"replace": "final last: String = slot;",
 			"note": "a line comment on an earlier line of the run counts as its end, so a run that ends in a block comment is guarded as if a line comment closed it"
+		},
+		{
+			"name": "M-COND-ATOM-ENDS-AT-WS",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "skipConditionAtom",
+			"find": "final atom: Null<Span> = conditionAt(source, at);",
+			"replace": "final atom: Null<Span> = null;",
+			"note": "the atom no longer reads the condition operand, so the else keyword after a condition is never reached"
+		},
+		{
+			"name": "M-COND-ATOM-IS-CONDITION-OPERAND",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "skipConditionAtom",
+			"find": "skipBlank(source, atom.to)",
+			"replace": "skipBlank(source, atom.to + 1)",
+			"note": "the atom swallows the byte glued after the condition operand, so the splice predicate and the query side read different conditions"
+		},
+		{
+			"name": "M-COND-OPERAND-PAREN-GROUP",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "scanOperand",
+			"find": "if (c == '('.code) return scanParens(source, at);",
+			"replace": "",
+			"note": "a parenthesised condition is no operand, so the generated splice predicate stops before the infix operator after the group and the region skip-parses"
+		},
+		{
+			"name": "M-COND-KEYWORD-OPERAND-SAME-LINE",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "conditionAt",
+			"find": "final start: Int = skipBlank(source, from);",
+			"replace": "final start: Int = skipBlank(source.substring(0, source.indexOf('\\n', from) < 0 ? source.length : source.indexOf('\\n', from)), from);",
+			"note": "the condition must start on the keyword's own line, so `#if` / `false` on two lines reads no condition at all"
+		},
+		{
+			"name": "M-COND-GROUP-STOPS-AT-LINE",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "scanParens",
+			"find": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n",
+			"replace": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n\t\t\tif (isLineBreak(c)) return at;\n",
+			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
+		},
+		{
+			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "scanExpression",
+			"find": "return operandEnd > operand ? operandEnd : at;",
+			"replace": "return operandEnd > operand ? (source.substr(operandEnd, 3) == ' &&' ? scanExpression(source, skipBlank(source, operandEnd + 3)) : operandEnd) : at;",
+			"note": "a `&&` after the operand and the operand after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
+		},
+		{
+			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "scanExpression",
+			"find": "operand = skipBlank(source, operand + 1);",
+			"replace": "operand = operand + 1;",
+			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
 		}
 	]
 }

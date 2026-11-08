@@ -75,6 +75,26 @@ final class HxCondSpliceOwnLineSliceTest extends HxTestHelpers {
 	}
 
 	/**
+	 * A quoted `)` inside the parenthesised condition does not end the condition atom: the infix
+	 * predicate reads the atom through `CondCondition.conditionAt`, so it sees the `&&` after the group.
+	 */
+	@:pin('control')
+	@:killer('M-COND-OPERAND-PAREN-GROUP')
+	public function testOwnLineSpliceConditionWithQuotedParenParses(): Void {
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f(cc) {\n\t\tif (intf != null\n'
+			+ '\t\t\t#if (js_es == "a)") && (cc.__super__ == null) #end\n\t\t) {\n\t\t\tg();\n\t\t}\n\t} }'
+		);
+		Assert.equals(1, body.length);
+		switch body[0] {
+			case IfStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected IfStmt, got ${body[0]}');
+		}
+	}
+
+	/**
 	 * REGRESSION GUARD -- the original dogfood catch recorded in the gate's
 	 * own comment, live at `video/GpuInlinePipeline.hx:52`: a
 	 * `@:privateAccess { ... }` block statement followed by an own-line

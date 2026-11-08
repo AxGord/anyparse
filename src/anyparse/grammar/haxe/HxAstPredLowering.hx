@@ -672,7 +672,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		final verdict: Expr = condSpliceElseVerdictExpr();
 		final body: Expr = macro {
 			final n: Int = raw.length;
-			final i: Int = anyparse.query.CondDirectives.skipConditionAtom(raw, 0);
+			final i: Int = anyparse.runtime.CondCondition.skipConditionAtom(raw, 0);
 			$verdict;
 		};
 		return predField(

@@ -64,38 +64,6 @@
 			"note": "no byte of a raw region is scanned at all, so the fail-closed gate stops seeing every occurrence it exists to see and every name-driven op rewrites around such a region in silence"
 		},
 		{
-			"name": "M-COND-KEYWORD-OPERAND-SAME-LINE",
-			"type": "anyparse.query.CondDirectives",
-			"method": "conditionAt",
-			"find": "final start: Int = skipBlank(source, from);",
-			"replace": "final start: Int = skipBlank(source.substring(0, source.indexOf('\\n', from) < 0 ? source.length : source.indexOf('\\n', from)), from);",
-			"note": "the condition must start on the keyword's own line, so `#if` / `false` on two lines reads no condition at all"
-		},
-		{
-			"name": "M-COND-GROUP-STOPS-AT-LINE",
-			"type": "anyparse.query.CondDirectives",
-			"method": "scanParens",
-			"find": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n",
-			"replace": "\t\t\tfinal c: Int = source.fastCodeAt(i);\n\t\t\tif (isLineBreak(c)) return at;\n",
-			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
-		},
-		{
-			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
-			"type": "anyparse.query.CondDirectives",
-			"method": "scanExpression",
-			"find": "return operandEnd > operand ? operandEnd : at;",
-			"replace": "return operandEnd > operand ? (source.substr(operandEnd, 3) == ' &&' ? scanExpression(source, skipBlank(source, operandEnd + 3)) : operandEnd) : at;",
-			"note": "a `&&` after the operand and the operand after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
-		},
-		{
-			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
-			"type": "anyparse.query.CondDirectives",
-			"method": "scanExpression",
-			"find": "operand = skipBlank(source, operand + 1);",
-			"replace": "operand = operand + 1;",
-			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
-		},
-		{
 			"name": "M-DECLARINGFILES-EMPTY",
 			"type": "anyparse.query.TypeRefIndex",
 			"method": "declaringFiles",
@@ -15800,14 +15768,6 @@
 			"find": "for (hole in region.holes ?? []) eachComment(hole.regions, onComment);",
 			"replace": "",
 			"note": "a comment written inside an interpolation hole is not reported, so the comment-loss guard never sees it and a writer that drops it passes"
-		},
-		{
-			"name": "M-COND-ATOM-ENDS-AT-WS",
-			"type": "anyparse.query.CondDirectives",
-			"method": "skipConditionAtom",
-			"find": "\t\t\tif (c == ' '.code || c == '\\t'.code || isLineBreak(c)) break;\n",
-			"replace": "",
-			"note": "the atom no longer stops at whitespace, so the else keyword after a condition is swallowed"
 		},
 		{
 			"name": "M-COND-OWN-BRANCHES",
