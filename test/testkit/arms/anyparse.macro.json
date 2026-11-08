@@ -2128,6 +2128,118 @@
 			"find": "deferUnderIgnore: openText == '{' && !reflowInExprPosition",
 			"replace": "deferUnderIgnore: openText == '{'",
 			"note": "an object literal in expression position is deferred from its host's width like an anon type, so a parameter default holding one no longer wraps its signature"
+		},
+		{
+			"name": "M-PAREN-CHAIN-LIST-BOUNDARY-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "opt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap",
+			"replace": "false",
+			"note": "a chain that breaks in a noWrap array element or map value stays glued: the list Flatten decides the paren"
+		},
+		{
+			"name": "M-PAREN-CHAIN-NOWRAP-OVERRIDE-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "opt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap",
+			"replace": "opt._parenChainInElement",
+			"note": "a list element under a NoWrap override (interpolation, switch subject) opens its chain paren"
+		},
+		{
+			"name": "M-PAREN-CHAIN-CONDITION-ELEMENT-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "opt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap",
+			"replace": "opt._parenChainInElement && opt._chainModeOverride == null",
+			"note": "an array element or map value inside a wrapping condition stays glued while its chain breaks"
+		},
+		{
+			"name": "M-PAREN-CHAIN-OWN-WIDTH-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "? _dwb(_difle(",
+			"replace": "? _dwb(_dfle(",
+			"note": "a chain that stays on one line opens its paren because a sibling overflows the line"
+		},
+		{
+			"name": "M-PAREN-CHAIN-OWN-WIDTH-TRAIL-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "opt.lineWidth + 1 + anyparse.core.DocMeasure.flatTokenWidth(_wrapTrail)",
+			"replace": "opt.lineWidth + 1",
+			"note": "the close paren counts against the chain: a chain ending at the limit opens"
+		},
+		{
+			"name": "M-PAREN-CHAIN-PENDING-SPACE-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "? _dwb(_difle(",
+			"replace": "? _dwb(_diwe(",
+			"note": "the un-flushed space after a map arrow is not counted: a map value one column past the limit stays glued while its chain breaks"
+		},
+		{
+			"name": "M-PAREN-CHAIN-ELEMENT-CONDITION-CLEAR-OFF",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "setChainModeOverrideField",
+			"find": "_c._parenChainInElement = false;",
+			"replace": "_c._parenChainInElement = o._parenChainInElement;",
+			"note": "a condition in a function body under a list element keeps the element flag and opens its paren ahead of the header"
+		},
+		{
+			"name": "M-PAREN-CHAIN-ELEMENT-CONDITION-EARLY-OFF",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "setChainModeOverrideField",
+			"find": "if (o._chainModeOverride == _mode && !o._parenChainInElement) return o;",
+			"replace": "if (o._chainModeOverride == _mode) return o;",
+			"note": "a condition with the mode already recorded returns early and keeps the element flag"
+		},
+		{
+			"name": "M-PAREN-CHAIN-NATURAL-HEADER-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "_diwe(_chainEnd, _chainOpen, _chainGlued)",
+			"replace": "_chainGlued",
+			"note": "a chain paren in a list element inside a wrapping condition opens the condition header too: the natural walk sees only the flat side"
+		},
+		{
+			"name": "M-PAREN-CHAIN-ELEMENT-ONLY-OFF",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "opt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap",
+			"replace": "opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap",
+			"note": "a chain paren in a noWrap object field opens too: the lift reaches beyond array and map elements"
+		},
+		{
+			"name": "M-PAREN-CHAIN-CONDITION-BOUNDARY-ON",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefWrapHardFlatten",
+			"find": "_dfle(\n\topt.lineWidth + 1, _chainOpen,\n\topt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap\n\t\t? _dwb(_difle(_chainEnd, _chainOpen, _diwe(_chainEnd, _chainOpen, _chainGlued)))\n\t\t: _chainGlued\n);",
+			"replace": "_dwb(_dfle(opt.lineWidth + 1, _chainOpen, _chainGlued));",
+			"note": "the boundary around the whole full-line probe opens a condition parenthesis ahead of its header: if ( !( chain ) ) becomes if (!( chain ))"
+		},
+		{
+			"name": "M-PAREN-CHAIN-MARK-OBJECT-CLEAR-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "case 'objectLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), false, opt);",
+			"replace": "case 'objectLiteralWrap': macro _setSuppressCallRestProbe($elemOptBase, false, opt);",
+			"note": "a noWrap object nested in an array element keeps the mark: its chain paren leaves the object's Flatten and the writer needs two passes"
+		},
+		{
+			"name": "M-PAREN-CHAIN-MARK-CALL-CLEAR-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixStar",
+			"find": "macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptArg, true, opt), false, opt)",
+			"replace": "macro _setSuppressCallRestProbe($elemOptArg, true, opt)",
+			"note": "a noWrap call argument nested in an array element keeps the mark and opens its chain paren"
+		},
+		{
+			"name": "M-PAREN-CHAIN-MARK-NEW-CLEAR-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "case 'callParameterWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, true, opt), false, opt);",
+			"replace": "case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true, opt);",
+			"note": "a noWrap new-expression argument nested in an array element keeps the mark and opens its chain paren"
 		}
 	]
 }

@@ -28,7 +28,9 @@
 		"trailing-keep/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"maxLineLength\": 60, \"callParameter\": {\"defaultWrap\": \"fillLine\", \"rules\": []}}}",
 		"trailing-keep/Probe.hx": "class A {\n\tfunction f() {\n\t\tf(a, b, {x: 1, y: 2},);\n\t\tf(a, b, [1, 2, 3],);\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c,);\n\t\tf(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbb, {xxxxxxxxxxxxxxx: 1, yyyyyyyyyyyyyyyyyy: 2},);\n\t\tfoo.bar(a, {x: 1},).baz();\n\t\tfoo.bar(a, b,).baz(c,);\n\t\tfoo.bar(aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccc, ddddddddd,).baz();\n\t\tfoo.bar(function() {\n\t\t\treturn 1;\n\t\t}, b,).baz();\n\t\tg(function() {\n\t\t\treturn 1;\n\t\t}, b,);\n\t\tg(a,);\n\t\tfoo.bar(a,).baz();\n\t}\n}\n",
 		"cond-splice-quoted/C2.hx": "class C {\n\tfunction f() {\n\t\tif (x) a() #if (v == \")\") else b(); #end\n\t\treturn 1;\n\t}\n}\n",
-		"cond-splice-stray-close/C11.hx": "class C {\n\tfunction f() {\n\t\tif (x) a() #if a) else b() #end\n\t\treturn 1;\n\t}\n}\n"
+		"cond-splice-stray-close/C11.hx": "class C {\n\tfunction f() {\n\t\tif (x) a() #if a) else b() #end\n\t\treturn 1;\n\t}\n}\n",
+		"paren-in-list/C.hx": "class C {\n\tstatic final v = [(aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1];\n\tstatic final w = [(aaaaaaaaaaaa && bbbbbbbbbbbb && cccccccccccc), true];\n\tstatic final m = [1 => (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 2 => 3];\n\tstatic final n = [1 => (aaaaaaaaaaaa && bbbbbbbbbbbb && cccccccccccc), 2 => true];\n\tstatic final k = (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc + ddddd);\n}\n",
+		"paren-in-list/hxformat.json": "{\"wrapping\":{\"maxLineLength\":40}}\n"
 	},
 	"invocations": [
 		{
@@ -311,6 +313,24 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "01118c41144242e9",
 				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "paren-in-list/C.hx",
+			"note": "a +/- or && chain parenthesis that is an array element or map value under the default noWrap rule opens as a container when the chain breaks (maxLineLength 40)",
+			"fixpoint": "paren-in-list/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"paren-in-list/C.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1d09f3d93cf3475b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
 			}
 		}
 	]

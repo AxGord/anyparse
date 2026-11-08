@@ -431,7 +431,10 @@ final class WriterKwRefLowering {
 		final opAddSubShape: Expr = opAddSubParenShape(leadDoc);
 		// An operator chain that does not fit opens the paren as a container whatever its own width — no `CollapseProbe`,
 		// whose fit gate re-glues an inner that cannot be one line — and it co-indents inside, since the paren's own `Nest`
-		// already supplies the indent.
+		// already supplies the indent. Under an array or map element the glued side measures the chain's own width behind a
+		// `WrapBoundary`, so a `noWrap` list's `Flatten` cannot glue a chain that breaks anyway; a chain that stays on one line
+		// keeps the paren glued whatever overflows beside it, and a `NoWrap` override never lifts it. The first-line probe counts
+		// the space a map arrow leaves pending; the width probe under it is what a condition header's natural walk resolves.
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _wrapTrail: anyparse.core.Doc = $trailDoc;
@@ -441,12 +444,22 @@ final class WriterKwRefLowering {
 					: $keepOpenGate
 						? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
 						: anyparse.format.wrap.BinaryChainEmit.isBreakableChain(_wrapInner)
-							? _dfle(opt.lineWidth + 1, _dc([
-								$leadDoc,
-								_dn(_cols, _dc([_dhl(), anyparse.format.wrap.BinaryChainEmit.coIndented(_wrapInner)])),
-								_dhl(),
-								_wrapTrail
-							]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+							? {
+								final _chainOpen: anyparse.core.Doc = _dc([
+									$leadDoc,
+									_dn(_cols, _dc([_dhl(), anyparse.format.wrap.BinaryChainEmit.coIndented(_wrapInner)])),
+									_dhl(),
+									_wrapTrail
+								]);
+								final _chainGlued: anyparse.core.Doc = _dc([$leadDoc, _wrapInner, _wrapTrail]);
+								final _chainEnd: Int = opt.lineWidth + 1 + anyparse.core.DocMeasure.flatTokenWidth(_wrapTrail);
+								_dfle(
+									opt.lineWidth + 1, _chainOpen,
+									opt._parenChainInElement && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap
+										? _dwb(_difle(_chainEnd, _chainOpen, _diwe(_chainEnd, _chainOpen, _chainGlued)))
+										: _chainGlued
+								);
+							}
 							: anyparse.format.wrap.WrapList.topLevelOperatorClass(_wrapInner) == anyparse.format.wrap.ChainOperatorClass.OpAddSub
 								? $opAddSubShape
 								: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)

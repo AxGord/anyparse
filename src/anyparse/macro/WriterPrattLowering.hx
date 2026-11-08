@@ -1001,7 +1001,8 @@ final class WriterPrattLowering {
 		// `callParameterWrap` cascade, not that flag. Compile-time gate -> byte-inert
 		// for every non-call sep-list Star (type-params, function sigs, arrays, object
 		// lits). Mirrors the case-pattern / `??` / chain-operand guards.
-		if (wrapRulesField == 'callParameterWrap') elemOptArg = macro _setSuppressCallRestProbe($elemOptArg, true, opt);
+		if (wrapRulesField == 'callParameterWrap')
+			elemOptArg = macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptArg, true, opt), false, opt);
 		// omega-arrow-value-if-reflow: ctor-level `@:fmt(arrowValueIfElemTrail)`
 		// stamps `_arrowValueIfElemTrailComment` on the element that CARRIES a
 		// captured trailing comment. The comment after an arrow-body value-`if`

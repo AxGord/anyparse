@@ -1089,6 +1089,32 @@ final class WriterOptFanout {
 	}
 
 	/**
+	 * Marks an array or map element's opt so a chain parenthesis written under it may leave a `noWrap` list's `Flatten`, and ends the
+	 * mark at any other list below it. Idempotent; `_setCondWrapChainMode` also clears it.
+	 */
+	private static function setParenChainInElementField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setParenChainInElement',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'on', type: macro : Bool },
+					chainBaseArg(optionsCT)
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._parenChainInElement == on) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._parenChainInElement = on;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
 	 * The two chain-mode shims. `forceRules` builds `_setChainModeOverride`, for a site that forces ONE mode on every chain
 	 * below it — a string-interpolation body and a `switch` subject (`NoWrap`), an expression paren inside a condition (its
 	 * `expressionWrapping` mode): it swaps both chain cascades for `_overrideChainMode` copies, even when `_chainModeOverride`
@@ -1115,9 +1141,11 @@ final class WriterOptFanout {
 			: macro {
 				if (mode == null) return o;
 				final _mode: anyparse.format.wrap.WrapMode = mode;
-				if (o._chainModeOverride == _mode) return o;
+				if (o._chainModeOverride == _mode && !o._parenChainInElement) return o;
 				final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 				_c._chainModeOverride = _mode;
+				// A condition nested under a list element owns its header's glue-or-open decision again.
+				_c._parenChainInElement = false;
 				return _c;
 			};
 		return {
@@ -1247,6 +1275,7 @@ final class WriterOptFanout {
 			fields.push(setChainModeOverrideField(optionsCT, true));
 			fields.push(setChainModeOverrideField(optionsCT, false));
 			fields.push(overrideChainModeField());
+			fields.push(setParenChainInElementField(optionsCT));
 		}
 		// ω-callarg-chain-nest: opt-fanout helper pair for the
 		// `@:fmt(callArgChainNest)` opt-in on a call-arg Star (currently

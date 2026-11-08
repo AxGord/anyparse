@@ -925,6 +925,13 @@ final class HxModuleWriteOptions {
 	public var _callArgChainNest: Bool = false; // noqa: naming
 	public var _suppressMore: Bool = false; // noqa: naming
 	public var _parenInCondition: Bool = false; // noqa: naming
+
+	/**
+	 * Set on an array or map element's opt: a chain parenthesis below it lifts its open-or-glue decision out of a `noWrap` list's
+	 * `Flatten`. A wrapping condition clears it.
+	 */
+	public var _parenChainInElement: Bool = false; // noqa: naming
+
 	// ω-compare-operand-linewrap: set on the ternary CONDITION's opt (via
 	// `_setInTernaryCond`) so `lowerInfixBranch` suppresses the `==`/`!=`
 	// operand-overflow break for a compare that IS a ternary condition -- the
