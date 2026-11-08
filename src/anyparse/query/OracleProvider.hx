@@ -5,6 +5,7 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -95,7 +96,40 @@ interface OracleProvider {
 	/** Stops the warm servers of the run `attachRun` gave `oracles`, if any. */
 	public function stopServers(oracles: Array<OracleConfig>): Void;
 
+	/** Starts the compiles typing what `oracles` compile, for a run to read later. */
+	public function startFacts(oracles: Array<OracleConfig>): StartedProbe<CompilerFacts>;
+
+	/** Starts the compiles describing the builds of `oracles`; finishing stores what they answer for a run that compiles nothing. */
+	public function startBuilds(oracles: Array<OracleConfig>): StartedProbe<ReachBuilds>;
+
+	/** The builds of `oracles`, compiled now and stored as `startBuilds` stores them; null when any build cannot be told. */
+	public function probeBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
+
+	/** The builds an earlier run stored for exactly the input `oracles` read now, or null when none is. */
+	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
+
 }
+
+/** Compiles a run started and has not read: exactly one of `finish` or `abandon` ends them. */
+@:nullSafety(Strict)
+interface StartedProbe<T> {
+
+	/** Waits for the compiles and answers what they found, or null when they could not tell. */
+	public function finish(): Null<T>;
+
+	/** Ends the compiles unread, leaving nothing of theirs behind. */
+	public function abandon(): Void;
+
+}
+
+/**
+ * The builds' compiles a run began ahead of its first question and has not read or dropped yet, and the run's read of its
+ * facts when its facts compiles carry the builds' probe: the builds' first question waits on that read instead of compiling them again.
+ */
+typedef AheadBuilds = {
+	probe: Null<StartedProbe<ReachBuilds>>,
+	?facts: () -> Void
+};
 
 /** What one configuration's compile reads, as far as an edit's verifiability goes. */
 @:nullSafety(Strict)

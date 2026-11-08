@@ -26,16 +26,6 @@ typedef DefinesProbe = {
 };
 
 /**
- * The define probes a run began ahead of its first question (`ReachDefinesProbe.start`) and has not read or dropped yet,
- * and the run's read of its facts when its facts compiles carry the probe (`facts`): the builds' first question waits on
- * that read, which files the builds (`OracleRunMemo.builds`), instead of compiling them again.
- */
-typedef AheadBuilds = {
-	probe: Null<DefinesProbe>,
-	?facts: () -> Void
-};
-
-/**
  * Another probe's hook riding the define probe's compile (`ReachDefinesProbe.prepare`): it joins the compile's arm after
  * the probe's own macros, so one compile answers both.
  */

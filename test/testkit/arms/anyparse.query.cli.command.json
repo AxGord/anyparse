@@ -380,8 +380,8 @@
 			"name": "M-AHEAD-NEVER-READ",
 			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
-			"find": "final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);",
-			"replace": "final found: Null<ReachBuilds> = ReachDefinesProbe.probeAll(oracles);",
+			"find": "final found: Null<ReachBuilds> = pending == null ? compiler.probeBuilds(oracles) : pending.finish();",
+			"replace": "final found: Null<ReachBuilds> = compiler.probeBuilds(oracles);",
 			"note": "the compiles started ahead are never read, so every run that escalates pays the builds twice"
 		},
 		{
@@ -650,7 +650,7 @@
 			"name": "M-REACH-STORED-UNREAD",
 			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
-			"find": "if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);",
+			"find": "if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders);",
 			"replace": "if (noOracle) return resolution;",
 			"note": "a run that compiles nothing never reads the builds an oracle run stored, so it knows no build and the alias branch no build takes is read again"
 		},

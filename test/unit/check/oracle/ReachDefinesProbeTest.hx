@@ -1,8 +1,14 @@
 package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.oracle.ReachBuildsRun;
 import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.core.TempScratch;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.OracleProvider.AheadBuilds;
+import anyparse.query.OracleProvider.StartedProbe;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import anyparse.query.cli.command.LintOracleRun;
 import haxe.Exception;
@@ -123,7 +129,7 @@ class ReachDefinesProbeTest extends Test {
 		// the overlap this pin holds exists only with more than one compile at once, whatever thread count the pool lease grants
 		final declared: Null<String> = Sys.getEnv('APQ_ORACLE_PARALLEL');
 		Sys.putEnv('APQ_ORACLE_PARALLEL', '${oracles.length}');
-		var builds: Null<anyparse.query.ReachLiveness.ReachBuilds> = null;
+		var builds: Null<ReachBuilds> = null;
 		CliFixture.always(() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> builds = ReachDefinesProbe.probeAll(oracles));
 		Assert.notNull(builds);
 		if (builds != null) for (i in 0...oracles.length)
@@ -199,44 +205,45 @@ class ReachDefinesProbeTest extends Test {
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
 		write(dir, 'build.hxml', '-cp src\n-cp macro\n-main Main\n--interp\n--macro Init.go()\n' + unit.check.CompileCounter.MACRO);
 		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: dir, defines: [] }];
-		final base: anyparse.query.CachingGrammarPlugin.ResolutionScope = {
+		final base: ResolutionScope = {
 			declared: true,
 			sources: () -> {
 				report: [],
 				projectRoots: [],
-				library: new anyparse.query.CachingGrammarPlugin.LibrarySources([]),
+				library: new LibrarySources([]),
 				rootsMatched: true,
 				rootsAllMatched: true
 			}
 		};
-		function scopeOf(ahead: AheadBuilds): anyparse.query.CachingGrammarPlugin.ResolutionScope {
-			final scope: Null<anyparse.query.CachingGrammarPlugin.ResolutionScope> = LintOracleRun.withReachConfigurations(
-				base, oracles, false, true, ahead
+		function scopeOf(ahead: AheadBuilds): ResolutionScope {
+			final scope: Null<ResolutionScope> = LintOracleRun.withReachConfigurations(
+				new HaxeQueryPlugin(), base, oracles, false, true, ahead
 			);
 			if (scope == null) throw 'no scope';
 			return scope;
 		}
-		function started(ahead: AheadBuilds, scope: anyparse.query.CachingGrammarPlugin.ResolutionScope): Void {
+		function started(ahead: AheadBuilds, scope: ResolutionScope): Void {
 			final start: Null<() -> Void> = scope.buildsAhead;
 			if (start != null) start();
 			// ended before anything reads it, so what follows does not race the compile
-			ahead.probe?.runs?.await();
+			final running: Null<ReachBuildsRun> = Std.downcast(ahead.probe, ReachBuildsRun);
+			running?.probe.runs?.await();
 		}
 		final read: AheadBuilds = { probe: null };
-		final first: anyparse.query.CachingGrammarPlugin.ResolutionScope = scopeOf(read);
+		final first: ResolutionScope = scopeOf(read);
 		started(read, first);
 		Assert.notNull(read.probe, 'the compiles started ahead');
-		final firstBuilds: Null<() -> Null<anyparse.query.ReachLiveness.ReachBuilds>> = first.builds;
+		final firstBuilds: Null<() -> Null<ReachBuilds>> = first.builds;
 		Assert.notNull(firstBuilds == null ? null : firstBuilds());
 		Assert.equals(1, unit.check.CompileCounter.count(dir), 'the question read the compile started ahead');
 		final dropped: AheadBuilds = { probe: null };
-		final second: anyparse.query.CachingGrammarPlugin.ResolutionScope = scopeOf(dropped);
+		final second: ResolutionScope = scopeOf(dropped);
 		started(dropped, second);
 		File.saveContent(flag, '');
 		final settle: Null<() -> Void> = second.buildsSettled;
 		if (settle != null) settle();
 		Assert.isNull(dropped.probe, 'a write drops the compiles started ahead');
-		final secondBuilds: Null<() -> Null<anyparse.query.ReachLiveness.ReachBuilds>> = second.builds;
+		final secondBuilds: Null<() -> Null<ReachBuilds>> = second.builds;
 		final after: Null<ReachConfiguration> = (secondBuilds == null ? null : secondBuilds())?.configurations[0];
 		Assert.isTrue(after?.everDefined.contains('APQ_FLAG') ?? false, 'the builds read the tree before the write');
 		remove(dir);
@@ -253,23 +260,27 @@ class ReachDefinesProbeTest extends Test {
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');
 		write(dir, 'build.hxml', '-cp src\n-main Main\n--interp\n');
 		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: dir, defines: [] }];
-		final base: anyparse.query.CachingGrammarPlugin.ResolutionScope = {
+		final base: ResolutionScope = {
 			declared: true,
 			sources: () -> {
 				report: [],
 				projectRoots: [],
-				library: new anyparse.query.CachingGrammarPlugin.LibrarySources([]),
+				library: new LibrarySources([]),
 				rootsMatched: true,
 				rootsAllMatched: true
 			}
 		};
 		final early: AheadBuilds = { probe: null };
-		LintOracleRun.startBuildsWithFacts(true, LintOracleRun.withReachConfigurations(base, oracles, false, true, early));
-		final started: Null<anyparse.check.oracle.ReachDefinesProbe.DefinesProbe> = early.probe;
+		LintOracleRun.startBuildsWithFacts(
+			true, LintOracleRun.withReachConfigurations(new HaxeQueryPlugin(), base, oracles, false, true, early)
+		);
+		final started: Null<StartedProbe<ReachBuilds>> = early.probe;
 		Assert.notNull(started, 'the builds did not start beside the facts');
-		if (started != null) ReachDefinesProbe.abandon(started);
+		started?.abandon();
 		final onDemand: AheadBuilds = { probe: null };
-		LintOracleRun.startBuildsWithFacts(false, LintOracleRun.withReachConfigurations(base, oracles, false, true, onDemand));
+		LintOracleRun.startBuildsWithFacts(
+			false, LintOracleRun.withReachConfigurations(new HaxeQueryPlugin(), base, oracles, false, true, onDemand)
+		);
 		Assert.isNull(onDemand.probe, 'the builds started ahead of a run that asks for the facts on demand');
 		remove(dir);
 	}

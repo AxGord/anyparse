@@ -1,12 +1,13 @@
 package unit.check.oracle;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.ReachDefinesProbe.AheadBuilds;
 import anyparse.core.TempScratch;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.Cli;
+import anyparse.query.CompilerFacts;
+import anyparse.query.OracleProvider.AheadBuilds;
+import anyparse.query.OracleProvider.StartedProbe;
 import anyparse.query.cli.command.LintArgs;
 import anyparse.query.cli.command.LintOracleRun;
 import haxe.Exception;
@@ -142,7 +143,7 @@ final class OracleRunWiringTest extends Test {
 		Cli.run(['lint', '$dir/Good.hx', '--fix']);
 		Assert.same(before, factsDirs(), 'no probe directory outlives the run');
 		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: dir, defines: [] }];
-		final early: FactsProbe = TypedFactsProbe.start(oracles);
+		final early: StartedProbe<CompilerFacts> = new HaxeQueryPlugin().startFacts(oracles);
 		Assert.equals(before.length + 1, factsDirs().length, 'the early compile was given its probe directory');
 		Assert.raises(() ->
 			LintOracleRun.endingCompiles(

@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.oracle.CompilerOracle;
 import anyparse.check.oracle.ReachBuildsCache;
+import anyparse.check.oracle.ReachBuildsRun;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
@@ -206,6 +207,25 @@ class ReachBuildsCacheTest extends Test {
 		put(configuration, 'defined', JArray([JNumber(1)]));
 		File.saveContent(path, RawJson.print(record));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a define that is no string');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A run's builds are stored under the input they read, from compiles started ahead or on the spot. */
+	@:pin('control') @:killer('M-BUILDS-RUN-UNSTORED') @:killer('M-BUILDS-NOW-UNSTORED')
+	public function testARunStoresTheBuildsItProbes(): Void {
+		#if (sys || nodejs)
+		final dir: Null<String> = tree('runstores', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
+		if (dir == null) return;
+		final oracles: Array<OracleConfig> = [{ hxml: '$dir/check.hxml', dir: dir, defines: [] }];
+		Assert.notNull(new ReachBuildsRun(oracles).finish(), 'the started compiles answered');
+		Assert.notNull(ReachBuildsCache.load(oracles), 'what the started compiles found is stored');
+		File.saveContent('$dir/Main.hx', '${File.getContent('$dir/Main.hx')}\n// moved\n');
+		Assert.isNull(ReachBuildsCache.load(oracles), 'nothing is stored yet for the changed input');
+		Assert.notNull(ReachBuildsRun.probeNow(oracles), 'the compiles on the spot answered');
+		Assert.notNull(ReachBuildsCache.load(oracles), 'what the compiles on the spot found is stored');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

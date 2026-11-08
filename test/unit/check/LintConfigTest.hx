@@ -375,8 +375,8 @@ class LintConfigTest extends Test {
 			}
 		};
 		final oracles: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
-		Assert.isNull(LintOracleRun.withReachConfigurations(scope, oracles, false, false, { probe: null })?.builds);
-		Assert.notNull(LintOracleRun.withReachConfigurations(scope, oracles, false, true, { probe: null })?.builds);
+		Assert.isNull(LintOracleRun.withReachConfigurations(new HaxeQueryPlugin(), scope, oracles, false, false, { probe: null })?.builds);
+		Assert.notNull(LintOracleRun.withReachConfigurations(new HaxeQueryPlugin(), scope, oracles, false, true, { probe: null })?.builds);
 	}
 
 	@:pin('control') @:killer('M-REFLECTIVE-AGREE') @:killer('M-HOLDERS-PARSE')

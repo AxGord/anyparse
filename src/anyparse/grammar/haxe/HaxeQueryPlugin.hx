@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.facts.TypedFactsRun;
 import anyparse.check.oracle.CompilerDisplayOracle;
 import anyparse.check.oracle.CompilerNameProof;
 import anyparse.check.oracle.CompilerOracle;
@@ -10,11 +11,14 @@ import anyparse.check.oracle.OracleCoverage;
 import anyparse.check.oracle.OracleDeclaration;
 import anyparse.check.oracle.OracleGeneration;
 import anyparse.check.oracle.OracleRunMemo;
+import anyparse.check.oracle.ReachBuildsCache;
+import anyparse.check.oracle.ReachBuildsRun;
 import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CompilerFacts;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
@@ -27,6 +31,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SpanTypeInfoProvider;
@@ -813,6 +818,22 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function stopServers(oracles: Array<OracleConfig>): Void {
 		OracleRunMemo.of(oracles)?.servers.stop();
+	}
+
+	public function startFacts(oracles: Array<OracleConfig>): StartedProbe<CompilerFacts> {
+		return new TypedFactsRun(oracles);
+	}
+
+	public function startBuilds(oracles: Array<OracleConfig>): StartedProbe<ReachBuilds> {
+		return new ReachBuildsRun(oracles);
+	}
+
+	public function probeBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		return ReachBuildsRun.probeNow(oracles);
+	}
+
+	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		return ReachBuildsCache.load(oracles);
 	}
 
 	/**

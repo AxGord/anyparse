@@ -1,9 +1,6 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.LintConfig;
-import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.ReachBuildsCache;
-import anyparse.check.oracle.ReachDefinesProbe;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.OracleProvider;
 import anyparse.query.ReachLiveness.ReachBuilds;
@@ -72,8 +69,8 @@ final class LintOracleRun {
 	 * Unchanged with no oracle.
 	 */
 	public static function withReachConfigurations(
-		resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool, ahead: AheadBuilds,
-		?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
+		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool,
+		ahead: AheadBuilds, ?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0) return resolution;
 		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
@@ -82,32 +79,27 @@ final class LintOracleRun {
 			sources: resolution.sources,
 			buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
 		} : resolution;
-		if (noOracle) return withStoredBuilds(resolution, oracles, reflective, holders);
+		if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
-		// the fingerprint of the input the compiles started ahead read, taken before they started
-		var aheadKey: Null<ReachBuildsKey> = null;
 		// once the run writes, the builds are compiled on demand, as they read the tree then: none starts ahead of a write
 		var writing: Bool = false;
 		function probe(): Null<ReachBuilds> {
 			if (!probed) {
 				probed = true;
-				final pending: Null<DefinesProbe> = ahead.probe;
+				final pending: Null<StartedProbe<ReachBuilds>> = ahead.probe;
 				ahead.probe = null;
 				// the facts compiles carry the builds' probe: their read files the builds, which the probe then holds
 				final facts: Null<() -> Void> = ahead.facts;
 				if (pending == null && facts != null) facts();
-				final key: Null<ReachBuildsKey> = pending == null ? ReachBuildsCache.fingerprint(oracles) : aheadKey;
-				final found: Null<ReachBuilds> = pending == null ? ReachDefinesProbe.probeAll(oracles) : ReachDefinesProbe.finish(pending);
-				ReachBuildsCache.store(oracles, key, found);
+				final found: Null<ReachBuilds> = pending == null ? compiler.probeBuilds(oracles) : pending.finish();
 				builds = bounded(found, reflective, holders);
 			}
 			return builds;
 		}
 		function start(): Void {
 			if (probed || writing || ahead.probe != null || ahead.facts != null) return;
-			aheadKey = ReachBuildsCache.fingerprint(oracles);
-			ahead.probe = ReachDefinesProbe.start(oracles);
+			ahead.probe = compiler.startBuilds(oracles);
 		}
 		function settled(): Void {
 			writing = true;
@@ -137,10 +129,10 @@ final class LintOracleRun {
 	}
 
 	/** The facts compiles a run starts before its first pass (`startsFactsEarly`), or null for a run that asks on demand. */
-	public static function earlyFacts(scoped: Bool, oracles: Array<OracleConfig>, o: LintOpts): Null<FactsProbe> {
-		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix)
-			? TypedFactsProbe.start(oracles)
-			: null;
+	public static function earlyFacts(
+		compiler: OracleProvider, scoped: Bool, oracles: Array<OracleConfig>, o: LintOpts
+	): Null<StartedProbe<CompilerFacts>> {
+		return startsFactsEarly(scoped, oracles.length, o.noOracle, o.ruleFilters.length > 0, o.fix) ? compiler.startFacts(oracles) : null;
 	}
 
 	/**
@@ -148,7 +140,8 @@ final class LintOracleRun {
 	 * batch must not run on after a failed run.
 	 */
 	public static function endingCompiles(
-		compiler: OracleProvider, early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>, body: () -> Int
+		compiler: OracleProvider, early: Null<StartedProbe<CompilerFacts>>, ahead: AheadBuilds, oracles: Array<OracleConfig>,
+		body: () -> Int
 	): Int {
 		final answer: Int = try {
 			body();
@@ -165,9 +158,9 @@ final class LintOracleRun {
 	 * another run may regenerate them.
 	 */
 	public static function endCompiles(
-		compiler: OracleProvider, early: Null<FactsProbe>, ahead: AheadBuilds, oracles: Array<OracleConfig>
+		compiler: OracleProvider, early: Null<StartedProbe<CompilerFacts>>, ahead: AheadBuilds, oracles: Array<OracleConfig>
 	): Void {
-		if (early != null) TypedFactsProbe.abandon(early);
+		early?.abandon();
 		compiler.stopServers(oracles);
 		dropAhead(ahead);
 		compiler.releaseBuilds(oracles);
@@ -181,8 +174,9 @@ final class LintOracleRun {
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	public static function withCompilerFacts(
-		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<FactsProbe>,
-		reflective: Null<Array<String>>, holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
+		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>,
+		early: Null<StartedProbe<CompilerFacts>>, reflective: Null<Array<String>>, holders: Null<Array<String>>, ahead: AheadBuilds,
+		o: LintOpts
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || o.noOracle) return resolution;
 		var probed: Bool = false;
@@ -193,7 +187,7 @@ final class LintOracleRun {
 				probed = true;
 				// a check waits on the facts here, and a question it asks may escalate to the builds: they compile meanwhile
 				if (!settling) startBuildsWithFacts(early != null, resolution);
-				final built: Null<CompilerFacts> = TypedFactsProbe.finish(early ?? TypedFactsProbe.start(oracles));
+				final built: Null<CompilerFacts> = (early ?? compiler.startFacts(oracles)).finish();
 				// the facts compiles are done and their cores free: the run's warm servers start, and compile, now
 				if (early != null) compiler.startServers(oracles);
 				facts = built;
@@ -286,14 +280,15 @@ final class LintOracleRun {
 	 * and otherwise knows none.
 	 */
 	private static function withStoredBuilds(
-		resolution: ResolutionScope, oracles: Array<OracleConfig>, reflective: Null<Array<String>>, holders: Null<Array<String>>
+		compiler: OracleProvider, resolution: ResolutionScope, oracles: Array<OracleConfig>, reflective: Null<Array<String>>,
+		holders: Null<Array<String>>
 	): ResolutionScope {
 		var read: Bool = false;
 		var builds: Null<ReachBuilds> = null;
 		function load(): Null<ReachBuilds> {
 			if (!read) {
 				read = true;
-				builds = bounded(ReachBuildsCache.load(oracles), reflective, holders);
+				builds = bounded(compiler.storedBuilds(oracles), reflective, holders);
 			}
 			return builds;
 		}
@@ -331,9 +326,9 @@ final class LintOracleRun {
 
 	/** End the builds' compiles `ahead` holds, started and never read (`withReachConfigurations`). */
 	private static function dropAhead(ahead: AheadBuilds): Void {
-		final pending: Null<DefinesProbe> = ahead.probe;
+		final pending: Null<StartedProbe<ReachBuilds>> = ahead.probe;
 		ahead.probe = null;
-		if (pending != null) ReachDefinesProbe.abandon(pending);
+		pending?.abandon();
 	}
 
 }

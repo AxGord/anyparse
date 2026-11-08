@@ -1019,6 +1019,22 @@
 			"find": "Std.downcast(oracle.runs, OracleRunMemo)",
 			"replace": "null",
 			"note": "a configuration's run memo is never found again once it is typed by the check package's marker, so every compile of a lint run goes to the compiler"
+		},
+		{
+			"name": "M-BUILDS-RUN-UNSTORED",
+			"type": "anyparse.check.oracle.ReachBuildsRun",
+			"method": "finish",
+			"find": "ReachBuildsCache.store(_oracles, _key, found);",
+			"replace": "",
+			"note": "builds read by this path are never stored, so a later --no-oracle run knows no build"
+		},
+		{
+			"name": "M-BUILDS-NOW-UNSTORED",
+			"type": "anyparse.check.oracle.ReachBuildsRun",
+			"method": "probeNow",
+			"find": "ReachBuildsCache.store(oracles, key, found);",
+			"replace": "",
+			"note": "builds read by this path are never stored, so a later --no-oracle run knows no build"
 		}
 	]
 }

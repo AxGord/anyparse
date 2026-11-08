@@ -11,7 +11,9 @@ import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.OracleProvider.OracleReading;
 import anyparse.query.OracleProvider.PreparedOracles;
+import anyparse.query.OracleProvider.StartedProbe;
 import anyparse.query.OracleProvider.UsableCoverage;
+import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
@@ -39,6 +41,20 @@ final class OracleProviders {
 		}
 		return new AbsentOracle();
 	}
+
+}
+
+/** The handle a grammar with no compiler answers a started probe with: nothing runs, so nothing is found or left. */
+@:nullSafety(Strict)
+private final class NoCompiles<T> implements StartedProbe<T> {
+
+	public function new() {}
+
+	public function finish(): Null<T> {
+		return null;
+	}
+
+	public function abandon(): Void {}
 
 }
 
@@ -156,5 +172,21 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	public function startServers(oracles: Array<OracleConfig>): Void {}
 
 	public function stopServers(oracles: Array<OracleConfig>): Void {}
+
+	public function startFacts(oracles: Array<OracleConfig>): StartedProbe<CompilerFacts> {
+		return new NoCompiles();
+	}
+
+	public function startBuilds(oracles: Array<OracleConfig>): StartedProbe<ReachBuilds> {
+		return new NoCompiles();
+	}
+
+	public function probeBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		return null;
+	}
+
+	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds> {
+		return null;
+	}
 
 }
