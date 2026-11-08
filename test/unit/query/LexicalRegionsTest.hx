@@ -193,6 +193,49 @@ class LexicalRegionsTest extends Test {
 		Assert.equals('$at:${at + 5}', spans.join('|'));
 	}
 
+	/**
+	 * The trivia scan reads the lexer's regions, so a `//` inside a string literal is text: scanning from inside the
+	 * literal stops on the slash instead of running to the end of a line the literal does not own, and a comment in
+	 * code is skipped whole.
+	 */
+	@:pin('control') @:killer('M-LEXREG-SKIPTRIVIA-STRING-BLIND')
+	public function testSkipTriviaReadsASlashInsideAStringAsText(): Void {
+		final source: String = "'a // b\nc' /* d */ e";
+		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
+		Assert.equals(source.indexOf('/'), LexicalRegions.skipTrivia(source, 2, regions), 'inside a string the slash is text');
+		Assert.equals(
+			source.indexOf('e'), LexicalRegions.skipTrivia(source, source.indexOf("' /*") + 1, regions), 'a comment in code is trivia'
+		);
+	}
+
+	/** The regions are asked for only at a `/`: a path that meets no comment pays no lex. */
+	@:pin('control') @:killer('M-LEXREG-SKIPTRIVIA-ASKS-OFF-SLASH')
+	public function testSkipTriviaLazyAsksForRegionsOnlyAtASlash(): Void {
+		var asked: Int = 0;
+		final regions: () -> Array<LexRegion> = () -> {
+			asked++;
+			return [];
+		};
+		Assert.equals(2, LexicalRegions.skipTriviaLazy('  x', 0, regions));
+		Assert.equals(0, asked, 'no slash: no lex');
+		Assert.equals(2, LexicalRegions.skipTriviaLazy('  /x', 0, regions));
+		Assert.equals(1, asked, 'a slash asks once');
+	}
+
+	/** A statement fragment's comments end where the lexer's would: a line comment before its break, one nothing closes at the end. */
+	@:pin('guard')
+	public function testOfFragmentEndsAComment(): Void {
+		final line: Array<LexRegion> = LexicalRegions.ofFragment('a // b\nc');
+		Assert.equals(1, line.length);
+		Assert.equals(2, line[0].from);
+		Assert.equals(6, line[0].to);
+		final open: Array<LexRegion> = LexicalRegions.ofFragment('a /* b');
+		Assert.equals(6, open[0].to);
+		final tail: Array<LexRegion> = LexicalRegions.ofFragment('a // b');
+		Assert.equals(6, tail[0].to);
+		Assert.equals(0, LexicalRegions.ofFragment('a / b').length);
+	}
+
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');

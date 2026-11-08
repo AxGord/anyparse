@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
@@ -510,9 +511,10 @@ final class CtorFieldWrite {
 	 * ever KEEPS a `var`.
 	 */
 	public static function abstractMethodMayMutate(
-		source: String, name: String, declType: Null<String>, exclude: Span, index: () -> Null<SymbolIndex>, abstractKinds: Array<String>
+		source: String, name: String, declType: Null<String>, exclude: Span, index: () -> Null<SymbolIndex>, abstractKinds: Array<String>,
+		lexicalRegions: () -> Array<LexRegion>
 	): Bool {
-		if (declType == null || !methodCalledOn(source, name, exclude)) return false;
+		if (declType == null || !methodCalledOn(source, name, exclude, lexicalRegions)) return false;
 		final idx: Null<SymbolIndex> = index();
 		final resolvedRebind: Null<Bool> = idx?.traits.abstractRebindsThis(declType, abstractKinds);
 		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
@@ -775,7 +777,7 @@ final class CtorFieldWrite {
 	 * method reference without a call (`name.m`) is not a match — only a `this`-mutating
 	 * abstract method call is a write the assignment scans miss.
 	 */
-	private static function methodCalledOn(source: String, name: String, exclude: Span): Bool {
+	private static function methodCalledOn(source: String, name: String, exclude: Span, lexicalRegions: () -> Array<LexRegion>): Bool {
 		final n: Int = source.length;
 		final len: Int = name.length;
 		if (len == 0) return false;
@@ -786,19 +788,20 @@ final class CtorFieldWrite {
 			from = idx + len;
 			final boundedBefore: Bool = idx == 0 || !Strings.isIdentChar(source.fastCodeAt(idx - 1));
 			final boundedAfter: Bool = from >= n || !Strings.isIdentChar(source.fastCodeAt(from));
-			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from)) return true;
+			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from, lexicalRegions))
+				return true;
 		}
 	}
 
 	/** Whether the tokens starting at `pos` are `.` <identifier> ... `(` — a method call, ignoring interposed whitespace and comments. */
-	private static function callFollows(source: String, pos: Int): Bool {
+	private static function callFollows(source: String, pos: Int, lexicalRegions: () -> Array<LexRegion>): Bool {
 		final n: Int = source.length;
-		var i: Int = SourceComments.skipForwardTrivia(source, pos);
+		var i: Int = LexicalRegions.skipTriviaLazy(source, pos, lexicalRegions);
 		if (i >= n || source.fastCodeAt(i) != '.'.code) return false;
-		i = SourceComments.skipForwardTrivia(source, i + 1);
+		i = LexicalRegions.skipTriviaLazy(source, i + 1, lexicalRegions);
 		if (i >= n || !Strings.isIdentStart(source.fastCodeAt(i))) return false;
 		while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
-		i = SourceComments.skipForwardTrivia(source, i);
+		i = LexicalRegions.skipTriviaLazy(source, i, lexicalRegions);
 		return i < n && source.fastCodeAt(i) == '('.code;
 	}
 

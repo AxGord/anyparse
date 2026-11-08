@@ -136,10 +136,7 @@ final class LexicalRegions {
 	 */
 	public static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
 		final region: Null<LexRegion> = regionAt(offset, regions);
-		return region != null && switch region.kind {
-			case LineComment, BlockComment: true;
-			case StringLit, RegexLit: false;
-		};
+		return region != null && isComment(region);
 	}
 
 	/**
@@ -164,10 +161,46 @@ final class LexicalRegions {
 	 * `SourceComments.hasCommentMarker`.
 	 */
 	public static function commentOpensIn(from: Int, to: Int, regions: Array<LexRegion>): Bool {
-		return regions.exists(region -> region.from >= from && region.from < to && switch region.kind {
+		return regions.exists(region -> region.from >= from && region.from < to && isComment(region));
+	}
+
+	/**
+	 * The first offset at or after `pos` that is neither whitespace nor inside a comment region, or `source.length` when
+	 * only trivia remains: the one answer to "where does the code after this point start". A `//` or `/*` inside a string
+	 * literal is text, so unlike a byte scan this never reads it as a comment; a comment nothing closes runs to the end of
+	 * the source, so no code byte follows it.
+	 */
+	public static function skipTrivia(source: String, pos: Int, regions: Array<LexRegion>): Int {
+		return skipTriviaLazy(source, pos, () -> regions);
+	}
+
+	/**
+	 * `skipTrivia` for a caller that holds no regions and may never need them: the thunk is asked only when a `/` could open a
+	 * comment, so a path that meets none pays no lex.
+	 */
+	public static function skipTriviaLazy(source: String, pos: Int, regions: () -> Array<LexRegion>): Int {
+		final n: Int = source.length;
+		var i: Int = pos;
+		while (i < n) {
+			final c: Int = source.fastCodeAt(i);
+			if (SourceText.isSpace(c)) {
+				i++;
+				continue;
+			}
+			if (c != '/'.code) break;
+			final region: Null<LexRegion> = regionAt(i, regions());
+			if (region == null || !isComment(region)) break;
+			i = region.to;
+		}
+		return i;
+	}
+
+	/** Is `region` a line or block comment? */
+	public static function isComment(region: LexRegion): Bool {
+		return switch region.kind {
 			case LineComment, BlockComment: true;
 			case StringLit, RegexLit: false;
-		});
+		};
 	}
 
 	/**
@@ -239,12 +272,17 @@ final class LexicalRegions {
 					i = end;
 					continue;
 				}
-			} else {
-				final end: Int = SourceComments.commentRegionEnd(text, i);
-				if (end >= 0) {
-					final block: Bool = text.fastCodeAt(i + 1) == '*'.code;
-					// `commentRegionEnd` is one past the line break of a line comment and `n + 1` for a comment nothing closes.
-					final to: Int = block ? (end > n ? n : end) : end - 1;
+			} else if (c == '/'.code && i + 1 < n) {
+				final next: Int = text.fastCodeAt(i + 1);
+				final block: Bool = next == '*'.code;
+				if (block || next == '/'.code) {
+					final close: Int = block ? text.indexOf('*/', i + 2) : text.indexOf('\n', i + 2);
+					final to: Int = if (close < 0)
+						n
+					else if (block)
+						close + 2
+					else
+						close;
 					out.push({ from: i, to: to, kind: block ? LexRegionKind.BlockComment : LexRegionKind.LineComment });
 					i = to;
 					continue;

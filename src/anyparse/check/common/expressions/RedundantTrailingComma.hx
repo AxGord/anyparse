@@ -2,7 +2,7 @@ package anyparse.check.common.expressions;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.query.ElementSpan;
-import anyparse.query.SourceComments;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -72,7 +72,11 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 		};
 		return kinds.hosts.length == 0 && kinds.params.length == 0
 			? []
-			: RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, kinds));
+			: RunScan.collect(
+				files, plugin,
+				(entry, tree, violations) ->
+					walk(violations, entry.file, entry.source, tree, kinds, plugin.lexicalRegions.bind(entry.source))
+			);
 	}
 
 	/** Delete each flagged comma. */
@@ -91,8 +95,10 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 	}
 
 	/** Walk `node`, flagging every trailing comma reached. */
-	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, kinds: ListKinds): Void {
-		final comma: Null<Span> = trailingComma(source, node, kinds);
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, kinds: ListKinds, lexicalRegions: () -> Array<LexRegion>
+	): Void {
+		final comma: Null<Span> = trailingComma(source, node, kinds, lexicalRegions);
 		if (comma != null) out.push({
 			file: file,
 			span: comma,
@@ -100,7 +106,7 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 			severity: Severity.Info,
 			message: 'redundant trailing comma'
 		});
-		for (c in node.children) walk(out, file, source, c, kinds);
+		for (c in node.children) walk(out, file, source, c, kinds, lexicalRegions);
 	}
 
 	/**
@@ -117,7 +123,9 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 	 * and every element is a child, so `lastListChild` already picked the last one); it
 	 * is kept for a grammar where a NON-element child may end after the list.
 	 */
-	private static function trailingComma(source: String, node: QueryNode, kinds: ListKinds): Null<Span> {
+	private static function trailingComma(
+		source: String, node: QueryNode, kinds: ListKinds, lexicalRegions: () -> Array<LexRegion>
+	): Null<Span> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
 		final host: Bool = kinds.hosts.contains(node.kind);
@@ -125,7 +133,7 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 		if (last == null || kinds.mandatory.contains(last.kind)) return null;
 		final lastSpan: Null<Span> = last.span;
 		if (lastSpan == null) return null;
-		final found: Null<{ comma: Int, next: Int }> = commaThenToken(source, lastSpan.to, span.to);
+		final found: Null<{ comma: Int, next: Int }> = commaThenToken(source, lastSpan.to, span.to, lexicalRegions);
 		if (found == null) return null;
 		final closes: Bool = host ? found.next == span.to - 1 && isCloser(source.charAt(found.next)) : source.charAt(found.next) == ')';
 		return closes ? oneChar(found.comma) : null;
@@ -136,10 +144,12 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 	 * first significant byte after that comma; null when either falls outside `limit`
 	 * or the gap holds anything but whitespace and comments.
 	 */
-	private static function commaThenToken(source: String, from: Int, limit: Int): Null<{ comma: Int, next: Int }> {
-		final comma: Int = SourceComments.skipForwardTrivia(source, from);
+	private static function commaThenToken(
+		source: String, from: Int, limit: Int, lexicalRegions: () -> Array<LexRegion>
+	): Null<{ comma: Int, next: Int }> {
+		final comma: Int = LexicalRegions.skipTriviaLazy(source, from, lexicalRegions);
 		if (comma >= limit || source.charAt(comma) != ',') return null;
-		final next: Int = SourceComments.skipForwardTrivia(source, comma + 1);
+		final next: Int = LexicalRegions.skipTriviaLazy(source, comma + 1, lexicalRegions);
 		return next >= limit ? null : { comma: comma, next: next };
 	}
 

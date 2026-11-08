@@ -15831,6 +15831,62 @@
 			"find": "return isMemberDeclKind(node.kind);",
 			"replace": "return true;",
 			"note": "every node is a member declaration, so a region guard counts non-members"
+		},
+		{
+			"name": "M-LEXREG-SKIPTRIVIA-STRING-BLIND",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "skipTriviaLazy",
+			"find": "if (region == null || !isComment(region)) break;",
+			"replace": "if (region == null) break;",
+			"note": "a string or regex literal is skipped as if it were a comment, so a `//` inside a quoted literal hides the code after it and the caller reads a byte of the text as the next token"
+		},
+		{
+			"name": "M-LEXREG-SKIPTRIVIA-ASKS-OFF-SLASH",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "skipTriviaLazy",
+			"find": "if (c != '/'.code) break;",
+			"replace": "",
+			"note": "the regions are asked for at every non-space byte, so a caller holding a lazy lex pays the whole-file scan on the commonest path, one that meets no comment"
+		},
+		{
+			"name": "M-HEADERSCAN-COMMENT-REGION",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "headerScan",
+			"find": "LexicalRegions.regionAt(i, regions);",
+			"replace": "null;",
+			"note": "no region is ever found, so a `{` written in a header comment is taken for the body brace and an extracted clause is spliced into comment text that still parses"
+		},
+		{
+			"name": "M-HEADERSCAN-COMMENT-NOT-A-TOKEN",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "headerScan",
+			"find": "if (!LexicalRegions.isComment(region)) tokenEnd = i;",
+			"replace": "tokenEnd = i;",
+			"note": "a header comment counts as the last token, so the insert offset of an extends clause lands after the comment instead of right after the name"
+		},
+		{
+			"name": "M-RETSLOT-COMMENT-OPAQUE",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "isReturnTypeSlot",
+			"find": "if (region == null || !LexicalRegions.isComment(region))",
+			"replace": "if (region == null || LexicalRegions.isComment(region))",
+			"note": "a comment in the gap is read as code, so a `(` written in it reads as a parameter list and a return type is taken for a type-parameter constraint"
+		},
+		{
+			"name": "M-RETSLOT-OPEN-COMMENT-NOT-CLOSED",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "isReturnTypeSlot",
+			"find": "else if (region.to > bodyStart)",
+			"replace": "else if (false)",
+			"note": "a comment that reaches the body start no longer fails the proof, so a comment swallowing the body is read as a return-type slot and the caller rewrites it"
+		},
+		{
+			"name": "M-RETSLOT-BODY-AT-SOURCE-END",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "isReturnTypeSlot",
+			"find": "bodyStart >= source.length",
+			"replace": "bodyStart > source.length",
+			"note": "a body starting at the source end is accepted, so an unterminated block comment that runs to the end reads as a closed gap and the slot is proven"
 		}
 	]
 }

@@ -4,9 +4,9 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.haxe.types.MapScopeScan.Scope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
@@ -27,6 +27,9 @@ private typedef Candidate = {
 private typedef Seams = {
 
 	var source: String;
+
+	/** The lexical regions of `source`: where a comment opens, so a scan never reads its bytes as code. */
+	var regions: Array<LexRegion>;
 	var scope: Scope;
 	var typeRefKinds: Array<String>;
 	var newExprKind: Null<String>;
@@ -332,6 +335,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 		final out: Array<Candidate> = [];
 		walk(tree, null, false, {
 			source: source,
+			regions: plugin.lexicalRegions(source),
 			scope: MapScopeScan.scopeOf(tree, shape),
 			typeRefKinds: typeRefKinds,
 			newExprKind: shape.newExprKind,
@@ -407,7 +411,9 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 			if (i == 0) return -1;
 			final candidate: Null<Span> = node.children[i - 1].span;
 			final body: Null<Span> = node.children[i].span;
-			return candidate != null && body != null && RefactorSupport.isReturnTypeSlot(seams.source, candidate.to, body.from)
+			return candidate != null
+				&& body != null
+				&& RefactorSupport.isReturnTypeSlot(seams.source, candidate.to, body.from, seams.regions)
 				? i - 1
 				: -1;
 		}
@@ -450,7 +456,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 		final site: Null<Site> = siteOf(node, seams);
 		if (site == null) return;
 		if (!site.text.rtrim().endsWith(EMPTY_ARGUMENT_LIST) || site.text.indexOf('#') != -1) return;
-		final nameAt: Int = constructedNameOffset(site.text, site.name);
+		final nameAt: Int = constructedNameOffset(site.text, site.name, site.span.from, seams.regions);
 		if (nameAt == -1) return;
 		if (!seams.scope.mapFree) {
 			out.push({ span: site.span, message: MSG_MAP_SHADOWED, edits: [] });
@@ -491,14 +497,14 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 	 * report it. Only the first name-token match is taken; the `new` keyword always precedes it, so a
 	 * match at offset 0 cannot be the constructed type.
 	 */
-	private static function constructedNameOffset(text: String, name: String): Int {
+	private static function constructedNameOffset(text: String, name: String, base: Int, regions: Array<LexRegion>): Int {
 		var i: Int = 0;
 		var tokenStart: Int = -1;
 		while (i < text.length) {
-			final commentEnd: Int = SourceComments.commentRegionEnd(text, i);
-			if (commentEnd != -1) {
+			final comment: Null<LexRegion> = LexicalRegions.regionAt(base + i, regions);
+			if (comment != null && LexicalRegions.isComment(comment)) {
 				tokenStart = -1;
-				i = commentEnd;
+				i = comment.to - base;
 				continue;
 			}
 			if (isNominalChar(text.fastCodeAt(i))) {

@@ -139,7 +139,7 @@ final class SourceText {
 	/**
 	 * The offset just past the whitespace run starting at `from`, bounded by `stop`.
 	 * Whitespace ONLY — a comment stops the scan, which is what a caller reading tokens
-	 * out of source text wants: `skipForwardTrivia` swallows comments and so hides them
+	 * out of source text wants: `LexicalRegions.skipTrivia` swallows comments and so hides them
 	 * from a comment guard. The canonical home for the hand-scan of a declaration head;
 	 * `redundant-property-access` is its first caller, and the private copies still in
 	 * `trivial-getter` / `redundant-map-iter-key` / `map-keys-lookup` belong here too.

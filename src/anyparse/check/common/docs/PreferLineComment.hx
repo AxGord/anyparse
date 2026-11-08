@@ -1,6 +1,7 @@
 package anyparse.check.common.docs;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -132,7 +133,8 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 
 	/** Every convertible block comment in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, kinds: LineCommentKinds): Array<LineCommentRewrite> {
-		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(regions);
 		final blocks: Array<CommentTok> = [for (tok in comments) if (!tok.isLine) tok];
 		if (blocks.length == 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
@@ -142,7 +144,7 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 			final rewrite: Null<LineCommentRewrite> = rewriteOf(source, tok);
 			if (rewrite == null) continue;
 			final host: Null<String> = innermostKind(tree, tok.from, tok.to, null);
-			if (host != null && kinds.blocks.contains(host) && !documentsLocalFunction(source, tree, tok, kinds.localFns))
+			if (host != null && kinds.blocks.contains(host) && !documentsLocalFunction(source, tree, tok, kinds.localFns, regions))
 				out.push(rewrite);
 		}
 		return out;
@@ -224,10 +226,12 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 	 * in-body analogue of a member doc, which reads as documentation and so is not
 	 * converted. A plain `/*` block above a local function is prose and still converts.
 	 */
-	private static function documentsLocalFunction(source: String, tree: QueryNode, tok: CommentTok, localFns: Array<String>): Bool {
+	private static function documentsLocalFunction(
+		source: String, tree: QueryNode, tok: CommentTok, localFns: Array<String>, regions: Array<LexRegion>
+	): Bool {
 		return localFns.length != 0
 			&& source.substring(tok.from, tok.from + 3) == '/**'
-			&& startsNodeOfKind(tree, SourceComments.skipForwardTrivia(source, tok.to), localFns);
+			&& startsNodeOfKind(tree, LexicalRegions.skipTrivia(source, tok.to, regions), localFns);
 	}
 
 	/** Whether any node of one of `kinds` starts exactly at `offset`. */

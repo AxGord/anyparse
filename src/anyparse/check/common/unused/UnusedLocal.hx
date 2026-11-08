@@ -2,10 +2,10 @@ package anyparse.check.common.unused;
 
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -46,6 +46,9 @@ private typedef ScanCtx = {
 	 * those no longer reads as a reference to a declaration it merely mentions.
 	 */
 	var matchMask: Array<Span>;
+
+	/** The file's lexical regions, asked for only when a comment could open between two tokens. */
+	var lexicalRegions: () -> Array<LexRegion>;
 
 }
 
@@ -171,7 +174,8 @@ final class UnusedLocal extends RuleBase implements VolatileMessage {
 				selfScopeDeclKinds: shape.selfScopeDeclKinds,
 				valueBinderKinds: shape.iterationValueBinderKinds ?? [],
 				conditionalIfKeyword: shape.conditionalIfKeyword,
-				matchMask: OccurrenceScan.inertMask(entry.source, plugin)
+				matchMask: OccurrenceScan.inertMask(entry.source, plugin),
+				lexicalRegions: plugin.lexicalRegions.bind(entry.source)
 			};
 			walk(ctx, tree, null);
 		});
@@ -458,10 +462,10 @@ final class UnusedLocal extends RuleBase implements VolatileMessage {
 	 * loop), so an exact end-offset comparison would make a finding a property of layout.
 	 * Only text that could BIND or REFERENCE something disqualifies the shape.
 	 */
-	private static function onlyTrivia(source: String, from: Int, to: Int): Bool {
+	private static function onlyTrivia(source: String, from: Int, to: Int, lexicalRegions: () -> Array<LexRegion>): Bool {
 		var at: Int = from;
 		while (at < to) {
-			final next: Int = SourceComments.skipForwardTrivia(source, at);
+			final next: Int = LexicalRegions.skipTriviaLazy(source, at, lexicalRegions);
 			if (next > at) {
 				at = next;
 				continue;
@@ -491,7 +495,8 @@ final class UnusedLocal extends RuleBase implements VolatileMessage {
 		final children: Array<QueryNode> = node.children;
 		if (span == null || children.length == 0) return;
 		final body: Null<Span> = children[children.length - 1].span;
-		if (body == null || body.to > span.to || body.from <= span.from || !onlyTrivia(ctx.source, body.to, span.to)) return;
+		if (body == null || body.to > span.to || body.from <= span.from || !onlyTrivia(ctx.source, body.to, span.to, ctx.lexicalRegions))
+			return;
 		final binder: Null<Span> = OccurrenceScan.binderTokenSpan(ctx.source, span.from, body.from, name);
 		if (binder == null) return;
 		out.push(binder);

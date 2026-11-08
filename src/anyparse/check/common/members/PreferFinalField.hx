@@ -233,7 +233,10 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 		if (folded) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			final foldDeclType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (CtorFieldWrite.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds)) return;
+			if (CtorFieldWrite.abstractMethodMayMutate(
+				source, name, foldDeclType, span, lazyIndex, abstractKinds, plugin.lexicalRegions.bind(source)
+			))
+				return;
 			flag(out, file, span, name, 'has a null-guarded constructor default', decline);
 			return;
 		}
@@ -241,7 +244,10 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			if (writtenInFile(source, name, span, plugin)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (CtorFieldWrite.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
+			if (CtorFieldWrite.abstractMethodMayMutate(
+				source, name, declType, span, lazyIndex, abstractKinds, plugin.lexicalRegions.bind(source)
+			))
+				return;
 			flag(out, file, span, name, 'is assigned only at its declaration', decline);
 			return;
 		}

@@ -898,7 +898,7 @@
 			"name": "M-HCBT-CHAIN-TERMINATOR",
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "fixEdits",
-			"find": "terminatorEnd(source, ends.chainEnd.to, terminator)",
+			"find": "terminatorEnd(source, ends.chainEnd.to, terminator, lexicalRegions)",
 			"replace": "ends.chainEnd.to",
 			"note": "the moved tail is written in front of the chain's own `;`, which is left as an empty statement the compiler refuses after the tail's own `;`"
 		},
@@ -914,7 +914,7 @@
 			"name": "M-HCBT-TERMINATOR-TRIVIA",
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "terminatorEnd",
-			"find": "SourceComments.skipForwardTrivia(source, from)",
+			"find": "LexicalRegions.skipTriviaLazy(source, from, lexicalRegions)",
 			"replace": "from",
 			"note": "the terminator is looked for only where the chain ends, so a comment between the chain and its `;` hides it and the moved tail is written in front of the `;`, which the compiler refuses after the tail's own"
 		},

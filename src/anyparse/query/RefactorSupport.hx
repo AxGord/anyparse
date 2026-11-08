@@ -556,7 +556,7 @@ final class RefactorSupport {
 	 * LIST: a constraint always has one between itself and the body, a return type never does, so a gap
 	 * holding no `(` is the discriminator.
 	 *
-	 * COMMENTS in the gap are skipped through the shared `commentRegionEnd` scan, because a `(` written
+	 * COMMENTS in the gap are skipped as the lexer's comment regions, because a `(` written
 	 * inside one cannot be a parameter list. Without that, a block comment or a trailing line comment
 	 * between the annotation and the body carries the whole function out of the proof, silently.
 	 *
@@ -566,8 +566,9 @@ final class RefactorSupport {
 	 * same way — `@:meta("(")` before the body opens at the `@`.
 	 *
 	 * Every OTHER unknown is answered `false`, which is the direction both callers want: a comment that
-	 * does not close before the body, an offset pair that arrives reversed, a `bodyStart` past the end of
-	 * the source. That keeps a `(` the scan cannot attribute from ever reading as absent, and it bounds the
+	 * does not close before the body, an offset pair that arrives reversed, a `bodyStart` at or past
+	 * the end of the source (a body always holds a byte, so one that starts there is itself unknown).
+	 * That keeps a `(` the scan cannot attribute from ever reading as absent, and it bounds the
 	 * scan to the window it was handed. Note what the arm does NOT buy: a comment can only ever flip a
 	 * RETURN-type slot, never a constraint slot, because a constraint's `(` precedes any comment that could
 	 * follow it. And this project's own writer refuses to round-trip a comment in that gap at all ("the
@@ -575,8 +576,8 @@ final class RefactorSupport {
 	 * could have produced — a real writer gap, recorded here because it is what makes the arm look
 	 * unreachable.
 	 */
-	public static function isReturnTypeSlot(source: String, typeEnd: Int, bodyStart: Int): Bool {
-		if (typeEnd > bodyStart || bodyStart > source.length) return false;
+	public static function isReturnTypeSlot(source: String, typeEnd: Int, bodyStart: Int, regions: Array<LexRegion>): Bool {
+		if (typeEnd > bodyStart || bodyStart >= source.length) return false;
 		var i: Int = typeEnd;
 		while (i < bodyStart) {
 			final c: Int = source.fastCodeAt(i);
@@ -585,13 +586,13 @@ final class RefactorSupport {
 				i++;
 				continue;
 			}
-			final commentEnd: Int = SourceComments.commentRegionEnd(source, i);
-			if (commentEnd < 0)
+			final region: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
+			if (region == null || !LexicalRegions.isComment(region))
 				i++;
-			else if (commentEnd > bodyStart)
+			else if (region.to > bodyStart)
 				return false;
 			else
-				i = commentEnd;
+				i = region.to;
 		}
 		return true;
 	}
@@ -866,32 +867,15 @@ final class RefactorSupport {
 		var tokenEnd: Int = from;
 		var i: Int = from;
 		while (i < end) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '/'.code && i + 1 < end) {
-				final commentEnd: Int = SourceComments.commentRegionEnd(source, i);
-				if (commentEnd >= 0) {
-					i = commentEnd;
-					continue;
-				}
-			}
-			if (c == '"'.code || c == "'".code) {
-				// The scanned region starting HERE is the literal; its end is the seam's own answer to
-				// where the quote closes. A quote the scan attributes to some other region (a regex
-				// body) is not a literal opener and is stepped over as an ordinary byte.
-				//
-				// REACHABLE, against the reading that a header window — just past the type NAME to the body
-				// `{` — can hold no string: a `@:const` type parameter does. `class X extends B<"//">`
-				// parses here as a `ConstStringType`, and the whole program compiles and runs on 4.3.7.
-				// Drop this arm and the `//` inside the literal opens a line comment that eats the rest of
-				// the header, so `typeHeaderInsertOffset` answers the quote's offset and
-				// `extract-interface` writes its clause INTO the literal — `class X extends B<" implements
-				// IX//">`, which re-parses and passes every gate the op has. Pinned by
-				// `TriviaScanSliceTest.testTypeHeaderInsertOffsetStepsOverAHeaderStringLiteral`.
-				final literal: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
-				i = literal != null && literal.from == i ? literal.to : i + 1;
-				tokenEnd = i;
+			final region: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
+			if (region != null) {
+				// A region is stepped over whole. A comment holds no token; a literal does, and a header can hold one:
+				// `class X extends B<"//">` is a `@:const` type parameter that parses as a `ConstStringType`.
+				i = region.to;
+				if (!LexicalRegions.isComment(region)) tokenEnd = i;
 				continue;
 			}
+			final c: Int = source.fastCodeAt(i);
 			if (c == '{'.code && brace < 0) brace = i;
 			if (!SourceText.isSpace(c)) tokenEnd = i + 1;
 			i++;

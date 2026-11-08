@@ -84,7 +84,7 @@ final class PreferFinal extends RuleBase {
 			if (tree != null)
 				checkTree(
 					violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds, index,
-					provider?.declaredTypes(entry.source), abstractKinds
+					provider?.declaredTypes(entry.source), abstractKinds, plugin
 				);
 		}
 		return violations;
@@ -125,7 +125,7 @@ final class PreferFinal extends RuleBase {
 	private static function checkTree(
 		out: Array<Violation>, file: String, source: String, tree: QueryNode, shape: RefShape, scopeKinds: Array<String>,
 		opaqueKinds: Array<String>, mutableKinds: Array<String>, index: () -> Null<SymbolIndex>, declaredTypes: Null<Map<Int, String>>,
-		abstractKinds: Array<String>
+		abstractKinds: Array<String>, plugin: GrammarPlugin
 	): Void {
 		final candidates: Array<Candidate> = [];
 		collect(
@@ -138,7 +138,10 @@ final class PreferFinal extends RuleBase {
 			final writes: Null<Array<Span>> = writesByName[c.name];
 			if (writes != null && reassignedInScope(writes, c.scope)) continue;
 			final declType: Null<String> = (declaredTypes == null ? null : declaredTypes[c.span.from]) ?? c.constructed;
-			if (CtorFieldWrite.abstractMethodMayMutate(source, c.name, declType, c.span, index, abstractKinds)) continue;
+			if (CtorFieldWrite.abstractMethodMayMutate(
+				source, c.name, declType, c.span, index, abstractKinds, plugin.lexicalRegions.bind(source)
+			))
+				continue;
 			out.push({
 				file: file,
 				span: c.span,

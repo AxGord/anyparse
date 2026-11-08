@@ -458,7 +458,7 @@ final class CrossRenameMember {
 			? ctorExpectedOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile)
 			: patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile);
 		final out: Array<Int> = qualified.offsets.concat(patterns)
-			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile));
+			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile, plugin));
 		if (!target.isEnumCtor) return { offsets: out, error: null };
 		final ctor: CtorOffsets = EnumCtorRefs.offsets(entry, {
 			typeName: target.typeName,
@@ -899,7 +899,8 @@ final class CrossRenameMember {
 	 * cannot even see — that declares the name (`hostShadows`).
 	 */
 	private static function expectedReturnOffsets(
-		source: String, file: String, tree: QueryNode, target: MemberTarget, refShape: RefShape, index: SymbolIndex, cursorFile: String
+		source: String, file: String, tree: QueryNode, target: MemberTarget, refShape: RefShape, index: SymbolIndex, cursorFile: String,
+		plugin: GrammarPlugin
 	): Array<Int> {
 		if (!target.isEnumValue) return [];
 		// A WHOLE-WORD probe, not a substring one: `RED` occurs inside `COLORED` and inside every
@@ -918,6 +919,7 @@ final class CrossRenameMember {
 		final grammar: ReturnSeams = seams;
 		final scan: ReturnScan = {
 			source: source,
+			regions: plugin.lexicalRegions(source),
 			file: file,
 			cursorFile: cursorFile,
 			target: target,
@@ -1083,7 +1085,7 @@ final class CrossRenameMember {
 	 * type through it, verified by compiling `function nul(): Null<Colour> return SAME;` on 4.3.7.
 	 */
 	private static function returnsSourceType(fn: QueryNode, scan: ReturnScan): Bool {
-		final ret: Null<QueryNode> = returnTypeChild(fn, scan.source, scan.seams);
+		final ret: Null<QueryNode> = returnTypeChild(fn, scan.source, scan.seams, scan.regions);
 		if (ret == null) return false;
 		final span: Null<Span> = ret.span;
 		if (span == null) return false;
@@ -1102,7 +1104,7 @@ final class CrossRenameMember {
 	 * TYPE-PARAMETER CONSTRAINT does, so the slot alone is NOT enough; see the guard below. An
 	 * anonymous-structure or function return has no name and is left unproven.
 	 */
-	private static function returnTypeChild(fn: QueryNode, source: String, s: ReturnSeams): Null<QueryNode> {
+	private static function returnTypeChild(fn: QueryNode, source: String, s: ReturnSeams, regions: Array<LexRegion>): Null<QueryNode> {
 		final children: Array<QueryNode> = fn.children;
 		for (i in 0...children.length) if (s.bodyKinds.contains(children[i].kind)) {
 			if (i == 0) return null;
@@ -1115,7 +1117,7 @@ final class CrossRenameMember {
 			// slot holds the LAST one. `RefactorSupport.isReturnTypeSlot` reads the gap between the
 			// candidate and the body for the parameter list that only a constraint has — the one
 			// predicate `PreferMapType.returnTypeSlot` asks of the type-ref tree.
-			return at != null && body != null && RefactorSupport.isReturnTypeSlot(source, at.to, body.from) ? candidate : null;
+			return at != null && body != null && RefactorSupport.isReturnTypeSlot(source, at.to, body.from, regions) ? candidate : null;
 		}
 		return null;
 	}
@@ -1226,6 +1228,7 @@ private typedef ReturnSeams = {
  */
 private typedef ReturnScan = {
 	final source: String;
+	final regions: Array<LexRegion>;
 	final file: String;
 	final cursorFile: String;
 	final target: MemberTarget;

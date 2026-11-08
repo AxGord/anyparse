@@ -674,52 +674,6 @@ final class SourceComments {
 	}
 
 	/**
-	 * Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block
-	 * comment. A comment nothing closes leaves no such byte: the result is then past the source end,
-	 * which every caller's own bound test rejects.
-	 */
-	public static function skipForwardTrivia(source: String, pos: Int): Int {
-		final n: Int = source.length;
-		var i: Int = pos;
-		while (i < n) {
-			if (SourceText.isSpace(source.fastCodeAt(i))) {
-				i++;
-				continue;
-			}
-			final commentEnd: Int = commentRegionEnd(source, i);
-			if (commentEnd < 0) break;
-			i = commentEnd;
-		}
-		return i;
-	}
-
-	/**
-	 * The offset just past the comment opening at `at`, or -1 when no comment opens there — the one
-	 * comment scan behind `skipForwardTrivia`, `headerScan` and `isReturnTypeSlot`, each of which
-	 * used to carry its own copy.
-	 *
-	 * A comment that NEVER CLOSES yields `source.length + 1`, one past every valid offset, so a
-	 * caller's `> bound` test rejects it at ANY bound including the source end. That is what lets
-	 * `isReturnTypeSlot` — whose `true` means "rewrite this" — fail closed on an unterminated `/*`
-	 * while a cursor-advancing caller reads the same value as "trivia to the end" and stops.
-	 *
-	 * Bounding is the CALLER's job: the scan reads the whole of `source` and never clamps, because
-	 * the three consumers bound it differently (a header range, a body start, the source end) and a
-	 * clamp would make "closed exactly at the bound" indistinguishable from "never closed".
-	 */
-	public static function commentRegionEnd(source: String, at: Int): Int {
-		if (at + 1 >= source.length || source.fastCodeAt(at) != '/'.code) return -1;
-		final next: Int = source.fastCodeAt(at + 1);
-		if (next == '*'.code) {
-			final close: Int = source.indexOf('*/', at + 2);
-			return close < 0 ? source.length + 1 : close + 2;
-		}
-		if (next != '/'.code) return -1;
-		final nl: Int = source.indexOf('\n', at + 2);
-		return nl < 0 ? source.length + 1 : nl + 1;
-	}
-
-	/**
 	 * Extend a member's `span` back over own-line leading comments and forward
 	 * over a same-line trailing comment, yielding its full source slot.
 	 */

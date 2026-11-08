@@ -251,7 +251,7 @@ final class MemberWriteScan {
 			final boundedAfter: Bool = at >= n || !Strings.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, at)) return true;
+			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, at, lexicalRegions)) return true;
 		}
 	}
 
@@ -370,9 +370,9 @@ final class MemberWriteScan {
 	 * assignment: `++` / `--`, or an operator run ending in `=` that is not a comparison
 	 * (`==` / `<=` / `>=` / `!=`) or the lambda arrow (`=>`).
 	 */
-	private static function followedByAssign(source: String, pos: Int): Bool {
+	private static function followedByAssign(source: String, pos: Int, lexicalRegions: () -> Array<LexRegion>): Bool {
 		final n: Int = source.length;
-		var i: Int = SourceComments.skipForwardTrivia(source, pos);
+		var i: Int = LexicalRegions.skipTriviaLazy(source, pos, lexicalRegions);
 		final start: Int = i;
 		while (i < n && isOperatorChar(source.fastCodeAt(i))) i++;
 		final token: String = source.substring(start, i);

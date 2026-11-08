@@ -4,7 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.TailScan;
 import anyparse.query.IndexScope;
-import anyparse.query.SourceComments;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -56,7 +56,7 @@ final class HoistCommonBranchTail extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams, null)) violations.push({
+			for (c in scan(tree, entry.source, seams, null, plugin.lexicalRegions.bind(entry.source))) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: RULE_ID,
@@ -78,7 +78,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: violations[0].file, source: source }], plugin);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex);
-			return TailScan.flaggedEdits(scan(tree, source, seams, purity), violations);
+			return TailScan.flaggedEdits(scan(tree, source, seams, purity, plugin.lexicalRegions.bind(source)), violations);
 		});
 	}
 
@@ -93,12 +93,16 @@ final class HoistCommonBranchTail extends RuleBase {
 	}
 
 	/** Every common-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
-	private static function scan(tree: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>): Array<Candidate> {
-		return TailScan.candidatesIn(tree, seams, site -> tryChain(site.head, source, seams, purity));
+	private static function scan(
+		tree: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>, lexicalRegions: () -> Array<LexRegion>
+	): Array<Candidate> {
+		return TailScan.candidatesIn(tree, seams, site -> tryChain(site.head, source, seams, purity, lexicalRegions));
 	}
 
 	/** The candidate for the chain headed by `head`, or null when any gate refuses (see the class doc). */
-	private static function tryChain(head: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>): Null<Candidate> {
+	private static function tryChain(
+		head: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>, lexicalRegions: () -> Array<LexRegion>
+	): Null<Candidate> {
 		final branches: Null<Array<QueryNode>> = BranchChain.branchesOf(head, seams.ifKinds);
 		if (branches == null) return null;
 		final headSpan: Null<Span> = head.span;
@@ -125,7 +129,7 @@ final class HoistCommonBranchTail extends RuleBase {
 			whole: whole,
 			edits: whole
 				? wholeEdits(head, branches, lists, source, seams, purity)
-				: fixEdits(branches, lists, firsts, lasts, count, source, seams.terminator)
+				: fixEdits(branches, lists, firsts, lasts, count, source, seams.terminator, lexicalRegions)
 		};
 	}
 
@@ -169,12 +173,12 @@ final class HoistCommonBranchTail extends RuleBase {
 	 */
 	private static function fixEdits(
 		branches: Array<QueryNode>, lists: Array<Array<QueryNode>>, firsts: Array<Span>, lasts: Array<Span>, count: Int, source: String,
-		terminator: Null<String>
+		terminator: Null<String>, lexicalRegions: () -> Array<LexRegion>
 	): Array<FixEdit> {
 
 		final ends: Null<ElseEnds> = TailScan.elseEnds(branches);
 		if (ends == null) return [];
-		final after: Int = terminatorEnd(source, ends.chainEnd.to, terminator);
+		final after: Int = terminatorEnd(source, ends.chainEnd.to, terminator, lexicalRegions);
 		final edits: Array<FixEdit> = [];
 		for (i => branch in branches) {
 			final kept: Int = lists[i].length - count;
@@ -203,9 +207,11 @@ final class HoistCommonBranchTail extends RuleBase {
 	 * none does: a chain written as a statement keeps its `;` outside its node, and the moved tail must go after it, or replace
 	 * it, rather than stand in front of a stray empty statement.
 	 */
-	private static function terminatorEnd(source: String, from: Int, terminator: Null<String>): Int {
+	private static function terminatorEnd(
+		source: String, from: Int, terminator: Null<String>, lexicalRegions: () -> Array<LexRegion>
+	): Int {
 		if (terminator == null) return from;
-		final at: Int = SourceComments.skipForwardTrivia(source, from);
+		final at: Int = LexicalRegions.skipTriviaLazy(source, from, lexicalRegions);
 		return source.substr(at, terminator.length) == terminator ? at + terminator.length : from;
 	}
 
