@@ -507,6 +507,22 @@
 			"find": "closeInside, sepBeforeFlags, flatTrailingComma",
 			"replace": "closeInside, sepBeforeFlags, false",
 			"note": "a leading-break call glued around a block lambda drops the trailing comma its source wrote under keep"
+		},
+		{
+			"name": "M-PAREN-CHAIN-ADD-COINDENT-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "coIndented",
+			"find": "case CollapseAddProbe(inner): CollapseAddProbe(spine(inner));",
+			"replace": "case CollapseAddProbe(inner): CollapseAddProbe(inner);",
+			"note": "the continuation lines of a + / - chain in an opened paren no longer co-indent with its first operand"
+		},
+		{
+			"name": "M-PAREN-CHAIN-OPEN-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "isBreakableChain",
+			"find": "return cls == ChainOperatorClass.OpAddSub || cls == ChainOperatorClass.OpBool;",
+			"replace": "return cls == ChainOperatorClass.OpBool;",
+			"note": "a + / - chain in a paren that does not fit no longer opens the paren: it glues and breaks at the operators"
 		}
 	]
 }

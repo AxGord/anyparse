@@ -104,10 +104,10 @@ final class TokenReport {
 			? 0
 			: (
 				turn.input * price.input
-					+ turn.output * price.output
-					+ turn.cacheRead * price.read
-					+ turn.write5m * price.input * WRITE_5M_MULTIPLE
-					+ turn.write1h * price.input * WRITE_1H_MULTIPLE
+				+ turn.output * price.output
+				+ turn.cacheRead * price.read
+				+ turn.write5m * price.input * WRITE_5M_MULTIPLE
+				+ turn.write1h * price.input * WRITE_1H_MULTIPLE
 			) / PER_MTOK;
 	}
 

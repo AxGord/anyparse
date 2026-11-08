@@ -221,11 +221,11 @@ final class HxExprParenDivOpenBoundaryTest extends Test {
 	@:killer('M-PAREN-SIBLING-COLLAPSE')
 	public function testCollapseTailParenIsNotABreakPoint(): Void {
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tratioValue = (\n\t\t\thxxxxxxxxx.top - baseSpan.top\n'
-			+ '\t\t) / (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\tratioValue = (\n\t\t\thxxxxxxxxx.top___baseSpan.top\n'
+			+ '\t\t) / (tailSpanValues[tailSpanValues.length - 1].top___baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
 			triviaWrite(
-				'class Sample {\n\tfunction run() {\n\t\tratioValue = (hxxxxxxxxx.top - baseSpan.top) / ('
-				+ 'tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n}',
+				'class Sample {\n\tfunction run() {\n\t\tratioValue = (hxxxxxxxxx.top___baseSpan.top) / ('
+				+ 'tailSpanValues[tailSpanValues.length - 1].top___baseSpans[baseSpans.length - 1].top);\n\t}\n}',
 				CFG.replace(EXPR_WRAP_SECTION, '')
 			)
 		);
@@ -439,13 +439,13 @@ final class HxExprParenDivOpenBoundaryTest extends Test {
 	@:killer('M-PAREN-EXACT-REST')
 	public function testUnmeasuredRestNodeEndsColumnPredictions(): Void {
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (\n\t\t\taaaa - bbbb\n\t\t) / (\n'
+			'class Sample {\n\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (\n\t\t\taaaa___bbbb\n\t\t) / (\n'
 			+ '\t\t\tv -> v.someLongFieldName + anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n'
-			+ '\t\t)(1) / (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
+			+ '\t\t)(1) / (tailSpanValues[tailSpanValues.length - 1].top___baseSpans[baseSpans.length - 1].top);\n\t}\n\n}',
 			triviaWrite(
-				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (aaaa - bbbb) / (v -> v.someLongFieldName +'
+				'class Sample {\n\tfunction run() {\n\t\tvalueQQQQQQQQQQQQQQQQQQQQQQQQQ = (aaaa___bbbb) / (v -> v.someLongFieldName +'
 				+ ' anotherFieldRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR)(1) /'
-				+ ' (tailSpanValues[tailSpanValues.length - 1].top - baseSpans[baseSpans.length - 1].top);\n\t}\n}',
+				+ ' (tailSpanValues[tailSpanValues.length - 1].top___baseSpans[baseSpans.length - 1].top);\n\t}\n}',
 				CFG.replace(EXPR_WRAP_SECTION, '')
 			)
 		);

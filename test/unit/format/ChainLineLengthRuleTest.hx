@@ -64,7 +64,7 @@ final class ChainLineLengthRuleTest extends Test {
 		final src: String = 'class Main {\n\tfunction test():Void {\n\t\tfinal h:Float = Dimensions.HEADER_HEIGHT * scale '
 			+ '+ Dimensions.CELL_HEIGHT * scale * (rowIdx + 1 - (dayPos == 0 ? 1 : 0));\n\t}\n}';
 		final plain: String = HxWriteFixture.triviaWrite(src, config(80, false));
-		Assert.isTrue(plain.contains('(rowIdx + 1 - (dayPos == 0'), plain);
+		Assert.isTrue(plain.contains('rowIdx + 1 - (dayPos == 0'), plain);
 		Assert.equals(plain, HxWriteFixture.triviaWrite(src, config(80, true)));
 	}
 
@@ -140,13 +140,13 @@ final class ChainLineLengthRuleTest extends Test {
 	}
 
 	/**
-	 * A `+` chain glued so that its last operand's paren opens stays glued under the `lineLength` rules, as it does
-	 * without them, whether or not the chain sits in a paren of its own: the commit takes the side every threshold
-	 * answers not-fired, so the comprehension in the paren is not pushed past the limit and broken.
+	 * A `+` chain glued so that its last operand's paren opens stays glued under the
+	 * `lineLength` rules, as it does without them: the commit takes the side every threshold
+	 * answers not-fired, so the comprehension in the paren is not pushed past the limit and
+	 * broken. A chain in a paren of its own opens that paren instead, its operands one per line.
 	 */
 	@:pin('control')
 	@:killer('M-CHAIN-GLUE-THRESHOLD-FIRES')
-	@:killer('M-CHAIN-GLUE-PAREN-THRESHOLD-FIRES')
 	public function testALineLengthRuleKeepsAChainGluedToAnOpenedParen(): Void {
 		final src: String = 'class M {\n\tfunction f() {\n\t\tfor (name in names) {\n\t\t\tif (x) {\n\t\t\t\ttrace(1);\n\t\t\t\thelp = '
 			+ '(help == null ? \'\' : help + \'. \') + (\'Arguments:\'.foreground(ForegroundColour.DarkGrayColour) + \'; \' + '
@@ -156,8 +156,14 @@ final class ChainLineLengthRuleTest extends Test {
 		final plain: String = HxWriteFixture.triviaWrite(src, forkConfig(''));
 		Assert.isTrue(plain.contains('\thelp = (help == null ? \'\' : help + \'. \') + (\n'), plain);
 		Assert.isTrue(plain.contains('[for (a in node.args) describeArgument(a)].join(\', \')\n'), plain);
-		Assert.isTrue(plain.contains('\t(help == null ? \'\' : help + \'. \') + (\n'), plain);
-		Assert.isTrue(plain.contains('[for (a in node.args) describeArg(a)].join(\', \')\n'), plain);
+		Assert.isTrue(plain.contains('\t(help == null ? \'\' : help + \'. \')\n'), plain);
+		Assert.isTrue(
+			plain.contains(
+				'+ (\'Arguments:\'.foreground(ForegroundColour.DarkGrayColour) + \'; \' + [for (a in node.args) '
+				+ 'describeArg(a)].join(\', \'))\n'
+			),
+			plain
+		);
 		Assert.equals(plain, HxWriteFixture.triviaWrite(src, forkConfig(SOFT_160)));
 	}
 
@@ -175,8 +181,10 @@ final class ChainLineLengthRuleTest extends Test {
 			+ 'final h:Float = Dimensions.HEADER_HEIGHT * scale + Dimensions.CELL_HEIGHT * (rowIdxLonger + firstOffsetValue + '
 			+ 'secondOffsetValue - (thirdOffsetValue + 1));\n\t}\n}';
 		final plain: String = HxWriteFixture.triviaWrite(src, cascade(80, ''));
-		Assert.isTrue(plain.contains('(rowIdxLonger + firstOffsetValue - secondOffsetValue - thirdOffsetValue + 1);'), plain);
-		Assert.isTrue(plain.contains('(rowIdxLonger + firstOffsetValue + secondOffsetValue - (thirdOffsetValue + 1));'), plain);
+		Assert.isTrue(plain.contains('rowIdxLonger + firstOffsetValue - secondOffsetValue - thirdOffsetValue + 1\n'), plain);
+		Assert.isTrue(
+			plain.contains('rowIdxLonger + firstOffsetValue + secondOffsetValue - (\n\t\t\t\t\tthirdOffsetValue + 1\n\t\t\t\t)\n'), plain
+		);
 		Assert.equals(plain, HxWriteFixture.triviaWrite(src, cascade(80, AT_90)));
 	}
 

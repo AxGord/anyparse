@@ -126,9 +126,9 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * `chain`, an opBool `emit` output, with every continuation `Nest` of its own shape spine collapsed to zero, i.e. the
-	 * layout `nestSuppress` gives: for a container that supplies the indent itself (an opened paren), so the chain's
-	 * broken lines co-indent with its first operand. Only the spine is rebuilt; the operands stay the same nodes.
+	 * `chain`, an operator chain `isBreakableChain` answers for, with every continuation `Nest` of its own shape spine collapsed
+	 * to zero, i.e. the layout `nestSuppress` gives: for a container that supplies the indent itself (an opened paren), so the
+	 * chain's broken lines co-indent with its first operand. Only the spine is rebuilt; the operands stay the same nodes.
 	 */
 	public static function coIndented(chain: Doc): Doc {
 		function spine(d: Doc): Doc {
@@ -138,6 +138,7 @@ final class BinaryChainEmit {
 				case Group(inner): Group(spine(inner));
 				case GroupWithRestProbe(inner): GroupWithRestProbe(spine(inner));
 				case CollapseBoolProbe(inner): CollapseBoolProbe(spine(inner));
+				case CollapseAddProbe(inner): CollapseAddProbe(spine(inner));
 				case IfBreak(brk, fl): IfBreak(spine(brk), spine(fl));
 				case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, spine(brk), spine(fl));
 				case IfLineExceeds(n, brk, fl): IfLineExceeds(n, spine(brk), spine(fl));
@@ -153,12 +154,14 @@ final class BinaryChainEmit {
 	}
 
 	/**
-	 * Whether `d` is itself an `&&` / `||` chain as `emit` lays it out — rooted at the chain's own `WrapBoundary`, so a
-	 * chain nested inside another construct (`macro (a || b)`) does not count — with no forced break inside: the inner a
-	 * paren group opens around as a container when it does not fit the line.
+	 * Whether `d` is itself an `&&` / `||` or `+` / `-` chain as `emit` lays it out — rooted at the chain's own `WrapBoundary`, so a chain
+	 * nested inside another construct (`macro (a || b)`) does not count — with no forced break inside: the inner a paren group
+	 * opens around as a container when it does not fit the line.
 	 */
-	public static function isBreakableBoolChain(d: Doc): Bool {
-		return d.match(WrapBoundary(_)) && WrapList.flatLength(d) >= 0 && WrapList.topLevelOperatorClass(d) == ChainOperatorClass.OpBool;
+	public static function isBreakableChain(d: Doc): Bool {
+		if (!d.match(WrapBoundary(_)) || WrapList.flatLength(d) < 0) return false;
+		final cls: Null<ChainOperatorClass> = WrapList.topLevelOperatorClass(d);
+		return cls == ChainOperatorClass.OpAddSub || cls == ChainOperatorClass.OpBool;
 	}
 
 	/** One indent level in columns, per the configured indent character. */

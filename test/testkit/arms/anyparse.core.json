@@ -590,14 +590,6 @@
 			"note": "an inner add-chain ending in a bare paren, collapsed inside a broken outer one, keeps its lineLength threshold, which fires past the limit and breaks it"
 		},
 		{
-			"name": "M-CHAIN-GLUE-PAREN-THRESHOLD-FIRES",
-			"type": "anyparse.core.CollapsePass",
-			"method": "chainGluedIfOpens",
-			"find": "case WrapBoundary(Group(IfBreak(_, fl))): gluedSide(fl, width);",
-			"replace": "case WrapBoundary(Group(IfBreak(_, fl))): fl;",
-			"note": "a chain in a paren of its own, committed glued around an opened paren, keeps its lineLength threshold, which measures the chain flat and breaks it after the commit"
-		},
-		{
 			"name": "M-CHAIN-GLUED-SIDE-DROPS-REACHED-THRESHOLD",
 			"type": "anyparse.core.CollapsePass",
 			"method": "gluedSide",

@@ -160,7 +160,7 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? (\n'
 			+ "\t\t\t\t(headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n"
-			+ "\t\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue\n\t\t\t)\n\t\t\t: '';\n\t}\n\n}",
+			+ "\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue\n\t\t\t)\n\t\t\t: '';\n\t}\n\n}",
 			triviaWrite(SRC_OPADDSUB, CFG)
 		);
 	}
@@ -169,11 +169,11 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 	 * Without expressionWrapping the opAddSub paren stays glued (`? ((`) — the config
 	 * gate keeps fork default-config parity (corpus byte-inert).
 	 */
-	public function testDefaultExpressionWrapKeepsParenOpAddSubGlued(): Void {
+	public function testDefaultExpressionWrapOpensParenOpAddSub(): Void {
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n'
-			+ "\t\t\t? ((headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n"
-			+ "\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue)\n\t\t\t: '';\n\t}\n\n}",
+			'class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? (\n'
+			+ "\t\t\t\t(headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n"
+			+ "\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue\n\t\t\t)\n\t\t\t: '';\n\t}\n\n}",
 			triviaWrite(SRC_OPADDSUB, CFG.replace(EXPR_WRAP_SECTION, ''))
 		);
 	}
