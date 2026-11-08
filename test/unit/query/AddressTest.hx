@@ -1,5 +1,6 @@
 package unit.query;
 
+import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.Address;
 import anyparse.query.Engine;
 import anyparse.query.Pattern.KindEquivalence;
@@ -788,6 +789,80 @@ class AddressTest extends Test {
 			compared++;
 		}
 		Assert.isTrue(compared > 20, 'fixture must exercise many addresses, got $compared');
+	}
+
+	/**
+	 * A bare line addresses a node that STARTS at its first character. The `{` alone on its line opens
+	 * the object of one array element, so that element — not the `arms` array around it — is what a
+	 * replace through the line would overwrite.
+	 */
+	@:pin('guard')
+	public function testAtBraceLineResolvesTheObjectItOpens(): Void {
+		final src: String = '{\n\t"arms": [\n\t\t{\n\t\t\t"name": "A"\n\t\t},\n\t\t{\n\t\t\t"name": "B"\n\t\t}\n\t]\n}\n';
+		final plugin: JsonQueryPlugin = new JsonQueryPlugin();
+		switch Address.resolve(plugin.parseFile(src), src, plugin, { at: '6' }) {
+			case Ok(offset, node):
+				Assert.equals(src.lastIndexOf('{'), offset);
+				Assert.equals('JObject', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	/**
+	 * A line whose first character sits inside a node that started earlier — a closing brace — has
+	 * no node of its own: the address refuses and names the enclosing nodes instead of answering
+	 * the innermost container. KILLED by arm `M-ADDRESS-BARE-LINE-WIDENS`.
+	 */
+	@:pin('control')
+	@:killer('M-ADDRESS-BARE-LINE-WIDENS')
+	public function testAtLineWithNoStartingNodeRefusesWithCandidates(): Void {
+		switch resolve({ at: '7' }) {
+			case Ok(_, node):
+				Assert.fail('resolved to ' + (node == null ? 'null' : node.kind));
+			case Err(message):
+				Assert.stringContains('no node starts on line 7', message);
+				Assert.stringContains('FnMember:f', message);
+				Assert.stringContains('--select', message);
+		}
+	}
+
+	/** A `--kind` lift needs the enclosing node of a line no node starts on, so `widen` keeps that answer. */
+	public function testAtLineWidenKeepsTheEnclosingNode(): Void {
+		switch resolve({ at: '7', widen: true }) {
+			case Ok(_, node):
+				Assert.equals('BlockBody', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	/** The same rule in Haxe: a `{` alone on its line resolves to the body it opens, not the function around it. */
+	public function testAtBraceLineResolvesTheBlockItOpens(): Void {
+		final src: String = 'class C {\n\tfunction f():Int\n\t{\n\t\treturn 1;\n\t}\n}\n';
+		switch resolveIn(src, { at: '3' }) {
+			case Ok(offset, node):
+				Assert.equals('{', src.charAt(offset));
+				Assert.equals('BlockBody', node == null ? 'null' : node.kind);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	/**
+	 * The `{` of a class body alone on its line opens no node of its own: the class started on the line
+	 * above, so the line is refused instead of answering `ClassDecl`. KILLED by arm `M-ADDRESS-BARE-LINE-WIDENS`.
+	 */
+	@:pin('control')
+	@:killer('M-ADDRESS-BARE-LINE-WIDENS')
+	public function testAtClassBodyBraceLineRefuses(): Void {
+		switch resolveIn('class T\n{\n\tvar a: Int;\n}\n', { at: '2' }) {
+			case Ok(_, node):
+				Assert.fail('resolved to ' + (node == null ? 'null' : node.kind));
+			case Err(message):
+				Assert.stringContains('no node starts on line 2', message);
+				Assert.stringContains('ClassDecl:T', message);
+		}
 	}
 
 	private function resolve(spec: AddressSpec): AddressResult {

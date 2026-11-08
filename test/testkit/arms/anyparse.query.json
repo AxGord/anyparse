@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-ADDRESS-BARE-LINE-WIDENS",
+			"type": "anyparse.query.Address",
+			"method": "resolveAt",
+			"find": "from == null || from == target",
+			"replace": "from == null || from != null",
+			"note": "a bare line answers the innermost node spanning its first character again, so a closing brace or a continuation line addresses the container around it and a write op replaces that whole container"
+		},
+		{
 			"name": "M-ADDRESS-NO-ROOT-ANCHOR",
 			"type": "anyparse.query.Address",
 			"method": "widenToUnique",

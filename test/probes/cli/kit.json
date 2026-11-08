@@ -25,7 +25,9 @@
 		"oraclebad/A.hx": "class A {}\n",
 		"helpercopy/apq.json": "{\"resolutionRoots\":[\"src\"],\"rules\":{\"helper-copy\":{\"enabled\":true,\"homes\":[\"util/\"]}}}",
 		"helpercopy/src/util/Cmp.hx": "package util;\n\nclass Cmp {\n\tpublic static function order(a: String, b: String): Int {\n\t\treturn if (a < b)\n\t\t\t-1\n\t\telse if (a > b)\n\t\t\t1\n\t\telse\n\t\t\t0;\n\t}\n}\n",
-		"helpercopy/src/own/Own.hx": "package own;\n\nclass Own {\n\tprivate static function cmp(x: String, y: String): Int {\n\t\treturn if (x < y)\n\t\t\t-1\n\t\telse if (x > y)\n\t\t\t1\n\t\telse\n\t\t\t0;\n\t}\n}\n"
+		"helpercopy/src/own/Own.hx": "package own;\n\nclass Own {\n\tprivate static function cmp(x: String, y: String): Int {\n\t\treturn if (x < y)\n\t\t\t-1\n\t\telse if (x > y)\n\t\t\t1\n\t\telse\n\t\t\t0;\n\t}\n}\n",
+		"arms/c.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"X\"\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Y\"\n\t\t}\n\t]\n}\n",
+		"brace/c.hx": "class T\n{\n\tvar a: Int;\n}\n"
 	},
 	"invocations": [
 		{
@@ -8433,6 +8435,154 @@
 				"exit": 0,
 				"out": "07e36208fc6299dd",
 				"err": "508980b5d1ec5208",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node arms/c.json --at 3 {\"name\": \"Z\"}",
+			"argv": [
+				"apq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"3",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f8433dbc9f332d7c",
+				"err": "d625a825d1147b3e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node arms/c.json --at 5 {\"name\": \"Z\"}",
+			"argv": [
+				"apq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"5",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "95355b67a13649ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node arms/c.json --at 3 {\"name\": \"Z\"}",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"3",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f8433dbc9f332d7c",
+				"err": "d625a825d1147b3e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node arms/c.json --at 5 {\"name\": \"Z\"}",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"5",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "95355b67a13649ba",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node brace/c.hx --at 2 x",
+			"argv": [
+				"apq",
+				"replace-node",
+				"brace/c.hx",
+				"--at",
+				"2",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "15059c0fde28820f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node brace/c.hx --at 2 x",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"brace/c.hx",
+				"--at",
+				"2",
+				"x"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "15059c0fde28820f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node arms/c.json --at 5 --kind JObject {\"name\": \"Z\"}",
+			"argv": [
+				"apq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"5",
+				"--kind",
+				"JObject",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f8433dbc9f332d7c",
+				"err": "d625a825d1147b3e",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node arms/c.json --at 5 --kind JObject {\"name\": \"Z\"}",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"arms/c.json",
+				"--at",
+				"5",
+				"--kind",
+				"JObject",
+				"{\"name\": \"Z\"}"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "f8433dbc9f332d7c",
+				"err": "d625a825d1147b3e",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

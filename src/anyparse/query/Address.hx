@@ -24,10 +24,15 @@ enum AddressResult {
  * given; `nth` is a 1-based disambiguator valid with `select` / `match` only.
  */
 typedef AddressSpec = {
+
 	@:optional var at: String;
 	@:optional var select: String;
 	@:optional var match: String;
 	@:optional var nth: Null<Int>;
+
+	/** A bare line may resolve to a node enclosing its first character — the caller lifts by `--kind`. */
+	@:optional var widen: Bool;
+
 }
 
 /**
@@ -69,7 +74,7 @@ final class Address {
 		if (modes > 1) return Err('give exactly one of <line>[:<col>] / --select / --match');
 		if (spec.nth != null && spec.at != null) return Err('--nth applies to --select / --match only');
 		final at: Null<String> = spec.at;
-		if (at != null) return resolveAt(tree, source, at);
+		if (at != null) return resolveAt(tree, source, plugin, at, spec.widen == true);
 		final sel: Null<String> = spec.select;
 		if (sel != null) return resolveSelect(tree, source, plugin, sel, spec.nth);
 		final pattern: Null<String> = spec.match;
@@ -224,7 +229,7 @@ final class Address {
 	}
 
 	/** A position `<line>[:<col>]`; a missing column snaps to the line's first non-whitespace character. */
-	private static function resolveAt(tree: QueryNode, source: String, at: String): AddressResult {
+	private static function resolveAt(tree: QueryNode, source: String, plugin: GrammarPlugin, at: String, widen: Bool): AddressResult {
 		final colon: Int = at.indexOf(':');
 		final lineText: String = colon >= 0 ? at.substring(0, colon) : at;
 		final line: Null<Int> = Std.parseInt(lineText);
@@ -247,7 +252,30 @@ final class Address {
 		}
 		if (offset >= source.length) return Err('line $line is past the end of the file');
 		final target: Int = declAfterModifierPrefix(tree, source, offset);
-		return Ok(target, Engine.at(tree, target));
+		final node: Null<QueryNode> = Engine.at(tree, target);
+		final from: Null<Int> = node?.span?.from;
+		return widen || node == null || from == null || from == target
+			? Ok(target, node)
+			: Err(noNodeStarts(tree, source, plugin, line, node));
+	}
+
+	/**
+	 * The refusal of a bare line on which no node starts: `Engine.at` would answer the node that merely
+	 * SPANS the line's first character (a closing `}` or `]`, a continuation line), and a write op
+	 * would then replace that whole container. Lists the enclosing nodes, innermost first, with a
+	 * selector each.
+	 */
+	private static function noNodeStarts(tree: QueryNode, source: String, plugin: GrammarPlugin, line: Int, innermost: QueryNode): String {
+		final index: AddressIndex = describerFor(tree, plugin.selectKindEquivalence());
+		final enclosing: Array<QueryNode> = (TreePath.pathTo(tree, innermost) ?? [innermost]).filter(n -> n.span != null);
+		enclosing.reverse();
+		final shown: Int = enclosing.length < CANDIDATE_LIMIT ? enclosing.length : CANDIDATE_LIMIT;
+		final lines: Array<String> = [for (i in 0...shown) '  ${candidateLabel(index, source, enclosing[i])}'];
+		final more: String = enclosing.length > shown ? '\n  … ${enclosing.length - shown} more' : '';
+		return 'no node starts on line $line — address one of the nodes enclosing it (innermost first) with --select, '
+			+ 'or give <line>:<col> of the node to take:\n'
+			+ lines.join('\n')
+			+ more;
 	}
 
 	/**

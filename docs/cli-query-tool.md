@@ -573,7 +573,7 @@ Every mutation op resolves its target through one shared address layer (`anypars
 
 | Form                 | Meaning |
 |----------------------|---------|
-| `<line>[:<col>]`     | 1-based position; **column omitted = the line's first non-whitespace character**, then past the declaration's modifier / metadata prefix — `public static function f` resolves the `FnMember`, not the `Public` sibling, and `@:keep` on its own line reaches the declaration below it. The walk stops at anything that is not a node START, so a comment between the prefix and the declaration keeps the address on the prefix. Spell the column explicitly to address a modifier or annotation itself |
+| `<line>[:<col>]`     | 1-based position; **column omitted = the line's first non-whitespace character**, then past the declaration's modifier / metadata prefix — `public static function f` resolves the `FnMember`, not the `Public` sibling, and `@:keep` on its own line reaches the declaration below it. The walk stops at anything that is not a node START, so a comment between the prefix and the declaration keeps the address on the prefix. A line on which NO node starts (a closing `}` / `]`, a continuation line) is refused with the enclosing nodes listed — a bare line never widens to a container that merely spans its first character; `--kind` keeps that widening, since it lifts from the enclosing node. Spell the column explicitly to address a modifier or annotation itself |
 | `--select '<sel>'`   | Selector v2 path; must resolve to exactly one node |
 | `--match '<pattern>'`| An `apq search` structural pattern (`$x` metavars); the matched node is the target |
 | `--nth <k>`          | Picks the k-th (1-based, document order) of several `--select` / `--match` matches |

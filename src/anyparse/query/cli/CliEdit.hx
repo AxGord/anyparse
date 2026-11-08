@@ -127,7 +127,7 @@ final class CliEdit {
 		if (liftKind != null && CliWalk.rejectUnknownKinds(opName, plugin, [liftKind], [])) return null;
 		if (atSpec != null) {
 			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
-			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);
+			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null, false, kind != null);
 			return if (pos == null)
 				null
 			else if (kind != null)
@@ -183,7 +183,7 @@ final class CliEdit {
 	 */
 	public static function resolveAddressPos(
 		op: String, source: String, plugin: GrammarPlugin, at: Null<String>, select: Null<String>, matchPat: Null<String>, nth: Null<Int>,
-		preferName: Bool = false
+		preferName: Bool = false, widen: Bool = false
 	): Null<Position> {
 		final tree: QueryNode = try {
 			plugin.parseFile(source);
@@ -195,7 +195,8 @@ final class CliEdit {
 			at: at,
 			select: select,
 			match: matchPat,
-			nth: nth
+			nth: nth,
+			widen: widen
 		}) {
 			case Ok(offset, node):
 				if (node != null && select == null)
