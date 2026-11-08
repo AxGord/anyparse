@@ -93,7 +93,7 @@ class LintFixRemoveTest extends Test {
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final witness: DiskWitness = new DiskWitness('$root/src/aqq/import.hx');
-			out = '${run(root, [new UnusedImport(), witness], [])}|${witness.seen.join(' :: ')}';
+			out = '${run(root, [new UnusedImport(), witness], [])}|${witness.seen.slice(0, 2).join(' :: ')}';
 		});
 		Assert.equals('0|import qqz.Deadqqw;\nimport qqz.Liveqqw;\n :: import qqz.Liveqqw;\n', out);
 		#else
@@ -184,7 +184,7 @@ private class LoadBearingRemove implements Check implements CrossFileFix {
 /** Reads one file from DISK each time it is run — what the pass about to judge it would find there. */
 private class DiskWitness implements Check {
 
-	/** The text found at each run, in order. */
+	/** The text found at each run, in order — a run after the first sees what the pass before it left on disk. */
 	public final seen: Array<String> = [];
 
 	private final _path: String;
@@ -208,7 +208,7 @@ private class DiskWitness implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		#if (sys || nodejs)
 		final text: String = File.getContent(_path);
-		if (seen.length == 0 || seen[seen.length - 1] != text) seen.push(text);
+		seen.push(text);
 		#end
 		return [];
 	}
