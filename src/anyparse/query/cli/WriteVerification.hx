@@ -85,7 +85,7 @@ final class WriteVerification {
 		final compiler: OracleProvider = compilerOf(paths);
 		final out: Array<OracleConfig> = [];
 		final keys: Array<String> = [];
-		for (dir in dirs) for (oracle in LintConfig.discover(Path.join([dir, '_'])).compilerOracles()) {
+		for (dir in dirs) for (oracle in LintConfig.discover(Path.join([dir, '_'])).compilerOracles(compiler)) {
 			final key: String = compiler.oracleKey(oracle);
 			if (keys.contains(key)) continue;
 			keys.push(key);

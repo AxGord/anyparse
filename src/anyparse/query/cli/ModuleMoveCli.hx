@@ -93,6 +93,7 @@ final class ModuleMoveCli {
 		// The library sources names resolve to — `resolutionLibs` and the std, read as `lint` reads them; without them a
 		// name an import of a library module may bind cannot be read, and the move refuses it.
 		final config: LintConfig = LintConfig.discover(opts.moves[0].from);
+		OracleProviders.reportDrops(config, plugin);
 		final resolution: Null<ResolutionScope> = LintCommand.resolutionThunk(
 			opts.lang, scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
 		);
@@ -184,7 +185,7 @@ final class ModuleMoveCli {
 		ext: String
 	): Int {
 		if (!opts.write) return preview(outcome);
-		if (opts.verify && LintConfig.discover(outcome.moves[0].from).compilerOracles().length == 0) {
+		if (opts.verify && LintConfig.discover(outcome.moves[0].from).compilerOracles(OracleProviders.of(plugin)).length == 0) {
 			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apq.json — nothing written\n');
 			return EXIT_RUNTIME;
 		}

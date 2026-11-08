@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.check.Check.NameSite;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsOracle;
-import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig;
+import anyparse.check.oracle.OracleDeclaration;
 import anyparse.query.OracleProvider.CompiledSet;
 import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.OracleProvider.NameProof;
@@ -42,6 +43,14 @@ final class OracleProviders {
 			if (grammar is OracleProvider) return cast grammar;
 		}
 		return new AbsentOracle();
+	}
+
+	/**
+	 * Read `config`'s `compilerOracle` declarations so their dropped entries are reported, for a command that discovers a
+	 * config and never asks it for builds: the warning is the only sign that an entry the project wrote is gone.
+	 */
+	public static function reportDrops(config: LintConfig, plugin: GrammarPlugin): Void {
+		config.compilerOracles(of(plugin)); // noqa: unused-return-value
 	}
 
 }
@@ -130,6 +139,10 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 
 	public function oracleKey(oracle: OracleConfig): String {
 		return [oracle.hxml, oracle.dir ?? ''].concat(oracle.defines).join('\n');
+	}
+
+	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig> {
+		return OracleDeclaration.read(declared.raw, declared.baseDir, drops);
 	}
 
 	public function describeOracle(oracle: OracleConfig): String {

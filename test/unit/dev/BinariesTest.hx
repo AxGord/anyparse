@@ -2,6 +2,7 @@ package unit.dev;
 
 import anyparse.check.LintConfig;
 import anyparse.check.oracle.OracleCache;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import dev.Binaries;
 import devkit.TempDir;
@@ -72,7 +73,7 @@ final class BinariesTest extends Test {
 	public function testABuildDeclaredOnlyWithDefinesStoresNothing(): Void {
 		TempDir.with(dir -> {
 			final tree: String = project(dir, GOOD, '{"compilerOracle":[{"hxml":"check.hxml","defines":["flag"]}]}');
-			final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles()[0];
+			final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles(new HaxeQueryPlugin())[0];
 			final withDefines: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
 			final plain: Null<String> = OracleCache.fingerprint(oracle.hxml, oracle.dir);
 			if (withDefines == null || plain == null) {
@@ -115,13 +116,13 @@ final class BinariesTest extends Test {
 
 	/** The fingerprint the project's declared build has now, as a lint would take it. */
 	private static function fingerprintOf(tree: String): Null<String> {
-		final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles()[0];
+		final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles(new HaxeQueryPlugin())[0];
 		return OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines);
 	}
 
 	/** The verdict stored for the project's declared build under `fingerprint`. */
 	private static function held(tree: String, fingerprint: String): Null<OracleOutcome> {
-		final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles()[0];
+		final oracle: OracleConfig = LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles(new HaxeQueryPlugin())[0];
 		return OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
 	}
 

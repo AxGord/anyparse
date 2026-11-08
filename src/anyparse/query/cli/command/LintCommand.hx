@@ -243,6 +243,7 @@ final class LintCommand implements CliCommand {
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
 			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file), o.reviewBudget);
+			OracleProviders.reportDrops(discovered, plugin);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
@@ -283,7 +284,7 @@ final class LintCommand implements CliCommand {
 		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
-		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle);
+		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle, OracleProviders.of(plugin));
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final compiler: OracleProvider = OracleProviders.of(plugin);
 		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
@@ -489,10 +490,10 @@ final class LintCommand implements CliCommand {
 	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
 	 */
 	private static function warnScopeNotices(
-		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool
+		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool, compiler: OracleProvider
 	): Void {
 		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
-		if (!noOracle) ConfigDisagreement.warnOracle(resolveConfig, paths);
+		if (!noOracle) ConfigDisagreement.warnOracle(compiler, resolveConfig, paths);
 		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);
 	}
 

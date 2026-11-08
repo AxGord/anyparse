@@ -18,6 +18,7 @@ final class ProjectResolution {
 	 */
 	public static function hostFor(plugin: GrammarPlugin, file: String, source: String): GrammarPlugin {
 		final config: LintConfig = LintConfig.discover(file);
+		OracleProviders.reportDrops(config, plugin);
 		final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(
 			plugin.langName(), [{ file: file, source: source }], config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd()
 		);

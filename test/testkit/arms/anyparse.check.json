@@ -303,7 +303,7 @@
 			"name": "M-REACH-COMPLETE-FOLLOWS-LIST",
 			"type": "anyparse.check.LintDocuments",
 			"method": "mergeDocuments",
-			"find": "near.compilerOracles == null ? far.reachConfigurationsComplete : null",
+			"find": "near.oracleDeclarations.length == 0 ? far.reachConfigurationsComplete : null",
 			"replace": "far.reachConfigurationsComplete",
 			"note": "a nested document naming a compilerOracle list of its own inherits the completeness its ancestor declared for another list, so the reach analysis reads a partial list as every build the project ships"
 		},
@@ -447,6 +447,38 @@
 			"find": "current == null ? [] : [for (name => prop in current.props) name => prop]",
 			"replace": "[]",
 			"note": "the overlay keeps only its own key, so the rule's other options of apq.json are lost for the run"
+		},
+		{
+			"name": "M-ORACLE-SHADOWED-DROPS-LOST",
+			"type": "anyparse.check.LintConfig",
+			"method": "compilerOracles",
+			"find": "for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
+			"replace": "if (nearest == read) for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
+			"note": "a dropped compilerOracle entry in a document a nearer one overrides is no longer reported, so the mistake goes unsaid until the nearer document is removed"
+		},
+		{
+			"name": "M-ORACLE-READ-DROPS-LOST",
+			"type": "anyparse.check.LintConfig",
+			"method": "compilerOracles",
+			"find": "for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
+			"replace": "{}",
+			"note": "a read that drops a compilerOracle entry no longer records it on the config, so a malformed declaration degrades in silence"
+		},
+		{
+			"name": "M-ORACLE-OVERRIDE-LOSES-DECLARATION",
+			"type": "anyparse.check.LintConfig",
+			"method": "withIntOption",
+			"find": "_oracles.declared",
+			"replace": "null",
+			"note": "a run overriding one option gets a config with no compilerOracle declaration, so it silently runs with no builds"
+		},
+		{
+			"name": "M-ORACLE-DROP-WARNED-UNDER-NO-DOCUMENT",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "declared.document = entry.path",
+			"replace": "declared.document = null",
+			"note": "a dropped compilerOracle entry is recorded but no longer warned under the document that wrote it"
 		}
 	]
 }

@@ -89,9 +89,10 @@ final class OracleCommand implements CliCommand {
 			configByDir[dir] = discovered;
 			return discovered;
 		}
-		ConfigDisagreement.warnOracle(resolveConfig, paths);
-		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles();
-		if (oracles.length > 0) return recordOracleVerdicts(OracleProviders.of(CliArgs.pickPlugin(lang)), oracles);
+		final compiler: OracleProvider = OracleProviders.of(CliArgs.pickPlugin(lang));
+		ConfigDisagreement.warnOracle(compiler, resolveConfig, paths);
+		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles(compiler);
+		if (oracles.length > 0) return recordOracleVerdicts(compiler, oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;
 	}

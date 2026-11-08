@@ -20,7 +20,9 @@
 		"oraclejson/apq.json": "{\"compilerOracle\":\"b.hxml\"}\n",
 		"oraclejson/a.json": "{}\n",
 		"identity/a.json": "[{\"file\":\"C.hx\",\"line\":3,\"col\":2,\"endLine\":3,\"endCol\":23,\"severity\":\"info\",\"rule\":\"member-order\",\"message\":\"type member 'x' is out of canonical order: a public var field must precede the public instance method 'p'\",\"address\":\"ClassDecl:C >> Public --nth 2\"}]\n",
-		"identity/b.json": "[{\"file\":\"C.hx\",\"line\":4,\"col\":2,\"endLine\":4,\"endCol\":23,\"severity\":\"info\",\"rule\":\"member-order\",\"message\":\"type member 'x' is out of canonical order: a public var field must precede the private instance method 'q'\",\"address\":\"ClassDecl:C >> Public --nth 2\"}]\n"
+		"identity/b.json": "[{\"file\":\"C.hx\",\"line\":4,\"col\":2,\"endLine\":4,\"endCol\":23,\"severity\":\"info\",\"rule\":\"member-order\",\"message\":\"type member 'x' is out of canonical order: a public var field must precede the private instance method 'q'\",\"address\":\"ClassDecl:C >> Public --nth 2\"}]\n",
+		"oraclebad/apq.json": "{\"compilerOracle\":[\"b.hxml\"]}\n",
+		"oraclebad/A.hx": "class A {}\n"
 	},
 	"invocations": [
 		{
@@ -8321,6 +8323,77 @@
 				"exit": 0,
 				"out": "375db4bb8312611d",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint oraclebad --lang haxe --list-rules",
+			"argv": [
+				"apq",
+				"lint",
+				"oraclebad",
+				"--lang",
+				"haxe",
+				"--list-rules"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "14f4584666dac636",
+				"err": "b16af8623e04073d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq add-import oraclebad/A.hx a.B --lang haxe",
+			"argv": [
+				"apq",
+				"add-import",
+				"oraclebad/A.hx",
+				"a.B",
+				"--lang",
+				"haxe"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "0adb6b9d47932a5b",
+				"err": "783588ce798b6933",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint oraclebad --lang haxe --no-oracle",
+			"argv": [
+				"apq",
+				"lint",
+				"oraclebad",
+				"--lang",
+				"haxe",
+				"--no-oracle"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "7c5c99a5aaaffe1f",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move oraclebad/A.hx --to oraclebad/sub --scope oraclebad --lang haxe",
+			"argv": [
+				"apq",
+				"move",
+				"oraclebad/A.hx",
+				"--to",
+				"oraclebad/sub",
+				"--scope",
+				"oraclebad",
+				"--lang",
+				"haxe"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7d7471381c1baaeb",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

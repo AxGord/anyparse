@@ -14,6 +14,7 @@ import anyparse.query.HaxelibResolver;
 import anyparse.query.ReachProject;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -42,7 +43,7 @@ final class EdgeDiff {
 		final project: Array<SourceFile> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
 		final library: Array<SourceFile> = libraryOf(config, project);
-		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles()).oracles;
+		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles(new HaxeQueryPlugin())).oracles;
 		final started: Float = Sys.time();
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
 		Sys.println('facts: ${Math.round(Sys.time() - started)}s, configurations ${facts?.configurations}, dropped ${facts?.dropped}');
@@ -106,7 +107,7 @@ final class EdgeDiff {
 		for (u in g.unresolved) if (u.from == id)
 			out.push('unresolved ${u.reason.getName()}(${u.reason.getParameters().join(',')}) @${u.span?.from ?? -1}');
 		for (a in g.unresolvedAccess) if (a.from == id) out.push('access ${a.member} @${a.span?.from ?? -1}');
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

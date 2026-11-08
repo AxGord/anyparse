@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig.OracleDeclared;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.TypedFactsRun;
 import anyparse.check.oracle.CompilerDisplayOracle;
@@ -772,6 +773,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function oracleKey(oracle: OracleConfig): String {
 		return OracleDeclaration.oracleKey(oracle);
+	}
+
+	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig> {
+		return OracleDeclaration.read(declared.raw, declared.baseDir, drops);
 	}
 
 	public function describeOracle(oracle: OracleConfig): String {

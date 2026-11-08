@@ -223,7 +223,8 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeLimeShapedProject();
 		final cfg: LintConfig = LintConfig.discover('$dir/src/Good.hx');
 		Assert.equals(
-			Path.normalize(dir), Path.normalize(cfg.compilerOracles()[0].dir ?? ''), 'a root-relative hxml compiles from the config dir'
+			Path.normalize(dir), Path.normalize(cfg.compilerOracles(new HaxeQueryPlugin())[0].dir ?? ''),
+			'a root-relative hxml compiles from the config dir'
 		);
 		if (oracleWorks()) Assert.equals(0, Cli.run(['lint', '$dir/src/Good.hx']), 'a lime-shaped project typechecks through its oracle');
 		CliFixture.removeDir(dir);
@@ -247,7 +248,7 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeNestedProject();
 		final path: String = '$dir/src/Good.hx';
 		final config: LintConfig = LintConfig.discover(path);
-		final oracles: Array<OracleConfig> = config.compilerOracles();
+		final oracles: Array<OracleConfig> = config.compilerOracles(new HaxeQueryPlugin());
 		if (oracles.length == 0) {
 			Assert.fail('the nested apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
@@ -343,7 +344,7 @@ final class CompilerOracleE2ETest extends Test {
 		final dir: String = writeLintDir(VALID, true, true);
 		final path: String = '$dir/Good.hx';
 		final config: LintConfig = LintConfig.discover(path);
-		final oracles: Array<OracleConfig> = config.compilerOracles();
+		final oracles: Array<OracleConfig> = config.compilerOracles(new HaxeQueryPlugin());
 		if (oracles.length == 0) {
 			Assert.fail('the fixture apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
@@ -431,7 +432,8 @@ final class CompilerOracleE2ETest extends Test {
 
 	/** Reap the warm server a fixture started, keyed through the config exactly as the CLI keyed it. */
 	private function stopWarmServer(path: String): Void {
-		for (oracle in LintConfig.discover(path).compilerOracles()) CompilerServer.stopShared(oracle.hxml, oracle.dir, oracle.defines);
+		for (oracle in LintConfig.discover(path).compilerOracles(new HaxeQueryPlugin()))
+			CompilerServer.stopShared(oracle.hxml, oracle.dir, oracle.defines);
 	}
 
 	private function oracleWorks(): Bool {

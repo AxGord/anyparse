@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.EffectiveRules;
+import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.check.RuleCategory;
 import anyparse.check.RuleIndex;
@@ -606,6 +607,7 @@ final class LintArgs {
 			return EXIT_RUNTIME;
 		}
 		// A rule the scope's grammar never runs is no state of this scope's lint: it is left out, as a run leaves it out.
+		for (path in paths) OracleProviders.reportDrops(LintConfig.discover(path), io.plugin);
 		final runs: Array<Check> = checks.filter(c -> Linter.runsOn(c, io.plugin.langName()));
 		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, runs)));
 		return EXIT_OK;

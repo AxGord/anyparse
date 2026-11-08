@@ -2,6 +2,8 @@ package anyparse.check;
 
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.OracleProvider;
+import anyparse.util.Compare;
 
 /**
  * The sentences a lint RUN owes its reader about the SET of `apq.json` documents its scope spans —
@@ -50,8 +52,8 @@ final class ConfigDisagreement {
 	 * Called from `Cli.runLint` and gated there on `--no-oracle`: a run that takes no oracle verdict
 	 * has nothing a disagreement could corrupt.
 	 */
-	public static function warnOracle(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {
-		warn('scope-disagreement', 'the compiler oracle', oracleMessage(resolve, paths));
+	public static function warnOracle(compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {
+		warn('scope-disagreement', 'the compiler oracle', oracleMessage(compiler, resolve, paths));
 	}
 
 	/**
@@ -113,8 +115,10 @@ final class ConfigDisagreement {
 	 * the array, and a directory with no config at all no longer renders as `undefined` where a parsed document with the key absent
 	 * renders as `null`. That difference is what once reported the first mixed scope this ran over as a disagreement about nothing.
 	 */
-	private static function oracleMessage(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Null<String> {
-		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles()));
+	private static function oracleMessage(
+		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>
+	): Null<String> {
+		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles(compiler)));
 	}
 
 	/**
@@ -217,7 +221,7 @@ final class ConfigDisagreement {
 	 */
 	private static function rosterSignature(roster: Array<FrameworkContract>): String {
 		final rendered: Array<String> = roster.map(contract -> '${contract.root}(${sorted(contract.names)})(${sorted(contract.prefixes)})');
-		rendered.sort(Reflect.compare);
+		rendered.sort(Compare.compareString);
 		return rendered.join(' ');
 	}
 
@@ -227,7 +231,7 @@ final class ConfigDisagreement {
 	 */
 	private static function sorted(fragments: Array<String>): String {
 		final ordered: Array<String> = fragments.copy();
-		ordered.sort(Reflect.compare);
+		ordered.sort(Compare.compareString);
 		return ordered.join(',');
 	}
 

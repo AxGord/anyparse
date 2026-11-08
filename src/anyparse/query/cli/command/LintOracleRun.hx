@@ -46,9 +46,9 @@ final class LintOracleRun {
 	public static function oraclesOf(
 		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>, grammar: GrammarPlugin
 	): Array<OracleConfig> {
-		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles();
-		if (noOracle) return declared;
 		final compiler: OracleProvider = OracleProviders.of(grammar);
+		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles(compiler);
+		if (noOracle) return declared;
 		final prepared: PreparedOracles = compiler.prepareBuilds(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
 		// `files` is the run's own list, which a created file joins: the memo hashes whatever it holds at each question
@@ -257,7 +257,7 @@ final class LintOracleRun {
 	 */
 	public static function reachComplete(compiler: OracleProvider, paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
 		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> c.compilerOracles().map(compiler.oracleKey).join('|');
+		final list: LintConfig -> String = c -> c.compilerOracles(compiler).map(compiler.oracleKey).join('|');
 		final first: String = list(resolveConfig(paths[0]));
 		var declared: Bool = false;
 		var all: Bool = true;

@@ -6,6 +6,7 @@ import anyparse.core.PhaseTimings;
 import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import anyparse.query.Glob;
+import anyparse.query.OracleProviders;
 import anyparse.query.ReachLiveness;
 import haxe.io.Path;
 
@@ -144,7 +145,7 @@ final class LibraryBodies {
 		final picked: Null<{ config: LintConfig, options: ThreadSafetyOptions, entry: String }> = chosen;
 		if (picked == null) return null;
 		final written: String = Path.normalize(picked.entry);
-		final oracle: Null<LintConfig.OracleConfig> = picked.config.compilerOracles().find(o -> {
+		final oracle: Null<LintConfig.OracleConfig> = picked.config.compilerOracles(OracleProviders.of(plugin)).find(o -> {
 			final hxml: String = Path.normalize(o.hxml);
 			hxml == written || hxml.endsWith('/$written');
 		});

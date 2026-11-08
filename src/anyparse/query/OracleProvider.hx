@@ -4,6 +4,7 @@ import anyparse.check.Check.NameOracle;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig.OracleDeclared;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ReachLiveness.ReachBuilds;
@@ -58,6 +59,9 @@ interface OracleProvider {
 
 	/** The identity of one configured build: two configurations with one key are one build. */
 	public function oracleKey(oracle: OracleConfig): String;
+
+	/** The builds one raw `compilerOracle` value declares, relative paths against `baseDir`; what it cannot use goes to `drops`. */
+	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig>;
 
 	/** One configured build named for a diagnostic line. */
 	public function describeOracle(oracle: OracleConfig): String;

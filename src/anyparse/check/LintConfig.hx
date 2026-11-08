@@ -6,6 +6,7 @@ import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.query.OracleProvider;
 import anyparse.query.RunLedger;
 import anyparse.query.format.LintFormat;
 import anyparse.util.Compare;
@@ -92,6 +93,20 @@ typedef OracleConfig = {
 }
 
 /**
+ * One `compilerOracle` value as a document wrote it, held raw so that parsing a config needs no grammar: the run's
+ * `OracleProvider` reads it. `baseDir` travels with it because relative paths resolve against THAT document's directory.
+ */
+typedef OracleDeclared = {
+
+	var raw: JValue;
+	var baseDir: Null<String>;
+
+	/** The document that wrote it, when discovered from a file: a dropped entry is attributed to it. */
+	var ?document: String;
+
+}
+
+/**
  * A configuration's `generate` declaration, resolved: the shell `command` that writes its hxml, the directory it runs
  * in (`root` — the declaring config's directory), the absolute `inputs` whose content decides whether a recorded
  * generation is still current (null when the entry names none: then it regenerates once per run), and whether the
@@ -145,16 +160,16 @@ final class LintConfig {
 	 */
 	public static inline final WARNED_TOPIC: String = 'lint-config';
 
-	private final _rules: Map<String, RuleConfig>;
-
-	/** The enablement each document of the chain states, nearest first — see `switchFor`. */
-	private final _switches: Array<RuleSwitches>;
-
 	/**
 	 * The `compilerOracle` configurations, each hxml resolved against the declaring config's
 	 * directory (verbatim when parsed without a base); an empty array when the key is absent.
 	 */
-	private final _compilerOracles: Array<OracleConfig>;
+	private final _oracles: { declared: Array<OracleDeclared>, read: Array<OracleConfig> };
+
+	private final _rules: Map<String, RuleConfig>;
+
+	/** The enablement each document of the chain states, nearest first — see `switchFor`. */
+	private final _switches: Array<RuleSwitches>;
 
 	/**
 	 * Whether the project opted the oracle into the shared warm compilation
@@ -209,7 +224,8 @@ final class LintConfig {
 		?resolutionLibs: Array<String>, resolutionStd: Bool = true, compilerOracleServer: Bool = false, ?languageVersion: String,
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
 		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
-		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?switches: Array<RuleSwitches>
+		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?switches: Array<RuleSwitches>,
+		?oracleDeclarations: Array<OracleDeclared>
 	) {
 		_switches = switches ?? [
 			{ rules: [for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true], categories: [] }
@@ -220,7 +236,7 @@ final class LintConfig {
 		_reflectiveClasses = reflectiveClasses;
 		_reflectiveMethodHolders = reflectiveMethodHolders;
 		_rules = rules;
-		_compilerOracles = compilerOracles ?? [];
+		_oracles = { declared: oracleDeclarations ?? [], read: compilerOracles ?? [] };
 		_compilerOracleServer = compilerOracleServer;
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
@@ -243,8 +259,21 @@ final class LintConfig {
 	 * `dist/<target>/haxe/debug.hxml` — or null when the config was parsed without a base
 	 * directory, where there is nothing to resolve against.
 	 */
-	public function compilerOracles(): Array<OracleConfig> {
-		return _compilerOracles;
+	public function compilerOracles(compiler: OracleProvider): Array<OracleConfig> {
+		if (_oracles.read.length > 0 || _oracles.declared.length == 0) return _oracles.read;
+		// Every folded declaration is read, the shadowed ones only for their dropped entries: a mistake in
+		// a document the nearer one overrides is still reported.
+		var nearest: Null<Array<OracleConfig>> = null;
+		for (declared in _oracles.declared) {
+			final drops: Array<String> = [];
+			final read: Array<OracleConfig> = compiler.readDeclaration(declared, drops);
+			if (nearest == null) nearest = read;
+			for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);
+			final document: Null<String> = declared.document;
+			if (document != null && drops.length > 0)
+				warnOnce('$document#compilerOracle', drops.map(drop -> 'apq: $document: $drop\n').join(''));
+		}
+		return _oracles.read = nearest ?? [];
 	}
 
 	/**
@@ -526,9 +555,9 @@ final class LintConfig {
 		props[key] = JNumber(value);
 		rules[id] = { enabled: current?.enabled, severity: current?.severity, props: props };
 		return new LintConfig(
-			rules, _compilerOracles, _resolutionRoots, _resolutionLibs, _resolutionStd, _compilerOracleServer, _languageVersion,
-			_frameworks, _drops, _reachConfigurationsComplete, _reportSummaryThreshold, _reflectiveClasses, _reflectiveMethodHolders,
-			_ownedTypes, _switches
+			rules, _oracles.read, _resolutionRoots, _resolutionLibs, _resolutionStd, _compilerOracleServer, _languageVersion, _frameworks,
+			_drops, _reachConfigurationsComplete, _reportSummaryThreshold, _reflectiveClasses, _reflectiveMethodHolders, _ownedTypes,
+			_switches, _oracles.declared
 		);
 	}
 
@@ -602,6 +631,7 @@ final class LintConfig {
 				final lines: Array<String> = doc.drops.map(drop -> 'apq: ${entry.path}: $drop\n');
 				warnOnce(entry.path, lines.join(''));
 			}
+			for (declared in doc.oracleDeclarations) declared.document = entry.path;
 			merged = merged == null ? doc : LintDocuments.mergeDocuments(merged, doc);
 			folded.push(entry.path);
 			if (doc.inherit == false) break;

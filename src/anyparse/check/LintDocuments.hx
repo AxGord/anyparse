@@ -1,12 +1,11 @@
 package anyparse.check;
 
-import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig.OracleDeclared;
 import anyparse.check.LintConfig.RuleConfig;
 import anyparse.check.LintConfig.RuleSwitches;
 import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
-import anyparse.check.oracle.OracleDeclaration;
 import anyparse.grammar.json.JValue;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import haxe.Exception;
@@ -69,10 +68,10 @@ final class LintDocuments {
 		return {
 			rules: rules,
 			switches: near.switches.concat(far.switches),
-			compilerOracles: near.compilerOracles ?? far.compilerOracles,
+			oracleDeclarations: near.oracleDeclarations.concat(far.oracleDeclarations),
 			compilerOracleServer: near.compilerOracleServer ?? far.compilerOracleServer,
 			reachConfigurationsComplete: near.reachConfigurationsComplete ?? (
-				near.compilerOracles == null ? far.reachConfigurationsComplete : null
+				near.oracleDeclarations.length == 0 ? far.reachConfigurationsComplete : null
 			),
 			reflectiveClasses: near.reflectiveClasses ?? far.reflectiveClasses,
 			reflectiveMethodHolders: near.reflectiveMethodHolders ?? far.reflectiveMethodHolders,
@@ -90,9 +89,9 @@ final class LintDocuments {
 	/** The finished config for a folded document — the one place the "absent" nulls collapse into the defaults. */
 	public static function fromDocument(doc: LintDocument): LintConfig {
 		return new LintConfig(
-			doc.rules, doc.compilerOracles, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer,
-			doc.languageVersion, doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold,
-			doc.reflectiveClasses, doc.reflectiveMethodHolders, doc.ownedTypes, doc.switches
+			doc.rules, null, doc.resolutionRoots, doc.resolutionLibs, doc.resolutionStd, doc.compilerOracleServer, doc.languageVersion,
+			doc.frameworks, doc.drops, doc.reachConfigurationsComplete, doc.reportSummaryThreshold, doc.reflectiveClasses,
+			doc.reflectiveMethodHolders, doc.ownedTypes, doc.switches, doc.oracleDeclarations
 		);
 	}
 
@@ -125,7 +124,11 @@ final class LintDocuments {
 			categories: declaredCategories == null ? [] : parseCategories(declaredCategories, drops)
 		};
 		final declaredOracle: Null<JValue> = config.compilerOracle;
-		final oracles: Null<Array<OracleConfig>> = declaredOracle == null ? null : OracleDeclaration.read(declaredOracle, baseDir, drops);
+		final oracles: Array<OracleDeclared> = [];
+		if (declaredOracle != null) {
+			final raw: JValue = declaredOracle;
+			oracles.push({ raw: raw, baseDir: baseDir });
+		}
 		final declaredRoots: Null<Array<String>> = config.resolutionRoots;
 		// Absence has to survive the mapping: `null` is "this document said nothing about
 		// roots, ask the one above", where `[]` is "this document declares none". Collapsing
@@ -140,7 +143,7 @@ final class LintDocuments {
 		return {
 			rules: rules,
 			switches: [switches],
-			compilerOracles: oracles,
+			oracleDeclarations: oracles,
 			compilerOracleServer: config.compilerOracleServer,
 			reachConfigurationsComplete: config.reachConfigurationsComplete,
 			reflectiveClasses: config.reflectiveClasses,
@@ -339,7 +342,7 @@ typedef LintDocument = {
 	 * the nearest document naming a rule OR its category decides it (`LintConfig.switchFor`).
 	 */
 	var switches: Array<RuleSwitches>;
-	var ?compilerOracles: Array<OracleConfig>;
+	var oracleDeclarations: Array<OracleDeclared>;
 	var ?compilerOracleServer: Bool;
 	var ?reachConfigurationsComplete: Bool;
 	var ?reflectiveClasses: Array<String>;

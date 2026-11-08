@@ -447,7 +447,7 @@ final class TyperConformance {
 		for (root in config.resolutionRoots()) collect(root, project);
 		final library: Array<{ file: String, source: String }> = EdgeDiff.libraryOf(config, project);
 		final asked: Array<OracleConfig> = [
-			for (o in config.compilerOracles()) if (configuration == null || o.hxml.contains(configuration)) o
+			for (o in config.compilerOracles(new HaxeQueryPlugin())) if (configuration == null || o.hxml.contains(configuration)) o
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];

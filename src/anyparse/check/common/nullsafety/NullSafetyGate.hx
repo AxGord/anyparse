@@ -1,5 +1,6 @@
 package anyparse.check.common.nullsafety;
 
+import anyparse.query.OracleProvider;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.io.File;
@@ -88,8 +89,11 @@ final class NullSafetyGate {
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private final _resolveConfig: Null<(String) -> LintConfig>;
 
-	public function new(resolveConfig: Null<(String) -> LintConfig>) {
+	private final _compiler: OracleProvider;
+
+	public function new(resolveConfig: Null<(String) -> LintConfig>, compiler: OracleProvider) {
 		_resolveConfig = resolveConfig;
+		_compiler = compiler;
 	}
 
 	/**
@@ -138,7 +142,7 @@ final class NullSafetyGate {
 			return false;
 		}
 		return LintConfig.resolveWith(_resolveConfig, file)
-			.compilerOracles()
+			.compilerOracles(_compiler)
 			.exists(oracle -> mayEnable(oracle.hxml, oracle.dir ?? Path.directory(oracle.hxml), 0));
 	}
 
