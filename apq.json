@@ -335,6 +335,12 @@
 			]
 		},
 		"hoist-embedded-assignment": true,
+		"helper-copy": {
+			"enabled": true,
+			"homes": [
+				"src/anyparse/util/"
+			]
+		},
 		"import-order": true,
 		"join-override-chain": true,
 		"join-string-append": true,

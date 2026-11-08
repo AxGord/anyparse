@@ -27,10 +27,10 @@ import anyparse.util.Strings;
 final class AccessorClauseText {
 
 	/** The accessor that admits no access at all. */
-	private static inline final NEVER_ACCESSOR: String = 'never';
+	private static final NEVER_ACCESSOR: String = 'never';
 
 	/** The write accessor that routes a write through the property's set accessor. */
-	private static inline final SET_ACCESSOR: String = 'set';
+	private static final SET_ACCESSOR: String = 'set';
 
 	/**
 	 * The accessor identifiers that give a property no storage of its own: a call through `get_` / `set_`, or no access at
@@ -98,10 +98,10 @@ final class AccessorClauseText {
 		final line: Span = ElementSpan.lineExtendedSpan(source, meta);
 		if (line.from != meta.from || line.to != meta.to) return line;
 		var to: Int = meta.to;
-		while (to < source.length && isHorizontalSpace(source.fastCodeAt(to))) to++;
+		while (to < source.length && Strings.isSpaceOrTab(source.fastCodeAt(to))) to++;
 		if (to > meta.to) return new Span(meta.from, to);
 		var from: Int = meta.from;
-		while (from > 0 && isHorizontalSpace(source.fastCodeAt(from - 1))) from--;
+		while (from > 0 && Strings.isSpaceOrTab(source.fastCodeAt(from - 1))) from--;
 		return new Span(from, meta.to);
 	}
 
@@ -135,11 +135,6 @@ final class AccessorClauseText {
 	 */
 	public static function accessorClauseAt(source: String, from: Int): Null<AccessorClause> {
 		return accessorClause(source, new Span(from, from));
-	}
-
-	/** Whether `c` is a space or a tab (a line-internal separator, newline excluded). */
-	private static inline function isHorizontalSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
 	}
 
 	/** The identifier at `i` (already past whitespace) and the offset after it, or null. */

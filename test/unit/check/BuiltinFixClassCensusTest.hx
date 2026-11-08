@@ -52,15 +52,16 @@ class BuiltinFixClassCensusTest extends Test {
 	 * `testEveryDeclaredNoAutofixRuleAnswersNoEdit` executes its claim on real findings rather than on
 	 * an empty violation list.
 	 */
-	private static inline final TRIPWIRE: String = 'class C {\n\tpublic function f(a: Int): Void {\n\t\tif (a == a) trace(4711);\n\t}\n}\n';
+	private static final TRIPWIRE: String = 'class C {\n\tpublic function f(a: Int): Void {\n\t\tif (a == a) trace(4711);\n\t}\n}\n';
 
-	private static inline final LOST_HINT: String =
-		'builtins lost from registration (fix the registration, or delete the name from the census file by hand; a loss is never recorded): ';
-	private static inline final ADDED_HINT: String =
-		'builtins missing from the census file (record with `APQ_CENSUS_RECORD=1 APQ_TEST=unit.check.BuiltinFixClassCensusTest node bin/test.js`, then state which fix-class list the rule joins): ';
+	private static final LOST_HINT: String = 'builtins lost from registration ('
+		+ 'fix the registration, or delete the name from the census file by hand; a loss is never recorded): ';
+	private static final ADDED_HINT: String = 'builtins missing from the census file ('
+		+ 'record with `APQ_CENSUS_RECORD=1 APQ_TEST=unit.check.BuiltinFixClassCensusTest node '
+		+ 'bin/test.js`, then state which fix-class list the rule joins): ';
 
 	/** The recorded builtin names, one JSON string per line, sorted. */
-	private static inline final CENSUS_FILE: String = 'test/testkit/builtin-census.json';
+	private static final CENSUS_FILE: String = 'test/testkit/builtin-census.json';
 
 	/**
 	 * The registered set is the recorded one, by NAME; `decide` holds the whole decision. Record mode
@@ -150,6 +151,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'extract-repeated-expression',
 			'guard-pin-arm-reach',
 			'hand-source-scanner',
+			'helper-copy',
 			'identical-operands',
 			'impossible-cast',
 			'loop-bound-length-mismatch',

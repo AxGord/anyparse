@@ -4,6 +4,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -40,20 +41,20 @@ using StringTools;
  */
 class FmtFlagOwnershipTest extends Test {
 
-	/** `MetaInspect` declares the readers themselves, so its parameter names are not flag reads. */
-	private static inline final READER_MODULE: String = 'MetaInspect';
-
-	private static inline final MACRO_DIR: String = 'src/anyparse/macro';
-	private static inline final STRATEGIES_DOC: String = 'docs/strategies.md';
-
 	/** Below this the inventory block was emptied or mis-parsed, and every set comparison would pass vacuously. */
 	private static inline final MIN_INVENTORY_FLAGS: Int = 200;
 
+	/** `MetaInspect` declares the readers themselves, so its parameter names are not flag reads. */
+	private static final READER_MODULE: String = 'MetaInspect';
+
+	private static final MACRO_DIR: String = 'src/anyparse/macro';
+	private static final STRATEGIES_DOC: String = 'docs/strategies.md';
+
 	/** Per module, the flag NAMES it reads, one per line, so two branches adding different flags merge without a conflict. */
-	private static inline final RECORD_FILE: String = 'test/testkit/fmt-ownership.json';
+	private static final RECORD_FILE: String = 'test/testkit/fmt-ownership.json';
 
 	/** Set to `1` to rewrite `RECORD_FILE` from the scan. */
-	private static inline final RECORD_ENV: String = 'APQ_OWNERSHIP_RECORD';
+	private static final RECORD_ENV: String = 'APQ_OWNERSHIP_RECORD';
 
 	/**
 	 * Flags a module names that no shipped grammar declares — a handler standing ready for
@@ -113,7 +114,7 @@ class FmtFlagOwnershipTest extends Test {
 		final recorded: Map<String, Array<String>> = readRecord(path);
 		final modules: Array<String> = [for (module in named.keys()) module];
 		for (module in recorded.keys()) if (!modules.contains(module)) modules.push(module);
-		modules.sort(compareStrings);
+		modules.sort(Compare.compareString);
 		for (module in modules) {
 			final actual: Array<String> = named[module] ?? [];
 			final expected: Array<String> = recorded[module] ?? [];
@@ -226,15 +227,6 @@ class FmtFlagOwnershipTest extends Test {
 		for (child in node.children) collectFlagLiterals(child, raw, kinds, flags, found);
 	}
 
-	private static function compareStrings(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
-	}
-
 	private static function readRecord(path: String): Map<String, Array<String>> {
 		final out: Map<String, Array<String>> = [];
 		if (!FileSystem.exists(path)) return out;
@@ -254,11 +246,11 @@ class FmtFlagOwnershipTest extends Test {
 
 	private static function renderRecord(named: Map<String, Array<String>>): String {
 		final modules: Array<String> = [for (module in named.keys()) module];
-		modules.sort(compareStrings);
+		modules.sort(Compare.compareString);
 		final blocks: Array<String> = [];
 		for (module in modules) {
 			final flags: Array<String> = named[module] ?? [];
-			flags.sort(compareStrings);
+			flags.sort(Compare.compareString);
 			blocks.push('\t"$module": [\n' + flags.map(flag -> '\t\t"$flag"').join(',\n') + '\n\t]');
 		}
 		return '{\n"modules": {\n' + blocks.join(',\n') + '\n}\n}\n';

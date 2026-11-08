@@ -102,6 +102,28 @@ Option `allow`: an object of path fragments, each with the reason the file may s
 "hand-source-scanner": { "allow": { "src/anyparse/query/LexicalRegions.hx": "the owner of the lexical-region model" } }
 ```
 
+## `helper-copy`
+
+A function that repeats, up to the names of its parameters and locals, a function declared under a
+configured home — the project's shared helpers. Its parameter list, return type and body are
+compared; its own name, modifiers and doc are not, so a private copy under another name is found.
+`Info`, DEFAULT OFF and report-only: whether a call can replace the copy is a design judgement.
+
+A function whose comparison text holds fewer than 40 non-blank characters is not compared, and a
+copy that spells a call differently (`s.fastCodeAt(i)` for `fastCodeAt(s, i)`) is a different
+function — the rule never invents a match. A literal in a default value compares exactly. The
+helpers are read from the project sources (`resolutionRoots` joined to the report), so a lint of one
+file still finds the home it was not handed; a project that declares no roots answers from the
+report scope alone. Its findings go through the usual lint gate, so a NEW copy in a touched file is
+a movement against the base even when the home is untouched.
+
+`homes` names the home as path fragments, each matched from a `/` boundary. Without it the rule does
+nothing. Functions of a file under a home are the helpers and are never reported.
+
+```json
+"helper-copy": { "enabled": true, "homes": ["src/anyparse/util/"] }
+```
+
 ## `listener-symmetry`
 
 A listener method without its twin: a type declaring `add<Name>Listener` (or `…Listeners`) and no

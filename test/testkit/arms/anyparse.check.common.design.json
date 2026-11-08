@@ -1213,6 +1213,69 @@
 			"find": "writes != null && !writes.exists(w -> TreePath.covers(top, w.node.span))",
 			"replace": "writes != null",
 			"note": "a function literal's cast joins the outer run though the function writes the operand later, so the literal reads the value the local bound before the write"
+		},
+		{
+			"name": "M-HELPER-COPY-NO-KEY",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "keyOf",
+			"force": "null",
+			"note": "no function has a comparison key, so a copy of a home helper is never reported"
+		},
+		{
+			"name": "M-HELPER-COPY-NO-RENAMING",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "keyOf",
+			"find": "DuplicateCode.renumbered(DuplicateCode.normalizeStmt(ctx, child, span, names), order)",
+			"replace": "DuplicateCode.normalizeStmt(ctx, child, span, null).text",
+			"note": "a binding keeps the name it was written with in the key, so a copy that renames its parameters and locals is no longer the helper"
+		},
+		{
+			"name": "M-HELPER-COPY-NO-FLOOR",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "keyOf",
+			"find": "return weight < MIN_NON_WS_CHARS ? null : parts.join(PART_SEP);",
+			"replace": "return parts.join(PART_SEP);",
+			"note": "a one-line function matches a home one-liner of the same shape, so a coincidence is reported as a copy"
+		},
+		{
+			"name": "M-HELPER-COPY-HOME-BY-SUBSTRING",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "isUnder",
+			"find": "rooted.indexOf('/$home') >= 0",
+			"replace": "file.indexOf(home) >= 0",
+			"note": "a path that merely contains the home text counts as inside it, so a copy beside a similarly named folder is taken for a helper and goes unreported"
+		},
+		{
+			"name": "M-HELPER-COPY-PARAMETERS-UNORDERED",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "parameterPart",
+			"find": "order.push(name);",
+			"replace": "final unordered: Int = 0;",
+			"note": "parameters take their number from where the body first reads them, so a copy that reads its parameters in another role order than the helper declares them is taken for the helper"
+		},
+		{
+			"name": "M-HELPER-COPY-LITERAL-COLLAPSED",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "parameterPart",
+			"find": "DuplicateCode.normalizeStmt(ctx, param, span, null).text",
+			"replace": "~/\\s+/g.replace(DuplicateCode.normalizeStmt(ctx, param, span, null).text, '')",
+			"note": "white space inside a literal in a parameter default is dropped before comparing, so two defaults that differ only by a space in a string are one copy"
+		},
+		{
+			"name": "M-HELPER-COPY-EVERY-FILE-CANDIDATE",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "run",
+			"find": "(own[entry.file] ?? []).length != 0",
+			"replace": "true",
+			"note": "a file whose own configuration names no homes is compared too, because another file in the run declared one"
+		},
+		{
+			"name": "M-HELPER-COPY-REPORT-SCOPE-ONLY",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "run",
+			"find": "RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files",
+			"replace": "files",
+			"note": "the helpers come from the report files alone, so a lint of the copy without its home reports nothing"
 		}
 	]
 }

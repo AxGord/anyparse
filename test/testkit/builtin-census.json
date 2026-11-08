@@ -54,6 +54,7 @@
 	"guard-continue",
 	"guard-pin-arm-reach",
 	"hand-source-scanner",
+	"helper-copy",
 	"guard-return",
 	"hoist-branch-string-affix",
 	"hoist-common-branch-head",

@@ -5,6 +5,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.OwnerIndex;
+import anyparse.util.Compare;
 import devkit.Args;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -102,7 +103,7 @@ final class OwnerOverlap {
 		+ ' [--min-terms N] [--interface-width N] [--allow FILE]';
 
 	/** The allow-list read when `--allow` names none and the file exists. */
-	public static inline final DEFAULT_ALLOW: String = 'tools/owner-overlap.allow';
+	public static final DEFAULT_ALLOW: String = 'tools/owner-overlap.allow';
 
 	public static final DEFAULTS: OverlapConfig = {
 		similarity: 0.6,
@@ -110,8 +111,6 @@ final class OwnerOverlap {
 		minTerms: 3,
 		interfaceWidth: 6
 	};
-
-	private static inline final ANY: String = '*';
 
 	/** The fewest words a type name has for a doc carrying them to point at that type: a one-word name is a common word. */
 	private static inline final MIN_NAME_TERMS: Int = 2;
@@ -123,6 +122,7 @@ final class OwnerOverlap {
 	private static inline final NEAR_IDENTICAL: Float = 0.8;
 
 	private static inline final ALLOW_COLUMNS: Int = 3;
+	private static final ANY: String = '*';
 
 	/** The directories read when none is given. */
 	private static final DEFAULT_DIRS: Array<String> = ['src', 'tools/src'];
@@ -270,7 +270,7 @@ final class OwnerOverlap {
 			perDir[dir] = (perDir[dir] ?? 0) + 1;
 		}
 		final dirs: Array<String> = [for (dir in perDir.keys()) dir];
-		dirs.sort(compareText);
+		dirs.sort(Compare.compareString);
 		for (dir in dirs) lines.push('  $dir\t${perDir[dir] ?? 0}');
 		final groups: Map<String, Array<Overlap>> = [];
 		for (o in result.overlaps) {
@@ -282,7 +282,7 @@ final class OwnerOverlap {
 		final keys: Array<String> = [for (key in groups.keys()) key];
 		keys.sort((a, b) -> {
 			final size: Int = (groups[b] ?? []).length - (groups[a] ?? []).length;
-			return size != 0 ? size : compareText(a, b);
+			return size != 0 ? size : Compare.compareString(a, b);
 		});
 		for (key in keys) {
 			final group: Array<Overlap> = groups[key] ?? [];
@@ -323,15 +323,6 @@ final class OwnerOverlap {
 		var sum: Float = 0;
 		for (term in terms) sum += index.rarity(term);
 		return sum;
-	}
-
-	private static function compareText(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
 	}
 
 	/** How many types declare each member name. */

@@ -63,6 +63,7 @@ import anyparse.check.common.design.DuplicateCode;
 import anyparse.check.common.design.DuplicateCodeRenamed;
 import anyparse.check.common.design.ExtractRepeatedExpression;
 import anyparse.check.common.design.GuardPinArmReach;
+import anyparse.check.common.design.HelperCopy;
 import anyparse.check.common.design.ListenerSymmetry;
 import anyparse.check.common.design.OversizedType;
 import anyparse.check.common.design.OwnedTypes;
@@ -575,6 +576,7 @@ final class Linter {
 			// two rules deliberately overlap — one population per rule id, and neither one's spans
 			// contain the other's. Both are report-only, so registry order carries no meaning.
 			new DuplicateCodeRenamed(),
+			new HelperCopy(),
 			new ListenerSymmetry(),
 			// Test-quality rules: report-only and inert until a test tree's config names their assertion and pin spellings.
 			new RefusalAssertIgnoresMessage(),

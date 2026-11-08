@@ -20,6 +20,7 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Strings;
 
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
@@ -54,24 +55,25 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 	 */
 	private static inline final MAX_ANON_LEN: Int = 80;
 
-	/** The message of a missing return type's finding: the one finding keyed by its function rather than a node of its own. */
-	private static inline final RETURN_MESSAGE: String = 'function declared without an explicit return type';
-
-	private static inline final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
-	private static inline final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
 	private static inline final DECLINE_MACRO_RETURN: String = 'a `macro` function the oracle cannot type: not every value it returns '
 		+ 'is an expression quotation (`macro …`) or `Context.error`';
-	private static inline final DECLINE_MACRO_PARAM: String = 'a parameter of a `macro` function: the oracle cannot type macro context';
-
-	/** The type every value of a `macro` function's proven returns has. */
-	private static inline final MACRO_RETURN_TYPE: String = 'haxe.macro.Expr';
-
-	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
 	private static inline final DECLINE_NO_STRUCTURAL_RETURN: String = 'a non-Void return type has no structural evidence — the '
 		+ 'oracle-assisted pass types it when the project configures a compilerOracle';
 	private static inline final DECLINE_NO_STRUCTURAL_TYPE: String = 'no structural rule names its type — a literal, a typed `new` '
 		+ 'or cast initializer, or a supertype declaring the parameter — and the oracle-assisted pass types it when the project '
 		+ 'configures a compilerOracle';
+
+	/** The message of a missing return type's finding: the one finding keyed by its function rather than a node of its own. */
+	private static final RETURN_MESSAGE: String = 'function declared without an explicit return type';
+
+	private static final DECLINE_NO_RETURN_SLOT: String = "no `)` sits right before the function's body, where the return type goes";
+	private static final DECLINE_NO_NAME: String = 'the declaration does not spell its name in active code';
+	private static final DECLINE_MACRO_PARAM: String = 'a parameter of a `macro` function: the oracle cannot type macro context';
+
+	/** The type every value of a `macro` function's proven returns has. */
+	private static final MACRO_RETURN_TYPE: String = 'haxe.macro.Expr';
+
+	private static final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
 
 	public function new() {
 		super('explicit-type', 'a member field, parameter, or return type without an explicit type annotation', RuleCategory.Types);
@@ -204,11 +206,6 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			case Function(_, ret, false): ret.text;
 			case _: null;
 		};
-	}
-
-	/** Whether `c` is a space or tab — horizontal whitespace, excluding line breaks. */
-	private static inline function isInlineSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code;
 	}
 
 	/** Whether `c` continues a dotted type-reference token — a letter, digit, `_` or `.`. */
@@ -366,7 +363,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			at = close + 1;
 		}
 		var next: Int = at;
-		while (next < end && isInlineSpace(source.fastCodeAt(next))) next++;
+		while (next < end && Strings.isSpaceOrTab(source.fastCodeAt(next))) next++;
 		return next < source.length && source.fastCodeAt(next) == ';'.code ? at : -1;
 	}
 
@@ -629,7 +626,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return -1;
 		var pos: Int = bodySpan.from;
-		while (pos > lo && isInlineSpace(source.fastCodeAt(pos - 1))) pos--;
+		while (pos > lo && Strings.isSpaceOrTab(source.fastCodeAt(pos - 1))) pos--;
 		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
 	}
 
