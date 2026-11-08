@@ -25,8 +25,8 @@ final class BaselineCache {
 	private static inline final RECORD: String = 'baseline.json';
 
 	/** The cache the entries are kept in when the caller names none. */
-	public static function defaultCache(): String {
-		return Sys.getEnv(CACHE_VAR) ?? Path.join([anyparse.core.TempScratch.root(), 'anyparse-slice-baseline']);
+	public static inline function defaultCache(): String {
+		return BaseBranch.cachePath(CACHE_VAR, 'anyparse-slice-baseline');
 	}
 
 	/**

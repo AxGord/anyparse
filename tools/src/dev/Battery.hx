@@ -57,8 +57,6 @@ final class Battery {
 	private static inline final CLIENT_LINTED: String = 'lint-client';
 	private static inline final LINTED: String = 'lint-anyparse';
 
-	/** The table's seconds are given to a tenth. */
-	private static inline final TENTHS_PER_SECOND: Int = 10;
 
 	/** The prefix `devkit.TmpLifecycle` claims the run's work directory under. */
 	private static inline final WORK_PREFIX: String = 'apq-battery';
@@ -72,8 +70,6 @@ final class Battery {
 	/** The lines of a failed typer-probe run shown when it names no `DIFFERENT` probe. */
 	private static inline final TAIL_LINES: Int = 20;
 
-	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
-	private static inline final ENGINE_VAR: String = 'HXQ_BIN';
 
 	private static final CORPUS_ROW: String = 'corpus';
 	private static final SUITE_ROW: String = 'suite';
@@ -141,7 +137,7 @@ final class Battery {
 			workFile('plan.json')
 		])
 			.at(_plan.repo)
-			.env(ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
+			.env(GateTree.ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
 			.timeout(BRANCH_TIMEOUT_MS);
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
 		final leased: Array<String> -> Command = Branches.leased(_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}');
@@ -803,7 +799,7 @@ final class Battery {
 
 	/** `elapsed` seconds to a tenth, with an `s`. */
 	private static function seconds(elapsed: Float): String {
-		return '${Math.round(elapsed * TENTHS_PER_SECOND) / TENTHS_PER_SECOND}s';
+		return '${Math.round(elapsed * Summary.TENTHS_PER_SECOND) / Summary.TENTHS_PER_SECOND}s';
 	}
 
 	/** Whether `text` is a parseable JSON document: the lint prints one only when it ran to its end. */

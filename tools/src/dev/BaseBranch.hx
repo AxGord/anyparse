@@ -50,8 +50,8 @@ final class BaseBranch {
 	}
 
 	/** The cache the readings are kept in, one entry per stamp, for every gate on this machine. */
-	public function cache(): String {
-		return Sys.getEnv(_cacheVar) ?? Path.join([anyparse.core.TempScratch.root(), _cacheName]);
+	public inline function cache(): String {
+		return cachePath(_cacheVar, _cacheName);
 	}
 
 	/** Whether this run's branch is still to leave its reading: a reading is awaited then, never measured a second time beside it. */
@@ -120,6 +120,11 @@ final class BaseBranch {
 	public function unread(gate: GateTree, why: String): String {
 		File.saveContent(gate.log(unreadFile), why);
 		return why;
+	}
+
+	/** The one rule of a shared cache's place: the environment variable `cacheVar` when set, else `name` under the scratch root. */
+	public static function cachePath(cacheVar: String, name: String): String {
+		return Sys.getEnv(cacheVar) ?? Path.join([anyparse.core.TempScratch.root(), name]);
 	}
 
 }

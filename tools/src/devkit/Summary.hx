@@ -15,11 +15,11 @@ using StringTools;
 @:nullSafety(Strict)
 final class Summary {
 
+	/** The table's seconds are given to a tenth. */
+	public static inline final TENTHS_PER_SECOND: Int = 10;
+
 	/** Milliseconds in a second. */
 	private static inline final MS_PER_SECOND: Float = 1000;
-
-	/** The table's seconds are given to a tenth. */
-	private static inline final TENTHS_PER_SECOND: Int = 10;
 
 	/** The width of the table's outcome column: its longest label, `not run`. */
 	private static inline final OUTCOME_WIDTH: Int = 7;
