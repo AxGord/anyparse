@@ -14,7 +14,8 @@
 		"verify/flat-comma/A.hx": "class A {\n\tstatic var x = [1, 2,];\n\tstatic function f() {\n\t\tg(1, 2,);\n\t}\n}\n",
 		"verify/comment-comma/A.hx": "class A {\n\tstatic var b = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var e = [\n\t\t1,\n\t\t2,\n\t\t// tail\n\t];\n}\n",
 		"cond/Br.hx": "class Br {\n\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\tvar r = a\n\t\t#if !sys\n\t\t|| b\n\t\t#elseif js\n\t\t&& c\n\t\t#end\n\t\t;\n\t\treturn r;\n\t}\n\n}\n",
-		"cond/Binop.hx": "class Binop {\n\n\tstatic function main() {\n\t\t#if lime && renderer.__type == OPENGL trace(1); #end\n\t\t#if (lime && x) trace(2); #end\n\t\t#if !sys || js trace(3); #end\n\t}\n\n}\n"
+		"cond/Binop.hx": "class Binop {\n\n\tstatic function main() {\n\t\t#if lime && renderer.__type == OPENGL trace(1); #end\n\t\t#if (lime && x) trace(2); #end\n\t\t#if !sys || js trace(3); #end\n\t}\n\n}\n",
+		"regex/R.hx": "var r = ~/a$x/;\n"
 	},
 	"invocations": [
 		{
@@ -8215,6 +8216,21 @@
 				"exit": 0,
 				"out": "9e04254fb00e81e8",
 				"err": "baffbb3b709d5baa",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq search a metavariable inside a regex literal stays text",
+			"argv": [
+				"apq",
+				"search",
+				"~/a$x/",
+				"regex"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7f0d099e45918694",
+				"err": "0a8da3948d231038",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

@@ -924,6 +924,14 @@
 			"find": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Keep;",
 			"replace": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Remove;",
 			"note": "an add-knob config without wrapping.trailingComma loads as Remove, which silently voids the requested trailing comma"
+		},
+		{
+			"name": "M-METAVAR-REGIONS-OFF",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "parsePattern",
+			"find": "Metavar.substituteMetavarsHaxe(source, lexicalRegions(source))",
+			"replace": "Metavar.substituteMetavarsHaxe(source, [])",
+			"note": "the lexer's regions are no longer consulted, so a metavariable inside a string, comment or regex literal of a pattern is rewritten to a placeholder"
 		}
 	]
 }

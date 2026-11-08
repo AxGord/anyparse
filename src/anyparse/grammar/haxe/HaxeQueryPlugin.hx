@@ -404,7 +404,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// interpolation, so we substitute them for reserved-identifier
 		// placeholders before parsing and reclassify the resulting leaves
 		// post-parse. The grammar parser stays unmodified.
-		final substituted: String = Metavar.substituteMetavarsHaxe(source);
+		final substituted: String = Metavar.substituteMetavarsHaxe(source, lexicalRegions(source));
 		final attempts: Array<{ wrap: String -> String, extract: QueryNode -> Null<QueryNode>, category: PatternCategory }> = [
 			{ wrap: src -> src, extract: HaxePatternFragment.extractFirstDecl, category: PatternCategory.Decl },
 			{ wrap: HaxePatternFragment.wrapAsStmt, extract: HaxePatternFragment.extractFirstStmt, category: PatternCategory.Stmt },

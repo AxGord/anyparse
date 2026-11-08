@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
 import anyparse.util.Strings;
@@ -147,17 +148,16 @@ final class Metavar {
 	/**
 	 * Substitute `$X` / `$_` tokens — and the `...` ellipsis in a child slot,
 	 * see `PatternStar` — with reserved placeholder identifiers that the
-	 * language's lexer accepts as ordinary identifiers. Skips occurrences
-	 * inside string literals (single-quoted, double-quoted) and comments
-	 * (line-style and block-style) — Haxe's specific string-comment rules;
-	 * other grammars override the policy. The ellipsis rides in this ONE pass
+	 * language's lexer accepts as ordinary identifiers. Leaves every byte inside one of the grammar's
+	 * lexical `regions` (comment, string or regex literal, interpolation holes included) as written,
+	 * so the grammar's own lexer decides what is text. The ellipsis rides in this ONE pass
 	 * rather than a second scan so the string / comment policy that decides
 	 * what is a token is written down exactly once.
 	 *
 	 * Returns the rewritten source. The placeholder format is
 	 * `__APQ_MV_<bareName>__` — reversed by `decodePlaceholderName`.
 	 */
-	public static function substituteMetavarsHaxe(source: String): String {
+	public static function substituteMetavarsHaxe(source: String, regions: Array<LexRegion>): String {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		final len: Int = source.length;
@@ -166,22 +166,12 @@ final class Metavar {
 			return end;
 		}
 		while (i < len) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\''.code || c == '"'.code) {
-				i = copyRun(i, scanStringEnd(source, i, c));
+			final region: Null<LexRegion> = LexicalRegions.regionAt(i, regions);
+			if (region != null) {
+				i = copyRun(i, region.to);
 				continue;
 			}
-			if (c == '/'.code && i + 1 < len) {
-				final c2: Int = source.fastCodeAt(i + 1);
-				if (c2 == '/'.code) {
-					i = copyRun(i, scanLineCommentEnd(source, i));
-					continue;
-				}
-				if (c2 == '*'.code) {
-					i = copyRun(i, scanBlockCommentEnd(source, i));
-					continue;
-				}
-			}
+			final c: Int = source.fastCodeAt(i);
 			// `...` standing alone in a child slot is the ellipsis; a range
 			// (`0...n`) or a spread (`f(...arr)`) has an operand on one side
 			// and is copied through as ordinary source.
@@ -305,39 +295,6 @@ final class Metavar {
 		out.sort(Compare.compareString);
 		return out;
 	}
-
-	private static function scanStringEnd(source: String, start: Int, quote: Int): Int {
-		var i: Int = start + 1;
-		final len: Int = source.length;
-		while (i < len) {
-			final c: Int = source.fastCodeAt(i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			if (c == quote) return i + 1;
-			i++;
-		}
-		return i;
-	}
-
-	private static function scanLineCommentEnd(source: String, start: Int): Int {
-		var i: Int = start + 2;
-		final len: Int = source.length;
-		while (i < len && source.fastCodeAt(i) != '\n'.code) i++;
-		return i;
-	}
-
-	private static function scanBlockCommentEnd(source: String, start: Int): Int {
-		var i: Int = start + 2;
-		final len: Int = source.length;
-		while (i + 1 < len) {
-			if (source.fastCodeAt(i) == '*'.code && source.fastCodeAt(i + 1) == '/'.code) return i + 2;
-			i++;
-		}
-		return len;
-	}
-
 
 	private static function countInto(node: QueryNode, into: Map<String, Int>): Void {
 		final n: Null<String> = node.name;
