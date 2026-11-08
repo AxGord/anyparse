@@ -186,4 +186,21 @@ final class Strings {
 		return at;
 	}
 
+	/**
+	 * The index of the `}` closing the `{` at `open` over the `length` codes `codeAt` reads, or -1 when it never closes.
+	 * Braces count naively, the way the compiler's `${ … }` scanner counts them: a brace inside a nested string still
+	 * counts. The one answer to "where does an interpolation block end".
+	 */
+	public static function closingBrace(length: Int, codeAt: Int -> Int, open: Int): Int {
+		var depth: Int = 0;
+		for (i in open ... length) {
+			final c: Int = codeAt(i);
+			if (c == '{'.code)
+				depth++;
+			else if (c == '}'.code && --depth == 0)
+				return i;
+		}
+		return -1;
+	}
+
 }

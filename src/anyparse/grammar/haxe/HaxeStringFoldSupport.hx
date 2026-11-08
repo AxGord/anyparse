@@ -560,7 +560,6 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 *    (`q("{")` reports "Unclosed brace"). A balanced `{x: 1}.x` is fine.
 	 */
 	private static function interpolationBlockSafe(src: String): Bool {
-		var depth: Int = 0;
 		var quote: Int = 0;
 		for (i in 0...src.length) {
 			final c: Int = src.fastCodeAt(i);
@@ -573,14 +572,17 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 			} else if (c == quote) {
 				quote = 0;
 			}
-			if (c == '{'.code) {
-				depth++;
-			} else if (c == '}'.code) {
-				depth--;
-				if (depth < 0) return false;
-			}
 		}
-		return depth == 0 && quote == 0;
+		// the source wrapped in its own `{ … }` closes exactly at the final `}` only when it is balanced and never dips below zero
+		final last: Int = src.length + 1;
+		return quote == 0 && Strings.closingBrace(last + 1, k -> {
+			if (k == 0)
+				'{'.code
+			else if (k == last)
+				'}'.code
+			else
+				src.fastCodeAt(k - 1);
+		}, 0) == last;
 	}
 
 	/**

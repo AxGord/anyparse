@@ -188,14 +188,8 @@ final class HxInterpProjection {
 	 * the whole remainder projects as one refusing `Block` rather than as text.
 	 */
 	private static function matchingBrace(decoded: Array<HxDecodedChar>, open: Int): Int {
-		var depth: Int = 0;
-		for (i in open ... decoded.length) {
-			if (decoded[i].code == '{'.code)
-				depth++;
-			else if (decoded[i].code == '}'.code && --depth == 0)
-				return i;
-		}
-		return decoded.length - 1;
+		final close: Int = Strings.closingBrace(decoded.length, k -> decoded[k].code, open);
+		return close < 0 ? decoded.length - 1 : close;
 	}
 
 	/** One segment node spanning `decoded[from]`'s first byte through `decoded[to]`'s last. */

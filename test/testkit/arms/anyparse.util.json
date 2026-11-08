@@ -426,6 +426,38 @@
 			"find": "i++;\n\t}\n\treturn at;",
 			"replace": "i++;\n\t}\n\treturn source.length;",
 			"note": "an unterminated literal reports the end of the text as its end, so a caller reads the rest as a closed literal"
+		},
+		{
+			"name": "M-UTIL-CLOSING-BRACE-NEST",
+			"type": "anyparse.util.Strings",
+			"method": "closingBrace",
+			"find": "depth++",
+			"replace": "depth += 0",
+			"note": "an opening brace no longer deepens the count, so a nested block never balances and the outer brace is never found"
+		},
+		{
+			"name": "M-UTIL-CLOSING-BRACE-NAIVE",
+			"type": "anyparse.util.Strings",
+			"method": "closingBrace",
+			"find": "if (c == '{'.code)",
+			"replace": "if (c == '{'.code && (i == 0 || codeAt(i - 1) != '\\''.code))",
+			"note": "a brace right after a quote is skipped as if the string were lexed, so the scan no longer counts it the way the compiler's scanner does"
+		},
+		{
+			"name": "M-UTIL-CLOSING-BRACE-UNCLOSED",
+			"type": "anyparse.util.Strings",
+			"method": "closingBrace",
+			"find": "return -1;",
+			"replace": "return length - 1;",
+			"note": "an unclosed block reports the last index instead of -1, so a caller cannot tell it from a block closing there"
+		},
+		{
+			"name": "M-UTIL-CLOSING-BRACE-OPEN",
+			"type": "anyparse.util.Strings",
+			"method": "closingBrace",
+			"find": "open ... length",
+			"replace": "0 ... length",
+			"note": "the scan starts at the text start instead of at the opening brace, so a closing brace before it unbalances the count"
 		}
 	]
 }

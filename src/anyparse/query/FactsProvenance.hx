@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 using Lambda;
 
@@ -971,14 +972,8 @@ private final class Interpolation {
 				pos++;
 			} else if (next == '{'.code) {
 				// the group's code is placed as the value's offsets past the quotes counted before it
-				var depth: Int = 0;
-				var end: Int = pos;
-				while (end < length) {
-					if (chars[end] == '{'.code) depth++;
-					if (chars[end] == '}'.code && --depth == 0) break;
-					end++;
-				}
-				if (end >= length) return null;
+				final end: Int = Strings.closingBrace(length, k -> chars[k], pos);
+				if (end < 0) return null;
 				for (k in pos ... end + 1) place(k);
 				pos = end + 1;
 			}

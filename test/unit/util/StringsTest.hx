@@ -356,4 +356,36 @@ final class StringsTest extends Test {
 		Assert.equals(0, Strings.quotedEnd('"ab\\', 0));
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-CLOSING-BRACE-NEST')
+	public function testANestedBlockClosesTheOuterBraceNotTheInnerOne(): Void {
+		Assert.equals(1, closing('{}', 0));
+		Assert.equals(6, closing('{a{b}c}', 0));
+		Assert.equals(6, closing('{a{b}c}d}', 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-CLOSING-BRACE-NAIVE')
+	public function testABraceInsideANestedStringStillCounts(): Void {
+		Assert.equals(4, closing("{f('}')}", 0));
+		Assert.equals(-1, closing("{f('{')}", 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-CLOSING-BRACE-UNCLOSED')
+	public function testABlockThatNeverClosesIsMinusOne(): Void {
+		Assert.equals(-1, closing('{a{b}', 0));
+		Assert.equals(-1, closing('{', 0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-CLOSING-BRACE-OPEN')
+	public function testTheScanStartsAtTheOpeningBrace(): Void {
+		Assert.equals(5, closing('x}y{a}b', 3));
+	}
+
+	private static function closing(text: String, open: Int): Int {
+		return Strings.closingBrace(text.length, k -> text.charCodeAt(k), open);
+	}
+
 }
