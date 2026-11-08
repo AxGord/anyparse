@@ -3,6 +3,10 @@ package dev;
 using Lambda;
 using StringTools;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.LexicalRegions;
+import anyparse.runtime.Span;
+
 /**
  * What a `hxq changed --diff` report says about the members of each file: the one answer to "which members of a source
  * file did the slice change, or can its report not say". A member whose diff lines differ in comments alone is no change. A file
@@ -133,28 +137,52 @@ final class ChangedMembers {
 	}
 
 	/**
-	 * The lines of one side of a diff that hold code, trimmed, with each `...` gap kept. A line is a comment when it opens `//`
-	 * or `/*`, is inside a block comment, or continues one (`DOC_STAR`); a block comment that shares its line with code stays code, so
-	 * the comparison can only widen.
+	 * The lines of one side of a diff that hold code, trimmed, with each `...` gap kept. The lines between two gaps are lexed
+	 * as one text, so a block comment a hunk opens ends with the hunk. A line is a comment when no code byte of it lies outside a
+	 * comment region (an opener inside a string is text) or when it continues a block comment (`DOC_STAR`), which a hunk may open
+	 * inside; a comment that shares its line with code stays code. A fragment cannot show that it opened inside a multi-line string,
+	 * so a hunk that does can still misread the lines after it.
 	 */
 	private static function codeOf(lines: Array<String>): Array<String> {
 		final code: Array<String> = [];
-		var inBlock: Bool = false;
+		var run: Array<String> = [];
 		for (line in lines) {
-			final text: String = line.trim();
-			if (text == '...') {
-				inBlock = false;
-				code.push(text);
+			if (line.trim() != '...') {
+				run.push(line);
 				continue;
 			}
-			final close: Int = text.indexOf('*/');
-			if (inBlock || text.startsWith('/*')) {
-				inBlock = close < 0;
-				if (close < 0 || close == text.length - 2) continue;
-			} else if (text.startsWith('//') || DOC_STAR.match(line)) {
-				continue;
-			}
-			if (text != '') code.push(text);
+			for (kept in codeLinesOf(run)) code.push(kept);
+			run = [];
+			code.push('...');
+		}
+		for (kept in codeLinesOf(run)) code.push(kept);
+		return code;
+	}
+
+	/**
+	 * The trimmed lines of `whole`, lexed as one text, that hold a byte of code outside every comment. The leading lines that continue
+	 * a block comment are dropped first: a hunk may open inside a doc comment, and an apostrophe there would open a string in the lexer.
+	 */
+	private static function codeLinesOf(whole: Array<String>): Array<String> {
+		var lead: Int = 0;
+		while (lead < whole.length && DOC_STAR.match(whole[lead])) lead++;
+		final run: Array<String> = whole.slice(lead);
+		final text: String = run.join('\n');
+		final comments: Array<LexRegion> = new HaxeQueryPlugin().lexicalRegions(text).filter(LexicalRegions.isComment);
+		final spans: Array<Span> = LexicalRegions.codeSpans(text.length, comments);
+		final code: Array<String> = [];
+		var from: Int = 0;
+		for (line in run) {
+			final lineFrom: Int = from;
+			final lineTo: Int = from + line.length;
+			from = lineTo + 1;
+			final held: Bool = spans.exists(
+				span ->
+					span.from < lineTo
+					&& span.to > lineFrom
+					&& text.substring(Std.int(Math.max(span.from, lineFrom)), Std.int(Math.min(span.to, lineTo))).trim() != ''
+			);
+			if (held && !DOC_STAR.match(line)) code.push(line.trim());
 		}
 		return code;
 	}

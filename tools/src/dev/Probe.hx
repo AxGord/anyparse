@@ -1,10 +1,12 @@
 package dev;
 
+import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
 import dev.Parity.Invocation;
 import dev.Parity.Outcome;
@@ -272,17 +274,14 @@ final class Probe {
 	}
 
 	/**
-	 * The `//` and `/* *\/` comments of C-family source `text`, each with its whitespace runs collapsed, sorted: a multiset to compare.
-	 * A comment opener inside a string literal counts too, alike on both sides of a comparison.
+	 * The `//` and `/* *\/` comments of Haxe source `text` as its lexer reads them, each with its whitespace runs collapsed,
+	 * sorted: a multiset to compare. A comment opener inside a string literal is text, so it counts for nothing.
 	 */
 	public static function commentsOf(text: String): Array<String> {
-		final found: Array<String> = [];
-		final comment: EReg = ~/\/\/[^\n]*|\/\*[\s\S]*?\*\//;
-		var rest: String = text;
-		while (comment.match(rest)) {
-			found.push(~/\s+/g.replace(comment.matched(0), ' ').trim());
-			rest = comment.matchedRight();
-		}
+		final found: Array<String> = [
+			for (region in new HaxeQueryPlugin().lexicalRegions(text))
+				if (LexicalRegions.isComment(region)) ~/\s+/g.replace(text.substring(region.from, region.to), ' ').trim()
+		];
 		found.sort(Compare.compareString);
 		return found;
 	}

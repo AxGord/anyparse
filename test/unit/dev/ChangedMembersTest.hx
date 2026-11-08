@@ -233,4 +233,55 @@ final class ChangedMembersTest extends Test {
 		Assert.same([], said['src/a/Gone.hx']);
 	}
 
+	@:pin('control')
+	@:killer('M-CHANGED-MEMBERS-STRING-LINE-COMMENT')
+	public function testALineThatOpensAsACommentInsideAMultiLineStringIsCode(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Str.hx  declarations  +2 -2',
+			'    ~ FnMember:run  +2 -2',
+			'        - \t\tfinal s = \'one',
+			'        - /* old',
+			'        - \';',
+			'        + \t\tfinal s = \'one',
+			'        + /* new',
+			'        + \';',
+			''
+		].join('\n'));
+		Assert.same(['run'], said['src/a/Str.hx']);
+	}
+
+	@:pin('control')
+	@:killer('M-CHANGED-MEMBERS-LEADING-DOC-STAR')
+	public function testAHunkThatOpensInsideADocCommentWithAnApostropheStillSeesTheCodeChange(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Open.hx  declarations  +1 -1',
+			'    ~ FnMember:run  +1 -1',
+			'          \t * don\'t touch',
+			'          \t */',
+			'          public function run() {',
+			'          final glob = \'src/*.hx\';',
+			'        - before();',
+			'        + after();',
+			'          }',
+			''
+		].join('\n'));
+		Assert.same(['run'], said['src/a/Open.hx']);
+	}
+
+	@:pin('control')
+	@:killer('M-CHANGED-MEMBERS-LEADING-DOC-STAR')
+	public function testAHunkThatOpensInsideADocCommentWithAnApostropheStillSeesACommentOnlyChange(): Void {
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of([
+			'M src/a/Note.hx  declarations  +1 -1',
+			'    ~ FnMember:run  +1 -1',
+			'          \t * the file\'s name',
+			'          \t */',
+			'        - // old note',
+			'        + // new note',
+			'          foo();',
+			''
+		].join('\n'));
+		Assert.same([], said['src/a/Note.hx']);
+	}
+
 }

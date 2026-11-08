@@ -1804,6 +1804,30 @@
 			"find": "failedRows(report.rows)",
 			"replace": "failedRows(report.failed)",
 			"note": "the kits row hands its hook the failing areas, so the battery's kit rows never match the base's and every red kit reads as the candidate's"
+		},
+		{
+			"name": "M-CHANGED-MEMBERS-STRING-LINE-COMMENT",
+			"type": "dev.ChangedMembers",
+			"method": "codeLinesOf",
+			"find": ".filter(LexicalRegions.isComment)",
+			"replace": ".filter(region -> true)",
+			"note": "the text of a string literal counts as comment, so a diff line inside a multi-line string that opens like a comment drops out and a member whose string alone changed reads as unchanged"
+		},
+		{
+			"name": "M-PROBE-COMMENTS-OF-STRING",
+			"type": "dev.Probe",
+			"method": "commentsOf",
+			"find": "if (LexicalRegions.isComment(region))",
+			"replace": "if (true)",
+			"note": "a string literal counts as a comment, so a marker inside one is compared as if written"
+		},
+		{
+			"name": "M-CHANGED-MEMBERS-LEADING-DOC-STAR",
+			"type": "dev.ChangedMembers",
+			"method": "codeLinesOf",
+			"find": "while (lead < whole.length && DOC_STAR.match(whole[lead])) lead++;",
+			"replace": "lead = 0;",
+			"note": "the lines that continue a block comment at a hunk's start are lexed with the rest, so an apostrophe in them opens a string that turns the code after it into text and the comments after it into code"
 		}
 	]
 }

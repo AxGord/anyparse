@@ -308,6 +308,13 @@ final class ProbeTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-PROBE-COMMENTS-OF-STRING')
+	public function testACommentMarkerInsideAStringLiteralIsNoComment(): Void {
+		Assert.same(['// real'], Probe.commentsOf('final url = \'http://x\'; // real\n'));
+		Assert.same(['/* b */'], Probe.commentsOf('final s = \'/* a\'; /* b */\n'));
+	}
+
 	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */
 	private static function engine(file: String, mark: String): String {
 		File.saveContent(file, [
