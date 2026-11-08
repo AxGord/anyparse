@@ -76,11 +76,11 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
 	}
 
 	private inline function triviaWrite2(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG_PAD);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_PAD));
 	}
 
 }

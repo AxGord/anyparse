@@ -31,10 +31,10 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * trailing comments inlined into the cascade-emitted items so source comments
 	 * survive.
 	 *
-	 * An anyparse extension the fork's `WrappingType` has no value for, so no corpus
-	 * fixture selects it and it reaches the engine only from a JSON config that names
-	 * it. A list the source broke collapses under it whenever it fits, which
-	 * is what a project asking for a canonical single-line layout needs.
+	 * An anyparse extension the fork's `WrappingType` has no value for: the Haxe
+	 * defaults take it for object, array, map and anonymous-type lists, so the
+	 * wrapping rules alone decide those; a fork fixture that keeps a source break
+	 * under them is fork-authorial.
 	 *
 	 * Effective only at the trivia-emit branch (`TriviaSepLowering.triviaSepStarExpr`);
 	 * the engine's `shape` switch maps `Ignore → shapeNoWrap` as a defensive fallback.

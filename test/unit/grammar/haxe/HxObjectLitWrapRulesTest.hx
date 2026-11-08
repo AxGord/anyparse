@@ -47,7 +47,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 
 	public function testDefaultsExposed(): Void {
 		final defaults: HxModuleWriteOptions = HaxeFormat.instance.defaultWriteOptions;
-		Assert.equals(WrapMode.NoWrap, defaults.objectLiteralWrap.defaultMode);
+		Assert.equals(WrapMode.Ignore, defaults.objectLiteralWrap.defaultMode);
 		Assert.isTrue(defaults.objectLiteralWrap.rules.length >= 4, 'expected at least four rules in default cascade');
 	}
 

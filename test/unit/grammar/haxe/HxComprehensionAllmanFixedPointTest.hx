@@ -86,19 +86,19 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 
 	/** At the limit the flat source is already canonical: nothing moves. */
 	public function testALiteralThatFitsStaysGlued(): Void {
-		Assert.equals(AT_LIMIT, HxWriteFixture.triviaWrite(fieldShape(42), CFG_SAME));
+		Assert.equals(AT_LIMIT, HxWriteFixture.triviaWrite(fieldShape(42), HxWriteFixture.listsKeepSource(CFG_SAME)));
 	}
 
 	/** Past it the FIRST write lands on the shape a source-multi-line literal gets, and that shape is a fixed point. */
 	public function testALiteralBrokenByWidthLandsInAllmanInOneWrite(): Void {
-		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(fieldShape(43), CFG_SAME));
-		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(PAST_LIMIT, CFG_SAME));
+		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(fieldShape(43), HxWriteFixture.listsKeepSource(CFG_SAME)));
+		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(PAST_LIMIT, HxWriteFixture.listsKeepSource(CFG_SAME)));
 	}
 
 	/** The wrapped iterable keeps its layout: its first write already was the fixed point. */
 	public function testAWrappedIterableKeepsItsGluedLiteral(): Void {
-		Assert.equals(WRAPPED_ITERABLE, HxWriteFixture.triviaWrite(longIterableShape(20), CFG_SAME));
-		Assert.equals(WRAPPED_ITERABLE, HxWriteFixture.triviaWrite(WRAPPED_ITERABLE, CFG_SAME));
+		Assert.equals(WRAPPED_ITERABLE, HxWriteFixture.triviaWrite(longIterableShape(20), HxWriteFixture.listsKeepSource(CFG_SAME)));
+		Assert.equals(WRAPPED_ITERABLE, HxWriteFixture.triviaWrite(WRAPPED_ITERABLE, HxWriteFixture.listsKeepSource(CFG_SAME)));
 	}
 
 	/**
@@ -204,13 +204,15 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-MEASURES-COMMITTED')
 	public function testAParenMeasuresTheBreakBare(): Void {
-		Assert.equals(OPEN_TERNARY_PAREN, HxWriteFixture.triviaWrite(ternaryParenShape(90), CFG_EXPRESSION));
+		Assert.equals(
+			OPEN_TERNARY_PAREN, HxWriteFixture.triviaWrite(ternaryParenShape(90), HxWriteFixture.listsKeepSource(CFG_EXPRESSION))
+		);
 		for (k in 1...101) assertOneWriteWithinLimit(ternaryParenShape(k), CFG_EXPRESSION, k);
 	}
 
 	private static function assertOneWriteWithinLimit(src: String, config: String, k: Int, slack: Int = 0): Void {
-		final once: String = HxWriteFixture.triviaWrite(src, config);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
+		final once: String = HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HxWriteFixture.listsKeepSource(config)), 'k=$k config=$config\n$src');
 		var widest: Int = 0;
 		for (line in once.split('\n')) {
 			final width: Int = line.replace('\t', ''.lpad(' ', TAB_WIDTH)).length;

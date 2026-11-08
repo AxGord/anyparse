@@ -76,8 +76,8 @@ final class HxFitPivotLiteralFixedPointTest extends Test {
 
 	/** `src` written once under the compiled defaults is `expected`, and `expected` is its own fixed point. */
 	private static function settlesOn(src: String, expected: String): Void {
-		Assert.equals(expected, HxWriteFixture.triviaWrite(src, '{}'), src);
-		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, '{}'));
+		Assert.equals(expected, HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource('{}')), src);
+		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, HxWriteFixture.listsKeepSource('{}')));
 	}
 
 	private static function statement(s: String): String {

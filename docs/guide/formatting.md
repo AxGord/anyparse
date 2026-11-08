@@ -104,3 +104,10 @@ that stays on one line, or a sole argument sharing the open delimiter's line, ge
 sets `arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says nothing about
 `wrapping.trailingComma` loads as `keep`, so the comma it asks for is added. A function parameter list's trailing `,`
 is always dropped and a mandatory comma (`{> Base,}`) always written, whatever the key says. Details: `docs/haxe-format-config.md`.
+
+## Lists break by the wrapping rules
+
+An object, array or map literal and an anonymous type lay out by `wrapping.objectLiteral` / `arrayWrap` / `mapWrap` /
+`anonType` alone (item count, item length, line width): a break the source put between items, grid rows included, does
+not keep a list open, and the built-in fallback of those four is `ignore`. A `"defaultWrap": "noWrap"` block on one of
+them restores the source-driven fallback for that list. A typedef's body keeps its source lines until its own decision.

@@ -385,7 +385,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	// --- helpers ---
 
 	private static function opts(json: String): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson(json);
+		return HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
 	}
 
 	private static function write(source: String, json: String): String {

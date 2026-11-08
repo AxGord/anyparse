@@ -41,18 +41,18 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 
 	public function testJsonLoaderRoutesIndentObjectLiteralFalse(): Void {
 		final json: String = '{"indentation":{"indentObjectLiteral":false}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(false, opts.indentObjectLiteral);
 	}
 
 	public function testJsonLoaderRoutesIndentObjectLiteralTrue(): Void {
 		final json: String = '{"indentation":{"indentObjectLiteral":true}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(true, opts.indentObjectLiteral);
 	}
 
 	public function testJsonLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		Assert.equals(true, opts.indentObjectLiteral);
 	}
 
@@ -262,7 +262,9 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 	}
 
 	private inline function writeWithCfg(src: String, cfg: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(cfg));
+		return HaxeModuleTriviaWriter.write(
+			HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(cfg))
+		);
 	}
 
 	private inline function writeWith(src: String, indentObjectLiteral: Bool, leftCurly: BracePlacement): String {
@@ -270,7 +272,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(indentObjectLiteral: Bool, leftCurly: BracePlacement): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = indentObjectLiteral;
 		opts.objectLiteralLeftCurly = leftCurly;
 		return opts;

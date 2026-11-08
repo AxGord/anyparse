@@ -78,7 +78,7 @@ class HxCallTrailingCommaEdgeTest extends Test {
 
 	/** Under `config`, `source` writes as `expected`, and `expected` writes as itself. */
 	private function assertWritesOnce(config: String, source: String, expected: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(config));
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(expected), opts));
 	}

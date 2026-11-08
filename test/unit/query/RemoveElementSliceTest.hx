@@ -56,8 +56,10 @@ class RemoveElementSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-REMOVE-COMMA-LINE-KEPT')
 	public function testRemoveOnePerLineElementTakesItsLine(): Void {
-		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
-		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\'\n\t];\n}\n';
+		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\',\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\'\n\t];\n}\n';
+		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\',\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\'\n\t];\n}\n';
 		assertRemove(source, 4, 3, false, expected);
 	}
 
@@ -162,10 +164,12 @@ class RemoveElementSliceTest extends Test {
 		assertSelectRemove(one, 'Literal:a', 'class C {\n\tstatic final A:Array<String> = [\'b\', \'c\'];\n}\n');
 		assertSelectRemove(one, 'Literal:b', 'class C {\n\tstatic final A:Array<String> = [\'a\', \'c\'];\n}\n');
 		assertSelectRemove(one, 'Literal:c', 'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\'];\n}\n');
-		final lines: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
-		assertSelectRemove(lines, 'Literal:a', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n');
-		assertSelectRemove(lines, 'Literal:b', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\'\n\t];\n}\n');
-		assertSelectRemove(lines, 'Literal:c', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\'\n\t];\n}\n');
+		final lines: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\',\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\'\n\t];\n}\n';
+		final tail: String = '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\'\n\t];\n}\n';
+		assertSelectRemove(lines, 'Literal:a', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'b\',\n\t\t\'c\',\n$tail');
+		assertSelectRemove(lines, 'Literal:b', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'c\',\n$tail');
+		assertSelectRemove(lines, 'Literal:c', 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n$tail');
 	}
 
 	/** A literal that is not a whole list item — an operand, a `return` value — is refused, never emptied. */

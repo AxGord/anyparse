@@ -31,8 +31,9 @@ final class HxFormatterCorpusHelpers {
 
 	/**
 	 * The one answer to "which corpus fixtures encode an authorial layout the canonical writer does not reproduce":
-	 * each expected section is a layout the fork read from its input (an explicit `keep`, or the fork's `keep`
-	 * default for `expressionCase` / `comprehensionFor`), and the writer's output is a function of the AST and the
+	 * each expected section is a layout the fork read from its input (an explicit `keep`, the fork's `keep`
+	 * default for `expressionCase` / `comprehensionFor`, or a list the fork left broken where the width rules
+	 * collapse it), and the writer's output is a function of the AST and the
 	 * options alone. Such a fixture failing is not a defect; one that passes no longer belongs here.
 	 */
 	public static final FORK_AUTHORIAL: Array<String> = [
@@ -88,7 +89,37 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/wrapping/method_chain_with_comments_keep.hxtest',
 		'test/testcases/wrapping/opadd_chain_keep.hxtest',
 		'test/testcases/wrapping/wrapping_method_chain_keep.hxtest',
-		'test/testcases/wrapping/wrapping_of_function_signature_keep.hxtest'
+		'test/testcases/wrapping/wrapping_of_function_signature_keep.hxtest',
+		'test/testcases/wrapping/issue_136_object_literal.hxtest',
+		'test/testcases/wrapping/issue_136_object_literal_indent_assignment_expr.hxtest',
+		'test/testcases/wrapping/issue_433_matrix_wrapping.hxtest',
+		'test/testcases/wrapping/issue_433_matrix_wrapping_no_align.hxtest',
+		'test/testcases/wrapping/issue_433_matrix_wrapping_trailing_comma.hxtest',
+		'test/testcases/wrapping/issue_516_literal_wrapping_with_postfix_exclamation.hxtest',
+		'test/testcases/wrapping/issue_68_object_literal_wrapping.hxtest',
+		'test/testcases/wrapping/nested_object_literal_with_curly_both.hxtest',
+		'test/testcases/wrapping/wrapping_of_objects.hxtest',
+		'test/testcases/whitespace/issue_150_overload_function.hxtest',
+		'test/testcases/whitespace/issue_562_arrow_function.hxtest',
+		'test/testcases/whitespace/issue_607_anon_object_with_meta.hxtest',
+		'test/testcases/whitespace/space_in_anonymous_object.hxtest',
+		'test/testcases/sameline/issue_104_typedef_with_finals.hxtest',
+		'test/testcases/sameline/issue_121_longer_expression_case.hxtest',
+		'test/testcases/sameline/issue_121_longer_expression_case_next.hxtest',
+		'test/testcases/lineends/issue_111_extra_line_break_after_object.hxtest',
+		'test/testcases/lineends/issue_301_typedef_anon_type.hxtest',
+		'test/testcases/lineends/issue_301_typedef_anon_type_wrap_keep.hxtest',
+		'test/testcases/lineends/issue_32_structure_inheritance.hxtest',
+		'test/testcases/indentation/issue_114_untyped.hxtest',
+		'test/testcases/indentation/issue_138_multiple_objects_in_call.hxtest',
+		'test/testcases/indentation/issue_138_multiple_objects_in_call_curly_next.hxtest',
+		'test/testcases/indentation/issue_367_array_literal_call.hxtest',
+		'test/testcases/indentation/issue_490_nested_object_literal.hxtest',
+		'test/testcases/indentation/issue_490_nested_object_literal_indent.hxtest',
+		'test/testcases/indentation/issue_546_wrapping_and_arrow_function.hxtest',
+		'test/testcases/indentation/issue_557_anon_struct_with_assignment.hxtest',
+		'test/testcases/indentation/issue_576_switch_indentation.hxtest',
+		'test/testcases/indentation/object_literal.hxtest'
 	];
 
 	private static inline final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';

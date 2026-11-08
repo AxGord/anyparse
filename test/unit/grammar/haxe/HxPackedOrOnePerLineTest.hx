@@ -76,7 +76,7 @@ class HxPackedOrOnePerLineTest extends Test {
 		final config: String = '{"wrapping": {"maxLineLength": $maxLineLength, "objectLiteral": {"defaultWrap": "ignore", "rules": ['
 			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
 			+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(config));
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

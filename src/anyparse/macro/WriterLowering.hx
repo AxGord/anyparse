@@ -2472,6 +2472,13 @@ typedef SepStarNoTriviaCtx = {
 	 */
 	final complexItems: Bool;
 
+	/**
+	 * A braced list that is not an expression-position literal: under Ignore its
+	 * hardline-carrying result is deferred from a host's width as a committed
+	 * one-per-line list is. An expression-position literal keeps its count.
+	 */
+	final deferUnderIgnore: Bool;
+
 };
 
 /**

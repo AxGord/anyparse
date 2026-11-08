@@ -124,15 +124,15 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
 	}
 
 	private inline function triviaWriteKeepPad(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG_KEEP_PAD);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_KEEP_PAD));
 	}
 
 	private inline function triviaWriteReflow(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG_REFLOW);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_REFLOW));
 	}
 
 }

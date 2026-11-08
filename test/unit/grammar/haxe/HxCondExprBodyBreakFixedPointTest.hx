@@ -90,16 +90,16 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAKMARK-SITE-OFF')
 	public function testAComprehensionCuddlesInOneWrite(): Void {
-		Assert.equals(COMPREHENSION_30, HxWriteFixture.triviaWrite(comprehension(30), CFG_CUDDLED));
-		Assert.equals(COMPREHENSION_30, HxWriteFixture.triviaWrite(COMPREHENSION_30, CFG_CUDDLED));
+		Assert.equals(COMPREHENSION_30, HxWriteFixture.triviaWrite(comprehension(30), HxWriteFixture.listsKeepSource(CFG_CUDDLED)));
+		Assert.equals(COMPREHENSION_30, HxWriteFixture.triviaWrite(COMPREHENSION_30, HxWriteFixture.listsKeepSource(CFG_CUDDLED)));
 	}
 
 	/** A call whose `#if` argument breaks keeps that argument on the call's line in the first write. */
 	@:pin('control')
 	@:killer('M-BREAKMARK-UNRECORDED')
 	public function testACallKeepsTheArgumentGluedInOneWrite(): Void {
-		Assert.equals(CALL_60, HxWriteFixture.triviaWrite(call(60), CFG_DEFAULT));
-		Assert.equals(CALL_60, HxWriteFixture.triviaWrite(CALL_60, CFG_DEFAULT));
+		Assert.equals(CALL_60, HxWriteFixture.triviaWrite(call(60), HxWriteFixture.listsKeepSource(CFG_DEFAULT)));
+		Assert.equals(CALL_60, HxWriteFixture.triviaWrite(CALL_60, HxWriteFixture.listsKeepSource(CFG_DEFAULT)));
 	}
 
 	/** One write is a fixed point within the limit at every width of the comprehension and of the call. */
@@ -142,8 +142,8 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	/** Under `conditionalExprFit` the region keeps the directive-seam ladder its own group gives it. */
 	@:pin('guard')
 	public function testAFitRegionKeepsItsLadder(): Void {
-		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(comprehension(85), CFG_FIT));
-		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(FIT_85, CFG_FIT));
+		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(comprehension(85), HxWriteFixture.listsKeepSource(CFG_FIT)));
+		Assert.equals(FIT_85, HxWriteFixture.triviaWrite(FIT_85, HxWriteFixture.listsKeepSource(CFG_FIT)));
 	}
 
 	/**
@@ -153,13 +153,13 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAKMARK-FIT-NAMED')
 	public function testAFittingLiteralInAFitRegionStaysFlat(): Void {
-		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(comprehension(62), CFG_FIT_RULE));
-		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(FLAT_62, CFG_FIT_RULE));
+		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(comprehension(62), HxWriteFixture.listsKeepSource(CFG_FIT_RULE)));
+		Assert.equals(FLAT_62, HxWriteFixture.triviaWrite(FLAT_62, HxWriteFixture.listsKeepSource(CFG_FIT_RULE)));
 	}
 
 	private static function assertOneWrite(src: String, config: String, k: Int): String {
-		final once: String = HxWriteFixture.triviaWrite(src, config);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
+		final once: String = HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HxWriteFixture.listsKeepSource(config)), 'k=$k config=$config\n$src');
 		return once;
 	}
 

@@ -39,18 +39,18 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 
 	public function testJsonLoaderRoutesIndentComplexValueExpressionsTrue(): Void {
 		final json: String = '{"indentation":{"indentComplexValueExpressions":true}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(true, opts.indentComplexValueExpressions);
 	}
 
 	public function testJsonLoaderRoutesIndentComplexValueExpressionsFalse(): Void {
 		final json: String = '{"indentation":{"indentComplexValueExpressions":false}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(false, opts.indentComplexValueExpressions);
 	}
 
 	public function testJsonLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		Assert.equals(false, opts.indentComplexValueExpressions);
 	}
 
@@ -115,7 +115,7 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(indentComplexValueExpressions: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentComplexValueExpressions = indentComplexValueExpressions;
 		return opts;
 	}

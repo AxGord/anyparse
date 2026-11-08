@@ -603,7 +603,9 @@ class HxTriviaWriteTest extends Test {
 	public function testLeadingLineCommentSpaceCanBeDisabled(): Void {
 		final source: String = '//foo\nclass Main {}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"addLineCommentSpace": false}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			HxWriteFixture.listsKeepSource('{"whitespace": {"addLineCommentSpace": false}}')
+		);
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('//foo\nclass Main {}\n', out);
 	}
@@ -644,7 +646,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitMultiLineRoundTrip(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -662,7 +664,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitTrailingComment(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1 // tag\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -675,7 +677,7 @@ class HxTriviaWriteTest extends Test {
 	 */
 	public function testArrayExprMultiLineRoundTrip(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2\n\t\t];\n\t}\n}';
-		assertRoundtrip(source);
+		assertRoundtrip(source, 'class Main {\n\tstatic function main() {\n\t\tvar a = [1, 2];\n\t}\n}\n');
 	}
 
 	/**
@@ -738,9 +740,9 @@ class HxTriviaWriteTest extends Test {
 		// stay compact (a fixed point).
 		final source: String =
 			'class C {\n\tfunction f(c:Bool) {\n\t\tvar x = c\n\t\t\t? [\'A\', \'B\']\n\t\t\t: [\'C\'];\n\t\treturn x;\n\t}\n}';
-		final once: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source));
+		final once: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), HxWriteFixture.listsKeepSourceOptions());
 		Assert.equals('class C {\n\tfunction f(c:Bool) {\n\t\tvar x = c ? [\'A\', \'B\'] : [\'C\'];\n\t\treturn x;\n\t}\n}\n', once);
-		final twice: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once));
+		final twice: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once), HxWriteFixture.listsKeepSourceOptions());
 		Assert.equals(once, twice);
 	}
 
@@ -748,7 +750,7 @@ class HxTriviaWriteTest extends Test {
 		// Guard against over-collapse: an array with a GENUINE internal newline
 		// (between elements, inside `[...]`) must still expand one-element-per-line.
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar x = [\'A\',\n\t\t\t\'B\'];\n\t\treturn x;\n\t}\n}';
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source));
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), HxWriteFixture.listsKeepSourceOptions());
 		Assert.equals('class C {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t\'A\',\n\t\t\t\'B\'\n\t\t];\n\t\treturn x;\n\t}\n}\n', out);
 	}
 
@@ -774,8 +776,10 @@ class HxTriviaWriteTest extends Test {
 
 	/** The relocated doc is a fixed point: a second pass leaves the first pass's output alone. */
 	public function testDocEndingItsLineSettlesInOnePass(): Void {
-		final once: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse('class A {} /** Doc of B. */\nclass B {}'));
-		Assert.equals(once, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once)));
+		final once: String = HaxeModuleTriviaWriter.write(
+			HaxeModuleTriviaParser.parse('class A {} /** Doc of B. */\nclass B {}'), HxWriteFixture.listsKeepSourceOptions()
+		);
+		Assert.equals(once, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once), HxWriteFixture.listsKeepSourceOptions()));
 	}
 
 	/**
@@ -808,7 +812,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	private static function withCommentStyle(style: CommentStyle): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.commentStyle = style;
 		return opts;
 	}

@@ -43,7 +43,7 @@ class HxSepCommentGapWriteTest extends Test {
 	}
 
 	public function testArrayOwnLineCommentBeforeSeparator(): Void {
-		assertSettles('class Foo {\n\tvar a = [1\n\t/* c */, 2];\n}\n', 'class Foo {\n\tvar a = [\n\t\t1,\n\t\t/* c */ 2\n\t];\n}\n');
+		assertSettles('class Foo {\n\tvar a = [1\n\t/* c */, 2];\n}\n', 'class Foo {\n\tvar a = [1, /* c */ 2];\n}\n');
 	}
 
 	public function testArrayCommentBeforeTrailingSeparatorJoinsTheOrphans(): Void {

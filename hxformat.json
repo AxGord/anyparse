@@ -63,6 +63,18 @@
 	},
 	"wrapping": {
 		"maxLineLength": 140,
+		"objectLiteral": {
+			"defaultWrap": "noWrap"
+		},
+		"arrayWrap": {
+			"defaultWrap": "noWrap"
+		},
+		"mapWrap": {
+			"defaultWrap": "noWrap"
+		},
+		"anonType": {
+			"defaultWrap": "noWrap"
+		},
 		"functionSignature": {
 			"defaultWrap": "fillLineWithLeadingBreak",
 			"rules": [

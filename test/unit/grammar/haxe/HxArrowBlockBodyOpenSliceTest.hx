@@ -222,7 +222,7 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String, ?cfg: String): String {
-		return HxWriteFixture.triviaWrite(src, cfg ?? CFG);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(cfg ?? CFG));
 	}
 
 }

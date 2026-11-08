@@ -84,7 +84,9 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 
 	public function testCascadeSetsBothKnobsViaJson(): Void {
 		final src: String = 'class Foo { static var x = {a: 1}; }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "before"}}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			HxWriteFixture.listsKeepSource('{"lineEnds": {"leftCurly": "before"}}')
+		);
 		Assert.equals(BracePlacement.Next, opts.objectLiteralLeftCurly);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		// Short literal still cuddled despite cascade
@@ -92,7 +94,7 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src: String, placement: BracePlacement): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.objectLiteralLeftCurly = placement;
 		// Disable indentObjectLiteral so this suite stays focused on the
 		// leftCurly axis — slice ω-indent-objectliteral default-true would

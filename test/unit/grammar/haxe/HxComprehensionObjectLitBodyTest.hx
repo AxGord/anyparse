@@ -296,7 +296,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	private static function write(source: String, config: String): String {
-		return HxWriteFixture.triviaWrite(source, config);
+		return HxWriteFixture.triviaWrite(source, HxWriteFixture.listsKeepSource(config));
 	}
 
 	private static function cuddledSource(): String {

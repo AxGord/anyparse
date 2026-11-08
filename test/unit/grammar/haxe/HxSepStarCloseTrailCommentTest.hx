@@ -207,7 +207,7 @@ class HxSepStarCloseTrailCommentTest extends Test {
 
 	private function roundTrip(source: String): String {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast);
+		return HaxeModuleTriviaWriter.write(ast, HxWriteFixture.listsKeepSourceOptions());
 	}
 
 }

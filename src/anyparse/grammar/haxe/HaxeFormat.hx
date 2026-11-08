@@ -202,8 +202,9 @@ final class HaxeFormat implements TextFormat {
 
 	/**
 	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
-	 * verbatim from haxe-formatter's `wrapping.objectLiteral` rule set
-	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
+	 * from haxe-formatter's `wrapping.objectLiteral` rule set
+	 * in `resources/default-hxformat.json` (AxGord fork), with `Ignore`
+	 * as the fallback so a source break never keeps a list open. Returned as a
 	 * fresh struct on each call so test code that mutates the
 	 * `defaultWriteOptions.objectLiteralWrap` substruct doesn't corrupt
 	 * the singleton.
@@ -235,7 +236,7 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
 				}
 			],
-			defaultMode: WrapMode.NoWrap
+			defaultMode: WrapMode.Ignore
 		};
 	}
 
@@ -296,7 +297,8 @@ final class HaxeFormat implements TextFormat {
 	 * triggers via the new `HasMultilineItems` cascade condition. The
 	 * `equalItemLengths` condition and its `fillLineWithLeadingBreak`
 	 * rule remain skipped — none of the current corpus fixtures depends
-	 * on it. Returned as a fresh struct on each call so test code that
+	 * on it. `Ignore` is the fallback, so a source break never keeps a
+	 * list open. Returned as a fresh struct on each call so test code that
 	 * mutates the `defaultWriteOptions.arrayLiteralWrap` substruct
 	 * doesn't corrupt the singleton.
 	 */
@@ -339,7 +341,7 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
 				}
 			],
-			defaultMode: WrapMode.NoWrap
+			defaultMode: WrapMode.Ignore
 		};
 	}
 
@@ -482,6 +484,11 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultAnonTypeWrap(): WrapRules {
 		return {
 			rules: [
+				// An item a comment holds open cannot share a line, and the NoWrap rules below would answer it.
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }]
+				},
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
@@ -506,7 +513,7 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
 				}
 			],
-			defaultMode: WrapMode.NoWrap
+			defaultMode: WrapMode.Ignore
 		};
 	}
 

@@ -177,7 +177,7 @@ final class HxParenValueIfOpenWrapSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String, cfg: String): String {
-		return HxWriteFixture.triviaWrite(src, cfg);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(cfg));
 	}
 
 }

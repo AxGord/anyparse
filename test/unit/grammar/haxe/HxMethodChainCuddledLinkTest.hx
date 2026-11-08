@@ -294,7 +294,7 @@ final class HxMethodChainCuddledLinkTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {
-		return HxWriteFixture.triviaWrite(src, config);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
 	}
 
 	/**

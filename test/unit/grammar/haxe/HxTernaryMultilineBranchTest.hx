@@ -126,7 +126,7 @@ final class HxTernaryMultilineBranchTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {
-		return HxWriteFixture.triviaWrite(src, config);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
 	}
 
 	/** A `var v = c… ? macro {` ternary whose first line is `cols` columns at a four-column tab. */

@@ -76,7 +76,7 @@ final class HxTernaryCollectionHugSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, CONFIG);
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
 	}
 
 }

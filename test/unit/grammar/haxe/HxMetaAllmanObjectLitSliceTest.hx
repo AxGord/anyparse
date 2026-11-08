@@ -74,7 +74,7 @@ final class HxMetaAllmanObjectLitSliceTest extends Test {
 	}
 
 	private inline function format(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{"wrapping": {"trailingComma": "keep"}}');
+		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource('{"wrapping": {"trailingComma": "keep"}}'));
 	}
 
 }

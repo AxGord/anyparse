@@ -298,7 +298,8 @@ final class TriviaSepLowering {
 			forceModeExpr: forceModeExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
 			reflowSourceMultiline: reflowSourceMultiline,
-			complexItems: complexItems
+			complexItems: complexItems,
+			deferUnderIgnore: openText == '{' && !reflowInExprPosition
 		});
 		final sepCtx: WriterLowering.SepStarCtx = {
 			openText: openText,
@@ -943,20 +944,10 @@ final class TriviaSepLowering {
 			// so every other sep-Star consumer is byte-identical (`macro {}`).
 			final matrixComputeExpr: Expr = c.matrixWrap
 				? macro {
-					// ω-matrix-survives-ignore: the probe reads `newlineBefore` off the
-					// elements itself, so `_hasSourceNewlines` was only ever a fast path —
-					// and under `Ignore` that signal is deliberately DROPPED, which took
-					// the grid with it. A 16-per-row lookup table then reflowed to one
-					// element per line, because a matrix has no representation other than
-					// the source rows: `Ignore` means "re-flow by width", and a grid is
-					// exactly the thing width cannot reconstruct. So the grid wins over
-					// Ignore, the same precedence the noWrap-flatten path already gives it.
-					//
-					// Nothing else needs a guard: `MatrixWrap.tryLayout` returns null
-					// unless the rows form a uniform grid of at least TWO columns, so a
-					// flat array (no `newlineBefore` anywhere) and a one-per-line array
-					// both fall straight through to the cascade.
-					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline) {
+					// The grid is the one layout built from the source rows, so `Ignore`, whose output is a function
+					// of the AST and the cascade, never reads them. `MatrixWrap.tryLayout` returns null unless the
+					// rows form a uniform grid of at least two columns, so no other guard is needed.
+					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline && !_ignoreEmit) {
 						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
 						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 						_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(
@@ -1065,6 +1056,9 @@ final class TriviaSepLowering {
 				// reflow Star routes its multiline lists through the same cascade, so both
 				// passes agree there too.
 				final _breakAsOnePerLine: Bool = !$v{c.reflowSourceMultiline} && !_ignoreEmit;
+				// Under Ignore no next pass commits a braced list, but a hardline-carrying answer is the
+				// same measure question for a host: counted, it would wrap a signature around a broken list.
+				final _deferIfHardline: Bool = _breakAsOnePerLine || $v{c.deferUnderIgnore} && _ignoreEmit;
 				$complexKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
@@ -1117,7 +1111,7 @@ final class TriviaSepLowering {
 				// RENDERER still decides stays counted, as the next pass may read it back flat.
 				_matrixDoc != null
 					? _dbg(_matrixDoc)
-					: (_smlKeep || _breakAsOnePerLine && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0) && !_isComprehension
+					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0) && !_isComprehension
 						? _dbg(_wlResult)
 						: _wlResult;
 			};

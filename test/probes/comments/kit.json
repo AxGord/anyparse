@@ -125,7 +125,8 @@
 		"tce-remove/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"remove\"}}\n",
 		"tce-remove/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
 		"tce-add/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"callParameter\": {\"defaultWrap\": \"onePerLine\", \"rules\": []}}, \"trailingCommas\": {\"callArgumentDefault\": \"yes\"}}\n",
-		"tce-add/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n"
+		"tce-add/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
+		"anon-comment/v11.hx": "class C {\n\tvar t:{\n\t\t@:optional var c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}\n"
 	},
 	"invocations": [
 		{
@@ -512,7 +513,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "74ccb16beece57a3",
+				"out": "12071668d066dfc1",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -818,7 +819,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "09e0b7beafbdf227",
+				"out": "45b016bb4639f969",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -835,7 +836,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "7283531a1cb028dd",
+				"out": "45b016bb4639f969",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -886,7 +887,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "ddfc82405a085c1f",
+				"out": "2426f2602e26de58",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -2110,7 +2111,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "c010ab4f5ea737ef",
+				"out": "3009c18f057e681d",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -2165,6 +2166,23 @@
 			"expect": {
 				"exit": 0,
 				"out": "273f0abddee4433b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "anon-comment/v11.hx",
+			"fixpoint": "anon-comment/v11.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"anon-comment/v11.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "3ce440d48c6d3690",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

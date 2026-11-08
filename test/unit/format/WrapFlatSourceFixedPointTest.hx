@@ -134,10 +134,11 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * commits it to `OnePerLine` in BOTH fit states. That commitment is the
 	 * fixture's whole point.
 	 */
-	private static final CALL_ARG_COMMITTED_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "callParameter": '
-		+ '{"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
-		+ '"value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": '
-		+ '"totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CALL_ARG_COMMITTED_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {'
+		+ '"defaultWrap": "noWrap"}, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", '
+		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
+		+ '{"conditions": [{"cond": "itemCount <= n", "value": 1}, {'
+		+ '"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	/** The same literal cascade under a ternary host instead of a call host. */
 	private static final TERNARY_ARG_OBJECT: String = '{"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '

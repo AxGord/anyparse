@@ -77,8 +77,8 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	}
 
 	private static function assertOneWriteWithinLimit(src: String, config: String, limit: Int, k: Int): Void {
-		final once: String = HxWriteFixture.triviaWrite(src, config);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), 'k=$k config=$config\n$src');
+		final once: String = HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HxWriteFixture.listsKeepSource(config)), 'k=$k config=$config\n$src');
 		var widest: Int = 0;
 		for (line in once.split('\n')) {
 			final width: Int = line.replace('\t', ''.lpad(' ', TAB_WIDTH)).length;

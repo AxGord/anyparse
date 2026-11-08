@@ -118,13 +118,16 @@ final class HxDroppedSepCommentTest extends Test {
 
 	private static function assertDroppedLikeAbsent(tail: String, host: Int): String {
 		final dropped: String = assertOneWriteIsAFixedPoint(source(tail, host, true, NOTE), CFG_REMOVE, 'host=$host tail=$tail');
-		Assert.equals(HxWriteFixture.triviaWrite(source(tail, host, false, NOTE), CFG_REMOVE), dropped, 'host=$host tail=$tail');
+		Assert.equals(
+			HxWriteFixture.triviaWrite(source(tail, host, false, NOTE), HxWriteFixture.listsKeepSource(CFG_REMOVE)), dropped,
+			'host=$host tail=$tail'
+		);
 		return dropped;
 	}
 
 	private static function assertOneWriteIsAFixedPoint(src: String, config: String, what: String): String {
-		final once: String = HxWriteFixture.triviaWrite(src, config);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, config), '$what (second write)');
+		final once: String = HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(config));
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HxWriteFixture.listsKeepSource(config)), '$what (second write)');
 		return once;
 	}
 

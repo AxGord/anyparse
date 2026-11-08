@@ -128,8 +128,9 @@ Every value also accepts its capitalised spelling (`OnePerLine`, `FillLine`, …
 mode that COLLAPSES a list the source broke — every other mode either preserves the source
 form or only breaks a long one. With `objectLiteral` at `defaultWrap: "ignore"` plus an
 `itemCount >= n` rule, a source-broken `{x: 1, y: 2}` collapses to one line, and a
-source-flat three-item literal breaks one-per-line. The fork's `WrappingType` has no
-`ignore`, so no corpus fixture selects it — which is exactly why it went unnoticed.
+source-flat three-item literal breaks one-per-line. It is the default of `objectLiteral`,
+`arrayWrap`, `mapWrap` and `anonType`; the fork's `WrappingType` has no `ignore`, so a list a
+fixture leaves at those defaults lays out by the rules, whatever its source breaks.
 
 ### `rules[].conditions[].cond`
 

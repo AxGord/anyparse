@@ -129,9 +129,12 @@ class AddElementSliceTest extends Test {
 	 * found appending to `TestDiscoveryParityTest`'s deferred-arm census).
 	 */
 	public function testAppendToArrayWithTrailingComma(): Void {
-		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\'\n\t];\n}\n';
-		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n\t\t\'a\',\n\t\t\'b\',\n\t\t\'c\'\n\t];\n}\n';
-		assertAppend(source, 2, 33, "'c'", false, expected);
+		final source: String = 'class C {\n\tstatic final A:Array<String> = [\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\',\n\t\t\'a\'\n\t];\n}\n';
+		final expected: String = 'class C {\n\tstatic final A:Array<String> = [\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\',\n\t\t\'a\',\n\t\t\'b\'\n\t];\n'
+			+ '}\n';
+		assertAppend(source, 2, 33, "'b'", false, expected);
 		assertAppend(
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", true,
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n}\n'
@@ -252,9 +255,10 @@ class AddElementSliceTest extends Test {
 
 	/** --append past a trailing BLOCK comment: same rule — the `,` stays with the last element. */
 	public function testAppendArrayPastTrailingBlockComment(): Void {
-		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1 /* one */\n\t\t];\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1, /* one */\n\t\t\t2\n\t\t];\n\t}\n}\n';
-		assertAppend(source, 3, 11, '2', false, expected);
+		final head: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n'
+			+ '\t\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\',\n';
+		final expected: String = '${head}\t\t\t1,\n\t\t\t/* one */ 2\n\t\t];\n\t}\n}\n';
+		assertAppend('${head}\t\t\t1 /* one */\n\t\t];\n\t}\n}\n', 3, 11, '2', false, expected);
 	}
 
 	/**
@@ -438,9 +442,10 @@ class AddElementSliceTest extends Test {
 
 	/** `--after` a comma-list element whose span swallows its own trailing block comment. */
 	public function testInsertAfterCommaElementKeepsItsTrailingComment(): Void {
-		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tb: 2\n\t\t};\n\t}\n}\n';
+		final rest: String = '\t\t\td: 4,\n\t\t\te: 5,\n\t\t\tf: 6\n\t\t};\n\t}\n}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tb: 2,\n$rest';
 		final expected: String =
-			'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tc: 3,\n\t\t\tb: 2\n\t\t};\n\t}\n}\n';
+			'class C {\n\tfunction f():Void {\n\t\tfinal o = {\n\t\t\ta: 1 /* about a */,\n\t\t\tc: 3,\n\t\t\tb: 2,\n$rest';
 		assertAdd(source, 4, 4, After, 'c: 3', true, expected);
 	}
 

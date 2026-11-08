@@ -14,8 +14,8 @@ final class RewindOrStashTriviaTest extends Test {
 	@:pin('control')
 	@:killer('M-TRIVIA-RUN-NO-REWIND')
 	public function testCommentAfterTheLastOperandIsKept(): Void {
-		final source: String = 'class A {\n\n\tfunction f() {\n\t\tfoo(a /* c */);\n\t\tvar o = {\n\t\t\ta: 1 /* d */\n\t\t};\n'
-			+ '\t\tvar x = [\n\t\t\ta /* e */\n\t\t];\n\t}\n\n}\n';
+		final source: String =
+			'class A {\n\n\tfunction f() {\n\t\tfoo(a /* c */);\n\t\tvar o = {a: 1 /* d */};\n\t\tvar x = [a /* e */];\n\t}\n\n}\n';
 		Assert.equals(source, roundTrip(source));
 	}
 

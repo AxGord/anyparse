@@ -932,6 +932,38 @@
 			"find": "Metavar.substituteMetavarsHaxe(source, lexicalRegions(source))",
 			"replace": "Metavar.substituteMetavarsHaxe(source, [])",
 			"note": "the lexer's regions are no longer consulted, so a metavariable inside a string, comment or regex literal of a pattern is rewritten to a placeholder"
+		},
+		{
+			"name": "M-DEFAULT-OBJECT-IGNORE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultObjectLiteralWrap",
+			"find": "defaultMode: WrapMode.Ignore",
+			"replace": "defaultMode: WrapMode.NoWrap",
+			"note": "the object-literal default stops being Ignore, so a source break keeps a short literal open"
+		},
+		{
+			"name": "M-DEFAULT-ARRAY-IGNORE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultArrayLiteralWrap",
+			"find": "defaultMode: WrapMode.Ignore",
+			"replace": "defaultMode: WrapMode.NoWrap",
+			"note": "the array and map default stops being Ignore, so a source break keeps a short list open"
+		},
+		{
+			"name": "M-DEFAULT-ANON-IGNORE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultAnonTypeWrap",
+			"find": "defaultMode: WrapMode.Ignore",
+			"replace": "defaultMode: WrapMode.NoWrap",
+			"note": "the anonymous-type default stops being Ignore, so a source break keeps a short anon type open"
+		},
+		{
+			"name": "M-ANON-MULTILINE-ONE-PER-LINE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultAnonTypeWrap",
+			"find": "{ cond: WrapConditionType.HasMultilineItems, value: 1 }",
+			"replace": "{ cond: WrapConditionType.ItemCountLessThan, value: 0 }",
+			"note": "the head rule of the anonymous-type cascade never fires, so an item a comment holds open is answered by a NoWrap rule"
 		}
 	]
 }
