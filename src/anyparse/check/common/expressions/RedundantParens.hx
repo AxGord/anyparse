@@ -2,6 +2,7 @@ package anyparse.check.common.expressions;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.QuotationAware;
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Strings;
@@ -318,9 +319,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class RedundantParens extends RuleBase implements ConfigAware implements QuotationAware {
-
-	/** A ternary's else-arm child index — `[condition, then, else]`. */
-	private static inline final TERNARY_ELSE_CHILD_INDEX: Int = 2;
 
 	/** The rule id — also the `apq.json` key its four opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
@@ -704,7 +702,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 			SlotKind.Required
 		else if (parent.kind == slots.ternaryKind && i == 0)
 			SlotKind.TernaryCondition
-		else if (parent.kind == slots.ternaryKind && i == TERNARY_ELSE_CHILD_INDEX)
+		else if (parent.kind == slots.ternaryKind && i == BranchChain.ELSE_BRANCH_INDEX)
 			SlotKind.TernaryElse
 		else if (i == 0 && sameFamilyLeftOperand(parent, slots))
 			SlotKind.SameFamilyLeft

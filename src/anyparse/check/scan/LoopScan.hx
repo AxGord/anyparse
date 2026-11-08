@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
@@ -56,9 +57,6 @@ final class LoopScan {
 
 	/** A compound assignment has exactly [target, value] children. */
 	private static inline final COMPOUND_ASSIGN_CHILD_COUNT: Int = 2;
-
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
 	/** The shortest loop body a leading guard can be lifted out of: the guard plus one statement. */
 	private static inline final GUARD_PLUS_ONE: Int = 2;
@@ -540,8 +538,8 @@ final class LoopScan {
 
 	/** Whether `stmt` is an else-less `if` whose then-branch is exactly `continue;`, bare or braced-single. */
 	private static function isIfContinue(stmt: QueryNode, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: String): Bool {
-		if (!ifKinds.contains(stmt.kind) || stmt.children.length != IF_NO_ELSE_CHILD_COUNT) return false;
-		final thenBranch: QueryNode = stmt.children[1];
+		if (!ifKinds.contains(stmt.kind) || BranchChain.hasElse(stmt)) return false;
+		final thenBranch: QueryNode = BranchChain.thenOf(stmt);
 		return thenBranch.kind == continueKind
 			|| (thenBranch.kind == blockStmtKind && thenBranch.children.length == 1 && thenBranch.children[0].kind == continueKind);
 	}

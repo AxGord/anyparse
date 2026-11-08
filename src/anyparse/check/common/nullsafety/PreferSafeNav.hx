@@ -1,6 +1,7 @@
 package anyparse.check.common.nullsafety;
 
 import anyparse.check.Check.VersionGated;
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
@@ -150,17 +151,11 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferSafeNav extends RuleBase implements VersionGated {
 
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	/** A binary comparison node has exactly [left, right] children. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
 	/** A logical-AND node has exactly [preceding-conjuncts, last-conjunct] children. */
 	private static inline final AND_CHILD_COUNT: Int = 2;
-
-	/** A complete ternary node has exactly [condition, then-branch, else-branch] children. */
-	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
 	/** An assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
@@ -366,10 +361,10 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		ifNode: QueryNode, declName: String, s: Seams
 	): Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> {
 		final assignKind: Null<String> = s.assignKind;
-		if (assignKind == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final condIdent: Null<QueryNode> = guardOperand(ifNode.children[0], s);
+		if (assignKind == null || !s.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
+		final condIdent: Null<QueryNode> = guardOperand(BranchChain.condOf(ifNode), s);
 		if (condIdent == null || subjectRoot(condIdent, s).name == declName) return null;
-		final stmt: Null<QueryNode> = soleExprStatement(ifNode.children[1], s);
+		final stmt: Null<QueryNode> = soleExprStatement(BranchChain.thenOf(ifNode), s);
 		if (stmt == null) return null;
 		final assign: QueryNode = stmt.children[0];
 		if (assign.kind != assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
@@ -447,16 +442,18 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * dropped text around the branch.
 	 */
 	private static function matchTernary(ternary: QueryNode, source: String, s: Seams): Null<Candidate> {
-		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
-		final cond: QueryNode = BoolExprShape.unwrapParens(ternary.children[0], s.parenKind);
+		if (!BranchChain.hasElse(ternary)) return null;
+		final cond: QueryNode = BoolExprShape.unwrapParens(BranchChain.condOf(ternary), s.parenKind);
 		if (cond.children.length != COMPARISON_CHILD_COUNT) return null;
 		// `==` puts `null` in the THEN branch and the guarded chain in the ELSE branch; `!=` mirrors that.
 		final elseIsGuarded: Bool = cond.kind == s.eqKind;
 		if (!elseIsGuarded && cond.kind != s.notEqKind) return null;
 		final condIdent: Null<QueryNode> = subjectOperand(cond, s);
 		if (condIdent == null) return null;
-		final branch: QueryNode = BoolExprShape.unwrapParens(ternary.children[elseIsGuarded ? 2 : 1], s.parenKind);
-		final fallback: QueryNode = BoolExprShape.unwrapParens(ternary.children[elseIsGuarded ? 1 : 2], s.parenKind);
+		final guardedBranch: QueryNode = elseIsGuarded ? BranchChain.elseBranch(ternary) : BranchChain.thenOf(ternary);
+		final nullBranch: QueryNode = elseIsGuarded ? BranchChain.thenOf(ternary) : BranchChain.elseBranch(ternary);
+		final branch: QueryNode = BoolExprShape.unwrapParens(guardedBranch, s.parenKind);
+		final fallback: QueryNode = BoolExprShape.unwrapParens(nullBranch, s.parenKind);
 		if (fallback.kind != s.nullKind) return null;
 		final access: Null<QueryNode> = subjectAccess(branch, condIdent, s);
 		if (access == null) return null;
@@ -522,12 +519,12 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * and when a comment sits in a DROPPED part of the removed `if` region.
 	 */
 	private static function match(ifNode: QueryNode, source: String, s: Seams): Null<Candidate> {
-		if (ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final guard: Null<{ operand: QueryNode, rest: Null<QueryNode> }> = guardCondition(ifNode.children[0], s);
+		if (BranchChain.hasElse(ifNode)) return null;
+		final guard: Null<{ operand: QueryNode, rest: Null<QueryNode> }> = guardCondition(BranchChain.condOf(ifNode), s);
 		if (guard == null) return null;
 		final condIdent: QueryNode = guard.operand;
 		final rest: Null<QueryNode> = guard.rest;
-		final stmt: Null<QueryNode> = singleCallStatement(ifNode.children[1], s);
+		final stmt: Null<QueryNode> = singleCallStatement(BranchChain.thenOf(ifNode), s);
 		if (stmt == null) return null;
 		final access: Null<QueryNode> = subjectAccess(stmt.children[0], condIdent, s);
 		if (access == null) return null;

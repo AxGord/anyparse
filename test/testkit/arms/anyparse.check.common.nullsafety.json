@@ -61,8 +61,8 @@
 			"name": "M-DECL-INIT-TERNARY-ANY-ARM",
 			"type": "anyparse.check.common.nullsafety.NullableSource",
 			"method": "initTypeIsNonNull",
-			"find": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) && initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
-			"replace": "return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) || initTypeIsNonNull(init.children[2], cfg, valueNominalOf);",
+			"find": "&& initTypeIsNonNull(BranchChain.elseBranch(init), cfg, valueNominalOf);",
+			"replace": "|| initTypeIsNonNull(BranchChain.elseBranch(init), cfg, valueNominalOf);",
 			"note": "one proven arm carries the whole ternary, so `flag ? a : null` reads as non-null and a real NPE goes silent"
 		},
 		{

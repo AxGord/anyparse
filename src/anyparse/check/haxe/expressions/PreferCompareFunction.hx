@@ -6,6 +6,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Supersedes;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.PurityScan;
@@ -92,7 +93,6 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** A chain of this many comparisons, then a terminal value, is a three-way comparison. */
 	private static inline final RUNGS: Int = 2;
 
-	private static inline final ELSE_SLOT: Int = 2;
 	private static inline final ASCENDING: String = '-1';
 	private static inline final DESCENDING: String = '1';
 	private static inline final EQUAL: String = '0';
@@ -322,9 +322,9 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final rungs: Array<Rung> = [];
 		final head: QueryNode = BoolExprShape.unwrapParens(node, s.parenKind);
 		var at: QueryNode = head;
-		while ((at.kind == s.ternaryKind || s.ifExpressionKinds.contains(at.kind)) && at.children.length == ELSE_SLOT + 1) {
-			rungs.push(rung(at.children[0], at.children[1]));
-			at = BoolExprShape.unwrapParens(at.children[ELSE_SLOT], s.parenKind);
+		while ((at.kind == s.ternaryKind || s.ifExpressionKinds.contains(at.kind)) && BranchChain.hasElse(at)) {
+			rungs.push(rung(BranchChain.condOf(at), BranchChain.thenOf(at)));
+			at = BoolExprShape.unwrapParens(BranchChain.elseBranch(at), s.parenKind);
 		}
 		return chained(head, rungs, at);
 	}
@@ -658,9 +658,9 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final out: Array<QueryNode> = [];
 		function value(node: QueryNode): Void {
 			final open: QueryNode = peeled(node, s);
-			if ((open.kind == s.ternaryKind || s.ifExpressionKinds.contains(open.kind)) && open.children.length == ELSE_SLOT + 1) {
-				value(open.children[1]);
-				value(open.children[ELSE_SLOT]);
+			if ((open.kind == s.ternaryKind || s.ifExpressionKinds.contains(open.kind)) && BranchChain.hasElse(open)) {
+				value(BranchChain.thenOf(open));
+				value(BranchChain.elseBranch(open));
 			} else {
 				out.push(open);
 			}

@@ -32,6 +32,9 @@ final class NodeShape {
 	/** A `return x;` carries exactly its value. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
+	/** A single-variable declaration with an initializer projects as exactly one child: the initializer. */
+	private static inline final INIT_CHILD_COUNT: Int = 1;
+
 	/** A comparison has exactly [left, right] operands. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
@@ -97,9 +100,10 @@ final class NodeShape {
 		final lhs: QueryNode = assign.children[0];
 		final name: Null<String> = lhs.name;
 		if (lhs.kind != identKind || name == null) return null;
-		if (ret.kind != returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
-		final retIdent: QueryNode = ret.children[0];
-		return retIdent.kind == identKind && retIdent.name == name ? { lhs: lhs, name: name, retIdent: retIdent } : null;
+		final retIdent: Null<QueryNode> = returnValueOf(ret, returnKind);
+		return retIdent != null && (retIdent.kind == identKind && retIdent.name == name)
+			? { lhs: lhs, name: name, retIdent: retIdent }
+			: null;
 	}
 
 	/**
@@ -117,6 +121,16 @@ final class NodeShape {
 		if (callee.kind != identKind) return [];
 		final nm: Null<String> = callee.name;
 		return nm != null ? [nm] : [];
+	}
+
+	/** The value a `return v;` statement carries — its one child — or null when `stmt` is not a `returnKind` node or returns nothing. */
+	public static function returnValueOf(stmt: QueryNode, returnKind: Null<String>): Null<QueryNode> {
+		return returnKind != null && stmt.kind == returnKind && stmt.children.length == RETURN_VALUE_CHILD_COUNT ? stmt.children[0] : null;
+	}
+
+	/** The initializer of a single-variable local declaration — its one child — or null when `decl` has none. */
+	public static function initOf(decl: QueryNode): Null<QueryNode> {
+		return decl.children.length == INIT_CHILD_COUNT ? decl.children[0] : null;
 	}
 
 }

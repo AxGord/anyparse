@@ -1,6 +1,7 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;
@@ -39,9 +40,6 @@ import anyparse.query.SymbolIndex;
  */
 @:nullSafety(Strict)
 final class EmptyBlock extends RuleBase {
-
-	/** An if node with both branches has children [cond, then, else]. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
 
 	private static inline final DECLINE_LOOP: String = 'a loop body: removing it removes the loop';
 	private static inline final DECLINE_TRY: String = 'a try / catch body: the construct needs it';
@@ -169,18 +167,17 @@ final class EmptyBlock extends RuleBase {
 		if (!(shape.ifStatementKinds ?? []).contains(parent.kind)) return Keep(keptBodyReason(parent, shape));
 		final nspan: Null<Span> = node.span;
 		if (nspan == null) return Keep(DECLINE_OTHER);
-		final kids: Array<QueryNode> = parent.children;
 		// Empty `else {}` — this node is the else branch (then + else both present).
-		if (kids.length >= IF_WITH_ELSE_CHILD_COUNT && kids[2] == node) {
-			final thenSpan: Null<Span> = kids[1].span;
+		if (BranchChain.hasElse(parent) && BranchChain.elseBranch(parent) == node) {
+			final thenSpan: Null<Span> = BranchChain.thenOf(parent).span;
 			return thenSpan == null
 				? Keep(DECLINE_OTHER)
 				: Remove({ span: ElementSpan.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' });
 		}
 		// Empty no-else `if (cond) {}` with a side-effect-free condition — safe to
 		// drop only when the `if` is a statement-list member, not a branch body.
-		if (kids.length != 2 || kids[1] != node) return Keep(DECLINE_THEN_WITH_ELSE);
-		if (!MemberKinds.isSideEffectFree(kids[0], shape)) return Keep(DECLINE_SIDE_EFFECT);
+		if (BranchChain.hasElse(parent) || BranchChain.thenOf(parent) != node) return Keep(DECLINE_THEN_WITH_ELSE);
+		if (!MemberKinds.isSideEffectFree(BranchChain.condOf(parent), shape)) return Keep(DECLINE_SIDE_EFFECT);
 		if (grandparent == null || !blockKinds.contains(grandparent.kind)) return Keep(DECLINE_BRANCH_BODY);
 		final pspan: Null<Span> = parent.span;
 		return pspan == null ? Keep(DECLINE_OTHER) : Remove({ span: ElementSpan.lineExtendedSpan(source, pspan), text: '' });

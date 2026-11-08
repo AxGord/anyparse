@@ -47,8 +47,8 @@
 			"name": "M-PM-FILTER",
 			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "leavesValue",
-			"find": "node.children.length < IF_ELSE_CHILD_COUNT",
-			"replace": "node.children.length < 0",
+			"find": "!BranchChain.hasElse(node)",
+			"replace": "false",
 			"note": "an if without else, a filter, becomes a map over every element"
 		},
 		{

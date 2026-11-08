@@ -1,6 +1,7 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
@@ -82,12 +83,6 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 
 	/** A `while` node has exactly [condition, body] children. */
 	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
-	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
-	/** An `if` with an `else` has exactly [condition, then-branch, else-branch] children. */
-	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
 
 	/** The only boolean literal an always-true loop header can be written as. */
 	private static inline final TRUE_LITERAL: String = 'true';
@@ -218,7 +213,7 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		final body: QueryNode = loop.children[1];
 		final bodyBlock: Null<QueryNode> = s.blockKinds.contains(body.kind) ? body : null;
 		final ifNode: QueryNode = bodyBlock == null || bodyBlock.children.length == 0 ? body : bodyBlock.children[0];
-		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length < IF_NO_ELSE_CHILD_COUNT) return null;
+		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length <= BranchChain.THEN_BRANCH_INDEX) return null;
 		final rest: Array<QueryNode> = bodyBlock == null ? [] : bodyBlock.children.slice(1);
 		final arms: Null<Arms> = classify(ifNode, rest, s);
 		if (arms == null) return null;
@@ -226,7 +221,7 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		final kepts: Array<QueryNode> = keep == null ? rest : [keep];
 		for (n in kepts) if (LoopScan.escapesIteration(n, s.breaks, false)) return null;
 		final kept: Null<Kept> = keptText(keep, ifNode, bodyBlock, ctx);
-		final cond: QueryNode = ifNode.children[0];
+		final cond: QueryNode = BranchChain.condOf(ifNode);
 		final condSpan: Null<Span> = cond.span;
 		if (kept == null || condSpan == null) return null;
 		final condText: String = arms.negate
@@ -247,8 +242,8 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 	 * exit, with both it never iterates at all.
 	 */
 	private static function classify(ifNode: QueryNode, rest: Array<QueryNode>, s: Seams): Null<Arms> {
-		if (ifNode.children.length == IF_NO_ELSE_CHILD_COUNT) {
-			final term: Null<Terminator> = exitBranch(ifNode.children[1], s);
+		if (!BranchChain.hasElse(ifNode)) {
+			final term: Null<Terminator> = exitBranch(BranchChain.thenOf(ifNode), s);
 			return term == null ? null : {
 				keep: null,
 				lift: term.head,
@@ -258,19 +253,19 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		}
 		// Forms (b) and (c) consume the WHOLE body: a statement after the `if` would have to join
 		// the kept branch, and the two runs are not contiguous in the source.
-		if (ifNode.children.length != IF_WITH_ELSE_CHILD_COUNT || rest.length != 0) return null;
-		final thenTerm: Null<Terminator> = exitBranch(ifNode.children[1], s);
-		final elseTerm: Null<Terminator> = exitBranch(ifNode.children[2], s);
+		if (rest.length != 0) return null;
+		final thenTerm: Null<Terminator> = exitBranch(BranchChain.thenOf(ifNode), s);
+		final elseTerm: Null<Terminator> = exitBranch(BranchChain.elseBranch(ifNode), s);
 		return if (elseTerm != null && thenTerm == null)
 			{
-				keep: ifNode.children[1],
+				keep: BranchChain.thenOf(ifNode),
 				lift: elseTerm.head,
 				breakNode: elseTerm.breakNode,
 				negate: false
 			};
 		else if (thenTerm != null && elseTerm == null)
 			{
-				keep: ifNode.children[2],
+				keep: BranchChain.elseBranch(ifNode),
 				lift: thenTerm.head,
 				breakNode: thenTerm.breakNode,
 				negate: true

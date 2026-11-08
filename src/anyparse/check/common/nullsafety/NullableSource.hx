@@ -1,5 +1,6 @@
 package anyparse.check.common.nullsafety;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
@@ -41,9 +42,6 @@ import anyparse.query.SymbolIndex;
  */
 @:nullSafety(Strict)
 final class NullableSource {
-
-	/** A ternary's child count — condition, then-arm, else-arm. */
-	private static inline final TERNARY_ARITY: Int = 3;
 
 	/**
 	 * Resolve the recognition config from a grammar's `RefShape`, or null when the
@@ -148,8 +146,9 @@ final class NullableSource {
 	): Bool {
 		if (init == null || valueNominalOf == null) return false;
 		final ternaryKind: Null<String> = cfg.shape.ternaryKind;
-		if (ternaryKind != null && init.kind == ternaryKind && init.children.length == TERNARY_ARITY)
-			return initTypeIsNonNull(init.children[1], cfg, valueNominalOf) && initTypeIsNonNull(init.children[2], cfg, valueNominalOf);
+		if (ternaryKind != null && init.kind == ternaryKind && BranchChain.hasElse(init))
+			return initTypeIsNonNull(BranchChain.thenOf(init), cfg, valueNominalOf)
+				&& initTypeIsNonNull(BranchChain.elseBranch(init), cfg, valueNominalOf);
 		if (NullFlow.NON_NULL_RHS_KINDS.contains(init.kind)) return true;
 		final nominal: Null<String> = valueNominalOf(init);
 		return nominal != null && !cfg.returnMarkers.contains(nominal) && nominal != cfg.shape.rawDynamicTypeName;

@@ -1,6 +1,7 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.loops.MapValueScan.ValueSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
@@ -70,9 +71,6 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'redundant-map-exists';
-
-	/** A complete ternary node has children [cond, then, else]. */
-	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
 	/** `m.exists(k)` is a call with [callee, key]. */
 	private static inline final EXISTS_CALL_CHILDREN: Int = 2;
@@ -255,9 +253,9 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 	 * the comment gate belong to `match`, which layers them on top; this half needs no resolution.
 	 */
 	private static function structuralShape(ternary: QueryNode, source: String, cfg: Cfg): Null<Shape> {
-		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
-		final cond: QueryNode = ternary.children[0];
-		final read: QueryNode = ternary.children[1];
+		if (!BranchChain.hasElse(ternary)) return null;
+		final cond: QueryNode = BranchChain.condOf(ternary);
+		final read: QueryNode = BranchChain.thenOf(ternary);
 		if (cond.kind != cfg.callKind || cond.children.length != EXISTS_CALL_CHILDREN) return null;
 		final callee: QueryNode = cond.children[0];
 		final method: Null<String> = callee.name;
@@ -275,7 +273,7 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 		return {
 			recv: recv,
 			read: read,
-			fallback: ternary.children[2],
+			fallback: BranchChain.elseBranch(ternary),
 			name: name
 		};
 	}

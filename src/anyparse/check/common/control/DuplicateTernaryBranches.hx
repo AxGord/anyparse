@@ -22,9 +22,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class DuplicateTernaryBranches extends RuleBase {
 
-	/** A complete ternary node has children [cond, then, else]. */
-	private static inline final TERNARY_CHILD_COUNT: Int = 3;
-
 	public function new() {
 		super('duplicate-ternary-branches', 'a ternary whose then- and else-branches are identical (cond ? x : x)', RuleCategory.Control);
 	}
@@ -50,10 +47,10 @@ final class DuplicateTernaryBranches extends RuleBase {
 				final span: Null<Span> = v.span;
 				if (span == null) continue;
 				final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-				if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
+				if (node == null || !BranchChain.hasElse(node)) continue;
 				// Only safe to drop the condition when evaluating it has no side effect.
-				if (!MemberKinds.isSideEffectFree(node.children[0], plugin.refShape())) continue;
-				final branchSpan: Null<Span> = node.children[1].span;
+				if (!MemberKinds.isSideEffectFree(BranchChain.condOf(node), plugin.refShape())) continue;
+				final branchSpan: Null<Span> = BranchChain.thenOf(node).span;
 				if (branchSpan == null) continue;
 				edits.push({ span: span, text: source.substring(branchSpan.from, branchSpan.to) });
 			}
@@ -64,8 +61,8 @@ final class DuplicateTernaryBranches extends RuleBase {
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {
 		if (
 			node.kind == ternaryKind
-			&& node.children.length == TERNARY_CHILD_COUNT
-			&& MemberKinds.sameSource(node.children[1], node.children[2], source)
+			&& BranchChain.hasElse(node)
+			&& MemberKinds.sameSource(BranchChain.thenOf(node), BranchChain.elseBranch(node), source)
 		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {

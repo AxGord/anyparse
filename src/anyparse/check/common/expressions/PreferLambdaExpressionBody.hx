@@ -1,5 +1,6 @@
 package anyparse.check.common.expressions;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.CanonicalEdit;
@@ -350,9 +351,6 @@ final class PreferLambdaExpressionBody extends RuleBase {
 
 	private static inline final LINE_COMMENT: String = '//';
 
-	/** An `if` node with this many children carries an else-branch — see `branchesInternally`. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	/** A collapsible statement carries exactly one child — the value the body becomes. */
 	private static inline final SINGLE_VALUE_CHILD: Int = 1;
 
@@ -696,8 +694,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * and a `--fix` fixpoint cannot oscillate across it.
 	 */
 	private static function branchesInternally(stmt: QueryNode, s: Seams): Bool {
-		return s.branchingKinds.contains(stmt.kind)
-			|| (s.shield.conditionalKinds.contains(stmt.kind) && stmt.children.length >= IF_ELSE_CHILD_COUNT);
+		return s.branchingKinds.contains(stmt.kind) || (s.shield.conditionalKinds.contains(stmt.kind) && BranchChain.hasElse(stmt));
 	}
 
 	/**

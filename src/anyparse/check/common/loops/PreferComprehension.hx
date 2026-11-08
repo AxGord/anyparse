@@ -1,5 +1,6 @@
 package anyparse.check.common.loops;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
@@ -222,9 +223,6 @@ final class PreferComprehension extends RuleBase {
 
 	/** A `while` node has exactly [condition, body] children. */
 	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
 	/** A `push` call has exactly [callee, single-argument] children. */
 	private static inline final PUSH_CALL_CHILD_COUNT: Int = 2;
@@ -546,9 +544,9 @@ final class PreferComprehension extends RuleBase {
 				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
 		if (node.kind == s.blockStmtKind) return buildBlock(node, name, ctx, acc);
 		if (s.ifKinds.contains(node.kind))
-			return node.children.length != IF_NO_ELSE_CHILD_COUNT
+			return BranchChain.hasElse(node)
 				? null
-				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
+				: buildHeaderLayer(node, BranchChain.condOf(node), BranchChain.thenOf(node), name, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(node, name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;

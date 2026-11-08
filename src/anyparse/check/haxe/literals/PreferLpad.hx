@@ -1,6 +1,7 @@
 package anyparse.check.haxe.literals;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.IndexScope;
@@ -132,9 +133,6 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 
 	/** An interval node has exactly [low, high] children. */
 	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
-
-	/** A ladder link has exactly [condition, value, tail] children -- a chain with no `else` has two. */
-	private static inline final LADDER_CHILD_COUNT: Int = 3;
 
 	/** A `<` comparison has exactly [left, right] children. */
 	private static inline final CONDITION_CHILD_COUNT: Int = 2;
@@ -306,8 +304,8 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 		var cursor: QueryNode = node;
 		final values: Array<QueryNode> = [];
 		while (true) {
-			if (!s.ifKinds.contains(cursor.kind) || cursor.children.length != LADDER_CHILD_COUNT) return null;
-			final condition: QueryNode = cursor.children[0];
+			if (!s.ifKinds.contains(cursor.kind) || !BranchChain.hasElse(cursor)) return null;
+			final condition: QueryNode = BranchChain.condOf(cursor);
 			if (condition.kind != s.ltKind || condition.children.length != CONDITION_CHILD_COUNT) return null;
 			final left: QueryNode = condition.children[0];
 			final name: Null<String> = left.name;
@@ -318,10 +316,10 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 				return null;
 			final bound: Null<Int> = intLiteral(condition.children[1], s, source);
 			if (bound == null || bound != threshold) return null;
-			values.push(cursor.children[1]);
+			values.push(BranchChain.thenOf(cursor));
 			if (values.length >= MAX_BRANCHES) return null;
 			threshold *= BASE;
-			final tail: QueryNode = cursor.children[2];
+			final tail: QueryNode = BranchChain.elseBranch(cursor);
 			if (!s.ifKinds.contains(tail.kind)) {
 				values.push(tail);
 				break;

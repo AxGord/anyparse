@@ -1,5 +1,6 @@
 package anyparse.check.haxe.loops;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
@@ -84,9 +85,6 @@ final class PreferFind extends HaxeRule {
 	 * key-value loop carries a third — its VALUE binder — and is refused before the count.
 	 */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
-
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
 	/** A Form-B `if`-body block has exactly [assignment-statement, break] children. */
 	private static inline final BREAK_BODY_CHILD_COUNT: Int = 2;
@@ -313,14 +311,14 @@ final class PreferFind extends HaxeRule {
 	 */
 	private static function guardedBreakOf(decl: QueryNode, ifNode: QueryNode, s: Seams, probe: MemberProbe): Null<GuardedBreak> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
-		if (declName == null || !s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
+		if (declName == null || !s.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
 		// The guard runs BETWEEN the declaration and the loop — the one place the unguarded form
 		// has nothing at all — so a guard that WRITES the holder breaks the `null` premise:
 		// `if ((r = seed) != null) for …` leaves `seed` behind on the no-match path, where the
 		// rewrite leaves `null`. A local can only be written through its own name (nothing else
 		// can reach it), so refusing any MENTION of it in the guard is exact.
-		if (mentionsName(ifNode.children[0], declName, s)) return null;
-		final loop: QueryNode = unwrapSole(ifNode.children[1], s);
+		if (mentionsName(BranchChain.condOf(ifNode), declName, s)) return null;
+		final loop: QueryNode = unwrapSole(BranchChain.thenOf(ifNode), s);
 		final head: Null<Head> = forIfHead(loop, s, probe);
 		return head == null || !isAssignBreakBody(head.then, declName, head.loopVar, s) ? null : {
 			forNode: loop,
@@ -524,11 +522,11 @@ final class PreferFind extends HaxeRule {
 		final shadowed: Bool = probe.shadows(iterable);
 		if (shadowed && !probe.qualified()) return null;
 		final body: QueryNode = unwrapSole(operands[1], s);
-		return !s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT ? null : {
+		return !s.ifKinds.contains(body.kind) || BranchChain.hasElse(body) ? null : {
 			loopVar: loopVar,
 			iterable: iterable,
-			cond: body.children[0],
-			then: body.children[1],
+			cond: BranchChain.condOf(body),
+			then: BranchChain.thenOf(body),
 			qualified: shadowed
 		};
 	}

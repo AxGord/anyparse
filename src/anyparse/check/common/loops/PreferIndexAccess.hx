@@ -1,5 +1,6 @@
 package anyparse.check.common.loops;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
@@ -297,11 +298,11 @@ final class PreferIndexAccess extends RuleBase {
 	private static function containsFragileNullGuard(
 		node: QueryNode, site: Span, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg
 	): Bool {
-		if (node.kind == cfg.ternaryKind && node.children.length == 3) {
-			final cond: QueryNode = node.children[0];
+		if (node.kind == cfg.ternaryKind && BranchChain.hasElse(node)) {
+			final cond: QueryNode = BranchChain.condOf(node);
 			final eq: Bool = cond.kind == cfg.eqKind;
 			if ((eq || cond.kind == cfg.notEqKind) && NodeShape.nullComparedSide(cond, cfg.nullLitKind) != null) {
-				final fallback: QueryNode = eq ? node.children[1] : node.children[2];
+				final fallback: QueryNode = eq ? BranchChain.thenOf(node) : BranchChain.elseBranch(node);
 				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
 			}
 		}

@@ -2,6 +2,7 @@ package anyparse.check.common.nullsafety;
 
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VersionGated;
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
@@ -48,9 +49,6 @@ import anyparse.query.TypeInfoProvider;
  */
 @:nullSafety(Strict)
 final class PreferNullCoalescing extends RuleBase implements RiskyFix implements VersionGated {
-
-	/** A complete ternary node has children [cond, then, else]. */
-	private static inline final TERNARY_CHILD_COUNT: Int = 3;
 
 	public function new() {
 		super(
@@ -162,9 +160,9 @@ final class PreferNullCoalescing extends RuleBase implements RiskyFix implements
 	private static function match(
 		ternary: QueryNode, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, seams: Seams
 	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
-		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
+		if (!BranchChain.hasElse(ternary)) return null;
 		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = guardOf(
-			ternary.children[0], ternary.children[1], ternary.children[2], source, seams
+			BranchChain.condOf(ternary), BranchChain.thenOf(ternary), BranchChain.elseBranch(ternary), source, seams
 		);
 		if (res == null) return null;
 		final span: Null<Span> = ternary.span;

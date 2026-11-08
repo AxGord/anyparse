@@ -84,6 +84,26 @@ class NodeShapeTest extends Test {
 		Assert.isNull(NodeShape.returnedAssignment(fieldWrite, new QueryNode(RETURN, null, [ident('x')]), IDENT, RETURN));
 	}
 
+	public function testReturnValueOfAnswersTheReturnedExpression(): Void {
+		final value: QueryNode = ident('x');
+		Assert.equals(value, NodeShape.returnValueOf(new QueryNode(RETURN, null, [value]), RETURN));
+	}
+
+	public function testReturnValueOfRefusesBareReturnOtherKindAndUnsetSeam(): Void {
+		final value: QueryNode = ident('x');
+		Assert.isNull(NodeShape.returnValueOf(new QueryNode(RETURN, null, []), RETURN));
+		Assert.isNull(NodeShape.returnValueOf(new QueryNode(RETURN, null, [value, value]), RETURN));
+		Assert.isNull(NodeShape.returnValueOf(new QueryNode('Other', null, [value]), RETURN));
+		Assert.isNull(NodeShape.returnValueOf(new QueryNode(RETURN, null, [value]), null));
+	}
+
+	public function testInitOfAnswersTheSoleInitializerChild(): Void {
+		final init: QueryNode = ident('e');
+		Assert.equals(init, NodeShape.initOf(new QueryNode('VarStmt', 'x', [init])));
+		Assert.isNull(NodeShape.initOf(new QueryNode('VarStmt', 'x', [])));
+		Assert.isNull(NodeShape.initOf(new QueryNode('VarStmt', 'x', [init, init])));
+	}
+
 	private static function ident(name: String): QueryNode {
 		return new QueryNode(IDENT, name, [], new Span(0, name.length));
 	}

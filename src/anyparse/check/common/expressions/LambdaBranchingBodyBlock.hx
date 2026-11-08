@@ -1,5 +1,6 @@
 package anyparse.check.common.expressions;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
@@ -87,9 +88,6 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'lambda-branching-body-braces';
 
-	/** A conditional node with this many children carries an else-branch. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
-
 	public function new() {
 		super(
 			RULE_ID,
@@ -172,7 +170,7 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 
 	/** The SAME boundary `PreferLambdaExpressionBody.branchesInternally` refuses on. */
 	private static function branchesInternally(body: QueryNode, s: Seams): Bool {
-		return s.switchKinds.contains(body.kind) || (s.conditionalKinds.contains(body.kind) && body.children.length >= IF_ELSE_CHILD_COUNT);
+		return s.switchKinds.contains(body.kind) || (s.conditionalKinds.contains(body.kind) && BranchChain.hasElse(body));
 	}
 
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {

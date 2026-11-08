@@ -2,6 +2,7 @@ package anyparse.check.haxe.loops;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
@@ -38,9 +39,6 @@ import anyparse.query.SymbolIndex;
 final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix {
 
 	private static inline final RULE_ID: String = 'prefer-map';
-
-	/** An `if` expression with its `else`: condition, then, else. */
-	private static inline final IF_ELSE_CHILD_COUNT: Int = 3;
 
 	/** The longest rewrite a finding's message quotes before it is cut. */
 	private static inline final MESSAGE_EXCERPT_MAX: Int = 80;
@@ -176,7 +174,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	private static function leavesValue(node: QueryNode, binder: String, s: Seams): Bool {
 		final isIdent: Bool = node.kind == s.identKind;
 		return s.leavingKinds.contains(node.kind)
-			|| (s.ifExpressionKinds.contains(node.kind) && node.children.length < IF_ELSE_CHILD_COUNT)
+			|| (s.ifExpressionKinds.contains(node.kind) && !BranchChain.hasElse(node))
 			|| (isIdent && node.name == s.superText)
 			|| (s.writeKinds.contains(node.kind) && node.children.length > 0 && isBinder(node.children[0], binder, s))
 			|| node.children.exists(c -> leavesValue(c, binder, s));

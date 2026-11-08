@@ -19,6 +19,7 @@ import anyparse.check.scan.UsingScan;
 import anyparse.check.common.loops.DeadBinderCounterLoop;
 import anyparse.check.scan.RunScan;
 import anyparse.query.NominalTypes;
+import anyparse.check.common.control.BranchChain;
 
 /**
  * The shape engine behind `prefer-exists`, `prefer-foreach` and `prefer-count`: a `for` loop whose
@@ -57,9 +58,6 @@ final class LambdaLoopScan {
 
 	/** A `for` node has exactly [iterable, body] operands once the key-value binder is filtered out. */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
-
-	/** An `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
 	/** The flag's ONE write: the loop's own assignment, and nothing else in the enclosing statement list. */
 	private static inline final FLAG_WRITES: Int = 1;
@@ -408,8 +406,8 @@ final class LambdaLoopScan {
 		};
 		// The guarded form merges the guard with `&&`, which only reads as the original for the
 		// `exists` direction — see the type doc for why the `foreach` mirror is refused outright.
-		if (kind != LambdaLoopKind.Exists || !s.ifKinds.contains(a.kind) || a.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final loop: QueryNode = unwrapSole(a.children[1], s);
+		if (kind != LambdaLoopKind.Exists || !s.ifKinds.contains(a.kind) || BranchChain.hasElse(a)) return null;
+		final loop: QueryNode = unwrapSole(BranchChain.thenOf(a), s);
 		final guarded: Null<Head> = forIfHead(loop, source, s, probe);
 		return guarded == null || guarded.value != loopValue ? null : {
 			anchor: a,
@@ -603,10 +601,10 @@ final class LambdaLoopScan {
 	 * reached from a local function.
 	 */
 	private static function bodyShape(body: QueryNode, source: String, s: Seams, ?sink: FlagSink): Null<BodyShape> {
-		final filtered: Bool = s.ifKinds.contains(body.kind) && body.children.length == IF_NO_ELSE_CHILD_COUNT;
-		final cond: Null<QueryNode> = filtered ? body.children[0] : null;
+		final filtered: Bool = s.ifKinds.contains(body.kind) && !BranchChain.hasElse(body);
+		final cond: Null<QueryNode> = filtered ? BranchChain.condOf(body) : null;
 		if (cond != null && mentionsSuper(cond, s)) return null;
-		final step: QueryNode = filtered ? unwrapSole(body.children[1], s) : body;
+		final step: QueryNode = filtered ? unwrapSole(BranchChain.thenOf(body), s) : body;
 		if (sink != null && sink.counts)
 			return LoopScan.isUnitIncrementOf(step, sink.name, sink.exprStmtKind, s.incrementKinds, s.addAssignKind, source, sink.loopSeams)
 				? { cond: cond, value: null }

@@ -1,5 +1,6 @@
 package anyparse.check.common.loops;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
@@ -122,9 +123,6 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class LoopGuard extends RuleBase {
 
-	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
-	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
-
 	public function new() {
 		super(
 			'loop-guard', 'a loop whose body opens with an if-continue guard, liftable into — or mergeable with — a for/while … if header',
@@ -177,6 +175,17 @@ final class LoopGuard extends RuleBase {
 			});
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
+	}
+
+	/**
+	 * The inverted source of guard condition `cond` — the negation the lifted `if` header tests.
+	 * `slotKind` is set on the merge arm, where the negation becomes the right operand of the
+	 * header's `&&` and a De Morgan `||` result must carry a parenthesis pair.
+	 */
+	private static inline function invert(
+		cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
+	): String {
+		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -269,9 +278,9 @@ final class LoopGuard extends RuleBase {
 		// A `do … while` holds a body that is not a block in an expression-body wrapper, its `if` an
 		// if-EXPRESSION with a block-expression branch: `do if (c) { … } while (x);`.
 		final header: QueryNode = s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body;
-		if (!s.headerIfKinds.contains(header.kind) || header.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final thenBranch: QueryNode = header.children[1];
-		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, s, header.children[0]) : null;
+		if (!s.headerIfKinds.contains(header.kind) || BranchChain.hasElse(header)) return null;
+		final thenBranch: QueryNode = BranchChain.thenOf(header);
+		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, s, BranchChain.condOf(header)) : null;
 	}
 
 	/**
@@ -291,17 +300,6 @@ final class LoopGuard extends RuleBase {
 			cond: guard.children[0],
 			headerCond: headerCond
 		};
-	}
-
-	/**
-	 * The inverted source of guard condition `cond` — the negation the lifted `if` header tests.
-	 * `slotKind` is set on the merge arm, where the negation becomes the right operand of the
-	 * header's `&&` and a De Morgan `||` result must carry a parenthesis pair.
-	 */
-	private static function invert(
-		cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
-	): String {
-		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
 	}
 
 }

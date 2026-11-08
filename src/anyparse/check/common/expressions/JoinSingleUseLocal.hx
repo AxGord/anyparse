@@ -5,6 +5,7 @@ import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeShape;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -132,14 +133,8 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 final class JoinSingleUseLocal extends RuleBase {
 
-	/** A single-variable declaration with an initializer projects as exactly one child: the initializer. */
-	private static inline final INIT_CHILD_COUNT: Int = 1;
-
 	/** A trivial field-access link wraps exactly one child: its receiver. */
 	private static inline final FIELD_ACCESS_CHILD_COUNT: Int = 1;
-
-	/** A valued `return` node has exactly one child: the returned expression. */
-	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
 	public function new() {
 		super(
@@ -311,9 +306,10 @@ final class JoinSingleUseLocal extends RuleBase {
 		if (drop == null) return null;
 		final dropSpan: Span = drop;
 
-		final init: QueryNode = decl.children[0];
-		final initSpan: Null<Span> = init.span;
-		if (initSpan == null || !isTrivialPureRead(init, s) || readsMutableLocal(init, tree, s)) return null;
+		final pure: Null<{ init: QueryNode, span: Span }> = pureInitOf(decl, tree, s);
+		if (pure == null) return null;
+		final init: QueryNode = pure.init;
+		final initSpan: Span = pure.span;
 
 		if (isJoinReturnShape(kids[at + 1], name, s)) return null;
 
@@ -359,7 +355,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function deletableDeclLine(decl: QueryNode, declSpan: Span, source: String, s: Seams): Null<Span> {
 		if (!s.localDeclKinds.contains(decl.kind) || s.mutableKinds.contains(decl.kind)) return null;
-		if (s.continuationKinds.contains(decl.kind) || decl.children.length != INIT_CHILD_COUNT) return null;
+		if (s.continuationKinds.contains(decl.kind) || NodeShape.initOf(decl) == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.continuationKinds)) return null;
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
@@ -405,10 +401,8 @@ final class JoinSingleUseLocal extends RuleBase {
 
 	/** Whether `next` is exactly `return <name>;` -- the pair `join-return` claims. */
 	private static function isJoinReturnShape(next: QueryNode, name: String, s: Seams): Bool {
-		final returnKind: Null<String> = s.returnKind;
-		if (returnKind == null || next.kind != returnKind || next.children.length != RETURN_VALUE_CHILD_COUNT) return false;
-		final value: QueryNode = next.children[0];
-		return value.kind == s.identKind && value.name == name;
+		final value: Null<QueryNode> = NodeShape.returnValueOf(next, s.returnKind);
+		return value != null && value.kind == s.identKind && value.name == name;
 	}
 
 	/**
@@ -657,6 +651,15 @@ final class JoinSingleUseLocal extends RuleBase {
 			}
 		}
 		return true;
+	}
+
+	/** The initializer of `decl` with its span when it is a trivial pure read no mutable local feeds, else null. */
+	private static function pureInitOf(decl: QueryNode, tree: QueryNode, s: Seams): Null<{ init: QueryNode, span: Span }> {
+		final init: Null<QueryNode> = NodeShape.initOf(decl);
+		final span: Null<Span> = init?.span;
+		return init == null || span == null || !isTrivialPureRead(init, s) || readsMutableLocal(init, tree, s)
+			? null
+			: { init: init, span: span };
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -109,9 +110,6 @@ final class PreferIfExpressionReturn extends RuleBase {
 
 	/** This check's rule id, written into every finding it raises. */
 	private static inline final RULE_ID: String = 'prefer-if-expression-return';
-
-	/** A valued `return` node has exactly one child: the returned expression. */
-	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
 
 	/**
 	 * The fewest CONDITIONS a claim needs - three leaf values. Two values are a ternary and belong
@@ -272,6 +270,11 @@ final class PreferIfExpressionReturn extends RuleBase {
 	 */
 	private static inline function rewritesChain(m: Match): Bool {
 		return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;
+	}
+
+	/** The returned expression of `stmt` when it is a valued `return`; null for a bare `return;` or any other statement. */
+	private static inline function returnValue(stmt: QueryNode, s: Seams): Null<QueryNode> {
+		return NodeShape.returnValueOf(stmt, s.returnKind);
 	}
 
 	/**
@@ -544,11 +547,6 @@ final class PreferIfExpressionReturn extends RuleBase {
 			if (BoolExprShape.pendingBooleanTernaryTail(v, s.shape)) return false;
 		}
 		return true;
-	}
-
-	/** The returned expression of `stmt` when it is a valued `return`; null for a bare `return;` or any other statement. */
-	private static function returnValue(stmt: QueryNode, s: Seams): Null<QueryNode> {
-		return stmt.kind == s.returnKind && stmt.children.length == RETURN_VALUE_CHILD_COUNT ? stmt.children[0] : null;
 	}
 
 	/** Build the `return if (c1) a else if (c2) b … else n;` edit replacing the whole head-`if` span. */

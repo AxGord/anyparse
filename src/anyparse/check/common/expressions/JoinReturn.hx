@@ -114,12 +114,6 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 @:nullSafety(Strict)
 final class JoinReturn extends RuleBase {
 
-	/** A single-variable declaration with an initializer projects as exactly one child: the initializer. */
-	private static inline final INIT_CHILD_COUNT: Int = 1;
-
-	/** A valued `return` node has exactly one child: the returned expression. */
-	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
-
 	public function new() {
 		super(
 			'join-return', 'a local declaration whose value is immediately returned, joinable to a single return', RuleCategory.Expressions
@@ -231,20 +225,19 @@ final class JoinReturn extends RuleBase {
 		decl: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
 		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>
 	): Null<Match> {
-		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != INIT_CHILD_COUNT) return null;
+		if (!s.localDeclKinds.contains(decl.kind)) return null;
+		final init: Null<QueryNode> = NodeShape.initOf(decl);
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
-		if (name == null || declSpan == null) return null;
+		if (init == null || name == null || declSpan == null) return null;
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
-		final init: QueryNode = decl.children[0];
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // multi-declarator
 
-		if (ret.kind != s.returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
-		final retIdent: QueryNode = ret.children[0];
-		if (retIdent.kind != s.identKind || retIdent.name != name) return null;
+		final retIdent: Null<QueryNode> = NodeShape.returnValueOf(ret, s.returnKind);
+		if (retIdent == null || retIdent.kind != s.identKind || retIdent.name != name) return null;
 		final retSpan: Null<Span> = ret.span;
 		if (retSpan == null) return null;
 
