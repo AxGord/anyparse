@@ -235,6 +235,13 @@ final class MemberWriteScan {
 		final n: Int = source.length;
 		final len: Int = name.length;
 		if (len == 0) return false;
+		// One lex per scan: every occurrence that starts a line asks for the regions.
+		var regions: Null<Array<LexRegion>> = null;
+		final lexicalRegions: () -> Array<LexRegion> = () -> {
+			final lexed: Array<LexRegion> = regions ?? plugin.lexicalRegions(source);
+			regions = lexed;
+			return lexed;
+		};
 		var at: Int = from;
 		while (true) {
 			final idx: Int = source.indexOf(name, at);
@@ -244,7 +251,7 @@ final class MemberWriteScan {
 			final boundedAfter: Bool = at >= n || !Strings.isIdentChar(source.fastCodeAt(at));
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx, plugin) || followedByAssign(source, at)) return true;
+			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, at)) return true;
 		}
 	}
 
@@ -327,25 +334,26 @@ final class MemberWriteScan {
 
 	/**
 	 * Whether the non-whitespace token immediately before `idx`, skipping any interposed
-	 * block comment, is `++` or `--` (a prefix increment / decrement — a write). Symmetric
-	 * with `followedByAssign`'s comment-skipping so a write with a comment between the
-	 * operator and the name is not missed.
+	 * block or line comment, is `++` or `--` (a prefix increment / decrement — a write).
+	 * Symmetric with `followedByAssign`'s comment-skipping so a write with a comment between
+	 * the operator and the name is not missed.
 	 */
-	private static function precededByIncrDecr(source: String, idx: Int, plugin: GrammarPlugin): Bool {
-		var regions: Null<Array<LexRegion>> = null;
+	private static function precededByIncrDecr(source: String, idx: Int, lexicalRegions: () -> Array<LexRegion>): Bool {
+
+		var crossedLineBreak: Bool = false;
 		var i: Int = idx - 1;
 		while (i >= 0) {
 			final c: Int = source.fastCodeAt(i);
 			if (SourceText.isSpace(c)) {
+				crossedLineBreak = crossedLineBreak || c == '\n'.code;
 				i--;
 				continue;
 			}
-			if (c == '/'.code && i >= 1 && source.fastCodeAt(i - 1) == '*'.code) {
-				// Lexed only once a `*/` is met: it is the one thing that can hide the operator from the walk.
-				final lexed: Array<LexRegion> = regions ?? plugin.lexicalRegions(source);
-				regions = lexed;
-				final comment: Null<LexRegion> = LexicalRegions.regionAt(i, lexed);
-				if (comment == null || comment.kind != LexRegionKind.BlockComment) break;
+			if (crossedLineBreak || (c == '/'.code && i >= 1 && source.fastCodeAt(i - 1) == '*'.code)) {
+				// Lexed only when a `*/` is met or a line break was crossed: those are the only two things that can hide the
+				// operator from the walk (a block comment's closer, the tail of a line comment on an earlier line).
+				final comment: Null<LexRegion> = LexicalRegions.regionAt(i, lexicalRegions());
+				if (comment == null || comment.kind == LexRegionKind.StringLit || comment.kind == LexRegionKind.RegexLit) break;
 				i = comment.from - 1;
 				continue;
 			}

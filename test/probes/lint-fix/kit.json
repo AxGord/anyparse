@@ -1246,6 +1246,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "W1",
+			"note": "prefer-final-field: a field written through `++ // c` + newline + name is a write, so it is not flagged final; `// ++` + newline + name is no write",
+			"argv": [
+				"hxq",
+				"lint",
+				"W.hx",
+				"--rule",
+				"prefer-final-field",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"W.hx": "class W {\n\tvar cnt:Int = 0;\n\tvar k:Int = 0;\n\tpublic function new() {}\n\tfunction f(y:Int):Void {\n\t\ty = ++ // c\n\t\t\tcnt;\n\t\ty = 1; // ++\n\t\tk;\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "f67271446fad4a60",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

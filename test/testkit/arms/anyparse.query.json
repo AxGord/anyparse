@@ -15710,9 +15710,17 @@
 			"name": "M-WRITESCAN-BLOCK-COMMENT-BLIND",
 			"type": "anyparse.query.MemberWriteScan",
 			"method": "precededByIncrDecr",
-			"find": "if (comment == null || comment.kind != LexRegionKind.BlockComment) break;",
+			"find": "if (comment == null || comment.kind == LexRegionKind.StringLit || comment.kind == LexRegionKind.RegexLit) break;",
 			"replace": "if (comment == null || true) break;",
-			"note": "a block comment between a prefix `++` and the name stops the walk, so `++ /* c */ x` is not read as a write"
+			"note": "a comment between a prefix `++` and the name stops the walk, so `++ /* c */ x` is not read as a write"
+		},
+		{
+			"name": "M-WRITESCAN-LINE-COMMENT-BLIND",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "precededByIncrDecr",
+			"find": "crossedLineBreak = crossedLineBreak || c == '\\n'.code;",
+			"replace": "crossedLineBreak = false;",
+			"note": "a line break crossed on the walk back no longer sends it to the regions, so `++ // c` then the name on the next line is not read as a write"
 		},
 		{
 			"name": "M-MODULESCAN-COMMENTS-KEPT",
@@ -15720,6 +15728,14 @@
 			"method": "stripComments",
 			"force": "text",
 			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
+		},
+		{
+			"name": "M-FRAGMENT-REGIONS-STRING-BLIND",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "ofFragment",
+			"find": "if (c == '\"'.code || c == '\\''.code) {",
+			"replace": "if (false) {",
+			"note": "a quote opens no literal, so a `//` inside a string literal of a statement fragment cuts the scan as a line comment"
 		},
 		{
 			"name": "M-LEX-HOLES-CLAIMED-AT-OWN-DEPTH",

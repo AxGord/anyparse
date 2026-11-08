@@ -2,8 +2,8 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.RefactorSupport.ModulePath;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
@@ -427,22 +427,20 @@ final class ModuleScan {
 
 	/**
 	 * `text` with every `//` line comment and `/* … *\/` block comment replaced
-	 * by a space, so a lexical scan cannot read comment content as code.
+	 * by a space, so a lexical scan cannot read comment content as code. A comment marker inside a
+	 * quoted literal is text and survives: the regions come from `LexicalRegions.ofFragment`.
 	 */
 	private static function stripComments(text: String): String {
 		final buf: StringBuf = new StringBuf();
-		final n: Int = text.length;
-		var i: Int = 0;
-		while (i < n) {
-			final commentEnd: Int = SourceComments.commentRegionEnd(text, i);
-			if (commentEnd < 0) {
-				buf.addChar(text.fastCodeAt(i));
-				i++;
-			} else {
-				buf.addChar(' '.code);
-				i = commentEnd < n ? commentEnd : n;
-			}
+		var at: Int = 0;
+		for (region in LexicalRegions.ofFragment(text)) if (
+			region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment
+		) {
+			buf.addSub(text, at, region.from - at);
+			buf.addChar(' '.code);
+			at = region.to;
 		}
+		buf.addSub(text, at);
 		return buf.toString();
 	}
 

@@ -23,6 +23,16 @@ class MemberWriteScanCommentTest extends Test {
 		Assert.isFalse(written('class C { function f(y:Int) { y = y + /* c */ cnt; } }'));
 	}
 
+	@:pin('control') @:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
+	public function testLineCommentBetweenIncrementAndNameStillReadsAsAWrite(): Void {
+		Assert.isTrue(written('class C { function f(y:Int) { y = ++ // c\n cnt; } }'));
+	}
+
+	@:pin('control') @:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
+	public function testIncrementWrittenInsideALineCommentIsNoWrite(): Void {
+		Assert.isFalse(written('class C { function f(y:Int) { y = 1; // ++\n cnt; } }'));
+	}
+
 	private function written(source: String): Bool {
 		return MemberWriteScan.writtenInRange(source, 'cnt', null, 0, source.length, new HaxeQueryPlugin());
 	}

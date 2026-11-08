@@ -3,6 +3,7 @@ package anyparse.query;
 using Lambda;
 
 import anyparse.runtime.Span;
+import anyparse.util.Strings;
 
 /**
  * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
@@ -108,14 +109,24 @@ final class LexicalRegions {
 	/**
 	 * The lexically-scanned non-code region containing `offset`, or null when `offset` is code.
 	 *
-	 * LEFT LINEAR deliberately. The regions are sorted and non-overlapping and two consumers call this
-	 * inside a loop, so a binary search looks obvious — but a CPU profile of a full `lint --all --fix` over
-	 * a large tree does not sample this function at all, nor `offsetWithinComment` beside it, and both loop
-	 * consumers are bounded from outside. Ten lines of binary search would buy a quantity the instrument
-	 * cannot see.
+	 * A binary search: the regions are sorted and non-overlapping, and a consumer that asks once per
+	 * occurrence of a name (`MemberWriteScan.precededByIncrDecr`) would otherwise pay a scan of the
+	 * whole array for each.
 	 */
 	public static function regionAt(offset: Int, regions: Array<LexRegion>): Null<LexRegion> {
-		return regions.find(region -> offset >= region.from && offset < region.to);
+		var low: Int = 0;
+		var high: Int = regions.length - 1;
+		while (low <= high) {
+			final mid: Int = (low + high) >> 1;
+			final region: LexRegion = regions[mid];
+			if (offset < region.from)
+				high = mid - 1;
+			else if (offset >= region.to)
+				low = mid + 1;
+			else
+				return region;
+		}
+		return null;
 	}
 
 	/**
@@ -205,6 +216,43 @@ final class LexicalRegions {
 			case StringLit, RegexLit:
 				for (hole in region.holes ?? []) eachComment(hole.regions, onComment);
 		}
+	}
+
+	/**
+	 * The regions of a statement FRAGMENT read with no grammar plugin — the one answer to "which `//` and `/*` of
+	 * this text are comments and which sit inside a quoted literal" for a caller that holds only the text (an import
+	 * statement sliced out of a source). C-family comments and single-line `"` / `'` literals, nothing else: no
+	 * interpolation holes and no regex literals, so it is NOT a lexer for a whole file — a caller that holds the
+	 * plugin asks `GrammarPlugin.lexicalRegions`. A line comment ends before its line break; a literal nothing
+	 * closes is no region, a block comment nothing closes runs to the end.
+	 */
+	public static function ofFragment(text: String): Array<LexRegion> {
+		final out: Array<LexRegion> = [];
+		final n: Int = text.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = text.fastCodeAt(i);
+			if (c == '"'.code || c == '\''.code) {
+				final end: Int = Strings.quotedEnd(text, i);
+				if (end > i) {
+					out.push({ from: i, to: end, kind: LexRegionKind.StringLit });
+					i = end;
+					continue;
+				}
+			} else {
+				final end: Int = SourceComments.commentRegionEnd(text, i);
+				if (end >= 0) {
+					final block: Bool = text.fastCodeAt(i + 1) == '*'.code;
+					// `commentRegionEnd` is one past the line break of a line comment and `n + 1` for a comment nothing closes.
+					final to: Int = block ? (end > n ? n : end) : end - 1;
+					out.push({ from: i, to: to, kind: block ? LexRegionKind.BlockComment : LexRegionKind.LineComment });
+					i = to;
+					continue;
+				}
+			}
+			i++;
+		}
+		return out;
 	}
 
 	/** The entries waiting at `depth`, the level created on first use. */

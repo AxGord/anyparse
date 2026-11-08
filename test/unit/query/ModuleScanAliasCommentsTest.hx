@@ -29,4 +29,10 @@ class ModuleScanAliasCommentsTest extends Test {
 		Assert.equals('', ModuleScan.aliasTargetOf('import a.b.C;'));
 	}
 
+	@:pin('control') @:killer('M-FRAGMENT-REGIONS-STRING-BLIND')
+	public function testSlashesInsideAStringLiteralAreNotAComment(): Void {
+		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C "//" as D;'));
+		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C \'/*\' as D;'));
+	}
+
 }
