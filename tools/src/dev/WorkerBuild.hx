@@ -14,7 +14,8 @@ using StringTools;
  * `dev worker-build <workdir> [both|apq|test]` — a PRIVATE `apq.js` / `test.js` for one worker, built from the tree that
  * holds this `dev.js` (or `--repo`) into `<workdir>`, never into the shared `bin/` two workers would truncate under each
  * other. Both builds run at once; each writes `<workdir>/build-<job>.log`. `APQ_HAXE_SERVER=<port>` compiles through a
- * running `haxe --wait <port>` (docs/testing.md § "Mutation runs: slots, servers and the fixture cache").
+ * running `haxe --wait <port>` (docs/testing.md § "Mutation runs: slots, servers and the fixture cache"). A repo that lacks
+ * a job's hxml is refused before any compile, so no `haxe` file-not-found line reaches the caller's output.
  */
 @:nullSafety(Strict)
 final class WorkerBuild {
@@ -38,6 +39,7 @@ final class WorkerBuild {
 		final target: String = given[1] ?? 'both';
 		if (workdir == '') throw new UsageError('empty <workdir>');
 		if (!['both', 'apq', 'test'].contains(target)) throw new UsageError('unknown target \'$target\' (expected both|apq|test)');
+		final jobs: Array<{ name: String, hxml: String, artifact: String }> = JOBS.filter(j -> target == 'both' || target == j.name);
 		FileSystem.createDirectory(workdir);
 		final out: String = FileSystem.fullPath(workdir);
 		refuseTreeRoot(out);
@@ -45,9 +47,12 @@ final class WorkerBuild {
 			throw new UsageError(
 				'<workdir> is the repo\'s own bin/ — that is the shared build this tool exists to avoid; pick a private directory'
 			);
+		for (job in jobs) if (!FileSystem.exists(Path.join([repo, job.hxml])))
+			throw new UsageError(
+				'${job.name} build file ${job.hxml} is not in <repo> $repo — pick the tree the build lives in with --repo'
+			);
 		final server: Null<String> = Sys.getEnv('APQ_HAXE_SERVER');
 		final connect: Array<String> = server == null || server == '' ? [] : ['--connect', server];
-		final jobs: Array<{ name: String, hxml: String, artifact: String }> = JOBS.filter(j -> target == 'both' || target == j.name);
 		final results: Array<Result> = Pool.of(jobs.length)
 			.map(
 				jobs, j -> cmd('haxe $connect ${j.hxml} ${Binaries.CODEGEN} -js $out/${j.artifact} ${launcherBuild(j.name, out)}').at(repo)

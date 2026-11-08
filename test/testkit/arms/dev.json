@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-WORKER-BUILD-HXML-UNCHECKED",
+			"type": "dev.WorkerBuild",
+			"method": "main",
+			"find": "if (!FileSystem.exists(Path.join([repo, job.hxml])))",
+			"replace": "if (false)",
+			"note": "a repo without the build files is not refused up front, so the compiler prints its own file-not-found into the caller's output"
+		},
+		{
 			"name": "M-SCRUB-PRIVATE-PATH-BLIND",
 			"type": "dev.ScrubGuard",
 			"method": "privatePaths",

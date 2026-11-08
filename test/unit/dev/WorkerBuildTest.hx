@@ -26,6 +26,8 @@ final class WorkerBuildTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-WORKER-BUILD-HXML-UNCHECKED')
 	public function testATreeRootIsRefusedAndWrittenNowhereWhileASiblingPasses(): Void {
 		TempDir.with(dir -> {
 			final root: String = dir.file('tree');
@@ -39,11 +41,17 @@ final class WorkerBuildTest extends Test {
 			final sibling: String = dir.file('private');
 			final emptyRepo: String = dir.file('empty');
 			FileSystem.createDirectory(emptyRepo);
-			Assert.equals(
-				1, WorkerBuild.main([sibling, '--repo', emptyRepo]),
-				'a sibling passes the guard and reaches the build, which fails for want of an hxml'
+			var refusal: String = '';
+			try
+				WorkerBuild.main([sibling, '--repo', emptyRepo])
+			catch (exception: UsageError)
+				refusal = exception.message;
+			Assert.stringContains(
+				'bin/apq-js-common.hxml', refusal,
+				'a sibling passes both guards, and a repo without the build files is refused naming the file before any haxe call can '
+				+ 'print its own error'
 			);
-			Assert.isTrue(FileSystem.exists(Path.join([sibling, 'build-apq.log'])), 'the build wrote its log into the sibling');
+			Assert.same([], FileSystem.readDirectory(sibling), 'the refusal starts no build, so nothing is written');
 			WorkerBuild.refuseTreeRoot(Path.join([root, 'bin']));
 			Assert.pass('the root\'s gitignored bin/ is not refused');
 		});
