@@ -1,6 +1,7 @@
 package anyparse.check.haxe.loops;
 
 import anyparse.check.common.control.BranchChain;
+import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
@@ -79,12 +80,6 @@ using StringTools;
  */
 @:nullSafety(Strict)
 final class PreferFind extends HaxeRule {
-
-	/**
-	 * A `for` node has exactly [iterable, body] children; the loop variable is its name. A
-	 * key-value loop carries a third — its VALUE binder — and is refused before the count.
-	 */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
 
 	/** A Form-B `if`-body block has exactly [assignment-statement, break] children. */
 	private static inline final BREAK_BODY_CHILD_COUNT: Int = 2;
@@ -513,15 +508,15 @@ final class PreferFind extends HaxeRule {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = BinderScan.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
-		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
-		final iterable: QueryNode = operands[0];
+		if (loopVar == null || !LoopScan.hasForShape(operands)) return null;
+		final iterable: QueryNode = LoopScan.forHead(operands);
 		if (isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
 		// A receiver member beats the extension, but not the QUALIFIED call — so a shadow selects
 		// the other spelling rather than refusing the site, and refuses only where the bare name
 		// `Lambda` does not reach the module from this file.
 		final shadowed: Bool = probe.shadows(iterable);
 		if (shadowed && !probe.qualified()) return null;
-		final body: QueryNode = unwrapSole(operands[1], s);
+		final body: QueryNode = unwrapSole(LoopScan.forBody(operands), s);
 		return !s.ifKinds.contains(body.kind) || BranchChain.hasElse(body) ? null : {
 			loopVar: loopVar,
 			iterable: iterable,

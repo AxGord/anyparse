@@ -76,9 +76,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferRangeLoop extends RuleBase {
 
-	/** A `while` node has exactly [condition, body] children. */
-	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
 	/** A `<` comparison node has exactly [left, right] children. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
@@ -259,8 +256,8 @@ final class PreferRangeLoop extends RuleBase {
 	 * bound is a simple identifier (not `i`) or a numeric literal, or null.
 	 */
 	private static function matchCondition(whileNode: QueryNode, loopVar: String, s: Seams): Null<QueryNode> {
-		if (whileNode.kind != s.whileStmtKind || whileNode.children.length != WHILE_CHILD_COUNT) return null;
-		final cond: QueryNode = whileNode.children[0];
+		if (whileNode.kind != s.whileStmtKind || !LoopScan.hasWhileShape(whileNode)) return null;
+		final cond: QueryNode = LoopScan.whileCondition(whileNode);
 		if (cond.kind != s.ltKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
 		final left: QueryNode = cond.children[0];
 		if (left.kind != s.identKind || left.name != loopVar) return null;
@@ -309,7 +306,7 @@ final class PreferRangeLoop extends RuleBase {
 		if (loopVar == null) return null;
 		final bound: Null<QueryNode> = matchCondition(whileNode, loopVar, s);
 		if (bound == null) return null;
-		final body: QueryNode = whileNode.children[1];
+		final body: QueryNode = LoopScan.whileBody(whileNode);
 		if (!bodyIsRangeConvertible(body, loopVar, bound, s)) return null;
 		final declSpan: Null<Span> = decl.span;
 		final initSpan: Null<Span> = decl.children[0].span;

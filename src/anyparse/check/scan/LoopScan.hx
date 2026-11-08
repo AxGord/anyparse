@@ -25,6 +25,10 @@ import anyparse.query.TypeSyntax;
  * alias or a field it owns. The element-loop rewrites close that half with `MemberReach`
  * (`ElementLoopRewrite.reachDecline`); a rule that does not must state the caveat in its own type doc.
  *
+
+ * It is also the one answer to "which child of a `while` / `for` node serves as its test / body / head": the
+ * `hasWhileShape` / `hasForShape` arity checks and the `while*` / `for*` accessors beside them.
+ *
  * Grammar-agnostic: every node kind arrives through `LoopSeams`, built once per run by
  * `seamsOf`, and a grammar leaving any required kind unset makes both rules a no-op.
  *
@@ -64,6 +68,9 @@ final class LoopScan {
 	/** A single-binder `for` node has exactly [iterable, body] children. */
 	private static inline final FOR_CHILD_COUNT: Int = 2;
 
+	/** A `while` node has exactly [condition, body] children. */
+	private static inline final WHILE_CHILD_COUNT: Int = 2;
+
 	/** An interval node has exactly [lower, upper] children. */
 	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
 
@@ -94,6 +101,19 @@ final class LoopScan {
 	/** Whether `node` is the numeric literal `0` — the only lower bound either rewrite can transcribe. */
 	public static inline function isZeroLiteral(node: QueryNode, source: String, s: LoopSeams): Bool {
 		return isNumericLiteral(node, ZERO_LITERAL, source, s);
+	}
+
+	/** Whether the `while` node has exactly its [condition, body] children. */
+	public static inline function hasWhileShape(node: QueryNode): Bool {
+		return node.children.length == WHILE_CHILD_COUNT;
+	}
+
+	/**
+	 * Whether a `for` loop's operands - its children without the value binder, so `node.children` for a single-binder
+	 * loop and `BinderScan.loopOperands` for a key-value one - are exactly [iterable, body].
+	 */
+	public static inline function hasForShape(operands: Array<QueryNode>): Bool {
+		return operands.length == FOR_CHILD_COUNT;
 	}
 
 	/**
@@ -328,10 +348,10 @@ final class LoopScan {
 		forNode: QueryNode, source: String, sizeMember: String, s: IntervalLoopSeams
 	): Null<IndexedLoopHeader> {
 		final core: LoopSeams = s.core;
-		if (forNode.kind != core.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
+		if (forNode.kind != core.forStmtKind || !hasForShape(forNode.children)) return null;
 		final index: Null<String> = forNode.name;
 		if (index == null) return null;
-		final iterable: QueryNode = forNode.children[0];
+		final iterable: QueryNode = forHead(forNode.children);
 		if (iterable.kind != s.intervalKind || iterable.children.length != INTERVAL_CHILD_COUNT) return null;
 		if (!isZeroLiteral(iterable.children[0], source, core)) return null;
 		final upper: QueryNode = iterable.children[1];
@@ -341,7 +361,7 @@ final class LoopScan {
 			collection: collection,
 			sizeReceiver: upper.children[0],
 			iterable: iterable,
-			body: forNode.children[1]
+			body: forBody(forNode.children)
 		};
 	}
 
@@ -371,6 +391,26 @@ final class LoopScan {
 			kids[0]
 		else
 			kids[kids.length - 1];
+	}
+
+	/** The condition of the `while` node; the caller has established `hasWhileShape(node)`. */
+	public static function whileCondition(node: QueryNode): QueryNode {
+		return node.children[0];
+	}
+
+	/** The body of the `while` node; the caller has established `hasWhileShape(node)`. */
+	public static function whileBody(node: QueryNode): QueryNode {
+		return node.children[1];
+	}
+
+	/** The iterable (the head after `in`) of a `for` loop whose operands satisfy `hasForShape`. */
+	public static function forHead(operands: Array<QueryNode>): QueryNode {
+		return operands[0];
+	}
+
+	/** The body of a `for` loop whose operands satisfy `hasForShape`. */
+	public static function forBody(operands: Array<QueryNode>): QueryNode {
+		return operands[1];
 	}
 
 	/**

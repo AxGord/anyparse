@@ -3,6 +3,7 @@ package anyparse.check.common.loops;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionAcc;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionCtx;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
+import anyparse.check.scan.LoopScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
@@ -58,10 +59,10 @@ final class ComprehensionFills {
 		final s: ComprehensionSeams = ctx.seams;
 		final binder: Null<String> = node.name;
 		final intervalKind: Null<String> = s.intervalKind;
-		if (node.kind != s.forStmtKind || node.children.length != PreferComprehension.FOR_CHILD_COUNT || binder == null) return null;
+		if (node.kind != s.forStmtKind || !LoopScan.hasForShape(node.children) || binder == null) return null;
 		if (intervalKind == null) return null;
-		final range: QueryNode = node.children[0];
-		final body: QueryNode = node.children[1];
+		final range: QueryNode = LoopScan.forHead(node.children);
+		final body: QueryNode = LoopScan.forBody(node.children);
 		if (range.kind != intervalKind || range.children.length != BINARY_CHILD_COUNT || !isZeroLiteral(range.children[0], ctx))
 			return null;
 		final braced: Bool = body.kind == s.blockStmtKind;

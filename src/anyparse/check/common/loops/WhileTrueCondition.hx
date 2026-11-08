@@ -81,9 +81,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class WhileTrueCondition extends RuleBase implements DefaultOff {
 
-	/** A `while` node has exactly [condition, body] children. */
-	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
 	/** The only boolean literal an always-true loop header can be written as. */
 	private static inline final TRUE_LITERAL: String = 'true';
 
@@ -207,10 +204,10 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 	 */
 	private static function tryMatch(loop: QueryNode, ctx: Ctx): Null<Match> {
 		final s: Seams = ctx.seams;
-		if (loop.kind != s.whileKind || loop.children.length != WHILE_CHILD_COUNT) return null;
+		if (loop.kind != s.whileKind || !LoopScan.hasWhileShape(loop)) return null;
 		final loopSpan: Null<Span> = loop.span;
-		if (loopSpan == null || !isTrueLiteral(loop.children[0], ctx.source, s)) return null;
-		final body: QueryNode = loop.children[1];
+		if (loopSpan == null || !isTrueLiteral(LoopScan.whileCondition(loop), ctx.source, s)) return null;
+		final body: QueryNode = LoopScan.whileBody(loop);
 		final bodyBlock: Null<QueryNode> = s.blockKinds.contains(body.kind) ? body : null;
 		final ifNode: QueryNode = bodyBlock == null || bodyBlock.children.length == 0 ? body : bodyBlock.children[0];
 		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length <= BranchChain.THEN_BRANCH_INDEX) return null;

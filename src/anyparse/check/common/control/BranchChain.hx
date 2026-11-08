@@ -52,11 +52,11 @@ final class BranchChain {
 	/** The then branch is the second child of an if node - `[cond, then, else]`. */
 	public static inline final THEN_BRANCH_INDEX: Int = 1;
 
+	/** The condition is the first child of an if (or ternary) node - `[cond, then, else]`. */
+	public static inline final COND_INDEX: Int = 0;
+
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
-
-	/** The condition is the first child of an if (or ternary) node - `[cond, then, else]`. */
-	private static inline final COND_INDEX: Int = 0;
 
 	/** Whether the if (or ternary) `node` has an else branch. */
 	public static inline function hasElse(node: QueryNode): Bool {

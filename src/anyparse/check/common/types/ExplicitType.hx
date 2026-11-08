@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.types.LiteralInfer.AnnotationSite;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -64,9 +65,6 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 
 	/** The type every value of a `macro` function's proven returns has. */
 	private static inline final MACRO_RETURN_TYPE: String = 'haxe.macro.Expr';
-
-	/** A ternary's children: the condition and its two arms. */
-	private static inline final IF_ELSE_CHILDREN: Int = 3;
 
 	private static inline final DECLINE_NO_SLOT: String = 'no slot after the name takes the annotation';
 	private static inline final DECLINE_NO_STRUCTURAL_RETURN: String = 'a non-Void return type has no structural evidence — the '
@@ -603,9 +601,9 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final kids: Array<QueryNode> = value.children;
 		if (quotations[value.kind] == MACRO_RETURN_TYPE) return Quoted;
 		if (value.kind == shape.parenKind && kids.length == 1) return returnProof(kids[0], shape, tree, index);
-		if (value.kind == shape.ternaryKind && kids.length == IF_ELSE_CHILDREN) return switch [
-			returnProof(kids[1], shape, tree, index),
-			returnProof(kids[2], shape, tree, index)
+		if (value.kind == shape.ternaryKind && BranchChain.hasElse(value)) return switch [
+			returnProof(BranchChain.thenOf(value), shape, tree, index),
+			returnProof(BranchChain.elseBranch(value), shape, tree, index)
 		] {
 			case [Unproven, _], [_, Unproven]: Unproven;
 			case [Quoted, _], [_, Quoted]: Quoted;

@@ -66,9 +66,6 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	/** The lead-in of the line the length comes from — the coordinate `messageIdentity` masks. */
 	private static inline final LINE_LEAD: String = '(line ';
 
-	/** A single-binder `for` / comprehension has exactly [iterable, body] children. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
 	/** An interval and every binary node have exactly [left, right] children. */
 	private static inline final BINARY_CHILD_COUNT: Int = 2;
 
@@ -314,8 +311,8 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 
 	/** The upper bound of `loop` when it is a single-binder loop of `kind` over `0...Y`, else null. */
 	private static function zeroBasedBound(loop: QueryNode, kind: String, ctx: FileCtx): Null<QueryNode> {
-		if (loop.kind != kind || loop.name == null || loop.children.length != FOR_CHILD_COUNT) return null;
-		final range: QueryNode = loop.children[0];
+		if (loop.kind != kind || loop.name == null || !LoopScan.hasForShape(loop.children)) return null;
+		final range: QueryNode = LoopScan.forHead(loop.children);
 		return range.kind != ctx.seams.intervalKind
 			|| range.children.length != BINARY_CHILD_COUNT
 			|| !LoopScan.isZeroLiteral(range.children[0], ctx.source, ctx.seams.core)
@@ -474,7 +471,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 			for (kind in s.loopKinds) {
 				final bound: Null<QueryNode> = zeroBasedBound(node, kind, ctx);
 				if (bound == null || index == null) continue;
-				final body: QueryNode = node.children[1];
+				final body: QueryNode = LoopScan.forBody(node.children);
 				final reach: Null<Int> = binds(body, index, s) ? null : readReach(body, src.name, index, owner, isField, ctx);
 				if (reach != null) compare(scope, span, bound, { index: index, reach: reach }, src, related, owner, isField, ctx);
 			}

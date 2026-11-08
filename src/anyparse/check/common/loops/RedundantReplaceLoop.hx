@@ -1,6 +1,7 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ShapeVocab;
@@ -170,9 +171,6 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'redundant-replace-loop';
 
-	/** A `while` node has exactly [condition, body] children. */
-	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
 	/** A `!=` comparison node has exactly [left, right] children. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
@@ -322,8 +320,8 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	private static function matchWhile(
 		whileNode: QueryNode, root: QueryNode, source: String, declaredTypes: Map<Int, String>, s: Seams
 	): Null<Match> {
-		if (whileNode.children.length != WHILE_CHILD_COUNT) return null;
-		var cond: QueryNode = whileNode.children[0];
+		if (!LoopScan.hasWhileShape(whileNode)) return null;
+		var cond: QueryNode = LoopScan.whileCondition(whileNode);
 		if (s.parenKind != null && cond.kind == s.parenKind && cond.children.length == 1) cond = cond.children[0];
 		final guard: Null<{ receiver: QueryNode, search: QueryNode }> = matchGuard(cond, source, s);
 		if (guard == null) return null;
@@ -338,7 +336,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 		final search: Null<Operand> = operandOf(guard.search, root, fns, source, s);
 		if (search == null) return null;
 
-		final body: Null<BodyMatch> = matchBody(whileNode.children[1], root, fns, source, bindingFrom, search, s);
+		final body: Null<BodyMatch> = matchBody(LoopScan.whileBody(whileNode), root, fns, source, bindingFrom, search, s);
 		if (body == null) return null;
 		final replacement: Operand = body.replacement;
 		final classified: Null<Classification> = classifyArm(search, replacement, fns, whileNode, root, source, s);

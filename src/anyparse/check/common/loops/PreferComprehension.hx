@@ -218,12 +218,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferComprehension extends RuleBase {
 
-	/** A `for` node has exactly [iterable, body] OPERAND children — a key-value VALUE binder is not one. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
-	/** A `while` node has exactly [condition, body] children. */
-	private static inline final WHILE_CHILD_COUNT: Int = 2;
-
 	/** A `push` call has exactly [callee, single-argument] children. */
 	private static inline final PUSH_CALL_CHILD_COUNT: Int = 2;
 
@@ -536,12 +530,14 @@ final class PreferComprehension extends RuleBase {
 		final s: ComprehensionSeams = ctx.seams;
 		if (node.kind == s.forStmtKind) {
 			final operands: Array<QueryNode> = BinderScan.loopOperands(node, s.valueBinderKinds);
-			return operands.length != FOR_CHILD_COUNT ? null : buildHeaderLayer(node, operands[0], operands[1], name, ctx, acc);
+			return LoopScan.hasForShape(operands)
+				? buildHeaderLayer(node, LoopScan.forHead(operands), LoopScan.forBody(operands), name, ctx, acc)
+				: null;
 		}
 		if (node.kind == s.whileStmtKind)
-			return node.children.length != WHILE_CHILD_COUNT
-				? null
-				: buildHeaderLayer(node, node.children[0], node.children[1], name, ctx, acc);
+			return LoopScan.hasWhileShape(node)
+				? buildHeaderLayer(node, LoopScan.whileCondition(node), LoopScan.whileBody(node), name, ctx, acc)
+				: null;
 		if (node.kind == s.blockStmtKind) return buildBlock(node, name, ctx, acc);
 		if (s.ifKinds.contains(node.kind))
 			return BranchChain.hasElse(node)

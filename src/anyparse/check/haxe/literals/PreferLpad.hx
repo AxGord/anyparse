@@ -2,6 +2,7 @@ package anyparse.check.haxe.literals;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.control.BranchChain;
+import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.IndexScope;
@@ -128,9 +129,6 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	/** Nine branches puts the top at 10^9, the last power of ten an `Int` holds. */
 	private static inline final MAX_BRANCHES: Int = 9;
 
-	/** A single-binder `for` node has exactly [iterable, body] children. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
 	/** An interval node has exactly [low, high] children. */
 	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
 
@@ -239,9 +237,9 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	 */
 	private static function collect(node: QueryNode, env: Map<String, Int>, s: LpadSeams, source: String, out: Array<LpadSite>): Void {
 		final binder: Null<String> = node.name;
-		if (node.kind == s.forKind && binder != null && node.children.length == FOR_CHILD_COUNT) {
-			final iterable: QueryNode = node.children[0];
-			final body: QueryNode = node.children[1];
+		if (node.kind == s.forKind && binder != null && LoopScan.hasForShape(node.children)) {
+			final iterable: QueryNode = LoopScan.forHead(node.children);
+			final body: QueryNode = LoopScan.forBody(node.children);
 			collect(iterable, env, s, source, out);
 			final bound: Null<Int> = rangeBound(iterable, s, source);
 			final inner: Map<String, Int> = env.copy();

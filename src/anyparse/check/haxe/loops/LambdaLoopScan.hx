@@ -56,9 +56,6 @@ import anyparse.check.common.control.BranchChain;
 @:nullSafety(Strict)
 final class LambdaLoopScan {
 
-	/** A `for` node has exactly [iterable, body] operands once the key-value binder is filtered out. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
 	/** The flag's ONE write: the loop's own assignment, and nothing else in the enclosing statement list. */
 	private static inline final FLAG_WRITES: Int = 1;
 
@@ -576,11 +573,11 @@ final class LambdaLoopScan {
 		if (forNode.kind != s.forStmtKind || NominalTypes.hasIterationValueBinder(forNode, s.valueBinderKinds)) return null;
 		final operands: Array<QueryNode> = BinderScan.loopOperands(forNode, s.valueBinderKinds);
 		final loopVar: Null<String> = forNode.name;
-		if (loopVar == null || operands.length != FOR_CHILD_COUNT) return null;
-		final iterable: QueryNode = operands[0];
+		if (loopVar == null || !LoopScan.hasForShape(operands)) return null;
+		final iterable: QueryNode = LoopScan.forHead(operands);
 		if (iterable.kind == s.intervalKind) return null;
 		if (iterable.kind == s.callKind && !resolvesToOneOf(iterable, probe.iterableTypes, probe)) return null;
-		final shape: Null<BodyShape> = bodyShape(unwrapSole(operands[1], s), source, s, sink);
+		final shape: Null<BodyShape> = bodyShape(unwrapSole(LoopScan.forBody(operands), s), source, s, sink);
 		final receiverType: Null<String> = receiverNominal(iterable, probe);
 		if (shape == null || provenIterator(receiverType, probe)) return null;
 		final spelling: Null<CallSpelling> = spellingOf(iterable, receiverType, shape.cond == null, probe, s);

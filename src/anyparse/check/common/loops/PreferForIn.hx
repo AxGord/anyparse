@@ -1,6 +1,7 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.LoopScan;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SourceComments;
@@ -82,9 +83,6 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 
 	/** The protocol method the body's first statement must be initialized from. */
 	private static inline final NEXT_METHOD: String = 'next';
-
-	/** A `while` node has exactly [condition, body] children. */
-	private static inline final WHILE_CHILD_COUNT: Int = 2;
 
 	/** A no-argument call has exactly [callee] children, and a field access exactly [receiver]. */
 	private static inline final SOLE_CHILD_COUNT: Int = 1;
@@ -223,9 +221,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 	): Null<Match> {
 		final s: Seams = ctx.seams;
 		final isWhile: Bool = loop.kind == s.whileStmtKind || (s.whileExprKind != null && loop.kind == s.whileExprKind);
-		if (!isWhile || loop.children.length != WHILE_CHILD_COUNT) return null;
-		final body: QueryNode = loop.children[1];
-		final iterator: Null<String> = protocolReceiver(loop.children[0], HAS_NEXT_METHOD, s);
+		if (!isWhile || !LoopScan.hasWhileShape(loop)) return null;
+		final body: QueryNode = LoopScan.whileBody(loop);
+		final iterator: Null<String> = protocolReceiver(LoopScan.whileCondition(loop), HAS_NEXT_METHOD, s);
 		if (iterator == null) return null;
 		if (body.kind != s.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS)
 			return tryUnbound(loop, body, iterator, scope, decl, ctx);

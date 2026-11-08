@@ -700,7 +700,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		// `dropsParens`. It pins the slot as the LEFT operand's for a reader.
 		return if (slots.requiredHost.contains(parent.kind))
 			SlotKind.Required
-		else if (parent.kind == slots.ternaryKind && i == 0)
+		else if (parent.kind == slots.ternaryKind && i == BranchChain.COND_INDEX)
 			SlotKind.TernaryCondition
 		else if (parent.kind == slots.ternaryKind && i == BranchChain.ELSE_BRANCH_INDEX)
 			SlotKind.TernaryElse

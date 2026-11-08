@@ -704,6 +704,14 @@
 			"find": "value.kind == seams.boolLitKind && value.name == TRUE_LITERAL",
 			"replace": "true",
 			"note": "a map storing false is read as a set of its keys"
+		},
+		{
+			"name": "M-LOOP-SHAPE-COUNT-REDECLARED",
+			"type": "anyparse.check.common.loops.WhileTrueCondition",
+			"method": "tryMatch",
+			"find": "if (loop.kind != s.whileKind || !LoopScan.hasWhileShape(loop)) return null;",
+			"replace": "final WHILE_CHILD_COUNT: Int = 2;\n\tif (loop.kind != s.whileKind || loop.children.length != WHILE_CHILD_COUNT) return null;",
+			"note": "the rule keeps its own while child count instead of asking LoopScan, so the slot-constant guard finds a second copy of the answer"
 		}
 	]
 }

@@ -114,9 +114,6 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 	/** The nominal a range binder must not provably differ from. */
 	private static inline final INT_TYPE: String = 'Int';
 
-	/** A single-binder `for` node has exactly [iterable, body] children. */
-	private static inline final FOR_CHILD_COUNT: Int = 2;
-
 	/** Minimum body statements: at least one real statement plus the trailing `i++`. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
 
@@ -384,13 +381,13 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 		final core: LoopSeams = s.core;
 		final counter: Null<String> = LoopScan.singleLocalDeclName(decl, s.mutableKinds, core);
 		if (counter == null || !LoopScan.isZeroLiteral(decl.children[0], source, core)) return null;
-		if (forNode.kind != core.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
+		if (forNode.kind != core.forStmtKind || !LoopScan.hasForShape(forNode.children)) return null;
 		final binder: Null<String> = forNode.name;
 		if (binder == null || binder == counter) return null;
-		final iterable: QueryNode = forNode.children[0];
+		final iterable: QueryNode = LoopScan.forHead(forNode.children);
 		final collection: Null<String> = LoopScan.bareIdentName(iterable, core);
 		if (collection == null || collection == counter) return null;
-		final body: QueryNode = forNode.children[1];
+		final body: QueryNode = LoopScan.forBody(forNode.children);
 		if (body.kind != core.blockStmtKind || body.children.length < MIN_BODY_STATEMENTS) return null;
 		final incr: QueryNode = body.children[body.children.length - 1];
 		return isPostIncrementOf(incr, counter, source, s) ? {
