@@ -193,6 +193,20 @@ final class LexicalRegions {
 		return claim(regionsAt, 0);
 	}
 
+	/**
+	 * Every comment of `regions` as `onComment(from, to)`, in source order, those written inside a literal's code holes
+	 * included: the flat reading of the assembled tree, where an abandoned hole's comments are already void, so each comment
+	 * is reported once by its own byte range.
+	 */
+	public static function eachComment(regions: Array<LexRegion>, onComment: (from:Int, to:Int) -> Void): Void {
+		for (region in regions) switch region.kind {
+			case LineComment, BlockComment:
+				onComment(region.from, region.to);
+			case StringLit, RegexLit:
+				for (hole in region.holes ?? []) eachComment(hole.regions, onComment);
+		}
+	}
+
 	/** The entries waiting at `depth`, the level created on first use. */
 	private static function pending<T>(levels: Array<Array<T>>, depth: Int): Array<T> {
 		while (levels.length <= depth) levels.push([]);

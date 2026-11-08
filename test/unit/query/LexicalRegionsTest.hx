@@ -167,6 +167,32 @@ class LexicalRegionsTest extends Test {
 		for (region in regions) Assert.isTrue(nestsWithin(region), 'every hole within its literal: ${dump(source, regions)}');
 	}
 
+	/**
+	 * A comment written inside a `${ … }` hole is a comment of the source: `scanComments` reports it flat, between the
+	 * comments around the literal, in source order.
+	 */
+	@:pin('control')
+	@:killer('M-LEX-EACHCOMMENT-SKIPS-HOLES')
+	public function testScanCommentsReportsACommentWrittenInAHole(): Void {
+		final source: String = "/* a */ var s = '${ /* b */ x }'; // c\n";
+		Assert.equals('/* a */|/* b */|// c', commentTexts(source).join('|'));
+	}
+
+	/**
+	 * An unterminated hole is abandoned, and the bytes the walk then re-reads as the literal's text hold a second hole
+	 * that spells the same comment: `scanComments` reports it once, by its byte range, not once per walk over it.
+	 */
+	@:pin('control')
+	@:killer('M-LEX-ABANDONED-HOLE-KEPT')
+	public function testScanCommentsReportsACommentOfAnAbandonedHoleOnce(): Void {
+		final source: String = "var s = '${ a ${ /*c*/ b } ';\n";
+		Assert.equals('/*c*/', commentTexts(source).join('|'), 'the comment of the surviving hole, once');
+		final spans: Array<String> = [];
+		HaxeLexicalRegions.scanComments(source, (from: Int, to: Int) -> spans.push('$from:$to'));
+		final at: Int = source.indexOf('/*c*/');
+		Assert.equals('$at:${at + 5}', spans.join('|'));
+	}
+
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');
@@ -179,6 +205,13 @@ class LexicalRegionsTest extends Test {
 			for (inner in hole.regions) if (inner.from < hole.from || inner.to > hole.to || !nestsWithin(inner)) return false;
 		}
 		return true;
+	}
+
+	/** The text of every comment `scanComments` reports for `source`, in report order. */
+	private function commentTexts(source: String): Array<String> {
+		final out: Array<String> = [];
+		HaxeLexicalRegions.scanComments(source, (from: Int, to: Int) -> out.push(source.substring(from, to)));
+		return out;
 	}
 
 }

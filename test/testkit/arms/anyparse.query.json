@@ -15784,6 +15784,14 @@
 			"find": "spans.map(span -> text.substring(span.from, span.to))",
 			"replace": "spans.map(span -> haxe.io.Bytes.ofString(text).sub(span.from, span.to - span.from).toString())",
 			"note": "a record is read at its parse span taken as UTF-8 byte offsets, so non-ASCII text before it or inside the document shifts every record that follows"
+		},
+		{
+			"name": "M-LEX-EACHCOMMENT-SKIPS-HOLES",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "eachComment",
+			"find": "for (hole in region.holes ?? []) eachComment(hole.regions, onComment);",
+			"replace": "",
+			"note": "a comment written inside an interpolation hole is not reported, so the comment-loss guard never sees it and a writer that drops it passes"
 		}
 	]
 }

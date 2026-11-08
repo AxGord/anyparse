@@ -51,7 +51,7 @@ class LexicalCodegen {
 	 * per declared region and one balancing walk per declared hole.
 	 */
 	public static function emit(specs: Array<LexRegionSpec>): Array<Field> {
-		final fields: Array<Field> = [scanField(specs), scanCommentsField(specs), codeField(specs)];
+		final fields: Array<Field> = [scanField(specs), scanCommentsField(), codeField(specs)];
 		for (k in 0...specs.length) {
 			fields.push(regionField(specs, k));
 			final spec: LexRegionSpec = specs[k];
@@ -62,11 +62,6 @@ class LexicalCodegen {
 			}
 		}
 		return fields;
-	}
-
-	/** Whether `spec` came from the format's comment delimiters rather than from a literal terminal. */
-	private static inline function isCommentSpec(spec: LexRegionSpec): Bool {
-		return spec.lineTerminated || (spec.escape < 0 && spec.body.length == 0 && spec.flagLow < 0);
 	}
 
 	// -------- names and types --------
@@ -105,20 +100,14 @@ class LexicalCodegen {
 		};
 	}
 
-	private static function scanCommentsField(specs: Array<LexRegionSpec>): Field {
-		final test: Expr = commentKindTest(specs);
-		final body: Expr = macro {
-			$i{CODE_FN}(src, 0, 0, (from: Int, to: Int, kind: anyparse.query.LexicalRegions.LexRegionKind, depth: Int) -> {
-				if (to >= 0 && ($test)) onComment(from, to);
-			}, (from: Int, to: Int, depth: Int) -> {});
-		};
+	private static function scanCommentsField(): Field {
+		final body: Expr = macro anyparse.query.LexicalRegions.eachComment(scan(src), onComment);
 		return {
 			name: 'scanComments',
 			doc: ' Every comment of `src` as a `[start, end)` span, in source order, with the grammar\'s\n'
 				+ ' literals skipped so an opener inside one never counts - the `CommentScan` the writer\'s\n comment-loss guard is '
-				+ 'handed.\n\n DELIBERATELY NOT `scan` FILTERED TO ITS COMMENT REGIONS: this reports a comment written\n inside an '
-				+ 'interpolation hole flat, where `scan` nests it under the hole of its literal. Both\n answers are right for their '
-				+ 'reader, and here they are two readings of ONE generated walk rather than\n two lexers.',
+				+ 'handed.\n\n A comment written inside an interpolation hole is reported flat, where `scan` nests it under the hole of '
+				+ 'its\n literal; a hole the walk abandoned reports none, so every comment comes once, by its own byte range.',
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
@@ -130,18 +119,6 @@ class LexicalCodegen {
 			}),
 			pos: Context.currentPos()
 		};
-	}
-
-	/** `kind == LineComment || kind == BlockComment`, from the kinds the format contributed. */
-	private static function commentKindTest(specs: Array<LexRegionSpec>): Expr {
-		final kinds: Array<String> = [];
-		for (spec in specs) if (isCommentSpec(spec) && !kinds.contains(spec.kind)) kinds.push(spec.kind);
-		var test: Null<Expr> = null;
-		for (name in kinds) {
-			final one: Expr = macro kind == ${kindValue(name)};
-			test = test == null ? one : macro $test || $one;
-		}
-		return test ?? macro false;
 	}
 
 	// -------- the walks --------
