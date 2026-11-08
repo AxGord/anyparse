@@ -6,6 +6,8 @@ import anyparse.runtime.ByteOrderMark;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using StringTools;
+
 /**
  * Pass 4 of the macro pipeline — codegen.
  *
@@ -66,6 +68,7 @@ class Codegen {
 			fields.push(collectTrailingAfterOpenField(formatInfo));
 			fields.push(collectTrailingBeforeSepField(formatInfo));
 			fields.push(collectTrailingBlockField(formatInfo));
+			fields.push(rewindOrStashTriviaField(formatInfo));
 			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
 		return fields;
@@ -1345,6 +1348,80 @@ class Codegen {
 			ctx.pos = _savedPos;
 			return (null: Null<String>);
 		}
+	}
+
+	/**
+	 * Generate `rewindOrStashTrivia` — the one answer to "what did the whitespace/comment run a no-match operator
+	 * loop consumed hold" in a Trivia-mode parser. It reads `[runStart, ctx.pos)`: a run holding a comment opener rewinds
+	 * `ctx.pos` to `runStart` and returns true, so the enclosing rule re-captures the comment; otherwise a run holding a
+	 * line break stashes `newlineBefore` (and `blankBefore` for two newlines apart only by horizontal whitespace, the
+	 * `collectTrivia` blank rule) into `ctx.pendingTrivia` and returns false. Comment openers come from the format.
+	 */
+	private static function rewindOrStashTriviaField(formatInfo: FormatReader.FormatInfo): Field {
+		final commentRewinds: Array<Expr> = [
+			for (p in formatInfo.commentPatterns)
+				macro if (${commentOpenAtExpr(p.open)}) {
+					ctx.pos = runStart;
+					return true;
+				}
+		];
+		final body: Expr = macro {
+			final to: Int = ctx.pos;
+			var i: Int = runStart;
+			var hadNewline: Bool = false;
+			var hadBlank: Bool = false;
+			var nlRun: Int = 0;
+			while (i < to) {
+				final c: Int = ctx.input.charCodeAt(i);
+				$b{commentRewinds};
+				if (c == '\n'.code) {
+					hadNewline = true;
+					nlRun++;
+					if (nlRun >= 2) hadBlank = true;
+				} else if (c != ' '.code && c != '\t'.code && c != '\r'.code) {
+					nlRun = 0;
+				}
+				i++;
+			}
+			if (hadNewline) {
+				final pending: Null<anyparse.runtime.PendingTrivia> = ctx.pendingTrivia;
+				if (pending == null) {
+					ctx.pendingTrivia = {
+						blankBefore: hadBlank,
+						blankAfterLeadingComments: false,
+						newlineBefore: true,
+						leadingComments: []
+					};
+				} else {
+					pending.newlineBefore = true;
+					if (hadBlank) pending.blankBefore = true;
+				}
+			}
+			return false;
+		};
+		return {
+			name: 'rewindOrStashTrivia',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'ctx', type: macro : anyparse.runtime.Parser },
+					{ name: 'runStart', type: macro : Int }
+				],
+				ret: macro : Bool,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/** The condition "the comment opener `open` starts at `i` and ends inside the run `[i, to)`", byte by byte. */
+	private static function commentOpenAtExpr(open: String): Expr {
+		var cond: Expr = macro i + $v{open.length} <= to;
+		for (k in 0...open.length) {
+			final code: Int = open.fastCodeAt(k);
+			cond = macro $cond && ctx.input.charCodeAt(i + $v{k}) == $v{code};
+		}
+		return cond;
 	}
 
 }

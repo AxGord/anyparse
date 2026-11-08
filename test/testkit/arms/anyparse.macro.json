@@ -2008,6 +2008,22 @@
 			"find": "(!_acLast || $tcExpr)",
 			"replace": "!_acLast",
 			"note": "under keep a last call argument followed by an after-separator comment loses its comma"
+		},
+		{
+			"name": "M-TRIVIA-RUN-NO-REWIND",
+			"type": "anyparse.macro.Codegen",
+			"method": "rewindOrStashTriviaField",
+			"find": "ctx.pos = runStart;",
+			"replace": "ctx.pos = ctx.pos;",
+			"note": "a comment in the run an operator loop consumed stays consumed while the comments it stashed are popped, so a comment after the last operand of an argument is dropped and the round trip refuses the file"
+		},
+		{
+			"name": "M-TRIVIA-RUN-NO-BLANK",
+			"type": "anyparse.macro.Codegen",
+			"method": "rewindOrStashTriviaField",
+			"find": "if (nlRun >= 2) hadBlank = true;",
+			"replace": "if (nlRun >= 2) hadBlank = false;",
+			"note": "two line breaks in the run an operator loop consumed stash only a line break, so the blank line after a brace-ended value with no terminator collapses"
 		}
 	]
 }

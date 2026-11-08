@@ -32,66 +32,16 @@ using StringTools;
  */
 final class OperatorLoopLowering {
 
+	/**
+	 * The Pratt loop's no-match exit: `rewindOrStashTrivia` settles the run the last `skipWsAndStash` consumed. On a
+	 * rewind the comments that stash captured from the run are popped again, or the caller's `collectTrivia` would see
+	 * them twice — once stashed, once re-read from the input.
+	 */
 	private static function buildPrattNoMatchHandlerExpr(): Expr {
 		return macro if (!_matched) {
-			var _scanI: Int = _preWsPos;
-			var _hadComment: Bool = false;
-			var _hadNewline: Bool = false;
-			// ω-keep-pratt-blank: track a blank line (≥2 newlines with
-			// only horizontal whitespace between them) inside the
-			// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
-			// semantics so the source-blank signal survives the no-op
-			// tail loop the same way the single-newline signal does.
-			var _nlRun: Int = 0;
-			var _hadBlank: Bool = false;
-			while (_scanI < ctx.pos) {
-				final _ch: Int = ctx.input.charCodeAt(_scanI);
-				if (_ch == '\n'.code) {
-					_hadNewline = true;
-					_nlRun++;
-					if (_nlRun >= 2) _hadBlank = true;
-				} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-					_nlRun = 0;
-				}
-				if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-					final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-					if (_c2 == '/'.code || _c2 == '*'.code) {
-						_hadComment = true;
-						break;
-					}
-				}
-				_scanI++;
-			}
-			if (_hadComment) {
-				ctx.pos = _preWsPos;
+			if (rewindOrStashTrivia(ctx, _preWsPos)) {
 				final _pt = ctx.pendingTrivia;
 				if (_pt != null) while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
-			} else if (_hadNewline) {
-				// ω-untyped-keep: when no operator matches AND the consumed
-				// WS contained a newline (no comment, no rewind), stash the
-				// newline signal into `pendingTrivia` so the next sibling's
-				// `collectTrivia` drain captures `newlineBefore=true`. Without
-				// this, Pratt silently consumes the newline and downstream
-				// `bodyBeforeNewline` slots never fire (e.g. function-body
-				// `untyped` after `:Type\n\tuntyped {…}` — the body field's
-				// pre-field collectTrivia sees pos already past the `\n`).
-				// ω-keep-pratt-blank: also carry `blankBefore` when the run
-				// held a blank line, so a `var b = function(){…}\n\nfinal a`
-				// brace-terminated `@:trailOpt(';')`-absent decl preserves
-				// its source blank line (issue_644). Without this the bit was
-				// hardcoded `false` and the blank collapsed to a single `\n`.
-				final _pt = ctx.pendingTrivia;
-				if (_pt == null) {
-					ctx.pendingTrivia = {
-						blankBefore: _hadBlank,
-						blankAfterLeadingComments: false,
-						newlineBefore: true,
-						leadingComments: []
-					};
-				} else {
-					_pt.newlineBefore = true;
-					if (_hadBlank) _pt.blankBefore = true;
-				}
 			}
 			break;
 		};
@@ -237,60 +187,12 @@ final class OperatorLoopLowering {
 		};
 	}
 
+	/**
+	 * The postfix loop's no-match scan-back over the run the last `skipWs` consumed: a comment rewinds so the enclosing
+	 * loop re-captures it, a line break or blank line is stashed for the next `collectTrivia` (`rewindOrStashTrivia`).
+	 */
 	private static function buildPostfixNoMatchScanback(): Expr {
-		// ω-cond-comp-expr-multiline / ω-keep-pratt-blank: when no postfix op
-		// matched, scan the `[_preWsPos, ctx.pos)` run consumed by the last
-		// skipWs. A comment rewinds to `_preWsPos` so the enclosing loop
-		// re-captures it; a bare newline (or a blank line, ≥2 newlines) is
-		// stashed into `ctx.pendingTrivia` so downstream `collectTrivia` reads
-		// the source-vertical signal the postfix loop otherwise drops.
-		return macro {
-			var _scanI: Int = _preWsPos;
-			var _hadComment: Bool = false;
-			var _hadNewline: Bool = false;
-			// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
-			// a blank line (≥2 newlines separated only by horizontal
-			// whitespace) inside the postfix-consumed run must survive
-			// the no-op tail so a brace-terminated value followed by a
-			// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
-			// carries `blankBefore` to the next decl's `collectTrivia`.
-			var _nlRun: Int = 0;
-			var _hadBlank: Bool = false;
-			while (_scanI < ctx.pos) {
-				final _ch: Int = ctx.input.charCodeAt(_scanI);
-				if (_ch == '\n'.code) {
-					_hadNewline = true;
-					_nlRun++;
-					if (_nlRun >= 2) _hadBlank = true;
-				} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-					_nlRun = 0;
-				}
-				if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-					final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-					if (_c2 == '/'.code || _c2 == '*'.code) {
-						_hadComment = true;
-						break;
-					}
-				}
-				_scanI++;
-			}
-			if (_hadComment) {
-				ctx.pos = _preWsPos;
-			} else if (_hadNewline) {
-				final _pt = ctx.pendingTrivia;
-				if (_pt == null) {
-					ctx.pendingTrivia = {
-						blankBefore: _hadBlank,
-						blankAfterLeadingComments: false,
-						newlineBefore: true,
-						leadingComments: []
-					};
-				} else {
-					_pt.newlineBefore = true;
-					if (_hadBlank) _pt.blankBefore = true;
-				}
-			}
-		};
+		return macro rewindOrStashTrivia(ctx, _preWsPos);
 	}
 
 	private static function collectAllOps(node: ShapeNode): Array<String> {
