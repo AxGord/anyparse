@@ -236,7 +236,7 @@ final class LintArgs {
 		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle; with an\n');
 		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index by\n');
 		CliIo.sysPrint('                    category and json one {id, category, description,\n');
-		CliIo.sysPrint('                    defaultOn} record per rule\n');
+		CliIo.sysPrint('                    defaultOn, scopeDependent} record per rule\n');
 		CliIo.sysPrint('  --all, -a        Include Info-severity advisories in the report (text format only —\n');
 		CliIo.sysPrint('                   json and checkstyle are never capped)\n');
 		CliIo.sysPrint('  --flat           One <file>:<line>:<col> per line (text format only)\n');

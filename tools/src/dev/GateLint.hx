@@ -242,15 +242,7 @@ final class GateLint {
 	private function lintDiff(old: String, now: String, name: String): LintMove {
 		final diff: Result = _gate.hxq(_gate.tree, ['lint-diff', '--old', old, '--new', now]).run();
 		File.saveContent(_gate.log(name), diff.out + diff.err);
-		final head: EReg = ~/(\d+) added \/ (\d+) removed/;
-		if (!head.match(diff.out)) throw new Exception('lint-diff printed no headline: ${GateTree.quote(diff)}');
-		final first: String = diff.lines().find(l -> l.startsWith('  + ')) ?? '';
-		return {
-			added: Std.parseInt(head.matched(1)) ?? 0,
-			removed: Std.parseInt(head.matched(2)) ?? 0,
-			first: first.trim(),
-			rows: GateExcerpt.lintRows(diff.out, true)
-		};
+		return moveOf(diff);
 	}
 
 	/** The report an earlier run of the gate cached under `key`, or null. */
@@ -384,6 +376,19 @@ final class GateLint {
 			if (config.startsWith(prefix)) return config.substr(prefix.length);
 		}
 		return config;
+	}
+
+	/** The movement a `hxq lint-diff` run `diff` reports; throws when it printed no headline. */
+	public static function moveOf(diff: Result): LintMove {
+		final head: EReg = ~/(\d+) added \/ (\d+) removed/;
+		if (!head.match(diff.out)) throw new Exception('lint-diff printed no headline: ${GateTree.quote(diff)}');
+		final first: String = diff.lines().find(l -> l.startsWith('  + ')) ?? '';
+		return {
+			added: Std.parseInt(head.matched(1)) ?? 0,
+			removed: Std.parseInt(head.matched(2)) ?? 0,
+			first: first.trim(),
+			rows: GateExcerpt.lintRows(diff.out, true)
+		};
 	}
 
 	/** The file the standard error of the lint reporting to `out` goes to. */

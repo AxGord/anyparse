@@ -408,6 +408,14 @@
 			"find": "final measured: OracleBaseline = oracle.judging(oracles);",
 			"replace": "final measured: OracleBaseline = { judging: oracles, excluded: [], verdict: Confirmed };",
 			"note": "the risky phase stops asking the grammar's oracle for its baseline and takes every configuration as green, so it judges edits under builds that never typechecked"
+		},
+		{
+			"name": "M-RULE-INDEX-JSON-DROPS-SCOPE-DEPENDENT",
+			"type": "anyparse.check.RuleIndex",
+			"method": "json",
+			"find": "scopeDependent: c is ScopeDependent",
+			"replace": "scopeDependent: false",
+			"note": "the rule listing names no rule scope-dependent, so a scoped land carries nothing from the base for a blind rule and turns the post-land backstop red"
 		}
 	]
 }

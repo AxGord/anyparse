@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.LanguageBound;
+import anyparse.check.Check.ScopeDependent;
 import anyparse.check.Check.VersionGated;
 import haxe.format.JsonPrinter;
 
@@ -51,7 +52,7 @@ final class RuleIndex {
 	}
 
 	/**
-	 * The registry as data, one `{id, category, description, languages, defaultOn}` record
+	 * The registry as data, one `{id, category, description, languages, defaultOn, scopeDependent}` record
 	 * per rule (`languages` empty for a rule every grammar runs) in registry order — what
 	 * `apq lint --list-rules --format json` prints for a tool that keys rules by category.
 	 */
@@ -61,13 +62,15 @@ final class RuleIndex {
 			category: String,
 			description: String,
 			languages: Array<String>,
-			defaultOn: Bool
+			defaultOn: Bool,
+			scopeDependent: Bool
 		}> = checks.map(c -> {
 			id: c.id(),
 			category: c.category(),
 			description: c.description(),
 			languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
-			defaultOn: !(c is DefaultOff)
+			defaultOn: !(c is DefaultOff),
+			scopeDependent: c is ScopeDependent
 		});
 		return JsonPrinter.print(records, null, '  ') + '\n';
 	}

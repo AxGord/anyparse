@@ -2,6 +2,7 @@ package anyparse.check.common.unused;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.ScopeDependent;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -64,7 +65,7 @@ import anyparse.query.TypeResolver;
  * to the default). The match is on the called name for every receiver form.
  */
 @:nullSafety(Strict)
-final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix {
+final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix implements ScopeDependent {
 
 	/**
 	 * Call names whose non-`Void` result is idiomatically discarded — in-place

@@ -1867,6 +1867,125 @@
 			"method": "owedBy",
 			"force": "false",
 			"note": "no slice owes the fork verify, so the gate never runs it for a writer or formatter-config change"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIED-DROPS-NARROW-RULE",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "return exists(file) && (!redone.exists(file) || isNarrow(record));",
+			"replace": "return exists(file) && !redone.exists(file);",
+			"note": "a re-linted file's findings of a scope-dependent rule leave the carried report, so the findings a scoped lint is blind to turn the post-land backstop red with nothing wrong"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIED-KEEPS-UNMARKED-RULE",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "return exists(file) && (!redone.exists(file) || isNarrow(record));",
+			"replace": "return exists(file);",
+			"note": "every rule's base findings stay on a re-linted file, so a finding a landing fixed is carried on as if it stood"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIED-DOUBLES-NARROW-RULE",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "stay.concat(added.filter(record -> !isNarrow(record)))",
+			"replace": "stay.concat(added)",
+			"note": "a scope-dependent rule's fresh finding is added beside the base's, so a finding a narrow run still sees is recorded twice"
+		},
+		{
+			"name": "M-LINTSCOPE-LISTING-IGNORES-MARKER",
+			"type": "dev.LintScope",
+			"method": "scopeDependent",
+			"find": "RawJson.isTrue(JValueTools.field(record, 'scopeDependent'))",
+			"replace": "true",
+			"note": "every rule of the engine's listing is carried from the base, so a scoped lint replaces nothing"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIED-KEEPS-DELETED-FILE",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "return exists(file) && (!redone.exists(file) || isNarrow(record));",
+			"replace": "return !redone.exists(file) || isNarrow(record);",
+			"note": "a deleted file's findings of a scope-dependent rule are carried, so the report names a file the tree no longer has"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIED-LOSES-FAILED-LINT",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "if (added == null) return fresh;",
+			"replace": "if (added == null) return null;",
+			"note": "a scoped lint that printed no report is answered as an unreadable base, so a battery blames the snapshot instead of the lint that failed"
+		},
+		{
+			"name": "M-POSTLAND-COMPARE-ALWAYS-REFUSES",
+			"type": "dev.PostLand",
+			"method": "snapshotRefusal",
+			"find": "LintScope.backstop(GateLint.moveOf(diff))",
+			"replace": "'moved'",
+			"note": "the backstop refuses whatever lint-diff says, so same findings at other lines turn a land red"
+		},
+		{
+			"name": "M-POSTLAND-COMPARE-NEVER-REFUSES",
+			"type": "dev.PostLand",
+			"method": "snapshotRefusal",
+			"find": "LintScope.backstop(GateLint.moveOf(diff))",
+			"replace": "null",
+			"note": "the backstop never refuses, so a finding the whole lint moved outside what the land judged passes silently"
+		},
+		{
+			"name": "M-POSTLAND-MALFORMED-SNAPSHOT-PASSES",
+			"type": "dev.PostLand",
+			"method": "snapshotRefusal",
+			"find": "(diff.status ?? 2) > 1",
+			"replace": "false",
+			"note": "a snapshot lint-diff cannot read is parsed as a movement report instead of being refused by name"
+		},
+		{
+			"name": "M-POSTLAND-UNREADABLE-LISTING-COMPARES",
+			"type": "dev.PostLand",
+			"method": "snapshotRefusal",
+			"find": "LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out)",
+			"replace": "(LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out) ?? [])",
+			"note": "a rule listing the engine could not print compares everything, so the carried findings turn the backstop red without saying why"
+		},
+		{
+			"name": "M-LINTSCOPE-JUDGED-KEEPS-CARRIED",
+			"type": "dev.LintScope",
+			"method": "judged",
+			"force": "text",
+			"note": "the backstop compares what the land carried unjudged, so every real movement of a scope-dependent rule on a re-linted file turns a clean land red"
+		},
+		{
+			"name": "M-LINTSCOPE-JUDGED-DROPS-UNMARKED-RULE",
+			"type": "dev.LintScope",
+			"method": "judged",
+			"find": "narrow.exists(RawJson.stringAt(record, 'rule') ?? '')",
+			"replace": "true",
+			"note": "every rule of a re-linted file leaves the compare, so a finding the land did judge moves unseen"
+		},
+		{
+			"name": "M-LINTSCOPE-JUDGED-DROPS-OUTSIDE-SCOPE",
+			"type": "dev.LintScope",
+			"method": "judged",
+			"find": "redone.exists(RawJson.stringAt(record, 'file') ?? '')",
+			"replace": "true",
+			"note": "a scope-dependent rule leaves the compare on every file, so its movement outside what the land re-linted is never refused"
+		},
+		{
+			"name": "M-LINTSCOPE-JUDGED-BLANKS-MALFORMED",
+			"type": "dev.LintScope",
+			"method": "judged",
+			"find": "if (records == null) return text;",
+			"replace": "if (records == null) return '[]';",
+			"note": "a snapshot that is no report compares as an empty one, so the backstop calls every finding movement instead of saying it could not compare"
+		},
+		{
+			"name": "M-POSTLAND-WHOLE-LINT-WITHOUT-THE-LAND-SCOPE",
+			"type": "dev.PostLand",
+			"method": "wholeLint",
+			"find": "LintScope.ofImpact(tree, '$sha^', true)",
+			"replace": "null",
+			"note": "the backstop compares everything, so a scope-dependent rule on a file of the land it carried by design turns a good land red"
 		}
 	]
 }

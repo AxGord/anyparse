@@ -261,6 +261,44 @@ final class PostLand {
 		return Path.join([dir, '$sha.$suffix']);
 	}
 
+	/**
+	 * Why the report `recorded` is not the whole lint `truth` of its tree, or null when `lint-diff` finds them the same. `scope` is what
+	 * the land re-linted (null or empty: nothing was carried); a scope-dependent rule's findings on those files are left out of both,
+	 * since the land carried them unjudged.
+	 */
+	public static function snapshotRefusal(tree: String, recorded: String, truth: String, scope: Null<Array<String>>): Null<String> {
+		final linted: Array<String> = scope ?? [];
+		final dependent: Null<Array<String>> = linted.length == 0
+			? []
+			: LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out);
+		if (dependent == null) return 'the engine\'s rule listing printed no report, so the backstop cannot tell what the land carried';
+		final old: String = judgedCopy(recorded, linted, dependent);
+		final now: String = judgedCopy(truth, linted, dependent);
+		final diff: Result = GateTree.shim(tree, tree, ['lint-diff', '--old', old, '--new', now]).run();
+		for (copy in [old, now]) FileSystem.deleteFile(copy);
+		return (diff.status ?? 2) > 1
+			? 'lint-diff could not compare $recorded with the whole lint: ${diff.firstError()}'
+			: LintScope.backstop(GateLint.moveOf(diff));
+	}
+
+	/**
+	 * The whole lint of the landed tree, the truth of the landing's lint snapshot: a battery that re-linted only the files its change
+	 * reaches (`LintScope`) carried the rest from its base, and a finding that moved elsewhere makes this run red. The truth replaces
+	 * the snapshot either way, so the next landing compares with what the tree really holds.
+	 */
+	public static function wholeLint(repo: String, sha: String, cache: String, tree: String): Outcome {
+		final lint: Result = GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).run();
+		if (!lint.out.trim().startsWith('[')) return Failed('the whole lint of $sha printed no report: ${lint.firstError()}');
+		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
+		final truth: String = '$snapshot.truth';
+		File.saveContent(truth, lint.out);
+		final refusal: Null<String> = FileSystem.exists(snapshot)
+			? snapshotRefusal(tree, snapshot, truth, LintScope.ofImpact(tree, '$sha^', true))
+			: null;
+		FileSystem.rename(truth, snapshot);
+		return refusal == null ? Passed : Failed(refusal);
+	}
+
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
 		return fileOf(cache, sha, state);
 	}
@@ -332,20 +370,6 @@ final class PostLand {
 			: Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
 	}
 
-	/**
-	 * The whole lint of the landed tree, the truth of the landing's lint snapshot: a battery that re-linted only the files its change
-	 * reaches (`LintScope`) carried the rest from its base, and a finding that moved elsewhere makes this run red. The truth replaces
-	 * the snapshot either way, so the next landing compares with what the tree really holds.
-	 */
-	private static function wholeLint(repo: String, sha: String, cache: String, tree: String): Outcome {
-		final lint: Result = GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).run();
-		if (!lint.out.trim().startsWith('[')) return Failed('the whole lint of $sha printed no report: ${lint.firstError()}');
-		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
-		final refusal: Null<String> = FileSystem.exists(snapshot) ? LintScope.backstop(File.getContent(snapshot), lint.out) : null;
-		File.saveContent(snapshot, lint.out);
-		return refusal == null ? Passed : Failed(refusal);
-	}
-
 	private static function directory(cache: String): String {
 		return Path.join([cache, DIRECTORY]);
 	}
@@ -365,6 +389,13 @@ final class PostLand {
 
 	private static function remove(path: String): Void {
 		if (FileSystem.exists(path)) FileSystem.deleteFile(path);
+	}
+
+	/** A copy of the report file `report`, beside it, holding only what the backstop judges. */
+	private static function judgedCopy(report: String, scope: Array<String>, dependent: Array<String>): String {
+		final copy: String = '$report.judged';
+		File.saveContent(copy, LintScope.judged(File.getContent(report), scope, dependent));
+		return copy;
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.grammar.json.JsonFormat;
 import anyparse.query.ShardPlan;
 import dev.ForkFmt.ForkVerdict;
 import dev.GateReuse.GateOffer;
+import dev.LintScope.WholeReport;
 import dev.Shard.Tally;
 import dev.XconfigFmt.XconfigFailure;
 import dev.XconfigFmt.XconfigRun;
@@ -381,9 +382,12 @@ final class Battery {
 		final why: Array<String> = [];
 		final report: Null<Result> = own == 0 ? null : runs[0];
 		final text: String = report?.out ?? '[]';
-		final whole: Null<String> = LintScope.whole(baseReport, scope, text, file -> FileSystem.exists(Path.join([_plan.repo, file])));
+		final carriedReport: WholeReport = LintScope.whole(
+			baseReport, scope, text, file -> FileSystem.exists(Path.join([_plan.repo, file])), () -> hxq(LintScope.RULE_LISTING).run().out
+		);
+		final whole: Null<String> = carriedReport.report;
 		if (scope != null) _summary.detail('lint scoped to ${scope.length} file(s), the rest is ${_plan.base ?? 'the base'}\'s');
-		if (whole == null) why.push('the base snapshot $baseReport is no lint report to carry');
+		if (carriedReport.why != null) why.push(carriedReport.why);
 		File.saveContent(workFile('lint-anyparse.json'), whole ?? text);
 		if (whole != null && isJson(whole)) _readings[LINTED] = 1;
 		if (report != null && !report.ok) {

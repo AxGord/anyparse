@@ -2,7 +2,9 @@ package dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.ConfigFinder;
+import dev.GateLint.LintMove;
 import devkit.Cmd.cmd;
 import devkit.RawJson;
 import devkit.Result;
@@ -17,13 +19,17 @@ using StringTools;
  * The one answer to "which files must a battery re-lint for a landing, and which findings of the base snapshot does that
  * leave standing": a landing that changes no engine input and no lint configuration re-lints the `.hx` files it changed,
  * every `.hx` beside them (a rule that counts a folder's files moves a finding filed on a sibling) and each `import.hx` up
- * the path to the root (ambient imports are inherited down it), and carries the base's findings for every other file.
+ * the path to the root (ambient imports are inherited down it), and carries the base's findings for every other file, and
+ * those of a rule whose answer depends on the report scope (`Check.ScopeDependent`) even for a re-linted file.
  * Anything else — or no way to tell — is the whole tree (`null`). `backstop` is the whole lint's check of that carrying.
  */
 final class LintScope {
 
 	/** The directories the battery lints. */
 	public static final ROOTS: Array<String> = ['src', 'test'];
+
+	/** The engine's rule listing, read by `scopeDependent`. */
+	public static final RULE_LISTING: Array<String> = ['lint', '--list-rules', '--format', 'json'];
 
 	private static inline final AMBIENT: String = 'import.hx';
 
@@ -70,46 +76,36 @@ final class LintScope {
 
 	/**
 	 * The report of the whole tree, from the base's report `base` and the lint `fresh` of `scope` alone: the base's findings of
-	 * every file outside `scope` that `exists` still, then the fresh ones. A `fresh` that is no report (a lint that failed) is answered
-	 * as it is, for the caller to fail on; null when `base` is none.
+	 * every file outside `scope` that `exists` still and those of a rule in `dependent` (`scopeDependent`: its answer for a re-linted
+	 * file is the narrow run's, so the base's stands), then the fresh ones of every other rule. A `fresh` that is no report (a lint
+	 * that failed) is answered as it is, for the caller to fail on; null when `base` is none.
 	 */
-	public static function carried(base: String, fresh: String, scope: Array<String>, exists: String -> Bool): Null<String> {
+	public static function carried(
+		base: String, fresh: String, scope: Array<String>, exists: String -> Bool, dependent: Array<String>
+	): Null<String> {
 		final kept: Null<Array<JValue>> = recordsOf(base);
 		final added: Null<Array<JValue>> = recordsOf(fresh);
 		if (added == null) return fresh;
 		if (kept == null) return null;
 		final redone: Map<String, Bool> = [for (file in scope) file => true];
+		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
+		final isNarrow: JValue -> Bool = record -> narrow.exists(RawJson.stringAt(record, 'rule') ?? '');
 		final stay: Array<JValue> = kept.filter(record -> {
 			final file: String = RawJson.stringAt(record, 'file') ?? '';
-			return !redone.exists(file) && exists(file);
+			return exists(file) && (!redone.exists(file) || isNarrow(record));
 		});
-		return RawJson.print(JArray(stay.concat(added)), '  ');
+		return RawJson.print(JArray(stay.concat(added.filter(record -> !isNarrow(record)))), '  ');
 	}
 
 	/**
-	 * Why the whole lint `truth` of a landed commit is not the report `recorded` for it, or null when they hold the same
-	 * findings: a finding moved in a file the landing's scoped lint did not re-lint. Names the first few, by file and rule.
+	 * Why the whole lint of a landed commit is not the report recorded for it — `moved`, their `lint-diff` — or null when they hold
+	 * the same findings by that compare's identity, which leaves out positions and masks a message's measurements: a finding `carried`
+	 * kept from the base has its base-time line and its base-time count. Names the first few, by file and rule.
 	 */
-	public static function backstop(recorded: String, truth: String): Null<String> {
-		final lines: Array<String> = moved(recorded, truth);
-		if (lines.length == 0) return null;
-		final shown: String = lines.slice(0, NAMED).join('; ');
-		return 'the whole lint moved ${lines.length} finding(s) the scoped lint did not re-lint — $shown';
-	}
-
-	/** The findings by which `now` differs from `old`, as `+ <file> <rule>` / `- <file> <rule>`, one per finding, sorted. */
-	public static function moved(old: String, now: String): Array<String> {
-		final balance: Map<String, Int> = [];
-		final names: Map<String, String> = [];
-		for (record in recordsOf(old) ?? []) tally(balance, names, record, -1);
-		for (record in recordsOf(now) ?? []) tally(balance, names, record, 1);
-		final lines: Array<String> = [];
-		for (key => count in balance) {
-			final sign: String = count > 0 ? '+' : '-';
-			for (_ in 0...(count > 0 ? count : -count)) lines.push('$sign ${names[key]}');
-		}
-		lines.sort(Reflect.compare);
-		return lines;
+	public static function backstop(moved: LintMove): Null<String> {
+		if (moved.added + moved.removed == 0) return null;
+		final shown: String = moved.rows.slice(0, NAMED).join('; ');
+		return 'the whole lint moved ${moved.added + moved.removed} finding(s) the scoped lint did not re-lint — $shown';
 	}
 
 	/**
@@ -123,16 +119,43 @@ final class LintScope {
 
 	/**
 	 * The report a landing keeps: `fresh`, the lint of `lintArgs(scope)`, alone for the whole tree (`scope` null or no `base`
-	 * snapshot file to carry), else `carried`. `exists` answers whether a repository-relative file is still there.
+	 * snapshot file to carry), else `carried` with the rules the engine's rule listing — `listing`, asked only then — names
+	 * scope-dependent. `exists` answers whether a repository-relative file is still there. A report that cannot be made answers why.
 	 */
-	public static function whole(base: Null<String>, scope: Null<Array<String>>, fresh: String, exists: String -> Bool): Null<String> {
-		return scope == null || base == null ? fresh : carried(File.getContent(base), fresh, scope, exists);
+	public static function whole(
+		base: Null<String>, scope: Null<Array<String>>, fresh: String, exists: String -> Bool, listing: () -> String
+	): WholeReport {
+		if (scope == null || base == null) return { report: fresh, why: null };
+		final dependent: Null<Array<String>> = scopeDependent(listing());
+		if (dependent == null)
+			return { report: null, why: 'the engine\'s rule listing printed no report, so the scoped lint cannot be carried' };
+		final report: Null<String> = carried(File.getContent(base), fresh, scope, exists, dependent);
+		return { report: report, why: report == null ? 'the base snapshot $base is no lint report to carry' : null };
 	}
 
-	private static function tally(balance: Map<String, Int>, names: Map<String, String>, record: JValue, step: Int): Void {
-		final key: String = RawJson.print(record);
-		balance[key] = (balance[key] ?? 0) + step;
-		names[key] = '${RawJson.stringAt(record, 'file') ?? '?'} ${RawJson.stringAt(record, 'rule') ?? '?'}';
+	/** The ids of the rules the engine's rule listing `listing` names scope-dependent, or null when `listing` is no listing. */
+	public static function scopeDependent(listing: String): Null<Array<String>> {
+		final records: Null<Array<JValue>> = recordsOf(listing);
+		return records == null ? null : [
+			for (record in records) if (RawJson.isTrue(JValueTools.field(record, 'scopeDependent'))) RawJson.stringAt(record, 'id') ?? ''
+		];
+	}
+
+	/**
+	 * Report `text` without the findings the landing's scoped lint carried by design: those of a rule in `dependent` on a file of
+	 * `scope`. The backstop compares what is left, since a scoped lint never judged those. A `text` that is no report is answered as it is.
+	 */
+	public static function judged(text: String, scope: Array<String>, dependent: Array<String>): String {
+		final records: Null<Array<JValue>> = recordsOf(text);
+		if (records == null) return text;
+		final redone: Map<String, Bool> = [for (file in scope) file => true];
+		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
+		return RawJson.print(
+			JArray(records.filter(
+				record -> !(redone.exists(RawJson.stringAt(record, 'file') ?? '') && narrow.exists(RawJson.stringAt(record, 'rule') ?? ''))
+			)),
+			'  '
+		);
 	}
 
 	private static function recordsOf(report: String): Null<Array<JValue>> {
@@ -180,3 +203,6 @@ final class LintScope {
 	}
 
 }
+
+/** The report `LintScope.whole` makes, or the reason it cannot. */
+typedef WholeReport = { report: Null<String>, why: Null<String> }

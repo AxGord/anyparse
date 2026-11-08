@@ -1,5 +1,6 @@
 package anyparse.check.common.imports;
 
+import anyparse.check.Check.ScopeDependent;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
@@ -118,7 +119,7 @@ private typedef ImportEvidence = {
  * and a deletion inside a conditional region would be unsafe).
  */
 @:nullSafety(Strict)
-final class UnusedImport extends RuleBase {
+final class UnusedImport extends RuleBase implements ScopeDependent {
 
 	/**
 	 * The half of a `not in lint scope` message that is the GUARD's sentence rather than the

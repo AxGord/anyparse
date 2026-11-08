@@ -1,6 +1,10 @@
 package unit.dev;
 
+import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueParser;
+import anyparse.util.Compare;
 import dev.LintScope;
+import devkit.RawJson;
 import utest.Assert;
 import utest.Test;
 
@@ -57,23 +61,29 @@ final class LintScopeTest extends Test {
 		]) Assert.isNull(LintScope.ofChange(['test/unit/dev/ATest.hx', path], filesIn, below), path);
 	}
 
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-KEEPS-UNMARKED-RULE')
 	public function testTheCarriedReportKeepsTheBasesFindingsOfTheFilesOutsideTheScope(): Void {
 		final base: String = report([['a.hx', 'old'], ['b.hx', 'kept'], ['gone.hx', 'dropped']]);
-		final carried: Null<String> = LintScope.carried(base, report([['a.hx', 'new']]), ['a.hx'], file -> file != 'gone.hx');
-		Assert.same([], LintScope.moved(carried ?? '', report([['b.hx', 'kept'], ['a.hx', 'new']])));
+		final carried: Null<String> = LintScope.carried(base, report([['a.hx', 'new']]), ['a.hx'], file -> file != 'gone.hx', []);
+		Assert.same(findings(report([['b.hx', 'kept'], ['a.hx', 'new']])), findings(carried ?? ''));
 	}
 
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-LOSES-FAILED-LINT')
 	public function testAFreshLintThatPrintedNoReportIsAnsweredAsItIs(): Void {
-		Assert.equals('boom', LintScope.carried(report([]), 'boom', ['a.hx'], _ -> true));
-		Assert.isNull(LintScope.carried('boom', report([]), ['a.hx'], _ -> true));
+		Assert.equals('boom', LintScope.carried(report([]), 'boom', ['a.hx'], _ -> true, []));
+		Assert.isNull(LintScope.carried('boom', report([]), ['a.hx'], _ -> true, []));
 	}
 
 	@:pin('guard')
 	public function testAWholeTreeLintIsKeptAsItIs(): Void {
-		Assert.equals(report([['a.hx', 'r']]), LintScope.whole(null, ['a.hx'], report([['a.hx', 'r']]), _ -> true));
-		Assert.equals(report([['a.hx', 'r']]), LintScope.whole('base.json', null, report([['a.hx', 'r']]), _ -> true));
+		Assert.equals(
+			report([['a.hx', 'r']]), LintScope.whole(null, ['a.hx'], report([['a.hx', 'r']]), _ -> true, () -> 'not asked').report
+		);
+		Assert.equals(
+			report([['a.hx', 'r']]), LintScope.whole('base.json', null, report([['a.hx', 'r']]), _ -> true, () -> 'not asked').report
+		);
 	}
 
 	@:pin('guard')
@@ -91,16 +101,21 @@ final class LintScopeTest extends Test {
 
 	@:pin('guard')
 	public function testTheBackstopNamesAFindingThatMovedOutsideTheScope(): Void {
-		final recorded: String = report([['a.hx', 'r'], ['b.hx', 'unused-import']]);
-		Assert.isNull(LintScope.backstop(recorded, report([['b.hx', 'unused-import'], ['a.hx', 'r']])));
-		final refusal: String = LintScope.backstop(recorded, report([['a.hx', 'r'], ['c.hx', 'doc-length']])) ?? '';
-		Assert.isTrue(refusal.contains('- b.hx unused-import'), refusal);
-		Assert.isTrue(refusal.contains('+ c.hx doc-length'), refusal);
-	}
-
-	@:pin('guard')
-	public function testASecondFindingOfTheSameRecordIsAMovement(): Void {
-		Assert.same(['+ a.hx r'], LintScope.moved(report([['a.hx', 'r']]), report([['a.hx', 'r'], ['a.hx', 'r']])));
+		Assert.isNull(LintScope.backstop({
+			added: 0,
+			removed: 0,
+			first: '',
+			rows: []
+		}));
+		final refusal: String = LintScope.backstop({
+			added: 1,
+			removed: 1,
+			first: '+ c.hx  doc-length  m',
+			rows: ['+ c.hx  doc-length  m', '- b.hx  unused-import  m']
+		}) ?? '';
+		Assert.isTrue(refusal.contains('moved 2 finding'), refusal);
+		Assert.isTrue(refusal.contains('- b.hx  unused-import'), refusal);
+		Assert.isTrue(refusal.contains('+ c.hx  doc-length'), refusal);
 	}
 
 	@:pin('guard')
@@ -111,6 +126,96 @@ final class LintScopeTest extends Test {
 		Assert.contains('test/unit/import.hx', scope);
 		Assert.contains('test/import.hx', scope);
 		Assert.notContains('test/RunTests.hx', scope);
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-DROPS-NARROW-RULE')
+	public function testAScopeDependentRuleKeepsTheBasesFindingsOfARelintedFile(): Void {
+		final base: String = report([['a.hx', 'blind'], ['a.hx', 'plain'], ['b.hx', 'plain']]);
+		final carried: Null<String> = LintScope.carried(base, report([['a.hx', 'plain']]), ['a.hx'], _ -> true, ['blind']);
+		Assert.same(findings(base), findings(carried ?? ''));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-KEEPS-UNMARKED-RULE')
+	public function testAnUnmarkedRuleOfARelintedFileIsStillReplaced(): Void {
+		final carried: Null<String> = LintScope.carried(
+			report([['a.hx', 'plain'], ['a.hx', 'blind']]), report([['a.hx', 'other']]), ['a.hx'], _ -> true, ['blind']
+		);
+		Assert.same(findings(report([['a.hx', 'blind'], ['a.hx', 'other']])), findings(carried ?? ''));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-KEEPS-DELETED-FILE')
+	public function testADeletedFileLosesItsScopeDependentFindings(): Void {
+		final carried: Null<String> = LintScope.carried(report([['gone.hx', 'blind']]), report([]), ['gone.hx'], _ -> false, ['blind']);
+		Assert.same([], findings(carried ?? ''));
+	}
+
+	/** The shape of the land the backstop refused: the scoped lint is blind to a marked rule's findings in files it re-lints. */
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-DROPS-NARROW-RULE')
+	public function testAReportCarriedOverAScopeBlindRuleHoldsTheWholeLintsFindings(): Void {
+		final truth: String = report([
+			['t.hx', 'unused-return-value'],
+			['t.hx', 'naming'],
+			['import.hx', 'hoist-common-import'],
+			['u.hx', 'naming']
+		]);
+		final carried: Null<String> = LintScope.carried(
+			truth, report([['t.hx', 'naming']]), ['t.hx', 'import.hx'], _ -> true, ['unused-return-value', 'hoist-common-import']
+		);
+		Assert.same(findings(truth), findings(carried ?? ''));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-LISTING-IGNORES-MARKER')
+	public function testTheScopeDependentRulesAreReadFromTheEnginesListing(): Void {
+		final listing: String = '[{"id":"a","scopeDependent":true},{"id":"b","scopeDependent":false},{"id":"c"}]';
+		Assert.same(['a'], LintScope.scopeDependent(listing));
+		Assert.isNull(LintScope.scopeDependent('no listing'));
+	}
+
+	@:pin('guard')
+	public function testAScopedRunThatCannotReadTheListingSaysSo(): Void {
+		final refused: WholeReport = LintScope.whole('base.json', ['a.hx'], report([]), _ -> true, () -> 'boom');
+		Assert.isNull(refused.report);
+		Assert.isTrue(refused.why?.contains('rule listing') ?? false);
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIED-DOUBLES-NARROW-RULE')
+	public function testAScopeDependentRulesFreshFindingDoesNotDoubleTheBases(): Void {
+		final base: String = report([['a.hx', 'blind']]);
+		final carried: Null<String> = LintScope.carried(base, report([['a.hx', 'blind']]), ['a.hx'], _ -> true, ['blind']);
+		Assert.same(findings(base), findings(carried ?? ''));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-JUDGED-KEEPS-CARRIED')
+	public function testTheJudgedReportLeavesOutACarriedRuleOnARelintedFile(): Void {
+		Assert.same(
+			findings(report([['b.hx', 'blind']])),
+			findings(LintScope.judged(report([['a.hx', 'blind'], ['b.hx', 'blind']]), ['a.hx'], ['blind']))
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-JUDGED-DROPS-UNMARKED-RULE')
+	public function testTheJudgedReportKeepsAnUnmarkedRuleOnARelintedFile(): Void {
+		Assert.same(findings(report([['a.hx', 'plain']])), findings(LintScope.judged(report([['a.hx', 'plain']]), ['a.hx'], ['blind'])));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-JUDGED-DROPS-OUTSIDE-SCOPE')
+	public function testTheJudgedReportKeepsACarriedRuleOutsideTheScope(): Void {
+		Assert.same(findings(report([['b.hx', 'blind']])), findings(LintScope.judged(report([['b.hx', 'blind']]), ['a.hx'], ['blind'])));
+	}
+
+	@:pin('control')
+	@:killer('M-LINTSCOPE-JUDGED-BLANKS-MALFORMED')
+	public function testAJudgedTextThatIsNoReportIsLeftAsItIs(): Void {
+		Assert.equals('boom', LintScope.judged('boom', ['a.hx'], ['blind']));
 	}
 
 	private static function filesIn(dir: String): Array<String> {
@@ -125,6 +230,19 @@ final class LintScopeTest extends Test {
 		return [
 			for (folder => files in TREE) if (folder == dir || folder.startsWith('$dir/')) for (file in files) file
 		];
+	}
+
+	/**
+	 * The `<file> <rule>` of each finding of report `text`, sorted.
+	 */
+	private static function findings(text: String): Array<String> {
+		final records: Array<JValue> = switch JValueParser.parse(text) {
+			case JArray(items): items;
+			case _: [];
+		}
+		final rows: Array<String> = records.map(record -> '${RawJson.stringAt(record, 'file')} ${RawJson.stringAt(record, 'rule')}');
+		rows.sort(Compare.compareString);
+		return rows;
 	}
 
 }

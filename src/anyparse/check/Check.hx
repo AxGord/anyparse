@@ -798,12 +798,22 @@ interface VolatileMessage {
  * clone was reported at all. `setReportable` hands the check the linter's per-file answer before each run (null:
  * every file reports), and the check anchors at an occurrence it holds true for.
  */
-interface CrossFileAnchored {
+interface CrossFileAnchored extends ScopeDependent {
 
 	/** Whether a finding in a file survives the run's per-file gates, or null when every file's does. */
 	function setReportable(reportable: Null<(String) -> Bool>): Void;
 
 }
+
+/**
+ * A check whose findings in one file depend on which OTHER files the run reports over: a narrower run answers differently
+ * for a file it does cover — it resolves less (a call into a type outside the report), counts less (the modules an ambient
+ * import governs) or anchors elsewhere (a clone spread over several files).
+ *
+ * `dev.LintScope` keeps the base's findings of such a rule for a re-linted file rather than replacing them with the narrower
+ * answer of a scoped lint; a tool learns these rules from the `scopeDependent` field of `apq lint --list-rules --format json`.
+ */
+interface ScopeDependent {}
 
 /**
  * A check whose finding on a declaration REPLACES another rule's finding on that same declaration: the two rules
