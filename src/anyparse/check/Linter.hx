@@ -218,6 +218,7 @@ import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.SubstrNegativeStart;
 import anyparse.check.haxe.literals.PreferInterpolation;
 import anyparse.check.haxe.literals.PreferLpad;
+import anyparse.check.haxe.literals.TrigraphInString;
 import anyparse.check.haxe.loops.PreferCount;
 import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
@@ -391,6 +392,7 @@ final class Linter {
 			// ever claimed twice.
 			new JoinSingleUseLocal(),
 			new PreferSingleQuotes(),
+			new TrigraphInString(),
 			new SimplifyBooleanTernary(),
 			// Registered after `double-negation`, and THAT ordering is load-bearing: on
 			// `!(!(!x) || q)` the two rules claim distinct but NESTED nodes; the earlier

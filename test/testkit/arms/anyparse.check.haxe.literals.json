@@ -88,6 +88,13 @@
 			"find": "r -> isCoreDeclaration(r, shape)",
 			"replace": "_ -> true",
 			"note": "a basic type name passes by its spelling, whatever declaration it binds to there"
+		},
+		{
+			"name": "M-TRIGRAPH-BARE-ALWAYS",
+			"type": "anyparse.check.haxe.literals.TrigraphInString",
+			"method": "bindsNothingAround",
+			"force": "true",
+			"note": "every slot reads as binding nothing, so a cut literal under a member access or a comparison loses its parentheses and changes meaning"
 		}
 	]
 }

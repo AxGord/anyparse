@@ -37,6 +37,7 @@
             "guardArgument": "guard",
             "killerMeta": "@:killer",
             "armRegistry": "testkit/arms"
-        }
+        },
+        "trigraph-in-string": false
     }
 }

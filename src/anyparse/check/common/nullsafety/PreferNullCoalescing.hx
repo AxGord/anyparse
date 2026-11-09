@@ -140,7 +140,7 @@ final class PreferNullCoalescing extends RuleBase implements RiskyFix implements
 					severity: Severity.Info,
 					message: m.fallback.kind == seams.nullKind
 						? 'this null-guard ternary falls back to null, so it is just its guarded value'
-						: 'this null-guard ternary can be the null-coalescing operator (??)'
+						: ('this null-guard ternary can be the null-coalescing operator (?' + '?)')
 				});
 				return;
 			}

@@ -2448,6 +2448,13 @@
 			"find": "leadText == _formatInfo.keyValueSep && !isTightLead(leadText)",
 			"replace": "leadText == _formatInfo.keyValueSep",
 			"note": "a lead the format declares tight takes the keyValueSpace space, so a knob-less `:` in Haxe prints `a: Int` when the option is on"
+		},
+		{
+			"name": "M-TRIGRAPH-CUT-NONE",
+			"type": "anyparse.macro.CppLiteralGuard",
+			"method": "cutTrigraphs",
+			"force": "[s]",
+			"note": "a trigraph-bearing literal is not cut, so the rewrite writes it back as one literal that hxcpp compiles to other bytes"
 		}
 	]
 }

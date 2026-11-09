@@ -47,9 +47,28 @@ final class CppLiteralGuard {
 
 	/** Whether `s` holds a `??` followed by a trigraph tail. */
 	public static function hasTrigraph(s: String): Bool {
-		for (i in 0...s.length - 2) if (s.charAt(i) == '?' && s.charAt(i + 1) == '?' && TRIGRAPH_TAILS.indexOf(s.charAt(i + 2)) >= 0)
-			return true;
+		for (i in 0...s.length - 2) if (trigraphAt(s, i)) return true;
 		return false;
+	}
+
+	/**
+	 * `s` cut between the two question marks of every trigraph, so no piece holds one and a C++ compiler reads each as its
+	 * own literal: `a??)b` becomes `a?` and `?)b`. One piece when `s` holds none.
+	 */
+	public static function cutTrigraphs(s: String): Array<String> {
+		final pieces: Array<String> = [];
+		var from: Int = 0;
+		for (i in 0...s.length - 2) if (trigraphAt(s, i)) {
+			pieces.push(s.substring(from, i + 1));
+			from = i + 1;
+		}
+		pieces.push(s.substring(from));
+		return pieces;
+	}
+
+	/** Whether `left` immediately followed by `right` forms a trigraph across their seam, which each alone does not hold there. */
+	public static function joinsTrigraph(left: String, right: String): Bool {
+		return hasTrigraph(left.substr(-2) + right.substr(0, 2));
 	}
 
 	/**
@@ -86,6 +105,10 @@ final class CppLiteralGuard {
 		return fields;
 	}
 	#end
+
+	private static function trigraphAt(s: String, i: Int): Bool {
+		return s.charAt(i) == '?' && s.charAt(i + 1) == '?' && TRIGRAPH_TAILS.indexOf(s.charAt(i + 2)) >= 0;
+	}
 
 	private static function rewrite(e: Expr, stranded: Array<Expr>): Expr {
 		return switch e.expr {

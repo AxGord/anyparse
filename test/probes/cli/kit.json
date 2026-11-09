@@ -8350,7 +8350,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "5f11c91ae71527ee",
+				"out": "bb3ef78043a787ed",
 				"err": "b16af8623e04073d",
 				"files": "e3b0c44298fc1c14"
 			}

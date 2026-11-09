@@ -188,6 +188,20 @@
 			"find": "return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;",
 			"replace": "return statementScope != null ? statementScope : memberScope;",
 			"note": "a body statement stands in for its member without the evidence that the member renders it as it renders alone, and a function literal's body the source under-indents is measured a tab narrow"
+		},
+		{
+			"name": "M-FOLD-TRIGRAPH-SEAM-OPEN",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "joinsTrigraph",
+			"force": "false",
+			"note": "the fold merges the two cut halves of a trigraph back into one literal, undoing trigraph-in-string"
+		},
+		{
+			"name": "M-TRIGRAPH-CONSTANT-READ-NONE",
+			"type": "anyparse.check.common.literals.ConstantReadSlots",
+			"method": "of",
+			"force": "[for (_ in node.children) { declaration: true, constant: false, constantMembers: false }]",
+			"note": "no declaration reads as a constant, so a trigraph in an inline field or an enum-abstract value is fixed into a concatenation that no longer compiles as a constant"
 		}
 	]
 }

@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "a286a9b0677a6f5f",
+				"err": "9b18b37debee7eae",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1397,6 +1397,96 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "416eaa080dfacf95",
 				"files": "9bf3ed3c17af65dc",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "TG1",
+			"note": "a trigraph in an inline field and an enum-abstract value is a constant the compiler reads: reported, with no edit offered",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"trigraph-in-string",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic inline final INL:String = 'a??=';\n\n\tstatic function f(s:String):Int {\n\t\treturn switch s {\n\t\t\tcase INL: 1;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n\n\tstatic function g(e:E):Int {\n\t\treturn switch e {\n\t\t\tcase A: 1;\n\t\t\tcase B: 2;\n\t\t}\n\t}\n\n\tstatic function main() {\n\t\tSys.println(f('a' + String.fromCharCode(63) + '?=') + g(A));\n\t}\n}\n\nenum abstract E(String) {\n\tvar A = 'b??=';\n\tvar B = 'c';\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "3d081d8273d5702b",
+				"err": "3573bf1aa2313e83",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "TG2",
+			"note": "a trigraph in a plain field and in an expression is cut into a concatenation that prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"trigraph-in-string",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic final PLAIN:String = 'a??=';\n\n\tstatic function main() {\n\t\tfinal n = 'x??)'.length;\n\t\tSys.println(PLAIN + n);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "068ca8d4fa11f58f",
+				"files": "d1a1f14b01881505",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "TG3",
+			"note": "hxcpp compiles Haxe only: a JSON document holding a trigraph draws no finding",
+			"argv": [
+				"hxq",
+				"lint",
+				"doc.json",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tSys.println('ok');\n\t}\n}\n",
+				"doc.json": "{\"a\": \"??)\"}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fbbbe43aac9861ec",
+				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					true,
 					true

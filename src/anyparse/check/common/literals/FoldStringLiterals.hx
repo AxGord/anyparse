@@ -1,13 +1,14 @@
 package anyparse.check.common.literals;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.common.literals.ConstantReadSlots.ChildSlot;
 import anyparse.check.common.literals.MacroGate.CallRef;
 import anyparse.check.common.literals.MacroGate.MacroIndex;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperatorSelection;
+import anyparse.macro.CppLiteralGuard;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.LexicalRegions;
-import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.SymbolIndex;
@@ -448,34 +449,10 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	private static function walkChildren(
 		out: Array<PlannedFold>, ctx: PlanContext, gate: MacroGate, calls: Array<CallRef>, node: QueryNode, constantMembers: Bool
 	): Void {
-		final seams: Seams = ctx.seams;
-		final metaName: Null<String> = seams.enumAbstractMetaName;
-		var runInline: Bool = false;
-		var runEnumMeta: Bool = false;
-		for (c in node.children) {
-			if (seams.modifierKinds.contains(c.kind)) {
-				if (c.kind == seams.inlineKind) runInline = true;
-				continue;
-			}
-			if (seams.metaKinds.contains(c.kind)) {
-				if (metaName != null && c.name == metaName) runEnumMeta = true;
-				continue;
-			}
-			// EVERY other child ends the run — a member, a nested type, a statement. Ending it
-			// only at a MEMBER left `@:enum abstract E {…}` marking every LATER declaration in
-			// the module as an enum abstract, since a type declaration is not a member kind.
-			final fn: Bool = seams.functionKinds.contains(c.kind);
-			final value: Bool = constantMembers && !fn && MemberKinds.isMemberDeclKind(c.kind);
-			// `runInline` is not asked whether the declaration is a MEMBER: a module-level
-			// `inline final S = …` projects as a top-level declaration, and its value is the
-			// same compile-time constant a `case` pattern reads the shape of.
-			if (!(value || (runInline && !fn)))
-				walk(
-					out, ctx, gate, calls, c,
-					c.kind == seams.enumAbstractDeclKind || runEnumMeta || (constantMembers && c.kind == seams.conditionalKind)
-				);
-			runInline = false;
-			runEnumMeta = false;
+		final slots: Array<ChildSlot> = ConstantReadSlots.of(node, constantMembers, ctx.seams);
+		for (i => c in node.children) {
+			final slot: ChildSlot = slots[i];
+			if (slot.declaration && !slot.constant) walk(out, ctx, gate, calls, c, slot.constantMembers);
 		}
 	}
 
@@ -960,8 +937,9 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			var last: Int = i + 1;
 			var j: Int = i + 1;
 			// A locked boundary at `j` means segment `j` may not join what precedes it: taking
-			// it in would swallow the comment sitting in that gap.
-			while (j < count && !locked.contains(j)) {
+			// it in would swallow the comment sitting in that gap. A trigraph seam is locked the
+			// same way: one literal there would hold bytes a C++ compiler rewrites.
+			while (j < count && !locked.contains(j) && !joinsTrigraph(segments, i, j)) {
 				final candidate: Null<String> = renderRange(ctx, segments, i, j + 1);
 				if (candidate == null || candidate.length > budget) break;
 				last = j + 1;
@@ -1264,6 +1242,29 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			candidateKinds: [concatKind].concat(stringLiteralKinds).concat(shape.condOperandRunKinds ?? []),
 			blockBodyKind: shape.blockBodyKind
 		};
+	}
+
+	/**
+	 * Whether the group gathered from `from` up to `j - 1`, followed by text segment `j`, would
+	 * form a C++ trigraph across the seam a merge removes. The tail is read across segments, so
+	 * a one-character middle segment does not hide it (`trigraph-in-string` writes the cut).
+	 */
+	private static function joinsTrigraph(segments: Array<ConcatSegment>, from: Int, j: Int): Bool {
+		var tail: String = '';
+		var k: Int = j - 1;
+		while (k >= from && tail.length < 2) {
+			switch segments[k] {
+				case SegText(_, raw):
+					tail = raw + tail;
+				case _:
+					break;
+			}
+			k--;
+		}
+		return switch segments[j] {
+			case SegText(_, right): CppLiteralGuard.joinsTrigraph(tail, right);
+			case _: false;
+		}
 	}
 
 }
