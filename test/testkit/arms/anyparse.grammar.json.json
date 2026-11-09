@@ -135,7 +135,7 @@
 			"method": "isCompact",
 			"find": "return options == JsonFormat.instance.compactWriteOptions;",
 			"replace": "return false;",
-			"note": "the compact options go to the Doc writer, which spells a space after every comma"
+			"note": "the compact options go to the Doc writer, which does not keep a lone surrogate's escape"
 		},
 		{
 			"name": "M-JVALUE-AT-LOOSE-INDEX",

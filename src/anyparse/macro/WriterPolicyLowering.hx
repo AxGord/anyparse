@@ -552,7 +552,9 @@ final class WriterPolicyLowering {
 	 * site and sibling leads on the same struct are unaffected. `typeParamDefaultEquals` still arrives by name
 	 * from the optional non-tight branch of `emitOptionalRefLead`.
 	 */
-	private static function whitespacePolicyLead(child: ShapeNode, leadText: String, knob: Null<String>, addBefore: Bool = false): Expr {
+	private static function whitespacePolicyLead(
+		child: ShapeNode, leadText: String, knob: Null<String>, addBefore: Bool = false, isKeyValueLead: Bool = false
+	): Expr {
 		// Opt-in `@:fmt(spaceAfterLead)` on a struct-
 		// field mandatory `@:lead(LIT)` appends an OptSpace after the
 		// lead literal — mirror of the enum-ctor `spaceAfterLead`
@@ -584,6 +586,8 @@ final class WriterPolicyLowering {
 			], macro _dt($v{leadText}))
 		else if (child.fmtHasFlag('spaceAfterLead'))
 			macro _dc([_dt($v{leadText}), _dop(' ')])
+		else if (isKeyValueLead)
+			keyValueSepDoc(leadText)
 		else
 			macro _dt($v{leadText});
 	}
@@ -820,6 +824,15 @@ final class WriterPolicyLowering {
 		Context.fatalError(
 			'@:fmt(space) takes an option name and one of the sides ${SPACE_SIDES.join(', ')}: got ($got)', Context.currentPos()
 		);
+	}
+
+	/**
+	 * The one answer to "how does a generated writer space a key-value separator": `text` ends in the format's
+	 * `keyValueSep`, and the option decides whether one space follows it. A plain `Text` so the key and the separator stay
+	 * one run, and the value owns any break that follows.
+	 */
+	private static function keyValueSepDoc(text: String): Expr {
+		return macro _dt(opt.keyValueSpace ? $v{text + ' '} : $v{text});
 	}
 
 }

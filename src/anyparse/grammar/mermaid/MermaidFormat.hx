@@ -74,6 +74,7 @@ final class MermaidFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: true,
 		keyValueSpace: false,
+		entrySpace: true,
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: 1,
 		commentStyle: Verbatim,

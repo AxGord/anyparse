@@ -52,6 +52,7 @@ final class MiniBlockStrictFormat {
 		lineEnd: '\n',
 		finalNewline: false,
 		keyValueSpace: false,
+		entrySpace: true,
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,

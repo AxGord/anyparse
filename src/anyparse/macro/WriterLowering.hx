@@ -343,6 +343,7 @@ class WriterLowering {
 			bodyPolicy: _bodyPolicy,
 			braceSym: _braceSym,
 			isTightLead: isTightLead,
+			isKeyValueLead: isKeyValueLead,
 			isTriviaBearing: isTriviaBearing,
 			writeFnFor: writeFnFor
 		};
@@ -821,7 +822,7 @@ class WriterLowering {
 			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
 			final keyPrefix: String = '"${child.wireKey(fieldName)}"$keyValueSep';
-			final keyDoc: Expr = macro _dt(opt.keyValueSpace ? $v{keyPrefix + ' '} : $v{keyPrefix});
+			final keyDoc: Expr = keyValueSepDoc(keyPrefix);
 			if (isOptional) {
 				// Strict null safety does not narrow field reads — capture into
 				// a non-null local before handing off to the per-kind writer.
@@ -1520,6 +1521,11 @@ class WriterLowering {
 	 */
 	private function isTightLead(leadText: Null<String>): Bool {
 		return leadText != null && _formatInfo.tightLeads.indexOf(leadText) != -1;
+	}
+
+	/** Whether `leadText` is the format's key-value separator: a lead `keyValueSpace` decides the space after. */
+	private function isKeyValueLead(leadText: Null<String>): Bool {
+		return leadText != null && leadText == _formatInfo.keyValueSep && !isTightLead(leadText);
 	}
 
 	// -------- trivia-mode helpers (ω₅) --------

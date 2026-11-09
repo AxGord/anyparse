@@ -1698,7 +1698,7 @@
 			"name": "M-KEY-VALUE-SPACE-IGNORED",
 			"type": "anyparse.macro.WriterLowering",
 			"method": "lowerStructByName",
-			"find": "final keyDoc: Expr = macro _dt(opt.keyValueSpace ? $v{keyPrefix + ' '} : $v{keyPrefix});",
+			"find": "final keyDoc: Expr = keyValueSepDoc(keyPrefix);",
 			"replace": "final keyDoc: Expr = macro _dt($v{keyPrefix});",
 			"note": "a by-name entry is written tight under `keyValueSpace`, so the expanded layout loses the space after each colon"
 		},
@@ -2376,6 +2376,30 @@
 			"find": "macro $isNoWrap && !opt._inTypedefBody",
 			"replace": "isNoWrap",
 			"note": "a typedef body under an explicit anonType noWrap collapses, a move owned by the typedef-RHS slice"
+		},
+		{
+			"name": "M-KEY-VALUE-LEAD-TIGHT",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "whitespacePolicyLead",
+			"find": "else if (isKeyValueLead)",
+			"replace": "else if (false)",
+			"note": "a key-value lead on a field stays tight under `keyValueSpace`, so an expanded JSON object loses the space after each colon"
+		},
+		{
+			"name": "M-SEP-LIST-ALWAYS-SPACED",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "sepListField",
+			"find": "opt.entrySpace ? _dl() : _dsl()",
+			"replace": "_dl()",
+			"note": "a separated list keeps its space on one line whatever `entrySpace` says, so a compact JSON array prints `[1, 2]`"
+		},
+		{
+			"name": "M-KEY-VALUE-LEAD-IGNORES-TIGHT",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "isKeyValueLead",
+			"find": "leadText == _formatInfo.keyValueSep && !isTightLead(leadText)",
+			"replace": "leadText == _formatInfo.keyValueSep",
+			"note": "a lead the format declares tight takes the keyValueSpace space, so a knob-less `:` in Haxe prints `a: Int` when the option is on"
 		}
 	]
 }

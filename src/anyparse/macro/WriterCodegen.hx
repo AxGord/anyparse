@@ -492,7 +492,7 @@ class WriterCodegen {
 			while (_i < items.length) {
 				if (_i > 0) {
 					_inner.push(_dt(sep));
-					_inner.push(_dl());
+					_inner.push(opt.entrySpace ? _dl() : _dsl());
 				}
 				_inner.push(items[_i]);
 				_i++;

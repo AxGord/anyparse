@@ -74,6 +74,7 @@ final class SExprFormat implements TextFormat {
 		lineEnd: '\n',
 		finalNewline: false,
 		keyValueSpace: false,
+		entrySpace: true,
 		trailingWhitespace: false,
 		maxConsecutiveBlanks: -1,
 		commentStyle: Verbatim,

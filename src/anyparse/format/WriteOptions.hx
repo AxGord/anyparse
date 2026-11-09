@@ -64,6 +64,14 @@ typedef WriteOptions = {
 	keyValueSpace: Bool,
 
 	/**
+	 * When `true`, a `sepList` list laid out on one line is written with one space after its separator (`[1, 2]`); when
+	 * `false`, tight (`[1,2]`). A broken list ends the line at the separator either way, so the knob reaches only the
+	 * flat layout. A `fillList` list is outside it and keeps its space. Writer-only, as `keyValueSpace` is: the space is
+	 * whitespace the format already skips.
+	 */
+	entrySpace: Bool,
+
+	/**
 	 * When `true`, blank lines between content carry the surrounding
 	 * block's indent rather than rendering bare. Opt-in gate on top of
 	 * the renderer's default deferred-indent, which silently drops

@@ -24,6 +24,7 @@ class OptionsRecordTest extends Test {
 		public var lineEnd: String = '\\n';
 		public var finalNewline: Bool = true;
 		public var keyValueSpace: Bool = false;
+		public var entrySpace: Bool = true;
 		public var trailingWhitespace: Bool = false;
 		public var commentStyle: anyparse.format.CommentStyle = Verbatim;
 		public var addLineCommentSpace: Bool = true;

@@ -75,6 +75,7 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A lone surrogate reads as the code unit it escapes and is written escaped again. */
+	@:pin('control') @:killer('M-NATIVE-COMPACT-NEVER')
 	public function testALoneSurrogateKeepsItsEscape(): Void {
 		final text: String = GOOD.replace('"name":"a"', '"name":"\\ud800"');
 		final read: DoorRecord = DoorRecordParser.parse(text);
@@ -107,7 +108,7 @@ class NativeDoorTest extends Test {
 	}
 
 	/** The compact options write the record with no whitespace, its keys in the schema's order and an absent one left out. */
-	@:pin('control') @:killer('M-NATIVE-COMPACT-NEVER')
+	@:pin('guard')
 	public function testTheCompactWriterSpellsTheRecord(): Void {
 		Assert.equals(
 			'{"name":"a","size":1,"ratio":1.5,"on":true,"function":"f","points":[1,2],"rows":[["x"],[]],"holes":["h",null],'
@@ -149,10 +150,13 @@ class NativeDoorTest extends Test {
 		Assert.equals(compact(held), direct(held));
 	}
 
-	/** A raw part keeps the Doc writer for the compact options too: its arrays are spaced as the Doc writer spaces them. */
+	/** A raw part keeps the Doc writer for the compact options too, and that writer prints those options' bytes: no space in a list. */
 	public function testARawPartKeepsTheDocWriter(): Void {
 		final record: DoorRawPart = { id: 'a', raw: JArray([JBool(true), JNull]), tuples: [[JBool(false), JNull]] };
-		Assert.stringContains('[true, null]', DoorRawPartWriter.write(record, JsonFormat.instance.compactWriteOptions));
+		Assert.equals(
+			'{"id":"a","raw":[true,null],"tuples":[[false,null]]}',
+			DoorRawPartWriter.write(record, JsonFormat.instance.compactWriteOptions)
+		);
 	}
 
 	/**
@@ -194,8 +198,8 @@ class NativeDoorTest extends Test {
 		return try {
 			parse();
 			'';
-		} catch (error: ParseError) {
-			error.toString();
+		} catch (exception: ParseError) {
+			exception.toString();
 		}
 	}
 

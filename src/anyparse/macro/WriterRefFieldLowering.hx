@@ -1813,7 +1813,7 @@ final class WriterRefFieldLowering {
 		// literal (`{x /* c */ : 1}`), ahead of the lead's own spacing.
 		final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, isFirstField, fieldAccess, typePath);
 		if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
-		emitMandatoryLead(child, parts, leadText, fieldAccess);
+		emitMandatoryLead(child, parts, leadText, fieldAccess, ctx.isKeyValueLead(leadText));
 		final afterLead: Null<Expr> = afterLeadSlotAccess(ctx, child, fieldAccess, typePath);
 		if (afterLead != null) parts.push(afterLeadDoc(afterLead));
 	}
@@ -1957,6 +1957,7 @@ typedef RefFieldCtx = {
 	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
 	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
 	final isTightLead: (leadText:Null<String>) -> Bool;
+	final isKeyValueLead: (leadText:Null<String>) -> Bool;
 	final isTriviaBearing: (refName:String) -> Bool;
 	final writeFnFor: (refName:String) -> String;
 }

@@ -43,7 +43,9 @@ final class WriterRefLeadLowering {
 	 * runtime `opt._intersectionOperandBreak` decision. Pushes onto `parts`.
 	 *
 	 */
-	private static function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String, fieldAccess: Expr): Void {
+	private static function emitMandatoryLead(
+		child: ShapeNode, parts: Array<Expr>, leadText: String, fieldAccess: Expr, isKeyValueLead: Bool
+	): Void {
 		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
 		// (`@:lead('&') @:fmt(space(…), typedefIntersectionBreak)`)
 		// makes the `&`→operand whitespace a runtime decision. When the
@@ -60,7 +62,7 @@ final class WriterRefLeadLowering {
 		// identical to the pre-slice layout.
 		final knob: Null<String> = spaceKnob(child, 'lead');
 		final leadDoc: Expr = if (child.fmtHasFlag('typedefIntersectionBreak')) {
-			final gluedLead: Expr = whitespacePolicyLead(child, leadText, knob);
+			final gluedLead: Expr = whitespacePolicyLead(child, leadText, knob, false, isKeyValueLead);
 			macro opt._intersectionOperandBreak
 				? _dc([
 					_dt($v{leadText}),
@@ -68,7 +70,7 @@ final class WriterRefLeadLowering {
 				])
 				: $gluedLead;
 		} else {
-			whitespacePolicyLead(child, leadText, knob);
+			whitespacePolicyLead(child, leadText, knob, false, isKeyValueLead);
 		};
 		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
 		// is on and the subject is not a leading-brace expr (object literal / block

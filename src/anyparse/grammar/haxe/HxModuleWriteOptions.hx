@@ -76,6 +76,7 @@ final class HxModuleWriteOptions {
 	public var lineEnd: String = '\n';
 	public var finalNewline: Bool = true;
 	public var keyValueSpace: Bool = false;
+	public var entrySpace: Bool = true;
 	public var trailingWhitespace: Bool = false;
 	public var commentStyle: CommentStyle = CommentStyle.Verbatim;
 	public var addLineCommentSpace: Bool = true;

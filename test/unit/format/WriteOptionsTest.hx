@@ -39,6 +39,7 @@ class WriteOptionsTest extends Test {
 			lineEnd: '\n',
 			finalNewline: false,
 			keyValueSpace: false,
+			entrySpace: true,
 			trailingWhitespace: false,
 			maxConsecutiveBlanks: -1,
 			commentStyle: Verbatim,
@@ -79,6 +80,15 @@ class WriteOptionsTest extends Test {
 		Assert.equals(4, defaults.tabWidth);
 		Assert.equals(160, defaults.lineWidth);
 		Assert.isTrue(defaults.finalNewline);
+	}
+
+	/** A lead the format declares tight stays tight under `keyValueSpace`, though it is the format's key-value separator. */
+	@:pin('control') @:killer('M-KEY-VALUE-LEAD-IGNORES-TIGHT')
+	public function testADeclaredTightLeadIgnoresKeyValueSpace(): Void {
+		final options: HxModuleWriteOptions = new HxModuleWriteOptions();
+		options.keyValueSpace = true;
+		final ast: HxModule = HaxeModuleParser.parse('class C { var f: (a: Int) -> Void; }');
+		Assert.stringContains('(a:Int)', HxModuleWriter.write(ast, options));
 	}
 
 }
