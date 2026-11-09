@@ -20,28 +20,28 @@ import anyparse.query.SymbolIndex;
  */
 class PreferStaticExtensionCheckTest extends Test {
 
-	/** The project-local static-utility fixture the receiver / arity gates resolve through. */
-	private static inline final EXT_SOURCE: String =
-		'class Ext {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n\n\tpublic static function pad(w: Widget, a: Int, b: Int): Widget return w;\n\n\tpublic static function tag(w: Widget, s: String): Widget return w;\n\n\tpublic static function now(): Int return 0;\n}\n';
-
 	/** A `Widget` with no members of its own — every extension name is provably absent from it. */
 	private static inline final WIDGET_SOURCE: String = 'class Widget {}\n';
 
+	/** The project-local static-utility fixture the receiver / arity gates resolve through. */
+	private static final EXT_SOURCE: String = 'class Ext {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n\n'
+		+ '\tpublic static function pad(w: Widget, a: Int, b: Int): Widget return w;\n\n'
+		+ '\tpublic static function tag(w: Widget, s: String): Widget return w;\n\n\tpublic static function now(): Int return 0;\n}\n';
+
 	/** The default injected config: `Ext` is the one static-extension module. */
-	private static inline final EXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"]}}}';
+	private static final EXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"]}}}';
 
 	/** The `StringTools`-only config, for the known-extension-table gate. */
-	private static inline final STRINGTOOLS_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StringTools"]}}}';
+	private static final STRINGTOOLS_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StringTools"]}}}';
 
 	/** A config declaring no rule options at all — the `types` / `addUsing` defaults then apply. */
-	private static inline final EMPTY_CONFIG: String = '{"rules": {}}';
+	private static final EMPTY_CONFIG: String = '{"rules": {}}';
 
 	/** A `String`-receiver static utility, for the tabled-static-call iterable fixtures. */
-	private static inline final STREXT_SOURCE: String =
-		'class StrExt {\n\tpublic static function deco(s: String, n: Int): String return s;\n}\n';
+	private static final STREXT_SOURCE: String = 'class StrExt {\n\tpublic static function deco(s: String, n: Int): String return s;\n}\n';
 
 	/** The `StrExt`-only config, paired with `strExtFiles`. */
-	private static inline final STREXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StrExt"]}}}';
+	private static final STREXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StrExt"]}}}';
 
 	public function testFixableRewriteWithUsingPresent(): Void {
 		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')));

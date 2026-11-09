@@ -50,33 +50,33 @@ using Lambda;
  */
 class CrossScopeSoundnessTest extends Test {
 
-	/** The declaring file — the only one in the report scope of the narrow arm. */
-	private static inline final DECL_FILE: String = 'pkg/A.hx';
-
-	/** The type every declaring source declares — what a name-keyed question is asked ABOUT. */
-	private static inline final DECL_TYPE: String = 'A';
-
-	/** The reaching file — outside the report scope of the narrow arm, inside its resolution scope. */
-	private static inline final REACH_FILE: String = 'pkg/B.hx';
-
-	/** The one file a `resolutionLibs`-only scope holds: installed, third-party, and no relation to the project. */
-	private static inline final LIB_FILE: String = 'lib/third/Third.hx';
-
-	/** A declared `resolutionRoots` file that reaches nothing — the roots half of the library-only placement. */
-	private static inline final ROOT_FILE: String = 'pkg/C.hx';
-
 	/** The reacher sits in `resolutionRoots` AND in the library — what `LintCommand` builds for a project declaring roots. */
 	private static inline final ROOTS_AND_LIBRARY: String = 'roots-and-library';
+
+	/** The declaring file — the only one in the report scope of the narrow arm. */
+	private static final DECL_FILE: String = 'pkg/A.hx';
+
+	/** The type every declaring source declares — what a name-keyed question is asked ABOUT. */
+	private static final DECL_TYPE: String = 'A';
+
+	/** The reaching file — outside the report scope of the narrow arm, inside its resolution scope. */
+	private static final REACH_FILE: String = 'pkg/B.hx';
+
+	/** The one file a `resolutionLibs`-only scope holds: installed, third-party, and no relation to the project. */
+	private static final LIB_FILE: String = 'lib/third/Third.hx';
+
+	/** A declared `resolutionRoots` file that reaches nothing — the roots half of the library-only placement. */
+	private static final ROOT_FILE: String = 'pkg/C.hx';
 
 	/**
 	 * The reacher sits in the LIBRARY half alone, `resolutionRoots` holding an inert project file — so the
 	 * roots are declared, `RefactorSupport.resolutionProjectSourcesOf` answers with files, and the reacher
 	 * is not among them. The library-half discriminator: the two seams differ HERE and nowhere else.
 	 */
-	private static inline final LIBRARY_ONLY: String = 'library-only';
+	private static final LIBRARY_ONLY: String = 'library-only';
 
 	/** `resolutionLibs` declared and `resolutionRoots` absent — the Pony shape `LIBS_ONLY_REGRESSIONS` prices. */
-	private static inline final LIBS_ONLY: String = 'libs-only';
+	private static final LIBS_ONLY: String = 'libs-only';
 
 	/** A declaration file whose private members are also read WITHIN it. */
 	private static final A_USED: String = 'package pkg;\n\nclass A {\n\n\tprivate var My_Field: Int = 0;\n\n'

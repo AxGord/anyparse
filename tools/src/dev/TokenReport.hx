@@ -31,7 +31,7 @@ final class TokenReport {
 	public static inline final TTL_LONG: Float = 3600;
 
 	/** The row of the agents whose prompt names no slice. */
-	public static inline final OTHER: String = '(other)';
+	public static final OTHER: String = '(other)';
 
 	/** The price of one million tokens of a model family: fresh input, output, and a cache read. */
 	public static final PRICES: Array<Price> = [

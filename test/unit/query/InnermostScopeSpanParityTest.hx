@@ -34,7 +34,7 @@ import anyparse.runtime.Span;
 class InnermostScopeSpanParityTest extends Test {
 
 	/** The character opening a method body — a literal kept out of interpolation, which cannot nest a brace. */
-	private static inline final BODY_OPEN: String = '{';
+	private static final BODY_OPEN: String = '{';
 
 	/**
 	 * Every scope-opening spelling the Haxe grammar has, in one class: a type body, a method, a

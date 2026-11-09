@@ -79,17 +79,17 @@ using StringTools;
 @:nullSafety(Strict)
 final class PreferForIn extends RuleBase implements DefaultOff {
 
-	/** The protocol method a qualifying `while` condition must call, on a bare identifier, with no arguments. */
-	private static inline final HAS_NEXT_METHOD: String = 'hasNext';
-
-	/** The protocol method the body's first statement must be initialized from. */
-	private static inline final NEXT_METHOD: String = 'next';
-
 	/** The binding plus at least one real statement — a body that only drains would become an empty loop. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
 
 	/** `hasNext()` in the condition and `next()` in the binding, and nothing else reads the iterator. */
 	private static inline final PROTOCOL_OCCURRENCES: Int = 2;
+
+	/** The protocol method a qualifying `while` condition must call, on a bare identifier, with no arguments. */
+	private static final HAS_NEXT_METHOD: String = 'hasNext';
+
+	/** The protocol method the body's first statement must be initialized from. */
+	private static final NEXT_METHOD: String = 'next';
 
 	/**
 	 * Element types whose name makes a POOR binder — the basic types, whose lower-cased name

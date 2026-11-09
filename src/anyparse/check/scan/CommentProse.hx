@@ -19,13 +19,13 @@ import anyparse.util.Strings;
 final class CommentProse {
 
 	/** The line-comment opener, stripped from each body line. */
-	public static inline final LINE_MARKER: String = '//';
-
-	/** The characters a section rule is drawn from (gate 9) — `//----`, `// === `, `// --- Mobile touch ---`. */
-	private static inline final SEPARATOR_CHARS: String = '-=*_#';
+	public static final LINE_MARKER: String = '//';
 
 	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
 	private static inline final DECORATED_LABEL_WORDS: Int = 4;
+
+	/** The characters a section rule is drawn from (gate 9) — `//----`, `// === `, `// --- Mobile touch ---`. */
+	private static final SEPARATOR_CHARS: String = '-=*_#';
 
 	/** Task markers (gate 6), lower-cased and matched ANYWHERE in a line. */
 	private static final TASK_MARKERS: Array<String> = ['todo', 'fixme', 'hack', 'xxx'];

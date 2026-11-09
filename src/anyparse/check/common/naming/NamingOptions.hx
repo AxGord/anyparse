@@ -23,14 +23,14 @@ final class NamingOptions implements NamingSupport {
 	/** The rule id whose options this reads. */
 	private static inline final RULE_ID: String = 'naming';
 
-	/** The option naming every catch variable. */
-	private static inline final CATCH_VAR_OPTION: String = 'catchVarName';
-
-	/** The option spelling a listener method `<event><suffix>` rather than `on<Event>`. */
-	private static inline final HANDLER_OPTION: String = 'handlerSuffix';
-
 	/** The length of the listener prefix `on` the handler option drops. */
 	private static inline final LISTENER_PREFIX_LENGTH: Int = 2;
+
+	/** The option naming every catch variable. */
+	private static final CATCH_VAR_OPTION: String = 'catchVarName';
+
+	/** The option spelling a listener method `<event><suffix>` rather than `on<Event>`. */
+	private static final HANDLER_OPTION: String = 'handlerSuffix';
 
 	/** The listener spelling the handler option rewrites away: `on` before an upper-case letter. */
 	private static final LISTENER_NAME: EReg = ~/^on[A-Z]/;

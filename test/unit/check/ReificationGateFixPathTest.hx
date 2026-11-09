@@ -98,8 +98,8 @@ class ReificationGateFixPathTest extends Test {
  */
 private class LiteralRewriteCheck implements Check implements RiskyFix {
 
-	private static inline final TARGET: String = '\'AAA\'';
-	private static inline final REPLACEMENT: String = '\'BBB\'';
+	private static final TARGET: String = '\'AAA\'';
+	private static final REPLACEMENT: String = '\'BBB\'';
 
 	public function new() {}
 

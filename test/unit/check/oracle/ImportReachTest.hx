@@ -23,7 +23,7 @@ import anyparse.query.cli.command.LintFixDriver;
 final class ImportReachTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"prefer-split-part":{"enabled":true,"textTools":"lib.Text"}}}';
-	private static inline final COMPARE_CONFIG: String =
+	private static final COMPARE_CONFIG: String =
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Cmp.strings"}}}}';
 	private static final TEXT: String = 'package lib;\nclass Text {\n'
 		+ '\tpublic static function allBefore(text:String, delimiter:String):String return text;\n'

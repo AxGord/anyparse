@@ -42,8 +42,11 @@ using Lambda;
 @:nullSafety(Strict)
 final class HaxeStringFoldSupport implements StringFoldSupport {
 
+	/** How many significant hex digits fill an `Int`: at that width a top digit above `7` wraps negative. */
+	private static inline final HEX_INT_DIGITS: Int = 8;
+
 	/** The escaped form of one literal dollar inside a single-quoted literal (a two-character string). */
-	private static inline final ESCAPED_DOLLAR: String = "$$";
+	private static final ESCAPED_DOLLAR: String = "$$";
 
 	/**
 	 * The affix Haxe reserves on BOTH ends of a target intrinsic's name — `__lua__`, `__js__`,
@@ -53,13 +56,10 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 	 * trailing one (`__hxcpp_cast_get_proc_address`) and takes runtime strings, which is why both
 	 * ends are required rather than the prefix alone.
 	 */
-	private static inline final INTRINSIC_MARK: String = '__';
+	private static final INTRINSIC_MARK: String = '__';
 
 	/** The largest `Int` a decimal literal spells, as written: one past it types as `Float`. */
-	private static inline final INT_MAX: String = '2147483647';
-
-	/** How many significant hex digits fill an `Int`: at that width a top digit above `7` wraps negative. */
-	private static inline final HEX_INT_DIGITS: Int = 8;
+	private static final INT_MAX: String = '2147483647';
 
 	/** A decimal `Int` literal with its separators removed: no leading zero, which Haxe rejects. */
 	private static final DECIMAL_LITERAL: EReg = ~/^(0|[1-9][0-9]*)$/;

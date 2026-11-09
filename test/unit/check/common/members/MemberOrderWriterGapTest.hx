@@ -18,28 +18,27 @@ using StringTools;
 @:nullSafety(Strict)
 class MemberOrderWriterGapTest extends Test {
 
+	/** The defaults: a doc-commented member is set off by one blank line before and after it. */
+	private static inline final DEFAULTS: String = '{}';
+
 	/**
 	 * the client's width and its `aroundMultilineFields: 1` - the config
 	 * under which the client findings of this shape could never be fixed.
 	 */
-	private static inline final AROUND_MULTILINE: String =
-		'{"wrapping": {"maxLineLength": 140}, "emptyLines": {"aroundMultilineFields": 1}}';
+	private static final AROUND_MULTILINE: String = '{"wrapping": {"maxLineLength": 140}, "emptyLines": {"aroundMultilineFields": 1}}';
 
 	/** The same width with the multi-line rule off - the control config. */
-	private static inline final WIDTH_ONLY: String = '{"wrapping": {"maxLineLength": 140}}';
-
-	/** The defaults: a doc-commented member is set off by one blank line before and after it. */
-	private static inline final DEFAULTS: String = '{}';
+	private static final WIDTH_ONLY: String = '{"wrapping": {"maxLineLength": 140}}';
 
 	/** The doc-comment rule switched off on both sides, so a doc-commented slot keeps its source gaps. */
-	private static inline final DOC_IGNORED: String =
+	private static final DOC_IGNORED: String =
 		'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "beforeDocCommentEmptyLines": "ignore"}}';
 
 	/** No blank line before a doc-commented member - the before-policy is the gap's last write, so it beats the after-doc blank. */
-	private static inline final BEFORE_DOC_NONE: String = '{"emptyLines": {"beforeDocCommentEmptyLines": "none"}}';
+	private static final BEFORE_DOC_NONE: String = '{"emptyLines": {"beforeDocCommentEmptyLines": "none"}}';
 
 	/** `BEFORE_DOC_NONE` with the multi-line rule on. */
-	private static inline final BEFORE_DOC_NONE_MULTILINE: String =
+	private static final BEFORE_DOC_NONE_MULTILINE: String =
 		'{"emptyLines": {"beforeDocCommentEmptyLines": "none", "aroundMultilineFields": 1}}';
 
 	/**

@@ -55,18 +55,18 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 	public static inline final RULE_ID: String = 'invert-negated-if-else';
 
-	private static inline final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
-	private static inline final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
-	private static inline final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
-	private static inline final MSG_DEFAULT_STATEMENT: String =
+	private static final MSG_STATEMENT: String = 'this negated if-else can be inverted — drop the ! and swap the branches';
+	private static final MSG_TERNARY: String = 'this negated ternary can be inverted — drop the ! and swap the branches';
+	private static final MSG_IF_EXPRESSION: String = 'this negated if-expression can be inverted — drop the ! and swap the branches';
+	private static final MSG_DEFAULT_STATEMENT: String =
 		'this if-else returns the default first — invert the condition so the default goes last';
-	private static inline final MSG_DEFAULT_TERNARY: String =
+	private static final MSG_DEFAULT_TERNARY: String =
 		'this ternary puts the default first — invert the condition so the default goes last';
-	private static inline final MSG_DEFAULT_IF_EXPRESSION: String =
+	private static final MSG_DEFAULT_IF_EXPRESSION: String =
 		'this if-expression puts the default first — invert the condition so the default goes last';
 
 	/** Appended to a value-form message when a comment keeps the site report-only. */
-	private static inline final COMMENT_BLOCKS: String = ' (a comment blocks the autofix)';
+	private static final COMMENT_BLOCKS: String = ' (a comment blocks the autofix)';
 
 	/** The linter's per-file config resolver (`keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

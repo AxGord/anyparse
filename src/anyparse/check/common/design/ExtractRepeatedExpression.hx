@@ -129,7 +129,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 	 * BACKWARDS from, because the count precedes it — anchoring on ` is repeated ` instead
 	 * would also mask a digit run inside an expression that happens to spell that phrase.
 	 */
-	private static inline final REPEAT_TAIL: String = ' times in one function body';
+	private static final REPEAT_TAIL: String = ' times in one function body';
 
 	public function new() {
 		super(

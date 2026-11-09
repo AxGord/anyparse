@@ -163,9 +163,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 
-	/** All that may separate the outer pattern from the nested switch: the label's own terminator. */
-	private static inline final LABEL_TERMINATOR: String = ':';
-
 	/** A collapsible nested switch has a subject and at least one arm. */
 	private static inline final MIN_INNER_CHILDREN: Int = 2;
 
@@ -174,6 +171,9 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 
 	/** A collapsible outer arm has exactly [pattern, nested switch]. */
 	private static inline final COLLAPSIBLE_ARM_CHILD_COUNT: Int = 2;
+
+	/** All that may separate the outer pattern from the nested switch: the label's own terminator. */
+	private static final LABEL_TERMINATOR: String = ':';
 
 	private static final RULE_ID: String = 'collapse-nested-switch';
 	private static final MESSAGE: String = 'this case body is a switch on its own binder; collapse it into a deep pattern';

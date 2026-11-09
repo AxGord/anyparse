@@ -67,9 +67,6 @@ final class TyperConformance {
 	public static inline final USAGE: String =
 		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>] | probes [<dir>]  [--list] [--census]';
 
-	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
-	private static inline final PROBES_DIR: String = 'tools/typer-facts';
-
 	/** The group of the test function's name in `displayTests`' header pattern. */
 	private static inline final TEST_NAME_GROUP: Int = 3;
 
@@ -83,16 +80,19 @@ final class TyperConformance {
 	private static inline final MESSAGE_TO_GROUP: Int = 4;
 	private static inline final MESSAGE_TEXT_GROUP: Int = 5;
 
+	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
+	private static final PROBES_DIR: String = 'tools/typer-facts';
+
 	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
-	private static inline final INLINED_ACCESS: String = 'inlined';
+	private static final INLINED_ACCESS: String = 'inlined';
 
 	/** The type a class read as a value has, and an enum's (`Class<T>`, `Enum<T>`). */
-	private static inline final CLASS_VALUE: String = 'Class';
+	private static final CLASS_VALUE: String = 'Class';
 
-	private static inline final ENUM_VALUE: String = 'Enum';
+	private static final ENUM_VALUE: String = 'Enum';
 
 	/** The kind the facts give a typedef (`CompilerFacts.TypeFact`). */
-	private static inline final TYPEDEF_KIND: String = 'typedef';
+	private static final TYPEDEF_KIND: String = 'typedef';
 
 	/** A display assertion the harness scores: `eq("<type>", type(pos(N)))`. */
 	private static final TYPE_ASSERT: EReg = ~/^eq\("((?:[^"\\]|\\.)*)",\s*type\(pos\((\d+)\)\)\)$/;
@@ -740,7 +740,7 @@ private enum Verdict {
 private final class FileTyper {
 
 	/** The kind of a written type annotation among a node's children. */
-	private static inline final ANNOTATION_KIND: String = ':';
+	private static final ANNOTATION_KIND: String = ':';
 
 	private final _file: String;
 	private final _source: String;
@@ -1117,18 +1117,18 @@ private final class UnknownCauses {
 	private static inline final MAX_DEPTH: Int = 16;
 
 	/** The wrapper a nullable receiver's type is read through. */
-	private static inline final NULL_WRAPPER: String = 'Null<';
+	private static final NULL_WRAPPER: String = 'Null<';
 
 	/** The kind of the `k => v` binder of a `for`. */
-	private static inline final KEY_VALUE_BINDER: String = 'KeyValueBinder';
+	private static final KEY_VALUE_BINDER: String = 'KeyValueBinder';
 
 	/** The kind of a written type annotation among a declaration's children. */
-	private static inline final ANNOTATION_KIND: String = ':';
+	private static final ANNOTATION_KIND: String = ':';
 
 	/** The kind of a literal segment of an interpolated string. */
-	private static inline final STRING_SEGMENT_KIND: String = 'Literal';
+	private static final STRING_SEGMENT_KIND: String = 'Literal';
 
-	private static inline final FN_MEMBER_KIND: String = 'FnMember';
+	private static final FN_MEMBER_KIND: String = 'FnMember';
 
 	/** The kinds whose value is the result of an operator over typed operands. */
 	private static final OPERATOR_KINDS: Array<String> = [
@@ -1491,7 +1491,7 @@ private final class UnknownCauses {
 private final class TypeText {
 
 	/** The wrapper an optional structure field's type is read through. */
-	private static inline final NULL_TYPE: String = 'Null';
+	private static final NULL_TYPE: String = 'Null';
 
 	private final _tokens: Array<String>;
 

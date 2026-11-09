@@ -38,10 +38,10 @@ using anyparse.macro.MetaInspect;
 final class WriterLoweringSupport {
 
 	/** The Star flag naming a function signature whose continuation indent depends on its body. */
-	private static inline final BODY_AWARE_FLAG: String = 'bodyAwareCompactIndent';
+	private static final BODY_AWARE_FLAG: String = 'bodyAwareCompactIndent';
 
 	/** The Star flag naming a function-type signature that takes no additional indent unless nested in another type. */
-	private static inline final NESTED_FLAG: String = 'compactUnlessNested';
+	private static final NESTED_FLAG: String = 'compactUnlessNested';
 
 	/**
 	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the

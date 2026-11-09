@@ -108,7 +108,7 @@ class ThreadSafetyFoldingTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
+	private static final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
 	private static function run(sources: Array<String>, ?config: String): Array<Violation> { // noqa: optional-param-shorthand
 		return ThreadSafetyCheckTest.violations(config ?? CONFIG, sources);

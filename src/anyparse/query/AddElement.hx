@@ -82,10 +82,10 @@ enum InsertSide {
 final class AddElement {
 
 	/** The refusal of an empty element text, which every insert mode shares. */
-	private static inline final EMPTY_ELEMENT: String = 'add-element requires a non-empty element text';
+	private static final EMPTY_ELEMENT: String = 'add-element requires a non-empty element text';
 
 	/** The label a parse failure of the edited source is reported under. */
-	private static inline final SOURCE_LABEL: String = 'source';
+	private static final SOURCE_LABEL: String = 'source';
 
 	/**
 	 * Insert `code` as a new sibling element on `side` of the element whose

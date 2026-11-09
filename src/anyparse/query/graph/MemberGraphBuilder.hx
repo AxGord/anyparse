@@ -1,7 +1,6 @@
 package anyparse.query.graph;
 
 import anyparse.query.CallGraph;
-import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.graph.CodeGraph.GraphEdgeKind;
@@ -19,7 +18,7 @@ import anyparse.query.graph.CodeGraph.GraphEdgeKind;
 final class MemberGraphBuilder {
 
 	/** What joins a function's id and a lambda or local function declared in it (`CallGraphNodes`). */
-	private static inline final LOCAL_MARK: String = '#';
+	private static final LOCAL_MARK: String = '#';
 
 	public final graph: CodeGraph = new CodeGraph();
 

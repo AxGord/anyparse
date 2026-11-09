@@ -36,16 +36,16 @@ final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware imp
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'zero-count-unparsed-fixture';
 
-	private static inline final ASSERTS_KEY: String = 'zeroAsserts';
-	private static inline final COUNT_FIELDS_KEY: String = 'countFields';
-	private static inline final SOURCE_FIELDS_KEY: String = 'sourceFields';
-	private static inline final SKIP_PARSE_TESTS_KEY: String = 'skipParseTests';
-
 	/** How many same-file helper calls a fixture is followed through before the trace gives up. */
 	private static inline final MAX_HOPS: Int = 3;
 
 	/** A zero-count assertion carries a callee and at least two arguments. */
 	private static inline final MIN_ASSERT_CHILDREN: Int = 3;
+
+	private static final ASSERTS_KEY: String = 'zeroAsserts';
+	private static final COUNT_FIELDS_KEY: String = 'countFields';
+	private static final SOURCE_FIELDS_KEY: String = 'sourceFields';
+	private static final SKIP_PARSE_TESTS_KEY: String = 'skipParseTests';
 
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

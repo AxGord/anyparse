@@ -29,7 +29,7 @@ import anyparse.runtime.Span;
 final class OracleProviders {
 
 	/** The `Unavailable` reason every answer of a grammar without a compiler oracle carries. */
-	public static inline final NO_ORACLE: String = 'this grammar supplies no compiler oracle';
+	public static final NO_ORACLE: String = 'this grammar supplies no compiler oracle';
 
 	/** `plugin`'s compiler oracle — never null; see the type's doc for a grammar that has none. */
 	public static function of(plugin: GrammarPlugin): OracleProvider {

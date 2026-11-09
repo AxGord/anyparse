@@ -68,8 +68,8 @@ typedef GraphRequest = {
 @:nullSafety(Strict)
 final class GraphCommand implements CliCommand {
 
-	private static inline final COMMAND: String = 'graph';
 	private static inline final DEFAULT_RADIUS: Int = 1;
+	private static final COMMAND: String = 'graph';
 
 	/**
 	 * The Mermaid library a page inlines: the npm package's `dist/mermaid.min.js`, vendored with its version in the

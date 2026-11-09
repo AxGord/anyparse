@@ -23,7 +23,7 @@ import anyparse.query.WriteSites;
 final class PropertyStorage {
 
 	/** The metadata that makes a property access reach the physical field directly. */
-	private static inline final BYPASS_META: String = '@:bypassAccessor';
+	private static final BYPASS_META: String = '@:bypassAccessor';
 
 	/**
 	 * The property of `container` whose set accessor `method` is, when the property's clause gives plain reads

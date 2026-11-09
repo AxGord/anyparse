@@ -26,37 +26,37 @@ final class HxAstPredLowering extends AstPredLowering {
 	public static inline final HX_STATEMENT: String = 'anyparse.grammar.haxe.HxStatement';
 	public static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.HxSwitchCase';
 
-	private static inline final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.HxTopLevelDecl';
-	private static inline final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
-	private static inline final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
-	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
-	private static inline final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
-	private static inline final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
-	private static inline final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.HxFnBlock';
+	private static final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.HxTopLevelDecl';
+	private static final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
+	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
+	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
+	private static final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
+	private static final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
+	private static final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.HxFnBlock';
 
 	/** `HxFnBlock`'s statement Star, the field its trivia slots are named after. */
-	private static inline final FN_BLOCK_STMTS: String = 'stmts';
+	private static final FN_BLOCK_STMTS: String = 'stmts';
 
-	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
-	private static inline final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
-	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
-	private static inline final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
-	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
-	private static inline final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
-	private static inline final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
-	private static inline final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
-	private static inline final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
-	private static inline final HX_TYPE: String = 'anyparse.grammar.haxe.HxType';
+	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
+	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
+	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
+	private static final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
+	private static final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
+	private static final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
+	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
+	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
+	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
+	private static final HX_TYPE: String = 'anyparse.grammar.haxe.HxType';
 
 	/** Generated predicate the anon-member separator gate calls on a field's declared type. */
-	private static inline final TYPE_ENDS_WITH_BRACE: String = '_typeEndsWithBrace';
+	private static final TYPE_ENDS_WITH_BRACE: String = '_typeEndsWithBrace';
 
 	/**
 	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
 	 * is an if-chain continuation rather than a standalone guarded
 	 * statement. See `condSpliceTailElseLedField`.
 	 */
-	private static inline final ELSE_KEYWORD: String = 'else';
+	private static final ELSE_KEYWORD: String = 'else';
 
 	/**
 	 * `HxExpr` `*Assign` ctor names — every right-associative `=` infix

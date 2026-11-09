@@ -28,9 +28,9 @@ final class AvoidHaxeJson extends HaxeRule implements NoAutofix implements Defau
 	private static inline final RULE_ID: String = 'avoid-haxe-json';
 
 	/** The std type the calls are on, as a file writes it bare and written out. */
-	private static inline final JSON_TYPE: String = 'Json';
+	private static final JSON_TYPE: String = 'Json';
 
-	private static inline final JSON_QUALIFIED: String = 'haxe.Json';
+	private static final JSON_QUALIFIED: String = 'haxe.Json';
 
 	/** The members that read or write a document, each with the raw-document type a schemaless use is sent to. */
 	private static final ALTERNATIVES: Map<String, String> = ['parse' => 'JValueParser', 'stringify' => 'JValueWriter'];

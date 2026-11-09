@@ -129,10 +129,10 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static inline final RULE_ID: String = 'prefer-doc-comment';
 
 	/** The triple-slash section-label opener of gate 8. */
-	private static inline final LABEL_MARKER: String = '///';
+	private static final LABEL_MARKER: String = '///';
 
 	/** The block-comment closer, which a converted body must not contain. */
-	private static inline final BLOCK_CLOSE: String = '*/';
+	private static final BLOCK_CLOSE: String = '*/';
 
 	public function new() {
 		super(RULE_ID, 'a line comment directly above a declaration, replaceable with a doc comment', RuleCategory.Docs);

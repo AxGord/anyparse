@@ -24,10 +24,6 @@ final class SliceStats {
 	public static inline final USAGE: String = 'usage: dev slice-stats [--since <date>] [--rev <rev>] [--queue <file>] [--edges] '
 		+ '[--clones] [--roots <dir>[,<dir>]...] [--cache <dir>] [--repo <tree>]';
 
-	/** What separates the fields of one `git log` record, and the records. */
-	private static inline final FIELD: String = '\x1f';
-
-	private static inline final RECORD: String = '\x1e';
 	private static inline final SECONDS_PER_HOUR: Float = 3600;
 	private static inline final SECONDS_PER_DAY: Int = 86400;
 	private static inline final DAYS_PER_WEEK: Int = 7;
@@ -41,8 +37,13 @@ final class SliceStats {
 	/** The length of `YYYY-MM-DD`, the day an ISO time starts with. */
 	private static inline final ISO_DAY_LENGTH: Int = 10;
 
+	/** What separates the fields of one `git log` record, and the records. */
+	private static final FIELD: String = '\x1f';
+
+	private static final RECORD: String = '\x1e';
+
 	/** The text of an unknown value in a table. */
-	private static inline final NONE: String = '-';
+	private static final NONE: String = '-';
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);

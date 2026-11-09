@@ -40,7 +40,7 @@ using StringTools;
 class BlockCommentNormalizer {
 
 	/** The doc-comment opener the canonical styles are scoped to. */
-	private static inline final DOC_OPEN: String = '/**';
+	private static final DOC_OPEN: String = '/**';
 
 	public static function processCapturedBlockComment(content: String, opt: WriteOptions): Doc {
 		return D.verbatim(commentDoc(content, opt));

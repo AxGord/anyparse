@@ -46,7 +46,7 @@ typedef Capture = {
 final class ReflectiveReach {
 
 	/** The `Type` member making a class value of a name (`resolvedLiteral`). */
-	private static inline final RESOLVE_CLASS: String = 'resolveClass';
+	private static final RESOLVE_CLASS: String = 'resolveClass';
 
 	/** Each class or interface -> the types whose fields a write on a value of it may reach (`reachOf`). */
 	private final _reach: Map<String, Array<String>> = [];

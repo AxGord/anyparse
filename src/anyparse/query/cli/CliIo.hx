@@ -39,7 +39,7 @@ final class CliIo {
 	 * runs an agent that reviews and must not edit the tree. Read at each write, never cached, so
 	 * a test or a parent process can flip it between runs of one process.
 	 */
-	public static inline final READ_ONLY_ENV: String = 'APQ_READ_ONLY';
+	public static final READ_ONLY_ENV: String = 'APQ_READ_ONLY';
 
 	/**
 	 * Heartbeat interval for the multi-file walk progress line — emit a
@@ -50,21 +50,21 @@ final class CliIo {
 	 */
 	private static inline final PROGRESS_INTERVAL: Int = 25;
 
-	/**
-	 * The suffix every write is staged through, on the far side of the extension on purpose:
-	 * a `.hx.apq-tmp` a killed process left behind is invisible to every `*.hx` walk this tool
-	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
-	 */
-	private static inline final STAGED_WRITE_SUFFIX: String = '.apq-tmp';
-
-	/** Extension of the corpus fixture format — see `isHxtestPath`. */
-	private static inline final HXTEST_EXT: String = '.hxtest';
-
 	/** The file descriptor of the process's standard error. */
 	private static inline final STDERR_FD: Int = 2;
 
 	/** How long `stderr` waits before it offers a blocked write again, in milliseconds. */
 	private static inline final BLOCKED_RETRY_MS: Int = 2;
+
+	/**
+	 * The suffix every write is staged through, on the far side of the extension on purpose:
+	 * a `.hx.apq-tmp` a killed process left behind is invisible to every `*.hx` walk this tool
+	 * does, where a `.apq-tmp.hx` would be linted, formatted and reported as a source file.
+	 */
+	private static final STAGED_WRITE_SUFFIX: String = '.apq-tmp';
+
+	/** Extension of the corpus fixture format — see `isHxtestPath`. */
+	private static final HXTEST_EXT: String = '.hxtest';
 
 	/**
 	 * Read a file as **source for parsing**. Same as `readFile` for plain

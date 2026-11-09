@@ -26,32 +26,32 @@ import anyparse.query.graph.CodeGraph;
 final class GraphMermaid {
 
 	/** The class a focused node carries, and its style. */
-	private static inline final FOCUS_CLASS: String = 'focus';
+	private static final FOCUS_CLASS: String = 'focus';
 
-	private static inline final FOCUS_STYLE: String = 'stroke-width:3px';
+	private static final FOCUS_STYLE: String = 'stroke-width:3px';
 
 	/** The class an external node carries, and its style. */
-	private static inline final EXTERNAL_CLASS: String = 'external';
+	private static final EXTERNAL_CLASS: String = 'external';
 
-	private static inline final EXTERNAL_STYLE: String = 'stroke-dasharray:4 3';
+	private static final EXTERNAL_STYLE: String = 'stroke-dasharray:4 3';
 
 	/** The style of an edge whose ends depend on each other (`CodeGraph.isMutual`). */
-	private static inline final MUTUAL_STYLE: String = 'stroke:#d33,stroke-width:2px';
+	private static final MUTUAL_STYLE: String = 'stroke:#d33,stroke-width:2px';
 
 	/** The width a changed edge whose ends depend on each other is drawn at, in its change's colour. */
-	private static inline final MUTUAL_CHANGED_WIDTH: String = 'stroke-width:4px';
+	private static final MUTUAL_CHANGED_WIDTH: String = 'stroke-width:4px';
 
 	/**
 	 * The styles of a node, and of a link, a graph comparing two versions
 	 * marks added, removed or changed; the class is the change's name.
 	 */
-	private static inline final ADDED_NODE_STYLE: String = 'fill:#dfd,stroke:#2a2';
+	private static final ADDED_NODE_STYLE: String = 'fill:#dfd,stroke:#2a2';
 
-	private static inline final REMOVED_NODE_STYLE: String = 'fill:#eee,stroke:#999,stroke-dasharray:4 3';
-	private static inline final CHANGED_NODE_STYLE: String = 'fill:#ffd,stroke:#d90';
-	private static inline final ADDED_LINK_STYLE: String = 'stroke:#2a2,stroke-width:2px';
-	private static inline final REMOVED_LINK_STYLE: String = 'stroke:#999,stroke-dasharray:4 3';
-	private static inline final CHANGED_LINK_STYLE: String = 'stroke:#d90,stroke-width:2px';
+	private static final REMOVED_NODE_STYLE: String = 'fill:#eee,stroke:#999,stroke-dasharray:4 3';
+	private static final CHANGED_NODE_STYLE: String = 'fill:#ffd,stroke:#d90';
+	private static final ADDED_LINK_STYLE: String = 'stroke:#2a2,stroke-width:2px';
+	private static final REMOVED_LINK_STYLE: String = 'stroke:#999,stroke-dasharray:4 3';
+	private static final CHANGED_LINK_STYLE: String = 'stroke:#d90,stroke-width:2px';
 
 	/**
 	 * The flowchart of `graph` laid out toward `direction`, left to right when none, after a `%%` comment line holding

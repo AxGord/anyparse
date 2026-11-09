@@ -1,6 +1,7 @@
 package anyparse.ds;
 
 #if macro
+import anyparse.util.Compare;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
@@ -40,7 +41,7 @@ private typedef Store = {
 final class BitsBuilder {
 
 	private static inline final WORD: Int = 32;
-	private static inline final MODULE: String = 'anyparse.ds';
+	private static final MODULE: String = 'anyparse.ds';
 
 	public static function build(): ComplexType {
 		final pos: Position = Context.currentPos();
@@ -123,7 +124,7 @@ final class BitsBuilder {
 			if (value < 0) Context.fatalError('Bits<$shown>: ${field.name} is not a non-negative Int literal', pos);
 			if (!values.contains(value)) values.push(value);
 		}
-		values.sort(Reflect.compare);
+		values.sort(Compare.compareInt);
 		final bits: Array<Int> = [for (rank in 0...values.length) rank];
 		final dense: Bool = values.length == 0 || values[values.length - 1] == values.length - 1;
 		if (dense) return { bits: bits, bitOfValue: macro (cast value: Int), valueAtIndex: macro cast index };

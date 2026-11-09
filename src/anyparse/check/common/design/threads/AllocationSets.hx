@@ -20,7 +20,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 final class AllocationSets {
 
 	/** Joins the classes of a set handed down a path. */
-	public static inline final SEPARATOR: String = ',';
+	public static final SEPARATOR: String = ',';
 
 	/** Each field id -> its sealed allocation set, null when it has none. */
 	private final _fields: Map<String, Null<Array<String>>> = [];

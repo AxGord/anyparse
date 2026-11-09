@@ -14,7 +14,7 @@ import haxe.ds.Either;
 @:nullSafety(Strict)
 final class MoveElementsCommand implements CliCommand {
 
-	private static inline final OP: String = 'move-elements';
+	private static final OP: String = 'move-elements';
 
 	public function new() {}
 

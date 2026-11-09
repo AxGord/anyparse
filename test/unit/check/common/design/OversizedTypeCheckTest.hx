@@ -21,7 +21,7 @@ using StringTools;
 class OversizedTypeCheckTest extends Test {
 
 	/** The option that lowers the line threshold to 50, for the cases that need a line ceiling in reach of a small fixture. */
-	private static inline final LINES_50: String = '"maxLines": 50, ';
+	private static final LINES_50: String = '"maxLines": 50, ';
 
 	public function testSmallTypeNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tvar x:Int;\n\tfunction f():Int { return x; }\n}').length);

@@ -512,13 +512,13 @@ class ThreadSafetyReflectiveSealTest extends Test {
 
 	#if (sys || nodejs)
 	/** `Help.put`, handing an optional parameter on to `Help.assign`. */
-	private static inline final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';
+	private static final PUT: String = 'public static function put(o:Dynamic, k:String, ?v:Dynamic):Void assign(o, k, v);';
 
 	/** `Help.pass`, handing a `Dynamic` parameter on to `Help.assign`. */
-	private static inline final PASS: String = 'public static function pass(x:Dynamic):Void assign(D.bag, "x", x);';
+	private static final PASS: String = 'public static function pass(x:Dynamic):Void assign(D.bag, "x", x);';
 
 	/** `Help.skip`, whose stored parameter comes after an optional one. */
-	private static inline final SKIP: String = 'public static function skip(?n:Int, v:Dynamic):Void assign(D.bag, "x", v);';
+	private static final SKIP: String = 'public static function skip(?n:Int, v:Dynamic):Void assign(D.bag, "x", v);';
 
 	/** How many findings of `helperFindings` report the main thread's take of `_l` in `D.quick`. */
 	private static function helperTakes(config: String, helpers: String, use: String, ?modules: Array<String>): Int {

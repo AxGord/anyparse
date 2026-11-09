@@ -37,15 +37,15 @@ private typedef TreeFile = {
 @:nullSafety(Strict)
 class HoistCommonImportTest extends Test {
 
-	/** What `hoistedSites` puts between two slices — never a `;`, which every statement it renders ends with. */
-	private static inline final SITE_SEPARATOR: String = ' :: ';
-
-	/** A class body calling `tqq` extension-style on a `String` — the access a rival `using` declaring `tqq` contests. */
-	private static inline final CALLS_TQQ: String = '\n\n\tfunction f(s:String):String {\n\t\treturn s.tqq();\n\t}\n\n';
-
 	/** What `planned` reports for `usingTree` whose three modules also keep a rival `using` no access contests. */
 	private static inline final HOISTED_PAST_RIVAL: String = 'src/aqq/OneQq.hx:qqz.Sqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Sqqwwee@src/import.hx,'
 		+ 'src/aqq/TwoQq.hx:qqz.Sqqwwee@src/import.hx';
+
+	/** What `hoistedSites` puts between two slices — never a `;`, which every statement it renders ends with. */
+	private static final SITE_SEPARATOR: String = ' :: ';
+
+	/** A class body calling `tqq` extension-style on a `String` — the access a rival `using` declaring `tqq` contests. */
+	private static final CALLS_TQQ: String = '\n\n\tfunction f(s:String):String {\n\t\treturn s.tqq();\n\t}\n\n';
 
 	/** Four modules of one package spelling one import, and a fifth that does not. */
 	private static final COMMON_TREE: Array<TreeFile> = [

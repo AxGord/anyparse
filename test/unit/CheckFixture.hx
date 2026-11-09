@@ -34,7 +34,7 @@ final class CheckFixture {
 	 * fixtures this serves, so `lastIndexOf` keeps the assertion tight where `indexOf` would let a
 	 * quoted finding past an early inner `};`.
 	 */
-	private static inline final QUOTATION_END: String = '};';
+	private static final QUOTATION_END: String = '};';
 
 	/**
 	 * `check`'s findings over `source` as `C.hx`, read the way production reads them: through `Linter.collect`

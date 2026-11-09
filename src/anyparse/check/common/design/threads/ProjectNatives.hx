@@ -27,7 +27,7 @@ using StringTools;
 final class ProjectNatives {
 
 	/** The type of the node a call of a bare target-code name (`__cpp__`) stands for: the code under `untyped`. */
-	public static inline final TARGET_CODE_TYPE: String = 'untyped';
+	public static final TARGET_CODE_TYPE: String = 'untyped';
 
 	/** The graph ids of the natives of the run, the nodes made for their call sites included. */
 	public final ids: Array<String> = [];

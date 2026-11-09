@@ -70,21 +70,6 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	private static inline final DEFAULT_MAX_LINES: Int = 2000;
 
 	/**
-	 * The fragment that follows the LINE EXTENT in the message — shared by the message
-	 * builder and by `messageIdentity`, so the anchor cannot drift away from the wording it
-	 * points at.
-	 */
-	private static inline final LINES_UNIT: String = ' lines (max ';
-
-	/**
-	 * The same, for the MEMBER count. Masked too: a type gaining one member re-keys a finding
-	 * that neither appeared nor went away, and such re-keys are what a blast-radius report is
-	 * made of. The `(max N)` threshold beside it stays unmasked — a configuration change IS a
-	 * change the gate must show.
-	 */
-	private static inline final MEMBERS_UNIT: String = ' members (max ';
-
-	/**
 	 * Share of the members that SURVIVE hub extraction which one `hxq clusters` component
 	 * must hold for the finding to stop pointing at that tool. Chosen from the distribution over
 	 * this project's own findings, which is bimodal rather than smooth — a blob's largest
@@ -93,11 +78,29 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	 */
 	private static inline final BLOB_SHARE: Float = 0.7;
 
+	/** This rule's id — the key its `apq.json` options sit under, and the `rule` field of its findings. */
+	private static inline final RULE_ID: String = 'oversized-type';
+
+	/**
+	 * The fragment that follows the LINE EXTENT in the message — shared by the message
+	 * builder and by `messageIdentity`, so the anchor cannot drift away from the wording it
+	 * points at.
+	 */
+	private static final LINES_UNIT: String = ' lines (max ';
+
+	/**
+	 * The same, for the MEMBER count. Masked too: a type gaining one member re-keys a finding
+	 * that neither appeared nor went away, and such re-keys are what a blast-radius report is
+	 * made of. The `(max N)` threshold beside it stays unmasked — a configuration change IS a
+	 * change the gate must show.
+	 */
+	private static final MEMBERS_UNIT: String = ' members (max ';
+
 	/**
 	 * The message tail when `hxq clusters` still has something to show — the finding names
 	 * the tool that answers "along which lines does this split?".
 	 */
-	private static inline final SEAM_TAIL: String = ' — a decomposition candidate (see hxq clusters)';
+	private static final SEAM_TAIL: String = ' — a decomposition candidate (see hxq clusters)';
 
 	/**
 	 * The message tail when it does not, and the reason this rule stopped being a heuristic
@@ -107,23 +110,20 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	 * answers "no seam here" after a run the reader pays for. Naming that up front turns a
 	 * finding nobody could act on into one that says WHICH KIND of decomposition is left.
 	 */
-	private static inline final NO_SEAM_TAIL: String =
-		' — a decomposition candidate; no member-reference seam — look for an architectural one (a command / handler / responsibility per module)';
+	private static final NO_SEAM_TAIL: String = ' — a decomposition candidate; no member-reference seam — look for an architectural one ('
+		+ 'a command / handler / responsibility per module)';
 
 	/** Separator between a grant's HEAD (`<Name> <= <ceiling>`) and the reason it is granted, in an `apq.json` entry. */
-	private static inline final GRANT_SEP: String = ':';
+	private static final GRANT_SEP: String = ':';
 
 	/** The grant shape after its name, as every refusal spells it — the one shape `readGrant` accepts. */
-	private static inline final GRANT_SHAPE: String = ' <= <N> members / <M> lines: <reason>';
+	private static final GRANT_SHAPE: String = ' <= <N> members / <M> lines: <reason>';
 
 	/** The relaxation of `GRANT_SHAPE` a refusal adds: a grant need not give both ceilings. */
-	private static inline final EITHER_CLAUSE: String = 'either ceiling alone is accepted, members first when both are given';
+	private static final EITHER_CLAUSE: String = 'either ceiling alone is accepted, members first when both are given';
 
 	/** The fragment that opens a reported type's grant clause — the grant was not enough for its current size. */
-	private static inline final BEYOND_GRANT: String = ' — beyond its grant \'';
-
-	/** This rule's id — the key its `apq.json` options sit under, and the `rule` field of its findings. */
-	private static inline final RULE_ID: String = 'oversized-type';
+	private static final BEYOND_GRANT: String = ' — beyond its grant \'';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

@@ -152,21 +152,21 @@ using StringTools;
 final class CondAssignMerge extends RuleBase implements DefaultOff {
 
 	/** ASCII-only note appended when a comment inside the merged span withholds the autofix. */
-	private static inline final COMMENT_NOTE: String = ' (comment in the merged span - merge by hand)';
+	private static final COMMENT_NOTE: String = ' (comment in the merged span - merge by hand)';
 
-	private static inline final MESSAGE: String =
-		'every branch of this conditional-compilation region assigns the same target - merge it into one assignment with a conditional r-value';
+	private static final MESSAGE: String = 'every branch of this conditional-compilation region assigns the same target - merge it into '
+		+ 'one assignment with a conditional r-value';
 
 	/** The EXIT arms' message: the merged statement keeps one `return` / `throw` keyword. */
-	private static inline final EXIT_MESSAGE: String =
-		'every branch of this conditional-compilation region exits with the same keyword - merge it into one statement with a conditional value';
+	private static final EXIT_MESSAGE: String = 'every branch of this conditional-compilation region exits with the same keyword - merge '
+		+ 'it into one statement with a conditional value';
 
 	/** ASCII-only note appended when the statement AFTER the region is merged in as the implicit else. */
-	private static inline final FOLLOWER_NOTE: String = ' (the statement after the region is the implicit else and is merged in)';
+	private static final FOLLOWER_NOTE: String = ' (the statement after the region is the implicit else and is merged in)';
 
-	private static inline final END_KEYWORD: String = '#end';
-	private static inline final ELSEIF_KEYWORD: String = '#elseif';
-	private static inline final ELSE_KEYWORD: String = '#else';
+	private static final END_KEYWORD: String = '#end';
+	private static final ELSEIF_KEYWORD: String = '#elseif';
+	private static final ELSE_KEYWORD: String = '#else';
 
 	public function new() {
 		super(

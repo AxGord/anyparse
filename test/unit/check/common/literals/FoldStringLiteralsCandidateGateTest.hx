@@ -17,14 +17,14 @@ import anyparse.check.LintConfig;
  */
 class FoldStringLiteralsCandidateGateTest extends FoldStringLiteralsCheckTestBase {
 
-	/** The macro-whitelist option name, which the refusal message names so a reader knows what lifts it. */
-	private static inline final WHITELIST_OPTION: String = 'concatFoldingMacros';
-
 	/** The rule id, which every finding here is asserted to carry. */
 	private static inline final RULE: String = 'fold-adjacent-string-literals';
 
+	/** The macro-whitelist option name, which the refusal message names so a reader knows what lifts it. */
+	private static final WHITELIST_OPTION: String = 'concatFoldingMacros';
+
 	/** The words the INTRINSIC refusal names itself by — distinct from the macro one, which names the whitelist option. */
-	private static inline final INTRINSIC_MARKER: String = 'compiler intrinsic';
+	private static final INTRINSIC_MARKER: String = 'compiler intrinsic';
 
 	/** A string literal in an ANNOTATION argument is parsed as an expression — moving a `$` into it changes the annotation. */
 	public function testMetadataStringArgumentNotTouched(): Void {

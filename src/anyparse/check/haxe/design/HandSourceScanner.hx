@@ -31,16 +31,16 @@ import anyparse.query.SymbolIndex;
 final class HandSourceScanner extends HaxeRule implements ConfigAware implements FileGated implements NoAutofix implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'hand-source-scanner';
-	private static inline final ALLOW_KEY: String = 'allow';
-
-	/** The `.code` field of a one-character string literal, which reads a character as a number. */
-	private static inline final CODE_FIELD: String = 'code';
-
-	private static inline final SUB_ASSIGN_KIND: String = 'SubAssign';
 	private static inline final BACKSLASH: Int = 92;
 	private static inline final SLASH: Int = 47;
 	private static inline final STAR: Int = 42;
 	private static inline final HASH: Int = 35;
+	private static final ALLOW_KEY: String = 'allow';
+
+	/** The `.code` field of a one-character string literal, which reads a character as a number. */
+	private static final CODE_FIELD: String = 'code';
+
+	private static final SUB_ASSIGN_KIND: String = 'SubAssign';
 
 	/** The calls that read one character of a text. */
 	private static final READ_METHODS: Array<String> = ['fastCodeAt', 'charCodeAt', 'charAt'];

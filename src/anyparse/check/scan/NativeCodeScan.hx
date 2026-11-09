@@ -15,7 +15,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 final class NativeCodeScan {
 
 	/** The receiver the `NATIVE_SYNTAX_MEMBERS` hang off (`js.Syntax`, `python.Syntax`, `php.Syntax`, …). */
-	private static inline final SYNTAX_RECEIVER: String = 'Syntax';
+	private static final SYNTAX_RECEIVER: String = 'Syntax';
 
 	/**
 	 * The metadata whose argument is TARGET code pasted into the generated output — text the Haxe

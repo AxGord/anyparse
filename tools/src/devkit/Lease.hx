@@ -19,11 +19,11 @@ final class Lease {
 	/** How long a flexible lease waits for its whole share before it takes what fits, in seconds. */
 	public static inline final WAIT_FULL_SECONDS: Int = 30;
 
-	/** The pool's command under the workflow plugin's root, which a workflow exec names in `WF_PLUGIN_ROOT`. */
-	private static inline final WF_RUN: String = 'scripts/wf-run';
-
 	/** What the pool's status may take before the run gives up on the pool. */
 	private static inline final STATUS_TIMEOUT_MS: Int = 30 * 1000;
+
+	/** The pool's command under the workflow plugin's root, which a workflow exec names in `WF_PLUGIN_ROOT`. */
+	private static final WF_RUN: String = 'scripts/wf-run';
 
 	/** The budget on the first line of `wf-run --status`. */
 	private static final BUDGET_LINE: EReg = ~/^pool .*: budget (\d+),/m;

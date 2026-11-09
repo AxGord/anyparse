@@ -37,10 +37,10 @@ final class TriviaTailRehome {
 	public static inline final CLASS_NAME: String = 'TailComments';
 
 	/** The parameter every generated function receives the comment in. */
-	private static inline final COMMENT_ARG: String = 'comment';
+	private static final COMMENT_ARG: String = 'comment';
 
 	/** The positional synth argument a close-trailing Alt branch carries its captured comment in. */
-	private static inline final CLOSE_TRAILING_ARG: String = 'closeTrailing';
+	private static final CLOSE_TRAILING_ARG: String = 'closeTrailing';
 
 	/** Branch metas that put no token after the branch's operand. */
 	private static final TRANSPARENT_BRANCH_METAS: Array<String> = [':kw', ':lead', ':fmt'];

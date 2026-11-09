@@ -110,7 +110,7 @@ final class MutationSchema {
 	public static inline final MACRO_LOG_VAR: String = 'APQ_MUTANT_MACRO_LOG';
 
 	/** The prefix of a copy's name: `__mut<id>_<name>`. */
-	private static inline final COPY_PREFIX: String = '__mut';
+	private static final COPY_PREFIX: String = '__mut';
 
 	/**
 	 * The switch fields, inserted before the closing brace of every type that holds a copy. The switch reads

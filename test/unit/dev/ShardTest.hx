@@ -31,7 +31,7 @@ final class ShardTest extends Test {
 	 * `shard` or `mono` line per run it is started for (a monolith run has an empty `APQ_TEST`). It sets its exit
 	 * status instead of calling `process.exit`, which would cut off output still queued for a pipe.
 	 */
-	private static inline final RUNNER: String = "const fs = require('fs'), path = require('path');
+	private static final RUNNER: String = "const fs = require('fs'), path = require('path');
 const classes = fs.readFileSync(path.join(__dirname, 'classes.txt'), 'utf8').split('\\n').filter(c => c);
 (function () {
 if (process.argv.includes('--list-classes')) return process.stdout.write(classes.join('\\n') + '\\n');

@@ -71,16 +71,17 @@ typedef SweepCorpusResult = {
 @:nullSafety(Strict)
 final class SweepCorpus {
 
-	/** Section separator of the `.hxtest` golden-file format. */
-	private static inline final SECTION_SEP: String = '\n---\n';
-
 	private static inline final SECTION_COUNT: Int = 3;
-	private static inline final STATUS_PASS: String = 'PASS';
-	private static inline final STATUS_FAIL: String = 'FAIL';
-	private static inline final STATUS_SKIP_PARSE: String = 'SKIP_PARSE';
-	private static inline final STATUS_SKIP_WRITE: String = 'SKIP_WRITE';
-	private static inline final STATUS_SKIP_CONFIG: String = 'SKIP_CONFIG';
-	private static inline final STATUS_MALFORMED: String = 'MALFORMED';
+
+	/** Section separator of the `.hxtest` golden-file format. */
+	private static final SECTION_SEP: String = '\n---\n';
+
+	private static final STATUS_PASS: String = 'PASS';
+	private static final STATUS_FAIL: String = 'FAIL';
+	private static final STATUS_SKIP_PARSE: String = 'SKIP_PARSE';
+	private static final STATUS_SKIP_WRITE: String = 'SKIP_WRITE';
+	private static final STATUS_SKIP_CONFIG: String = 'SKIP_CONFIG';
+	private static final STATUS_MALFORMED: String = 'MALFORMED';
 
 	#if (sys || nodejs)
 	/**

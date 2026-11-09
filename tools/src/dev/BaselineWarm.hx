@@ -28,8 +28,8 @@ final class BaselineWarm {
 	public static inline final USAGE: String =
 		'usage: dev baseline-warm run <sha> [--repo <dir>] [--frozen <dir>]... [--infra-tree <dir>]...';
 
-	private static inline final DIRECTORY: String = 'baseline-warm';
 	private static inline final POLL_MS: Int = 5000;
+	private static final DIRECTORY: String = 'baseline-warm';
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);

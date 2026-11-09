@@ -37,10 +37,11 @@ final class TokenTranscript {
 	public static inline final ROLE_REVIEWER: String = 'anyparse reviewer';
 	public static inline final ROLE_ENGINE_WORKER: String = 'engine worker';
 	public static inline final ROLE_ENGINE_REVIEWER: String = 'engine reviewer';
-	public static inline final ROLE_OTHER: String = 'other';
 
 	/** The size of one read of a transcript file. */
 	public static inline final CHUNK_BYTES: Int = 65536;
+
+	public static final ROLE_OTHER: String = 'other';
 
 	/** How many leading-command rounds of `cd`, `export`, `VAR=` and `rtk` prefixes a command line is stripped of. */
 	private static inline final PREFIX_ROUNDS: Int = 6;
@@ -52,16 +53,16 @@ final class TokenTranscript {
 	private static inline final BIGGEST_CALLS: Int = 3;
 
 	private static inline final CALL_LENGTH: Int = 120;
-	private static inline final WORKFLOW_PREFIX: String = 'mcp__plugin_workflow_wf__';
-	private static inline final MCP_PREFIX: String = 'mcp__';
 
 	/** The shape of a slice id: a hyphenated word or a letter run with a number. */
 	private static inline final SLICE_SHAPE: String = '[A-Z][A-Z0-9]*(?:-[A-Za-z0-9]+)+|[A-Z]+[0-9]+[a-z]?';
 
-	private static inline final HOOK_DENIAL: String = 'PreToolUse:';
-	private static inline final BASH: String = 'Bash';
 	private static inline final NEWLINE: Int = 10;
 	private static inline final CARRIAGE_RETURN: Int = 13;
+	private static final WORKFLOW_PREFIX: String = 'mcp__plugin_workflow_wf__';
+	private static final MCP_PREFIX: String = 'mcp__';
+	private static final HOOK_DENIAL: String = 'PreToolUse:';
+	private static final BASH: String = 'Bash';
 
 	/**
 	 * The role of each known prompt opening; the first prefix that opens the prompt wins, no prefix means `ROLE_OTHER`.

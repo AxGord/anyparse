@@ -30,6 +30,26 @@ class OperandBindingTest extends Test {
 	/** The plain class a simple-name lookup would take for the operand's type. */
 	private static final PLAIN_TAG: String = 'package u;\n\nclass Tag {\n\n\tpublic function new() {}\n\n}\n';
 
+	/** An extern whose `@:overload` returns the `+` overloader while the written signature returns `String`. */
+	private static final EXT: String = 'package u;\n\nextern class Ext {\n\n'
+		+ '\t@:overload(function(x: Int): lib.Dir {})\n\tpublic static function m(x: String): String;\n\n}\n';
+
+	/** A class with a `toString`, named like the unindexed nullable alias `far.MaybeR`. */
+	private static final MAYBE: String = 'package u;\n\nclass MaybeR {\n\n\tpublic function new() {}\n\n'
+		+ '\tpublic function toString(): String {\n\t\treturn \'M\';\n\t}\n\n}\n';
+
+	/** A same-package `Tagish` class with a `toString`, and a `Holder` whose `get()` returns one. */
+	private static final TAGISH_TREE: Map<String, String> = [
+		'u/Tagish.hx' => 'package u;\n\nclass Tagish {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function toString(): String {\n\t\treturn \'C\';\n\t}\n\n}\n',
+		'u/Holder.hx' => 'package u;\n\nclass Holder {\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function get(): Tagish {\n\t\treturn new Tagish();\n\t}\n\n}\n'
+	];
+
+	private static final FIXABLE: String = 'fixable';
+	private static final REPORT_ONLY: String = 'report-only';
+	private static final ABSENT: String = 'absent';
+
 	@:pin('control')
 	@:killer('M-BINDING-UNINDEXED-IMPORT-FREE')
 	public function testImportOfUnindexedTypeOutranksSamePackageClass(): Void {
@@ -158,9 +178,8 @@ class OperandBindingTest extends Test {
 	@:pin('control')
 	@:killer('M-BINDING-UNINDEXED-IMPORT-FREE')
 	public function testNegationRulesBindTheOperands(): Void {
-		final flagDecl: String = 'package lib;\n\nabstract Flag(Bool) from Bool to Bool {\n\n'
-			+ '\t@:op(A == B) public inline function eq(b: Flag): Bool return this == cast b;\n\n'
-			+ '\t@:op(!A) public inline function inv(): Bool return this;\n\n}\n';
+		final flagDecl: String = 'package lib;\n\nabstract Flag(Bool) from Bool to Bool {\n\n\t@:op(A == B) public inline function eq(b: '
+			+ 'Flag): Bool return this == cast b;\n\n\t@:op(!A) public inline function inv(): Bool return this;\n\n}\n';
 		final plain: String = 'package u;\n\nclass Flag {\n\n\tpublic function new() {}\n\n}\n';
 		final use: String = 'package u;\n\nimport far.Flag;\n\nclass Use {\n\n\tpublic static function a(f: Flag, g: Flag): Bool {\n'
 			+ '\t\treturn !(f == g);\n\t}\n\n\tpublic static function b(f: Flag): Bool {\n\t\treturn !!f;\n\t}\n\n'
@@ -226,8 +245,8 @@ class OperandBindingTest extends Test {
 	@:pin('control')
 	@:killer('M-OPERAND-LOCAL-MACRO')
 	public function testLocalMacroIsNotTypedByItsReturn(): Void {
-		final use: String = 'package u;\n\nclass Use {\n\n\tpublic static function f(): String {\n\t\treturn gen() + \'a\' + \'b\';\n\t}\n\n'
-			+ '\tprivate static macro function gen(): String {\n\t\treturn null;\n\t}\n\n}\n';
+		final use: String = 'package u;\n\nclass Use {\n\n\tpublic static function f(): String {\n\t\treturn gen() + \'a\' + \'b\';\n'
+			+ '\t}\n\n\tprivate static macro function gen(): String {\n\t\treturn null;\n\t}\n\n}\n';
 		Assert.equals(REPORT_ONLY, foldOf(['u/Use.hx' => use], 'gen() + \''));
 	}
 
@@ -262,32 +281,6 @@ class OperandBindingTest extends Test {
 		Assert.isTrue(dropsToString(['u/MaybeR.hx' => MAYBE, 'u/Holder.hx' => holder]));
 	}
 
-	/** An extern whose `@:overload` returns the `+` overloader while the written signature returns `String`. */
-	private static final EXT: String = 'package u;\n\nextern class Ext {\n\n'
-		+ '\t@:overload(function(x: Int): lib.Dir {})\n\tpublic static function m(x: String): String;\n\n}\n';
-
-	/** A class with a `toString`, named like the unindexed nullable alias `far.MaybeR`. */
-	private static final MAYBE: String = 'package u;\n\nclass MaybeR {\n\n\tpublic function new() {}\n\n'
-		+ '\tpublic function toString(): String {\n\t\treturn \'M\';\n\t}\n\n}\n';
-
-	/** A `Use` whose outer `t: String` meets a switch over a `lib.Dir` with `pattern`, the branch body led by `lead`. */
-	private static function caseUse(pattern: String, lead: String, members: String = ''): String {
-		return 'package u;\n\nimport lib.Dir;\n\nclass Use {\n\n${members}\tpublic static function f(d: Dir): String {\n'
-			+ '\t\tfinal t: String = \'q\';\n\t\tswitch d {\n\t\t\t$pattern\n\t\t\t\t${lead}return t + \'a\' + \'b\';\n\t\t}\n'
-			+ '\t\treturn t;\n\t}\n\n}\n';
-	}
-
-	/** Whether `redundant-tostring` offers to drop `.toString()` off `h.get()` in a null-safe `Use`. */
-	private static function dropsToString(files: Map<String, String>): Bool {
-		final use: String = 'package u;\n\n@:nullSafety(Strict)\nclass Use {\n\n\tpublic static function f(h: Holder): String {\n'
-			+ '\t\treturn \'$${h.get().toString()}x\';\n\t}\n\n}\n';
-		final all: Map<String, String> = files.copy();
-		all['u/Use.hx'] = use;
-		return violationsAt(
-			new RedundantToString(), all, 'h.get().toString()'
-		).exists(v -> v.message.indexOf('not provably non-null') == -1);
-	}
-
 	/**
 	 * `h.get()` on the imported `far.Holder` (unindexed) is typed by where `h`'s type BINDS, not by the
 	 * simple name `Holder`: the same-package `u.Holder.get()` returns a class, `far.Holder.get()` an
@@ -320,13 +313,23 @@ class OperandBindingTest extends Test {
 		Assert.equals(ABSENT, toStringOf(TAGISH_TREE, 'import far.String;', 't: Tagish', 't.toString()'));
 	}
 
-	/** A same-package `Tagish` class with a `toString`, and a `Holder` whose `get()` returns one. */
-	private static final TAGISH_TREE: Map<String, String> = [
-		'u/Tagish.hx' => 'package u;\n\nclass Tagish {\n\n\tpublic function new() {}\n\n'
-			+ '\tpublic function toString(): String {\n\t\treturn \'C\';\n\t}\n\n}\n',
-		'u/Holder.hx' => 'package u;\n\nclass Holder {\n\n\tpublic function new() {}\n\n'
-			+ '\tpublic function get(): Tagish {\n\t\treturn new Tagish();\n\t}\n\n}\n'
-	];
+	/** A `Use` whose outer `t: String` meets a switch over a `lib.Dir` with `pattern`, the branch body led by `lead`. */
+	private static function caseUse(pattern: String, lead: String, members: String = ''): String {
+		return
+			'package u;\n\nimport lib.Dir;\n\nclass Use {\n\n$members\tpublic static function f(d: Dir): String {\n\t\tfinal t: String = '
+				+ '\'q\';\n\t\tswitch d {\n\t\t\t$pattern\n\t\t\t\t${lead}return t + \'a\' + \'b\';\n\t\t}\n\t\treturn t;\n\t}\n\n}\n';
+	}
+
+	/** Whether `redundant-tostring` offers to drop `.toString()` off `h.get()` in a null-safe `Use`. */
+	private static function dropsToString(files: Map<String, String>): Bool {
+		final use: String = 'package u;\n\n@:nullSafety(Strict)\nclass Use {\n\n\tpublic static function f(h: Holder): String {\n'
+			+ '\t\treturn \'$${h.get().toString()}x\';\n\t}\n\n}\n';
+		final all: Map<String, String> = files.copy();
+		all['u/Use.hx'] = use;
+		return violationsAt(
+			new RedundantToString(), all, 'h.get().toString()'
+		).exists(v -> v.message.indexOf('not provably non-null') == -1);
+	}
 
 	/**
 	 * What `redundant-tostring` makes of `<left> + <call>` in a null-safe `u/Use.hx` with `imports` whose
@@ -349,17 +352,13 @@ class OperandBindingTest extends Test {
 			FIXABLE;
 	}
 
-	private static inline final FIXABLE: String = 'fixable';
-	private static inline final REPORT_ONLY: String = 'report-only';
-	private static inline final ABSENT: String = 'absent';
-
 	/**
 	 * What `fold-adjacent-string-literals` makes of `<operand> + 'a' + 'b'` in `u/Use.hx`, a class
 	 * with `imports` whose function takes `param` and also declares `name(): String`, beside `extra`
 	 * and `lib.Dir`: fixed, reported without the fix, or not reported at all.
 	 */
 	private static function fold(extra: Map<String, String>, imports: String, param: String, needle: String, root: String = ''): String {
-		final expr: String = needle.substr(0, needle.length - 1) + '\'a\' + \'b\'';
+		final expr: String = '${needle.substr(0, needle.length - 1)}\'a\' + \'b\'';
 		final use: String = 'package u;\n\n$imports\n\nclass Use {\n\n\tpublic static function f($param): String {\n'
 			+ '\t\treturn $expr;\n\t}\n\n\tprivate static function name(): String {\n\t\treturn \'n\';\n\t}\n\n}\n';
 		final files: Map<String, String> = extra.copy();

@@ -143,7 +143,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	private static inline final DEFAULT_ALLOW_INHERITED_SHADOW: Bool = false;
 
 	/** The rule whose same-binding finding this one replaces - see `supersedes`. */
-	private static inline final NAMING_ID: String = 'naming';
+	private static final NAMING_ID: String = 'naming';
 
 	/**
 	 * A flagged name: one or more leading underscores followed by an alphanumeric. An

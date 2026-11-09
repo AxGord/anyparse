@@ -11,7 +11,7 @@ import devkit.Summary.Outcome;
 final class ScrubRow {
 
 	/** What `scrub-guard` writes on stderr when nothing is configured for the tree scan. */
-	private static inline final UNCONFIGURED: String = 'nothing checked';
+	private static final UNCONFIGURED: String = 'nothing checked';
 
 	/** The verdict of the row from the tree scan `tree` and the range scan `range`. */
 	public static function verdict(tree: Result, range: Result): Outcome {

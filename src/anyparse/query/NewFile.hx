@@ -54,13 +54,13 @@ using Lambda;
 final class NewFile {
 
 	/** Body emitted for an interface method the caller left unfilled. */
-	private static inline final STUB: String = 'throw new haxe.exceptions.NotImplementedException();';
+	private static final STUB: String = 'throw new haxe.exceptions.NotImplementedException();';
 
 	/** Reserved `@@` section name carrying the type doc-comment. */
-	private static inline final DOC_SECTION: String = 'doc';
+	private static final DOC_SECTION: String = 'doc';
 
 	/** Reserved `@@` section name carrying a raw block of free-form members. */
-	private static inline final MEMBERS_SECTION: String = 'members';
+	private static final MEMBERS_SECTION: String = 'members';
 
 	/** Type kinds that carry a `@:nullSafety(Strict)` meta (class / interface). */
 	private static final NULL_SAFE_KINDS: Array<String> = ['class', 'interface'];

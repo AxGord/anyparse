@@ -23,7 +23,7 @@ using StringTools;
 class MermaidRoundTripTest extends Test {
 
 	/** The corpus root, relative to the repository root the suite runs from. */
-	private static inline final CORPUS: String = 'test/corpus/mermaid';
+	private static final CORPUS: String = 'test/corpus/mermaid';
 
 	/** The corpus sets, each a directory of `.mmd` files. */
 	private static final SETS: Array<String> = ['docs', 'spec', 'demo', 'review'];
@@ -72,7 +72,7 @@ class MermaidRoundTripTest extends Test {
 	private static function corpusFiles(set: String): Array<String> {
 		final dir: String = '$CORPUS/$set';
 		final names: Array<String> = FileSystem.readDirectory(dir).filter(name -> name.endsWith('.mmd'));
-		names.sort(Reflect.compare);
+		names.sort(anyparse.util.Compare.compareString);
 		return names.map(name -> '$dir/$name');
 	}
 	#end

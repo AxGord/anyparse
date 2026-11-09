@@ -22,24 +22,24 @@ using Lambda;
 @:nullSafety(Strict)
 final class LanguageChoice {
 
-	private static inline final LANG_FLAG: String = '--lang';
+	private static final LANG_FLAG: String = '--lang';
 
 	/** A preset's grammar (`hxq` passes `--lang-default haxe`): taken only when no file argument names another. */
-	private static inline final PRESET_FLAG: String = '--lang-default';
+	private static final PRESET_FLAG: String = '--lang-default';
 
 	/** The positional naming standard input. */
-	private static inline final STDIN_POSITIONAL: String = '-';
+	private static final STDIN_POSITIONAL: String = '-';
 
 	/** `ast`'s flag naming standard input. */
-	private static inline final STDIN_FLAG: String = '--stdin';
+	private static final STDIN_FLAG: String = '--stdin';
 
 	/** The switch asking a command for a JSON document. */
-	private static inline final JSON_SWITCH: String = '--json';
+	private static final JSON_SWITCH: String = '--json';
 
 	/** The flag naming a report's format, and its JSON value. */
-	private static inline final FORMAT_FLAG: String = '--format';
+	private static final FORMAT_FLAG: String = '--format';
 
-	private static inline final JSON_FORMAT: String = 'json';
+	private static final JSON_FORMAT: String = 'json';
 
 	/**
 	 * `given` (a command's own argv) as the runs to make, each led by `--lang <name>` when it named none, and the stdin

@@ -122,9 +122,9 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/indentation/object_literal.hxtest'
 	];
 
-	private static inline final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';
-	private static inline final SECTION_SEP: String = '\n---\n';
 	private static inline final EXPECTED_SECTIONS: Int = 3;
+	private static final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';
+	private static final SECTION_SEP: String = '\n---\n';
 
 	private function new(): Void {}
 

@@ -122,22 +122,8 @@ final class ShardPlan {
 	/** What a class not in `CLASS_WEIGHTS` costs — the tail is flat, so one number covers it. */
 	private static inline final DEFAULT_WEIGHT: Int = 30;
 
-	/** Package a bare `addCase(new X())` registration belongs to. */
-	private static inline final DEFAULT_PACKAGE: String = 'unit';
-
-	/** The call this reads out of the runner. */
-	private static inline final REGISTER_CALL: String = 'addCase';
-
-	/** Every message this module produces carries the subcommand's own prefix. */
-	private static inline final TAG: String = 'apq shard-plan: ';
-
 	/** Longest source fragment quoted back for a registration that cannot be named. */
 	private static inline final QUOTE_LIMIT: Int = 120;
-
-	/** Why a registration was refused — the two halves of one message shape. */
-	private static inline final NAME_REASON: String = 'cannot derive an APQ_TEST filter from';
-
-	private static inline final CONDITIONAL_REASON: String = 'registration inside a conditional-compilation region';
 
 	/**
 	 * The base of each band in `primaryWeight`, in the order a UTF-8 locale
@@ -152,6 +138,20 @@ final class ShardPlan {
 	private static inline final RANK_DIGIT: Int = 10;
 	private static inline final RANK_LETTER: Int = 30;
 	private static inline final RANK_OTHER: Int = 1000;
+
+	/** Package a bare `addCase(new X())` registration belongs to. */
+	private static final DEFAULT_PACKAGE: String = 'unit';
+
+	/** The call this reads out of the runner. */
+	private static final REGISTER_CALL: String = 'addCase';
+
+	/** Every message this module produces carries the subcommand's own prefix. */
+	private static final TAG: String = 'apq shard-plan: ';
+
+	/** Why a registration was refused — the two halves of one message shape. */
+	private static final NAME_REASON: String = 'cannot derive an APQ_TEST filter from';
+
+	private static final CONDITIONAL_REASON: String = 'registration inside a conditional-compilation region';
 
 	/**
 	 * In-suite self-times from a suite profile, in milliseconds, with the number of tests each class ran — the

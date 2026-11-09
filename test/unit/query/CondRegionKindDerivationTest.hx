@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Meta;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -54,26 +55,26 @@ using StringTools;
 @:nullSafety(Strict)
 class CondRegionKindDerivationTest extends Test {
 
-	/** The grammar package whose ctor names the gate is derived from. */
-	private static inline final HAXE_GRAMMAR_DIR: String = 'src/anyparse/grammar/haxe';
-
 	/** Grammar opt-in marking a TERMINAL whose bytes are conditional-region text no node projects. */
 	private static inline final RAW_MARKER: String = '@:condRegionRaw';
-
-	/** Grammar opt-in marking the TERMINAL a directive's condition atom is captured as. */
-	private static inline final CONDITION_MARKER: String = '@:condRegionCondition';
-
-	/** The tag every grammar rule carries - what bounds the independent scan to declarations the macro also sees. */
-	private static inline final PEG_MARKER: String = '@:peg';
-
-	/** The `Seq` opt-out of transparency; its argument is the kind such a struct projects. */
-	private static inline final SPANNED_MARKER: String = '@:spanned';
 
 	/** Below this the independent scan found nothing to compare and every assertion over it would pass vacuously. */
 	private static inline final MIN_RAW_CAPTURE_KINDS: Int = 12;
 
 	/** Below this the marker scan found no seed and the coverage direction below would be empty. */
 	private static inline final MIN_RAW_TERMINALS: Int = 5;
+
+	/** The grammar package whose ctor names the gate is derived from. */
+	private static final HAXE_GRAMMAR_DIR: String = 'src/anyparse/grammar/haxe';
+
+	/** Grammar opt-in marking the TERMINAL a directive's condition atom is captured as. */
+	private static final CONDITION_MARKER: String = '@:condRegionCondition';
+
+	/** The tag every grammar rule carries - what bounds the independent scan to declarations the macro also sees. */
+	private static final PEG_MARKER: String = '@:peg';
+
+	/** The `Seq` opt-out of transparency; its argument is the kind such a struct projects. */
+	private static final SPANNED_MARKER: String = '@:spanned';
 
 	/**
 	 * The reported reproducer, verbatim. `return #if nodejs target; #else 2; #end` in
@@ -194,7 +195,7 @@ class CondRegionKindDerivationTest extends Test {
 	@:killer('M-OPAQUE-REGION-HAND-LIST')
 	public function testTheDerivedOpaqueKindsMatchAnIndependentScanOfTheGrammar(): Void {
 		final derived: Array<String> = (new HaxeQueryPlugin().refShape().opaqueCondRegionKinds ?? []).copy();
-		derived.sort(Reflect.compare);
+		derived.sort(Compare.compareString);
 		final scanned: Array<String> = rawCaptureKindsFromGrammarSource();
 		Assert.isTrue(
 			scanned.length >= MIN_RAW_CAPTURE_KINDS,
@@ -324,7 +325,7 @@ class CondRegionKindDerivationTest extends Test {
 		final out: Array<String> = [];
 		for (ctor => referenced in ctors) if (referenced.exists(name -> tainted.contains(name)) && !out.contains(ctor)) out.push(ctor);
 		for (holder => kind in spanned) if (tainted.contains(holder) && !out.contains(kind)) out.push(kind);
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 
@@ -409,7 +410,7 @@ class CondRegionKindDerivationTest extends Test {
 				if (owner != null && hit.annotation == marker && !out.contains(owner)) out.push(owner);
 			}
 		}
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

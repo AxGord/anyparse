@@ -78,14 +78,8 @@ final class DocMeasurementClaim extends RuleBase implements DefaultOff implement
 	/** The code unit an arrow between two values is drawn with. */
 	private static inline final ARROW: Int = 0x2192;
 
-	/** The arrow prose types where the drawn one is unavailable. */
-	private static inline final TYPED_ARROW: String = '->';
-
 	/** The dash a sentence is broken with, beside the ASCII one. */
 	private static inline final EM_DASH: Int = 0x2014;
-
-	/** The word standing between a count and the total it was counted out of. */
-	private static inline final RATIO_WORD: String = ' of ';
 
 	/** The code unit inline code is fenced with in prose. */
 	private static inline final BACKTICK: Int = '`'.code;
@@ -96,6 +90,12 @@ final class DocMeasurementClaim extends RuleBase implements DefaultOff implement
 	/** What every finding asks for, once the shape has been named. */
 	private static inline final ADVICE: String =
 		' — a reading is of one tree at one moment: keep the conclusion in a phrase, and leave the numbers to the commit message or the ledger';
+
+	/** The arrow prose types where the drawn one is unavailable. */
+	private static final TYPED_ARROW: String = '->';
+
+	/** The word standing between a count and the total it was counted out of. */
+	private static final RATIO_WORD: String = ' of ';
 
 	/** The unit tokens a duration is written with. */
 	private static final TIME_UNITS: Array<String> = ['ns', 'us', 'ms', 's', 'min'];

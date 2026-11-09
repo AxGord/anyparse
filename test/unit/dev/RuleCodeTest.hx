@@ -14,10 +14,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class RuleCodeTest extends Test {
 
-	private static inline final CLI_FILE: String = 'src/anyparse/query/cli/Cmd.hx';
-	private static inline final QUERY_FILE: String = 'src/anyparse/query/Index.hx';
-	private static inline final CHECK_FILE: String = 'src/anyparse/check/NewRule.hx';
-	private static inline final OUTSIDE_FILE: String = 'tools/Moved.hx';
+	private static final CLI_FILE: String = 'src/anyparse/query/cli/Cmd.hx';
+	private static final QUERY_FILE: String = 'src/anyparse/query/Index.hx';
+	private static final CHECK_FILE: String = 'src/anyparse/check/NewRule.hx';
+	private static final OUTSIDE_FILE: String = 'tools/Moved.hx';
 
 	public function testAnEmptyDiffTouchesNoRuleCode(): Void {
 		TempDir.with(dir -> {

@@ -15,8 +15,8 @@ import utest.Test;
  */
 class HxChainCallTrailingCommaTest extends Test {
 
-	private static inline final KEEP: String = '{"wrapping": {"trailingComma": "keep"}}';
-	private static inline final ADD: String = '{"trailingCommas": {"callArgumentDefault": "yes"}}';
+	private static final KEEP: String = '{"wrapping": {"trailingComma": "keep"}}';
+	private static final ADD: String = '{"trailingCommas": {"callArgumentDefault": "yes"}}';
 
 	@:pin('control')
 	@:killer('M-CHAIN-CALL-FLAT-SOURCE-TRAIL-OFF')

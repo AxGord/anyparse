@@ -31,20 +31,20 @@ class ReificationGateTest extends Test {
 	private static inline final DUP_QUOTED: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n'
 		+ '\t\t\tg(\'marker\');\n\t\t\tg(\'marker\');\n\t\t\tg(\'marker\');\n\t\t};\n\t}\n}\n';
 
-	/** The same three occurrences as ordinary code. */
-	private static inline final DUP_PLAIN: String =
-		'class C {\n\tfunction f():Void {\n\t\tg(\'marker\');\n\t\tg(\'marker\');\n\t\tg(\'marker\');\n\t}\n}\n';
-
 	/** An annotated `Dynamic` local — `avoid-dynamic`'s trigger — written inside a quotation. */
 	private static inline final DYNAMIC_QUOTED: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n'
 		+ '\t\t\tvar eff:Dynamic = source;\n\t\t\ttrace(eff);\n\t\t};\n\t}\n}\n';
 
+	/** The same three occurrences as ordinary code. */
+	private static final DUP_PLAIN: String =
+		'class C {\n\tfunction f():Void {\n\t\tg(\'marker\');\n\t\tg(\'marker\');\n\t\tg(\'marker\');\n\t}\n}\n';
+
 	/** The same local as ordinary code. */
-	private static inline final DYNAMIC_PLAIN: String =
+	private static final DYNAMIC_PLAIN: String =
 		'class C {\n\tfunction f():Void {\n\t\tvar eff:Dynamic = source;\n\t\ttrace(eff);\n\t}\n}\n';
 
 	/** One `MARK` identifier inside a quotation and one outside — what the test doubles report on. */
-	private static inline final MARKED: String =
+	private static final MARKED: String =
 		'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tMARK;\n\t\t};\n\t\tMARK;\n\t}\n}\n';
 
 	public function testUngatedRuleLosesItsQuotedFinding(): Void {

@@ -29,11 +29,11 @@ using StringTools;
 final class GateLint {
 
 	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
-	private static inline final TOUCHED_REPORT: String = 'lint-touched.json';
+	private static final TOUCHED_REPORT: String = 'lint-touched.json';
 
-	private static inline final REJECTED: String = 'compiler oracle REJECTED ';
-	private static inline final REJECTED_END: String = ' — build does not typecheck';
-	private static inline final TOUCHED_BASE_REPORT: String = 'lint-touched-base.json';
+	private static final REJECTED: String = 'compiler oracle REJECTED ';
+	private static final REJECTED_END: String = ' — build does not typecheck';
+	private static final TOUCHED_BASE_REPORT: String = 'lint-touched-base.json';
 
 	/** The engine's build flags, which with `src` make it what it is: the shared file and the leaf that adds the codegen flag. */
 	private static final ENGINE_FLAGS: Array<String> = ['bin/apq-js-common.hxml', 'bin/apq-js.hxml'];

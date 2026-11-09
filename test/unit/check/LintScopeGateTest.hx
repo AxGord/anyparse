@@ -44,11 +44,11 @@ class LintScopeGateTest extends Test {
 	private static inline final BARE_REPORT: String = 'package pkg;\n\nclass Align {\n\tpublic static inline final LEFT:Int = 0;\n}';
 
 	/** A file OUTSIDE the report set whose literal is the only thing keeping `Align` alive at run time. */
-	private static inline final RESOLVER: String =
+	private static final RESOLVER: String =
 		'package pkg;\n\nclass Use {\n\tpublic static function m():Dynamic {\n\t\treturn Type.resolveClass(\'pkg.Align\');\n\t}\n}';
 
 	/** The same, spelled through interpolation — the half `literalOf` answers null for. */
-	private static inline final INTERPOLATING: String =
+	private static final INTERPOLATING: String =
 		"package pkg;\n\nclass Use {\n\tpublic static function m(p:String):Dynamic {\n\t\treturn Reflect.field(this, '${p}Value');\n\t}\n}";
 
 	public function new(): Void {

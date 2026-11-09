@@ -91,10 +91,10 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 	 * The fragment that precedes the OCCURRENCE TALLY in a message, shared by the builder and
 	 * by `messageIdentity` so the mask anchor cannot drift from the wording it points at.
 	 */
-	private static inline final WRITTEN_LEAD: String = ' written ';
+	private static final WRITTEN_LEAD: String = ' written ';
 
 	/** The same, for the DISTINCT-FILE tally of the cross-file wording. */
-	private static inline final ACROSS_LEAD: String = 'across ';
+	private static final ACROSS_LEAD: String = 'across ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

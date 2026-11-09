@@ -13,7 +13,7 @@ import anyparse.query.CallGraphNames;
 final class PositiveSinks {
 
 	/** How the one notice a reporting run gives of the sinks it applied begins (`notice`). */
-	public static inline final NOTICE: String = 'builtin sinks applied: ';
+	public static final NOTICE: String = 'builtin sinks applied: ';
 
 	/** How many blocking library calls the grammar names. */
 	public final patterns: Int;

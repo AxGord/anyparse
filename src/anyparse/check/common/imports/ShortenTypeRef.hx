@@ -254,32 +254,32 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 */
 	private static inline final DEFAULT_IMPORT_MIN_USES: Int = 2;
 
-	/** The `apq.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
-	private static inline final IMPORT_MIN_USES_KEY: String = 'importMinUses';
-
-	/** The `apq.json` option that opts VALUE positions (static-access chains) in; type positions are always on. */
-	private static inline final VALUE_POSITIONS_KEY: String = 'valuePositions';
-
 	/** The finding message when the short name is ALREADY reachable — the rewrite needs no import. */
 	private static inline final MSG_FIXABLE: String = 'an over-qualified type reference - the short name resolves to the same type here';
 
+	/** The `apq.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
+	private static final IMPORT_MIN_USES_KEY: String = 'importMinUses';
+
+	/** The `apq.json` option that opts VALUE positions (static-access chains) in; type positions are always on. */
+	private static final VALUE_POSITIONS_KEY: String = 'valuePositions';
+
 	/** The finding message when the rewrite comes WITH a fresh import (the add-import arm). */
-	private static inline final MSG_IMPORTABLE: String =
+	private static final MSG_IMPORTABLE: String =
 		'a fully-qualified type reference repeated in this file - an import would let it be spelled short';
 
 	/** The finding message when the index could not prove a changed reference names the same declaration. */
-	private static inline final MSG_UNPROVEN: String =
-		'an over-qualified type reference (report-only: the resolution index does not prove the shorter spelling names the same declaration)';
+	private static final MSG_UNPROVEN: String = 'an over-qualified type reference ('
+		+ 'report-only: the resolution index does not prove the shorter spelling names the same declaration)';
 
 	/**
 	 * What the fix ledger is told about an `MSG_UNPROVEN` finding — report-only BY DESIGN, not a
 	 * fixer that failed. Shorter than the message because the ledger already names the rule.
 	 */
-	private static inline final DECLINE_UNPROVEN: String =
+	private static final DECLINE_UNPROVEN: String =
 		'report-only by design: the resolution index does not prove the shorter spelling names the same declaration';
 
 	/** What the fix ledger is told about a value site the compiler did not confirm keeps naming the same declaration. */
-	private static inline final DECLINE_VALUE_UNANSWERED: String =
+	private static final DECLINE_VALUE_UNANSWERED: String =
 		'the compiler does not confirm that the short name at this value position names the same declaration';
 
 	/**

@@ -16,10 +16,10 @@ final class CliFlags {
 	 * it — unless the command's spec says it ends the options (`search -- '--$x'`). A spec that reads neither
 	 * refuses it as an unknown option.
 	 */
-	public static inline final SEPARATOR: String = '--';
+	public static final SEPARATOR: String = '--';
 
 	/** The long-flag prefix: a token spelled with it that no spec declares is an unknown option. */
-	private static inline final LONG_PREFIX: String = '--';
+	private static final LONG_PREFIX: String = '--';
 
 	private static final GLOBAL_VALUED: Array<String> = ['--lang', '--lang-default'];
 	private static final GLOBAL_SWITCHES: Array<String> = ['-h', '--help'];

@@ -16,10 +16,10 @@ import utest.Test;
  */
 class HxCallArgCommentAfterLastSepTest extends Test {
 
-	private static inline final KEEP: String = '{"wrapping": {"trailingComma": "keep"}}';
-	private static inline final REMOVE: String = '{"wrapping": {"trailingComma": "remove"}}';
 	private static inline final ADD: String = '{"wrapping": {"trailingComma": "keep", "callParameter": {'
 		+ '"defaultWrap": "onePerLine", "rules": []}}, "trailingCommas": {"callArgumentDefault": "yes"}}';
+	private static final KEEP: String = '{"wrapping": {"trailingComma": "keep"}}';
+	private static final REMOVE: String = '{"wrapping": {"trailingComma": "remove"}}';
 
 	@:pin('control')
 	@:killer('M-CALL-AFTER-LAST-SEP-BLOCK-LEFT')

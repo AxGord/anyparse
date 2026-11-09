@@ -16,10 +16,10 @@ import anyparse.query.cli.DataPath.WhereClause;
 @:nullSafety(Strict)
 final class GetCommand implements CliCommand implements StdinDocument implements LanguageFreeWhen {
 
-	private static inline final OP: String = 'get';
+	private static final OP: String = 'get';
 
 	/** The file argument naming standard input. */
-	private static inline final STDIN: String = '-';
+	private static final STDIN: String = '-';
 
 	public function new() {}
 

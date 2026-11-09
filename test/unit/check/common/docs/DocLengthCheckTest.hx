@@ -19,14 +19,14 @@ using StringTools;
  */
 class DocLengthCheckTest extends Test {
 
-	/** An empty document: no rule declares a maximum, so the check's own default stands. */
-	private static inline final DEFAULT: String = '{}';
-
-	/** A document declaring a maximum far below the default, so a fixture cannot pass on either by luck. */
-	private static inline final SHORT: String = '{"rules":{"doc-length":{"max":5}}}';
-
 	/** The default this project's config does not override, spelled where a fixture asserts against it. */
 	private static inline final DEFAULT_MAX: Int = 40;
+
+	/** An empty document: no rule declares a maximum, so the check's own default stands. */
+	private static final DEFAULT: String = '{}';
+
+	/** A document declaring a maximum far below the default, so a fixture cannot pass on either by luck. */
+	private static final SHORT: String = '{"rules":{"doc-length":{"max":5}}}';
 
 	public function testABlockPastTheDefaultIsFlagged(): Void {
 		final vs: Array<Violation> = violations(DEFAULT, docBlock(DEFAULT_MAX + 5));
@@ -46,8 +46,9 @@ class DocLengthCheckTest extends Test {
 		final vs: Array<Violation> = violations(DEFAULT, src);
 		final span: Null<Span> = vs[0].span;
 		Assert.notNull(span);
-		Assert.isTrue(src.substring((span: Span).from, (span: Span).to).startsWith('/**'), 'the span opens the block');
-		Assert.isTrue(src.substring((span: Span).from, (span: Span).to).endsWith('*/'), 'the span closes the block');
+		final span2: Span = (span: Span);
+		Assert.isTrue(src.substring(span2.from, span2.to).startsWith('/**'), 'the span opens the block');
+		Assert.isTrue(src.substring(span2.from, span2.to).endsWith('*/'), 'the span closes the block');
 	}
 
 	/**

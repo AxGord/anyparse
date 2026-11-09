@@ -275,7 +275,7 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	private static inline final DISK: String = 'class Disk { public static function stat(p:String):Void {} }';
+	private static final DISK: String = 'class Disk { public static function stat(p:String):Void {} }';
 
 	/** `N.run` loops `xs.length` times over `a`, then three times over `b`, both loops written `for (i in 0...n)`, bounded by `entry`. */
 	private static function sameHeaders(entry: String): Array<Violation> {

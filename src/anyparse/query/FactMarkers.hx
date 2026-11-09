@@ -39,7 +39,7 @@ enum FactMarker {
 final class FactMarkers {
 
 	/** The prefix of the marker naming the method whose declared code holds a fact of a spliced reflective body. */
-	private static inline final REFLECTION_FROM: String = 'reflection-from:';
+	private static final REFLECTION_FROM: String = 'reflection-from:';
 
 	/** The marker `text` reads as; `Unknown` for one the vocabulary does not hold. */
 	public static function read(text: String): FactMarker {

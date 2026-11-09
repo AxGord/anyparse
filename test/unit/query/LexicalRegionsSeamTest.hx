@@ -28,7 +28,7 @@ using StringTools;
  */
 class LexicalRegionsSeamTest extends Test {
 
-	private static inline final HAXE_RULES: String = 'src/anyparse/check/haxe/';
+	private static final HAXE_RULES: String = 'src/anyparse/check/haxe/';
 
 	/** Comment, interpolating literal with a nested same-quote hole, and a regex holding an opener. */
 	private static final SOURCE: String = "// note\nvar s = '${c ? '// inner' : x}';\nvar r = ~/[\\/*]/;\n";

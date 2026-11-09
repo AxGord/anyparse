@@ -20,7 +20,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class LintNewTest extends Test {
 
-	private static inline final MODULE: String =
+	private static final MODULE: String =
 		'class A {\n\tvar a: Int;\n\tvar b: Int;\n\tvar c: Int;\n\tvar d: Int;\n\tfunction f(x) { return x; } // FIXME one\n}\n';
 
 	/** The stand-in engine: `lint` reports a `FIXME` per line, `lint-diff` the multiset difference of two reports. */

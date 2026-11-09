@@ -25,7 +25,7 @@ class AddMemberSliceTest extends Test {
 	 * collapses to one and the brace blank is removed, which is why nothing in this suite saw the
 	 * doubling.
 	 */
-	private static inline final TWO_BLANK_LINES: String = '{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}';
+	private static final TWO_BLANK_LINES: String = '{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}';
 
 	/** Append a method to a class that already has a member. */
 	public function testAppendToClassWithMembers(): Void {

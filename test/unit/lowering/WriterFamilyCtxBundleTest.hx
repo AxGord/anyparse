@@ -29,11 +29,11 @@ using StringTools;
  */
 class WriterFamilyCtxBundleTest extends Test {
 
-	private static inline final MACRO_DIR: String = 'src/anyparse/macro';
-	private static inline final WRITER_LOWERING: String = 'src/anyparse/macro/WriterLowering.hx';
-
 	/** Below this the typedef bodies were mis-parsed and every per-field assertion would pass vacuously. */
 	private static inline final MIN_BUNDLE_FIELDS: Int = 25;
+
+	private static final MACRO_DIR: String = 'src/anyparse/macro';
+	private static final WRITER_LOWERING: String = 'src/anyparse/macro/WriterLowering.hx';
 
 	/** Each family module and the ctx bundle it declares — the seven `WriterLowering` extractions that carry state. */
 	private static final EXPECTED_BUNDLES: Map<String, String> = [

@@ -66,7 +66,7 @@ final class RootCauseFold {
 	 * What a finding a hold around it turned info (`ThreadSafety.nestHolds`, `foldEnclosed`) adds when every finding it
 	 * was turned onto ended info too: it names no warning.
 	 */
-	public static inline final INFO_COVER_NOTE: String = ' — that finding is itself info and says where its work is reported';
+	public static final INFO_COVER_NOTE: String = ' — that finding is itself info and says where its work is reported';
 
 	/** How many holds a folded finding names before it counts the rest. */
 	private static inline final NAMED_CAP: Int = 3;

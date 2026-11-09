@@ -19,7 +19,7 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class ExtractConstantToMode {
 
-	private static inline final OP: String = 'extract-constant';
+	private static final OP: String = 'extract-constant';
 
 	public static function run(args: Array<String>): Int {
 		// noqa: complexity

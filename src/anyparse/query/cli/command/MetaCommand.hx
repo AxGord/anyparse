@@ -39,7 +39,7 @@ typedef MetaOpts = {
 final class MetaCommand implements CliCommand implements LeadingQueryCount {
 
 	/** The flag that names the declaration kind — spelled once, so the kind gate reports the flag the user typed. */
-	private static inline final ON_FLAG: String = '--on';
+	private static final ON_FLAG: String = '--on';
 
 	private static final ARG_CONTAINS_FLAG: String = '--arg-contains';
 	private static final CMD: String = 'meta';

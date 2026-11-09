@@ -25,7 +25,7 @@ typedef MergePlace = {
 final class MergeBrief {
 
 	/** The prefix `apq merge-file` reports a conflicting place with. */
-	public static inline final CONFLICT_PREFIX: String = 'merge-conflict: ';
+	public static final CONFLICT_PREFIX: String = 'merge-conflict: ';
 
 	/** The choices a place can be settled with, as `apq merge-file --choices` reads them. */
 	public static final CHOICES: Array<String> = ['ours', 'theirs', 'both'];

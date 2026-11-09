@@ -40,7 +40,7 @@ using anyparse.macro.MetaInspect;
 @:access(anyparse.macro.TriviaTypeSynth)
 final class TriviaPairConverters {
 
-	private static inline final CONVERTERS_CLASS_NAME: String = 'Converters';
+	private static final CONVERTERS_CLASS_NAME: String = 'Converters';
 
 	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with

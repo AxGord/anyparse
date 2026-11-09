@@ -26,38 +26,38 @@ import js.node.fs.Stats;
 final class CodeCacheLauncher {
 
 	/** The suffix the cache file adds to the binary's path. */
-	public static inline final SUFFIX: String = '.v8cache';
+	public static final SUFFIX: String = '.v8cache';
 
 	/** The first argument that makes this a warm run. */
-	public static inline final WARM: String = '--warm';
+	public static final WARM: String = '--warm';
 
 	/** Set to `1`, every call says on stderr whether its cache was a hit, a miss or refused by V8. */
-	public static inline final TRACE_ENV: String = 'APQ_CODE_CACHE_TRACE';
-
-	/** The bytes every cache file opens with; bump the digit on any change to the layout `writeCache` documents. */
-	private static inline final MAGIC: String = 'apq-cc1\n';
+	public static final TRACE_ENV: String = 'APQ_CODE_CACHE_TRACE';
 
 	/** The length of a SHA-256 digest: the cache key and the payload's checksum. */
 	private static inline final DIGEST_LENGTH: Int = 32;
-
-	private static inline final SHA256: String = 'sha256';
-
-	/** The wrapper node's own module loader puts around a CommonJS module (`Module.wrap`). */
-	private static inline final WRAP_HEAD: String = '(function (exports, require, module, __filename, __dirname) { ';
-
-	private static inline final WRAP_TAIL: String = '\n});';
-
-	/** The `-resource` name of the Haxe source a warm run drives the engine over (`bin/apq-launch-common.hxml`). */
-	private static inline final FIXTURE_RESOURCE: String = 'warm-fixture';
-
-	/** The first argument of the child process a warm run drives the engine in. */
-	private static inline final WARM_RUN: String = '--warm-run';
 
 	/** How long a warm run may take before the build goes on without its cache. */
 	private static inline final WARM_TIMEOUT_MS: Int = 120000;
 
 	/** The placeholder `WARM_RUNS` writes for the fixture's path. */
 	private static inline final FIXTURE: String = '<fixture>';
+
+	/** The bytes every cache file opens with; bump the digit on any change to the layout `writeCache` documents. */
+	private static final MAGIC: String = 'apq-cc1\n';
+
+	private static final SHA256: String = 'sha256';
+
+	/** The wrapper node's own module loader puts around a CommonJS module (`Module.wrap`). */
+	private static final WRAP_HEAD: String = '(function (exports, require, module, __filename, __dirname) { ';
+
+	private static final WRAP_TAIL: String = '\n});';
+
+	/** The `-resource` name of the Haxe source a warm run drives the engine over (`bin/apq-launch-common.hxml`). */
+	private static final FIXTURE_RESOURCE: String = 'warm-fixture';
+
+	/** The first argument of the child process a warm run drives the engine in. */
+	private static final WARM_RUN: String = '--warm-run';
 
 	/**
 	 * The command lines of a warm run, each given `--lang haxe` after its subcommand as the `hxq` shim gives it. V8

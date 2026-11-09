@@ -11,7 +11,7 @@ import devkit.RawJson;
  */
 class LintCategoryCliTest extends Test {
 
-	private static inline final SOURCE: String = 'package p;\n\n/** C. */\nclass C {\n\t//\n\tpublic static final S:String = "a";\n}\n';
+	private static final SOURCE: String = 'package p;\n\n/** C. */\nclass C {\n\t//\n\tpublic static final S:String = "a";\n}\n';
 
 	@:pin('control') @:killer('M-CATEGORY-FILTER-IGNORED')
 	public function testACategoryNarrowsTheRunToItsRules(): Void {

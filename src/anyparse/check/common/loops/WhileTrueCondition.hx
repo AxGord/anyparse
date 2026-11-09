@@ -82,12 +82,12 @@ using StringTools;
 final class WhileTrueCondition extends RuleBase implements DefaultOff {
 
 	/** The only boolean literal an always-true loop header can be written as. */
-	private static inline final TRUE_LITERAL: String = 'true';
+	private static final TRUE_LITERAL: String = 'true';
 
-	private static inline final MESSAGE: String = 'this while (true) can lift its break condition into the loop header';
+	private static final MESSAGE: String = 'this while (true) can lift its break condition into the loop header';
 
 	/** ASCII-only note appended when a comment the rewrite would delete keeps the finding report-only. */
-	private static inline final COMMENT_NOTE: String = ' (comment in the dropped glue - lift by hand)';
+	private static final COMMENT_NOTE: String = ' (comment in the dropped glue - lift by hand)';
 
 	public function new() {
 		super(

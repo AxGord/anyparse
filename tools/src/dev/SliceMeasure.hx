@@ -26,7 +26,7 @@ using StringTools;
 final class SliceMeasure {
 
 	/** The roots a reading covers when the caller names none. */
-	public static inline final DEFAULT_ROOTS: String = 'src';
+	public static final DEFAULT_ROOTS: String = 'src';
 
 	/** The hex digits of a cache key's digest a file name carries. */
 	private static inline final KEY_LENGTH: Int = 16;

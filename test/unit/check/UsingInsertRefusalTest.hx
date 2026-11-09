@@ -42,7 +42,7 @@ import anyparse.runtime.Span;
 class UsingInsertRefusalTest extends Test {
 
 	/** A module whose header declares one `using`, so the insert anchor is that declaration's first byte. */
-	private static inline final SRC: String = 'package p;\n\nusing StringTools;\n\nclass C {\n\tfunction f() {}\n}\n';
+	private static final SRC: String = 'package p;\n\nusing StringTools;\n\nclass C {\n\tfunction f() {}\n}\n';
 
 	/**
 	 * `appendUsingInsert` must answer `false` when the anchor is covered — `true` told the caller

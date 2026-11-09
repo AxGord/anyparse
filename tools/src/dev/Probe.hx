@@ -66,7 +66,7 @@ final class Probe {
 	private static inline final QUOTE_WIDTH: Int = 120;
 
 	/** The key of an invocation's expectation in a kit. */
-	private static inline final EXPECT_KEY: String = 'expect';
+	private static final EXPECT_KEY: String = 'expect';
 
 	/** Whether `verdict` passes: nothing deviates and, when `strict`, no known-defect row has moved either. */
 	public static inline function holds(verdict: Verdict, strict: Bool): Bool {

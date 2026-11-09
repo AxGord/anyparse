@@ -27,8 +27,8 @@ using StringTools;
 @:nullSafety(Strict)
 class HxAnonFieldTypeProjectionTest extends Test {
 
-	private static inline final XML_TEXT: String = 'class C { function f():{ xml:Xml, text:String } return null; }';
-	private static inline final INT_INT: String = 'class C { function f():{ xml:Int, text:Int } return null; }';
+	private static final XML_TEXT: String = 'class C { function f():{ xml:Xml, text:String } return null; }';
+	private static final INT_INT: String = 'class C { function f():{ xml:Int, text:Int } return null; }';
 
 	/** The defect itself: same field names, different field types, one S-expr. */
 	public function testFieldTypesDiscriminateTwoAnonShapes(): Void {

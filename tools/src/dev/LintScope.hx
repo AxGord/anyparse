@@ -31,10 +31,10 @@ final class LintScope {
 	/** The engine's rule listing, read by `scopeDependent`. */
 	public static final RULE_LISTING: Array<String> = ['lint', '--list-rules', '--format', 'json'];
 
-	private static inline final AMBIENT: String = 'import.hx';
-
 	/** How many moved findings a backstop refusal names. */
 	private static inline final NAMED: Int = 3;
+
+	private static final AMBIENT: String = 'import.hx';
 
 	/** The other files a lint reads besides the sources: the oracle's build files, the formatter's config, the library list. */
 	private static final INPUT_FILES: Array<String> = ['hxformat.json', 'haxelib.json'];

@@ -17,9 +17,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class PoolTest extends Test {
 
-	/** Prints its first argument. */
-	private static inline final PRINT_ARG: String = 'process.stdout.write(process.argv[1])';
-
 	/**
 	 * Marks itself started in the directory `argv[1]` (as `argv[2]`), then waits for `argv[3]` marks in all: it exits 0
 	 * only when that many commands were running at once, 1 when it gave up waiting.
@@ -30,14 +27,17 @@ final class PoolTest extends Test {
 		+ ' if (fs.readdirSync(dir).filter(f => f.startsWith("job")).length >= Number(want)) process.exit(0);'
 		+ ' if (Date.now() > end) process.exit(1); setTimeout(wait, 20); })();';
 
+	/** Prints its first argument. */
+	private static final PRINT_ARG: String = 'process.stdout.write(process.argv[1])';
+
 	/** Never ends by itself. */
-	private static inline final HANG: String = 'setInterval(() => {}, 1000)';
+	private static final HANG: String = 'setInterval(() => {}, 1000)';
 
 	/** Copies its standard input to its standard output. */
-	private static inline final CAT: String = 'process.stdin.pipe(process.stdout)';
+	private static final CAT: String = 'process.stdin.pipe(process.stdout)';
 
 	/** Prints `DEVKIT_PROBE`. */
-	private static inline final SHOW_ENV: String = 'process.stdout.write(String(process.env.DEVKIT_PROBE))';
+	private static final SHOW_ENV: String = 'process.stdout.write(String(process.env.DEVKIT_PROBE))';
 
 	private final _node: String = js.Node.process.execPath;
 

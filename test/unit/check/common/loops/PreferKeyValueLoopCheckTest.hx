@@ -22,18 +22,17 @@ using StringTools;
  */
 class PreferKeyValueLoopCheckTest extends Test {
 
-	/**
-	 * The types `wrapSink` fixtures call into, declared so the body's calls can be followed.
-	 * Members of `C` that grow `items`, directly (`refresh`) and through a second hop (`relay`).
-	 */
-	private static inline final GROWS: String =
-		'\n\n\tfunction refresh(i:Int):Void items.push(null);\n\n\tfunction relay(i:Int):Void refresh(i);';
-
 	private static inline final SUPPORT: String = '\n\nclass Sink {\n\tpublic function new() {}\n\n'
 		+ '\tpublic function use(a:Dynamic, ?b:Dynamic):Void {}\n\n\tpublic function log(a:Dynamic, ?b:Dynamic):Void {}\n\n'
 		+ '\tpublic function before(a:Int):Void {}\n\n\tpublic function defer(a:Dynamic, ?b:Dynamic):Void {}\n\n'
 		+ '\tpublic function all():Array<Item> return [];\n\n\tpublic function make(a:Int):Item return null;\n}\n\n'
 		+ 'class Item {\n\tpublic var pos:Pos;\n}\n\nclass Pos {\n\tpublic function clone():Pos return this;\n}';
+
+	/**
+	 * The types `wrapSink` fixtures call into, declared so the body's calls can be followed.
+	 * Members of `C` that grow `items`, directly (`refresh`) and through a second hop (`relay`).
+	 */
+	private static final GROWS: String = '\n\n\tfunction refresh(i:Int):Void items.push(null);\n\n\tfunction relay(i:Int):Void refresh(i);';
 
 	public function testBasicFlagged(): Void {
 		final vs: Array<Violation> = violations(wrapFn('for (i in 0...items.length) {\n\t\t\tfinal it = items[i];\n\t\t\tuse(it);\n\t\t}'));

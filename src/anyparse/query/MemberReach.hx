@@ -222,7 +222,7 @@ final class MemberReach {
 	private static inline final MAX_FRESH_DEPTH: Int = 4;
 
 	/** The step kind of a constructor the walk admitted through reflective instantiation. */
-	private static inline final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
+	private static final REFLECTIVE_CONSTRUCTOR: String = 'reflective constructor';
 
 	/** The admissions of target code by target code (`AdmissionSite.kind`): what it hands on, it was handed (`admitTarget`). */
 	private static final TARGET_ADMISSIONS: Array<String> = ['extern', 'native'];

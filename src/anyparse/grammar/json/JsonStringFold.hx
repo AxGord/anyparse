@@ -23,7 +23,7 @@ using StringTools;
 final class JsonStringFold implements StringFoldSupport {
 
 	/** The one quote a JSON string is written in. */
-	private static inline final QUOTE: String = '"';
+	private static final QUOTE: String = '"';
 
 	public function new() {}
 

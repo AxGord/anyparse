@@ -32,7 +32,7 @@ using StringTools;
 class LintSliceTest extends Test {
 
 	/** The project's own `apq.json` names functions a one-file fixture cannot resolve; a framework test reads none of it. */
-	private static inline final NO_RULES: String = '{}';
+	private static final NO_RULES: String = '{}';
 
 	/**
 	 * A type-position reference (`var x:Used`) keeps an import; an import

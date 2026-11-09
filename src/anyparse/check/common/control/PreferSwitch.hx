@@ -57,7 +57,7 @@ final class PreferSwitch extends RuleBase {
 	 * Appended after a branch body that does not end in one of `SELF_TERMINATING_ENDINGS`: the
 	 * `;` before an `else` is elided (`if (c) a else b;`), so a then-branch can arrive bare.
 	 */
-	private static inline final BODY_TERMINATOR: String = ';';
+	private static final BODY_TERMINATOR: String = ';';
 
 	/**
 	 * A body ending in `;` carries its own terminator, and one ending in `}` needs none — the

@@ -25,8 +25,8 @@ typedef ImportSpelled = {
 @:nullSafety(Strict)
 final class ImportSpelling {
 
-	public static inline final IMPORT_WORD: String = 'import';
-	public static inline final USING_WORD: String = 'using';
+	public static final IMPORT_WORD: String = 'import';
+	public static final USING_WORD: String = 'using';
 
 	/** The width of ` as ` / ` in ` — the alias keyword with the space on each side. */
 	private static inline final ALIAS_WORD_WIDTH: Int = 4;

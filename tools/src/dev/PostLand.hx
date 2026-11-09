@@ -29,16 +29,17 @@ final class PostLand {
 	public static inline final USAGE: String =
 		'usage: dev post-land run <sha> [--repo <dir>] [--cache <dir>] | status [--cache <dir>] | clear (<sha>... | --all) [--cache <dir>]';
 
-	/** The directory of the snapshot cache that holds the records and the run's own copy of `dev.js`. */
-	private static inline final DIRECTORY: String = 'post-land';
-
 	private static inline final RUNNING: String = 'running';
 	private static inline final RED: String = 'red';
-	private static inline final LOG: String = 'log';
-	private static inline final PID: String = 'pid';
-	private static inline final SCRIPT: String = 'dev.js';
-	private static inline final WORK_PREFIX: String = 'apq-dev';
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
+
+	/** The directory of the snapshot cache that holds the records and the run's own copy of `dev.js`. */
+	private static final DIRECTORY: String = 'post-land';
+
+	private static final LOG: String = 'log';
+	private static final PID: String = 'pid';
+	private static final SCRIPT: String = 'dev.js';
+	private static final WORK_PREFIX: String = 'apq-dev';
 
 	/** The totals line `dev shard` ends its tally with. */
 	private static final TOTALS: EReg = ~/--- suite-shard: \d+ classes \/ (\d+) tests \/ (\d+) assertions/;

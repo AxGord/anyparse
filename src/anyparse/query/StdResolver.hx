@@ -58,7 +58,7 @@ final class StdResolver {
 	 * The toplevel file every Haxe std ships — the marker `isStdFile` checks before ATTRIBUTING a
 	 * path to std, so a `HAXE_STD_PATH` aimed at something else cannot lend its name to a tree.
 	 */
-	private static inline final STD_MARKER: String = 'Std.hx';
+	private static final STD_MARKER: String = 'Std.hx';
 
 	/** The memoised `stdDir` result; `_computed` distinguishes a cached null from "not yet computed". */
 	private static var _cached: Null<String> = null;

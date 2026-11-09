@@ -64,7 +64,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	private static inline final RULE_ID: String = 'unused-loop-binder';
 
 	/** The wildcard binder name. */
-	private static inline final WILDCARD: String = '_';
+	private static final WILDCARD: String = '_';
 
 	public function new() {
 		super(RULE_ID, 'a for-loop binder the body never reads — replaceable with _ (or a dropped key)', RuleCategory.Loops);

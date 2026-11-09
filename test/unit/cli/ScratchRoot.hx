@@ -11,20 +11,20 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class ScratchRoot {
 
-	/**
-	 * The scratch-directory prefix this suite claims, and the one `devkit.TmpLifecycle`
-	 * must list in `TMPL_PREFIXES` for an orphaned root to be reaped.
-	 */
-	private static inline final SCRATCH_PREFIX: String = 'apq-suite';
-
-	/** The owner stamp that script reads: `<dir>/.apq-owner`, first line `pid <pid>`. */
-	private static inline final OWNER_STAMP: String = '.apq-owner';
-
 	/** Lowest six-digit value, so the fallback token is always exactly `mktemp`'s six characters. */
 	private static inline final SCRATCH_TOKEN_LOW: Int = 100000;
 
 	/** How many six-digit values the fallback token draws from. */
 	private static inline final SCRATCH_TOKEN_SPAN: Int = 900000;
+
+	/**
+	 * The scratch-directory prefix this suite claims, and the one `devkit.TmpLifecycle`
+	 * must list in `TMPL_PREFIXES` for an orphaned root to be reaped.
+	 */
+	private static final SCRATCH_PREFIX: String = 'apq-suite';
+
+	/** The owner stamp that script reads: `<dir>/.apq-owner`, first line `pid <pid>`. */
+	private static final OWNER_STAMP: String = '.apq-owner';
 
 	/**
 	 * Remove a scratch root this class CLAIMED, and refuse anything else BY NAME.

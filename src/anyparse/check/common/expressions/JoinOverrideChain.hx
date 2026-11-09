@@ -92,12 +92,12 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 	/** The rule id, and the `--rule` selector that force-enables this default-off check. */
 	private static inline final RULE_ID: String = 'join-override-chain';
 
-	/** The finding message -- reported on the DECLARATION, the statement the whole run collapses into. */
-	private static inline final MESSAGE: String =
-		'this declaration and the chain of conditional overwrites after it can be one nested switch-expression assignment';
-
 	/** One construct is the single-construct rules' shape; a CHAIN starts at two. */
 	private static inline final MIN_CONSTRUCTS: Int = 2;
+
+	/** The finding message -- reported on the DECLARATION, the statement the whole run collapses into. */
+	private static final MESSAGE: String =
+		'this declaration and the chain of conditional overwrites after it can be one nested switch-expression assignment';
 
 	public function new() {
 		super(

@@ -16,7 +16,7 @@ using StringTools;
  */
 class UnnecessarySwitchCheckTest extends Test {
 
-	private static inline final MESSAGE: String =
+	private static final MESSAGE: String =
 		'this switch has a single unconditional catch-all arm — it decides nothing; use the arm\'s body directly';
 
 	public function testWildcardArmFlagged(): Void {

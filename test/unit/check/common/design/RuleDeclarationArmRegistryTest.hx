@@ -7,7 +7,7 @@ using StringTools;
 /** `RuleDeclaration.armRegistry`: the arms by name, a registry's other keys skipped, and a line in `problems` for what it cannot use. */
 class RuleDeclarationArmRegistryTest extends Test {
 
-	private static inline final LABEL: String = 'arm registry a.json';
+	private static final LABEL: String = 'arm registry a.json';
 
 	public function testTheArmsByName(): Void {
 		final problems: Array<String> = [];

@@ -26,20 +26,21 @@ class CollapseNestedSwitchCheckTest extends Test {
 	 * The enums the fixtures match, declared so each switched binder is a constructor argument whose written
 	 * type proves it a capture — an undeclared constructor may take an enum whose same-named value compares.
 	 */
-	private static inline final ENUMS: String =
-		'\nenum PE {\n\tP(b: QE, c: QE);\n\tR(x: QE);\n}\nenum QE {\n\tQ;\n\tA;\n\tB;\n}\nenum ExprDef {\n\tEConst(c: Constant);\n}\nenum Constant {\n\tCString(s: String, kind: String);\n\tCInt(i: String);\n}';
+	private static final ENUMS: String = '\nenum PE {\n\tP(b: QE, c: QE);\n\tR(x: QE);\n}\nenum QE {\n\tQ;\n\tA;\n\tB;\n}\nenum ExprDef {\n'
+		+ '\tEConst(c: Constant);\n}\nenum Constant {\n\tCString(s: String, kind: String);\n\tCInt(i: String);\n'
+		+ '}';
 
 	/** The line break + indent before an INNER case label in a `nest()` fixture. */
-	private static inline final INNER_LABEL: String = '\n\t\t\t\t\t';
+	private static final INNER_LABEL: String = '\n\t\t\t\t\t';
 
 	/** An unguarded, EMPTY outer arm after the collapsible one — the tail that makes a merge harmless. */
-	private static inline final EMPTY_TAIL: String = '\n\t\t\tcase _:';
+	private static final EMPTY_TAIL: String = '\n\t\t\tcase _:';
 
 	/** An outer arm that ACTS, so falling out of the collapsed run would newly run it. */
-	private static inline final ACTING_TAIL: String = '\n\t\t\tcase _: z();';
+	private static final ACTING_TAIL: String = '\n\t\t\tcase _: z();';
 
 	/** A later outer arm whose EXTRACTOR pattern RUNS code while matching — reaching it would call `tap`. */
-	private static inline final EXTRACTOR_TAIL: String = '\n\t\t\tcase tap(_) => P(Q):';
+	private static final EXTRACTOR_TAIL: String = '\n\t\t\tcase tap(_) => P(Q):';
 
 	public function testCanaryShapeFlagged(): Void {
 		final vs: Array<Violation> = violations(canary());

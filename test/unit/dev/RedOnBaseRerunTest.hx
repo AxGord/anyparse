@@ -23,7 +23,7 @@ using StringTools;
 final class RedOnBaseRerunTest extends Test {
 
 	/** What a build of the fixture does: leave the mark that its binary needs to run. */
-	private static inline final MARK: String = "require('fs').writeFileSync(process.argv[2], 'built');";
+	private static final MARK: String = "require('fs').writeFileSync(process.argv[2], 'built');";
 
 	/**
 	 * The fake test runner of the base. It lists its classes, refuses to run unbuilt or to run a class it does not list, and reports

@@ -27,7 +27,7 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 	private static inline final METHOD: String = 'substr';
 
 	/** The string length member a last-character start subtracts one from. */
-	private static inline final LENGTH: String = 'length';
+	private static final LENGTH: String = 'length';
 
 	public function new() {
 		super(

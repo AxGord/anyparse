@@ -35,25 +35,22 @@ using StringTools;
 final class MutationSlot {
 
 	/** The workroot's files the parent writes for its slots. */
-	public static inline final ROWS: String = 'rows';
+	public static final ROWS: String = 'rows';
 
-	public static inline final ORDER: String = 'order';
+	public static final ORDER: String = 'order';
 
 	/** The pid every slot follows: a slot whose parent is gone takes no further track. */
-	public static inline final OWNER: String = 'owner';
+	public static final OWNER: String = 'owner';
 
-	public static inline final KILLER_FIRST: String = 'killer-first';
-	public static inline final BUILD_ONLY: String = 'build-only';
-	public static inline final SCHEMA: String = 'schema';
+	public static final KILLER_FIRST: String = 'killer-first';
+	public static final BUILD_ONLY: String = 'build-only';
+	public static final SCHEMA: String = 'schema';
 
 	/** Present when the slots keep compiler servers. */
-	public static inline final SERVERS: String = 'servers';
+	public static final SERVERS: String = 'servers';
 
 	/** The environment variable naming the file a slot rewrites as each track ends: a gate's sign of life for the arms row. */
-	public static inline final PROGRESS_VAR: String = 'APQ_ARMS_PROGRESS';
-
-	/** The directory a slot claims a track in, one `mkdir` per track: the first slot to make it runs it. */
-	private static inline final CLAIMS: String = 'claims';
+	public static final PROGRESS_VAR: String = 'APQ_ARMS_PROGRESS';
 
 	/** Seconds a warm build may take before its server counts as hung, unless `APQ_MUTATION_BUILD_TIMEOUT` says otherwise. */
 	private static inline final BUILD_TIMEOUT_S: Int = 300;
@@ -69,14 +66,17 @@ final class MutationSlot {
 
 	private static inline final MS_PER_SECOND: Int = 1000;
 
+	/** The directory a slot claims a track in, one `mkdir` per track: the first slot to make it runs it. */
+	private static final CLAIMS: String = 'claims';
+
 	/** The verdict of a track that produced no usable transcript. */
-	private static inline final RUN_FAIL: String = 'RUN-FAIL';
+	private static final RUN_FAIL: String = 'RUN-FAIL';
 
 	/** The environment variable a suite run's compiler shim goes first on. */
-	private static inline final PATH: String = 'PATH';
+	private static final PATH: String = 'PATH';
 
 	/** The environment variable that turns the narrow build off, so every track takes the full build. */
-	private static inline final NO_NARROW: String = 'APQ_MUTATION_NO_NARROW';
+	private static final NO_NARROW: String = 'APQ_MUTATION_NO_NARROW';
 
 	private static final TEST_JS: String = 'test.js';
 

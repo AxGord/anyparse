@@ -36,7 +36,7 @@ final class TempScratch {
 	private static final ROOT_VARS: Array<String> = ['TMPDIR', 'TMP', 'TEMP'];
 
 	/** Where a POSIX host has a temp root when it names none. */
-	private static inline final DEFAULT_ROOT: String = '/tmp';
+	private static final DEFAULT_ROOT: String = '/tmp';
 
 	/** Lowest six-digit value, so the non-node process token is always six characters. */
 	private static inline final PROCESS_TOKEN_LOW: Int = 100000;

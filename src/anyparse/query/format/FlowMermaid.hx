@@ -19,9 +19,9 @@ import anyparse.query.graph.FlowGraph;
 final class FlowMermaid {
 
 	/** The class a `throw` node carries, and its style. */
-	private static inline final THROW_CLASS: String = 'throw';
+	private static final THROW_CLASS: String = 'throw';
 
-	private static inline final THROW_STYLE: String = 'stroke:#d33,stroke-width:2px';
+	private static final THROW_STYLE: String = 'stroke:#d33,stroke-width:2px';
 
 	/**
 	 * The flowchart of `graph` laid out toward `direction`, top to bottom

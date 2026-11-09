@@ -61,14 +61,14 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 	/** Output the server may write before its batch's driver ends it — far more than a `--wait` server ever prints. */
 	private static inline final SERVER_OUTPUT: Int = 256 * 1024 * 1024;
 
-	/** The compiler's reply to a display request whose cursor lies in no file it takes for the display file. */
-	private static inline final NO_COMPLETION_POINT: String = 'No completion point was found';
-
-	/** The compiler flag a display request is spelled with. */
-	private static inline final DISPLAY: String = '--display';
-
 	/** Output a position reply may carry: one `<pos>` element, or an error. */
 	private static inline final REPLY_OUTPUT: Int = 1024 * 1024;
+
+	/** The compiler's reply to a display request whose cursor lies in no file it takes for the display file. */
+	private static final NO_COMPLETION_POINT: String = 'No completion point was found';
+
+	/** The compiler flag a display request is spelled with. */
+	private static final DISPLAY: String = '--display';
 
 	private final _hxml: String;
 	private final _cwd: Null<String>;

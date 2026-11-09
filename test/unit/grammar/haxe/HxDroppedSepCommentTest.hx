@@ -22,7 +22,7 @@ final class HxDroppedSepCommentTest extends Test {
 	private static inline final HOSTS: Int = 4;
 
 	/** The line comment every list ends with. */
-	private static inline final NOTE: String = '// note';
+	private static final NOTE: String = '// note';
 
 	/** The trailing comma is dropped, a comprehension cuddles its `for`. */
 	private static final CFG_REMOVE: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '

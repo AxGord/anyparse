@@ -15,7 +15,7 @@ class ThreadSafetyErrorPathTest extends Test {
 
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
-	private static inline final REPORT: String = 'class Report { public static function send():Void Sys.sleep(1); }';
+	private static final REPORT: String = 'class Report { public static function send():Void Sys.sleep(1); }';
 
 	/**
 	 * the client's `TreeWatcher.setTimestamp`: the hold spans a call whose only blocking leg is `catch` → `Error.reportError` →

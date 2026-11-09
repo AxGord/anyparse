@@ -89,10 +89,11 @@ typedef FieldWriteSite = {
 final class FieldWrites {
 
 	private static inline final REFLECT: String = 'Reflect';
-	private static inline final DYNAMIC_ACCESS: String = 'DynamicAccess';
 
 	/** How many functions making an `unplaced` write the notice names (`notices`). */
 	private static inline final NOTICE_NAMES: Int = 3;
+
+	private static final DYNAMIC_ACCESS: String = 'DynamicAccess';
 
 	/**
 	 * The reflective calls writing a field by name, off `Reflect` (`recordReflective`) -> how many arguments a direct

@@ -7,14 +7,15 @@ import anyparse.query.CanonicalEdit;
 
 /**
  * The `unused-loop-binder` check: a `for` binder the body never reads becomes `_`, and an unread key
- * over an `Array` / `List`, or a map the loop provably leaves unchanged, is dropped. Every refusal is paired with the finding it would otherwise be:
+ * over an `Array` / `List`, or a map the loop provably leaves unchanged, is
+ * dropped. Every refusal is paired with the finding it would otherwise be:
  * most fixtures SHADOW the binder in the body, so the resolver alone would call it unread and only the
  * gate under test refuses.
  */
 @:nullSafety(Strict) class UnusedLoopBinderCheckTest extends Test {
 
 	/** The parameter list every fixture's method declares. */
-	private static inline final PARAMS: String = 'xs:Array<Int>, m:Map<String, Int>, l:List<Int>';
+	private static final PARAMS: String = 'xs:Array<Int>, m:Map<String, Int>, l:List<Int>';
 
 	public function testUnreadRangeBinderRenamed(): Void {
 		final src: String = wrap('for (i in 0...3) g();');
@@ -69,12 +70,12 @@ import anyparse.query.CanonicalEdit;
 	@:pin('control') @:killer('M-ULB-KEYED-UNPROVED-DROPPED')
 	public function testUnreadKeyOverALocalMapDroppedOnlyWhereTheLoopLeavesItUnchanged(): Void {
 		final decl: String = 'final mm:Map<String, Int> = [\'a\' => 1];\n\t\t';
-		Assert.equals(wrap(decl + 'for (v in mm) g(v);'), applyFix(wrap(decl + 'for (k => v in mm) g(v);')));
+		Assert.equals(wrap('${decl}for (v in mm) g(v);'), applyFix(wrap('${decl}for (k => v in mm) g(v);')));
 		Assert.equals(
-			wrap(decl + 'for (_ => v in mm) { mm.remove(\'a\'); g(v); }'),
-			applyFix(wrap(decl + 'for (k => v in mm) { mm.remove(\'a\'); g(v); }'))
+			wrap('${decl}for (_ => v in mm) { mm.remove(\'a\'); g(v); }'),
+			applyFix(wrap('${decl}for (k => v in mm) { mm.remove(\'a\'); g(v); }'))
 		);
-		final vs: Array<Violation> = violations(wrap(decl + 'for (k => v in mm) g(v);'));
+		final vs: Array<Violation> = violations(wrap('${decl}for (k => v in mm) g(v);'));
 		Assert.equals(1, vs.length);
 		if (vs.length == 1)
 			Assert.equals(

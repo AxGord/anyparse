@@ -28,8 +28,8 @@ final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'refusal-assert-ignores-message';
 
-	private static inline final REFUSALS_KEY: String = 'refusalConstructors';
-	private static inline final PASSES_KEY: String = 'passCalls';
+	private static final REFUSALS_KEY: String = 'refusalConstructors';
+	private static final PASSES_KEY: String = 'passCalls';
 
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

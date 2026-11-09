@@ -25,7 +25,7 @@ final class BinaryParseLowering {
 	// -------- @:raw post-processing --------
 
 	/** The name of the std nullable wrapper a declared field type may carry. */
-	private static inline final NULL_TYPE: String = 'Null';
+	private static final NULL_TYPE: String = 'Null';
 
 	/**
 	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes

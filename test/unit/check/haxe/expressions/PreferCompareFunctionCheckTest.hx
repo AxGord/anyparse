@@ -24,12 +24,12 @@ class PreferCompareFunctionCheckTest extends Test {
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"Int":"lib.Order.ints","String":"lib.Order.texts"}}}}';
 
 	/** The rule on, no function named: the project's own `apq.json` names some a fixture cannot resolve. */
-	private static inline final BARE: String = '{"rules":{"prefer-compare-function":true}}';
+	private static final BARE: String = '{"rules":{"prefer-compare-function":true}}';
 
-	private static inline final STRING_ONLY: String =
+	private static final STRING_ONLY: String =
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Order.texts"}}}}';
-	private static inline final ORDER: String =
-		'package lib;\nclass Order {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n\tpublic static function texts(a:String, b:String):Int return 0;\n}';
+	private static final ORDER: String = 'package lib;\nclass Order {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n'
+		+ '\tpublic static function texts(a:String, b:String):Int return 0;\n}';
 
 	public function testTernaryChainFlaggedAndFixed(): Void {
 		final src: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');

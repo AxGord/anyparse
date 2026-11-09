@@ -29,7 +29,7 @@ import anyparse.query.SymbolIndex;
 final class DeadSafeNav extends RuleBase implements ConfigAware {
 
 	/** What a `.` rewrite of a proof the compiler's null-safety does not share would do (`NullSafetyGate.unseenProofReason`). */
-	private static inline final UNSEEN_CONSEQUENCE: String = ', so a plain `.` would not compile';
+	private static final UNSEEN_CONSEQUENCE: String = ', so a plain `.` would not compile';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

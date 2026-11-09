@@ -61,22 +61,22 @@ using StringTools;
 @:nullSafety(Strict)
 class HxFormatterCorpusTest extends Test {
 
-	private static inline final SAMELINE_SUBDIR: String = 'test/testcases/sameline';
-	private static inline final WHITESPACE_SUBDIR: String = 'test/testcases/whitespace';
-	private static inline final INDENTATION_SUBDIR: String = 'test/testcases/indentation';
-	private static inline final WRAPPING_SUBDIR: String = 'test/testcases/wrapping';
-	private static inline final EMPTYLINES_SUBDIR: String = 'test/testcases/emptylines';
-	private static inline final LINEENDS_SUBDIR: String = 'test/testcases/lineends';
-	private static inline final OTHER_SUBDIR: String = 'test/testcases/other';
-	private static inline final FORMATRANGE_SUBDIR: String = 'test/testcases/formatrange';
-	private static inline final EXPRESSIONLEVEL_SUBDIR: String = 'test/testcases/expressionlevel';
-	private static inline final MISSING_SUBDIR: String = 'test/testcases/missing';
-	private static inline final HXTEST_EXT: String = '.hxtest';
 	private static inline final MAX_DIFF_CONTEXT: Int = 40;
 	private static inline final MAX_REASON_LEN: Int = 120;
 	private static inline final SNIPPET_LEN: Int = 24;
-	private static inline final SWEEP_JSON_PATH: String = 'bin/.last-sweep.json';
-	private static inline final SWEEP_PREV_PATH: String = 'bin/.prev-sweep.json';
+	private static final SAMELINE_SUBDIR: String = 'test/testcases/sameline';
+	private static final WHITESPACE_SUBDIR: String = 'test/testcases/whitespace';
+	private static final INDENTATION_SUBDIR: String = 'test/testcases/indentation';
+	private static final WRAPPING_SUBDIR: String = 'test/testcases/wrapping';
+	private static final EMPTYLINES_SUBDIR: String = 'test/testcases/emptylines';
+	private static final LINEENDS_SUBDIR: String = 'test/testcases/lineends';
+	private static final OTHER_SUBDIR: String = 'test/testcases/other';
+	private static final FORMATRANGE_SUBDIR: String = 'test/testcases/formatrange';
+	private static final EXPRESSIONLEVEL_SUBDIR: String = 'test/testcases/expressionlevel';
+	private static final MISSING_SUBDIR: String = 'test/testcases/missing';
+	private static final HXTEST_EXT: String = '.hxtest';
+	private static final SWEEP_JSON_PATH: String = 'bin/.last-sweep.json';
+	private static final SWEEP_PREV_PATH: String = 'bin/.prev-sweep.json';
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 

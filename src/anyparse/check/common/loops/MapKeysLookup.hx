@@ -97,17 +97,17 @@ using StringTools;
 @:nullSafety(Strict)
 final class MapKeysLookup extends RuleBase {
 
-	private static inline final KEYS_METHOD: String = 'keys';
-	private static inline final GET_METHOD: String = 'get';
-	private static inline final SET_METHOD: String = 'set';
-	private static inline final REMOVE_METHOD: String = 'remove';
-	private static inline final CLEAR_METHOD: String = 'clear';
-
 	/** A `get(k)` call has exactly [callee, key-argument] children. */
 	private static inline final GET_CALL_CHILD_COUNT: Int = 2;
 
 	/** An index access `m[k]` and a for-loop both have at least [receiver/iterable, key/body]. */
 	private static inline final MIN_BINARY_CHILD_COUNT: Int = 2;
+
+	private static final KEYS_METHOD: String = 'keys';
+	private static final GET_METHOD: String = 'get';
+	private static final SET_METHOD: String = 'set';
+	private static final REMOVE_METHOD: String = 'remove';
+	private static final CLEAR_METHOD: String = 'clear';
 
 	public function new() {
 		super(

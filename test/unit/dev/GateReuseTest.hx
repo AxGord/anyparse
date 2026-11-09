@@ -20,7 +20,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class GateReuseTest extends Test {
 
-	private static inline final BRANCH: String = 'batch/hxqb-S1';
+	private static final BRANCH: String = 'batch/hxqb-S1';
 
 	@:pin('control')
 	@:killer('M-GATE-REUSE-NOTHING-TAKEN')

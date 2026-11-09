@@ -317,7 +317,7 @@ final class CallGraph {
 	public static inline final BODY_MARK: String = '@';
 
 	/** What a type parameter nothing binds becomes in a written type: text that names no type. */
-	private static inline final UNKNOWN_TYPE: String = '$$_';
+	private static final UNKNOWN_TYPE: String = '$$_';
 
 	public final nodes: Map<String, FnNode> = [];
 	public final edges: Array<CallEdge> = [];

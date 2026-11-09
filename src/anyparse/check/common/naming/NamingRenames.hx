@@ -1509,74 +1509,76 @@ typedef DeclRename = {
 class RenameRefusal {
 
 	/** A declaration the grammar itself marked unrenameable. */
-	public static inline final RENAME_UNSAFE: String =
-		'the grammar marked this declaration rename-unsafe — its identifier is a wire / accessor / `@:rtti` contract that a rewrite of the declaration alone cannot honour';
+	public static final RENAME_UNSAFE: String = 'the grammar marked this declaration rename-unsafe — its identifier is a wire / accessor / '
+		+ '`@:rtti` contract that a rewrite of the declaration alone cannot honour';
 
 	/**
 	 * A Type / EnumValue: no member-confinement proof applies, so neither member rename owns it — its fix is
 	 * `NamingCrossRename`'s compiler-verified arm, which states its own reason when it declines.
 	 */
-	public static inline final NOT_A_MEMBER: String =
-		'a type or enum-value rename reaches every file that names it, so only the cross-file `rename --scope` arm can fix it — applied only through the compiler oracle';
+	public static final NOT_A_MEMBER: String = 'a type or enum-value rename reaches every file that names it, so only the cross-file '
+		+ '`rename --scope` arm can fix it — applied only through the compiler oracle';
 
 	/** A public member: reachable from anywhere holding a value of the owner's type. */
-	public static inline final PUBLIC_MEMBER: String =
-		'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to one — the cross-file path owns it, and declined too';
+	public static final PUBLIC_MEMBER: String = 'a public member is reachable from every file holding a value of its owner type, so the '
+		+ 'single-file rename never applies to one — the cross-file path owns it, and declined too';
 
 	/** A public `_x` whose fix is the PRIVATIZE arm (`NamingPrivatize`) - the rename steps aside for it. */
-	public static inline final PRIVATIZE_ARM: String =
-		'nothing outside its type reads this public `_`-prefixed member, so the fix makes it private instead of renaming it — applied only through the compiler oracle';
+	public static final PRIVATIZE_ARM: String = 'nothing outside its type reads this public `_`-prefixed member, so the fix makes it '
+		+ 'private instead of renaming it — applied only through the compiler oracle';
 
 	/** No cross-file index: nothing can prove the member is unreferenced elsewhere. */
-	public static inline final NO_INDEX: String =
+	public static final NO_INDEX: String =
 		'this run built no cross-file index, so no proof that the member is referenced nowhere else is available';
 
 	/** An override binds the SUPERTYPE's name. */
-	public static inline final OVERRIDE: String =
-		'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one alone would leave it overriding nothing';
+	public static final OVERRIDE: String = 'the method is an `override`, so its name is the SUPERTYPE declaration\'s — renaming this one '
+		+ 'alone would leave it overriding nothing';
 
 	/** The member is the type's CONSTRUCTOR. */
-	public static inline final IS_CONSTRUCTOR: String =
-		'the method is the type\'s CONSTRUCTOR — `new` is the language\'s own spelling for it, reached by every `new Owner(…)` and by no identifier a rename could follow';
+	public static final IS_CONSTRUCTOR: String = 'the method is the type\'s CONSTRUCTOR — `new` is the language\'s own spelling for it, '
+		+ 'reached by every `new Owner(…)` and by no identifier a rename could follow';
 
 	/** A magic name the runtime itself calls. */
-	public static inline final MAGIC_NAME: String =
-		'the method carries a magic name the runtime calls directly (`__init__`), so renaming it disables the code silently instead of moving a reference';
+	public static final MAGIC_NAME: String = 'the method carries a magic name the runtime calls directly (`__init__`), so renaming it '
+		+ 'disables the code silently instead of moving a reference';
 
 	/** A property accessor: its spelling is the property's. */
-	public static inline final IS_ACCESSOR: String =
-		'the method is a property ACCESSOR — its spelling is the PROPERTY\'s, invoked through that property\'s `(get, set)` and by no identifier naming the method, so correcting it alone would leave the property demanding an accessor that no longer exists';
+	public static final IS_ACCESSOR: String = 'the method is a property ACCESSOR — its spelling is the PROPERTY\'s, invoked through that '
+		+ 'property\'s `(get, set)` and by no identifier naming the method, so correcting it alone would '
+		+ 'leave the property demanding an accessor that no longer exists';
 
 	/** Metadata-bearing member: a macro / framework can reach it by name. */
-	public static inline final CARRIES_METADATA: String =
-		'the member carries metadata, so a macro / `@:keep` / framework may reach it by NAME through references no identifier-level proof sees';
+	public static final CARRIES_METADATA: String = 'the member carries metadata, so a macro / `@:keep` / framework may reach it by NAME '
+		+ 'through references no identifier-level proof sees';
 
 	/** A `static final` bound to a type reference: a `Class<T>` registry entry. */
-	public static inline final TYPE_REGISTRY: String =
-		'the member is a `static final` bound to a TYPE reference — a `Class<T>` registry entry a macro / framework resolves by NAME, through references no identifier-level proof sees';
+	public static final TYPE_REGISTRY: String = 'the member is a `static final` bound to a TYPE reference — a `Class<T>` registry entry a '
+		+ 'macro / framework resolves by NAME, through references no identifier-level proof sees';
 
 	/** The program's entry point: the build names it, not the sources. */
-	public static inline final ENTRY_POINT: String =
-		'the method is the program\'s ENTRY POINT (`static function main()`), named by the build — `-main`, a generated launcher, `--run` — and by no identifier a rename could follow';
+	public static final ENTRY_POINT: String = 'the method is the program\'s ENTRY POINT (`static function main()`), named by the build — '
+		+ '`-main`, a generated launcher, `--run` — and by no identifier a rename could follow';
 
 	/** An `@:allow` grant opens the member to another type: only the cross-file rename, which enumerates the grantees, can carry it. */
-	public static inline final ALLOW_GRANT: String =
+	public static final ALLOW_GRANT: String =
 		'the member carries an `@:allow` grant, which opens it to another type, so the rename must cross into the grantee files';
 
 	/** No enclosing type: the confinement proof has nothing to scope to. */
-	public static inline final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
+	public static final NO_OWNER: String = 'the declaration reports no enclosing type, and the confinement proof is scoped to one';
 
 	/** A reflection call in ANOTHER file names this member. */
-	public static inline final REFLECTION_NAME: String =
+	public static final REFLECTION_NAME: String =
 		'another indexed file reaches this member by NAME through a reflection call, and a rename breaks such a reference silently';
 
 	/** The private member is reachable from some other file in the index. */
-	public static inline final NOT_CONFINED: String =
-		'the private member is not provably confined to this file — a subtype, an `@:access` / `@:allow` grant or a file the grammar could not read can reach it, so the rewrite must cross files';
+	public static final NOT_CONFINED: String = 'the private member is not provably confined to this file — a subtype, an `@:access` / '
+		+ '`@:allow` grant or a file the grammar could not read can reach it, so the rewrite must cross '
+		+ 'files';
 
 	/** No rule in the policy selects this declaration. */
-	public static inline final NO_RULE: String =
-		'no rule in the naming policy in force selects this declaration\'s category and modifier set, so there is no format to correct towards';
+	public static final NO_RULE: String = 'no rule in the naming policy in force selects this declaration\'s category and modifier set, so '
+		+ 'there is no format to correct towards';
 
 	/**
 	 * The policy states a format and no way to reach it. THE dominant decline on any project that
@@ -1584,50 +1586,57 @@ class RenameRefusal {
 	 * onto a rule and attaches no `normalize`, so the check can prove a name wrong and has nothing
 	 * to propose.
 	 */
-	public static inline final NO_NORMALIZER: String =
-		'the naming policy in force states a FORMAT this name fails but no mechanical normalizer that could produce a conforming one — no correction is attached to a category whose rename reaches every file that names it, so the check can say the name is wrong and not what it should be';
+	public static final NO_NORMALIZER: String = 'the naming policy in force states a FORMAT this name fails but no mechanical normalizer '
+		+ 'that could produce a conforming one — no correction is attached to a category whose rename '
+		+ 'reaches every file that names it, so the check can say the name is wrong and not what it '
+		+ 'should be';
 
 	/** The normalizer ran and what it produced was not usable. */
-	public static inline final NORMALIZER_DECLINED: String =
-		'the policy\'s normalizer ran and produced no usable name — it answered nothing, answered the name unchanged, answered one that still fails the rule\'s own format, or (under a project config) answered two different conforming ones, which is a preference the config never stated';
+	public static final NORMALIZER_DECLINED: String = 'the policy\'s normalizer ran and produced no usable name — it answered nothing, '
+		+ 'answered the name unchanged, answered one that still fails the rule\'s own format, '
+		+ 'or (under a project config) '
+		+ 'answered two different conforming ones, which is a preference the config never stated';
 
 	/** A supertype may already declare the corrected name. */
-	public static inline final INHERITED_COLLISION: String =
-		'the owner\'s supertype closure cannot be proved free of a member already carrying the corrected name, which Haxe rejects as a redefinition (a method, as a missing `override`)';
+	public static final INHERITED_COLLISION: String = 'the owner\'s supertype closure cannot be proved free of a member already carrying '
+		+ 'the corrected name, which Haxe rejects as a redefinition ('
+		+ 'a method, as a missing `override`)';
 
 	/** The owner is in an `@:rtti` hierarchy. */
-	public static inline final RTTI_HIERARCHY: String =
+	public static final RTTI_HIERARCHY: String =
 		'the owner sits in an `@:rtti` hierarchy, which serializes by member NAME — a rename would invalidate saved data';
 
 	/** An occurrence of the old name is not accounted for. */
-	public static inline final OCCURRENCE_UNRESOLVED: String =
-		'some textual occurrence of the name is not accounted for by the resolved rename spans — a `#if` branch, a name-shaped string literal, a `noqa`, or an active-code reference the resolver does not attribute — so the rewrite would be incomplete';
+	public static final OCCURRENCE_UNRESOLVED: String = 'some textual occurrence of the name is not accounted for by the resolved rename '
+		+ 'spans — a `#if` branch, a name-shaped string literal, a `noqa`, or an active-code '
+		+ 'reference the resolver does not attribute — so the rewrite would be incomplete';
 
 	/** Another accepted rename in this run already claims the name. */
-	public static inline final NAME_CLAIMED: String =
+	public static final NAME_CLAIMED: String =
 		'another rename accepted earlier in this run already claims the corrected name in an overlapping scope';
 
 	/** The plugin projects no naming declarations at all. */
-	public static inline final NO_SUPPORT: String =
-		'the grammar plugin projects no naming declarations, so the check has nothing to rename';
+	public static final NO_SUPPORT: String = 'the grammar plugin projects no naming declarations, so the check has nothing to rename';
 
 	/** The file did not re-parse for the fix pass. */
-	public static inline final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
+	public static final NO_TREE: String = 'the file did not re-parse in the fix pass, so no declaration could be located in it';
 
 	/** The declaring file holds an `@:allow` the projection does not attribute, so whom it reaches is unknown. */
-	public static inline final CROSS_ALLOW_GRANT: String =
-		'the cross-file rename cannot enumerate who reaches the owner — the declaring file carries an `@:allow` the projection does not attribute to a declaration, so which members it opens, and to whom, is unknown';
+	public static final CROSS_ALLOW_GRANT: String = 'the cross-file rename cannot enumerate who reaches the owner — the declaring file '
+		+ 'carries an `@:allow` the projection does not attribute to a declaration, so which '
+		+ 'members it opens, and to whom, is unknown';
 
 	/** A member of the override family sits outside the files the rename would edit. */
-	public static inline final CROSS_FAMILY_UNREACHABLE: String =
-		'the rename would have to carry the whole override family, and one of its declarations sits outside the files this run would edit — half a family leaves a declaration overriding nothing';
+	public static final CROSS_FAMILY_UNREACHABLE: String = 'the rename would have to carry the whole override family, and one of its '
+		+ 'declarations sits outside the files this run would edit — half a family leaves a '
+		+ 'declaration overriding nothing';
 
 	/** A file the rename must touch could not be read or parsed. */
-	public static inline final CROSS_FILE_UNREADABLE: String =
+	public static final CROSS_FILE_UNREADABLE: String =
 		'a file the rename would have to edit is not in this run\'s source set, or did not parse';
 
 	/** The target name is already bound in a file outside the declaring one. */
-	public static inline final CROSS_COLLISION: String =
+	public static final CROSS_COLLISION: String =
 		'the corrected name is already bound in one of the files the rename would edit, where no `this.` qualification can disambiguate it';
 
 	/**

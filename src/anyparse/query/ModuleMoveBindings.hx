@@ -96,7 +96,7 @@ final class ModuleMoveBindings {
 	public static inline final UNKNOWN: String = 'unknown';
 
 	/** What a qualified spelling reads where the index places it nowhere. */
-	private static inline final NOWHERE: String = 'nothing the analysed set holds';
+	private static final NOWHERE: String = 'nothing the analysed set holds';
 
 	/**
 	 * Give every indexed module that is NOT on disk the ambient chain its path would have, read from the analysed set

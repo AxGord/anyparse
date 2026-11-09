@@ -9,7 +9,7 @@ import anyparse.check.LintConfig;
  */
 class NamingOptionsTest extends Test {
 
-	private static inline final OPTIONS: String = '{"rules": {"naming": {"catchVarName": "exception", "handlerSuffix": "Handler"}}}';
+	private static final OPTIONS: String = '{"rules": {"naming": {"catchVarName": "exception", "handlerSuffix": "Handler"}}}';
 
 	public function testCatchVariableRenamed(): Void {
 		final src: String = wrap('try {\n\t\t\tg();\n\t\t} catch (e: haxe.Exception) {\n\t\t\ttrace(e);\n\t\t}');

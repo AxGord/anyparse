@@ -17,10 +17,10 @@ using Lambda;
 class ThreadSafetyLibraryBodiesTest extends Test {
 
 	/** The build: the project's own classpath, the library's, a define spelled with a dash and the target. */
-	private static inline final HXML: String = '-cp .\n-cp vendorlib\n-D gate-on\n-cpp out\n';
+	private static final HXML: String = '-cp .\n-cp vendorlib\n-D gate-on\n-cpp out\n';
 
 	/** The options walking the fixture's libraries. */
-	private static inline final OPTIONS: String = '"libraryBodies":["build.hxml"],"spawns":["Thread.create"]';
+	private static final OPTIONS: String = '"libraryBodies":["build.hxml"],"spawns":["Thread.create"]';
 
 	/**
 	 * The library: a native read only under every define of the build — the hxml's, the oracle entry's, the target's and

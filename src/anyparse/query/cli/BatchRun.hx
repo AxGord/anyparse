@@ -20,13 +20,13 @@ import sys.io.File;
 final class BatchRun {
 
 	/** The argv head that selects this entry instead of a command. */
-	public static inline final FLAG: String = '--batch';
+	public static final FLAG: String = '--batch';
 
 	/** The field of the value a redirected `process.exit` throws, holding the status it was called with. */
-	private static inline final EXIT_FIELD: String = 'apqBatchExit';
+	private static final EXIT_FIELD: String = 'apqBatchExit';
 
 	/** The encoding of every stream and of the standard input a call is given. */
-	private static inline final UTF8: String = 'utf8';
+	private static final UTF8: String = 'utf8';
 
 	/** `apq --batch <calls> <answers>`; the status is the batch's own, each call's status is in its answer. */
 	public static function main(args: Array<String>): Int {

@@ -61,7 +61,7 @@ final class LintDiff {
 	public static final SEVERITY_ORDER: Array<String> = ['error', 'warning', 'info'];
 
 	/** Opens the message slot of an identity key (`keyFor`): a character no rule writes into its prose. */
-	private static inline final IDENTITY_MARK: String = '\x01';
+	private static final IDENTITY_MARK: String = '\x01';
 
 	/**
 	 * Read an `apq lint --format json` snapshot into its records — the bare array, or the `{"findings":

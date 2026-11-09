@@ -19,10 +19,10 @@ class RedundantToStringCheckTest extends Test {
 	 * `toString` only for a NON-EXTERN type declared in the analysed scope, so every context-arm
 	 * fixture has to declare the receiver's type.
 	 */
-	private static inline final DECL_K: String = "class K { public function toString():String return 'k'; } ";
+	private static final DECL_K: String = "class K { public function toString():String return 'k'; } ";
 
 	/** An abstract prefix: non-extern and declared, so only the `+` arm's operator proof can reject it. */
-	private static inline final DECL_ABSTRACT: String = "abstract Tag(String) { public function toString():String return 'tag'; } ";
+	private static final DECL_ABSTRACT: String = "abstract Tag(String) { public function toString():String return 'tag'; } ";
 
 	public function testInterpolationIdentCollapsesToShorthand(): Void {
 		final out: String = applyFix('$DECL_K@:nullSafety(Strict) class C { function f(x:K) { final s:String = \'$${x.toString()}\'; } }');

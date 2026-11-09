@@ -38,40 +38,40 @@ using Lambda;
 @:nullSafety(Strict)
 final class NullGuardedCode {
 
-	/** The access of a typed call of a static method (`CallFact.access`). */
-	private static inline final STATIC_ACCESS: String = 'FStatic';
-
-	/** The use of a field read that only compares the value (`FieldFact.use`). */
-	private static inline final COMPARE: String = 'compare';
-
-	/** The use of a field read whose value goes on (`FieldFact.use`): a method's value. */
-	private static inline final VALUE: String = 'value';
-
-	/** The nullable wrapper: a value of it is one of its argument's, or null. */
-	private static inline final NULLABLE: String = 'Null';
-
-	/** The type of a class as a value, and of an abstract as one: their statics. */
-	private static inline final CLASS_VALUE: String = 'Class';
-
-	private static inline final ABSTRACT_VALUE: String = 'Abstract';
-
-	/** The catch-all type. */
-	private static inline final CATCH_ALL: String = 'Dynamic';
-
-	/** What the facts spell a type the compiler left unbound with: no operator of any type applies to it. */
-	private static inline final UNBOUND: String = '?';
-
-	/** The metadata making a field callable by code outside the program. */
-	private static inline final EXPOSE: String = ':expose';
-
-	/** The prefix a target gives a Haxe name it cannot spell as it is: the name stands behind it. */
-	private static inline final MANGLED: String = '_hx_';
-
 	/** How many calls a function value is followed through before its uses count as unknown. */
 	private static inline final MAX_DEPTH: Int = 8;
 
 	/** How many typedefs a container's type is read through. */
 	private static inline final MAX_ALIASES: Int = 8;
+
+	/** The access of a typed call of a static method (`CallFact.access`). */
+	private static final STATIC_ACCESS: String = 'FStatic';
+
+	/** The use of a field read that only compares the value (`FieldFact.use`). */
+	private static final COMPARE: String = 'compare';
+
+	/** The use of a field read whose value goes on (`FieldFact.use`): a method's value. */
+	private static final VALUE: String = 'value';
+
+	/** The nullable wrapper: a value of it is one of its argument's, or null. */
+	private static final NULLABLE: String = 'Null';
+
+	/** The type of a class as a value, and of an abstract as one: their statics. */
+	private static final CLASS_VALUE: String = 'Class';
+
+	private static final ABSTRACT_VALUE: String = 'Abstract';
+
+	/** The catch-all type. */
+	private static final CATCH_ALL: String = 'Dynamic';
+
+	/** What the facts spell a type the compiler left unbound with: no operator of any type applies to it. */
+	private static final UNBOUND: String = '?';
+
+	/** The metadata making a field callable by code outside the program. */
+	private static final EXPOSE: String = ':expose';
+
+	/** The prefix a target gives a Haxe name it cannot spell as it is: the name stands behind it. */
+	private static final MANGLED: String = '_hx_';
 
 	/** The field accesses of a typed call of a method a parameter of whose holds what the call hands it (`CallFact.access`). */
 	private static final FORWARDING: Array<String> = ['FStatic', 'FInstance'];

@@ -14,10 +14,10 @@ import sys.FileSystem;
 final class Tally {
 
 	/** The error code of an exclusive create whose file exists. */
-	private static inline final EXISTS: String = 'EEXIST';
+	private static final EXISTS: String = 'EEXIST';
 
 	/** The error code of a removal whose file is already gone. */
-	private static inline final ABSENT: String = 'ENOENT';
+	private static final ABSENT: String = 'ENOENT';
 
 	/** Claim the next number of the tally kept in `dir` (made if missing); the first claim answers 1. */
 	public static function next(dir: String): Int {

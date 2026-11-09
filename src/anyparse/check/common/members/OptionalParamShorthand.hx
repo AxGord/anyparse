@@ -184,7 +184,7 @@ final class OptionalParamShorthand extends RuleBase {
 	private static inline final RULE_ID: String = 'optional-param-shorthand';
 
 	/** The one nullable wrapper this rule unwraps. */
-	private static inline final NULL_WRAPPER: String = 'Null';
+	private static final NULL_WRAPPER: String = 'Null';
 
 	public function new() {
 		super(
@@ -548,7 +548,7 @@ final class OptionalParamShorthand extends RuleBase {
 				'drop the redundant ? on ?$name:$rawType'
 					+ ' - a non-null default already makes the parameter optional, and the ? widens its body type to Null<$rawType>';
 			case Hoist(plan):
-				'prefer $name:${plan.typeText} = ${plan.constText} over ?$name:${plan.rawType}' + ' with $name ?? ${plan.constText}';
+				'prefer $name:${plan.typeText} = ${plan.constText} over ?$name:${plan.rawType} with $name ?? ${plan.constText}';
 		}
 		if (message == null) return;
 		// Re-bound to a non-null local — see above.

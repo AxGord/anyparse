@@ -107,9 +107,6 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'prefer-typed-throw';
 
-	/** The clause keyword the textual gate scans for — its length is the scan's step, so the two must stay one constant. */
-	private static inline final CATCH_KEYWORD: String = 'catch';
-
 	/** The finding message when the catch-clause gate passed — the rewrite is available. */
 	private static inline final MSG_FIXABLE: String = 'a raw string throw — prefer throwing a typed exception';
 
@@ -120,6 +117,9 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 	 */
 	private static inline final DECLINE_CATCH_IN_SCOPE: String =
 		'a String / Dynamic / Any catch clause in the resolution scope would stop matching, or rebind, a typed exception';
+
+	/** The clause keyword the textual gate scans for — its length is the scan's step, so the two must stay one constant. */
+	private static final CATCH_KEYWORD: String = 'catch';
 
 	/** The finding message when the gate found a catch-all / String clause in scope — the rule is report-only. */
 	private static final MSG_DEGRADED: String = '$MSG_FIXABLE (report-only: $DECLINE_CATCH_IN_SCOPE)';

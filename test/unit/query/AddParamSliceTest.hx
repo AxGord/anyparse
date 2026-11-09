@@ -29,7 +29,7 @@ using StringTools;
 class AddParamSliceTest extends Test {
 
 	/** A writer config narrow enough that the fixture's signature wraps. */
-	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
+	private static final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Add a defaulted trailing parameter to a 2-parameter method:

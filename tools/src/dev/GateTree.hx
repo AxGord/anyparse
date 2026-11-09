@@ -24,18 +24,18 @@ using StringTools;
 final class GateTree {
 
 	/** Why a gate that compares with the baseline cannot run. */
-	public static inline final NO_BASELINE: String = 'no baseline — run `dev slice-gate <worktree> --baseline` before the first edit';
+	public static final NO_BASELINE: String = 'no baseline — run `dev slice-gate <worktree> --baseline` before the first edit';
 
 	/** The file `--baseline` records its readings in, beside the corpus snapshot it saves. */
-	public static inline final BASELINE_FILE: String = 'baseline.json';
+	public static final BASELINE_FILE: String = 'baseline.json';
 
-	public static inline final SWEEP_BASE: String = 'sweep-base.json';
+	public static final SWEEP_BASE: String = 'sweep-base.json';
 
 	/** The environment variable that names the corpus the suite's harness reads. */
-	public static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
+	public static final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
 
 	/** The environment variable that pins which `apq.js` the `hxq` shim runs. */
-	public static inline final ENGINE_VAR: String = 'HXQ_BIN';
+	public static final ENGINE_VAR: String = 'HXQ_BIN';
 
 	/** The scope of a whole-tree lint of this project. */
 	public static final TREE_SCOPE: Array<String> = ['src', 'test', 'tools'];
@@ -43,17 +43,17 @@ final class GateTree {
 	/** The file names the formatter reads its options from, in any folder. */
 	public static final FORMATTER_CONFIGS: Array<String> = ['hxformat.json', '.hxformat.json'];
 
-	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
-	private static inline final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
-
-	/** Where the corpus class rotates the previous snapshot to before each write, relative to the tree. */
-	private static inline final SWEEP_PREVIOUS: String = 'bin/.prev-sweep.json';
-
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
 
 	/** The characters of a commit or a digest a report row spells. */
 	private static inline final SHORT_HASH: Int = 9;
+
+	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
+	private static final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
+
+	/** Where the corpus class rotates the previous snapshot to before each write, relative to the tree. */
+	private static final SWEEP_PREVIOUS: String = 'bin/.prev-sweep.json';
 
 	/** The probe's own source and build file: the jvm probe runs when either moves, as when an engine input does. */
 	private static final JVM_PROBE_FILES: Array<String> = ['tools/src/dev/JvmPortability.hx', 'tools/jvm-portability.hxml'];

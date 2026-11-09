@@ -87,12 +87,6 @@ final class CasePatternSeparator extends RuleBase implements DefaultOff implemen
 
 	private static inline final RULE_ID: String = 'case-pattern-separator';
 
-	/** The option naming the separator a case label must carry. */
-	private static inline final OPTION_STYLE: String = 'style';
-
-	/** The `style` value asking for `case A | B:`; every other value — and no value — is the comma default. */
-	private static inline final STYLE_PIPE: String = 'pipe';
-
 	/** A case-pattern wrapper holds exactly its one pattern. */
 	private static inline final PATTERN_CHILD_COUNT: Int = 1;
 
@@ -101,6 +95,12 @@ final class CasePatternSeparator extends RuleBase implements DefaultOff implemen
 
 	private static inline final PIPE: Int = '|'.code;
 	private static inline final COMMA: Int = ','.code;
+
+	/** The option naming the separator a case label must carry. */
+	private static final OPTION_STYLE: String = 'style';
+
+	/** The `style` value asking for `case A | B:`; every other value — and no value — is the comma default. */
+	private static final STYLE_PIPE: String = 'pipe';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

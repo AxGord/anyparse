@@ -23,7 +23,7 @@ using StringTools;
 class DeclarationsReadTest extends Test {
 
 	/** The directory whose every source the agreement fixture reads both ways. */
-	private static inline final AGREEMENT_DIR: String = 'src/anyparse/query';
+	private static final AGREEMENT_DIR: String = 'src/anyparse/query';
 
 	@:pin('control')
 	@:killer('M-SKIM-GAPS-COUNTED')

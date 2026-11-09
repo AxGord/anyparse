@@ -28,11 +28,11 @@ using Lambda;
 class HxComprehensionBracketPolicyTest extends Test {
 
 	/** Pads only `mapLiteralBrackets`, so a padded `[` reports kind 1 and a tight one reports 0 or 2. */
-	private static inline final MAP_PAD: String =
+	private static final MAP_PAD: String =
 		'{"whitespace":{"bracketConfig":{"mapLiteralBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 
 	/** The mirror of `MAP_PAD`: a padded `[` reports kind 2, a tight one 0 or 1. */
-	private static inline final COMPREHENSION_PAD: String =
+	private static final COMPREHENSION_PAD: String =
 		'{"whitespace":{"bracketConfig":{"comprehensionBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 
 	public function new(): Void {

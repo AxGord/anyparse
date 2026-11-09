@@ -179,13 +179,13 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	/** `x.replace(S, B)`: callee + two arguments. */
 	private static inline final REPLACE_CALL_CHILD_COUNT: Int = 3;
 
-	private static inline final SEARCH_METHOD: String = 'indexOf';
-	private static inline final CONTAINS_METHOD: String = 'contains';
-	private static inline final REPLACE_METHOD: String = 'replace';
-	private static inline final STRING_TYPE: String = 'String';
-
 	/** Longest literal excerpt echoed verbatim in a finding message before it is elided. */
 	private static inline final EXCERPT_MAX: Int = 40;
+
+	private static final SEARCH_METHOD: String = 'indexOf';
+	private static final CONTAINS_METHOD: String = 'contains';
+	private static final REPLACE_METHOD: String = 'replace';
+	private static final STRING_TYPE: String = 'String';
 
 	public function new() {
 		super(
@@ -595,7 +595,6 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 		}
 		return out;
 	}
-
 
 	/**
 	 * `guard`'s condition when it is an `if` whose then-branch unconditionally exits — a `return`

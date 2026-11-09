@@ -11,7 +11,7 @@ using StringTools; // noqa: redundant-import
 @:nullSafety(Strict)
 final class FactsTypeText {
 
-	private static inline final NULL_NAME: String = 'Null';
+	private static final NULL_NAME: String = 'Null';
 
 	/**
 	 * `type` without the `Null<…>` wrappers that enclose the WHOLE of it — each peeled only while its `<`

@@ -46,7 +46,7 @@ using anyparse.macro.MetaInspect;
 class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** The `HxType` ctor whose body is a decl host - the one `type` field value the walk descends instead of skipping. */
-	private static inline final ANON_CTOR: String = 'Anon';
+	private static final ANON_CTOR: String = 'Anon';
 
 	/**
 	 * Grammar opt-in on a `type` field: project it in the DEFAULT walk too, not
@@ -69,7 +69,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `parseFileTypeRefs` uses, so the two projections agree on the shape by
 	 * construction rather than by a second, parallel emit.
 	 */
-	private static inline final QUERY_TYPE_REF_META: String = ':queryTypeRef';
+	private static final QUERY_TYPE_REF_META: String = ':queryTypeRef';
 
 	/**
 	 * Grammar opt-in on a `type` field: WALK it in the default tree, exactly as
@@ -95,7 +95,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * The tag moves the DEFAULT tree only — `parseFileTypeRefs` keeps its flat
 	 * `TypeRef` projection, so the two trees stay the two answers they are.
 	 */
-	private static inline final QUERY_TYPE_META: String = ':queryType';
+	private static final QUERY_TYPE_META: String = ':queryType';
 
 	/**
 	 * Grammar opt-in on a String field of a `@:spanned` `Seq`: the field NAMES the node, ahead of the
@@ -103,7 +103,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * member projects as `Member` named by its decoded key — the name `--select 'Member:rules'` matches.
 	 * Without it a struct whose identifying field has any other name projects unnamed.
 	 */
-	private static inline final QUERY_NAME_META: String = ':queryName';
+	private static final QUERY_NAME_META: String = ':queryName';
 
 	/**
 	 * Grammar opt-in on a `type` field — or on any other field holding the one type a
@@ -129,7 +129,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `Anon` decl-host descent (`var x:{a:Int}` publishes its fields as declarations)
 	 * keeps working and every children-walking consumer sees a byte-identical tree.
 	 */
-	private static inline final QUERY_TYPE_SLOT_META: String = ':queryTypeSlot';
+	private static final QUERY_TYPE_SLOT_META: String = ':queryTypeSlot';
 
 	/**
 	 * Grammar opt-in on a `Star` field holding TYPE ARGUMENTS beside value children (Haxe
@@ -142,18 +142,18 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * one node, so the element count IS the node count, and the nodes lead the span-ordered children
 	 * because the type arguments are written before the value ones.
 	 */
-	private static inline final QUERY_TYPE_ARGS_META: String = ':queryTypeArgs';
+	private static final QUERY_TYPE_ARGS_META: String = ':queryTypeArgs';
 
 	/**
 	 * Name of the `_walk` parameter carrying the enclosing node's type
 	 * slot, and of the local a node-forming rule allocates for its own.
 	 */
-	private static inline final TYPE_OUT_PARAM: String = 'typeOut';
+	private static final TYPE_OUT_PARAM: String = 'typeOut';
 
-	private static inline final TYPE_SLOT_LOCAL: String = '_typeSlot';
+	private static final TYPE_SLOT_LOCAL: String = '_typeSlot';
 
 	/** Name of the local a `@:queryTypeSlot` field walks into before its first node becomes the slot. */
-	private static inline final TYPE_SLOT_OWN_LOCAL: String = '_typeSlotOwn';
+	private static final TYPE_SLOT_OWN_LOCAL: String = '_typeSlotOwn';
 
 	/**
 	 * Grammar opt-in on a TERMINAL: the bytes it matches are conditional-compilation region text
@@ -169,7 +169,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * appeared in one series two days after the hand-kept ctor list shipped, and every name-driven
 	 * op wrote silently over them for eighteen days.
 	 */
-	private static inline final COND_REGION_RAW_META: String = ':condRegionRaw';
+	private static final COND_REGION_RAW_META: String = ':condRegionRaw';
 
 	/**
 	 * Grammar opt-in on a TERMINAL: the bytes it matches are the CONDITION of a
@@ -182,7 +182,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * the raw set with it would make every ordinary `#if` refuse a rename of a name its CONDITION
 	 * spells.
 	 */
-	private static inline final COND_REGION_CONDITION_META: String = ':condRegionCondition';
+	private static final COND_REGION_CONDITION_META: String = ':condRegionCondition';
 
 	/**
 	 * The kind the `_typeRefs` projection MINTS for a nominal type name. No grammar ctor
@@ -191,7 +191,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * `TypeRefShape.typeRefKinds` all name it, so leaving it out of the projected
 	 * vocabulary would report three live declarations as stale.
 	 */
-	private static inline final TYPE_REF_KIND: String = 'TypeRef';
+	private static final TYPE_REF_KIND: String = 'TypeRef';
 
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];

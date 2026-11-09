@@ -140,7 +140,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static inline final RULE_ID: String = 'redundant-lambda-wrapper';
 
 	/** The finding for a std callee — the risky arm's marker, since `fix` and `riskyArmFindings` split the findings on it. */
-	private static inline final STD_MESSAGE: String =
+	private static final STD_MESSAGE: String =
 		'this lambda only forwards its parameters to one std function — pass the function itself (the fix needs the compiler oracle)';
 
 	public function new() {

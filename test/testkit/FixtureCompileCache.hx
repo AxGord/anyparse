@@ -63,9 +63,6 @@ final class FixtureCompileCache {
 	/** Buffer of the real compile: the defines probe's `-v` names every parsed module. */
 	private static inline final MAX_BUFFER: Int = 1024 * 1024 * 1024;
 
-	/** The placeholder bracket: a byte no path and no compiler output carries. */
-	private static inline final MARK: String = '\x01';
-
 	/**
 	 * The version of the key and entry layout, bumped whenever what may be recorded changes, since a kept cache outlives
 	 * the rule it was written under: 2 gzips an entry, 3 records no compile
@@ -78,6 +75,9 @@ final class FixtureCompileCache {
 
 	/** How often a waiting process looks for the record. */
 	private static inline final AWAIT_POLL_MS: Int = 50;
+
+	/** The placeholder bracket: a byte no path and no compiler output carries. */
+	private static final MARK: String = '\x01';
 
 	/** A `--macro` naming one of these is a probe compile; nothing else is replayed. */
 	private static final PROBE_MACROS: Array<String> = ['anyparse.check.facts.TypedFactsMacro.run(', 'AnyparseReachDefinesProbe.'];

@@ -340,19 +340,19 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	/** A collapsible body block holds exactly one statement. */
 	private static inline final SINGLE_STATEMENT: Int = 1;
 
+	/** A collapsible statement carries exactly one child — the value the body becomes. */
+	private static inline final SINGLE_VALUE_CHILD: Int = 1;
+
 	/**
 	 * What the block body contributes to the lambda's head line, and therefore the ONLY
 	 * difference the collapse may make to it — see `paysForItself`.
 	 */
-	private static inline final BODY_BRACE_TAIL: String = ' {';
+	private static final BODY_BRACE_TAIL: String = ' {';
 
 	/** The closing brace the de-brace deletes from the block's last line — see `interiorSurvives`. */
-	private static inline final BLOCK_CLOSE: String = '}';
+	private static final BLOCK_CLOSE: String = '}';
 
-	private static inline final LINE_COMMENT: String = '//';
-
-	/** A collapsible statement carries exactly one child — the value the body becomes. */
-	private static inline final SINGLE_VALUE_CHILD: Int = 1;
+	private static final LINE_COMMENT: String = '//';
 
 	public function new() {
 		super(

@@ -15,8 +15,8 @@ using StringTools;
 @:nullSafety(Strict)
 final class RuleScopeTest extends Test {
 
-	private static inline final DIR: String = 'src/anyparse/check/common/imports/';
-	private static inline final DIFF_HEAD: String = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n';
+	private static final DIR: String = 'src/anyparse/check/common/imports/';
+	private static final DIFF_HEAD: String = 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n';
 	private static final WALK: ImpactSource = {
 		path: 'src/anyparse/check/scan/Walk.hx',
 		text: 'package anyparse.check.scan;\n\nfinal class Walk {\n\tpublic static function go(): Void {}\n}\n'

@@ -95,7 +95,7 @@ enum abstract MergeChoice(String) to String {
 final class KeyedMerge {
 
 	/** The key of a whole document. */
-	public static inline final ROOT: String = '(module)';
+	public static final ROOT: String = '(module)';
 
 	private final _conflicts: Array<MergeConflict> = [];
 	private final _seated: Array<String> = [];

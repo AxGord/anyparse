@@ -12,7 +12,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 final class GeneratedParserSharingTest extends Test {
 
 	/** The generated rule method whose source the row reads. */
-	private static inline final TYPEDEF_RULE: String = 'parseHxTypedefDeclT';
+	private static final TYPEDEF_RULE: String = 'parseHxTypedefDeclT';
 
 	/** A rolled-back Star element hands its stash back through the runtime's brace check, not an inline back-scan. */
 	@:pin('control')

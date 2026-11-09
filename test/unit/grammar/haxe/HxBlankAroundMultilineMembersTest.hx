@@ -19,7 +19,7 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxBlankAroundMultilineMembersTest extends Test {
 
-	private static inline final WIDE: String = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+	private static final WIDE: String = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 	/** Knob on: one blank line around any multi-line member. */
 	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '

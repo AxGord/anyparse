@@ -18,7 +18,7 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class ExtractInterfaceCommand implements CliCommand {
 
-	private static inline final OP: String = 'extract-interface';
+	private static final OP: String = 'extract-interface';
 
 	public function new() {}
 

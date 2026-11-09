@@ -103,7 +103,7 @@ private typedef Cursor = {
 final class CondRegionLiveness {
 
 	/** The one call a condition may write: `version("…")`, a semantic version. */
-	private static inline final VERSION_CALL: String = 'version';
+	private static final VERSION_CALL: String = 'version';
 
 	/** The comparison operators a condition may carry between two operands, longest first so `>` never shadows `>=`. */
 	private static final COMPARISONS: Array<String> = ['==', '!=', '>=', '<=', '>', '<'];

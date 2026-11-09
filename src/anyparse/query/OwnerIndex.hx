@@ -75,7 +75,7 @@ final class OwnerIndex {
 	private static inline final MIN_TERM_LENGTH: Int = 2;
 
 	/** The phrase a doc introduces the question it owns with, before the quoted question. */
-	private static inline final OWNED_PHRASE: String = 'one answer to';
+	private static final OWNED_PHRASE: String = 'one answer to';
 
 	/** Words a question is phrased with that name no concept, so they rank nothing. */
 	private static final STOP_WORDS: Array<String> = [

@@ -23,7 +23,7 @@ final class HxCloseTrailBlockCommentWriteTest extends Test {
 	private static final MODES: Array<String> = ['same', 'next', 'keep', 'fitLine'];
 
 	/** The marker a fixture writes after each `}` that a comment trails. */
-	private static inline final MARK: String = '}@';
+	private static final MARK: String = '}@';
 
 	public function new(): Void {
 		super();

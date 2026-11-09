@@ -12,7 +12,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class ShellHxAccessTest extends Test {
 
-	private static inline final TREE: String = '/w/anyparse';
+	private static final TREE: String = '/w/anyparse';
 
 	public function testEverySegmentOfALineIsRead(): Void {
 		Assert.isTrue(ShellHxAccess.reads('cd /w/anyparse && export X=1 && cat src/A.hx', null, null));

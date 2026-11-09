@@ -48,11 +48,11 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	 * characters are the real reification's, only spelled with no legal cut point in them.
 	 * Its own `\n` is terminal, so that seam yields nothing either.
 	 */
-	private static inline final IRREDUCIBLE: String =
+	private static final IRREDUCIBLE: String =
 		"\"\\t\\t\\tmacro_if_.$p..'sourceObject'._fieldEntry.slot]}_!=_null)_$p..fieldEntry.slot]}_=_$p..'sourceObject'._fieldEntry.slot]}\\n\"";
 
 	/** A real column list, 128 characters of solid text whose ONLY cut points are its commas — no space, bracket or `\n`. */
-	private static inline final COLUMN_LIST: String =
+	private static final COLUMN_LIST: String =
 		'filepath,folder,cloud_id,folder_cloud_id,action,filepath_movedfrom,filepath_movedfromorigin,timestamp,synced_at,deleted_at,stamp';
 
 	/** A merge whose rendered line lands EXACTLY on `maxLineLength` is accepted (the fits-probe boundary). */
@@ -269,7 +269,6 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	public function testPerLineFoldIsIdempotent(): Void {
 		assertFixIsIdempotent(perLineCommentSource());
 	}
-
 
 	/**
 	 * An over-long literal with NO interpolation at all splits at its embedded `\n`
@@ -597,6 +596,20 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 	}
 
 	/**
+	 * A body statement stands in for its member only where the member renders it exactly as it renders alone. The
+	 * body of a function literal the source indents a level short of where the writer puts it renders a tab deeper
+	 * inside its member than in the one-statement wrapper, so measured alone this merge would fit by the four columns
+	 * it is really over: the member scope sees the width the file will have, and nothing is proposed.
+	 */
+	@:pin('control')
+	@:killer('M-FOLD-STATEMENT-UNPROVEN')
+	public function testStatementStandsInOnlyWhereItRendersAlike(): Void {
+		final literal: String = ''.lpad('a', 116);
+		final src: String = 'class C {\n\tstatic var x = [\n\t\tfunction() {\n\t\tg(\'${literal}\' + \'bbbbbbbb\');\n\t\t}\n\t];\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
 	 * A `g('…' + '…')` at three tabs whose FIRST operand is 40 characters of text and
 	 * whose second is 40 more, an interpolated `$x` and `tailLen` trailing characters.
 	 * The greedy fill packs the first three segments into one group and leaves the
@@ -787,20 +800,6 @@ class FoldStringLiteralsWidthCheckTest extends FoldStringLiteralsCheckTestBase {
 			if (cols > widest) widest = cols;
 		}
 		return widest;
-	}
-
-	/**
-	 * A body statement stands in for its member only where the member renders it exactly as it renders alone. The
-	 * body of a function literal the source indents a level short of where the writer puts it renders a tab deeper
-	 * inside its member than in the one-statement wrapper, so measured alone this merge would fit by the four columns
-	 * it is really over: the member scope sees the width the file will have, and nothing is proposed.
-	 */
-	@:pin('control')
-	@:killer('M-FOLD-STATEMENT-UNPROVEN')
-	public function testStatementStandsInOnlyWhereItRendersAlike(): Void {
-		final literal: String = StringTools.lpad('', 'a', 116);
-		final src: String = 'class C {\n\tstatic var x = [\n\t\tfunction() {\n\t\tg(\'${literal}\' + \'bbbbbbbb\');\n\t\t}\n\t];\n}\n';
-		Assert.equals(0, violations(src).length);
 	}
 
 }

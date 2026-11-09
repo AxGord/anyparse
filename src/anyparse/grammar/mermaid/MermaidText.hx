@@ -37,7 +37,7 @@ final class MermaidText {
 	private static inline final MAX_CODE_DIGITS: Int = 7;
 
 	/** Characters that never appear in a bare label: delimiters, the quote, the escapes, markup, `%%`. */
-	private static inline final UNSAFE: String = '[](){}|"/\\#&;<>%';
+	private static final UNSAFE: String = '[](){}|"/\\#&;<>%';
 
 	/** The named entity codes the codec resolves; any other name is markup. */
 	private static final NAMED: Map<String, Int> = [

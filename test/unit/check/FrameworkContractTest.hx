@@ -34,27 +34,27 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict) class FrameworkContractTest extends Test {
 
-	/** The file the driver lives in — every assertion filters findings to it. */
-	private static inline final DRIVER_FILE: String = 'game/Player.hx';
-
-	/** The engine base class, declared in scope so the supertype closure and the rename gate are both provable. */
-	private static inline final ROOT_SRC: String = 'class Node {\n\tpublic function new():Void {}\n}';
-
 	/** A driver whose lifecycle callback the engine calls by that exact name, and whose spelling the built-in normalizer CAN correct. */
 	private static inline final DRIVER_SRC: String = 'class Player extends Node {\n\n\tprivate var _hp:Int = 100;\n\n'
 		+ '\tpublic function new():Void {\n\t\tsuper();\n\t}\n\n\tprivate function _ready():Void {\n\t\t_hp = 100;\n\t}\n\n}';
 
+	/** The file the driver lives in — every assertion filters findings to it. */
+	private static final DRIVER_FILE: String = 'game/Player.hx';
+
+	/** The engine base class, declared in scope so the supertype closure and the rename gate are both provable. */
+	private static final ROOT_SRC: String = 'class Node {\n\tpublic function new():Void {}\n}';
+
 	/** The contract that owns `_ready`. */
-	private static inline final GODOT_CONFIG: String = '{"frameworks":[{"root":"Node","names":["_ready","_process"]}]}';
+	private static final GODOT_CONFIG: String = '{"frameworks":[{"root":"Node","names":["_ready","_process"]}]}';
 
 	/** A second project's roster, used to show a declared roster does not displace the built-in one. */
-	private static inline final UNITY_CONFIG: String = '{"frameworks":[{"root":"MonoBehaviour","names":["Start","Update"]}]}';
+	private static final UNITY_CONFIG: String = '{"frameworks":[{"root":"MonoBehaviour","names":["Start","Update"]}]}';
 
 	/** The Unity engine base, in scope for the same reason `ROOT_SRC` is. */
-	private static inline final UNITY_ROOT_SRC: String = 'class MonoBehaviour {\n\tpublic function new():Void {}\n}';
+	private static final UNITY_ROOT_SRC: String = 'class MonoBehaviour {\n\tpublic function new():Void {}\n}';
 
 	/** The roster nominating the callback of the same-simple-name collision fixture. */
-	private static inline final COLLIDE_CONFIG: String = '{"frameworks":[{"root":"Base","names":["_ready"]}]}';
+	private static final COLLIDE_CONFIG: String = '{"frameworks":[{"root":"Base","names":["_ready"]}]}';
 
 	/** Per-file configs for a scope spanning two roots: everything under `b/` nominates `Tick`, the rest `Start`. */
 	private static final twoRootResolver: (String) -> LintConfig = path ->
@@ -417,7 +417,6 @@ import anyparse.runtime.Span;
 		check.setConfigResolver(_ -> LintConfig.parse(config));
 		return CheckFixture.violationsIn(check, godotFixture()).filter(v -> v.file == DRIVER_FILE).length;
 	}
-
 
 	/**
 	 * The `unused-private` findings the Godot driver keeps under `config` — `{}` for a project that declares no roster.

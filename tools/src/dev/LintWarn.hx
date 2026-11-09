@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.grammar.json.JsonFormat;
+import anyparse.util.Compare;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import haxe.Exception;
@@ -39,7 +40,7 @@ final class LintWarn {
 	private static inline final DIGEST_LENGTH: Int = 16;
 
 	/** The sentence every nudge ends with: a finding a rule can rewrite is that rule's to fix. */
-	private static inline final FIX_HINT: String =
+	private static final FIX_HINT: String =
 		'A mechanically-rewritable one is fixed with\n  hxq lint <file> --rule <id> --fix\nand never by hand.';
 
 	/** An op reporting its own write: `apq <op>: wrote <path>` or `apq <op>: (re)wrote <n> file(s)`. */
@@ -163,7 +164,7 @@ final class LintWarn {
 		final snapshots: String = cacheRoot();
 		final cacheDir: String = '$snapshots/${digest(session)}';
 		final sorted: Array<String> = files.copy();
-		sorted.sort(Reflect.compare);
+		sorted.sort(Compare.compareString);
 		var snapshot: Null<String> = '$cacheDir/${digest('$root\n${sorted.join('\n')}')}.json';
 		sweep(snapshots);
 		try

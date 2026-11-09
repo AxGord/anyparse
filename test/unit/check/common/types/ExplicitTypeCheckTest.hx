@@ -17,7 +17,7 @@ class ExplicitTypeCheckTest extends Test {
 
 	// --- parameter types copied from an implemented / overridden signature ---
 
-	private static inline final IFACE: String =
+	private static final IFACE: String =
 		'interface I {\n\tpublic function grab(str:String):Int;\n\tpublic function opt(?flag:Bool):Void;\n}';
 
 	public function testTypedFieldNotFlagged(): Void {

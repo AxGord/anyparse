@@ -46,13 +46,13 @@ using Lambda;
 final class CallGraphFacts {
 
 	/** The prefix the compiler gives a native identifier (`` `trace ``), which the syntax spells without it. */
-	private static inline final NATIVE_PREFIX: String = '`';
+	private static final NATIVE_PREFIX: String = '`';
 
 	/** The access of a call of a method the compiler spliced in (`CompilerFacts.CallFact`). */
-	private static inline final INLINED: String = 'inlined';
+	private static final INLINED: String = 'inlined';
 
 	/** The access of a call of the value a field holds (`CompilerFacts.CallFact`). */
-	private static inline final FIELD_VALUE: String = 'fieldValue';
+	private static final FIELD_VALUE: String = 'fieldValue';
 
 	/** The call accesses by a name off a value of no class or a structure (`CallFact.access`). */
 	private static final DYNAMIC_CALLS: Array<String> = ['FDynamic', 'FAnon'];

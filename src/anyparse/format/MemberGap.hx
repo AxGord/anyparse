@@ -49,7 +49,7 @@ typedef LeadingCommented = {
 final class MemberGap {
 
 	/** The opening of a doc comment - the leading-comment prefix the doc-comment rule keys on. */
-	private static inline final DOC_OPEN: String = '/**';
+	private static final DOC_OPEN: String = '/**';
 
 	/**
 	 * Whether the doc-comment rule drops the gap's SOURCE blank: after a

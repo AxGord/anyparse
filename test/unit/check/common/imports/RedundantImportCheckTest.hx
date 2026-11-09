@@ -15,7 +15,7 @@ import anyparse.runtime.Span;
 class RedundantImportCheckTest extends Test {
 
 	/** The module whose main type is `Mod` and whose secondary type is `Sub`. */
-	private static inline final MOD: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n';
+	private static final MOD: String = 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n';
 
 	// --- reported ---
 

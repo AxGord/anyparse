@@ -31,16 +31,16 @@ import sys.FileSystem;
 final class GrammarDiscovery {
 
 	/** The file-name suffix that makes a module a grammar plugin the CLI registers. */
-	private static inline final MODULE_SUFFIX: String = 'QueryPlugin';
+	private static final MODULE_SUFFIX: String = 'QueryPlugin';
 
 	/** The compiler's module file extension. */
-	private static inline final MODULE_EXTENSION: String = '.hx';
+	private static final MODULE_EXTENSION: String = '.hx';
 
 	/** The interface every registered plugin implements, by its module path. */
-	private static inline final PLUGIN_INTERFACE: String = 'anyparse.query.GrammarPlugin';
+	private static final PLUGIN_INTERFACE: String = 'anyparse.query.GrammarPlugin';
 
 	/** The optional static content test. */
-	private static inline final RECOGNISES: String = 'recognises';
+	private static final RECOGNISES: String = 'recognises';
 
 	/** The statics every registered plugin declares. */
 	private static final REQUIRED_STATICS: Array<String> = ['LANG', 'EXTENSIONS', 'MERGE'];

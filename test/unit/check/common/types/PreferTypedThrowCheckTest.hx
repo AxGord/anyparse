@@ -20,17 +20,16 @@ class PreferTypedThrowCheckTest extends Test {
 	// --- helpers -------------------------------------------------------------------
 
 	/** The thrower every scoped test reports on. */
-	private static inline final THROWER: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
+	private static final THROWER: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
 
 	/** A source carrying one blocking `catch (e:String)` clause — the gate's trigger shape. */
-	private static inline final STRING_CATCH: String =
-		'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
+	private static final STRING_CATCH: String = 'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
 
 	/** A source the grammar cannot read, carrying NO catch clause. */
-	private static inline final UNREADABLE: String = 'class B {\n\tfunction q(: {{{\n}\n';
+	private static final UNREADABLE: String = 'class B {\n\tfunction q(: {{{\n}\n';
 
 	/** The same unreadable source, differing in ONE thing: it carries the blocking clause. */
-	private static inline final UNREADABLE_CATCH: String = 'class B {\n\tfunction q(: {{{\n\ttry h() catch (e:String) {}\n}\n';
+	private static final UNREADABLE_CATCH: String = 'class B {\n\tfunction q(: {{{\n\ttry h() catch (e:String) {}\n}\n';
 
 	// --- what is flagged ---
 

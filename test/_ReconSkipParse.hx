@@ -37,11 +37,11 @@ typedef ReconCluster = {
  */
 final class _ReconSkipParse { // noqa: naming
 
-	private static inline final HXTEST_EXT: String = '.hxtest';
 	private static inline final HEAD_LEN: Int = 70;
 	private static inline final LOCUS_LEN: Int = 20;
 	private static inline final TOP_N_DEFAULT: Int = 30;
 	private static inline final EXAMPLES_PER_CLUSTER: Int = 2;
+	private static final HXTEST_EXT: String = '.hxtest';
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SUBDIRS: Array<String> = [
 		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',

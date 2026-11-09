@@ -23,10 +23,10 @@ using StringTools;
 class UnusedCaseBinderCheckTest extends Test {
 
 	/** The enum the constructor fixtures match, declared so each argument is a PROVEN capture. */
-	private static inline final ENUMS: String = '\nenum N {\n\tNode(x: Int, y: Int);\n\tA(x: Int);\n\tB(x: Int);\n}';
+	private static final ENUMS: String = '\nenum N {\n\tNode(x: Int, y: Int);\n\tA(x: Int);\n\tB(x: Int);\n}';
 
 	/** The reported message for the canary's unread binder. */
-	private static inline final CANARY_MESSAGE: String = 'case binder \'_data\' is never read; replace it with _';
+	private static final CANARY_MESSAGE: String = 'case binder \'_data\' is never read; replace it with _';
 
 	public function testCanaryFlagged(): Void {
 		final vs: Array<Violation> = violations(canary());

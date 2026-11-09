@@ -16,7 +16,7 @@ import anyparse.query.SymbolIndex;
 final class CatchTypes {
 
 	/** The written type of a string literal's value. */
-	private static inline final STRING_TYPE: String = 'String';
+	private static final STRING_TYPE: String = 'String';
 
 	/**
 	 * The written type the `throw` node `node` raises a value of: a string literal's, a `new T(…)`'s `T`; null for any

@@ -37,10 +37,10 @@ class CommentWidthCheckTest extends Test {
 		+ 'omega alpha beta gamma delta epsilon zeta eta theta and further words';
 
 	/** Prose that overflows a 60-column config and fits a 140-column one — 73 rendered columns as a doc line. */
-	private static inline final MEDIUM: String = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu';
+	private static final MEDIUM: String = 'alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu';
 
 	/** A config declaring a line width no other fixture uses — the SECOND declaration this rule is read against. */
-	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}, "indentation": {"character": "tab", "tabWidth": 4}}';
+	private static final NARROW: String = '{"wrapping": {"maxLineLength": 60}, "indentation": {"character": "tab", "tabWidth": 4}}';
 
 	/** The fixture trees, removed in `teardown`; their shared parent is reused across runs. */
 	private final _trees: ConfigTrees = new ConfigTrees('apq-comment-width-test');

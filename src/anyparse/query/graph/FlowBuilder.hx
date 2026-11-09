@@ -68,7 +68,7 @@ final class FlowBuilder {
 	private static inline final RUN_LINES: Int = 3;
 
 	/** What may follow a comment inside a header, a pattern or a call without a blank between. */
-	private static inline final CLOSERS: String = ')],;:';
+	private static final CLOSERS: String = ')],;:';
 
 	private static final WHITESPACE: EReg = ~/\s+/g;
 

@@ -76,12 +76,12 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 @:nullSafety(Strict)
 final class PreferIndexAccess extends RuleBase {
 
-	private static inline final GET_METHOD: String = 'get';
-	private static inline final SET_METHOD: String = 'set';
 	private static inline final GET_ARG_COUNT: Int = 1;
 	private static inline final SET_ARG_COUNT: Int = 2;
-	private static inline final GET_MESSAGE: String = 'read a map value with map[key] instead of map.get(key)';
-	private static inline final SET_MESSAGE: String = 'set a map value with map[key] = value instead of map.set(key, value)';
+	private static final GET_METHOD: String = 'get';
+	private static final SET_METHOD: String = 'set';
+	private static final GET_MESSAGE: String = 'read a map value with map[key] instead of map.get(key)';
+	private static final SET_MESSAGE: String = 'set a map value with map[key] = value instead of map.set(key, value)';
 
 	public function new() {
 		super(

@@ -79,14 +79,14 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 	private static inline final INDEX_CHILD_COUNT: Int = 2;
 
 	/** The message for a site whose no-null-value proof cleared — the one that gets a fix. */
-	private static inline final FIXABLE_MESSAGE: String = 'this exists-then-index map lookup can be map[key] ?? default';
+	private static final FIXABLE_MESSAGE: String = 'this exists-then-index map lookup can be map[key] ?? default';
 
 	/** The message for a site the census could not prove; reported for a human, never fixed. */
-	private static inline final UNPROVEN_MESSAGE: String =
+	private static final UNPROVEN_MESSAGE: String =
 		'this exists-then-index map lookup reads like map[key] ?? default, but a stored null value cannot be ruled out';
 
 	/** Why an unproven site gets no edit, for `apq lint --fix`'s unfixed ledger — the same fact the message states. */
-	private static inline final DECLINE_REASON: String =
+	private static final DECLINE_REASON: String =
 		'the value census could not rule out a stored null, so map[key] ?? default would change the result for that key';
 
 	public function new() {

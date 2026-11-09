@@ -18,8 +18,7 @@ import anyparse.runtime.Span;
 class ImportOutsideGuardCheckTest extends Test {
 
 	/** The incident, in miniature: `using` stranded above a guard whose own header is an import run. */
-	private static inline final STRANDED_USING: String =
-		'package debug;\n\nusing ext.One;\n\n#if FLAG\nimport sub.Widget;\n\nclass C {}\n#end\n';
+	private static final STRANDED_USING: String = 'package debug;\n\nusing ext.One;\n\n#if FLAG\nimport sub.Widget;\n\nclass C {}\n#end\n';
 
 	public function testStrandedUsingFlagged(): Void {
 		final vs: Array<Violation> = violations(STRANDED_USING);

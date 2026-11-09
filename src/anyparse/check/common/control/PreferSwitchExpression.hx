@@ -75,7 +75,7 @@ final class PreferSwitchExpression extends RuleBase {
 	 * A branch value of an expression chain is a bare expression, so each rendered `case`
 	 * body needs its own terminator, whatever it ends with.
 	 */
-	private static inline final BODY_TERMINATOR: String = ';';
+	private static final BODY_TERMINATOR: String = ';';
 
 	public function new() {
 		super(

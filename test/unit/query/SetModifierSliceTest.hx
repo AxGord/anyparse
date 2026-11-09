@@ -18,14 +18,14 @@ using StringTools;
  */
 class SetModifierSliceTest extends Test {
 
-	private static inline final PRIVATE_FN: String = 'package p;\nclass C {\n\tprivate function f(): Int return 1;\n}';
+	private static final PRIVATE_FN: String = 'package p;\nclass C {\n\tprivate function f(): Int return 1;\n}';
 
 	/**
 	 * A module-level `private typedef`: `class C` and a module-private helper type
 	 * beside it. Line 4 column 1 is the `private` keyword, which the cursor convention reads as the
 	 * declaration's first token.
 	 */
-	private static inline final MODULE_PRIVATE_TYPEDEF: String = 'package p;\nclass C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}';
+	private static final MODULE_PRIVATE_TYPEDEF: String = 'package p;\nclass C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}';
 
 	/** private → public, body intact, old visibility gone. */
 	public function testFlipVisibility(): Void {

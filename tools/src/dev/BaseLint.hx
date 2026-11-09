@@ -23,11 +23,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class BaseLint {
 
-	/** The report in the gate's logs; `STAMP` beside it says which base and compiler it stands for. */
-	public static inline final FILE: String = 'lint-base.json';
-
-	public static inline final STAMP: String = 'lint-base.stamp';
-
 	/** The announcement of the base lint branch (`BaseBranch.pendingFile`). */
 	public static inline final PENDING: String = 'lint-base.pending';
 
@@ -39,6 +34,11 @@ final class BaseLint {
 
 	/** The environment variable that names the cache of reports shared by every worktree instead of the default. */
 	public static inline final CACHE_VAR: String = 'SLICE_BASE_LINT_CACHE';
+
+	/** The report in the gate's logs; `STAMP` beside it says which base and compiler it stands for. */
+	public static final FILE: String = 'lint-base.json';
+
+	public static final STAMP: String = 'lint-base.stamp';
 
 	/** The announce-and-wait protocol of the branch, its markers and its shared cache. */
 	private static final BRANCH: BaseBranch = new BaseBranch(ROW, PENDING, UNREAD, CACHE_VAR, 'anyparse-slice-base-lint');

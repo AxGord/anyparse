@@ -13,7 +13,7 @@ import anyparse.runtime.Span;
 final class RecordTree {
 
 	/** The separator of a container read with fewer than two children. */
-	private static inline final DEFAULT_SEPARATOR: String = ', ';
+	private static final DEFAULT_SEPARATOR: String = ', ';
 
 	/** The tree of `source`, parsed into `root`. */
 	public static function of(source: String, root: QueryNode): MergeTree {

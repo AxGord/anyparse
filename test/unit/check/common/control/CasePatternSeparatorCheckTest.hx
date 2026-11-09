@@ -18,13 +18,13 @@ import anyparse.query.CanonicalEdit;
 class CasePatternSeparatorCheckTest extends Test {
 
 	/** The default style: an or-pattern is the finding, and the fix spells it with commas. */
-	private static inline final COMMA_CONFIG: String = '{"rules":{"case-pattern-separator":{}}}';
+	private static final COMMA_CONFIG: String = '{"rules":{"case-pattern-separator":{}}}';
 
 	/** The opt-in style: a multi-pattern label is the finding, and the fix joins it with pipes. */
-	private static inline final PIPE_CONFIG: String = '{"rules":{"case-pattern-separator":{"style":"pipe"}}}';
+	private static final PIPE_CONFIG: String = '{"rules":{"case-pattern-separator":{"style":"pipe"}}}';
 
 	/** An unrecognised `style` — must read as the comma default rather than disabling the rule. */
-	private static inline final UNKNOWN_STYLE_CONFIG: String = '{"rules":{"case-pattern-separator":{"style":"pipes"}}}';
+	private static final UNKNOWN_STYLE_CONFIG: String = '{"rules":{"case-pattern-separator":{"style":"pipes"}}}';
 
 	public function testOrPatternFlaggedUnderCommaStyle(): Void {
 		final vs: Array<Violation> = violations(switchOf('case PRIMARY | GOLDEN: a();'), COMMA_CONFIG);

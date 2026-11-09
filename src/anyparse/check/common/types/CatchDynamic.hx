@@ -85,7 +85,7 @@ private typedef LoggingKinds = {
 final class CatchDynamic extends RuleBase implements ConfigAware implements VersionGated {
 
 	/** The name arm (b) gives a caught value when the project's `naming.catchVarName` sets none. */
-	private static inline final DEFAULT_CATCH_NAME: String = 'exception';
+	private static final DEFAULT_CATCH_NAME: String = 'exception';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

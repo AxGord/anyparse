@@ -31,25 +31,25 @@ import haxe.macro.Expr;
 class SpanInfoLowering extends PairedShapeLowering {
 
 	/** The `HxType` ctor that names a nominal type; its first operand carries the name. */
-	private static inline final NAMED_CTOR: String = 'Named';
+	private static final NAMED_CTOR: String = 'Named';
 
 	/** Struct field holding a binding's declared type - the `declaredTypes` / `declaredTypeSources` write site. */
-	private static inline final TYPE_FIELD: String = 'type';
+	private static final TYPE_FIELD: String = 'type';
 
 	/** Struct field holding a function's return type. */
-	private static inline final RETURN_TYPE_FIELD: String = 'returnType';
+	private static final RETURN_TYPE_FIELD: String = 'returnType';
 
 	/** Struct field holding a property's accessor clause. */
-	private static inline final ACCESS_FIELD: String = 'access';
+	private static final ACCESS_FIELD: String = 'access';
 
 	/** Struct field that, together with `name`, marks a type-parameter declaration - the `typeParamNames` collect site. */
-	private static inline final CONSTRAINT_MORE_FIELD: String = 'constraintMore';
+	private static final CONSTRAINT_MORE_FIELD: String = 'constraintMore';
 
 	/** Struct field holding a type parameter's first bound - the head of the `typeParamConstraints` collect. */
-	private static inline final CONSTRAINT_FIELD: String = 'constraint';
+	private static final CONSTRAINT_FIELD: String = 'constraint';
 
 	/** Struct field holding a type parameter's default type - the `typeParamDefaults` collect site. */
-	private static inline final DEFAULT_FIELD: String = 'defaultValue';
+	private static final DEFAULT_FIELD: String = 'defaultValue';
 
 	/** Accessor ids that denote a plain stored slot; anything else runs code. */
 	private static final STORED_ACCESSORS: Array<String> = ['default', 'null', 'never'];

@@ -65,13 +65,13 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * which would move the `public` conferral too — a wider change than this arm, and one whose
 	 * blast radius reaches every rule that selects on visibility.
 	 */
-	public static inline final INTERFACE_MOD: String = 'interface';
+	public static final INTERFACE_MOD: String = 'interface';
 
 	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
-	private static inline final VAR_MORE_KIND: String = 'VarMore';
+	private static final VAR_MORE_KIND: String = 'VarMore';
 
 	/** The grant annotation `implicitReachOf` sets apart from every other metadata. */
-	private static inline final ALLOW_META: String = '@:allow';
+	private static final ALLOW_META: String = '@:allow';
 
 	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
 

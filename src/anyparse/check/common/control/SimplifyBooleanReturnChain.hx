@@ -41,7 +41,7 @@ import anyparse.query.SymbolIndex;
 final class SimplifyBooleanReturnChain extends RuleBase {
 
 	/** Why `fix` leaves a chain whose span holds a comment: the rewrite is built from the conditions alone. */
-	private static inline final COMMENT_DECLINE: String =
+	private static final COMMENT_DECLINE: String =
 		'a comment stands inside the guard chain, and the single return is rebuilt from the conditions alone, which would drop it';
 
 	public function new() {

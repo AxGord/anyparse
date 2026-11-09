@@ -41,12 +41,12 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class EmptyBlock extends RuleBase {
 
-	private static inline final DECLINE_LOOP: String = 'a loop body: removing it removes the loop';
-	private static inline final DECLINE_TRY: String = 'a try / catch body: the construct needs it';
-	private static inline final DECLINE_SIDE_EFFECT: String = 'the if condition may have a side effect';
-	private static inline final DECLINE_BRANCH_BODY: String = 'the if is a single-statement branch body';
-	private static inline final DECLINE_THEN_WITH_ELSE: String = 'an empty then-branch with an else needs the condition inverted';
-	private static inline final DECLINE_OTHER: String = 'only an empty else and an empty no-else if are removed';
+	private static final DECLINE_LOOP: String = 'a loop body: removing it removes the loop';
+	private static final DECLINE_TRY: String = 'a try / catch body: the construct needs it';
+	private static final DECLINE_SIDE_EFFECT: String = 'the if condition may have a side effect';
+	private static final DECLINE_BRANCH_BODY: String = 'the if is a single-statement branch body';
+	private static final DECLINE_THEN_WITH_ELSE: String = 'an empty then-branch with an else needs the condition inverted';
+	private static final DECLINE_OTHER: String = 'only an empty else and an empty no-else if are removed';
 
 	public function new() {
 		super(

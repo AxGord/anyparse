@@ -27,10 +27,10 @@ using Lambda;
 final class WriteSites {
 
 	/** The binding half of a member root reached through the self reference: whichever declaration the member is. */
-	private static inline final ANY_BINDING: String = '*';
+	private static final ANY_BINDING: String = '*';
 
 	/** The step an index access adds: any element. */
-	private static inline final ANY_ELEMENT: String = '[]';
+	private static final ANY_ELEMENT: String = '[]';
 
 	/**
 	 * The path of the access chain `node` is — the storage a write target names, or the chain an expression reads;

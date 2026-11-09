@@ -37,7 +37,7 @@ import unit.cli.CliFixture;
 @:nullSafety(Strict)
 class ApqTestSummaryTinkTest extends Test {
 
-	private static inline final ESC: String = '\x1b';
+	private static final ESC: String = '\x1b';
 
 	// --- All-passing transcript, ANSI-colored (the real client shape) ---
 

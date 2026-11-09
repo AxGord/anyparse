@@ -25,7 +25,7 @@ import anyparse.query.SymbolIndex;
 final class ModifierOrder extends RuleBase {
 
 	/** The `final` keyword the grammar folds into a `finalModifierMemberKind` wrapper — a fixed 5-char token at the wrapper's start. */
-	private static inline final FINAL_KEYWORD: String = 'final';
+	private static final FINAL_KEYWORD: String = 'final';
 
 	public function new() {
 		super(

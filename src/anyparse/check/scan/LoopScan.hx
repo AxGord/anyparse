@@ -51,12 +51,6 @@ final class LoopScan {
 	/** An index access has exactly [receiver, index] children. */
 	private static inline final INDEX_ACCESS_CHILD_COUNT: Int = 2;
 
-	/** The one numeric literal a counter / range may start from. */
-	private static inline final ZERO_LITERAL: String = '0';
-
-	/** The step a compound `+=` must add for the statement to count as an increment. */
-	private static inline final ONE_LITERAL: String = '1';
-
 	/** A compound assignment has exactly [target, value] children. */
 	private static inline final COMPOUND_ASSIGN_CHILD_COUNT: Int = 2;
 
@@ -71,6 +65,12 @@ final class LoopScan {
 
 	/** An interval node has exactly [lower, upper] children. */
 	private static inline final INTERVAL_CHILD_COUNT: Int = 2;
+
+	/** The one numeric literal a counter / range may start from. */
+	private static final ZERO_LITERAL: String = '0';
+
+	/** The step a compound `+=` must add for the statement to count as an increment. */
+	private static final ONE_LITERAL: String = '1';
 
 	/** The name `node` carries when it is a bare identifier, else null. */
 	public static inline function bareIdentName(node: QueryNode, s: LoopSeams): Null<String> {

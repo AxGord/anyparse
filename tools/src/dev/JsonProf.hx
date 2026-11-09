@@ -36,9 +36,6 @@ final class JsonProf {
 
 	private static inline final MS_PER_SECOND: Float = 1000.0;
 
-	/** The prefix of a facts file's node line. */
-	private static inline final NODE_LINE: String = '{"k":"node"';
-
 	/** Hundredths of a millisecond: the precision a reading is printed in. */
 	private static inline final HUNDREDTHS: Float = 100.0;
 
@@ -50,6 +47,9 @@ final class JsonProf {
 
 	/** The node of a stored tree `json-stored-*` holds: one run of integers per node, as `ParseDiskCache` writes it. */
 	private static inline final STORED_NODES: Int = 2000000;
+
+	/** The prefix of a facts file's node line. */
+	private static final NODE_LINE: String = '{"k":"node"';
 
 	public static function main(): Void {
 		final args: Array<String> = Sys.args();

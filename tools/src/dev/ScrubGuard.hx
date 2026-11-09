@@ -49,11 +49,11 @@ final class ScrubGuard {
 	/** How many segments a path must have to name a directory: fewer are too common a phrase to be one project's. */
 	private static inline final DIRECTORY_SEGMENTS: Int = 3;
 
-	/** The name a home path may carry in published text: the placeholder the docs and fixtures use for "a user". */
-	private static inline final PLACEHOLDER_HOME: String = 'me';
-
 	/** The group of `HOME_PATH` that holds the name. */
 	private static inline final HOME_NAME: Int = 2;
+
+	/** The name a home path may carry in published text: the placeholder the docs and fixtures use for "a user". */
+	private static final PLACEHOLDER_HOME: String = 'me';
 
 	/** Directory names a project keeps its modules under, which say nothing about the project. */
 	private static final SOURCE_ROOT_NAMES: Array<String> = ['src', 'source', 'lib', 'test', 'tests'];

@@ -86,17 +86,26 @@ import sys.FileSystem;
 @:nullSafety(Strict)
 final class OracleCoverage implements CompiledSet {
 
+	/**
+	 * Spawn buffer for the probe, in bytes. Node's default is 1 MiB and a real project
+	 * blows straight through it — 815 KB of `-v` output for Pony's two arms, 2.1 MB for
+	 * this project's own `test-js.hxml`. What an overflow costs is the WHOLE risky phase,
+	 * not a wrong decline: node reports it as a spawn error with a null status and a
+	 * truncated stdout, which `probe` reads as an UNKNOWN compiled set.
+	 */
+	private static inline final PROBE_BUFFER: Int = 256 * 1024 * 1024;
+
 	/** The extension of a source file the compiler parses. */
-	private static inline final SOURCE_EXTENSION: String = 'hx';
+	private static final SOURCE_EXTENSION: String = 'hx';
 
 	/** The `haxe -v` line prefix that names a source file the compiler read. */
-	private static inline final PARSED_PREFIX: String = 'Parsed ';
+	private static final PARSED_PREFIX: String = 'Parsed ';
 
 	/** The `haxe -v` line that OPENS one compile arm and names the defines it starts with. */
-	private static inline final DEFINES_PREFIX: String = 'Defines:';
+	private static final DEFINES_PREFIX: String = 'Defines:';
 
 	/** The `haxe -v` line naming the roots one compile arm resolves modules under, printed before that arm's `Defines:`. */
-	private static inline final CLASSPATH_PREFIX: String = 'Classpath:';
+	private static final CLASSPATH_PREFIX: String = 'Classpath:';
 
 	/**
 	 * The `haxe -v` line shape of an init macro that ADDS a define after the `Defines:`
@@ -110,19 +119,10 @@ final class OracleCoverage implements CompiledSet {
 	 * from INSIDE a build macro prints its call site rather than its argument and stays
 	 * invisible, which costs a decline and never a wrong permission.
 	 */
-	private static inline final MACRO_DEFINE_PREFIX: String = 'Calling macro haxe.macro.Compiler.define (--macro define(';
+	private static final MACRO_DEFINE_PREFIX: String = 'Calling macro haxe.macro.Compiler.define (--macro define(';
 
 	/** The one sentence every target-without-a-process arm of this class answers with. */
-	private static inline final UNSUPPORTED_TARGET: String = 'compiler oracle coverage requires a sys or nodejs target';
-
-	/**
-	 * Spawn buffer for the probe, in bytes. Node's default is 1 MiB and a real project
-	 * blows straight through it — 815 KB of `-v` output for Pony's two arms, 2.1 MB for
-	 * this project's own `test-js.hxml`. What an overflow costs is the WHOLE risky phase,
-	 * not a wrong decline: node reports it as a spawn error with a null status and a
-	 * truncated stdout, which `probe` reads as an UNKNOWN compiled set.
-	 */
-	private static inline final PROBE_BUFFER: Int = 256 * 1024 * 1024;
+	private static final UNSUPPORTED_TARGET: String = 'compiler oracle coverage requires a sys or nodejs target';
 
 	/**
 	 * How many source files the oracle's compile READS — standard library and haxelibs

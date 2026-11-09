@@ -58,7 +58,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 	private static inline final DEFAULT_MIN_UNCHECKED: Int = 3;
 
 	/** The tail after the occurrence tally, shared by the builder and `messageIdentity`. */
-	private static inline final REPEAT_TAIL: String = ' times in one function body';
+	private static final REPEAT_TAIL: String = ' times in one function body';
 
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 

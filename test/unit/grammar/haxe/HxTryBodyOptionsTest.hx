@@ -31,7 +31,7 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxTryBodyOptionsTest extends Test {
 
-	private static inline final SRC_BLOCK_BODY: String = 'class C { static function m() { try { a; } catch (e:Any) {} } }';
+	private static final SRC_BLOCK_BODY: String = 'class C { static function m() { try { a; } catch (e:Any) {} } }';
 
 	public function new(): Void {
 		super();

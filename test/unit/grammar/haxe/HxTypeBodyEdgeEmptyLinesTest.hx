@@ -13,8 +13,8 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxTypeBodyEdgeEmptyLinesTest extends Test {
 
-	private static inline final ENUM_BLANK: String = 'enum E {\n\n\tA;\n\tB;\n\n}';
-	private static inline final ENUM_TIGHT: String = 'enum E {\n\tA;\n\tB;\n}';
+	private static final ENUM_BLANK: String = 'enum E {\n\n\tA;\n\tB;\n\n}';
+	private static final ENUM_TIGHT: String = 'enum E {\n\tA;\n\tB;\n}';
 
 	public function new(): Void {
 		super();

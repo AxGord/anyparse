@@ -19,12 +19,12 @@ using StringTools;
  */
 class CollapseNestedSwitchTypedTest extends Test {
 
-	private static inline final LIB_EITHER: String = 'package lib;\nenum Either<L, R> {\n\tLeft(v: L);\n\tRight(v: R);\n}\n';
-	private static inline final LIB_KIND: String = 'package lib;\nenum abstract Kind(Int) {\n\tvar x;\n}\n';
 	private static inline final COVERED: String = 'case Left(r): 2;\n\t\t\t\t\tcase Right(y): 3;';
-	private static inline final CATCH_ALL: String = 'case Left(r): 2;\n\t\t\t\t\tcase _: 3;';
-	private static inline final OUTER_OK: String = 'Either<Array<String>, Array<Int>>';
-	private static inline final INNER_OK: String = 'Either<Array<String>, { c: Int }>';
+	private static final LIB_EITHER: String = 'package lib;\nenum Either<L, R> {\n\tLeft(v: L);\n\tRight(v: R);\n}\n';
+	private static final LIB_KIND: String = 'package lib;\nenum abstract Kind(Int) {\n\tvar x;\n}\n';
+	private static final CATCH_ALL: String = 'case Left(r): 2;\n\t\t\t\t\tcase _: 3;';
+	private static final OUTER_OK: String = 'Either<Array<String>, Array<Int>>';
+	private static final INNER_OK: String = 'Either<Array<String>, { c: Int }>';
 
 	/** A slot typed by a type argument of an enum from another file: its capture needs the typed proof alone. */
 	@:pin('control')

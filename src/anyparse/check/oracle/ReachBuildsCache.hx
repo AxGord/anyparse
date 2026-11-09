@@ -35,7 +35,7 @@ typedef ReachBuildsKey = {
 final class ReachBuildsCache {
 
 	/** The scheme tag in every record: bump it and every stored record misses. */
-	private static inline final FORMAT_TAG: String = 'apq-reach-builds v2';
+	private static final FORMAT_TAG: String = 'apq-reach-builds v2';
 
 	/** The engine code a record's answer depends on, hashed when the engine compiles: another engine's record misses. */
 	private static final ENGINE: String = ReachBuildsEngine.digest();

@@ -59,7 +59,7 @@ private typedef Placed = {
 final class StoredValues {
 
 	/** The receiver naming the object a member runs on. */
-	private static inline final THIS: String = 'this';
+	private static final THIS: String = 'this';
 
 	/** The `Ref` edges whose value only a constructor's stores keep, by `keyOf`. */
 	private final _stored: Set<String> = new Set<String>();

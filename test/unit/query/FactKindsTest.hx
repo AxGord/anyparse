@@ -18,7 +18,7 @@ class FactKindsTest extends Test {
 	/** A js target has no overloads, so the fixture compiles for the jvm. */
 	private static inline final BUILD: String = '-cp .\n-main Main\n--jvm out.jar\n';
 
-	private static inline final MACRO_BUILD: String = '-cp .\n-main Main\n--js out.js\n';
+	private static final MACRO_BUILD: String = '-cp .\n-main Main\n--js out.js\n';
 	private static final SOURCE: String = 'interface Shape { function area():Int; }\nenum Color { Red; Rgb(r:Int); }\n'
 		+ 'typedef Point = {x:Int};\nabstract Meters(Int) { public function new(i:Int) this = i; }\nclass '
 		+ 'Circle implements Shape {\n\tpublic var radius:Int = 1;\n\tpublic function new() {}\n\tstatic '

@@ -25,10 +25,10 @@ import anyparse.query.CachingGrammarPlugin;
 class ReflectionMemoTest extends Test {
 
 	/** A scope file naming no type at run time. */
-	private static inline final PLAIN: String = 'package pkg;\n\nclass Use {\n\tpublic static function m():Int {\n\t\treturn 1;\n\t}\n}';
+	private static final PLAIN: String = 'package pkg;\n\nclass Use {\n\tpublic static function m():Int {\n\t\treturn 1;\n\t}\n}';
 
 	/** The same file after a rewrite that puts a runtime type path into it. */
-	private static inline final REFLECTS: String =
+	private static final REFLECTS: String =
 		'package pkg;\n\nclass Use {\n\tpublic static function m():Dynamic {\n\t\treturn Type.resolveClass(\'pkg.Align\');\n\t}\n}';
 
 	public function new(): Void {

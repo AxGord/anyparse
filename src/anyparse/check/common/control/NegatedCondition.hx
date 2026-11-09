@@ -50,14 +50,14 @@ final class NegatedCondition {
 	 * The `invert-negated-if-else` option that keeps a negation whose else arm is a default literal
 	 * (`!x ? v : null`), read by every rule that inverts or orients a choice through this class.
 	 */
-	public static inline final KEEP_DEFAULT_ELSE: String = 'keepDefaultElse';
+	public static final KEEP_DEFAULT_ELSE: String = 'keepDefaultElse';
 
 	/**
 	 * The `invert-negated-if-else` option that turns a choice whose THEN arm is a default literal and whose
 	 * else arm is no literal around, so the default goes last (`c ? null : v` -> `!c ? v : null`). It implies
 	 * `KEEP_DEFAULT_ELSE`.
 	 */
-	public static inline final DEFAULT_LAST: String = 'defaultLast';
+	public static final DEFAULT_LAST: String = 'defaultLast';
 
 	/**
 	 * The per-run seams, or null when the grammar declares no not kind (every caller then emits the

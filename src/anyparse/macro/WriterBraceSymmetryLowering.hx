@@ -63,10 +63,10 @@ final class WriterBraceSymmetryLowering {
 	 * substitution itself. A site spelling it differently would de-brace a body whose sibling
 	 * the chain never consulted.
 	 */
-	private static inline final DROP_SINGLE_STMT_BRACES: String = 'dropSingleStmtBraces';
+	private static final DROP_SINGLE_STMT_BRACES: String = 'dropSingleStmtBraces';
 
 	/** The value-branch flag that mirrors a sibling's braces; read through `valueMirrors` or its args. */
-	private static inline final VALUE_BRACE_SYMMETRY: String = 'valueBraceSymmetry';
+	private static final VALUE_BRACE_SYMMETRY: String = 'valueBraceSymmetry';
 
 	/**
 	 * Locate the mandatory bodyPolicy sibling carrying `dropSingleStmtBraces`

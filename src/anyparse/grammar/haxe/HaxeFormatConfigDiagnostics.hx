@@ -16,6 +16,7 @@ import anyparse.runtime.Parser;
 import anyparse.runtime.Span.Position;
 import anyparse.runtime.StringInput;
 import anyparse.runtime.UnknownField;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 using Lambda;
@@ -50,10 +51,10 @@ final class HaxeFormatConfigDiagnostics {
 	 * `hxformat.json` for hundreds of files says it once. Carries no parse state — only
 	 * "this path has been examined".
 	 */
-	private static inline final REPORTED_TOPIC: String = 'hxformat-config';
+	private static final REPORTED_TOPIC: String = 'hxformat-config';
 
 	/** Set to `1` to silence the config report — for a project that knows its config states more than hxq reads. */
-	private static inline final SILENCE_VAR: String = 'APQ_NO_CONFIG_WARN';
+	private static final SILENCE_VAR: String = 'APQ_NO_CONFIG_WARN';
 
 	/** The config paths this run has already reported. */
 	public static inline function reportedPaths(): Array<String> {
@@ -291,7 +292,7 @@ final class HaxeFormatConfigDiagnostics {
 		// Only the placement-policy fields of the section are strings (the rest are Bool / Int, or a sibling policy with
 		// no `keep`), so reading every field by reflection reports a new policy key with no list to extend.
 		final keys: Array<String> = Reflect.fields(section);
-		keys.sort(Reflect.compare);
+		keys.sort(Compare.compareString);
 		for (key in keys) {
 			final value: String = Std.string(Reflect.field(section, key));
 			if (isKeep(value)) add(into, 'sameLine.$key "$value"');

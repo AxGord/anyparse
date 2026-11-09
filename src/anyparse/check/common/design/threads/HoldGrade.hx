@@ -77,7 +77,7 @@ typedef HoldJudges = {
 final class HoldGrade {
 
 	/** Opens the `takenKey` of a lock no member names, which no `Owner.member` lock object starts with. */
-	private static inline final UNNAMED: String = '?';
+	private static final UNNAMED: String = '?';
 
 	/**
 	 * The holds findings (b) judge: every one of `acquires`, and the holds a multi-lock helper's call opens in its caller

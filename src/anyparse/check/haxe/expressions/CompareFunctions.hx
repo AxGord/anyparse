@@ -18,10 +18,10 @@ typedef NamedCompare = {
 @:nullSafety(Strict)
 final class CompareFunctions {
 
-	private static inline final PUBLIC_VISIBILITY: String = 'public';
-
 	/** A compare function takes exactly this many parameters. */
 	private static inline final OPERANDS: Int = 2;
+
+	private static final PUBLIC_VISIBILITY: String = 'public';
 
 	/** What is wrong with the option as written; empty for a usable one. */
 	public final problems: Array<String> = [];

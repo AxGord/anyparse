@@ -42,16 +42,16 @@ final class CaseValueKey {
 	private static inline final MAX_HEX_VALUE: Float = 2147483647;
 
 	/** The key a numeric value is filed under — one shared prefix, so an `Int` and an equal `Float` collide. */
-	private static inline final NUMBER_PREFIX: String = 'n:';
+	private static final NUMBER_PREFIX: String = 'n:';
 
 	/** The key prefix of a string value. */
-	private static inline final STRING_PREFIX: String = 's:';
+	private static final STRING_PREFIX: String = 's:';
 
 	/** The key prefix of a bool value. */
-	private static inline final BOOL_PREFIX: String = 'b:';
+	private static final BOOL_PREFIX: String = 'b:';
 
 	/** The key of the null literal. */
-	private static inline final NULL_KEY: String = 'null';
+	private static final NULL_KEY: String = 'null';
 
 	/** A decimal integer literal. */
 	private static final DECIMAL: EReg = ~/^[0-9]+$/;

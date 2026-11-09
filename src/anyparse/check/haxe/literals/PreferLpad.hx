@@ -102,24 +102,6 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-lpad';
 
-	/** The static-extension module supplying `lpad`. */
-	private static inline final STRING_TOOLS_MODULE: String = 'StringTools';
-
-	/** The `StringTools` method padding a string on the left to a fixed width. */
-	private static inline final LPAD_METHOD: String = 'lpad';
-
-	/** The character a zero-pad ladder writes, and the one the emitted call pads with. */
-	private static inline final PAD_CHAR: String = '0';
-
-	/** The single-quote the emitted interpolating literals carry. */
-	private static inline final QUOTE: String = "'";
-
-	/** The interpolation sigil the emitted hole carries. */
-	private static inline final HOLE_SIGIL: String = "$";
-
-	/** A segment holding this is refused rather than split -- its trailing `0` may belong to an escape. */
-	private static inline final ESCAPE: String = '\\';
-
 	/** The numeric base the ladder's thresholds step through. */
 	private static inline final BASE: Int = 10;
 
@@ -134,6 +116,24 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 
 	/** A `<` comparison has exactly [left, right] children. */
 	private static inline final CONDITION_CHILD_COUNT: Int = 2;
+
+	/** The static-extension module supplying `lpad`. */
+	private static final STRING_TOOLS_MODULE: String = 'StringTools';
+
+	/** The `StringTools` method padding a string on the left to a fixed width. */
+	private static final LPAD_METHOD: String = 'lpad';
+
+	/** The character a zero-pad ladder writes, and the one the emitted call pads with. */
+	private static final PAD_CHAR: String = '0';
+
+	/** The single-quote the emitted interpolating literals carry. */
+	private static final QUOTE: String = "'";
+
+	/** The interpolation sigil the emitted hole carries. */
+	private static final HOLE_SIGIL: String = "$";
+
+	/** A segment holding this is refused rather than split -- its trailing `0` may belong to an escape. */
+	private static final ESCAPE: String = '\\';
 
 	public function new() {
 		super(RULE_ID, 'a hand-written zero-pad if-ladder over a range-bound Int, replaceable with one lpad call', RuleCategory.Literals);

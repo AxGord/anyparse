@@ -41,9 +41,6 @@ final class DocLength extends RuleBase implements ConfigAware implements Default
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'doc-length';
 
-	/** The `apq.json` option a project overrides the default with. */
-	private static inline final MAX_KEY: String = 'max';
-
 	/**
 	 * The longest a doc block may be where the project declares nothing.
 	 *
@@ -60,8 +57,11 @@ final class DocLength extends RuleBase implements ConfigAware implements Default
 	private static inline final ADVICE: String =
 		' — a contract is a sentence or three; the rest belongs in `docs/`, in the commit that made it, or nowhere';
 
+	/** The `apq.json` option a project overrides the default with. */
+	private static final MAX_KEY: String = 'max';
+
 	/** The message's lead-in, and the anchor `messageIdentity` masks the block's own length behind. */
-	private static inline final LENGTH_LEAD: String = 'doc block is ';
+	private static final LENGTH_LEAD: String = 'doc block is ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

@@ -25,15 +25,15 @@ using Lambda;
 @:nullSafety(Strict)
 final class LintArgs {
 
-	public static inline final FORMAT_JSON: String = 'json';
-	public static inline final FORMAT_CHECKSTYLE: String = 'checkstyle';
-	public static inline final FORMAT_TEXT: String = 'text';
+	public static final FORMAT_JSON: String = 'json';
+	public static final FORMAT_CHECKSTYLE: String = 'checkstyle';
+	public static final FORMAT_TEXT: String = 'text';
 
 	/** The `--list-rules` rendering as the markdown rule index (`RuleIndex`); no lint run has this format. */
-	private static inline final FORMAT_MARKDOWN: String = 'markdown';
+	private static final FORMAT_MARKDOWN: String = 'markdown';
 
 	/** The `--summary` flag, named where the parser and the list-rules refusal both speak of it. */
-	private static inline final SUMMARY_FLAG: String = '--summary';
+	private static final SUMMARY_FLAG: String = '--summary';
 
 	/**
 	 * Split `checks` into the sets `lint --fix` applies differently.

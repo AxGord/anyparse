@@ -21,7 +21,7 @@ final class ChangedMembers {
 	private static inline final NAME_GROUP: Int = 3;
 
 	/** The indent of the lines `--diff` prints under a declaration row: a row itself is indented by less. */
-	private static inline final DIFF_INDENT: String = '        ';
+	private static final DIFF_INDENT: String = '        ';
 
 	/**
 	 * A line that continues a block comment: the writer emits the star of a doc line one space past the indent, which no operator

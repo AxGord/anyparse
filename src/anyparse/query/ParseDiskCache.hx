@@ -30,18 +30,12 @@ typedef StoredProjections = {
 @:nullSafety(Strict)
 final class ParseDiskCache {
 
-	/** The scheme tag opening every entry: bump it and every stored entry misses. */
-	private static inline final FORMAT_TAG: String = 'apq-parse-cache v1';
-
-	private static inline final DIR_PREFIX: String = 'apq-parse-cache-';
-
 	/** The file whose modification time says when an engine's directory was last used. */
 	private static inline final MARKER: String = '.used';
 
 	/** How long an engine's directory may sit unused before the next new one sweeps it away. */
 	private static inline final IDLE_SECONDS: Float = 3600;
 
-	private static inline final SWITCH_VARIABLE: String = 'APQ_PARSE_CACHE';
 	private static inline final MILLISECONDS: Float = 1000;
 
 	// One node is NODE_WIDTH integers, at these offsets from where it starts.
@@ -53,6 +47,12 @@ final class ParseDiskCache {
 	private static inline final CHILD_COUNT: Int = 5;
 	private static inline final HAS_TYPE: Int = 6;
 	private static inline final NODE_WIDTH: Int = 7;
+
+	/** The scheme tag opening every entry: bump it and every stored entry misses. */
+	private static final FORMAT_TAG: String = 'apq-parse-cache v1';
+
+	private static final DIR_PREFIX: String = 'apq-parse-cache-';
+	private static final SWITCH_VARIABLE: String = 'APQ_PARSE_CACHE';
 	private static final ENGINE: String = ParseProjectionEngine.digest();
 
 	private final _lang: String;

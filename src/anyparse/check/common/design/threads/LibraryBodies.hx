@@ -31,7 +31,7 @@ using StringTools;
 final class LibraryBodies {
 
 	/** The option naming the build whose libraries are walked: one `compilerOracle` entry's hxml. */
-	public static inline final OPTION: String = 'libraryBodies';
+	public static final OPTION: String = 'libraryBodies';
 
 	/** The option lists whose calls run a handed function value elsewhere, or never: the walk does not follow one. */
 	private static final AWAY_KEYS: Array<String> = ['spawns', 'marshals', 'registers', 'neverInvokes'];
@@ -101,7 +101,7 @@ final class LibraryBodies {
 				named.push(id);
 				final tail: Array<String> = chain[0] == id ? chain.slice(1) : chain;
 				for (t in tail) tails.push(t);
-				v.message += ' — inside the library: ${ThreadSafety.elided([id].concat(tail), ThreadSafety.CHAIN_CAP)}';
+				v.message += ' — inside the library: ${ThreadSafety.elided([id].concat(tail))}';
 			}
 			if (tails.length > 0) data.chain = data.chain.concat(tails);
 		}

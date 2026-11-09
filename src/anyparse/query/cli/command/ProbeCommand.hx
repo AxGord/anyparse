@@ -18,10 +18,10 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	 * Basename stem of the probe scratch slot. The temp root and this
 	 * process's own id complete it — see `stageProbePath`.
 	 */
-	private static inline final STAGE_PROBE_STEM: String = 'anyparse-last-probe';
+	private static final STAGE_PROBE_STEM: String = 'anyparse-last-probe';
 
 	/** Env var naming the staging path outright, overriding the resolved one. */
-	private static inline final STAGE_PROBE_ENV: String = 'APQ_PROBE_PATH';
+	private static final STAGE_PROBE_ENV: String = 'APQ_PROBE_PATH';
 
 	public function new() {}
 

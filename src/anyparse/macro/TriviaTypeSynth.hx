@@ -436,9 +436,9 @@ class TriviaTypeSynth {
 
 	public static inline final TERNARY_THEN_TRAIL_ARG_NAME: String = 'thenTrailComment';
 
-	private static inline final PAIRED_SUFFIX: String = 'T';
-	private static inline final SYNTH_SUBPACK: String = 'trivia';
-	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
+	private static final PAIRED_SUFFIX: String = 'T';
+	private static final SYNTH_SUBPACK: String = 'trivia';
+	private static final SYNTH_MODULE_LEAF: String = 'Pairs';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Map<String, Bool> = [];
 

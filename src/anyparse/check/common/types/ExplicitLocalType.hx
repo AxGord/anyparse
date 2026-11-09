@@ -174,22 +174,23 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	 * decline reason", which reads as a rule with no autofix — where the survivors are the hard
 	 * shapes, which is the sentence the reader is owed.
 	 */
-	private static inline final DECLINE_NO_TREE: String =
-		'the file did not re-parse in the fix pass (or the grammar names no local-declaration kind), so no flagged declaration could be located';
+	private static final DECLINE_NO_TREE: String = 'the file did not re-parse in the fix pass ('
+		+ 'or the grammar names no local-declaration kind), so no flagged declaration could be located';
 
 	/** The violation's span matched no local-declaration node in the tree `fix` re-parsed. */
-	private static inline final DECLINE_NO_NODE: String = 'the flagged span matched no local declaration in the tree this pass re-parsed';
+	private static final DECLINE_NO_NODE: String = 'the flagged span matched no local declaration in the tree this pass re-parsed';
 
 	/** A declaration with no initializer: the ladder infers FROM the initializer, and there is none. */
-	private static inline final DECLINE_NO_INIT: String =
+	private static final DECLINE_NO_INIT: String =
 		'the declaration carries no initializer, and every rule this check has infers the type FROM one';
 
 	/** The ladder DID name a type, and the name is one an annotation must not spell. */
-	private static inline final DECLINE_INADMISSIBLE: String =
-		'the only type on offer is `Dynamic` / `Any` / `Void`, which an annotation must not spell — it would pin down a value whose implicit-conversion dispatch the compiler still resolves';
+	private static final DECLINE_INADMISSIBLE: String = 'the only type on offer is `Dynamic` / `Any` / `Void`, which an annotation must '
+		+ 'not spell — it would pin down a value whose implicit-conversion dispatch the '
+		+ 'compiler still resolves';
 
 	/** No insertion point between the binder and the initializer (an unusual declaration shape). */
-	private static inline final DECLINE_NO_INSERT_POINT: String =
+	private static final DECLINE_NO_INSERT_POINT: String =
 		'the declaration offers no position between its binder and its initializer to write the annotation into';
 
 	/**

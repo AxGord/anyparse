@@ -45,7 +45,7 @@ using Lambda;
 final class FactNodeRecords {
 
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
-	private static inline final INLINED: String = 'inlined';
+	private static final INLINED: String = 'inlined';
 
 	/**
 	 * The node line `text` through the engine's parse with no shape check, its read tuples made the `JValue`s the record

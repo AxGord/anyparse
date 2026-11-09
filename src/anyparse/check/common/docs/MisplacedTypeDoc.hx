@@ -72,15 +72,15 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'misplaced-type-doc';
 
+	/** The header decls a misplaced doc must sit between: the package statement plus at least one import. */
+	private static inline final MIN_HEADER_DECLS: Int = 2;
+
 	/**
 	 * The doc opener, for the cheap PREFILTER only — a byte probe of the header gap that
 	 * skips the whole-source comment scan for a file with no candidate. What actually
 	 * counts as documentation is `RefactorSupport.isDocBlock`, which asks the lexer.
 	 */
-	private static inline final DOC_OPEN: String = '/**';
-
-	/** The header decls a misplaced doc must sit between: the package statement plus at least one import. */
-	private static inline final MIN_HEADER_DECLS: Int = 2;
+	private static final DOC_OPEN: String = '/**';
 
 	public function new() {
 		super(RULE_ID, 'a doc comment stranded between the package statement and the imports', RuleCategory.Docs);

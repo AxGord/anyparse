@@ -132,7 +132,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	private static inline final RULE_ID: String = 'owned-types';
 
 	/** The member name a constructor is declared and owned under. */
-	private static inline final CONSTRUCTOR: String = 'new';
+	private static final CONSTRUCTOR: String = 'new';
 
 	/** Each glob of a declaration, compiled once per run. */
 	private final _globs: Map<String, EReg> = [];

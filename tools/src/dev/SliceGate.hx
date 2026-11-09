@@ -44,17 +44,17 @@ final class SliceGate {
 	public static inline final USAGE: String = 'usage: dev slice-gate <worktree> [--baseline [--frozen <dir>]... [--infra-tree <dir>]...] '
 		+ '[--arm <NAME>]... [--allow-arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
 
-	/** The environment variable that names the script the branches run instead of this tool's own: a test's stand-in. */
-	public static inline final SELF_VAR: String = 'SLICE_GATE_SELF';
-
 	/** The most threads the arms phase takes. */
 	public static inline final ARMS_THREADS: Int = 6;
 
 	/** The row the arms phase runs. */
 	public static inline final ARMS_ROW: String = 'arms';
 
+	/** The environment variable that names the script the branches run instead of this tool's own: a test's stand-in. */
+	public static final SELF_VAR: String = 'SLICE_GATE_SELF';
+
 	/** The file of the logs that keeps the table a run printed (not `table.txt`, which the workflows redirect the gate's stdout into). */
-	public static inline final TABLE_FILE: String = 'printed-table.txt';
+	public static final TABLE_FILE: String = 'printed-table.txt';
 
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the

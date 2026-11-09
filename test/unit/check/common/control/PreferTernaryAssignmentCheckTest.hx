@@ -16,11 +16,10 @@ import anyparse.check.common.control.PreferTernaryAssignment;
 class PreferTernaryAssignmentCheckTest extends Test {
 
 	/** A flat 2-branch assignment whose ELSE r-value is a ternary — the third leaf, so `prefer-if-expression-assignment`'s. */
-	private static inline final TERNARY_TAILED_ELSE: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
+	private static final TERNARY_TAILED_ELSE: String = 'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
 
 	/** The same shape with a comment inside the ternary — the claiming rule fails closed, so this one keeps it. */
-	private static inline final COMMENTED_TERNARY_TAIL: String =
+	private static final COMMENTED_TERNARY_TAIL: String =
 		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p /* why */ ? q : r;\n\t}\n}';
 
 	public function testBasicFlagged(): Void {

@@ -27,7 +27,7 @@ using Lambda;
 final class AllowGrants {
 
 	/** The annotation this class reads. */
-	public static inline final TAG: String = '@:allow';
+	public static final TAG: String = '@:allow';
 
 	/** A grant argument this class can enumerate: a plain dot path. */
 	private static final DOT_PATH: EReg = new EReg('^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$', '');

@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.query.CallGraph;
+import anyparse.util.Compare;
 
 /**
  * Outer-lock dominance: lock M is DOMINATED by lock L when every long hold of M — every hold spanning a call that blocks
@@ -16,11 +17,11 @@ import anyparse.query.CallGraph;
 @:nullSafety(Strict)
 final class LockDominance {
 
-	/** Joins the entries of a hold set (`holdOf`). */
-	private static inline final HELD_SEPARATOR: String = '\n';
-
 	/** Bound on the rounds of `settle`: each round's answer is sound, the last one kept. */
 	private static inline final ROUNDS: Int = 8;
+
+	/** Joins the entries of a hold set (`holdOf`). */
+	private static final HELD_SEPARATOR: String = '\n';
 
 	/** Each lock -> the locks that dominate it; filled by `settle`. */
 	public final dominators: Map<String, Array<String>> = [];
@@ -179,7 +180,7 @@ final class LockDominance {
 		var changed: Bool = false;
 		for (lock in [for (l in found.keys()) l].concat(broken)) {
 			final next: Array<String> = broken.contains(lock) ? [] : found[lock] ?? [];
-			next.sort(Reflect.compare);
+			next.sort(Compare.compareString);
 			if ((dominators[lock] ?? []).join('\n') != next.join('\n')) changed = true;
 			dominators[lock] = next;
 		}

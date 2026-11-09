@@ -37,7 +37,7 @@ class PreferStaticExtensionFactsTest extends Test {
 	private static inline final CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Main.Util", "StringTools"]}}}';
 
 	/** Only `Util` is configured. */
-	private static inline final UTIL_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}';
+	private static final UTIL_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Util"]}}}';
 
 	/** Every receiver below is a local initialized from a function with no declared return type: no structural type. */
 	private static final MAIN: String = [

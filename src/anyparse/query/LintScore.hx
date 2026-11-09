@@ -8,6 +8,7 @@ import anyparse.query.format.json.LintScoreDocumentWriter;
 import anyparse.query.format.json.LintTruthEntryJson;
 import anyparse.query.format.json.LintTruthJson;
 import anyparse.query.format.json.LintTruthJsonParser;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 using Lambda;
@@ -93,10 +94,10 @@ typedef LintScoreResult = {
 final class LintScore {
 
 	/** The bucket name of the whole rule. */
-	public static inline final ALL: String = 'all';
+	public static final ALL: String = 'all';
 
 	/** The severity of a score that scores every one. */
-	public static inline final ALL_SEVERITIES: String = 'all';
+	public static final ALL_SEVERITIES: String = 'all';
 
 	/** The verdicts a truth entry may carry, in the order every rendering lists them. */
 	public static final VERDICTS: Array<String> = [REAL_LONG, REAL_SHORT, RARE, FALSE, DUP_OF, UNKNOWN];
@@ -122,11 +123,11 @@ final class LintScore {
 	/** The verdict that names the key it duplicates. */
 	private static inline final DUP_OF: String = 'dup-of';
 
-	/** The family of a finding that carries no `data`: it can match no entry. */
-	private static inline final NO_DATA: String = '-';
-
 	/** A ratio is printed to two decimals. */
 	private static inline final RATIO_SCALE: Float = 100;
+
+	/** The family of a finding that carries no `data`: it can match no entry. */
+	private static final NO_DATA: String = '-';
 
 	/** Read and validate a truth file; throws naming every defect `validate` finds. */
 	public static function parseTruth(raw: String): LintTruthJson {
@@ -177,7 +178,7 @@ final class LintScore {
 		final families: Array<String> = [];
 		for (k in keys) if (!families.contains(k.family)) families.push(k.family);
 		for (e in truth.entries) if (!families.contains(e.family)) families.push(e.family);
-		families.sort(Reflect.compare);
+		families.sort(Compare.compareString);
 		final hit: (LintTruthEntryJson) -> Bool = e -> found.exists(keyOf(e.family, e.member, e.subject));
 		return {
 			rule: truth.rule,

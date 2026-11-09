@@ -29,10 +29,10 @@ using StringTools;
 @:nullSafety(Strict)
 class ApqAstTypeRefsCliTest extends Test {
 
-	private static inline final MIXED_SOURCE: String =
+	private static final MIXED_SOURCE: String =
 		'class C { var a: Int; final b: Map<String, Foo>; function f(p: haxe.io.Bytes): Null<Bar> return null; }';
-	private static inline final ANON_SOURCE: String = 'class C { function f(?d: Array<{ node: Doc, crosses: Bool }>): Void {} }';
-	private static inline final INT_FIELD_SOURCE: String = 'class C { var a: Int; }';
+	private static final ANON_SOURCE: String = 'class C { function f(?d: Array<{ node: Doc, crosses: Bool }>): Void {} }';
+	private static final INT_FIELD_SOURCE: String = 'class C { var a: Int; }';
 	private static final MIXED_TYPE_REFS: String = '(module\n  (ClassDecl\n    C\n    (VarMember a (TypeRef Int))\n'
 		+ '    (FinalMember b (TypeRef Map) (TypeRef String) (TypeRef Foo))\n    (FnMember\n      f\n'
 		+ '      (Required p (TypeRef haxe.io.Bytes))\n      (Named Null (TypeRef Bar))\n      (ExprBody (ReturnExpr (NullLit))))))\n';

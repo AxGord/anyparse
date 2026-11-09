@@ -87,18 +87,18 @@ final class PreferArrowCallback extends RuleBase {
 	/** Typedef-alias hop cap for the function-type source analysis. */
 	private static inline final MAX_ALIAS_DEPTH: Int = 4;
 
-	/** The nullable wrapper a receiver's written type is peeled of. */
-	private static inline final NULL_WRAPPER: String = 'Null';
-
-	/** The result type a callback slot must name for the arrow form to keep its meaning. */
-	private static inline final VOID_TYPE: String = 'Void';
-
 	/** The finding message when the fix gates passed — the rewrite is proven safe. */
 	private static inline final MSG_FIXABLE: String = 'this function-literal callback can be an arrow lambda';
 
+	/** The nullable wrapper a receiver's written type is peeled of. */
+	private static final NULL_WRAPPER: String = 'Null';
+
+	/** The result type a callback slot must name for the arrow form to keep its meaning. */
+	private static final VOID_TYPE: String = 'Void';
+
 	/** The finding message when the callee signature stayed unresolved — the finding is report-only. */
-	private static inline final MSG_REPORT_ONLY: String =
-		'this function-literal callback may be an arrow lambda (callee signature unresolved — verify the expected return type before converting)';
+	private static final MSG_REPORT_ONLY: String = 'this function-literal callback may be an arrow lambda ('
+		+ 'callee signature unresolved — verify the expected return type before converting)';
 
 	public function new() {
 		super('prefer-arrow-callback', 'a function-literal callback argument replaceable with an arrow lambda', RuleCategory.Expressions);

@@ -26,7 +26,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class HxTypeSyntax {
 
-	private static inline final PREFIX: String = 'typedef _ = ';
+	private static final PREFIX: String = 'typedef _ = ';
 
 	private final _text: String;
 

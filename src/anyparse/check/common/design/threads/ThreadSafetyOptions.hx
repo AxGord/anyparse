@@ -78,13 +78,12 @@ final class ThreadSafetyOptions {
 	/** The keys holding `true` or `false`. */
 	public static final FLAG_KEYS: Array<String> = ['closedWorld', 'compilerFacts'];
 
-	private static inline final BUDGET_KEY: String = 'repeatBudgetMs';
-	private static inline final SPAWNS_KEY: String = 'spawns';
-
 	/** The largest argument position a `spawns` object entry may name: no call writes more arguments. */
 	private static inline final MAX_POSITION: Float = 255;
 
-	private static inline final BOUNDED_KEY: String = 'boundedRepeats';
+	private static final BUDGET_KEY: String = 'repeatBudgetMs';
+	private static final SPAWNS_KEY: String = 'spawns';
+	private static final BOUNDED_KEY: String = 'boundedRepeats';
 
 	/** The keys every rule takes, which the linter reads itself when well-formed (`LintDocuments.parseRule`). */
 	private static final LIFTED_KEYS: Array<String> = ['enabled', 'severity'];

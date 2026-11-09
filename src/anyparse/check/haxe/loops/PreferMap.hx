@@ -41,11 +41,11 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 
 	private static inline final RULE_ID: String = 'prefer-map';
 
-	/** The lead-in of a finding's message; the rewrite it quotes follows, and `messageIdentity` masks that tail. */
-	private static inline final MESSAGE_LEAD: String = 'this comprehension maps each element — it can be ';
-
 	/** The longest rewrite a finding's message quotes before it is cut. */
 	private static inline final MESSAGE_EXCERPT_MAX: Int = 80;
+
+	/** The lead-in of a finding's message; the rewrite it quotes follows, and `messageIdentity` masks that tail. */
+	private static final MESSAGE_LEAD: String = 'this comprehension maps each element — it can be ';
 
 	public function new() {
 		super(

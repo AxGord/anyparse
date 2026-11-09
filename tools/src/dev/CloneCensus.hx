@@ -3,6 +3,7 @@ package dev;
 import anyparse.query.format.json.AstDumpJson;
 import anyparse.query.format.json.AstNodeJson;
 import anyparse.query.format.json.AstSearchSpan;
+import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -45,7 +46,7 @@ final class CloneCensus {
 	private static inline final PARTNER_LINE_GROUP: Int = 3;
 
 	/** Every character Python's `str.isspace` answers true for. */
-	private static inline final PY_WHITESPACE: String = '\t\n\x0B\x0C\r\x1C\x1D\x1E\x1F \u0085                 　';
+	private static final PY_WHITESPACE: String = '\t\n\x0B\x0C\r\x1C\x1D\x1E\x1F \u0085                 　';
 
 	/** Whether a run kind is one of the bare ones (`bare-decl`, `bare-assign`, `bare-mixed`). */
 	public static inline function isBare(kind: String): Bool {
@@ -273,7 +274,7 @@ final class CloneCensus {
 	/** `counts` as Python prints a dict built from its items sorted by key. */
 	private static function pyDict(counts: Map<String, Int>): String {
 		final keys: Array<String> = [for (k in counts.keys()) k];
-		keys.sort(Reflect.compare);
+		keys.sort(Compare.compareString);
 		return '{' + keys.map(k -> '\'$k\': ${counts[k]}').join(', ') + '}';
 	}
 

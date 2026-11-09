@@ -24,7 +24,7 @@ import anyparse.query.ImportSpelling.ImportSpelled;
 @:nullSafety(Strict)
 final class RemoveImport {
 
-	private static inline final USING_KIND: String = 'UsingDecl';
+	private static final USING_KIND: String = 'UsingDecl';
 
 	/**
 	 * Remove the import / using whose exposed path equals `modulePath`, with its leading `/**` doc

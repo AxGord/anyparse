@@ -24,7 +24,7 @@ using Lambda;
 final class HaxeCallbackMods {
 
 	/** The neutral modifier a callback method carries. */
-	public static inline final CALLBACK_MOD: String = 'callback';
+	public static final CALLBACK_MOD: String = 'callback';
 
 	private static final NON_RESULT_KINDS: Array<String> = ['Required', 'Optional', 'Rest', 'BlockBody', 'ExprBody', 'NoBody'];
 	private static final VALUE_RETURN_KIND: String = 'ReturnStmt';

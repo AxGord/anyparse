@@ -12,7 +12,7 @@ package dev;
 final class BranchWatch {
 
 	/** The environment variable whose value, in milliseconds, replaces every limit: how a test makes a stand-in branch stall quickly. */
-	public static inline final IDLE_VAR: String = 'SLICE_GATE_IDLE_MS';
+	public static final IDLE_VAR: String = 'SLICE_GATE_IDLE_MS';
 
 	private static inline final MS_PER_MINUTE: Int = 60 * 1000;
 

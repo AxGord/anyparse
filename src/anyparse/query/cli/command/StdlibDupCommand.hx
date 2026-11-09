@@ -20,7 +20,7 @@ import sys.FileSystem;
 final class StdlibDupCommand implements CliCommand {
 
 	/** Basename stem of the probe staging directory; the temp root and this process's id complete it. */
-	private static inline final WORK_DIR_STEM: String = 'apq-stdlib-dup';
+	private static final WORK_DIR_STEM: String = 'apq-stdlib-dup';
 
 	public function new() {}
 

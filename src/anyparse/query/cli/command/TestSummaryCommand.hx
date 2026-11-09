@@ -23,7 +23,7 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 	 * var is the only thing that scales with the caller's own isolation, so it is the only
 	 * default offered.
 	 */
-	private static inline final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
+	private static final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
 
 	public function new() {}
 

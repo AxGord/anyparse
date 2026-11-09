@@ -17,7 +17,7 @@ import anyparse.query.CanonicalEdit;
 @:nullSafety(Strict)
 final class RegionTerminatorFixTest extends Test {
 
-	private static inline final REGION: String = '#if d p() #else q() #end';
+	private static final REGION: String = '#if d p() #else q() #end';
 
 	public function new(): Void {
 		super();

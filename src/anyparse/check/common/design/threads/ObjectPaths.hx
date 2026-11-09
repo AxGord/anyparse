@@ -17,7 +17,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 final class ObjectPaths {
 
 	/** Joins the links of a path. */
-	public static inline final SEPARATOR: String = '>';
+	public static final SEPARATOR: String = '>';
 
 	/** Each field id (`Type.member`) -> whether nothing changes the object it names after construction. */
 	private final _stable: Map<String, Bool> = [];

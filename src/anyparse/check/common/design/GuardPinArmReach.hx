@@ -44,10 +44,10 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'guard-pin-arm-reach';
 
-	private static inline final PIN_KEY: String = 'pinMeta';
-	private static inline final GUARD_KEY: String = 'guardArgument';
-	private static inline final KILLER_KEY: String = 'killerMeta';
-	private static inline final REGISTRY_KEY: String = 'armRegistry';
+	private static final PIN_KEY: String = 'pinMeta';
+	private static final GUARD_KEY: String = 'guardArgument';
+	private static final KILLER_KEY: String = 'killerMeta';
+	private static final REGISTRY_KEY: String = 'armRegistry';
 
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

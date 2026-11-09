@@ -21,10 +21,10 @@ using Lambda;
 final class PackageDocumentCarry {
 
 	/** How a document spells the package of the root types in its comment. */
-	private static inline final ROOT_NAME: String = '(root)';
+	private static final ROOT_NAME: String = '(root)';
 
 	/** The gap between two records of a document that holds fewer than two. */
-	private static inline final DEFAULT_GAP: String = ',\n\t\t';
+	private static final DEFAULT_GAP: String = ',\n\t\t';
 
 	/**
 	 * The documents of `documents` (all of one registry directory) whose records sit in the wrong one, rewritten with each

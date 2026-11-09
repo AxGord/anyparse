@@ -2,6 +2,7 @@ package dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.util.Compare;
 import dev.SuiteImpact.DeclaredTypes;
 import dev.SuiteImpact.ImpactSource;
 import devkit.Args;
@@ -24,17 +25,16 @@ final class RuleScope {
 	public static inline final USAGE: String = 'usage: dev rule-scope <tree> [--base <rev>]';
 
 	/** The file whose `builtins` list instantiates every rule. */
-	public static inline final REGISTRY: String = 'src/anyparse/check/Linter.hx';
+	public static final REGISTRY: String = 'src/anyparse/check/Linter.hx';
 
 	/** What `dev rule-scope` prints for a diff no rule list bounds. */
-	public static inline final WHOLE: String = 'whole';
-
-	private static inline final CHECK_DIR: String = 'src/anyparse/check/';
-	private static inline final ENGINE_DIR: String = 'src/';
+	public static final WHOLE: String = 'whole';
 
 	/** The most rules a bounded answer names: past it a run of them costs what the whole tree does. */
 	private static inline final MAX_RULES: Int = 40;
 
+	private static final CHECK_DIR: String = 'src/anyparse/check/';
+	private static final ENGINE_DIR: String = 'src/';
 	private static final RULE_FILE: EReg = ~/^src\/anyparse\/check\/(?:common|haxe)\/(?:[A-Za-z0-9_]+\/)*([A-Z][A-Za-z0-9_]*)\.hx$/;
 	private static final RULE_CLASS: EReg = ~/\bclass\s+[A-Z]\w*\s+extends\s+(?:RuleBase|HaxeRule)\b/;
 	private static final SUPER_ID: EReg = ~/\bsuper\(\s*(?:'([a-z0-9-]+)'|([A-Z][A-Z0-9_]*)\b)/;
@@ -93,7 +93,7 @@ final class RuleScope {
 		final created: Array<String> = touched.map(moduleOf);
 		final registryOk: Bool = !touched.contains(REGISTRY) || gainsOnly(registryDiff, created);
 		if (ids.length == 0 || ids.length > MAX_RULES || !registryOk) return null;
-		ids.sort(Reflect.compare);
+		ids.sort(Compare.compareString);
 		return ids;
 	}
 

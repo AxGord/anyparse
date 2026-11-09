@@ -17,7 +17,7 @@ import anyparse.runtime.Span;
 abstract class PositionTypeOracle implements TypeOracle {
 
 	/** What a position-based oracle declines with when the position carries no type. */
-	public static inline final DECLINE_NO_ANSWER: String = 'the display server named no type at the declaration';
+	public static final DECLINE_NO_ANSWER: String = 'the display server named no type at the declaration';
 
 	/** `GrammarPlugin.typeSyntax` — how a printed function type is read for its result. */
 	private final _typeSyntax: TypeSyntaxReader;

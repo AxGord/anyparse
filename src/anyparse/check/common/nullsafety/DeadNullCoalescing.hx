@@ -30,7 +30,7 @@ import anyparse.query.SymbolIndex;
 final class DeadNullCoalescing extends RuleBase implements ConfigAware {
 
 	/** What dropping a fallback whose proof the compiler's null-safety does not share would do (`NullSafetyGate`). */
-	private static inline final UNSEEN_CONSEQUENCE: String = ', so dropping the fallback would not compile';
+	private static final UNSEEN_CONSEQUENCE: String = ', so dropping the fallback would not compile';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

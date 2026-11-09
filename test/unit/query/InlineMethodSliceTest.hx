@@ -22,7 +22,7 @@ import haxe.Exception;
 class InlineMethodSliceTest extends Test {
 
 	/** The path every fixture is inlined as; a scope entry under it is the fixture's own file. */
-	private static inline final FIXTURE_FILE: String = 'Fixture.hx';
+	private static final FIXTURE_FILE: String = 'Fixture.hx';
 
 	/**
 	 * A binary-body method inlined into two call sites: `add(a, b)` with

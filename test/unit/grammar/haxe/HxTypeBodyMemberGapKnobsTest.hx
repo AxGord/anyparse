@@ -11,9 +11,9 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxTypeBodyMemberGapKnobsTest extends Test {
 
-	private static inline final MACRO_OPEN: String = 'class M {\n\tstatic function f() {\n\t\tvar c = macro class X {\n';
-	private static inline final MACRO_CLOSE: String = '\n\t\t};\n\t}\n}';
-	private static inline final SPLIT_LEAD: String = '\t/** d */\n\t// foo\n\n\t/** e */\n';
+	private static final MACRO_OPEN: String = 'class M {\n\tstatic function f() {\n\t\tvar c = macro class X {\n';
+	private static final MACRO_CLOSE: String = '\n\t\t};\n\t}\n}';
+	private static final SPLIT_LEAD: String = '\t/** d */\n\t// foo\n\n\t/** e */\n';
 
 	public function new(): Void {
 		super();

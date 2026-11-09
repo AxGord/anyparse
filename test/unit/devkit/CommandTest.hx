@@ -22,34 +22,9 @@ using StringTools;
 @:nullSafety(Strict)
 final class CommandTest extends Test {
 
-	/** Prints its own arguments as JSON. */
-	private static inline final ECHO_ARGS: String = 'console.log(JSON.stringify(process.argv.slice(1)))';
-
-	/** Copies its standard input to its standard output, upper-cased. */
-	private static inline final UPPER: String =
-		'let s = ""; process.stdin.on("data", d => s += d).on("end", () => process.stdout.write(s.toUpperCase()))';
-
-	/** Writes one line to each stream, then exits 3. */
-	private static inline final FAIL: String = 'process.stdout.write("o\\n"); process.stderr.write("e\\n"); process.exit(3)';
-
-	/** Never ends by itself. */
-	private static inline final HANG: String = 'setInterval(() => {}, 1000)';
-
-	/** Prints `DEVKIT_PROBE` and its working directory. */
-	private static inline final SHOW_ENV: String = 'process.stdout.write(process.env.DEVKIT_PROBE + "|" + process.cwd())';
-
-	/** Prints two lines. */
-	private static inline final PRINT_XY: String = 'console.log("x"); console.log("y")';
-
 	/** After a quiet start, writes `row-one` to the file `argv[1]` and then goes silent for good. */
 	private static inline final WRITE_LATE: String = 'setTimeout(() => require("fs").writeFileSync(process.argv[1], "row-one"), 1800); '
 		+ 'setInterval(() => {}, 1000)';
-
-	/** Prints a blank line between two, the last one ended. */
-	private static inline final PRINT_GAP: String = 'process.stdout.write("a\\n\\nb\\n")';
-
-	/** Prints one line with no break after it. */
-	private static inline final PRINT_UNENDED: String = 'process.stdout.write("a")';
 
 	/** Prints the command line of its parent. */
 	private static inline final PRINT_PARENT: String = 'process.stdout.write(require("child_process").execFileSync("ps", '
@@ -82,12 +57,37 @@ final class CommandTest extends Test {
 	private static inline final LEAVE_DETACHED: String = 'const c = require("child_process").spawn(process.execPath, ["-e", "setTimeout(() => {}, 12000)"], '
 		+ '{ detached: true, stdio: ["ignore", "inherit", "inherit"] }); c.unref(); console.log(c.pid)';
 
+	/** Prints its own arguments as JSON. */
+	private static final ECHO_ARGS: String = 'console.log(JSON.stringify(process.argv.slice(1)))';
+
+	/** Copies its standard input to its standard output, upper-cased. */
+	private static final UPPER: String =
+		'let s = ""; process.stdin.on("data", d => s += d).on("end", () => process.stdout.write(s.toUpperCase()))';
+
+	/** Writes one line to each stream, then exits 3. */
+	private static final FAIL: String = 'process.stdout.write("o\\n"); process.stderr.write("e\\n"); process.exit(3)';
+
+	/** Never ends by itself. */
+	private static final HANG: String = 'setInterval(() => {}, 1000)';
+
+	/** Prints `DEVKIT_PROBE` and its working directory. */
+	private static final SHOW_ENV: String = 'process.stdout.write(process.env.DEVKIT_PROBE + "|" + process.cwd())';
+
+	/** Prints two lines. */
+	private static final PRINT_XY: String = 'console.log("x"); console.log("y")';
+
+	/** Prints a blank line between two, the last one ended. */
+	private static final PRINT_GAP: String = 'process.stdout.write("a\\n\\nb\\n")';
+
+	/** Prints one line with no break after it. */
+	private static final PRINT_UNENDED: String = 'process.stdout.write("a")';
+
 	/** Prints a line on a short beat for a while, then exits. */
-	private static inline final TICK: String =
+	private static final TICK: String =
 		'let n = 0; const t = setInterval(() => { console.log("tick " + n++); if (n > 12) clearInterval(t); }, 200)';
 
 	/** Prints the parent of the `git` that runs it: a shell alias, so the one program under test is the one asked. */
-	private static inline final GIT_PARENT: String = "alias.parent=!ps -o ppid= -p $PPID";
+	private static final GIT_PARENT: String = "alias.parent=!ps -o ppid= -p $PPID";
 
 	private final _node: String = js.Node.process.execPath;
 

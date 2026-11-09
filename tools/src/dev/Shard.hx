@@ -40,18 +40,6 @@ final class Shard {
 	/** The last green run's per-class timings: the weights the next plan balances on. */
 	public static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
 
-	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
-	private static inline final WORK_PREFIX: String = 'apq-suite-shard';
-
-	/**
-	 * The test tree whose `*Test.hx` files the runner's class list must match one for one: the build macro
-	 * (`testkit.TestDiscovery`) registers exactly one class per such file, so another count is a binary built from another tree.
-	 */
-	private static inline final TEST_ROOT: String = 'test';
-
-	/** The file-name ending of a test module under `TEST_ROOT`. */
-	private static inline final TEST_FILE_SUFFIX: String = 'Test.hx';
-
 	/**
 	 * What one shard may run before it is killed. The process driver bounds its own wait by its jobs' timeouts, and a
 	 * shard that outlives this one is wedged, not slow.
@@ -63,9 +51,6 @@ final class Shard {
 	 * transcript says which test stood last. Far above the longest single test, far below `SHARD_TIMEOUT_MS`.
 	 */
 	private static inline final IDLE_MS: Int = 15 * 60 * 1000;
-
-	/** The prefix of the lines the process driver adds to a shard's stderr for what its process group left running. */
-	private static inline final ORPHAN_NOTE: String = 'orphan ';
 
 	private static inline final MS_PER_SECOND: Int = 1000;
 	private static inline final MS_PER_TENTH: Int = 100;
@@ -79,6 +64,21 @@ final class Shard {
 
 	/** How many failing tests of a red shard its report line names. */
 	private static inline final FAILING_SHOWN: Int = 5;
+
+	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
+	private static final WORK_PREFIX: String = 'apq-suite-shard';
+
+	/**
+	 * The test tree whose `*Test.hx` files the runner's class list must match one for one: the build macro
+	 * (`testkit.TestDiscovery`) registers exactly one class per such file, so another count is a binary built from another tree.
+	 */
+	private static final TEST_ROOT: String = 'test';
+
+	/** The file-name ending of a test module under `TEST_ROOT`. */
+	private static final TEST_FILE_SUFFIX: String = 'Test.hx';
+
+	/** The prefix of the lines the process driver adds to a shard's stderr for what its process group left running. */
+	private static final ORPHAN_NOTE: String = 'orphan ';
 
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);

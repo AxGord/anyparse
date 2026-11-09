@@ -327,7 +327,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** What a finding folded onto the warnings covering it says (`RootCauseFold`): a long wait, not a brief one. */
-	private static inline final FOLDED: String = ' — long only through ';
+	private static final FOLDED: String = ' — long only through ';
 
 	/**
 	 * The findings (b) of `Fs.work` over `db` (`DB` unless given) and `fs`, `(folded)` marking one
@@ -397,7 +397,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A project file the run leaves out, writing `Fs.holder` (`ProjectCoverage`). */
-	private static inline final PLUGIN: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h; }';
+	private static final PLUGIN: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h; }';
 
 	/** The run's notice of a `closedWorld` it does not cover (`CLOSED_NOTE`, then the project's document); null for none. */
 	private static function closedNote(found: Array<Violation>): Null<String> {

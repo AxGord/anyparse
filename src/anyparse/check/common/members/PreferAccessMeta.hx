@@ -72,16 +72,16 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	private static inline final ANNOTATED_CHILDREN: Int = 2;
 
 	/** The constructor's member name, which a construction reads. */
-	private static inline final CONSTRUCTOR: String = 'new';
+	private static final CONSTRUCTOR: String = 'new';
 
 	/** The finding's text after the waiver's own spelling. */
-	private static inline final MESSAGE_TAIL: String =
+	private static final MESSAGE_TAIL: String =
 		' waives every privacy check in its expression — grant the type it reads on the member instead';
 
-	private static inline final DECLINE_UNTYPED: String =
+	private static final DECLINE_UNTYPED: String =
 		'a receiver or member in the waived expression could not be resolved, so the types to grant are not known';
-	private static inline final DECLINE_PLACE: String = 'the waiver sits outside any member, so there is no member to grant';
-	private static inline final DECLINE_COMMENT: String = 'a comment sits between the waiver and its expression';
+	private static final DECLINE_PLACE: String = 'the waiver sits outside any member, so there is no member to grant';
+	private static final DECLINE_COMMENT: String = 'a comment sits between the waiver and its expression';
 
 	public function new() {
 		super(RULE_ID, 'an expression waiving every privacy check — grant the type it reads on the member instead', RuleCategory.Members);

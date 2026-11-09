@@ -29,7 +29,7 @@ final class TmpLifecycle {
 	private static inline final LEGACY_SECONDS: Int = 21600;
 
 	/** The prefixes, unless `TMPL_PREFIXES` names others. */
-	private static inline final PREFIXES: String = 'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard apq-suite apq-dev';
+	private static final PREFIXES: String = 'anyparse-mutcheck anyparse-mutarm apq-battery apq-suite-shard apq-suite apq-dev';
 
 	public final root: String;
 	public final prefixes: Array<String>;

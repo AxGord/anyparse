@@ -19,12 +19,12 @@ import utest.Test;
 final class TestDiscoveryNarrowTest extends Test {
 
 	/** A test class that needs none of the harness beyond the runner, so the build stays small. */
-	private static inline final FIRST: String = 'unit.devkit.NarrowBuildTest';
+	private static final FIRST: String = 'unit.devkit.NarrowBuildTest';
 
-	private static inline final SECOND: String = 'unit.DiscoveryOnlyProbeTest';
+	private static final SECOND: String = 'unit.DiscoveryOnlyProbeTest';
 
 	/** The query engine's entry class, which a build holds only when something names `Cli`. */
-	private static inline final ENGINE_ENTRY: String = 'anyparse_query_Cli';
+	private static final ENGINE_ENTRY: String = 'anyparse_query_Cli';
 
 	@:pin('control')
 	@:killer('M-NARROW-FLOOR-HARNESS')

@@ -22,10 +22,10 @@ using Lambda;
 @:nullSafety(Strict)
 final class NativeDocLowering {
 
-	private static inline final CHECK_PREFIX: String = 'native';
-	private static inline final COMPACT_PREFIX: String = 'compact';
-	private static inline final COMPACT_TO_PREFIX: String = 'compactTo';
-	private static inline final OUT_PREFIX: String = 'out';
+	private static final CHECK_PREFIX: String = 'native';
+	private static final COMPACT_PREFIX: String = 'compact';
+	private static final COMPACT_TO_PREFIX: String = 'compactTo';
+	private static final OUT_PREFIX: String = 'out';
 
 	/** Each rule's verdict; a rule being decided answers yes, so a recursive schema is decided by its other fields. */
 	private final _readable: Map<String, Bool> = [];

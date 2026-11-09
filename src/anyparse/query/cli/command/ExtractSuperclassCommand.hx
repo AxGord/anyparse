@@ -12,7 +12,7 @@ import anyparse.query.MoveSymbol;
 @:nullSafety(Strict)
 final class ExtractSuperclassCommand implements CliCommand {
 
-	private static inline final OP: String = 'extract-superclass';
+	private static final OP: String = 'extract-superclass';
 
 	public function new() {}
 

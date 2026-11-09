@@ -24,9 +24,9 @@ final class CodeCacheLauncherTest extends Test {
 	private static inline final PROBE: String = '__apqCodeCacheProbe';
 
 	/** The launcher a build writes beside the engine. */
-	private static inline final LAUNCHER: String = 'bin/apq-launch.js';
+	private static final LAUNCHER: String = 'bin/apq-launch.js';
 
-	private static inline final ENGINE: String = 'bin/apq.js';
+	private static final ENGINE: String = 'bin/apq.js';
 
 	/**
 	 * A rebuild whose source has the SAME LENGTH as the cached one gets no cache: V8 checks only the length, and would

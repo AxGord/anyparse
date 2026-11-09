@@ -23,10 +23,10 @@ using Lambda;
 class EffectiveRulesTest extends Test {
 
 	/** A default-on rule no fixture config mentions except where a case names it. */
-	private static inline final PLAIN: String = 'unused-import';
+	private static final PLAIN: String = 'unused-import';
 
 	/** A default-off rule. */
-	private static inline final OPT_IN: String = 'explicit-local-type';
+	private static final OPT_IN: String = 'explicit-local-type';
 
 	@:pin('control')
 	@:killer('M-EFFECTIVE-IGNORES-CONFIG')

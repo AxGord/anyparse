@@ -9,7 +9,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class ScrubRowTest extends Test {
 
-	private static inline final UNCONFIGURED: String = 'scrub-guard: no token list, nothing checked\n';
+	private static final UNCONFIGURED: String = 'scrub-guard: no token list, nothing checked\n';
 
 	@:pin('control')
 	@:killer('M-SCRUB-ROW-UNCONFIGURED-FIRST')

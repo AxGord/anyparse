@@ -51,7 +51,7 @@ using StringTools;
 final class MessageMask {
 
 	/** What a masked coordinate reads as — one character, so the key stays readable in a failing assertion. */
-	private static inline final MASK: String = '#';
+	private static final MASK: String = '#';
 
 	/**
 	 * `text` with the coordinate that immediately FOLLOWS each occurrence of `anchor`

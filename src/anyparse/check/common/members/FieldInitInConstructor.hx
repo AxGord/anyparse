@@ -105,8 +105,8 @@ import anyparse.util.Strings;
 @:nullSafety(Strict)
 final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 
-	private static inline final MESSAGE: String =
-		'this field default is overwritten by one conditional constructor write - fold the pair into a single unconditional assignment of a conditional value';
+	private static final MESSAGE: String = 'this field default is overwritten by one conditional constructor write - fold the pair into a '
+		+ 'single unconditional assignment of a conditional value';
 
 	/**
 	 * The suffix a derived constant name carries. Fixed rather than inferred from the file: the only
@@ -115,7 +115,7 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 	 * `HEADER_HEIGHT` next to a `_header` field would teach the derivation to emit `..._HEIGHT`. A
 	 * wrong suffix is a name nobody asked for, so the derivation stays the one everybody can predict.
 	 */
-	private static inline final DEFAULT_SUFFIX: String = '_DEFAULT';
+	private static final DEFAULT_SUFFIX: String = '_DEFAULT';
 
 	/**
 	 * The constant names this `--fix` PASS has already minted, so a second field of the same type

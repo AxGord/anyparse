@@ -17,8 +17,8 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class DataPath {
 
-	private static inline final SEPARATOR: String = '.';
-	private static inline final ESCAPE: String = '\\';
+	private static final SEPARATOR: String = '.';
+	private static final ESCAPE: String = '\\';
 
 	/**
 	 * Can a document of the grammar `shape` describes be walked at all — does it declare an object or an array

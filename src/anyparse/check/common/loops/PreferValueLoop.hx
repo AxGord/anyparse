@@ -56,17 +56,17 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'prefer-value-loop';
 
-	/** The element-count member an indexed loop bounds itself by. */
-	private static inline final LENGTH_MEMBER: String = 'length';
-
-	/** The one container nominal whose value iteration yields what `X[0...length]` yields. */
-	private static inline final ARRAY_TYPE: String = 'Array';
-
 	/** The sibling's minimum body: the declaration it consumes plus at least one real statement. */
 	private static inline final MIN_KEY_VALUE_STATEMENTS: Int = 2;
 
 	/** The one `X[i]` the sibling's rewrite consumes; a second one is outside its claim. */
 	private static inline final CONSUMED_INDEX_READS: Int = 1;
+
+	/** The element-count member an indexed loop bounds itself by. */
+	private static final LENGTH_MEMBER: String = 'length';
+
+	/** The one container nominal whose value iteration yields what `X[0...length]` yields. */
+	private static final ARRAY_TYPE: String = 'Array';
 
 	public function new() {
 		super(RULE_ID, 'an indexed for whose index only reads X[i], replaceable with for (v in X)', RuleCategory.Loops);

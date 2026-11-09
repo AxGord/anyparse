@@ -21,7 +21,7 @@ using StringTools;
 final class BuildFlagsTest extends Test {
 
 	/** The line that makes a typecheck leaf write nothing, whoever runs it by hand. */
-	private static inline final TYPECHECK_ONLY: String = '--no-output';
+	private static final TYPECHECK_ONLY: String = '--no-output';
 
 	private static final CODEGEN: String = Binaries.CODEGEN.join(' ');
 

@@ -64,11 +64,11 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'loop-bound-length-mismatch';
 
-	/** The lead-in of the line the length comes from — the coordinate `messageIdentity` masks. */
-	private static inline final LINE_LEAD: String = '(line ';
-
 	/** How deep a constant may refer to another constant before folding gives up — a cycle stops here. */
 	private static inline final MAX_FOLD_DEPTH: Int = 16;
+
+	/** The lead-in of the line the length comes from — the coordinate `messageIdentity` masks. */
+	private static final LINE_LEAD: String = '(line ';
 
 	public function new() {
 		super(

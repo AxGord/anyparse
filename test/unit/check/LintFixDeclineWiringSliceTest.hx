@@ -46,7 +46,7 @@ import anyparse.runtime.Span;
 class LintFixDeclineWiringSliceTest extends Test {
 
 	/** The sentence `ArmCheck`'s safe arm writes on a finding it leaves to its risky arm — and how the arm recognises one. */
-	public static inline final ARM_HAND_OFF: String = 'the risky arm owns this finding';
+	public static final ARM_HAND_OFF: String = 'the risky arm owns this finding';
 
 	/** `unused-local` on a declaration that IS a brace-less `if` body — the shape the guard refuses. */
 	private static final REFUSED: String =

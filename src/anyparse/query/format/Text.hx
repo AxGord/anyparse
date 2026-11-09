@@ -45,7 +45,7 @@ final class Text {
 	 * A node with no declared type prints exactly as it did before the slot existed, and so does one whose
 	 * declared type is also one of its children (`sameNode`).
 	 */
-	private static inline final TYPE_SLOT_HEAD: String = ':';
+	private static final TYPE_SLOT_HEAD: String = ':';
 
 	public static function render(node: QueryNode, spans: Bool = false): String {
 		return '${SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions)}\n';

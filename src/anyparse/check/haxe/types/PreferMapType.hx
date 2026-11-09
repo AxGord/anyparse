@@ -204,33 +204,33 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'prefer-map-type';
 
-	/** An empty constructor argument list — the only one this rule rewrites (the `NewLiteral` precedent). */
-	private static inline final EMPTY_ARGUMENT_LIST: String = '()';
-
-	/** The grammar's name/type pair inside an anonymous-structure field — transparent to the position walk. */
-	private static inline final FIELD_PAIR_KIND: String = 'Plain';
-
 	/** The finding message when the rewrite is available — the only message `fix` acts on. */
 	private static inline final MSG_FIXABLE: String = 'this concrete map type can be the unified Map<K, V> syntax';
 
+	/** Hop budget for following a module-declared alias chain — a cycle is illegal Haxe, but a scan must still terminate. */
+	private static inline final ALIAS_CHAIN_LIMIT: Int = 16;
+
+	/** An empty constructor argument list — the only one this rule rewrites (the `NewLiteral` precedent). */
+	private static final EMPTY_ARGUMENT_LIST: String = '()';
+
+	/** The grammar's name/type pair inside an anonymous-structure field — transparent to the position walk. */
+	private static final FIELD_PAIR_KIND: String = 'Plain';
+
 	/** The finding message when the file binds `Map` to something else, so the unified name cannot be written here. */
-	private static inline final MSG_MAP_SHADOWED: String =
+	private static final MSG_MAP_SHADOWED: String =
 		'a concrete map type replaceable with Map<K, V> (report-only: this file binds Map to another type)';
 
 	/** The finding message for a reference written with no type parameters, which `Map<K, V>` requires. */
-	private static inline final MSG_NO_TYPE_PARAMS: String =
+	private static final MSG_NO_TYPE_PARAMS: String =
 		'a concrete map type replaceable with Map<K, V> (report-only: written without the type parameters Map requires)';
 
 	/** The finding message for a bare construction whose declaration does not determine the resulting map type. */
-	private static inline final MSG_UNPINNED_NEW: String =
+	private static final MSG_UNPINNED_NEW: String =
 		'a concrete map construction replaceable with new Map() (report-only: no annotation determines the resulting key and value types)';
 
 	/** The finding message when the written key does not prove `Map` resolves back to the implementation named here. */
-	private static inline final MSG_KEY_UNPROVEN: String =
+	private static final MSG_KEY_UNPROVEN: String =
 		'a concrete map type replaceable with Map<K, V> (report-only: the key type does not prove Map resolves to this implementation)';
-
-	/** Hop budget for following a module-declared alias chain — a cycle is illegal Haxe, but a scan must still terminate. */
-	private static inline final ALIAS_CHAIN_LIMIT: Int = 16;
 
 	/**
 	 * The concrete map implementations this rule rewrites, each mapped to the key type the unified

@@ -89,11 +89,11 @@ enum DifferentialOutcome {
 @:nullSafety(Strict)
 final class StdlibDifferential {
 
-	/** The class name the generated probe module declares; a candidate of this name is skipped. */
-	public static inline final PROBE_CLASS: String = 'Probe';
-
 	/** Beyond this the enumeration stops being worth generating; such a candidate is skipped. */
 	public static inline final MAX_MAPPINGS: Int = 4000;
+
+	/** The class name the generated probe module declares; a candidate of this name is skipped. */
+	public static final PROBE_CLASS: String = 'Probe';
 
 	/**
 	 * The pool id every TRIVIAL baseline carries. A candidate that agrees with one of these across the
@@ -103,7 +103,7 @@ final class StdlibDifferential {
 	 * finding, each agreeing with a fistful of identity-shaped stdlib calls at once (`urlDecode`,
 	 * `htmlEscape`, `htmlUnescape`, `Std.string`, `replace(v, v, v)`) for one and the same reason.
 	 */
-	public static inline final TRIVIAL_ID: String = '(unchanged)';
+	public static final TRIVIAL_ID: String = '(unchanged)';
 
 	/**
 	 * How many values one parameter is driven over, by the candidate's arity. The product is what

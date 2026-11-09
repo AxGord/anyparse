@@ -422,7 +422,7 @@
 			"name": "M-TS-DATA-SUBJECT-UNSORTED",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "sortedIds",
-			"find": "sorted.sort(Reflect.compare);",
+			"find": "sorted.sort(Compare.compareString);",
 			"replace": "",
 			"note": "a subject naming several ids keeps the graph's order, so one finding re-keys when the graph or the walk meets them another way"
 		},

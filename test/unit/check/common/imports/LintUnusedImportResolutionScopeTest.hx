@@ -15,7 +15,7 @@ import anyparse.query.CachingGrammarPlugin;
 class LintUnusedImportResolutionScopeTest extends Test {
 
 	/** A tiny stand-in "library" module injected as the resolution scope. */
-	private static inline final WIDGET: String = 'package ext.lib;\n\nclass Widget {}';
+	private static final WIDGET: String = 'package ext.lib;\n\nclass Widget {}';
 
 	/** An unused named import of a resolution-scoped library module is a deletable Warning (was an Info advisory). */
 	public function testLibraryImportUnusedIsWarning(): Void {

@@ -139,7 +139,7 @@ using StringTools;
 final class PreferCaseGuard extends RuleBase implements RiskyFix {
 
 	/** All that may separate the last pattern from the `if`: the label's own colon. */
-	private static inline final LABEL_TERMINATOR: String = ':';
+	private static final LABEL_TERMINATOR: String = ':';
 
 	private static final RULE_ID: String = 'prefer-case-guard';
 	private static final MESSAGE: String = 'this case body is a single if; write it as a case guard';

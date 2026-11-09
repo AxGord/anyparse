@@ -152,10 +152,10 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 	private static inline final RULE_ID: String = 'import-order';
 
 	/** The `order` option value accepting EITHER recognised order — the default, and the least opinionated reading. */
-	private static inline final ORDER_ANY: String = 'any';
+	private static final ORDER_ANY: String = 'any';
 
 	/** The option gating the `using` WEDGE merge — on unless a project opts out. */
-	private static inline final OPTION_USING_AFTER: String = 'usingAfterImports';
+	private static final OPTION_USING_AFTER: String = 'usingAfterImports';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

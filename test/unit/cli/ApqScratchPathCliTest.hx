@@ -42,20 +42,20 @@ using StringTools;
 @:nullSafety(Strict)
 class ApqScratchPathCliTest extends Test {
 
-	/** The env var `apq test-summary` reads when no positional source is given. */
-	private static inline final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
-
-	/** The half of the stdlib-dup work directory's name that is a contract. */
-	private static inline final WORK_DIR_STEM: String = 'apq-stdlib-dup';
-
 	/** What the stdlib-dup run prints before the directory it staged into. */
 	private static inline final WORK_DIR_MARKER: String = 'staging probes in ';
 
+	/** The env var `apq test-summary` reads when no positional source is given. */
+	private static final TRANSCRIPT_ENV: String = 'APQ_TEST_OUT';
+
+	/** The half of the stdlib-dup work directory's name that is a contract. */
+	private static final WORK_DIR_STEM: String = 'apq-stdlib-dup';
+
 	/** A scope with no candidate at all, so the run resolves its work directory and spawns no compiler. */
-	private static inline final NO_CANDIDATE_SOURCE: String = 'class NoCandidate {\n\tpublic var x: Int = 1;\n}\n';
+	private static final NO_CANDIDATE_SOURCE: String = 'class NoCandidate {\n\tpublic var x: Int = 1;\n}\n';
 
 	/** What a symlinked staging target must still hold after a refused run. */
-	private static inline final VICTIM_CONTENT: String = 'ORIGINAL VICTIM CONTENT\n';
+	private static final VICTIM_CONTENT: String = 'ORIGINAL VICTIM CONTENT\n';
 
 	/**
 	 * No positional and no `$TRANSCRIPT_ENV` is a USAGE error, not a fallback.

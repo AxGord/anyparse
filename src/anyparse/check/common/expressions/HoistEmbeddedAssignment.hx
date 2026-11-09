@@ -127,7 +127,7 @@ private typedef HoistSite = {
 @:nullSafety(Strict)
 final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff implements RiskyFix {
 
-	private static inline final ID: String = 'hoist-embedded-assignment';
+	private static final ID: String = 'hoist-embedded-assignment';
 
 	public function new() {
 		super(ID, 'an assignment buried inside an array / object literal — hoist it in front of the statement', RuleCategory.Expressions);

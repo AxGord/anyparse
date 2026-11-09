@@ -86,25 +86,25 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 	 * `Check.VolatileMessage` asks for: a threshold change IS a change, while a line drifting
 	 * from 168 columns to 167 is the same standing finding and must not read as movement.
 	 */
-	private static inline final WIDTH_LEAD: String = 'comment line is ';
+	private static final WIDTH_LEAD: String = 'comment line is ';
 
 	/** The markdown fence marker whose interior is a code sample, whatever its first character looks like. */
-	private static inline final FENCE: String = '```';
+	private static final FENCE: String = '```';
 
 	/** Report-only: nothing inside a raw `#if` region projects, so no edit there can be corroborated. */
-	private static inline final OPAQUE: String = 'it sits in a conditional-compilation region the parser captured raw';
+	private static final OPAQUE: String = 'it sits in a conditional-compilation region the parser captured raw';
 
 	/** Report-only: with no tree, a raw `#if` region cannot be ruled out — the same fail-closed answer, one step wider. */
-	private static inline final UNPARSED: String = 'the file does not parse, so a raw conditional-compilation region cannot be ruled out';
+	private static final UNPARSED: String = 'the file does not parse, so a raw conditional-compilation region cannot be ruled out';
 
 	/** Report-only: a wrapped trailing comment's continuation is a new own-line comment the writer relocates. */
-	private static inline final TRAILING: String = 'it trails after code, so its continuation would be a new own-line comment';
+	private static final TRAILING: String = 'it trails after code, so its continuation would be a new own-line comment';
 
 	/** Report-only: the interior of a fenced block is a code sample, and breaking it at spaces rewrites the sample. */
-	private static inline final FENCED: String = 'it is inside a fenced code block';
+	private static final FENCED: String = 'it is inside a fenced code block';
 
 	/** Report-only: the reflow handed the line back byte-identical — one word wider than the width. */
-	private static inline final NO_BREAK: String = 'it holds no break point inside the width';
+	private static final NO_BREAK: String = 'it holds no break point inside the width';
 
 	public function new() {
 		super(RULE_ID, 'a comment line wider than the configured maximum line length', RuleCategory.Docs);

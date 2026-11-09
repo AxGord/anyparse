@@ -23,7 +23,7 @@ using StringTools;
 final class NullSafetyGate {
 
 	/** The head of a `declineReason` for a non-null proof the compiler's null-safety does not share. */
-	public static inline final UNSEEN_PROOF: String = 'null-safety may be on here and does not follow this proof';
+	public static final UNSEEN_PROOF: String = 'null-safety may be on here and does not follow this proof';
 
 	/** How deep an oracle hxml's own `.hxml` includes are followed — a bound that ends an include cycle. */
 	private static inline final MAX_INCLUDE_DEPTH: Int = 8;

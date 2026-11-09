@@ -22,10 +22,10 @@ import haxe.Exception;
 final class DefineReads {
 
 	/** The macro API that hands every define at once. */
-	private static inline final ALL_DEFINES: String = 'getDefines';
+	private static final ALL_DEFINES: String = 'getDefines';
 
 	/** The keyword a declaration of `ALL_DEFINES` opens with — the standard library's own, which reads nothing. */
-	private static inline final DECLARATION: String = 'function';
+	private static final DECLARATION: String = 'function';
 
 	/** The macro API that reads one define by the name its first argument spells. */
 	private static final READERS: Array<String> = ['defined', 'definedValue', 'getDefine'];

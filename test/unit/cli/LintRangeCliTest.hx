@@ -27,16 +27,16 @@ import anyparse.query.cli.command.LintCommand.LintRange;
  */
 class LintRangeCliTest extends Test {
 
-	/** Two foldable concatenations, on lines 6 and 8 of the fixture below. */
-	private static inline final FOLDABLE_A: String = "'aaa' + 'bbb'";
-
-	private static inline final FOLDABLE_B: String = "'ccc' + 'ddd'";
-
 	/** Three members whose `if` / `else` returns every safe return fix would fold, between a line comment and a block comment. */
 	private static inline final ODD_FIXTURE: String = 'package pkg;\n\nclass C {\n\n\t// top comment\n'
 		+ '\tpublic static function f(x: Bool): Int {\n\t\tif (x) return 1; else return 2;\n\t}\n\n'
 		+ '\t/* block\n\t inner line */\n\tpublic static function g(x: Bool): Int {\n\t\tif (x) return 3; else return 4;\n\t}\n\n'
 		+ '\tpublic static function h(x: Bool): Int {\n\t\tif (x) return 5; else return 6;\n\t}\n\n}\n';
+
+	/** Two foldable concatenations, on lines 6 and 8 of the fixture below. */
+	private static final FOLDABLE_A: String = "'aaa' + 'bbb'";
+
+	private static final FOLDABLE_B: String = "'ccc' + 'ddd'";
 
 	/** A window around a finding gates the run; a window beside it does not. */
 	public function testRangeNarrowsTheReport(): Void {

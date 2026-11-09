@@ -73,10 +73,10 @@ import anyparse.query.SymbolIndex;
 @:nullSafety(Strict)
 final class RedundantElse extends RuleBase {
 
-	private static inline final MESSAGE: String = 'this else is redundant — the if branch always exits';
+	private static final MESSAGE: String = 'this else is redundant — the if branch always exits';
 
 	/** ASCII-only note appended when a comment the de-nest would delete withholds the autofix. */
-	private static inline final COMMENT_NOTE: String = ' (comment in the else body - de-nest by hand)';
+	private static final COMMENT_NOTE: String = ' (comment in the else body - de-nest by hand)';
 
 	public function new() {
 		super(

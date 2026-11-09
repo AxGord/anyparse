@@ -84,7 +84,7 @@ final class PreferRangeLoop extends RuleBase {
 	private static inline final EXCERPT_MAX: Int = 40;
 
 	/** The `Int` nominal every range operand must not provably differ from. */
-	private static inline final INT_TYPE: String = 'Int';
+	private static final INT_TYPE: String = 'Int';
 
 	public function new() {
 		super(

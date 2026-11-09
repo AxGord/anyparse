@@ -40,18 +40,18 @@ final class RedundantMapIterKey extends RuleBase {
 	private static inline final RULE_ID: String = 'redundant-map-iter-key';
 
 	/** Why a finding over an iterable of unproven type carries no edit. */
-	private static inline final UNPROVEN_DECLINE: String =
-		'the iterable is not provably an Array, a List or a standard map, whose iterator() yields exactly the values keyValueIterator() does';
+	private static final UNPROVEN_DECLINE: String = 'the iterable is not provably an Array, a List or a standard map, whose iterator() '
+		+ 'yields exactly the values keyValueIterator() does';
 
 	/** The finding where the key provably can go. */
-	private static inline final PROVEN_MESSAGE: String = 'this loop discards its key — iterate the values directly: for (v in …)';
+	private static final PROVEN_MESSAGE: String = 'this loop discards its key — iterate the values directly: for (v in …)';
 
 	/** The finding over a map: the key may go when the loop leaves the map unchanged, which only the fix asks. */
-	private static inline final KEYED_MESSAGE: String =
+	private static final KEYED_MESSAGE: String =
 		'this loop discards its key — dropping it iterates the same values only while nothing the loop runs changes the map';
 
 	/** The finding where it cannot be proved to — described, not prescribed. */
-	private static inline final UNPROVEN_MESSAGE: String =
+	private static final UNPROVEN_MESSAGE: String =
 		'this loop discards its key, but dropping it is not proved to iterate the same values for this iterable';
 
 	public function new() {

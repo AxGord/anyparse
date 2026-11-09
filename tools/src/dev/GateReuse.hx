@@ -20,16 +20,16 @@ using StringTools;
 final class GateReuse {
 
 	/** The record's file inside the gate's logs. */
-	public static inline final FILE: String = 'gate-record.json';
+	public static final FILE: String = 'gate-record.json';
 
 	/** The reading that holds how many classes an impact-selected suite ran; absent when the suite ran every class. */
-	public static inline final IMPACT: String = 'impact';
+	public static final IMPACT: String = 'impact';
 
 	/** The corpus snapshot the gate's suite left, copied beside the record. */
-	public static inline final SWEEP: String = 'gate-sweep.json';
+	public static final SWEEP: String = 'gate-sweep.json';
 
 	/** The gate's logs beside its worktree, the only place a record is ever read from. */
-	public static inline final LOGS_SUFFIX: String = '-logs/slice-gate';
+	public static final LOGS_SUFFIX: String = '-logs/slice-gate';
 
 	/**
 	 * Each gate row a battery row may take over, as the pair `[gate row, battery row]`. A row missing here — fmt, typer probes,

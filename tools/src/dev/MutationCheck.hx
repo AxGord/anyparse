@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -28,9 +29,6 @@ final class MutationCheck {
 	public static inline final USAGE: String = 'usage: dev mutation-check <manifest> [--jobs N] [--keep] [--build-only] [--killer-first] '
 		+ '[--schema <dir>] [--base <ref>] [--repo <tree>]';
 
-	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
-	private static inline final WORK_PREFIX: String = 'anyparse-mutcheck';
-
 	/** The memory one default job is budgeted, in GiB: a warm compiler server and a suite process. */
 	private static inline final GIB_PER_JOB: Int = 5;
 
@@ -57,6 +55,9 @@ final class MutationCheck {
 
 	/** A manifest line's fields: name, patch, filter and expectations — the last one keeps any further `|`. */
 	private static inline final MANIFEST_FIELDS: Int = 4;
+
+	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under, and sweeps it by. */
+	private static final WORK_PREFIX: String = 'anyparse-mutcheck';
 
 	/** The order a timing line names the build kinds in (`MutationSlot`). */
 	private static final BUILD_KINDS: Array<String> = ['narrow', 'warm', 'restarted', 'cold', 'schema'];
@@ -351,7 +352,7 @@ final class MutationCheck {
 		final seen: Map<String, Int> = [];
 		for (name in names) seen[name] = (seen[name] ?? 0) + 1;
 		final twice: Array<String> = [for (name => n in seen) if (n > 1) name];
-		twice.sort(Reflect.compare);
+		twice.sort(Compare.compareString);
 		return twice;
 	}
 

@@ -15,7 +15,7 @@ import anyparse.query.Cli;
 class LintQuotationAwareCliTest extends Test {
 
 	/** The fixture: one quoted delimited pair, the only redundant pair of the file. */
-	private static inline final QUOTED: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = macro g((x));\n\t}\n}\n';
+	private static final QUOTED: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = macro g((x));\n\t}\n}\n';
 
 	@:pin('control') @:killer('M-PARENS-QUOTED-DROPPED')
 	public function testAQuotedRedundantParensFindingReports(): Void {

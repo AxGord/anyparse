@@ -129,7 +129,7 @@ final class PreferIfExpressionAssignment extends RuleBase {
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;
 
 	/** The finding message for the decl arm (a declaration and the else-less chain after it). */
-	private static inline final DECL_MESSAGE: String =
+	private static final DECL_MESSAGE: String =
 		'this declaration and the else-less if/else-if assignment chain after it can be a single if-expression initializer';
 
 	public function new() {

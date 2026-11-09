@@ -16,7 +16,7 @@ class SiblingShareTest extends Test {
 
 	private static inline final WIDTH: Int = 40;
 	private static inline final NO_WIDTH: Int = -1;
-	private static inline final HEAD: String = 'case 1:';
+	private static final HEAD: String = 'case 1:';
 
 	/** A list of a fitting and an over-wide sibling, both still voting: one verdict reaches both. */
 	public function testTheWidestSiblingDecidesForAll(): Void {

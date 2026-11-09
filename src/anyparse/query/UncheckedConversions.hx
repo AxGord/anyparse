@@ -31,22 +31,22 @@ using Lambda;
 final class UncheckedConversions {
 
 	/** The nullable wrapper: a value of it is one of its argument, or null. */
-	private static inline final NULLABLE: String = 'Null';
+	private static final NULLABLE: String = 'Null';
 
 	/** The metadata of a type the compiler represents itself (`TypeFact.meta`). */
-	private static inline final CORE_TYPE: String = ':coreType';
+	private static final CORE_TYPE: String = ':coreType';
 
 	/** The metadata of a type no value of which is null (`TypeFact.meta`). */
-	private static inline final NOT_NULL: String = ':notNull';
+	private static final NOT_NULL: String = ':notNull';
 
 	/** The target that converts a value into a typed place (`converts`). */
-	private static inline final CONVERTING_TARGET: String = 'cpp';
+	private static final CONVERTING_TARGET: String = 'cpp';
 
 	/** The language's string type, a value hxcpp converts into (`converts`). */
-	private static inline final STRING: String = 'String';
+	private static final STRING: String = 'String';
 
 	/** hxcpp's C pointer type: a `cpp.Star<T>` is a `T *`, whatever its declaration reads as (`converts`). */
-	private static inline final POINTER: String = 'cpp.Star';
+	private static final POINTER: String = 'cpp.Star';
 
 	/** Whether some build keeps what lands at a place of a type, by the type as the facts spell it (`keeps`). */
 	private final _kept: Map<String, Bool> = [];

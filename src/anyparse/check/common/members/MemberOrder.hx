@@ -123,7 +123,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static inline final RULE_ID: String = 'member-order';
 
 	/** The `apq.json` option key that replaces `MAX_RELOCATED_LINES`. */
-	private static inline final BUDGET_OPTION: String = 'maxRelocatedLines';
+	private static final BUDGET_OPTION: String = 'maxRelocatedLines';
 
 	/**
 	 * The linter's memoised per-file config resolver; null when run outside it (falls

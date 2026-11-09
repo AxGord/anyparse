@@ -19,10 +19,10 @@ using StringTools;
 final class MermaidProjection {
 
 	/** The synthetic root kind. */
-	public static inline final DOCUMENT: String = 'Document';
+	public static final DOCUMENT: String = 'Document';
 
 	/** A `%%` comment statement. */
-	public static inline final COMMENT: String = 'Comment';
+	public static final COMMENT: String = 'Comment';
 
 	/** Parse `source` and project it. Throws the parser's `ParseError` on a document that does not parse. */
 	public static function parse(source: String): QueryNode {

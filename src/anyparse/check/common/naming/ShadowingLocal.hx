@@ -100,10 +100,10 @@ final class ShadowingLocal extends RuleBase {
 	private static inline final RULE_ID: String = 'shadowing-local';
 
 	/** What a plain local declaration is called — in the message and in `Hidden.label`. */
-	private static inline final LOCAL_LABEL: String = 'local';
+	private static final LOCAL_LABEL: String = 'local';
 
 	/** A finding `fix` cannot place back on its declaration. */
-	private static inline final DECLINE_UNPLACED: String = 'the declaration cannot be placed in the source again';
+	private static final DECLINE_UNPLACED: String = 'the declaration cannot be placed in the source again';
 
 	public function new() {
 		super(RULE_ID, 'a local declaration whose name is already bound by an enclosing local, binder or parameter', RuleCategory.Naming);

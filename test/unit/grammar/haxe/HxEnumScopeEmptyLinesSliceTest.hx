@@ -26,7 +26,7 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxEnumScopeEmptyLinesSliceTest extends Test {
 
-	private static inline final CLASS_BEGIN_END: String = '{"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
+	private static final CLASS_BEGIN_END: String = '{"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
 
 	public function new(): Void {
 		super();

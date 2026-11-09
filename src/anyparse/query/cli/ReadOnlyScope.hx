@@ -17,7 +17,7 @@ import haxe.io.Path;
 final class ReadOnlyScope {
 
 	/** The variable naming the protected tree explicitly, for a run whose working directory is not inside it. */
-	public static inline final ROOT_ENV: String = 'APQ_READ_ONLY_ROOT';
+	public static final ROOT_ENV: String = 'APQ_READ_ONLY_ROOT';
 
 	/** Whether `path` lies inside the protected tree (the tree itself included). */
 	public static function protects(path: String): Bool {

@@ -58,12 +58,12 @@ using anyparse.macro.MetaInspect;
  */
 class SpanTypeSynth {
 
-	private static inline final PAIRED_SUFFIX: String = 'S';
-	private static inline final SYNTH_SUBPACK: String = 'spans';
-	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
-	private static inline final SPAN_FIELD_NAME: String = '_span';
-	private static inline final KIND_FIELD_NAME: String = '_kind';
-	private static inline final SPANNED_META: String = ':spanned';
+	private static final PAIRED_SUFFIX: String = 'S';
+	private static final SYNTH_SUBPACK: String = 'spans';
+	private static final SYNTH_MODULE_LEAF: String = 'Pairs';
+	private static final SPAN_FIELD_NAME: String = '_span';
+	private static final KIND_FIELD_NAME: String = '_kind';
+	private static final SPANNED_META: String = ':spanned';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Set<String> = new Set<String>();
 

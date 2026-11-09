@@ -15,7 +15,7 @@ using StringTools;
 @:nullSafety(Strict)
 class HxEnumExistingBetweenFieldsTest extends Test {
 
-	private static inline final REMOVE: String = '{"emptyLines":{"enumEmptyLines":{"betweenFields":0,"existingBetweenFields":"remove"}}}';
+	private static final REMOVE: String = '{"emptyLines":{"enumEmptyLines":{"betweenFields":0,"existingBetweenFields":"remove"}}}';
 
 	public function new(): Void {
 		super();

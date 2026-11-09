@@ -35,7 +35,7 @@ typedef TypeOwnership = {
 final class OwnedTypesDeclaration {
 
 	/** The key's own name, as every diagnostic line spells it. */
-	private static inline final KEY: String = 'ownedTypes';
+	private static final KEY: String = 'ownedTypes';
 
 	/** Every declaration of `raw` the reader could keep, in declared order. */
 	public static function read(raw: Array<JValue>, drops: Array<String>): Array<TypeOwnership> {

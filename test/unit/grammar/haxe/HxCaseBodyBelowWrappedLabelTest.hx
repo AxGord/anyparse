@@ -14,8 +14,8 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCaseBodyBelowWrappedLabelTest extends Test {
 
-	private static inline final WIDE: String = 'case Alpha, Beta, Gamma, Delta, Epsilon, Zeta';
-	private static inline final ROWS: String = '\t\t\tcase Alpha, Beta, Gamma, Delta,\n\t\t\t\tEpsilon, Zeta:\n';
+	private static final WIDE: String = 'case Alpha, Beta, Gamma, Delta, Epsilon, Zeta';
+	private static final ROWS: String = '\t\t\tcase Alpha, Beta, Gamma, Delta,\n\t\t\t\tEpsilon, Zeta:\n';
 
 	/** A wrapped label alone in its switch, or beside a sibling with no body: no vote can move it, in either mode. */
 	@:pin('control')

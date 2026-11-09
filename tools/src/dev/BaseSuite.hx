@@ -45,9 +45,6 @@ enum BaseRead {
 @:nullSafety(Strict)
 final class BaseSuite {
 
-	/** The reading's record in the gate's logs; its sweep snapshot is `GateTree.SWEEP_BASE` beside it. */
-	public static inline final FILE: String = 'suite-base.txt';
-
 	/** The announcement of a base branch still to leave its reading: the run's id; lifted when the branch has left it or why not. */
 	public static inline final PENDING: String = 'suite-base.pending';
 
@@ -60,7 +57,10 @@ final class BaseSuite {
 	/** The environment variable that names the cache of readings shared by every worktree instead of the default. */
 	public static inline final CACHE_VAR: String = 'SLICE_BASE_SUITE_CACHE';
 
-	private static inline final SUITE_LOG: String = 'suite-base.log';
+	/** The reading's record in the gate's logs; its sweep snapshot is `GateTree.SWEEP_BASE` beside it. */
+	public static final FILE: String = 'suite-base.txt';
+
+	private static final SUITE_LOG: String = 'suite-base.log';
 
 	/** The announce-and-wait protocol of the base branch, its markers and its shared cache. */
 	private static final BRANCH: BaseBranch = new BaseBranch(ROW, PENDING, UNREAD, CACHE_VAR, 'anyparse-slice-base-suite');

@@ -18,7 +18,7 @@ import anyparse.query.SymbolIndex;
 final class OverriddenInline extends RuleBase {
 
 	/** How the inline end of a finding opens — the end `fix` edits. */
-	private static inline final INLINE_END: String = 'inline method ';
+	private static final INLINE_END: String = 'inline method ';
 
 	public function new() {
 		super(

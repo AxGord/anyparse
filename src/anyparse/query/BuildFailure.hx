@@ -77,7 +77,7 @@ final class BuildFailure {
 	private static inline final LINE_LIMIT: Int = 200;
 
 	/** What a haxe diagnostic stamps ahead of its line number. */
-	private static inline final POSITION_MARKER: String = '.hx:';
+	private static final POSITION_MARKER: String = '.hx:';
 
 	/**
 	 * Marker of the registry's own build-macro cross-checks (the registry directory's path).

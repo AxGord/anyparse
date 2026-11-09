@@ -18,7 +18,7 @@ using StringTools;
 final class LandFormat {
 
 	/** The trailer the landing commit names the rewritten files under. */
-	public static inline final TRAILER: String = 'Fmt-Applied';
+	public static final TRAILER: String = 'Fmt-Applied';
 
 	/** How many rewritten files the trailer names before it counts the rest. */
 	private static inline final NAMED: Int = 8;

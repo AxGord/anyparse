@@ -58,18 +58,7 @@ import anyparse.query.TypingService;
 final class PreferSplitPart extends HaxeRule implements DefaultOff implements ConfigAware implements GroupedFix {
 
 	private static inline final RULE_ID: String = 'prefer-split-part';
-
-	/** The option naming the project's text utility class. */
-	private static inline final OPTION_TEXT_TOOLS: String = 'textTools';
-
-	private static inline final SPLIT: String = 'split';
-	private static inline final POP: String = 'pop';
-	private static inline final BEFORE: String = 'allBefore';
 	private static inline final AFTER_LAST: String = 'allAfterLast';
-	private static inline final PUBLIC_VISIBILITY: String = 'public';
-
-	/** The text the first part of a split is read with. */
-	private static inline final FIRST_PART: String = '0';
 
 	/** A cut utility takes the text and the delimiter. */
 	private static inline final CUT_PARAMS: Int = 2;
@@ -78,6 +67,17 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 	private static inline final MIN_QUOTED: Int = 3;
 
 	private static inline final QUOTE_WIDTH: Int = 1;
+
+	/** The option naming the project's text utility class. */
+	private static final OPTION_TEXT_TOOLS: String = 'textTools';
+
+	private static final SPLIT: String = 'split';
+	private static final POP: String = 'pop';
+	private static final BEFORE: String = 'allBefore';
+	private static final PUBLIC_VISIBILITY: String = 'public';
+
+	/** The text the first part of a split is read with. */
+	private static final FIRST_PART: String = '0';
 
 	/** The linter's per-file config resolver, or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

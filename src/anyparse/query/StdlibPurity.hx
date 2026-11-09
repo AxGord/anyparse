@@ -22,7 +22,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 final class StdlibPurity {
 
 	/** The one effect-free `String` method that is not transparent: it answers a FRESH, mutable array. */
-	private static inline final SPLIT_METHOD: String = 'split';
+	private static final SPLIT_METHOD: String = 'split';
 
 	/**
 	 * Simple `Type.method` names of stdlib STATIC functions that are REFERENTIALLY TRANSPARENT: no side effect, the same

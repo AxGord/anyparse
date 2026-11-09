@@ -60,29 +60,29 @@ using Lambda;
 @:nullSafety(Strict)
 final class FunctionValueTypes {
 
-	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
-	private static inline final INLINED: String = 'inlined';
-
-	/** The type of a class as a value (`Class<T>`). */
-	private static inline final CLASS_VALUE: String = 'Class';
-
-	/** The reflective member that runs a class value's constructor with the arguments an array hands it. */
-	private static inline final CONSTRUCTING: String = 'Type.createInstance';
-
-	/** The nullable wrapper: it unifies as what it wraps. */
-	private static inline final NULLABLE: String = 'Null';
-
-	/** The result type of a function that returns nothing. */
-	private static inline final VOID: String = 'Void';
-
 	/** How many typedefs are read through to a type before it counts as unread. */
 	private static inline final MAX_ALIASES: Int = 8;
 
+	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
+	private static final INLINED: String = 'inlined';
+
+	/** The type of a class as a value (`Class<T>`). */
+	private static final CLASS_VALUE: String = 'Class';
+
+	/** The reflective member that runs a class value's constructor with the arguments an array hands it. */
+	private static final CONSTRUCTING: String = 'Type.createInstance';
+
+	/** The nullable wrapper: it unifies as what it wraps. */
+	private static final NULLABLE: String = 'Null';
+
+	/** The result type of a function that returns nothing. */
+	private static final VOID: String = 'Void';
+
 	/** What the facts spell a type parameter with (`FactsTypeTree`). */
-	private static inline final PARAMETER: String = '$$';
+	private static final PARAMETER: String = '$$';
 
 	/** What a nested function's graph id holds (`FactsView.NESTED_MARK`): a lambda's or a local function's value is typed. */
-	private static inline final NESTED: String = '#';
+	private static final NESTED: String = '#';
 
 	/** The call accesses that may run an instance method a type declares (`CallFact.access`). */
 	private static final INVOKING: Array<String> = ['FInstance', 'FClosure', 'super'];

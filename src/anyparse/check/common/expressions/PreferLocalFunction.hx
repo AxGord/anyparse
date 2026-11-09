@@ -91,7 +91,7 @@ using StringTools;
 final class PreferLocalFunction extends RuleBase {
 
 	private static inline final RULE_ID: String = 'prefer-local-function';
-	private static inline final MSG: String = 'this function literal is bound to a local — declare it as a local function';
+	private static final MSG: String = 'this function literal is bound to a local — declare it as a local function';
 
 	public function new() {
 		super(

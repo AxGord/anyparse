@@ -16,7 +16,7 @@ final class LintScoreCommand implements CliCommand implements LanguageFree {
 	private static inline final UNLABELLED_LIMIT: Int = 20;
 
 	/** The least severity a score counts unless told otherwise: warnings and errors, the output a reader acts on. */
-	private static inline final DEFAULT_SEVERITY: String = 'warning';
+	private static final DEFAULT_SEVERITY: String = 'warning';
 
 	public function new() {}
 

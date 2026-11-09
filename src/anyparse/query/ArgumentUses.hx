@@ -31,10 +31,10 @@ using Lambda;
 final class ArgumentUses {
 
 	/** The access of a call of a static field (`CallFact.access`): the declared body is the one that runs. */
-	private static inline final STATIC_ACCESS: String = 'FStatic';
+	private static final STATIC_ACCESS: String = 'FStatic';
 
 	/** The access of a call of an instance method (`CallFact.access`): an override may run instead. */
-	private static inline final INSTANCE_ACCESS: String = 'FInstance';
+	private static final INSTANCE_ACCESS: String = 'FInstance';
 
 	/** Argument key -> the uses the value meets, or null when the facts do not answer; settled once. */
 	private final _settled: Map<String, Null<Array<ParamUse>>> = [];

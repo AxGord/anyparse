@@ -32,14 +32,15 @@ import anyparse.query.SymbolIndex;
 final class PreferSinglePass extends HaxeRule implements DefaultOff implements RiskyFix {
 
 	private static inline final RULE_ID: String = 'prefer-single-pass';
-	private static inline final FILTER: String = 'filter';
-	private static inline final MAP: String = 'map';
 
 	/** A call and its callee: `m(arg)` holds the callee and one argument. */
 	private static inline final CALL_WITH_ONE_ARGUMENT: Int = 2;
 
 	/** A lambda: its one parameter and its body. */
 	private static inline final LAMBDA_CHILD_COUNT: Int = 2;
+
+	private static final FILTER: String = 'filter';
+	private static final MAP: String = 'map';
 
 	public function new() {
 		super(RULE_ID, 'an Array method chain (filter.map, map.map, filter.filter, map.filter) that one pass can do', RuleCategory.Loops);

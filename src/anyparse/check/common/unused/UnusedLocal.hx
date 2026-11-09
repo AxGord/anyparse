@@ -154,7 +154,7 @@ final class UnusedLocal extends RuleBase implements VolatileMessage {
 	 * `redeclarationNote` and by `messageIdentity`, so the anchor cannot drift away from the
 	 * wording it points at.
 	 */
-	private static inline final REDECLARED_AT: String = ' — re-declared at ';
+	private static final REDECLARED_AT: String = ' — re-declared at ';
 
 	public function new() {
 		super('unused-local', 'local var/final declared but never referenced in its scope', RuleCategory.Unused);

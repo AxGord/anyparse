@@ -13,11 +13,11 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 class NodeShapeTest extends Test {
 
-	private static inline final EXPR_STMT: String = 'ExprStmt';
-	private static inline final ASSIGN: String = 'Assign';
-	private static inline final IDENT: String = 'IdentExpr';
-	private static inline final RETURN: String = 'ReturnStmt';
-	private static inline final FIELD_ACCESS: String = 'FieldAccess';
+	private static final EXPR_STMT: String = 'ExprStmt';
+	private static final ASSIGN: String = 'Assign';
+	private static final IDENT: String = 'IdentExpr';
+	private static final RETURN: String = 'ReturnStmt';
+	private static final FIELD_ACCESS: String = 'FieldAccess';
 
 	public function testAssignmentOfAnswersTheWrappedBinary(): Void {
 		final assign: QueryNode = new QueryNode(ASSIGN, null, [ident('x'), ident('e')]);

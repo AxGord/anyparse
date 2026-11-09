@@ -20,11 +20,11 @@ import haxe.macro.Context;
 @:nullSafety(Strict)
 final class CppLiteralGuard {
 
-	/** The characters that make a trigraph when they follow `??`. */
-	private static inline final TRIGRAPH_TAILS: String = "=/'()!<>-";
-
 	/** The first code past printable ASCII: DEL. */
 	private static inline final DEL: Int = 0x7F;
+
+	/** The characters that make a trigraph when they follow `??`. */
+	private static final TRIGRAPH_TAILS: String = "=/'()!<>-";
 
 	/**
 	 * The C++ string literal, quotes included, spelling `s` with every `?`, `\` and `"` escaped; null when `s` holds no

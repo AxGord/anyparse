@@ -59,31 +59,31 @@ using Lambda;
 final class FactsEscapes {
 
 	/** The access of a method read as a value (`FieldFact.access`, `CallFact.access`). */
-	private static inline final CLOSURE: String = 'FClosure';
+	private static final CLOSURE: String = 'FClosure';
 
 	/** The access of a field reached by name on a value of any type: untyped code (`FieldFact.access`, `CallFact.access`). */
-	private static inline final DYNAMIC_ACCESS: String = 'FDynamic';
+	private static final DYNAMIC_ACCESS: String = 'FDynamic';
 
 	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
-	private static inline final INLINED: String = 'inlined';
+	private static final INLINED: String = 'inlined';
 
 	/** The flow of an unchecked cast (`FlowFact.via`). */
-	private static inline final CAST: String = 'cast';
+	private static final CAST: String = 'cast';
 
 	/** The catch-all type: what it holds escaped already. */
-	private static inline final CATCH_ALL: String = 'Dynamic';
+	private static final CATCH_ALL: String = 'Dynamic';
 
 	/** The nullable wrapper: it holds what its argument does. */
-	private static inline final NULLABLE: String = 'Null';
+	private static final NULLABLE: String = 'Null';
 
 	/** The type of an enum as a value: its statics, and the values a reflective call makes of them. */
-	private static inline final ENUM_VALUE: String = 'Enum';
+	private static final ENUM_VALUE: String = 'Enum';
 
 	/** The type of a class as a value: its statics, and the instances a reflective call makes of it. */
-	private static inline final CLASS_VALUE: String = 'Class';
+	private static final CLASS_VALUE: String = 'Class';
 
 	/** The type of an abstract as a value: its statics, which its implementation class holds. */
-	private static inline final ABSTRACT_VALUE: String = 'Abstract';
+	private static final ABSTRACT_VALUE: String = 'Abstract';
 
 	/** The kinds of a typed type a class value may be of (`TypeFact.kind`): an abstract's implementation class holds its statics. */
 	private static final CLASS_KINDS: Array<String> = [FactKinds.CLASS, FactKinds.INTERFACE, FactKinds.IMPL];

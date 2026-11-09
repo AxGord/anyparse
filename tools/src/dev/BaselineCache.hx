@@ -22,7 +22,7 @@ final class BaselineCache {
 	public static inline final CACHE_VAR: String = 'SLICE_BASELINE_CACHE';
 
 	/** The record's file inside an entry; written last, so an entry that has it is complete. */
-	private static inline final RECORD: String = 'baseline.json';
+	private static final RECORD: String = 'baseline.json';
 
 	/** The cache the entries are kept in when the caller names none. */
 	public static inline function defaultCache(): String {

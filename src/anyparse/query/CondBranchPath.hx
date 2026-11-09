@@ -38,7 +38,7 @@ using Lambda;
 final class CondBranchPath {
 
 	/** What joins the conditions of a branch's chain (`CondFrame.condition`). */
-	private static inline final CHAIN_SEPARATOR: String = '|';
+	private static final CHAIN_SEPARATOR: String = '|';
 
 	/**
 	 * Replay `source`'s directives into a lookup: for each directive, its start offset and the

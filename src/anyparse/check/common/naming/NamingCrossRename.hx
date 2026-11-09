@@ -58,51 +58,52 @@ import anyparse.query.SymbolIndex;
 final class NamingCrossRename {
 
 	/** The run does not index the whole project. */
-	public static inline final NO_PROJECT: String =
-		'the cross-file rename arm needs the WHOLE project indexed (declared `resolutionRoots`, every one matched), and this run does not — a project file it never read would keep the old name';
+	public static final NO_PROJECT: String = 'the cross-file rename arm needs the WHOLE project indexed ('
+		+ 'declared `resolutionRoots`, every one matched), and this run does not — a project file it never read would keep the old name';
 
 	/** A class / interface / enum: its name exists at run time. */
-	public static inline final RUNTIME_TYPE: String =
-		'the type is a class, an interface or an enum, whose NAME exists at run time (`Type.getClassName`, `Type.resolveClass`, serialized data) — a rename can change behaviour no typecheck sees';
+	public static final RUNTIME_TYPE: String = 'the type is a class, an interface or an enum, whose NAME exists at run time ('
+		+ '`Type.getClassName`, `Type.resolveClass`, serialized data) — a rename can change behaviour no typecheck sees';
 
 	/** A module's main type. */
-	public static inline final MAIN_TYPE: String =
+	public static final MAIN_TYPE: String =
 		'the type is its module\'s MAIN type, so renaming it renames the module path — the file would have to be renamed with it';
 
 	/** A type carrying metadata a macro / framework may read. */
-	public static inline final TYPE_METADATA: String =
+	public static final TYPE_METADATA: String =
 		'the type carries metadata a macro, a framework or the runtime may resolve by the type\'s NAME';
 
 	/** A declaration only some builds see. */
-	public static inline final GUARDED: String =
+	public static final GUARDED: String =
 		'the declaration sits inside a conditional-compilation region, so other builds may declare the name differently';
 
 	/** A plain enum constructor. */
-	public static inline final ENUM_CONSTRUCTOR: String =
+	public static final ENUM_CONSTRUCTOR: String =
 		'the value is a constructor of a plain `enum`, whose name exists at run time (`Std.string`, serialization, `Type.enumConstructor`)';
 
 	/** An implicit enum-abstract value derived from its own name. */
-	public static inline final IMPLICIT_VALUE: String =
-		'the enum-abstract value has no initializer and its underlying type derives an implicit value from the NAME (`String`), so the rename would change the value';
+	public static final IMPLICIT_VALUE: String = 'the enum-abstract value has no initializer and its underlying type derives an implicit '
+		+ 'value from the NAME (`String`), so the rename would change the value';
 
 	/** A string spells the old name. */
-	public static inline final STRING_LITERAL: String =
-		'a string literal in the project names the declaration, or a runtime type path spells it — a lookup by NAME the rename cannot follow';
+	public static final STRING_LITERAL: String = 'a string literal in the project names the declaration, or a runtime type path spells it '
+		+ '— a lookup by NAME the rename cannot follow';
 
 	/** Another declaration carries the old name. */
-	public static inline final OLD_NAME_SHARED: String =
-		'another declaration in the resolution scope carries the same name, so an occurrence the rename leaves behind would bind to it instead of failing to compile';
+	public static final OLD_NAME_SHARED: String = 'another declaration in the resolution scope carries the same name, so an occurrence the '
+		+ 'rename leaves behind would bind to it instead of failing to compile';
 
 	/** The corrected name is already taken. */
-	public static inline final NEW_NAME_TAKEN: String =
-		'the corrected name is already declared, or already spelled in a project file, so the renamed declaration could capture a reference meant for something else';
+	public static final NEW_NAME_TAKEN: String = 'the corrected name is already declared, or already spelled in a project file, so the '
+		+ 'renamed declaration could capture a reference meant for something else';
 
 	/** The engine refused. */
-	public static inline final ENGINE_REFUSED: String =
-		'the `rename --scope` engine refused this rename (an ambiguous or unresolvable declaration, a name the type already declares, an unparsed `#if` region, or a rewrite that does not re-parse)';
+	public static final ENGINE_REFUSED: String = 'the `rename --scope` engine refused this rename ('
+		+ 'an ambiguous or unresolvable declaration, a name the type already declares, an unparsed '
+		+ '`#if` region, or a rewrite that does not re-parse)';
 
 	/** The declaration could not be located again. */
-	public static inline final UNRESOLVED: String = 'the declaration could not be resolved in the run\'s index, so no gate could be asked';
+	public static final UNRESOLVED: String = 'the declaration could not be resolved in the run\'s index, so no gate could be asked';
 
 	/** Whether `decl` is a declaration this arm owns: a type or an enum value the grammar did not mark rename-unsafe. */
 	public static inline function isCandidate(decl: NamedDecl): Bool {

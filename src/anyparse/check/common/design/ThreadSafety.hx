@@ -45,6 +45,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.MemberKinds;
 import anyparse.query.ReachAdmission;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.ds.ObjectMap;
 
@@ -115,14 +116,14 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	/** The main thread on a path through a `quietRoots` function: reached, but never reported. */
 	public static inline final CTX_QUIET: Int = 4;
 
-	/** Joins the ids of a subject naming several (the sinks of one call site, the two locks of an inversion), sorted. */
-	public static inline final SUBJECT_SEPARATOR: String = ' / ';
-
 	/** The hops a finding's text names of a chain; its data keeps them all. */
 	public static inline final CHAIN_CAP: Int = 8;
 
+	/** Joins the ids of a subject naming several (the sinks of one call site, the two locks of an inversion), sorted. */
+	public static final SUBJECT_SEPARATOR: String = ' / ';
+
 	/** The name of a program's entry point, which the runtime calls. */
-	public static inline final ENTRY_POINT: String = 'main';
+	public static final ENTRY_POINT: String = 'main';
 
 	private static inline final EVIDENCE_CAP: Int = 8;
 
@@ -412,7 +413,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	 * `parts` joined as a call chain, at most `cap` of them: the head says where the chain leaves its function, the
 	 * last two what it ends in.
 	 */
-	public static function elided(parts: Array<String>, cap: Int): String {
+	public static function elided(parts: Array<String>, cap: Int = CHAIN_CAP): String {
 		return (parts.length <= cap ? parts : parts.slice(0, cap - 2).concat(['...']).concat(parts.slice(-2))).join(' -> ');
 	}
 
@@ -438,7 +439,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	/** `ids` sorted: the order a subject or a chain names several ids in, whatever order the graph met them. */
 	public static function sortedIds(ids: Array<String>): Array<String> {
 		final sorted: Array<String> = ids.copy();
-		sorted.sort(Reflect.compare);
+		sorted.sort(Compare.compareString);
 		return sorted;
 	}
 
@@ -882,7 +883,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			final evidence: Array<String> = [];
 			for (escape in a.escapes) {
 				final raiser: Null<CallEdge> = escape.raiser;
-				final shown: String = raiser == null ? 'a throw' : elided(throws.chain(raiser), CHAIN_CAP);
+				final shown: String = raiser == null ? 'a throw' : elided(throws.chain(raiser));
 				if (!evidence.contains(shown)) evidence.push(shown);
 			}
 			final holder: String = a.edge.from;

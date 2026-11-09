@@ -29,19 +29,19 @@ final class BaseEngine {
 	public static inline final MAX_AGE_DAYS: Int = 7;
 
 	/** The engine's file name inside a cache entry. */
-	public static inline final ENGINE: String = 'apq.js';
-
-	/** The file holding the SHA-256 of the engine, written once the build succeeded. */
-	private static inline final CHECKSUM: String = 'apq.js.sha256';
-
-	/** The file naming the compiler that built the engine. */
-	private static inline final TOOLCHAIN: String = 'toolchain';
-
-	/** The build file of the engine alone, without the code-cache launcher the shared build adds. */
-	private static inline final HXML: String = 'bin/apq-js-common.hxml';
+	public static final ENGINE: String = 'apq.js';
 
 	private static inline final SECONDS_PER_DAY: Float = 86400;
 	private static inline final MS_PER_SECOND: Float = 1000;
+
+	/** The file holding the SHA-256 of the engine, written once the build succeeded. */
+	private static final CHECKSUM: String = 'apq.js.sha256';
+
+	/** The file naming the compiler that built the engine. */
+	private static final TOOLCHAIN: String = 'toolchain';
+
+	/** The build file of the engine alone, without the code-cache launcher the shared build adds. */
+	private static final HXML: String = 'bin/apq-js-common.hxml';
 
 	public static inline function remove(path: String): Void {
 		js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", path);

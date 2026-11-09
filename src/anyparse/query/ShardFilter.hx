@@ -30,12 +30,12 @@ typedef ShardToken = {
 final class ShardFilter {
 
 	/** Separates a token's class substring from its slice. */
-	private static inline final SLICE_MARK: String = '#';
+	private static final SLICE_MARK: String = '#';
 
-	private static inline final SLICE_SEPARATOR: String = '/';
+	private static final SLICE_SEPARATOR: String = '/';
 
 	/** Leads a token that names tests rather than a class: `test:<substring of fq.Class.method>`. */
-	private static inline final TEST_MARK: String = 'test:';
+	private static final TEST_MARK: String = 'test:';
 
 	/** The token running slice `part` of `parts` of `cls`, or `cls` itself for a whole class. */
 	public static function render(cls: String, part: Int, parts: Int): String {

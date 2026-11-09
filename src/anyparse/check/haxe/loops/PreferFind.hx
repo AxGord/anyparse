@@ -89,10 +89,10 @@ final class PreferFind extends HaxeRule {
 	private static inline final EXCERPT_MAX: Int = 40;
 
 	/** The module whose `find` the rewrite calls — the `using` the fix inserts when the file lacks it. */
-	private static inline final LAMBDA_MODULE: String = 'Lambda';
+	private static final LAMBDA_MODULE: String = 'Lambda';
 
 	/** The extension method the rewrite emits — the name a second `using` must be proven not to supply. */
-	private static inline final FIND_METHOD: String = 'find';
+	private static final FIND_METHOD: String = 'find';
 
 	public function new() {
 		super(

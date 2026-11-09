@@ -141,12 +141,12 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		+ 'function PARAMETER from its ascriptions; this `Dynamic` is a field, a return type, a type argument, a rest parameter, or a '
 		+ 'lambda / local-function parameter';
 
-	/** The fix ledger's sentence for a local the fixer looked at and could not narrow. */
-	private static inline final DECLINE_NOT_PROVEN: String = 'a local, but its uses prove no single plain nominal type to narrow it to';
-
 	/** The fix ledger's sentence for a parameter the ascription arm looked at and refused. */
 	private static inline final DECLINE_PARAM_NOT_PINNED: String = 'a parameter, but its reads are not all ascriptions to one '
 		+ 'conversion-free type, or its method can be overridden';
+
+	/** The fix ledger's sentence for a local the fixer looked at and could not narrow. */
+	private static final DECLINE_NOT_PROVEN: String = 'a local, but its uses prove no single plain nominal type to narrow it to';
 
 	/** Call-path roots that mark a local as a Reflect/Json boundary transit — reported distinctly. */
 	private static final DEFAULT_BOUNDARY_CALLS: Array<String> = ['Reflect', 'Json'];

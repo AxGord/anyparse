@@ -18,10 +18,10 @@ using Lambda;
 final class MoveMemberReceivers {
 
 	/** `receiverVerdict`: the access is the moved member's and goes through the via field. */
-	private static inline final ROUTE: String = 'route';
+	private static final ROUTE: String = 'route';
 
 	/** `receiverVerdict`: the access is provably another member's, or a static one. */
-	private static inline final LEAVE: String = 'leave';
+	private static final LEAVE: String = 'leave';
 
 	/**
 	 * Every receiver-qualified access to a moved INSTANCE member across the scope — `g.x()` where `g` holds the source

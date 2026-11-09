@@ -19,17 +19,17 @@ final class Decision {
 
 	public static inline final USAGE: String = 'usage: dev decision --slice <ID> <text> [--repo <dir>]';
 
-	/** The ledger, relative to the tree. */
-	public static inline final LEDGER: String = 'docs/decisions.md';
-
 	/** The longest text a line may carry: one sentence, what was tried and why not; the detail is the slice's commit. */
 	public static inline final MAX_TEXT: Int = 300;
 
+	/** The ledger, relative to the tree. */
+	public static final LEDGER: String = 'docs/decisions.md';
+
 	/** What separates a line's text from the slice that decided it. */
-	private static inline final ARROW: String = ' → ';
+	private static final ARROW: String = ' → ';
 
 	/** The line that ends the ledger's header; the lines are below it. */
-	private static inline final HEADER_END: String = '---';
+	private static final HEADER_END: String = '---';
 
 	/** A slice id as the queue spells it: `PROC-1`, `FB-2b`. */
 	private static final SLICE_ID: EReg = ~/^[A-Z][A-Za-z0-9]*(-[A-Za-z0-9]+)*$/;

@@ -61,13 +61,13 @@ using StringTools;
 final class IfFalseDeadCode extends RuleBase {
 
 	/** ASCII-only note appended when a non-trivial dead body withholds the autofix. */
-	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
+	private static final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
 
 	/** Base message for a flagged `#if false` region — always dead code. */
-	private static inline final FALSE_MESSAGE: String = 'dead `#if false` region — no compilation target ever includes it';
+	private static final FALSE_MESSAGE: String = 'dead `#if false` region — no compilation target ever includes it';
 
 	/** Base message for a flagged `#if true` region — the guard is always redundant. */
-	private static inline final TRUE_MESSAGE: String = 'redundant `#if true` region — every compilation target already includes it';
+	private static final TRUE_MESSAGE: String = 'redundant `#if true` region — every compilation target already includes it';
 
 	public function new() {
 		super(

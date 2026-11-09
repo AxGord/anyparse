@@ -24,16 +24,16 @@ final class HaxePropertyStorage {
 	 * The modifier a property with no storage of its own carries: its clause names no storage slot
 	 * (`PropertyClause.storageless`) and its leading run proves no `@:isVar` grants one.
 	 */
-	public static inline final STORAGELESS_MOD: String = 'storageless';
+	public static final STORAGELESS_MOD: String = 'storageless';
 
 	/** The modifier a storage-less property ALSO carries when its write accessor is `never`. */
-	public static inline final READ_ONLY_MOD: String = 'readOnly';
+	public static final READ_ONLY_MOD: String = 'readOnly';
 
 	/** The annotation that grants a property physical storage whatever its accessors say. */
-	private static inline final IS_VAR_META: String = '@:isVar';
+	private static final IS_VAR_META: String = '@:isVar';
 
 	/** The node kind of a conditional-compilation region (`#if` … `#end`). */
-	private static inline final CONDITIONAL_KIND: String = 'Conditional';
+	private static final CONDITIONAL_KIND: String = 'Conditional';
 
 	/**
 	 * The storage modifiers of the declaration `node` of `category`. Only a FIELD earns any, and only as the `head` of

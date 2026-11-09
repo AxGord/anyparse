@@ -45,13 +45,13 @@ using Lambda;
 final class HxInterpProjection {
 
 	/** The query-tree kind of a single-quoted, interpolation-capable string literal. */
-	private static inline final STRING_KIND: String = 'SingleStringExpr';
+	private static final STRING_KIND: String = 'SingleStringExpr';
 
 	/** The query-tree kind of one plain-text fragment of such a literal. */
-	private static inline final TEXT_KIND: String = 'Literal';
+	private static final TEXT_KIND: String = 'Literal';
 
 	/** The query-tree kind of a `${ … }` interpolation block — the one segment kind that owns a subtree. */
-	private static inline final BLOCK_KIND: String = 'Block';
+	private static final BLOCK_KIND: String = 'Block';
 
 	/**
 	 * Rewrite every `SingleStringExpr` in `tree` that hides escape-spelled interpolation.

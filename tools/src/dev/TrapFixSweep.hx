@@ -1,9 +1,6 @@
 package dev;
 
 import anyparse.grammar.json.JValue;
-import dev.SweepCatalog;
-import dev.SweepProbe;
-import dev.SweepTrap;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.RawJson;
@@ -29,16 +26,16 @@ final class TrapFixSweep {
 		'usage: dev trap-fix-sweep [--rule <id>]... [--catalog <json>] — every probe formatted and fixed under its own compilerOracle';
 
 	/** The verdict of a probe the formatter alone changed: it no longer runs, or prints otherwise. */
-	public static inline final FORMAT_CHANGED: String = 'FORMAT-CHANGED';
+	public static final FORMAT_CHANGED: String = 'FORMAT-CHANGED';
 
 	/** The build each probe's `apq.json` names as its `compilerOracle`: the probe's main class, typechecked. */
-	private static inline final ORACLE_HXML: String = 'build.hxml';
+	private static final ORACLE_HXML: String = 'build.hxml';
 
 	/** The catalog swept when the caller names none, from the tree's root. */
-	private static inline final DEFAULT_CATALOG: String = 'test/traps/resolve.json';
+	private static final DEFAULT_CATALOG: String = 'test/traps/resolve.json';
 
 	/** The flag naming one rule to sweep, on this command's line and on the `lint` it runs. */
-	private static inline final RULE_FLAG: String = '--rule';
+	private static final RULE_FLAG: String = '--rule';
 
 	/** Whether a verdict fails the sweep: a format or a fix that changed what a program means, or an engine run that failed. */
 	public static inline function fails(verdict: String): Bool {

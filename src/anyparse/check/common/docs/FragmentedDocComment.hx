@@ -34,14 +34,13 @@ final class FragmentedDocComment extends RuleBase {
 	 * declarations invisible to `apq lint-diff`; the mask is refused here rather than in the
 	 * consumer.
 	 */
-	private static inline final BLOCK_COUNT_LEAD: String = 'documented by ';
+	private static final BLOCK_COUNT_LEAD: String = 'documented by ';
 
 	/**
 	 * Why two blocks that each open a doc are not merged: the compiler reads only the last, and an earlier one may be
 	 * the orphan of a member that moved, so which text this declaration keeps is the author's call.
 	 */
-	private static inline final TWO_DOCS: String =
-		'several blocks each open a doc of their own — an earlier one may belong to another member';
+	private static final TWO_DOCS: String = 'several blocks each open a doc of their own — an earlier one may belong to another member';
 
 	public function new() {
 		super('fragmented-doc-comment', 'a declaration documented by several adjacent comment blocks instead of one', RuleCategory.Docs);

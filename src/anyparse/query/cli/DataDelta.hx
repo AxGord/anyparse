@@ -34,19 +34,19 @@ final class DataDelta {
 	private static inline final DIGEST_MIN: Int = 32;
 
 	private static inline final DIGEST_KEPT: Int = 12;
-	private static inline final CUT: String = '…';
+	private static final CUT: String = '…';
 
 	/** The change a document whose values all agree still shows when its keys sit in another order. */
-	private static inline final KEY_ORDER: String = '(key order)';
+	private static final KEY_ORDER: String = '(key order)';
 
 	/** The path standing for the whole document. */
-	private static inline final ROOT: String = '.';
+	private static final ROOT: String = '.';
 
 	/** The suffix of the row for an array whose elements moved. */
-	private static inline final ARRAY_ORDER: String = '(order)';
+	private static final ARRAY_ORDER: String = '(order)';
 
 	/** The suffix of the row for a key whose entries were repeated a different number of times. */
-	private static inline final DUPLICATE_KEY: String = '(duplicate key)';
+	private static final DUPLICATE_KEY: String = '(duplicate key)';
 
 	/** Whether the grammar `shape` describes reads a document as a value tree. */
 	public static inline function reads(shape: RefShape): Bool {

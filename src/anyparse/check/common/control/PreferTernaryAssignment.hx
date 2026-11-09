@@ -90,7 +90,7 @@ import anyparse.query.SymbolIndex;
 final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
 
 	/** The finding message for the decl arm (a declaration and the one-branch `if` after it). */
-	private static inline final DECL_MESSAGE: String =
+	private static final DECL_MESSAGE: String =
 		'this declaration and the else-less if assignment after it can be a single ternary initializer';
 
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */

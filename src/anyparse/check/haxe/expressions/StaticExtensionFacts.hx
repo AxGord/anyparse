@@ -23,24 +23,23 @@ using StringTools;
 @:nullSafety(Strict)
 final class StaticExtensionFacts {
 
-	/** A type's own static extensions: `x.method()` resolves through them BEFORE any `using` of the file. */
-	private static inline final USING_META: String = ':using';
-
-
-	/** The static access the facts record for `Module.method(…)`. */
-	private static inline final STATIC_ACCESS: String = 'FStatic';
-
-	/** The access the facts record for a call the compiler spliced in (`inline`). */
-	private static inline final INLINED_ACCESS: String = 'inlined';
-
 	/** A bound on a typedef chain, which a structure-typed alias never ends. */
 	private static inline final MAX_ALIAS_HOPS: Int = 16;
 
-	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
-	private static inline final NO_USING_META: String = ':noUsing';
-
 	/** The one type that dispatches nothing statically. */
 	private static inline final DYNAMIC: String = 'Dynamic';
+
+	/** A type's own static extensions: `x.method()` resolves through them BEFORE any `using` of the file. */
+	private static final USING_META: String = ':using';
+
+	/** The static access the facts record for `Module.method(…)`. */
+	private static final STATIC_ACCESS: String = 'FStatic';
+
+	/** The access the facts record for a call the compiler spliced in (`inline`). */
+	private static final INLINED_ACCESS: String = 'inlined';
+
+	/** The annotation that keeps a static out of `using` (`TypedFactsProbe` writes metadata without its `@`). */
+	private static final NO_USING_META: String = ':noUsing';
 
 	/** A type path with no arguments: a nominal type the table can hold. */
 	private static final NOMINAL: EReg = ~/^[A-Za-z_][A-Za-z0-9_.]*$/;

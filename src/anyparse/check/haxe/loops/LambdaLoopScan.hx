@@ -59,33 +59,33 @@ final class LambdaLoopScan {
 	/** The flag's ONE write: the loop's own assignment, and nothing else in the enclosing statement list. */
 	private static inline final FLAG_WRITES: Int = 1;
 
-	/** The keyword the folded declaration is emitted with — after the fold the binding is written once. */
-	private static inline final FINAL_KEYWORD: String = 'final';
-
 	/** Cap on an excerpt's length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
-
-	/** The module whose `exists` / `foreach` / `count` the rewrite calls — the `using` the fix inserts when the file lacks it. */
-	private static inline final LAMBDA_MODULE: String = 'Lambda';
 
 	/** The atomic group binding an INSERTED `using Lambda;` to every call that needs it (see `edits`). */
 	private static inline final USING_GROUP: Int = 0;
 
+	/** The keyword the folded declaration is emitted with — after the fold the binding is written once. */
+	private static final FINAL_KEYWORD: String = 'final';
+
+	/** The module whose `exists` / `foreach` / `count` the rewrite calls — the `using` the fix inserts when the file lacks it. */
+	private static final LAMBDA_MODULE: String = 'Lambda';
+
 	/** The boolean literal's source text for `true` — the engine reads the VALUE off the span. */
-	private static inline final TRUE_LITERAL: String = 'true';
+	private static final TRUE_LITERAL: String = 'true';
 
 	/** The boolean literal's source text for `false`; any other text makes the literal unreadable and the site skipped. */
-	private static inline final FALSE_LITERAL: String = 'false';
+	private static final FALSE_LITERAL: String = 'false';
 
 	/**
 	 * The nominal a loop may iterate and no `Lambda` call accepts: `for` takes an `Iterator`, the
 	 * `Iterable<A>` parameter does not (`Iterator<Int> has no field count`). The gate is `provenIterator`,
 	 * which proves an iterator STRUCTURALLY; this name is only its fallback when no index is available.
 	 */
-	private static inline final ITERATOR_TYPE_NAME: String = 'Iterator';
+	private static final ITERATOR_TYPE_NAME: String = 'Iterator';
 
 	/** The only annotation a counter may carry: the fold's value is `Lambda.count`'s `Int`. */
-	private static inline final COUNTER_TYPE_NAME: String = 'Int';
+	private static final COUNTER_TYPE_NAME: String = 'Int';
 
 	/**
 	 * The nominal types a CALL iterable may resolve to for the rewrite to compile — `Lambda`'s

@@ -14,6 +14,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Compare;
 
 using StringTools;
 
@@ -42,17 +43,14 @@ using StringTools;
 final class ArgumentValues {
 
 	public static inline final UNKNOWN: String = '?';
-	public static inline final TRUE: String = 't';
 	public static inline final FALSE: String = 'f';
+	public static final TRUE: String = 't';
 
 	/** A parameter holding `null`. */
-	public static inline final NULL: String = 'n';
+	public static final NULL: String = 'n';
 
 	/** A parameter holding a value that is never null, of no known `Bool` or string value. */
-	public static inline final NON_NULL: String = 'v';
-
-	/** The prefix of the atom of a known string: `s:` and the string. */
-	private static inline final STRING_ATOM: String = 's:';
+	public static final NON_NULL: String = 'v';
 
 	/** The code of the first character spelling a value of several atoms, or a string's (`spell`): the private-use plane. */
 	private static inline final SET_BASE: Int = 0xE000;
@@ -62,6 +60,9 @@ final class ArgumentValues {
 
 	/** The lowest such code. */
 	private static inline final PRINTABLE_FIRST: Int = 0x20;
+
+	/** The prefix of the atom of a known string: `s:` and the string. */
+	private static final STRING_ATOM: String = 's:';
 
 	/** Function id -> the names of its tracked parameters, in declaration order. */
 	private final _tracked: Map<String, Array<String>> = [];
@@ -294,7 +295,7 @@ final class ArgumentValues {
 		}
 		if (kept.length == 0) return UNKNOWN;
 		if (kept.length == 1 && stringOf(kept[0]) == null) return kept[0];
-		kept.sort(Reflect.compare);
+		kept.sort(Compare.compareString);
 		final key: String = kept.join('\n');
 		final known: Null<String> = _setChars[key];
 		if (known != null) return known;

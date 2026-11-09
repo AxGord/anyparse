@@ -120,7 +120,7 @@ using StringTools;
 final class SplitVarDeclaration extends RuleBase {
 
 	/** The characters a declaration keyword may be built from -- lowercase ASCII only. */
-	private static inline final KEYWORD_LETTERS: String = 'abcdefghijklmnopqrstuvwxyz';
+	private static final KEYWORD_LETTERS: String = 'abcdefghijklmnopqrstuvwxyz';
 
 	public function new() {
 		super(

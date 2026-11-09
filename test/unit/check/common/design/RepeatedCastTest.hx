@@ -10,7 +10,7 @@ import anyparse.query.CanonicalEdit;
  */
 class RepeatedCastTest extends Test {
 
-	private static inline final CHECKED: String =
+	private static final CHECKED: String =
 		'class C { function m(o:Dynamic, c:Int) { cast(o, Bubble).color = c; cast(o, Bubble).redraw(); } }';
 
 	public function testCheckedCastRepeatedTwiceIsBoundOnce(): Void {

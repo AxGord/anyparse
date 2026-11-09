@@ -52,14 +52,14 @@ final class WriterTriviaStarDispatch {
 	/** How many knobs `@:fmt(interMemberBlankLines(...))` names: between vars, between functions, after vars. */
 	private static inline final INTER_MEMBER_KNOBS: Int = 3;
 
-	/** The `@:fmt` flag that subdivides a member Star's kinds into static and instance. */
-	private static inline final STATIC_SUBDIVISION: String = 'staticVarSubdivision';
-
 	/** The arguments of `@:fmt(staticVarSubdivision(...))` before its knobs: modifier field, static ctor. */
 	private static inline final STATIC_SUBDIV_HEAD_ARGS: Int = 2;
 
 	/** How many knobs `@:fmt(staticVarSubdivision(...))` names: after static vars, between static functions. */
 	private static inline final STATIC_SUBDIV_KNOBS: Int = 2;
+
+	/** The `@:fmt` flag that subdivides a member Star's kinds into static and instance. */
+	private static final STATIC_SUBDIVISION: String = 'staticVarSubdivision';
 
 	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`

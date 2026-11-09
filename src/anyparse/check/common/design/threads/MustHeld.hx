@@ -30,10 +30,10 @@ using StringTools;
 final class MustHeld {
 
 	/** The object of a static lock: one however it is reached. */
-	public static inline final STATIC_OBJECT: String = 'static';
+	public static final STATIC_OBJECT: String = 'static';
 
 	/** The object of a lock of the object the function runs on. */
-	public static inline final SELF_OBJECT: String = 'this';
+	public static final SELF_OBJECT: String = 'this';
 
 	/** Joins a must-held lock and the object it is held on. */
 	private static inline final ON: String = '@';

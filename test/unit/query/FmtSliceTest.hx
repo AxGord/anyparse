@@ -33,7 +33,7 @@ class FmtSliceTest extends Test {
 	 * class body, single-line members. The writer reflows all of it, so
 	 * `fmt` output differs from the input on every target's default options.
 	 */
-	private static inline final NON_CANONICAL: String = 'package;\nclass C{var x:Int=1;function f(){return x;}}\n';
+	private static final NON_CANONICAL: String = 'package;\nclass C{var x:Int=1;function f(){return x;}}\n';
 
 	#if (sys || nodejs)
 	private static var counter: Int = 0;

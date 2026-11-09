@@ -24,11 +24,11 @@ using StringTools;
 @:access(anyparse.check.common.loops.PreferComprehension)
 final class ComprehensionFills {
 
-	/** The type name whose index write appends — the one container an index fill is admitted for. */
-	private static inline final ARRAY_HEAD: String = 'Array';
-
 	/** A nested build body is exactly [inner declaration, fill loop, outer push]. */
 	private static inline final NESTED_BODY_LENGTH: Int = 3;
+
+	/** The type name whose index write appends — the one container an index fill is admitted for. */
+	private static final ARRAY_HEAD: String = 'Array';
 
 	/**
 	 * The comprehension text of the whole loop `loop` building `name`, declared with `annotation`: an index

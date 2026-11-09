@@ -46,10 +46,10 @@ import anyparse.runtime.Span;
 final class HxArrowParamProjection {
 
 	/** The query-tree kind of the bare `arg -> body` lambda — `HxExpr.ThinArrow`, a Pratt infix ctor. */
-	private static inline final ARROW_KIND: String = 'ThinArrow';
+	private static final ARROW_KIND: String = 'ThinArrow';
 
 	/** The kind the parameter arrives as: an ordinary identifier reference. */
-	private static inline final IDENT_KIND: String = 'IdentExpr';
+	private static final IDENT_KIND: String = 'IdentExpr';
 
 	/**
 	 * The kind it leaves as — `HxLambdaParam.Required`, the very ctor the parenthesised
@@ -57,7 +57,7 @@ final class HxArrowParamProjection {
 	 * own is what makes the two spellings indistinguishable to every consumer, which is the
 	 * whole point: `Required` is already in `DECL_HOST_KINDS` and in `RefShape.paramKinds`.
 	 */
-	private static inline final PARAM_KIND: String = 'Required';
+	private static final PARAM_KIND: String = 'Required';
 
 	/**
 	 * The annotation kinds this pass refuses to descend into — `HaxeQueryPlugin.metaShape`'s

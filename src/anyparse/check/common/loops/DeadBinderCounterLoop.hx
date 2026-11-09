@@ -86,7 +86,7 @@ import anyparse.check.scan.UsingScan;
 final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 
 	/** The element-count member of a container that has one. */
-	public static inline final LENGTH_MEMBER: String = 'length';
+	public static final LENGTH_MEMBER: String = 'length';
 
 	/**
 	 * Container nominals whose element count is a plain `length` member — no `Lambda` needed.
@@ -105,20 +105,20 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 	/** This check's stable id, spelled once. */
 	private static inline final RULE_ID: String = 'dead-binder-counter-loop';
 
-	/** The static-extension module supplying `count`. */
-	private static inline final LAMBDA_MODULE: String = 'Lambda';
-
-	/** The `Lambda` method counting an `Iterable`'s elements. */
-	private static inline final COUNT_METHOD: String = 'count';
-
-	/** The nominal a range binder must not provably differ from. */
-	private static inline final INT_TYPE: String = 'Int';
-
 	/** Minimum body statements: at least one real statement plus the trailing `i++`. */
 	private static inline final MIN_BODY_STATEMENTS: Int = 2;
 
 	/** The trailing `i++` is the counter's only write. */
 	private static inline final COUNTER_WRITES: Int = 1;
+
+	/** The static-extension module supplying `count`. */
+	private static final LAMBDA_MODULE: String = 'Lambda';
+
+	/** The `Lambda` method counting an `Iterable`'s elements. */
+	private static final COUNT_METHOD: String = 'count';
+
+	/** The nominal a range binder must not provably differ from. */
+	private static final INT_TYPE: String = 'Int';
 
 	public function new() {
 		super(

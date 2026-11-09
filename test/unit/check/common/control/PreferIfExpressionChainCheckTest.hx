@@ -17,51 +17,59 @@ import anyparse.query.CanonicalEdit;
 class PreferIfExpressionChainCheckTest extends Test {
 
 	/** The client `StoreBase` move comparator after `prefer-lambda-expression-body` collapsed its block (anonymized). */
-	private static inline final RW_TERNARY_COMPARATOR: String =
-		'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0);\n\t}\n}';
+	private static final RW_TERNARY_COMPARATOR: String = 'class C {\n\tfunction f():Void {\n'
+		+ '\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) '
+		+ '-> a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0);\n\t}\n}';
 
 	/** client `MirrorRebind.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
-	private static inline final RW_RELINK_DECISION: String =
-		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
+	private static final RW_RELINK_DECISION: String = 'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag '
+		+ '< 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // '
+		+ 'already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == '
+		+ 'QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
 
 	/** A ternary nested in the THEN arm — the shape inversion reaches, silent before it. */
-	private static inline final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
+	private static final THEN_NESTED: String = 'class C {\n\tfunction f():Int {\n\t\treturn a ? b ? 1 : 2 : 3;\n\t}\n}';
 
 	/** client `ClockInput.get_hours` (anonymized) — a null guard duplicated into the conjunction, held by short-circuiting. */
-	private static inline final RW_NULL_GUARDED_ACCESSOR: String =
+	private static final RW_NULL_GUARDED_ACCESSOR: String =
 		"class C {\n\tfunction f():String {\n\t\treturn sel != null ? sel.data.data == -1 ? 'N/A' : sel.data.text : '';\n\t}\n}";
 
 	/** A ternary chain as the value of a `case` arm — the shape the client's `getPickerKind` writes five times over. */
-	private static inline final CASE_ARM_CHAIN: String =
+	private static final CASE_ARM_CHAIN: String =
 		'class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1:\n\t\t\t\ta ? 1 : b ? 2 : 3;\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 
 	/** A three-value chain whose HEAD is a boolean-literal ternary — claimed by `simplify-boolean-ternary`, not here. */
-	private static inline final BOOL_REDUCIBLE_CHAIN_HEAD: String =
+	private static final BOOL_REDUCIBLE_CHAIN_HEAD: String =
 		'class C {\n\tfunction f(a:Bool, b:Bool, c:Bool, d:Bool):Bool {\n\t\treturn a ? false : b ? c : d;\n\t}\n}';
 
 	/** The same chain with no boolean literal anywhere — the control the deferral must not touch. */
-	private static inline final NON_BOOLEAN_CHAIN_HEAD: String =
+	private static final NON_BOOLEAN_CHAIN_HEAD: String =
 		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int):Int {\n\t\treturn a ? 0 : b ? c : d;\n\t}\n}';
 
 	/** The claimed ternary is a RUNG, not the head — the rewrite consumes it just the same. */
-	private static inline final BOOL_REDUCIBLE_CHAIN_RUNG: String =
+	private static final BOOL_REDUCIBLE_CHAIN_RUNG: String =
 		'class C {\n\tfunction f(a:Bool, b:Bool, x:Int, y:Int, c:Int, d:Int):Bool {\n\t\treturn a ? x == y : b ? false : c == d;\n\t}\n}';
 
 	/** The claimed ternary is in the head's THEN arm — off the else-spine, but the INVERSION folds it in. */
-	private static inline final BOOL_REDUCIBLE_FOLDED_RUNG: String =
+	private static final BOOL_REDUCIBLE_FOLDED_RUNG: String =
 		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int, e:Bool):Bool {\n\t\treturn a ? b ? false : c == d : e;\n\t}\n}';
 
 	/** The same nested ternary in a rung the inversion never reaches — copied verbatim, so its finding survives. */
-	private static inline final BOOL_REDUCIBLE_UNFOLDED_RUNG: String =
-		'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int, g:Bool, e:Int, h:Int):Dynamic {\n\t\treturn a ? (b ? false : c == d) : g ? e : h;\n\t}\n}';
+	private static final BOOL_REDUCIBLE_UNFOLDED_RUNG: String = 'class C {\n\tfunction f(a:Bool, b:Bool, c:Int, d:Int, g:Bool, e:Int, '
+		+ 'h:Int):Dynamic {\n\t\treturn a ? (b ? false : c == d) : g ? e : h;\n\t}\n}';
 
 	/** anyparse's own `ShardPlan.compareEntries`: an if-chain the author wrote, whose LAST rung value is a ternary. */
-	private static inline final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String =
-		'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
+	private static final CANONICAL_CHAIN_WITH_TERNARY_RUNG_VALUE: String = 'class C {\n\tfunction f(a:Entry, b:Entry):Int {\n'
+		+ '\t\treturn if (a.sticky != b.sticky)\n\t\t\ta.sticky ? -1 : 1\n'
+		+ '\t\telse if (a.weight != b.weight)\n\t\t\ta.weight > b.weight ? -1 : 1\n'
+		+ '\t\telse\n\t\t\tcompareNames(a.cls, b.cls);\n\t}\n}';
 
 	/** The client `StoreBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
-	private static inline final RW_IF_CHAIN_COMPARATOR: String =
-		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
+	private static final RW_IF_CHAIN_COMPARATOR: String = 'class C {\n\tfunction f():Void {\n'
+		+ '\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif ('
+		+ 'a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n'
+		+ '\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, '
+		+ 'b.nodeName)\n\t\t);\n\t}\n}';
 
 	public function testTernaryChainFlagged(): Void {
 		final vs: Array<Violation> = violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : b ? 2 : 3;\n\t}\n}');

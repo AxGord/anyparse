@@ -30,19 +30,19 @@ using StringTools;
 final class JsonProjection {
 
 	/** The synthetic root kind. */
-	public static inline final DOCUMENT: String = 'Document';
+	public static final DOCUMENT: String = 'Document';
 
 	/** `{ … }`. */
-	public static inline final OBJECT: String = 'JObject';
+	public static final OBJECT: String = 'JObject';
 
 	/** One `"key": value` entry of an object (`JEntry`'s `@:spanned` kind). */
-	public static inline final MEMBER: String = 'Member';
+	public static final MEMBER: String = 'Member';
 
 	/** `[ … ]`. */
-	public static inline final ARRAY: String = 'JArray';
+	public static final ARRAY: String = 'JArray';
 
 	/** A string value. */
-	public static inline final STRING: String = 'JString';
+	public static final STRING: String = 'JString';
 
 	/** Is `node` a container — a `JObject` or a `JArray`? */
 	public static inline function isContainer(node: QueryNode): Bool {

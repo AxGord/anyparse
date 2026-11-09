@@ -441,9 +441,9 @@ class ThreadSafetyRootCauseTest extends Test {
 
 	#if (sys || nodejs)
 	/** What a hold turned onto another's finding adds when that finding ends info. */
-	private static inline final NAMED_INFO: String = ' — that finding is itself info and says where its work is reported';
+	private static final NAMED_INFO: String = ' — that finding is itself info and says where its work is reported';
 
-	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
+	private static final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 	private static inline final DISK: String = 'class Disk { public static function read(p:String):Void {}'
 		+ ' public static function stat(p:String):Void {} public static function list(p:String):Void {} }';
 

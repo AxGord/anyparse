@@ -21,14 +21,14 @@ import haxe.Exception;
 final class RuleDeclaration {
 
 	/** The `prefer-api-idiom` option holding the idiom list. */
-	private static inline final IDIOMS_KEY: String = 'idioms';
+	private static final IDIOMS_KEY: String = 'idioms';
 
-	private static inline final EVENT_BASE_KEY: String = 'eventBase';
-	private static inline final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
-	private static inline final LISTENER_METHODS_KEY: String = 'listenerMethods';
+	private static final EVENT_BASE_KEY: String = 'eventBase';
+	private static final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
+	private static final LISTENER_METHODS_KEY: String = 'listenerMethods';
 
 	/** The key of a mutation-arm registry's records. */
-	private static inline final ARMS_KEY: String = 'arms';
+	private static final ARMS_KEY: String = 'arms';
 
 	/** The keys an idiom entry may carry. */
 	private static final ENTRY_KEYS: Array<String> = ['type', 'fields', 'method', 'copy', 'subtypes'];

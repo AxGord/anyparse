@@ -19,7 +19,7 @@ using Lambda;
 @:nullSafety(Strict)
 final class XconfigFmtTest extends Test {
 
-	private static inline final SUMMARY: String = 'apq fmt --list: 0 of 2 file(s) would be rewritten';
+	private static final SUMMARY: String = 'apq fmt --list: 0 of 2 file(s) would be rewritten';
 
 	/** A filed set for the stand's own contract: the real one holds whatever the writer leaves unsettled today, even nothing. */
 	private static final FILED: Array<String> = ['src/x/Filed.hx', 'src/x/Other.hx'];

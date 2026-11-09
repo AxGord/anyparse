@@ -18,10 +18,10 @@ using Lambda;
 @:nullSafety(Strict)
 final class EditJournal {
 
-	public static inline final UNMAPPED_NO_HISTORY: String = 'the run rewrote this file along a path whose edits it did not record';
-	public static inline final UNMAPPED_REWRITTEN: String =
+	public static final UNMAPPED_NO_HISTORY: String = 'the run rewrote this file along a path whose edits it did not record';
+	public static final UNMAPPED_REWRITTEN: String =
 		"the run rewrote or moved the declaration's own text after the compiler typed it, so no fact names it";
-	public static inline final UNMAPPED_AMBIGUOUS: String = 'the run recorded histories of this file that place the declaration apart';
+	public static final UNMAPPED_AMBIGUOUS: String = 'the run recorded histories of this file that place the declaration apart';
 
 	/** How many distinct histories between two texts are compared before the answer is refused. */
 	private static inline final MAX_PATHS: Int = 64;

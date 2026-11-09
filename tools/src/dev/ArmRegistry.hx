@@ -19,16 +19,16 @@ using Lambda;
 final class ArmRegistry {
 
 	/** The registry, from the tree's root: one document per package, named after it. */
-	public static inline final DIRECTORY: String = 'test/testkit/arms';
+	public static final DIRECTORY: String = 'test/testkit/arms';
 
 	/** The single document the registry was kept in before it was split; a base older than the split still has it. */
-	public static inline final LEGACY_FILE: String = 'test/testkit/mutation-arms.json';
+	public static final LEGACY_FILE: String = 'test/testkit/mutation-arms.json';
 
 	/** The key of the array that holds the records. */
-	private static inline final ARRAY_NAME: String = 'arms';
+	private static final ARRAY_NAME: String = 'arms';
 
 	/** The opening of that array as the documents spell it. */
-	private static inline final ARRAY_KEY: String = '"arms": [';
+	private static final ARRAY_KEY: String = '"arms": [';
 
 	/** The records of the registry document `text`, in its order; a name declared twice in it is refused. */
 	public static function parse(text: String): Array<ArmRecord> {

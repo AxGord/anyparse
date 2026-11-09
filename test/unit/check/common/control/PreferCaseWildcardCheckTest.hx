@@ -12,13 +12,13 @@ import anyparse.check.common.control.PreferCaseWildcard;
  */
 class PreferCaseWildcardCheckTest extends Test {
 
-	/** The trigger shape written INSIDE a `macro …` quotation, where it is AST the macro builds. */
-	private static inline final QUOTED: String =
-		'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t}\n}\n';
-
 	/** The same shape quoted AND then written as real code — exactly one of the two is a finding. */
 	private static inline final QUOTED_THEN_RUNTIME: String = 'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n'
 		+ '\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t}\n\t}\n}\n';
+
+	/** The trigger shape written INSIDE a `macro …` quotation, where it is AST the macro builds. */
+	private static final QUOTED: String =
+		'class C {\n\tfunction f(k:Int):Void {\n\t\tfinal e = macro switch m {\n\t\t\tcase 1: a();\n\t\t\tdefault: b();\n\t\t};\n\t}\n}\n';
 
 	/**
 	 * A `default:` inside a REIFICATION subtree is DATA: it reifies as
@@ -89,7 +89,6 @@ class PreferCaseWildcardCheckTest extends Test {
 	private function stmtSwitch(lastBranch: String): String {
 		return 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: a();\n\t\t\t$lastBranch\n\t\t}\n\t}\n}';
 	}
-
 
 	private function violations(source: String): Array<Violation> {
 		return CheckFixture.violations(new PreferCaseWildcard(), source);

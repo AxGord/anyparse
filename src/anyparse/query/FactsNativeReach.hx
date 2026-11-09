@@ -30,7 +30,7 @@ using Lambda;
 final class FactsNativeReach {
 
 	/** The prefix a target gives a Haxe name it cannot spell as it is (hxcpp's `_hx_new`): the name stands behind it. */
-	private static inline final MANGLED: String = '_hx_';
+	private static final MANGLED: String = '_hx_';
 
 	/** The names target code spells the object its method runs on by (`reach`), besides a member of it. */
 	private static final THIS_SPELLINGS: Array<String> = ['this', '_hx_this', '__this', '__this__', 'self', '_gthis'];

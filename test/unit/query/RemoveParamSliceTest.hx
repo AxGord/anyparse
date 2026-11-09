@@ -32,7 +32,7 @@ using StringTools;
 class RemoveParamSliceTest extends Test {
 
 	/** A writer config narrow enough that a four-parameter signature wraps and a three-parameter one does not. */
-	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
+	private static final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Remove the MIDDLE parameter (index 1) of a method with three

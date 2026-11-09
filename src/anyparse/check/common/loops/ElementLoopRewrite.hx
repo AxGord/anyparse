@@ -20,32 +20,32 @@ final class ElementLoopRewrite {
 	 * The head of the decline note of an element-loop fix refused because the body may run code that
 	 * changes the collection (see `reachDecline`); the note continues with what `MemberReach` found.
 	 */
-	public static inline final SELF_CALL_DECLINE: String =
+	public static final SELF_CALL_DECLINE: String =
 		'the body runs code that may replace an element or grow the collection while the loop runs';
 
 	/** The decline note of an element-loop fix refused over a comment inside a region a splice would overwrite. */
-	public static inline final COMMENT_DECLINE: String = 'a comment sits inside a region the rewrite would overwrite';
+	public static final COMMENT_DECLINE: String = 'a comment sits inside a region the rewrite would overwrite';
 
 	/** The English vowels, for deciding which `…ies` plural came from a `…y` singular. */
-	private static inline final VOWELS: String = 'aeiou';
+	private static final VOWELS: String = 'aeiou';
 
 	/** The ending a `…y` singular takes in the plural. */
-	private static inline final PLURAL_IES: String = 'ies';
+	private static final PLURAL_IES: String = 'ies';
 
 	/** The ending the singular behind an `…ies` plural carries. */
-	private static inline final SINGULAR_Y: String = 'y';
+	private static final SINGULAR_Y: String = 'y';
 
 	/** The ending a sibilant singular takes in the plural. */
-	private static inline final PLURAL_ES: String = 'es';
+	private static final PLURAL_ES: String = 'es';
 
 	/** The ending every other plural takes. */
-	private static inline final PLURAL_S: String = 's';
+	private static final PLURAL_S: String = 's';
 
 	/** The private-member prefix a derived binder drops. */
-	private static inline final UNDERSCORE: String = '_';
+	private static final UNDERSCORE: String = '_';
 
 	/** The size member an OTHER loop's header is matched by when checking for a nested binder clash. */
-	private static inline final LENGTH_MEMBER: String = 'length';
+	private static final LENGTH_MEMBER: String = 'length';
 
 	/** Endings that take `es` rather than a bare `s`, so the singular drops both characters. */
 	private static final SIBILANT_PLURALS: Array<String> = ['ses', 'xes', 'zes', 'ches', 'shes'];

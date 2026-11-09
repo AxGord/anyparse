@@ -21,10 +21,8 @@ using StringTools;
  */
 class RedundantCaseBodyCheckTest extends Test {
 
-	private static inline final SUBSUME_MESSAGE: String =
-		'this case body is identical to the catch-all that follows it; the arm is redundant';
-	private static inline final MERGE_MESSAGE: String =
-		'this case body is identical to the next arm\'s; merge the two labels into one case';
+	private static final SUBSUME_MESSAGE: String = 'this case body is identical to the catch-all that follows it; the arm is redundant';
+	private static final MERGE_MESSAGE: String = 'this case body is identical to the next arm\'s; merge the two labels into one case';
 
 	public function testSubsumeFlagged(): Void {
 		final vs: Array<Violation> = violations(sw('case "User": t(k);\n\t\t\tcase _: t(k);'));

@@ -47,13 +47,13 @@ using StringTools;
 class ApqDxTier5CliTest extends Test {
 
 	/** The half of the staging slot's name that is a contract; the rest belongs to the resolver. */
-	private static inline final PROBE_SLOT_STEM: String = 'anyparse-last-probe';
+	private static final PROBE_SLOT_STEM: String = 'anyparse-last-probe';
 
 	/** The env var that names the staging slot outright. */
-	private static inline final PROBE_PATH_ENV: String = 'APQ_PROBE_PATH';
+	private static final PROBE_PATH_ENV: String = 'APQ_PROBE_PATH';
 
 	/** What a symlinked staging target must still hold after a probe. */
-	private static inline final VICTIM_CONTENT: String = 'ORIGINAL VICTIM CONTENT\n';
+	private static final VICTIM_CONTENT: String = 'ORIGINAL VICTIM CONTENT\n';
 
 	// --- 1. refs/uses macro-emit nudge ---
 

@@ -40,7 +40,7 @@ final class JvmPortability {
 	 * 0`; everything on the census line is a reading, and a reading carries the commit it was
 	 * taken on.
 	 */
-	private static inline final CENSUS_NOTE: String =
+	private static final CENSUS_NOTE: String =
 		'a reading of THIS tree, not an invariant — take it on your own base, never quote another commit\'s';
 
 	/** The default scope: the two packages whose portability actually regressed. */

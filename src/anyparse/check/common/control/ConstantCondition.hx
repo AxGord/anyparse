@@ -44,7 +44,7 @@ import anyparse.query.SymbolIndex;
 final class ConstantCondition extends RuleBase {
 
 	/** ASCII-only note appended when a non-trivial dead branch withholds the autofix. */
-	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
+	private static final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
 
 	public function new() {
 		super('constant-condition', 'a boolean literal as an if condition (if (true) / if (false))', RuleCategory.Control);

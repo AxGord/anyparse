@@ -26,13 +26,13 @@ import anyparse.runtime.Span;
  */
 class FieldInitInConstructorCheckTest extends Test {
 
-	private static inline final FIELDS: String = '\tprivate var _cellsX:Int = 20;\n\tprivate var _cellsY:Int = 12;';
-	private static inline final BODY: String = '\t\tif (palette != null) {\n\t\t\t_cellsX = palette.length;\n\t\t\t_cellsY = 1;\n\t\t}';
+	private static final FIELDS: String = '\tprivate var _cellsX:Int = 20;\n\tprivate var _cellsY:Int = 12;';
+	private static final BODY: String = '\t\tif (palette != null) {\n\t\t\t_cellsX = palette.length;\n\t\t\t_cellsY = 1;\n\t\t}';
 
 	/** The one-field shape the constant-extraction arm is exercised on. */
-	private static inline final ONE_FIELD: String = '\tprivate var _cellsNumX:Int = 20;';
+	private static final ONE_FIELD: String = '\tprivate var _cellsNumX:Int = 20;';
 
-	private static inline final ONE_GUARD: String = '\t\tif (palette != null) _cellsNumX = palette.length;';
+	private static final ONE_GUARD: String = '\t\tif (palette != null) _cellsNumX = palette.length;';
 
 	public function testFlagsConditionalDefault(): Void {
 		final vs: Array<Violation> = violations(wrap(FIELDS, BODY));

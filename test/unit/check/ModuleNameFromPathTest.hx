@@ -20,10 +20,10 @@ using StringTools;
 final class ModuleNameFromPathTest extends Test {
 
 	/** The sub-type's declaration path — what `shorten-type-ref` finds written out in full. */
-	private static inline final CANONICAL: String = 'p.Mod.Content';
+	private static final CANONICAL: String = 'p.Mod.Content';
 
 	/** How the compiler names that sub-type: package plus simple name, with the module dropped. */
-	private static inline final HYBRID: String = 'p.Content';
+	private static final HYBRID: String = 'p.Content';
 
 	/** The module `p.Mod` with an unrelated typedef ahead of its main type, and `Content` declared beside both. */
 	private static final HELPER_FIRST: String = 'package p;\n\ntypedef First = {a:Int};\n\ntypedef Content = Holder;\n\n'

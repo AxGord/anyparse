@@ -20,9 +20,6 @@ final class TmpLifecycleTest extends Test {
 	private static inline final GRACE: Int = 300;
 	private static inline final LEGACY: Int = 21600;
 
-	/** A pid no process holds: above every default `pid_max`. */
-	private static inline final DEAD_PID: String = '99999999';
-
 	/** Seconds of silence past the grace period and short of the legacy one. */
 	private static inline final PAST_GRACE: Int = 600;
 
@@ -30,6 +27,9 @@ final class TmpLifecycleTest extends Test {
 	private static inline final PAST_LEGACY: Int = 30000;
 
 	private static inline final MS_PER_SECOND: Float = 1000;
+
+	/** A pid no process holds: above every default `pid_max`. */
+	private static final DEAD_PID: String = '99999999';
 
 	public function testOnlyAClaimNameDirectlyUnderTheRootIsOurs(): Void {
 		TempDir.with(dir -> {

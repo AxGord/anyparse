@@ -83,41 +83,41 @@ final class ReachDefinesProbe {
 	/** Spawn buffer, in bytes: `-v` names every parsed module. */
 	public static inline final BUFFER: Int = 256 * 1024 * 1024;
 
-	/** The class name of the probe macro, written to a directory of its own. */
-	private static inline final MACRO_CLASS: String = 'AnyparseReachDefinesProbe';
-
-	private static inline final EARLY_PREFIX: String = 'APQ-REACH-EARLY-DEFINES ';
-	private static inline final FINAL_PREFIX: String = 'APQ-REACH-FINAL-DEFINES ';
-
-	/** The probe's line naming one define and its value, as a JSON pair, at the first initialization macro. */
-	private static inline final EARLY_VALUE_PREFIX: String = 'APQ-REACH-EARLY-VALUE ';
-
-	/** The probe's line naming one define and its value, as a JSON pair, once typing ended. */
-	private static inline final FINAL_VALUE_PREFIX: String = 'APQ-REACH-FINAL-VALUE ';
-
-	/** The `haxe -v` line that opens one compile arm. */
-	private static inline final DEFINES_PREFIX: String = 'Defines:';
-
-	/** The `haxe -v` line naming every class path, the one the compiler searches first leading. */
-	private static inline final CLASSPATH_PREFIX: String = 'Classpath: ';
-
-	/** The `haxe -v` line naming one file the compile parsed. */
-	private static inline final PARSED_PREFIX: String = 'Parsed ';
-
-	/** The `haxe -v` line closing one macro call. */
-	private static inline final EXIT_PREFIX: String = 'Exiting macro ';
-
-	/** The prefix every line the probe macro prints opens with. */
-	private static inline final PROBE_LINE: String = 'APQ-REACH-';
-
-	/** The compiler flag running an initialization macro. */
-	private static inline final MACRO_FLAG: String = '--macro';
-
-	/** The probe's line naming one type the build's runtime context typed, then the file that declares it. */
-	private static inline final TYPE_PREFIX: String = 'APQ-REACH-TYPE ';
-
 	/** The bound of the random suffix that keeps two runs' probe directories apart. */
 	private static inline final DIRECTORY_SUFFIX_BOUND: Int = 0x7fffffff;
+
+	/** The class name of the probe macro, written to a directory of its own. */
+	private static final MACRO_CLASS: String = 'AnyparseReachDefinesProbe';
+
+	private static final EARLY_PREFIX: String = 'APQ-REACH-EARLY-DEFINES ';
+	private static final FINAL_PREFIX: String = 'APQ-REACH-FINAL-DEFINES ';
+
+	/** The probe's line naming one define and its value, as a JSON pair, at the first initialization macro. */
+	private static final EARLY_VALUE_PREFIX: String = 'APQ-REACH-EARLY-VALUE ';
+
+	/** The probe's line naming one define and its value, as a JSON pair, once typing ended. */
+	private static final FINAL_VALUE_PREFIX: String = 'APQ-REACH-FINAL-VALUE ';
+
+	/** The `haxe -v` line that opens one compile arm. */
+	private static final DEFINES_PREFIX: String = 'Defines:';
+
+	/** The `haxe -v` line naming every class path, the one the compiler searches first leading. */
+	private static final CLASSPATH_PREFIX: String = 'Classpath: ';
+
+	/** The `haxe -v` line naming one file the compile parsed. */
+	private static final PARSED_PREFIX: String = 'Parsed ';
+
+	/** The `haxe -v` line closing one macro call. */
+	private static final EXIT_PREFIX: String = 'Exiting macro ';
+
+	/** The prefix every line the probe macro prints opens with. */
+	private static final PROBE_LINE: String = 'APQ-REACH-';
+
+	/** The compiler flag running an initialization macro. */
+	private static final MACRO_FLAG: String = '--macro';
+
+	/** The probe's line naming one type the build's runtime context typed, then the file that declares it. */
+	private static final TYPE_PREFIX: String = 'APQ-REACH-TYPE ';
 
 	/**
 	 * The builds of `oracles`, each probed once — the compiles overlap (`ProcessSpawn.parallelism`) — with the source of every file

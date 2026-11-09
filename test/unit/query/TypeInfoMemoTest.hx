@@ -13,7 +13,7 @@ import anyparse.query.TypeResolver;
 @:nullSafety(Strict)
 class TypeInfoMemoTest extends Test {
 
-	private static inline final SOURCE: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal s: String = cast(1, String);\n\t}\n}\n';
+	private static final SOURCE: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal s: String = cast(1, String);\n\t}\n}\n';
 
 	private final _plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 

@@ -35,40 +35,40 @@ typedef Scope = {
 @:nullSafety(Strict)
 final class MapScopeScan {
 
-	/** The unified map abstract's simple name — what every rewrite writes. */
-	public static inline final UNIFIED_MAP: String = 'Map';
-
-	/**
-	 * The ANNOTATION type-reference kind, spelled literally: `RefShape` carries no field naming
-	 * it, and it needs a different position rule from the clause kind below. Both are declared in
-	 * `TypeRefShape.typeRefKinds`, so a grammar missing either makes the check a no-op.
-	 */
-	public static inline final ANNOTATION_TYPE_KIND: String = 'TypeRef';
-
-	/**
-	 * The CLAUSE type-reference kind — a return type, a heritage entry, a type-parameter
-	 * constraint, an abstract's underlying / `from` / `to` type, an `is` operand. Only the return
-	 * type of these is an annotation, which is why it needs its own position rule.
-	 */
-	public static inline final CLAUSE_TYPE_KIND: String = 'Named';
-
 	/** The fully-qualified prefix a self-proving reference carries. */
 	public static inline final QUALIFIED_PREFIX: String = '$MAP_MODULE_PACKAGE.';
 
 	/** The package the four rewritable map implementations live in — the target of every name proof. */
 	public static inline final MAP_MODULE_PACKAGE: String = 'haxe.ds';
 
-	/** The plain `import a.b.X;` declaration kind (spelled literally, as `UsingScan`'s import anchors are). */
-	private static inline final IMPORT_DECL_KIND: String = 'ImportDecl';
+	/** The unified map abstract's simple name — what every rewrite writes. */
+	public static final UNIFIED_MAP: String = 'Map';
+
+	/**
+	 * The ANNOTATION type-reference kind, spelled literally: `RefShape` carries no field naming
+	 * it, and it needs a different position rule from the clause kind below. Both are declared in
+	 * `TypeRefShape.typeRefKinds`, so a grammar missing either makes the check a no-op.
+	 */
+	public static final ANNOTATION_TYPE_KIND: String = 'TypeRef';
+
+	/**
+	 * The CLAUSE type-reference kind — a return type, a heritage entry, a type-parameter
+	 * constraint, an abstract's underlying / `from` / `to` type, an `is` operand. Only the return
+	 * type of these is an annotation, which is why it needs its own position rule.
+	 */
+	public static final CLAUSE_TYPE_KIND: String = 'Named';
 
 	/** The `import a.b.*;` declaration kind. */
 	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
+
+	/** The plain `import a.b.X;` declaration kind (spelled literally, as `UsingScan`'s import anchors are). */
+	private static final IMPORT_DECL_KIND: String = 'ImportDecl';
 
 	/**
 	 * The `using a.b.*;` declaration kind — the `using` twin of
 	 * `WILDCARD_IMPORT_KIND` (`UsingScan.USING_DECL_KIND` names the plain one).
 	 */
-	private static inline final WILDCARD_USING_KIND: String = 'UsingWildDecl';
+	private static final WILDCARD_USING_KIND: String = 'UsingWildDecl';
 
 	/** The aliasing import kinds (`import a.b.X as Y;` / `… in Y;`) — each binds a simple name to an unexposed path. */
 	private static final ALIAS_IMPORT_KINDS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];

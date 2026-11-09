@@ -49,34 +49,34 @@ import utest.Test;
 class HxOpenDelimStashBarrierTest extends Test {
 
 	/** The reported shape: the newline sits before `return`, outside the bracket. */
-	private static inline final BRACELESS_FN_ARRAY: String =
-		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n\t\t\treturn [for (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
+	private static final BRACELESS_FN_ARRAY: String = 'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n'
+		+ '\t\t\treturn [for (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
 
 	/** Same statement, newline moved INSIDE the bracket — the break is then the source's own. */
-	private static inline final IN_BRACKET_NEWLINE: String =
-		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b) return [\n\t\t\tfor (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
+	private static final IN_BRACKET_NEWLINE: String = 'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b) '
+		+ 'return [\n\t\t\tfor (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
 
 	/** Struct-field Star (`HxObjectLit.fields`) reached through the same stash. */
-	private static inline final BRACELESS_FN_OBJECT: String =
-		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n\t\t\treturn {k: [for (key in o) key => 1]};\n\t\treturn t;\n\t}\n}\n';
+	private static final BRACELESS_FN_OBJECT: String = 'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n'
+		+ '\t\t\treturn {k: [for (key in o) key => 1]};\n\t\treturn t;\n\t}\n}\n';
 
 	/** No anon fn at all: the Pratt no-match stash left by `=` before an own-line `[`. */
-	private static inline final NEWLINE_BEFORE_OPEN_BRACKET: String =
+	private static final NEWLINE_BEFORE_OPEN_BRACKET: String =
 		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar b =\n\t\t\t[for (key in o) key => 1];\n\t\treturn b;\n\t}\n}\n';
 
 	/** The stash also carries a leading comment; that half must reach the element intact. */
-	private static inline final BRACELESS_FN_LEADING_COMMENT: String =
-		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n\t\t\t// MARKER\n\t\t\treturn [for (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
+	private static final BRACELESS_FN_LEADING_COMMENT: String = 'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar t = function(a, b)\n'
+		+ '\t\t\t// MARKER\n\t\t\treturn [for (key in o) key => 1];\n\t\treturn t;\n\t}\n}\n';
 
 	/** No anon fn: the Pratt no-match stash `=` leaves before an own-line `{`. */
-	private static inline final BARE_OBJECT_LIT_OWN_LINE: String =
+	private static final BARE_OBJECT_LIT_OWN_LINE: String =
 		'class M {\n\tstatic function f() {\n\t\tvar c =\n\t\t\t{k: 1, m: 2};\n\t\treturn c;\n\t}\n}\n';
 
 	/** Control: an ordinary statement in a block — no stash is ever produced here. */
-	private static inline final PLAIN_BLOCK_STATEMENT: String =
+	private static final PLAIN_BLOCK_STATEMENT: String =
 		'class M {\n\tstatic function f(o:Array<String>) {\n\t\tvar a = 1;\n\t\treturn [for (key in o) key => 1];\n\t}\n}\n';
 
-	private static inline final FLAT: String = '[for (key in o) key => 1]';
+	private static final FLAT: String = '[for (key in o) key => 1]';
 
 	public function new(): Void {
 		super();

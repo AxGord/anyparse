@@ -50,7 +50,7 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 	 * `messageIdentity` so the mask anchor cannot drift from the wording it points at. The
 	 * `(max N)` threshold beside it stays unmasked — a configuration change IS a change.
 	 */
-	private static inline final SCORE_LEAD: String = ' has cyclomatic complexity ';
+	private static final SCORE_LEAD: String = ' has cyclomatic complexity ';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Compare;
 import devkit.Command;
 import devkit.Result;
 import haxe.io.Path;
@@ -18,7 +19,7 @@ using StringTools;
 final class XconfigFmt {
 
 	/** The vendored second formatter config the cross-config arm formats this tree under. */
-	public static inline final XCONFIG: String = 'tools/data/xconfig-hxformat.json';
+	public static final XCONFIG: String = 'tools/data/xconfig-hxformat.json';
 
 	/**
 	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
@@ -34,7 +35,7 @@ final class XconfigFmt {
 			for (line in err.split('\n'))
 				if (line.startsWith(prefix) && line.indexOf(marker) >= 0) line.substring(prefix.length, line.indexOf(marker))
 		];
-		files.sort(Reflect.compare);
+		files.sort(Compare.compareString);
 		return files;
 	}
 

@@ -17,11 +17,11 @@ using StringTools;
  */
 class EmptyCaseArmCheckTest extends Test {
 
-	private static inline final MESSAGE: String =
+	private static final MESSAGE: String =
 		'this trailing empty case arm matches values and does nothing — the switch has no catch-all, so deleting it changes nothing';
 
 	/** The firing shape every refusal fixture is a minimal pair of. */
-	private static inline final FIRING_BRANCHES: String = 'case 1: t();\n\t\t\tcase 2, 3:';
+	private static final FIRING_BRANCHES: String = 'case 1: t();\n\t\t\tcase 2, 3:';
 
 	public function testTrailingEmptyArmFlagged(): Void {
 		final vs: Array<Violation> = violations(sw('Int', FIRING_BRANCHES));

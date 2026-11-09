@@ -86,6 +86,21 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.StructSeqLowering, anyparse.macro.TerminalParseLowering, anyparse.macro.TriviaSlotNames)
 class Lowering {
 
+	/** `DEL` — the one non-printable byte that is not below the space. */
+	private static inline final DELETE_BYTE: Int = 127;
+
+	/**
+	 * How many guardable branches an Alt rule needs before the dispatch
+	 * prologue repays itself. Read by `lowerEnum` (which acts on it) and
+	 * by `dumpDispatch` (which reports it), so the dump can never claim a
+	 * dispatch decision the codegen does not make.
+	 *
+	 * One guardable branch cannot repay the prologue: the single trial it
+	 * saves costs about what the peek itself costs, and a threshold of 1
+	 * parses measurably SLOWER over a calibrated corpus.
+	 */
+	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
+
 	/**
 	 * Names of the three locals the Alt first-token dispatch prologue
 	 * emits into the generated parse function. `lowerEnum` DECLARES them
@@ -97,13 +112,13 @@ class Lowering {
 	 * (`_savedPos`, `_raw`, `_items`) and chosen not to collide with any
 	 * of them.
 	 */
-	private static inline final GUARD_SAVED_LOCAL: String = '_gSaved';
+	private static final GUARD_SAVED_LOCAL: String = '_gSaved';
 
 	/** Char code at the dispatch position — the `FirstLit` guard's subject. */
-	private static inline final GUARD_BYTE_LOCAL: String = '_gC0';
+	private static final GUARD_BYTE_LOCAL: String = '_gC0';
 
 	/** Maximal word at the dispatch position — the `FirstKw` guard's subject. */
-	private static inline final GUARD_WORD_LOCAL: String = '_gW';
+	private static final GUARD_WORD_LOCAL: String = '_gW';
 
 	/**
 	 * Names of the two locals a `@:tryparse` Star call-site gate emits.
@@ -114,10 +129,10 @@ class Lowering {
 	 * loops themselves declare (`_savedPos`, `_lead`, `_leadStart`,
 	 * `_savedPending`, `_afterTriviaPos`, `_node`, `_e`).
 	 */
-	private static inline final STAR_GATE_BYTE_LOCAL: String = '_eC0';
+	private static final STAR_GATE_BYTE_LOCAL: String = '_eC0';
 
 	/** Maximal word at the Star element position — the `FirstKw` gate's subject. */
-	private static inline final STAR_GATE_WORD_LOCAL: String = '_eW';
+	private static final STAR_GATE_WORD_LOCAL: String = '_eW';
 
 	/**
 	 * Char code at a `@:re` Terminal's own entry position — the subject of
@@ -129,10 +144,7 @@ class Lowering {
 	 * is in scope from either, and giving it its own name keeps the three
 	 * readers from ever matching each other's shape.
 	 */
-	private static inline final TERMINAL_BYTE_LOCAL: String = '_tC0';
-
-	/** `DEL` — the one non-printable byte that is not below the space. */
-	private static inline final DELETE_BYTE: Int = 127;
+	private static final TERMINAL_BYTE_LOCAL: String = '_tC0';
 
 	/**
 	 * Shape-node annotation recording `shouldLowerByName`'s answer.
@@ -145,7 +157,7 @@ class Lowering {
 	 * syntax: the positional first field says nothing about what the
 	 * emitted body opens with.
 	 */
-	private static inline final BY_NAME_KEY: String = 'lowering.byName';
+	private static final BY_NAME_KEY: String = 'lowering.byName';
 
 	/**
 	 * `@:fmt` flag that retargets a Ref's parse call to the `${parseFn}Atom`
@@ -159,19 +171,7 @@ class Lowering {
 	 * `Unknown` for such a branch because `ruleFirstToken` models the ENTRY
 	 * function and this flag bypasses it.
 	 */
-	private static inline final ATOM_OPERAND_FLAG: String = 'atomOperand';
-
-	/**
-	 * How many guardable branches an Alt rule needs before the dispatch
-	 * prologue repays itself. Read by `lowerEnum` (which acts on it) and
-	 * by `dumpDispatch` (which reports it), so the dump can never claim a
-	 * dispatch decision the codegen does not make.
-	 *
-	 * One guardable branch cannot repay the prologue: the single trial it
-	 * saves costs about what the peek itself costs, and a threshold of 1
-	 * parses measurably SLOWER over a calibrated corpus.
-	 */
-	private static inline final DISPATCH_MIN_GUARDS: Int = 2;
+	private static final ATOM_OPERAND_FLAG: String = 'atomOperand';
 
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 

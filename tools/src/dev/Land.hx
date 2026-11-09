@@ -45,30 +45,29 @@ final class Land {
 		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--resolve <path>#<key>=<ours|theirs|both>]... '
 		+ '[--queue <file>] [--warm-frozen <dir>]... [--warm-infra <dir>]... [--logs <dir>] [--repo <tree>]';
 
-	/** The trailers a landing carries its review rounds and the tokens the slice cost under, which `dev slice-stats` reads. */
-	public static inline final ROUNDS_TRAILER: String = 'Review-Rounds';
-
-	public static inline final TOKENS_TRAILER: String = 'Tokens';
-
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
 
+	/** The trailers a landing carries its review rounds and the tokens the slice cost under, which `dev slice-stats` reads. */
+	public static final ROUNDS_TRAILER: String = 'Review-Rounds';
+
+	public static final TOKENS_TRAILER: String = 'Tokens';
 	public static final NO_BATTERY: String = '--no-battery';
-
-	/** The merge driver `.gitattributes` names for the files a grammar reads (`apq merge-file`). */
-	private static inline final DRIVER: String = 'anyparse';
-
-	/** The prefix `apq merge-file` reports a merged file with. */
-	private static inline final MERGED_PREFIX: String = 'auto-merged: ';
-
-	/** The queue file whose lines a merge brief quotes, under the repository, when `--queue` names none. */
-	private static inline final QUEUE: String = '.claude/batch/wave-D.md';
 
 	/** What the battery may run before it is killed. */
 	private static inline final BATTERY_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 
+	/** The merge driver `.gitattributes` names for the files a grammar reads (`apq merge-file`). */
+	private static final DRIVER: String = 'anyparse';
+
+	/** The prefix `apq merge-file` reports a merged file with. */
+	private static final MERGED_PREFIX: String = 'auto-merged: ';
+
+	/** The queue file whose lines a merge brief quotes, under the repository, when `--queue` names none. */
+	private static final QUEUE: String = '.claude/batch/wave-D.md';
+
 	/** Where, under the battery's snapshot directory, the landings are counted. */
-	private static inline final TALLY_DIR: String = 'landings';
+	private static final TALLY_DIR: String = 'landings';
 
 	/**
 	 * Where a shard and the one-process run of the suite can diverge, so a landing that brings a path in is checked against

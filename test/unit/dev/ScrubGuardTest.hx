@@ -24,12 +24,12 @@ final class ScrubGuardTest extends Test {
 	 * CRLF ending, a `regex:` one with a lookbehind, a blank line (no rule), an inline-flag regex, and a last line with
 	 * no line break. No rule can match inside a commit hash, which the range mode scans with the messages.
 	 */
-	private static inline final LIST: String = 'alpha==>X\nliteral:be.ta\r\nregex:(?<=x)y+==>c\n\nregex:(?i)gam\nend';
+	private static final LIST: String = 'alpha==>X\nliteral:be.ta\r\nregex:(?<=x)y+==>c\n\nregex:(?i)gam\nend';
 
 	/** The home directories a published path must not spell, split so this file does not spell one itself. */
-	private static inline final USERS: String = '/Users';
+	private static final USERS: String = '/Users';
 
-	private static inline final HOMES: String = '/home';
+	private static final HOMES: String = '/home';
 
 	public function testEveryLineShapeOfTheListIsARule(): Void {
 		final rules: Array<Rule> = ScrubGuard.loadRules(LIST);

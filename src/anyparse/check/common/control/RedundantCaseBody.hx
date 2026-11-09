@@ -81,7 +81,7 @@ import anyparse.query.SymbolIndex;
 final class RedundantCaseBody extends RuleBase {
 
 	/** What separates two alternatives of one label — the writer re-canonicalises the spacing. */
-	private static inline final ALTERNATIVE_SEPARATOR: String = ', ';
+	private static final ALTERNATIVE_SEPARATOR: String = ', ';
 
 	private static final RULE_ID: String = 'redundant-case-body';
 

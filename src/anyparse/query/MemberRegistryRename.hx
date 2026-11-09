@@ -46,11 +46,11 @@ typedef RegistryFollow = {
 @:nullSafety(Strict)
 final class MemberRegistryRename {
 
-	/** How a member of the enclosing instance is spelled with a receiver. */
-	private static inline final SELF_RECEIVER: String = 'this.';
-
 	/** The access operator a receiver spells before a member. */
 	private static inline final ACCESS: Int = '.'.code;
+
+	/** How a member of the enclosing instance is spelled with a receiver. */
+	private static final SELF_RECEIVER: String = 'this.';
 
 	/**
 	 * The rename the op's `changes` performed over `sources`, the originals it read; null when it changed nothing.

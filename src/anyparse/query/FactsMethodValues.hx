@@ -42,35 +42,35 @@ using Lambda;
 @:nullSafety(Strict)
 final class FactsMethodValues {
 
-	/** The access of a field read off a value of no class (`FieldFact.access`): its value is typed by nothing. */
-	private static inline final DYNAMIC_ACCESS: String = 'FDynamic';
-
-	/** The access of an instance field read (`FieldFact.access`): a method's value only when the field is a method. */
-	private static inline final INSTANCE_ACCESS: String = 'FInstance';
-
-	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
-	private static inline final INLINED: String = 'inlined';
-
-	/** The type of an enum as a value: it holds no instance of a class. */
-	private static inline final ENUM_VALUE: String = 'Enum';
-
-	/** The type of a class as a value: it holds its statics, no instance. */
-	private static inline final CLASS_VALUE: String = 'Class';
-
-	/** The type of an abstract as a value: it holds its statics, no instance. */
-	private static inline final ABSTRACT_VALUE: String = 'Abstract';
-
 	/** How deep `mayHold` reads through wrappers and type parameters before it answers that a value may be anything. */
 	private static inline final MAX_DEPTH: Int = 8;
 
+	/** The access of a field read off a value of no class (`FieldFact.access`): its value is typed by nothing. */
+	private static final DYNAMIC_ACCESS: String = 'FDynamic';
+
+	/** The access of an instance field read (`FieldFact.access`): a method's value only when the field is a method. */
+	private static final INSTANCE_ACCESS: String = 'FInstance';
+
+	/** The access of a call of a method the compiler spliced in (`CallFact.access`). */
+	private static final INLINED: String = 'inlined';
+
+	/** The type of an enum as a value: it holds no instance of a class. */
+	private static final ENUM_VALUE: String = 'Enum';
+
+	/** The type of a class as a value: it holds its statics, no instance. */
+	private static final CLASS_VALUE: String = 'Class';
+
+	/** The type of an abstract as a value: it holds its statics, no instance. */
+	private static final ABSTRACT_VALUE: String = 'Abstract';
+
 	/** The catch-all type: a value of it is of no class. */
-	private static inline final CATCH_ALL: String = 'Dynamic';
+	private static final CATCH_ALL: String = 'Dynamic';
 
 	/** The type any value unifies with: a value of it is of no class. */
-	private static inline final ANY: String = 'Any';
+	private static final ANY: String = 'Any';
 
 	/** The nullable wrapper: a value of it is what it wraps. */
-	private static inline final NULLABLE: String = 'Null';
+	private static final NULLABLE: String = 'Null';
 
 	/** The field accesses whose read yields no instance method's value: a static's, an enum constructor's. */
 	private static final VALUELESS_ACCESSES: Array<String> = ['FStatic', 'FEnum'];

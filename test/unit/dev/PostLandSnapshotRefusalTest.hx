@@ -16,9 +16,9 @@ import utest.Test;
 @:nullSafety(Strict)
 final class PostLandSnapshotRefusalTest extends Test {
 
-	private static inline final MARKED: String = 'hoist-common-import';
-	private static inline final PLAIN: String = 'doc-length';
-	private static inline final ANON: String = 'anon-type-dup';
+	private static final MARKED: String = 'hoist-common-import';
+	private static final PLAIN: String = 'doc-length';
+	private static final ANON: String = 'anon-type-dup';
 
 	@:pin('guard')
 	public function testTheSameFindingsAtOtherLinesAndAMaskedCountAreNoMovement(): Void {

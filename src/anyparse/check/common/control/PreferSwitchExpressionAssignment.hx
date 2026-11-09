@@ -114,11 +114,11 @@ import anyparse.query.SymbolIndex;
 final class PreferSwitchExpressionAssignment extends RuleBase {
 
 	/** The finding message for the decl-pairing arm (a `var` and its following switch). */
-	private static inline final DECL_MESSAGE: String =
+	private static final DECL_MESSAGE: String =
 		'this declaration and its following switch assignment can be a single switch-expression assignment';
 
 	/** The finding message for the l-value arm (a standalone switch assigning one l-value in every arm). */
-	private static inline final LVALUE_MESSAGE: String =
+	private static final LVALUE_MESSAGE: String =
 		'this switch that assigns the same l-value in every arm can be a single switch-expression assignment';
 
 	public function new() {

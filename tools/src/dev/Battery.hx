@@ -43,35 +43,33 @@ final class Battery {
 	/** The characters of HEAD a snapshot is keyed by. */
 	public static inline final KEY_LENGTH: Int = 8;
 
-	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
-	private static inline final TESTS: String = 'tests';
-
-	private static inline final ASSERTIONS: String = 'assertions';
-
-	/** The reading of a suite row that ran only the classes the change reaches: how many, and what they counted. */
-	private static inline final IMPACT: String = 'impact-classes';
-
-	private static inline final IMPACT_TESTS: String = 'impact-tests';
-	private static inline final IMPACT_ASSERTIONS: String = 'impact-assertions';
-	private static inline final SWEEP_PASS: String = 'sweep-pass';
-	private static inline final SWEEP_FAIL: String = 'sweep-fail';
-	private static inline final SWEEP_SKIP: String = 'sweep-skip';
-	private static inline final CLIENT_LINTED: String = 'lint-client';
-	private static inline final LINTED: String = 'lint-anyparse';
-
-
-	/** The prefix `devkit.TmpLifecycle` claims the run's work directory under. */
-	private static inline final WORK_PREFIX: String = 'apq-battery';
-
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final BRANCH_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
-
-	/** The build file only a typecheck reaches: the corpus drill's driver, a root-level module no binary's `-main` types. */
-	private static inline final RECON_HXML: String = 'recon.hxml';
 
 	/** The lines of a failed typer-probe run shown when it names no `DIFFERENT` probe. */
 	private static inline final TAIL_LINES: Int = 20;
 
+	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
+	private static final TESTS: String = 'tests';
+
+	private static final ASSERTIONS: String = 'assertions';
+
+	/** The reading of a suite row that ran only the classes the change reaches: how many, and what they counted. */
+	private static final IMPACT: String = 'impact-classes';
+
+	private static final IMPACT_TESTS: String = 'impact-tests';
+	private static final IMPACT_ASSERTIONS: String = 'impact-assertions';
+	private static final SWEEP_PASS: String = 'sweep-pass';
+	private static final SWEEP_FAIL: String = 'sweep-fail';
+	private static final SWEEP_SKIP: String = 'sweep-skip';
+	private static final CLIENT_LINTED: String = 'lint-client';
+	private static final LINTED: String = 'lint-anyparse';
+
+	/** The prefix `devkit.TmpLifecycle` claims the run's work directory under. */
+	private static final WORK_PREFIX: String = 'apq-battery';
+
+	/** The build file only a typecheck reaches: the corpus drill's driver, a root-level module no binary's `-main` types. */
+	private static final RECON_HXML: String = 'recon.hxml';
 
 	private static final CORPUS_ROW: String = 'corpus';
 	private static final SUITE_ROW: String = 'suite';

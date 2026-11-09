@@ -63,29 +63,12 @@ using StringTools;
 final class PreferCompareFunction extends HaxeRule implements DefaultOff implements Supersedes implements ConfigAware implements GroupedFix {
 
 	private static inline final RULE_ID: String = 'prefer-compare-function';
-
-	/** The method whose callback is read for its sign only. */
-	private static inline final SORT: String = 'sort';
-
 	private static inline final REFLECT: String = 'Reflect';
 	private static inline final COMPARE_MEMBER: String = 'compare';
 	private static inline final COMPARE: String = '$REFLECT.$COMPARE_MEMBER';
 
-	/** The node a call-site `inline` projects as. */
-	private static inline final INLINE_EXPR: String = 'InlineExpr';
-
-	/** The option naming the project's compare functions by operand type. */
-	private static inline final OPTION_COMPARE: String = 'compare';
-
-	private static inline final MAY_BE_NULL: String = 'an operand may be null and the call then answers differently';
-	private static inline final NOT_RETURNED: String =
-		'the callback does not return this call, so its value may be read for more than a sign';
-
 	/** A `Reflect.compare` call's children: its callee and two operands. */
 	private static inline final OPERANDS_CALL: Int = 3;
-
-	private static inline final LESS: String = 'lt';
-	private static inline final GREATER: String = 'gt';
 
 	/** A callback of this many parameters is a comparator. */
 	private static inline final COMPARATOR_PARAMS: Int = 2;
@@ -93,9 +76,22 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** A chain of this many comparisons, then a terminal value, is a three-way comparison. */
 	private static inline final RUNGS: Int = 2;
 
-	private static inline final ASCENDING: String = '-1';
-	private static inline final DESCENDING: String = '1';
-	private static inline final EQUAL: String = '0';
+	/** The method whose callback is read for its sign only. */
+	private static final SORT: String = 'sort';
+
+	/** The node a call-site `inline` projects as. */
+	private static final INLINE_EXPR: String = 'InlineExpr';
+
+	/** The option naming the project's compare functions by operand type. */
+	private static final OPTION_COMPARE: String = 'compare';
+
+	private static final MAY_BE_NULL: String = 'an operand may be null and the call then answers differently';
+	private static final NOT_RETURNED: String = 'the callback does not return this call, so its value may be read for more than a sign';
+	private static final LESS: String = 'lt';
+	private static final GREATER: String = 'gt';
+	private static final ASCENDING: String = '-1';
+	private static final DESCENDING: String = '1';
+	private static final EQUAL: String = '0';
 
 	/** The linter's per-file config resolver (`compare`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;

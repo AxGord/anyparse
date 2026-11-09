@@ -26,10 +26,10 @@ typedef ProjectLanguages = {
 final class LanguageDeclaration {
 
 	/** The project key naming the grammars a directory walk takes. */
-	private static inline final LANGUAGES_KEY: String = 'languages';
+	private static final LANGUAGES_KEY: String = 'languages';
 
 	/** The project key naming the grammar of a call no file names. */
-	private static inline final LANG_KEY: String = 'lang';
+	private static final LANG_KEY: String = 'lang';
 
 	/**
 	 * What the `apq.json` chain above `path` (a file, or a directory the walk enters) declares. A document that is not

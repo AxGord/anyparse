@@ -27,7 +27,7 @@ using StringTools;
 class ChangeSigSliceTest extends Test {
 
 	/** A writer config narrow enough that the fixture's signature wraps. */
-	private static inline final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
+	private static final NARROW: String = '{"wrapping": {"maxLineLength": 60}}';
 
 	/**
 	 * Reorder a method's three parameters `2,0,1` (new order c, a, b). The

@@ -125,7 +125,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 
-	private static inline final MESSAGE: String =
+	private static final MESSAGE: String =
 		'this null-defaulting try-expression and its following null guard can collapse into the catch clauses';
 
 	public function new() {

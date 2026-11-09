@@ -30,14 +30,14 @@ private typedef MergeFileOpts = {
 @:nullSafety(Strict)
 final class MergeFileCommand implements CliCommand implements LanguageFree {
 
-	/** The field separator of a choices line. */
-	private static inline final TAB: String = '\t';
-
-	/** Git's own three-way file merge, the line merge this command widens. */
-	private static inline final GIT_MERGE_FILE: String = 'merge-file';
-
 	/** The output cap of the `git merge-file` child, which writes its result in place and prints little. */
 	private static inline final GIT_BUFFER: Int = 256 * 1024 * 1024;
+
+	/** The field separator of a choices line. */
+	private static final TAB: String = '\t';
+
+	/** Git's own three-way file merge, the line merge this command widens. */
+	private static final GIT_MERGE_FILE: String = 'merge-file';
 
 	public function new() {}
 

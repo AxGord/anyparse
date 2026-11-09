@@ -43,7 +43,7 @@ final class TokenAudit {
 
 	private static inline final THOUSAND: Float = 1000;
 	private static inline final MS_PER_SECOND: Float = 1000;
-	private static inline final SUBAGENTS: String = 'subagents';
+	private static final SUBAGENTS: String = 'subagents';
 	private static final TRANSCRIPT: EReg = ~/\.(output|jsonl)$/;
 
 	public static function main(argv: Array<String>): Int {

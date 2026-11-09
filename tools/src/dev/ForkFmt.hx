@@ -15,10 +15,10 @@ using Lambda;
 @:nullSafety(Strict)
 final class ForkFmt {
 
-	private static inline final DIVERGED: String = 'formatting changed more than whitespace';
-	private static inline final ONE_PASS: String = 'fmt --one-pass:';
-	private static inline final VERIFY_LINE: String = 'fmt --verify:';
-	private static inline final FIXED_POINT: String = 'rewrites to reach its fixed point';
+	private static final DIVERGED: String = 'formatting changed more than whitespace';
+	private static final ONE_PASS: String = 'fmt --one-pass:';
+	private static final VERIFY_LINE: String = 'fmt --verify:';
+	private static final FIXED_POINT: String = 'rewrites to reach its fixed point';
 
 	/**
 	 * The verdict of the verify over `fork`'s `src` (the value of `GateTree.FORK_VAR`; null or empty has nothing to verify and

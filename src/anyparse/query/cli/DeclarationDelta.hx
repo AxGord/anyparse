@@ -140,16 +140,16 @@ private typedef BodyToken = {
 final class DeclarationDelta {
 
 	/** The pseudo-declaration owning the lines no declaration owns. */
-	public static inline final MODULE_REST: String = '(module)';
+	public static final MODULE_REST: String = '(module)';
 
 	/** The row of `hunk` standing for a run of unchanged lines. */
-	public static inline final ELIDED: String = '...';
+	public static final ELIDED: String = '...';
 
 	/** The edit distance past which a line count falls back to the multiset of lines. */
 	private static inline final MAX_LINE_EDITS: Int = 2000;
 
 	/** The mark of a line of `hunk` that no edit touched. */
-	private static inline final UNCHANGED_MARK: String = '  ';
+	private static final UNCHANGED_MARK: String = '  ';
 
 	/**
 	 * The change from `base` to `now`, both read with `plugin`. A version that does not parse makes the whole answer

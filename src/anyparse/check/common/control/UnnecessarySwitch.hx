@@ -101,7 +101,7 @@ final class UnnecessarySwitch extends RuleBase {
 	/** A degenerate switch holds exactly its subject and ONE arm. */
 	private static inline final SUBJECT_AND_ONE_ARM: Int = 2;
 
-	private static inline final MESSAGE: String =
+	private static final MESSAGE: String =
 		'this switch has a single unconditional catch-all arm — it decides nothing; use the arm\'s body directly';
 	private static final RULE_ID: String = 'unnecessary-switch';
 

@@ -17,8 +17,7 @@ import haxe.Exception;
 class PreferIfExpressionAssignmentCheckTest extends Test {
 
 	/** A flat 2-branch assignment whose ELSE r-value is a ternary — its spine supplies the third leaf. */
-	private static inline final TERNARY_TAILED_ELSE: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
+	private static final TERNARY_TAILED_ELSE: String = 'class C {\n\tfunction f() {\n\t\tif (a) x = 1;\n\t\telse x = p ? q : r;\n\t}\n}';
 
 	public function testBasicChainFlagged(): Void {
 		final vs: Array<Violation> = violations(wrap('if (a) x = 1;\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));

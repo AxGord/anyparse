@@ -22,7 +22,7 @@ import haxe.io.Path;
 final class ImportGraph {
 
 	/** The label of the package whose files declare none. */
-	private static inline final ROOT_PACKAGE_LABEL: String = '(root)';
+	private static final ROOT_PACKAGE_LABEL: String = '(root)';
 
 	public static function build(index: SymbolIndex, level: GraphLevel): CodeGraph {
 		if (level != Package && level != Type) throw new Exception('graph: an import joins packages or types, not ${level}s');

@@ -75,7 +75,7 @@ final class OracleServerPool {
 	private static inline final RESTART_AT: Int = 32;
 
 	/** The ending of a path the compiler loads as a module: the only files a `server/invalidate` of the path itself reaches. */
-	private static inline final MODULE_EXTENSION: String = '.hx';
+	private static final MODULE_EXTENSION: String = '.hx';
 
 	private final _servers: Map<String, PoolServer> = [];
 

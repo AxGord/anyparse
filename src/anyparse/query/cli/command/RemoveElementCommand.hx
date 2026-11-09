@@ -14,7 +14,7 @@ import anyparse.runtime.Span;
 final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 
 	/** The op's name, as the registry lists it and every address / edit helper is told it. */
-	private static inline final OP: String = 'remove-element';
+	private static final OP: String = 'remove-element';
 
 	public function new() {}
 

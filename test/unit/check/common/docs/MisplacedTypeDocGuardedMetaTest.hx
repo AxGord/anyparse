@@ -22,13 +22,13 @@ import anyparse.runtime.Span;
 class MisplacedTypeDocGuardedMetaTest extends Test {
 
 	/** The path every fixture is read and fixed under — packaged, so the file's own `package p;` is consistent. */
-	private static inline final FILE: String = 'p/C.hx';
+	private static final FILE: String = 'p/C.hx';
 
 	/** The `enum abstract` compatibility prefix, verbatim from `pony.db.mysql.Const` — the reported shape. */
-	private static inline final ENUM_REGION: String = '#if (haxe_ver >= 4.2) enum #else @:enum #end\n';
+	private static final ENUM_REGION: String = '#if (haxe_ver >= 4.2) enum #else @:enum #end\n';
 
 	/** The `final class` compatibility prefix, verbatim from `remote.client.actions.RemoteActionGet`. */
-	private static inline final FINAL_REGION: String = '#if (haxe_ver >= 4.2) final #else @:final #end\n';
+	private static final FINAL_REGION: String = '#if (haxe_ver >= 4.2) final #else @:final #end\n';
 
 	public function testDocAboveAGuardedMetaRunIsNotStranded(): Void {
 		Assert.equals(0, run('package p;\n\n/**\n * Doc\n */\n#if !macro\n@:keep\n#end\nclass C {}\n').length);

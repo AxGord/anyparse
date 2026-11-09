@@ -23,7 +23,7 @@ using Lambda;
 @:nullSafety(Strict)
 final class ArmMoveTest extends Test {
 
-	private static inline final ARM: String = 'M-TAILMERGE-NORM-ONLY';
+	private static final ARM: String = 'M-TAILMERGE-NORM-ONLY';
 
 	public function testARelocatedModulesArmMovesToTheNewPackagesDocumentAndStillApplies(): Void {
 		TempDir.with(dir -> {

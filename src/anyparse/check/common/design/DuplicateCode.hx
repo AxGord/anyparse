@@ -98,9 +98,6 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 	 */
 	private static inline final MIN_NON_WS_CHARS: Int = 40;
 
-	/** Separator between statement norms in a three-gram key — a byte no source text contains. */
-	private static inline final GRAM_SEP: String = '\x1e';
-
 	private static inline final RULE_ID: String = 'duplicate-code';
 
 	/**
@@ -134,11 +131,14 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 	/** The same-file wording's tail, after the original's line. */
 	private static inline final SAME_FILE_HELPER_TAIL: String = ' — extract a helper (hxq extract-method)';
 
+	/** Separator between statement norms in a three-gram key — a byte no source text contains. */
+	private static final GRAM_SEP: String = '\x1e';
+
 	/**
 	 * Wraps a normalized binder name inside a statement's comparison text — a byte no source text
 	 * contains, so a text carrying none is its own type-1 key.
 	 */
-	private static inline final HOLE: String = '\x1f';
+	private static final HOLE: String = '\x1f';
 
 	/** This rule's reading: no binder normalization, so only exact-logic clones bucket together. */
 	private static final EXACT: DupMode = {

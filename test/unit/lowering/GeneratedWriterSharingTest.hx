@@ -12,17 +12,17 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 @:nullSafety(Strict)
 final class GeneratedWriterSharingTest extends Test {
 
-	/** The generated rule method whose source both rows read. */
-	private static inline final IF_STMT_RULE: String = 'writeHxIfStmtT';
-
-	/** The call that writes an `if`'s then- or else-body statement. */
-	private static inline final STATEMENT_WRITE: String = 'writeHxStatementT(';
-
 	/** The then-body, the else-body, and the else separator's own semicolon probe of the then-body. */
 	private static inline final MAX_STATEMENT_WRITES: Int = 3;
 
+	/** The generated rule method whose source both rows read. */
+	private static final IF_STMT_RULE: String = 'writeHxIfStmtT';
+
+	/** The call that writes an `if`'s then- or else-body statement. */
+	private static final STATEMENT_WRITE: String = 'writeHxStatementT(';
+
 	/** The local the body-policy wrap binds the body's value to. */
-	private static inline final BODY_VALUE_LOCAL: String = '_bpVal';
+	private static final BODY_VALUE_LOCAL: String = '_bpVal';
 
 	/** An opt-fanout shim stays a call in the rule that uses it, not a copy of its body at each site. */
 	@:pin('control')

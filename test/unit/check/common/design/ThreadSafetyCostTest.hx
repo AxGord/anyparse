@@ -15,7 +15,7 @@ class ThreadSafetyCostTest extends Test {
 		+ '"FileSystem.readDirectory"],"shortSinks":["FileSystem.stat","FileSystem.readDirectory"],"spawns":["Runner.create"],'
 		+ '"lockPairs":["Mutex.acquire/release"],"iterates":["Each.all"],"runsOnce":["Once.run"]}}}';
 
-	private static inline final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
+	private static final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
 	/** the client's `ShardStore.getFilePathCall`: one indexed SQL lookup on the main thread waits well under a frame. */
 	@:pin('control') @:killer('M-TS-SHORT-SINKS-IGNORED')

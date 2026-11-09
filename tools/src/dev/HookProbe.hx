@@ -34,19 +34,18 @@ final class HookProbe {
 	/** The extension spelled apart, so no line of this file reads as a command on a `.hx` file to a gate scanning it. */
 	private static inline final X: String = '.hx';
 
-	private static inline final ALLOW: String = 'allow';
-	private static inline final DENY: String = 'deny';
-	private static inline final WARN: String = 'warn';
-	private static inline final SILENT: String = 'silent';
-	private static inline final SPEAKS: String = 'speaks';
-
 	/** The width of the verdict column: the longest verdict of the matrix. */
 	private static inline final GATE_WIDTH: Int = 5;
 
 	private static inline final LINT_WARN_WIDTH: Int = 6;
+	private static final ALLOW: String = 'allow';
+	private static final DENY: String = 'deny';
+	private static final WARN: String = 'warn';
+	private static final SILENT: String = 'silent';
+	private static final SPEAKS: String = 'speaks';
 
 	/** The session id of every lint-warn probe payload, so its snapshot can be cleared before a run. */
-	private static inline final SESSION: String = 'probe-session';
+	private static final SESSION: String = 'probe-session';
 
 	public static function gate(argv: Array<String>): Int {
 		final found: Null<String> = hookOf(argv, 'HXQ_GATE_HOOK', '.claude/hooks/hxq-gate.sh');

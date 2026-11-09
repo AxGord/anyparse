@@ -14,9 +14,6 @@ import utest.Test;
 @:nullSafety(Strict)
 final class CloneCensusTest extends Test {
 
-	/** Four statements: two bare declarations, a call, a bare assignment. */
-	private static inline final SOURCE: String = 'var a = 1;\nvar b = 2;\nfoo(a);\nx.y = \'q\';\n';
-
 	/** The `hxq ast --json` of `SOURCE`, as far as a census reads it. */
 	private static inline final AST: String = '{"file":"A.hx","tree":{"kind":"module","children":['
 		+ '{"kind":"VarStmt","children":[],"span":{"start":[1,1],"end":[1,11]}},'
@@ -37,7 +34,10 @@ final class CloneCensusTest extends Test {
 		+ '{"file":"A.hx","line":7,"col":1,"message":"2 statements duplicated from line 1 — x"},'
 		+ '{"file":"A.hx","line":3,"col":1,"message":"1 statements duplicated from line 9 — x"}]';
 
-	private static inline final T1: String = 'A.hx:1:1: [info] 2 statements duplicated from line 9 — x (duplicate-code)\n';
+	/** Four statements: two bare declarations, a call, a bare assignment. */
+	private static final SOURCE: String = 'var a = 1;\nvar b = 2;\nfoo(a);\nx.y = \'q\';\n';
+
+	private static final T1: String = 'A.hx:1:1: [info] 2 statements duplicated from line 9 — x (duplicate-code)\n';
 
 	public function testBothReportFormatsReadTheSameFindings(): Void {
 		TempDir.with(dir -> {

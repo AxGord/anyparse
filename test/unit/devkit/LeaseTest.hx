@@ -22,11 +22,10 @@ final class LeaseTest extends Test {
 		+ 'locks held: none\n';
 
 	/** Prints `DEVKIT_PROBE` and the threads its lease granted. */
-	private static inline final SHOW_LEASE: String = 'process.stdout.write(process.env.DEVKIT_PROBE + "|" + process.env.WF_THREADS)';
+	private static final SHOW_LEASE: String = 'process.stdout.write(process.env.DEVKIT_PROBE + "|" + process.env.WF_THREADS)';
 
 	/** A `wf-run` that skips its own options and runs the command after `--` on a grant of three threads. */
-	private static inline final FAKE_WF_RUN: String =
-		'#!/bin/sh\nwhile [ "$$1" != "--" ]; do shift; done\nshift\nWF_THREADS=3 exec "$$@"\n';
+	private static final FAKE_WF_RUN: String = '#!/bin/sh\nwhile [ "$$1" != "--" ]; do shift; done\nshift\nWF_THREADS=3 exec "$$@"\n';
 
 	@:pin('control')
 	@:killer('M-LEASE-NEST-UNDER-HELD')

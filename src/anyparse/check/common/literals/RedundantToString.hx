@@ -88,13 +88,13 @@ import anyparse.util.Strings;
 final class RedundantToString extends RuleBase implements DefaultOff {
 
 	/** The stringification method every arm looks for. */
-	private static inline final TO_STRING: String = 'toString';
+	private static final TO_STRING: String = 'toString';
 
 	/** The receiver name the `Std.string(...)` arm matches on. */
-	private static inline final STD_TYPE: String = 'Std';
+	private static final STD_TYPE: String = 'Std';
 
 	/** The member name the `Std.string(...)` arm matches on. */
-	private static inline final STD_METHOD: String = 'string';
+	private static final STD_METHOD: String = 'string';
 
 	public function new() {
 		super('redundant-tostring', 'a .toString() call in a position that already stringifies', RuleCategory.Literals);

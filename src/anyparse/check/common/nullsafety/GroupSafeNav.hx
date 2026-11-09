@@ -39,7 +39,7 @@ final class GroupSafeNav extends RuleBase {
 	private static inline final RULE_ID: String = 'group-safe-nav';
 
 	/** The source spelling of a null-safe access, whose `?` the rewrite drops at the root of each statement. */
-	private static inline final SAFE_NAV: String = '?.';
+	private static final SAFE_NAV: String = '?.';
 
 	public function new() {
 		super(

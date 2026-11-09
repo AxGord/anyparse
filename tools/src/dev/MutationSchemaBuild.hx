@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Compare;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import haxe.io.Path;
@@ -32,9 +33,9 @@ final class MutationSchemaBuild {
 	private static inline final FAILED: String = 'failed';
 
 	/** The composed build's files: what `apq mutation-schema` placed, and the arms it is asked to compose. */
-	private static inline final PLACEMENTS: String = 'placements';
+	private static final PLACEMENTS: String = 'placements';
 
-	private static inline final PLAN: String = 'plan';
+	private static final PLAN: String = 'plan';
 
 	/** The class paths a composed arm's file lives under, the suite build's own (`test-js-common.hxml`). */
 	private static final CLASS_PATHS: Array<String> = ['src', 'tools/src'];
@@ -108,7 +109,7 @@ final class MutationSchemaBuild {
 			final typed: String = Path.withoutDirectory(path) == p.owner ? module : '$module.${p.owner}';
 			if (!modules.contains(typed)) modules.push(typed);
 		}
-		modules.sort(Reflect.compare);
+		modules.sort(Compare.compareString);
 		return [for (m in modules) for (arg in ['--macro', '$m.__mutOn(0)']) arg];
 	}
 
