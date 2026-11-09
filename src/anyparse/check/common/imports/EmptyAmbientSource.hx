@@ -20,15 +20,15 @@ final class EmptyAmbientSource extends RuleBase implements CrossFileFix {
 
 	private static inline final RULE_ID: String = 'empty-ambient-source';
 
-	/** The message of a source with nothing but whitespace in it — the one finding the fix deletes. */
-	private static inline final MSG_BLANK: String = 'ambient import source binds nothing — delete it';
-
-	/** The message of a source with comments and nothing else. */
-	private static inline final MSG_COMMENTS: String = 'ambient import source binds nothing but carries comments — delete it by hand';
-
 	/** Why the comment-only finding is never deleted. */
 	private static inline final DECLINE_COMMENTS: String = 'the comments would go with the file, and whether they still say something '
 		+ 'is a reader\'s call';
+
+	/** The message of a source with nothing but whitespace in it — the one finding the fix deletes. */
+	private static final MSG_BLANK: String = 'ambient import source binds nothing — delete it';
+
+	/** The message of a source with comments and nothing else. */
+	private static final MSG_COMMENTS: String = 'ambient import source binds nothing but carries comments — delete it by hand';
 
 	public function new() {
 		super(RULE_ID, 'an ambient import source with no statement in it', RuleCategory.Imports);
@@ -36,7 +36,7 @@ final class EmptyAmbientSource extends RuleBase implements CrossFileFix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final out: Array<Violation> = [];
-		for (entry in files) if (plugin.ambientImportGovernance(entry.file) != null) {
+		for (entry in files) if (plugin.ambientImportGovernedFiles(entry.file) != null) {
 			final blank: Null<Bool> = blankness(entry.source, plugin);
 			if (blank != null) out.push({
 				file: entry.file,

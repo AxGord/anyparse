@@ -147,6 +147,10 @@ final class StubQueryPlugin implements GrammarPlugin {
 		return _inner.ambientImportGovernance(path);
 	}
 
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles> {
+		return _inner.ambientImportGovernedFiles(path);
+	}
+
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return _inner.ambientImportSites(path, pkg);
 	}

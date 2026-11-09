@@ -157,14 +157,14 @@
 		{
 			"name": "M-AMBIENT-GOVERNANCE-SHORT",
 			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
-			"method": "collectModules",
+			"method": "collectModuleFiles",
 			"force": "false",
 			"note": "the modules an ambient source governs are never reported as fully enumerated, so every verdict about such a file is withheld and a dead statement in one is never found"
 		},
 		{
 			"name": "M-AMBIENT-GOVERNANCE-COMPLETE",
 			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
-			"method": "collectModules",
+			"method": "collectModuleFiles",
 			"force": "true",
 			"note": "a governed set that could not be listed is claimed complete, so an ambient source whose readers the engine never saw has every statement called dead and deleted"
 		},
@@ -993,6 +993,14 @@
 			"find": "opt.expressionTryOverflow = HaxeFormatValues.sameLineToRuntime(section.expressionTryOverflow, opt.expressionTryOverflow);",
 			"replace": "opt.expressionTryOverflow = anyparse.format.SameLinePolicy.Next;",
 			"note": "the key is ignored, so A cannot be selected"
+		},
+		{
+			"name": "M-AMBIENT-NAMES-READS-TEXT",
+			"type": "anyparse.grammar.haxe.HaxeAmbientImports",
+			"method": "collectModuleFiles",
+			"find": "\t\t\tout.push(child);\n",
+			"replace": "\t\t\tif (readModule(child) != null) out.push(child);\n",
+			"note": "the names-first listing opens every module it names, so a module that cannot be read drops out of an answer a caller meant to get without any module text"
 		}
 	]
 }

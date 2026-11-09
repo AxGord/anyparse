@@ -641,7 +641,7 @@ final class LintFixDriver {
 		changed: Array<{ file: String, source: String }>, plugin: CachingGrammarPlugin, beforeWrite: Null<() -> Void>
 	): Void {
 		final ambient: Array<{ path: String, content: String }> = [
-			for (entry in changed) if (plugin.ambientImportGovernance(entry.file) != null) { path: entry.file, content: entry.source }
+			for (entry in changed) if (plugin.ambientImportGovernedFiles(entry.file) != null) { path: entry.file, content: entry.source }
 		];
 		if (ambient.length == 0) return;
 		if (beforeWrite != null) beforeWrite();

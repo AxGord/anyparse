@@ -174,7 +174,7 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 		info: FileInfo, imp: ImportInfo, index: SymbolIndex, publicTypes: Map<String, Array<String>>, bindings: ImportBindings,
 		plugin: GrammarPlugin
 	): Null<String> {
-		if (imp.guarded || imp.kind != ImportKind.Import || plugin.ambientImportGovernance(info.file) != null) return null;
+		if (imp.guarded || imp.kind != ImportKind.Import || plugin.ambientImportGovernedFiles(info.file) != null) return null;
 		if (!ImportBindings.bindsNoValue(bindings.ofImport(imp.raw))) return null;
 		final simple: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
 		if (simple == null) return null;

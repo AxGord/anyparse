@@ -401,6 +401,20 @@ interface GrammarPlugin {
 	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance>;
 
 	/**
+	 * The names-first answer of `ambientImportGovernance`: the modules `path` governs by FILE NAME
+	 * alone, and null when `path` is an ordinary module. The one answer to "which modules does this
+	 * ambient source govern, without reading them" — a caller that only counts, lists or null-tests
+	 * the governed set must ask here, because the texts are most of what the other answer costs.
+	 *
+	 * `files` lists the modules `ambientImportGovernance` would carry a text for, in the same order,
+	 * plus any module that is listed but cannot be read: a caller of this answer never reads one.
+	 * `bounded` is false only when a directory could not be listed.
+	 *
+	 * A grammar with no ambient-import concept answers null for every path.
+	 */
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles>;
+
+	/**
 	 * Every position an ambient import source COULD occupy for the module at `path`, NEAREST FIRST
 	 * and whether or not a file is there — the chain `ambientImportSources` would read if all of
 	 * them existed.
@@ -4296,5 +4310,14 @@ typedef AmbientImports = {
  */
 typedef AmbientImportGovernance = {
 	var governs: Array<AmbientImportSource>;
+	var bounded: Bool;
+};
+
+/**
+ * The modules ONE ambient import source governs, by file name only — see
+ * `GrammarPlugin.ambientImportGovernedFiles`, which is where it is read.
+ */
+typedef AmbientImportGovernedFiles = {
+	var files: Array<String>;
 	var bounded: Bool;
 };

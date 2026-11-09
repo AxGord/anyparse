@@ -73,7 +73,7 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final written: Null<String> = _inner.writeRoundTrip(source, optsJson);
-		return written == null ? null : written.replace(_from, _to);
+		return written?.replace(_from, _to);
 	}
 
 	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String> {
@@ -138,6 +138,10 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 
 	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance> {
 		return _inner.ambientImportGovernance(path);
+	}
+
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles> {
+		return _inner.ambientImportGovernedFiles(path);
 	}
 
 	public function ambientImportSites(path: String, pkg: String): Array<String> {

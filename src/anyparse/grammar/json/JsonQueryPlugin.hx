@@ -185,6 +185,10 @@ final class JsonQueryPlugin implements GrammarPlugin {
 		return null;
 	}
 
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles> {
+		return null;
+	}
+
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return [];
 	}

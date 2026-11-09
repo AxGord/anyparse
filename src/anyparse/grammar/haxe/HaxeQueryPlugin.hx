@@ -551,6 +551,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return HaxeAmbientImports.governanceFor(path);
 	}
 
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles> {
+		return HaxeAmbientImports.governedFilesFor(path);
+	}
+
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return HaxeAmbientImports.sitesFor(path, pkg);
 	}

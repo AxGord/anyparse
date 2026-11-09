@@ -4,6 +4,7 @@ import anyparse.check.scan.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.AmbientImportGovernance;
+import anyparse.query.GrammarPlugin.AmbientImportGovernedFiles;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
@@ -710,6 +711,13 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_governanceMemo[path] = governance;
 		return governance;
 	}
+
+	/**
+	 * Forwarded, not memoised: a names listing is a bare directory read, a rule may ask one ambient source once per
+	 * import statement it holds, and a listing held across a pass would show the tree before the run's own writes.
+	 */
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles>
+		return _inner.ambientImportGovernedFiles(path);
 
 	/** Forwarded: the ladder is a function of the path, the package and the grammar's own stop rule, so there is nothing to cache. */
 	public function ambientImportSites(path: String, pkg: String): Array<String> return _inner.ambientImportSites(path, pkg);

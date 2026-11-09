@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.query.ConfigFinder;
 import anyparse.query.GrammarPlugin.AmbientImportGovernance;
+import anyparse.query.GrammarPlugin.AmbientImportGovernedFiles;
 import anyparse.query.GrammarPlugin.AmbientImportSource;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import haxe.io.Path;
@@ -19,10 +20,10 @@ import haxe.io.Path;
 final class HaxeAmbientImports {
 
 	/** The file name Haxe reads a directory's ambient imports from. */
-	private static inline final AMBIENT_FILE: String = 'import.hx';
+	private static final AMBIENT_FILE: String = 'import.hx';
 
 	/** The extension of a Haxe module file — what an `import.hx` governs and what it is not. */
-	private static inline final MODULE_EXTENSION: String = 'hx';
+	private static final MODULE_EXTENSION: String = 'hx';
 
 	/**
 	 * The `import.hx` chain in scope for the module at `path` with package `pkg`, nearest first.
@@ -64,10 +65,32 @@ final class HaxeAmbientImports {
 	 * `GrammarPlugin.ambientImportGovernance`.
 	 */
 	public static function governanceFor(path: String): Null<AmbientImportGovernance> {
-		if (Path.withoutDirectory(path) != AMBIENT_FILE) return null;
+		final names: Null<AmbientImportGovernedFiles> = governedFilesFor(path);
+		if (names == null) return null;
 		final governed: Array<AmbientImportSource> = [];
-		final complete: Bool = collectModules(named(Path.directory(path)), governed);
+		var complete: Bool = names.bounded;
+		for (file in names.files) {
+			final text: Null<String> = readModule(file);
+			if (text == null) {
+				complete = false;
+				continue;
+			}
+			// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
+			final read: String = text;
+			governed.push({ file: file, source: read });
+		}
 		return { governs: governed, bounded: complete };
+	}
+
+	/**
+	 * The modules `path` governs, by name: the same walk `governanceFor` reads its texts after, without
+	 * opening a module. `bounded` is false when a directory on the way down could not be listed.
+	 */
+	public static function governedFilesFor(path: String): Null<AmbientImportGovernedFiles> {
+		if (Path.withoutDirectory(path) != AMBIENT_FILE) return null;
+		final files: Array<String> = [];
+		final complete: Bool = collectModuleFiles(named(Path.directory(path)), files);
+		return { files: files, bounded: complete };
 	}
 
 	/**
@@ -101,8 +124,13 @@ final class HaxeAmbientImports {
 		return dir == '' ? '.' : dir;
 	}
 
-	/** Every module stored under `dir` with its text, ambient sources excluded; false when one could not be read. */
-	private static function collectModules(dir: String, out: Array<AmbientImportSource>): Bool {
+	/** The text of the module at `file`, or null when it could not be read. */
+	private static function readModule(file: String): Null<String> {
+		return #if (sys || nodejs) try sys.io.File.getContent(file) catch (_: haxe.Exception) null #else null #end;
+	}
+
+	/** Every module stored under `dir`, ambient sources excluded; false when a directory could not be listed. */
+	private static function collectModuleFiles(dir: String, out: Array<String>): Bool {
 		#if (sys || nodejs)
 		final entries: Null<Array<String>> = try sys.FileSystem.readDirectory(dir) catch (_: haxe.Exception) null;
 		if (entries == null) return false;
@@ -117,18 +145,11 @@ final class HaxeAmbientImports {
 				continue;
 			}
 			if (isDir) {
-				if (!collectModules(child, out)) complete = false;
+				if (!collectModuleFiles(child, out)) complete = false;
 				continue;
 			}
 			if (name == AMBIENT_FILE || Path.extension(name) != MODULE_EXTENSION) continue;
-			final text: Null<String> = try sys.io.File.getContent(child) catch (_: haxe.Exception) null;
-			if (text == null) {
-				complete = false;
-			} else {
-				// Re-bound: strict null-safety does not carry a narrowed local into a structure literal.
-				final read: String = text;
-				out.push({ file: child, source: read });
-			}
+			out.push(child);
 		}
 		return complete;
 		#else

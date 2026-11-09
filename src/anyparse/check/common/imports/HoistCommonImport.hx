@@ -188,16 +188,16 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	private static inline final PERCENT: Int = 100;
 
 	/** The keyword an `import` statement's identity opens with. */
-	private static inline final IMPORT_WORD: String = 'import';
+	private static final IMPORT_WORD: String = 'import';
 
 	/** The keyword a `using` statement's identity opens with. */
-	private static inline final USING_WORD: String = 'using';
+	private static final USING_WORD: String = 'using';
 
 	/** The fragment before the SHARE in a message — the anchor `messageIdentity` masks from. */
-	private static inline final SHARE_LEAD: String = ' stands in ';
+	private static final SHARE_LEAD: String = ' stands in ';
 
 	/** The fragment before the READER share in a sink message — the second anchor `messageIdentity` masks from. */
-	private static inline final READ_LEAD: String = ' is read by ';
+	private static final READ_LEAD: String = ' is read by ';
 
 	/** The `using` modules allowed in an ambient source unless a project names its own list. */
 	private static final DEFAULT_USING_ALLOW: Array<String> = ['StringTools', 'Lambda'];
@@ -631,9 +631,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		}
 		final governedAt: Map<String, Array<String>> = [];
 		for (site in order) {
-			final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(site);
+			final governance: Null<AmbientImportGovernedFiles> = plugin.ambientImportGovernedFiles(site);
 			if (governance == null || !governance.bounded) continue;
-			final names: Array<String> = governance.governs.map(governed -> governed.file);
+			final names: Array<String> = governance.files;
 			if (names.length > 0 && names.foreach(name -> infoOf.exists(name))) governedAt[site] = names;
 		}
 		final sites: Array<String> = [for (site in order) if (governedAt.exists(site)) site];

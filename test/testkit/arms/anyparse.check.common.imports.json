@@ -427,6 +427,14 @@
 			"method": "shiftedStart",
 			"force": "at",
 			"note": "the compiler is asked at the original offset in the rewritten text, past the import the same rewrite adds, so it answers about another name"
+		},
+		{
+			"name": "M-HOIST-GOVERNED-READS-TEXT",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "contextOf",
+			"find": "\t\t\tfinal governance: Null<AmbientImportGovernedFiles> = plugin.ambientImportGovernedFiles(site);\n\t\t\tif (governance == null || !governance.bounded) continue;\n\t\t\tfinal names: Array<String> = governance.files;\n",
+			"replace": "\t\t\tfinal governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(site);\n\t\t\tif (governance == null || !governance.bounded) continue;\n\t\t\tfinal names: Array<String> = governance.governs.map(governed -> governed.file);\n",
+			"note": "the hoist asks each candidate site for the text of every module it governs, so a governed module the disk cannot open withholds the whole site although the run holds its source"
 		}
 	]
 }
