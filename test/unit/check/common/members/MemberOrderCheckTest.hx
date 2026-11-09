@@ -1637,7 +1637,4 @@ class MemberOrderCheckTest extends Test {
  * finding carries and also what a silently declined one carried before this check learned to speak;
  * only the edit count separates them.
  */
-typedef FixOutcome = {
-	var reasons: Array<Null<String>>;
-	var edits: Int;
-};
+typedef FixOutcome = { var reasons: Array<Null<String>>; var edits: Int; };

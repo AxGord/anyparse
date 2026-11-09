@@ -175,8 +175,4 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 }
 
 /** The kind sets `RedundantTrailingComma` reads off the plugin, resolved once per run. */
-private typedef ListKinds = {
-	final hosts: Array<String>;
-	final params: Array<String>;
-	final mandatory: Array<String>;
-};
+private typedef ListKinds = { final hosts: Array<String>; final params: Array<String>; final mandatory: Array<String>; };

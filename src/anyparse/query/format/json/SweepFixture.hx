@@ -21,7 +21,4 @@ package anyparse.query.format.json;
  * (null / empty map), which reads as "no baseline" — a stricter but still
  * non-crashing degradation than before.
  */
-@:peg typedef SweepFixture = {
-	@:optional var path: String;
-	@:optional var status: String;
-};
+@:peg typedef SweepFixture = { @:optional var path: String; @:optional var status: String; };

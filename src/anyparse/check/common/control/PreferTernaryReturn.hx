@@ -549,10 +549,7 @@ private typedef Seams = {
 };
 
 /** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */
-private typedef PreservedComments = {
-	final hoisted: String;
-	final branchTrailing: Null<String>;
-};
+private typedef PreservedComments = { final hoisted: String; final branchTrailing: Null<String>; };
 
 private typedef TernaryMatch = {
 	var ifNode: QueryNode;

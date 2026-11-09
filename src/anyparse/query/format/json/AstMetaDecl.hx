@@ -17,8 +17,4 @@ package anyparse.query.format.json;
  * gotcha (see `AstNodeJson` for the same rationale).
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstMetaDecl = {
-	var kind: String;
-	@:optional var name: String;
-	var span: AstSearchSpan;
-};
+typedef AstMetaDecl = { var kind: String; @:optional var name: String; var span: AstSearchSpan; };

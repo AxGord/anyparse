@@ -140,7 +140,7 @@ class RemoveElementSliceTest extends Test {
 	 * doc and nothing else.
 	 */
 	public function testRemoveModuleTypedefKeepsNextDeclDoc(): Void {
-		final source: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n}\n\n/** class doc */\nclass C {}\n';
+		final source: String = '/** typedef doc */\ntypedef T = {final a:Int;}\n\n/** class doc */\nclass C {}\n';
 		final expected: String = '/** class doc */\nclass C {}\n';
 		final result: EditResult = RemoveElement.removeElement(source, 2, 1, false, new HaxeQueryPlugin(), true);
 		switch result {

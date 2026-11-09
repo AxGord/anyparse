@@ -30,17 +30,10 @@ enum FactsType {
 }
 
 /** An argument of a facts function type: whether it may be left out, and its type. */
-typedef FactsArgument = {
-	final optional: Bool;
-	final type: FactsType;
-}
+typedef FactsArgument = { final optional: Bool; final type: FactsType; }
 
 /** A field of a facts structure type: whether it may be absent, its name, and its type. */
-typedef FactsField = {
-	final optional: Bool;
-	final name: String;
-	final type: FactsType;
-}
+typedef FactsField = { final optional: Bool; final name: String; final type: FactsType; }
 
 /**
  * The one answer to "what are the parts of a type the compiler facts spell as a string": a recursive-descent reader of one type

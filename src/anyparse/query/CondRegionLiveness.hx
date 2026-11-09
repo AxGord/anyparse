@@ -16,10 +16,7 @@ using Lambda;
  * every branch up to and including this one refuted", which is exactly what the NEXT branch of
  * the region needs to know.
  */
-typedef CondBranchStep = {
-	final live: Null<Bool>;
-	final guard: Null<Bool>;
-};
+typedef CondBranchStep = { final live: Null<Bool>; final guard: Null<Bool>; };
 
 /**
  * What a CALLER asserts about a define set: `defined` names the flags it proved set, `undefined`
@@ -47,10 +44,7 @@ private typedef Frame = {
 	var elseGuard: Null<Bool>;
 }
 
-private typedef Cursor = {
-	var pos: Int;
-	var ok: Bool;
-}
+private typedef Cursor = { var pos: Int; var ok: Bool; }
 
 /**
  * Whether a byte offset in a source file sits in code the compiler PROVABLY compiled,

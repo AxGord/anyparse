@@ -27,9 +27,7 @@ enum abstract DocGapVerdict(Int) {
 }
 
 /** A type body member as the doc-comment rule reads it: the comments in front of it, in source order. */
-typedef LeadingCommented = {
-	var leadingComments: Array<String>;
-}
+typedef LeadingCommented = { var leadingComments: Array<String>; }
 
 /**
  * The blank-line policy a writer applies to the gap BETWEEN two adjacent members of a type body, as the runtime

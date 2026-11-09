@@ -29,6 +29,4 @@ package anyparse.grammar.haxe;
  */
 @:peg
 @:spanned('KeyValueBinder')
-typedef HxKeyValueBinder = {
-	var name: HxIdentLit;
-};
+typedef HxKeyValueBinder = { var name: HxIdentLit; };

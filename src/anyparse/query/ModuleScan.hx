@@ -448,7 +448,4 @@ final class ModuleScan {
  * fail-closed answer: a caller asking whether a site is covered gets "no" and refuses, rather than
  * treating an unlocatable guard as if it were absent.
  */
-typedef GuardedImport = {
-	final decl: QueryNode;
-	final region: Null<Span>;
-};
+typedef GuardedImport = { final decl: QueryNode; final region: Null<Span>; };

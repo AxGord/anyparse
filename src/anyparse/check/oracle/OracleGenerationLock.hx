@@ -311,10 +311,7 @@ final class OracleGenerationLock {
 }
 
 /** One `apq` process as a lock holder: its pid, and when it started (empty when that cannot be told). */
-typedef Holder = {
-	var pid: Int;
-	var start: String;
-}
+typedef Holder = { var pid: Int; var start: String; }
 
 /**
  * The owner of a generation's exclusive hold as read off its `owner` file: pid and start time (null / empty when the

@@ -33,11 +33,14 @@ final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 
 	@:pin('control')
 	@:killer('M-EXPLICIT-NOWRAP-TYPEDEF-BODY')
-	public function testATypedefBodyKeepsItsLines(): Void {
-		for (src in [
-			'typedef T = {\n\ta:Int,\n\tb:Int\n}',
-			'typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}'
-		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, config('noWrap', '')));
+	public function testATypedefBodyIsFlat(): Void {
+		Assert.equals(
+			'typedef T = {a:Int, b:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int,\n\tb:Int\n}', config('noWrap', ''))
+		);
+		Assert.equals(
+			'typedef U = {var a:Int; var b:Int;}',
+			HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}', config('noWrap', ''))
+		);
 	}
 
 	private static function config(mode: String, rest: String): String {

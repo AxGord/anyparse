@@ -241,7 +241,4 @@ final class CliFixture {
 }
 
 /** What one `apq` run left: its exit code and its stdout. */
-typedef CliRun = {
-	final code: Int;
-	final out: String;
-}
+typedef CliRun = { final code: Int; final out: String; }

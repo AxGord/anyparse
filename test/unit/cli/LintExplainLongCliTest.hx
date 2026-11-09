@@ -252,7 +252,4 @@ class LintExplainLongCliTest extends Test {
 }
 
 /** What one lint run printed: stdout and stderr. */
-private typedef LintOutput = {
-	final out: String;
-	final err: String;
-}
+private typedef LintOutput = { final out: String; final err: String; }

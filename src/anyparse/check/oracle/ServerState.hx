@@ -7,8 +7,4 @@ package anyparse.check.oracle;
  * staleness rule is written against.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef ServerState = {
-	var port: Int;
-	var pid: Int;
-	var compiledAt: Int;
-}
+typedef ServerState = { var port: Int; var pid: Int; var compiledAt: Int; }

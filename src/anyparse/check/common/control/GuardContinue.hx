@@ -688,8 +688,4 @@ private typedef Candidate = GuardedIf & { var tail: Array<QueryNode>; var rename
  * over — the declaration's binder token plus each read, a plain identifier or the
  * identifier of a `$name` interpolation (the `$` itself is outside the span).
  */
-private typedef LocalRename = {
-	var name: String;
-	var newName: String;
-	var spans: Array<Span>;
-}
+private typedef LocalRename = { var name: String; var newName: String; var spans: Array<Span>; }

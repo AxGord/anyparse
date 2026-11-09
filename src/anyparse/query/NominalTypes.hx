@@ -1171,10 +1171,7 @@ final class NominalTypes {
  * each consumer then reads its own way. Produced only by `NominalTypes.pathRootBinding`, which
  * answers null rather than an all-null record when the root resolves to neither.
  */
-private typedef PathRoot = {
-	final selfTypeName: Null<String>;
-	final bindingFrom: Null<Int>;
-};
+private typedef PathRoot = { final selfTypeName: Null<String>; final bindingFrom: Null<Int>; };
 
 /**
  * Which binder of an iteration node a binding offset landed on: the loop node itself (its own
@@ -1182,10 +1179,7 @@ private typedef PathRoot = {
  * separate child in a key-value iteration. The two type DIFFERENTLY, so the answer cannot be a
  * bare node — see `NominalTypes.loopBinderAt`.
  */
-private typedef LoopBinderHit = {
-	final loop: QueryNode;
-	final isValueBinder: Bool;
-};
+private typedef LoopBinderHit = { final loop: QueryNode; final isValueBinder: Bool; };
 
 /**
  * The extra per-file context `NominalTypes.expressionTypeNominal` needs for its DEEP

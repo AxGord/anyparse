@@ -8,6 +8,4 @@ import anyparse.grammar.json.JValue;
  * has no map-of-lists rule. Read by `FmtOwnershipRecordParser`.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef FmtOwnershipRecord = {
-	var modules: Map<String, JValue>;
-};
+typedef FmtOwnershipRecord = { var modules: Map<String, JValue>; };

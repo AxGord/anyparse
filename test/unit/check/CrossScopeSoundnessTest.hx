@@ -992,14 +992,7 @@ class CrossScopeSoundnessTest extends Test {
 }
 
 /** One two-file cell: the declaring source, the reaching source, and the route's name. */
-private typedef Cell = {
-	final name: String;
-	final decl: String;
-	final grantee: String;
-};
+private typedef Cell = { final name: String; final decl: String; final grantee: String; };
 
 /** One source a scope half holds. */
-private typedef SourceFile = {
-	var file: String;
-	var source: String;
-};
+private typedef SourceFile = { var file: String; var source: String; };

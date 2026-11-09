@@ -5,7 +5,4 @@ package anyparse.query.format.json;
  * opens on, and the legend, each as the Mermaid text the page renders.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef GraphPageJson = {
-	var views: Array<GraphPageViewJson>;
-	var legend: String;
-};
+typedef GraphPageJson = { var views: Array<GraphPageViewJson>; var legend: String; };

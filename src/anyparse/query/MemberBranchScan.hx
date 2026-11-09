@@ -427,7 +427,4 @@ typedef MemberBranchSeams = {
  * accept it. `final` in a structure typedef is fine anywhere the expected type is
  * written at the literal — see `docs/testing.md` § "The core stays target-independent".
  */
-private typedef MemberRun = {
-	var nodes: Array<QueryNode>;
-	var certain: Bool;
-};
+private typedef MemberRun = { var nodes: Array<QueryNode>; var certain: Bool; };

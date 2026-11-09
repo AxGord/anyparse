@@ -292,8 +292,4 @@ private typedef Candidate = {
 };
 
 /** One arm's body: its statement nodes and the source region they span. */
-private typedef Body = {
-	final nodes: Array<QueryNode>;
-	final from: Int;
-	final to: Int;
-};
+private typedef Body = { final nodes: Array<QueryNode>; final from: Int; final to: Int; };

@@ -151,7 +151,4 @@ final class PreferSwitchExpression extends RuleBase {
 }
 
 /** `PreferSwitchExpression`'s resolved configuration: the chain seams and the host kinds its head gate whitelists. */
-private typedef Config = {
-	final seams: ChainSeams;
-	final hosts: Array<String>;
-}
+private typedef Config = { final seams: ChainSeams; final hosts: Array<String>; }

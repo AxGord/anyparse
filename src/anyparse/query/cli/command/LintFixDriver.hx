@@ -31,10 +31,7 @@ using Lambda;
  * The outcome of one `lint --fix` pass over the active file set: `nextActive` is the file set (with
  * rewritten sources) to feed the next fixpoint pass, and `fixedDelta` how many findings that pass resolved.
  */
-typedef LintPassResult = {
-	var nextActive: Array<{ file: String, source: String }>;
-	var fixedDelta: Int;
-};
+typedef LintPassResult = { var nextActive: Array<{ file: String, source: String }>; var fixedDelta: Int; };
 
 /**
  * The pass loop behind `apq lint --fix`.

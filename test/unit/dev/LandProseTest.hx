@@ -174,14 +174,7 @@ final class LandProseTest extends Test {
 }
 
 /** What the row said about a scratch repository: its reading, whether it passed, and the log of every hit. */
-private typedef Reading = {
-	var note: String;
-	var passed: Bool;
-	var logged: String;
-}
+private typedef Reading = { var note: String; var passed: Bool; var logged: String; }
 
 /** The oddities a scratch repository can be given: a log that cannot be written, more prose than the row names. */
-private typedef Odd = {
-	@:optional var nowhere: Bool;
-	@:optional var many: Bool;
-}
+private typedef Odd = { @:optional var nowhere: Bool; @:optional var many: Bool; }

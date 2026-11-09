@@ -242,8 +242,4 @@ final class IfFalseDeadCode extends RuleBase {
 }
 
 /** The resolved region `eliminatedRegion` reads in both `fix` and `deadRegionMessage`. */
-private typedef EliminatedRegion = {
-	final then: String;
-	final elsePos: Int;
-	final otherwise: String;
-};
+private typedef EliminatedRegion = { final then: String; final elsePos: Int; final otherwise: String; };

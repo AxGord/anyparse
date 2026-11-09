@@ -21,7 +21,4 @@ package anyparse.grammar.haxe;
  * back so the `#end` is still there for the field after it.
  */
 @:peg
-typedef HxCondSpliceOpTerm = {
-	@:fmt(atomOperand) var operand: HxExpr;
-	@:fmt(inlineSep) var op: HxCondSpliceOpLit;
-};
+typedef HxCondSpliceOpTerm = { @:fmt(atomOperand) var operand: HxExpr; @:fmt(inlineSep) var op: HxCondSpliceOpLit; };

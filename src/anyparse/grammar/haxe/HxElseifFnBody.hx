@@ -21,7 +21,4 @@ package anyparse.grammar.haxe;
  * under `HxConditionalExpr.elseifs`.
  */
 @:peg
-typedef HxElseifFnBody = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	var body: HxFnBody;
-};
+typedef HxElseifFnBody = { @:kw('#elseif') var cond: HxPpCondLit; var body: HxFnBody; };

@@ -16,10 +16,7 @@ import js.node.Buffer;
  * produced none) and its combined stdout + stderr. The typed narrowing of the raw
  * spawn result, so no `Dynamic` crosses back out of the process boundary.
  */
-typedef ConnectResult = {
-	var status: Null<Int>;
-	var output: String;
-}
+typedef ConnectResult = { var status: Null<Int>; var output: String; }
 
 /**
  * A PERSISTENT Haxe compilation server shared by every `apq` process working on one

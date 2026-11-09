@@ -560,7 +560,4 @@ typedef NewFileSpec = {
 }
 
 /** `create` outcome: the edit (Ok canonical source / Err) plus the interface methods left as stubs. */
-typedef NewFileResult = {
-	var result: EditResult;
-	var stubbed: Array<String>;
-}
+typedef NewFileResult = { var result: EditResult; var stubbed: Array<String>; }

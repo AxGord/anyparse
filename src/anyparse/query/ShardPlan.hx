@@ -16,10 +16,7 @@ typedef ShardPlacement = {
 };
 
 /** A class's in-suite cost: its wall time in milliseconds and how many tests it ran (0 when unknown). */
-typedef ClassWeight = {
-	ms: Int,
-	tests: Int
-};
+typedef ClassWeight = { ms: Int, tests: Int };
 
 /**
  * Everything `ShardPlan.plan` reads: the parsed runner, its text (hit

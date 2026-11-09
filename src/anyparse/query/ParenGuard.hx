@@ -14,11 +14,7 @@ import haxe.Exception;
  * never saw — so `guard` treats `[0, text.length)` as an implicit hole and the
  * caller does not list it.
  */
-typedef GuardedEdit = {
-	span: Span,
-	text: String,
-	holes: Array<Span>
-};
+typedef GuardedEdit = { span: Span, text: String, holes: Array<Span> };
 
 /**
  * Minimal parenthesisation for a TEXT splice.
@@ -568,10 +564,7 @@ final class ParenGuard {
 }
 
 /** How to spell a grouping pair, as `RefShape.parenDelimiters` declares it. */
-private typedef ParenDelimiters = {
-	open: String,
-	close: String
-};
+private typedef ParenDelimiters = { open: String, close: String };
 
 /** Everything the per-wrap probes need, assembled once. */
 private typedef Probe = {

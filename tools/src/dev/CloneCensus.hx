@@ -447,19 +447,10 @@ typedef Finding = {
 }
 
 /** Findings by family, families in first-seen order. */
-typedef Grouped = {
-	var keys: Array<String>;
-	var members: Map<String, Array<Finding>>;
-}
+typedef Grouped = { var keys: Array<String>; var members: Map<String, Array<Finding>>; }
 
 /** Findings by whole identity, keys in first-seen order. */
-typedef Keyed = {
-	var keys: Array<String>;
-	var byKey: Map<String, Finding>;
-}
+typedef Keyed = { var keys: Array<String>; var byKey: Map<String, Finding>; }
 
 /** A node starting at some position: its siblings and its index among them. */
-typedef Candidate = {
-	var siblings: Array<AstNodeJson>;
-	var index: Int;
-}
+typedef Candidate = { var siblings: Array<AstNodeJson>; var index: Int; }

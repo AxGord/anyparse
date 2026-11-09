@@ -597,10 +597,7 @@ private typedef Seams = {
 };
 
 /** A member lookup both resolved arms have already PINNED: the run's index and the receiver's type nominal. */
-private typedef PinnedLookup = {
-	final index: SymbolIndex;
-	final recvType: String;
-};
+private typedef PinnedLookup = { final index: SymbolIndex; final recvType: String; };
 
 /**
  * One file's resolution context for the resolved-type Bool proof: the parsed `root` the scope

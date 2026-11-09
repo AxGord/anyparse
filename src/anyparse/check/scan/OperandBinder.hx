@@ -538,10 +538,7 @@ typedef Located = {
 }
 
 /** The file of the index a type is written in, and the type parameters in scope where it is. */
-typedef WrittenHost = {
-	final file: FileInfo;
-	final params: Array<String>;
-}
+typedef WrittenHost = { final file: FileInfo; final params: Array<String>; }
 
 /**
  * The parameter list a call selects (`OperandBinder.calleeParams`): where it is written (`at` of the binder's file, or of

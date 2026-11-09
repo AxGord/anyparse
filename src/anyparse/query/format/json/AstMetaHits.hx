@@ -10,6 +10,4 @@ package anyparse.query.format.json;
  * envelope — forward-compatible.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstMetaHits = {
-	var hits: Array<AstMetaHit>;
-};
+typedef AstMetaHits = { var hits: Array<AstMetaHit>; };

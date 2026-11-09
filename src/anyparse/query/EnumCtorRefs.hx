@@ -29,10 +29,7 @@ typedef CtorTarget = {
 }
 
 /** One file's constructor-token offsets, or the refusal that stops the whole rename. */
-typedef CtorOffsets = {
-	final offsets: Array<Int>;
-	final error: Null<String>;
-}
+typedef CtorOffsets = { final offsets: Array<Int>; final error: Null<String>; }
 
 /**
  * The references of an enum CONSTRUCTOR a member rename (`CrossRenameMember`) does not reach through a receiver: the

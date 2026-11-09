@@ -11,8 +11,4 @@ package anyparse.query.format.json;
  * can read both via a single normalization pass).
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstSearchBinding = {
-	var name: String;
-	var text: String;
-	var span: AstSearchSpan;
-};
+typedef AstSearchBinding = { var name: String; var text: String; var span: AstSearchSpan; };

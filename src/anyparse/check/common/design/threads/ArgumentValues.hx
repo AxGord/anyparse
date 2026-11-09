@@ -558,11 +558,7 @@ final class ArgumentValues {
  * A string affix guard (`ArgumentValues.stringPredicate`): of the tracked parameter `param`, whether it ends (`suffix`) or
  * starts with `text`.
  */
-typedef AffixTest = {
-	final param: Int;
-	final suffix: Bool;
-	final text: String;
-}
+typedef AffixTest = { final param: Int; final suffix: Bool; final text: String; }
 
 /** One call `ArgumentValues.bind` reads: its edge, arguments, the callee's parameters, and what the caller knows. */
 private typedef CallBinding = {

@@ -25,11 +25,7 @@ using Lambda;
  * One resolved member of a type declaration: the member node, the
  * modifier / meta sibling run that precedes it, and the enclosing decl.
  */
-typedef MemberGroup = {
-	var member: QueryNode;
-	var modifiers: Array<QueryNode>;
-	var groupSpan: Span;
-}
+typedef MemberGroup = { var member: QueryNode; var modifiers: Array<QueryNode>; var groupSpan: Span; }
 
 /**
  * One member being moved: its resolved group, member-node span, cut
@@ -50,11 +46,7 @@ typedef MovedMember = {
  * it is a braceless string interpolation, null for an ordinary identifier — the two take
  * different edits (see `qualifyEdit`).
  */
-private typedef BareHit = {
-	var m: MovedMember;
-	var offset: Int;
-	var interp: Null<Span>;
-}
+private typedef BareHit = { var m: MovedMember; var offset: Int; var interp: Null<Span>; }
 
 /**
  * One TYPE-QUALIFIED reference to a moved member — the receiver span to overwrite and the
@@ -62,20 +54,13 @@ private typedef BareHit = {
  * root-anchored path, which is legal from every file and therefore needs no import; a BARE one
  * keeps its short form and leans on an import, so only that flavour reports `needsImport`.
  */
-private typedef QualifiedHit = {
-	var span: Span;
-	var text: String;
-	var needsImport: Bool;
-}
+private typedef QualifiedHit = { var span: Span; var text: String; var needsImport: Bool; }
 
 /**
  * A destination field to mirror under `--scaffold`: its name and the
  * verbatim source of its declared type on the source type.
  */
-typedef ScaffoldField = {
-	var name: String;
-	var type: String;
-}
+typedef ScaffoldField = { var name: String; var type: String; }
 
 /**
  * Accumulator for `scanSibling`: satisfied final-field deps, moved

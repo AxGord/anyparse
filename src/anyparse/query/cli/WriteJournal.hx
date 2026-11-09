@@ -18,10 +18,7 @@ typedef JournalEntry = {
 }
 
 /** A path's text at one moment, or null when it does not exist. */
-typedef JournalState = {
-	final path: String;
-	final content: Null<String>;
-}
+typedef JournalState = { final path: String; final content: Null<String>; }
 
 /**
  * Every file one command run wrote or deleted, with what it held before — what a post-write check needs to put the

@@ -651,9 +651,7 @@ typedef TreeSeams = {
 }
 
 /** A mutable holder threading the common l-value through the recursion (set by the leftmost leaf). */
-typedef LvalueRef = {
-	var lvalue: Null<QueryNode>;
-}
+typedef LvalueRef = { var lvalue: Null<QueryNode>; }
 
 /**
  * A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts,

@@ -401,16 +401,10 @@ final class ParamAscription {
  * to no arm, while one that is and was refused has a reason of its own. Folded into a bare
  * `Null<Array<…>>` a reader chasing the second would look for a gate that never ran.
  */
-typedef ParamVerdict = {
-	final subject: Bool;
-	final edits: Null<Array<FixEdit>>;
-};
+typedef ParamVerdict = { final subject: Bool; final edits: Null<Array<FixEdit>>; };
 
 /** The modifier kinds and metadata names of the annotation run written immediately before a declaration. */
-private typedef LeadingRun = {
-	final kinds: Array<String>;
-	final metas: Array<String>;
-};
+private typedef LeadingRun = { final kinds: Array<String>; final metas: Array<String>; };
 
 /** The parameter a `Dynamic` finding sits on, plus what the arm needs to reach its owner and its reads. */
 private typedef ParamSubject = {

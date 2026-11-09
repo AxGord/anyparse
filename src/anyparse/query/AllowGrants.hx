@@ -95,7 +95,4 @@ final class AllowGrants {
 }
 
 /** What `AllowGrants.granteeFiles` enumerated: the files a grant opens a member to, or the first path it could not enumerate. */
-typedef Grantees = {
-	final files: Array<String>;
-	final unmatched: Null<String>;
-};
+typedef Grantees = { final files: Array<String>; final unmatched: Null<String>; };

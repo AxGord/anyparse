@@ -75,8 +75,8 @@ class AddMemberSliceTest extends Test {
 	 * swallows (same trivia-swallow as `final class`).
 	 */
 	public function testAppendToTypedefAnon(): Void {
-		final source: String = 'typedef T = {\n\tvar x:Int;\n}\n';
-		final expected: String = 'typedef T = {\n\tvar x:Int;\n\n\tvar y:Int;\n}\n';
+		final source: String = 'typedef T = {var x:Int;}\n';
+		final expected: String = 'typedef T = {var x:Int; var y:Int;}\n';
 		assertAdd(source, 'T', 'var y:Int;', expected);
 	}
 
@@ -144,9 +144,9 @@ class AddMemberSliceTest extends Test {
 	 * final class is the last decl.
 	 */
 	public function testAppendToNonLastFinalClass(): Void {
-		final source: String = 'final class C {\n\tvar x:Int;\n}\n\n/**\n * Doc.\n */\ntypedef T = {\n\tvar y:Int;\n}\n';
+		final source: String = 'final class C {\n\tvar x:Int;\n}\n\n/**\n * Doc.\n */\ntypedef T = {var y:Int;}\n';
 		final expected: String =
-			'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n\n/**\n * Doc.\n */\ntypedef T = {\n\tvar y:Int;\n}\n';
+			'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n\n/**\n * Doc.\n */\ntypedef T = {var y:Int;}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 

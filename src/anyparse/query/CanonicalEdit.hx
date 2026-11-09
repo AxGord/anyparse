@@ -546,7 +546,4 @@ enum EditResult {
  * Purely OPT-IN, and inert without a declaration: an edit set that declares no carry is judged
  * exactly as it was before this type existed.
  */
-typedef CarriedEdit = {
-	final edit: Span;
-	final spans: Array<Span>;
-}
+typedef CarriedEdit = { final edit: Span; final spans: Array<Span>; }

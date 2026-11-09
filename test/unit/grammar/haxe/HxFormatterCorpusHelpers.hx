@@ -12,11 +12,7 @@ import sys.io.File;
  * `input` is the pre-format Haxe source, `expected` is the reference
  * formatter's byte-exact output.
  */
-typedef HxTestCase = {
-	final config: String;
-	final input: String;
-	final expected: String;
-}
+typedef HxTestCase = { final config: String; final input: String; final expected: String; }
 
 /**
  * Shared helpers for the haxe-formatter corpus harness. Resolves the

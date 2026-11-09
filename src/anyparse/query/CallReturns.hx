@@ -377,11 +377,7 @@ final class CallReturns {
  * the type from different files (`CallReturns.selectedParameter`); `unbound` the type parameters of the call's signature
  * it still names, which no argument before it binds.
  */
-typedef WrittenParameter = {
-	final text: String;
-	final file: Null<FileInfo>;
-	final unbound: Array<String>;
-}
+typedef WrittenParameter = { final text: String; final file: Null<FileInfo>; final unbound: Array<String>; }
 
 /** How a call's arguments meet the signature it selects, as far as typing one of them reads it (`CallReturns.parameterType`). */
 typedef ArgumentRun = {

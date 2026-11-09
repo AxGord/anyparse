@@ -87,11 +87,7 @@ typedef FileScan = {
  * What a written type name denotes (`OwnedTypes.typesNamed`): the declarations of the index and the paths of types outside
  * it that it may be, or `open` when it may be something nothing here reads.
  */
-typedef Denoted = {
-	final decls: Array<ResolvedType>;
-	final outside: Array<String>;
-	final open: Bool;
-}
+typedef Denoted = { final decls: Array<ResolvedType>; final outside: Array<String>; final open: Bool; }
 
 /**
  * Reports every reach past a layer's boundary the project declares in `apq.json` `ownedTypes`: a mention of an

@@ -13,6 +13,4 @@ package anyparse.query.format.json;
  * since `sourceDirFrom` needs only the source directory.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef HaxelibJson = {
-	@:optional var classPath: String;
-};
+typedef HaxelibJson = { @:optional var classPath: String; };

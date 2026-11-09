@@ -124,7 +124,4 @@ final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware 
 }
 
 /** The two option lists the rule reads. */
-typedef RefusalOptions = {
-	final refusals: Array<String>;
-	final passes: Array<String>;
-}
+typedef RefusalOptions = { final refusals: Array<String>; final passes: Array<String>; }

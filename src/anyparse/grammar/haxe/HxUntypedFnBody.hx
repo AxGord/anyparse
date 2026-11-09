@@ -26,6 +26,4 @@ package anyparse.grammar.haxe;
  * `opt.leftCurly` (a separate sub-category in the fork's `detectCurlyPolicy`).
  */
 @:peg
-typedef HxUntypedFnBody = {
-	@:kw('untyped') @:fmt(leftCurly('blockLeftCurly')) var block: HxFnBlock;
-}
+typedef HxUntypedFnBody = { @:kw('untyped') @:fmt(leftCurly('blockLeftCurly')) var block: HxFnBlock; }

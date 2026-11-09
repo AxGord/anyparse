@@ -151,7 +151,7 @@ class AddMetaSliceTest extends Test {
 	/** An enum and a typedef take an entry too — the op is not class-only. */
 	public function testEnumAndTypedef(): Void {
 		assertMeta('enum E {\n\n\tX;\n\n}\n', BySelector('EnumDecl:E'), '@:keep', '@:keep\nenum E {\n\n\tX;\n\n}\n');
-		assertMeta('typedef T = {\n\tvar a:Int;\n}\n', BySelector('TypedefDecl:T'), '@:keep', '@:keep\ntypedef T = {\n\tvar a:Int;\n}\n');
+		assertMeta('typedef T = {var a:Int;}\n', BySelector('TypedefDecl:T'), '@:keep', '@:keep\ntypedef T = {var a:Int;}\n');
 	}
 
 	/** `Ok` with the exact canonical result. */

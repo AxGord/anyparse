@@ -328,10 +328,7 @@ final class MapValueScan {
  * Where a map binding was declared: its owning type when it is a member of one, and whether
  * that member is public.
  */
-typedef Decl = {
-	final owner: Null<String>;
-	final exported: Bool;
-}
+typedef Decl = { final owner: Null<String>; final exported: Bool; }
 
 /**
  * The grammar seams the no-null-value census reads.

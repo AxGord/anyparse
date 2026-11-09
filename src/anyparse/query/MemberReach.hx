@@ -154,22 +154,14 @@ enum FreshOnlyAnswer {
  * A member of shared state code may read: the graph's simple name of its declaring type, its name, and whether its value is
  * inert (`LibraryCalls.inertType`) — a string, number or boolean, which only a write of the member itself can change.
  */
-typedef SharedRead = {
-	final owner: String;
-	final name: String;
-	final inert: Bool;
-}
+typedef SharedRead = { final owner: String; final name: String; final inert: Bool; }
 
 /**
  * A member by its declaring owner's simple name and its own name — and, optionally, a read of it at `site` in the entry's
  * file, by which the compiler facts may name which of several types sharing that simple name declares it
  * (`FactsView.pinnedOwner`).
  */
-typedef MemberRef = {
-	var owner: String;
-	var name: String;
-	@:optional var site: Null<Span>;
-}
+typedef MemberRef = { var owner: String; var name: String; @:optional var site: Null<Span>; }
 
 /**
  * "May the code this entry runs read / write / mutate member M?" — one analysis with three answers, for

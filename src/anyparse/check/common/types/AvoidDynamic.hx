@@ -742,8 +742,4 @@ private typedef NarrowAcc = {
 };
 
 /** The initializer shape of a `Dynamic` local: presence, null-literal, and resolved source type. */
-private typedef InitInfo = {
-	var present: Bool;
-	var isNull: Bool;
-	var type: Null<String>;
-};
+private typedef InitInfo = { var present: Bool; var isNull: Bool; var type: Null<String>; };

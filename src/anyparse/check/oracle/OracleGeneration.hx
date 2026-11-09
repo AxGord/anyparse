@@ -744,10 +744,7 @@ typedef StaleGroup = {
 }
 
 /** The haxelib repository generations resolve libraries from, and each dev install in it as dev path to repository directory. */
-typedef LibraryIndex = {
-	var repo: Null<String>;
-	var devs: Map<String, String>;
-}
+typedef LibraryIndex = { var repo: Null<String>; var devs: Map<String, String>; }
 
 /**
  * One generation `prepare` may run: the key it is shared by, its declaration, every hxml it serves with the directory

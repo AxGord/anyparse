@@ -18,10 +18,7 @@ enum abstract TestPolicy(String) from String to String {
 }
 
 /** Nested section to test recursive ByName parsing. */
-@:peg typedef TestNested = {
-	var kind: String;
-	@:optional var count: Int;
-};
+@:peg typedef TestNested = { var kind: String; @:optional var count: Int; };
 
 /**
  * Root config grammar — covers every ByName field shape τ₄ needs:

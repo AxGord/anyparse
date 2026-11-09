@@ -8,8 +8,4 @@ package anyparse.check.oracle;
  * honestly — a record written by hand, or by another engine, may carry any part of it.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef OracleVerdictRecord = {
-	var ?fingerprint: String;
-	var ?verdict: String;
-	var ?errors: String;
-}
+typedef OracleVerdictRecord = { var ?fingerprint: String; var ?verdict: String; var ?errors: String; }

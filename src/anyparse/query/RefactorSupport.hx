@@ -55,11 +55,7 @@ typedef TypeDeclMatch = {
  * receiver's WHOLE path against what `qualifiedPaths` makes legal — never against the
  * reference's last segment, which a same-named module in another package also satisfies.
  */
-typedef ModulePath = {
-	final path: String;
-	final pkg: String;
-	final base: String;
-}
+typedef ModulePath = { final path: String; final pkg: String; final base: String; }
 
 /**
  * Cursor-resolution and identifier/span primitives shared by the scope-correct refactoring

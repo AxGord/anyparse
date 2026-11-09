@@ -8,11 +8,7 @@ import anyparse.query.merge.RecordTree;
 using Lambda;
 
 /** The two documents `DataDelta` walks and the grammar shape that reads both. */
-private typedef Versions = {
-	final shape: RefShape;
-	final base: String;
-	final now: String;
-}
+private typedef Versions = { final shape: RefShape; final base: String; final now: String; }
 
 /**
  * The one answer to "which key paths of a data document differ between two versions of it": an object is compared by

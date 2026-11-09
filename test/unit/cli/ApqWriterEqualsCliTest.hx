@@ -21,8 +21,8 @@ class ApqWriterEqualsCliTest extends Test {
 
 	public function testTriviaMatch(): Void {
 		#if (sys || nodejs)
-		final input: String = CliFixture.write('apq_writer_equals', 'typedef T = {\n\tvar x:Int;\n}');
-		final expected: String = CliFixture.writeAs('apq_writer_equals_expected', 'txt', 'typedef T = {\n\tvar x:Int;\n}\n');
+		final input: String = CliFixture.write('apq_writer_equals', 'typedef T = {var x:Int;}');
+		final expected: String = CliFixture.writeAs('apq_writer_equals_expected', 'txt', 'typedef T = {var x:Int;}\n');
 		Assert.equals(0, Cli.run(['writer-equals', input, expected]), 'trivia writer must round-trip a simple typedef byte-identically');
 		FileSystem.deleteFile(input);
 		FileSystem.deleteFile(expected);

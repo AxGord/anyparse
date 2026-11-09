@@ -34,7 +34,7 @@ final class NamingCrossRenameTest extends Test {
 
 	/** A module whose sub-type `JSON_POINT` is a typedef, read through its qualified path elsewhere. */
 	private static final TYPES: String = 'package pkg;\n\nclass T {\n\tpublic static function make():JSON_POINT {\n'
-		+ '\t\treturn {x: 1, y: 2};\n\t}\n}\n\ntypedef JSON_POINT = {\n\tx:Float,\n\ty:Float\n}\n';
+		+ '\t\treturn {x: 1, y: 2};\n\t}\n}\n\ntypedef JSON_POINT = {x:Float, y:Float}\n';
 
 	/** A reader naming the typedef through its module. */
 	private static final USER: String =
@@ -50,8 +50,7 @@ final class NamingCrossRenameTest extends Test {
 		+ '\t\treturn MY_ACTIONS.goals + Levels.high + Mode.fast;\n\t}\n}\n';
 
 	/** The oracle project's module: two typedefs, the second an alias of a class that `Main` reads as a bare VALUE. */
-	private static final ORACLE_TYPES: String =
-		'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {\n\tx:Int\n}\n\ntypedef JSON_RECT = T;\n';
+	private static final ORACLE_TYPES: String = 'package pkg;\n\nclass T {}\n\ntypedef JSON_POINT = {x:Int}\n\ntypedef JSON_RECT = T;\n';
 
 	/** The latest refusal `armSets` read off the arm's finding. */
 	private var _lastReason: String = '';
@@ -186,7 +185,7 @@ final class NamingCrossRenameTest extends Test {
 				files: [
 					types,
 					user,
-					{ file: 'pkg/V.hx', source: 'package pkg;\n\nclass V {}\n\ntypedef JSON_POINT = {\n\tz:Int\n}\n' }
+					{ file: 'pkg/V.hx', source: 'package pkg;\n\nclass V {}\n\ntypedef JSON_POINT = {z:Int}\n' }
 				],
 				roots: [],
 				name: 'JSON_POINT',

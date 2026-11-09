@@ -399,19 +399,10 @@ private typedef Arms = {
 }
 
 /** An exiting branch read apart: the statements before its `break`, and the `break` itself. */
-private typedef Terminator = {
-	var head: Array<QueryNode>;
-	var breakNode: QueryNode;
-}
+private typedef Terminator = { var head: Array<QueryNode>; var breakNode: QueryNode; }
 
 /** The loop's new body: its text, and the source region that text was taken from (null when it is synthesised). */
-private typedef Kept = {
-	var text: String;
-	var region: Null<Span>;
-}
+private typedef Kept = { var text: String; var region: Null<Span>; }
 
 /** A flagged loop: the whole-loop span, and its replacement text (null when a dropped comment withholds the fix). */
-private typedef Match = {
-	var span: Span;
-	var text: Null<String>;
-}
+private typedef Match = { var span: Span; var text: Null<String>; }

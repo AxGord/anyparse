@@ -25,7 +25,4 @@ package anyparse.grammar.json;
  */
 @:peg
 @:spanned('Member')
-typedef JEntry = {
-	@:queryName var key: JStringLit;
-	@:lead(':') var value: JValue;
-}
+typedef JEntry = { @:queryName var key: JStringLit; @:lead(':') var value: JValue; }

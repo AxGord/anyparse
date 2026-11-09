@@ -47,10 +47,7 @@ typedef NullFacts = {
  * One consumer visit of a seedless `NullFlow.analyze` walk, kept for replay: the node, and the facts that held at its
  * entry, frozen. `RefsCache.nullFlowVisits` holds a tree's list for the run.
  */
-typedef NullFlowVisit = {
-	node: QueryNode,
-	facts: NullFacts
-};
+typedef NullFlowVisit = { node: QueryNode, facts: NullFacts };
 
 /**
  * The per-path fact lattice carried through a `NullFlow` walk: the set of names

@@ -602,11 +602,7 @@ private typedef MemberInfo = {
 };
 
 /** One agreeing call site's deletion span. */
-private typedef CallSite = {
-	final file: String;
-	final cutFrom: Int;
-	final cutTo: Int;
-};
+private typedef CallSite = { final file: String; final cutFrom: Int; final cutTo: Int; };
 
 /** What one flagged parameter's fix must do. */
 private typedef Plan = {

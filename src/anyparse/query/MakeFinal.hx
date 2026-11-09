@@ -9,11 +9,7 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /** One scope file parsed once. */
-private typedef Parsed = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-};
+private typedef Parsed = { final file: String; final source: String; final tree: QueryNode; };
 
 /**
  * `make-final` — turn a mutable `var` field into `final` when it is never

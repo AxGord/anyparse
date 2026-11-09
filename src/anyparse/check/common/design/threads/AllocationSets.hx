@@ -253,7 +253,4 @@ final class AllocationSets {
 }
 
 /** The type names one file's imports bind: by an alias, and by a module path's last segment. */
-private typedef FileImports = {
-	final aliases: Array<String>;
-	final named: Array<String>;
-}
+private typedef FileImports = { final aliases: Array<String>; final named: Array<String>; }

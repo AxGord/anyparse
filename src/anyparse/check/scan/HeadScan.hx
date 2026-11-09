@@ -150,8 +150,4 @@ final class HeadScan {
 }
 
 /** The resolved facts the head gates ask of the owners: the unchanged-locals scan, the purity context and the tree. */
-typedef HeadCtx = {
-	final unchanged: UnchangedLocal;
-	final purity: PurityCtx;
-	final tree: QueryNode;
-};
+typedef HeadCtx = { final unchanged: UnchangedLocal; final purity: PurityCtx; final tree: QueryNode; };

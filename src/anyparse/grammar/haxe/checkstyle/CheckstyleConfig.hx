@@ -14,6 +14,4 @@ package anyparse.grammar.haxe.checkstyle;
  * overrides.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef CheckstyleConfig = {
-	@:optional var checks: Array<CheckstyleCheck>;
-};
+typedef CheckstyleConfig = { @:optional var checks: Array<CheckstyleCheck>; };

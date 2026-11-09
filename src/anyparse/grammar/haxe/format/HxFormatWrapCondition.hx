@@ -16,7 +16,4 @@ package anyparse.grammar.haxe.format;
  * Schema added in slice ω-peg-byname-array — first consumer of the
  * `@:peg` ByName Array<T> ingestion lift.
  */
-@:peg typedef HxFormatWrapCondition = {
-	@:optional var cond: String;
-	@:optional var value: Int;
-};
+@:peg typedef HxFormatWrapCondition = { @:optional var cond: String; @:optional var value: Int; };

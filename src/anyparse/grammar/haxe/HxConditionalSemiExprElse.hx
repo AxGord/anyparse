@@ -15,6 +15,4 @@ package anyparse.grammar.haxe;
  * while the `#else` clause as a whole stays optional at the parent level.
  */
 @:peg
-typedef HxConditionalSemiExprElse = {
-	@:trail(';') var expr: HxExpr;
-};
+typedef HxConditionalSemiExprElse = { @:trail(';') var expr: HxExpr; };

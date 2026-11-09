@@ -64,6 +64,4 @@ final class SameValueRuns {
 }
 
 /** An occurrence, as `SameValueRuns` reads it: where it sits. */
-typedef Located = {
-	final span: Span;
-}
+typedef Located = { final span: Span; }

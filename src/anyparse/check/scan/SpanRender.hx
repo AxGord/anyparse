@@ -113,17 +113,10 @@ final class SpanRender {
  * One stretch of a rendered span: the bytes `[from, to)` and, when non-null, the text emitted in
  * their place. A null `text` is a token whose interior is copied verbatim.
  */
-typedef RenderPart = {
-	var from: Int;
-	var to: Int;
-	var text: Null<String>;
-}
+typedef RenderPart = { var from: Int; var to: Int; var text: Null<String>; }
 
 /**
  * A stretch of source and the text `renderSpan` emits in its place — the caller's way of blanking
  * a name out of a comparison key without touching the bytes around it. Spans must not overlap.
  */
-typedef SpanOverride = {
-	var span: Span;
-	var text: String;
-}
+typedef SpanOverride = { var span: Span; var text: String; }

@@ -8,15 +8,9 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * ω-anontype-reflow-typedef-guard — `wrapping.anonType.defaultWrap: "ignore"`
- * drops the source-newline signal of an INLINE anon type hint so the cascade
- * re-flows it by width (fits → one line, exceeds → one field per line), while
- * a typedef RHS body keeps its source line structure verbatim.
- *
- * The fork classifies the typedef brace as `BrOpenType.TypedefDecl` and routes
- * it to `MarkWrapping.typedefWrapping`, which never consults
- * `wrapping.anonType`; anyparse models both positions with the single
- * `HxType.Anon` Star, so the Ignore drop is gated off inside the typedef RHS.
+ * `wrapping.anonType.defaultWrap: "ignore"` drops the source-newline signal of
+ * an anon type, so the cascade re-flows it by width (fits → one line, exceeds →
+ * one field per line) — an inline type hint and a typedef RHS body alike.
  */
 @:nullSafety(Strict)
 class HxAnonTypeIgnoreReflowTest extends Test {
@@ -46,15 +40,10 @@ class HxAnonTypeIgnoreReflowTest extends Test {
 		Assert.isTrue(out.indexOf('function f():{\n\t\t$field\n\t} {') != -1, 'expected packed inline anon body in:\n<$out>');
 	}
 
-	public function testTypedefBodyKeepsSourceBreaksWhileNestedAnonReflows(): Void {
-		// One combined assertion on purpose: the OUTER typedef body must keep
-		// its source breaks (the guard) while the NESTED anon collapses (the
-		// per-element `_inTypedefBody` clear). Either half alone would be
-		// satisfiable without the other.
+	public function testTypedefBodyReflowsLikeAnInlineAnon(): Void {
 		final out: String = write('typedef Outer = {\n\talpha:Int,\n\tnested:{\n\t\tp:Int,\n\t\tq:Int\n\t}\n}');
 		Assert.isTrue(
-			out.indexOf('typedef Outer = {\n\talpha:Int,\n\tnested:{p:Int, q:Int}\n}') != -1,
-			'expected preserved typedef body with collapsed nested anon in:\n<$out>'
+			out.indexOf('typedef Outer = {alpha:Int, nested:{p:Int, q:Int}}') != -1, 'expected a collapsed typedef body in:\n<$out>'
 		);
 	}
 

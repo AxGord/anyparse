@@ -418,13 +418,7 @@ private typedef Seams = {
 }
 
 /** A flagged loop: the full replacement span and the `for` text that takes its place. */
-private typedef Match = {
-	var span: Span;
-	var text: String;
-}
+private typedef Match = { var span: Span; var text: String; }
 
 /** Per-file inputs the walkers share: the source and the resolved seams. */
-private typedef Ctx = {
-	var source: String;
-	var seams: Seams;
-}
+private typedef Ctx = { var source: String; var seams: Seams; }

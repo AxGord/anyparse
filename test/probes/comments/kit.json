@@ -126,7 +126,10 @@
 		"tce-remove/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
 		"tce-add/hxformat.json": "{\"wrapping\": {\"trailingComma\": \"keep\", \"callParameter\": {\"defaultWrap\": \"onePerLine\", \"rules\": []}}, \"trailingCommas\": {\"callArgumentDefault\": \"yes\"}}\n",
 		"tce-add/c1.hx": "class A {\n\tfunction f() {\n\t\tg(a, b /* x */, /* c */).n();\n\t}\n}\n",
-		"anon-comment/v11.hx": "class C {\n\tvar t:{\n\t\t@:optional var c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}\n"
+		"anon-comment/v11.hx": "class C {\n\tvar t:{\n\t\t@:optional var c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}\n",
+		"lead/A.hx": "typedef T = {\n\t/* Comment */ a: Float,\n\t/* Comment */ b: Float\n}\n",
+		"lead/G.hx": "typedef T = {\n\t/* Comment */ a: Float,\n\tb: Float\n}\n",
+		"lead/C.hx": "class C {\n\tvar x:{\n\t\t/* Comment */ a: Float,\n\t\t/* Comment */ b: Float\n\t};\n}\n"
 	},
 	"invocations": [
 		{
@@ -513,7 +516,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "12071668d066dfc1",
+				"out": "d7108413f48464a8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -2183,6 +2186,60 @@
 			"expect": {
 				"exit": 0,
 				"out": "3ce440d48c6d3690",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "lead/A.hx",
+			"fixpoint": "lead/A.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"lead/A.hx"
+			],
+			"note": "a block comment leading every field of a typedef body, the first included, stays before its field in one rewrite",
+			"expect": {
+				"exit": 0,
+				"out": "7cbecc5e905660b8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "lead/G.hx",
+			"fixpoint": "lead/G.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"lead/G.hx"
+			],
+			"note": "a block comment leading only the first typedef field stays before it in one rewrite",
+			"expect": {
+				"exit": 0,
+				"out": "7d53618418a8ee2f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "lead/C.hx",
+			"fixpoint": "lead/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"lead/C.hx"
+			],
+			"note": "an inline anon type whose first field has a block lead is laid out in one rewrite, each comment before its field",
+			"expect": {
+				"exit": 0,
+				"out": "d5f0a47ac530b08a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

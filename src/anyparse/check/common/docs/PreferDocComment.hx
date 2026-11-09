@@ -615,7 +615,4 @@ private typedef Anchor = {
 };
 
 /** Resolved kind-sets the anchor walk threads through its recursion. */
-private typedef Seams = {
-	final decls: Array<String>;
-	final modifiers: Array<String>;
-};
+private typedef Seams = { final decls: Array<String>; final modifiers: Array<String>; };

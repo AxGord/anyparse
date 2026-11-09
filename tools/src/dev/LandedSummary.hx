@@ -4,8 +4,4 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef LandedSummary = {
-	var slices: Int;
-	var cost: Float;
-	var perSlice: Float;
-}
+typedef LandedSummary = { var slices: Int; var cost: Float; var perSlice: Float; }

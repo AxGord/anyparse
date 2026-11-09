@@ -6,7 +6,4 @@ package unit.grammar;
  * module, as a writer's grammar root must be.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef TestKeyed = {
-	@:key('function') var member: String;
-	@:optional @:key('content-type') var contentType: Null<String>;
-};
+typedef TestKeyed = { @:key('function') var member: String; @:optional @:key('content-type') var contentType: Null<String>; };

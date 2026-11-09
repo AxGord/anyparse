@@ -14,11 +14,7 @@ import anyparse.util.Strings;
 using Lambda;
 
 /** The simple names one file's meaning is compared on, and where the file lives before and after the relocation. */
-typedef BindingProbe = {
-	final before: String;
-	final after: String;
-	final names: Array<String>;
-}
+typedef BindingProbe = { final before: String; final after: String; final names: Array<String>; }
 
 /** One simple name whose meaning a relocation changed in one file. */
 typedef BindingDrift = {
@@ -51,11 +47,7 @@ typedef QualifiedDrift = {
 }
 
 /** One qualified sub-type spelling written in code: the module name it starts with, the sub-type, and where it starts. */
-private typedef SubTypeSpelling = {
-	final head: String;
-	final sub: String;
-	final at: Int;
-}
+private typedef SubTypeSpelling = { final head: String; final sub: String; final at: Int; }
 
 /**
  * The two indexes a qualified spelling is read through, the relocated module paths (old -> new), the grammar, and the
@@ -78,10 +70,7 @@ private typedef FileSides = {
 }
 
 /** What a simple name means in one file: a comparable key, and the one declaration it binds when it binds exactly one. */
-private typedef Meaning = {
-	final key: String;
-	final single: Null<ResolvedType>;
-}
+private typedef Meaning = { final key: String; final single: Null<ResolvedType>; }
 
 /**
  * The proof a module relocation owes: every simple type name a moved module or one of its readers writes MEANS the same

@@ -5,10 +5,7 @@ import StringTools.fastCodeAt;
 using StringTools;
 
 /** The text on either side of a delimiter. */
-typedef Split = {
-	final before: String;
-	final after: String;
-}
+typedef Split = { final before: String; final after: String; }
 
 /**
  * The one answer to "how does the project read a piece of plain text": the line a position sits on, whether a string is

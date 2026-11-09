@@ -77,10 +77,7 @@ typedef FindingData = {
  * A repeating call (`FindingData.repeatedBy`): the member it sits in and what repeats there, by name — a loop's header,
  * the call a value is handed to, or the call itself.
  */
-typedef RepeatSite = {
-	var member: String;
-	var at: String;
-}
+typedef RepeatSite = { var member: String; var at: String; }
 
 /**
  * A single analysis check. The framework is grammar-agnostic: a check
@@ -450,10 +447,7 @@ interface OracleAssisted {
 }
 
 /** One written name a rewrite moves: its offset in the text before the rewrite and in the text after it. */
-typedef NameSite = {
-	before: Int,
-	after: Int
-};
+typedef NameSite = { before: Int, after: Int };
 
 /**
  * The compiler's answer to whether a rewrite keeps what a written name means: for each of `sites`, the name at its
@@ -517,10 +511,7 @@ typedef CrossFileEdits = {
 };
 
 /** One edit set of a cross-file `RiskyArm`: the finding it fixes and its per-file slices, verified and reverted as one. */
-typedef RiskyCrossFileEdit = {
-	final violation: Violation;
-	final slices: Array<CrossFileEdits>;
-};
+typedef RiskyCrossFileEdit = { final violation: Violation; final slices: Array<CrossFileEdits>; };
 
 /**
  * Opt-in capability of a `Check` whose autofix spans MULTIPLE files atomically —
@@ -559,10 +550,7 @@ interface CrossFileFix {
  * does not restate it at each one. Structurally identical to that inline declaration, so the two
  * spellings unify wherever they meet.
  */
-typedef FixEdit = {
-	span: Span,
-	text: String
-};
+typedef FixEdit = { span: Span, text: String };
 
 /**
  * One fix edit plus the ATOMIC GROUP it belongs to. `span` / `text` are the raw edit
@@ -572,11 +560,7 @@ typedef FixEdit = {
  * Ids are opaque and scoped to ONE `fixGrouped` call: equal non-null ids mean one
  * indivisible unit, and nothing more.
  */
-typedef GroupedEdit = {
-	final span: Span;
-	final text: String;
-	final group: Null<Int>;
-}
+typedef GroupedEdit = { final span: Span; final text: String; final group: Null<Int>; }
 
 /**
  * Opt-in capability of a `Check` whose autofix edits are NOT all independently
@@ -642,11 +626,7 @@ interface GroupedFix {
  * An empty `carried` is a legal declaration and means what it says: this edit quotes nothing, so
  * nothing can have been moved across it. A fix that emits fresh syntax is in that state by nature.
  */
-typedef CarryingEdit = {
-	final span: Span;
-	final text: String;
-	final carried: Array<Span>;
-}
+typedef CarryingEdit = { final span: Span; final text: String; final carried: Array<Span>; }
 
 /**
  * Opt-in capability of a `Check` whose autofix builds its replacement out of SOURCE FRAGMENTS,

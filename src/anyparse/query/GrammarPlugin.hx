@@ -4153,10 +4153,7 @@ typedef ExecutionShape = {
  * and never inspects grammar-specific node types.
  */
 @:nullSafety(Strict)
-typedef MetaShape = {
-	var metaKinds: Array<String>;
-	var declHostKinds: Array<String>;
-}
+typedef MetaShape = { var metaKinds: Array<String>; var declHostKinds: Array<String>; }
 
 /**
  * The writer's layout numbers for one config (`GrammarPlugin.layoutMetrics`).
@@ -4166,10 +4163,7 @@ typedef MetaShape = {
  * position into a column without knowing the grammar's indent style.
  */
 @:nullSafety(Strict)
-typedef LayoutMetrics = {
-	final lineWidth: Int;
-	final indentWidth: Int;
-}
+typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
 
 /**
  * The member-gap half of a writer's blank-line policy under one format config (`GrammarPlugin.memberGapPolicy`):
@@ -4211,10 +4205,7 @@ typedef MemberGapPolicy = {
  * children and are otherwise invisible to the check.
  */
 @:nullSafety(Strict)
-typedef EnumAbstractSyntax = {
-	final head: String;
-	final bodyOpen: String;
-}
+typedef EnumAbstractSyntax = { final head: String; final bodyOpen: String; }
 
 /**
  * Plugin-declared contract for `apq uses`. The walker reads this slot
@@ -4230,20 +4221,14 @@ typedef EnumAbstractSyntax = {
  * query target.
  */
 @:nullSafety(Strict)
-typedef TypeRefShape = {
-	var typeRefKinds: Array<String>;
-}
+typedef TypeRefShape = { var typeRefKinds: Array<String>; }
 
 /**
  * One row of `RefShape.cPrecedenceDivergences`: a bare operand whose kind is in `operands`, sitting in one of `slots`
  * (0 left, 1 right) of a `hosts` operator, is grouped here the way a C-family reader would not group it.
  */
 @:nullSafety(Strict)
-typedef PrecedenceDivergence = {
-	var hosts: Array<String>;
-	var operands: Array<String>;
-	var slots: Array<Int>;
-}
+typedef PrecedenceDivergence = { var hosts: Array<String>; var operands: Array<String>; var slots: Array<Int>; }
 
 /**
  * Lint-check option overrides a grammar discovered from its native config — for
@@ -4281,10 +4266,7 @@ typedef CheckOverrides = {
  * it, and a caller narrowed to one file would otherwise have no way to read a chain member
  * outside its own scope.
  */
-typedef AmbientImportSource = {
-	var file: String;
-	var source: String;
-};
+typedef AmbientImportSource = { var file: String; var source: String; };
 
 /**
  * The whole ambient chain of one module: its `sources` NEAREST FIRST, and whether the chain
@@ -4295,10 +4277,7 @@ typedef AmbientImportSource = {
  * same-package declaration, so a consumer pinning a reference to one declaration must refuse on
  * `bounded == false` rather than resolve against what it did read.
  */
-typedef AmbientImports = {
-	var sources: Array<AmbientImportSource>;
-	var bounded: Bool;
-};
+typedef AmbientImports = { var sources: Array<AmbientImportSource>; var bounded: Bool; };
 
 /**
  * The modules ONE ambient import source governs: each `governs` entry is a module that receives the
@@ -4308,16 +4287,10 @@ typedef AmbientImports = {
  * The two travel together for the same reason `AmbientImports`' pair does — see
  * `GrammarPlugin.ambientImportGovernance`, which is where the false is read.
  */
-typedef AmbientImportGovernance = {
-	var governs: Array<AmbientImportSource>;
-	var bounded: Bool;
-};
+typedef AmbientImportGovernance = { var governs: Array<AmbientImportSource>; var bounded: Bool; };
 
 /**
  * The modules ONE ambient import source governs, by file name only — see
  * `GrammarPlugin.ambientImportGovernedFiles`, which is where it is read.
  */
-typedef AmbientImportGovernedFiles = {
-	var files: Array<String>;
-	var bounded: Bool;
-};
+typedef AmbientImportGovernedFiles = { var files: Array<String>; var bounded: Bool; };

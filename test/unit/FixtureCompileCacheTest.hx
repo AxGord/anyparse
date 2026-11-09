@@ -356,7 +356,4 @@ class FixtureCompileCacheTest extends Test {
 
 }
 
-private typedef Fixture = {
-	var dir: String;
-	var probe: String;
-}
+private typedef Fixture = { var dir: String; var probe: String; }

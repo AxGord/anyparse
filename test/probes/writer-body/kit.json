@@ -415,7 +415,7 @@
 		},
 		{
 			"name": "explicit-nowrap/Min.hx",
-			"note": "a multi-line object literal under an explicit noWrap goes flat; a multi-line typedef body beside it keeps its lines",
+			"note": "a multi-line object literal under an explicit noWrap goes flat, and the multi-line typedef body beside it goes flat too",
 			"argv": [
 				"hxq",
 				"fmt",
@@ -423,7 +423,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "9bbe058e4e5fa5e8",
+				"out": "f0256f096ce27848",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

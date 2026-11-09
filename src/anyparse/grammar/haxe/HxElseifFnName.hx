@@ -15,7 +15,4 @@ package anyparse.grammar.haxe;
  * `HxConditionalExpr.elseifs`.
  */
 @:peg
-typedef HxElseifFnName = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	var name: HxIdentLit;
-};
+typedef HxElseifFnName = { @:kw('#elseif') var cond: HxPpCondLit; var name: HxIdentLit; };

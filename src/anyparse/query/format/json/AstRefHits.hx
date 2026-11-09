@@ -9,6 +9,4 @@ package anyparse.query.format.json;
  * spec form unwrap the envelope — forward-compatible.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstRefHits = {
-	var hits: Array<AstRefHit>;
-};
+typedef AstRefHits = { var hits: Array<AstRefHit>; };

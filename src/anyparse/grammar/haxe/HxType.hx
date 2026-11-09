@@ -141,14 +141,12 @@ enum HxType {
 	 * in the `@:sep`-Star force-multi branch — without touching inline
 	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
 	 *
-	 * `@:fmt(forceMultiInTypedef)` doubles as the typedef-awareness marker
-	 * for the source-newline policy: `wrapping.anonType.defaultWrap:
-	 * "ignore"` re-flows an INLINE anon type hint by width (fits → one
-	 * line, exceeds → one field per line), but the drop is gated off while
-	 * `opt._inTypedefBody` holds, so a typedef RHS body keeps its source
-	 * line structure. The fork needs no such gate — it classifies the
-	 * typedef brace as `BrOpenType.TypedefDecl` and routes it to
-	 * `MarkWrapping.typedefWrapping`, which never reads `wrapping.anonType`.
+	 * A typedef RHS body follows the `anonType` cascade like an inline anon
+	 * type hint: its source line breaks are not a layout signal, so a simple
+	 * body goes on one line and a complex one wraps by rule.
+	 * `@:fmt(forceMultiInTypedef)` only clears the typedef context per field,
+	 * drops the cascade indent and forces one field per line under a `Next`
+	 * left curly.
 	 */
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';', selfEnded('anonMemberNoSep')) @:fmt(anonTypeBracesOpen,
 		anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'),

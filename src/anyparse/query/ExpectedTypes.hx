@@ -222,10 +222,7 @@ final class ExpectedTypes {
 }
 
 /** The ancestors of a node, outermost first, and the child index leading down from each (`ExpectedTypes.lineageOf`). */
-typedef Lineage = {
-	final nodes: Array<QueryNode>;
-	final indices: Array<Int>;
-}
+typedef Lineage = { final nodes: Array<QueryNode>; final indices: Array<Int>; }
 
 /**
  * What `ExpectedTypes` asks a typer, answering in the typer's own currency `W`: the call graph's keyed type source, the

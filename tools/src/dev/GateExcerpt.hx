@@ -86,8 +86,4 @@ final class GateExcerpt {
 }
 
 /** A track row of `dev mutation-arm`, read. */
-typedef ArmRow = {
-	var verdict: String;
-	var name: String;
-	var line: String;
-}
+typedef ArmRow = { var verdict: String; var name: String; var line: String; }

@@ -10,10 +10,7 @@ import anyparse.query.OracleProvider.OracleOutcome;
 using Lambda;
 
 /** One per-file pass that rewrote a file: the text it started from and the rule groups whose edits landed. */
-typedef SafeFixStep = {
-	final base: String;
-	final groups: Array<RuleEdits>;
-};
+typedef SafeFixStep = { final base: String; final groups: Array<RuleEdits>; };
 
 /**
  * What the safe rounds of one `lint --fix` run recorded about their own edits: per file, the per-file passes that

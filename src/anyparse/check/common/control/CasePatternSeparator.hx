@@ -13,10 +13,7 @@ using StringTools;
  * case-arm rules share (`CasePatternScan`), and `orPatternKind` — the node a `case A | B:` label
  * projects its alternation as — is the one this rule adds on top.
  */
-private typedef SeparatorSeams = {
-	final scan: CaseSeams;
-	final orPatternKind: String;
-}
+private typedef SeparatorSeams = { final scan: CaseSeams; final orPatternKind: String; }
 
 /**
  * Flags a switch case label whose TOP-LEVEL pattern separator is not the project's configured

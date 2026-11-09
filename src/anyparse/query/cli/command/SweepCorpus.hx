@@ -17,10 +17,7 @@ using Lambda;
  * in its `fixtures` array, so a snapshot written from these entries is
  * interchangeable with the corpus harness's own.
  */
-typedef SweepCorpusEntry = {
-	final path: String;
-	final status: String;
-};
+typedef SweepCorpusEntry = { final path: String; final status: String; };
 
 /**
  * A whole-corpus census: the six counters `apq sweep` prints plus the

@@ -7,7 +7,4 @@ import anyparse.grammar.json.JValue;
  * of another type means nothing rather than refusing the whole config, whose other keys are skipped.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef FormatterDriverKeys = {
-	@:optional var disableFormatting: JValue;
-	@:optional var excludes: JValue;
-};
+typedef FormatterDriverKeys = { @:optional var disableFormatting: JValue; @:optional var excludes: JValue; };

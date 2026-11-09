@@ -26,10 +26,7 @@ private enum FlowStatement {
 }
 
 /** Where control stands after a statement: the node it left and the label of the edge it leaves by. */
-private typedef FlowTail = {
-	final node: FlowNode;
-	final label: Null<String>;
-}
+private typedef FlowTail = { final node: FlowNode; final label: Null<String>; }
 
 /** A loop being drawn: the node `continue` returns to and the tails `break` leaves by. */
 private typedef FlowLoop = {

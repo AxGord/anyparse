@@ -37,7 +37,4 @@ package anyparse.grammar.haxe;
  * `HxConditionalType` defers the same extension.
  */
 @:peg
-typedef HxConditionalVarInit = {
-	var cond: HxPpCondLit;
-	@:optional @:lead('=') var init: Null<HxExpr>;
-};
+typedef HxConditionalVarInit = { var cond: HxPpCondLit; @:optional @:lead('=') var init: Null<HxExpr>; };

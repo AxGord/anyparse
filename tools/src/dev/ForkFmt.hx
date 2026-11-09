@@ -66,7 +66,4 @@ final class ForkFmt {
 }
 
 /** What a fork verify found: the lines worth showing, and one reason per failure (none when it holds). */
-typedef ForkVerdict = {
-	var shown: Array<String>;
-	var why: Array<String>;
-}
+typedef ForkVerdict = { var shown: Array<String>; var why: Array<String>; }

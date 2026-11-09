@@ -20,7 +20,4 @@ package anyparse.grammar.haxe;
  * knobs that their statement-level counterparts carry.
  */
 @:peg
-typedef HxWhileExpr = {
-	@:lead('(') @:trail(')') var cond: HxExpr;
-	var body: HxExpr;
-};
+typedef HxWhileExpr = { @:lead('(') @:trail(')') var cond: HxExpr; var body: HxExpr; };

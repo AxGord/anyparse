@@ -16,6 +16,4 @@ package anyparse.grammar.haxe;
  * lead slot on `=` and the `#if` rides the inner struct's first field.
  */
 @:peg
-typedef HxCondSpliceClosedRegion = {
-	@:kw('#if') var raw: HxCondSpliceClosedRaw;
-};
+typedef HxCondSpliceClosedRegion = { @:kw('#if') var raw: HxCondSpliceClosedRaw; };

@@ -5,20 +5,13 @@ import anyparse.runtime.Span;
 import haxe.ds.Either;
 
 /** One scope file parsed once: its path, source and parse tree. */
-typedef ParsedFile = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-};
+typedef ParsedFile = { final file: String; final source: String; final tree: QueryNode; };
 
 /**
  * The scope parsed for a cross-file op: the files that parsed, plus a non-null `error` when any
  * did not (the op is then refused).
  */
-typedef ScopeParse = {
-	final parsed: Array<ParsedFile>;
-	final error: Null<String>;
-};
+typedef ScopeParse = { final parsed: Array<ParsedFile>; final error: Null<String>; };
 
 /**
  * The cross-file half the scope-wide ops share — `rename --scope` (type and member), `move`,

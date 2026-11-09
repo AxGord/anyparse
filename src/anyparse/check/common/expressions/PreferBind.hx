@@ -371,11 +371,7 @@ final class PreferBind extends RuleBase {
 }
 
 /** The resolved seams `PreferBind` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final lambdaKind: String;
-	final callKind: String;
-	final shape: RefShape;
-};
+private typedef Seams = { final lambdaKind: String; final callKind: String; final shape: RefShape; };
 
 /**
  * One file's scan: the seams, the parsed root the scope resolver binds identifiers against, the file's

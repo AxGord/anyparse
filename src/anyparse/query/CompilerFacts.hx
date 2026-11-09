@@ -18,28 +18,17 @@ using Lambda;
  * One compile's facts as `TypedFactsProbe` wrote them: the configuration's `name`, the JSON Lines `text`, and `file`,
  * which maps a path as the compiler spelled it to the key the table files it under.
  */
-typedef FactsDump = {
-	final name: String;
-	final text: String;
-	final file: (String) -> String;
-}
+typedef FactsDump = { final name: String; final text: String; final file: (String) -> String; }
 
 /** Where a fact sits: the table's key of its file, and its range in anyparse `Span` units. */
-typedef FactPos = {
-	final file: String;
-	final span: Span;
-}
+typedef FactPos = { final file: String; final span: Span; }
 
 /**
  * One declaration of a type some configurations typed (`CompilerFacts.typeHomes`): the table key of its file, its range
  * there — null when that file's text is not the one the compile read — and the configurations that read it there, as
  * indexes into `CompilerFacts.configurations`.
  */
-typedef TypeHome = {
-	final file: String;
-	final at: Null<FactPos>;
-	final builds: Array<Int>;
-}
+typedef TypeHome = { final file: String; final at: Null<FactPos>; final builds: Array<Int>; }
 
 /**
  * A call site. `target` is the called field's declaring type and name (`pack.Type.field`), a structure or dynamic
@@ -141,28 +130,16 @@ typedef FieldFact = {
  * The parameter a value is handed to as an argument: the `index`-th of the method `target` (`pack.Type.field`), called
  * through `access` (`FStatic`, `FInstance` — on an instance, any override may run).
  */
-typedef ArgumentFact = {
-	final target: String;
-	final access: String;
-	final index: Int;
-}
+typedef ArgumentFact = { final target: String; final access: String; final index: Int; }
 
 /** One use a parameter's reads make of what a call hands it, as a field read's (`FieldFact.use`, `method`, `argument`). */
-typedef ParamUse = {
-	final use: String;
-	final method: Null<String>;
-	final argument: Null<ArgumentFact>;
-}
+typedef ParamUse = { final use: String; final method: Null<String>; final argument: Null<ArgumentFact>; }
 
 /**
  * An element write through an array — `a[i] = v`, `a[i] += v`, `a[i]++` — on any receiver: `receiverAt` is the position
  * of the array's own read, the field read or local read found there; null when its file was lost (`stale-foreign`).
  */
-typedef ElementWriteFact = {
-	final receiver: String;
-	final receiverAt: Null<FactPos>;
-	final at: FactPos;
-}
+typedef ElementWriteFact = { final receiver: String; final receiverAt: Null<FactPos>; final at: FactPos; }
 
 /** A value of type `from` reaching a place of type `to` through `via`: `var`, `assign`, `arg`, `ret`, `arr`, `obj` or `cast`. */
 typedef FlowFact = {
@@ -195,11 +172,7 @@ typedef HandFact = {
  * A field declaring type parameters of its own (a generic method), read or called at `at`: its declared type `declared`,
  * spelling them (`$name.T`), and the type `applied` the compiler instantiated it at there.
  */
-typedef InstantiationFact = {
-	final declared: String;
-	final applied: String;
-	final at: FactPos;
-}
+typedef InstantiationFact = { final declared: String; final applied: String; final at: FactPos; }
 
 /**
  * A non-String operand of a String concatenation, or a non-String thrown value
@@ -219,11 +192,7 @@ typedef StringFact = {
 }
 
 /** A `for` loop the compiler kept as one: the binder's type and the iterated value's. */
-typedef IterationFact = {
-	final binder: String;
-	final iterated: String;
-	final at: FactPos;
-}
+typedef IterationFact = { final binder: String; final iterated: String; final at: FactPos; }
 
 /** A `Reflect`/`Type` call, with its first literal string argument and its first type argument. */
 typedef ReflectionFact = {
@@ -292,11 +261,7 @@ typedef NativeFact = {
 }
 
 /** A local, parameter or loop binder, with the type the compiler gave it. */
-typedef VarFact = {
-	final name: String;
-	final type: String;
-	final at: FactPos;
-}
+typedef VarFact = { final name: String; final type: String; final at: FactPos; }
 
 /** A read of a local, parameter or loop binder, with its type: the identifier's own range. */
 typedef LocalReadFact = {
@@ -393,28 +358,17 @@ typedef FactNode = {
  * was written in (`anchor`) — the node's own, or a method's an inlined call spliced in. Code spliced in that no inlined
  * method and no macro is declared around has neither `expander` nor `declared`.
  */
-typedef ExpansionFact = {
-	final expander: Null<String>;
-	final anchor: FactPos;
-	final declared: Null<FactPos>;
-}
+typedef ExpansionFact = { final expander: Null<String>; final anchor: FactPos; final declared: Null<FactPos>; }
 
 /**
  * The body of the method `callee` as inlined calls spliced it into a node: `body` is the method's declared range, which
  * holds every fact of that code, and `sites` the ranges of the node's file its calls ran at, each holding a call site the
  * compiler replaced — the code runs at one of them, never elsewhere in the node.
  */
-typedef SpliceFact = {
-	final callee: String;
-	final body: FactPos;
-	final sites: Array<Span>;
-}
+typedef SpliceFact = { final callee: String; final body: FactPos; final sites: Array<Span>; }
 
 /** A node's signature and parameters as one configuration typed them. */
-typedef FactSignature = {
-	final signature: String;
-	final params: Array<{ name: String, type: String }>;
-}
+typedef FactSignature = { final signature: String; final params: Array<{ name: String, type: String }>; }
 
 /** A declared field of a typed type. `kind` is `method`, `inline`, `dynamic`, `macro` or `var(<read>,<write>)`. */
 typedef FieldDeclFact = {
@@ -1294,21 +1248,10 @@ private typedef NodeLine = {
 }
 
 /** Where one or more dumps typed a type: its home file, its range there, and those dumps. */
-private typedef HomeRecord = {
-	final home: String;
-	final p: Array<Int>;
-	final builds: Array<Int>;
-}
+private typedef HomeRecord = { final home: String; final p: Array<Int>; final builds: Array<Int>; }
 
 /** A node's range in its home file, in the compiler's codepoints. */
-private typedef NodeRange = {
-	final id: String;
-	final min: Int;
-	final max: Int;
-}
+private typedef NodeRange = { final id: String; final min: Int; final max: Int; }
 
 /** One dump's file table and path mapping. */
-private typedef DumpFiles = {
-	final paths: Array<Null<String>>;
-	final file: (String) -> String;
-}
+private typedef DumpFiles = { final paths: Array<Null<String>>; final file: (String) -> String; }

@@ -90,7 +90,4 @@ final class ShortenTypeRefCompilerProofE2ETest extends Test {
 }
 
 /** A verified pass's verdict and the consumer's text on disk after it. */
-private typedef Verified = {
-	var verdict: FixVerifyResult;
-	var main: String;
-}
+private typedef Verified = { var verdict: FixVerifyResult; var main: String; }

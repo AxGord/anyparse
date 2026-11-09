@@ -173,11 +173,7 @@ final class GroupSafeNav extends RuleBase {
 }
 
 /** A maximal run: the receiver's name, the span from the first statement to the last, and each statement's root identifier. */
-private typedef SafeNavRun = {
-	final name: String;
-	final span: Span;
-	final roots: Array<QueryNode>;
-};
+private typedef SafeNavRun = { final name: String; final span: Span; final roots: Array<QueryNode>; };
 
 /** The resolved seams `GroupSafeNav` reads in both `run` and `fix`. */
 private typedef Seams = {

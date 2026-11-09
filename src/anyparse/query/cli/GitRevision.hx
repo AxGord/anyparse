@@ -133,14 +133,7 @@ final class GitRevision {
 }
 
 /** One path `git diff --name-status` reports: its status letter, its path now, and its path at the base revision. */
-typedef ChangedPath = {
-	final status: String;
-	final path: String;
-	final basePath: String;
-}
+typedef ChangedPath = { final status: String; final path: String; final basePath: String; }
 
 /** One file a revision holds: its path, relative to the cwd, and the id of its content, the same for the same text. */
-typedef RevisionFile = {
-	final path: String;
-	final blob: String;
-}
+typedef RevisionFile = { final path: String; final blob: String; }

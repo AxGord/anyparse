@@ -21,7 +21,4 @@ package anyparse.grammar.haxe;
  * no reification semantics are applied.
  */
 @:peg
-typedef HxDollarReif = {
-	var name: HxWordLit;
-	@:lead('{') var expr: HxExpr;
-};
+typedef HxDollarReif = { var name: HxWordLit; @:lead('{') var expr: HxExpr; };

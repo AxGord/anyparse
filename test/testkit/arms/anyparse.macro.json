@@ -1015,8 +1015,8 @@
 			"name": "M-NOWRAP-LEAD-IN-CASCADE",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepInlineableLeadExpr",
-			"find": "_ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()});",
-			"replace": "_ignoreEmit && $inlineLead;",
+			"find": "(!_noWrapRules || $e{triviaSepGluedLeadExpr()}) && !$typedefDocLed;",
+			"replace": "!$typedefDocLed;",
 			"note": "a pure noWrap cascade takes an own-line comment and writes it after the previous parameter's comma"
 		},
 		{
@@ -2421,9 +2421,41 @@
 			"name": "M-EXPLICIT-NOWRAP-TYPEDEF-BODY",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepCheckExprs",
-			"find": "macro $isNoWrap && !opt._inTypedefBody",
-			"replace": "isNoWrap",
-			"note": "a typedef body under an explicit anonType noWrap collapses, a move owned by the typedef-RHS slice"
+			"find": "anyparse.format.wrap.WrapMode.NoWrap;",
+			"replace": "anyparse.format.wrap.WrapMode.NoWrap && !opt._inTypedefBody;",
+			"note": "a typedef body under an explicit anonType noWrap keeps its source lines instead of going flat"
+		},
+		{
+			"name": "M-TYPEDEF-RHS-KEEPS-SOURCE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepCheckExprs",
+			"find": "final ignoreCheckExpr: Expr = ignoreResolved;",
+			"replace": "final ignoreCheckExpr: Expr = macro ($ignoreResolved) && !opt._inTypedefBody;",
+			"note": "a source-broken typedef RHS under the default anonType cascade keeps its source lines instead of following the rules"
+		},
+		{
+			"name": "M-TYPEDEF-DOC-LED-IN-CASCADE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": "&& !$typedefDocLed;",
+			"replace": ";",
+			"note": "a doc-led typedef field rides the cascade and loses the typedef body's doc-keyed blank lines"
+		},
+		{
+			"name": "M-TYPEDEF-STRIPPED-BLANK-HOLDS-LINES",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepBlankHardlineExpr",
+			"find": "macro $kept && !$e{typedefStripBetweenExpr()}",
+			"replace": "kept",
+			"note": "a typedef blank the writer strips still forces the body multi-line, so a second pass collapses it"
+		},
+		{
+			"name": "M-TYPEDEF-STATED-BLANKS-IN-CASCADE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepPredicateScanExpr",
+			"find": "$statedBlanksExpr;",
+			"replace": "",
+			"note": "a typedef body whose config states blank lines rides the cascade, goes on one line and drops the stated blanks"
 		},
 		{
 			"name": "M-KEY-VALUE-LEAD-TIGHT",
@@ -2463,6 +2495,14 @@
 			"find": "if (ref == bodyTypePath) return",
 			"replace": "if (false) return",
 			"note": "the seam before a later catch stops reading the previous bare body, so a de-braced multi-catch try puts the catch on the bare body line and needs a second rewrite to move it"
+		},
+		{
+			"name": "M-OPEN-GLUED-COMMENT-AS-TRAIL",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepDispatchExpr",
+			"find": "_ignoreEmit && anyparse.runtime.OpenGluedComment.leads(_arr, _trailOpen)",
+			"replace": "false",
+			"note": "a first element's inline block lead, written right after the open delimiter, reads back as the open trail and breaks the list on the next rewrite"
 		}
 	]
 }

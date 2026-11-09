@@ -37,7 +37,7 @@ class AddressCliTest extends Test {
 	 * resolves to, which is what makes the two addresses collide. Writer-canonical, since these ops
 	 * are canonical-gated and a drifted fixture is refused before any of them decides anything.
 	 */
-	private static final MODULE_PRIVATE_FIXTURE: String = 'class C {}\n\nprivate typedef Helper = {\n\tvar n:Int;\n}\n';
+	private static final MODULE_PRIVATE_FIXTURE: String = 'class C {}\n\nprivate typedef Helper = {var n:Int;}\n';
 
 	/**
 	 * A member carrying everything a removal takes along that the address never names: a doc

@@ -589,10 +589,7 @@ private typedef Seams = {
 }
 
 /** One rewritable binding: the literal's span (the finding key) and the edits that hoist it. */
-private typedef Match = {
-	var reportSpan: Span;
-	var edits: Array<{ span: Span, text: String }>;
-}
+private typedef Match = { var reportSpan: Span; var edits: Array<{ span: Span, text: String }>; }
 
 /**
  * A literal's emitted pieces: typed parameter texts, the return-type hint span, the body span, whether
@@ -615,28 +612,15 @@ private typedef FnParts = {
  * What a binding's written type says: whether the hoist may drop it, whether it named
  * a `Void` result, and the function type the hoisted declaration must reproduce.
  */
-private typedef DeclaredType = {
-	var survives: Bool;
-	var returnsVoid: Bool;
-	var signature: Null<FnSignature>;
-}
+private typedef DeclaredType = { var survives: Bool; var returnsVoid: Bool; var signature: Null<FnSignature>; }
 
 /** A written function type: each parameter's optionality and type, and the result. */
-private typedef FnSignature = {
-	var params: Array<ParamSig>;
-	var ret: String;
-}
+private typedef FnSignature = { var params: Array<ParamSig>; var ret: String; }
 
 /** One parameter of a written function type or of a literal: whether it is optional, and its written type. */
-private typedef ParamSig = {
-	var optional: Bool;
-	var type: String;
-}
+private typedef ParamSig = { var optional: Bool; var type: String; }
 
 /**
  * Occurrence tally for one name: how many declarations were seen, and whether every occurrence passed its gate.
  */
-private typedef Refs = {
-	var declarations: Int;
-	var ok: Bool;
-}
+private typedef Refs = { var declarations: Int; var ok: Bool; }

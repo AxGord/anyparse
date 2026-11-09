@@ -35,10 +35,7 @@ typedef ImportBinding = {
  * `unlisted` set — a rank whose names one of them binds and the other line `unlisted` cannot be
  * listed for, so nothing proves it does not bind the same one.
  */
-typedef BindingCollision = {
-	final name: String;
-	final unlisted: Null<String>;
-}
+typedef BindingCollision = { final name: String; final unlisted: Null<String>; }
 
 /**
  * The one answer to "which simple names does this import line bind", over the resolution index —

@@ -19,6 +19,4 @@ package anyparse.query.format.json;
  * missing data.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef LintReportJson = {
-	var findings: Array<LintFindingJson>;
-};
+typedef LintReportJson = { var findings: Array<LintFindingJson>; };

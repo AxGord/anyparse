@@ -34,10 +34,7 @@ typedef SweepTotals = {
  * One fixture whose sweep status moved, as `apq sweep --diff` reports it: `key` is the
  * breakdown bucket (`PASS->FAIL`, `ADDED(FAIL)`, …) and `line` the human row.
  */
-typedef SweepFixtureMove = {
-	var key: String;
-	var line: String;
-};
+typedef SweepFixtureMove = { var key: String; var line: String; };
 
 /**
  * `apq sweep` — read corpus sweep snapshot totals + Δ vs prior.

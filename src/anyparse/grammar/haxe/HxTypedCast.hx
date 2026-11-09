@@ -19,7 +19,4 @@ package anyparse.grammar.haxe;
  * `cast x`), and the bare `CastExpr` branch picks up the operand.
  */
 @:peg
-typedef HxTypedCast = {
-	@:lead('(') var target: HxExpr;
-	@:lead(',') @:fmt(spaceAfterLead) @:trail(')') @:queryTypeSlot var type: HxType;
-};
+typedef HxTypedCast = { @:lead('(') var target: HxExpr; @:lead(',') @:fmt(spaceAfterLead) @:trail(')') @:queryTypeSlot var type: HxType; };

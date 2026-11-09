@@ -29,11 +29,7 @@ typedef StdlibFn = {
  * binder names `a0`, `a1`, ...); `display` is the same call written with the candidate's own
  * parameter names, which is what a report shows a human.
  */
-typedef Mapping = {
-	final fn: StdlibFn;
-	final code: String;
-	final display: String;
-};
+typedef Mapping = { final fn: StdlibFn; final code: String; final display: String; };
 
 /** What one differential run decided about a candidate. */
 enum DifferentialOutcome {
@@ -531,8 +527,4 @@ final class StdlibDifferential {
 }
 
 /** One filling of one slot: what the probe writes, what a report writes, and which parameter it consumed. */
-private typedef Argument = {
-	final code: String;
-	final display: String;
-	final param: Null<String>;
-};
+private typedef Argument = { final code: String; final display: String; final param: Null<String>; };

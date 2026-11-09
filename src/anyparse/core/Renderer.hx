@@ -54,11 +54,7 @@ private typedef RenderCtx = {
 	newline. Named because three signatures carry it; see the function's own
 	doc for what each `-1` means and which caller reads which field.
 **/
-private typedef EmbeddedLineWidths = {
-	final first: Int;
-	final last: Int;
-	final condSpliceFirstLine: Int;
-};
+private typedef EmbeddedLineWidths = { final first: Int; final last: Int; final condSpliceFirstLine: Int; };
 
 /**
  * The probe a sibling-aware rest-of-stack walk measures FOR
@@ -118,10 +114,7 @@ private typedef RouteEntry = {
 	ends on (`ends`) and the widest width one runs on with past the walked node
 	(`cont`), each negative when no route does.
 **/
-private typedef RouteWidths = {
-	final ends: Int;
-	final cont: Int;
-};
+private typedef RouteWidths = { final ends: Int; final cont: Int; };
 
 /**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat

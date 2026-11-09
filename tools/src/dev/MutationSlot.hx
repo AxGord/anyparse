@@ -562,21 +562,10 @@ typedef SlotContext = {
 }
 
 /** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */
-typedef Classified = {
-	var verdict: String;
-	var detail: String;
-	var full: Null<String>;
-}
+typedef Classified = { var verdict: String; var detail: String; var full: Null<String>; }
 
 /** A track's tests run: which run answered, its reading (null when unreadable), and the transcript(s) it read. */
-typedef SuiteRun = {
-	var phase: String;
-	var reading: Null<Classified>;
-	var read: String;
-}
+typedef SuiteRun = { var phase: String; var reading: Null<Classified>; var read: String; }
 
 /** The seconds a narrow attempt spent building and running, charged to the track's timing row. */
-typedef NarrowClock = {
-	var build: Float;
-	var run: Float;
-}
+typedef NarrowClock = { var build: Float; var run: Float; }

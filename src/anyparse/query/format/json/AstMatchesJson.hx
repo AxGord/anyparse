@@ -10,7 +10,4 @@ package anyparse.query.format.json;
  * `AstNodeJson`.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstMatchesJson = {
-	var file: String;
-	var matches: Array<AstNodeJson>;
-};
+typedef AstMatchesJson = { var file: String; var matches: Array<AstNodeJson>; };

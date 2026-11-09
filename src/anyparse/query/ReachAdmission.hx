@@ -189,8 +189,4 @@ final class ReachAdmission {
 }
 
 /** The functions an admission site may enter: the closure over touchers, its value-callable part, its constructors. */
-typedef Admission = {
-	var closure: Map<String, String>;
-	var value: Array<String>;
-	var constructors: Array<String>;
-}
+typedef Admission = { var closure: Map<String, String>; var value: Array<String>; var constructors: Array<String>; }

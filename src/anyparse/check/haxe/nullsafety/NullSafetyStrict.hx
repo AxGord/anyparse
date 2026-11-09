@@ -13,11 +13,7 @@ import anyparse.query.SymbolIndex;
  * One finding of `null-safety-strict`: where it is reported, what it says, and the edit that makes the type strict, null
  * when it is reported only.
  */
-private typedef StrictFinding = {
-	final span: Span;
-	final message: String;
-	final edit: Null<FixEdit>;
-}
+private typedef StrictFinding = { final span: Span; final message: String; final edit: Null<FixEdit>; }
 
 /**
  * Flags a class that does not declare STRICT null safety — no `@:nullSafety` entry, a bare (loose) one, or one

@@ -512,8 +512,4 @@ final class CallRepetition {
  * The repetitions `boundedRepeats` entries bind along one way of calls (`CallRepetition.along`): the product of their
  * bounds (`turns`), the worst cost of one turn (`cost`, ms), and the entries met.
  */
-typedef BoundedWay = {
-	final turns: Float;
-	final cost: Float;
-	final entries: Array<BoundedRepeat>;
-}
+typedef BoundedWay = { final turns: Float; final cost: Float; final entries: Array<BoundedRepeat>; }

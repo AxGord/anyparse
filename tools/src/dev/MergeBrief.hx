@@ -9,11 +9,7 @@ import sys.io.File;
 using StringTools;
 
 /** One place `apq merge-file` could not merge: the file, the key of the place, and what each side did there. */
-typedef MergePlace = {
-	final path: String;
-	final key: String;
-	final sides: String;
-}
+typedef MergePlace = { final path: String; final key: String; final sides: String; }
 
 /**
  * The brief a landing writes when the merge driver leaves a place both sides changed differently: per place, what each

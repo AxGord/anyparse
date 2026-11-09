@@ -434,8 +434,4 @@ private typedef Seams = {
 }
 
 /** A collapsible pair: the finding key span (the declaration), the replaced region, and the built replacement. */
-private typedef Match = {
-	var keySpan: Span;
-	var editSpan: Span;
-	var text: String;
-}
+private typedef Match = { var keySpan: Span; var editSpan: Span; var text: String; }

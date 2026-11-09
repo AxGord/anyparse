@@ -292,18 +292,10 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 private typedef CommentTok = { from: Int, to: Int, isLine: Bool };
 
 /** A confirmed finding: the stranded block, the offset to move it to, and the type it belongs to. */
-private typedef Stranded = {
-	final doc: CommentTok;
-	final anchor: Int;
-	final name: String;
-};
+private typedef Stranded = { final doc: CommentTok; final anchor: Int; final name: String; };
 
 /** The header decls preceding a module's sole type, plus that type's doc anchor and reported name. */
-private typedef Header = {
-	final decls: Array<QueryNode>;
-	final anchor: Int;
-	final name: String;
-};
+private typedef Header = { final decls: Array<QueryNode>; final anchor: Int; final name: String; };
 
 /** Resolved kind-sets the header walk threads through. */
 private typedef Seams = {

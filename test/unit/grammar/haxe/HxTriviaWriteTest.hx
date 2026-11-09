@@ -762,8 +762,7 @@ class HxTriviaWriteTest extends Test {
 	public function testDocEndingItsLineAfterATypeLeadsTheNextType(): Void {
 		assertRoundtrip('class A {} /** Doc of B. */\nclass B {}', 'class A {}\n\n/** Doc of B. */\nclass B {}\n');
 		assertRoundtrip(
-			'typedef A = {\n\tvar a:Int;\n} /** Doc of B. */\nclass B {}',
-			'typedef A = {\n\tvar a:Int;\n}\n\n/** Doc of B. */\nclass B {}\n'
+			'typedef A = {\n\tvar a:Int;\n} /** Doc of B. */\nclass B {}', 'typedef A = {var a:Int;}\n\n/** Doc of B. */\nclass B {}\n'
 		);
 	}
 

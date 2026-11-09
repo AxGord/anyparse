@@ -560,10 +560,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 }
 
 /** An idiom the resolution index confirmed, with its type resolved. */
-typedef Idiom = {
-	final spec: IdiomSpec;
-	final type: ResolvedType;
-}
+typedef Idiom = { final spec: IdiomSpec; final type: ResolvedType; }
 
 /** One `R.f = rhs;` statement. */
 private typedef Write = {

@@ -5,7 +5,4 @@ package anyparse.query.format.json;
  * `callees`, `reach` and `clusters`: the nodes ordered by id, the edges by source, target and kind.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef CodeGraphJson = {
-	var nodes: Array<CodeGraphNodeJson>;
-	var edges: Array<CodeGraphEdgeJson>;
-};
+typedef CodeGraphJson = { var nodes: Array<CodeGraphNodeJson>; var edges: Array<CodeGraphEdgeJson>; };

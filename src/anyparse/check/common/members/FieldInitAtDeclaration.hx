@@ -1226,11 +1226,7 @@ private typedef Candidate = {
  * prologue resolves nothing in-class (`coMoversOrderSafe`). The candidates need no such record: they
  * are order-safe by construction.
  */
-private typedef Candidates = {
-	var byStmt: Map<Int, Candidate>;
-	var embedded: Array<Candidate>;
-	var coMoversOrderSafe: Bool;
-}
+private typedef Candidates = { var byStmt: Map<Int, Candidate>; var embedded: Array<Candidate>; var coMoversOrderSafe: Bool; }
 
 /**
  * The early-init proofs of one file's run, as `candidateFor` asks them: whether the sole write of the field `member` of

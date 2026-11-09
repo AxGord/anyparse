@@ -17,11 +17,7 @@ typedef NullFlowSeams = {
  * An identifier operand with its name and the span of the node it sits
  * in — what a flow fact is asked about, and where the finding lands.
  */
-typedef IdentOperand = {
-	final operand: QueryNode;
-	final name: String;
-	final span: Span;
-};
+typedef IdentOperand = { final operand: QueryNode; final name: String; final span: Span; };
 
 /**
  * The shapes the `NullFlow.analyze` consumers gate on before asking `facts`: the seams they share, a null

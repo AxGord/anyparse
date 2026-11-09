@@ -384,6 +384,4 @@ final class LintFormat {
 }
 
 /** What an `--explain-long` run hands the json renderer: the report, or null when the rule ran and explained nothing. */
-typedef ExplainedLocks = {
-	final report: Null<LongLockReport>;
-}
+typedef ExplainedLocks = { final report: Null<LongLockReport>; }

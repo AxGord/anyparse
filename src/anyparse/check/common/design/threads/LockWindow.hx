@@ -24,10 +24,7 @@ typedef HeldWindow = {
 }
 
 /** A `try` body with a `catch` the walk is inside: its `catch` clauses, and whether a throw held the lock on its way to them. */
-private typedef TryFrame = {
-	final catches: Array<QueryNode>;
-	var raised: Bool;
-}
+private typedef TryFrame = { final catches: Array<QueryNode>; var raised: Bool; }
 
 /**
  * The path-aware extent of a lock held inside ONE function body: a may-held walk over the statement structure from the

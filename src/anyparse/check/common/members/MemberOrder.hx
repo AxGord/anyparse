@@ -26,11 +26,7 @@ import haxe.Exception;
  * `inline` fields - the blocks that LEAD the plain members of their rank instead of trailing
  * them.
  */
-typedef SortPlan = {
-	var groupFirst: Map<String, Int>;
-	var ranked: Map<String, Int>;
-	var rankedInline: Array<String>;
-}
+typedef SortPlan = { var groupFirst: Map<String, Int>; var ranked: Map<String, Int>; var rankedInline: Array<String>; }
 
 /**
  * What one fix pass reads off its file's configs: `movableArglessNew` relaxes the side-effecting
@@ -39,11 +35,7 @@ typedef SortPlan = {
  * `separateInlineSubgroup` option and the writer's member-gap policy), which the report path
  * resolves from the same file.
  */
-private typedef FixOptions = {
-	var movableArglessNew: Bool;
-	var budget: Int;
-	var spacing: SpacingPolicy;
-}
+private typedef FixOptions = { var movableArglessNew: Bool; var budget: Int; var spacing: SpacingPolicy; }
 
 /**
  * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, properties,

@@ -30,7 +30,4 @@ package anyparse.grammar.haxe;
  * on the shape by construction.
  */
 @:peg
-typedef HxAnonFieldBody = {
-	var name: HxIdentLit;
-	@:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeRef var type: HxType;
-}
+typedef HxAnonFieldBody = { var name: HxIdentLit; @:fmt(space('typeHintColon', 'lead')) @:lead(':') @:queryTypeRef var type: HxType; }

@@ -84,9 +84,7 @@ class GreedyDeclSpanEditBoundarySliceTest extends Test {
 		final replacement: String = 'typedef A = {\n\tvar x:Int;\n\tvar z:Int;\n}';
 		switch ReplaceNode.replaceNode(GREEDY, ReplaceTarget.BySelector('TypedefDecl:A'), replacement, true, new HaxeQueryPlugin()) {
 			case Ok(text):
-				Assert.equals(
-					'typedef A = {\n\tvar x:Int;\n\tvar z:Int;\n}\n\n/**\n * Doc of B.\n */\ntypedef B = {\n\tvar y:Int;\n}\n', text
-				);
+				Assert.equals('typedef A = {var x:Int; var z:Int;}\n\n/**\n * Doc of B.\n */\ntypedef B = {var y:Int;}\n', text);
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 		}

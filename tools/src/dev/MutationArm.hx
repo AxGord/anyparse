@@ -672,16 +672,10 @@ typedef ArmTarget = {
 }
 
 /** The arms of a run split by whether their cut rendered: the names that did, and a verdict row for each that did not. */
-typedef RenderSplit = {
-	var rendered: Array<String>;
-	var failed: Array<String>;
-}
+typedef RenderSplit = { var rendered: Array<String>; var failed: Array<String>; }
 
 /** The pinned tests and classes of every arm, each a sorted comma-separated list. */
-typedef PinTables = {
-	var tests: Map<String, String>;
-	var classes: Map<String, String>;
-}
+typedef PinTables = { var tests: Map<String, String>; var classes: Map<String, String>; }
 
 /** One `dev mutation-arm` run. */
 typedef ArmJob = {
@@ -707,18 +701,10 @@ typedef ArmJob = {
 }
 
 /** The engine and the runner a run reads the unmutated tree through. */
-typedef ArmBinaries = {
-	var apq: String;
-	var test: String;
-}
+typedef ArmBinaries = { var apq: String; var test: String; }
 
 /** The composed build running in the background: its directory, and the batch whose job it is. */
-typedef SchemaRun = {
-	var dir: String;
-	var batch: PendingRuns;
-}
+typedef SchemaRun = { var dir: String; var batch: PendingRuns; }
 
 /** What `release` must end whatever way the run went. */
-typedef RunState = {
-	var schema: Null<SchemaRun>;
-}
+typedef RunState = { var schema: Null<SchemaRun>; }

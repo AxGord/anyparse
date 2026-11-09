@@ -476,11 +476,7 @@ private typedef Seams = {
 };
 
 /** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */
-private typedef Asymmetry = {
-	final span: Span;
-	final node: QueryNode;
-	final message: String;
-};
+private typedef Asymmetry = { final span: Span; final node: QueryNode; final message: String; };
 
 /** The per-file context of `AsymmetricBranchBraces.fix`. */
 private typedef FixSite = {

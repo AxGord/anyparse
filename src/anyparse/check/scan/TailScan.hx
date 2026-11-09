@@ -281,21 +281,10 @@ typedef TailSeams = {
 };
 
 /** An `if` standing as a block statement, with the statements that follow it in that block. */
-typedef ChainSite = {
-	final head: QueryNode;
-	final following: Array<QueryNode>;
-};
+typedef ChainSite = { final head: QueryNode; final following: Array<QueryNode>; };
 
 /** A rewrite of an `if` chain: the chain, the span its finding reports and the edits that carry it out (none when report-only). */
-typedef RewriteSite = {
-	final chain: QueryNode;
-	final span: Span;
-	final edits: Array<FixEdit>;
-};
+typedef RewriteSite = { final chain: QueryNode; final span: Span; final edits: Array<FixEdit>; };
 
 /** `elseEnds`: the final branch's index, its span, and the span of the branch before it. */
-typedef ElseEnds = {
-	final last: Int;
-	final chainEnd: Span;
-	final beforeElse: Span;
-};
+typedef ElseEnds = { final last: Int; final chainEnd: Span; final beforeElse: Span; };

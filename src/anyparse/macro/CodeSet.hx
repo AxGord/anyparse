@@ -100,7 +100,4 @@ final class CodeSet {
 }
 
 /** An inclusive run of code units. */
-typedef CodeRange = {
-	final lo: Int;
-	final hi: Int;
-}
+typedef CodeRange = { final lo: Int; final hi: Int; }

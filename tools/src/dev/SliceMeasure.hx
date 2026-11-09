@@ -172,14 +172,7 @@ final class SliceMeasure {
 }
 
 /** The `.hx` files of a revision's roots and its member call edges, each valued by the file it lands in (empty: outside). */
-typedef EdgeReading = {
-	var files: Array<String>;
-	var edges: Map<String, String>;
-}
+typedef EdgeReading = { var files: Array<String>; var edges: Map<String, String>; }
 
 /** The call edges a slice added, and how many of them land in a module the base held, in one it added. */
-typedef EdgeShare = {
-	var added: Int;
-	var existing: Int;
-	var fresh: Int;
-}
+typedef EdgeShare = { var added: Int; var existing: Int; var fresh: Int; }

@@ -9,10 +9,7 @@ import anyparse.runtime.Span;
 import haxe.ds.Either;
 
 /** The class an extraction starts from: the parsed source and the class declaration in it. */
-typedef SourceClass = {
-	final tree: QueryNode;
-	final decl: TypeDeclMatch;
-}
+typedef SourceClass = { final tree: QueryNode; final decl: TypeDeclMatch; }
 
 /**
  * The core the type-extracting ops share — `extract-interface` and `extract-superclass`, which

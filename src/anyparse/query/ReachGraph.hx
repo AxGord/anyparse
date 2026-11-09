@@ -1560,19 +1560,13 @@ final class ReachGraph {
  * A function an implicit-call site may run (`ReachGraph.ownedIdsAt`): its graph id, and the typed type whose member it is
  * when the compiler facts say so — null when only its simple name says.
  */
-typedef OwnedId = {
-	final id: String;
-	final owner: Null<String>;
-}
+typedef OwnedId = { final id: String; final owner: Null<String>; }
 
 /**
  * What a reflective access by a computed name may reach (`ReachGraph.reflectedMembers`): the simple names of the types
  * whose members it may touch, and the methods it may run, each with the typed type it is a member of.
  */
-typedef ReflectedMembers = {
-	final types: Array<String>;
-	final ids: Array<OwnedId>;
-}
+typedef ReflectedMembers = { final types: Array<String>; final ids: Array<OwnedId>; }
 
 /** An implicitly-called member the index declares, and the file declaring it. */
 private typedef ImplicitCandidate = {

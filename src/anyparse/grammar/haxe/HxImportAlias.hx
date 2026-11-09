@@ -28,7 +28,4 @@ package anyparse.grammar.haxe;
  * supports the alias form.
  */
 @:peg
-typedef HxImportAlias = {
-	var path: HxTypeName;
-	@:kw('as') var name: HxIdentLit;
-}
+typedef HxImportAlias = { var path: HxTypeName; @:kw('as') var name: HxIdentLit; }

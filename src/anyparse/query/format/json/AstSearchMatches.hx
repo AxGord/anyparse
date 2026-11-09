@@ -9,6 +9,4 @@ package anyparse.query.format.json;
  * — the change is forward-compatible.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef AstSearchMatches = {
-	var matches: Array<AstSearchMatch>;
-};
+typedef AstSearchMatches = { var matches: Array<AstSearchMatch>; };

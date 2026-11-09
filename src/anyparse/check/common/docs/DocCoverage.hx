@@ -273,8 +273,4 @@ private typedef Seams = {
 };
 
 /** Per-file resolved config for the doc-coverage walk. */
-private typedef DocCfg = {
-	final requireTypeDoc: Bool;
-	final requireMemberDoc: Bool;
-	final includeConstructor: Bool;
-};
+private typedef DocCfg = { final requireTypeDoc: Bool; final requireMemberDoc: Bool; final includeConstructor: Bool; };

@@ -43,11 +43,7 @@ typedef FnNode = {
  * each branch of a conditional region, an overload, a copy of its type per build — and each of them is code the node
  * runs: its `span` of `file`, the body a reader of the node's text reads beside the node's own `span`.
  */
-typedef FnDeclaration = {
-	var id: String;
-	var file: String;
-	var span: Span;
-}
+typedef FnDeclaration = { var id: String; var file: String; var span: Span; }
 
 /**
  * One directed edge. `via` is set on `Ref` edges only: the id of the call
@@ -117,10 +113,7 @@ typedef CallEdge = {
  * Where a call writes an argument: its position among the arguments the call writes (`index`, from 0, a receiver not
  * counted) and how many it writes (`count`) — which parameter it binds is the callee's (`CallGraphKeys.bindsItsPosition`).
  */
-typedef ArgumentPosition = {
-	final index: Int;
-	final count: Int;
-}
+typedef ArgumentPosition = { final index: Int; final count: Int; }
 
 /**
  * Why a call site has no resolved target. The distinction a reachability consumer
@@ -209,10 +202,7 @@ typedef UnresolvedAccess = {
  * anywhere in the function — and `origin`, the graph node of the inlined method the code is written in, with the code's
  * own range (`span`) in the file the compiler facts key as `file`; null when the graph names no such node.
  */
-typedef SplicedSite = {
-	final sites: Null<Array<Span>>;
-	final origin: Null<{ node: String, file: String, span: Span }>;
-}
+typedef SplicedSite = { final sites: Null<Array<Span>>; final origin: Null<{ node: String, file: String, span: Span }>; }
 
 /**
  * Edge classification. `Call` / `New` are direct invocations; `Virtual` is an

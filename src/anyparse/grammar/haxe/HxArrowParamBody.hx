@@ -16,7 +16,4 @@ package anyparse.grammar.haxe;
  * `name:Type` tight regardless of the type-hint policy elsewhere.
  */
 @:peg
-typedef HxArrowParamBody = {
-	var name: HxIdentLit;
-	@:lead(':') var type: HxType;
-}
+typedef HxArrowParamBody = { var name: HxIdentLit; @:lead(':') var type: HxType; }

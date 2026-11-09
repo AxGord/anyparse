@@ -7,8 +7,4 @@ package unit.query;
  * gotcha.
  */
 @:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
-typedef ApqProbeNode = {
-	var kind: String;
-	@:optional var name: String;
-	var children: Array<ApqProbeNode>;
-};
+typedef ApqProbeNode = { var kind: String; @:optional var name: String; var children: Array<ApqProbeNode>; };

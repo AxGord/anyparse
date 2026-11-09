@@ -198,24 +198,14 @@ final class CondResolve {
  * directive's span, which is what a caller renders as `file:line:col`, and `directive` that
  * directive's verbatim text.
  */
-typedef UndecidedRegion = {
-	final at: Span;
-	final directive: String;
-};
+typedef UndecidedRegion = { final at: Span; final directive: String; };
 
 /**
  * What `CondResolve.resolve` answers: the write `result` for the whole file, how many regions
  * folded (`resolved`, nested ones counted individually), and every region left standing
  * (`undecided`) for the caller to report.
  */
-typedef CondResolveResult = {
-	final result: EditResult;
-	final resolved: Int;
-	final undecided: Array<UndecidedRegion>;
-};
+typedef CondResolveResult = { final result: EditResult; final resolved: Int; final undecided: Array<UndecidedRegion>; };
 
 /** One region's replacement text, and how many regions producing it accounted for — itself included. */
-private typedef FoldedRegion = {
-	final text: String;
-	final count: Int;
-};
+private typedef FoldedRegion = { final text: String; final count: Int; };

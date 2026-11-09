@@ -235,7 +235,7 @@ final class TriviaSepLowering {
 		// tail consumes. Extracted to `triviaSepCheckExprs` so the orchestrator
 		// stays under the complexity gate; behaviour byte-identical.
 		final checks: WriterLowering.SepStarChecks = triviaSepCheckExprs(
-			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, forceMultiInTypedef, mapWrap
+			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, mapWrap
 		);
 
 		final ignoreCheckExpr: Expr = checks.ignoreCheckExpr;
@@ -325,7 +325,7 @@ final class TriviaSepLowering {
 			forceMultiColsExpr: forceMultiColsFor(wrapRulesField, mapWrap, sepText, suppressExpr)
 		}
 		final predicateScan: Expr = triviaSepPredicateScanExpr(
-			reflowSourceMultiline, uniformStmtBlanks, triviaElemCall, relocateTrailingComments
+			reflowSourceMultiline, uniformStmtBlanks, triviaElemCall, relocateTrailingComments, typedefBodyBlanks
 		);
 		final matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
 			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
@@ -684,7 +684,7 @@ final class TriviaSepLowering {
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepCheckExprs(
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
-		rightCurlyKnob: Null<String>, forceMultiInTypedef: Bool, mapWrap: Null<WriterLowering.SepStarMapWrap>
+		rightCurlyKnob: Null<String>, mapWrap: Null<WriterLowering.SepStarMapWrap>
 	): WriterLowering.SepStarChecks {
 
 		// ω-cascade-emits-comments: Ignore-mode runtime check. Fires when the wrap-rules JSON config sets
@@ -729,19 +729,9 @@ final class TriviaSepLowering {
 				|| opt._literalReflow == anyparse.format.LiteralReflow.Here
 				|| (opt._inArrowLambdaBody && opt.objectLiteralArrowBodyReflow)
 			: ignoreBase;
-		// ω-anontype-reflow-typedef-guard: a typedef RHS anon is NOT governed by
-		// `wrapping.anonType` in the fork at all — its brace classifies as
-		// `BrOpenType.TypedefDecl` and routes to `MarkWrapping.typedefWrapping`,
-		// which keeps the source line structure verbatim (collapse only when the
-		// body was already same-line). anyparse models both positions with the
-		// single `HxType.Anon` Star, so an `anonType.defaultWrap: "ignore"` config
-		// — meant to re-flow INLINE anon type hints by width — would also drop the
-		// source newlines of every multi-line typedef body and collapse it. Gate
-		// the Ignore drop off inside the typedef RHS on the Star that opted into
-		// `@:fmt(forceMultiInTypedef)` (only `HxType.Anon`); `opt._inTypedefBody`
-		// is set by `HxTypedefDecl.type`'s `propagateTypedefContext` and cleared
-		// per-element, so a NESTED anon inside a typedef body still re-flows.
-		final ignoreCheckExpr: Expr = forceMultiInTypedef ? macro ($ignoreResolved) && !opt._inTypedefBody : ignoreResolved;
+		// A typedef RHS anon follows the same rules as every other list: its source line breaks are not a layout
+		// signal, so a simple body goes on one line and a complex one wraps by the `anonType` cascade.
+		final ignoreCheckExpr: Expr = ignoreResolved;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
 		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — a block that
@@ -764,8 +754,7 @@ final class TriviaSepLowering {
 		// The config's fallback mode is `noWrap`, with or without a rule cascade before it.
 		final noWrapDefaultCheckExpr: Expr = wrapRulesField != null ? {
 			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
-			final isNoWrap: Expr = macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap;
-			forceMultiInTypedef ? macro $isNoWrap && !opt._inTypedefBody : isNoWrap;
+			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap;
 		} : macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
@@ -1139,10 +1128,11 @@ final class TriviaSepLowering {
 	 * element's blank/comment/source-newline signals. References the runtime `_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
 	 */
 	private static function triviaSepPredicateScanExpr(
-		reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr, relocateTrailingComments: Bool
+		reflowSourceMultiline: Bool, uniformStmtBlanks: Bool, triviaElemCall: Expr, relocateTrailingComments: Bool, typedefBodyBlanks: Bool
 	): Expr {
-		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks);
-		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments);
+		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks, typedefBodyBlanks);
+		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments, typedefBodyBlanks);
+		final statedBlanksExpr: Expr = triviaSepTypedefStatedBlanksExpr(typedefBodyBlanks);
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {
@@ -1193,6 +1183,7 @@ final class TriviaSepLowering {
 					_anyMultilineItem = true;
 				_ti++;
 			}
+			$statedBlanksExpr;
 		};
 	}
 
@@ -1211,9 +1202,14 @@ final class TriviaSepLowering {
 	 * element per line, as a call's arguments do, or the move is not a fixed point; there only a one-line block
 	 * comment rides along.
 	 */
-	private static function triviaSepInlineableLeadExpr(relocateTrailingComments: Bool): Expr {
+	private static function triviaSepInlineableLeadExpr(relocateTrailingComments: Bool, typedefBodyBlanks: Bool): Expr {
 		final inlineLead: Expr = relocateTrailingComments ? triviaSepInlineLeadExpr() : macro true;
-		return macro _ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()});
+		// The typedef body's doc-keyed blank lines (`typedefEmptyLines.*IfDocComments`, `beforeDocCommentEmptyLines`) are
+		// laid out only by the force-multi loop, so a doc-led typedef field takes that layout instead of the cascade.
+		final typedefDocLed: Expr = typedefBodyBlanks
+			? macro opt._inTypedefBody && anyparse.format.MemberGap.docLed(_t.leadingComments)
+			: macro false;
+		return macro _ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()}) && !$typedefDocLed;
 	}
 
 	/** Every leading comment of the element `_t` is a one-line block comment, the only kind that can share a line. */
@@ -1308,6 +1304,11 @@ final class TriviaSepLowering {
 			// at the no-trivia branch collapses to `_docs.push(_elem)`
 			// because `_parts.length==1` on no-comment elements.
 			final _ignoreEmit: Bool = $ignoreCheckExpr;
+			// The cascade writes a first element's inline leading comment right after the open delimiter, where the next
+			// parse takes it as the open trail; reading it back as that lead keeps the layout a fixed point.
+			final _openGlued: Bool = _ignoreEmit && anyparse.runtime.OpenGluedComment.leads(_arr, _trailOpen);
+			final _arr = _openGlued ? anyparse.runtime.OpenGluedComment.first(_arr, _trailOpen ?? '') : _arr;
+			final _trailOpen: Null<String> = _openGlued ? null : _trailOpen;
 			// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
 			// to Ignore (a single `defaultMode`, so this only ever flips for
 			// an actual NoWrap config). Scoped to the
@@ -1495,21 +1496,8 @@ final class TriviaSepLowering {
 		final trackPrevDocExpr: Expr = afterDocPolicy != null
 			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
 			: macro {};
-		// ω-typedef-between-fields: runtime predicate that strips the
-		// source-captured inter-field blank for a typedef RHS body. Fires
-		// when this Star opted into `@:fmt(typedefBodyBlanks)` AND the anon
-		// is in typedef context AND EITHER a forced `typedefBetweenFields`
-		// count owns the slot (the `$typedefBetweenExpr` pushes the exact
-		// count, so the source blank must not stack on top) OR
-		// `typedefExistingBetweenFields == Remove` collapses source blanks.
-		// `false` for every non-typedef caller (compile-time gate) → the
-		// existing source-blank pass-through is byte-identical.
-		final typedefStripBetweenExpr: Expr = typedefBodyBlanks
-			? macro (
-				opt._inTypedefBody
-				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
-			)
-			: macro false;
+		// `false` for every Star without `@:fmt(typedefBodyBlanks)`, whose source blank passes through.
+		final stripBetweenExpr: Expr = typedefBodyBlanks ? typedefStripBetweenExpr() : macro false;
 		// ω-uniform-element-blanks: suppress the source blank at every interior
 		// gap once the pre-pass found the gap set uniform. Sister to the
 		// block-Star guard in `TriviaBlockLowering.triviaBlockBlankBeforeExpr`;
@@ -1520,7 +1508,7 @@ final class TriviaSepLowering {
 		return docRule
 			? macro {
 				$currHasDocComputeExpr;
-				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr || $uniformStripExpr;
+				final _stripBlank: Bool = $stripByCurrDocExpr || $stripBetweenExpr || $uniformStripExpr;
 				final _addBlank: Bool = $addByCurrDocExpr;
 				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 				if (_si > 0 && (_sourceBlank || _addBlank)) {
@@ -1530,7 +1518,7 @@ final class TriviaSepLowering {
 				$trackPrevDocExpr;
 			}
 			: macro {
-				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr) && !($uniformStripExpr)) {
+				if (_t.blankBefore && _si > 0 && !($stripBetweenExpr) && !($uniformStripExpr)) {
 					_inner.push(_dhl());
 					$blankExtras;
 				}
@@ -1653,8 +1641,9 @@ final class TriviaSepLowering {
 	 * losing its blanks. That is the shape the blank-free source produces,
 	 * which is exactly the invariant this gate buys.
 	 */
-	private static function triviaSepBlankHardlineExpr(uniformStmtBlanks: Bool): Expr {
-		return uniformStmtBlanks ? macro (_t.blankBefore && !_uniformCollapse) : macro _t.blankBefore;
+	private static function triviaSepBlankHardlineExpr(uniformStmtBlanks: Bool, typedefBodyBlanks: Bool): Expr {
+		final kept: Expr = uniformStmtBlanks ? macro (_t.blankBefore && !_uniformCollapse) : macro _t.blankBefore;
+		return typedefBodyBlanks ? macro $kept && !$e{typedefStripBetweenExpr()} : kept;
 	}
 
 	/**
@@ -1697,6 +1686,35 @@ final class TriviaSepLowering {
 				_ignoreEmit ? anyparse.core.BreakCommits.redecided(_cascade) : _cascade;
 			}
 			: cascade;
+	}
+
+	/**
+	 * The runtime predicate that strips a typedef RHS body's source blank between fields: the anon is in typedef context and
+	 * either a stated `typedefBetweenFields` count owns the slot or `typedefExistingBetweenFields` is `Remove`. A stripped
+	 * blank is no layout signal either, so the predicate scan does not count it as a hardline.
+	 */
+	private static function typedefStripBetweenExpr(): Expr {
+		return macro (
+			opt._inTypedefBody
+			&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
+		);
+	}
+
+	/**
+	 * A typedef RHS body whose config states a positive blank count (`typedefEmptyLines.beginType` / `endType` or their
+	 * doc-comment variants, or `betweenFields` between two fields) cannot sit on one line, and only the force-multi loop
+	 * writes those counts, so the body takes that layout. `macro {}` for a Star without `@:fmt(typedefBodyBlanks)`.
+	 */
+	private static function triviaSepTypedefStatedBlanksExpr(typedefBodyBlanks: Bool): Expr {
+		if (!typedefBodyBlanks) return macro {};
+		final begin: Expr = typedefEdgeExpr(macro opt.typedefBeginType, macro opt.typedefBeginTypeIfDocComments);
+		final end: Expr = typedefEdgeExpr(macro opt.typedefEndType, macro opt.typedefEndTypeIfDocComments);
+		return macro if (
+			opt._inTypedefBody
+			&& _arr.length > 0
+			&& ((opt.typedefBetweenFields > 0 && _arr.length > 1) || ($begin ?? 0) > 0 || ($end ?? 0) > 0)
+		)
+			_requiresHardline = true;
 	}
 
 }

@@ -89,7 +89,7 @@ class HxMeasuredMultilineDeclBlankSliceTest extends Test {
 	}
 
 	public function testMultilineTypedefIsSeparatedFromItsNeighbour(): Void {
-		final out: String = write('typedef Aa = {\n\tvar a: Int;\n};\ntypedef Bb = Int;\n', CFG);
+		final out: String = write('typedef Aa = {var a: Int; var b: Int; var c: Int; var d: Int; var e: Int;};\ntypedef Bb = Int;\n', CFG);
 		Assert.isTrue(out.indexOf('};\n\ntypedef Bb = Int;') != -1, 'an anon-body typedef renders multi-line:\n<$out>');
 	}
 

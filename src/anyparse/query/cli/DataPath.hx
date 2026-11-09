@@ -178,7 +178,4 @@ enum DataLookup {
 }
 
 /** `apq get --where`'s clause: a record matches when `segments` resolve in it to a value that prints as `value`. */
-typedef WhereClause = {
-	final segments: Array<String>;
-	final value: String;
-};
+typedef WhereClause = { final segments: Array<String>; final value: String; };

@@ -651,10 +651,7 @@ typedef ShardSplit = {
 }
 
 /** A suite's test and assertion totals. */
-typedef SuiteCounts = {
-	var tests: Int;
-	var assertions: Int;
-}
+typedef SuiteCounts = { var tests: Int; var assertions: Int; }
 
 /** The four counts of one transcript. */
 typedef Tally = {

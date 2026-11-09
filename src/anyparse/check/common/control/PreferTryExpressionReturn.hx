@@ -161,8 +161,4 @@ final class PreferTryExpressionReturn extends RuleBase {
 }
 
 /** The kinds `PreferTryExpressionReturn` reads. */
-private typedef Seams = {
-	var tryKinds: Array<String>;
-	var returnKinds: Array<String>;
-	var tryShape: TrySeams;
-}
+private typedef Seams = { var tryKinds: Array<String>; var returnKinds: Array<String>; var tryShape: TrySeams; }

@@ -31,10 +31,7 @@ private enum abstract FoldState(Int) {
 }
 
 /** A warned hold (by index) long by a sink call, and whether that call runs more than once under it. */
-private typedef SiteDoer = {
-	final at: Int;
-	final repeated: Bool;
-}
+private typedef SiteDoer = { final at: Int; final repeated: Bool; }
 
 /**
  * One warning per root cause across holds: a hold finding (b) warning whose every long call is long only through what

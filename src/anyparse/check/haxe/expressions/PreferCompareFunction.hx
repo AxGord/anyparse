@@ -715,10 +715,7 @@ private typedef Chain = {
 }
 
 /** The two operands of a strict comparison, the smaller first. */
-private typedef Order = {
-	smallNode: QueryNode,
-	bigNode: QueryNode
-}
+private typedef Order = { smallNode: QueryNode, bigNode: QueryNode }
 
 /** What the type, purity and null proofs answer about an operand. */
 private typedef Typed = {
@@ -753,11 +750,7 @@ private typedef Match = {
 }
 
 /** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
-private typedef ConfigProblem = {
-	message: String,
-	file: String,
-	enabled: Bool
-}
+private typedef ConfigProblem = { message: String, file: String, enabled: Bool }
 
 /** The two operands of a written call, as source text. */
 private typedef Operands = { left: String, right: String }

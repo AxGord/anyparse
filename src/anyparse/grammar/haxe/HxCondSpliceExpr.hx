@@ -29,7 +29,4 @@ package anyparse.grammar.haxe;
  * `test/unit/HxCondSpliceExprSliceTest.hx` pins the shapes and their verdicts.
  */
 @:peg
-typedef HxCondSpliceExpr = {
-	var raw: HxCondSpliceRaw;
-	@:fmt(chainNestSuppress) var tail: HxExpr;
-}
+typedef HxCondSpliceExpr = { var raw: HxCondSpliceRaw; @:fmt(chainNestSuppress) var tail: HxExpr; }

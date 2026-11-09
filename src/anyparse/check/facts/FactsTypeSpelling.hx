@@ -9,10 +9,7 @@ import anyparse.query.FactsTypeTree.FactsTypeTree;
 import anyparse.query.SourceText;
 
 /** The type parameters a spelled type may name: those of the type `owner` (an id) and of the method `method`. */
-typedef TypeScope = {
-	final owner: Null<String>;
-	final method: Null<String>;
-}
+typedef TypeScope = { final owner: Null<String>; final method: Null<String>; }
 
 /**
  * A type in the facts type grammar (`TypedFactsProbe`) spelled as Haxe source: the type read (`FactsTypeTree`), then

@@ -1419,11 +1419,7 @@ final class NamingRenames {
  * declaration: a parameter named after an imported type (`Event` beside `Event.ACTIVATE`) needs it
  * just as much as a field does.
  */
-typedef RenameContext = {
-	final index: SymbolIndex;
-	final file: String;
-	@:optional final ownerName: String;
-};
+typedef RenameContext = { final index: SymbolIndex; final file: String; @:optional final ownerName: String; };
 
 /**
  * A resolved cross-file rename candidate: the parsed declaring file, the flagged binding's cursor
@@ -1459,11 +1455,7 @@ typedef CrossFileCandidate = {
  * owning type and the new name. `crossFileFix` needs those two to record the rename with
  * `RenameClaims`, and the slices alone do not carry them.
  */
-typedef CrossFileRename = {
-	final slices: Array<CrossFileEdits>;
-	final owner: String;
-	final newName: String;
-};
+typedef CrossFileRename = { final slices: Array<CrossFileEdits>; final owner: String; final newName: String; };
 
 /**
  * A completed rename for one declaration within a single `Naming.fix` pass: the SPANS to
@@ -1471,11 +1463,7 @@ typedef CrossFileRename = {
  * because the same-pass claim gate (`defersToAnAcceptedRename`) needs more than the spans — two renames can
  * share no span yet still collide by normalizing to the same new name in one scope.
  */
-typedef DeclRename = {
-	final newName: String;
-	final edits: Array<{ span: Span, text: String }>;
-	final scope: Span;
-};
+typedef DeclRename = { final newName: String; final edits: Array<{ span: Span, text: String }>; final scope: Span; };
 
 /**
  * Why a rename was withheld, one sentence per gate, plus the four ways a gate hands one to the

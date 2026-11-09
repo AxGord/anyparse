@@ -9,10 +9,7 @@ import anyparse.query.ExitCode.*;
  * twin of the name goes with it), so an address is a way to SPELL the pair, never a way to
  * remove one branch's declaration and leave its twin behind.
  */
-typedef NamedMember = {
-	final type: String;
-	final member: String;
-};
+typedef NamedMember = { final type: String; final member: String; };
 
 /**
  * `apq remove-member` — remove a member by --type + name (inverse of add-member).

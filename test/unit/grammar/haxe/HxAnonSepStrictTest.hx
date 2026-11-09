@@ -24,7 +24,7 @@ class HxAnonSepStrictTest extends Test {
 	private static final VAR_ENDED_BY_ANON: String = 'typedef T = {\n\tvar a:{x:Int}\n\tvar b:String;\n}';
 	private static final VAR_ENDED_BY_ARROW: String = 'typedef T = {\n\tvar a:Int->{x:Int}\n\tvar b:String;\n}';
 	private static final VAR_ENDED_BY_ARROW_FN: String = 'typedef T = {\n\tvar a:(Int) -> {x:Int}\n\tvar b:String;\n}';
-	private static final SELF_TERMINATED: String = 'typedef T = {\n\tvar a:Int;\n\tvar b:String;\n}';
+	private static final SELF_TERMINATED: String = 'typedef T = {var a:Int; var b:String;}';
 	private static final REGION: String = 'typedef T = {\n\ta:Int,\n\t#if x\n\tvar b:Int;\n\t#end\n\tc:Int\n}';
 	private static final FN_TERMINATED: String = 'typedef T = {\n\tfunction f():Void;\n\tvar b:Int;\n}';
 	private static final FN_BLOCK_BODY: String = 'typedef T = {\n\tfunction f():Void {}\n\tvar b:Int;\n}';
@@ -97,7 +97,7 @@ class HxAnonSepStrictTest extends Test {
 
 	@:pin('guard')
 	public function testTrailingCommaStaysLegal(): Void {
-		final src: String = 'typedef T = {\n\ta:Int,\n\tb:String,\n}';
+		final src: String = 'typedef T = {a:Int, b:String,}';
 		Assert.equals(1, HaxeModuleParser.parse(src).decls.length);
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
 	}
