@@ -137,7 +137,7 @@ final class LintFixVerify {
 				// The three clauses in a local, so the sentence above keeps the shape it had: the
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
 				// inline they push the segment past the line width.
-				final declinedClause: String = declinedTail(verified.declined);
+				final declinedClause: String = declinedTail(verified.declined) + notCanonicalTail(verified.notCanonical ?? []);
 				final clauses: String =
 					'$declinedClause${excludedTail(verified.excluded)}${bisectTail(verified.partials)}${roundsTail(verified.rounds)}';
 				return {
@@ -198,6 +198,9 @@ final class LintFixVerify {
 			entry.handedOff = 0;
 			entry.handedOffReasons = [];
 		}
+		// Findings the run did report, on a file no fix was tried on: `reported` alone, so no decline row charges the rule.
+		for (row in verified.notCanonical ?? []) if (!armRules.contains(row.rule))
+			LintFixDriver.ledgerFor(ledger, row.rule).reported += row.findings;
 		for (tally in verified.tallies) {
 			final entry: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, tally.rule);
 			if (!armRules.contains(tally.rule)) entry.reported += tally.findings;
@@ -1050,6 +1053,15 @@ final class LintFixVerify {
 					};
 			}
 		];
+	}
+
+	/** The clause for files no risky fix was attempted on because the writer would reformat them; empty when there are none. */
+	private static function notCanonicalTail(rows: Array<{ file: String, rule: String, findings: Int }>): String {
+		final files: Array<String> = [];
+		for (row in rows) if (!files.contains(row.file)) files.push(row.file);
+		return files.length == 0
+			? ''
+			: ', ${files.length} file(s) not writer-canonical so risky fixes not attempted there (e.g. ${files[0]}; run fmt first)';
 	}
 
 }

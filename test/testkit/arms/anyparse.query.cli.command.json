@@ -1075,6 +1075,38 @@
 			"find": "GitRevision.parseNameStatus(alone.out).length == 0",
 			"replace": "true",
 			"note": "git is no longer asked whether a spec lists anything, so every filter that is not literally a listed path (a glob, an absolute spelling, an exclude) is reported as matching nothing"
+		},
+		{
+			"name": "M-RISKY-NOT-CANONICAL-SILENT",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "notCanonicalTail",
+			"find": "return files.length == 0",
+			"replace": "return files.length >= 0",
+			"note": "a file the writer would reformat gets no risky fix and the run ends in an unexplained zero again"
+		},
+		{
+			"name": "M-RISKY-NOT-CANONICAL-NOT-REPORTED",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": ".reported += row.findings",
+			"replace": ".reported += 0",
+			"note": "the ledger row of a drifted file stops counting its findings as reported"
+		},
+		{
+			"name": "M-RISKY-NOT-CANONICAL-COUNTS-ROWS",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "notCanonicalTail",
+			"find": "if (!files.contains(row.file)) files.push(row.file);",
+			"replace": "files.push(row.file);",
+			"note": "one drifted file with two rules counts as two files"
+		},
+		{
+			"name": "M-RISKY-NOT-CANONICAL-ARM-COUNTED-TWICE",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "if (!armRules.contains(row.rule))",
+			"replace": "if (row.rule != \"\")",
+			"note": "a drifted file recounts an arm rule whose findings the safe loop already reported"
 		}
 	]
 }

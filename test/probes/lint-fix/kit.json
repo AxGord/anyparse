@@ -1496,6 +1496,39 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "RISKY-NOT-CANONICAL",
+			"note": "a drifted file under a compiler oracle gets no risky fix and the run names it",
+			"argv": [
+				"hxq",
+				"lint",
+				"src/P.hx",
+				"--rule",
+				"prefer-single-pass",
+				"--fix",
+				"--all"
+			],
+			"files": {
+				"apq.json": "{\"resolutionRoots\":[\"src\"],\"compilerOracle\":[{\"hxml\":\"probe.hxml\",\"dir\":\".\"}],\"rules\":{\"prefer-single-pass\":{\"enabled\":true},\"prefer-map\":{\"enabled\":true}}}\n",
+				"probe.hxml": "-cp src\n-main P\nQ\n-js out.js\n",
+				"src/P.hx": "class P {\n\tstatic function main() {\n\t\ttrace(new P().f([1, 2, 3]));\n\t\ttrace(g([1, 2, 3]));\n\t}\n\n\tfunction new() {}\n\n\tfunction f(xs: Array<Int>): Array<Int> {\n\t\tfinal ys = xs.filter(x -> x > 1).map(x -> x * 2);\n\t\treturn ys;\n\t}\n\n\tstatic function g(xs: Array<Int>): Array<Int> {\n\t\tfinal ys = xs.filter(x -> x > 1).map(x -> x * 2);\n\t\treturn ys;\n\t}\n}\n",
+				"src/Q.hx": "class Q {\n\tstatic function g(xs: Array<Int>): Array<Int> {\n\t\treturn [for (x in xs) x * 2];\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "c67728570d14c524",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

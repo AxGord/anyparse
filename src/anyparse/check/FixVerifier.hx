@@ -90,6 +90,12 @@ typedef FixVerifyResult = {
 	 */
 	var tallies: Array<FixVerifyTally>;
 
+	/**
+	 * The findings that got no candidate because the source is not the writer's fixed point. Neither a decline
+	 * nor a tally row (see `SourceNotCanonical`), so without this list the run would end in an unexplained zero.
+	 */
+	@:optional var notCanonical: Array<{ file: String, rule: String, findings: Int }>;
+
 }
 
 /**
@@ -386,6 +392,7 @@ final class FixVerifier {
 		// per-entry switch below — including the `continue` for a check that answered no edit
 		// at all, which is a decline like any other and the one the caller could least see.
 		final tallies: Array<FixVerifyTally> = [];
+		final notCanonical: Array<{ file: String, rule: String, findings: Int }> = [];
 		var appliedEdits: Int = 0;
 		final rounds: Array<Int> = [];
 		// EVERY configuration's own baseline, and a RED one is dropped rather than allowed to stop
@@ -537,7 +544,10 @@ final class FixVerifier {
 				// the reason, and the reason is already in `declined` / `reverted` under the same
 				// (file, rule) pair.
 				final landed: Int = switch verdict {
-					case NoChange, SourceNotCanonical: 0;
+					case NoChange: 0;
+					case SourceNotCanonical:
+						notCanonical.push({ file: entry.file, rule: check.id(), findings: own.length });
+						0;
 					case Declined(reason):
 						// The whole point of this class: code the oracle never typechecks cannot be
 						// typechecked into safety. Writing the candidate would spend a full compile to
@@ -600,7 +610,8 @@ final class FixVerifier {
 				coverage: coverageMemo.probes,
 				excluded: excluded,
 				rounds: rounds,
-				tallies: tallies
+				tallies: tallies,
+				notCanonical: notCanonical
 			},
 			{
 				checks: riskyChecks,

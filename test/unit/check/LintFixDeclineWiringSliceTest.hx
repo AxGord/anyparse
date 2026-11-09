@@ -1052,6 +1052,18 @@ class LintFixDeclineWiringSliceTest extends Test {
 		#end
 	}
 
+	/** An arm rule's findings entered `reported` in the safe loop, so a drifted file must not count them again. */
+	@:pin('control') @:killer('M-RISKY-NOT-CANONICAL-ARM-COUNTED-TWICE')
+	public function testADriftedFileDoesNotRecountAnArmRulesFindings(): Void {
+		final ledger: Map<String, RuleFixOutcome> = armPassOne();
+		final result: FixVerifyResult = armResult(0, []);
+		result.tallies = [];
+		result.notCanonical = [{ file: 'A.hx', rule: 'arm-rule', findings: 2 }];
+		LintFixVerify.ledgerRiskyTallies(ledger, result, ['arm-rule']);
+		final row: Null<RuleFixOutcome> = ledger['arm-rule'];
+		Assert.equals(5, row == null ? -1 : row.reported);
+	}
+
 	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
 	private static function reasoned(reason: Null<String>): Violation {
 		return {

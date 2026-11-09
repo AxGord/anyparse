@@ -479,6 +479,22 @@
 			"find": "declared.document = entry.path",
 			"replace": "declared.document = null",
 			"note": "a dropped compilerOracle entry is recorded but no longer warned under the document that wrote it"
+		},
+		{
+			"name": "M-RISKY-ORACLE-READ-NOT-APPLIED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "prepareEntry",
+			"find": "return covering.length == 0",
+			"replace": "return covering.length >= 0",
+			"note": "a file the oracle reads no longer takes the risky fix"
+		},
+		{
+			"name": "M-RISKY-ORACLE-UNREAD-NOT-NAMED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "prepareEntry",
+			"find": "return covering.length == 0",
+			"replace": "return covering.length < 0",
+			"note": "a file the oracle does not read is no longer declined by name"
 		}
 	]
 }
