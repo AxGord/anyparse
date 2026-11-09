@@ -1,8 +1,6 @@
 package anyparse.query.cli;
 
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.CompilerOracle;
-import anyparse.check.oracle.OracleCoverage;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
@@ -39,10 +37,10 @@ typedef BuildAnswer = {
 final class WriteVerification {
 
 	/** The flag that tells a write command to skip the check; the dispatcher strips it. */
-	public static inline final OPT_OUT: String = '--no-verify';
+	public static final OPT_OUT: String = '--no-verify';
 
 	/** The flag that asks for the check after an in-place edit; stripped unless the command reads a `--verify` of its own. */
-	public static inline final OPT_IN: String = '--verify';
+	public static final OPT_IN: String = '--verify';
 
 	/** How many builds compile at once when the process holds no pool lease. */
 	private static inline final UNLEASED_COMPILES: Int = 2;
@@ -97,22 +95,27 @@ final class WriteVerification {
 	/** `settle` once the builds are known. */
 	private static function judge(op: String, journal: WriteJournal, oracles: Array<OracleConfig>, changed: Array<String>, exit: Int): Int {
 		final parallel: Int = ProcessSpawn.unleasedParallelism(UNLEASED_COMPILES);
+		final compiler: OracleProvider = compilerOf(changed);
 		final sources: Array<String> = [
-			for (path in changed) if (OracleCoverage.isSource(path) && ConfigFinder.fileExists(path)) path
+			for (path in changed) if (compiler.isSource(path) && ConfigFinder.fileExists(path)) path
 		];
 		final created: Array<String> = createdAmong(journal, sources);
 		// a run of created modules only: a build whose class paths hold none of them cannot read any
 		final onlyCreated: Bool = created.length > 0 && created.length == changed.length;
-		final after: Array<BuildAnswer> = compile(onlyCreated ? holding(oracles, sources) : oracles, parallel, created);
+		final after: Array<BuildAnswer> = compile(compiler, onlyCreated ? holding(oracles, sources) : oracles, parallel, created);
 		reportUnavailable(op, after);
-		if (putBackIfBroken(op, journal, after, parallel, created)) return ExitCode.EXIT_RUNTIME;
+		if (putBackIfBroken(op, journal, compiler, after, parallel, created)) return ExitCode.EXIT_RUNTIME;
 		final vouching: Array<String> = [
 			for (a in after) if (confirmed(a) && (sources.length == 0 || sources.exists(s -> parsedBy(a, s)))) a.oracle.hxml
 		];
 		// only a build that typechecks the written tree can judge a module named to it
 		final judges: Array<OracleConfig> = [for (a in after) if (confirmed(a)) a.oracle];
 		final unreached: Array<String> = [for (s in sources) if (!after.exists(a -> parsedBy(a, s))) s];
-		if (judges.length > 0 && unreached.length > 0 && !settleUnreached(op, journal, judges, unreached, vouching, onlyCreated, parallel))
+		if (
+			judges.length > 0
+			&& unreached.length > 0
+			&& !settleUnreached(op, journal, compiler, judges, unreached, vouching, onlyCreated, parallel)
+		)
 			return ExitCode.EXIT_RUNTIME;
 		final count: Int = vouching.length;
 		if (count > 0)
@@ -123,8 +126,10 @@ final class WriteVerification {
 	}
 
 	/** `oracles` compiled with `-v`, `parallel` at a time: each verdict, with what it parsed. */
-	private static function compile(oracles: Array<OracleConfig>, parallel: Int, created: Array<String>): Array<BuildAnswer> {
-		final readings: Array<OracleReading> = CompilerOracle.typecheckEachReading(
+	private static function compile(
+		compiler: OracleProvider, oracles: Array<OracleConfig>, parallel: Int, created: Array<String>
+	): Array<BuildAnswer> {
+		final readings: Array<OracleReading> = compiler.typecheckEachReading(
 			oracles, false, parallel, errors -> created.exists(file -> LintFixSafePass.blames(errors, file))
 		);
 		return [
@@ -147,7 +152,7 @@ final class WriteVerification {
 			final roots: Array<String> = compiler.classPaths(oracle.hxml, oracle.dir);
 			final modules: Array<String> = [];
 			for (file in files) {
-				final module: Null<String> = OracleCoverage.moduleUnder(roots, file);
+				final module: Null<String> = compiler.moduleUnder(roots, file);
 				if (module != null) modules.push(module);
 			}
 			if (modules.length == 0) continue;
@@ -198,7 +203,7 @@ final class WriteVerification {
 	 * named as judging nothing.
 	 */
 	private static function putBackIfBroken(
-		op: String, journal: WriteJournal, after: Array<BuildAnswer>, parallel: Int, created: Array<String>
+		op: String, journal: WriteJournal, compiler: OracleProvider, after: Array<BuildAnswer>, parallel: Int, created: Array<String>
 	): Bool {
 		final red: Array<BuildAnswer> = [for (a in after) if (a.outcome?.match(Rejected(_)) == true) a];
 		if (red.length == 0) return false;
@@ -209,7 +214,7 @@ final class WriteVerification {
 			putBack(op, blamed, 'the created module does not typecheck in ${names(blamed)}');
 			return true;
 		}
-		final before: Array<BuildAnswer> = compile(red.map(r -> r.oracle), parallel, []);
+		final before: Array<BuildAnswer> = compile(compiler, red.map(r -> r.oracle), parallel, []);
 		final broken: Array<BuildAnswer> = [for (k => r in red) if (confirmed(before[k])) r];
 		if (broken.length > 0) {
 			putBack(op, broken, 'the write breaks ${names(broken)}, which typechecked before it');
@@ -226,10 +231,11 @@ final class WriteVerification {
 	 * existing one, or one no class path holds, stays unverified.
 	 */
 	private static function keptUnreached(
-		op: String, journal: WriteJournal, oracles: Array<OracleConfig>, unreached: Array<String>, vouching: Array<String>, parallel: Int
+		op: String, journal: WriteJournal, compiler: OracleProvider, oracles: Array<OracleConfig>, unreached: Array<String>,
+		vouching: Array<String>, parallel: Int
 	): Bool {
 		final created: Array<String> = createdAmong(journal, unreached);
-		final named: Array<BuildAnswer> = compile(naming(oracles, unreached), parallel, created);
+		final named: Array<BuildAnswer> = compile(compiler, naming(oracles, unreached), parallel, created);
 		for (file in unreached) {
 			final holders: Array<BuildAnswer> = [for (a in named) if (parsedBy(a, file)) a];
 			final green: Array<BuildAnswer> = holders.filter(confirmed);
@@ -284,15 +290,16 @@ final class WriteVerification {
 	 * build vouches for a module and one blamed it, with no compile of the tree without the write), null when a module is left open.
 	 */
 	private static function namedCheapestFirst(
-		op: String, journal: WriteJournal, oracles: Array<OracleConfig>, sources: Array<String>, vouching: Array<String>, parallel: Int
+		op: String, journal: WriteJournal, compiler: OracleProvider, oracles: Array<OracleConfig>, sources: Array<String>,
+		vouching: Array<String>, parallel: Int
 	): Null<Bool> {
 		final blamed: Array<BuildAnswer> = [];
 		var pending: Array<String> = sources.copy();
-		for (oracle in cheapestFirst(compilerOf(sources), oracles)) {
+		for (oracle in cheapestFirst(compiler, oracles)) {
 			if (pending.length == 0) break;
 			final asked: Array<OracleConfig> = naming([oracle], pending);
 			if (asked.length == 0) continue;
-			final answer: BuildAnswer = compile(asked, parallel, sources)[0];
+			final answer: BuildAnswer = compile(compiler, asked, parallel, sources)[0];
 			if (confirmed(answer)) {
 				final vouched: Array<String> = pending.filter(file -> parsedBy(answer, file));
 				if (vouched.length > 0 && !vouching.contains(oracle.hxml)) vouching.push(oracle.hxml);
@@ -320,18 +327,19 @@ final class WriteVerification {
 	/** The sources under the explicit class paths of `oracle`, as the canonical paths the class paths spell. */
 	private static function sourcesIn(compiler: OracleProvider, oracle: OracleConfig): Array<String> {
 		final out: Array<String> = [];
-		for (root in compiler.classPaths(oracle.hxml, oracle.dir)) collectSources(FileIdentity.canonical(Sys.getCwd(), root), out);
+		for (root in compiler.classPaths(oracle.hxml, oracle.dir))
+			collectSources(compiler, FileIdentity.canonical(Sys.getCwd(), root), out);
 		return out;
 	}
 
-	private static function collectSources(dir: String, into: Array<String>): Void {
+	private static function collectSources(compiler: OracleProvider, dir: String, into: Array<String>): Void {
 		#if (sys || nodejs)
 		if (!sys.FileSystem.exists(dir) || !sys.FileSystem.isDirectory(dir)) return;
 		for (name in sys.FileSystem.readDirectory(dir)) {
 			final path: String = Path.join([dir, name]);
 			if (sys.FileSystem.isDirectory(path))
-				collectSources(path, into);
-			else if (OracleCoverage.isSource(path))
+				collectSources(compiler, path, into);
+			else if (compiler.isSource(path))
 				into.push(path);
 		}
 		#end
@@ -369,20 +377,25 @@ final class WriteVerification {
 	 * (`keptUnreached`). Answers false when the write was put back.
 	 */
 	private static function settleUnreached(
-		op: String, journal: WriteJournal, judges: Array<OracleConfig>, unreached: Array<String>, vouching: Array<String>,
-		onlyCreated: Bool, parallel: Int
+		op: String, journal: WriteJournal, compiler: OracleProvider, judges: Array<OracleConfig>, unreached: Array<String>,
+		vouching: Array<String>, onlyCreated: Bool, parallel: Int
 	): Bool {
-		final named: Null<Bool> = onlyCreated ? namedCheapestFirst(op, journal, judges, unreached, vouching, parallel) : null;
-		return named ?? keptUnreached(op, journal, judges, unreached, vouching, parallel);
+		final named: Null<Bool> = onlyCreated ? namedCheapestFirst(op, journal, compiler, judges, unreached, vouching, parallel) : null;
+		return named ?? keptUnreached(op, journal, compiler, judges, unreached, vouching, parallel);
 	}
 
-	/** The compiler a write of `paths` is judged by: the first written file's grammar that supplies one. */
+	/**
+	 * The compiler a write of `paths` is judged by: the first grammar that supplies one, the written files' grammars asked
+	 * first and every registered grammar after them, because the project's builds judge a file their compiler never parses
+	 * (a data file a macro reads) as well as a source.
+	 */
 	private static function compilerOf(paths: Array<String>): OracleProvider {
 		final plugins: Array<GrammarPlugin> = [];
 		for (path in paths) {
 			final lang: Null<String> = CliArgs.langOfFile(path);
 			if (lang != null) plugins.push(CliArgs.pickPlugin(lang));
 		}
+		for (entry in CliArgs.grammars()) plugins.push(entry.make());
 		return OracleProviders.firstOf(plugins);
 	}
 

@@ -1,7 +1,7 @@
 package unit.query;
 
 import anyparse.check.FixVerifier;
-import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.LintConfig;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;
@@ -103,6 +103,48 @@ class OracleProvidersTest extends Test {
 		#else
 		Assert.pass('non-sys target');
 		#end
+	}
+
+	@:pin('control')
+	@:killer('M-ORACLE-ABSENT-READS-NOTHING')
+	public function testAGrammarWithoutACompilerStillNamesTheBuildsTheProjectDeclares(): Void {
+		final config: LintConfig = LintConfig.parse(
+			'{"compilerOracle":[{"hxml":"b.hxml","defines":["X"],"dir":"d"},{"hxml":"c.hxml"},{"dir":"e"}]}', '/proj'
+		);
+		final absent: OracleProvider = OracleProviders.of(new JsonQueryPlugin());
+		final oracles: Array<OracleConfig> = config.compilerOracles(absent);
+		Assert.same(['/proj/b.hxml', '/proj/c.hxml'], oracles.map(oracle -> oracle.hxml));
+		Assert.same([['X'], []], oracles.map(oracle -> oracle.defines));
+		Assert.same(['/proj/d', null], oracles.map(oracle -> oracle.dir));
+		Assert.same(
+			['/proj/a.hxml'], LintConfig.parse('{"compilerOracle":"a.hxml"}', '/proj').compilerOracles(absent).map(oracle -> oracle.hxml)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-ORACLE-HAXE-IS-SOURCE-ALWAYS')
+	@:killer('M-ORACLE-ABSENT-IS-SOURCE-ALWAYS')
+	@:killer('M-ORACLE-HAXE-MODULE-UNDER-NULL')
+	public function testTheProviderTellsASourceAndItsModuleInsteadOfTheCallerReadingTheHaxeOracle(): Void {
+		final haxe: OracleProvider = OracleProviders.of(new HaxeQueryPlugin());
+		Assert.isTrue(haxe.isSource('src/a/B.hx'));
+		Assert.isFalse(haxe.isSource('src/a/B.json'));
+		Assert.equals('a.B', haxe.moduleUnder(['/proj/src'], '/proj/src/a/B.hx'));
+		Assert.isNull(haxe.moduleUnder(['/proj/src'], '/elsewhere/a/B.hx'));
+		final absent: OracleProvider = OracleProviders.of(new JsonQueryPlugin());
+		Assert.isFalse(absent.isSource('src/a/B.hx'));
+		Assert.isNull(absent.moduleUnder(['/proj/src'], '/proj/src/a/B.hx'));
+	}
+
+	@:pin('control')
+	@:killer('M-ORACLE-ABSENT-DROPS-LOST')
+	public function testAGrammarWithoutACompilerStillReportsAMalformedDeclaration(): Void {
+		final config: LintConfig = LintConfig.parse('{"compilerOracle":[{"dir":"e"},"x.hxml"]}', '/proj');
+		Assert.same([], config.compilerOracles(OracleProviders.of(new JsonQueryPlugin())));
+		Assert.same([
+			'compilerOracle[0] declares no "hxml" — dropped',
+			'compilerOracle[1] is not an object — dropped'
+		], config.drops());
 	}
 
 }

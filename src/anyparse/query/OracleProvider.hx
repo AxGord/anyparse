@@ -31,8 +31,23 @@ interface OracleProvider {
 	/** One verdict over every configuration, the first non-green one winning; `verbose` compiles print what they read. */
 	public function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool): OracleOutcome;
 
-	/** Each configuration's verdict and the files its compile read, in order; `stopAfterFailure` leaves the rest unasked. */
-	public function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading>;
+	/**
+	 * Each configuration's verdict and the files its compile read, in order; `stopAfterFailure` leaves the rest unasked.
+	 * `parallel` bounds how many compile at once (the provider's own default when absent); `decisive` accepts the diagnostics
+	 * of a failing compile as the verdict (they blame a file the caller just created) instead of asking again plainly.
+	 */
+	public function typecheckEachReading(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
+	): Array<OracleReading>;
+
+	/** Whether `file` is a source this oracle's compiler parses — what a build's parsed-file list can name. */
+	public function isSource(file: String): Bool;
+
+	/**
+	 * The module a build with `classPaths` names `file` by, or null when no root holds it, it is no source, or its path is
+	 * no legal module name — a file no command line may name.
+	 */
+	public function moduleUnder(classPaths: Array<String>, file: String): Null<String>;
 
 	/** One build's verdict from a warm compilation server reading `paths`, or null when no server would answer. */
 	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome>;

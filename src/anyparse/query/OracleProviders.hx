@@ -4,7 +4,7 @@ import anyparse.check.Check.NameSite;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.OracleDeclaration;
+import anyparse.check.config.OracleDeclarationReader;
 import anyparse.query.OracleProvider.CompiledSet;
 import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.OracleProvider.NameProof;
@@ -91,7 +91,17 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 		return Unavailable(OracleProviders.NO_ORACLE);
 	}
 
-	public function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading> {
+	public function isSource(file: String): Bool {
+		return false;
+	}
+
+	public function moduleUnder(classPaths: Array<String>, file: String): Null<String> {
+		return null;
+	}
+
+	public function typecheckEachReading(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
+	): Array<OracleReading> {
 		return [
 			for (_ in oracles) { outcome: Unavailable(OracleProviders.NO_ORACLE), parsed: null }
 		];
@@ -142,7 +152,7 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	}
 
 	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig> {
-		return OracleDeclaration.read(declared.raw, declared.baseDir, drops);
+		return OracleDeclarationReader.read(declared.raw, declared.baseDir, drops, null);
 	}
 
 	public function describeOracle(oracle: OracleConfig): String {

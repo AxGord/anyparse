@@ -433,6 +433,54 @@ class WriteVerificationCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-COMPILER-OF-WRITTEN-GRAMMAR-ONLY')
+	public function testAWriteToADataFileABuildReadsIsJudgedByTheBuild(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir('writeverify-data', [
+			{ name: 'Main.hx', source: 'class Main {\n\tstatic function main() {\n\t\ttrace(M.check());\n\t}\n}\n' },
+			{
+				name: 'M.hx',
+				source: 'import haxe.macro.Context;\n\nclass M {\n\tpublic static macro function check() {\n'
+				+ '\t\tfinal v = haxe.Json.parse(sys.io.File.getContent("data.json"));\n'
+				+ '\t\tif (v.a != 1) Context.error("bad data", Context.currentPos());\n\t\treturn macro 1;\n\t}\n}\n'
+			},
+			{ name: 'build.hxml', source: '-cp .\n-main Main\n--no-output\n' },
+			{ name: 'data.json', source: '{"a":1}\n' },
+			{ name: 'apq.json', source: '{"compilerOracle": "build.hxml"}' }
+		]);
+		if (!compiles(dir)) return;
+		var rc: Int = 0;
+		final broken: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'replace-node',
+			'$dir/data.json',
+			'--select',
+			'JNumber',
+			'2',
+			'--write',
+			'--verify'
+		]));
+		Assert.equals(1, rc, broken);
+		Assert.equals('{"a":1}\n', File.getContent('$dir/data.json'), 'the write the build rejects is put back');
+		final fine: String = CliFixture.captureStderr(() -> rc = Cli.run([
+			'replace-node',
+			'$dir/data.json',
+			'--select',
+			'JNumber',
+			'1',
+			'--write',
+			'--verify'
+		]));
+		Assert.equals(0, rc, fine);
+		#if nodejs
+		Assert.isTrue(fine.contains('verified by 1 configured build'), fine);
+		#end
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A project of two builds over `src/`, the cheap one `Good` alone and the larger one `Big` (in `more/`, also a class path
 	 * of it), with `extras` written beside them (paths relative to the project) and an `apq.json` naming both.

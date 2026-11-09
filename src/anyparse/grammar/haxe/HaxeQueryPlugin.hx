@@ -4,6 +4,7 @@ import anyparse.check.Check.TypeOracle;
 import anyparse.check.FactsOracle;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleDeclared;
+import anyparse.check.config.OracleDeclarationReader;
 import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.facts.TypedFactsRun;
 import anyparse.check.oracle.CompilerDisplayOracle;
@@ -743,8 +744,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return CompilerOracle.typecheckAll(oracles, verbose);
 	}
 
-	public function typecheckEachReading(oracles: Array<OracleConfig>, stopAfterFailure: Bool): Array<OracleReading> {
-		return CompilerOracle.typecheckEachReading(oracles, stopAfterFailure);
+	public function typecheckEachReading(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
+	): Array<OracleReading> {
+		return CompilerOracle.typecheckEachReading(oracles, stopAfterFailure, parallel, decisive);
+	}
+
+	public function isSource(file: String): Bool {
+		return OracleCoverage.isSource(file);
+	}
+
+	public function moduleUnder(classPaths: Array<String>, file: String): Null<String> {
+		return OracleCoverage.moduleUnder(classPaths, file);
 	}
 
 	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome> {
@@ -778,7 +789,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig> {
-		return OracleDeclaration.read(declared.raw, declared.baseDir, drops);
+		return OracleDeclarationReader.read(declared.raw, declared.baseDir, drops, OracleDeclaration.compileDir);
 	}
 
 	public function describeOracle(oracle: OracleConfig): String {

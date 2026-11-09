@@ -151,6 +151,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/common/design/RuleDeclaration.hx',
 			'src/anyparse/check/common/design/threads/ThreadSafetyOptions.hx',
 			'src/anyparse/check/config/ApqLintConfig.hx',
+			'src/anyparse/check/config/OracleDeclarationReader.hx',
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
 			'src/anyparse/check/facts/TypedFactsMacro.hx',
 			'src/anyparse/check/facts/TypedFactsProbe.hx',
@@ -159,7 +160,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/facts/TypedFactsWalk.hx',
 			'src/anyparse/check/oracle/CompilerServer.hx',
 			'src/anyparse/check/oracle/OracleCache.hx',
-			'src/anyparse/check/oracle/OracleDeclaration.hx',
+
 			'src/anyparse/check/oracle/OracleGeneration.hx',
 			'src/anyparse/check/oracle/ReachDefinesProbe.hx',
 			'src/anyparse/proc/ProcessSpawn.hx',

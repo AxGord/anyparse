@@ -1124,6 +1124,20 @@
 			"find": "'metadataFunctionLineEnd', 'FnDecl'",
 			"replace": "'metadataTypeLineEnd', 'FnDecl'",
 			"note": "a module-level function answers to metadataType again, so metadataFunction stops reaching it"
+		},
+		{
+			"name": "M-ORACLE-HAXE-IS-SOURCE-ALWAYS",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "isSource",
+			"force": "true",
+			"note": "every written file counts as a source the Haxe compiler parses, so a verification expects a parsed line for a file that can never have one"
+		},
+		{
+			"name": "M-ORACLE-HAXE-MODULE-UNDER-NULL",
+			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
+			"method": "moduleUnder",
+			"force": "null",
+			"note": "no file is named by a module, so a module created by a write is never offered to a build and is judged unreached"
 		}
 	]
 }

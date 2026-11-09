@@ -1,0 +1,98 @@
+package unit.query;
+
+import anyparse.query.ModuleScan;
+import anyparse.query.ParseGate;
+import anyparse.query.QueryNode;
+import anyparse.runtime.Span;
+import sys.io.File;
+import unit.cli.CliFixture;
+
+using Lambda;
+using StringTools;
+
+/**
+ * The Haxe compiler oracle (`anyparse.check.oracle`) and the typed facts built on it (`anyparse.check.facts`) are reached
+ * from generic code only through the `OracleProvider` door. A module outside those two packages, `check/haxe` and
+ * `grammar/haxe` that imports one of them names the Haxe compiler where a language-neutral layer stands.
+ *
+ * Both pins are `guard`s: what a module imports is the text of the source, which no cut of a compiled type changes.
+ */
+@:nullSafety(Strict)
+final class OracleImportOwnerGuardTest extends Test {
+
+	/** The layer swept, relative to the repository root. */
+	private static final LAYER: String = 'src/anyparse';
+
+	/** The directories that may import the Haxe oracle: its own packages and the Haxe language packages. */
+	private static final OWNERS: Array<String> = ['check/oracle/', 'check/facts/', 'check/haxe/', 'grammar/haxe/'];
+
+	/** The packages only the owners may import from. */
+	private static final GUARDED: Array<String> = ['anyparse.check.oracle.', 'anyparse.check.facts.'];
+
+	/** The statement kinds whose node name is the path they bring in. */
+	private static final PATH_KINDS: Array<String> = ['ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl'];
+
+	/** The alias import kinds, whose node name is only the alias: `ModuleScan.aliasTargetOf` decodes the path from the statement. */
+	private static final ALIAS_KINDS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];
+
+	@:pin('guard')
+	public function testOnlyTheHaxeOraclesOwnersImportTheHaxeOracle(): Void {
+		final root: String = CliFixture.repoRoot();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final found: Array<String> = [];
+		for (path in SourceTree.collect('$root/$LAYER').map(p -> p.substr(root.length + LAYER.length + 2))) if (!OWNERS.exists(owner ->
+			path.startsWith(owner)
+		)) {
+			final source: String = File.getContent('$root/$LAYER/$path');
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+			if (tree == null) {
+				found.push('$path does not parse, so its imports are unread');
+				continue;
+			}
+			for (name in guardedImports(tree, source)) found.push('$path imports $name');
+		}
+		Assert.equals('', found.join('\n'), 'ask the module\'s OracleProvider instead of naming the Haxe oracle');
+	}
+
+	@:pin('guard')
+	public function testEveryStatementNamingAGuardedPackageIsReportedAndAnotherIsNot(): Void {
+		final source: String = 'package a;\nimport anyparse.check.oracle.OracleCoverage;\nimport anyparse.check.facts.TypedFactsProbe;\n'
+			+ 'import anyparse.check.oracle.*;\nusing anyparse.check.facts.TypedFactsProbe;\nusing anyparse.check.facts.*;\n'
+			+ 'import anyparse.check.oracle.CompilerOracle as Compiler;\nimport anyparse.check.oracle.CompilerOracle in Compiler2;\n'
+			+ 'import anyparse.check.LintConfig.OracleConfig;\nimport anyparse.query.OracleProvider;\nclass C {}';
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(new HaxeQueryPlugin(), source);
+		Assert.notNull(tree);
+		if (tree == null) return;
+		Assert.same([
+			'anyparse.check.oracle.OracleCoverage',
+			'anyparse.check.facts.TypedFactsProbe',
+			'anyparse.check.oracle.*',
+			'anyparse.check.facts.TypedFactsProbe',
+			'anyparse.check.facts.*',
+			'anyparse.check.oracle.CompilerOracle',
+			'anyparse.check.oracle.CompilerOracle'
+		], guardedImports(tree, source));
+	}
+
+	/**
+	 * The paths of the statements of `tree`, read from `source`, that name a guarded package, in source order. An alias import
+	 * keeps only its alias as the node's name, so its path is decoded from its own span by `ModuleScan.aliasTargetOf`.
+	 */
+	private static function guardedImports(tree: QueryNode, source: String): Array<String> {
+		final out: Array<String> = [];
+		function visit(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			final span: Null<Span> = node.span;
+			if (name != null && PATH_KINDS.contains(node.kind)) {
+				if (GUARDED.exists(prefix -> name.startsWith(prefix))) out.push(name);
+			} else if (span != null && ALIAS_KINDS.contains(node.kind)) {
+				final path: String = ModuleScan.aliasTargetOf(source.substring(span.from, span.to));
+				if (GUARDED.exists(prefix -> path.startsWith(prefix))) out.push(path);
+			}
+			for (child in node.children) visit(child);
+		}
+		visit(tree);
+		return out;
+	}
+
+}

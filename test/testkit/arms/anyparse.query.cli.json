@@ -434,8 +434,8 @@
 			"name": "M-WRITE-VERIFY-HOLDERS-COMPILE",
 			"type": "anyparse.query.cli.WriteVerification",
 			"method": "judge",
-			"find": "compile(onlyCreated ? holding(oracles, sources) : oracles,",
-			"replace": "compile(onlyCreated ? [] : oracles,",
+			"find": "compile(compiler, onlyCreated ? holding(oracles, sources) : oracles,",
+			"replace": "compile(compiler, onlyCreated ? [] : oracles,",
 			"note": "a run that only created modules compiles no build as configured, so a module a build reads only through its own folder walk, a shadow or a lookup is vouched for by a build that never reads it"
 		},
 		{
@@ -672,6 +672,14 @@
 			"method": "noDataDocumentsMatched",
 			"force": "'${quotedSpecs(specs)} matched no .hx files'",
 			"note": "a data search whose spec matches nothing names the Haxe extension, not the data grammars'"
+		},
+		{
+			"name": "M-WRITE-VERIFY-COMPILER-OF-WRITTEN-GRAMMAR-ONLY",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "compilerOf",
+			"find": "for (entry in CliArgs.grammars()) plugins.push(entry.make());",
+			"replace": "",
+			"note": "only the written files' grammars are asked for a compiler, so a write to a data file a build reads is judged by no build and stays unverified while it breaks that build"
 		}
 	]
 }

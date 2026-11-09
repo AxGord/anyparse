@@ -16061,6 +16061,28 @@
 			"find": "if (appliesAsWritten(rewrite, find.value, replace?.value)) continue;",
 			"replace": "",
 			"note": "a find that still applies is carried through the alignment anyway"
+		},
+		{
+			"name": "M-ORACLE-ABSENT-READS-NOTHING",
+			"type": "anyparse.query.OracleProviders",
+			"method": "readDeclaration",
+			"force": "[]",
+			"note": "a grammar with no compiler reads none of the builds the project declares, so a run on it finds nothing to answer unavailable and treats the project as having no oracle at all"
+		},
+		{
+			"name": "M-ORACLE-ABSENT-IS-SOURCE-ALWAYS",
+			"type": "anyparse.query.OracleProviders",
+			"method": "isSource",
+			"force": "true",
+			"note": "a grammar with no compiler calls every file a source its builds parse, so a write verification waits on files no compile can name"
+		},
+		{
+			"name": "M-ORACLE-ABSENT-DROPS-LOST",
+			"type": "anyparse.query.OracleProviders",
+			"method": "readDeclaration",
+			"find": "OracleDeclarationReader.read(declared.raw, declared.baseDir, drops, null)",
+			"replace": "OracleDeclarationReader.read(declared.raw, declared.baseDir, [], null)",
+			"note": "the entries a run on a grammar without a compiler cannot use are dropped without a line, so a malformed compilerOracle is reported on a Haxe run and never on any other"
 		}
 	]
 }

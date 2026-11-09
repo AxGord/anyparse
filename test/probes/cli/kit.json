@@ -29,7 +29,12 @@
 		"arms/c.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"X\"\n\t\t},\n\t\t{\n\t\t\t\"name\": \"Y\"\n\t\t}\n\t]\n}\n",
 		"brace/c.hx": "class T\n{\n\tvar a: Int;\n}\n",
 		"getwhere/one.json": "{\"n\": 1}\n",
-		"getwhere/note.txt": "plain\n"
+		"getwhere/note.txt": "plain\n",
+		"verifydata/apq.json": "{\"compilerOracle\":\"build.hxml\"}\n",
+		"verifydata/build.hxml": "-cp .\n-main Main\n--no-output\n",
+		"verifydata/data.json": "{\"a\":1}\n",
+		"verifydata/Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(M.check());\n\t}\n}\n",
+		"verifydata/M.hx": "import haxe.macro.Context;\n\nclass M {\n\tpublic static macro function check() {\n\t\tfinal v = haxe.Json.parse(sys.io.File.getContent(\"data.json\"));\n\t\tif (v.a != 1) Context.error(\"bad data\", Context.currentPos());\n\t\treturn macro 1;\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -8602,6 +8607,25 @@
 				"exit": 1,
 				"out": "7da34ade244f2627",
 				"err": "d91b0aee85fc4018",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node verifydata/data.json --select JNumber 2 --write --verify",
+			"argv": [
+				"apq",
+				"replace-node",
+				"verifydata/data.json",
+				"--select",
+				"JNumber",
+				"2",
+				"--write",
+				"--verify"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "95a3e042413837d3",
 				"files": "e3b0c44298fc1c14"
 			}
 		}
