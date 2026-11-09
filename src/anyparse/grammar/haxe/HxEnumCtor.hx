@@ -21,8 +21,14 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxEnumCtor {
+
 	@:trail(';')
 	ParamCtor(decl: HxEnumCtorDecl);
 	@:trail(';')
 	SimpleCtor(decl: HxEnumSimpleCtorDecl);
+
+	/** A `#if` region of whole constructors; see `HxConditionalEnumMember`. */
+	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
+	Conditional(inner: HxConditionalEnumMember);
+
 }

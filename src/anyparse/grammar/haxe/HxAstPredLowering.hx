@@ -30,6 +30,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
 	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
 	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
+	private static final HX_ENUM_MEMBER: String = 'anyparse.grammar.haxe.HxEnumMember';
 	private static final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
 	private static final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
 	private static final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.HxFnBlock';
@@ -264,6 +265,9 @@ final class HxAstPredLowering extends AstPredLowering {
 				'Byte-parity: the retired Dynamic adapter probed the struct\'s `.decl` field, which `HxMemberDecl` does not have ('
 				+ 'its wrapper field is `.member`), so a nested conditional MEMBER never lifted. Keep the false verdict; widening to '
 				+ '`.member` → `HxClassMember.Conditional` is a behavior change to make deliberately, against fork fixtures.'
+			),
+			elementIsConditionalFalseField(
+				HX_ENUM_MEMBER, 'c', 'A nested conditional constructor does not lift, the same layout as a nested conditional member.'
 			),
 			stmtExprNoSemiField(),
 			stmtExprNoSemiAtField(),
