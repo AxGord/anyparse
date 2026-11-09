@@ -74,9 +74,9 @@ final class MemberGap {
 	}
 
 	/**
-	 * The blank lines at one edge of a type body — between its `{` and the first member, or the last member and its
-	 * `}`: a `stated` count is exact whatever the source holds there; `null` (the config said nothing) keeps the one
-	 * source blank `sourceBlank` reports when `policy` is `Keep`.
+	 * The blank lines at one edge of a type body — between its `{` and the first member, or the last member (or the
+	 * orphan comments after it) and its `}`: a `stated` count is exact whatever the source holds there; `null` (the config
+	 * said nothing) keeps the one source blank `sourceBlank` reports when `policy` is `Keep`.
 	 */
 	public static inline function bodyEdge(stated: Null<Int>, policy: KeepEmptyLinesPolicy, sourceBlank: Bool): Int {
 		return stated ?? (policy == Keep && sourceBlank ? 1 : 0);

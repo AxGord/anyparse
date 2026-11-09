@@ -572,7 +572,6 @@ final class TriviaSepLowering {
 				_si++;
 			}
 			$keepCurlyEndExpr;
-			$typedefEndExpr;
 			if (_trailLC.length > 0) {
 				_inner.push(_dhl());
 				if (_trailBB && _arr.length > 0) _inner.push(_dhl());
@@ -583,6 +582,7 @@ final class TriviaSepLowering {
 					_tii++;
 				}
 			}
+			$typedefEndExpr;
 			final _cols: Int = $forceMultiColsExpr;
 			final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
 			final _parts: Array<anyparse.core.Doc> = [];

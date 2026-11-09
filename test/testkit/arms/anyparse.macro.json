@@ -11,6 +11,54 @@
 			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
 		},
 		{
+			"name": "M-ENDTYPE-BLOCK-COMMENT-ONLY",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElseBody",
+			"find": "_trailLC.length == 0 || _arr.length > 0",
+			"replace": "true",
+			"note": "a body of comments only takes end-edge blanks, the form decided to have none"
+		},
+		{
+			"name": "M-ENDABS-ORPHAN-LINE-BLANK",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "lineCommentTrailGate",
+			"find": "macro !$p{['opt', off]}",
+			"replace": "macro true",
+			"note": "enum abstract takes the class-kind forced blank before a line-comment orphan trail"
+		},
+		{
+			"name": "M-ENDTYPE-TRAIL-SRC-BLANK",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockEndNExpr",
+			"find": " && _trailLC.length == 0",
+			"replace": "",
+			"note": "the source blank in front of orphan comments also opens a blank before the close curly under keep"
+		},
+		{
+			"name": "M-ENDTYPE-TYPEDEF-EMPTY",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTypedefBlankInserts",
+			"find": "opt._inTypedefBody && _arr.length > 0 ? $endStated",
+			"replace": "opt._inTypedefBody ? $endStated",
+			"note": "a typedef body of comments only takes end-edge blanks, the form decided to have none"
+		},
+		{
+			"name": "M-ENDTYPE-TYPEDEF-TRAIL",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiExpr",
+			"find": "$typedefEndExpr;",
+			"replace": "if (_trailLC.length == 0) $typedefEndExpr;",
+			"note": "a typedef body ending in orphan comments takes no end-edge blanks after them"
+		},
+		{
+			"name": "M-ENDTYPE-BLOCK-TRAIL",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElseBody",
+			"find": "_trailLC.length == 0 || _arr.length > 0",
+			"replace": "_trailLC.length == 0",
+			"note": "a body ending in orphan comments takes no end-edge blanks, the pre-fix placement"
+		},
+		{
 			"name": "M-SCAN-LOOP-FOLLOW-IGNORED",
 			"type": "anyparse.macro.RegexScanPlan",
 			"method": "holds",

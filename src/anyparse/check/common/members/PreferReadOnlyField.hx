@@ -212,4 +212,5 @@ final class PreferReadOnlyField extends RuleBase {
 	}
 
 	/** Whether `c` is an identifier character. */
+
 }

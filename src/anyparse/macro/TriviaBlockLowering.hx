@@ -380,7 +380,7 @@ final class TriviaBlockLowering {
 		emptyCurlyBreak: Bool = false,
 		beginEndType: Bool = false,
 		keepCurlyBlanks: Bool = false,
-		lineCommentTrailBlank: Bool = false,
+		?lineCommentTrailBlank: Expr,
 		blankBeforeFinalDocInLeading: Bool = false,
 		?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo,
 		betweenMultilineCommentsBlanks: Bool = false,
@@ -919,7 +919,7 @@ final class TriviaBlockLowering {
 	 */
 	private static function triviaBlockLeafExprs(
 		afterFieldsWithDocComments: Null<Expr>, beforeDocCommentEmptyLines: Bool, interMember: Bool, indentCaseLabelsGate: Bool,
-		lineCommentTrailBlank: Bool
+		?lineCommentTrailBlank: Expr
 	): WriterLowering.BlockLeafExprs {
 		final trackDocCommentExpr: Expr = afterFieldsWithDocComments != null
 			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
@@ -932,10 +932,12 @@ final class TriviaBlockLowering {
 			: macro _dn(_cols, _dc(_inner));
 		// ω-block-orphan-trail-blank: opt-in via
 		// `@:fmt(blankBeforeOrphanLineCommentTrail)`. When the orphan trail is led by
-		// a line-comment `//`, force the extra `_dhl()` blank regardless of source.
-		final extraInnerTrailBlankExpr: Expr = lineCommentTrailBlank
-			? macro (_arr.length > 0 && (_trailBB || (_trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//'))))
-			: macro (_trailBB && _arr.length > 0);
+		// a line-comment `//`, force the extra `_dhl()` blank regardless of source;
+		// `lineCommentTrailBlank` is the runtime answer, absent for a Star without the flag.
+		final forcedTrailBlank: Expr = lineCommentTrailBlank ?? macro false;
+		final extraInnerTrailBlankExpr: Expr = macro (
+			_arr.length > 0 && (_trailBB || ($forcedTrailBlank && _trailLC.length > 0 && StringTools.startsWith(_trailLC[0], '//')))
+		);
 		return {
 			initDocCommentExpr: afterFieldsWithDocComments != null ? macro var _prevHadDocComment: Bool = false : macro {},
 			initCurrDocCommentExpr: beforeDocCommentEmptyLines ? macro var _currHasDocComment: Bool = false : macro {},
@@ -1103,8 +1105,9 @@ final class TriviaBlockLowering {
 					$blockTrailBetweenExpr;
 					_ti++;
 				}
-			} else
-				$endTypeExpr;
+			}
+			// A body of comments only has no edge blanks: the type's edges are read against members.
+			if (_trailLC.length == 0 || _arr.length > 0) $endTypeExpr;
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _innerWrap: anyparse.core.Doc = $innerWrapExpr;
 			final _parts: Array<anyparse.core.Doc> = [_dt($v{openText})];
@@ -1191,11 +1194,12 @@ final class TriviaBlockLowering {
 
 	/**
 	 * Block-Star tail blank-line count (ω-class-begin-end-type / ω-bropen-keep): the `}`-side twin of
-	 * `triviaBlockBeginNExpr`, under `beforeRightCurly`.
+	 * `triviaBlockBeginNExpr`, under `beforeRightCurly`. The edge sits after the orphan comments when the body ends in
+	 * some, so the source blank in front of those comments, which their own run keeps, is not this edge's.
 	 */
 	private static function triviaBlockEndNExpr(beginEndType: Bool, endAccess: Expr): Expr {
 		final stated: Expr = beginEndType ? endAccess : macro null;
-		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.beforeRightCurly, _trailBB && _arr.length > 0);
+		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.beforeRightCurly, _trailBB && _arr.length > 0 && _trailLC.length == 0);
 	}
 
 }

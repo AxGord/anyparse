@@ -40,7 +40,11 @@
 		"meta-keys/Src.hx": "@:a function main() {}\n\n@:b var g = 1;\n\n@:c final h = 2;\n\n@:t1 @:t2 class C {\n\t@:m1 var x:Int;\n\n\t@:m2 function f() {\n\t\t@:l1 var y = 1;\n\t\t@:l2 function g2() {}\n\t\t@:l3 final z = 3;\n\t}\n}\n",
 		"try-statement-barrier/hxformat.json": "{\n\t\"indentation\": {\n\t\t\"character\": \"tab\",\n\t\t\"tabWidth\": 4,\n\t\t\"trailingWhitespace\": false,\n\t\t\"alignInlineSwitchCaseBody\": true\n\t},\n\t\"comments\": {\n\t\t\"blockCommentBodyIndent\": \"verbatim\"\n\t},\n\t\"emptyLines\": {\n\t\t\"maxAnywhereInFile\": 2,\n\t\t\"afterLeftCurly\": \"keep\",\n\t\t\"beforeRightCurly\": \"keep\",\n\t\t\"beforeDocCommentEmptyLines\": \"one\",\n\t\t\"classEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"abstractEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"interfaceEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"externClassEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"macroClassEmptyLines\": {\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0\n\t\t},\n\t\t\"enumEmptyLines\": {\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"typedefEmptyLines\": {\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"enumAbstractEmptyLines\": {\n\t\t\t\"betweenVars\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t}\n\t},\n\t\"wrapping\": {\n\t\t\"maxLineLength\": 140,\n\t\t\"objectLiteral\": {\n\t\t\t\"defaultWrap\": \"noWrap\"\n\t\t},\n\t\t\"arrayWrap\": {\n\t\t\t\"defaultWrap\": \"onePerLine\"\n\t\t},\n\t\t\"mapWrap\": {\n\t\t\t\"defaultWrap\": \"noWrap\"\n\t\t},\n\t\t\"anonType\": {\n\t\t\t\"defaultWrap\": \"noWrap\"\n\t\t},\n\t\t\"functionSignature\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 100}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"methodChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"itemsAfterCloseParenOnly\": true,\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"lineLength >= n\", \"value\": 160}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 3}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 80}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"anyItemLength >= n\", \"value\": 30}, {\"cond\": \"itemCount >= n\", \"value\": 4}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount >= n\", \"value\": 7}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLine\"}\n\t\t\t]\n\t\t},\n\t\t\"callParameter\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}, {\"cond\": \"totalItemLength <= n\", \"value\": 100}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"expressionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"conditionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t},\n\t\"whitespace\": {\n\t\t\"addLineCommentSpace\": true,\n\t\t\"colonPolicy\": \"after\",\n\t\t\"typeHintColonPolicy\": \"after\",\n\t\t\"typeCheckColonPolicy\": \"after\",\n\t\t\"functionTypeHaxe3Policy\": \"around\",\n\t\t\"functionTypeHaxe4Policy\": \"around\",\n\t\t\"arrowFunctionsPolicy\": \"around\",\n\t\t\"ifPolicy\": \"around\",\n\t\t\"forPolicy\": \"around\",\n\t\t\"whilePolicy\": \"around\",\n\t\t\"switchPolicy\": \"around\",\n\t\t\"binopPolicy\": \"around\",\n\t\t\"intervalPolicy\": \"around\",\n\t\t\"bracesConfig\": {\n\t\t\t\"objectLiteralBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"anonTypeBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"singleStatementBraces\": \"symmetric\"\n\t\t},\n\t\t\"parenConfig\": {\n\t\t\t\"callParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"funcParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"conditionParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"anonFuncParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t}\n\t\t}\n\t},\n\t\"lineEnds\": {\n\t\t\"emptyCurly\": \"noBreak\"\n\t},\n\t\"sameLine\": {\n\t\t\"ifBody\": \"fitLine\",\n\t\t\"forBody\": \"fitLine\",\n\t\t\"whileBody\": \"fitLine\",\n\t\t\"functionBody\": \"fitLine\",\n\t\t\"returnBody\": \"fitLine\",\n\t\t\"returnBodySingleLine\": \"fitLine\",\n\t\t\"expressionIf\": \"next\"\n\t}\n}\n",
 		"explicit-nowrap/Min.hx": "typedef T = {\n\ta:Int,\n\tb:Int\n}\n\nclass C {\n\tvar o = {\n\t\ta: 1,\n\t\tb: 2\n\t};\n}\n",
-		"explicit-nowrap/hxformat.json": "{\"wrapping\":{\"objectLiteral\":{\"defaultWrap\":\"noWrap\"},\"mapWrap\":{\"defaultWrap\":\"noWrap\"},\"anonType\":{\"defaultWrap\":\"noWrap\"}}}\n"
+		"explicit-nowrap/hxformat.json": "{\"wrapping\":{\"objectLiteral\":{\"defaultWrap\":\"noWrap\"},\"mapWrap\":{\"defaultWrap\":\"noWrap\"},\"anonType\":{\"defaultWrap\":\"noWrap\"}}}\n",
+		"end-orphan/Min.hx": "class C {\n\tvar a:Int;\n\t/** x */\n}\n",
+		"end-orphan/hxformat.json": "{\"emptyLines\":{\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":0,\"endType\":1}}}",
+		"comment-only/Min.hx": "class C {\n\t/** x */\n}\n",
+		"comment-only/hxformat.json": "{\"emptyLines\":{\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":0,\"endType\":1}}}"
 	},
 	"invocations": [
 		{
@@ -416,6 +420,36 @@
 			"expect": {
 				"exit": 0,
 				"out": "9bbe058e4e5fa5e8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "end-orphan/Min.hx",
+			"note": "a type body ending in an orphan doc takes its stated endType after the doc, in front of the close curly",
+			"argv": [
+				"hxq",
+				"fmt",
+				"end-orphan/Min.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "46584f896f548f89",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "comment-only/Min.hx",
+			"note": "a type body of comments only takes no end-edge blanks, a stated endType included",
+			"argv": [
+				"hxq",
+				"fmt",
+				"comment-only/Min.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "369b9c95e5105b97",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

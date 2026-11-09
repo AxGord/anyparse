@@ -316,7 +316,7 @@ final class WriterTriviaStarDispatch {
 		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
 		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
-		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+		final lineCommentTrailBlank: Expr = lineCommentTrailGate(starNode);
 		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
 		// ω-* classify-info builders resolved in buildTriviaBlockInfos.
 		final infos: WriterLowering.TriviaBlockInfos = buildTriviaBlockInfos(tc, starNode, elemRefName, beforeDocComments);
@@ -801,6 +801,16 @@ final class WriterTriviaStarDispatch {
 				macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC);
 			}
 		];
+	}
+
+	/**
+	 * The runtime answer of `@:fmt(blankBeforeOrphanLineCommentTrail)`: whether a `//`-led orphan trail takes a forced
+	 * blank in front of it. An optional argument names an `opt` flag under which the Star's kind does not take it.
+	 */
+	private static function lineCommentTrailGate(star: ShapeNode): Expr {
+		if (!star.fmtHasFlag('blankBeforeOrphanLineCommentTrail')) return macro false;
+		final off: Null<String> = fmtFirstStringArg(star, 'blankBeforeOrphanLineCommentTrail');
+		return off == null ? macro true : macro !$p{['opt', off]};
 	}
 
 }

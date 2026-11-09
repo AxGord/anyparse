@@ -203,5 +203,6 @@ class BinaryWriterLowering {
 	}
 
 	// -------- helpers --------
+
 }
 #end
