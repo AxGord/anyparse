@@ -6,6 +6,7 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.grammar.json.JsonProjection;
+import anyparse.grammar.json.JsonText;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -130,6 +131,12 @@ final class TypePathRegistries {
 	/** The document edit that replaces the decoded range `[from, to)` of `slot` with `text`, which needs no JSON escape. */
 	public static function spliceOf(slot: StringSlot, from: Int, to: Int, text: String): RegistryEdit {
 		return { span: new Span(slot.offsets[from], slot.offsets[to]), text: text };
+	}
+
+	/** The edit that replaces the whole of a slot with `text`, spelled as the inside of a JSON string. */
+	public static function respell(slot: StringSlot, text: String): RegistryEdit {
+		final quoted: String = JsonText.quote(text);
+		return spliceOf(slot, 0, slot.value.length, quoted.substring(1, quoted.length - 1));
 	}
 
 	/** Whether `value` carries a glob metacharacter. */

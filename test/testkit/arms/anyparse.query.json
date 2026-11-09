@@ -16013,6 +16013,54 @@
 			"find": "if (file != apart) {",
 			"replace": "if (_sources[file] != _sources[apart ?? '']) {",
 			"note": "the declaring file is told from another grantee by its text, so a copy of it at another path is not scanned and its mention goes unseen"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REPLACE-SHARES-FIND",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "now.substring(newFrom, end) + middle + now.substring(tail, newTo)",
+			"replace": "replace",
+			"note": "a replace no longer takes the new spelling of what it shares with its find, so a paren the rewrite put inside the fragment is lost"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-SPLICE-CHECKED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "carry",
+			"find": "if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin)) return",
+			"replace": "if (true) return",
+			"note": "a re-spelled cut that would not parse is written instead of named"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-FIND-MAPS-TO-WRITTEN",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "carry",
+			"find": "boundaries(maps, from + written.length, now.length)",
+			"replace": "boundaries(maps, from + find.length, now.length)",
+			"note": "the extent of an indent-tolerant cut is taken from the find, so a multi-line fragment ends short"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-BOUNDARY-TAKES-INSERTED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "boundaries",
+			"find": "[startOf(map, at, end), endOf(map, at)]",
+			"replace": "[endOf(map, at)]",
+			"note": "a delimiter inserted exactly at a boundary can no longer join the cut"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-KEEPS-UNCHANGED-REPLACE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "out.push(replace);",
+			"replace": "",
+			"note": "a replace that dropped the group the rewrite added is no longer tried as written"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-AS-WRITTEN-FIRST",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "followRecord",
+			"find": "if (appliesAsWritten(rewrite, find.value, replace?.value)) continue;",
+			"replace": "",
+			"note": "a find that still applies is carried through the alignment anyway"
 		}
 	]
 }

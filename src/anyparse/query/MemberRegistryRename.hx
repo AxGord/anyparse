@@ -101,6 +101,28 @@ final class MemberRegistryRename {
 		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
 	}
 
+	/** Every node the applier's address `<kind>:<name>` selects in `tree`; none for an address that does not parse. */
+	public static function selected(tree: QueryNode, kind: String, name: String, plugin: GrammarPlugin): Array<QueryNode> {
+		return try {
+			Engine.select(tree, Selector.parse('$kind:$name'), plugin.selectKindEquivalence());
+		} catch (_: Exception) {
+			[];
+		};
+	}
+
+	public static function sharedPrefix(a: String, b: String): Int {
+		var n: Int = 0;
+		while (n < a.length && n < b.length && a.fastCodeAt(n) == b.fastCodeAt(n)) n++;
+		return n;
+	}
+
+	/** The shared suffix of `a` and `b`, left of neither's first `prefix` code units. */
+	public static function sharedSuffix(a: String, b: String, prefix: Int): Int {
+		var n: Int = 0;
+		while (n < a.length - prefix && n < b.length - prefix && a.fastCodeAt(a.length - 1 - n) == b.fastCodeAt(b.length - 1 - n)) n++;
+		return n;
+	}
+
 	private static inline function unprovenReplace(record: MemberRecord, old: String): String {
 		return 'arm ${record.name}: its replace spells "$old" where the find proves nothing about it — re-aim it';
 	}
@@ -171,15 +193,6 @@ final class MemberRegistryRename {
 			for (k => at in tokensOf(replace.value, old)) if (replaced[k])
 				edits.push(TypePathRegistries.spliceOf(replace, at, at + old.length, rename.newName));
 		}
-	}
-
-	/** Every node the applier's address `<kind>:<name>` selects in `tree`; none for an address that does not parse. */
-	private static function selected(tree: QueryNode, kind: String, name: String, plugin: GrammarPlugin): Array<QueryNode> {
-		return try {
-			Engine.select(tree, Selector.parse('$kind:$name'), plugin.selectKindEquivalence());
-		} catch (_: Exception) {
-			[];
-		};
 	}
 
 	/**
@@ -264,19 +277,6 @@ final class MemberRegistryRename {
 		}
 		out.add(text.substring(from));
 		return out.toString();
-	}
-
-	private static function sharedPrefix(a: String, b: String): Int {
-		var n: Int = 0;
-		while (n < a.length && n < b.length && a.fastCodeAt(n) == b.fastCodeAt(n)) n++;
-		return n;
-	}
-
-	/** The shared suffix of `a` and `b`, left of neither's first `prefix` code units. */
-	private static function sharedSuffix(a: String, b: String, prefix: Int): Int {
-		var n: Int = 0;
-		while (n < a.length - prefix && n < b.length - prefix && a.fastCodeAt(a.length - 1 - n) == b.fastCodeAt(b.length - 1 - n)) n++;
-		return n;
 	}
 
 }

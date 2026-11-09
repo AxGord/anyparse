@@ -55,6 +55,7 @@ import anyparse.query.cli.command.PushDownCommand;
 import anyparse.query.cli.command.ReachCommand;
 import anyparse.query.cli.command.ReconCommand;
 import anyparse.query.cli.command.RefsCommand;
+import anyparse.query.cli.command.RegistryFollowCommand;
 import anyparse.query.cli.command.RemoveElementCommand;
 import anyparse.query.cli.command.RemoveImportCommand;
 import anyparse.query.cli.command.RemoveMemberCommand;
@@ -175,6 +176,7 @@ final class CliRegistry {
 			new GatesCommand(),
 			new DiffCommand(),
 			new ChangedCommand(),
+			new RegistryFollowCommand(),
 			new MergeFileCommand(),
 			new StripCommand(),
 			new WriterEqualsCommand(),
