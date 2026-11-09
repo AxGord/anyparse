@@ -19,6 +19,9 @@ class HoistCommonBranchHeadTest extends Test {
 	private static final GETTER_OWNER: String =
 		'class C { static var n:Int = 0; static var next(get, never):Int; static function get_next():Int { n++; return n; } ';
 	private static final FIELD_OWNER: String = 'class C { var count:Int = 1; function reset():Void { count = 0; } ';
+	private static final TYPES: String = 'class P { public var x:Int = 0; public var g(get, never):Int; function get_g():Int return 1; } '
+		+ 'abstract A(Array<Int>) { @:arrayAccess function at(i:Int):Int return 1; } '
+		+ 'abstract O(Int) { public var x(default, never):Int = 1; @:op(A + B) function add(o:O):O return this; } ';
 
 	public function testSharedHeadMovesBeforeTheIf(): Void {
 		final vs: Array<Violation> = violations(TWO_BRANCHES);
@@ -338,6 +341,54 @@ class HoistCommonBranchHeadTest extends Test {
 		);
 	}
 
+	@:pin('control') @:killer('M-PURITY-UNRESOLVED-RECEIVER')
+	public function testUntypedReceiverIsNotPure(): Void {
+		Assert.equals(0, violations(receiverRead('u', 'u.x')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-UNRESOLVED-RECEIVER-FLIP')
+	public function testTypedPlainFieldReadStaysPure(): Void {
+		Assert.equals(1, violations(TYPES + receiverRead('u:P', 'u.x')).length);
+		Assert.equals(
+			1,
+			violations('${TYPES}class Array<T> { public var length(default, null):Int; } '
+			+ receiverRead('u:Array<Int>', 'u.length')).length
+		);
+	}
+
+	@:pin('control') @:killer('M-PURITY-GETTER-OFF')
+	public function testGetterFieldIsNotPure(): Void {
+		Assert.equals(0, violations(TYPES + receiverRead('u:P', 'u.g')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-OVERLOAD-OFF')
+	public function testAbstractWithAccessOverloadIsNotPure(): Void {
+		Assert.equals(0, violations(TYPES + receiverRead('u:A', 'u[0]')).length);
+		Assert.equals(0, violations(TYPES + receiverRead('u:O', 'u.x')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-UNKNOWN-MEMBER')
+	public function testUndeclaredReceiverTypeIsNotPure(): Void {
+		Assert.equals(0, violations(receiverRead('u:Foreign', 'u.x')).length);
+		Assert.equals(0, violations(receiverRead('u:ext.Foreign', 'u.x')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-UNKNOWN-MEMBER')
+	public function testTypedefAliasReceiverIsNotPure(): Void {
+		Assert.equals(0, violations('${TYPES}typedef Al = P; ' + receiverRead('u:Al', 'u.g')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-UNKNOWN-INDEX')
+	public function testIndexReadOnUndeclaredTypeIsNotPure(): Void {
+		Assert.equals(0, violations(receiverRead('u:Foreign', 'u[0]')).length);
+		Assert.equals(1, violations('${TYPES}class Plain {} ' + receiverRead('u:Plain', 'u[0]')).length);
+	}
+
+	@:pin('control') @:killer('M-PURITY-ALIAS-OVERLOAD')
+	public function testIndexReadThroughAliasOfOverloadingAbstractIsNotPure(): Void {
+		Assert.equals(0, violations('${TYPES}typedef Al = A; ' + receiverRead('u:Al', 'u[0]')).length);
+	}
+
 	private static function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new HoistCommonBranchHead(), src);
 	}
@@ -352,6 +403,10 @@ class HoistCommonBranchHeadTest extends Test {
 
 	private static function violationsIn(owner: String, member: String): Array<Violation> {
 		return violations(owner + member);
+	}
+
+	private static function receiverRead(param: String, read: String): String {
+		return 'class C { function f($param) { var n:Int = 0; if ($read > 0) { n = 1; a(); } else { n = 1; b(); } } }';
 	}
 
 }

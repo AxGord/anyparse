@@ -1,10 +1,13 @@
 package anyparse.check.scan;
 
 import anyparse.query.MemberKinds;
+import anyparse.query.NominalTypes;
+import anyparse.query.SourceText;
 import anyparse.query.StdlibPurity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypingService;
 
 /**
  * Whether an expression subtree can be evaluated once — or DROPPED — without changing what the
@@ -27,7 +30,7 @@ import anyparse.query.TypeResolver;
  * ## What passes
  *
  * A safe skeleton kind (`RefactorSupport.isSafeKind` — the syntactic core, reused rather than
- * restated), a field or index READ whose resolvable first hop is not a property getter, and a
+ * restated), a field or index READ whose receiver type resolves and proves no code runs, and a
  * call whose callee is a referentially transparent stdlib function (`StdlibPurity`). Everything
  * else — an instance call, a local-function call, a complex-receiver call — is impure.
  *
@@ -36,11 +39,10 @@ import anyparse.query.TypeResolver;
  * of the RESOLVER together — the enclosing type must declare a getter of the name, AND the
  * identifier must not bind to a value declaration that shadows it (`readsGetterUnqualified`).
  *
- * An UNRESOLVED receiver reads as a plain field rather than as a getter: the receiver's type is
- * only resolvable when it is a bare identifier with a declared type, or `this`. That is the
- * assumption `extract-repeated-expression` has always made, kept here unchanged; it is the one
- * place this scan is optimistic, and it is why a caller that DELETES rather than hoists should
- * carry its own structural gates on top.
+ * A read whose receiver type does not resolve may be a getter: `isProvenPure` reads it as impure,
+ * `isPure` as plain, because receivers the rules type on their own (a loop binder, a lambda
+ * parameter) do not resolve here. A read on an abstract declaring an operator or index overload
+ * is impure for both, its access may select code.
  *
  * Grammar-agnostic: `contextOf` resolves every kind through `RefShape` and returns null when
  * the grammar leaves the field-access or call kind unset, which makes a caller a no-op rather
@@ -48,6 +50,20 @@ import anyparse.query.TypeResolver;
  */
 @:nullSafety(Strict)
 final class PurityScan {
+
+	/**
+	 * Whether every node in `node`'s subtree is side-effect-free, an access `accessRunsCode` clears counting as one. An
+	 * access whose receiver type does not resolve is assumed a plain read here; the caller that reorders an expression
+	 * against effects it cannot see asks `isProvenPure`.
+	 */
+	public static inline function isPure(node: QueryNode, ctx: PurityCtx): Bool {
+		return pure(node, ctx, false);
+	}
+
+	/** `isPure` with unknown read as impure: an access through a receiver whose type does not resolve may be a getter. */
+	public static inline function isProvenPure(node: QueryNode, ctx: PurityCtx): Bool {
+		return pure(node, ctx, true);
+	}
 
 	/**
 	 * The per-file context `isPure` threads through its walk, or null when the grammar leaves the
@@ -62,6 +78,14 @@ final class PurityScan {
 		if (fieldAccessKind == null || callKind == null) return null;
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
+		final wrappers: Array<String> = shape.memberTransparentWrapperTypeNames ?? [];
+		final receiverTypes: Map<Int, String> = [];
+		if (provider != null) for (from => written in provider.declaredTypeSources(source)) {
+			final nominal: Null<String> = NominalTypes.outerNominalOf(
+				NominalTypes.memberLookupReceiverSource(written, wrappers, index.typeSyntax), index.typeSyntax
+			);
+			if (nominal != null) receiverTypes[from] = nominal;
+		}
 		return {
 			shape: shape,
 			safeKinds: MemberKinds.sideEffectFreeExprKinds(shape),
@@ -71,35 +95,18 @@ final class PurityScan {
 			indexAccessKind: shape.indexAccessKind,
 			selfReferenceText: shape.selfReferenceText,
 			declaredTypes: declaredTypes,
+			receiverTypes: receiverTypes,
+			wrappers: wrappers,
 			index: index,
 			root: root
 		};
 	}
 
 	/**
-	 * Whether every node in `node`'s subtree is side-effect-free: a safe skeleton kind, a field /
-	 * index READ, or a provably-pure stdlib call. A field read whose resolvable first hop is a
-	 * property getter, and any non-whitelisted call, make it impure.
-	 */
-	public static function isPure(node: QueryNode, ctx: PurityCtx): Bool {
-		final kind: String = node.kind;
-		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
-		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
-		if (ctx.safeKinds.contains(kind)) return childrenPure();
-		if (kind != ctx.fieldAccessKind) return if (ctx.indexAccessKind != null && kind == ctx.indexAccessKind)
-			childrenPure()
-		else if (kind == ctx.callKind)
-			isPureCall(node, ctx) && childrenPure()
-		else
-			false;
-		return !isSideEffectingGetter(node, ctx) && childrenPure();
-	}
-
-	/**
 	 * Whether `node` is pure AND built from the safe skeleton alone — literals, identifiers,
 	 * grouping and the pure operators: no field or index read, no call, however transparent. A
-	 * caller that DROPS the expression asks this rather than `isPure`, because the field-read
-	 * verdict is optimistic about an unresolved receiver and a dropped getter call is a lost effect.
+	 * caller that DROPS the expression asks this rather than `isPure`, because even a plain read
+	 * then disappears from the program.
 	 * A bare identifier is still asked of `readsGetterUnqualified`.
 	 */
 	public static function isPlainValue(node: QueryNode, ctx: PurityCtx): Bool {
@@ -119,33 +126,38 @@ final class PurityScan {
 		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index);
 	}
 
+	private static function pure(node: QueryNode, ctx: PurityCtx, unknownRuns: Bool): Bool {
+		final kind: String = node.kind;
+		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
+		function childrenPure() return node.children.foreach(c -> pure(c, ctx, unknownRuns));
+		if (ctx.safeKinds.contains(kind)) return childrenPure();
+		if (kind == ctx.fieldAccessKind || (ctx.indexAccessKind != null && kind == ctx.indexAccessKind))
+			return !accessRunsCode(node, ctx, unknownRuns) && childrenPure();
+		return kind == ctx.callKind && isPureCall(node, ctx) && childrenPure();
+	}
+
 	/**
-	 * Whether a `fieldAccessKind` node reads a member proven to be a property GETTER — resolvable
-	 * only when the receiver is a bare identifier (its declared type, else its own spelling
-	 * read as a type name: `Owner.p` on a static property) or `this` (the enclosing
-	 * type); a deeper receiver is left unresolved and assumed a plain read. Reuses
-	 * `MemberLookup.memberGetter` (the getter-property map).
+	 * Whether a field or index read may run code: the type is an abstract whose access may select an overload, the field
+	 * is a property getter (`MemberLookup.memberGetter`), or, with `unknownRuns` set, the receiver type does not resolve, an
+	 * index read's type has no declaration, or a field read's member is not proven plain. The overload and declaration
+	 * questions follow a typedef alias; the getter question does not, so a field read through an alias is unknown.
 	 */
-	private static function isSideEffectingGetter(fa: QueryNode, ctx: PurityCtx): Bool {
-		final field: Null<String> = fa.name;
-		if (field == null || fa.children.length != 1) return false;
-		final recv: QueryNode = fa.children[0];
-		if (recv.kind != ctx.identKind) return false;
-		final recvName: Null<String> = recv.name;
-		if (recvName == null) return false;
-		final typeName: Null<String> = if (recvName == ctx.selfReferenceText) {
-			final span: Null<Span> = fa.span;
-			span == null ? null : TypeResolver.enclosingTypeName(ctx.root, span);
-		} else {
-			TypeResolver.identTypeName(recv, ctx.root, ctx.shape, ctx.declaredTypes) ?? recvName;
-		}
-		return typeName != null && ctx.index.typing.members.memberGetter(typeName, field) == true;
+	private static function accessRunsCode(access: QueryNode, ctx: PurityCtx, unknownRuns: Bool): Bool {
+		final recv: Null<QueryNode> = access.children[0];
+		final typeName: Null<String> = recv == null ? null : receiverTypeName(recv, ctx);
+		if (typeName == null) return unknownRuns;
+		final typing: TypingService = ctx.index.typing;
+		if (typing.accessOverloaded(typeName)) return true;
+		if (access.kind != ctx.fieldAccessKind) return unknownRuns && !typing.typeDeclared(typeName);
+		final field: Null<String> = access.name;
+		final getter: Null<Bool> = field == null ? null : typing.members.memberGetter(typeName, field);
+		return getter == true || (unknownRuns && getter == null);
 	}
 
 	/**
 	 * Whether a BARE identifier reads a property of the enclosing type whose getter runs code. The
 	 * qualified spellings (`this.p`, `o.p`) arrive as a field access and are answered by
-	 * `isSideEffectingGetter`; unqualified inside its own type, the same read is an `identKind` leaf
+	 * `accessRunsCode`; unqualified inside its own type, the same read is an `identKind` leaf
 	 * that `RefactorSupport.isSafeKind` would wave through — `switch prop { case _: … }` would then
 	 * look droppable while dropping a `get_prop()` call.
 	 *
@@ -170,6 +182,27 @@ final class PurityScan {
 		return !TypeResolver.bindsToValueDeclaration(name, span, ctx.root, ctx.shape);
 	}
 
+	/** The type name a receiver read denotes: a value's declared type, or the type a path spells; null when neither is known. */
+	private static function receiverTypeName(recv: QueryNode, ctx: PurityCtx): Null<String> {
+		final path: Null<Array<String>> = NominalTypes.pathOf(recv, ctx.identKind, ctx.fieldAccessKind);
+		if (path == null) return null;
+		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, ctx.root, ctx.receiverTypes, ctx.shape);
+		if (rootType != null) return pathEndType(path, rootType, ctx);
+		if (!TypeResolver.receiverRootIsUnboundType(recv, ctx.root, ctx.shape)) return null;
+		for (i => segment in path) if (SourceText.isUpperInitial(segment)) return pathEndType(path.slice(i), segment, ctx);
+		return null;
+	}
+
+	private static function pathEndType(path: Array<String>, rootType: String, ctx: PurityCtx): Null<String> {
+		if (path.length == 1) return rootType;
+		final written: Null<String> = NominalTypes.pathFinalMemberTypeSource(path, rootType, ctx.index, ctx.wrappers);
+		return written == null
+			? null
+			: NominalTypes.outerNominalOf(
+				NominalTypes.memberLookupReceiverSource(written, ctx.wrappers, ctx.index.typeSyntax), ctx.index.typeSyntax
+			);
+	}
+
 }
 
 /** Per-file resolved constants threaded through `PurityScan`'s recursive walk. */
@@ -190,6 +223,10 @@ typedef PurityCtx = {
 	final indexAccessKind: Null<String>;
 	final selfReferenceText: Null<String>;
 	final declaredTypes: Map<Int, String>;
+
+	/** Every binding's outer nominal, parametric and optional types included: a receiver's type is what this asks. */
+	final receiverTypes: Map<Int, String>;
+	final wrappers: Array<String>;
 	final index: SymbolIndex;
 	final root: QueryNode;
 

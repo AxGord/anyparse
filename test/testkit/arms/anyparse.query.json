@@ -16083,6 +16083,14 @@
 			"find": "OracleDeclarationReader.read(declared.raw, declared.baseDir, drops, null)",
 			"replace": "OracleDeclarationReader.read(declared.raw, declared.baseDir, [], null)",
 			"note": "the entries a run on a grammar without a compiler cannot use are dropped without a line, so a malformed compilerOracle is reported on a Haxe run and never on any other"
+		},
+		{
+			"name": "M-PURITY-ALIAS-OVERLOAD",
+			"type": "anyparse.query.TypingService",
+			"method": "accessOverloaded",
+			"find": "_refs.aliasedName(typeName)",
+			"replace": "typeName",
+			"note": "an alias of an abstract with an index overload reads as having none"
 		}
 	]
 }

@@ -139,9 +139,9 @@ final class MemberLookup {
 	 * read") and feeds two code-DELETING fixers: `TypeResolver.isDeletionPure` → `UnusedLocal`'s
 	 * `--fix`, and `DeadStore.rhsSafeToDelete` directly. So every new `false` is a positive proof — the
 	 * direction this widening exists for — and every downgrade to null merely keeps code.
-	 * `ExtractRepeatedExpression.isSideEffectingGetter` (1 call site) acts on `== true` ("getter,
-	 * impure, bail"), for which `false` and `null` are indistinguishable, so new `true`s only make it
-	 * MORE conservative. None of the three reads a spurious answer as a licence to act.
+	 * `PurityScan.accessRunsCode` (1 call site) refuses on `true`; `isProvenPure` also refuses on `null`
+	 * and only `false` admits, while `isPure` reads `null` as plain, so new `true`s only make it MORE
+	 * conservative. None of the three reads a spurious answer as a licence to act.
 	 */
 	public function memberGetter(typeName: String, field: String): Null<Bool> {
 		var found: Null<Bool> = null;

@@ -205,6 +205,16 @@ final class TypingService {
 		return member ? AsMember : ByModulePath;
 	}
 
+	/** Whether a type of the name `typeName` is an abstract whose field or index access may select an overload. */
+	public function accessOverloaded(typeName: String): Bool {
+		return operators.overloadsAccess(_refs.resolvedDeclsNamed(_refs.aliasedName(typeName)));
+	}
+
+	/** Whether the index holds a declaration of the type `typeName` names, through its typedef aliases. */
+	public function typeDeclared(typeName: String): Bool {
+		return _refs.declaresName(_refs.aliasedName(typeName));
+	}
+
 	/**
 	 * The tier of `spelling` at `at` of `file` read in `position`. A value position takes the caller's word that the head
 	 * binds no value, which is why only `readingAt`, holding the tree that proves it, asks one.

@@ -1186,9 +1186,9 @@
 		{
 			"name": "M-PURITY-STATIC-GETTER",
 			"type": "anyparse.check.scan.PurityScan",
-			"method": "isSideEffectingGetter",
-			"find": " ?? recvName",
-			"replace": "",
+			"method": "accessRunsCode",
+			"find": "getter == true || (",
+			"replace": "(",
 			"note": "a property read through the name of its own type is taken for a plain field, so a condition that runs the getter is moved past a head that reads what the getter changes"
 		},
 		{
@@ -1203,7 +1203,7 @@
 			"name": "M-HCBH-INERT-CALL",
 			"type": "anyparse.check.scan.HeadScan",
 			"method": "isInert",
-			"find": "(node.kind == purity.callKind && !PurityScan.isPure(node, purity))",
+			"find": "(node.kind == purity.callKind && !PurityScan.isProvenPure(node, purity))",
 			"replace": "false",
 			"note": "a call in the head is taken for inert, so a condition reading a field the call writes runs after the new value is set"
 		},
@@ -1219,7 +1219,7 @@
 			"name": "M-HCBH-EFFECTFUL-COND",
 			"type": "anyparse.check.scan.HeadScan",
 			"method": "mayPrecede",
-			"find": "!conds.foreach(c -> PurityScan.isPure(c, ctx.purity))",
+			"find": "!conds.foreach(c -> PurityScan.isProvenPure(c, ctx.purity))",
 			"replace": "false",
 			"note": "a condition that calls a function, assigns or runs a property getter is taken for pure, so a head that reads state those effects change runs ahead of them"
 		},
@@ -1390,6 +1390,53 @@
 			"find": "for (child in node.children) spellNames(child, out);",
 			"replace": "",
 			"note": "a read spelled below the position (a qualified path, an interpolated segment) holds nothing"
+		},
+		{
+			"name": "M-PURITY-UNRESOLVED-RECEIVER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "if (typeName == null) return unknownRuns;",
+			"replace": "if (typeName == null) return false;",
+			"note": "an unresolved receiver reads as pure again"
+		},
+		{
+			"name": "M-PURITY-UNRESOLVED-RECEIVER-FLIP",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"force": "true",
+			"note": "every read is impure, a typed plain field loses its finding"
+		},
+		{
+			"name": "M-PURITY-GETTER-OFF",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "getter == true || ",
+			"replace": "",
+			"note": "a getter of a resolved type reads as plain"
+		},
+		{
+			"name": "M-PURITY-OVERLOAD-OFF",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "if (typing.accessOverloaded(typeName)) return true;",
+			"replace": "",
+			"note": "an abstract declaring an overload reads as plain"
+		},
+		{
+			"name": "M-PURITY-UNKNOWN-MEMBER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "unknownRuns && getter == null",
+			"replace": "false",
+			"note": "a field the index cannot place reads as plain under isProvenPure"
+		},
+		{
+			"name": "M-PURITY-UNKNOWN-INDEX",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "unknownRuns && !typing.typeDeclared(typeName)",
+			"replace": "false",
+			"note": "an index read on a type outside the index reads as plain under isProvenPure"
 		}
 	]
 }

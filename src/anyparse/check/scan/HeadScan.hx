@@ -82,7 +82,8 @@ final class HeadScan {
 		final last: Null<Span> = run[run.length - 1].span;
 		final ctx: Null<HeadCtx> = context();
 		if (first == null || last == null || ctx == null) return false;
-		if (!conds.foreach(c -> PurityScan.isPure(c, ctx.purity))) return run.foreach(s -> isConstantDecl(s, ctx.purity.safeKinds, seams));
+		if (!conds.foreach(c -> PurityScan.isProvenPure(c, ctx.purity)))
+			return run.foreach(s -> isConstantDecl(s, ctx.purity.safeKinds, seams));
 		final region: Span = new Span(first.from, last.to);
 		return !readsBeyondHeldLocals(conds, region, seams, ctx) || isInert(run, conds, region, ctx);
 	}
@@ -112,7 +113,7 @@ final class HeadScan {
 		final purity: PurityCtx = ctx.purity;
 		function quiet(node: QueryNode): Bool {
 			final runsCode: Bool = node.kind == purity.shape.newExprKind
-				|| (node.kind == purity.callKind && !PurityScan.isPure(node, purity));
+				|| (node.kind == purity.callKind && !PurityScan.isProvenPure(node, purity));
 			return !runsCode && node.children.foreach(quiet);
 		}
 		if (!run.foreach(quiet)) return false;

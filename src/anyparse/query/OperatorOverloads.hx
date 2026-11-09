@@ -94,6 +94,13 @@ final class OperatorOverloads {
 		return agreed;
 	}
 
+	/** Whether any of `decls` is an abstract declaring an index access or an operator overload, so a read through it may select code. */
+	public function overloadsAccess(decls: Array<ResolvedType>): Bool {
+		return decls.exists(
+			d -> _abstractKinds.contains(d.type.kind) && d.type.members.exists(m -> isIndexAccess(m) || m.operatorOverloads.length != 0)
+		);
+	}
+
 	/** Whether `m` is an index access of its abstract: annotated as one, or an overload of the index operator. */
 	private inline function isIndexAccess(m: MemberInfo): Bool {
 		final meta: String = _indexMeta ?? '';

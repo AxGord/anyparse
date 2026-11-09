@@ -394,6 +394,13 @@ class HoistCommonBranchTailTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	@:pin('guard')
+	public function testUntypedReceiverConditionIsNotGatedBecauseATailRunsAfterIt(): Void {
+		final src: String = 'class C { function f(u) { if (u.x > 0) { a(); h(); } else { b(); h(); } } }';
+		Assert.equals(1, violations(src).length);
+		Assert.isTrue(edits(src).length > 0);
+	}
+
 	private static function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new HoistCommonBranchTail(), src);
 	}
