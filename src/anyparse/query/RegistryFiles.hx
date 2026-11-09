@@ -14,7 +14,7 @@ import sys.FileSystem;
 final class RegistryFiles {
 
 	/** The ending of a document that belongs to a registry directory. */
-	public static inline final EXTENSION: String = '.json';
+	public static final EXTENSION: String = '.json';
 
 	/** The files `path` names; none when it does not exist (or on a target without a file system). */
 	public static function of(path: String): Array<String> {
@@ -22,7 +22,7 @@ final class RegistryFiles {
 		if (!FileSystem.exists(path)) return [];
 		if (!FileSystem.isDirectory(path)) return [path];
 		final names: Array<String> = FileSystem.readDirectory(path).filter(name -> name.endsWith(EXTENSION));
-		names.sort(Reflect.compare);
+		names.sort(anyparse.util.Compare.compareString);
 		return names.map(name -> Path.join([path, name]));
 		#else
 		return [];

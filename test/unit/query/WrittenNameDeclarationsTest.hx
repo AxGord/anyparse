@@ -6,6 +6,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SupertypeWalk;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
+import anyparse.util.Compare;
 import unit.CheckFixture;
 
 /**
@@ -176,7 +177,7 @@ class WrittenNameDeclarationsTest extends Test {
 	@:pin('control') @:killer('M-DECLARING-PATHS-EMPTY', 'M-DECLARINGFILES-EMPTY')
 	public function testARefusalNamesEveryDeclaringFile(): Void {
 		final found: Array<String> = indexOf(BASES).refs.declaringPaths('Base');
-		found.sort(Reflect.compare);
+		found.sort(Compare.compareString);
 		Assert.equals(BOTH, found.join(','));
 		Assert.equals('t/T.hx', indexOf(TWINS).refs.declaringPaths('T').join(','));
 	}
@@ -197,7 +198,7 @@ class WrittenNameDeclarationsTest extends Test {
 
 	private static function filesOf(found: Array<ResolvedType>): String {
 		final files: Array<String> = found.map(r -> r.file.file);
-		files.sort(Reflect.compare);
+		files.sort(Compare.compareString);
 		return files.join(',');
 	}
 

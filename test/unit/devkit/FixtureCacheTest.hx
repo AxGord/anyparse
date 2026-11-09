@@ -1,5 +1,6 @@
 package unit.devkit;
 
+import anyparse.util.Compare;
 import devkit.FixtureCache;
 import devkit.TempDir;
 import js.node.Fs.Fs;
@@ -52,10 +53,10 @@ final class FixtureCacheTest extends Test {
 			aged('$store/sub/old.json.gz', now - 9 * DAY_MS);
 			FixtureCache.prune(store, 7);
 			final left: Array<String> = FileSystem.readDirectory(store);
-			left.sort(Reflect.compare);
+			left.sort(Compare.compareString);
 			final expected: Array<String> = ['sub', 'old.txt', 'other-old.js'];
 			for (kind in kinds) for (age in ['edge', 'new']) expected.push(kind(age));
-			expected.sort(Reflect.compare);
+			expected.sort(Compare.compareString);
 			Assert.same(expected, left);
 			Assert.isTrue(FileSystem.exists('$store/sub/old.json.gz'), 'a prune never descends');
 		});

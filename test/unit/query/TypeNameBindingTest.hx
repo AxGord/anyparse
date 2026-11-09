@@ -7,6 +7,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
+import anyparse.util.Compare;
 import haxe.Exception;
 import unit.CheckFixture;
 
@@ -343,7 +344,7 @@ class TypeNameBindingTest extends Test {
 		final declared: Array<String> = [for (t in types) if (!t.isPrivate) t.name];
 		final sorted: Array<String> -> String = names -> {
 			final copy: Array<String> = names.copy();
-			copy.sort(Reflect.compare);
+			copy.sort(Compare.compareString);
 			copy.join(',');
 		};
 		Assert.equals(sorted(declared), sorted(TypeNameBinding.STD_TYPE_NAMES), 'the fallback list is what the std `StdTypes.hx` declares');

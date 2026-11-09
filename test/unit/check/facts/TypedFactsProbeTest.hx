@@ -4,6 +4,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.facts.TypedFactsProbe;
 import anyparse.query.FactSites;
 import anyparse.query.FactsTypeTree;
+import anyparse.util.Compare;
 import haxe.io.Path;
 import sys.io.File;
 
@@ -325,11 +326,11 @@ class TypedFactsProbeTest extends Test {
 		]);
 		final facts: Null<CompilerFacts> = scratch.facts;
 		final down: Array<String> = facts?.subtypesOf('a.Base') ?? [];
-		down.sort(Reflect.compare);
+		down.sort(Compare.compareString);
 		Assert.same(['Leaf', 'Mid'], down);
 		Assert.same(['Leaf'], facts?.subtypesOf('b.Base'));
 		final up: Array<String> = facts?.supertypesOf('Leaf') ?? [];
-		up.sort(Reflect.compare);
+		up.sort(Compare.compareString);
 		Assert.same(['Mid', 'a.Base', 'b.Base'], up);
 		Assert.equals('Mid<Int>', facts?.type('Leaf')?.superClass);
 		final declared: Null<FactPos> = facts?.typePosition('Leaf');
@@ -691,7 +692,7 @@ class TypedFactsProbeTest extends Test {
 					for (f in walked.fields)
 						if (f.field == 'items' && !f.write && f.at.span.from == from) f.use + (f.method == null ? '' : ':${f.method}')
 				];
-				uses.sort(Reflect.compare);
+				uses.sort(Compare.compareString);
 				return uses.join(',');
 			}
 			Assert.equals('call:keyValueIterator', usesAt('in items)'), 'the key-value loop');
@@ -837,7 +838,7 @@ class TypedFactsProbeTest extends Test {
 					final use: String = f.use + (f.method == null ? '' : ':${f.method}') + (f.held ? '' : '!');
 					if (!uses.contains(use)) uses.push(use);
 				}
-				uses.sort(Reflect.compare);
+				uses.sort(Compare.compareString);
 				return uses.join(',');
 			}
 			Assert.equals('call:keyValueIterator,index,member', usesAt('items', 'l = items'), 'the stored value');

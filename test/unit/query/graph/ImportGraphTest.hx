@@ -5,6 +5,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.format.GraphMermaid;
 import anyparse.query.graph.CodeGraph;
 import anyparse.query.graph.ImportGraph;
+import anyparse.util.Compare;
 #if (sys || nodejs)
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -63,7 +64,7 @@ class ImportGraphTest extends Test {
 		final graph: CodeGraph = ImportGraph.build(indexOf(FILES), Type);
 		Assert.equals('pkg.a', graph.node(graph.node(CodeGraph.idOf(Type, 'pkg.a.Alpha'))?.parent ?? '')?.name);
 		final held: Array<String> = graph.held(CodeGraph.idOf(Package, 'pkg.b')).map(n -> n.name);
-		held.sort(Reflect.compare);
+		held.sort(Compare.compareString);
 		Assert.equals('pkg.b.Beta,pkg.b.Gamma', held.join(','));
 	}
 

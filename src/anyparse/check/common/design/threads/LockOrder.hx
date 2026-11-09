@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.check.common.design.ThreadSafety.FindingFamily;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.query.CallGraph;
+import anyparse.util.Compare;
 
 /**
  * One way a thread can be in a function: entered on `ctx` under `valuation` (`EdgeConditions`) holding the locks `held`
@@ -201,7 +202,7 @@ final class LockOrder {
 			final held: Array<String> = state.held.copy();
 			for (h in _heldAt[key] ?? []) if (!held.contains(h.lock) && _conditions.carried(h.take, state.valuation, state.ctx) != 0)
 				held.push(h.lock);
-			held.sort(Reflect.compare);
+			held.sort(Compare.compareString);
 			// a lock held already is a re-take, on the lock of one member: no order between two locks
 			for (taken in _takenAt[key] ?? []) if (!held.contains(taken)) for (h in held) record({
 				state: state,

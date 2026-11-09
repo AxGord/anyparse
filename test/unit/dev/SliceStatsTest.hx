@@ -1,5 +1,6 @@
 package unit.dev;
 
+import anyparse.util.Compare;
 import dev.SliceMeasure;
 import dev.SliceStats;
 import devkit.Cmd.cmd;
@@ -146,7 +147,7 @@ final class SliceStatsTest extends Test {
 			File.saveContent(dir.file('src/p/B.hx'), B_SOURCE);
 			final reading: EdgeReading = SliceMeasure.edgesOf(dir.path, ['src']);
 			final files: Array<String> = reading.files.copy();
-			files.sort(Reflect.compare);
+			files.sort(Compare.compareString);
 			Assert.same(['src/p/A.hx', 'src/p/B.hx'], files);
 			Assert.equals('src/p/B.hx', reading.edges['p.A.f -> p.B.g']);
 			Assert.equals('src/p/B.hx', reading.edges['p.B.g -> p.B.h']);

@@ -1,6 +1,7 @@
 package testkit;
 
 import anyparse.query.ArmTypePath;
+import anyparse.util.Compare;
 import devkit.NarrowBuild;
 import haxe.io.Path;
 import haxe.macro.Context;
@@ -158,7 +159,7 @@ class TestDiscovery {
 		final modules: Array<String> = [];
 		final testFiles: Map<String, String> = [];
 		collectModules(root, [], modules, testFiles);
-		modules.sort(compareStrings);
+		modules.sort(Compare.compareString);
 		final census: TestCensus = {
 			registered: [],
 			dead: [],
@@ -175,11 +176,11 @@ class TestDiscovery {
 		}
 		checkArms(table.arms, census.killers, census.deferred);
 		checkTestFiles(census.registered, testFiles);
-		census.registered.sort((a, b) -> compareStrings(qualified(a), qualified(b)));
-		census.dead.sort(compareStrings);
-		census.bases.sort(compareStrings);
-		census.pins.sort(compareStrings);
-		census.claims.sort(compareStrings);
+		census.registered.sort((a, b) -> Compare.compareString(qualified(a), qualified(b)));
+		census.dead.sort(Compare.compareString);
+		census.bases.sort(Compare.compareString);
+		census.pins.sort(Compare.compareString);
+		census.claims.sort(Compare.compareString);
 		return Context.getBuildFields().concat(generate(census, table.arms.map(MutationArms.render)));
 	}
 
@@ -585,14 +586,6 @@ class TestDiscovery {
 		final parts: Array<String> = c.module.split('.');
 		return parts[parts.length - 1];
 	}
-
-	/** Code-unit order, so the generated registration does not depend on the machine's locale. */
-	private static function compareStrings(a: String, b: String): Int return if (a < b)
-		-1
-	else if (a > b)
-		1
-	else
-		0;
 
 	/** A census registering exactly `classes`, each a `utest.Test` class of the test tree, and holding nothing else. */
 	private static function narrowCensus(classes: Array<String>): TestCensus {

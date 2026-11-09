@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Compare;
 import unit.CheckFixture;
 
 /**
@@ -135,7 +136,7 @@ class DeclarationQueriesTest extends Test {
 
 	private static function sorted(names: Array<String>): Array<String> {
 		final out: Array<String> = names.copy();
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

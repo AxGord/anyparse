@@ -2,6 +2,7 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.util.Compare;
 import dev.Baseline;
 import dev.BaselineCache;
 import dev.BaselineLists;
@@ -97,7 +98,7 @@ final class BaselineCacheTest extends Test {
 			js.node.Fs.Fs.utimesSync(Path.join([cache, 'old']), aged, aged);
 			BaselineCache.store(cache, 'next', recorded(dir.file('logs-c'), 'abe'));
 			final names: Array<String> = FileSystem.readDirectory(cache);
-			names.sort(Reflect.compare);
+			names.sort(Compare.compareString);
 			Assert.same(['fresh', 'next'], names);
 		});
 	}

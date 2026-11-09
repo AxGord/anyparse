@@ -7,6 +7,7 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.util.Compare;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -64,7 +65,7 @@ enum Tier {
 final class TypeNameBinding {
 
 	/** The module the compiler imports into every module ahead of any wildcard, package or toplevel type. */
-	public static inline final STD_TYPES_MODULE: String = 'StdTypes';
+	public static final STD_TYPES_MODULE: String = 'StdTypes';
 
 	/**
 	 * Every name `StdTypes` declares on Haxe 4.3 — what its tier binds when neither the index nor the std
@@ -712,7 +713,7 @@ final class TypeNameBinding {
 	public static function sameDecls(a: Array<ResolvedType>, b: Array<ResolvedType>): Bool {
 		inline function keys(decls: Array<ResolvedType>): Array<String> {
 			final out: Array<String> = decls.map(d -> '${d.file.file}#${d.type.span.from}');
-			out.sort(Reflect.compare);
+			out.sort(Compare.compareString);
 			return out;
 		}
 		return keys(a).join('|') == keys(b).join('|');

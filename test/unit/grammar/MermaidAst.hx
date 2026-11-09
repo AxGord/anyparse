@@ -1,6 +1,7 @@
 package unit.grammar;
 
 import anyparse.grammar.json.JsonText;
+import anyparse.util.Compare;
 
 /**
  * A structural dump of a Mermaid AST value — enum ctors with their arguments, struct fields in name
@@ -19,7 +20,7 @@ final class MermaidAst {
 				Type.enumConstructor(value) + (params.length == 0 ? '' : '(' + params.join(', ') + ')');
 			case TObject:
 				final fields: Array<String> = Reflect.fields(value).filter(field -> Reflect.field(value, field) != null);
-				fields.sort(Reflect.compare);
+				fields.sort(Compare.compareString);
 				'{' + fields.map(field -> '$field: ${dump(Reflect.field(value, field))}').join(', ') + '}';
 			case TClass(String): JsonText.quote(value);
 			case TClass(Array): '[' + (value: Array<Any>).map(dump).join(', ') + ']';

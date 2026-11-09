@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.util.Compare;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -56,7 +57,7 @@ final class Glob {
 			else
 				out.push(norm);
 		}
-		out.sort(Reflect.compare);
+		out.sort(anyparse.util.Compare.compareString);
 		#end
 		return out;
 	}
@@ -74,7 +75,7 @@ final class Glob {
 		} else {
 			listed.filter(p -> p == norm || ((norm == '' || p.startsWith('$norm/')) && p.endsWith(extension)));
 		};
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

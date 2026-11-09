@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
 
@@ -110,8 +111,8 @@ final class MoveElements {
 			return sameSequence(targetAfter, expectedTarget) ? null : 'the target array does not end with the slice, in order';
 		final got: Array<String> = targetAfter.copy();
 		final want: Array<String> = expectedTarget.copy();
-		got.sort(Reflect.compare);
-		want.sort(Reflect.compare);
+		got.sort(Compare.compareString);
+		want.sort(Compare.compareString);
 		return sameSequence(got, want) ? null : 'the target array does not hold its old entries plus the slice';
 	}
 

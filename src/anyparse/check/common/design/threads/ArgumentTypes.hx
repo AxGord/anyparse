@@ -15,6 +15,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeTerm.TypeEnd;
 import anyparse.query.TypingService;
 import anyparse.runtime.SortedOffsets;
+import anyparse.util.Compare;
 
 using StringTools;
 
@@ -204,7 +205,7 @@ final class ArgumentTypes {
 		final known: Null<Array<Int>> = _typeSourceOffsets[file];
 		if (known != null) return known;
 		final offsets: Array<Int> = [for (at in sources.keys()) at];
-		offsets.sort(Reflect.compare);
+		offsets.sort(Compare.compareInt);
 		_typeSourceOffsets[file] = offsets;
 		return offsets;
 	}

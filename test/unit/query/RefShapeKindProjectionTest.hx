@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.ds.StringMap;
 import sys.FileSystem;
@@ -1235,7 +1236,7 @@ final class RefShapeKindProjectionTest extends Test {
 			final projected: Array<String> = projectedKindsFor(lang);
 			final declared: Array<String> = declaredKindsOf(shape, kindFieldsOf(shape, projected), projected);
 			final shared: Array<String> = ambiguousKindsFor(lang).filter(kind -> declared.contains(kind));
-			shared.sort(Reflect.compare);
+			shared.sort(Compare.compareString);
 			final found: String = shared.join(', ');
 			final known: String = (KNOWN_AMBIGUOUS[lang] ?? []).join(', ');
 			Assert.equals(known, found, '$lang kind names two or more @:peg rules spell — known [$known], found [$found]');
@@ -1271,7 +1272,7 @@ final class RefShapeKindProjectionTest extends Test {
 	public function testNoUnclassifiedFieldCarriesAProjectedKindName(): Void {
 		final classified: Array<String> = EXTRA_KIND_FIELDS.concat(KIND_LOOKALIKE_FIELDS);
 		final expected: Array<String> = classified.copy();
-		expected.sort(Reflect.compare);
+		expected.sort(Compare.compareString);
 		for (lang in CliArgs.langNames()) {
 			final shape: RefShape = CliArgs.pickPlugin(lang).refShape();
 			final projected: Array<String> = projectedKindsFor(lang);
@@ -1283,11 +1284,11 @@ final class RefShapeKindProjectionTest extends Test {
 				stringsOf(fieldOf(shape, field), strings);
 				if (strings.exists(name -> projected.contains(name))) unclassified.push(field);
 			}
-			unclassified.sort(Reflect.compare);
+			unclassified.sort(Compare.compareString);
 			final loose: String = unclassified.join(', ');
 			Assert.equals('', loose, '$lang: RefShape field(s) carrying a projected kind name with no classification: [$loose]');
 			final live: Array<String> = classified.filter(field -> hasFieldOf(shape, field));
-			live.sort(Reflect.compare);
+			live.sort(Compare.compareString);
 			Assert.equals(expected.join(', '), live.join(', '), '$lang: classified field(s) the shape no longer declares');
 		}
 	}
@@ -1339,18 +1340,18 @@ final class RefShapeKindProjectionTest extends Test {
 			final shape: RefShape = CliArgs.pickPlugin(lang).refShape();
 			final probed: Array<String> = tokenProbesFor(lang).map(probe -> '${probe.field}#${probe.slot}');
 			final wanted: Array<String> = tokenSlotsOf(shape);
-			probed.sort(Reflect.compare);
-			wanted.sort(Reflect.compare);
+			probed.sort(Compare.compareString);
+			wanted.sort(Compare.compareString);
 			Assert.isTrue(wanted.length >= MIN_TOKEN_SLOTS, '$lang: ${wanted.length} token-bearing slot(s)');
 			final keywords: Array<String> = KEYWORD_TOKEN_FIELDS.copy();
 			final liveKeywords: Array<String> = keywords.filter(field -> hasFieldOf(shape, field));
-			keywords.sort(Reflect.compare);
-			liveKeywords.sort(Reflect.compare);
+			keywords.sort(Compare.compareString);
+			liveKeywords.sort(Compare.compareString);
 			Assert.equals(keywords.join(', '), liveKeywords.join(', '), '$lang: keyword field(s) the shape no longer declares');
 			final templates: Array<String> = TEMPLATE_SLOTS.copy();
 			final liveTemplates: Array<String> = templates.filter(address -> slotTextAt(shape, address) != null);
-			templates.sort(Reflect.compare);
-			liveTemplates.sort(Reflect.compare);
+			templates.sort(Compare.compareString);
+			liveTemplates.sort(Compare.compareString);
 			Assert.equals(templates.join(', '), liveTemplates.join(', '), '$lang: template slot(s) the shape no longer declares');
 			Assert.equals(wanted.join(', '), probed.join(', '), '$lang: token-bearing slots and capture probes differ');
 		}
@@ -1554,7 +1555,7 @@ final class RefShapeKindProjectionTest extends Test {
 				stringsOf(value, names);
 			for (name in names) if (!out.contains(name)) out.push(name);
 		}
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

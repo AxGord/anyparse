@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
+import anyparse.util.Compare;
 import unit.cli.CliFixture;
 
 /**
@@ -86,7 +87,7 @@ class AmbientGovernanceMemoTest extends Test {
 		final governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance('$root/src/gqq/import.hx');
 		if (governance == null) return 'NONE';
 		final entries: Array<String> = governance.governs.map(entry -> '${entry.file}:${entry.source}');
-		entries.sort(Reflect.compare);
+		entries.sort(Compare.compareString);
 		return entries.join(';');
 	}
 
