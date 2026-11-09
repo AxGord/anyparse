@@ -305,17 +305,22 @@ final class CliArgs {
 	}
 
 	/**
-	 * Expand a --scope dir/glob into the files of grammar `lang` and read every one plus the extras (the
-	 * op's own files), reporting read failures; null aborts the op.
+	 * Expand a --scope dir/glob (and `moreScopes`, for an op taking several) into the files of grammar `lang` and read every one
+	 * plus the extras (the op's own files), reporting read failures; null aborts the op. One file under two scopes, however each
+	 * spells it, is one entry.
 	 */
 	public static function collectScopeFiles(
-		cmd: String, lang: String, scopeDir: String, extraFiles: Array<String>
+		cmd: String, lang: String, scopeDir: String, extraFiles: Array<String>, ?moreScopes: Array<String>
 	): Null<Array<{ file: String, source: String }>> {
-		final expanded: ExpandedInputs = expandFor(lang, [scopeDir]);
-		final paths: Array<String> = expanded.paths;
+		final expanded: ExpandedInputs = expandFor(lang, [scopeDir].concat(moreScopes ?? []));
+		final paths: Array<String> = [];
+		final keys: Array<String> = [];
+		for (path in expanded.paths) if (!keys.contains(FileIdentity.realPath(path))) {
+			paths.push(path);
+			keys.push(FileIdentity.realPath(path));
+		}
 		// An extra file the scope walk already holds under another spelling (absolute against a relative scope) takes that
 		// entry's place: the caller looks its own spelling up, and a second entry would index the file twice.
-		final keys: Array<String> = paths.map(FileIdentity.realPath);
 		for (extra in extraFiles) {
 			final at: Int = keys.indexOf(FileIdentity.realPath(extra));
 			if (at < 0) {

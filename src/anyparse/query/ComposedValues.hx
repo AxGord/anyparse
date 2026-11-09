@@ -181,6 +181,33 @@ final class ComposedValues {
 	}
 
 	/**
+	 * What the object literal `node` is written to build, read through the written types around it: the return type of a function it
+	 * is returned from, the type of a target it is assigned to, an annotated declaration, a parameter it is passed to. `member` is
+	 * the field the caller asks about and `typeParams` the type parameters of the literal's file.
+	 */
+	public static function literalExpectation(
+		node: QueryNode, returns: Map<Int, String>, member: String, typeParams: Array<String>, c: IndexTyping
+	): LiteralExpectation {
+		final expected: Null<Expectation> = expectationOf(node, c, literalHost(returns));
+		return expected == null || expected.free
+			? Unwritten
+			: writtenExpectation(expected.text, expected.file, expected.unbound.concat(typeParams), member, c);
+	}
+
+	/**
+	 * What the receiver of a read of `member` is typed as, by the same reading of a written type a literal gets; `Unwritten` when
+	 * the expression types as nothing.
+	 */
+	public static function receiverExpectation(
+		receiver: QueryNode, member: String, typeParams: Array<String>, c: IndexTyping
+	): LiteralExpectation {
+		final written: Null<String> = NominalTypes.expressionTypeSource(
+			receiver, c.root, c.shape, c.declaredTypes, c.index, c.file, c.chain
+		);
+		return written == null ? Unwritten : writtenExpectation(written, c.index?.fileInfo(c.file), typeParams, member, c);
+	}
+
+	/**
 	 * What `ExpectedTypes` asks the index host of a literal's position: the written type expected of it, as the file writing
 	 * it reads it, or none (`Expectation.free`, a value of its own). A position it does not read — an assignment, a `return`,
 	 * an argument the signature does not decide — expects nothing it can tell, so null. Built per question, so no static of
@@ -528,13 +555,15 @@ final class ComposedValues {
 	 * What is expected of the literal `node` where it is written (`ExpectedTypes.expectedAt` over `EXPECTATIONS`): a type and
 	 * the file writing it, or none (the literal a value of its own); null where the engine reads nothing.
 	 */
-	private static function expectationOf(node: QueryNode, c: IndexTyping): Null<Expectation> {
+	private static function expectationOf(
+		node: QueryNode, c: IndexTyping, ?host: ExpectationHost<Expectation, IndexTyping>
+	): Null<Expectation> {
 		final index: Null<SymbolIndex> = c.index;
 		final path: Array<QueryNode> = TreePath.pathAround(c.root, node) ?? [];
 		if (index == null || path.length < 2) return null;
 		final lineage: Array<QueryNode> = path.slice(0, path.length - 1);
 		final indices: Array<Int> = [for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1])];
-		return index.typing.expectations.expectedAt(lineage, indices, lineage.length - 1, expectationHost(), c);
+		return index.typing.expectations.expectedAt(lineage, indices, lineage.length - 1, host ?? expectationHost(), c);
 	}
 
 	/**
@@ -725,6 +754,60 @@ final class ComposedValues {
 		return at;
 	}
 
+	/** `expectationHost` with a `return` read off the written return types `returns` and an assignment off the target's written type. */
+	private static function literalHost(returns: Map<Int, String>): ExpectationHost<Expectation, IndexTyping> {
+		final base: ExpectationHost<Expectation, IndexTyping> = expectationHost();
+		return {
+			declared: base.declared,
+			assigned: (target, c) ->
+				writtenHere(NominalTypes.expressionTypeSource(target, c.root, c.shape, c.declaredTypes, c.index, c.file, c.chain), c),
+			returned: (fn, c) -> {
+				final at: Null<Span> = fn.span;
+				writtenHere(at == null ? null : returns[at.from], c);
+			},
+			argument: base.argument,
+			element: base.element,
+			field: base.field,
+			read: base.read,
+			part: base.part
+		};
+	}
+
+	/** The expectation a type source `written` in the file being read states; null for none. */
+	private static function writtenHere(written: Null<String>, c: IndexTyping): Null<Expectation> {
+		return written == null ? null : {
+			text: written,
+			file: c.index?.fileInfo(c.file),
+			free: false,
+			unbound: []
+		};
+	}
+
+	/** `text`, written in `file`, read for what it says about `member`: `unbound` the names standing for a type not yet known. */
+	private static function writtenExpectation(
+		text: String, file: Null<FileInfo>, unbound: Array<String>, member: String, c: IndexTyping
+	): LiteralExpectation {
+		final peeled: String = NominalTypes.memberLookupReceiverSource(
+			text, c.shape.memberTransparentWrapperTypeNames ?? [], c.chain.typeSyntax
+		);
+		final index: Null<SymbolIndex> = c.index;
+		return switch c.chain.typeSyntax(peeled)?.shape {
+			case Nominal(path, _):
+				final decl: Null<ResolvedType> = index == null || file == null
+					? null
+					: throughAliases(index.refs.resolveTypeRef(path, file), index);
+				if (decl != null)
+					Declared(decl)
+				else if (unbound.contains(path) || (index?.refs.declaresName(SourceText.lastSegment(path)) ?? false))
+					Unwritten
+				else
+					NotADeclaration;
+			case Structure(fields) if (!fields.exists(f -> f.name == member)): Unfollowed;
+			case Intersection(_), Conditional(_): Unfollowed;
+			case _: NotADeclaration;
+		};
+	}
+
 }
 
 /**
@@ -738,4 +821,27 @@ typedef Expectation = {
 	final file: Null<FileInfo>;
 	final free: Bool;
 	final unbound: Array<String>;
+}
+
+/** What a written type says about one field of a value of it (`ComposedValues.literalExpectation`). */
+enum LiteralExpectation {
+
+	/** A declaration of the scope, read through its plain aliases. */
+	Declared(decl: ResolvedType);
+
+	/**
+	 * A written type that declares no such field of a declaration of the scope: a library type, `Dynamic`, an inline structure
+	 * writing the field itself.
+	 */
+	NotADeclaration;
+
+	/** Nothing written says what the value is, or what is written is a type parameter or a name this file cannot resolve. */
+	Unwritten;
+
+	/**
+	 * A written type reaching the field through a part the reader does not
+	 * follow: an extension (`{> T, …}`), an intersection, a `#if` type.
+	 */
+	Unfollowed;
+
 }

@@ -71,7 +71,7 @@ final class RenameCommand implements CliCommand {
 		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
-		var scope: Null<String> = null;
+		final scopes: Array<String> = [];
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
 		var selectExpr: Null<String> = null;
@@ -94,7 +94,7 @@ final class RenameCommand implements CliCommand {
 				case '--write':
 					write = true;
 				case '--scope':
-					scope = arg.value();
+					scopes.push(arg.value());
 				case '--qualify-shadowed':
 					qualifyShadowed = true;
 				case '-h', '--help':
@@ -133,7 +133,7 @@ final class RenameCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 
-		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
+		if (scopes.length > 0) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scopes, write, plugin);
 		// A TYPE name lives in the type namespace, which `Rename` (value bindings) does not
 		// index - route it through the op `--scope` uses, with the cursor file as the scope.
 		if (cursorOnTypeDecl(source, pos.line, pos.col, plugin))
@@ -162,9 +162,9 @@ final class RenameCommand implements CliCommand {
 	}
 
 	/**
-	 * `apq rename <file> <l>:<c> <newName> --scope <dir>` — cross-file
+	 * `apq rename <file> <l>:<c> <newName> --scope <dir> [--scope <dir>…]` — cross-file
 	 * TYPE rename. The cursor's binding MUST be a type declaration; that
-	 * type is renamed across every `.hx` file under `<dir>` (plus the
+	 * type is renamed across every `.hx` file under each `<dir>` (plus the
 	 * cursor file if it sits outside the scope). Reads the scope files
 	 * from disk, drives the pure `CrossRename.crossRenameType`, and on
 	 * success either writes each changed file (`--write`) or prints a
@@ -173,32 +173,21 @@ final class RenameCommand implements CliCommand {
 	 * write either touches all changed files or none.
 	 */
 	private static function runRenameScope(
-		filePath: String, source: String, line: Int, col: Int, newName: String, scope: String, write: Bool, plugin: GrammarPlugin
+		filePath: String, source: String, line: Int, col: Int, newName: String, scopes: Array<String>, write: Bool, plugin: GrammarPlugin
 	): Int {
-		final expanded: ExpandedInputs = CliArgs.expandFor(plugin.langName(), [scope]);
-		final paths: Array<String> = expanded.paths;
-		// The cursor file's declaration must be covered even if it sits
-		// outside the scope directory — add it when expandFor missed it.
-		if (!paths.contains(filePath)) paths.push(filePath);
-		if (paths.length == 0) {
-			CliIo.stderr('apq rename: ${CliArgs.noFilesMatched(plugin.langName(), [scope])}\n');
+		// A scope that matches nothing would narrow the rename silently to the rest, so it refuses instead.
+		final unmatched: Array<String> = CliArgs.expandFor(plugin.langName(), scopes).unmatched;
+		if (unmatched.length > 0) {
+			CliIo.stderr('apq rename: ${CliArgs.noFilesMatched(plugin.langName(), unmatched)}\n');
 			return EXIT_RUNTIME;
 		}
-
-		final scopeFiles: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			if (path == filePath) {
-				scopeFiles.push({ file: path, source: source });
-				continue;
-			}
-			final fileSource: String = try {
-				CliIo.readSourceForParse(path);
-			} catch (exception: Exception) {
-				CliIo.stderr('apq rename: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			scopeFiles.push({ file: path, source: fileSource });
-		}
+		// The cursor file's declaration must be covered even if it sits outside every scope, and under one it
+		// is the same entry however the scope spells it.
+		final collected: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
+			new RenameCommand().name(), plugin.langName(), scopes[0], [filePath], scopes.slice(1)
+		);
+		if (collected == null) return EXIT_RUNTIME;
+		final scopeFiles: Array<{ file: String, source: String }> = collected;
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final refShape: RefShape = plugin.refShape();
@@ -392,12 +381,14 @@ final class RenameCommand implements CliCommand {
 
 	private static function printRenameUsage(): Void {
 		CliIo.sysPrint(
-			"Usage: apq rename <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName> [--write] [--scope <dir>]\n"
+			"Usage: apq rename <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName> [--write] [--scope <dir>]...\n"
 		);
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		CliIo.sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
+		CliIo.sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>;\n');
+		CliIo.sysPrint('                      repeatable, every scope counts (a scope matching no\n');
+		CliIo.sysPrint('                      file refuses)\n');
 		CliIo.sysPrint('  --qualify-shadowed  Insert `this.` instead of refusing a capture: on the\n');
 		CliIo.sysPrint('                      member access when a PARAMETER of the same name\n');
 		CliIo.sysPrint('                      captures it, and on the captured references when a\n');
@@ -474,6 +465,12 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('as does a file importing a module the scope does not hold, or a new\n');
 		CliIo.sysPrint('name already spelled bare anywhere in scope. References through strings\n');
 		CliIo.sysPrint('(Type.createEnum(E, "A"), Reflect) are not rewritten.\n');
+		CliIo.sysPrint('A field of a typedef structure has no value binding of its own: its\n');
+		CliIo.sysPrint('declaration moves, and so does an object-literal field where a written\n');
+		CliIo.sysPrint('type (a return type, an annotated declaration, a parameter, an assignment\n');
+		CliIo.sysPrint('target, an array or field of one) proves the literal builds it. A literal\n');
+		CliIo.sysPrint('no written type decides, whose fields could be exactly that structure,\n');
+		CliIo.sysPrint('refuses the rename; one a written type proves to be something else stays.\n');
 		CliIo.sysPrint('A member a #if region\n');
 		CliIo.sysPrint('declares once per branch is one logical member: every branch declaration\n');
 		CliIo.sysPrint('moves in the same edit set. Refuses an override member,\n');

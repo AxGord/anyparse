@@ -34,7 +34,9 @@
 		"verifydata/build.hxml": "-cp .\n-main Main\n--no-output\n",
 		"verifydata/data.json": "{\"a\":1}\n",
 		"verifydata/Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(M.check());\n\t}\n}\n",
-		"verifydata/M.hx": "import haxe.macro.Context;\n\nclass M {\n\tpublic static macro function check() {\n\t\tfinal v = haxe.Json.parse(sys.io.File.getContent(\"data.json\"));\n\t\tif (v.a != 1) Context.error(\"bad data\", Context.currentPos());\n\t\treturn macro 1;\n\t}\n}\n"
+		"verifydata/M.hx": "import haxe.macro.Context;\n\nclass M {\n\tpublic static macro function check() {\n\t\tfinal v = haxe.Json.parse(sys.io.File.getContent(\"data.json\"));\n\t\tif (v.a != 1) Context.error(\"bad data\", Context.currentPos());\n\t\treturn macro 1;\n\t}\n}\n",
+		"p/Build.hx": "package p;\n\ntypedef Ctx = {\n\tfinal flag: Bool;\n\tfinal other: Int;\n}\n\nclass Build {\n\tpublic static function make(): Ctx {\n\t\treturn {flag: true, other: 1};\n\t}\n\n\tpublic static function held(): Bool {\n\t\tfinal c: Ctx = {flag: false, other: 2};\n\t\treturn c.flag;\n\t}\n}\n",
+		"p/Reader.hx": "package p;\n\nimport p.Build.Ctx;\n\nclass Reader {\n\tpublic static function read(c: Ctx): Bool {\n\t\treturn c.flag;\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -8672,6 +8674,25 @@
 				"exit": 0,
 				"out": "bcfc613c7aca98be",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq rename p/Build.hx --select FinalField:flag enabled --scope p",
+			"argv": [
+				"apq",
+				"rename",
+				"p/Build.hx",
+				"--select",
+				"FinalField:flag",
+				"enabled",
+				"--scope",
+				"p"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "47c1cbba4a078c56",
+				"err": "a754d94e6e76fcd1",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

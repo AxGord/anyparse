@@ -27,7 +27,8 @@ using Lambda;
  * constructor), whether it is an enum constructor, and the enclosing type
  * declaration (for the same-type name-collision check).
  */
-private typedef MemberTarget = {
+typedef MemberTarget = {
+
 	var typeName: String;
 	var memberName: String;
 	var isStatic: Bool;
@@ -35,6 +36,10 @@ private typedef MemberTarget = {
 	var isEnumValue: Bool;
 	var isEnumCtor: Bool;
 	var srcDecl: TypeDeclMatch;
+
+	/** Where the member's declaration node starts. */
+	var declFrom: Int;
+
 }
 
 /**
@@ -42,7 +47,7 @@ private typedef MemberTarget = {
  * first PROVEN access whose token could not be located. A non-null `error`
  * refuses the whole rename, so a rewrite is never half-applied.
  */
-private typedef LocatedOffsets = {
+typedef LocatedOffsets = {
 	final offsets: Array<Int>;
 	final error: Null<String>;
 };
@@ -112,6 +117,9 @@ private typedef ReceiverProof = {
  *    source type the miss surfaces as a compile error, never a wrong rewrite. A
  *    `new T()` receiver names its type itself and needs no binding at all; that
  *    name is the whole written path, so it resolves the same way.
+ *  - A FIELD OF A STRUCTURE: its declaration node, each object-literal key a written type proves builds the
+ *    structure, and every read through a receiver the expression typing proves is it; a receiver or literal
+ *    nothing written decides refuses the whole rename (`StructureFieldOffsets`).
  *  - An ENUM CONSTRUCTOR's import and its BARE spellings, each proven by a declaration of
  *    its expected type (`ctorExpectedOffsets`, the return scan), or the whole rename refuses (`EnumCtorRefs`).
  *  - EVERY branch of a `#if` region that declares the member. The region is a
@@ -188,13 +196,13 @@ final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
 	private static final ADVISORY: String = 'member rename resolves instance receivers, switch subjects and expected-type returns via '
-		+ 'declared types only — unresolved receivers and subjects ('
-		+ 'chained calls, un-annotated locals, casts, a `Null<T>`-wrapped annotation, a type named by an '
-		+ 'ALIAS import, the file own or an ambient one'
-		+ '), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated assignment, a '
-		+ 'typed argument) or in a function with no return annotation, an enum-abstract value brought into '
-		+ 'scope by importing its type, super-access, `using` extension calls, aliased-import homonyms, '
-		+ 'and overrides declared outside this scope are left for the compiler to reject; verify by hand.';
+		+ 'declared types only — unresolved receivers and subjects (chained calls, un-annotated locals, '
+		+ 'casts, a `Null<T>`-wrapped annotation, a type named by an ALIAS import, the file own or an '
+		+ 'ambient one), an expected-type value OUTSIDE return position (`x == VALUE`, an annotated '
+		+ 'assignment, a typed argument) or in a function with no return annotation, an enum-abstract '
+		+ 'value brought into scope by importing its type, super-access, `using` extension calls, '
+		+ 'aliased-import homonyms, and overrides declared outside this scope are left for the compiler to '
+		+ 'reject; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /
@@ -296,6 +304,18 @@ final class CrossRenameMember {
 	}
 
 	/**
+	 * The refusal diagnostic for a PROVEN access whose member token could
+	 * not be located in code — a comment occupied the window instead.
+	 * Refusing keeps the rename COMPLETE: renaming the rest would leave the
+	 * project uncompilable while the op reported success.
+	 */
+	public static function unlocatableAccess(source: String, faSpan: Span, memberName: String): String {
+		final at: Position = faSpan.lineCol(source);
+		return 'cannot locate the "$memberName" token of the proven access at ${at.line}:${at.col}'
+			+ ' - refusing rather than renaming part of the scope';
+	}
+
+	/**
 	 * Resolve the cursor to the member declaration it sits on — a field
 	 * or method that is a DIRECT child of a type declaration whose name
 	 * token contains the cursor (or whose span starts at it). Returns the
@@ -351,7 +371,8 @@ final class CrossRenameMember {
 								&& MemberKinds.implicitlyStaticMember(decl.kind, kind, refShape)
 							),
 							isEnumCtor: isCtor,
-							srcDecl: decl
+							srcDecl: decl,
+							declFrom: spanNN.from
 						};
 					}
 				});
@@ -400,12 +421,16 @@ final class CrossRenameMember {
 				? Rename.renameOccurrences(entry.source, entry.tree, cursor, refShape)
 				: [];
 			for (occ in resolved) addOff(occ.from);
+			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
 			// An override declared in this file: its own declaration plus the bare / `this.` reads its
 			// type makes of it, resolved by the same machinery the cursor file uses. Renaming the base
-			// without these leaves `override function <old>` overriding nothing.
-			for (fm in family)
-				if (fm.file == entry.file)
-					for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
+			// without these leaves `override function <old>` overriding nothing. A field of a structure
+			// binds no value, so its declaration comes off the declaration node; for a member that does
+			// bind one it is the same token.
+			for (fm in family) if (fm.file == entry.file) {
+				for (occ in Rename.renameOccurrences(entry.source, entry.tree, fm.declFrom, refShape)) addOff(occ.from);
+				addOff(declNameOffset(entry.source, fm.declFrom, target.memberName, regions));
+			}
 			final proven: LocatedOffsets = provenOffsets(entry, target, newName, plugin, refShape, index, module, cursorFile);
 			if (proven.error != null) return Err('${entry.file}: ${proven.error}');
 			for (off in proven.offsets) addOff(off);
@@ -457,8 +482,11 @@ final class CrossRenameMember {
 		final patterns: Array<Int> = target.isEnumCtor
 			? ctorExpectedOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile)
 			: patternConstantOffsets(entry.source, entry.file, entry.tree, target, plugin, refShape, index, cursorFile);
+		final literals: LocatedOffsets = StructureFieldOffsets.literalFieldOffsets(entry, target, plugin, refShape, index, cursorFile);
+		if (literals.error != null) return literals;
 		final out: Array<Int> = qualified.offsets.concat(patterns)
-			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile, plugin));
+			.concat(expectedReturnOffsets(entry.source, entry.file, entry.tree, target, refShape, index, cursorFile, plugin))
+			.concat(literals.offsets);
 		if (!target.isEnumCtor) return { offsets: out, error: null };
 		final ctor: CtorOffsets = EnumCtorRefs.offsets(entry, {
 			typeName: target.typeName,
@@ -481,8 +509,10 @@ final class CrossRenameMember {
 		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
 		module: ModulePath, cursorFile: String
 	): LocatedOffsets {
-		return target.isStatic
-			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module, plugin.lexicalRegions(source))
+		if (target.isStatic)
+			return staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module, plugin.lexicalRegions(source));
+		return StructureFieldOffsets.structureOf(target, index, cursorFile) != null && plugin is TypeInfoProvider
+			? StructureFieldOffsets.structureReadOffsets(source, file, tree, target, plugin, refShape, index, cursorFile)
 			: instanceMemberOffsets(source, file, tree, target, plugin, refShape, index, cursorFile);
 	}
 
@@ -560,9 +590,8 @@ final class CrossRenameMember {
 			final recvSpan: Null<Span> = cand.recv.span;
 			final faSpan: Null<Span> = cand.fa.span;
 			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, proof)) continue;
-			final off: Int = OccurrenceScan.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName, regions);
-			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
-			if (!out.contains(off)) out.push(off);
+			final unlocated: Null<String> = StructureFieldOffsets.addAccessOffset(source, recvSpan, faSpan, memberName, regions, out);
+			if (unlocated != null) return { offsets: [], error: unlocated };
 		}
 		return { offsets: out, error: null };
 	}
@@ -711,19 +740,6 @@ final class CrossRenameMember {
 			case _: null;
 		};
 	}
-
-	/**
-	 * The refusal diagnostic for a PROVEN access whose member token could
-	 * not be located in code — a comment occupied the window instead.
-	 * Refusing keeps the rename COMPLETE: renaming the rest would leave the
-	 * project uncompilable while the op reported success.
-	 */
-	private static function unlocatableAccess(source: String, faSpan: Span, memberName: String): String {
-		final at: Position = faSpan.lineCol(source);
-		return 'cannot locate the "$memberName" token of the proven access at ${at.line}:${at.col}'
-			+ ' - refusing rather than renaming part of the scope';
-	}
-
 
 	/**
 	 * Every switch in `tree` that spells `memberName` BARE in at least one case pattern,
@@ -1187,6 +1203,11 @@ final class CrossRenameMember {
 		return index.typing.members.typeDeclaresMember(owner, memberName)
 			|| index.typing.members.supertypeDeclaresMember(owner, memberName)
 			|| !index.subtypes.supertypeChainResolved(owner);
+	}
+
+	/** The name token of the member declaration whose node starts at `declFrom`: the first of that name in active code past it. */
+	private static function declNameOffset(source: String, declFrom: Int, memberName: String, regions: Array<LexRegion>): Int {
+		return OccurrenceScan.activeCodeIdentTokenOffset(source, new Span(declFrom, source.length), memberName, regions);
 	}
 
 }

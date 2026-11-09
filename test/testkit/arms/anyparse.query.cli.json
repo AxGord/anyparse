@@ -563,8 +563,8 @@
 			"name": "M-SCOPE-FILES-WALK-HX",
 			"type": "anyparse.query.cli.CliArgs",
 			"method": "collectScopeFiles",
-			"find": "expandFor(lang, [scopeDir])",
-			"replace": "expandEach([scopeDir], ['.hx'])",
+			"find": "expandFor(lang, [scopeDir].concat(moreScopes ?? []))",
+			"replace": "expandEach([scopeDir].concat(moreScopes ?? []), ['.hx'])",
 			"note": "a refactor's --scope walks the .hx files whatever the op's grammar, so a JSON scope is read as Haxe files parsed by the JSON plugin"
 		},
 		{
@@ -680,6 +680,14 @@
 			"find": "for (entry in CliArgs.grammars()) plugins.push(entry.make());",
 			"replace": "",
 			"note": "only the written files' grammars are asked for a compiler, so a write to a data file a build reads is judged by no build and stays unverified while it breaks that build"
+		},
+		{
+			"name": "M-SCOPE-FILES-OVERLAP",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "collectScopeFiles",
+			"find": "for (path in expanded.paths) if (!keys.contains(FileIdentity.realPath(path))) {",
+			"replace": "for (path in expanded.paths) {",
+			"note": "two scopes spelling one file differently index it twice"
 		}
 	]
 }

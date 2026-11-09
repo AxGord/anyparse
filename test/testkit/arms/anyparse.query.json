@@ -16091,6 +16091,173 @@
 			"find": "_refs.aliasedName(typeName)",
 			"replace": "typeName",
 			"note": "an alias of an abstract with an index overload reads as having none"
+		},
+		{
+			"name": "M-LITERAL-FIELD-PROVEN",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "literalFieldOffsets",
+			"find": "out.push(off);",
+			"replace": "{}",
+			"note": "a literal a written type proves builds the member keeps the old field name"
+		},
+		{
+			"name": "M-LITERAL-FIELD-OTHER-TYPE",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "buildsStructure",
+			"find": "(decl.type.name == target.typeName && decl.file.file == cursorFile)",
+			"replace": "true",
+			"note": "a literal or a read of another declared type gets the field renamed too"
+		},
+		{
+			"name": "M-LITERAL-FIELD-REFUSES",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "literalFieldOffsets",
+			"find": "case Unwritten: mayBuildStructure(",
+			"replace": "case Unwritten: false && mayBuildStructure(",
+			"note": "a literal nothing written decides, of the structure shape, no longer refuses"
+		},
+		{
+			"name": "M-STRUCTURE-FIELD-DECL",
+			"type": "anyparse.query.CrossRenameMember",
+			"method": "apply",
+			"find": "addOff(declNameOffset(entry.source, fm.declFrom, target.memberName, regions));",
+			"replace": "",
+			"note": "the declaration of a field that binds no value keeps the old name"
+		},
+		{
+			"name": "M-READ-TYPED-RECEIVER-STAYS",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "structureReadOffsets",
+			"find": "case Declared(_), NotADeclaration: false;",
+			"replace": "case Declared(_), NotADeclaration: return { offsets: [], error: undecidedRead(source, faSpan, target) };",
+			"note": "a receiver typed as another type, a static type-name read among them, refuses the rename instead of keeping the field"
+		},
+		{
+			"name": "M-READ-LITERAL-RECEIVER",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "isLiteralReceiver",
+			"find": "return recv.kind == shape.objectLiteralKind",
+			"replace": "return false && recv.kind == shape.objectLiteralKind",
+			"note": "a literal receiver whose parts type as nothing refuses the rename, though a literal cannot be the structure"
+		},
+		{
+			"name": "M-READ-UNKNOWN-REFUSES",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "structureReadOffsets",
+			"find": "case Unwritten, Unfollowed: return { offsets: [], error: undecidedRead(source, faSpan, target) };",
+			"replace": "case Unwritten, Unfollowed: false;",
+			"note": "an unknown receiver keeps the old name and the rename reports success"
+		},
+		{
+			"name": "M-READ-CHECK-TYPE",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "fileTyping",
+			"find": "castTargetSources: TypeInfoMemo.castTargetSources(provider, source),",
+			"replace": "",
+			"note": "a check-type receiver types as nothing and refuses the rename"
+		},
+		{
+			"name": "M-READ-NULL-SAFE",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "structureReadCandidates",
+			"find": "shape.nullSafeAccessKind, ",
+			"replace": "",
+			"note": "a `?.` read is not offered at all and keeps the old name"
+		},
+		{
+			"name": "M-READ-PROVEN-MOVES",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "structureReadOffsets",
+			"find": "if (!moves) continue;",
+			"replace": "continue;",
+			"note": "a read through a proven receiver keeps the old field name"
+		},
+		{
+			"name": "M-ABSTRACT-WRAPS-STRUCTURE",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "wrapsStructure",
+			"find": "return inner != null && buildsStructure(inner, target, index, cursorFile);",
+			"replace": "return false;",
+			"note": "an abstract over the structure counts as another type, so its literal keeps the field and the build breaks"
+		},
+		{
+			"name": "M-TYPE-PARAM-UNWRITTEN",
+			"type": "anyparse.query.ComposedValues",
+			"method": "writtenExpectation",
+			"find": "unbound.contains(path) || ",
+			"replace": "",
+			"note": "a type parameter reads as a library type, so a literal under it keeps the field and the build breaks"
+		},
+		{
+			"name": "M-EXTENSION-UNFOLLOWED",
+			"type": "anyparse.query.ComposedValues",
+			"method": "writtenExpectation",
+			"find": "if (!fields.exists(f -> f.name == member))",
+			"replace": "if (false)",
+			"note": "a written structure reaching the field through an extension reads as an inline structure declaring it, so the field stays and the build breaks"
+		},
+		{
+			"name": "M-PATTERN-PARTIAL-REFUSES",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "literalFieldOffsets",
+			"find": "cursorFile, subject != null);",
+			"replace": "cursorFile, false);",
+			"note": "a partial pattern over a subject nothing proves keeps its field name and the rename reports success"
+		},
+		{
+			"name": "M-PATTERN-SUBJECT-PROVEN",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "literalFieldOffsets",
+			"find": "ComposedValues.receiverExpectation(subject, target.memberName, typeParams, typing)",
+			"replace": "Unwritten",
+			"note": "a pattern proven by its switch subject is not, so a partial pattern over a value of the structure refuses"
+		},
+		{
+			"name": "M-STRUCTINIT-CTOR-KEPT",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "namesConstructorParameters",
+			"force": "false",
+			"note": "a literal of a @:structInit class written with its own constructor has the parameter name it reads renamed"
+		},
+		{
+			"name": "M-PATTERN-EVERY-ALTERNATIVE",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "literalFieldSites",
+			"find": "CasePatterns.patternRun(child, shape)",
+			"replace": "CasePatterns.patternRun(child, shape).slice(0, 1)",
+			"note": "only the first comma alternative of a case is a pattern, so the next is read as a value and keeps the old key: a partial rename that breaks the build"
+		},
+		{
+			"name": "M-READ-TYPE-PATH-STAYS",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "structureReadOffsets",
+			"find": "case Unwritten if (isTypePathReceiver(cand.recv, tree, refShape, index, file)): false;",
+			"replace": "",
+			"note": "a type no scope file declares types as nothing and refuses the rename, though no structure field is read through a type"
+		},
+		{
+			"name": "M-TYPE-PATH-PACKAGE-PREFIX",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "isTypePathReceiver",
+			"find": "if (segment == null || SourceText.isUpperInitial(segment)) return false;",
+			"replace": "if (segment == null) return false;",
+			"note": "a type-cased member of an unknown type passes as a type path, so a read through it stays and the rename breaks the build"
+		},
+		{
+			"name": "M-TYPE-PATH-UPPER-END",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "isTypePathReceiver",
+			"find": "!SourceText.isUpperInitial(name) || ",
+			"replace": "",
+			"note": "an unbound lowercase receiver, an inherited member, passes as a type path, so a read through it stays and the rename breaks the build"
+		},
+		{
+			"name": "M-TYPE-PATH-IMPORTED-STATIC",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "isTypePathReceiver",
+			"find": "statics.statics.length == 0",
+			"replace": "statics.statics.length >= 0",
+			"note": "an imported static of unknown type passes as a type path, so a read through it stays and the rename breaks the build"
 		}
 	]
 }

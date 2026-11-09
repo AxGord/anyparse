@@ -1107,6 +1107,22 @@
 			"find": "if (!armRules.contains(row.rule))",
 			"replace": "if (row.rule != \"\")",
 			"note": "a drifted file recounts an arm rule whose findings the safe loop already reported"
+		},
+		{
+			"name": "M-RENAME-SCOPE-REPEAT",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "runRenameScope",
+			"find": "scopes.slice(1)",
+			"replace": "[]",
+			"note": "a repeated --scope is dropped silently"
+		},
+		{
+			"name": "M-RENAME-SCOPE-UNMATCHED",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "runRenameScope",
+			"find": "if (unmatched.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a scope matching no file narrows the rename silently"
 		}
 	]
 }
