@@ -1060,6 +1060,21 @@
 			"find": "return named == null ? null : CliArgs.pickPlugin(named);",
 			"replace": "if (named == null) throw new UsageFailure('no grammar');\nreturn CliArgs.pickPlugin(named);",
 			"note": "an unclaimed file throws a UsageFailure again instead of reaching load's refusal line, so a --where run over several documents aborts with exit 2 after earlier matches printed"
+		},
+		{
+			"name": "M-CHANGED-UNMATCHED-SILENT",
+			"type": "anyparse.query.cli.command.ChangedCommand",
+			"method": "unmatchedBy",
+			"force": "[]",
+			"note": "no path filter is ever reported as matching nothing, so a filter that drops every changed file prints a clean zero again"
+		},
+		{
+			"name": "M-CHANGED-UNMATCHED-UNCONFIRMED",
+			"type": "anyparse.query.cli.command.ChangedCommand",
+			"method": "unmatchedBy",
+			"find": "GitRevision.parseNameStatus(alone.out).length == 0",
+			"replace": "true",
+			"note": "git is no longer asked whether a spec lists anything, so every filter that is not literally a listed path (a glob, an absolute spelling, an exclude) is reported as matching nothing"
 		}
 	]
 }

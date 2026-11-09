@@ -68,6 +68,13 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			return ExitCode.EXIT_RUNTIME;
 		}
 		final entries: Array<ChangedPath> = GitRevision.parseNameStatus(listed.out);
+		final unmatched: Array<String> = unmatchedBy(opts.paths, entries, range);
+		if (unmatched.length > 0)
+			CliIo.stderr(
+				'apq changed: ${unmatched.length} of ${opts.paths.length} path(s) matched no changed file: '
+				+ '${CliArgs.quotedSpecs(unmatched)}\n'
+			);
+
 		final names: Array<String> = [];
 		final report: Array<String> = [];
 		final tally: Map<String, Int> = [];
@@ -129,6 +136,8 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		CliIo.sysPrint('  text          a file the grammar does not read: a line count only\n');
 		CliIo.sysPrint('A moved file prints `<- <old path>` — when a <path> filter names both of its paths.\n');
 		CliIo.sysPrint('Untracked files are not reported.\n');
+		CliIo.sysPrint('A <path> that names no changed file is reported on stderr, the run going on with the others.\n');
+
 	}
 
 	/** The options of one run, or null when it asked for the usage text and got it. */
@@ -304,6 +313,20 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			case Added: '${change.spanLines} line(s)';
 			case Removed: '${change.spanLines} line(s), base';
 		};
+	}
+
+	/**
+	 * The path filters of `specs` that git finds matching no file changed over `range`: git reads a filter as a pathspec
+	 * (globs, `:!` excludes, absolute and `..` spellings), so only a spec that is not itself a listed path is asked of it.
+	 * A failed run reports nothing.
+	 */
+	private static function unmatchedBy(specs: Array<String>, entries: Array<ChangedPath>, range: Array<String>): Array<String> {
+		final listed: Array<String> = [for (entry in entries) for (path in [entry.path, entry.basePath]) path];
+		return specs.filter(spec -> {
+			if (listed.contains(spec)) return false;
+			final alone: ProcessRun = GitRevision.diffNameStatus(range, [spec]);
+			return alone.failure == '' && alone.status == 0 && GitRevision.parseNameStatus(alone.out).length == 0;
+		});
 	}
 
 }
