@@ -35,8 +35,8 @@ using StringTools;
 @:nullSafety(Strict)
 final class FormatterOff {
 
-	private static inline final OFF: String = '// @formatter:off';
 	private static inline final ON: String = '// @formatter:on';
+	private static final OFF: String = '// @formatter:off';
 
 	/**
 	 * `written` with every `@formatter:off` region replaced by the bytes it
@@ -78,8 +78,11 @@ final class FormatterOff {
 		return result.join('\n');
 	}
 
-	/** Every `off`…`on` region of `text`, in source order, as line indices. */
-	private static function regionsOf(text: String, scan: CommentScan): Array<Region> {
+	/**
+	 * Every `off`…`on` region of `text`, in source order, as line indices: the one answer to "which lines does the writer
+	 * leave to the author", for a caller that must treat them as bytes it does not touch.
+	 */
+	public static function regionsOf(text: String, scan: CommentScan): Array<Region> {
 		final marks: Array<Mark> = [];
 		scan(text, (start: Int, end: Int) -> {
 			final body: String = text.substring(start, end);
@@ -168,7 +171,7 @@ private typedef Mark = {
  * precedes each marker on its own line — the anchor the splice verifies
  * before trusting the indices.
  */
-private typedef Region = {
+typedef Region = {
 	final from: Int;
 	final to: Int;
 	final headCode: String;

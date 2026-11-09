@@ -18,6 +18,7 @@ final class Dev {
 		{ name: 'scrub-guard', main: ScrubGuard.main, usage: ScrubGuard.USAGE },
 		{ name: 'clone-census', main: CloneCensus.main, usage: CloneCensus.USAGE },
 		{ name: 'owner-overlap', main: OwnerOverlap.main, usage: OwnerOverlap.USAGE },
+		{ name: 'squash-census', main: SquashCensus.main, usage: SquashCensus.USAGE },
 		{ name: 'worker-build', main: WorkerBuild.main, usage: WorkerBuild.USAGE },
 		{ name: 'shard', main: Shard.main, usage: Shard.USAGE },
 		{ name: 'mutation-arm', main: MutationArm.main, usage: MutationArm.USAGE },

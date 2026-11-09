@@ -2058,6 +2058,150 @@
 			"find": "ArmTypePath.moduleOf(type)",
 			"replace": "type",
 			"note": "the arm census finds no file for an arm on a sub-module type, so it names the type and scopes nothing for the arm"
+		},
+		{
+			"name": "M-SQUASH-STRING-BLIND",
+			"type": "dev.Squash",
+			"method": "apply",
+			"find": "LexicalRegions.codeSpans(source.length, regions)",
+			"replace": "[new Span(0, source.length)]",
+			"note": "the whole source is read as code, so a break inside a string literal is squashed into the string's text"
+		},
+		{
+			"name": "M-SQUASH-COMMENT-NEIGHBOUR",
+			"type": "dev.Squash",
+			"method": "squashable",
+			"find": "&& !isComment(to, regions)",
+			"replace": "",
+			"note": "a break beside a comment is squashed, so a line comment swallows the line after it"
+		},
+		{
+			"name": "M-SQUASH-DIRECTIVE-LINE",
+			"type": "dev.Squash",
+			"method": "squashable",
+			"find": "&& !meets(directives, Strings.lineStart(source, from), from)",
+			"replace": "",
+			"note": "a break beside a conditional-compilation line is squashed, so a directive no longer owns its line"
+		},
+		{
+			"name": "M-SQUASH-ERROR-DIRECTIVE",
+			"type": "dev.Squash",
+			"method": "errorSpans",
+			"find": "if (span != null && ERROR_KINDS.contains(node.kind)) out.push(span);",
+			"replace": "",
+			"note": "a #error line is not read off the parse, so its breaks are squashed into the code around it"
+		},
+		{
+			"name": "M-SQUASH-BLANK-LINE",
+			"type": "dev.Squash",
+			"method": "apply",
+			"find": "if (breaks != 1 ||",
+			"replace": "if (breaks < 1 ||",
+			"note": "a run with several newlines is squashed too, so a blank line goes"
+		},
+		{
+			"name": "M-SQUASH-FORMATTER-OFF",
+			"type": "dev.Squash",
+			"method": "squashable",
+			"find": "&& !verbatim.exists(span -> from <= span.to && to >= span.from)",
+			"replace": "",
+			"note": "an @formatter:off region is squashed like code, so the author's hand layout is lost"
+		},
+		{
+			"name": "M-SQUASH-FORMATTER-OFF-EDGE",
+			"type": "dev.Squash",
+			"method": "squashable",
+			"find": "from <= span.to && to >= span.from",
+			"replace": "from < span.to && to > span.from",
+			"note": "a break that ends where an @formatter:off region begins is squashed, so the region's first line joins the code before it"
+		},
+		{
+			"name": "M-SQUASH-FILE-EDGE",
+			"type": "dev.Squash",
+			"method": "squashable",
+			"find": "&& to < source.length",
+			"replace": "",
+			"note": "the break at the start or end of a file is squashed, so the file's final newline goes"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-NEW-COUNTS-ALL",
+			"type": "dev.SquashCensus",
+			"method": "census",
+			"find": "after.onePass.contains(name) && !before.onePass.contains(name)",
+			"replace": "after.onePass.contains(name)",
+			"note": "a file that already needed a second rewrite as written counts as one the squash broke"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-UNPARSED-COUNTED",
+			"type": "dev.SquashCensus",
+			"method": "census",
+			"find": "!before.unparsed.contains(name) && !after.unparsed.contains(name)",
+			"replace": "true",
+			"note": "a file the grammar cannot format takes part in the columns, so it reads as a file whose output the squash did not move"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-DIFFERS-BLIND",
+			"type": "dev.SquashCensus",
+			"method": "census",
+			"find": "File.getContent(Path.join([original, name])) != File.getContent(Path.join([squashed, name]))",
+			"replace": "false",
+			"note": "the formatted squash is never compared with the formatted original, so the census cannot see a file whose output depends on the author's breaks"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-CONFIG-LOST",
+			"type": "dev.SquashCensus",
+			"method": "copyConfigs",
+			"find": "if (FileSystem.exists(Path.join([repo, path])) && !configs.contains(path)) configs.push(path);",
+			"replace": "",
+			"note": "the copies carry no hxformat.json from the folders above the tree, so the writer formats them under defaults and not under the tree's own options"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-TOTAL-BLIND",
+			"type": "dev.SquashCensus",
+			"method": "render",
+			"find": "files: report.rows.fold((row, n) -> n + row.files, 0),",
+			"replace": "files: 0,",
+			"note": "the total row does not add the files of the trees up"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-NESTED-CONFIG-LOST",
+			"type": "dev.SquashCensus",
+			"method": "hxFiles",
+			"find": "if (GateTree.FORMATTER_CONFIGS.contains(entry)) found.configs.push(child);",
+			"replace": "",
+			"note": "a formatter config inside the tree reaches neither copy, so the files under it are formatted under the wrong options"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-LIST-STATUS-UNCHECKED",
+			"type": "dev.SquashCensus",
+			"method": "format",
+			"find": "!ran(run) ||",
+			"replace": "",
+			"note": "a formatter that never started is read as a run, so the census prints a table of a tree nothing formatted"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-LIST-SUMMARY-UNCHECKED",
+			"type": "dev.SquashCensus",
+			"method": "format",
+			"find": " || run.err.indexOf(LIST_SUMMARY) < 0",
+			"replace": "",
+			"note": "a formatter that crashed with a status of 1 is read as a run that found files it could not format"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-WRITE-STATUS-UNCHECKED",
+			"type": "dev.SquashCensus",
+			"method": "format",
+			"find": "if (!ran(write))",
+			"replace": "if (false)",
+			"note": "a write that never ran leaves the copies unformatted, and the census compares them as if they were"
+		},
+		{
+			"name": "M-SQUASH-CENSUS-MISSING-DIR-UNCHECKED",
+			"type": "dev.SquashCensus",
+			"method": "hxFiles",
+			"find": "if (!FileSystem.exists(Path.join([repo, dir])))",
+			"replace": "if (false)",
+			"note": "a tree that does not exist stops the census with the file system's error and not with a message naming the tree"
 		}
 	]
 }
