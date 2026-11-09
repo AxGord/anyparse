@@ -6,7 +6,7 @@
 		{
 			"name": "M-SPAWN-RUN-IGNORES-CWD",
 			"type": "anyparse.proc.ProcessSpawn",
-			"method": "exec",
+			"method": "spawnOptions",
 			"find": "if (cwd != null) Reflect.setField(options, 'cwd', cwd);",
 			"replace": "",
 			"note": "a single haxe spawn runs in the process cwd whatever the configuration's dir says, so a relative -cp resolves against the wrong tree and the typecheck and every probe answer about a different project"
@@ -145,7 +145,7 @@
 		{
 			"name": "M-GC-RUN-INHERITS",
 			"type": "anyparse.proc.ProcessSpawn",
-			"method": "exec",
+			"method": "spawnOptions",
 			"find": "{ env: childEnv() }",
 			"replace": "{}",
 			"note": "a single haxe spawn inherits the caller's environment untouched, so every typecheck run through `run` pays the default collector again"
@@ -320,6 +320,30 @@
 			"find": "js.Syntax.code('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, {0})', ms);",
 			"replace": "{ final end: Float = Date.now().getTime() + ms; while (Date.now().getTime() < end) {} }",
 			"note": "the pause polls the clock instead of parking the thread, so a waiting run holds a core for its whole wait and a parallel fan-out starves the very runs it waits on"
+		},
+		{
+			"name": "M-SHORT-BOUND-DEFAULT",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "boundOf",
+			"find": "return isShort(job) ? SHORT_BOUND : 0;",
+			"replace": "return 0;",
+			"note": "a git, ps or pgrep run in the tools' own process that names no timeout has no bound, so a hung one blocks its caller forever"
+		},
+		{
+			"name": "M-TIMEOUT-NAMES-ARGV",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "exec",
+			"find": "'${invocation(program, job.args)} timed out",
+			"replace": "'$program timed out",
+			"note": "a run killed at its bound names only its program, so a hung git is reported as 'git' with nothing to tell which call hung"
+		},
+		{
+			"name": "M-EXEC-IGNORES-DEFAULT-BOUND",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "spawnOptions",
+			"find": "final timeout: Int = boundOf(job);",
+			"replace": "final timeout: Int = job.timeout ?? 0;",
+			"note": "the default bound of a short program is computed and never applied to the run"
 		}
 	]
 }

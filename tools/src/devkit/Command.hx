@@ -15,7 +15,8 @@ import haxe.Exception;
  * Every run goes through `ProcessSpawn` (here and from `Pool`), the project's one process
  * seam: a run ends at its process's exit, and whatever its process group still runs then — an
  * orphan holding its pipes included — is named in `err` (`orphan left running`) and killed.
- * A short program (`SHORT_PROGRAMS`) is the exception: it runs in this process, bounded by its own `timeout` alone.
+ * A short program (`ProcessSpawn.isShort`) is the exception: it runs in this process, bounded by its own `timeout` or, when it
+ * names none, by `ProcessSpawn.boundOf`.
  */
 @:nullSafety(Strict)
 final class Command {
@@ -25,13 +26,6 @@ final class Command {
 	 * run is killed and answers a `failure`.
 	 */
 	public static inline final MAX_BUFFER: Int = 256 * 1024 * 1024;
-
-	/**
-	 * The programs that end within moments and start nothing that outlives them (git plumbing, process listings): a run of one
-	 * needs no process driver, which costs a node start on top of the program itself. Such a run is bounded by the command's own
-	 * `timeout` and by nothing else, as a driven one is; a caller that knows its program is plumbing names one.
-	 */
-	private static final SHORT_PROGRAMS: Array<String> = ['git', 'ps', 'pgrep'];
 
 	public final argv: Array<String>;
 
@@ -245,7 +239,7 @@ final class Command {
 	 * One job run to its end. A short program (`runsDirect`) runs in this process; any other goes through the process
 	 * driver, which answers at the process's exit and not at its pipes' end: what its process group still runs at the exit is named
 	 * in the `err` (`orphan left running`) and killed, as it was when the caller's own group was reaped. The limit is the job's
-	 * `timeout` alone.
+	 * `timeout`; a short program that names none gets the default of `ProcessSpawn.boundOf`.
 	 */
 	private static function one(job: SpawnJob): ProcessRun {
 		return runsDirect(job) ? ProcessSpawn.exec(job, MAX_BUFFER) : ProcessSpawn.runDriven([job], MAX_BUFFER, 1)[0];
@@ -261,7 +255,7 @@ final class Command {
 	 * watch for silence or tether to a driver. Its streams go to files and not to pipes, so what it leaves behind cannot hold the run.
 	 */
 	private static function runsDirect(job: SpawnJob): Bool {
-		return job.tethered != true && (job.idle ?? 0) <= 0 && SHORT_PROGRAMS.contains(job.cmd ?? '');
+		return job.tethered != true && (job.idle ?? 0) <= 0 && ProcessSpawn.isShort(job);
 	}
 
 }

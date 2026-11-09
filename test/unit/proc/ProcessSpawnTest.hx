@@ -364,6 +364,44 @@ final class ProcessSpawnTest extends Test {
 	}
 
 	/**
+	 * A short program that names no `timeout` is still bounded, and a job's own `timeout` wins; a compile is bounded by nothing
+	 * unless it names a limit, as before.
+	 */
+	@:pin('control')
+	@:killer('M-SHORT-BOUND-DEFAULT')
+	public function testAShortProgramWithNoTimeoutIsGrantedABound(): Void {
+		for (program in ['git', 'ps', 'pgrep'])
+			Assert.isTrue(ProcessSpawn.boundOf({ cmd: program, args: [] }) > 0, '$program has a default bound');
+		Assert.equals(0, ProcessSpawn.boundOf({ args: [] }));
+		Assert.equals(0, ProcessSpawn.boundOf({ cmd: 'node', args: [] }));
+		Assert.equals(7, ProcessSpawn.boundOf({ cmd: 'git', args: [], timeout: 7 }));
+	}
+
+	/** A hung short run is killed at its bound and its failure names the program with its arguments, not the program alone. */
+	@:pin('control')
+	@:killer('M-TIMEOUT-NAMES-ARGV')
+	public function testAShortRunPastItsTimeoutNamesItsArguments(): Void {
+		#if nodejs
+		final run: ProcessRun = ProcessSpawn.exec({ cmd: 'git', args: ['-c', 'alias.hang=!sleep 3', 'hang'], timeout: 300 }, ROOMY);
+		Assert.isNull(run.status);
+		Assert.equals('git -c alias.hang=!sleep 3 hang timed out after 300 ms', run.failure);
+		#end
+	}
+
+	/** The kill a node spawn is armed with is the job's bound: a short program with no `timeout` of its own is armed, a compile is not. */
+	@:pin('control')
+	@:killer('M-EXEC-IGNORES-DEFAULT-BOUND')
+	public function testTheSpawnOfAShortProgramIsArmedWithItsBound(): Void {
+		Assert.isTrue(
+			Reflect.field(ProcessSpawn.spawnOptions({ cmd: 'git', args: [] }), 'timeout') > 0,
+			'a git with no timeout is killed at its default bound'
+		);
+		Assert.equals('SIGKILL', Reflect.field(ProcessSpawn.spawnOptions({ cmd: 'git', args: [] }), 'killSignal'));
+		Assert.equals(11, Reflect.field(ProcessSpawn.spawnOptions({ cmd: 'git', args: [], timeout: 11 }), 'timeout'));
+		Assert.isNull(Reflect.field(ProcessSpawn.spawnOptions({ args: [] }), 'timeout'), 'a compile is bounded only by a timeout it names');
+	}
+
+	/**
 	 * Start the process driver on the one shell job `shell` in a fresh directory holding `files`, wait for the job to write
 	 * its child's pid to `child.txt`, SIGTERM the driver, and answer how long the child outlived the signal in ms; null when
 	 * it never started or was alive `waitMs` later, when it is SIGKILLed here.

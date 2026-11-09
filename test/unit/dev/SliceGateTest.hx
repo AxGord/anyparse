@@ -38,23 +38,21 @@ final class SliceGateTest extends Test {
 		+ 'echo "pool /p: budget 8, held 0, load 0.0 (external 0.0, threshold 2)"; exit 0\nfi\n'
 		+ 'echo "$$*" >> "$$(dirname "$$0")/leases.log"\nwhile [ "$$1" != "--" ]; do shift; done\nshift\nexec "$$@"\n';
 
-	/** The arms registry of the scratch tree below: one arm, on a type no slice touches. */
-	private static inline final BASE_REGISTRY: String =
-		'{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"}]}';
-
 	/** `BASE_REGISTRY` with a second arm, which a slice that adds it has to run the kill run for. */
 	private static inline final GROWN_REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"},'
 		+ '{"name": "M-NEW", "type": "a.Other", "method": "f", "force": "1"}]}';
 
-	/** A registry whose one arm belongs to a package other than the document's (`a.json`). */
-	private static inline final MISPLACED_REGISTRY: String =
-		'{"arms": [{"name": "M-BAD", "type": "b.Other", "method": "f", "force": "1"}]}';
-
 	/** A `bin/hxq` that answers every graph call with an empty graph. */
 	private static inline final GRAPH_HXQ: String = 'echo \'{"nodes": [], "edges": []}\'\n';
 
+	/** The arms registry of the scratch tree below: one arm, on a type no slice touches. */
+	private static final BASE_REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"}]}';
+
+	/** A registry whose one arm belongs to a package other than the document's (`a.json`). */
+	private static final MISPLACED_REGISTRY: String = '{"arms": [{"name": "M-BAD", "type": "b.Other", "method": "f", "force": "1"}]}';
+
 	/** The environment variable that names the corpus the suite's harness reads. */
-	private static inline final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
+	private static final FORK_VAR: String = 'ANYPARSE_HXFORMAT_FORK';
 
 	/**
 	 * A stand-in for the script the branches run: it logs the rows it was handed in `<logs>/branches.log` and leaves the
@@ -531,6 +529,23 @@ final class SliceGateTest extends Test {
 		Assert.isFalse(ran.table.contains(BaseLint.ROW), ran.table);
 		final plain: GateRan = gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'notes.txt', true);
 		Assert.isFalse(plain.branches.split('\n').contains(BaseLint.ROW), 'no rule code moved: ${plain.branches}');
+	}
+
+	/**
+	 * Two scratch trees made at once share no commit: the baseline cache is keyed by the base, and one SHA would be one entry. The
+	 * base trees are compared, which differ whatever the clock says.
+	 */
+	@:pin('control')
+	@:killer('M-SLICE-GATE-TREE-SHARES-BASE')
+	public function testTwoTreesMadeInOneSecondShareNoCommit(): Void {
+		TempDir.with(first -> TempDir.with(second -> {
+			final bases: Array<String> = [];
+			for (dir in [first, second]) {
+				final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
+				bases.push(cmd('git rev-parse HEAD~1^{tree}').at(tree).check().out.trim());
+			}
+			Assert.notEquals(bases[0], bases[1], 'the base trees are one');
+		}));
 	}
 
 	/**

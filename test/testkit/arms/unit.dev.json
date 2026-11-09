@@ -1,0 +1,31 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package unit.dev. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-GATE-ARMS-TREE-SHARES-BASE",
+			"type": "unit.dev.GateArmsTest",
+			"method": "withTree",
+			"find": "fail-base-build\\n# $tree\\n'",
+			"replace": "fail-base-build\\n'",
+			"note": "two scratch trees made in one second hold the same files and so the same commits, and a memo keyed by a commit is shared between them"
+		},
+		{
+			"name": "M-LAND-REPO-SHARES-BASE",
+			"type": "unit.dev.LandTest",
+			"method": "scaffold",
+			"find": "'bin/*.out\\n# $repo\\n'",
+			"replace": "'bin/*.out\\n'",
+			"note": "two scratch repositories made in one second hold the same files and so the same commits"
+		},
+		{
+			"name": "M-SLICE-GATE-TREE-SHARES-BASE",
+			"type": "unit.dev.SliceGateTest",
+			"method": "scratchTree",
+			"find": "File.saveContent(Path.join([tree, 'src/keep']), tree);",
+			"replace": "File.saveContent(Path.join([tree, 'src/keep']), '');",
+			"note": "two scratch trees made in one second share a base commit and with it a baseline cache entry"
+		}
+	]
+}

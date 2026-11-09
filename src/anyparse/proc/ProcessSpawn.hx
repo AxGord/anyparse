@@ -80,10 +80,10 @@ final class ProcessSpawn {
 	 * 16M-word minor heap and a `space_overhead` of 400, which collect a compile's short-lived allocations far less
 	 * often. The collector's settings change when memory is reclaimed, never what the compiler answers.
 	 */
-	public static inline final DEFAULT_GC: String = 's=16M,o=400';
+	public static final DEFAULT_GC: String = 's=16M,o=400';
 
 	/** The `APQ_ORACLE_GC` value that leaves every compile under the runtime's own collector settings. */
-	public static inline final GC_OFF: String = 'off';
+	public static final GC_OFF: String = 'off';
 
 	/** Bytes a job's JSON-escaped streams may add over its own output cap in the parallel driver's reply. */
 	private static inline final OVERHEAD: Int = 1024 * 1024;
@@ -109,14 +109,17 @@ final class ProcessSpawn {
 	 */
 	private static inline final JOB_BOUND: Float = 10 * 60 * 1000;
 
+	/**
+	 * What a short program (`isShort`) run in this process is granted when its job names no `timeout`: git plumbing and
+	 * process listings end within moments, so one that outlasts this is hung, and a caller that knows better names its own.
+	 */
+	private static inline final SHORT_BOUND: Int = 60 * 1000;
+
 	/** What `driverBound` adds for the process driver itself: its start, the job launches, the answer. */
 	private static inline final DRIVER_SLACK: Float = 60 * 1000;
 
 	/** The largest `driverBound`: a millisecond count that still fits an `Int`. */
 	private static inline final MAX_BOUND: Float = 2147483647;
-
-	/** The spawn error code of a process whose output outgrew its cap. */
-	private static inline final OVERFLOW: String = 'ENOBUFS';
 
 
 	/**
@@ -272,6 +275,9 @@ final class ProcessSpawn {
 		+ ' if (!dying && done === jobs.length) flush(); }'
 		+ "if (jobs.length === 0) emit('{\"runs\":[]}'); else start();";
 
+	/** The spawn error code of a process whose output outgrew its cap. */
+	private static final OVERFLOW: String = 'ENOBUFS';
+
 	/**
 	 * Whether this target's spawn honours the `cwd` argument. False on the native `sys`
 	 * branch, where `sys.io.Process` has no working directory — a caller whose answer
@@ -297,7 +303,7 @@ final class ProcessSpawn {
 
 	/**
 	 * Run the one job `job` to its end in this process — its `cmd` (`haxe` when absent) over `args`, no shell in between —
-	 * capturing both streams under a `maxBuffer` byte cap, killed after `timeout` ms when that is positive (the program
+	 * capturing both streams under a `maxBuffer` byte cap, killed after `boundOf` ms when that is positive (the program
 	 * alone: a process group is the driver's). Never throws; the same three answers as `run`. A `shell` job needs the
 	 * process driver (`runAll`) and is refused, and so is an `env`, `stdin` or `timeout` on a target without node's
 	 * process API.
@@ -314,16 +320,8 @@ final class ProcessSpawn {
 		#if nodejs
 		final recorded: Null<ProcessRun> = recordedRun(job, maxBuffer);
 		if (recorded != null) return recorded;
-		final cwd: Null<String> = job.cwd;
-		final options: Dynamic = { env: childEnv() };
-		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
-		// over the inherited environment, which `options.env` already holds
-		for (key => value in variables(job.env)) Reflect.setField(options.env, key, value);
-		final timeout: Int = job.timeout ?? 0;
-		if (timeout > 0) {
-			Reflect.setField(options, 'timeout', timeout);
-			Reflect.setField(options, 'killSignal', 'SIGKILL');
-		}
+		final options: Any = spawnOptions(job);
+		final timeout: Int = boundOf(job);
 		final stdin: Null<String> = job.stdin;
 		final input: Null<Int> = stdin == null
 			? null
@@ -356,7 +354,7 @@ final class ProcessSpawn {
 				// the program ran FINE and out-wrote `maxBuffer`, or ran past `timeout` and was killed: both leave output
 				// worth reading, while every other spawn error means it never ran at all
 				case OVERFLOW: '$program out-wrote its $maxBuffer byte output buffer';
-				case 'ETIMEDOUT': '$program timed out after $timeout ms';
+				case 'ETIMEDOUT': '${invocation(program, job.args)} timed out after $timeout ms';
 				case _: 'could not launch $program ($reason)';
 			},
 			overflowed: code == OVERFLOW
@@ -718,6 +716,24 @@ final class ProcessSpawn {
 	}
 
 	/**
+	 * The options `exec` hands node's `spawnSync` for `job`: its directory, its environment over the inherited one, the kill at
+	 * `boundOf`.
+	 */
+	public static function spawnOptions(job: SpawnJob): Any {
+		final options: Dynamic = { env: childEnv() };
+		final cwd: Null<String> = job.cwd;
+		if (cwd != null) Reflect.setField(options, 'cwd', cwd);
+		// over the inherited environment, which `options.env` already holds
+		for (key => value in variables(job.env)) Reflect.setField(options.env, key, value);
+		final timeout: Int = boundOf(job);
+		if (timeout > 0) {
+			Reflect.setField(options, 'timeout', timeout);
+			Reflect.setField(options, 'killSignal', 'SIGKILL');
+		}
+		return options;
+	}
+
+	/**
 	 * `program args` run to its exit with both streams going to files of a scratch directory, not to pipes: a pipe is
 	 * closed only when EVERY holder is gone, so a grandchild that outlived the program kept `spawnSync` waiting for as long
 	 * as it lived. A stream past `maxBuffer` bytes is cut there and counts as overflowed.
@@ -944,6 +960,32 @@ final class ProcessSpawn {
 	 * the process driver (`PARALLEL_DRIVER`).
 	 */
 	public static inline final ANSWER_ENV: String = 'APQ_SPAWN_ANSWER';
+
+	/**
+	 * Whether `job` names a program that ends within moments and starts nothing that outlives it (git plumbing, process
+	 * listings): one run in this process needs no process driver and is bounded by `boundOf` when it names no `timeout`.
+	 */
+	public static function isShort(job: SpawnJob): Bool {
+		return switch job.cmd {
+			case 'git', 'ps', 'pgrep': true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * The milliseconds `job` run in this process may take before it is killed:
+	 * its own `timeout`, else `SHORT_BOUND` for a short program, else 0.
+	 */
+	public static function boundOf(job: SpawnJob): Int {
+		final own: Int = job.timeout ?? 0;
+		if (own > 0) return own;
+		return isShort(job) ? SHORT_BOUND : 0;
+	}
+
+	/** The program of `job` and its arguments as one line, for a message that names what ran. */
+	private static function invocation(program: String, args: Array<String>): String {
+		return [program].concat(args).join(' ');
+	}
 
 }
 

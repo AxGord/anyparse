@@ -26,9 +26,6 @@ using StringTools;
 @:nullSafety(Strict)
 final class LandTest extends Test {
 
-	/** The slice branch of the scratch repository; its id, `S1`, is what the trailer names. */
-	private static inline final BRANCH: String = 'batch/hxqb-S1';
-
 	/** Where a tree keeps the suite weights its shards balance on. */
 	private static inline final WEIGHTS: String = dev.Shard.WEIGHTS;
 
@@ -47,6 +44,9 @@ final class LandTest extends Test {
 	private static inline final CHOICES_STUB: String = "const fs = require('fs'); const a = process.argv;\n"
 		+ "if (a[2] === 'merge-file') { const i = a.indexOf('--choices');\n"
 		+ "fs.writeFileSync(a[4], i < 0 ? 'none\\n' : fs.readFileSync(a[i + 1])); }\n";
+
+	/** The slice branch of the scratch repository; its id, `S1`, is what the trailer names. */
+	private static final BRANCH: String = 'batch/hxqb-S1';
 
 	@:pin('control')
 	@:killer('M-LAND-CANDIDATE-LEFT')
@@ -799,6 +799,24 @@ final class LandTest extends Test {
 	}
 
 	/**
+	 * Two scratch repositories made at once share no commit: a commit is its tree, parent, message and second. The base trees are
+	 * compared, which differ whatever the clock says.
+	 */
+	@:pin('control')
+	@:killer('M-LAND-REPO-SHARES-BASE')
+	public function testTwoReposMadeInOneSecondShareNoCommit(): Void {
+		TempDir.with(first -> TempDir.with(second -> {
+			final bases: Array<String> = [];
+			for (dir in [first, second]) {
+				final repo: String = dir.file('repo');
+				scaffold(repo, 'b.txt', null, {});
+				bases.push(cmd('git -C $repo rev-parse main^{tree}').check().out.trim());
+			}
+			Assert.notEquals(bases[0], bases[1], 'the base trees are one');
+		}));
+	}
+
+	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler, which writes `bin/engine.out` (ignored, as the real binaries are) into the tree it builds. `setup` shapes the
 	 * repository further.
@@ -952,7 +970,8 @@ final class LandTest extends Test {
 		FileSystem.createDirectory(repo);
 		git(repo, ['init', '-q', '-b', 'main']);
 		File.saveContent('$repo/a.txt', 'a\n');
-		File.saveContent('$repo/.gitignore', 'bin/*.out\n');
+		// the repo's own path makes its base commit unique: two repos made in one second would otherwise share one SHA
+		File.saveContent('$repo/.gitignore', 'bin/*.out\n# $repo\n');
 		if (renameFrom != null) {
 			makeDirectories(Path.directory('$repo/$renameFrom'));
 			File.saveContent('$repo/$renameFrom', 'moved\n');

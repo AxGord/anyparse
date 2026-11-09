@@ -625,6 +625,21 @@ final class GateArmsTest extends Test {
 		});
 	}
 
+	/**
+	 * Two scratch trees made at once share no commit: a commit is its tree,
+	 * parent, message and second, and a shared SHA is a shared memo key. The base TREES are compared: they differ whatever the
+	 * clock says, so the pin does not depend on both trees landing in one second.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-TREE-SHARES-BASE')
+	public function testTwoTreesMadeInOneSecondShareNoCommit(): Void {
+		final bases: Array<String> = [];
+		withTree(first -> withTree(second -> for (tree in [first, second])
+			bases.push(cmd('git rev-parse HEAD~1^{tree}').at(tree).check().out.trim())));
+		Assert.equals(2, bases.length);
+		Assert.notEquals(bases[0], bases[1], 'the base trees are one');
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
@@ -688,7 +703,8 @@ final class GateArmsTest extends Test {
 			FileSystem.createDirectory(Path.join([tree, 'src/pkg']));
 			FileSystem.createDirectory(Path.join([tree, ArmRegistry.DIRECTORY]));
 			FileSystem.createDirectory('$tree-logs');
-			File.saveContent(Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nprogress.log\nhxq.log\nfail-base-build\n');
+			// the tree's own path makes its base commit unique: two trees made in one second would otherwise share one SHA
+			File.saveContent(Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nprogress.log\nhxq.log\nfail-base-build\n# $tree\n');
 			File.saveContent(Path.join([tree, 'bin/dev.js']), FAKE_DEV);
 			File.saveContent(Path.join([tree, 'bin/test.js']), '');
 			File.saveContent(Path.join([tree, 'bin/hxq']), FAKE_HXQ);
