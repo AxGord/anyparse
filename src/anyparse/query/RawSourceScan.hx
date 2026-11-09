@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -124,7 +125,8 @@ final class RawSourceScan {
 	 * member's name ties such a file to it. The grant is file-scoped — every member of such a file reaches
 	 * the type's privates — so the scan must be too, unlike the declaration-span scan a
 	 * subtype gets. True without consulting `matches` when such a file's source was not
-	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
+	 * retained. The file at path `apart` (the one a caller rewrites whole) is not consulted; a copy of it at another path is.
+	 * The precise counterpart of `hasAccessGrant`, for a caller that can say what
 	 * it actually fears from a grantee rather than vetoing on the grant's existence.
 	 *
 	 * A member a project reification spells answers true when a privileged file spells the type holding that reification
@@ -132,8 +134,8 @@ final class RawSourceScan {
 	 * output is access-checked where it lands, so a privileged caller reaches it without spelling it — through a helper,
 	 * a chain of macros or `@:build` / `@:autoBuild` alike. A name the macro computes (`$i{…}`) is out of reach.
 	 */
-	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool): Bool {
-		for (file in privilegedFiles(typeName, member)) {
+	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool, ?apart: String): Bool {
+		for (file in privilegedFiles(typeName, member)) if (file != apart) {
 			final src: Null<String> = _sources[file];
 			if (src == null || matches(src)) return true;
 		}
@@ -457,7 +459,7 @@ final class RawSourceScan {
 		final out: Array<String> = tag == null ? [] : [
 			for (file => src in sources) if (!thirdParty.exists(file) && writesTagInCode(src, tag, plugin)) file
 		];
-		out.sort(Reflect.compare);
+		out.sort(Compare.compareString);
 		return out;
 	}
 

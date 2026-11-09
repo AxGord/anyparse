@@ -117,7 +117,7 @@ final class SubtypeGraph {
 	 */
 	public inline function subtypeReferencesField(owner: String, field: String): Bool {
 		return subtypeDeclMatches(
-			owner, field, (_, src, span, redeclares) -> !redeclares && SourceText.identTokenOffset(src, span, field) >= 0
+			owner, field, (_, src, span, redeclares, _) -> !redeclares && SourceText.identTokenOffset(src, span, field) >= 0
 		);
 	}
 
@@ -345,8 +345,9 @@ final class SubtypeGraph {
 
 	/**
 	 * Whether `matches` holds for ANY (transitive) subtype of `owner`, given that subtype's
-	 * whole source, its raw declaration span, and whether it REDECLARES `field` (shadowing
-	 * the inherited member). True without consulting `matches` when the hierarchy is
+	 * whole source, its raw declaration span, whether it REDECLARES `field` (shadowing
+	 * the inherited member) and its file's path (a copy of a file with the same text is another file). True without
+	 * consulting `matches` when the hierarchy is
 	 * unresolvable: a subtype whose source was not retained, or a second type carrying
 	 * `owner`'s own simple name. The predicate separates the callers, including what a
 	 * redeclaration means to each — `subtypeReferencesField` reads it as "this mention is
@@ -354,7 +355,7 @@ final class SubtypeGraph {
 	 * is exactly what I cannot rule out".
 	 */
 	public function subtypeDeclMatches(
-		owner: String, field: String, matches: (subtype:String, source:String, span:Span, redeclares:Bool) -> Bool
+		owner: String, field: String, matches: (subtype:String, source:String, span:Span, redeclares:Bool, file:String) -> Bool
 	): Bool {
 		final closure: Array<String> = [owner];
 		var i: Int = 0;
@@ -370,7 +371,7 @@ final class SubtypeGraph {
 				// twice would loop; skipping the second one's slice silently drops evidence.
 				if (!closure.contains(t.name)) closure.push(t.name);
 				final src: Null<String> = _sources[sub.file.file];
-				if (src == null || matches(t.name, src, t.span, t.members.exists(m -> m.name == field))) return true;
+				if (src == null || matches(t.name, src, t.span, t.members.exists(m -> m.name == field), sub.file.file)) return true;
 			}
 		}
 		return false;

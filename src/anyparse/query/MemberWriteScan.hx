@@ -49,7 +49,7 @@ final class MemberWriteScan {
 		)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
-				(subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
+				(subtype, src, span, redeclares, _) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
 			);
 	}
 
@@ -70,7 +70,7 @@ final class MemberWriteScan {
 		)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
-				(subtype, src, span, redeclares) ->
+				(subtype, src, span, redeclares, _) ->
 					redeclares
 					|| writeIndex.writtenAnywhere(subtype, name)
 					|| subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
@@ -89,8 +89,8 @@ final class MemberWriteScan {
 	 * Fails closed on the same terms as `subtypeMayWrite`: an unresolvable hierarchy, a subtype
 	 * whose source was not retained, a REdeclaration of the name, and an `@:build` in the
 	 * subtype's file (a macro can inject a read no text scan sees) all answer true. Same index
-	 * choice too — the resolution scope when one is configured, else the report index. A source equal to `apart` (the file the
-	 * caller rewrites whole) is not scanned.
+	 * choice too — the resolution scope when one is configured, else the report index. The file at path `apart` (the one
+	 * the caller rewrites whole) is not scanned; a copy of its text at another path is.
 	 */
 	public static inline function subtypeMayReference(
 		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
@@ -100,13 +100,11 @@ final class MemberWriteScan {
 		)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
-				(subtype, src, span, redeclares) ->
+				(subtype, src, span, redeclares, file) ->
 					redeclares
-					|| (src != apart && mayReference(src, name, span.from, span.to))
+					|| (file != apart && mayReference(src, name, span.from, span.to))
 					|| scopeOf(index, plugin)
-						.text.accessGrantMatches(
-							subtype, name, granted -> granted != apart && mayReference(granted, name, 0, granted.length)
-						)
+						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length), apart)
 			);
 	}
 
@@ -117,7 +115,7 @@ final class MemberWriteScan {
 	public static inline function accessGrantMayReference(
 		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
 	): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> src != apart && mayReference(src, name, 0, src.length));
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayReference(src, name, 0, src.length), apart);
 	}
 
 	/**
@@ -212,15 +210,16 @@ final class MemberWriteScan {
 	}
 
 	/**
-	 * `referencesConfined` for a rewrite that edits the WHOLE declaring file: a subtype or `@:access` grantee whose source is
-	 * `source` itself is respelled by the same edits, so only a mention in ANOTHER file refuses (`apart`, on the two scans above).
+	 * `referencesConfined` for a rewrite that edits the WHOLE declaring file `file` (text `source`): a subtype or
+	 * `@:access` grantee in that file is respelled by the same edits, so only a mention in ANOTHER file refuses
+	 * (`apart`, on the two scans above). Files are told apart by path, so a copy of the file with the same text still refuses.
 	 */
 	public static inline function referencesConfinedToFile(
-		owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
+		owner: String, name: String, file: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
 	): Bool {
 		return RefactorSupport.privateMemberScanIsSound(source, index, name)
-			&& !subtypeMayReference(owner, name, index, plugin, source)
-			&& !accessGrantMayReference(owner, name, index, plugin, source);
+			&& !subtypeMayReference(owner, name, index, plugin, file)
+			&& !accessGrantMayReference(owner, name, index, plugin, file);
 	}
 
 	/**

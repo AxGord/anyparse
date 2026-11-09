@@ -170,7 +170,7 @@ final class MapValueScan {
 		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		return !scope.text.hasAccessGrant(owner)
 			&& !scope.text.privilegeMayReference(owner, name)
-			&& !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares) -> {
+			&& !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares, _) -> {
 				if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
 				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
 				return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams, asked);

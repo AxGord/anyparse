@@ -50,16 +50,16 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 	private static inline final MAP_ARGUMENTS: Int = 2;
 
 	/** The `apq.json` option naming the project's set type. */
-	private static inline final SET_OPTION: String = 'set';
+	private static final SET_OPTION: String = 'set';
 
 	/** The `apq.json` option naming the project's bit-set type, which takes a set whose key is a fixed enum domain. */
-	private static inline final BITS_OPTION: String = 'bits';
+	private static final BITS_OPTION: String = 'bits';
 
 	/** The written name of the map a construction respelled to the set type has. */
-	private static inline final MAP_TYPE: String = 'Map';
+	private static final MAP_TYPE: String = 'Map';
 
 	/** The receiver keyword of a member of the enclosing type. */
-	private static inline final THIS_NAME: String = 'this';
+	private static final THIS_NAME: String = 'this';
 
 	/** The key types a native set compares as `Map` does; an enum value is structural in `Map` and by identity in a native set. */
 	private static final SET_KEY_TYPES: Array<String> = ['String', 'Int'];
@@ -488,7 +488,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		if (declarationsOf(root, name, seams.declKinds) != 1) return 'the file declares another \'$name\'';
 		final owner: Null<String> = MapValueScan.memberOwner(root, declAt, seams);
 		final scope: Null<SymbolIndex> = project.index;
-		return owner == null || (scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin))
+		return owner == null
+			|| (scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, project.file, source, scope, plugin))
 			? null
 			: 'a subtype or an @:access grantee in another file may read the member';
 	}

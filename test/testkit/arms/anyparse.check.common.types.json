@@ -295,7 +295,7 @@
 			"name": "M-MAS-SET-CROSS-FILE-READER",
 			"type": "anyparse.check.common.types.MapAsSet",
 			"method": "unconfinedReason",
-			"find": "owner == null || (scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, source, scope, plugin))",
+			"find": "scope != null && MemberWriteScan.referencesConfinedToFile(owner, name, project.file, source, scope, plugin)",
 			"replace": "true",
 			"note": "a non-public member set is respelled in its declaring file while a subtype in another file still reads it as a map, which does not compile"
 		},

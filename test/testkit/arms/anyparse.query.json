@@ -15538,7 +15538,7 @@
 			"name": "M-MWS-SAME-FILE-SUBTYPE",
 			"type": "anyparse.query.MemberWriteScan",
 			"method": "referencesConfinedToFile",
-			"find": "&& !subtypeMayReference(owner, name, index, plugin, source)",
+			"find": "&& !subtypeMayReference(owner, name, index, plugin, file)",
 			"replace": "&& !subtypeMayReference(owner, name, index, plugin)",
 			"note": "a subtype in the declaring file counts as a reader the rewrite cannot reach, though the same edits respell it, so a correct member rewrite and its finding are lost"
 		},
@@ -15997,6 +15997,22 @@
 			"find": "'$pack.$sub.$method'",
 			"replace": "'$type.$method'",
 			"note": "a sub-module type's member keeps the record's spelling, which the call graph never prints, so no graph neighbour matches it"
+		},
+		{
+			"name": "M-MWS-SUBTYPE-FILE-IDENTITY",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "subtypeMayReference",
+			"find": "(file != apart && mayReference(src, name, span.from, span.to))",
+			"replace": "(src != index.sourceOf(apart ?? '') && mayReference(src, name, span.from, span.to))",
+			"note": "the declaring file is told from another by its text, so a copy of it at another path is not scanned and its reader goes unseen"
+		},
+		{
+			"name": "M-RSS-GRANT-FILE-IDENTITY",
+			"type": "anyparse.query.RawSourceScan",
+			"method": "accessGrantMatches",
+			"find": "if (file != apart) {",
+			"replace": "if (_sources[file] != _sources[apart ?? '']) {",
+			"note": "the declaring file is told from another grantee by its text, so a copy of it at another path is not scanned and its mention goes unseen"
 		}
 	]
 }

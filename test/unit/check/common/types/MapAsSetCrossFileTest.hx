@@ -78,6 +78,26 @@ class MapAsSetCrossFileTest extends Test {
 		Assert.isTrue(check.fix(local, seen, plugin).length > 0);
 	}
 
+	/** A copy of the declaring file holds the same text at another path: its subtype still reads the member unrespelled. */
+	@:pin('control')
+	@:killer('M-MWS-SUBTYPE-FILE-IDENTITY')
+	public function testSubtypeInACopyOfTheDeclaringFileKeepsTheMemberASet(): Void {
+		final run: FixRun = copyRun(subtypeText());
+		Assert.equals(0, run.violations.length);
+		Assert.equals(0, run.edits.length);
+	}
+
+	/** The same text in the declaring file alone is respelled: it is the copy, not the subtype, that holds the member back. */
+	public function testSubtypeInTheDeclaringFileAloneIsRespelled(): Void {
+		final config: LintConfig = LintConfig.parse(SET);
+		final run: FixRun = CheckFixture.fixRun(
+			new MapAsSet(),
+			[{ file: 'use/Holder.hx', source: subtypeText() }],
+			null, null, _ -> config
+		);
+		Assert.equals(1, run.violations.length);
+	}
+
 	private static function holder(key: String): String {
 		return 'package use;\n\nclass Holder {\n\tprivate final marks: Map<$key, Bool> = new Map<$key, Bool>();\n\n'
 			+ '\tpublic function new() {}\n\n\tpublic function mark(c: $key): Void {\n\t\tmarks[c] = true;\n\t}\n\n'
@@ -112,6 +132,19 @@ class MapAsSetCrossFileTest extends Test {
 			{ file: 'use/Sub.hx', source: subSource }
 		].concat(more);
 		return CheckFixture.fixRun(new MapAsSet(), files, 'use/Holder.hx', null, _ -> config);
+	}
+
+	private static function subtypeText(): String {
+		return
+			'${holder('String')}\n\nclass Sub extends Holder {\n\tpublic function also(c: String): Bool {\n\t\treturn marks.exists(c);\n\t}\n}';
+	}
+
+	private static function copyRun(text: String): FixRun {
+		final config: LintConfig = LintConfig.parse(SET);
+		return CheckFixture.fixRun(
+			new MapAsSet(), [{ file: 'use/Holder.hx', source: text }, { file: 'use/Copy.hx', source: text }],
+			'use/Holder.hx', null, _ -> config
+		);
 	}
 
 }

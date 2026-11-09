@@ -320,7 +320,7 @@ class SymbolIndexSliceTest extends Test {
 		], plugin());
 		final seen: Array<String> = [];
 
-		index.subtypes.subtypeDeclMatches('C', 'x', (subtype, src, _, _) -> {
+		index.subtypes.subtypeDeclMatches('C', 'x', (subtype, src, _, _, _) -> {
 			seen.push(subtype + (src.indexOf('@:build') >= 0 ? ':build' : ':plain'));
 			return false;
 		});
