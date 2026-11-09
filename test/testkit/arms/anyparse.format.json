@@ -585,6 +585,35 @@
 			"find": "Doc.Concat([HEAD_LINE_REST_CUT, fitLineLayout(cols, body, false, lineWidth)])",
 			"replace": "Doc.Concat([HEAD_LINE_REST_CUT, breakLayout(cols, body)])",
 			"note": "every flat comprehension body takes the next line, so a short one no longer stays on the head line"
+		},
+		{
+			"name": "M-SSB-ELSE-IF-LINK-NONE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "elseIfLink",
+			"force": "null",
+			"note": "the chain scan stops at an else block that collapses into an else-if, so the then-branch is de-braced beside a chain that keeps its braces and the next pass has to brace it back"
+		},
+		{
+			"name": "M-SSB-TRY-STAYS-ALWAYS",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "staysStatementTry",
+			"force": "true",
+			"note": "a try group de-braces whatever its last body ends on, so the bare text re-parses as a value try and the next pass lays it out differently"
+		},
+		{
+			"name": "M-SSB-TRY-STAYS-NEVER",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "staysStatementTry",
+			"force": "false",
+			"note": "no try group de-braces, even one whose last body closes on its own semicolon and reads back as the statement form"
+		},
+		{
+			"name": "M-SSB-TRY-IF-TAIL-NEVER",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "staysStatementTry",
+			"find": "case 'IfStmt':",
+			"replace": "case 'IfStmt' if (false):",
+			"note": "an if/else ending on its own semicolon reads as not closing the bare try, so a group that settles bare keeps its braces"
 		}
 	]
 }

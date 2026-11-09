@@ -44,7 +44,11 @@
 		"end-orphan/Min.hx": "class C {\n\tvar a:Int;\n\t/** x */\n}\n",
 		"end-orphan/hxformat.json": "{\"emptyLines\":{\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":0,\"endType\":1}}}",
 		"comment-only/Min.hx": "class C {\n\t/** x */\n}\n",
-		"comment-only/hxformat.json": "{\"emptyLines\":{\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":0,\"endType\":1}}}"
+		"comment-only/hxformat.json": "{\"emptyLines\":{\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"classEmptyLines\":{\"beginType\":0,\"endType\":1}}}",
+		"chain-force-then/T.hx": "class T {\n\tfunction f(): Void {\n\t\tif (c) { a(); } else { if (d) { e(); f(); } }\n\t}\n}\n",
+		"chain-force-then/hxformat.json": "{ \"whitespace\": { \"bracesConfig\": { \"singleStatementBraces\": \"remove\" } } }\n",
+		"in-for-loop/T.hx": "class T {\n\tfunction f(): Void {\n\t\tfor (i in y) { try { foo(); } catch (s: String) { for (j in z) b(); } }\n\t}\n}\n",
+		"in-for-loop/hxformat.json": "{ \"whitespace\": { \"bracesConfig\": { \"singleStatementBraces\": \"remove\" } } }\n"
 	},
 	"invocations": [
 		{
@@ -451,6 +455,40 @@
 				"exit": 0,
 				"out": "369b9c95e5105b97",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "chain-force-then/T.hx",
+			"note": "an else block holding an if joins the chain: one rewrite under singleStatementBraces remove",
+			"argv": [
+				"hxq",
+				"fmt",
+				"chain-force-then/T.hx",
+				"--one-pass",
+				"--list"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ad996e1a74953bb2",
+				"err": "eef06c7385a6b7eb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "in-for-loop/T.hx",
+			"note": "a try whose catch is a loop keeps its braces inside a loop body: one rewrite under singleStatementBraces remove",
+			"argv": [
+				"hxq",
+				"fmt",
+				"in-for-loop/T.hx",
+				"--one-pass",
+				"--list"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "faeed87a9bb1f705",
+				"err": "eef06c7385a6b7eb",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

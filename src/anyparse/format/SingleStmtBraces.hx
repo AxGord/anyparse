@@ -30,6 +30,17 @@ class SingleStmtBraces {
 	/** Value ctors a symmetry wrap must leave alone: a brace-LED value re-opens `{` in statement position. */
 	private static final TRY_WRAP_SKIP_CTORS: Array<String> = ['ObjectLit'];
 
+	/** The last-body kinds whose expression form leaves the closing `;` to the bare statement `try` (`staysStatementTry`). */
+	private static final STATEMENT_TRY_TAIL_CTORS: Array<String> = [
+		'ExprStmt',
+		'ReturnStmt',
+		'VoidReturnStmt',
+		'ThrowStmt',
+		'BreakStmt',
+		'ContinueStmt',
+		'DoWhileStmt'
+	];
+
 	/**
 	 * Statement ctors the gate-7 WRAP direction leaves alone - the keyword-headed
 	 * else bodies. `} else if (c) {` and `} else switch s {` are idioms the writer
@@ -199,10 +210,10 @@ class SingleStmtBraces {
 			final elseBody: Dynamic = stmt.elseBody;
 			if (keepsBraces(stmt.thenBody, drop, symmetry, suppress, elseBody != null, stmt.thenBodyTrailPresent == true, true))
 				return true;
-			if (elseBody == null || !Reflect.isEnumValue(elseBody) || Type.enumConstructor(cast elseBody) != 'IfStmt')
+			final link: Null<Any> = elseIfLink(stmt, drop, suppress);
+			if (link == null)
 				return elseBody != null && keepsBraces(elseBody, drop, symmetry, suppress, false, stmt.elseBodyTrailPresent == true, false);
-			final ps: Array<Dynamic> = Type.enumParameters(cast elseBody);
-			stmt = ps.length == 0 ? null : ps[0];
+			stmt = link;
 		}
 		return false;
 	}
@@ -361,6 +372,8 @@ class SingleStmtBraces {
 			// settle what one can decide.
 			if (allDeBrace && (braced ? tryDeBraced(b, last, suppress) == null : !bareLegalAt(b, last))) allDeBrace = false;
 		}
+		// The text must read back as the statement it was written for; see `staysStatementTry`.
+		if (allDeBrace && !staysStatementTry(bodies[bodies.length - 1], drop, symmetry, suppress)) allDeBrace = false;
 		// Gate 6 for the group: the writer keeps a `;` written after the last catch body, and
 		// `catch (e) x;;` does not compile, so that `;` keeps the group braced.
 		if (allDeBrace && catches != null && catches.length > 0 && catchCarriesSemi(catches[catches.length - 1])) allDeBrace = false;
@@ -471,6 +484,11 @@ class SingleStmtBraces {
 	 */
 	private static inline function triviaNode(v: Dynamic): Dynamic {
 		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
+	}
+
+	/** An `HxIfStmt` struct's else body, null for a lone `if`. */
+	private static inline function elseBodyOf(ifStmt: Any): Any {
+		return Reflect.field(ifStmt, 'elseBody');
 	}
 
 	/**
@@ -874,6 +892,44 @@ class SingleStmtBraces {
 			out.push(hasStructField(node, 'body') ? Reflect.field(node, 'body') : null);
 		}
 		return out;
+	}
+
+	/**
+	 * The `if` an else body continues a chain with: an `else if` itself, or an `else { if … }` block that
+	 * would lose its braces and read as one. Null when the else ends the chain.
+	 */
+	private static function elseIfLink(ifStmt: Any, drop: Bool, suppress: Bool): Null<Any> {
+		final elseBody: Any = elseBodyOf(ifStmt);
+		if (elseBody == null || !Reflect.isEnumValue(elseBody)) return null;
+		final inner: Null<Any> = Type.enumConstructor(cast elseBody) == 'IfStmt'
+			? elseBody
+			: deBracedElem(elseBody, drop, suppress, false, Reflect.field(ifStmt, 'elseBodyTrailPresent') == true, false, false)?.node;
+		return inner == null || !Reflect.isEnumValue(inner) || Type.enumConstructor(cast inner) != 'IfStmt' ? null : paramAt(cast inner, 0);
+	}
+
+	/**
+	 * Would the bare text of a statement `try` ending on `v` read back as a statement `try`? Its bare form
+	 * closes on a `;` of its own, so a last body that ends on `}` — or whose expression form swallows that
+	 * `;`, as `for` and an else-less `if` do — leaves nothing to close on: the text parses as a value `try`,
+	 * which is laid out by other rules, and the group keeps its braces rather than move to those on re-read.
+	 * Every kind the group can de-brace is listed; anything else answers no, which only keeps braces.
+	 */
+	private static function staysStatementTry(v: Any, drop: Bool, symmetry: Bool, suppress: Bool): Bool {
+		if (v == null || !Reflect.isEnumValue(v)) return false;
+		final e: EnumValue = cast v;
+		final ctor: String = Type.enumConstructor(e);
+		return switch ctor {
+			case 'IfStmt':
+				final ifStmt: Any = paramAt(e, 0);
+				final elseBody: Any = elseBodyOf(ifStmt);
+				elseBody != null
+					&& !chainForcesBraces(ifStmt, drop, symmetry, suppress)
+					&& staysStatementTry(elseBody, drop, symmetry, suppress);
+			case 'BlockStmt':
+				final elem: Null<{ node: Any }> = deBracedElem(v, drop, suppress, false, false, false, false);
+				elem != null && staysStatementTry(elem.node, drop, symmetry, suppress);
+			case _: STATEMENT_TRY_TAIL_CTORS.contains(ctor);
+		};
 	}
 
 	/**

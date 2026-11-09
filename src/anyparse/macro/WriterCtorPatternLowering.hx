@@ -205,20 +205,21 @@ final class WriterCtorPatternLowering {
 	}
 
 	/**
-	 * ω-block-shape-aware — find the field name of the bare-Ref child on
+	 * ω-block-shape-aware — find the field name of the Ref child on
 	 * `elemTypePath`'s Seq rule whose Ref points at `bodyTypePath`. Used by
 	 * the Star sameLine handler to wire shape-awareness on subsequent
 	 * iterations: each catch element after the first checks the previous
 	 * element's body shape (`_arr[_si - 1].<field>`) against the prev
-	 * body's block ctors. Returns `null` when the element is not a Seq,
-	 * has no matching Ref child, or the matching child is not a bare Ref
-	 * (Star / optional fields are skipped — they don't carry the body
-	 * directly).
+	 * body's block ctors. Returns `null` when the element is not a Seq or
+	 * has no matching Ref child. A Ref child counts, optional or not (a
+	 * catch clause's body is optional and decides the seam of the `catch`
+	 * after it); Star fields are skipped.
 	 */
 	private static function findElementBodyField(ctx: CtorPatternCtx, elemTypePath: String, bodyTypePath: String): Null<String> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[elemTypePath];
 		if (rule == null || rule.kind != Seq) return null;
-		for (child in rule.children) if (child.kind == Ref && child.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true) {
+		// An optional body counts too: a catch clause's is one, and it decides the seam of the `catch` after it.
+		for (child in rule.children) if (child.kind == Ref) {
 			final ref: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
 			if (ref == bodyTypePath) return child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		}

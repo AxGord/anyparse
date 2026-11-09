@@ -2455,6 +2455,14 @@
 			"method": "cutTrigraphs",
 			"force": "[s]",
 			"note": "a trigraph-bearing literal is not cut, so the rewrite writes it back as one literal that hxcpp compiles to other bytes"
+		},
+		{
+			"name": "M-CATCH-SEAM-OPTIONAL-BODY-BLIND",
+			"type": "anyparse.macro.WriterCtorPatternLowering",
+			"method": "findElementBodyField",
+			"find": "if (ref == bodyTypePath) return",
+			"replace": "if (false) return",
+			"note": "the seam before a later catch stops reading the previous bare body, so a de-braced multi-catch try puts the catch on the bare body line and needs a second rewrite to move it"
 		}
 	]
 }
