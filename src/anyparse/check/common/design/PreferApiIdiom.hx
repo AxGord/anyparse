@@ -154,9 +154,8 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final idioms: Array<Idiom> = validatedFor(specsFor(file), resolved, seams, []);
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		return ([
-			for (m in matchesIn(
-				file, source, idioms, resolved, seams, plugin
-			)) if (wanted.contains('${m.span.from}:${m.span.to}')) { span: m.span, text: m.text }
+			for (m in matchesIn(file, source, idioms, resolved, seams, plugin))
+				if (wanted.contains('${m.span.from}:${m.span.to}')) { span: m.span, text: m.text }
 		]: Array<FixEdit>);
 	}
 

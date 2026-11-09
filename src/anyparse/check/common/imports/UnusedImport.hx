@@ -242,9 +242,8 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 		return [
 			for (imp in info.imports)
 				[
-					for (scan in readersOf(
-						scans, imp, info.file, evidence.resolveIndex
-					)) if (!provenDeadIn(scan, info.file, imp, plugin, evidence)) scan.file
+					for (scan in readersOf(scans, imp, info.file, evidence.resolveIndex))
+						if (!provenDeadIn(scan, info.file, imp, plugin, evidence)) scan.file
 				]
 		];
 	}

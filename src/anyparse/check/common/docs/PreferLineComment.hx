@@ -101,9 +101,8 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 		if (kinds.blocks.length == 0) return [];
 		final flagged: Array<Int> = RunScan.spanStarts(violations);
 		return [
-			for (rewrite in rewrites(
-				source, plugin, kinds
-			)) if (flagged.contains(rewrite.comment.from)) { span: rewrite.edit, text: rewrite.text }
+			for (rewrite in rewrites(source, plugin, kinds))
+				if (flagged.contains(rewrite.comment.from)) { span: rewrite.edit, text: rewrite.text }
 		];
 	}
 

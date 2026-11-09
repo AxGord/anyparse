@@ -117,9 +117,7 @@ final class OverriddenInline extends RuleBase {
 		final key: String = index.refs.seenKey(owner);
 		final seen: Array<String> = [];
 		return [
-			for (sub in index.subtypes.subtypeDecls(
-				owner.type.name, owner.file.file
-			))
+			for (sub in index.subtypes.subtypeDecls(owner.type.name, owner.file.file))
 				if (
 					sub.type.members.exists(sm -> sm.name == name && isOverride(sm))
 					&& index.subtypes.overriddenDeclarations(sub, [name]).exists(d -> index.refs.seenKey(d) == key)

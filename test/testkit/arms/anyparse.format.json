@@ -569,6 +569,22 @@
 			"find": "return comments.length == 0 ? GroupWithRestProbe(inner) : Concat([GroupWithRestProbe(peeled), comments[0]]);",
 			"replace": "return comments.length == 0 ? Group(inner) : Concat([Group(peeled), comments[0]]);",
 			"note": "the construct group stops counting the rest of the line, so a try one column past the limit stays on one line"
+		},
+		{
+			"name": "M-COMPREHENSION-REST-CUT-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictFitLineLayout",
+			"find": "Doc.Concat([HEAD_LINE_REST_CUT, fitLineLayout(cols, body, false, lineWidth)])",
+			"replace": "fitLineLayout(cols, body, false, lineWidth)",
+			"note": "the zero-width rest cut in front of a flat comprehension body is gone: the head call counts the body as rest of its line and wraps itself"
+		},
+		{
+			"name": "M-COMPREHENSION-BODY-ALWAYS-NEXT",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictFitLineLayout",
+			"find": "Doc.Concat([HEAD_LINE_REST_CUT, fitLineLayout(cols, body, false, lineWidth)])",
+			"replace": "Doc.Concat([HEAD_LINE_REST_CUT, breakLayout(cols, body)])",
+			"note": "every flat comprehension body takes the next line, so a short one no longer stays on the head line"
 		}
 	]
 }

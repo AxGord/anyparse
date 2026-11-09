@@ -779,9 +779,8 @@ class ThreadSafetyCheckTest extends Test {
 			for (t in tree) if (StringTools.endsWith(t.name, '.hx')) { file: '${root}/${t.name}', source: t.source }
 		];
 		final found: Array<String> = [
-			for (v in CheckFixture.violationsIn(
-				new ThreadSafety(), files
-			)) if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
+			for (v in CheckFixture.violationsIn(new ThreadSafety(), files))
+				if (v.file != '') '${v.file.substring(root.length + 1)}: ${v.message}'
 		];
 		CliFixture.removeDir(root);
 		Assert.same(['x/X.hx: main thread reaches blocking "Sys.sleep": Y.f -> X.work -> Sys.sleep'], found);

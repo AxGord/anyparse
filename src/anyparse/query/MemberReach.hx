@@ -1028,9 +1028,7 @@ final class MemberReach {
 	 */
 	private function liveHazards(file: String, tree: QueryNode, source: String, span: Span): Array<ReachHazard> {
 		final out: Array<ReachHazard> = [
-			for (h in _hazards.hazardsIn(
-				file, tree, source, span
-			))
+			for (h in _hazards.hazardsIn(file, tree, source, span))
 				if (
 					_live.live(file, source, h.span)
 					&& (h.kind != Opaque || _live.holdsLiveCode(file, source, h.span))

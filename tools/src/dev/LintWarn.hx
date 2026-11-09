@@ -237,9 +237,8 @@ final class LintWarn {
 	/** The registered worktrees of the repository at `repo`, main first, as git spells them (real paths). */
 	private static function worktrees(repo: String): Array<String> {
 		final listed: Array<String> = [
-			for (line in cmd('git -C $repo worktree list --porcelain')
-				.run()
-				.lines()) if (line.startsWith('worktree ')) line.substr('worktree '.length)
+			for (line in cmd('git -C $repo worktree list --porcelain').run().lines())
+				if (line.startsWith('worktree ')) line.substr('worktree '.length)
 		];
 		return listed.length > 0 ? listed : [repo];
 	}

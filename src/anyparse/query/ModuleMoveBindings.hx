@@ -396,9 +396,9 @@ final class ModuleMoveBindings {
 		final source: String = text;
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		return tree == null ? [] : [
-			for (name => hits in Refs.findMulti(
-				names, tree, plugin.refShape()
-			)) for (h in hits) if (h.kind == RefKind.Decl || h.bindingSpan != null) SourceText.identTokenOffset(source, h.span, name)
+			for (name => hits in Refs.findMulti(names, tree, plugin.refShape()))
+				for (h in hits)
+					if (h.kind == RefKind.Decl || h.bindingSpan != null) SourceText.identTokenOffset(source, h.span, name)
 		];
 	}
 

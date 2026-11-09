@@ -123,9 +123,9 @@ final class PreferLocalFunction extends RuleBase {
 				if (span != null) wanted.add('${span.from}:${span.to}');
 			}
 			return [
-				for (m in collectMatches(
-					tree, source, s, plugin.lexicalRegions(source)
-				)) if (wanted.has('${m.reportSpan.from}:${m.reportSpan.to}')) for (e in m.edits) e
+				for (m in collectMatches(tree, source, s, plugin.lexicalRegions(source)))
+					if (wanted.has('${m.reportSpan.from}:${m.reportSpan.to}'))
+						for (e in m.edits) e
 			];
 		});
 	}

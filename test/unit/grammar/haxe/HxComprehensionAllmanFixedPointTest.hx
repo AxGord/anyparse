@@ -44,8 +44,25 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/** The rest-aware `Group` again, with a trailing comma the ladder line carries after the item. */
 	private static final CFG_TRAILING_COMMA: String = cfg('same', true, false, true);
 
+	/**
+	 * `comprehensionFor: fitLine` with the cuddled open: the placement the sweeps must hold for this repository.
+	 */
+	private static final CFG_FIT_LINE: String = cfg('fitLine', true, true);
+
+	/**
+	 * `comprehensionFor: fitLine` with the ladder open.
+	 */
+	private static final CFG_FIT_LINE_LADDER: String = cfg('fitLine', false, true);
+
 	/** Every config the sweeps run under. */
-	private static final CONFIGS: Array<String> = [CFG_SAME, CFG_SAME_LADDER, CFG_GROUP, CFG_TRAILING_COMMA];
+	private static final CONFIGS: Array<String> = [
+		CFG_SAME,
+		CFG_SAME_LADDER,
+		CFG_GROUP,
+		CFG_TRAILING_COMMA,
+		CFG_FIT_LINE,
+		CFG_FIT_LINE_LADDER
+	];
 
 	/** No wrap rules at all: the cascade's defaults under `comprehensionFor: same`. */
 	private static final CFG_PLAIN_SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'

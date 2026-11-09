@@ -51,6 +51,14 @@ import anyparse.format.wrap.WrapList;
 final class BodyFit {
 
 	/**
+	 * A zero-width boundary placed in front of a comprehension's flat-rendering body: a `Group` the head still holds
+	 * (its iterable's call arguments) asks how wide the rest of the line is, and a body that moves to the next line
+	 * when it does not fit must not be charged to that question. `IfNaturalFirstLineExceeds` is the node the
+	 * rest-of-line walk stops at; both its branches are empty, so nothing renders and no enclosing measure changes.
+	 */
+	private static final HEAD_LINE_REST_CUT: Doc = Doc.IfNaturalFirstLineExceeds(0, Doc.Empty, Doc.Empty);
+
+	/**
 	 * The BREAK shape every `FitLine` outcome falls back to: `body` on the
 	 * next line, one indent level deeper than the header.
 	 *
@@ -134,12 +142,13 @@ final class BodyFit {
 	 * stacks its own closers under the container's, so it keeps the refusal whatever
 	 * its first line looks like.
 	 *
-	 * A body that renders flat keeps the shared `fitLineLayout` answer; the glue
-	 * verdict for a body that cannot is the only thing this function decides.
+	 * A body that renders flat keeps the shared `fitLineLayout` answer behind the rest
+	 * cut, so its width cannot make the head wrap its own iterable call; the glue verdict
+	 * for a body that cannot render flat is the only thing this function decides.
 	 */
 	public static function strictFitLineLayout(cols: Int, body: Doc, lineWidth: Int, keywordLedBody: Bool): Doc {
 		return if (WrapList.flatLength(body) != -1)
-			fitLineLayout(cols, body, false, lineWidth);
+			Doc.Concat([HEAD_LINE_REST_CUT, fitLineLayout(cols, body, false, lineWidth)]);
 		else if (!keywordLedBody || lineWidth <= 0)
 			breakLayout(cols, body);
 		else

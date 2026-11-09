@@ -153,9 +153,8 @@ final class TailMerge extends RuleBase {
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final flagged: Array<String> = RunScan.spanKeys(violations);
 			final edits: Array<{ span: Span, text: String }> = [
-				for (c in scan(
-					tree, source, seams
-				)) if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
+				for (c in scan(tree, source, seams))
+					if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
 			];
 			return CanonicalEdit.dropContainedEdits(edits);
 		});

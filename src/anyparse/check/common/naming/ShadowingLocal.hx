@@ -592,9 +592,8 @@ final class ShadowingLocal extends RuleBase {
 					shifted(hit.span.from, span.to, delta)
 		];
 		final bound: Array<Int> = [
-			for (hit in Refs.find(
-				name, tree, site.seams.shape
-			)) if (hit.kind == RefKind.Read && bindsWithin(hit.bindingSpan, outerSpan)) hit.span.from
+			for (hit in Refs.find(name, tree, site.seams.shape))
+				if (hit.kind == RefKind.Read && bindsWithin(hit.bindingSpan, outerSpan)) hit.span.from
 		];
 		return moved.length == bound.length && moved.foreach(m -> bound.contains(m));
 	}

@@ -309,9 +309,9 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 			final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: text }];
 			final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 			final edits: Array<{ span: Span, text: String }> = [
-				for (group in check.crossFileFix(
-					files, CheckFixture.violationsIn(check, files, plugin), plugin
-				)) for (slice in group) for (e in slice.edits) e
+				for (group in check.crossFileFix(files, CheckFixture.violationsIn(check, files, plugin), plugin))
+					for (slice in group)
+						for (e in slice.edits) e
 			];
 			if (edits.length == 0) return text;
 			text = CanonicalEdit.applyEdits(text, edits);

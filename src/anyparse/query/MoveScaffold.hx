@@ -47,9 +47,8 @@ final class MoveScaffold {
 		final provider: Null<TypeInfoProvider> = plugin is TypeInfoProvider ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
 		final fields: Array<MemberGroup> = [
-			for (g in MoveMember.membersOf(
-				prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions
-			)) if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
+			for (g in MoveMember.membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions))
+				if (MemberKinds.isDataFieldKind(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
 		];
 		if (viaField != null) {
 			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);

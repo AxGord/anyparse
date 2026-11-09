@@ -26,9 +26,8 @@ class ImplicitSitesTest extends Test {
 		final tree: QueryNode = plugin.parseFile(source);
 		final sites: ImplicitSites = new ImplicitSites(plugin, CheckFixture.index([{ file: 'C.hx', source: source }], plugin));
 		final landed: Array<String> = [
-			for (s in sites.sitesIn(
-				'C.hx', tree, source, new Span(0, source.length)
-			)) if (s.landing == true) source.substring(s.span.from, s.span.to)
+			for (s in sites.sitesIn('C.hx', tree, source, new Span(0, source.length)))
+				if (s.landing == true) source.substring(s.span.from, s.span.to)
 		];
 		Assert.same(['d'], landed);
 	}

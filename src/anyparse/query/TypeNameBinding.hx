@@ -319,8 +319,9 @@ final class TypeNameBinding {
 			for (f in tables().modules[path] ?? []) for (t in f.types) if (t.isMain && t.name == last) { file: f, type: t }
 		];
 		return mains.length > 0 || path.indexOf('.') < 0 ? mains : [
-			for (f in tables()
-				.modules[SourceText.parentPath(path)] ?? []) for (t in f.types) if (!t.isMain && t.name == last) { file: f, type: t }
+			for (f in tables().modules[SourceText.parentPath(path)] ?? [])
+				for (t in f.types)
+					if (!t.isMain && t.name == last) { file: f, type: t }
 		];
 	}
 
@@ -701,8 +702,9 @@ final class TypeNameBinding {
 		if (rootLength < 0 || dirs.slice(rootLength).join('/') != segments.join('/')) return true;
 		final root: String = dirs.slice(0, rootLength).join('/');
 		final moduleFile: String = '$typeName.${Path.extension(file)}';
-		return [for (depth in fromDepth ... segments.length
-			+ 1) depth].exists(depth -> FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile]))));
+		return [for (depth in fromDepth ... segments.length + 1) depth].exists(depth ->
+			FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile])))
+		);
 	}
 
 	/** Whether two answers name the same declarations, as files and spans. */

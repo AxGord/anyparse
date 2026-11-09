@@ -856,9 +856,8 @@ class HoistCommonImportTest extends Test {
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final rendered: Array<String> = [
-				for (v in reportOf(
-					tree, root
-				)) if (v.message.indexOf(' is read by ') >= 0) '${relative(v.file, root)}:${quoted(v.message, 0)}'
+				for (v in reportOf(tree, root))
+					if (v.message.indexOf(' is read by ') >= 0) '${relative(v.file, root)}:${quoted(v.message, 0)}'
 			];
 			rendered.sort((a, b) -> if (a < b)
 				-1

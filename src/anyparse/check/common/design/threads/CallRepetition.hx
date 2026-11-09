@@ -460,9 +460,8 @@ final class CallRepetition {
 		if (tree == null || span == null) return [];
 		final wanted: String = label.endsWith(' #1') ? label.substring(0, label.length - 3) : label;
 		return [
-			for (l in loops.around(
-				tree, span.from
-			)) if (loops.labelOf(edge.file, tree, l.node, span.from) == wanted) loopKey(edge.file, l.repeating)
+			for (l in loops.around(tree, span.from))
+				if (loops.labelOf(edge.file, tree, l.node, span.from) == wanted) loopKey(edge.file, l.repeating)
 		];
 	}
 

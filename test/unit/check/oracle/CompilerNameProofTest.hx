@@ -299,9 +299,8 @@ final class CompilerNameProofTest extends Test {
 		memo.servers.start(configs);
 		final ask: PositionAsk = { content: SHORT_SOURCE, at: SHORT_SOURCE.indexOf('F.make') };
 		final lines: Array<Null<Int>> = [
-			for (answers in memo.servers.positionsIn(
-				configs, '$root/a/b/Main.hx', [[ask], [ask, ask]]
-			)) for (answer in answers ?? [null]) lineOf(answer)
+			for (answers in memo.servers.positionsIn(configs, '$root/a/b/Main.hx', [[ask], [ask, ask]]))
+				for (answer in answers ?? [null]) lineOf(answer)
 		];
 		memo.servers.stop();
 		CliFixture.removeDir(root);

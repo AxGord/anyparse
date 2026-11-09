@@ -209,8 +209,8 @@ final class ParenGuard {
 		source: String, edits: Array<GuardedEdit>, sites: Array<Site>, delims: ParenDelimiters, plugin: GrammarPlugin
 	): Array<Bool> {
 		return [
-			for (p in 0...maxPosition(sites)
-				+ 1) parseVariant(source, edits, (sites.map(s -> s.position == p): Array<Bool>), delims, plugin) != null
+			for (p in 0...maxPosition(sites) + 1)
+				parseVariant(source, edits, (sites.map(s -> s.position == p): Array<Bool>), delims, plugin) != null
 		];
 	}
 
