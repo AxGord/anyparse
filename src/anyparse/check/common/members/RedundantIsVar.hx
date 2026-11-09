@@ -131,8 +131,9 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		final declared: Null<TypeDeclInfo> = host.types.find(t -> t.name == owner);
 		if (declared == null || declared.hasKeep || declared.isExtern) return;
 		final candidates: Array<Candidate> = [];
+		final metaKinds: Array<String> = ctx.plugin.metaShape().metaKinds;
 		MemberBranchScan.eachMember(branch, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
-			final candidate: Null<Candidate> = certain ? candidateOf(child, run, source, ctx.shape) : null;
+			final candidate: Null<Candidate> = certain ? candidateOf(child, run, source, ctx.shape, metaKinds) : null;
 			if (candidate != null) candidates.push(candidate);
 		});
 		if (candidates.length == 0) return;
@@ -158,17 +159,17 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 	 * The property `member` declares when it is a shape this rule judges — an `@:isVar` in its modifier
 	 * run `run`, both accessor slots storageless, no initializer — or null.
 	 */
-	private static function candidateOf(member: QueryNode, run: Array<QueryNode>, source: String, shape: RefShape): Null<Candidate> {
+	private static function candidateOf(
+		member: QueryNode, run: Array<QueryNode>, source: String, shape: RefShape, metaKinds: Array<String>
+	): Null<Candidate> {
 		final name: Null<String> = member.name;
 		final span: Null<Span> = member.span;
 		if (name == null || span == null || CheckScan.METHOD_KINDS.contains(member.kind)) return null;
 		// `@:keep` pins the member against removal because machinery no scan models reaches it.
 		final retained: Null<String> = shape.retainedDeclMetaName;
-		if (retained != null && run.exists(n -> MemberKinds.META_KINDS.contains(n.kind) && n.name == retained)) return null;
+		if (retained != null && run.exists(n -> metaKinds.contains(n.kind) && n.name == retained)) return null;
 		// An argument-less `@:isVar()` is the same metadata; one carrying arguments is not a spelling `fix` removes.
-		final metaSpan: Null<Span> = run.find(n ->
-			MemberKinds.META_KINDS.contains(n.kind) && n.name == IS_VAR_META && n.children.length == 0
-		)?.span;
+		final metaSpan: Null<Span> = run.find(n -> metaKinds.contains(n.kind) && n.name == IS_VAR_META && n.children.length == 0)?.span;
 		final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
 		return metaSpan != null
 			&& access != null

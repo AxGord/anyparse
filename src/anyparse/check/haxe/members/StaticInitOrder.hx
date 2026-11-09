@@ -35,6 +35,7 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
 		final deferred: Array<String> = (shape.lambdaKinds ?? []).concat([for (k in [shape.namedFnExprKind]) if (k != null) k]);
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
@@ -43,7 +44,9 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 			function walk(node: QueryNode, typeName: Null<String>): Void {
 				final container: Bool = containers.contains(node.kind);
 				final owner: Null<String> = container ? node.name ?? typeName : typeName;
-				final members: Array<OrderedMember> = container ? MemberSlots.collectMembers(node, entry.source, shape, [], regions) : [];
+				final members: Array<OrderedMember> = container
+					? MemberSlots.collectMembers(node, entry.source, shape, metaKinds, [], regions)
+					: [];
 				for (m in members) {
 					final span: Null<Span> = m.initNode?.span;
 					if (span == null || !m.isStatic || reported.has(span.from)) continue;

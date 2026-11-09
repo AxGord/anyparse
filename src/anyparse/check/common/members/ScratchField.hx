@@ -91,7 +91,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final resolved: Null<Seams> = seamsOf(plugin.refShape());
+		final resolved: Null<Seams> = seamsOf(plugin);
 		if (resolved == null) return [];
 		final seams: Seams = resolved;
 		final lazyIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
@@ -136,7 +136,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final resolved: Null<Seams> = seamsOf(plugin.refShape());
+		final resolved: Null<Seams> = seamsOf(plugin);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (resolved == null || tree == null) return [];
 		final seams: Seams = resolved;
@@ -440,7 +440,8 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	}
 
 	/** Bundle the kinds this check reads, or null when one it cannot work without is unset (the check is then a no-op). */
-	private static function seamsOf(shape: RefShape): Null<Seams> {
+	private static function seamsOf(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final assignKind: Null<String> = shape.assignKind;
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
@@ -462,7 +463,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			containers: MemberKinds.classLikeContainerKinds(shape),
 			mutableFieldKinds: present(shape.mutableFieldDeclKinds),
 			functionKinds: present(shape.functionKinds),
-			modifierRunKinds: present(shape.modifierKinds).concat(MemberKinds.META_KINDS),
+			modifierRunKinds: present(shape.modifierKinds).concat(plugin.metaShape().metaKinds),
 			visibility: present(shape.visibilityModifierKinds),
 			defaultVis: defaultVis,
 			binderKinds: BinderScan.binderKinds(shape),

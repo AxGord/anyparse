@@ -357,7 +357,7 @@
 			"name": "M-ISVAR-MEMBER-KEEP-BLIND",
 			"type": "anyparse.check.common.members.RedundantIsVar",
 			"method": "candidateOf",
-			"find": "if (retained != null && run.exists(n -> MemberKinds.META_KINDS.contains(n.kind) && n.name == retained)) return null;",
+			"find": "if (retained != null && run.exists(n -> metaKinds.contains(n.kind) && n.name == retained)) return null;",
 			"replace": "",
 			"note": "a member-level `@:keep` is ignored, so a member pinned against removal by machinery no scan models loses its storage"
 		},
@@ -1118,6 +1118,30 @@
 			"find": "if (facts.demand.staticInitRunsCode(member)) earlierInitRunsCode = true;",
 			"replace": "",
 			"note": "a __init__ calling a helper does not hold, and the plain form reads the constant unset"
+		},
+		{
+			"name": "M-METAKINDS-PREFER-INLINE",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "forEachMethod",
+			"find": "metaKinds.contains(mod.kind)",
+			"replace": "MemberKinds.META_KINDS.contains(mod.kind)",
+			"note": "prefer-inline reads the annotation kinds from the Haxe table again, so a pinned method of a grammar that spells them otherwise is offered inline"
+		},
+		{
+			"name": "M-METAKINDS-COMMON-TABLE-READ",
+			"type": "anyparse.check.common.members.RedundantIsVar",
+			"method": "candidateOf",
+			"find": "run.exists(n -> metaKinds.contains(n.kind) && n.name == retained)",
+			"replace": "run.exists(n -> MemberKinds.META_KINDS.contains(n.kind) && n.name == retained)",
+			"note": "a check/common rule reads a query-layer Haxe annotation table again, which no kind-literal guard can see"
+		},
+		{
+			"name": "M-METAKINDS-PREFER-INLINE-CLASS-RUN",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "metaBlockedClasses",
+			"find": "!runKinds.contains(child.kind)",
+			"replace": "!MemberKinds.isModifierOrMetaKind(child.kind)",
+			"note": "prefer-inline ends a declaration's modifier run on the Haxe annotation table again, so a class annotation of a grammar that spells them otherwise never blocks its class"
 		}
 	]
 }

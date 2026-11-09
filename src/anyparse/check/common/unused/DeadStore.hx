@@ -34,6 +34,9 @@ private typedef LiveCtx = {
 	var exitClearKinds: Array<String>;
 	var exitTopKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+
+	/** The annotation kinds (`MetaShape.metaKinds`): their arguments are compile-time data, so the walk skips them. */
+	var metaKinds: Array<String>;
 	var nestedFnKinds: Array<String>;
 
 	/** The two-armed conditionals (`ShapeVocab.conditionalKinds`): each arm is a path of its own. */
@@ -187,9 +190,11 @@ final class DeadStore extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		return RunScan.collectWith(files, plugin, shape.identKind, (entry, tree, id, violations) -> {
 			NullFlow.forEachFunctionUnit(
-				tree, shape, (body, paramNames) -> analyzeBody(violations, entry.file, entry.source, body, shape, id, paramNames)
+				tree, shape,
+				(body, paramNames) -> analyzeBody(violations, entry.file, entry.source, body, shape, metaKinds, id, paramNames)
 			);
 		});
 	}
@@ -293,7 +298,8 @@ final class DeadStore extends RuleBase {
 	 * over-killing is safe).
 	 */
 	private static function analyzeBody(
-		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>
+		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, metaKinds: Array<String>, identKind: String,
+		paramNames: Array<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final nestedFnKinds: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
@@ -319,6 +325,7 @@ final class DeadStore extends RuleBase {
 			exitClearKinds: returnKinds,
 			exitTopKinds: [for (k in controlExitKinds) if (!returnKinds.contains(k)) k],
 			opaqueKinds: shape.opaqueKinds ?? [],
+			metaKinds: metaKinds,
 			nestedFnKinds: nestedFnKinds,
 			conditionalKinds: ShapeVocab.conditionalKinds(shape),
 			loopKinds: ShapeVocab.loopKinds(shape),
@@ -347,7 +354,7 @@ final class DeadStore extends RuleBase {
 	 */
 	private static function walkBack(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final kind: String = node.kind;
-		if (NullFlow.META_KINDS.contains(kind)) return;
+		if (ctx.metaKinds.contains(kind)) return;
 		if (ctx.opaqueKinds.contains(kind)) {
 			setTop(live, ctx);
 			return;

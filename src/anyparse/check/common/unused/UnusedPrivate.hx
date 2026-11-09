@@ -384,7 +384,11 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	): Bool {
 		final name: Null<String> = member.name;
 		if (owner == null || name == null || index == null) return false;
-		if (!isStaticClassMember(member, parent, plugin.refShape().staticModifierKind)) return false;
+		if (!isStaticClassMember(
+			member, parent, plugin.refShape().staticModifierKind,
+			(plugin.refShape().modifierKinds ?? []).concat(plugin.metaShape().metaKinds)
+		))
+			return false;
 		final reach: Null<StaticReflectionReach> = staticReachOf(plugin);
 		return reach != null && !reach.staticReachable(owner, file, name, index);
 	}
@@ -802,10 +806,12 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	 * from the member, holds `static`. A modifier the run does not show (behind a `#if`) reads as absent,
 	 * which only keeps the string gate closed.
 	 */
-	private static function isStaticClassMember(member: QueryNode, parent: QueryNode, staticKind: Null<String>): Bool {
+	private static function isStaticClassMember(
+		member: QueryNode, parent: QueryNode, staticKind: Null<String>, runKinds: Array<String>
+	): Bool {
 		if (staticKind == null || !CheckScan.isClassBodyKind(parent.kind)) return false;
 		var i: Int = parent.children.indexOf(member) - 1;
-		while (i >= 0 && MemberKinds.MODIFIER_META_KINDS.contains(parent.children[i].kind)) {
+		while (i >= 0 && runKinds.contains(parent.children[i].kind)) {
 			if (parent.children[i].kind == staticKind) return true;
 			i--;
 		}

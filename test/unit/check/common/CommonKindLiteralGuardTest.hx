@@ -1,5 +1,6 @@
 package unit.check.common;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
@@ -21,6 +22,9 @@ class CommonKindLiteralGuardTest extends Test {
 
 	/** The layer the guard reads, relative to the repository root. */
 	private static inline final LAYER: String = 'src/anyparse/check/common';
+
+	/** The names of the query-layer Haxe annotation tables, and of the helper that reads one, a rule of the layer must not use. */
+	private static final TABLE_READS: Array<String> = ['META_KINDS', 'MODIFIER_META_KINDS', 'isModifierOrMetaKind'];
 
 	/**
 	 * The kind literals left, by file. The import declarations are one family no seam answers yet; `Dynamic` there is the
@@ -71,6 +75,30 @@ class CommonKindLiteralGuardTest extends Test {
 		}
 		for (path => texts in ACCOUNTED) for (text in texts)
 			Assert.isTrue(seen.contains('$path $text'), '$path no longer spells \'$text\' - drop it from ACCOUNTED');
+	}
+
+	/**
+	 * No rule of the layer reads an annotation-kind table (`META_KINDS`, `MODIFIER_META_KINDS`,
+	 * `isModifierOrMetaKind`): which nodes are annotations is `MetaShape.metaKinds`, and a read of
+	 * the Haxe list (`MemberKinds`, `NullFlow`) welds the rule to one grammar where the literal guard above cannot see it.
+	 */
+	@:pin('control') @:killer('M-METAKINDS-COMMON-TABLE-READ')
+	public function testNoCommonRuleReadsAnAnnotationKindTable(): Void {
+		final root: String = CliFixture.repoRoot();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
+		for (path in layerFiles(root)) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, File.getContent('$root/$path'));
+			if (tree == null) continue;
+			function visit(node: QueryNode): Void {
+				Assert.isFalse(
+					TABLE_READS.contains(node.name ?? '') && (node.kind == shape.fieldAccessKind || node.kind == shape.identKind),
+					'$path reads a Haxe annotation table - ask `plugin.metaShape().metaKinds` and `refShape().modifierKinds`'
+				);
+				for (child in node.children) visit(child);
+			}
+			visit(tree);
+		}
 	}
 
 	/** The text of every string literal in `tree` whose raw span is one quoted run, quotes stripped. */

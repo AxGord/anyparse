@@ -330,7 +330,7 @@ final class NullFlow {
 	 * Metadata annotation kinds (`@:name(args)` / `@:name` / raw) — their argument
 	 * expressions are compile-time data, never runtime code, so the flow walks
 	 * skip these subtrees entirely (no facts change, no consumer visits). Mirrors
-	 * the plugin's `metaShape().metaKinds`. Shared with `DeadStore`.
+	 * the plugin's `metaShape().metaKinds`.
 	 */
 	public static final META_KINDS: Array<String> = ['MetaCall', 'Meta', 'PlainMeta'];
 

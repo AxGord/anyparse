@@ -217,6 +217,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		// The framework carve-out's two halves: the grammar's own naming seam (which knows the
 		// frameworks its language ships) and the project's declared roster. Resolved once per run
 		// — `frameworksFor` reads a config per file, and the answer is the same for every method.
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final naming: Null<NamingSupport> = plugin.namingSupport();
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		// The grammar's RETAINED tag (Haxe `@:keep`). Asked separately from the inline-neutral
@@ -241,10 +242,11 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		// inline / dynamic / macro / override / @:keep / constructor / self-recursive) — the only
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
-		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, shape, (name, fn, mods, metas) -> {
-			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained, shape) && !candidateNames.contains(name))
-				candidateNames.push(name);
-		});
+		for (t in trees)
+			for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, t.branch, shape, metaKinds, (name, fn, mods, metas) -> {
+				if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed, retained, shape) && !candidateNames.contains(name))
+					candidateNames.push(name);
+			});
 		// Pass B: the value-reference gate, over the REPORT trees. It stays report-scoped on purpose
 		// and it is NOT a soundness gate: `final f: Void -> Int = h.m;` over an `inline` method
 		// compiles and returns the value under `--dce std` AND `--dce full` — the compiler keeps a
@@ -294,7 +296,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		// own TYPE-level annotation is not inline-neutral is skipped whole (see `metaBlockedClasses`).
 		final out: Array<Violation> = [];
 		for (t in trees) {
-			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch);
+			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch, shape, metaKinds);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
 				considerClass(
 					out, cls, t.file, t.source, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming, contracts,
@@ -318,11 +320,14 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			final edits: Array<{ span: Span, text: String }> = [];
 			final shape: RefShape = plugin.refShape();
 			final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
-			for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
-				final span: Null<Span> = fn.span;
-				if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}')) return;
-				edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
-			});
+			for (cls in CheckScan.classBodies(tree)) forEachMethod(
+				cls, branch, shape, plugin.metaShape().metaKinds, (name, fn, mods, metas) -> {
+					final span: Null<Span> = fn.span;
+					if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}'))
+						return;
+					edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+				}
+			);
 			return edits;
 		});
 	}
@@ -466,7 +471,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * inlined method no longer has. `@:build` / `@:autoBuild` land here too, the same verdict
 	 * `transitivelyCarriesBuildMacro` reaches for a grant INHERITED from a supertype.
 	 *
-	 * The run is carried by `RefactorSupport.isModifierOrMetaKind` — metadata AND the modifier
+	 * The run is carried by the grammar's modifier kinds and its `metaKinds` — metadata AND the modifier
 	 * keywords, because `private` / `extern` project as SIBLING nodes BETWEEN the annotation and the
 	 * declaration, and ending the run on them attributed the annotation to the keyword (which owns no
 	 * class body) and handed the class out bare. Every other child ends the run, so an annotation
@@ -475,21 +480,24 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * separately, so `#if A class X #else @:nativeGen class Y #end` blocks only `Y`, and an annotation
 	 * wrapped in a region projects as a name-less `Meta` whose child carries the real name.
 	 */
-	private static function metaBlockedClasses(tree: QueryNode, branch: MemberBranchSeams): Array<QueryNode> {
+	private static function metaBlockedClasses(
+		tree: QueryNode, branch: MemberBranchSeams, shape: RefShape, metaKinds: Array<String>
+	): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		MemberBranchScan.eachMember(branch, tree, child -> !MemberKinds.isModifierOrMetaKind(child.kind), (decl, run, _) -> {
-			if (run.exists(carriesNonNeutralMeta)) for (cls in CheckScan.classBodies(decl)) out.push(cls);
+		final runKinds: Array<String> = (shape.modifierKinds ?? []).concat(metaKinds);
+		MemberBranchScan.eachMember(branch, tree, child -> !runKinds.contains(child.kind), (decl, run, _) -> {
+			if (run.exists(n -> carriesNonNeutralMeta(n, metaKinds))) for (cls in CheckScan.classBodies(decl)) out.push(cls);
 		});
 		return out;
 	}
 
 	/** Whether `node` is — or holds anywhere below it — a metadata node whose name is not `inlineNeutralMeta`. */
-	private static function carriesNonNeutralMeta(node: QueryNode): Bool {
-		final metaName: Null<String> = MemberKinds.META_KINDS.contains(node.kind) ? node.name : null;
+	private static function carriesNonNeutralMeta(node: QueryNode, metaKinds: Array<String>): Bool {
+		final metaName: Null<String> = metaKinds.contains(node.kind) ? node.name : null;
 		// A NAMED annotation's own verdict is final — descending into its ARGUMENTS would let a
 		// `@:privateAccess` inside a whitelisted `@:value(...)` refuse the class. Only the name-less
 		// wrappers a `#if` region projects are worth recursing through.
-		return metaName != null ? !inlineNeutralMeta(metaName) : node.children.exists(carriesNonNeutralMeta);
+		return metaName != null ? !inlineNeutralMeta(metaName) : node.children.exists(c -> carriesNonNeutralMeta(c, metaKinds));
 	}
 
 	/**
@@ -533,7 +541,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			span: Span,
 			isStatic: Bool
 		}> = [];
-		forEachMethod(cls, branch, shape, (name, fn, mods, metas) -> {
+		forEachMethod(cls, branch, shape, plugin.metaShape().metaKinds, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
 			if (
 				span != null && !valueBlocked.contains(name) && isCandidateMethod(name, fn, mods, metas, relaxed, retained, shape)
@@ -623,7 +631,8 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * member kind is named here.
 	 */
 	private static function forEachMethod(
-		cls: QueryNode, branch: MemberBranchSeams, shape: RefShape, cb: (String, QueryNode, Array<String>, Array<String>) -> Void
+		cls: QueryNode, branch: MemberBranchSeams, shape: RefShape, metaKinds: Array<String>,
+		cb: (String, QueryNode, Array<String>, Array<String>) -> Void
 	): Void {
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		MemberBranchScan.eachMember(branch, cls, child -> memberKinds.contains(child.kind), (member, run, certain) -> {
@@ -635,7 +644,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			if (name == null) return;
 			final mods: Array<String> = [];
 			final metas: Array<String> = [];
-			for (mod in run) if (MemberKinds.META_KINDS.contains(mod.kind)) {
+			for (mod in run) if (metaKinds.contains(mod.kind)) {
 				final nm: Null<String> = mod.name;
 				if (nm != null) metas.push(nm);
 			} else {

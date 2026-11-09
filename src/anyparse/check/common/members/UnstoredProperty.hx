@@ -59,6 +59,7 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final r: RunState = {
@@ -71,7 +72,8 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 			},
 			reflection: ReflectionScan.reflectionSurface(files, plugin),
 			propertyKinds: shape.mutableFieldDeclKinds ?? [],
-			runKinds: (shape.modifierKinds ?? []).concat(MemberKinds.META_KINDS),
+			runKinds: (shape.modifierKinds ?? []).concat(metaKinds),
+			metaKinds: metaKinds,
 			writes: null,
 			enumerates: null
 		};
@@ -117,8 +119,8 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 	}
 
 	/** Whether the modifier run of `property` in `cls` holds metadata. */
-	private static function carriesMetadata(property: QueryNode, cls: QueryNode, runKinds: Array<String>): Bool {
-		return MemberKinds.precedingModifiers(property, cls, runKinds).exists(m -> MemberKinds.META_KINDS.contains(m.kind));
+	private static function carriesMetadata(property: QueryNode, cls: QueryNode, runKinds: Array<String>, metaKinds: Array<String>): Bool {
+		return MemberKinds.precedingModifiers(property, cls, runKinds).exists(m -> metaKinds.contains(m.kind));
 	}
 
 	/**
@@ -165,7 +167,7 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 			rule: RULE_ID,
 			severity: Severity.Info,
 			message: '$where, and nothing reads it — its read access can be never',
-			declineReason: carriesMetadata(property, cls, r.runKinds)
+			declineReason: carriesMetadata(property, cls, r.runKinds, r.metaKinds)
 				? 'the property carries metadata, which may reach its field in a way no text here shows'
 				: enumerates(r)
 					? 'code in scope may list or render an object\'s fields, which sees the field this fix removes'
@@ -199,6 +201,9 @@ private typedef RunState = {
 
 	/** The kinds of a member's modifier and metadata run. */
 	final runKinds: Array<String>;
+
+	/** The kinds an annotation in that run carries (`MetaShape.metaKinds`). */
+	final metaKinds: Array<String>;
 
 	/** The scope's field write index, once a candidate needs it. */
 	var writes: Null<FieldWriteIndex>;

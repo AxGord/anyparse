@@ -1,6 +1,5 @@
 package anyparse.check.common.members;
 
-import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
@@ -34,7 +33,7 @@ import anyparse.query.SymbolIndex;
  * The assignment kind comes from `RefShape.assignKind` (unset makes the check a
  * no-op), the bare lvalue from `identKind`, the `this.x` form from
  * `fieldAccessKind` + `selfReferenceText`. The metadata node is any
- * `RefactorSupport.META_KINDS` node named `@:bypassAccessor`. Member resolution and
+ * `MetaShape.metaKinds` node named `@:bypassAccessor`. Member resolution and
  * the write-accessor flag come from `SymbolIndex` (`MemberInfo.hasSetter`), which
  * needs a `TypeInfoProvider` to populate the write slot: the Haxe plugin supplies
  * one and is the only shipped consumer. A grammar without a provider leaves every
@@ -76,7 +75,7 @@ final class RedundantBypassAccessor extends RuleBase {
 		return RunScan.editsWith(plugin, source, context(plugin), (tree, ctx) -> {
 			final flagged: Array<String> = [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}'];
 			final edits: Array<{ span: Span, text: String }> = [];
-			collectEdits(tree, flagged, edits);
+			collectEdits(tree, flagged, edits, ctx.metaKinds);
 			return edits;
 		});
 	}
@@ -89,7 +88,8 @@ final class RedundantBypassAccessor extends RuleBase {
 			assignKind: assignKind,
 			identKind: shape.identKind,
 			fieldAccessKind: shape.fieldAccessKind,
-			self: shape.selfReferenceText
+			self: shape.selfReferenceText,
+			metaKinds: plugin.metaShape().metaKinds
 		};
 	}
 
@@ -100,10 +100,10 @@ final class RedundantBypassAccessor extends RuleBase {
 	 * set-accessor.
 	 */
 	private static function collect(node: QueryNode, file: String, ctx: Ctx, info: FileInfo, out: Array<Violation>): Void {
-		final meta: Null<QueryNode> = bypassMeta(node);
+		final meta: Null<QueryNode> = bypassMeta(node, ctx.metaKinds);
 		if (meta != null) {
-			final wrapped: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
-			final assign: Null<QueryNode> = wrapped == null ? null : unwrapToAssign(wrapped, ctx.assignKind);
+			final wrapped: Null<QueryNode> = node.children.find(c -> !ctx.metaKinds.contains(c.kind));
+			final assign: Null<QueryNode> = wrapped == null ? null : unwrapToAssign(wrapped, ctx.assignKind, ctx.metaKinds);
 			final metaSpan: Null<Span> = meta.span;
 			if (assign != null && metaSpan != null) {
 				final name: Null<String> = lvalueName(assign, ctx);
@@ -120,29 +120,31 @@ final class RedundantBypassAccessor extends RuleBase {
 	}
 
 	/** Re-walk to emit the token deletion for each flagged wrapper. */
-	private static function collectEdits(node: QueryNode, flagged: Array<String>, edits: Array<{ span: Span, text: String }>): Void {
-		final meta: Null<QueryNode> = bypassMeta(node);
+	private static function collectEdits(
+		node: QueryNode, flagged: Array<String>, edits: Array<{ span: Span, text: String }>, metaKinds: Array<String>
+	): Void {
+		final meta: Null<QueryNode> = bypassMeta(node, metaKinds);
 		if (meta != null) {
 			final metaSpan: Null<Span> = meta.span;
-			final wrapped: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
+			final wrapped: Null<QueryNode> = node.children.find(c -> !metaKinds.contains(c.kind));
 			final wrapSpan: Null<Span> = wrapped?.span;
 			if (metaSpan != null && wrapSpan != null && flagged.contains('${metaSpan.from}:${metaSpan.to}'))
 				edits.push({ span: new Span(metaSpan.from, wrapSpan.from), text: '' });
 		}
-		for (child in node.children) collectEdits(child, flagged, edits);
+		for (child in node.children) collectEdits(child, flagged, edits, metaKinds);
 	}
 
 	/** The `@:bypassAccessor` META child of `node`, or null. */
-	private static function bypassMeta(node: QueryNode): Null<QueryNode> {
-		return node.children.find(c -> MemberKinds.META_KINDS.contains(c.kind) && c.name == BYPASS_META);
+	private static function bypassMeta(node: QueryNode, metaKinds: Array<String>): Null<QueryNode> {
+		return node.children.find(c -> metaKinds.contains(c.kind) && c.name == BYPASS_META);
 	}
 
 	/** Descend `node` through nested metadata wrappers to the plain assignment it wraps, or null. */
-	private static function unwrapToAssign(node: QueryNode, assignKind: String): Null<QueryNode> {
+	private static function unwrapToAssign(node: QueryNode, assignKind: String, metaKinds: Array<String>): Null<QueryNode> {
 		if (node.kind == assignKind) return node;
-		if (!node.children.exists(c -> MemberKinds.META_KINDS.contains(c.kind))) return null;
-		final inner: Null<QueryNode> = node.children.find(c -> !MemberKinds.META_KINDS.contains(c.kind));
-		return inner == null ? null : unwrapToAssign(inner, assignKind);
+		if (!node.children.exists(c -> metaKinds.contains(c.kind))) return null;
+		final inner: Null<QueryNode> = node.children.find(c -> !metaKinds.contains(c.kind));
+		return inner == null ? null : unwrapToAssign(inner, assignKind, metaKinds);
 	}
 
 	/**
@@ -196,5 +198,6 @@ private typedef Ctx = {
 	assignKind: String,
 	identKind: String,
 	fieldAccessKind: Null<String>,
-	self: Null<String>
+	self: Null<String>,
+	metaKinds: Array<String>
 };

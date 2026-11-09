@@ -158,7 +158,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
 			walk(
-				violations, entry.file, entry.source, tree, shape, accessors, plugin.lexicalRegions(entry.source),
+				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors,
+				plugin.lexicalRegions(entry.source),
 				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))
 			);
 		});
@@ -202,7 +203,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 					? LintConfig.resolveWith(_resolveConfig, violations[0].file).intOption(id(), BUDGET_OPTION) ?? MAX_RELOCATED_LINES
 					: MAX_RELOCATED_LINES;
 				fixWalk(
-					edits, source, tree, shape, flagged, accessors,
+					edits, source, tree, shape, plugin.metaShape().metaKinds, flagged, accessors,
 					{ movableArglessNew: movableArglessNew, budget: budget, spacing: spacing }, index, file, plugin.lexicalRegions(source)
 				);
 				return edits;
@@ -342,11 +343,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>,
-		regions: Array<LexRegion>, spacing: SpacingPolicy
+		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
+		accessors: Map<Int, Bool>, regions: Array<LexRegion>, spacing: SpacingPolicy
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
-			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, accessors, regions);
+			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, metaKinds, accessors, regions);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(
 				members, source, computePlan(members, source, shape), MemberSpacing.forContainer(spacing, node.kind)
 			);
@@ -358,7 +359,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape, accessors, regions, spacing);
+		for (c in node.children) walk(out, file, source, c, shape, metaKinds, accessors, regions, spacing);
 	}
 
 	/**
@@ -366,12 +367,13 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * degrades to spacing-only fixes).
 	 */
 	private static function fixWalk(
-		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Map<Int, Violation>,
-		accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
+		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
+		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
+		regions: Array<LexRegion>
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
-			emitReorder(edits, source, node, shape, flagged, accessors, options, index, file, regions);
-		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, options, index, file, regions);
+			emitReorder(edits, source, node, shape, metaKinds, flagged, accessors, options, index, file, regions);
+		for (c in node.children) fixWalk(edits, source, c, shape, metaKinds, flagged, accessors, options, index, file, regions);
 	}
 
 	/**
@@ -385,10 +387,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * to `emitSpacingOnly`, so the blank-line normalisation between rank groups still lands and the order stays untouched.
 	 */
 	private static function emitReorder(
-		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Map<Int, Violation>,
-		accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>, regions: Array<LexRegion>
+		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, metaKinds: Array<String>,
+		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
+		regions: Array<LexRegion>
 	): Void {
-		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, accessors, regions);
+		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, metaKinds, accessors, regions);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
 		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);

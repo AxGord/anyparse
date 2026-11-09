@@ -228,7 +228,9 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 		final owner: Null<String> = site.container.name;
 		final annotation: Null<String> = site.typeAnnotation;
 		if (owner == null || annotation == null || index == null || !isBareLiteral(site.defaultNode, shape)) return null;
-		final reused: Null<String> = constantHoldingTheDefault(site, source, shape, annotation, plugin.lexicalRegions(source));
+		final reused: Null<String> = constantHoldingTheDefault(
+			site, source, shape, plugin.metaShape().metaKinds, annotation, plugin.lexicalRegions(source)
+		);
 		if (reused != null) return reused;
 		final ownerName: String = owner;
 		final idx: SymbolIndex = index;
@@ -245,7 +247,9 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 		if (OccurrenceScan.referencedInRange(source, newName, 0, source.length, [])) return null;
 		if (!idx.typing.members.typeProvablyLacksMember(ownerName, newName, file)) return null;
 		if (_runClaims.defers(ownerName, newName, idx)) return null;
-		final at: Null<Int> = constantsRankSplice(site.container, decl, source, shape, ownerName, plugin.lexicalRegions(source));
+		final at: Null<Int> = constantsRankSplice(
+			site.container, decl, source, shape, plugin.metaShape().metaKinds, ownerName, plugin.lexicalRegions(source)
+		);
 		if (at == null) return null;
 		_runClaims.claim(ownerName, newName, idx);
 		stage(inserts, at, '\n\t${member.text}');
@@ -268,9 +272,9 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 	 * than a reuse.
 	 */
 	private static function constantHoldingTheDefault(
-		site: CtorDefaultSite, source: String, shape: RefShape, annotation: String, regions: Array<LexRegion>
+		site: CtorDefaultSite, source: String, shape: RefShape, metaKinds: Array<String>, annotation: String, regions: Array<LexRegion>
 	): Null<String> {
-		for (m in MemberSlots.collectMembers(site.container, source, shape, [], regions)) {
+		for (m in MemberSlots.collectMembers(site.container, source, shape, metaKinds, [], regions)) {
 			final init: Null<QueryNode> = m.initNode;
 			final name: Null<String> = m.node.name;
 			final declSpan: Null<Span> = m.node.span;
@@ -292,10 +296,11 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 	 * A member inside a `#if` region is no anchor: the splice must land in every build.
 	 */
 	private static function constantsRankSplice(
-		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, ownerName: String, regions: Array<LexRegion>
+		container: QueryNode, decl: TypeDeclMatch, source: String, shape: RefShape, metaKinds: Array<String>, ownerName: String,
+		regions: Array<LexRegion>
 	): Null<Int> {
 		var at: Int = -1;
-		for (m in MemberSlots.collectMembers(container, source, shape, [], regions))
+		for (m in MemberSlots.collectMembers(container, source, shape, metaKinds, [], regions))
 			if (m.condition == null && m.rank - MemberRank.StaticPrivateImmutableField <= 0) at = m.span.to;
 		if (at >= 0) return at;
 		final brace: Null<Int> = RefactorSupport.typeBodyBraceOffset(source, decl, ownerName, regions);

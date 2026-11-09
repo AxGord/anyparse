@@ -3,7 +3,6 @@ package anyparse.check.common.members;
 import anyparse.query.CondDirectives;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.MemberKinds;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.util.Strings;
@@ -95,11 +94,12 @@ final class MemberSlots {
 	 * member is recorded with the condition it is declared under (see `collectInto`).
 	 */
 	public static function collectMembers(
-		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>, regions: Array<LexRegion>
+		container: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>, accessors: Map<Int, Bool>,
+		regions: Array<LexRegion>
 	): Array<OrderedMember> {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final out: Array<OrderedMember> = [];
-		collectInto(out, container, source, shape, comments, [], null, accessors);
+		collectInto(out, container, source, shape, metaKinds, comments, [], null, accessors);
 		return out;
 	}
 
@@ -202,7 +202,7 @@ final class MemberSlots {
 	 * each of its members sits in, since the parse tree carries no branch structure.
 	 */
 	private static function collectInto(
-		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape,
+		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
 	): Void {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
@@ -223,7 +223,7 @@ final class MemberSlots {
 		}
 		for (child in parent.children) {
 			if (condKind != null && child.kind == condKind) {
-				if (collectConditional(out, child, source, shape, comments, condStack, outerCond, accessors)) resetModifiers();
+				if (collectConditional(out, child, source, shape, metaKinds, comments, condStack, outerCond, accessors)) resetModifiers();
 			} else if (members.contains(child.kind)) {
 				pushMember(
 					out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, hasMeta, accessors
@@ -232,7 +232,7 @@ final class MemberSlots {
 			} else {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
 				if (inlineKind != null && child.kind == inlineKind) isInline = true;
-				if (MemberKinds.META_KINDS.contains(child.kind)) hasMeta = true;
+				if (metaKinds.contains(child.kind)) hasMeta = true;
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
 					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
@@ -250,14 +250,14 @@ final class MemberSlots {
 	 * `declGroupSpan` - so the caller's modifier flags, read before the guard, must survive it.
 	 */
 	private static function collectConditional(
-		out: Array<OrderedMember>, child: QueryNode, source: String, shape: RefShape,
+		out: Array<OrderedMember>, child: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
 	): Bool {
 		final span: Null<Span> = child.span;
 		final cond: Null<String> = extractConditionText(child, source, shape);
 		final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
 		final firstIdx: Int = out.length;
-		collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
+		collectInto(out, child, source, shape, metaKinds, comments, nextStack, outerCond ?? span, accessors);
 		if (out.length == firstIdx) return false;
 		if (span != null) {
 			absorbLeadDoc(out, firstIdx, source, comments, span.from);

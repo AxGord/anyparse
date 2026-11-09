@@ -59,7 +59,9 @@ class MemberSpacingPolicyTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final root: QueryNode = plugin.parseFile(src);
 		final container: QueryNode = root.children.find(c -> c.kind == 'ClassDecl') ?? root;
-		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, src, plugin.refShape(), [], plugin.lexicalRegions(src));
+		final members: Array<OrderedMember> = MemberSlots.collectMembers(
+			container, src, plugin.refShape(), plugin.metaShape().metaKinds, [], plugin.lexicalRegions(src)
+		);
 		return MemberSpacing.firstSpacingIssue(members, src, { separateInline: false, writer: writer })?.message;
 	}
 

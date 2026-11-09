@@ -319,6 +319,14 @@
 			"find": "&& !scopeIndex.text.privilegeMayReference(c.className, shape.constructorName ?? 'new')",
 			"replace": "&& true",
 			"note": "the constructor arm stops asking what a privilege reaches, so a private constructor built through a waived alias or referenced as `A.new` is deleted"
+		},
+		{
+			"name": "M-METAKINDS-UNUSED-PRIVATE-CTOR",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "collectCtorCandidates",
+			"find": "plugin.metaShape().metaKinds",
+			"replace": "MemberKinds.META_KINDS",
+			"note": "unused-private reads the annotation kinds from the Haxe table again, so a grammar that spells them otherwise loses its private-constructor finding"
 		}
 	]
 }

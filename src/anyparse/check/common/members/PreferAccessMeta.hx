@@ -5,7 +5,6 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.AddMeta;
-import anyparse.query.MemberKinds;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
@@ -19,6 +18,7 @@ private typedef Seams = {
 	final waiver: String;
 	final grant: String;
 	final memberKinds: Array<String>;
+	final metaKinds: Array<String>;
 	final fieldAccessKind: String;
 	final newExprKind: Null<String>;
 };
@@ -88,7 +88,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return RunScan.collectWith(files, plugin, seamsOf(plugin.refShape()), (entry, tree, s, out) -> {
+		return RunScan.collectWith(files, plugin, seamsOf(plugin), (entry, tree, s, out) -> {
 			for (w in waivers(tree, s)) {
 				final span: Null<Span> = w.meta.span;
 				if (span != null) out.push({
@@ -106,7 +106,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final file: String = violations.length > 0 ? violations[0].file : '';
 		final scope: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
-		return RunScan.editsWith(plugin, source, seamsOf(plugin.refShape()), (tree, s) -> {
+		return RunScan.editsWith(plugin, source, seamsOf(plugin), (tree, s) -> {
 			final binder: Null<OperandBinder> = scope == null ? null : OperandBinder.forFile(plugin, file, source, tree, scope);
 			final byFrom: Map<Int, Violation> = [];
 			for (v in violations) {
@@ -135,7 +135,8 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	}
 
 	/** The seams, or null when the grammar names no waiver, no grant or no prefix annotation. */
-	private static function seamsOf(shape: RefShape): Null<Seams> {
+	private static function seamsOf(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final waiver: Null<String> = shape.waivesPrivacyMetaName;
 		final grant: Null<String> = shape.takesPrivateAccessMetaName;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
@@ -145,6 +146,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 			waiver: waiver,
 			grant: grant,
 			memberKinds: shape.memberDeclKinds ?? [],
+			metaKinds: plugin.metaShape().metaKinds,
 			fieldAccessKind: fieldAccessKind,
 			newExprKind: shape.newExprKind
 		};
@@ -164,7 +166,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 				member;
 			if (s.annotatedKinds.contains(node.kind) && node.children.length == ANNOTATED_CHILDREN) {
 				final meta: QueryNode = node.children[0];
-				if (MemberKinds.META_KINDS.contains(meta.kind) && meta.name == s.waiver) out.push({
+				if (s.metaKinds.contains(meta.kind) && meta.name == s.waiver) out.push({
 					meta: meta,
 					expr: node.children[1],
 					member: inMember,

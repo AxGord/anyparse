@@ -172,7 +172,8 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 			fragments: reflection.fragments,
 			scopeIndex: wide,
 			retainedMeta: plugin.refShape().retainedDeclMetaName,
-			staticKind: plugin.refShape().staticModifierKind ?? ''
+			staticKind: plugin.refShape().staticModifierKind ?? '',
+			metaKinds: plugin.metaShape().metaKinds
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached
@@ -235,8 +236,8 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 			// accessor. See `MemberBranchScan.joinRuns`.
 			if (!certain || !isMethod || name == null || span == null) return;
 			final retained: Null<String> = ctx.retainedMeta;
-			final memberKept: Bool = retained != null && runCarries(run, retained, true);
-			final isStatic: Bool = runCarries(run, ctx.staticKind, false);
+			final memberKept: Bool = retained != null && runCarries(run, retained, true, ctx.metaKinds);
+			final isStatic: Bool = runCarries(run, ctx.staticKind, false, ctx.metaKinds);
 			final target: Null<{ prop: String, getter: Bool }> = accessorTargetOf(name);
 			if (target == null) return;
 			final prop: String = target.prop;
@@ -461,9 +462,9 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 	 * modifier KIND. A metadata node's name and a plain modifier's kind live in different slots, so
 	 * the two questions cannot share one `contains`.
 	 */
-	private static function runCarries(run: Array<QueryNode>, wanted: String, isMeta: Bool): Bool {
+	private static function runCarries(run: Array<QueryNode>, wanted: String, isMeta: Bool, metaKinds: Array<String>): Bool {
 		for (mod in run) {
-			final meta: Bool = MemberKinds.META_KINDS.contains(mod.kind);
+			final meta: Bool = metaKinds.contains(mod.kind);
 			if (meta == isMeta && (isMeta ? mod.name == wanted : mod.kind == wanted)) return true;
 		}
 		return false;
@@ -600,5 +601,8 @@ private typedef Ctx = {
 
 	/** `RefShape.staticModifierKind` — the modifier that makes an accessor serve a static property; empty when unset. */
 	var staticKind: String;
+
+	/** `MetaShape.metaKinds` — the kinds a modifier-run node carries when it is an annotation rather than a plain modifier. */
+	var metaKinds: Array<String>;
 
 }
