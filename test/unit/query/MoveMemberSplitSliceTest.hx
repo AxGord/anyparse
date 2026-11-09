@@ -42,8 +42,8 @@ class MoveMemberSplitSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-ACCESS-GRANT-PER-MEMBER')
 	public function testTwoMembersNeedingPrivateAccessShareOneTypeGrant(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tstatic function scale(x:Int):Int return x * 10;\n\n'
-			+ '\tpublic static function one(x:Int):Int return scale(x);\n\n\tpublic static function two(x:Int):Int return scale(x) + one(x);\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tstatic function scale(x:Int):Int return x * 10;\n\n\tpublic static function '
+			+ 'one(x:Int):Int return scale(x);\n\n\tpublic static function two(x:Int):Int return scale(x) + one(x);\n}';
 		final newB: String = okSource(move('pkg/A.hx', 'A', 'one,two', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: 'package pkg;\n\n/** The destination. */\nclass B {}' }
@@ -145,9 +145,8 @@ class MoveMemberSplitSliceTest extends Test {
 			{
 				file: 'p/Big.hx',
 				source: 'package p;\n\nclass Big {\n\tpublic final lib:Lib;\n\tprivate var count(default, null):Int = 0;\n\n'
-				+ '\tpublic function new() {\n\t\tlib = new Lib();\n\t}\n\n\tpublic function bump():Int {\n\t\tcount++;\n'
-				+ '\t\treturn total();\n\t}\n\n\tprivate function total():Int return count;\n\n'
-				+ '\tpublic function run():Int return bump();\n}'
+				+ '\tpublic function new() {\n\t\tlib = new Lib();\n\t}\n\n\tpublic function bump():Int {\n\t\tcount++;\n\t\treturn '
+				+ 'total();\n\t}\n\n\tprivate function total():Int return count;\n\n\tpublic function run():Int return bump();\n}'
 			},
 			{ file: 'p/Lib.hx', source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}' }
 		]));
@@ -187,7 +186,7 @@ class MoveMemberSplitSliceTest extends Test {
 		final unknown: String = errMessage(move(
 			'p/G.hx', 'G', 'isPure', 'Lib',
 			holderScope(
-				'public', '\n\tpublic static function any():Bool {\n' + '\t\tfinal g = Elsewhere.make();\n\t\treturn g.isPure(5);\n\t}\n'
+				'public', '\n\tpublic static function any():Bool {\n\t\tfinal g = Elsewhere.make();\n\t\treturn g.isPure(5);\n\t}\n'
 			)
 		));
 		Assert.isTrue(unknown.contains('its receiver\'s type is not known'), unknown);
@@ -211,80 +210,6 @@ class MoveMemberSplitSliceTest extends Test {
 			'p/G.hx'
 		);
 		Assert.isFalse(other.contains('function isPure'), other);
-	}
-
-	/** The `G` / `Lib` / `User` scope of the receiver-routing tests: `G.library` with visibility `via`, `extra` members on `User`. */
-	private static function holderScope(via: String, extra: String): Array<{ file: String, source: String }> {
-		return [
-			{
-				file: 'p/G.hx',
-				source: 'package p;\n\nclass G {\n\t$via final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
-					+ '\tpublic function isPure(x:Int):Bool return x > 0;\n\n'
-					+ '\tpublic function run():Bool return isPure(1) && this.isPure(4);\n}'
-			},
-			{ file: 'p/Lib.hx', source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}' },
-			{
-				file: 'p/User.hx',
-				source: 'package p;\n\nclass User {\n\tfinal _g:G;\n\n\tpublic function new(g:G) {\n\t\t_g = g;\n\t}\n\n'
-					+ '\tpublic function check():Bool {\n\t\tfinal s:String = "abc";\n'
-					+ '\t\treturn _g.isPure(2) && new G().isPure(3) && s.length == 3;\n\t}\n$extra}'
-			}
-		];
-	}
-
-	/** The `Big` / `Lib` scope of the owned-field tests, with `extra` members added to `Big`. */
-	private static function bigScope(extra: String): Array<{ file: String, source: String }> {
-		return [
-			{
-				file: 'p/Big.hx',
-				source: 'package p;\n\nclass Big {\n\tpublic final lib:Lib;\n\tprivate var count:Int = 0;\n'
-					+ '\tprivate final seen:Array<Int> = [];\n\n\tpublic function new() {\n\t\tlib = new Lib();\n\t}\n\n'
-					+ '\tpublic function bump():Int {\n\t\tcount++;\n\t\tseen.push(count);\n\t\treturn total();\n\t}\n\n'
-					+ '\tprivate function total():Int return count + seen.length;\n\n'
-					+ '\tpublic function run():Int {\n\t\tbump();\n\t\treturn bump();\n\t}\n$extra}'
-			},
-			{ file: 'p/Lib.hx', source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}' }
-		];
-	}
-
-	private static function errMessage(result: MoveResult): String {
-		return switch result {
-			case Ok(changes, _):
-				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
-				'';
-			case Err(message): message;
-		};
-	}
-
-	private static function move(
-		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
-		?via: String, ?keepBare: Bool, ?scaffold: Bool
-	): MoveResult {
-		return MoveMember.move(
-			srcFile, srcType, members.split(','), destType, via, false, scaffold == true, scopeFiles, new HaxeQueryPlugin(),
-			new HaxeQueryPlugin().typeRefShape(), keepBare == true
-		);
-	}
-
-	/** The new source of `file` in an `Ok` result — every rewritten file re-parsed first — or a failed assertion. */
-	private static function okSource(result: MoveResult, file: String): String {
-		switch result {
-			case Ok(changes, _):
-				for (c in changes) {
-					var parsed: Bool = true;
-					try
-						new HaxeQueryPlugin().parseFile(c.newSource)
-					catch (_: haxe.Exception)
-						parsed = false;
-					Assert.isTrue(parsed, 'rewritten ${c.file} should re-parse');
-				}
-				final change: Null<MoveChange> = changes.find(c -> c.file == file);
-				if (change != null) return change.newSource;
-				Assert.fail('no change for file $file');
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-		return '';
 	}
 
 	/**
@@ -339,8 +264,8 @@ class MoveMemberSplitSliceTest extends Test {
 		) -> { file: String, source: String } = (head, modifier) ->
 			{
 				file: 'p/G.hx',
-				source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
-					+ '\t${modifier}public function isPure(x:Int):Bool return x > 0;\n}'
+				source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n'
+					+ '\t}\n\n\t${modifier}public function isPure(x:Int):Bool return x > 0;\n}'
 			};
 		final overriding: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [g(' extends q.Base', 'override '), lib]));
 		Assert.isTrue(overriding.contains('"isPure"') && overriding.contains('overrides'), overriding);
@@ -376,9 +301,9 @@ class MoveMemberSplitSliceTest extends Test {
 		final big: String = okSource(move('p/Big.hx', 'Big', 'twice', 'Half', [
 			{
 				file: 'p/Big.hx',
-				source: 'package p;\n\n@:nullSafety(Strict)\nclass Big {\n\tprivate final _k:Int;\n\tprivate final _hand:{ run:() -> Int };\n\n'
-				+ '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_hand = { run: run };\n\t}\n\n'
-				+ '\tpublic function run():Int return twice();\n\n\tfunction twice():Int return _k * 2;\n}'
+				source: 'package p;\n\n@:nullSafety(Strict)\nclass Big {\n\tprivate final _k:Int;\n'
+				+ '\tprivate final _hand:{ run:() -> Int };\n\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_hand = { run: run };\n'
+				+ '\t}\n\n\tpublic function run():Int return twice();\n\n\tfunction twice():Int return _k * 2;\n}'
 			},
 			{ file: 'p/Half.hx', source: 'package p;\n\nclass Half {}' }
 		], null, false, true), 'p/Big.hx');
@@ -431,6 +356,79 @@ class MoveMemberSplitSliceTest extends Test {
 			{ file: 'p/Dest.hx', source: 'package p;\n\nclass Dest {}' }
 		]), 'p/Dest.hx');
 		Assert.isTrue(both.contains('package p;\n\nusing StringTools;\nusing Lambda;\n\nclass Dest {'), both);
+	}
+
+	/** The `G` / `Lib` / `User` scope of the receiver-routing tests: `G.library` with visibility `via`, `extra` members on `User`. */
+	private static function holderScope(via: String, extra: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'p/G.hx',
+				source: 'package p;\n\nclass G {\n\t$via final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
+					+ '\tpublic function isPure(x:Int):Bool return x > 0;\n\n'
+					+ '\tpublic function run():Bool return isPure(1) && this.isPure(4);\n}'
+			},
+			{ file: 'p/Lib.hx', source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}' },
+			{
+				file: 'p/User.hx',
+				source: 'package p;\n\nclass User {\n\tfinal _g:G;\n\n\tpublic function new(g:G) {\n\t\t_g = g;\n\t}\n\n'
+					+ '\tpublic function check():Bool {\n\t\tfinal s:String = "abc";\n'
+					+ '\t\treturn _g.isPure(2) && new G().isPure(3) && s.length == 3;\n\t}\n$extra}'
+			}
+		];
+	}
+
+	/** The `Big` / `Lib` scope of the owned-field tests, with `extra` members added to `Big`. */
+	private static function bigScope(extra: String): Array<{ file: String, source: String }> {
+		return [
+			{
+				file: 'p/Big.hx',
+				source: 'package p;\n\nclass Big {\n\tpublic final lib:Lib;\n\tprivate var count:Int = 0;\n'
+					+ '\tprivate final seen:Array<Int> = [];\n\n\tpublic function new() {\n\t\tlib = new Lib();\n\t}\n\n\tpublic function '
+					+ 'bump():Int {\n\t\tcount++;\n\t\tseen.push(count);\n\t\treturn total();\n\t}\n\n\tprivate function total():Int '
+					+ 'return count + seen.length;\n\n\tpublic function run():Int {\n\t\tbump();\n\t\treturn bump();\n\t}\n$extra}'
+			},
+			{ file: 'p/Lib.hx', source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}' }
+		];
+	}
+
+	private static function errMessage(result: MoveResult): String {
+		return switch result {
+			case Ok(changes, _):
+				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
+				'';
+			case Err(message): message;
+		};
+	}
+
+	private static function move(
+		srcFile: String, srcType: String, members: String, destType: String, scopeFiles: Array<{ file: String, source: String }>,
+		?via: String, ?keepBare: Bool, ?scaffold: Bool
+	): MoveResult {
+		return MoveMember.move(
+			srcFile, srcType, members.split(','), destType, via, false, scaffold == true, scopeFiles, new HaxeQueryPlugin(),
+			new HaxeQueryPlugin().typeRefShape(), keepBare == true
+		);
+	}
+
+	/** The new source of `file` in an `Ok` result — every rewritten file re-parsed first — or a failed assertion. */
+	private static function okSource(result: MoveResult, file: String): String {
+		switch result {
+			case Ok(changes, _):
+				for (c in changes) {
+					var parsed: Bool = true;
+					try
+						new HaxeQueryPlugin().parseFile(c.newSource)
+					catch (_: haxe.Exception)
+						parsed = false;
+					Assert.isTrue(parsed, 'rewritten ${c.file} should re-parse');
+				}
+				final change: Null<MoveChange> = changes.find(c -> c.file == file);
+				if (change != null) return change.newSource;
+				Assert.fail('no change for file $file');
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+		return '';
 	}
 
 }

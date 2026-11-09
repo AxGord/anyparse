@@ -89,7 +89,8 @@ class UnificationTest extends Test {
 	@:pin('control') @:killer('M-UNIFY-GENERIC-GIVEN')
 	public function testAGivenTypeWithParametersIsDecidedByItsChain(): Void {
 		final index: SymbolIndex = indexOf(
-			'package p;\n\ninterface I {}\n\nclass A implements I {}\n\nclass GA<T> extends A {}\n\nclass G<T> {}\n\nenum Opt<T> {\n\tNone;\n}\n'
+			'package p;\n\ninterface I {}\n\nclass A implements I {}\n\nclass GA<T> extends A {}\n\nclass G<T> {}\n\nenum Opt<T> {\n'
+			+ '\tNone;\n}\n'
 		);
 		Assert.equals(Fits, unifies(index, 'GA', 'A'), 'a generic subclass');
 		Assert.equals(Fits, unifies(index, 'GA', 'I'), 'an interface its superclass implements');

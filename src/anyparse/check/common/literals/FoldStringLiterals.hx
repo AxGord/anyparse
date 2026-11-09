@@ -526,6 +526,10 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		final groups: Int = settled.groups.length;
 		if (groups >= current && !overLong(ctx, decomposition.editSpan)) return null;
 		final width: Null<WidthPair> = settled.width;
+		// A boundary the plan ADDED that the writer left on one line is a concatenation with no
+		// gain, the very shape the merge direction would flag; the split is worth making only
+		// when its pieces land on separate lines.
+		if (width != null && joinsOnOneLine(decomposition.current, settled, width)) return null;
 		// ONE group of nothing but TEXT is the only plan that renders as a compile-time constant —
 		// a lone group holding an expression renders INTERPOLATED, which is a `+` chain the parser
 		// desugared. `MacroGate.intrinsic` is the one gate that can tell those apart.
@@ -631,7 +635,12 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			width = nextWidth;
 			pass++;
 		}
-		return { groups: groups, text: rendered.text, width: width };
+		return {
+			groups: groups,
+			text: rendered.text,
+			parts: rendered.parts,
+			width: width
+		};
 	}
 
 	/** The flat segment list plus the SOURCE's own group boundaries, or null when `node` is not a candidate. */
@@ -1065,7 +1074,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			if (k > 0) text.add(decomposition.glue[ends[k - 1]] ?? GROUP_JOIN);
 			text.add(part);
 		}
-		return { text: text.toString(), widest: widest };
+		return { text: text.toString(), parts: parts, widest: widest };
 	}
 
 	/**
@@ -1183,14 +1192,16 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		for (i in prefix ... original.length - suffix) surplus[original[i]] = (surplus[original[i]] ?? 0) - 1;
 		var widest: Int = 0;
 		var originalWidest: Int = 0;
+		final added: Array<String> = [];
 		for (line => count in surplus) if (count != 0) {
 			final width: Int = displayWidth(line, indentWidth);
+			if (count > 0) added.push(line);
 			if (count > 0 && width > widest)
 				widest = width;
 			else if (count < 0 && width > originalWidest)
 				originalWidest = width;
 		}
-		return { written: widest, original: originalWidest };
+		return { written: widest, original: originalWidest, added: added };
 	}
 
 	/** The finding text, naming the direction the segmentation moves in. */
@@ -1265,6 +1276,19 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			case SegText(_, right): CppLiteralGuard.joinsTrigraph(tail, right);
 			case _: false;
 		}
+	}
+
+	/**
+	 * Whether the writer kept two pieces on ONE line across a boundary the plan added: a join `'a' + 'b'`
+	 * that costs an operator and buys no line break. A boundary the source already had is exempt, since the
+	 * fill keeps one where the pieces cannot merge, a trigraph cut or an operand the writer leaves in place.
+	 */
+	private static function joinsOnOneLine(current: Array<Int>, settled: Settled, width: WidthPair): Bool {
+		for (k in 0...settled.groups.length - 1) if (!current.contains(settled.groups[k])) {
+			final joint: String = settled.parts[k] + GROUP_JOIN + settled.parts[k + 1];
+			for (line in width.added) if (line.indexOf(joint) != -1) return true;
+		}
+		return false;
 	}
 
 }
@@ -1415,6 +1439,7 @@ private typedef Plan = {
  */
 private typedef Rendered = {
 	final text: String;
+	final parts: Array<String>;
 	final widest: Int;
 };
 
@@ -1428,6 +1453,7 @@ private typedef Rendered = {
 private typedef WidthPair = {
 	final written: Int;
 	final original: Int;
+	final added: Array<String>;
 };
 
 /**
@@ -1438,6 +1464,7 @@ private typedef WidthPair = {
 private typedef Settled = {
 	final groups: Array<Int>;
 	final text: String;
+	final parts: Array<String>;
 	final width: Null<WidthPair>;
 };
 

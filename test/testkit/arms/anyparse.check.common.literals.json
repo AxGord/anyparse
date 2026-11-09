@@ -202,6 +202,28 @@
 			"method": "of",
 			"force": "[for (_ in node.children) { declaration: true, constant: false, constantMembers: false }]",
 			"note": "no declaration reads as a constant, so a trigraph in an inline field or an enum-abstract value is fixed into a concatenation that no longer compiles as a constant"
+		},
+		{
+			"name": "M-FOLD-SPLIT-ONE-LINE-ACCEPTED",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "joinsOnOneLine",
+			"force": "false",
+			"note": "a split whose added boundary the writer keeps on one line is accepted, so the fix turns a 141-column literal into a concatenation that gains no line break"
+		},
+		{
+			"name": "M-FOLD-SPLIT-ALWAYS-REFUSED",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "joinsOnOneLine",
+			"force": "true",
+			"note": "every split is refused as a one-line join, so an over-long literal the writer WOULD break at the new boundary is never cut"
+		},
+		{
+			"name": "M-FOLD-SPLIT-KEPT-BOUNDARY-ASKED",
+			"type": "anyparse.check.common.literals.FoldStringLiterals",
+			"method": "joinsOnOneLine",
+			"find": "!current.contains(settled.groups[k])",
+			"replace": "true",
+			"note": "a boundary the source already had is asked too, so a pair that cannot merge (a trigraph cut) and stays on one line is refused as a no-gain split and the fold drops its own edit"
 		}
 	]
 }

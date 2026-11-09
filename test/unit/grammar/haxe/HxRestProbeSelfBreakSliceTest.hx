@@ -20,27 +20,25 @@ import utest.Test;
 @:nullSafety(Strict)
 class HxRestProbeSelfBreakSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, '
-		+ '"anonType": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, '
-		+ '"objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, '
-		+ '"arrayWrap": {"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, '
-		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, '
-		+ '"whitespace": {"bracesConfig": {"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}, '
+	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "anonType": {"defaultWrap": "ignore", "rules": ['
+		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
+		+ '"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": '
+		+ '"packedOrOnePerLine"}]}, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, "arrayWrap": {'
+		+ '"defaultWrap": "ignore", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "packedOrOnePerLine"}]}, '
+		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {'
+		+ '"bracesConfig": {"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}, '
 		+ '"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
-
 	private static final LITERAL: String = '{\n\t\t\t"name": itemName(i),\n'
 		+ '\t\t\t"cropRect": { x: croppedRect.x, y: croppedRect.y, width: croppedRect.width, height: croppedRect.height, more: 1 }\n\t\t}';
-
 	private static final HINT: String = '{ cropRect:{ height:Float, width:Float, x:Float, y:Float }, name:String }';
-
 	private static final HINT_BROKEN: String = '{\n\t\t\tcropRect:{ height:Float, width:Float, x:Float, y:Float }, name:String\n\t\t}';
-
 	private static final ARGS: String = 'firstArgumentOfHolder, secondArgumentOfHolder, thirdArgumentOfHolder, fourthArgumentOfHolder, '
 		+ 'fifthArgumentOfHolder, sixthArgumentOfHolder';
-
 	private static final ARGS_BROKEN: String = '(\n\t\t\tfirstArgumentOfHolder, secondArgumentOfHolder, thirdArgumentOfHolder, '
 		+ 'fourthArgumentOfHolder, fifthArgumentOfHolder,\n\t\t\tsixthArgumentOfHolder\n\t\t)';
 
@@ -92,8 +90,8 @@ class HxRestProbeSelfBreakSliceTest extends Test {
 	 */
 	@:pin('guard')
 	public function testHintThatDoesNotFitStillBreaks(): Void {
-		final hint: String = '{ cropRectangle:{ height:Float, width:Float, x:Float, y:Float }, nameOfTheThing:String, '
-			+ 'anotherFieldHere:Int, more:Int }';
+		final hint: String =
+			'{ cropRectangle:{ height:Float, width:Float, x:Float, y:Float }, nameOfTheThing:String, anotherFieldHere:Int, more:Int }';
 		final broken: String = '{\n\t\t\tcropRectangle:{ height:Float, width:Float, x:Float, y:Float }, nameOfTheThing:String, '
 			+ 'anotherFieldHere:Int, more:Int\n\t\t}';
 		Assert.equals(fn('final wide:$broken = { "name": n };'), write(fn('final wide:$hint = { "name": n };')));

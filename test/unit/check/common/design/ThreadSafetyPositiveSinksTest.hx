@@ -5,6 +5,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
 import unit.cli.CliFixture;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -146,7 +147,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 				+ ' — "sinks" adds to them, "nonBlocking" removes from them'
 			],
 			[
-				for (v in found) if (v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE)) v.message
+				for (v in found) if (v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)) v.message
 			]
 		);
 		#else
@@ -167,14 +168,13 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		#if (sys || nodejs)
 		final native: String = 'package utils; extern class Lock { public function new():Void; public function wait():Bool; }'
 			+ ' class File { public static function getContent(p:String):String return p; }';
-		final app: String = 'package app; import sys.thread.Mutex as M;'
-			+ ' class Holder { public static var lock:sys.thread.Lock; static function make():sys.thread.Lock return null; }'
-			+ ' class A { static function written(l:sys.thread.Lock):Void l.wait(); static function made():Void { final l = new'
-			+ ' sys.thread.Lock(); l.wait(); } static function own(l:utils.Lock):Void l.wait(); static function aliased(m:M):Void'
-			+ ' m.acquire(); static function staticPath():Void sys.io.File.getContent("x"); static function field():Void'
-			+ ' Holder.lock.wait(); static function returned():Void @:privateAccess Holder.make().wait(); static function'
-			+ ' nullable(m:Null<sys.thread.Mutex>):Void m.acquire(); static function main():Void { written(null); made(); own(null);'
-			+ ' aliased(null); staticPath(); field(); returned(); nullable(null); } }';
+		final app: String = 'package app; import sys.thread.Mutex as M; class Holder {'
+			+ ' public static var lock:sys.thread.Lock; static function make():sys.thread.Lock return null; } class A { static function '
+			+ 'written(l:sys.thread.Lock):Void l.wait(); static function made():Void { final l = new sys.thread.Lock(); l.wait(); } static '
+			+ 'function own(l:utils.Lock):Void l.wait(); static function aliased(m:M):Void m.acquire(); static function staticPath():Void '
+			+ 'sys.io.File.getContent("x"); static function field():Void Holder.lock.wait(); static function returned():Void '
+			+ '@:privateAccess Holder.make().wait(); static function nullable(m:Null<sys.thread.Mutex>):Void m.acquire(); static function '
+			+ 'main():Void { written(null); made(); own(null); aliased(null); staticPath(); field(); returned(); nullable(null); } }';
 		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
 		Assert.same([
 			'warning A A.aliased | Mutex.acquire',
@@ -231,8 +231,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		final wild: String =
 			'package utils; import sys.thread.*; class W { static function main():Void { final l:Lock = null; l.wait(); } }';
 		Assert.same(['warning A W.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [own, wild])), 'wildcard');
-		final guarded: String = 'package app; #if sys import sys.thread.Lock; #end'
-			+ ' class G { static function main():Void { final l:Lock = null; l.wait(); } }';
+		final guarded: String =
+			'package app; #if sys import sys.thread.Lock; #end class G { static function main():Void { final l:Lock = null; l.wait(); } }';
 		Assert.same(
 			['warning A G.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [own, guarded])), 'guarded'
 		);
@@ -286,13 +286,10 @@ class ThreadSafetyPositiveSinksTest extends Test {
 			Assert.pass('no std on this machine');
 			return;
 		}
-		final source: String = 'class C { static function makeLock():sys.thread.Lock return null;'
-			+ ' static function stdin():Void { final i = Sys.stdin(); i.readLine(); }'
-			+ ' static function made():Void { var l = makeLock(); l.wait(); }'
-			+ ' static var lock: sys.thread.Lock;'
-			+ ' static function field():Void { var f = lock; f.wait(); }'
-			+ ' static function alias():Void { var a = makeLock(); var b = a; b.wait(); }'
-			+ ' static function main():Void { stdin(); made(); field(); alias(); } }';
+		final source: String = 'class C { static function makeLock():sys.thread.Lock return null; static function stdin():Void {'
+			+ ' final i = Sys.stdin(); i.readLine(); } static function made():Void { var l = makeLock(); l.wait(); }'
+			+ ' static var lock: sys.thread.Lock; static function field():Void { var f = lock; f.wait(); } static function alias():Void {'
+			+ ' var a = makeLock(); var b = a; b.wait(); } static function main():Void { stdin(); made(); field(); alias(); } }';
 		Assert.same([
 			'warning A C.alias | Lock.wait',
 			'warning A C.field | Lock.wait',
@@ -319,15 +316,14 @@ class ThreadSafetyPositiveSinksTest extends Test {
 			Assert.pass('no std on this machine');
 			return;
 		}
-		final source: String = 'import sys.io.File as Disk; import sys.db.ResultSet;'
-			+ ' class C { static function alias():Void Disk.getContent("x"); static function stdin():Void Sys.stdin().readLine();'
-			+ ' static function socket():Void { final s = new sys.net.Socket(); s.input.readLine(); }'
-			+ ' static function ssl(s:sys.ssl.Socket):Void s.input.readLine();'
-			+ ' static function loop():Void sys.thread.Thread.current().events.loop();'
-			+ ' static function idle(e:sys.thread.EventLoop):Void e.wait(1); static function job():Void sys.thread.Thread.runWithEventLoop(() -> {});'
-			+ ' static function datagram(u:sys.net.UdpSocket):Void u.readFrom(null, 0, 4, null);'
-			+ ' static function rows(r:ResultSet):Int return r.length;'
-			+ ' static function main():Void { alias(); stdin(); socket(); ssl(null); loop(); idle(null); job(); datagram(null); rows(null); } }';
+		final source: String = 'import sys.io.File as Disk; import sys.db.ResultSet; class C { static function alias():Void '
+			+ 'Disk.getContent("x"); static function stdin():Void Sys.stdin().readLine(); static function socket():Void {'
+			+ ' final s = new sys.net.Socket(); s.input.readLine(); } static function ssl(s:sys.ssl.Socket):Void '
+			+ 's.input.readLine(); static function loop():Void sys.thread.Thread.current().events.loop(); static function '
+			+ 'idle(e:sys.thread.EventLoop):Void e.wait(1); static function job():Void sys.thread.Thread.runWithEventLoop(() '
+			+ '-> {}); static function datagram(u:sys.net.UdpSocket):Void u.readFrom(null, 0, 4, null);'
+			+ ' static function rows(r:ResultSet):Int return r.length; static function main():Void {'
+			+ ' alias(); stdin(); socket(); ssl(null); loop(); idle(null); job(); datagram(null); rows(null); } }';
 		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
 		Assert.same([
 			'warning A C.alias | File.getContent',
@@ -401,7 +397,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 			'{"rules":{"thread-safety":{"nonBlocking":["Mutex.* the fixture mutex is never held","Sys.sleep it sleeps zero"]}}}', [source],
 			null, true
 		);
-		final notice: Null<String> = found.find(v -> v.file == '' && StringTools.startsWith(v.message, PositiveSinks.NOTICE))?.message;
+		final notice: Null<String> = found.find(v -> v.file == '' && v.message.startsWith(PositiveSinks.NOTICE))?.message;
 		Assert.isTrue(StringTools.endsWith(notice ?? '', '"nonBlocking" removes from them (here 2 sink(s) by 2 entries)'), notice);
 		#else
 		Assert.pass('non-sys target');

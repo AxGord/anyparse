@@ -16,7 +16,6 @@ import anyparse.query.FactText;
 class FactsTypeOracleTest extends Test {
 
 	private static final PLUGIN: HaxeQueryPlugin = new HaxeQueryPlugin();
-
 	private static final SRC: String = 'class A<T> {\n\tvar fld = g();\n\n\tfunction f(p) {\n\t\tvar v = g();\n\t}\n}\n';
 
 	@:pin('control') @:killer('M-FACTS-ORACLE-AGREE') @:killer('M-FACTS-UNION')
@@ -63,7 +62,7 @@ class FactsTypeOracleTest extends Test {
 		// an edit in ANOTHER member: the local below it is placed by the offset the edit shifted it by
 		final facts: CompilerFacts = table([dump('Int')]);
 		final at: Int = SRC.indexOf(' = g();');
-		final now: String = SRC.substr(0, at) + ':Int\n\n\t// added\n' + SRC.substr(at);
+		final now: String = '${SRC.substr(0, at)}:Int\n\n\t// added\n${SRC.substr(at)}';
 		facts.invalidate('A.hx', SRC);
 		final journal: EditJournal = new EditJournal();
 		journal.record(SRC, [{ span: new Span(at, at), text: ':Int\n\n\t// added\n' }], now);
@@ -80,7 +79,7 @@ class FactsTypeOracleTest extends Test {
 		// the local's own text is untouched, but its member's signature changed: what the compiler inferred rests on it
 		final facts: CompilerFacts = table([dump('Int')]);
 		final at: Int = SRC.indexOf('(p)') + 2;
-		final now: String = SRC.substr(0, at) + ':Int' + SRC.substr(at);
+		final now: String = '${SRC.substr(0, at)}:Int${SRC.substr(at)}';
 		facts.invalidate('A.hx', SRC);
 		final journal: EditJournal = new EditJournal();
 		journal.record(SRC, [{ span: new Span(at, at), text: ':Int' }], now);
@@ -102,7 +101,7 @@ class FactsTypeOracleTest extends Test {
 	@:pin('control') @:killer('M-ORACLE-HOME-MODIFIED-TYPE')
 	public function testAFinalClassIsItsOwnHome(): Void {
 		// `final class` projects as a wrapper around the named class form; the wrapper names nothing itself
-		final modified: String = '@:x final ' + SRC;
+		final modified: String = '@:x final $SRC';
 		final facts: CompilerFacts = CompilerFacts.build([
 			{ name: 'one', text: dump('Int', 0, 'Int', 'Int', 'Int', modified), file: path -> path }
 		], file -> file == 'A.hx' ? modified : null, file -> file);
@@ -122,7 +121,7 @@ class FactsTypeOracleTest extends Test {
 		Assert.equals(SRC, facts.sourceOf('A.hx'));
 		// certified for neither the original nor the text on disk: stale, and the original is not kept
 		final other: CompilerFacts = CompilerFacts.build(
-			[{ name: 'one', text: read, file: path -> path }], file -> file == 'A.hx' ? SRC + '\n' : null, file -> file
+			[{ name: 'one', text: read, file: path -> path }], file -> file == 'A.hx' ? '$SRC\n' : null, file -> file
 		);
 		other.invalidate('A.hx', SRC.replace('class A', 'class  A'));
 		Assert.isNull(other.sourceOf('A.hx'));
@@ -319,11 +318,10 @@ class FactsTypeOracleTest extends Test {
 			? ''
 			: ',"calls":[{"t":"A.g","a":"FStatic","rt":"Int","p":[$callFrom,${callFrom + 3}]}],'
 				+ '"flows":[{"s":"$flowFrom","d":"$varType","c":"var","p":[$callFrom,${callFrom + 3}]}]';
-		return '{"k":"facts","v":1,"inline":true}\n'
-			+ '{"k":"type","id":"A","f":"A.hx","p":[${at(0)},${at(text.length)}],"kind":"class","pack":"","params":["T"],'
-			+ '"fields":[{"n":"fld","k":"var(default,default)","t":"$fieldType","p":[$fldFrom,$fldTo]}]}\n'
-			+ '{"k":"node","id":"A.f","f":"A.hx","p":[$fnFrom,$fnTo],"kind":"method","owner":"A","t":"(?Null<$param>)->$result",'
-			+ '"params":[{"n":"p","t":"Null<$param>"}],"vars":[{"n":"v","t":"$varType","p":[$varFrom,$varTo]}]$flowing}\n'
+		return '{"k":"facts","v":1,"inline":true}\n{"k":"type","id":"A","f":"A.hx","p":[${at(0)},${at(text.length)}'
+			+ '],"kind":"class","pack":"","params":["T"],"fields":[{"n":"fld","k":"var(default,default)","t":"$fieldType","p":[$fldFrom,'
+			+ '$fldTo]}]}\n{"k":"node","id":"A.f","f":"A.hx","p":[$fnFrom,$fnTo],"kind":"method","owner":"A","t":"(?Null<$param>)->$result'
+			+ '","params":[{"n":"p","t":"Null<$param>"}],"vars":[{"n":"v","t":"$varType","p":[$varFrom,$varTo]}]$flowing}\n'
 			+ '{"k":"end","nodes":1,"types":1}\n';
 	}
 

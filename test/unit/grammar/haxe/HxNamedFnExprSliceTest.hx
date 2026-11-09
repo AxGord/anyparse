@@ -155,7 +155,8 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 			'class C { function f():Void { var g = function() { return 1; }; var h = function n() { return 1; }; } }'
 		));
 		Assert.equals(
-			'class C {\n\tfunction f():Void {\n\t\tvar g = function() {\n\t\t\treturn 1;\n\t\t}\n\t\tvar h = function n() {\n\t\t\treturn 1;\n\t\t}\n\t}\n}\n',
+			'class C {\n\tfunction f():Void {\n\t\tvar g = function() {\n\t\t\treturn 1;\n\t\t}\n\t\tvar h = function n() {\n'
+			+ '\t\t\treturn 1;\n\t\t}\n\t}\n}\n',
 			plain
 		);
 	}

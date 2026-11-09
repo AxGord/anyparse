@@ -176,11 +176,12 @@ using StringTools;
 	/** A project `@:autoBuild` macro reifying the class it builds hands its class value to code no text here holds. */
 	@:pin('control') @:killer('M-STATICREACH-REIFY-BLIND')
 	public function testAClassReifyingBuildMacroKeepsTheGate(): Void {
-		final reg: String = 'import haxe.macro.Context;\n\nclass Reg {\n\tpublic static macro function build(): Array<haxe.macro.Expr.Field> {\n'
-			+ '\t\tfinal cls = Context.getLocalClass().get();\n\t\tfinal path: Array<String> = cls.pack.concat([cls.name]);\n'
-			+ '\t\tfinal fields = Context.getBuildFields();\n\t\ttrace(macro Registry.add($$p{path}));\n\t\treturn fields;\n\t}\n}\n';
-		final plain: String = 'import haxe.macro.Context;\n\nclass Reg {\n\tpublic static macro function build(): Array<haxe.macro.Expr.Field> {\n'
-			+ '\t\treturn Context.getBuildFields();\n\t}\n}\n';
+		final reg: String = 'import haxe.macro.Context;\n\nclass Reg {\n'
+			+ '\tpublic static macro function build(): Array<haxe.macro.Expr.Field> {\n\t\tfinal cls = '
+			+ 'Context.getLocalClass().get();\n\t\tfinal path: Array<String> = cls.pack.concat([cls.name]);\n\t\tfinal '
+			+ 'fields = Context.getBuildFields();\n\t\ttrace(macro Registry.add($$p{path}));\n\t\treturn fields;\n\t}\n}\n';
+		final plain: String = 'import haxe.macro.Context;\n\nclass Reg {\n\tpublic static macro function build(): '
+			+ 'Array<haxe.macro.Expr.Field> {\n\t\treturn Context.getBuildFields();\n\t}\n}\n';
 		final owner: SourceFile = { file: 'C.hx', source: OWNER.replace('class C', 'class C implements I') };
 		final iface: SourceFile = { file: 'I.hx', source: '@:autoBuild(Reg.build())\ninterface I {}\n' };
 		Assert.isTrue(reachable([owner, iface, { file: 'Reg.hx', source: reg }]));
@@ -192,7 +193,8 @@ using StringTools;
 	public function testGetClassOfThisInAMacroModuleKeepsTheGate(): Void {
 		final tools: SourceFile = {
 			file: 'Tools.hx',
-			source: 'class Tools {\n\tpublic static macro function classOfThis(): haxe.macro.Expr {\n\t\treturn macro Type.getClass(this);\n\t}\n}\n'
+			source: 'class Tools {\n\tpublic static macro function classOfThis(): haxe.macro.Expr {\n'
+				+ '\t\treturn macro Type.getClass(this);\n\t}\n}\n'
 		};
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, tools]));
 	}

@@ -13,6 +13,14 @@ using StringTools;
  */
 class LoopBoundLengthMismatchCheckTest extends Test {
 
+	/** The motivating fixture: a field filled `numPoints` times, read by a loop that runs to `G.N + 1`. */
+	private static final GRID: String = 'class G {\n\tstatic inline final N:Int = 4;\n\n\tvar points:Array<Int>;\n\n'
+		+ '\tpublic function new(numPoints:Int = 5) {\n\t\tpoints = new Array<Int>();\n\t\tfor (i in 0...numPoints) '
+		+ 'points.push(i);\n\t}\n\n\tfunction f():Void {\n\t\tfor (i in 0...G.N + 1) trace(points[i]);\n\t}\n}';
+
+	/** A second type declaring the constant `G.N` the folding tests read. */
+	private static final CONSTANTS: String = '\n\nclass G {\n\tpublic static inline final N:Int = 4;\n}';
+
 	/** A field filled in the constructor to a parameter, read by a loop running to a constant: the motivating shape. */
 	@:pin('control') @:killer('M-LOOPBOUND-SILENT')
 	public function testAFieldFilledInTheConstructorIsReportedAgainstAnUnrelatedBound(): Void {
@@ -49,7 +57,7 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	@:pin('control') @:killer('M-LOOPBOUND-SILENT', 'M-LOOPBOUND-FIXED-WRITE')
 	public function testAFixedLengthConstructionIsItsArgument(): Void {
 		final vs: Array<Violation> = violations(
-			fn('final v:haxe.ds.Vector<Int> = new haxe.ds.Vector(3);\n\t\tv[0] = 1;\n' + '\t\tfor (i in 0...n) trace(v[i]);')
+			fn('final v:haxe.ds.Vector<Int> = new haxe.ds.Vector(3);\n\t\tv[0] = 1;\n\t\tfor (i in 0...n) trace(v[i]);')
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals('the length of `v` comes from `3` (line 3), this loop runs to `n`', vs[0].message);
@@ -103,8 +111,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	@:pin('control') @:killer('M-LOOPBOUND-REACH-IGNORED')
 	public function testAReadPastTheIndexMovesTheReach(): Void {
 		final vs: Array<Violation> = violations(
-			'class C {\n\tstatic final F:Array<Int> = [1, 2, 3, 4, 5];\n\n\tfunction f():Void {\n\t\tfor (r in 0...4) trace(F[r] + F[r + 1]);\n'
-			+ '\t\tfor (r in 0...5) trace(F[r + 1]);\n\t}\n}'
+			'class C {\n\tstatic final F:Array<Int> = [1, 2, 3, 4, 5];\n\n\tfunction f():Void {\n'
+			+ '\t\tfor (r in 0...4) trace(F[r] + F[r + 1]);\n\t\tfor (r in 0...5) trace(F[r + 1]);\n\t}\n}'
 		);
 		Assert.equals(1, vs.length);
 		Assert.equals(
@@ -182,9 +190,9 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	public function testALoopInsideTheFillLoopIsNotChecked(): Void {
 		Assert.equals(
 			0,
-			violations(fn(
-				'final xs:Array<Int> = [];\n\t\tfor (k in 0...n) {\n\t\t\txs.push(k);\n' + '\t\t\tfor (j in 0...n + 1) trace(xs[j]);\n\t\t}'
-			)).length
+			violations(
+				fn('final xs:Array<Int> = [];\n\t\tfor (k in 0...n) {\n\t\t\txs.push(k);\n\t\t\tfor (j in 0...n + 1) trace(xs[j]);\n\t\t}')
+			).length
 		);
 	}
 
@@ -241,8 +249,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	public function testADeclaredTypeOtherThanTheBuiltOneRefuses(): Void {
 		Assert.equals(
 			0,
-			violations(fn('final xs:Null<Array<Int>> = [];\n\t\tfor (k in 0...n) xs.push(k);\n'
-			+ '\t\tfor (i in 0...n + 1) trace(xs[i]);')).length
+			violations(fn('final xs:Null<Array<Int>> = [];\n\t\tfor (k in 0...n) xs.push(k);\n\t\tfor (i in 0...n + 1) trace(xs[i]);'))
+				.length
 		);
 		Assert.equals(0, violations(fn('final v:Array<Int> = new haxe.ds.Vector(3);\n\t\tfor (i in 0...n) trace(v[i]);')).length);
 	}
@@ -258,14 +266,6 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('loop-bound-length-mismatch'));
 	}
-
-	/** The motivating fixture: a field filled `numPoints` times, read by a loop that runs to `G.N + 1`. */
-	private static final GRID: String = 'class G {\n\tstatic inline final N:Int = 4;\n\n\tvar points:Array<Int>;\n\n'
-		+ '\tpublic function new(numPoints:Int = 5) {\n\t\tpoints = new Array<Int>();\n\t\tfor (i in 0...numPoints) points.push(i);\n\t}\n\n'
-		+ '\tfunction f():Void {\n\t\tfor (i in 0...G.N + 1) trace(points[i]);\n\t}\n}';
-
-	/** A second type declaring the constant `G.N` the folding tests read. */
-	private static final CONSTANTS: String = '\n\nclass G {\n\tpublic static inline final N:Int = 4;\n}';
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new LoopBoundLengthMismatch(), src);

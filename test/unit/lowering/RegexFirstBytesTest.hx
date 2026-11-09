@@ -46,10 +46,8 @@ class RegexFirstBytesTest extends Test {
 		// alternatives lead with a digit and one with an escaped dot.
 		{
 			pattern: '(?:[0-9](?:_?[0-9])*\\.[0-9](?:_?[0-9])*(?:[eE][-+]?[0-9](?:_?[0-9])*)?(?:_?f(?:32|64))?'
-				+ '|[0-9](?:_?[0-9])*\\.(?![\\w.])'
-				+ '|\\.[0-9](?:_?[0-9])*(?:[eE][-+]?[0-9](?:_?[0-9])*)?(?:_?f(?:32|64))?'
-				+ '|[0-9](?:_?[0-9])*[eE][-+]?[0-9](?:_?[0-9])*(?:_?f(?:32|64))?'
-				+ '|[0-9](?:_?[0-9])*_?f(?:32|64))',
+				+ '|[0-9](?:_?[0-9])*\\.(?![\\w.])|\\.[0-9](?:_?[0-9])*(?:[eE][-+]?[0-9](?:_?[0-9])*)?(?:_?f(?:32|64))?'
+				+ '|[0-9](?:_?[0-9])*[eE][-+]?[0-9](?:_?[0-9])*(?:_?f(?:32|64))?|[0-9](?:_?[0-9])*_?f(?:32|64))',
 			codes: ['.'.code].concat(digits())
 		},
 		// HxIdentLit / HxTypeName / HxWildPath.
@@ -81,7 +79,7 @@ class RegexFirstBytesTest extends Test {
 		{ pattern: '~/(?:[^/\\\\\n]|\\\\.)*/[a-z]*', codes: ['~'.code] },
 		{ pattern: '@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*', codes: ['@'.code] },
 		{
-			pattern: '@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*' + '(?:\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))?',
+			pattern: '@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*(?:\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))?',
 			codes: ['@'.code]
 		},
 		{ pattern: '@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*(?=\\()', codes: ['@'.code] },
@@ -227,8 +225,8 @@ class RegexFirstBytesTest extends Test {
 		Assert.isNull(RegexFirstBytes.of('a|é'), 'and one non-ASCII alternative poisons the union');
 		Assert.same(['a'.code], RegexFirstBytes.of('[a]x'), 'while the ASCII neighbour is unaffected');
 		// The boundary itself: DEL is the last code a guard may carry.
-		Assert.same([MAX_PROBE_BYTE], RegexFirstBytes.of(String.fromCharCode(MAX_PROBE_BYTE) + 'x'));
-		Assert.isNull(RegexFirstBytes.of(String.fromCharCode(MAX_PROBE_BYTE + 1) + 'x'));
+		Assert.same([MAX_PROBE_BYTE], RegexFirstBytes.of('${String.fromCharCode(MAX_PROBE_BYTE)}x'));
+		Assert.isNull(RegexFirstBytes.of('${String.fromCharCode(MAX_PROBE_BYTE + 1)}x'));
 	}
 
 	/** Ranges, a trailing `-`, and an escaped member inside a class. */

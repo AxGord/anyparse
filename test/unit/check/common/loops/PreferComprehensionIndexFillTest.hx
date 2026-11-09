@@ -171,7 +171,8 @@ using StringTools;
 
 	private function fn(stmts: String): String {
 		return
-			'class C {\n\tfunction f(xs:Array<Int>, n:Int, k:Int, v:Int, h:Int, other:Array<P>):Dynamic {\n\t\t$stmts\n\t\treturn out;\n\t}\n}';
+			'class C {\n\tfunction f(xs:Array<Int>, n:Int, k:Int, v:Int, h:Int, other:Array<P>):Dynamic {\n\t\t$stmts\n\t\treturn out;\n'
+				+ '\t}\n}';
 	}
 
 	private function count(source: String): Int {
