@@ -9,12 +9,14 @@ import anyparse.check.common.unused.SelfAssignment;
 import anyparse.check.common.unused.UnusedLocal;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.grammar.json.JsonText;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
-import devkit.RawJson;
 
 using StringTools;
 
@@ -538,7 +540,7 @@ class LintSliceTest extends Test {
 		), plugin());
 		Assert.equals(1, vs.length);
 		final sourceOf: Map<String, String> = [file => src];
-		final parsed: Array<JValue> = RawJson.items(JValueParser.parse(LintFormat.json(vs, sourceOf)));
+		final parsed: Array<JValue> = JValueTools.items(JValueParser.parse(LintFormat.json(vs, sourceOf)));
 		Assert.equals(1, parsed.length);
 		final rec: JValue = parsed[0];
 		Assert.equals(JsonText.quote(file), written(rec, 'file'));
@@ -558,7 +560,7 @@ class LintSliceTest extends Test {
 			severity: Severity.Warning,
 			message: 'no position'
 		};
-		final bare: JValue = RawJson.items(JValueParser.parse(LintFormat.json([spanless], ['F.hx' => ''])))[0] ?? JNull;
+		final bare: JValue = JValueTools.items(JValueParser.parse(LintFormat.json([spanless], ['F.hx' => ''])))[0] ?? JNull;
 		Assert.equals('null', written(bare, 'endLine'), 'the key is present on a spanless record');
 		Assert.equals('null', written(bare, 'line'));
 		Assert.equals('null', written(bare, 'endCol'));
@@ -916,7 +918,7 @@ class LintSliceTest extends Test {
 		switch record {
 			case JObject(entries):
 				for (entry in entries) if (entry.key == key)
-					found = RawJson.print(entry.value);
+					found = JValueWriter.write(entry.value, JsonFormat.instance.compactWriteOptions);
 			case _:
 		}
 		return found;

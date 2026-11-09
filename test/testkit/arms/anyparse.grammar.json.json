@@ -144,6 +144,14 @@
 			"find": "index == null || '$index' != segment || index < 0 || index >= items.length",
 			"replace": "index == null || index < 0 || index >= items.length",
 			"note": "an index is whatever number a segment starts with, so `1x` and `01` both read element 1 instead of nothing"
+		},
+		{
+			"name": "M-TABBED-OPTIONS-SPACES",
+			"type": "anyparse.grammar.json.JsonFormat",
+			"method": "writeOptions",
+			"find": "indentChar: indentChar,",
+			"replace": "indentChar: Space,",
+			"note": "the tabbed layout falls back to spaces, so a kit a tool re-records is reindented whole"
 		}
 	]
 }

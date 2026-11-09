@@ -3,12 +3,13 @@ package dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.util.Compare;
 import dev.BaseBranch.BaseGot;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Pool;
-import devkit.RawJson;
 import devkit.Result;
 import devkit.Summary;
 import haxe.Exception;
@@ -310,7 +311,10 @@ final class GateLint {
 	public static function rebased(report: String, pathsNow: Map<String, String>): String {
 		if ([for (base => now in pathsNow) if (base != now) now].length == 0) return report;
 		return switch JValueParser.parse(report) {
-			case JArray(records): RawJson.print(JArray([for (record in records) rebasedRecord(record, pathsNow)]), '  ');
+			case JArray(records):
+				JValueWriter.write(
+					JArray([for (record in records) rebasedRecord(record, pathsNow)]), JsonFormat.instance.expandedWriteOptions
+				);
 			case _: report;
 		}
 	}
@@ -423,7 +427,7 @@ final class GateLint {
 
 	/** The path `pathsNow` maps the file `value` names to, `value` itself when it maps none. */
 	private static function rebasedFile(value: JValue, pathsNow: Map<String, String>): JValue {
-		final file: Null<String> = RawJson.string(value);
+		final file: Null<String> = JValueTools.string(value);
 		return file == null ? value : JString(pathsNow[file] ?? file);
 	}
 

@@ -2,8 +2,8 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import dev.GateLint;
-import devkit.RawJson;
 import devkit.Summary.Outcome;
 import utest.Assert;
 import utest.Test;
@@ -17,7 +17,7 @@ final class GateLintTest extends Test {
 	public function testAMovedFilesBaseFindingsTakeItsNewPath(): Void {
 		final report: String = '[{"file":"old/C.hx","rule":"r"},{"file":"a/B.hx","rule":"r"}]';
 		final records: JValue = JValueParser.parse(GateLint.rebased(report, ['old/C.hx' => 'new/C.hx', 'a/B.hx' => 'a/B.hx']));
-		Assert.same(['new/C.hx', 'a/B.hx'], RawJson.items(records).map(RawJson.stringAt.bind(_, 'file')));
+		Assert.same(['new/C.hx', 'a/B.hx'], JValueTools.items(records).map(JValueTools.stringAt.bind(_, 'file')));
 	}
 
 	public function testAReportWithNothingMovedIsAnsweredAsItIs(): Void {

@@ -2,7 +2,8 @@ package dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueTools;
-import devkit.RawJson;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import haxe.Exception;
 import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
@@ -324,7 +325,7 @@ final class TokenTranscript {
 
 	/** The text of a message content: the string itself, or the `text` parts of a block list joined. */
 	private static function textOf(content: Null<JValue>): String {
-		return RawJson.string(content) ?? blocksOf(content).map(block -> block.text ?? '').join('');
+		return JValueTools.string(content) ?? blocksOf(content).map(block -> block.text ?? '').join('');
 	}
 
 	private static function parse(line: String): Null<TranscriptEntry> {
@@ -333,7 +334,7 @@ final class TokenTranscript {
 
 	/** The content blocks of a message content, none when the content is a plain string. */
 	private static function blocksOf(content: Null<JValue>): Array<Block> {
-		return RawJson.items(content).map(blockOf);
+		return JValueTools.items(content).map(blockOf);
 	}
 
 	/** The row key of a call to a tool that is not the shell or a file read: a workflow or other MCP call, else the tool's name. */
@@ -373,13 +374,13 @@ final class TokenTranscript {
 	private static function blockOf(value: JValue): Block {
 		final input: Null<JValue> = JValueTools.field(value, 'input');
 		return {
-			type: RawJson.stringAt(value, 'type'),
-			id: RawJson.stringAt(value, 'id'),
-			name: RawJson.stringAt(value, 'name'),
+			type: JValueTools.stringAt(value, 'type'),
+			id: JValueTools.stringAt(value, 'id'),
+			name: JValueTools.stringAt(value, 'name'),
 			input: input == null ? null : inputOf(input),
-			toolUseId: RawJson.stringAt(value, 'tool_use_id'),
-			isError: RawJson.isTrue(JValueTools.field(value, 'is_error')),
-			text: RawJson.stringAt(value, 'text'),
+			toolUseId: JValueTools.stringAt(value, 'tool_use_id'),
+			isError: JValueTools.isTrue(JValueTools.field(value, 'is_error')),
+			text: JValueTools.stringAt(value, 'text'),
 			content: JValueTools.field(value, 'content')
 		};
 	}
@@ -387,11 +388,11 @@ final class TokenTranscript {
 	/** The tool call input `value`, as far as the audit reads it. */
 	private static function inputOf(value: JValue): Input {
 		return {
-			command: RawJson.stringAt(value, 'command'),
-			filePath: RawJson.stringAt(value, 'file_path'),
-			newString: RawJson.stringAt(value, 'new_string'),
-			content: RawJson.stringAt(value, 'content'),
-			json: RawJson.print(value)
+			command: JValueTools.stringAt(value, 'command'),
+			filePath: JValueTools.stringAt(value, 'file_path'),
+			newString: JValueTools.stringAt(value, 'new_string'),
+			content: JValueTools.stringAt(value, 'content'),
+			json: JValueWriter.write(value, JsonFormat.instance.compactWriteOptions)
 		};
 	}
 

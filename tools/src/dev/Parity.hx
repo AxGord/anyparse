@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.ProcessRun;
 import anyparse.query.cli.BatchAnswer;
@@ -11,7 +12,6 @@ import anyparse.query.cli.BatchRun;
 import devkit.Args;
 import devkit.Command;
 import devkit.Pool;
-import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
 import haxe.Exception;
@@ -37,7 +37,7 @@ final class Parity {
 		'usage: dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--one-process] [--repo <tree>]';
 
 	/** The suite run when the caller names none, from the tree's root. */
-	public static inline final DEFAULT_SUITE: String = 'tools/parity/default-suite.json';
+	public static final DEFAULT_SUITE: String = 'tools/parity/default-suite.json';
 
 	/** How long one invocation may run before it is killed and answers a failure. */
 	private static inline final TIMEOUT_MS: Int = 120000;
@@ -310,7 +310,7 @@ final class Parity {
 		final files: Map<String, String> = [];
 		switch given {
 			case JObject(entries):
-				for (entry in entries) files[entry.key] = RawJson.text(entry.value) ?? '';
+				for (entry in entries) files[entry.key] = JValueTools.text(entry.value) ?? '';
 			case _:
 		}
 		return files;

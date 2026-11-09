@@ -3,10 +3,11 @@ package dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.ConfigFinder;
 import dev.GateLint.LintMove;
 import devkit.Cmd.cmd;
-import devkit.RawJson;
 import devkit.Result;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -89,12 +90,12 @@ final class LintScope {
 		if (kept == null) return null;
 		final redone: Map<String, Bool> = [for (file in scope) file => true];
 		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
-		final isNarrow: JValue -> Bool = record -> narrow.exists(RawJson.stringAt(record, 'rule') ?? '');
+		final isNarrow: JValue -> Bool = record -> narrow.exists(JValueTools.stringAt(record, 'rule') ?? '');
 		final stay: Array<JValue> = kept.filter(record -> {
-			final file: String = RawJson.stringAt(record, 'file') ?? '';
+			final file: String = JValueTools.stringAt(record, 'file') ?? '';
 			return exists(file) && (!redone.exists(file) || isNarrow(record));
 		});
-		return RawJson.print(JArray(stay.concat(added.filter(record -> !isNarrow(record)))), '  ');
+		return JValueWriter.write(JArray(stay.concat(added.filter(record -> !isNarrow(record)))), JsonFormat.instance.expandedWriteOptions);
 	}
 
 	/**
@@ -137,7 +138,8 @@ final class LintScope {
 	public static function scopeDependent(listing: String): Null<Array<String>> {
 		final records: Null<Array<JValue>> = recordsOf(listing);
 		return records == null ? null : [
-			for (record in records) if (RawJson.isTrue(JValueTools.field(record, 'scopeDependent'))) RawJson.stringAt(record, 'id') ?? ''
+			for (record in records)
+				if (JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))) JValueTools.stringAt(record, 'id') ?? ''
 		];
 	}
 
@@ -150,11 +152,11 @@ final class LintScope {
 		if (records == null) return text;
 		final redone: Map<String, Bool> = [for (file in scope) file => true];
 		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
-		return RawJson.print(
-			JArray(records.filter(
-				record -> !(redone.exists(RawJson.stringAt(record, 'file') ?? '') && narrow.exists(RawJson.stringAt(record, 'rule') ?? ''))
-			)),
-			'  '
+		return JValueWriter.write(
+			JArray(records.filter(record -> !(
+				redone.exists(JValueTools.stringAt(record, 'file') ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')
+			))),
+			JsonFormat.instance.expandedWriteOptions
 		);
 	}
 

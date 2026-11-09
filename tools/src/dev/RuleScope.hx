@@ -2,11 +2,13 @@ package dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.util.Compare;
 import dev.SuiteImpact.DeclaredTypes;
 import dev.SuiteImpact.ImpactSource;
 import devkit.Args;
-import devkit.RawJson;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -100,9 +102,9 @@ final class RuleScope {
 	/** `report` (a `lint --format json` array) without the findings of every rule outside `ids`. */
 	public static function keep(report: String, ids: Array<String>): String {
 		return switch JValueParser.parse(report) {
-			case JArray(records): RawJson.print(JArray([
-				for (record in records) if (ids.contains(RawJson.stringAt(record, 'rule') ?? '')) record
-			]), '  ');
+			case JArray(records): JValueWriter.write(JArray([
+				for (record in records) if (ids.contains(JValueTools.stringAt(record, 'rule') ?? '')) record
+			]), JsonFormat.instance.expandedWriteOptions);
 			case _: report;
 		}
 	}

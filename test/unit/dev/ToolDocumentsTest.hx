@@ -2,6 +2,7 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.format.json.AstDumpJson;
 import dev.ArmHead;
@@ -33,7 +34,6 @@ import dev.SweepTrap;
 import dev.TranscriptEntry;
 import dev.TranscriptEntryParser;
 import dev.TranscriptMessage;
-import devkit.RawJson;
 import devkit.TempDir;
 import sys.io.File;
 import utest.Assert;
@@ -85,7 +85,7 @@ final class ToolDocumentsTest extends Test {
 		final kit: SuiteFile = SuiteFileParser.parse(text);
 		final row: SuiteInvocation = (kit.invocations ?? [])[0];
 		Assert.equals('a kit', kit.about);
-		Assert.equals('class A {}\n', RawJson.string(JValueTools.field(kit.files, 'A.hx')));
+		Assert.equals('class A {}\n', JValueTools.string(JValueTools.field(kit.files, 'A.hx')));
 		Assert.same(['-main', 'A'], kit.compile?.args);
 		Assert.equals(true, kit.compile?.run);
 		Assert.same([['x']], kit.compile?.defines);
@@ -96,7 +96,7 @@ final class ToolDocumentsTest extends Test {
 		Assert.equals('^a', row.outShape);
 		Assert.same(['hxq', 'fmt'], row.argv);
 		Assert.equals('s', row.stdin);
-		Assert.equals('b', RawJson.string(JValueTools.field(row.files, 'B.hx')));
+		Assert.equals('b', JValueTools.string(JValueTools.field(row.files, 'B.hx')));
 		Assert.same(['-main', 'B'], row.compile?.args);
 		Assert.equals('o', row.expect?.out);
 		Assert.equals(0, row.expect?.exit);
@@ -114,7 +114,7 @@ final class ToolDocumentsTest extends Test {
 		);
 		final trap: SweepTrap = catalog.traps[0];
 		Assert.equals('t', trap.name);
-		Assert.same(['class A {}', ''], RawJson.strings(JValueTools.field(trap.files, 'A.hx')));
+		Assert.same(['class A {}', ''], JValueTools.strings(JValueTools.field(trap.files, 'A.hx')));
 		Assert.isNull(trap.probes[0].text);
 		Assert.same(['x'], trap.probes[1].text);
 	}
@@ -186,9 +186,11 @@ final class ToolDocumentsTest extends Test {
 		Assert.equals(4, message?.usage?.cacheCreationInputTokens);
 		Assert.equals(5, message?.usage?.cacheCreation?.ephemeral5mInputTokens);
 		Assert.equals(6, message?.usage?.cacheCreation?.ephemeral1hInputTokens);
-		final block: JValue = RawJson.items(message?.content)[0];
-		Assert.equals('Bash', RawJson.stringAt(block, 'name'));
-		Assert.equals('{"command":"ls"}', RawJson.print(JValueTools.field(block, 'input') ?? JNull));
+		final block: JValue = JValueTools.items(message?.content)[0];
+		Assert.equals('Bash', JValueTools.stringAt(block, 'name'));
+		Assert.equals(
+			'{"command":"ls"}', JValueWriter.write(JValueTools.field(block, 'input') ?? JNull, JsonFormat.instance.compactWriteOptions)
+		);
 	}
 
 	public function testRecordingAKitReplacesTheExpectationsAndNothingElse(): Void {

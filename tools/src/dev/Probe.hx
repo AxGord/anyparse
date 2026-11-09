@@ -5,6 +5,7 @@ import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
@@ -13,7 +14,6 @@ import dev.Parity.Outcome;
 import devkit.Args;
 import devkit.Command;
 import devkit.Pool;
-import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
 import haxe.crypto.Sha256;
@@ -42,17 +42,17 @@ final class Probe {
 	public static inline final USAGE: String =
 		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--per-process] [--process-parity] [--repo <tree>]';
 
-	/** Where a kit named by its area lives, from the tree's root: `<KITS>/<area>/kit.json`. */
-	public static inline final KITS: String = 'test/probes';
-
-	/** The file of a kit inside its area's directory. */
-	public static inline final KIT_FILE: String = 'kit.json';
-
-	/** What stands in a recorded stream or file for the directory the invocation ran in, which differs on every run. */
-	public static inline final FIXTURE_MARK: String = '<fixture>';
-
 	/** The threads a gate's or a battery's kit run holds (`checkAll`). */
 	public static inline final GATE_THREADS: Int = 2;
+
+	/** Where a kit named by its area lives, from the tree's root: `<KITS>/<area>/kit.json`. */
+	public static final KITS: String = 'test/probes';
+
+	/** The file of a kit inside its area's directory. */
+	public static final KIT_FILE: String = 'kit.json';
+
+	/** What stands in a recorded stream or file for the directory the invocation ran in, which differs on every run. */
+	public static final FIXTURE_MARK: String = '<fixture>';
 
 	/** How long one haxe compile may run before it is killed and answers a failure. */
 	private static inline final COMPILE_TIMEOUT_MS: Int = 120000;
@@ -265,7 +265,7 @@ final class Probe {
 	/** The kit file `kitFile` with each invocation's expectation replaced by the answer `seen` holds for it, every other field kept. */
 	public static function write(kitFile: String, seen: Array<Seen>): Void {
 		final kit: JValue = JValueParser.parse(File.getContent(kitFile));
-		final text: String = RawJson.print(recorded(kit, seen), '\t');
+		final text: String = JValueWriter.write(recorded(kit, seen), JsonFormat.instance.tabbedWriteOptions);
 		File.saveContent(kitFile, '$text\n');
 	}
 
@@ -447,7 +447,7 @@ final class Probe {
 	}
 
 	private static function withExpectations(rows: JValue, seen: Array<Seen>): JValue {
-		return JArray([for (i => row in RawJson.items(rows)) withExpectation(row, seen[i].answer)]);
+		return JArray([for (i => row in JValueTools.items(rows)) withExpectation(row, seen[i].answer)]);
 	}
 
 	/** The invocation `row` with its `expect` set to `answer`: in place when it holds one, last otherwise. */

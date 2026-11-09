@@ -1,5 +1,6 @@
 package testkit;
 
+import anyparse.grammar.json.JValueWriter;
 #if nodejs
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
@@ -10,7 +11,6 @@ import anyparse.check.oracle.OracleGeneration;
 import anyparse.proc.SpawnJob;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
-import devkit.RawJson;
 #end
 
 /**
@@ -50,7 +50,10 @@ class TestChild {
 						why == null ? JNull : JString(why);
 					}
 				];
-				sys.io.File.saveContent(Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '', RawJson.print(JArray(unavailable)));
+				sys.io.File.saveContent(
+					Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '',
+					JValueWriter.write(JArray(unavailable), JsonFormat.instance.compactWriteOptions)
+				);
 			case 'spawn':
 				ProcessSpawn.runAll(TestChildDocumentParser.parse(input).jobs ?? [], 1024 * 1024, 2);
 			case 'bounded-run':

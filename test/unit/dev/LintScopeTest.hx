@@ -2,9 +2,9 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.util.Compare;
 import dev.LintScope;
-import devkit.RawJson;
 import utest.Assert;
 import utest.Test;
 
@@ -240,7 +240,9 @@ final class LintScopeTest extends Test {
 			case JArray(items): items;
 			case _: [];
 		}
-		final rows: Array<String> = records.map(record -> '${RawJson.stringAt(record, 'file')} ${RawJson.stringAt(record, 'rule')}');
+		final rows: Array<String> = records.map(record ->
+			'${JValueTools.stringAt(record, 'file')} ${JValueTools.stringAt(record, 'rule')}'
+		);
 		rows.sort(Compare.compareString);
 		return rows;
 	}

@@ -2,6 +2,7 @@ package dev;
 
 import anyparse.core.PoolLease;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.json.JValueTools;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ArmTypePath;
@@ -11,7 +12,6 @@ import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Pool;
-import devkit.RawJson;
 import devkit.Result;
 import devkit.TmpLifecycle;
 import haxe.Exception;
@@ -155,13 +155,13 @@ final class MutationArm {
 				continue;
 			}
 			final kind: String = arm.kind == null || arm.kind == '' ? DEFAULT_KIND : arm.kind;
-			final force: String = RawJson.text(arm.force) ?? '';
+			final force: String = JValueTools.text(arm.force) ?? '';
 			if (force != '') {
 				out[name] = Force(arm.type, arm.method, kind, force);
 				continue;
 			}
-			final finds: Array<String> = RawJson.strings(arm.find) ?? [];
-			final replaces: Array<String> = RawJson.strings(arm.replace) ?? [for (_ in finds) ''];
+			final finds: Array<String> = JValueTools.strings(arm.find) ?? [];
+			final replaces: Array<String> = JValueTools.strings(arm.replace) ?? [for (_ in finds) ''];
 			if (finds.length == 0 || finds.length != replaces.length) {
 				out[name] = Unrenderable(
 					'"$name" declares ${finds.length} find fragment(s) against ${replaces.length} replace(s)'

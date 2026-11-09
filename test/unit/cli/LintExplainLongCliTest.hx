@@ -4,10 +4,11 @@ import anyparse.check.common.design.threads.PositiveSinks;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.Cli;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
-import devkit.RawJson;
 import unit.check.common.design.ThreadSafetyCheckTest;
 import unit.check.common.design.ThreadSafetyLongLocksTest;
 
@@ -63,7 +64,7 @@ class LintExplainLongCliTest extends Test {
 		final longLocks: Null<JValue> = JValueTools.at(JValueParser.parse(out), 'longLocks');
 		final aside: Null<JValue> = JValueTools.at(lock(longLocks, 'A._l'), 'aside.0');
 		Assert.same(['"spans-blocking"', '"Mutex.acquire"', '"A._m"', '3', '39'], printed(aside, ['kind', 'call', 'via', 'line', 'col']));
-		final short: Array<JValue> = RawJson.items(JValueTools.at(longLocks, 'mainShort'));
+		final short: Array<JValue> = JValueTools.items(JValueTools.at(longLocks, 'mainShort'));
 		Assert.same([['"A._s"', '4', '25', 'false']], short.map(t -> printed(t, ['lock', 'line', 'col', 'quiet'])));
 		#else
 		Assert.pass('node only: stdout capture');
@@ -104,7 +105,7 @@ class LintExplainLongCliTest extends Test {
 		);
 		Assert.same(
 			[['"A._inner"', '["A._outer"]'], ['"A._outer"', '["A._inner"]']],
-			RawJson.items(JValueTools.at(json, 'dominated')).map(d -> printed(d, ['lock', 'by']))
+			JValueTools.items(JValueTools.at(json, 'dominated')).map(d -> printed(d, ['lock', 'by']))
 		);
 		Assert.stringContains(
 			'dominated A._inner by A._outer: a take of it under one of those is brief',
@@ -127,11 +128,11 @@ class LintExplainLongCliTest extends Test {
 		final json: Null<JValue> = JValueTools.at(
 			JValueParser.parse(lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out), 'longLocks'
 		);
-		final reasons: Array<JValue> = RawJson.items(JValueTools.at(lock(json, 'A._m'), 'reasons'));
+		final reasons: Array<JValue> = JValueTools.items(JValueTools.at(lock(json, 'A._m'), 'reasons'));
 		final paths: Array<Null<String>> = [
 			for (r in reasons)
 				if (JValueTools.field(r, 'errorPath') != null)
-					(RawJson.string(JValueTools.field(r, 'errorPath')) ?? 'errorPath is not a string').split('/').pop()
+					(JValueTools.string(JValueTools.field(r, 'errorPath')) ?? 'errorPath is not a string').split('/').pop()
 		];
 		Assert.same(['A.hx:3'], paths);
 		Assert.stringContains('only on an error path (catch at ', lint(source, ThreadSafetyLongLocksTest.CONFIG, ['--explain-long']).out);
@@ -222,12 +223,12 @@ class LintExplainLongCliTest extends Test {
 	 * where it holds none.
 	 */
 	private static function printed(value: Null<JValue>, paths: Array<String>): Array<String> {
-		return paths.map(path -> RawJson.print(JValueTools.at(value, path) ?? JNull));
+		return paths.map(path -> JValueWriter.write(JValueTools.at(value, path) ?? JNull, JsonFormat.instance.compactWriteOptions));
 	}
 
 	/** The record of `lock` among the long locks of an `--explain-long` section. */
 	private static function lock(longLocks: Null<JValue>, lock: String): Null<JValue> {
-		return RawJson.items(JValueTools.at(longLocks, 'long')).filter(l -> RawJson.stringAt(l, 'lock') == lock)[0];
+		return JValueTools.items(JValueTools.at(longLocks, 'long')).filter(l -> JValueTools.stringAt(l, 'lock') == lock)[0];
 	}
 
 	#if (sys || nodejs)

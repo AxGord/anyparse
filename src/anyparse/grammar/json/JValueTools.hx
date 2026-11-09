@@ -97,4 +97,53 @@ class JValueTools {
 		}
 	}
 
+	/** The string `value` is, null for any other value. */
+	public static function string(value: Null<JValue>): Null<String> {
+		return switch value {
+			case JString(v): v;
+			case _: null;
+		}
+	}
+
+	/** The string, number or boolean `value` is as text, null for any other value. */
+	public static function text(value: Null<JValue>): Null<String> {
+		return switch value {
+			case JString(v): v;
+			case JNumber(v): Std.string(v);
+			case JBool(v): Std.string(v);
+			case _: null;
+		}
+	}
+
+	/** The scalar `value` is as a one-item list, a list's scalar items as text, null for an absent `value`. */
+	public static function strings(value: Null<JValue>): Null<Array<String>> {
+		return switch value {
+			case null: null;
+			case JNull: null;
+			case JArray(held): [for (item in held) text(item) ?? ''];
+			case scalar: [text(scalar) ?? ''];
+		}
+	}
+
+	/** The items of the array `value` is, none for any other value. */
+	public static function items(value: Null<JValue>): Array<JValue> {
+		return switch value {
+			case JArray(held): held;
+			case _: [];
+		}
+	}
+
+	/** The string at `key` of `value`, null when it holds none. */
+	public static function stringAt(value: Null<JValue>, key: String): Null<String> {
+		return string(JValueTools.field(value, key));
+	}
+
+	/** Whether `value` is the boolean `true`. */
+	public static function isTrue(value: Null<JValue>): Bool {
+		return switch value {
+			case JBool(v): v;
+			case _: false;
+		}
+	}
+
 }

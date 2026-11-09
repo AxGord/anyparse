@@ -1,6 +1,6 @@
 package devkit;
 
-import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.util.Compare;
 import devkit.Cmd.cmd;
 import haxe.Exception;
@@ -180,7 +180,7 @@ final class FixtureCache {
 
 	/** `text` as one JavaScript string literal. */
 	private static function literal(text: String): String {
-		return RawJson.print(JString(text));
+		return JsonFormat.instance.quote(text);
 	}
 
 }

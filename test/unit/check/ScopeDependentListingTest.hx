@@ -4,7 +4,6 @@ import anyparse.check.RuleIndex;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
-import devkit.RawJson;
 
 /**
  * The rule listing a tool reads to learn which rules answer differently on a narrower report scope: the rules that
@@ -33,7 +32,8 @@ class ScopeDependentListingTest extends Test {
 			case _: [];
 		}
 		return [
-			for (record in records) if (RawJson.isTrue(JValueTools.field(record, 'scopeDependent'))) RawJson.stringAt(record, 'id') ?? ''
+			for (record in records)
+				if (JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))) JValueTools.stringAt(record, 'id') ?? ''
 		];
 	}
 

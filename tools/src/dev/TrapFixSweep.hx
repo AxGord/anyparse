@@ -1,9 +1,9 @@
 package dev;
 
 import anyparse.grammar.json.JValue;
+import anyparse.grammar.json.JValueTools;
 import devkit.Args;
 import devkit.Cmd.cmd;
-import devkit.RawJson;
 import devkit.Result;
 import devkit.TempDir;
 import haxe.io.Path;
@@ -124,7 +124,7 @@ final class TrapFixSweep {
 		final out: Map<String, String> = [];
 		switch trap.files {
 			case JObject(entries):
-				for (entry in entries) out[entry.key] = (RawJson.strings(entry.value) ?? []).join('\n') + '\n';
+				for (entry in entries) out[entry.key] = (JValueTools.strings(entry.value) ?? []).join('\n') + '\n';
 			case _:
 		}
 		final own: Null<Array<String>> = probe.text;

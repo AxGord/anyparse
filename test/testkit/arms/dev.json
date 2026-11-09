@@ -1928,7 +1928,7 @@
 			"name": "M-LINTSCOPE-LISTING-IGNORES-MARKER",
 			"type": "dev.LintScope",
 			"method": "scopeDependent",
-			"find": "RawJson.isTrue(JValueTools.field(record, 'scopeDependent'))",
+			"find": "JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))",
 			"replace": "true",
 			"note": "every rule of the engine's listing is carried from the base, so a scoped lint replaces nothing"
 		},
@@ -1991,7 +1991,7 @@
 			"name": "M-LINTSCOPE-JUDGED-DROPS-UNMARKED-RULE",
 			"type": "dev.LintScope",
 			"method": "judged",
-			"find": "narrow.exists(RawJson.stringAt(record, 'rule') ?? '')",
+			"find": "narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')",
 			"replace": "true",
 			"note": "every rule of a re-linted file leaves the compare, so a finding the land did judge moves unseen"
 		},
@@ -1999,7 +1999,7 @@
 			"name": "M-LINTSCOPE-JUDGED-DROPS-OUTSIDE-SCOPE",
 			"type": "dev.LintScope",
 			"method": "judged",
-			"find": "redone.exists(RawJson.stringAt(record, 'file') ?? '')",
+			"find": "redone.exists(JValueTools.stringAt(record, 'file') ?? '')",
 			"replace": "true",
 			"note": "a scope-dependent rule leaves the compare on every file, so its movement outside what the land re-linted is never refused"
 		},

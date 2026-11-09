@@ -2,8 +2,8 @@ package unit.cli;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
+import anyparse.grammar.json.JValueTools;
 import anyparse.query.Cli;
-import devkit.RawJson;
 
 /**
  * `apq lint --category <id>` NARROWS a run to the rules of that category the config enables — it never force-enables a
@@ -71,10 +71,12 @@ class LintCategoryCliTest extends Test {
 			Cli.run(['lint', '--list-rules', '--category', 'imports', '--format', 'json'])
 		);
 		#if nodejs
-		final records: Array<JValue> = RawJson.items(JValueParser.parse(listed));
+		final records: Array<JValue> = JValueTools.items(JValueParser.parse(listed));
 		Assert.isTrue(records.length > 0, 'the category holds rules');
 		for (r in records)
-			Assert.equals('imports', RawJson.stringAt(r, 'category'), '${RawJson.stringAt(r, 'id')} is listed under its own category');
+			Assert.equals(
+				'imports', JValueTools.stringAt(r, 'category'), '${JValueTools.stringAt(r, 'id')} is listed under its own category'
+			);
 		#end
 		#else
 		Assert.pass('non-sys target');

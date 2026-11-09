@@ -10,11 +10,12 @@ import anyparse.check.oracle.ReachBuildsRun;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.query.Cli;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.ReachLiveness.ReachBuilds;
-import devkit.RawJson;
 
 /**
  * The builds an oracle run probed, read back by a run that compiles nothing (`--no-oracle`) only while the compile input
@@ -201,11 +202,11 @@ class ReachBuildsCacheTest extends Test {
 		final record: JValue = JValueParser.parse(File.getContent(path));
 		final configuration: Null<JValue> = JValueTools.at(record, 'configurations.0');
 		put(configuration, 'values', JArray([JNull]));
-		File.saveContent(path, RawJson.print(record));
+		File.saveContent(path, JValueWriter.write(record, JsonFormat.instance.compactWriteOptions));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a value pair that is null');
 		put(configuration, 'values', JArray([]));
 		put(configuration, 'defined', JArray([JNumber(1)]));
-		File.saveContent(path, RawJson.print(record));
+		File.saveContent(path, JValueWriter.write(record, JsonFormat.instance.compactWriteOptions));
 		Assert.isNull(ReachBuildsCache.load(oracles), 'a define that is no string');
 		CliFixture.removeDir(dir);
 		#else

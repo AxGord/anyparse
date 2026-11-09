@@ -6,10 +6,11 @@ import anyparse.check.haxe.literals.PreferLpad;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JValueWriter;
+import anyparse.grammar.json.JsonFormat;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.ExitCode;
-import devkit.RawJson;
 import unit.cli.CliFixture;
 
 using StringTools;
@@ -84,10 +85,11 @@ class LanguageBoundTest extends Test {
 		final markdown: String = RuleIndex.markdown([new PreferLpad(), new MagicNumber()]);
 		Assert.stringContains('| ${RuleIndex.guideLink(new PreferLpad())} | haxe | off |', markdown);
 		Assert.stringContains('| ${RuleIndex.guideLink(new MagicNumber())} | any | on |', markdown);
-		final records: Array<JValue> = RawJson.items(JValueParser.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()])));
+		final records: Array<JValue> = JValueTools.items(JValueParser.parse(RuleIndex.json([new PreferLpad(), new MagicNumber()])));
 		Assert.same(
 			['["haxe"]', '[]'],
-			records.map(r -> RawJson.print(JValueTools.field(r, 'languages') ?? JNull)), 'an unbound rule lists no grammar'
+			records.map(r -> JValueWriter.write(JValueTools.field(r, 'languages') ?? JNull, JsonFormat.instance.compactWriteOptions)),
+			'an unbound rule lists no grammar'
 		);
 	}
 

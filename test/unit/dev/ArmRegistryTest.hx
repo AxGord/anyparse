@@ -4,7 +4,6 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import dev.ArmRegistry;
-import devkit.RawJson;
 import devkit.TempDir;
 import sys.io.File;
 import utest.Assert;
@@ -33,8 +32,8 @@ final class ArmRegistryTest extends Test {
 			File.saveContent(dir.file('a.json'), file([arm('A', '1')]));
 			File.saveContent(dir.file('notes.txt'), 'not a registry document');
 			Assert.same(['A', 'B'], ArmRegistry.read(dir.path).map(r -> r.key), 'in file-name order');
-			final merged: Array<JValue> = RawJson.items(JValueTools.field(JValueParser.parse(ArmRegistry.merged(dir.path)), 'arms'));
-			Assert.same(['A', 'B'], merged.map(a -> RawJson.stringAt(a, 'name')), 'the merged text is one document');
+			final merged: Array<JValue> = JValueTools.items(JValueTools.field(JValueParser.parse(ArmRegistry.merged(dir.path)), 'arms'));
+			Assert.same(['A', 'B'], merged.map(a -> JValueTools.stringAt(a, 'name')), 'the merged text is one document');
 			Assert.raises(() -> ArmRegistry.read(dir.file('missing')), ArmRegistryError);
 		});
 	}
