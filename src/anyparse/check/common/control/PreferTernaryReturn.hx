@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.check.Check.CarryingEdit;
 import anyparse.check.Check.CarryingFix;
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.query.BoolExprShape;
@@ -72,7 +73,7 @@ using StringTools;
  * positions are enumerable, so it can carry them instead of bailing.
  */
 @:nullSafety(Strict)
-final class PreferTernaryReturn extends RuleBase implements CarryingFix implements ConfigAware {
+final class PreferTernaryReturn extends RuleBase implements CarryingFix implements ConfigAware implements QuotationAware {
 
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -138,7 +139,9 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 
 	/** `TypeResolver.childReturnTypeSource` with this check's seams unpacked from `Seams`. */
 	private static inline function childReturnType(node: QueryNode, source: String, s: Seams, retType: Null<String>): Null<String> {
-		return TypeResolver.childReturnTypeSource(node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds);
+		return TypeResolver.childReturnTypeSource(
+			node, source, retType, s.functionKinds, s.lambdaKinds, s.bodyKinds, s.paramKinds, s.shape.opaqueKinds
+		);
 	}
 
 	/**

@@ -1437,6 +1437,21 @@
 			"find": "unknownRuns && !typing.typeDeclared(typeName)",
 			"replace": "false",
 			"note": "an index read on a type outside the index reads as plain under isProvenPure"
+		},
+		{
+			"name": "M-FRAME-SPLICE-UNKNOWN",
+			"type": "anyparse.check.scan.ScopeFrames",
+			"method": "isSplicedStatement",
+			"force": "false",
+			"note": "a spliced statement adds no unknown binding to its frame, so a move into it passes the collision gate though the splice may declare the name"
+		},
+		{
+			"name": "M-FRAME-RUN-SPLICE",
+			"type": "anyparse.check.scan.ScopeFrames",
+			"method": "collidesWithScope",
+			"find": "if (ReificationScan.isSpliceStatement(s, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds)) return true;",
+			"replace": "",
+			"note": "a moved run holding a spliced statement passes the collision gate, though the splice may declare any name in the frame it lands in"
 		}
 	]
 }

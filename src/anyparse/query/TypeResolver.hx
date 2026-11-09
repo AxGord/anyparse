@@ -431,6 +431,9 @@ final class TypeResolver {
 	 * step of a top-down walk that threads "what does the enclosing function promise to
 	 * return" — a `null` result means "nothing is promised", never "not yet computed".
 	 *
+	 * A node of `opaqueKinds` (a `macro { … }` quotation) promises nothing either: the code in it is built, not run in the
+	 * function around it, so what that function declares says nothing about the quotation's `return`s.
+	 *
 	 * ★ The scope set is `functionKinds` UNION `lambdaKinds`, and the union is the point. A
 	 * Haxe lambda projects as `FnExpr` / `ThinParenLambdaExpr` / `ParenLambdaExpr` /
 	 * `ThinArrow`, and NONE of those is in `functionKinds` — so a walk rebinding on
@@ -444,11 +447,14 @@ final class TypeResolver {
 	 */
 	public static function childReturnTypeSource(
 		node: QueryNode, source: String, inherited: Null<String>, functionKinds: Array<String>, lambdaKinds: Array<String>,
-		bodyKinds: Array<String>, paramKinds: Array<String>
+		bodyKinds: Array<String>, paramKinds: Array<String>, ?opaqueKinds: Array<String>
 	): Null<String> {
-		return functionKinds.contains(node.kind) || lambdaKinds.contains(node.kind)
-			? functionReturnTypeSource(node, source, bodyKinds, paramKinds)
-			: inherited;
+		return if (opaqueKinds != null && opaqueKinds.contains(node.kind))
+			null
+		else if (functionKinds.contains(node.kind) || lambdaKinds.contains(node.kind))
+			functionReturnTypeSource(node, source, bodyKinds, paramKinds)
+		else
+			inherited;
 	}
 
 	/**

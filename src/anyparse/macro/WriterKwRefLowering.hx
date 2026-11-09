@@ -861,9 +861,12 @@ final class WriterKwRefLowering {
 		// other policy leaves the ctor unwrapped → byte-identical.
 		return c.branch.fmtHasFlag('conditionalMarkerDedent')
 			? macro (
-				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
-					? _dcmz($case3Doc)
-					: opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc
+				if (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero)
+					_dcmz($case3Doc)
+				else if (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
+					_dcmd($case3Doc)
+				else
+					$case3Doc
 			)
 			: case3Doc;
 	}

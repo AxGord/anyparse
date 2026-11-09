@@ -420,18 +420,17 @@ final class WriterPrattLowering {
 			// `lowerInfixBranch` is generated for Haxe alone.
 			final _compareBreakOnOverflow: Bool = $v{isCompareBreakOp}
 				&& (!opt._inTernaryCond || opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak);
-			final _inner: anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
-				|| anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
-				? _compareBreakOnOverflow
-					? _dc([
-						_left,
-						_dile(
-							opt.lineWidth + 1, _dn(_cols, _dc([_dhl(), _dt($v{opAfterText}), _right])),
-							_dc([_dt($v{opWithSpaces}), _right])
-						)
-					])
-					: _glued
-				: _dg(_dc([_left, _dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right]))]));
+			final _inner: anyparse.core.Doc = if (
+				!anyparse.format.wrap.WrapList.startsWithOpenDelim(_right) && !anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
+			)
+				_dg(_dc([_left, _dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right]))]))
+			else if (_compareBreakOnOverflow)
+				_dc([
+					_left,
+					_dile(opt.lineWidth + 1, _dn(_cols, _dc([_dhl(), _dt($v{opAfterText}), _right])), _dc([_dt($v{opWithSpaces}), _right]))
+				])
+			else
+				_glued;
 			final _rhsTrail: Null<String> = $rhsTrailExpr;
 			final _innerT: anyparse.core.Doc = _rhsTrail != null ? _dc([_inner, trailingCommentDocVerbatim(_rhsTrail, opt)]) : _inner;
 			if ($v{prec} < ctxPrec)

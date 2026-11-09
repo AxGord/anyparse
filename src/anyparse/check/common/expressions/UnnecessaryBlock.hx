@@ -128,7 +128,10 @@ final class UnnecessaryBlock extends RuleBase {
 			scopeKinds: shape.scopeKinds,
 			functionKinds: shape.functionKinds ?? [],
 			localDeclKinds: ScopeFrames.bindingKinds(shape),
-			condKind: shape.conditionalMemberKind
+			condKind: shape.conditionalMemberKind,
+			spliceKinds: shape.spliceKinds ?? [],
+			exprStmtKind: shape.exprStatementKind,
+			annotationKinds: shape.prefixAnnotationKinds ?? []
 		};
 	}
 
@@ -165,7 +168,7 @@ final class UnnecessaryBlock extends RuleBase {
 		if (
 			block != null
 			&& block.children.length <= CheckScan.BARE_BLOCK_MAX_STATEMENTS
-			&& !ScopeFrames.collidesWithScope(block.children, seams.localDeclKinds, scopeNames)
+			&& !ScopeFrames.collidesWithScope(block.children, seams, scopeNames)
 		)
 			out.push(block);
 	}
@@ -185,4 +188,7 @@ private typedef Seams = {
 	final functionKinds: Array<String>;
 	final localDeclKinds: Array<String>;
 	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
 };

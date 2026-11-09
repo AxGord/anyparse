@@ -180,6 +180,14 @@ class UnnecessaryBlockCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('#if js\n\t\tvar x = 1;\n\t\ttrace(x);\n\t\t#end\n\t\ttrace(2);') >= 0, 'unexpected: $fixed');
 	}
 
+	/**
+	 * A block in a `macro` quotation is the scope structure the macro
+	 * emits - a consumer of the quotation may match on it - so it stays.
+	 */
+	public function testABlockInAMacroReificationIsLeftAlone(): Void {
+		Assert.equals(0, violations(wrap('final e = macro {\n\t\t\t{ foo(); bar(); }\n\t\t\tbaz();\n\t\t};')).length);
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}

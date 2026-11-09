@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.DeclFallbackChain.DeclSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
@@ -87,7 +88,7 @@ import anyparse.query.SymbolIndex;
  * check a no-op).
  */
 @:nullSafety(Strict)
-final class PreferTernaryAssignment extends RuleBase implements ConfigAware {
+final class PreferTernaryAssignment extends RuleBase implements ConfigAware implements QuotationAware {
 
 	/** The finding message for the decl arm (a declaration and the one-branch `if` after it). */
 	private static final DECL_MESSAGE: String =

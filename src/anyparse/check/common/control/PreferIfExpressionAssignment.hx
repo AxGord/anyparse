@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.DeclFallbackChain.DeclSeams;
 import anyparse.check.scan.AssignmentTreeHoist;
 import anyparse.check.scan.IfExpressionChain;
@@ -123,7 +124,7 @@ import anyparse.query.SymbolIndex;
  * that nesting).
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionAssignment extends RuleBase {
+final class PreferIfExpressionAssignment extends RuleBase implements QuotationAware {
 
 	/** A real chain is a head plus at least one `else if` -- a 2-branch `if`/`else` (one branch) is `prefer-ternary-assignment`'s. */
 	private static inline final MIN_CHAIN_BRANCHES: Int = 2;

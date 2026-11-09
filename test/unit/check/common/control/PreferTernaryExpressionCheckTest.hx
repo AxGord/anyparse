@@ -154,14 +154,6 @@ class PreferTernaryExpressionCheckTest extends Test {
 		);
 	}
 
-	/** A reification subtree is spliced code a consumer may pattern-match, not source anyone reads. */
-	public function testMacroSubtreeNotFlagged(): Void {
-		// The `if`-expression sits in a DELIMITED slot (`macro var q = …`), so only the
-		// opaque-subtree skip can refuse it — a bare `macro if (…)` would already be
-		// refused by the slot gate and would prove nothing about this one.
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\treturn macro var q = if (c) 1 else 2;\n\t}\n}').length);
-	}
-
 	/** Identifier branch values, not integers — the one lexical case where a bad splice does not re-space itself. */
 	public function testFixIdentifierBranches(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
@@ -247,6 +239,15 @@ class PreferTernaryExpressionCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = if (!c) x else false;\n\t}\n}';
 		Assert.equals('!c ? x : false', keptEdit(src, true));
 		Assert.equals('c ? false : x', keptEdit(src, false));
+	}
+
+	/** A `macro` reification is read and fixed like any other code: `c ? 1 : 2` builds the value the `if`-expression built. */
+	@:pin('control')
+	@:killer('M-PTE-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn macro var q = if (c) 1 else 2;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('c ? 1 : 2', edits(src)[0].text);
 	}
 
 	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */

@@ -1011,7 +1011,8 @@
 			"name": "M-ASYM-SPLICE-BARE",
 			"type": "anyparse.check.common.control.BranchChain",
 			"method": "isSplice",
-			"force": "false",
+			"find": "return ReificationScan.isSpliceStatement(node, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds);",
+			"replace": "return false;",
 			"note": "a branch a quotation splices counts as bare, so `if (a) { p(); q(); } else $b;` is flagged and its splice braced, though the macro may splice a block there"
 		},
 		{
@@ -1119,6 +1120,85 @@
 			"find": "elseOf(parent, ifKinds) == node",
 			"replace": "ifKinds.contains(parent.kind) && parent.children.contains(node)",
 			"note": "a then branch counts as an else-if link, so the ternary rules skip the head of every if they should rewrite"
+		},
+		{
+			"name": "M-PTR-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "PreferTernaryReturn",
+			"kind": "ClassDecl",
+			"find": "final class PreferTernaryReturn extends RuleBase implements CarryingFix implements ConfigAware implements QuotationAware {",
+			"replace": "final class PreferTernaryReturn extends RuleBase implements CarryingFix implements ConfigAware {",
+			"note": "the rule takes the central reification drop again, so an if/return pair inside a macro quotation is neither reported nor collapsed"
+		},
+		{
+			"name": "M-PTA-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryAssignment",
+			"method": "PreferTernaryAssignment",
+			"kind": "ClassDecl",
+			"find": "final class PreferTernaryAssignment extends RuleBase implements ConfigAware implements QuotationAware {",
+			"replace": "final class PreferTernaryAssignment extends RuleBase implements ConfigAware {",
+			"note": "the rule takes the central reification drop again, so an if/else assignment inside a macro quotation is neither reported nor collapsed"
+		},
+		{
+			"name": "M-PTE-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "PreferTernaryExpression",
+			"kind": "ClassDecl",
+			"find": "final class PreferTernaryExpression extends RuleBase implements ConfigAware implements QuotationAware {",
+			"replace": "final class PreferTernaryExpression extends RuleBase implements ConfigAware {",
+			"note": "the rule takes the central reification drop again, so an if-expression inside a macro quotation is neither reported nor rewritten"
+		},
+		{
+			"name": "M-PIEA-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionAssignment",
+			"method": "PreferIfExpressionAssignment",
+			"kind": "ClassDecl",
+			"find": "final class PreferIfExpressionAssignment extends RuleBase implements QuotationAware {",
+			"replace": "final class PreferIfExpressionAssignment extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so an assignment chain inside a macro quotation is neither reported nor collapsed"
+		},
+		{
+			"name": "M-PIEC-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "PreferIfExpressionChain",
+			"kind": "ClassDecl",
+			"find": "final class PreferIfExpressionChain extends RuleBase implements QuotationAware {",
+			"replace": "final class PreferIfExpressionChain extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so a ternary chain inside a macro quotation is neither reported nor rewritten"
+		},
+		{
+			"name": "M-PIER-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "PreferIfExpressionReturn",
+			"kind": "ClassDecl",
+			"find": "final class PreferIfExpressionReturn extends RuleBase implements QuotationAware {",
+			"replace": "final class PreferIfExpressionReturn extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so a return chain inside a macro quotation is neither reported nor collapsed"
+		},
+		{
+			"name": "M-REDUNDANT-ELSE-QUOTATION-BLIND",
+			"type": "anyparse.check.common.control.RedundantElse",
+			"method": "RedundantElse",
+			"kind": "ClassDecl",
+			"find": "final class RedundantElse extends RuleBase implements QuotationAware {",
+			"replace": "final class RedundantElse extends RuleBase {",
+			"note": "the rule takes the central reification drop again, so an else after an exiting branch inside a macro quotation is neither reported nor de-nested"
+		},
+		{
+			"name": "M-PTR-QUOTED-RETTYPE",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "childReturnType",
+			"find": "s.paramKinds, s.shape.opaqueKinds",
+			"replace": "s.paramKinds, null",
+			"note": "a quotation inherits the declared return type of the function around it, so a Bool there licenses a boolean ternary on a value the quoted code never promised is Bool"
+		},
+		{
+			"name": "M-DECL-CHAIN-SPLICE",
+			"type": "anyparse.check.common.control.DeclFallbackChain",
+			"method": "match",
+			"find": " || MemberKinds.subtreeContainsAnyKind(head, s.shape.spliceKinds ?? [])",
+			"replace": "",
+			"note": "a chain holding a spliced statement still folds into its declaration, though the splice may read the variable the initializer then moves past"
 		}
 	]
 }

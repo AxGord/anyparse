@@ -41,15 +41,6 @@ private typedef ExpressionTyping = {
 @:nullSafety(Strict)
 final class CheckScan {
 
-	/** The read-accessor method-name prefix; its length also slices the property name off. */
-	public static inline final GET_PREFIX: String = 'get_';
-
-	/** The write-accessor method-name prefix (same length as `GET_PREFIX`, which slices both). */
-	public static inline final SET_PREFIX: String = 'set_';
-
-	/** The static-text child kind inside an interpolated string expression. */
-	public static inline final STRING_FRAGMENT_KIND: String = 'Literal';
-
 	/**
 	 * The largest top-level statement count a bare `{ … }` statement block may hold and still read as noise
 	 * rather than as a deliberate section marker. Calibrated on a real tree: the blocks a reader wants gone
@@ -61,6 +52,15 @@ final class CheckScan {
 	 * fixers disagree about the same shape and one of them emits what the other refuses to clean.
 	 */
 	public static inline final BARE_BLOCK_MAX_STATEMENTS: Int = 5;
+
+	/** The read-accessor method-name prefix; its length also slices the property name off. */
+	public static final GET_PREFIX: String = 'get_';
+
+	/** The write-accessor method-name prefix (same length as `GET_PREFIX`, which slices both). */
+	public static final SET_PREFIX: String = 'set_';
+
+	/** The static-text child kind inside an interpolated string expression. */
+	public static final STRING_FRAGMENT_KIND: String = 'Literal';
 
 	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
 	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
@@ -290,7 +290,10 @@ final class CheckScan {
 			scopeKinds: shape.scopeKinds,
 			functionKinds: shape.functionKinds ?? [],
 			localDeclKinds: ScopeFrames.bindingKinds(shape),
-			condKind: shape.conditionalMemberKind
+			condKind: shape.conditionalMemberKind,
+			spliceKinds: shape.spliceKinds ?? [],
+			exprStmtKind: shape.exprStatementKind,
+			annotationKinds: shape.prefixAnnotationKinds ?? []
 		};
 		final parents: Map<QueryNode, QueryNode> = [];
 		fillParents(tree, parents);
@@ -922,8 +925,7 @@ final class CheckScan {
 		)
 			return whole;
 		final parent: QueryNode = ifParent;
-		return seams.containerKinds.contains(parent.kind)
-			&& !ScopeFrames.collidesWithScope(body.children, seams.localDeclKinds, frames[parent] ?? [])
+		return seams.containerKinds.contains(parent.kind) && !ScopeFrames.collidesWithScope(body.children, seams, frames[parent] ?? [])
 			? source.substring(bs.from + 1, bs.to - 1).trim()
 			: whole;
 	}
@@ -971,6 +973,9 @@ private typedef CondSimplifySeams = {
 	final functionKinds: Array<String>;
 	final localDeclKinds: Array<String>;
 	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
 };
 
 /**

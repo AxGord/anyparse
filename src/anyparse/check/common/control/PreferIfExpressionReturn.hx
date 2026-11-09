@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BoolExprShape;
@@ -106,7 +107,7 @@ import anyparse.query.SymbolIndex;
  * Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any unset makes it a no-op).
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionReturn extends RuleBase {
+final class PreferIfExpressionReturn extends RuleBase implements QuotationAware {
 
 	/** This check's rule id, written into every finding it raises. */
 	private static inline final RULE_ID: String = 'prefer-if-expression-return';

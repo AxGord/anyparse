@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.check.scan.IfExpressionChain;
@@ -68,9 +69,8 @@ import anyparse.query.SymbolIndex;
  * - no comment in a region the rebuild drops (the `if (` / `)` / `else` glue and the braces
  *   all go away), following the family's fail-closed comment guard.
  *
- * A reification subtree (`RefShape.opaqueKinds`, Haxe's `macro { … }`) is skipped wholesale,
- * matching `double-negation` / `comparison-to-boolean`: its interior is spliced code a
- * consumer may pattern-match on, not source a human reads.
+ * A `macro { … }` quotation is read like any other code (`QuotationAware`): the ternary types the same as the
+ * if-expression, and a spliced branch is not in the whitelist, so it never reaches an arm.
  *
  * ## Handoff to `join-branch-call`
  *
@@ -110,7 +110,7 @@ import anyparse.query.SymbolIndex;
  * direction.
  */
 @:nullSafety(Strict)
-final class PreferTernaryExpression extends RuleBase implements ConfigAware {
+final class PreferTernaryExpression extends RuleBase implements ConfigAware implements QuotationAware {
 
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -211,7 +211,6 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 			branchKinds: branchKinds,
 			delimitedAllKinds: (shape.delimitedAllChildKinds ?? []).concat(parenKind == null ? [] : [parenKind]),
 			delimitedTailKinds: shape.delimitedTailChildKinds ?? [],
-			opaqueKinds: shape.opaqueKinds ?? [],
 			negation: NegatedCondition.readSeams(plugin, files, config, report),
 			shape: shape
 		};
@@ -220,12 +219,9 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware {
 	/**
 	 * Walk `node`, collecting every value `if` that is rewritable IN ITS SLOT. `parent` /
 	 * `childIndex` carry the slot the node occupies, which the emitted ternary — unlike the
-	 * self-delimiting `if`-expression it replaces — is sensitive to. A reification subtree
-	 * (`opaqueKinds`) is skipped wholesale, as the sibling rewrite rules do: its interior is
-	 * spliced code a consumer may pattern-match, not source anyone reads.
+	 * self-delimiting `if`-expression it replaces — is sensitive to.
 	 */
 	private static function walk(node: QueryNode, scan: Scan, out: Array<Match>, parent: Null<QueryNode>, childIndex: Int): Void {
-		if (scan.seams.opaqueKinds.contains(node.kind)) return;
 		if (scan.seams.ifExprKinds.contains(node.kind) && slotAcceptsTernary(parent, childIndex, scan.seams)) {
 			final m: Null<Match> = match(node, scan);
 			if (m != null) out.push(m);
@@ -293,7 +289,6 @@ private typedef Seams = {
 	var branchKinds: Array<String>;
 	var delimitedAllKinds: Array<String>;
 	var delimitedTailKinds: Array<String>;
-	var opaqueKinds: Array<String>;
 
 	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
 	var negation: Null<InversionSeams>;

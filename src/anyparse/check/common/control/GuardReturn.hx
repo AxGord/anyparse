@@ -261,6 +261,9 @@ final class GuardReturn extends RuleBase {
 			shape: shape,
 			implicitTailEnabled: voidReturnKind != null && blockBodyKind != null && valueReturnKinds.length > 0,
 			condKind: shape.conditionalMemberKind,
+			spliceKinds: shape.spliceKinds ?? [],
+			exprStmtKind: shape.exprStatementKind,
+			annotationKinds: shape.prefixAnnotationKinds ?? [],
 			negation: NegationScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport()
 		};
@@ -523,6 +526,9 @@ private typedef Seams = {
 	final shape: RefShape;
 	final implicitTailEnabled: Bool;
 	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
 	final negation: NegationSeams;
 	final logic: Null<BooleanLogicSupport>;
 }

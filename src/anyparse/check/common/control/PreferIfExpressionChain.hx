@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.NegationScan;
 import anyparse.check.scan.OperatorSelection;
@@ -218,7 +219,7 @@ import anyparse.query.SymbolIndex;
  * (nothing to convert) or no host kind → the check is a no-op.
  */
 @:nullSafety(Strict)
-final class PreferIfExpressionChain extends RuleBase {
+final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 
 	/** Two conditions (three leaf values) — below this, the ternary IS the canon. */
 	private static inline final MIN_RUNGS: Int = 2;
@@ -348,22 +349,19 @@ final class PreferIfExpressionChain extends RuleBase {
 			armKinds: ShapeVocab.switchArmKinds(shape),
 			negation: NegationScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport(),
-			parenKind: shape.parenKind,
-			opaqueKinds: shape.opaqueKinds ?? []
+			parenKind: shape.parenKind
 		};
 	}
 
 	/**
 	 * Walk `node`, collecting every convertible chain HEAD. `parentKind` carries the slot the
 	 * node occupies (the host gate) and `inElseSlot` whether it is an inner rung of an
-	 * enclosing chain, which is skipped so a chain is reported once. A reification subtree is
-	 * skipped whole.
+	 * enclosing chain, which is skipped so a chain is reported once.
 	 */
 	private static function walk(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin,
 		lazy: Lazy, out: Array<Match>, parentKind: Null<String>, inElseSlot: Bool
 	): Void {
-		if (s.opaqueKinds.contains(node.kind)) return;
 		final isChain: Bool = s.chainKinds.contains(node.kind);
 		if (isChain && !inElseSlot && parentKind != null && s.hostKinds.contains(parentKind)) {
 			final m: Null<Match> = match(node, source, comments, s, plugin, lazy, parentKind);
@@ -606,7 +604,6 @@ private typedef Seams = {
 	var negation: NegationSeams;
 	var logic: Null<BooleanLogicSupport>;
 	var parenKind: Null<String>;
-	var opaqueKinds: Array<String>;
 }
 
 /**

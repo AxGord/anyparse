@@ -966,9 +966,11 @@ final class TriviaTryparseLowering {
 		final fit: Expr = { expr: ECall(fn, args), pos: Context.currentPos() };
 		return macro {
 			final _caseBody: anyparse.core.Doc = if (_fitCase)
-				$fit;
+				$fit
+			else if (opt.alignInlineSwitchCaseBody)
+				_dc(_docs)
 			else
-				opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs));
+				_dn(_cols, _dc(_docs));
 			_dwb(_trailDocs.length > 0 ? _dc([_caseBody, _dc(_trailDocs)]) : _caseBody);
 		};
 	}

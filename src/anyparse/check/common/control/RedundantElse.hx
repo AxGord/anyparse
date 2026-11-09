@@ -1,5 +1,6 @@
 package anyparse.check.common.control;
 
+import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.check.scan.ScopeFrames;
 import anyparse.query.CanonicalEdit;
@@ -71,7 +72,7 @@ import anyparse.query.SymbolIndex;
  * makes the check report-only.
  */
 @:nullSafety(Strict)
-final class RedundantElse extends RuleBase {
+final class RedundantElse extends RuleBase implements QuotationAware {
 
 	private static final MESSAGE: String = 'this else is redundant — the if branch always exits';
 
@@ -283,7 +284,7 @@ final class RedundantElse extends RuleBase {
 	 */
 	private static function deNestText(elseNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>): Null<String> {
 		final stmts: Array<QueryNode> = seams.support.blockKinds().contains(elseNode.kind) ? elseNode.children : [elseNode];
-		if (ScopeFrames.collidesWithScope(stmts, seams.localDeclKinds, scopeNames)) return null;
+		if (ScopeFrames.collidesWithScope(stmts, seams, scopeNames)) return null;
 		final run: Null<Span> = deNestedRun(elseNode, source, seams);
 		return run == null ? null : source.substring(run.from, run.to);
 	}
@@ -337,6 +338,9 @@ final class RedundantElse extends RuleBase {
 			functionKinds: shape.functionKinds ?? [],
 			scopeKinds: shape.scopeKinds,
 			condKind: shape.conditionalMemberKind,
+			spliceKinds: shape.spliceKinds ?? [],
+			exprStmtKind: shape.exprStatementKind,
+			annotationKinds: shape.prefixAnnotationKinds ?? [],
 			identKind: shape.identKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			notEqKind: shape.notEqKind,
@@ -365,6 +369,9 @@ private typedef Seams = {
 	final functionKinds: Array<String>;
 	final scopeKinds: Array<String>;
 	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
 
 	/** The `fix` narrowing gate's kinds: the guard shape it recognises and the receivers it compares. */
 	final identKind: String;

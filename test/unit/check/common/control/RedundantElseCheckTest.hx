@@ -300,6 +300,56 @@ class RedundantElseCheckTest extends Test {
 		CheckFixture.assertRegistered('redundant-else-after-return');
 	}
 
+	/** A `macro` reification is read and fixed like any other code: the de-nested statements type the same in the quoted block. */
+	@:pin('control')
+	@:killer('M-REDUNDANT-ELSE-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { foo(); bar(); }\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/** A spliced statement beside the `if` may declare the name an else-body local would then redeclare: the else stays. */
+	@:pin('control')
+	@:killer('M-FRAME-SPLICE-UNKNOWN')
+	public function testASplicedSiblingKeepsTheElse(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n'
+			+ '\t\t\t$$rest;\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A spliced statement inside the else body may declare any name: de-nesting it into the enclosing list is refused. */
+	@:pin('control')
+	@:killer('M-FRAME-RUN-SPLICE')
+	public function testASplicedElseStatementKeepsTheElse(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { $$d; foo(); }\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** `@:mergeBlock $b{d};` declares into the enclosing block whatever it names: the metadata wrapper does not hide the splice. */
+	@:pin('control')
+	@:killer('M-SPLICE-UNDER-META')
+	public function testAMetadataWrappedSplicedSiblingKeepsTheElse(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n'
+			+ '\t\t\t@:mergeBlock $$b{d};\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A metadata-wrapped splice in the else body may declare any name: de-nesting it into the enclosing list is refused. */
+	@:pin('control')
+	@:killer('M-SPLICE-UNDER-META')
+	public function testAMetadataWrappedSplicedElseStatementKeepsTheElse(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { foo(); @:m $$x; }\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new RedundantElse(), src);
 	}

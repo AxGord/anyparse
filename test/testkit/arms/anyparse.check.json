@@ -495,6 +495,14 @@
 			"find": "return covering.length == 0",
 			"replace": "return covering.length < 0",
 			"note": "a file the oracle does not read is no longer declined by name"
+		},
+		{
+			"name": "M-SPLICE-UNDER-META",
+			"type": "anyparse.check.ReificationScan",
+			"method": "isSpliceStatement",
+			"find": "while (annotationKinds.contains(inner.kind) && inner.children.length > 0) inner = inner.children[inner.children.length - 1];",
+			"replace": "",
+			"note": "a splice under a metadata wrapper (`@:mergeBlock $b{decls};`) is not seen as a splice, so a de-nest beside or past it passes the collision gate though the splice declares into the enclosing block"
 		}
 	]
 }

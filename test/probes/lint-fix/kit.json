@@ -1529,6 +1529,105 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "Q1",
+			"note": "a quotation is read: the asymmetric pair is braced, the pair whose else is the splice $b is left alone",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"Mac.hx",
+				"--rule",
+				"asymmetric-branch-braces",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function t(c:Bool):Void {\n\t\tMac.pick(c);\n\t\tSys.println('end');\n\t}\n\n\tstatic function main() {\n\t\tt(true);\n\t\tt(false);\n\t}\n}\n",
+				"Mac.hx": "import haxe.macro.Expr;\n\nclass Mac {\n\tpublic static macro function pick(c:Expr):Expr {\n\t\tfinal b = macro Sys.println('b');\n\t\treturn macro {\n\t\t\tif ($c)\n\t\t\t\tSys.println('a');\n\t\t\telse {\n\t\t\t\tSys.println('x');\n\t\t\t\tSys.println('y');\n\t\t\t}\n\t\t\tif ($c) {\n\t\t\t\tSys.println('c');\n\t\t\t\tSys.println('d');\n\t\t\t} else\n\t\t\t\t$b;\n\t\t};\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "68dd998bfb14dfef",
+				"files": "d5e15e0ed85f9de5",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "Q2",
+			"note": "a quotation is read: the else after an exiting branch is de-nested, the one beside a spliced statement is not",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"Mac.hx",
+				"--rule",
+				"redundant-else-after-return",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function t(c:Bool):Void {\n\t\tMac.pick(c);\n\t\tSys.println('end');\n\t}\n\n\tstatic function main() {\n\t\tt(true);\n\t\tt(false);\n\t}\n}\n",
+				"Mac.hx": "import haxe.macro.Expr;\n\nclass Mac {\n\tpublic static macro function pick(c:Expr):Expr {\n\t\tfinal rest = macro Sys.println('r');\n\t\treturn macro {\n\t\t\t{\n\t\t\t\tif ($c) {\n\t\t\t\t\tSys.println('a');\n\t\t\t\t\treturn;\n\t\t\t\t} else {\n\t\t\t\t\tSys.println('x');\n\t\t\t\t\tSys.println('y');\n\t\t\t\t}\n\t\t\t}\n\t\t\t{\n\t\t\t\tif (!$c) {\n\t\t\t\t\tSys.println('c');\n\t\t\t\t\treturn;\n\t\t\t\t} else {\n\t\t\t\t\tfinal t = 'z';\n\t\t\t\t\tSys.println(t);\n\t\t\t\t}\n\t\t\t\t$rest;\n\t\t\t}\n\t\t};\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2d768a14a634f588",
+				"files": "673931d5dd33c369",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "Q3",
+			"note": "a metadata-wrapped splice (@:mergeBlock $b{decls};) declares into the enclosing block: the finding stays and the else is not de-nested",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"Mac.hx",
+				"--rule",
+				"redundant-else-after-return",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function t(c:Bool):Void {\n\t\tMac.pick(c);\n\t\tSys.println('end');\n\t}\n\n\tstatic function main() {\n\t\tt(true);\n\t\tt(false);\n\t}\n}\n",
+				"Mac.hx": "import haxe.macro.Expr;\n\nclass Mac {\n\tpublic static macro function pick(c:Expr):Expr {\n\t\tfinal decls = [macro var t = 1];\n\t\treturn macro {\n\t\t\t@:mergeBlock $b{decls};\n\t\t\tif ($c) {\n\t\t\t\tSys.println('a');\n\t\t\t\treturn;\n\t\t\t} else {\n\t\t\t\tvar t = 2;\n\t\t\t\tSys.println(t);\n\t\t\t}\n\t\t\tSys.println(t);\n\t\t};\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

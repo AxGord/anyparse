@@ -184,7 +184,10 @@ interface ConfigAware {
  * types the same inside a quotation, the splice-arity and operand gates covering what does not), `empty-statement` (a stray
  * `;` is not in the reified AST at all), and the brace and if-shape rules `asymmetric-branch-braces`, `redundant-braces`,
  * `collapsible-if` and `collapsible-else-if` (the typer scopes a branch body as a block either way; a spliced statement is
- * left alone, `BranchChain.isSplice`). A rule that reads bindings or types stays out: a splice hides what it reads.
+ * left alone, `BranchChain.isSplice`), the ternary and if-expression rules (the same value builds either way), and
+ * `redundant-else-after-return`, whose scope gate reads a frame that a spliced statement hides and so refuses it
+ * (`ScopeFrames.UNKNOWN_BINDINGS`). A rule that reads types or bindings it cannot refuse around stays out: a splice hides what
+ * it reads; `unnecessary-block` stays out because a block in a quotation is the scope structure the macro emits.
  * The slot exists so the central drop is a policy a future check can DECLINE rather than a trap
  * it cannot see: a check that analyses quotations AS DATA — a macro-hygiene rule, a reification
  * linter — would otherwise silently report nothing at all and give no hint why.

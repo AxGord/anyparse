@@ -311,15 +311,6 @@ class PreferIfExpressionChainCheckTest extends Test {
 		Assert.equals('if (a < b) -1 else if (a > b) 1 else g(0)', es[0].text);
 	}
 
-	/** A reification subtree is spliced code a consumer may pattern-match, not source anyone reads. */
-	public function testMacroSubtreeNotFlagged(): Void {
-		// The chain's parent inside the quotation is `ReturnExpr`, which IS a host — so only
-		// the opaque-subtree skip can refuse it. A `macro var q = …` fixture would prove
-		// nothing: `VarExpr` is not a host kind and the host gate would reject it first.
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfinal e = macro return a ? 1 : b ? 2 : 3;\n\t}\n}').length);
-		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 : b ? 2 : 3;\n\t}\n}').length);
-	}
-
 	/**
 	 * The VALUE POSITION OF A `case` ARM is a host: the arm's `:` and the statement's `;`
 	 * delimit it exactly as a `return` does, and the formatter renders the ladder there under
@@ -643,6 +634,15 @@ class PreferIfExpressionChainCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	/** A `macro` reification is read and fixed like any other code: the if-expression chain builds the value the ternary chain built. */
+	@:pin('control')
+	@:killer('M-PIEC-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro return a ? 1 : b ? 2 : 3;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('if (a) 1 else if (b) 2 else 3', edits(src)[0].text);
 	}
 
 	private function violations(src: String): Array<Violation> {

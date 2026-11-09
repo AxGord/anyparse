@@ -424,6 +424,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 			tryKinds: chain.tryKinds,
 			catchKind: chain.catchKind,
 			spliceKinds: chain.spliceKinds,
+			annotationKinds: chain.annotationKinds,
 			bracedKinds: [chain.blockStmtKind].concat(plugin.controlFlowSupport()?.blockKinds() ?? []),
 			shape: shape
 		};
@@ -465,6 +466,9 @@ private typedef Seams = {
 
 	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, left bare (`BranchChain.isSplice`). */
 	final spliceKinds: Array<String>;
+
+	/** `RefShape.prefixAnnotationKinds`: the metadata wrappers a splice sits under (`BranchChain.isSplice`). */
+	final annotationKinds: Array<String>;
 
 	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
 	final shape: RefShape;

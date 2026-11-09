@@ -328,6 +328,32 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals('var k:Int = a ? 0 : 5;', keptEdit(decl, false));
 	}
 
+	/** A `macro` reification is read and fixed like any other code: `x = c ? a : b` types as the two assignments did. */
+	@:pin('control')
+	@:killer('M-PTA-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) x = 1; else x = 2;\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/** The declaration arm moves the initializer past the branch values, which a spliced `$e` may read: it is left alone. */
+	@:pin('control')
+	@:killer('M-DECL-CHAIN-SPLICE')
+	public function testASplicedBranchKeepsTheDeclarationArmOff(): Void {
+		Assert.equals(
+			1,
+			violations('class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tvar q:Int = 0;\n\t\t\tif (c) q = 5;\n\t\t};\n\t}\n}')
+				.length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tvar q:Int = 0;\n\t\t\tif (c) q = $$a;\n\t\t};\n\t}\n}'
+			).length
+		);
+	}
+
 	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */
 	private function keptEdit(src: String, on: Bool): String {
 		return CheckFixture.soleEditUnder(new PreferTernaryAssignment(), src, InvertNegatedIfElseCheckTest.keepConfig(on));

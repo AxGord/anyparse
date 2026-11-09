@@ -733,7 +733,14 @@ final class WriterBodyPolicyLowering {
 		final tests: ElseSwitchTests = buildElseSwitchTests(bp, opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
-		final elseSwitchPolicy: Expr = esSame == null ? policyFlag : macro ($esSame ? $samePat : $esNext ? $nextPat : $policyFlag);
+		final elseSwitchPolicy: Expr = esSame == null
+			? policyFlag
+			: macro (if ($esSame)
+				$samePat
+			else if ($esNext)
+				$nextPat
+			else
+				$policyFlag);
 		final policySwitch: Expr = { expr: ESwitch(elseSwitchPolicy, policyCases, sameLayoutExpr), pos: Context.currentPos() };
 		final outerCases: Array<Case> = [];
 		if (ifStmtPattern != null) {

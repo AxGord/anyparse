@@ -1139,9 +1139,9 @@ class WriterCodegen {
 	 */
 	private static function kwSameLayoutDocField(): Field {
 		final body: Expr = macro {
-			if (bodyIsBlock || cuddled == null && ownLines.length == 0)
-				return _dc([kwGapDoc(cuddled, ownLines, step, false, opt), bodyDoc]);
-			return nextLayoutKwGapDoc(cuddled, ownLines, step, bodyDoc, opt, _dhl());
+			return bodyIsBlock || cuddled == null && ownLines.length == 0
+				? _dc([kwGapDoc(cuddled, ownLines, step, false, opt), bodyDoc])
+				: nextLayoutKwGapDoc(cuddled, ownLines, step, bodyDoc, opt, _dhl());
 		};
 		return {
 			name: 'kwSameLayoutDoc',

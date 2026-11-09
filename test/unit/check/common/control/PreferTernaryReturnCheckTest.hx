@@ -618,6 +618,26 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
+	/** A `macro` reification is read and fixed like any other code: `return c ? a : b` builds one `EIf` where the pair built two. */
+	@:pin('control')
+	@:killer('M-PTR-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (a) return 1;\n\t\t\treturn 2;\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/** A quotation promises nothing about the function around it: that function's `Bool` makes no `g()` in the quoted code a Bool. */
+	@:pin('control')
+	@:killer('M-PTR-QUOTED-RETTYPE')
+	public function testAQuotationDoesNotInheritTheEnclosingReturnType(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f():Bool {\n\t\tif (a) return true;\n\t\treturn g();\n\t}\n}').length);
+		final src: String = 'class C {\n\tfunction f():Bool {\n\t\tfinal e = macro {\n\t\t\tif (a) return true;\n\t\t\treturn g();\n'
+			+ '\t\t};\n\t\treturn true;\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	/** The one edit of a `--fix` pass over `src` with `invert-negated-if-else` `keepDefaultElse` set to `on`. */
 	private function keptEdit(src: String, on: Bool): String {
 		return CheckFixture.soleEditUnder(new PreferTernaryReturn(), src, InvertNegatedIfElseCheckTest.keepConfig(on));

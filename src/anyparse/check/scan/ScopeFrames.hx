@@ -34,9 +34,18 @@ package anyparse.check.scan;
  * never holds that run's own locals, so a candidate never collides with itself. An un-braced
  * `if (c) var n;` body IS collected, though Haxe scopes that binding to the branch — counting it
  * can only REFUSE a de-nest that would have been legal, never allow a wrong one.
+ *
+ * Inside a quotation a statement may be a splice (`$e;`) that brings declarations no scan sees, so a frame holding one
+ * carries `UNKNOWN_BINDINGS` and every move into it is refused.
  */
 @:nullSafety(Strict)
 final class ScopeFrames {
+
+	/**
+	 * Stands in a frame for the names a spliced statement (`RefShape.spliceKinds`) may declare, spelled so no Haxe identifier is
+	 * equal to it; `collidesWithScope` treats it as colliding with every name.
+	 */
+	private static final UNKNOWN_BINDINGS: String = '$$';
 
 	/**
 	 * The names visible inside `node` itself: `inherited` for anything that is not a statement
@@ -119,11 +128,16 @@ final class ScopeFrames {
 	 *
 	 * Haxe permits same-scope shadowing, so such a move COMPILES and no oracle catches it; it silently rebinds
 	 * every later read of the outer binding. This refusal is the only thing between the rewrite and that.
+	 *
+	 * A spliced statement declares names no source scan can read, so it collides with anything: a run holding one, or a
+	 * frame that does (`UNKNOWN_BINDINGS`), is refused.
 	 */
-	public static function collidesWithScope(stmts: Array<QueryNode>, bindingKinds: Array<String>, scopeNames: Array<String>): Bool {
+	public static function collidesWithScope(stmts: Array<QueryNode>, seams: FrameSeams, scopeNames: Array<String>): Bool {
+		if (scopeNames.contains(UNKNOWN_BINDINGS)) return true;
 		for (s in stmts) {
 			final nm: Null<String> = s.name;
-			if (nm != null && bindingKinds.contains(s.kind) && scopeNames.contains(nm)) return true;
+			if (ReificationScan.isSpliceStatement(s, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds)) return true;
+			if (nm != null && seams.localDeclKinds.contains(s.kind) && scopeNames.contains(nm)) return true;
 		}
 		return false;
 	}
@@ -153,6 +167,7 @@ final class ScopeFrames {
 	 */
 	private static function collect(node: QueryNode, seams: FrameSeams, skip: Null<QueryNode>, out: Array<String>): Void {
 		for (c in node.children) if (c != skip) {
+			if (isSplicedStatement(c, node, seams)) out.push(UNKNOWN_BINDINGS);
 			final nm: Null<String> = c.name;
 			if (nm != null && seams.localDeclKinds.contains(c.kind)) out.push(nm);
 			if (!seams.scopeKinds.contains(c.kind)) collect(c, seams, skip, out);
@@ -169,6 +184,12 @@ final class ScopeFrames {
 		for (c in node.children) indexFrames(c, seams, childScopeNames(node, c, seams, inherited, scopeNames, ownParams), out);
 	}
 
+	/** Whether `node`, a child of `parent`, is a statement a quotation splices: wrapped in an expression statement, or bare in a block. */
+	private static function isSplicedStatement(node: QueryNode, parent: QueryNode, seams: FrameSeams): Bool {
+		return ReificationScan.isSpliceStatement(node, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds)
+			&& (node.kind == seams.exprStmtKind || seams.blockKinds.contains(parent.kind));
+	}
+
 }
 
 /**
@@ -181,4 +202,7 @@ typedef FrameSeams = {
 	final functionKinds: Array<String>;
 	final localDeclKinds: Array<String>;
 	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
 }

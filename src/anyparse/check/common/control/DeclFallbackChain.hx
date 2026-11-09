@@ -53,6 +53,7 @@ import anyparse.query.TypeInfoProvider;
  *   (`Refs`, scope-resolved): after the collapse the chain IS the initializer, so a read in a
  *   condition or a value, a capture by a closure, a nested write or a same-named binding would
  *   all name a variable that does not exist yet;
+ * - the chain holds no quotation splice: what `$e` brings may read or declare the variable, which no scan of the chain sees;
  * - the copied declaration prefix carries no dangling line comment, and no comment sits in a
  *   region the rebuild drops (each rule's own comment handling).
  *
@@ -129,7 +130,7 @@ final class DeclFallbackChain {
 		final branches: Null<Array<{ cond: QueryNode, stmt: QueryNode }>> = IfExpressionChain.collectElseLess(
 			head, s.ifKinds, s.tree.blockStmtKind
 		);
-		if (branches == null) return null;
+		if (branches == null || MemberKinds.subtreeContainsAnyKind(head, s.shape.spliceKinds ?? [])) return null;
 		final ref: LvalueRef = { lvalue: null };
 		final probe: Null<UnitValue> = AssignmentTreeHoist.fallbackChainValue(branches, init, ref, source, s.tree);
 		final lvalue: Null<QueryNode> = ref.lvalue;

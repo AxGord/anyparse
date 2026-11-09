@@ -89,6 +89,19 @@ final class ReificationScan {
 		return [for (check in checks) if (check is QuotationAware) check.id()];
 	}
 
+	/**
+	 * Whether the statement `node` is a quotation's splice - one of `spliceKinds`, bare or as the one expression of an `exprStmtKind`
+	 * statement, under any `annotationKinds` wrappers (`@:mergeBlock $b{…}` lands its declarations in the enclosing block). What the macro
+	 * splices there may be a block or a declaration, so a rule that reads shape alone cannot see which names or braces it brings.
+	 */
+	public static function isSpliceStatement(
+		node: QueryNode, spliceKinds: Array<String>, exprStmtKind: Null<String>, annotationKinds: Array<String>
+	): Bool {
+		var inner: QueryNode = node.kind == exprStmtKind && node.children.length == 1 ? node.children[0] : node;
+		while (annotationKinds.contains(inner.kind) && inner.children.length > 0) inner = inner.children[inner.children.length - 1];
+		return spliceKinds.contains(inner.kind);
+	}
+
 	/** Whether `span` sits inside one of `regions` — containing one does not count, only being contained by it. */
 	private static function insideAny(regions: Array<Span>, span: Span): Bool {
 		return regions.exists(region -> region.from <= span.from && span.to <= region.to);

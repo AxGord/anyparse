@@ -569,6 +569,16 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		);
 	}
 
+	/** A `macro` reification is read and fixed like any other code: `return if …` builds the value the returns built. */
+	@:pin('control')
+	@:killer('M-PIER-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n'
+			+ '\t\t\tif (a) return 1; else if (b) return 2; else return 3;\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch CanonicalEdit.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

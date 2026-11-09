@@ -572,6 +572,36 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse while (b) x = 3;')).length);
 	}
 
+	/** A `macro` reification is read and fixed like any other code: the collapsed assignment types as the chain did. */
+	@:pin('control')
+	@:killer('M-PIEA-QUOTATION-BLIND')
+	public function testAMacroReificationIsReadAndFixed(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (a) x = 1; else if (b) x = 2; else x = 3;\n\t\t};\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/** The declaration arm folds the initializer into the chain, which a spliced `$e` may read: it is left alone. */
+	@:pin('control')
+	@:killer('M-DECL-CHAIN-SPLICE')
+	public function testASplicedBranchKeepsTheDeclarationArmOff(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tvar q:Int = 0;\n\t\t\tif (a) q = 1; else if (b) q = 2;\n'
+				+ '\t\t};\n\t}\n}'
+			).length
+		);
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tvar q:Int = 0;\n'
+				+ '\t\t\tif (a) q = $$a; else if (b) q = 2;\n\t\t};\n\t}\n}'
+			).length
+		);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch CanonicalEdit.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

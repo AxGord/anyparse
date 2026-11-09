@@ -35,6 +35,9 @@ typedef ChainSeams = {
 	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, whose content no brace rule can read. */
 	final spliceKinds: Array<String>;
 
+	/** `RefShape.prefixAnnotationKinds`: the metadata wrappers a splice statement may sit under. */
+	final annotationKinds: Array<String>;
+
 };
 
 /**
@@ -66,6 +69,15 @@ final class BranchChain {
 	/** Whether the if (or ternary) `node` has the condition and the then branch. */
 	public static inline function hasThen(node: QueryNode): Bool {
 		return node.children.length > COND_INDEX + 1;
+	}
+
+	/**
+	 * Whether the statement `node` is a quotation's splice (`RefShape.spliceKinds`), bare or as the one expression of an
+	 * expression statement. What the macro splices there may be a block or a declaration, so a brace rule neither counts
+	 * such a branch as bare nor strips the braces around it.
+	 */
+	public static inline function isSplice(node: QueryNode, seams: ChainSeams): Bool {
+		return ReificationScan.isSpliceStatement(node, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds);
 	}
 
 	/** The condition of the if (or ternary) `node`. */
@@ -136,16 +148,6 @@ final class BranchChain {
 		return last != null && seams.lastChildClosedKinds.contains(node.kind) && selfTerminated(last, source, seams);
 	}
 
-	/**
-	 * Whether the statement `node` is a quotation's splice (`RefShape.spliceKinds`), bare or as the one expression of an
-	 * expression statement. What the macro splices there may be a block or a declaration, so a brace rule neither counts
-	 * such a branch as bare nor strips the braces around it.
-	 */
-	public static function isSplice(node: QueryNode, seams: ChainSeams): Bool {
-		return seams.spliceKinds.contains(node.kind)
-			|| (node.kind == seams.exprStmtKind && node.children.length == 1 && seams.spliceKinds.contains(node.children[0].kind));
-	}
-
 	/** The `ChainSeams` of `shape`, or null when it names no statement-position `if` kind or no block-statement kind. */
 	public static function chainSeams(shape: RefShape): Null<ChainSeams> {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
@@ -162,7 +164,8 @@ final class BranchChain {
 			tryKinds: (shape.tryStatementKinds ?? []).concat(shape.tryExpressionKinds ?? []),
 			catchKind: catchKind,
 			exprStmtKind: shape.exprStatementKind,
-			spliceKinds: shape.spliceKinds ?? []
+			spliceKinds: shape.spliceKinds ?? [],
+			annotationKinds: shape.prefixAnnotationKinds ?? []
 		};
 	}
 
