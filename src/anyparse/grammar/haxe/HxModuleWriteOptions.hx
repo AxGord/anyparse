@@ -797,16 +797,39 @@ final class HxModuleWriteOptions {
 	public var formatStringInterpolation: Bool = true;
 
 	/**
-	 * Line-end policy for the metadata Star on `HxMemberDecl.meta` (upstream
-	 * `lineEnds.metadataFunction`), consumed by `@:fmt(metaLineEndPolicy('metadataFunctionLineEnd'))`.
+	 * Line-end policy for metadata on a function: `HxMemberDecl.meta` before a function member,
+	 * `HxAnonMember.meta` before a function field, `HxTopLevelDecl.meta` before a module-level
+	 * function (upstream `lineEnds.metadataFunction`).
 	 * `None` (default) — source-driven inter-element separator, no forced gap after the last
 	 * metadata; `After` — every separator becomes a hardline AND a hardline fires after the last
 	 * element (one metadata per line); `AfterLast` — separators stay source-driven, a hardline
 	 * ALWAYS fires after the last metadata; `ForceAfterLast` — separators forced to a single space
-	 * (source newlines between metas collapse) AND a hardline after the last. Per-construct sisters
-	 * (`metadataType` / `metadataVar` / `metadataOther`) do not exist yet.
+	 * (source newlines between metas collapse) AND a hardline after the last.
 	 */
 	public var metadataFunctionLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.None;
+
+	/**
+	 * Line-end policy for `HxTopLevelDecl.meta` where neither `metadataVarLineEnd` nor
+	 * `metadataFunctionLineEnd` claims it: a type declaration and every module-level `final`, the
+	 * `final x` form included, since `HxDecl.FinalDecl` wraps both the class and the var form and a
+	 * constructor arm reads one level only (upstream `lineEnds.metadataType`); values as on
+	 * `metadataFunctionLineEnd`.
+	 */
+	public var metadataTypeLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.None;
+
+	/**
+	 * Line-end policy for metadata on a `var` or `final` — a class member, an anon field or a local —
+	 * and on a module-level `var` (`HxTopLevelDecl.meta`; a module-level `final` stays on
+	 * `metadataTypeLineEnd`), upstream `lineEnds.metadataVar`; values as on `metadataFunctionLineEnd`.
+	 */
+	public var metadataVarLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.None;
+
+	/**
+	 * Line-end policy for the remaining metadata sites: enum constructors, anon fields without a
+	 * keyword, a member the `var` / `function` arms do not name, inline metadata after a `var` keyword
+	 * (upstream `lineEnds.metadataOther`); values as on `metadataFunctionLineEnd`.
+	 */
+	public var metadataOtherLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.None;
 
 	/**
 	 * Set when descending through an expression-position parent (`HxCaseBranch.body` /

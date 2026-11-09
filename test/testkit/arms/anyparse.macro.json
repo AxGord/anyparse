@@ -2328,6 +2328,38 @@
 			"find": "_clearKeptListCountsInFit(_clearCallArgChainNest($optExpr))",
 			"replace": "_clearCallArgChainNest($optExpr)",
 			"note": "the kept-list flag crosses the statement list below a value try, so an if statement in its braced body or a closure breaks its fit-line body where outside a try it stays glued"
+		},
+		{
+			"name": "M-META-CHAIN-NO-PEEL",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainSepExpr",
+			"find": "while (true) $peel;",
+			"replace": "",
+			"note": "a chain head reads its policy from the next annotation instead of the tail, so only the last one of a chain sees the var"
+		},
+		{
+			"name": "M-META-COLLAPSE-IGNORED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseStarExpr",
+			"find": "metaCollapseBlanks || forceInlineSep",
+			"replace": "forceInlineSep",
+			"note": "a blank between member metadata survives instead of collapsing"
+		},
+		{
+			"name": "M-META-COLLAPSE-FOR-ALL",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseStarExpr",
+			"find": "metaCollapseBlanks || forceInlineSep",
+			"replace": "metaLineEndPolicy != null || forceInlineSep",
+			"note": "every wired site collapses the blanks between its metadata, so a type keeps fewer blanks than it does today"
+		},
+		{
+			"name": "M-META-PLAIN-NO-BREAK",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadEmit",
+			"find": "_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0",
+			"replace": "false",
+			"note": "the plain writer emits no break after the last metadata while the following separator is still dropped, so metadata glues to the declaration"
 		}
 	]
 }

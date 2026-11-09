@@ -1001,6 +1001,129 @@
 			"find": "\t\t\tout.push(child);\n",
 			"replace": "\t\t\tif (readModule(child) != null) out.push(child);\n",
 			"note": "the names-first listing opens every module it names, so a module that cannot be read drops out of an answer a caller meant to get without any module text"
+		},
+		{
+			"name": "M-META-TYPE-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndPolicy('metadataTypeLineEnd'),",
+			"replace": "",
+			"note": "a type declaration names no knob, so metadataType changes nothing"
+		},
+		{
+			"name": "M-META-ENUM-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxEnumMember",
+			"method": "HxEnumMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta",
+			"replace": "var meta",
+			"note": "an enum constructor names no knob, so metadataOther does not reach it"
+		},
+		{
+			"name": "M-META-VARDECL-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxVarDecl",
+			"method": "HxVarDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta",
+			"replace": "var meta",
+			"note": "metadata after a var keyword names no knob, so metadataOther does not reach it"
+		},
+		{
+			"name": "M-META-MEMBER-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),",
+			"replace": "",
+			"note": "a var member has no arm of its own, so metadataVar stops reaching members and they take metadataOther"
+		},
+		{
+			"name": "M-META-MEMBER-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'),",
+			"replace": "",
+			"note": "a function member has no arm of its own, so metadataFunction stops reaching it"
+		},
+		{
+			"name": "M-META-ANON-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('field', 'metadataVarLineEnd', 'VarField', 'FinalField'),",
+			"replace": "",
+			"note": "an anon var field takes metadataOther instead of metadataVar"
+		},
+		{
+			"name": "M-META-ANON-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'FnField')",
+			"replace": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'Conditional')",
+			"note": "an anon function field takes metadataOther instead of metadataFunction"
+		},
+		{
+			"name": "M-META-ANON-OTHER-OFF",
+			"type": "anyparse.grammar.haxe.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndPolicy('metadataOtherLineEnd'), ",
+			"replace": "",
+			"note": "an anon field without a keyword reaches no knob, so metadataOther does not move it"
+		},
+		{
+			"name": "M-META-CHAIN-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxMetaExpr",
+			"method": "HxMetaExpr",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndChain('MetaExpr', 'expr'),",
+			"replace": "",
+			"note": "a local var annotation is not a metadata site, so metadataVar does not reach it"
+		},
+		{
+			"name": "M-META-CONFIG-TYPE",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataTypeLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataType);",
+			"replace": "{}",
+			"note": "lineEnds.metadataType is read and dropped"
+		},
+		{
+			"name": "M-META-CONFIG-VAR",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataVarLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataVar);",
+			"replace": "{}",
+			"note": "lineEnds.metadataVar is read and dropped"
+		},
+		{
+			"name": "M-META-CONFIG-OTHER",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataOtherLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataOther);",
+			"replace": "{}",
+			"note": "lineEnds.metadataOther is read and dropped"
+		},
+		{
+			"name": "M-META-TOP-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "'metadataVarLineEnd', 'VarDecl'",
+			"replace": "'metadataTypeLineEnd', 'VarDecl'",
+			"note": "a module-level var answers to metadataType again, so metadataVar stops reaching it"
+		},
+		{
+			"name": "M-META-TOP-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "'metadataFunctionLineEnd', 'FnDecl'",
+			"replace": "'metadataTypeLineEnd', 'FnDecl'",
+			"note": "a module-level function answers to metadataType again, so metadataFunction stops reaching it"
 		}
 	]
 }

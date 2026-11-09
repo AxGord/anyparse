@@ -429,6 +429,9 @@ final class HaxeFormatConfigLoader {
 		// (and override inter-element sep for `After` / `ForceAfterLast`).
 		if (section.metadataFunction != null)
 			opt.metadataFunctionLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataFunction);
+		if (section.metadataType != null) opt.metadataTypeLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataType);
+		if (section.metadataVar != null) opt.metadataVarLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataVar);
+		if (section.metadataOther != null) opt.metadataOtherLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataOther);
 		// ω-lineend-character: `lineEnds.lineEndCharacter` → `opt.lineEnd`
 		// (base WriteOptions String). `"LF"` / `"CRLF"` / `"CR"` map to
 		// `\n` / `\r\n` / `\r`; `"Auto"` falls back to `\n` because the

@@ -103,15 +103,28 @@ final class WriterStarPadLowering {
 				MetaInspect.fmtReadStringArgs(c.starNode, 'glueToPrevious'), macro _arr[_si + 1]
 			);
 			final nextGlued: Expr = glueTest ?? macro false;
+			final metaPolicy: Null<Expr> = f.metaPolicy;
+			final policyDecl: Expr = metaPolicy == null
+				? macro {}
+				: macro final _metaPolicy: anyparse.format.MetadataLineEndPolicy = $metaPolicy;
+			final elemSep: Expr = metaPolicy == null
+				? macro _dt(' ')
+				: macro (_metaPolicy == anyparse.format.MetadataLineEndPolicy.After ? _dhl() : _dt(' '));
+			final afterLast: Expr = metaPolicy == null ? macro {} : macro if (
+				_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0
+			)
+				_docs.push(_dhl());
 			parts.push(macro {
 				final _arr = $fieldAccess;
 				final _docs: Array<anyparse.core.Doc> = [];
+				$policyDecl;
 				var _si: Int = 0;
 				while (_si < _arr.length) {
 					_docs.push($elemCall);
-					if (_si < _arr.length - 1 && !$nextGlued) _docs.push(_dt(' '));
+					if (_si < _arr.length - 1 && !$nextGlued) _docs.push($elemSep);
 					_si++;
 				}
+				$afterLast;
 				_dc(_docs);
 			});
 		}

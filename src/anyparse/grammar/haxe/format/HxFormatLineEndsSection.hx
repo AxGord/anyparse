@@ -26,5 +26,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var anonTypeCurly: HxFormatCurlyLineEndPolicy;
 	@:optional var blockCurly: HxFormatCurlyLineEndPolicy;
 	@:optional var metadataFunction: HxFormatMetadataLineEndPolicy;
+	@:optional var metadataType: HxFormatMetadataLineEndPolicy;
+	@:optional var metadataVar: HxFormatMetadataLineEndPolicy;
+	@:optional var metadataOther: HxFormatMetadataLineEndPolicy;
 	@:optional var lineEndCharacter: HxFormatLineEndCharacter;
 };

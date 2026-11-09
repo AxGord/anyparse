@@ -292,9 +292,10 @@ final class WriterTriviaStarEmitLowering {
 		final refuseGlueOnControlFlow: Bool = starNode.fmtHasFlag('refuseGlueOnControlFlowRoot');
 		// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
 		// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
-		// separator dispatch through `opt.<optField>:MetadataLineEndPolicy`.
-		// Default `None` (and absent flag) is byte-identical to pre-slice.
-		final metaLineEndOptField: Null<String> = starNode.fmtReadString('metaLineEndPolicy');
+		// separator dispatch through the site's knob; which knob is the
+		// `WriterMetaLineEndLowering.policyExpr` answer. Default `None` (and
+		// absent flag) is byte-identical to pre-slice.
+		final metaLineEndPolicy: Null<Expr> = WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath);
 		// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
 		// metas that the EOF-Star branch reads, so an inner Star (e.g.
 		// `HxConditionalDecl.body`) opted in via the metas drives the
@@ -391,12 +392,13 @@ final class WriterTriviaStarEmitLowering {
 			tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride, caseBodyFlagNames,
 			flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing, propagateExprPosition, refuseFlatOnComplex,
 			cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-			cascadeInfos.headCtorInfos, metaLineEndOptField, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware,
-			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
-			tryparseBlockEnded, tryparseSepFaithful, listLayout, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
-			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
-			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious'),
-			starNode.fmtReadStringArgs('siblingSlot'), starNode.fmtHasFlag('belowWrappedLabel')
+			cascadeInfos.headCtorInfos, metaLineEndPolicy, starNode.fmtHasFlag('metaCollapseBlanks'),
+			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
+			tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful, listLayout,
+			tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail, tryparseSepBeforeAccess,
+			tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn, refuseGlueOnControlFlow, tryparseFillItems,
+			starNode.fmtReadStringArgs('glueToPrevious'), starNode.fmtReadStringArgs('siblingSlot'),
+			starNode.fmtHasFlag('belowWrappedLabel')
 		));
 	}
 

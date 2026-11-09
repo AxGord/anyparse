@@ -3019,6 +3019,7 @@ typedef PadFlags = {
 	final lineLengthAwareSeps: Bool;
 	final sepBeforeOptActive: Bool;
 	final softFill: Bool;
+	final metaPolicy: Null<Expr>;
 };
 /**
  * The three classify-info results resolved by

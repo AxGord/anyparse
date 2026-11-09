@@ -39,7 +39,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxAnonMember = {
-	@:trivia @:tryparse var meta: Array<HxMetadata>;
+	@:trivia @:tryparse
+	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'), metaLineEndIfCtor('field', 'metadataVarLineEnd', 'VarField', 'FinalField'),
+		metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'FnField'))
+	var meta: Array<HxMetadata>;
 	@:trivia @:tryparse @:fmt(keepBlankAfterStarCtor('meta', 'Conditional')) var modifiers: Array<HxMemberModifier>;
 	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var field: Null<HxAnonField>;
 }

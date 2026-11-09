@@ -37,7 +37,12 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxMemberDecl = {
-	@:trivia @:tryparse @:fmt(metaLineEndPolicy('metadataFunctionLineEnd')) var meta: Array<HxMetadata>;
+	@:trivia @:tryparse
+	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'),
+		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
+		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'),
+		metaCollapseBlanks)
+	var meta: Array<HxMetadata>;
 	@:trivia @:tryparse @:fmt(forceInlineSep, keepBlankAfterStarCtor('meta', 'Conditional')) var modifiers: Array<HxMemberModifier>;
 	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var member: Null<HxClassMember>;
 }

@@ -38,6 +38,6 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxEnumMember = {
-	@:trivia @:tryparse var meta: Array<HxMetadata>;
+	@:trivia @:tryparse @:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta: Array<HxMetadata>;
 	@:optional @:absentOn('}') @:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional')) var ctor: Null<HxEnumCtor>;
 }

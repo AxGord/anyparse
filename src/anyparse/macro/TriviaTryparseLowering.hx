@@ -81,8 +81,9 @@ final class TriviaTryparseLowering {
 		propagateExprPosition: Bool = false, refuseFlatOnComplex: Bool = false, ?afterCtorInfos: Array<WriterLowering.AfterCtorBlankInfo>,
 		?beforeCtorInfos: Array<WriterLowering.BeforeCtorBlankInfo>, ?betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo>,
 		?transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo>, ?headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo>,
-		?metaLineEndOptField: String, ?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>,
-		lineLengthAwareSeps: Bool = false, ?priorAfterTrailExpr: Expr, forceInlineSep: Bool = false,
+		?metaLineEndPolicy: Expr, metaCollapseBlanks: Bool = false,
+		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, lineLengthAwareSeps: Bool = false,
+		?priorAfterTrailExpr: Expr, forceInlineSep: Bool = false,
 		// ω-blockended-trivia-tryparse (Session 3): when the tryparse
 		// Star carries `@:sep('text', tailRelax, blockEnded)`, the
 		// per-iteration emit inserts `;` (or other sepText) between two
@@ -202,10 +203,10 @@ final class TriviaTryparseLowering {
 		final cascadeInitCurr: Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute: Expr = cascadeEmit.currCompute;
 		final cascadeTrackPrev: Expr = cascadeEmit.trackPrev;
-		// ω-meta-strip-blanks: meta Stars cap inter-element separator at a single
-		// hardline (metaLineEndOptField); ω-slice-45: forceInlineSep Stars short-
+		// ω-meta-strip-blanks: a `metaCollapseBlanks` Star caps the inter-element
+		// separator at a single hardline; ω-slice-45: forceInlineSep Stars short-
 		// circuit cascade blanks too. Both ⇒ macro 0; else the cascade count.
-		final cascadeBlanksCount: Expr = metaLineEndOptField != null || forceInlineSep ? macro 0 : cascadeEmit.blanksCount;
+		final cascadeBlanksCount: Expr = metaCollapseBlanks || forceInlineSep ? macro 0 : cascadeEmit.blanksCount;
 		// ω-before-package — head-of-Star override; `macro {}` when no
 		// `blankLinesAtHeadIfCtor` meta on this inner Star (byte-identical).
 		final cascadeHeadEmit: Expr = cascadeEmit.headEmit;
@@ -253,8 +254,8 @@ final class TriviaTryparseLowering {
 		final condNestedIncreaseGateExpr: Expr = triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent);
 		final lastTrailTerminatorEmit: Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` from
-		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
-		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
+		// the site's knob (0 = None default, byte-identical).
+		final metaPolicyExpr: Expr = metaLineEndPolicy ?? macro 0;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
 		final glueRefusalExpr: Expr = triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow);
 		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);

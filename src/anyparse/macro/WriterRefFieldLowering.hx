@@ -1388,10 +1388,11 @@ final class WriterRefFieldLowering {
 			final sepExpr: Expr = ctx.ctx.trivia && ctx.isTriviaBearing(typePath)
 				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
 				: macro _dt(' ');
+			final metaAwareSep: Expr = WriterMetaLineEndLowering.chainSepExpr(ctx.ctorPat, child, typePath, fieldAccess, sepExpr) ?? sepExpr;
 			parts.push(macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _doc: anyparse.core.Doc = $writeCall;
-				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$sepExpr, _doc]);
+				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$metaAwareSep, _doc]);
 			});
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.ctx.trivia && ctx.isTriviaBearing(typePath)) {
 			// ω-cond-comp-expr-body-nest: source-shape-driven

@@ -845,7 +845,8 @@ final class WriterStarEmitLowering {
 			padTrailing: padTrailing,
 			lineLengthAwareSeps: lineLengthAwareSeps,
 			sepBeforeOptActive: sepBeforeOptActive,
-			softFill: softFill
+			softFill: softFill,
+			metaPolicy: WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath)
 		};
 		emitTryparsePadEmit(c, padFlags, parts);
 	}
@@ -984,10 +985,8 @@ final class WriterStarEmitLowering {
 			final lineTrail: Null<Expr> = child.hasMeta(':tryparse') ? starTrailEndsLineExpr(ctx, child, typePath) : null;
 			return lineTrail == null ? (macro $fieldAccess.length > 0) : (macro $fieldAccess.length > 0 || $lineTrail);
 		}
-		final metaLineEndField: Null<String> = child.fmtReadString('metaLineEndPolicy');
-		if (metaLineEndField == null) return null;
-		final optAccess: Expr = optFieldAccess(metaLineEndField);
-		return macro $fieldAccess.length > 0 && $optAccess != 0;
+		final policy: Null<Expr> = WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, child, typePath);
+		return policy == null ? null : macro $fieldAccess.length > 0 && $policy != 0;
 	}
 
 	/**

@@ -23,9 +23,9 @@ package anyparse.format;
  * hardline fires after the last element. Produces a canonical
  * `@A @B @C\nfunction main()` shape.
  *
- * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` on a
- * `@:trivia @:tryparse` Star — the writer reads `opt.<optField>`
- * per generated parser run.
+ * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` and its
+ * `metaLineEndIfCtor` / `metaLineEndChain` refinements, which name a
+ * metadata site's knob (`anyparse.macro.WriterMetaLineEndLowering`).
  *
  * Format-neutral — lives in `anyparse.format` so grammars for other
  * languages that carry sequence-style annotations (decorators,
