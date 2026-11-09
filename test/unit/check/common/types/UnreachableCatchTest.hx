@@ -190,7 +190,8 @@ class UnreachableCatchTest extends Test {
 				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f():Void {\n\t\ttry {\n\t\t\tg();\n'
 				+ '\t\t} catch (e:Base) {\n\t\t\tone();\n\t\t} catch (e:Sub) {\n\t\t\ttwo();\n\t\t}\n\t}\n\n}\n'
 			}
-		]).length;
+		])
+			.length;
 	}
 
 	/** `unreachable-catch` findings over a `catch (e:Base)` followed by a `catch (e:<later>)`, beside `my.Eof extends Base`. */
@@ -203,7 +204,8 @@ class UnreachableCatchTest extends Test {
 				source: 'package my;\n\nclass Main {\n\n\tfunction f():Void {\n\t\ttry {\n\t\t\tg();\n\t\t} catch (e:Base) {\n'
 				+ '\t\t\tone();\n\t\t} catch (e:$later) {\n\t\t\ttwo();\n\t\t}\n\t}\n\n}\n'
 			}
-		]).length;
+		])
+			.length;
 	}
 
 }

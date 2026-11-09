@@ -530,11 +530,9 @@ final class SwitchChain {
 	private static function completeScan(
 		discTexts: Null<Array<String>>, rungs: Array<ChainRung>, elseBody: Null<Span>, elseless: Bool
 	): Null<ChainScan> {
-		return discTexts == null || rungs.length < 2 || (elseBody == null && !elseless) || !distinctValues(rungs) ? null : {
-			discTexts: discTexts,
-			rungs: rungs,
-			elseBody: elseBody
-		};
+		return discTexts == null || rungs.length < 2 || (elseBody == null && !elseless) || !distinctValues(rungs)
+			? null
+			: { discTexts: discTexts, rungs: rungs, elseBody: elseBody };
 	}
 
 	private static function groupText(parts: Array<String>, seams: ChainSeams): Null<String> {

@@ -66,13 +66,7 @@ class LintFixQuietDefaultTest extends Test {
 	 * arm speaks whatever the verbosity.
 	 */
 	public function testOnlyTheFlagArmOfTheNetNoticeIsQuiet(): Void {
-		final configured: Array<OracleConfig> = [
-			{
-				hxml: 'build.hxml',
-				dir: null,
-				defines: []
-			}
-		];
+		final configured: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
 		Assert.isNull(LintFixSafePass.netNotice(configured, true, false), 'the flag the reader just passed');
 		Assert.stringContains('--no-oracle', LintFixSafePass.netNotice(configured, true, true) ?? '');
 		final unconfigured: Null<String> = LintFixSafePass.netNotice([], false, false);

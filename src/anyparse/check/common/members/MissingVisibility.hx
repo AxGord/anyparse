@@ -106,7 +106,8 @@ final class MissingVisibility extends RuleBase {
 		// Re-bound to a non-null local: strict null-safety narrowing does not reach into an
 		// anonymous struct literal.
 		return RunScan.collectWith(
-			files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> walk({
+			files, plugin, resolveSeams(plugin),
+			(entry, tree, seams, violations) -> walk({
 				out: violations,
 				file: entry.file,
 				seams: seams,

@@ -199,12 +199,10 @@ final class ExtractConstantCommand implements CliCommand {
 					// The module and the call sites that will reference its constant are ONE change
 					// set: a run that wrote the sites and then could not write the module would
 					// leave every one of them naming a constant that does not exist.
-					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([
-						{
-							path: intoPath,
-							content: finalModule
-						}
-					]));
+					CliIo.writeFiles([for (c in changes) {
+						path: c.file,
+						content: c.newSource
+					}].concat([{ path: intoPath, content: finalModule }]));
 					CliIo.stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');

@@ -338,10 +338,9 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		// exclusion `RawSourceScan.admits` earns for a structural proof does not carry to them and they
 		// are asked of EVERY unreadable file in scope. A SUBTYPE is structural — it has to name the
 		// type it extends, which no haxelib can — so `prop` is the one name asked per OWNER.
-		final unreadable: Array<String> = scopeIndex.text.skippedFilesMentioning([
-			name,
-			wantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX
-		]);
+		final unreadable: Array<String> = scopeIndex.text.skippedFilesMentioning([name, wantGetter
+			? CheckScan.GET_PREFIX
+			: CheckScan.SET_PREFIX]);
 		for (file in scopeIndex.text.skippedFilesMentioning([prop], ownerFile)) if (!unreadable.contains(file)) unreadable.push(file);
 		return unreadable.length == 0
 			? null

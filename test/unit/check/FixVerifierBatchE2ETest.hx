@@ -282,15 +282,17 @@ final class FixVerifierBatchE2ETest extends Test {
 	}
 
 	private static function fixture(sources: Array<String>, ?main: String): String {
-		return CliFixture.writeDir('fixverifbatch', [
-			for (i => source in sources) { name: '${NAMES[i]}.hx', source: source }
-		].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }]));
+		return CliFixture.writeDir(
+			'fixverifbatch',
+			[for (i => source in sources) {
+				name: '${NAMES[i]}.hx',
+				source: source
+			}].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }])
+		);
 	}
 
 	private static function verify(dir: String, sources: Array<String>, check: Check): FixVerifyResult {
-		final files: Array<FileText> = [
-			for (i => source in sources) { file: '$dir/${NAMES[i]}.hx', source: source }
-		];
+		final files: Array<FileText> = [for (i => source in sources) { file: '$dir/${NAMES[i]}.hx', source: source }];
 		return FixVerifier.verify(files, [check], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent);
 	}
 

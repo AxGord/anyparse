@@ -65,9 +65,10 @@ final class LintWarn {
 			Sys.stderr().writeString('dev lint-warn: ${exception.message}\n');
 			null;
 		};
-		if (body != null) Sys.println(HookAnswerWriter.write({
-			hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: 'hxq lint-warn (nudge — nothing was fixed):\n$body' }
-		}, JsonFormat.instance.compactWriteOptions));
+		if (body != null)
+			Sys.println(HookAnswerWriter.write({
+				hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: 'hxq lint-warn (nudge — nothing was fixed):\n$body' }
+			}, JsonFormat.instance.compactWriteOptions));
 		return 0;
 	}
 

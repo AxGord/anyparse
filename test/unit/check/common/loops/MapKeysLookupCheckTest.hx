@@ -446,7 +446,8 @@ class MapKeysLookupCheckTest extends Test {
 		// m:Map directly. The package-blind walk resolved b.Mid's Map → flagged → a broken
 		// `for (k => v in ...)` rewrite; the import-aware walk resolves CustomKeys → skip.
 		Assert.equals(
-			0, violationsForFiles([
+			0,
+			violationsForFiles([
 				{
 					file: 'keys/CustomKeys.hx',
 					source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
@@ -469,7 +470,8 @@ class MapKeysLookupCheckTest extends Test {
 		// Same cross-package poison via a VALUE root `o.mid.m` (o:Outer) — closes the pre-existing
 		// value-root hole too.
 		Assert.equals(
-			0, violationsForFiles([
+			0,
+			violationsForFiles([
 				{
 					file: 'keys/CustomKeys.hx',
 					source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'

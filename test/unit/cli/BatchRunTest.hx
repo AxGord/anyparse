@@ -57,10 +57,9 @@ final class BatchRunTest extends Test {
 	@:killer('M-RUN-KEEPS-LEDGER')
 	public function testASecondLintCallOverABrokenConfigWarnsAgain(): Void {
 		#if nodejs
-		final dir: String = CliFixture.writeDir('batch_lint_warn', [
-			{ name: 'apqlint.json', source: '{' },
-			{ name: 'A.hx', source: 'class A {}\n' }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'batch_lint_warn', [{ name: 'apqlint.json', source: '{' }, { name: 'A.hx', source: 'class A {}\n' }]
+		);
 		final lint: Array<String> = ['lint', '--lang-default', 'haxe', 'A.hx', '--no-oracle'];
 		for (call in 0...2)
 			Assert.stringContains(

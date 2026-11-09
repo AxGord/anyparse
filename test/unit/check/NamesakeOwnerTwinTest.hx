@@ -113,10 +113,11 @@ class NamesakeOwnerTwinTest extends Test {
 			},
 			{ file: 'other/$other.hx', source: 'package other;\n\nclass $other$heritage {\n\n\tpublic function new() {}\n\n}\n' }
 		];
-		if (withSub) files.push({
-			file: 'other/Sub.hx',
-			source: 'package other;\n\nclass Sub extends $other {\n\n\tpublic function helper():Int {\n\t\treturn 3;\n\t}\n\n}\n'
-		});
+		if (withSub)
+			files.push({
+				file: 'other/Sub.hx',
+				source: 'package other;\n\nclass Sub extends $other {\n\n\tpublic function helper():Int {\n\t\treturn 3;\n\t}\n\n}\n'
+			});
 		return CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/Foo.hx').length;
 	}
 

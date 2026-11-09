@@ -162,11 +162,7 @@ final class LandProseTest extends Test {
 			commit(repo, 'move');
 			final summary: Summary = new Summary();
 			final outcome: Outcome = summary.time('prose-refs', new LandProse(repo, skills, log, summary).run);
-			{
-				note: summary.steps()[0].note,
-				passed: outcome.match(Passed),
-				logged: FileSystem.exists(log) ? File.getContent(log) : ''
-			};
+			{ note: summary.steps()[0].note, passed: outcome.match(Passed), logged: FileSystem.exists(log) ? File.getContent(log) : '' };
 		});
 	}
 

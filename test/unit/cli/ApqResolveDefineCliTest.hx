@@ -58,10 +58,7 @@ class ApqResolveDefineCliTest extends Test {
 	 */
 	public function testADirectoryListsThePathsThatWouldChange(): Void {
 		#if nodejs
-		final dir: String = CliFixture.writeDir('resolve_dir', [
-			{ name: 'A.hx', source: BRANCHED },
-			{ name: 'B.hx', source: PLAIN }
-		]);
+		final dir: String = CliFixture.writeDir('resolve_dir', [{ name: 'A.hx', source: BRANCHED }, { name: 'B.hx', source: PLAIN }]);
 		var printed: String = '';
 		final noted: String = CliFixture.captureStderr(
 			() -> printed = CliFixture.captureStdout(() -> Assert.equals(0, Cli.run(['resolve-define', 'X', dir])))

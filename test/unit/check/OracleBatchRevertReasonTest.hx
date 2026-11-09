@@ -30,10 +30,9 @@ class OracleBatchRevertReasonTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = makeDir(3);
 		final candidates: Array<{ file: String, before: String, after: String }> = batch(dir, 3);
-		final result = LintFixVerify.verifyOracleBatch(candidates, oracles(dir), canned([
-			Rejected('$dir/f1.hx:1: characters 1-2 : boom'),
-			Confirmed
-		]));
+		final result = LintFixVerify.verifyOracleBatch(
+			candidates, oracles(dir), canned([Rejected('$dir/f1.hx:1: characters 1-2 : boom'), Confirmed])
+		);
 		Assert.equals('compiler rejected', result.reason);
 		Assert.same(['$dir/f1.hx'], result.reverted);
 		Assert.equals(2, result.applied.length);
@@ -108,9 +107,9 @@ class OracleBatchRevertReasonTest extends Test {
 	public function testNonConvergentBatchRevertsAll(): Void {
 		#if (sys || nodejs)
 		final dir: String = makeDir(8);
-		final result = LintFixVerify.verifyOracleBatch(batch(dir, 8), oracles(dir), canned([
-			for (k in 0...8) Rejected('$dir/f$k.hx:1: characters 1-2 : boom')
-		]));
+		final result = LintFixVerify.verifyOracleBatch(
+			batch(dir, 8), oracles(dir), canned([for (k in 0...8) Rejected('$dir/f$k.hx:1: characters 1-2 : boom')])
+		);
 		Assert.equals('not converged in 6 passes', result.reason);
 		Assert.equals(8, result.reverted.length);
 		Assert.equals(0, result.applied.length);
@@ -134,13 +133,7 @@ class OracleBatchRevertReasonTest extends Test {
 
 	/** The one configuration these fixtures declare — the canned oracle never reads it. */
 	private static function oracles(dir: String): Array<OracleConfig> {
-		return [
-			{
-				hxml: 'check.hxml',
-				dir: dir,
-				defines: []
-			}
-		];
+		return [{ hxml: 'check.hxml', dir: dir, defines: [] }];
 	}
 
 	/** `n` candidates named `f0.hx`…, each rewritten from `before <k>` to `after <k>`. */

@@ -347,11 +347,12 @@ final class TokenTranscript {
 		final command: String = input.command ?? '';
 		final path: String = input.filePath ?? '';
 		return switch name {
-			case BASH: {
-				read: sample(ShellHxAccess.readSegment(command, cwd, slice)),
-				write: sample(ShellHxAccess.writeSegment(command, cwd, slice)),
-				script: sample(ShellHxAccess.scriptSegment(command, cwd, slice))
-			};
+			case BASH:
+				{
+					read: sample(ShellHxAccess.readSegment(command, cwd, slice)),
+					write: sample(ShellHxAccess.writeSegment(command, cwd, slice)),
+					script: sample(ShellHxAccess.scriptSegment(command, cwd, slice))
+				};
 			case 'Edit', 'Write':
 				{ read: null, write: REPO_HX.match(path) && ShellHxAccess.isRepoPath(path, slice) ? '$name $path' : null, script: null };
 			case _: { read: null, write: null, script: null };

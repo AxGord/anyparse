@@ -137,13 +137,10 @@ class MapAsSetBitsTest extends Test {
 		final user: String = 'package use;\n\nimport dom.Tone;\n\nfinal class Local {\n\tpublic function new() {}\n\n'
 			+ '\tpublic function f(t: Tone): Bool {\n\t\tvar seen: Map<Tone, Bool> = [];\n\t\tseen[t] = true;\n'
 			+ '\t\treturn seen.exists(t);\n\t}\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'use/Local.hx',
-				source: user
-			},
-			{ file: 'dom/Tone.hx', source: enums }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'use/Local.hx',
+			source: user
+		}, { file: 'dom/Tone.hx', source: enums }];
 		final config: LintConfig = LintConfig.parse(CONFIG);
 		final run: FixRun = CheckFixture.fixRun(new MapAsSet(), files, 'use/Local.hx', null, _ -> config);
 		Assert.equals(1, run.violations.length);

@@ -150,15 +150,11 @@ class ElemChainFlagTest extends Test {
 		final dir: String = CliFixture.writeDir('elem-chain-flag', [{ name: 'Main.hx', source: main }]);
 		FileSystem.createDirectory('$dir/g');
 		for (file in grammarFiles(metas, writerOptions)) File.saveContent('$dir/g/${file.name}', file.source);
-		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
-			'-cp',
-			'${Sys.getCwd()}/src',
-			'-cp',
-			dir,
-			'--main',
-			'Main',
-			mode
-		], cast { encoding: 'utf8' });
+		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			'haxe',
+			['-cp', '${Sys.getCwd()}/src', '-cp', dir, '--main', 'Main', mode],
+			cast { encoding: 'utf8' }
+		);
 		CliFixture.removeDir(dir);
 		return run;
 	}

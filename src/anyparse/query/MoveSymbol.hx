@@ -326,10 +326,7 @@ final class MoveSymbol {
 		final lines: Array<String> = ordered == null
 			? canonicalCarry(carried, plugin.refShape())
 			: sortedImportLines(carried, ordered.order);
-		return {
-			span: new Span(anchor.offset, anchor.offset),
-			text: '${anchor.lead}${lines.join('\n')}\n${anchor.trail}'
-		};
+		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}${lines.join('\n')}\n${anchor.trail}' };
 	}
 
 	/**
@@ -807,10 +804,9 @@ final class MoveSymbol {
 		// and `>` sent that spelling straight back down the two-edit path.
 		if (carriedEdit != null && carriedEdit.span.from >= trimmedEnd) {
 			final head: String = destSource.substring(trimmedEnd, carriedEdit.span.from) + carriedEdit.text;
-			edits.push({
-				span: new Span(trimmedEnd, destSource.length),
-				text: '${head.substring(0, trimTrailingNewlines(head))}\n\n$decl$eof'
-			});
+			edits.push(
+				{ span: new Span(trimmedEnd, destSource.length), text: '${head.substring(0, trimTrailingNewlines(head))}\n\n$decl$eof' }
+			);
 			return edits;
 		}
 		if (carriedEdit != null) edits.push(carriedEdit);
@@ -914,10 +910,11 @@ final class MoveSymbol {
 			// compiles and no rule reports it — which is why it has to be decided here rather than left
 			// to one.
 			final redundant: Bool = imp.kind != ImportKind.Alias || imp.alias == typeName;
-			ScopeFiles.editsFor(editsByFile, destInfo.file).push(redundant ? { span: removeImportSpan(destSource, imp), text: '' } : {
-				span: imp.span,
-				text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to))
-			});
+			ScopeFiles.editsFor(editsByFile, destInfo.file).push(
+				redundant
+					? { span: removeImportSpan(destSource, imp), text: '' }
+					: { span: imp.span, text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to)) }
+			);
 		}
 		destinationUsingMirror(editsByFile, target, destSource, oldImportPath, newImportPath);
 	}
@@ -996,10 +993,9 @@ final class MoveSymbol {
 		// spells the OLD path, so the repoint above never sees the statement and the moved type simply
 		// leaves this file's scope. The new statement goes in the old one's SLOT so that a later import
 		// binding the same name still wins.
-		return moduleWide && !plan.mainMoved && path == plan.sourceModule && needsMoved ? {
-			span: imp.span,
-			text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath, statement)}'
-		} : null;
+		return moduleWide && !plan.mainMoved && path == plan.sourceModule && needsMoved
+			? { span: imp.span, text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath, statement)}' }
+			: null;
 	}
 
 	/**

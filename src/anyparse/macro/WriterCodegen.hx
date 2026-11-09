@@ -147,14 +147,8 @@ class WriterCodegen {
 		rootFn: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
 	): Field {
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-		final defaultOptsExpr: Expr = {
-			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
-			pos: Context.currentPos()
-		};
-		final writeCall: Expr = {
-			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
-			pos: Context.currentPos()
-		};
+		final defaultOptsExpr: Expr = { expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'), pos: Context.currentPos() };
+		final writeCall: Expr = { expr: ECall(macro $i{rootFn}, [macro value, macro _opt]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
@@ -191,14 +185,8 @@ class WriterCodegen {
 		rootFn: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
 	): Field {
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-		final defaultOptsExpr: Expr = {
-			expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'),
-			pos: Context.currentPos()
-		};
-		final writeCall: Expr = {
-			expr: ECall(macro $i{rootFn}, [macro value, macro _opt]),
-			pos: Context.currentPos()
-		};
+		final defaultOptsExpr: Expr = { expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'), pos: Context.currentPos() };
+		final writeCall: Expr = { expr: ECall(macro $i{rootFn}, [macro value, macro _opt]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return $writeCall;
@@ -226,10 +214,7 @@ class WriterCodegen {
 
 	private static function binaryEntry(rootTypePath: String, rootReturnCT: ComplexType): Field {
 		final rootFn: String = 'write${simpleName(rootTypePath)}';
-		final writeCall: Expr = {
-			expr: ECall(macro $i{rootFn}, [macro value, macro output]),
-			pos: Context.currentPos()
-		};
+		final writeCall: Expr = { expr: ECall(macro $i{rootFn}, [macro value, macro output]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
 			$writeCall;
@@ -238,11 +223,7 @@ class WriterCodegen {
 		return {
 			name: 'write',
 			access: [APublic, AStatic],
-			kind: FFun({
-				args: [{ name: 'value', type: rootReturnCT }],
-				ret: macro : haxe.io.Bytes,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'value', type: rootReturnCT }], ret: macro : haxe.io.Bytes, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -266,19 +247,12 @@ class WriterCodegen {
 	// -------- per-rule fields --------
 
 	private static function ruleField(rule: WriterLowering.WriterRule, optionsCT: ComplexType): Field {
-		final args: Array<FunctionArg> = [
-			{ name: 'value', type: rule.valueCT },
-			{ name: 'opt', type: optionsCT }
-		];
+		final args: Array<FunctionArg> = [{ name: 'value', type: rule.valueCT }, { name: 'opt', type: optionsCT }];
 		if (rule.hasCtxPrec) args.push({ name: 'ctxPrec', type: macro : Int, value: macro -1 });
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: args,
-				ret: macro : anyparse.core.Doc,
-				expr: rule.body
-			}),
+			kind: FFun({ args: args, ret: macro : anyparse.core.Doc, expr: rule.body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -594,13 +568,7 @@ class WriterCodegen {
 			// the continuation indent — matches haxe-formatter's convention
 			// of indenting wrapped function parameters one level deeper than
 			// the body so they remain visually distinct.
-			return _dg(_dc([
-				_dt(open),
-				openInside,
-				_dn(_cols, _dc([_fill, _trail])),
-				closeInside,
-				_dt(close)
-			]));
+			return _dg(_dc([_dt(open), openInside, _dn(_cols, _dc([_fill, _trail])), closeInside, _dt(close)]));
 		};
 		return {
 			name: 'fillList',
@@ -637,11 +605,7 @@ class WriterCodegen {
 		return {
 			name: 'formatFloat',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'value', type: macro : Float }],
-				ret: macro : String,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'value', type: macro : Float }], ret: macro : String, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -1216,11 +1180,7 @@ class WriterCodegen {
 		return {
 			name: 'escapeString',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'value', type: macro : String }],
-				ret: macro : String,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'value', type: macro : String }], ret: macro : String, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

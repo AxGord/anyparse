@@ -533,6 +533,4 @@ private typedef Seams = {
  * or null on the implicit-tail arm, where the guard returns no value and the rewritten span
  * ends at the `if` itself.
  */
-private typedef Candidate = GuardedIf & {
-	var tail: Null<QueryNode>;
-}
+private typedef Candidate = GuardedIf & { var tail: Null<QueryNode>; }

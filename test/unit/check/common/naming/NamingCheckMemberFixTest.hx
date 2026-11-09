@@ -269,13 +269,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final otherSrc: String = "package pkg;\nclass Other {\n\tpublic function g() { return Reflect.field(this, 'shape'); }\n}";
 		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
-		final files: Array<{ file: String, source: String }> = [
-			{ file: '$dir/C.hx', source: cSrc },
-			{
-				file: '$dir/Other.hx',
-				source: otherSrc
-			}
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: '$dir/C.hx',
+			source: cSrc
+		}, { file: '$dir/Other.hx', source: otherSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
@@ -296,13 +293,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final otherSrc: String =
 			'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
 		final dir: String = CliFixture.writeDir('namingid', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
-		final files: Array<{ file: String, source: String }> = [
-			{ file: '$dir/C.hx', source: cSrc },
-			{
-				file: '$dir/Other.hx',
-				source: otherSrc
-			}
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: '$dir/C.hx',
+			source: cSrc
+		}, { file: '$dir/Other.hx', source: otherSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
@@ -1049,10 +1043,9 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.My_Field; }\n}' }
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
@@ -1101,10 +1094,9 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 			{ file: 'pkg/E.hx', source: 'package pkg;\nclass E {\n\tpublic function f(c:C) { return Reflect.field(c, \'My_Field\'); }\n}' }
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) } }
+		);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(1, vs.length);
@@ -1119,10 +1111,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 
 	/** The `Naming` fix edits for `pkg/C.hx` with one unparseable sibling carrying `badSrc`. */
 	private function fixCount(cSrc: String, badSrc: String): Int {
-		final files: Array<{ source: String, file: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/Bad.hx', source: badSrc }
-		];
+		final files: Array<{ source: String, file: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/Bad.hx', source: badSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == 'pkg/C.hx');
@@ -1241,14 +1230,11 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	 */
 	private function assertReflectionGuard(otherSource: String, expectRenamed: Bool): Void {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\n\tpublic function f():Void {\n\t\tshape = 1;\n\t}\n}';
-		final dir: String = CliFixture.writeDir('namingrefl', [
-			{ name: 'C.hx', source: cSrc },
-			{ name: 'E.hx', source: otherSource }
-		]);
-		final files: Array<{ file: String, source: String }> = [
-			{ file: '$dir/C.hx', source: cSrc },
-			{ file: '$dir/E.hx', source: otherSource }
-		];
+		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'E.hx', source: otherSource }]);
+		final files: Array<{ file: String, source: String }> = [{
+			file: '$dir/C.hx',
+			source: cSrc
+		}, { file: '$dir/E.hx', source: otherSource }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');

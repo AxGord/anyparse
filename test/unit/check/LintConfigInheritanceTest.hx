@@ -260,12 +260,8 @@ class LintConfigInheritanceTest extends Test {
 		Assert.same(src.resolutionLibs(), test.resolutionLibs(), 'so are the resolution libs');
 		// The opt-in rules the root declares reach `test/` now; a nested document that
 		// replaced its parent left every one of them off, silently finding nothing.
-		for (id in [
-			'explicit-local-type',
-			'import-order',
-			'anon-type-dup',
-			'unused-public-member'
-		]) Assert.isTrue(test.enabledFor(id, false), 'the root opt-in "$id" reaches test/');
+		for (id in ['explicit-local-type', 'import-order', 'anon-type-dup', 'unused-public-member'])
+			Assert.isTrue(test.enabledFor(id, false), 'the root opt-in "$id" reaches test/');
 		// And the six relaxations the document is actually for still apply — the two newer
 		// ones are exemptions of rules that are LIVE at the root, so each is asserted on both
 		// sides: off under test/, on under src/ (a nested document that switched them off

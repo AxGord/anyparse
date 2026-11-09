@@ -223,14 +223,8 @@ class RedundantImportCheckTest extends Test {
 			+ '\tvar a:StoreRemoteAction;\n\n\tvar b:ShardStoreFilePath;\n\n}\n';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'tests/unit/T.hx', source: src },
-			{
-				file: 'fs/StoreInterface.hx',
-				source: 'package fs;\n\ninterface StoreInterface {}\n\ntypedef StoreRemoteAction = Int;\n'
-			},
-			{
-				file: 'fs/cloud/ShardStore.hx',
-				source: 'package fs.cloud;\n\nclass ShardStore {}\n\ntypedef ShardStoreFilePath = String;\n'
-			}
+			{ file: 'fs/StoreInterface.hx', source: 'package fs;\n\ninterface StoreInterface {}\n\ntypedef StoreRemoteAction = Int;\n' },
+			{ file: 'fs/cloud/ShardStore.hx', source: 'package fs.cloud;\n\nclass ShardStore {}\n\ntypedef ShardStoreFilePath = String;\n' }
 		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: RedundantImport = new RedundantImport();

@@ -771,18 +771,17 @@ final class CheckScan {
 		final ifParent: Null<QueryNode> = parents[ifNode];
 		// An always-true guard keeps only the body — refuse if a comment sits in the removed
 		// `if (…)` header or trailing region (comments inside the body are preserved).
-		if (alwaysTrue) return hasCommentMarker(source, ns.from, bs.from) || hasCommentMarker(source, bs.to, ns.to) ? null : {
-			span: ns,
-			text: keptBodyText(body, bs, ifParent, frames, source, seams)
-		};
+		if (alwaysTrue)
+			return hasCommentMarker(source, ns.from, bs.from) || hasCommentMarker(source, bs.to, ns.to)
+				? null
+				: { span: ns, text: keptBodyText(body, bs, ifParent, frames, source, seams) };
 		if (hasCommentMarker(source, ns.from, ns.to)) return null;
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
 		// A collapsed-away `if` is a PURE deletion like a member removal, so it gives back its
 		// flanking blank line the same way; the `{}` arm replaces rather than deletes and must not.
-		return inBlock ? {
-			span: ElementSpan.blankExtendedSpan(source, ElementSpan.lineExtendedSpan(source, ns)),
-			text: ''
-		} : { span: ns, text: '{}' };
+		return inBlock
+			? { span: ElementSpan.blankExtendedSpan(source, ElementSpan.lineExtendedSpan(source, ns)), text: '' }
+			: { span: ns, text: '{}' };
 	}
 
 	/**

@@ -276,10 +276,7 @@ final class AssignmentTreeHoist {
 				final condSpan: Null<Span> = pair.cond.span;
 				final valueSpan: Null<Span> = pair.value.span;
 				if (condSpan == null || valueSpan == null) return null;
-				built.push({
-					cond: source.substring(condSpan.from, condSpan.to),
-					value: source.substring(valueSpan.from, valueSpan.to)
-				});
+				built.push({ cond: source.substring(condSpan.from, condSpan.to), value: source.substring(valueSpan.from, valueSpan.to) });
 				kept.push(condSpan);
 				kept.push(valueSpan);
 				leafCount++;

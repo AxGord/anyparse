@@ -196,10 +196,7 @@ final class AddMeta {
 		final at: Null<Int> = insertOffset(run, host);
 		if (at == null) return null;
 		final indent: String = lineIndentAt(source, at);
-		return {
-			span: new Span(at, at + 1),
-			text: '${texts.join('\n$indent')}\n$indent${source.charAt(at)}'
-		};
+		return { span: new Span(at, at + 1), text: '${texts.join('\n$indent')}\n$indent${source.charAt(at)}' };
 	}
 
 	/**

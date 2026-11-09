@@ -138,10 +138,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * (c) x();` fits and stays inline.
 	 */
 	private function caseBodyControlFlowRootField(): Field {
-		final recurse: Expr = {
-			expr: ECall(ident('caseBodyControlFlowRoot'), [field(ident('_m'), 'stmt')]),
-			pos: Context.currentPos()
-		};
+		final recurse: Expr = { expr: ECall(ident('caseBodyControlFlowRoot'), [field(ident('_m'), 'stmt')]), pos: Context.currentPos() };
 		final exprCall: Expr = { expr: ECall(ident('caseBodyControlFlowExpr'), [ident('_e')]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(ident('s'), macro false, [
 			caseOf(HX_STATEMENT, CONTROL_FLOW_STMT_CTORS, macro true),
@@ -172,10 +169,7 @@ final class HxCasePredLowering extends AstPredLowering {
 	 * keeps the glue a bare block gets.
 	 */
 	private function caseBodyControlFlowExprField(): Field {
-		final recurse: Expr = {
-			expr: ECall(ident('caseBodyControlFlowExpr'), [field(ident('_mv'), 'expr')]),
-			pos: Context.currentPos()
-		};
+		final recurse: Expr = { expr: ECall(ident('caseBodyControlFlowExpr'), [field(ident('_mv'), 'expr')]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(ident('e'), macro false, [
 			caseOf(HX_EXPR, CONTROL_FLOW_EXPR_CTORS, macro true),
 			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse)

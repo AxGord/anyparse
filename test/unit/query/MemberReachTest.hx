@@ -497,11 +497,8 @@ class MemberReachTest extends Test {
 			return ask([src, other, poker, keep]);
 		}
 		assertMatch(run(source('var cs:Array<C> = [this];')), r -> r.match(Proven));
-		for (escape in [
-			'arr = [this];',
-			'var cs:Array<C> = [this]; arr = cs;',
-			'al = [this];'
-		]) refused(run(source(escape)), 'escape `$escape`');
+		for (escape in ['arr = [this];', 'var cs:Array<C> = [this]; arr = cs;', 'al = [this];'])
+			refused(run(source(escape)), 'escape `$escape`');
 		refused(run(source('keep([this]);', 'function keep(a:Array<Dynamic>):Void arr = a;')), 'a parameter');
 		refused(run(source('arr = held();', 'function held():Array<Dynamic> return [this];')), 'a return');
 		refused(run(source('Keep.put(mine());', 'function mine():Array<C> return [this];')), 'a container whose arguments nothing says');
@@ -1929,12 +1926,10 @@ class MemberReachTest extends Test {
 				everDefined: [],
 				values: [],
 				compiled: parsesLoud ? ['F0.hx', 'L0.hx'] : ['F0.hx'],
-				types: [
-					{
-						name: 'C',
-						file: FileIdentity.canonical(Sys.getCwd(), 'F0.hx')
-					}
-				].concat(parsesLoud ? [{ name: 'Loud', file: FileIdentity.canonical(Sys.getCwd(), 'L0.hx') }] : [])
+				types: [{
+					name: 'C',
+					file: FileIdentity.canonical(Sys.getCwd(), 'F0.hx')
+				}].concat(parsesLoud ? [{ name: 'Loud', file: FileIdentity.canonical(Sys.getCwd(), 'L0.hx') }] : [])
 			};
 			plugin.setResolutionScope({
 				declared: true,

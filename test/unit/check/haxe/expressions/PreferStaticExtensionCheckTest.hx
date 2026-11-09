@@ -269,7 +269,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 */
 	public function testUsingWithAmbiguousSimpleModuleNameStillFlagged(): Void {
 		Assert.equals(
-			1, violationsOf(fileSet(user('using Ext;\nusing p.Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
+			1,
+			violationsOf(fileSet(user('using Ext;\nusing p.Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
 				{
 					file: 'p/Other.hx',
 					source: 'package p;\n\nclass Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n'
@@ -881,7 +882,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	/** The structural-membership fixture set: a `Bag` that only DECLARES `iterator()`, a plain type, and a generic extension module. */
 	private function bagFiles(body: String): Array<{ file: String, source: String }> {
 		return fileSet(
-			'using Ext;\nusing IterExt;\n\nclass C {\n\tfunction f(b:Bag, p:Plain):Void {\n\t\t$body\n\t}\n}\n', WIDGET_SOURCE, [
+			'using Ext;\nusing IterExt;\n\nclass C {\n\tfunction f(b:Bag, p:Plain):Void {\n\t\t$body\n\t}\n}\n', WIDGET_SOURCE,
+			[
 				{ file: 'Bag.hx', source: 'class Bag {\n\tpublic function iterator(): BagIter return null;\n}\n' },
 				{
 					file: 'BagIter.hx',

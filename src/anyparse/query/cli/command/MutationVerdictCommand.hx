@@ -116,9 +116,7 @@ final class MutationVerdictCommand implements CliCommand implements LanguageFree
 			CliIo.sysPrint('${failure.line}\n');
 			return EXIT_OK;
 		}
-		final expected: Array<String> = [
-			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
-		];
+		final expected: Array<String> = [for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()];
 		// several transcripts are the slices of one run (`dev mutation-check`'s fallback), read as their union
 		final verdict: MutationVerdictResult = MutationVerdict.classify(
 			raws.length == 1 ? TestTranscript.parseTestSummary(raw) : MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)),

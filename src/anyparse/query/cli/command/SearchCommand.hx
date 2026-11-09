@@ -177,10 +177,8 @@ final class SearchCommand implements CliCommand implements LeadingQuery implemen
 			return EXIT_RUNTIME;
 		}
 
-		final collected: Null<{
-			entries: Array<{ file: String, source: String, matches: Array<Match> }>,
-			kindCounts: Map<String, Int>
-		}> = collectSearchEntries(paths, plugin, expanded.singleFile, parsed, o.kind, o.explain);
+		final collected: Null<{ entries: Array<{ file: String, source: String, matches: Array<Match> }>, kindCounts: Map<String, Int> }> =
+			collectSearchEntries(paths, plugin, expanded.singleFile, parsed, o.kind, o.explain);
 		if (collected == null) return EXIT_RUNTIME;
 		final allEntries: Array<{ file: String, source: String, matches: Array<Match> }> = collected.entries;
 

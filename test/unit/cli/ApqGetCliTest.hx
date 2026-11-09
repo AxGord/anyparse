@@ -120,10 +120,9 @@ class ApqGetCliTest extends Test {
 	/** A code file named beside the documents is refused on one stderr line; the documents still answer, and the exit is 1. */
 	public function testWhereRefusesACodeFile(): Void {
 		#if (sys || nodejs)
-		final dir: String = CliFixture.writeDir('apq_get_where_code', [
-			{ name: 'a.json', source: WHERE_A },
-			{ name: 'c.hx', source: 'class C {}' }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'apq_get_where_code', [{ name: 'a.json', source: WHERE_A }, { name: 'c.hx', source: 'class C {}' }]
+		);
 		var exit: Int = -1;
 		var out: String = '';
 		final err: String = CliFixture.captureStderr(

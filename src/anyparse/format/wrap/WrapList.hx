@@ -351,12 +351,7 @@ class WrapList {
 		// land at outer+cols (operator-led illusion), not at
 		// outer+2cols. See `BinaryChainEmit.emit`'s `nestSuppress`
 		// argument and the macro-emitted call site in `WriterLowering`.
-		final brkShape: Doc = Concat([
-			Text(open),
-			Nest(cols, Concat([Line('\n'), condDoc])),
-			Line('\n'),
-			Text(close)
-		]);
+		final brkShape: Doc = Concat([Text(open), Nest(cols, Concat([Line('\n'), condDoc])), Line('\n'), Text(close)]);
 
 
 		inline function decideAt(exceeds: Bool): WrapMode {
@@ -631,11 +626,12 @@ class WrapList {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
 				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
-			)) return {
-				mode: rule.mode,
-				location: rule.location ?? WrappingLocation.AfterLast,
-				additionalIndent: rule.additionalIndent ?? 0
-			};
+			))
+				return {
+					mode: rule.mode,
+					location: rule.location ?? WrappingLocation.AfterLast,
+					additionalIndent: rule.additionalIndent ?? 0
+				};
 		}
 		return { mode: rules.defaultMode, location: fallback, additionalIndent: rules.defaultAdditionalIndent ?? 0 };
 	}
@@ -3162,12 +3158,7 @@ class WrapList {
 		// hardline" signal `HasMultilineItems` reads.
 		final anyMultiline: Bool = items.exists(item -> flatLength(item) < 0);
 		final body: Doc = anyMultiline ? Concat(broken) : Group(IfBreak(Concat(broken), Concat(flat)));
-		return Concat([
-			Text(open),
-			Nest(cols, Concat([Line('\n'), body])),
-			Line('\n'),
-			Text(close)
-		]);
+		return Concat([Text(open), Nest(cols, Concat([Line('\n'), body])), Line('\n'), Text(close)]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(
@@ -3183,12 +3174,7 @@ class WrapList {
 			tail.push(items[i]);
 		}
 		if (appendTrailingComma) tail.push(Text(sep));
-		return Concat([
-			Text(open),
-			items[0],
-			Nest(cols, Concat(tail)),
-			Text(close)
-		]);
+		return Concat([Text(open), items[0], Nest(cols, Concat(tail)), Text(close)]);
 	}
 
 	/**
@@ -3371,24 +3357,9 @@ class WrapList {
 			// Nest])` (length=3) where the close stays glued. See
 			// `isChainOPLBreak` for the marker probe and ω-1arg-close-
 			// chain-opl-gate for the slice that introduced it.
-			final gluedShape: Doc = Concat([
-				Text(open),
-				openInside,
-				items[0],
-				tail0,
-				closeInside,
-				Text(close)
-			]);
+			final gluedShape: Doc = Concat([Text(open), openInside, items[0], tail0, closeInside, Text(close)]);
 			if (!isChainOPLBreak(items[0])) return groupOrRestProbe(gluedShape, groupRestProbe);
-			final brkShape: Doc = Concat([
-				Text(open),
-				openInside,
-				items[0],
-				tail0,
-				closeInside,
-				Line('\n'),
-				Text(close)
-			]);
+			final brkShape: Doc = Concat([Text(open), openInside, items[0], tail0, closeInside, Line('\n'), Text(close)]);
 			return groupOrRestProbe(IfBreak(brkShape, gluedShape), groupRestProbe);
 		}
 		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
@@ -3476,13 +3447,7 @@ class WrapList {
 		}
 		final tail: Doc = trailSep;
 		final inner: Doc = Concat([Concat(bodyParts), tail]);
-		final outerInner: Doc = Concat([
-			Text(open),
-			openInside,
-			Nest(cols, inner),
-			closeInside,
-			Text(close)
-		]);
+		final outerInner: Doc = Concat([Text(open), openInside, Nest(cols, inner), closeInside, Text(close)]);
 		return groupOrRestProbe(outerInner, groupRestProbe);
 	}
 

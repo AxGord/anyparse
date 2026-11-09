@@ -388,10 +388,8 @@ final class StructSeqLowering {
 			final refName: Null<String> = child.kind == Ref ? child.annotations.get(AnnotationKeys.BASE_REF) : null;
 			final nullAware: Bool = nullLiteral != null && refName != sc.formatInfo.anyType;
 			final nullMatch: Expr = nullMatchExpr(sc);
-			switchCases.push({
-				values: [{ expr: EConst(CString(key)), pos: Context.currentPos() }],
-				expr: nullAware ? macro if (!$nullMatch) $assign : assign
-			});
+			switchCases.push({ values: [{ expr: EConst(CString(key)), pos: Context.currentPos() }], expr: nullAware ? macro if (!$nullMatch)
+				$assign : assign });
 			if (isOptional) {
 				structFields.push({ field: fieldName, expr: macro $i{localName} });
 			} else {
@@ -439,10 +437,7 @@ final class StructSeqLowering {
 				// schema's own field list beside it, and a boundary that
 				// knows where the input came from can say so. A consumer
 				// that never reads `ctx.unknownFields` sees nothing.
-				final knownNames: Expr = {
-					expr: EArrayDecl([for (c in switchCases) c.values[0]]),
-					pos: Context.currentPos()
-				};
+				final knownNames: Expr = { expr: EArrayDecl([for (c in switchCases) c.values[0]]), pos: Context.currentPos() };
 				macro {
 					ctx.recordUnknownField(_key, _keyPos, $knownNames);
 					$i{anyFn}(ctx);
@@ -702,10 +697,7 @@ final class StructSeqLowering {
 				'Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw, @:absentOn or @:absentOnEof', Context.currentPos()
 			);
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
-		final subCallRaw: Expr = {
-			expr: ECall(macro $i{sc.parseFnName(refName)}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final subCallRaw: Expr = { expr: ECall(macro $i{sc.parseFnName(refName)}, [macro ctx]), pos: Context.currentPos() };
 		// ω-optional-ref-trail: consume the per-field `@:trail`
 		// literal AFTER the sub-rule parse, INSIDE the lead-led
 		// commit branch. Mirrors the mandatory-Ref trail emit
@@ -1005,10 +997,8 @@ final class StructSeqLowering {
 		// ω-region-prefix-blank: the opt-in blank flag of the same scan. Derived
 		// from `child` here rather than threaded, so the push cannot drift from
 		// the capture — both call `hasBeforeBlankSlotFor`.
-		if (hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot)) structFields.push({
-			field: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX,
-			expr: macro $i{beforeBlankLocalName(fieldName)}
-		});
+		if (hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot))
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX, expr: macro $i{beforeBlankLocalName(fieldName)} });
 		if (hasNewlineAfterSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
 
@@ -1049,11 +1039,7 @@ final class StructSeqLowering {
 	private static function emitTrailSidecarDecls(
 		sc: StructSeqCtx, child: ShapeNode, typePath: String, fieldName: Null<String>, isStar: Bool, isOptional: Bool,
 		trailText: Null<String>, trailPresentLocal: String, parseSteps: Array<Expr>
-	): {
-		hasOptionalRefAfterTrailSlot: Bool,
-		hasStructFieldTrailOptSlot: Bool,
-		captureTrailPresentExpr: Expr
-	} {
+	): { hasOptionalRefAfterTrailSlot: Bool, hasStructFieldTrailOptSlot: Bool, captureTrailPresentExpr: Expr } {
 		// ω-optional-ref-trail: pre-declare the
 		// `<field>AfterTrail` capture local before the parse step so
 		// the optional-Ref's lead-led commit branch can assign into
@@ -1157,10 +1143,7 @@ final class StructSeqLowering {
 				// `<operand> <operator>` as a pair without the Pratt loop ever
 				// needing to rewind a failed right operand (`HxCondSpliceOpTerm`).
 				final subFnName: String = child.fmtHasFlag(ATOM_OPERAND_FLAG) ? '${sc.parseFnName(refName)}Atom' : sc.parseFnName(refName);
-				final callExpr: Expr = {
-					expr: ECall(macro $i{subFnName}, [macro ctx]),
-					pos: Context.currentPos()
-				};
+				final callExpr: Expr = { expr: ECall(macro $i{subFnName}, [macro ctx]), pos: Context.currentPos() };
 				parseSteps.push({
 					expr: EVars([
 						{

@@ -396,11 +396,7 @@ final class JoinArrayPushes extends RuleBase {
 		if (span == null || name == null || !s.localDeclKinds.contains(stmt.kind)) return null;
 		if (s.continuationKinds.contains(stmt.kind) || stmt.children.length != 1) return null;
 		final literal: Null<Span> = emptyArraySpan(stmt.children[0], s);
-		return literal == null || !annotationNamesArray(stmt, ctx) ? null : {
-			name: name,
-			span: span,
-			literal: literal
-		};
+		return literal == null || !annotationNamesArray(stmt, ctx) ? null : { name: name, span: span, literal: literal };
 	}
 
 	/**
@@ -475,10 +471,9 @@ final class JoinArrayPushes extends RuleBase {
 		final end: Int = run[run.length - 1].stmt.to;
 		if (CheckScan.hasCommentMarker(source, decl.span.from, Strings.lineEnd(source, end))) return null;
 		for (push in run) if (referencesName(push.arg, decl.name, ctx.seams)) return null;
-		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, []) ? {
-			span: decl.span,
-			edits: foldEdits(decl.literal, run, ctx)
-		} : null;
+		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, [])
+			? { span: decl.span, edits: foldEdits(decl.literal, run, ctx) }
+			: null;
 	}
 
 	/**

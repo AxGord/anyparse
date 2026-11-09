@@ -46,10 +46,10 @@ final class NamingPrivatizeTest extends Test {
 	@:pin('control')
 	@:killer('M-PRIVATIZE-NO-CANDIDATE', 'M-NAMING-PRIVATIZE-NOT-DECLINED', 'M-NAMING-RISKYFIX-EMPTY')
 	public function testAPublicUnderscoreFieldReadOnlyInsideIsPrivatized(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: OWNER },
-			{ file: 'pkg/D.hx', source: SILENT_USER }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'pkg/C.hx',
+			source: OWNER
+		}, { file: 'pkg/D.hx', source: SILENT_USER }];
 		final plugin: GrammarPlugin = scoped(files, []);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = findingsOnLabel(check, files, plugin);
@@ -140,10 +140,10 @@ final class NamingPrivatizeTest extends Test {
 	@:pin('control')
 	@:killer('M-PRIVATIZE-INCOMPLETE-PROJECT')
 	public function testNoDeclaredScopeLeavesTheRename(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: OWNER },
-			{ file: 'pkg/D.hx', source: SILENT_USER }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'pkg/C.hx',
+			source: OWNER
+		}, { file: 'pkg/D.hx', source: SILENT_USER }];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = findingsOnLabel(check, files, plugin);

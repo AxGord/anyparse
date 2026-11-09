@@ -257,7 +257,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		]);
 		Assert.same(['info A N.each | Disk.stat', 'warning A N.run | for (x in xs)'], mains(across), 'main thread');
 		final held: Array<Violation> = ThreadSafetyCheckTest.violations(
-			config('{"site": "H.work", "max": 10, "costMs": 1}, {"site": "H.each", "max": 10, "costMs": 1}', true), [
+			config('{"site": "H.work", "max": 10, "costMs": 1}, {"site": "H.each", "max": 10, "costMs": 1}', true),
+			[
 				ThreadSafetyCheckTest.MUTEX,
 				DISK,
 				'class Runner { public static function create(fn:()->Void):Void {} }',

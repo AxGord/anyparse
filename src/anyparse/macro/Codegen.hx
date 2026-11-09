@@ -89,21 +89,14 @@ class Codegen {
 		return {
 			name: 'parse',
 			access: [APublic, AStatic],
-			kind: FFun({
-				args: [{ name: 'source', type: macro : String }],
-				ret: rootReturnCT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'source', type: macro : String }], ret: rootReturnCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
 
 	private static function publicEntryWith(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
 		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
-		final parseCall: Expr = {
-			expr: ECall(macro $i{rootFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final parseCall: Expr = { expr: ECall(macro $i{rootFn}, [macro ctx]), pos: Context.currentPos() };
 		// Takes the context instead of owning it, so a caller can read what
 		// the parse observed but did not return. The context must be FRESH:
 		// `pos`, `maxFailPos`, `errors`, `indentStack`, `captures` and
@@ -154,21 +147,14 @@ class Codegen {
 		return {
 			name: 'parseWith',
 			access: [APublic, AStatic],
-			kind: FFun({
-				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
-				ret: rootReturnCT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: rootReturnCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
 
 	private static function binaryEntry(rootTypePath: String, rootReturnCT: ComplexType, ?rootFnName: Null<String>): Field {
 		final rootFn: String = rootFnName ?? 'parse${simpleName(rootTypePath)}';
-		final parseCall: Expr = {
-			expr: ECall(macro $i{rootFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final parseCall: Expr = { expr: ECall(macro $i{rootFn}, [macro ctx]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.BytesInput(source));
 			final _v = $parseCall;
@@ -179,11 +165,7 @@ class Codegen {
 		return {
 			name: 'parse',
 			access: [APublic, AStatic],
-			kind: FFun({
-				args: [{ name: 'source', type: macro : haxe.io.Bytes }],
-				ret: rootReturnCT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'source', type: macro : haxe.io.Bytes }], ret: rootReturnCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -203,19 +185,11 @@ class Codegen {
 		// `_savedPos` rollback branch's `precValue < minPrec` comparison
 		// fail the null-safety binop check inside the generated parser.
 		final args: Array<FunctionArg> = [{ name: 'ctx', type: macro : anyparse.runtime.Parser }];
-		if (rule.hasMinPrec) args.push({
-			name: 'minPrec',
-			type: macro : Int,
-			value: macro 0
-		});
+		if (rule.hasMinPrec) args.push({ name: 'minPrec', type: macro : Int, value: macro 0 });
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: args.concat(rule.extraArgs),
-				ret: rule.returnCT,
-				expr: rule.body
-			}),
+			kind: FFun({ args: args.concat(rule.extraArgs), ret: rule.returnCT, expr: rule.body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -257,11 +231,7 @@ class Codegen {
 		return {
 			name: 'skipWs',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
-				ret: macro : Void,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: macro : Void, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -326,11 +296,7 @@ class Codegen {
 		return {
 			name: 'skipWsAndStash',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
-				ret: macro : Void,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: macro : Void, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -818,11 +784,7 @@ class Codegen {
 		return {
 			name: 'collectTrailing',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
-				ret: macro : Null<String>,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: macro : Null<String>, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -1239,11 +1201,7 @@ class Codegen {
 		return {
 			name: name,
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }],
-				ret: macro : Null<String>,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: macro : Null<String>, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

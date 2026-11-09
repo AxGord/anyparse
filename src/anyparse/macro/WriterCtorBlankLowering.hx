@@ -141,9 +141,9 @@ final class WriterCtorBlankLowering {
 			transition: Array<WriterLowering.TransitionAcrossInfo>
 		} = buildCtorBlankInfos(cb, elemRefName, betweenCtorAllArgs, transitionAcrossAllArgs, transparentByClassifier);
 		final headCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAtHeadIfCtor');
-		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [
-			for (args in headCtorAllArgs) buildHeadCtorBlankInfo(cb, elemRefName, args)
-		];
+		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [for (args in headCtorAllArgs) buildHeadCtorBlankInfo(
+			cb, elemRefName, args
+		)];
 		// NB: the trivia-multiline override is intentionally NOT threaded into
 		// `blankLinesBetweenSameCtorIfNot` (betweenSingleLineTypes, inverted).
 		// That rule's blank between two single-line type pairs is OWNED by it
@@ -265,11 +265,7 @@ final class WriterCtorBlankLowering {
 		cb: CtorBlankCtx, elemRefName: String, args: Array<String>
 	): WriterLowering.HeadCtorBlankInfo {
 		final r: WriterLowering.CtorBlankResolution = resolveCtorBlankArgs(cb, elemRefName, args, 'blankLinesAtHeadIfCtor', null);
-		return {
-			classifierFieldName: r.fieldName,
-			classifyCases: r.cases,
-			optField: r.optField
-		};
+		return { classifierFieldName: r.fieldName, classifyCases: r.cases, optField: r.optField };
 	}
 
 	/**
@@ -289,11 +285,7 @@ final class WriterCtorBlankLowering {
 		cb: CtorBlankCtx, elemRefName: String, args: Array<String>, predicateAdapter: Null<String>
 	): WriterLowering.AfterCtorBlankInfo {
 		final r: WriterLowering.CtorBlankResolution = resolveCtorBlankArgs(cb, elemRefName, args, 'blankLinesAfterCtor', predicateAdapter);
-		return {
-			classifierFieldName: r.fieldName,
-			classifyCases: r.cases,
-			optField: r.optField
-		};
+		return { classifierFieldName: r.fieldName, classifyCases: r.cases, optField: r.optField };
 	}
 
 	/**
@@ -321,11 +313,7 @@ final class WriterCtorBlankLowering {
 		final r: WriterLowering.CtorBlankResolution = resolveCtorBlankArgs(
 			cb, elemRefName, reduced, 'blankLinesAfterCtorIf', args[1], false, null, measuredMultilineExpr
 		);
-		return {
-			classifierFieldName: r.fieldName,
-			classifyCases: r.cases,
-			optField: r.optField
-		};
+		return { classifierFieldName: r.fieldName, classifyCases: r.cases, optField: r.optField };
 	}
 
 	/**
@@ -386,10 +374,7 @@ final class WriterCtorBlankLowering {
 				final pattern: Expr = { expr: ECall(ctorIdent, binders), pos: pos };
 				cases.push({ values: [pattern], guard: null, expr: macro 1 });
 			} else {
-				final pattern: Expr = arity == 0 ? ctorIdent : {
-					expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-					pos: pos
-				};
+				final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
 				cases.push({ values: [pattern], guard: null, expr: macro 0 });
 			}
 		}
@@ -553,11 +538,7 @@ final class WriterCtorBlankLowering {
 		final r: WriterLowering.CtorBlankResolution = resolveCtorBlankArgs(
 			cb, elemRefName, reduced, 'blankLinesBetweenSameCtorIfNot', args[1], true
 		);
-		return {
-			classifierFieldName: r.fieldName,
-			classifyCases: r.cases,
-			optField: r.optField
-		};
+		return { classifierFieldName: r.fieldName, classifyCases: r.cases, optField: r.optField };
 	}
 
 	/**
@@ -754,10 +735,9 @@ final class WriterCtorBlankLowering {
 						Context.currentPos()
 					);
 				transparentMatched.push(ctorName);
-				patterns.push({
-					pattern: { expr: ECall(ctorIdent, [for (i in 0...arity) i == 0 ? macro _v0 : macro _]), pos: pos },
-					subset: 3
-				});
+				patterns.push(
+					{ pattern: { expr: ECall(ctorIdent, [for (i in 0...arity) i == 0 ? macro _v0 : macro _]), pos: pos }, subset: 3 }
+				);
 			} else {
 				patterns.push({ pattern: transitionPattern(ctorIdent, arity, false, pos), subset: 0 });
 			}
@@ -855,10 +835,7 @@ final class WriterCtorBlankLowering {
 			// "Not enough arguments" at the generated switch.
 			final arity: Int = branch.children.length + cb.branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final pattern: Expr = arity == 0 ? ctorIdent : {
-				expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-				pos: pos
-			};
+			final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
 			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
 			if (isMatch) matched.push(ctorName);
 			final kindExpr: Expr = if (!isMatch)
@@ -890,11 +867,7 @@ final class WriterCtorBlankLowering {
 		cases.push({ values: [macro null], guard: null, expr: macro 0 });
 		for (name in ctorNames) if (matched.indexOf(name) < 0)
 			Context.fatalError('WriterLowering: @:fmt($metaName) ctor "$name" not found in enum $enumRuleName', Context.currentPos());
-		return {
-			fieldName: fieldName,
-			cases: cases,
-			optField: optField
-		};
+		return { fieldName: fieldName, cases: cases, optField: optField };
 	}
 
 	/**

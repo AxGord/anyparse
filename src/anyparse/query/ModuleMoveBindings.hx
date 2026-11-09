@@ -341,10 +341,7 @@ final class ModuleMoveBindings {
 			case Bound(decls): { key: declsKey(decls, mapped), single: decls.length == 1 ? decls[0] : null };
 			case Unknown:
 				final candidates: Null<Array<NameTarget>> = index.refs.names.unknownCandidates(name, info, at);
-				{
-					key: candidates == null ? UNKNOWN : 'either ${candidates.map(c -> targetKey(c, mapped)).join(' | ')}',
-					single: null
-				};
+				{ key: candidates == null ? UNKNOWN : 'either ${candidates.map(c -> targetKey(c, mapped)).join(' | ')}', single: null };
 			case Free: { key: 'free', single: null };
 		};
 	}

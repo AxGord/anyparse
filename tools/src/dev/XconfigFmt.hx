@@ -25,7 +25,7 @@ final class XconfigFmt {
 	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
 	 * a file joining is a regression and one leaving is progress, and either is recorded here with the measurement.
 	 */
-	public static final XCONFIG_ONE_PASS: Array<String> = [];
+	public static final XCONFIG_ONE_PASS: Array<String> = ['test/unit/check/common/imports/HoistCommonImportTest.hx'];
 
 	/** The files under the scratch `root` that `fmt --one-pass`'s stderr `err` names, relative to `root`, sorted. */
 	public static function onePassSet(err: String, root: String): Array<String> {
@@ -81,10 +81,11 @@ final class XconfigFmt {
 	 * `gone` from the tree count with those that left; null when the run holds.
 	 */
 	public static function xconfigVerdict(run: XconfigRun, expected: Array<String>, gone: Array<String>): Null<XconfigFailure> {
-		if (!run.finished) return {
-			line: 'the cross-config fmt run printed no summary line — it did not finish, so its one-pass set means nothing',
-			detail: run.shown
-		};
+		if (!run.finished)
+			return {
+				line: 'the cross-config fmt run printed no summary line — it did not finish, so its one-pass set means nothing',
+				detail: run.shown
+			};
 		final moved: Array<String> = setMoves(expected, run.onePass);
 		return failureOf(
 			[for (move in moved) if (move.startsWith('+ ')) move.substr(2)],

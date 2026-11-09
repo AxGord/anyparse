@@ -920,14 +920,8 @@ class SymbolIndexSliceTest extends Test {
 	public function testProvablyLacksMemberResolvesQualifiedSupertypeReference(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/common/ISpanAware.hx', source: 'package common;\ninterface ISpanAware { function inCommon():Void; }' },
-			{
-				file: 'src/sidepanel/ISpanAware.hx',
-				source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }'
-			},
-			{
-				file: 'src/common/Q.hx',
-				source: 'package common;\nclass Q implements sidepanel.ISpanAware { private var _own:Int; }'
-			}
+			{ file: 'src/sidepanel/ISpanAware.hx', source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }' },
+			{ file: 'src/common/Q.hx', source: 'package common;\nclass Q implements sidepanel.ISpanAware { private var _own:Int; }' }
 		], plugin());
 		// The qualified clause names the `sidepanel` one, so ITS member is inherited and the
 		// same-package `common.IExtentAware`'s is not.
@@ -1134,10 +1128,7 @@ class SymbolIndexSliceTest extends Test {
 	public function testAnonStructuralExtensionResolvesInheritedField(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/Base.hx', source: 'package pkg;\ntypedef Base = {\n\tcount:Int,\n\t?label:String\n}\n' },
-			{
-				file: 'src/pkg/Res.hx',
-				source: 'package pkg;\ntypedef Res = {\n\t> Base,\n\tname:String\n}\n'
-			}
+			{ file: 'src/pkg/Res.hx', source: 'package pkg;\ntypedef Res = {\n\t> Base,\n\tname:String\n}\n' }
 		], plugin());
 		Assert.equals('String', index.paths.resolvePathFinalMemberTypeSource('src/pkg/Res.hx', 'Res', ['name']));
 		Assert.equals('Int', index.paths.resolvePathFinalMemberTypeSource('src/pkg/Res.hx', 'Res', ['count']));
@@ -1183,10 +1174,7 @@ class SymbolIndexSliceTest extends Test {
 				source: 'package pkg;\nclass Mid extends Ext {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 1;\n'
 					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
-			{
-				file: 'pkg/Leaf.hx',
-				source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}'
-			}
+			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}' }
 		];
 		Assert.isFalse(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypes.subtypeOverridesProperty('Root', 'tag'));
 	}
@@ -1204,10 +1192,7 @@ class SymbolIndexSliceTest extends Test {
 					+ '\tfunction set_tag(v:Int):Int return v;\n}'
 			},
 			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Root {\n\tpublic function ping():Void {}\n}' },
-			{
-				file: 'pkg/Leaf.hx',
-				source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}'
-			}
+			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}' }
 		];
 		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypes.subtypeOverridesProperty('Root', 'tag'));
 	}
@@ -1222,10 +1207,7 @@ class SymbolIndexSliceTest extends Test {
 			{ file: 'pkg/Root.hx', source: 'package pkg;\nclass Root {\n\tpublic function ping():Void {}\n}' },
 			{ file: 'pkg/Plain.hx', source: 'package pkg;\nclass Plain {\n\tpublic function ping():Void {}\n}' },
 			{ file: 'pkg/Dyn.hx', source: 'package pkg;\nabstract Dyn(Int) {\n\tpublic function new(v:Int) this = v;\n}' },
-			{
-				file: 'pkg/Leaf.hx',
-				source: 'package pkg;\nclass Leaf extends Plain implements Dyn {\n\tpublic function ping2():Void {}\n}'
-			}
+			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Plain implements Dyn {\n\tpublic function ping2():Void {}\n}' }
 		];
 		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypes.provablyNotSubtype('Leaf', 'Root'));
 	}
@@ -1510,20 +1492,17 @@ class SymbolIndexSliceTest extends Test {
 	public function testOverrideFamilyOfRefusesUnprovable(): Void {
 		final base: String = 'package pkg;\nclass B {\n\tpublic function draw():Void {}\n}';
 		final foreign: String = 'package pkg;\nclass F extends Absent {\n\toverride public function draw():Void {}\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/B.hx', source: base },
-			{ file: 'pkg/F.hx', source: foreign }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/B.hx', source: base }, { file: 'pkg/F.hx', source: foreign }];
 		Assert.isNull(SymbolIndex.build(files, plugin()).subtypes.overrideFamilyOf('B', 'draw'));
 		// The SAME unresolvable type WITHOUT the override modifier cannot be `B`'s override at all —
 		// Haxe rejects a bare redeclaration under a plain-class owner — so it must veto nothing. Without
 		// this exclusion the refusal is near-universal in a framework tree, where no class's ancestry
 		// resolves to the end.
 		final bare: String = 'package pkg;\nclass F extends Absent {\n\tpublic function draw():Void {}\n}';
-		final bareFamily: Null<Array<OverrideFamilyMember>> = SymbolIndex.build([
-			{ file: 'pkg/B.hx', source: base },
-			{ file: 'pkg/F.hx', source: bare }
-		], plugin()).subtypes.overrideFamilyOf('B', 'draw');
+		final bareFamily: Null<Array<OverrideFamilyMember>> = SymbolIndex.build(
+			[{ file: 'pkg/B.hx', source: base }, { file: 'pkg/F.hx', source: bare }], plugin()
+		)
+			.subtypes.overrideFamilyOf('B', 'draw');
 		Assert.notNull(bareFamily);
 		if (bareFamily != null) Assert.equals(0, bareFamily.length);
 		// Alone, the same base has an EMPTY family — `null` above is the unprovable type talking.
@@ -1648,10 +1627,7 @@ class SymbolIndexSliceTest extends Test {
 	private static function ambiguousStartFiles(): Array<{ file: String, source: String }> {
 		return [
 			{ file: 'src/common/ISpanAware.hx', source: 'package common;\ninterface ISpanAware { function inCommon():Void; }' },
-			{
-				file: 'src/sidepanel/ISpanAware.hx',
-				source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }'
-			},
+			{ file: 'src/sidepanel/ISpanAware.hx', source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }' },
 			{ file: 'src/Holder.hx', source: 'import sidepanel.ISpanAware;\n\nclass Holder {}' },
 			{ file: 'src/other/Away.hx', source: 'package other;\n\nclass Away {}' }
 		];
@@ -1660,10 +1636,7 @@ class SymbolIndexSliceTest extends Test {
 	private static function ambiguousInterfaceFiles(): Array<{ file: String, source: String }> {
 		return [
 			{ file: 'src/common/ISpanAware.hx', source: 'package common;\ninterface ISpanAware { function inCommon():Void; }' },
-			{
-				file: 'src/sidepanel/ISpanAware.hx',
-				source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }'
-			},
+			{ file: 'src/sidepanel/ISpanAware.hx', source: 'package sidepanel;\ninterface ISpanAware { function inRightmenu():Void; }' },
 			{
 				file: 'src/common/Sized.hx',
 				source: 'package common;\nclass Sized implements ISpanAware { public function inCommon():Void {} }'

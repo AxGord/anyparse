@@ -38,12 +38,11 @@ class LintFixSafePassRevertTest extends Test {
 		final source: String = 'class C { static function scan(t: String): Bool { var found = false;'
 			+ ' map(t, run -> { if (t == null) found = true; return run; }); return found; } }';
 		final at: Int = source.indexOf(' = false');
-		final refusal: Null<String> = DefiniteAssignmentGuard.unassignedRead(source, [
-			{
-				span: new Span(at, at + ' = false'.length),
-				text: ''
-			}
-		], new HaxeQueryPlugin());
+		final refusal: Null<String> = DefiniteAssignmentGuard.unassignedRead(
+			source,
+			[{ span: new Span(at, at + ' = false'.length), text: '' }],
+			new HaxeQueryPlugin()
+		);
 		Assert.notNull(refusal);
 		Assert.stringContains('`found`', refusal ?? '');
 	}
@@ -331,13 +330,7 @@ class LintFixSafePassRevertTest extends Test {
 	 * project starts in, so it is the one that needed the sentence most.
 	 */
 	public function testBothNetlessArmsSaySoAndNameTheirOwnRemedy(): Void {
-		final configured: Array<OracleConfig> = [
-			{
-				hxml: 'build.hxml',
-				dir: null,
-				defines: []
-			}
-		];
+		final configured: Array<OracleConfig> = [{ hxml: 'build.hxml', dir: null, defines: [] }];
 		final unconfigured: String = LintFixSafePass.netNotice([], false, false) ?? '';
 		Assert.stringContains('no safe-pass revert net', unconfigured);
 		Assert.stringContains('compilerOracle', unconfigured);

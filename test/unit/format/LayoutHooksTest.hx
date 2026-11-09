@@ -36,11 +36,7 @@ final class LayoutHooksTest extends Test {
 	public function testAMatchedRuleBreaksTheClausesAndChargesItsIndent(): Void {
 		final rules: WrapRules = {
 			rules: [
-				{
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }],
-					mode: WrapMode.OnePerLine,
-					additionalIndent: 1
-				}
+				{ conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }], mode: WrapMode.OnePerLine, additionalIndent: 1 }
 			],
 			defaultMode: WrapMode.NoWrap
 		};

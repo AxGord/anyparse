@@ -310,12 +310,10 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, extViolations('using ExtArray;', '', [], '@:using(ExtIter) class S').length);
 		Assert.equals(
 			0,
-			extViolations('using ExtArray;', '', [
-				{
-					file: 'Base.hx',
-					source: '@:using(ExtIter) class Base {}'
-				}
-			], 'class S extends Base').length
+			extViolations('using ExtArray;', '', [{
+				file: 'Base.hx',
+				source: '@:using(ExtIter) class Base {}'
+			}], 'class S extends Base').length
 		);
 	}
 
@@ -340,12 +338,10 @@ class PreferForeachCheckTest extends Test {
 		Assert.equals(0, extViolations('using ExtArray;\nusing Missing;', '').length);
 		Assert.equals(
 			0,
-			extViolations('using ExtArray;\nusing AliasHost;', '', [
-				{
-					file: 'AliasHost.hx',
-					source: 'typedef AliasHost = ExtIter;'
-				}
-			]).length
+			extViolations('using ExtArray;\nusing AliasHost;', '', [{
+				file: 'AliasHost.hx',
+				source: 'typedef AliasHost = ExtIter;'
+			}]).length
 		);
 	}
 

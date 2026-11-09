@@ -219,22 +219,10 @@ final class HaxeFormat implements TextFormat {
 						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
 					]
 				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.Ignore
 		};
@@ -260,26 +248,11 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultCallParameterWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 80 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 80 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -305,14 +278,8 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultArrayLiteralWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }]
-				},
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }]
-				},
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }] },
+				{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }] },
 				{
 					mode: WrapMode.FillLineWithLeadingBreak,
 					conditions: [
@@ -328,18 +295,9 @@ final class HaxeFormat implements TextFormat {
 						{ cond: WrapConditionType.ItemCountLargerThan, value: 10 }
 					]
 				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.Ignore
 		};
@@ -360,10 +318,7 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultComprehensionWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -421,18 +376,9 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultMultiVarWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.AllItemLengthsLessThan, value: 15 }]
-				},
-				{
-					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 80 }]
-				},
-				{
-					mode: WrapMode.OnePerLineAfterFirst,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.AllItemLengthsLessThan, value: 15 }] },
+				{ mode: WrapMode.OnePerLineAfterFirst, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 80 }] },
+				{ mode: WrapMode.OnePerLineAfterFirst, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -454,14 +400,8 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultCasePatternWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -485,10 +425,7 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [
 				// An item a comment holds open cannot share a line, and the NoWrap rules below would answer it.
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }]
-				},
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }] },
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
@@ -496,22 +433,10 @@ final class HaxeFormat implements TextFormat {
 						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
 					]
 				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }]
-				},
-				{
-					mode: WrapMode.NoWrap,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }] },
+				{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.Ignore
 		};
@@ -541,10 +466,7 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultMethodChainWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }]
-				},
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }] },
 				{
 					mode: WrapMode.NoWrap,
 					conditions: [
@@ -566,14 +488,8 @@ final class HaxeFormat implements TextFormat {
 						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }
 					]
 				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }]
-				},
-				{
-					mode: WrapMode.OnePerLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }] },
+				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap,
 			// ω-methodchain-all-or-nothing: this cascade is the Haxe layout
@@ -621,10 +537,7 @@ final class HaxeFormat implements TextFormat {
 	 * the singleton.
 	 */
 	public static function defaultConditionWrap(): WrapRules {
-		return {
-			rules: [],
-			defaultMode: WrapMode.NoWrap
-		};
+		return { rules: [], defaultMode: WrapMode.NoWrap };
 	}
 
 	/**
@@ -673,10 +586,7 @@ final class HaxeFormat implements TextFormat {
 	 * corrupt the singleton.
 	 */
 	public static function defaultExpressionWrappingWrap(): WrapRules {
-		return {
-			rules: [],
-			defaultMode: WrapMode.NoWrap
-		};
+		return { rules: [], defaultMode: WrapMode.NoWrap };
 	}
 
 	/**
@@ -702,11 +612,7 @@ final class HaxeFormat implements TextFormat {
 	 * corrupt the singleton.
 	 */
 	public static function defaultFunctionSignatureWrap(): WrapRules {
-		return {
-			rules: [],
-			defaultMode: WrapMode.FillLine,
-			defaultAdditionalIndent: 1
-		};
+		return { rules: [], defaultMode: WrapMode.FillLine, defaultAdditionalIndent: 1 };
 	}
 
 	/**
@@ -728,21 +634,13 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultAnonFunctionSignatureWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }],
-					additionalIndent: 1
-				},
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 7 }], additionalIndent: 1 },
 				{
 					mode: WrapMode.FillLine,
 					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 80 }],
 					additionalIndent: 1
 				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
-					additionalIndent: 1
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], additionalIndent: 1 }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -771,18 +669,9 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultMetadataCallParameterWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 140 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -808,14 +697,8 @@ final class HaxeFormat implements TextFormat {
 	public static function defaultTypeParameterWrap(): WrapRules {
 		return {
 			rules: [
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 50 }]
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 70 }]
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 50 }] },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 70 }] }
 			],
 			defaultMode: WrapMode.NoWrap
 		};
@@ -840,16 +723,8 @@ final class HaxeFormat implements TextFormat {
 					conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 140 }],
 					additionalIndent: 2
 				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }],
-					additionalIndent: 2
-				},
-				{
-					mode: WrapMode.FillLine,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
-					additionalIndent: 2
-				}
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }], additionalIndent: 2 },
+				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], additionalIndent: 2 }
 			],
 			defaultMode: WrapMode.NoWrap
 		};

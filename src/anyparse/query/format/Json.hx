@@ -89,10 +89,7 @@ final class Json {
 			final index: LineIndex = new LineIndex(entry.source);
 			for (h in entry.hits) {
 				final declSpan: Null<Span> = h.declSpan;
-				final decl: AstMetaDecl = {
-					kind: h.declKind,
-					span: declSpan == null ? emptySpan() : spanToJson(declSpan, index)
-				};
+				final decl: AstMetaDecl = { kind: h.declKind, span: declSpan == null ? emptySpan() : spanToJson(declSpan, index) };
 				final dn: Null<String> = h.declName;
 				if (dn != null) decl.name = dn;
 				out.push({
@@ -140,11 +137,9 @@ final class Json {
 
 	public static function renderSearchMatches(file: String, source: String, matches: Array<Match>): String {
 		final index: LineIndex = new LineIndex(source);
-		final entries: Array<AstSearchMatch> = matches.map(m -> {
-			file: file,
-			span: spanToJson(m.span, index),
-			bindings: collectBindings(m, source, index)
-		});
+		final entries: Array<AstSearchMatch> = matches.map(m ->
+			{file: file, span: spanToJson(m.span, index), bindings: collectBindings(m, source, index) }
+		);
 		final envelope: AstSearchMatches = { matches: entries };
 		return '${AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
@@ -172,11 +167,7 @@ final class Json {
 		for (name => boundNode in m.bindings) {
 			final span: Null<Span> = boundNode.span;
 			final text: String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : SourceSlice.slice(source, span);
-			out.push({
-				name: name,
-				text: text,
-				span: span == null ? emptySpan() : spanToJson(span, index)
-			});
+			out.push({ name: name, text: text, span: span == null ? emptySpan() : spanToJson(span, index) });
 		}
 		return out;
 	}
@@ -186,10 +177,7 @@ final class Json {
 		final to: Position = index.positionAt(span.to);
 		// Both line and col are 1-based — the unified apq
 		// coordinate convention (refs / ast --at / source agree).
-		return {
-			start: [from.line, from.col],
-			end: [to.line, to.col]
-		};
+		return { start: [from.line, from.col], end: [to.line, to.col] };
 	}
 
 }

@@ -210,10 +210,7 @@ final class TriviaSepLowering {
 			case null: elemOptBase;
 			case _: macro _setParenChainInElement($elemOptBase, false, opt);
 		}
-		final triviaElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]),
-			pos: Context.currentPos()
-		};
+		final triviaElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]), pos: Context.currentPos() };
 		final emptyText: String = openText + closeText;
 		final trailBB: Expr = trailBBAccess ?? macro false;
 
@@ -374,10 +371,8 @@ final class TriviaSepLowering {
 		// The rehomed list keeps reading the source `trailPresent`: a separator is only dropped under the `Remove` veto, and
 		// every layout that reads source presence is vetoed with it.
 		return switch body.expr {
-			case EBlock(stmts): {
-				expr: EBlock(triviaSepArrDecls(fieldAccess, tailRehomeFn, appendTrailingCommaExpr).concat(stmts)),
-				pos: body.pos
-			};
+			case EBlock(stmts):
+				{ expr: EBlock(triviaSepArrDecls(fieldAccess, tailRehomeFn, appendTrailingCommaExpr).concat(stmts)), pos: body.pos };
 			case _: throw 'triviaSepStarExpr: the emitted body is not a block';
 		};
 	}
@@ -784,10 +779,9 @@ final class TriviaSepLowering {
 		//
 		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
 		// a hardline before the open brace, regardless of knob value.
-		final knobNextOrEmpty: Expr = knobExpr == null ? macro _de() : {
-			expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
-			pos: Context.currentPos()
-		};
+		final knobNextOrEmpty: Expr = knobExpr == null
+			? macro _de()
+			: { expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()), pos: Context.currentPos() };
 		final wrapLeadFlatDoc: Expr = macro _de();
 		// ω-anontype-right-curly: when the call site reads
 		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
@@ -801,10 +795,12 @@ final class TriviaSepLowering {
 		// `RightCurlyPlacement.{Inline,Same}` semantic.
 		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : optFieldAccess(rightCurlyKnob);
 		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
-		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null ? macro _dhl() : {
-			expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
-			pos: Context.currentPos()
-		};
+		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null
+			? macro _dhl()
+			: {
+				expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
+				pos: Context.currentPos()
+			};
 		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
 		// the same knob as the trivia branch's `triviaTrailDoc`.
 		// `WrapList.shapeOnePerLine` substitutes the result for the
@@ -1566,10 +1562,7 @@ final class TriviaSepLowering {
 					_inner.push(_dhl());
 			}
 			: macro {};
-		return {
-			keepCurlyBeginExpr: keepCurlyBeginExpr,
-			keepCurlyEndExpr: keepCurlyEndExpr
-		};
+		return { keepCurlyBeginExpr: keepCurlyBeginExpr, keepCurlyEndExpr: keepCurlyEndExpr };
 	}
 
 	/**
@@ -1619,11 +1612,7 @@ final class TriviaSepLowering {
 				}
 			}
 			: macro {};
-		return {
-			typedefBeginExpr: typedefBeginExpr,
-			typedefEndExpr: typedefEndExpr,
-			typedefBetweenExpr: typedefBetweenExpr
-		};
+		return { typedefBeginExpr: typedefBeginExpr, typedefEndExpr: typedefEndExpr, typedefBetweenExpr: typedefBetweenExpr };
 	}
 
 	/**

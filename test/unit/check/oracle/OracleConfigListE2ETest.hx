@@ -128,10 +128,10 @@ final class OracleConfigListE2ETest extends Test {
 		final alone: FixVerifyResult = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [oracle(dir, 'check.hxml', [])]);
 		Assert.same(['$dir/Good.hx'], alone.applied, 'the first configuration accepts the edit on its own');
 		Assert.isTrue(File.getContent('$dir/Good.hx').indexOf('= ONLY_IN_FIRST;') != -1, 'and the rewrite reached disk');
-		final both: FixVerifyResult = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [
-			oracle(dir, 'check.hxml', []),
-			oracle(dir, 'check.hxml', ['second'])
-		]);
+		final both: FixVerifyResult = rewrite(
+			dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST',
+			[oracle(dir, 'check.hxml', []), oracle(dir, 'check.hxml', ['second'])]
+		);
 		Assert.isTrue(both.baseline.match(Confirmed), 'the original source typechecks under BOTH configurations');
 		Assert.equals(0, both.applied.length, 'an edit the second configuration rejects is not applied');
 		Assert.equals(1, both.reverted.length, 'it is REVERTED');
@@ -160,7 +160,8 @@ final class OracleConfigListE2ETest extends Test {
 		Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
 		var result: Null<FixVerifyResult> = null;
 		CliFixture.always(
-			() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''), () -> result = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [
+			() -> Sys.putEnv('APQ_ORACLE_PARALLEL', declared ?? ''),
+			() -> result = rewrite(dir, 'Good.hx', SHARED, 'ONLY_IN_FIRST', [
 				oracle(dir, 'check.hxml', []),
 				oracle(dir, 'check.hxml', ['second']),
 				oracle(dir, 'check.hxml', ['third'])
@@ -449,10 +450,10 @@ final class OracleConfigListE2ETest extends Test {
 		final alone: FixVerifyResult = rewrite(dir, 'Region.hx', REGION, '2', [oracle(dir, 'main.hxml', [])]);
 		Assert.equals(1, alone.declined.length, 'one configuration cannot typecheck the branch it excludes');
 		Assert.equals(REGION, File.getContent('$dir/Region.hx'), 'so nothing is written into it');
-		final both: FixVerifyResult = rewrite(dir, 'Region.hx', REGION, '2', [
-			oracle(dir, 'main.hxml', []),
-			oracle(dir, 'main.hxml', ['second'])
-		]);
+		final both: FixVerifyResult = rewrite(
+			dir, 'Region.hx', REGION, '2',
+			[oracle(dir, 'main.hxml', []), oracle(dir, 'main.hxml', ['second'])]
+		);
 		Assert.equals(0, both.declined.length, 'the configuration that DOES compile the branch verifies the edit');
 		Assert.same(['$dir/Region.hx'], both.applied);
 		Assert.isTrue(File.getContent('$dir/Region.hx').indexOf('final v:Int = 2;') != -1, 'and the rewrite reached the branch');
@@ -470,10 +471,10 @@ final class OracleConfigListE2ETest extends Test {
 		#if (sys || nodejs)
 		final dir: String = regionDir();
 		if (skipWithoutHaxe(dir, 'main.hxml')) return;
-		final result: FixVerifyResult = rewrite(dir, 'Nowhere.hx', NOWHERE, '2', [
-			oracle(dir, 'main.hxml', []),
-			oracle(dir, 'main.hxml', ['second'])
-		]);
+		final result: FixVerifyResult = rewrite(
+			dir, 'Nowhere.hx', NOWHERE, '2',
+			[oracle(dir, 'main.hxml', []), oracle(dir, 'main.hxml', ['second'])]
+		);
 		Assert.equals(1, result.declined.length, 'a branch neither configuration defines is unverifiable by either');
 		final reason: String = result.declined[0].reason;
 		Assert.stringContains('no configured compiler oracle typechecks this edit', reason);
@@ -541,19 +542,12 @@ final class OracleConfigListE2ETest extends Test {
 
 	/** One configuration over a fixture's hxml, differing from its siblings only in `defines`. */
 	private static function oracle(dir: String, hxml: String, defines: Array<String>): OracleConfig {
-		return {
-			hxml: hxml,
-			dir: dir,
-			defines: defines
-		};
+		return { hxml: hxml, dir: dir, defines: defines };
 	}
 
 	/** The one-module fixture the cross-configuration verdict directions share. */
 	private static function sharedDir(): String {
-		return CliFixture.writeDir('oraclelist', [
-			{ name: 'Good.hx', source: SHARED },
-			{ name: 'check.hxml', source: SHARED_HXML }
-		]);
+		return CliFixture.writeDir('oraclelist', [{ name: 'Good.hx', source: SHARED }, { name: 'check.hxml', source: SHARED_HXML }]);
 	}
 
 	/** The two-module fixture the red-baseline direction uses. */

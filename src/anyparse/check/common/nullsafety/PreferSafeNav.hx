@@ -368,11 +368,9 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final access: Null<QueryNode> = subjectAccess(rhs, condIdent, s);
 		if (access == null) return null;
 		final root: QueryNode = access.children[0];
-		return mentionsOutsideRoot(rhs, root, condIdent, s) || mentionsOutsideRoot(rhs, root, lhs, s) ? null : {
-			condIdent: condIdent,
-			rhs: rhs,
-			root: root
-		};
+		return mentionsOutsideRoot(rhs, root, condIdent, s) || mentionsOutsideRoot(rhs, root, lhs, s)
+			? null
+			: { condIdent: condIdent, rhs: rhs, root: root };
 	}
 
 	/** Index every ASSIGNMENT-arm guard by its `if` statement's `from:to` span — the key `run` anchors its finding on. */

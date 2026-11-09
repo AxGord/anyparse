@@ -90,9 +90,7 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 		final root: QueryNode = new HaxeQueryPlugin().parseFile(src);
 		final container: QueryNode = root.children.length > 0 ? root.children[0] : root;
 		final at: Int = src.indexOf('public static final');
-		final owners: Array<String> = [
-			for (child in container.children) if (covers(child, at)) child.kind
-		];
+		final owners: Array<String> = [for (child in container.children) if (covers(child, at)) child.kind];
 		Assert.equals('Public', owners.join(','), 'the modifier is its own sibling slot: $owners');
 	}
 

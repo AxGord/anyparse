@@ -61,7 +61,8 @@ final class RedOnBaseTest extends Test {
 		final empty: OnBase = RedOnBase.ofSuite(1, null, [], ['unit.A.testOne']);
 		Assert.same(OnBase.Unknown('the base re-run counted no tests'), empty);
 		Assert.same(
-			empty, RedOnBase.ofSuite(1, {
+			empty,
+			RedOnBase.ofSuite(1, {
 				tests: 0,
 				assertions: 0,
 				failures: 0,

@@ -194,10 +194,8 @@ final class TypeRefPrinter {
 		final trimmed: String = fqn.trim();
 		// A dotless run carries no derivable module path, and a lower-initial final segment is a
 		// package path or a structural field name, never a type — both pass through untouched.
-		if (trimmed.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(trimmed))) return {
-			text: trimmed,
-			importPath: null
-		};
+		if (trimmed.indexOf('.') == -1 || !SourceText.isUpperInitial(SourceText.lastSegment(trimmed)))
+			return { text: trimmed, importPath: null };
 		final canonical: String = canonicalize(trimmed);
 		final simple: String = SourceText.lastSegment(canonical);
 		final visible: Null<String> = visibleNameFor(canonical, simple);

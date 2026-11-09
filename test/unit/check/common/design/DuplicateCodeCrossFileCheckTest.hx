@@ -107,7 +107,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 
 	public function testTwoStatementCrossFileNotFlagged(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				file('A.hx', [
 					'class A {',
 					'\tfunction f():Void {',
@@ -156,7 +157,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 
 	public function testDifferentIdentifiersCrossFileNotFlagged(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				file('A.hx', [
 					'class A {',
 					'\tfunction f():Void {',
@@ -181,7 +183,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 
 	public function testBelowContentGateCrossFileNotFlagged(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				file('A.hx', [
 					'class A {',
 					'\tfunction f():Void {',
@@ -206,7 +209,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 
 	public function testUnrelatedFilesEmpty(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				file('A.hx', [
 					'class A {',
 					'\tfunction f():Void {',
@@ -258,7 +262,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	/** The cross-file pass applies the same bare-run filter: a row of field fills shared by two files is no clone. */
 	public function testABareRunAcrossFilesIsNotAClone(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				file('A.hx', [
 					'class A {',
 					'\tfunction f(alpha:Int, beta:String):Void {',

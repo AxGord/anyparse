@@ -74,10 +74,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String =
 			'package pkg;\nclass C {\n\tprivate var bottom:Int = 0;\n\tpublic function f(d:CSub):Int { return bottom + d.bottom; }\n}';
 		final dSrc: String = 'package pkg;\nclass CSub extends C {\n\tpublic function new() {}\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/CSub.hx', source: dSrc }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/CSub.hx', source: dSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
@@ -478,10 +475,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function __helper():Int { return 1; }\n\t'
 			+ 'public function f():Int { return __helper(); }\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Int { return __helper() + 1; }\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/D.hx', source: dSrc }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		assertRenameSlice(rename, 'pkg/C.hx', cSrc, 'private function helper():Int', '__helper');
 		// The renamed inherited call next to its untouched arithmetic: only the rename produces this.
@@ -492,10 +486,10 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	public function testCrossFileFixRenamesPublicMethod(): Void {
 		final bSrc: String = 'package pkg;\nclass Base {\n\tpublic function __draw():Int { return 1; }\n}';
 		final cSrc: String = 'package pkg;\nclass Caller {\n\tpublic function go(b:Base):Int { return b.__draw(); }\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/Base.hx', source: bSrc },
-			{ file: 'pkg/Caller.hx', source: cSrc }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'pkg/Base.hx',
+			source: bSrc
+		}, { file: 'pkg/Caller.hx', source: cSrc }];
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		assertRenameSlice(rename, 'pkg/Base.hx', bSrc, 'public function draw():Int', '__draw');
 		assertRenameSlice(rename, 'pkg/Caller.hx', cSrc, 'return b.draw();', '__draw');
@@ -645,10 +639,10 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(n:Int) { __size = n; }\n}';
 		final oSrc: String = 'package pkg;\nclass Other {\n\tpublic function f():String { return \'reads the __size of it\'; }\n}\n\n'
 			+ 'class Mystery extends Unknown {\n\tpublic var size:Int;\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/Holder.hx', source: hSrc },
-			{ file: 'pkg/Other.hx', source: oSrc }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'pkg/Holder.hx',
+			source: hSrc
+		}, { file: 'pkg/Other.hx', source: oSrc }];
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		// The renamed write beside its untouched parameter: only the rename produces this string.
 		assertRenameSlice(rename, 'pkg/Holder.hx', hSrc, 'public function new(n:Int) { size = n; }', '__size');
@@ -1109,10 +1103,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		library: Array<{ file: String, source: String }>
 	): Int {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) } }
+		);
 		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		final check: Naming = new Naming();
 		return check.crossFileFix(report, CheckFixture.violationsIn(check, report, plugin), plugin, index).length;

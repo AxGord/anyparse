@@ -74,11 +74,7 @@ final class ShortenTypeRefCompilerProofE2ETest extends Test {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({
 			declared: true,
-			sources: () -> {
-				report: report,
-				projectRoots: [],
-				library: new LibrarySources([{ file: '$root/a/F.hx', source: F_SOURCE }])
-			}
+			sources: () -> {report: report, projectRoots: [], library: new LibrarySources([{ file: '$root/a/F.hx', source: F_SOURCE }]) }
 		});
 		// the configuration as a lint run prepares it, carrying the run's memo and so its warm servers
 		final memo: OracleRunMemo = new OracleRunMemo(false, () -> ['$root/a/b/Main.hx']);

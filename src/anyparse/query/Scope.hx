@@ -138,11 +138,7 @@ final class ScopeFrame {
 	public function declare(name: String, node: QueryNode, span: Span, visibleFrom: Int): Void {
 		final bindings: Array<ScopeBinding> = _bindings[name] ?? [];
 		_bindings[name] = bindings;
-		bindings.push(({
-			node: node,
-			span: span,
-			visibleFrom: visibleFrom < visibleFloor ? visibleFloor : visibleFrom
-		}: ScopeBinding));
+		bindings.push(({ node: node, span: span, visibleFrom: visibleFrom < visibleFloor ? visibleFloor : visibleFrom }: ScopeBinding));
 	}
 
 }

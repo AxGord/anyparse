@@ -164,10 +164,11 @@ class DeadTestGuardTest extends Test {
 				final live: Null<Bool> = condition == null
 					? null
 					: CondRegionLiveness.evaluate(source.substring(condition.from, condition.to), defines);
-				if (live != true) unproven.push({
-					line: new Span(directive.span.from, directive.span.from).lineCol(source).line,
-					text: CondDirectives.text(source, directive)
-				});
+				if (live != true)
+					unproven.push({
+						line: new Span(directive.span.from, directive.span.from).lineCol(source).line,
+						text: CondDirectives.text(source, directive)
+					});
 			}
 		return unproven;
 	}

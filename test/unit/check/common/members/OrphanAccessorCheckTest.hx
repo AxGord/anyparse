@@ -161,7 +161,8 @@ import anyparse.query.CachingGrammarPlugin;
 		final midB: String = 'package b;\nclass Mid extends Base {}';
 		final leaf: String = 'package a;\nclass Leaf extends Mid {\n\tpublic var v(get, never):Int;\n}';
 		Assert.equals(
-			0, violationsOf([
+			0,
+			violationsOf([
 				{ file: 'Base.hx', source: base },
 				{ file: 'a/Mid.hx', source: midA },
 				{ file: 'b/Mid.hx', source: midB },

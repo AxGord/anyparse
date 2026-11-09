@@ -280,11 +280,7 @@ final class WriterOptFanout {
 		return {
 			name: '_setExprPosition',
 			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)], ret: optionsCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

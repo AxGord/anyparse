@@ -117,11 +117,7 @@ final class Probe {
 
 	/** The kit file `given` names: a path to a kit file or to a directory holding `kit.json`, else an area under `KITS`. */
 	public static function kitPath(repo: String, given: String): String {
-		final candidates: Array<String> = [
-			given,
-			Path.join([given, KIT_FILE]),
-			Path.join([repo, KITS, given, KIT_FILE])
-		];
+		final candidates: Array<String> = [given, Path.join([given, KIT_FILE]), Path.join([repo, KITS, given, KIT_FILE])];
 		for (candidate in candidates) if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate))
 			return FileSystem.fullPath(candidate);
 		throw new UsageError('no probe kit $given (neither a kit file nor $KITS/$given/kit.json)');

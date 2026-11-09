@@ -58,18 +58,12 @@ final class TriviaEofLowering {
 		afterFileHeaderCommentBlanks: Bool = false, betweenMultilineCommentsBlanks: Bool = false,
 		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, measuredMultiline: Bool = false
 	): Expr {
-		final triviaElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]),
-			pos: Context.currentPos()
-		};
+		final triviaElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]), pos: Context.currentPos() };
 		// ω-measured-multiline-decl — the same call with the comprehension
 		// binder as receiver, for the `_elemDocs` pre-pass. Docs are built
 		// ONCE either way: with the flag on, the loop reads `_elemDocs[_si]`
 		// instead of calling the element writer again.
-		final measuredElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _e.node, macro opt]),
-			pos: Context.currentPos()
-		};
+		final measuredElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _e.node, macro opt]), pos: Context.currentPos() };
 		final trailBB: Expr = trailBBAccess ?? macro false;
 		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
 		final afterInfos: Array<WriterLowering.AfterCtorBlankInfo> = afterCtorInfos ?? [];
@@ -172,10 +166,7 @@ final class TriviaEofLowering {
 		whileBodyParts.push(c.emit.trackPrev);
 		whileBodyParts.push(macro _si++);
 		final whileBodyBlock: Expr = { expr: EBlock(whileBodyParts), pos: c.pos };
-		return {
-			expr: EWhile(macro _si < _arr.length, whileBodyBlock, true),
-			pos: c.pos
-		};
+		return { expr: EWhile(macro _si < _arr.length, whileBodyBlock, true), pos: c.pos };
 	}
 
 	/**

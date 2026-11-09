@@ -237,12 +237,8 @@ final class EnumCtorRefs {
 	private static function bareSpellings(entry: ParsedFile, ctor: String, refShape: RefShape): Array<{ offset: Int, host: Null<String> }> {
 		final out: Array<{ offset: Int, host: Null<String> }> = [];
 		if (SourceText.identTokenOffset(entry.source, new Span(0, entry.source.length), ctor) < 0) return out;
-		final bound: Array<Int> = [
-			for (h in Refs.find(ctor, entry.tree, refShape)) if (isBoundRead(h)) h.span.from
-		];
-		final identKinds: Array<String> = [
-			for (k in [refShape.identKind, refShape.stringInterpIdentKind]) if (k != null) k
-		];
+		final bound: Array<Int> = [for (h in Refs.find(ctor, entry.tree, refShape)) if (isBoundRead(h)) h.span.from];
+		final identKinds: Array<String> = [for (k in [refShape.identKind, refShape.stringInterpIdentKind]) if (k != null) k];
 		function walk(node: QueryNode, host: Null<String>): Void {
 			final owner: Null<String> = RefactorSupport.typeDeclOf(node)?.name ?? host;
 			final span: Null<Span> = node.span;

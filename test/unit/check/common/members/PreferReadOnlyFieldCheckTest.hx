@@ -250,7 +250,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	 */
 	public function testStructuralTypedefMemberNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; public function bump():Void { x = 5; } }' }
 			]).length
@@ -263,7 +264,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	 */
 	public function testStructuralMethodMemberStillFlagged(): Void {
 		Assert.equals(
-			1, ownerViolations([
+			1,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { function x():Bool; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Void->Bool = null; public function bump():Void { x = null; } }' }
 			]).length
@@ -279,7 +281,8 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	 */
 	public function testCededCandidateReclaimedWhenFinalIsPinned(): Void {
 		Assert.equals(
-			1, ownerViolations([
+			1,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { function x():Bool; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }' }
 			]).length

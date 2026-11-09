@@ -285,10 +285,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		for (site in ctx.sites) planSite(site, ctx, resolve, plans);
 		final sinks: Array<SinkPlan> = [];
 		for (site in ctx.sites) sinkSite(site, ctx, report, plugin, sinks);
-		return {
-			hoists: plans,
-			sinks: sinks
-		};
+		return { hoists: plans, sinks: sinks };
 	}
 
 	/**
@@ -408,10 +405,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			out = [];
 			census.spellers[key] = out;
 		}
-		out.push({
-			file: file,
-			span: span
-		});
+		out.push({ file: file, span: span });
 	}
 
 	/**
@@ -431,35 +425,15 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			final asked: Array<Spelled> = plan.from.filter(f -> justified(violations, f));
 			if (asked.length == 0) continue;
 			statements.push(plan.statement);
-			for (f in asked) removals.push({
-				file: f.file,
-				edits: [
-					{
-						span: f.span,
-						text: ''
-					}
-				]
-			});
+			for (f in asked) removals.push({ file: f.file, edits: [{ span: f.span, text: '' }] });
 		}
 		if (statements.length == 0) return null;
 		final existing: Null<String> = sourceOf[site];
 		final built: Null<String> = builtAmbientSource(site, existing, statements, plugin);
 		if (built == null || built == existing) return null;
 		final head: CrossFileEdits = existing == null
-			? {
-				file: site,
-				edits: [],
-				create: built
-			}
-			: {
-				file: site,
-				edits: [
-					{
-						span: new Span(0, existing.length),
-						text: built
-					}
-				]
-			};
+			? { file: site, edits: [], create: built }
+			: { file: site, edits: [{ span: new Span(0, existing.length), text: built }] };
 		return [head].concat(removals);
 	}
 
@@ -497,21 +471,11 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			for (site in sites) {
 				final spans: Array<Span> = leaving[site] ?? [];
 				remainsBlank(sourceOf[site] ?? '', spans)
-					? {
-						file: site,
-						edits: [],
-						remove: true
-					}
-					: {
-						file: site,
-						edits: spans.map(span -> {span: span, text: '' })
-					};
+					? { file: site, edits: [], remove: true }
+					: { file: site, edits: spans.map(span -> {span: span, text: '' }) };
 			}
 		];
-		for (file in readers) out.push({
-			file: file,
-			edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')]
-		});
+		for (file in readers) out.push({ file: file, edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')] });
 		return out;
 	}
 
@@ -554,10 +518,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		while (head < limit && before.charCodeAt(head) == after.charCodeAt(head)) head++;
 		var tail: Int = 0;
 		while (tail < limit - head && before.charCodeAt(before.length - 1 - tail) == after.charCodeAt(after.length - 1 - tail)) tail++;
-		return {
-			span: new Span(head, before.length - tail),
-			text: after.substring(head, after.length - tail)
-		};
+		return { span: new Span(head, before.length - tail), text: after.substring(head, after.length - tail) };
 	}
 
 	/** Whether a violation of this rule in THIS call asks for `spelled`'s deletion. */

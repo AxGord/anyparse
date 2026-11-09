@@ -1092,10 +1092,7 @@ final class TriviaTryparseLowering {
 			// Wrap each `macro` expression in parens — array-literal `,` after
 			// a `macro final ... = ...` reification fragment otherwise mis-parses
 			// (the parser treats `macro` as a variable name in the next element).
-			final block: Array<Expr> = [
-				(macro final _wo = _copyOpt(opt)),
-				macro _wo._inExprPosition = true
-			];
+			final block: Array<Expr> = [(macro final _wo = _copyOpt(opt)), macro _wo._inExprPosition = true];
 			if (hasFlatChildOpt) {
 				final flatOnlyParts: Array<Expr> = [
 					for (pair in flatChildOptPairs) {
@@ -1189,10 +1186,7 @@ final class TriviaTryparseLowering {
 		} else {
 			macro _writerOpt;
 		};
-		final triviaElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
-			pos: Context.currentPos()
-		};
+		final triviaElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]), pos: Context.currentPos() };
 		// ω-typedef-intersection-operand-break: per-iteration element call for
 		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
 		// `triviaElemCall`/`_writerOpt`). Flag off (every Star but
@@ -1203,10 +1197,9 @@ final class TriviaTryparseLowering {
 		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
 		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
 		// no mutation of the shared opt).
-		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace ? {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
-			pos: Context.currentPos()
-		} : triviaElemCall;
+		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace
+			? { expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]), pos: Context.currentPos() }
+			: triviaElemCall;
 		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
 		// nested EBlock — that would isolate `_elemOpt` from the element call).
 		// Flag on ⇒ when the prior element rendered multi-line AND ended with a

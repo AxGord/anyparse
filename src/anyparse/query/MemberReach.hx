@@ -1134,10 +1134,9 @@ final class MemberReach {
 			inline function kept(at: FactPos): Bool {
 				return at.file != key || !guardedDead(file, read.tree, at.span);
 			}
-			final typed: Null<TruthSites> = sites == null ? null : {
-				natives: [for (n in sites.natives) if (kept(n.at)) n],
-				reflection: [for (r in sites.reflection) if (kept(r.at)) r]
-			};
+			final typed: Null<TruthSites> = sites == null
+				? null
+				: { natives: [for (n in sites.natives) if (kept(n.at)) n], reflection: [for (r in sites.reflection) if (kept(r.at)) r] };
 			final hazards: Array<ReachHazard> = typed == null ? syntactic : _hazards.underTruth(syntactic, typed, read.tree);
 			for (h in hazards) out.push({ file: file, hazard: h });
 		}

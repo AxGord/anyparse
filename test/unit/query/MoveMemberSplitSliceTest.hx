@@ -195,13 +195,18 @@ class MoveMemberSplitSliceTest extends Test {
 		Assert.isTrue(hidden.contains('"library" is not public'), hidden);
 		final other: String = okSource(
 			move(
-				'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '').concat([
-					{ file: 'p/Other.hx', source: 'package p;\n\nclass Other {\n\tpublic function isPure(x:Int):Bool return false;\n}' },
-					{
-						file: 'p/Use.hx',
-						source: 'package p;\n\nclass Use {\n\tpublic static function f(o:Other):Bool return o.isPure(1);\n}'
-					}
-				])
+				'p/G.hx', 'G', 'isPure', 'Lib',
+				holderScope('public', '')
+					.concat([
+						{
+							file: 'p/Other.hx',
+							source: 'package p;\n\nclass Other {\n\tpublic function isPure(x:Int):Bool return false;\n}'
+						},
+						{
+							file: 'p/Use.hx',
+							source: 'package p;\n\nclass Use {\n\tpublic static function f(o:Other):Bool return o.isPure(1);\n}'
+						}
+					])
 			),
 			'p/G.hx'
 		);
@@ -292,17 +297,24 @@ class MoveMemberSplitSliceTest extends Test {
 	@:killer('M-RECEIVER-STRUCTURE-LEFT')
 	public function testAReceiverNotProvenAnUnrelatedClassRefusesTheMove(): Void {
 		final forward: String = errMessage(move(
-			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '').concat([
-				{ file: 'p/A.hx', source: 'package p;\n\n@:forward\nenum abstract A(G) {\n\tpublic inline function new(g:G) this = g;\n}' },
-				{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(a:A):Bool return a.isPure(1);\n}' }
-			])
+			'p/G.hx', 'G', 'isPure', 'Lib',
+			holderScope('public', '')
+				.concat([
+					{
+						file: 'p/A.hx',
+						source: 'package p;\n\n@:forward\nenum abstract A(G) {\n\tpublic inline function new(g:G) this = g;\n}'
+					},
+					{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(a:A):Bool return a.isPure(1);\n}' }
+				])
 		));
 		Assert.isTrue(forward.contains('cannot route `a.isPure`'), forward);
 		final structure: String = errMessage(move(
-			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '').concat([
-				{ file: 'p/S.hx', source: 'package p;\n\ntypedef S = {\n\tfunction isPure(x:Int):Bool;\n}' },
-				{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(s:S):Bool return s.isPure(1);\n}' }
-			])
+			'p/G.hx', 'G', 'isPure', 'Lib',
+			holderScope('public', '')
+				.concat([
+					{ file: 'p/S.hx', source: 'package p;\n\ntypedef S = {\n\tfunction isPure(x:Int):Bool;\n}' },
+					{ file: 'p/Use.hx', source: 'package p;\n\nclass Use {\n\tpublic static function f(s:S):Bool return s.isPure(1);\n}' }
+				])
 		));
 		Assert.isTrue(structure.contains('cannot route `s.isPure`'), structure);
 	}
@@ -322,11 +334,14 @@ class MoveMemberSplitSliceTest extends Test {
 			file: 'p/Lib.hx',
 			source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}'
 		};
-		final g: (String, String) -> { file: String, source: String } = (head, modifier) -> {
-			file: 'p/G.hx',
-			source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
-				+ '\t${modifier}public function isPure(x:Int):Bool return x > 0;\n}'
-		};
+		final g: (
+			String, String
+		) -> { file: String, source: String } = (head, modifier) ->
+			{
+				file: 'p/G.hx',
+				source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n\t}\n\n'
+					+ '\t${modifier}public function isPure(x:Int):Bool return x > 0;\n}'
+			};
 		final overriding: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [g(' extends q.Base', 'override '), lib]));
 		Assert.isTrue(overriding.contains('"isPure"') && overriding.contains('overrides'), overriding);
 		final implementing: String = errMessage(move('p/G.hx', 'G', 'isPure', 'Lib', [

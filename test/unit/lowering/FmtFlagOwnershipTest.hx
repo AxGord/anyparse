@@ -62,12 +62,7 @@ class FmtFlagOwnershipTest extends Test {
 	 * is the declared-side list), and pinned here so the same reading also covers a handler
 	 * whose grammar declaration was deleted.
 	 */
-	private static final HANDLER_ONLY_FLAGS: Array<String> = [
-		'blankLinesBeforeCtor',
-		'blankLinesBeforeCtorIf',
-		'fill',
-		'fillDoubleIndent'
-	];
+	private static final HANDLER_ONLY_FLAGS: Array<String> = ['blankLinesBeforeCtor', 'blankLinesBeforeCtorIf', 'fill', 'fillDoubleIndent'];
 
 	/**
 	 * Every flag the shipped grammars declare is named by at least one macro module.

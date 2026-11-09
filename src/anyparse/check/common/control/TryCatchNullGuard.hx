@@ -311,11 +311,9 @@ final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 		if (valueSpan != null) kept.push(valueSpan);
 		for (c in parts.catches) kept.push(c.headerSpan);
 		final region: Span = new Span(declSpan.from, guardSpan.to);
-		return IfExpressionChain.droppedComment(region, kept, comments) ? null : {
-			keySpan: declSpan,
-			editSpan: region,
-			text: build(prefix.text, valueSrc, parts, termText)
-		};
+		return IfExpressionChain.droppedComment(region, kept, comments)
+			? null
+			: { keySpan: declSpan, editSpan: region, text: build(prefix.text, valueSrc, parts, termText) };
 	}
 
 	/**

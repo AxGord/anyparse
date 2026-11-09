@@ -85,10 +85,7 @@ final class KwBranchLowering {
 		for (lit in litList) {
 			final valueExpr: Expr = { expr: EConst(CIdent(lit)), pos: Context.currentPos() };
 			final call: Expr = { expr: ECall(ctorRef, [valueExpr]), pos: Context.currentPos() };
-			final matchCall: Expr = {
-				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]),
-				pos: Context.currentPos()
-			};
+			final matchCall: Expr = { expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]), pos: Context.currentPos() };
 			attempts.push(macro if ($matchCall) return $call);
 		}
 		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;

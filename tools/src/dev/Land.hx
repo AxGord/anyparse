@@ -149,10 +149,7 @@ final class Land {
 	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>): Int {
 		final cache: Null<String> = battery?.cache;
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
-			{
-				name: 'post-red',
-				step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail)
-			},
+			{ name: 'post-red', step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail) },
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
 			{ name: 'base', step: ensureBase.bind(battery) },
@@ -168,10 +165,7 @@ final class Land {
 				name: 'post-land',
 				step: () -> PostLand.afterwards(_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _summary.detail)
 			},
-			{
-				name: 'warm',
-				step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
-			}
+			{ name: 'warm', step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail) }
 		];
 		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
 		final left: Null<String> = _candidate.drop();

@@ -580,12 +580,7 @@ final class CollapsePass {
 		if (tagged == null) return null;
 		if (!opens(tagged.marker, decisions)) return null;
 		final headBreak: Null<Doc> = commitHeadBreak(tagged, decisions, width);
-		return headBreak == null
-			? null
-			: Group(Concat([
-				WrapBoundary(headBreak),
-				Flatten(rewrite(parts.cont, decisions, false, width))
-			]));
+		return headBreak == null ? null : Group(Concat([WrapBoundary(headBreak), Flatten(rewrite(parts.cont, decisions, false, width))]));
 	}
 
 	/**

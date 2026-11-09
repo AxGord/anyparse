@@ -114,10 +114,7 @@ final class ShardPlan {
 	 * Everything else uses unique per-test temp directories and random
 	 * compiler-server ports, so it parallelises freely.
 	 */
-	public static final STICKY_CLASSES: Array<String> = [
-		CORPUS_CLASS,
-		'unit.cli.ApqDxTier5CliTest'
-	];
+	public static final STICKY_CLASSES: Array<String> = [CORPUS_CLASS, 'unit.cli.ApqDxTier5CliTest'];
 
 	/** What a class not in `CLASS_WEIGHTS` costs — the tail is flat, so one number covers it. */
 	private static inline final DEFAULT_WEIGHT: Int = 30;

@@ -18,10 +18,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testSecondaryTypedefUseKeepsModuleImport(): Void {
 		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x: ModExtra;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}
@@ -30,10 +29,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testSecondaryEnumUseKeepsModuleImport(): Void {
 		final mod: String = 'package a.b;\n\nenum ModAction {\n\tGo;\n\tStop;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tfunction f(): ModAction return Go;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}
@@ -42,10 +40,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testSecondaryEnumAbstractUseKeepsModuleImport(): Void {
 		final mod: String = 'package a.b;\n\nenum abstract ModKind(String) to String {\n\tfinal A = \'a\';\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x: ModKind;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}
@@ -55,10 +52,11 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final mod: String = 'package a.b;\n\nenum ModAction {\n\tGo;\n\tStop;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tfunction f(): Dynamic return Go;\n}';
 		Assert.equals(
-			0, CheckFixture.violationsIn(new UnusedImport(), [
-				{ file: 'a/b/Mod.hx', source: mod },
-				{ file: 'pkg/C.hx', source: use }
-			], plugin()).length
+			0,
+			CheckFixture.violationsIn(
+				new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+			)
+				.length
 		);
 	}
 
@@ -68,10 +66,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final mod: String = 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {}\n';
 		final use: String = 'package pkg;\n\nimport v.Fns;\n\nclass C {\n\tfunction f(): Void {\n\t\tmodfn();\n\t}\n}\n';
 		Assert.equals(
-			0, CheckFixture.violationsIn(new UnusedImport(), [
-				{ file: 'v/Fns.hx', source: mod },
-				{ file: 'pkg/C.hx', source: use }
-			], plugin()).length
+			0,
+			CheckFixture.violationsIn(new UnusedImport(), [{ file: 'v/Fns.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin())
+				.length
 		);
 	}
 
@@ -84,11 +81,13 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final use: String =
 			'package pkg;\n\nimport v.Fns;\nimport v.Fns2;\n\nclass C {\n\tfunction f(): Void {\n\t\tnew Fns();\n\t\tmodfn();\n\t}\n}\n';
 		Assert.equals(
-			0, CheckFixture.violationsIn(new UnusedImport(), [
+			0,
+			CheckFixture.violationsIn(new UnusedImport(), [
 				{ file: 'v/Fns.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {\n\tpublic function new() {}\n}\n' },
 				{ file: 'v/Fns2.hx', source: 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns2 {}\n' },
 				{ file: 'pkg/C.hx', source: use }
-			], plugin()).length
+			], plugin())
+				.length
 		);
 	}
 
@@ -107,10 +106,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testWhollyUnusedModuleImportStillFlagged(): Void {
 		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -125,10 +123,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		final mod: String =
 			'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\ntypedef ModOther = {\n\tvar n: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod.ModExtra;\n\nclass C {\n\tvar x: ModOther;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -153,10 +150,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testBareEnumConstructorKeepsModuleImport(): Void {
 		final mod: String = 'package a.b;\n\nenum Mod {\n\tGo;\n\tStop;\n}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x = Go;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}
@@ -165,10 +161,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testBareEnumAbstractValueKeepsSubModuleImport(): Void {
 		final mod: String = 'package a.b;\n\nenum abstract Kind(Int) {\n\tfinal First = 0;\n\tfinal Second = 1;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod.Kind;\n\nclass C {\n\tvar x = First;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}
@@ -177,10 +172,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testWhollyUnusedEnumImportStillFlagged(): Void {
 		final mod: String = 'package a.b;\n\nenum Mod {\n\tGo;\n\tStop;\n}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -199,10 +193,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testGuardedUnusedImportIsInfoNotWarning(): Void {
 		final mod: String = 'package a.b;\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -212,10 +205,9 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	public function testGuardedReferencedImportNotFlagged(): Void {
 		final mod: String = 'package a.b;\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {\n\tvar x: Mod;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		], plugin());
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }], plugin()
+		);
 
 		Assert.equals(0, vs.length);
 	}

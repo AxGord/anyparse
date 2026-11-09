@@ -161,11 +161,9 @@ final class HxFormatterCorpusHelpers {
 		#if (sys || nodejs)
 		final content: String = File.getContent(path);
 		final parts: Array<String> = content.split(SECTION_SEP);
-		return parts.length != EXPECTED_SECTIONS ? null : {
-			config: StringTools.trim(parts[0]),
-			input: stripPadNewlines(parts[1]),
-			expected: stripPadNewlines(parts[2])
-		};
+		return parts.length != EXPECTED_SECTIONS
+			? null
+			: { config: StringTools.trim(parts[0]), input: stripPadNewlines(parts[1]), expected: stripPadNewlines(parts[2]) };
 		#else
 		return null;
 		#end

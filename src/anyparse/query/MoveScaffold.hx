@@ -102,10 +102,11 @@ final class MoveScaffold {
 			final g: Null<MemberGroup> = members.find(mm -> mm.member.name == name);
 			final gSpan: Null<Span> = g?.member.span;
 			final type: Null<String> = gSpan != null ? typeSources[gSpan.from] : null;
-			if (type == null) return {
-				error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
-				fields: []
-			};
+			if (type == null)
+				return {
+					error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
+					fields: []
+				};
 			final typeNN: String = type;
 			fields.push({ name: name, type: typeNN });
 		}
@@ -125,11 +126,12 @@ final class MoveScaffold {
 		final block: String = scaffoldDestBlock(fields);
 		final ctor: Null<MemberGroup> = MoveMember.constructorGroupOf(prep.destDecl, prep.destSource, prep.shape, lexicalRegions);
 		if (ctor == null) return { error: null, prependBlock: block };
-		if (!isTrivialCtor(prep.destSource, ctor)) return {
-			error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
-				+ '(a bare `new() {}` or no constructor)',
-			prependBlock: ''
-		};
+		if (!isTrivialCtor(prep.destSource, ctor))
+			return {
+				error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
+					+ '(a bare `new() {}` or no constructor)',
+				prependBlock: ''
+			};
 		final from: Int = Strings.lineStart(prep.destSource, ctor.groupSpan.from);
 		ScopeFiles.editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
 		return { error: null, prependBlock: '' };
@@ -147,17 +149,13 @@ final class MoveScaffold {
 		final ctor: Null<MemberGroup> = MoveMember.constructorGroupOf(prep.srcDecl, prep.srcSource, prep.shape, lexicalRegions);
 		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
 		final fieldFrom: Int = Strings.lineStart(prep.srcSource, ctor.groupSpan.from);
-		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
-			span: new Span(fieldFrom, fieldFrom),
-			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n'
-		});
+		ScopeFiles.editsFor(editsByFile, prep.srcFile)
+			.push({ span: new Span(fieldFrom, fieldFrom), text: '\tprivate final $viaName: ${prep.destTypeName};\n\n' });
 		final at: Null<Int> = viaWiringOffset(prep, ctor.member, fields);
 		if (at == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
 		final args: String = fields.map(f -> f.name).join(', ');
-		ScopeFiles.editsFor(editsByFile, prep.srcFile).push({
-			span: new Span(at, at),
-			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);'
-		});
+		ScopeFiles.editsFor(editsByFile, prep.srcFile)
+			.push({ span: new Span(at, at), text: '\n\t\t$viaName = new ${prep.destTypeName}($args);' });
 		return null;
 	}
 

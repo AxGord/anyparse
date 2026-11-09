@@ -44,8 +44,16 @@ final class _ReconSkipParse { // noqa: naming
 	private static final HXTEST_EXT: String = '.hxtest';
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SUBDIRS: Array<String> = [
-		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
-		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing'
+		'sameline',
+		'whitespace',
+		'indentation',
+		'wrapping',
+		'emptylines',
+		'lineends',
+		'other',
+		'formatrange',
+		'expressionlevel',
+		'missing'
 	];
 
 	// Recon driver: the dense arg-parse + per-bucket sweep loop is intentional for a
@@ -127,9 +135,7 @@ final class _ReconSkipParse { // noqa: naming
 		// `expected="…"` (almost always `//`) is dropped: the parser's
 		// expected-terminator carousel is uninformative; the locus IS
 		// the construct the parser couldn't consume.
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [
-			for (k => v in clusters) { key: k, cluster: v }
-		];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in clusters) { key: k, cluster: v }];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
 		Sys.println('');

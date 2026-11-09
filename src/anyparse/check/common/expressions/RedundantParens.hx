@@ -794,10 +794,8 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		// Same defensive `children.length == 1` as `walk` — see the note there.
 		if (node.kind == slots.parenKind && node.children.length == 1) {
 			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = {
-				node: node,
-				dropsParens: dropsParens(node.children[0], slots, slot, opaque, prefixed)
-			};
+			if (span != null)
+				out['${span.from}:${span.to}'] = { node: node, dropsParens: dropsParens(node.children[0], slots, slot, opaque, prefixed) };
 		}
 		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
 		final host: Bool = slots.prefixAnnotation.contains(node.kind);

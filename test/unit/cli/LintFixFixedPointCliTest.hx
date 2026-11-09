@@ -323,10 +323,11 @@ class LintFixFixedPointCliTest extends Test {
 	 */
 	@:access(anyparse.query.Cli)
 	public function testUnfixedLedgerNamesTheRulesItDoesNotCover(): Void {
-		final all: String = LintFixLedger.unfixedFixLedger([
-			'magic-number' => outcome(1, 1, 0),
-			'explicit-local-type' => outcome(5, 5, 0)
-		], [], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']).join('');
+		final all: String = LintFixLedger.unfixedFixLedger(
+			['magic-number' => outcome(1, 1, 0), 'explicit-local-type' => outcome(5, 5, 0)],
+			[], ['explicit-local-type'], ['avoid-dynamic', 'prefer-inline']
+		)
+			.join('');
 		Assert.isTrue(all.indexOf('2 rule(s) are absent from this ledger') >= 0, 'the RISKY rules are counted - got: $all');
 		Assert.isTrue(all.indexOf('avoid-dynamic, prefer-inline') >= 0, 'and named - got: $all');
 		// An OracleAssisted rule that is not ALSO risky runs in the safe loop, so it has a row here.
@@ -353,7 +354,8 @@ class LintFixFixedPointCliTest extends Test {
 			'r6' => outcome(3, 3, 0),
 			'r7' => outcome(2, 2, 0),
 			'r8' => outcome(1, 1, 0)
-		], [], [], []).join('');
+		], [], [], [])
+			.join('');
 		Assert.isTrue(all.indexOf('r1 8:') >= 0 && all.indexOf('r6 3:') >= 0, 'the six biggest are named - got: $all');
 		Assert.isTrue(all.indexOf('r7 2:') < 0, 'the seventh is not - got: $all');
 		Assert.isTrue(all.indexOf('... +2 more rule(s), 3 finding(s)') >= 0, 'and the rest are totalled - got: $all');
@@ -379,7 +381,8 @@ class LintFixFixedPointCliTest extends Test {
 				{ text: 'the `using` module is unknown', count: 25 },
 				{ text: 'the wildcard symbol set is unknown', count: 15 }
 			])
-		], [], [], []).join('');
+		], [], [], [])
+			.join('');
 		Assert.isTrue(
 			all.indexOf('unused-import 204 of 205: fix DECLINED, 4 distinct reason(s) over 204 finding(s)') >= 0,
 			'the row heads the list with how many different answers there are - got: $all'

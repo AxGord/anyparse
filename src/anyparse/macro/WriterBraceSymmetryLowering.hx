@@ -79,11 +79,9 @@ final class WriterBraceSymmetryLowering {
 			c -> c.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true && c.fmtHasFlag(DROP_SINGLE_STMT_BRACES)
 		);
 		final thenName: Null<String> = thenSibling?.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-		return thenSibling == null || thenName == null ? null : {
-			sibling: thenSibling,
-			name: thenName,
-			access: { expr: EField(macro value, thenName), pos: Context.currentPos() }
-		};
+		return thenSibling == null || thenName == null
+			? null
+			: { sibling: thenSibling, name: thenName, access: { expr: EField(macro value, thenName), pos: Context.currentPos() } };
 	}
 
 	/**
@@ -370,10 +368,7 @@ final class WriterBraceSymmetryLowering {
 		if (ifPat == null) return e;
 		final setExpr: Expr = macro _setSsbChainSuppress($e, $chainSuppressExpr, opt);
 		final clearExpr: Expr = macro _setSsbChainSuppress($e, false, opt);
-		return {
-			expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
-			pos: Context.currentPos()
-		};
+		return { expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr), pos: Context.currentPos() };
 	}
 
 	/**
@@ -475,10 +470,9 @@ final class WriterBraceSymmetryLowering {
 		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
 		// access is byte-identical to pre-slice.
 		final dropBraces: Bool = bs.ctx.trivia && child.fmtHasFlag(DROP_SINGLE_STMT_BRACES);
-		final elseAccess: Null<Expr> = dropBraces && elseFieldName != null ? {
-			expr: EField(macro value, elseFieldName),
-			pos: Context.currentPos()
-		} : null;
+		final elseAccess: Null<Expr> = dropBraces && elseFieldName != null
+			? { expr: EField(macro value, elseFieldName), pos: Context.currentPos() }
+			: null;
 		// Gates 4/5 arming, and REDUNDANT with the chain probe below: `chainForcesBraces`
 		// opens by asking `keepsBraces(thenBody, …, elseBody != null, …)`, which is this very
 		// condition evaluated one layer down. Wherever `elseFollows` would turn a de-brace into

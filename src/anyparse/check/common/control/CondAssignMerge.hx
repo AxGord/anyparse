@@ -493,11 +493,9 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 		if (rhs.kind == seams.assignKind) return null; // `a = b = c` — the inner assignment cannot go inline
 		final lhsSpan: Null<Span> = assign.children[0].span;
 		final rhsSpan: Null<Span> = rhs.span;
-		return lhsSpan == null || rhsSpan == null ? null : {
-			prefix: '${source.substring(lhsSpan.from, lhsSpan.to)} =',
-			value: source.substring(rhsSpan.from, rhsSpan.to),
-			exit: false
-		};
+		return lhsSpan == null || rhsSpan == null
+			? null
+			: { prefix: '${source.substring(lhsSpan.from, lhsSpan.to)} =', value: source.substring(rhsSpan.from, rhsSpan.to), exit: false };
 	}
 
 	/**
@@ -513,11 +511,7 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
 		final prefix: String = source.substring(stmtSpan.from, initSpan.from).trim();
-		return prefix.endsWith('=') ? {
-			prefix: prefix,
-			value: source.substring(initSpan.from, initSpan.to),
-			exit: false
-		} : null;
+		return prefix.endsWith('=') ? { prefix: prefix, value: source.substring(initSpan.from, initSpan.to), exit: false } : null;
 	}
 
 	/** Whether a comment token overlaps `region` — the merge rebuilds the statement, so any comment in it would be lost. */

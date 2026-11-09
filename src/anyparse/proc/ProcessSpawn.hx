@@ -325,13 +325,16 @@ final class ProcessSpawn {
 		final stdin: Null<String> = job.stdin;
 		final input: Null<Int> = stdin == null
 			? null
-			: try Fs.openSync(stdin, 'r') catch (exception: haxe.Exception) return {
-				status: null,
-				out: '',
-				err: '',
-				failure: 'could not open $stdin as the standard input of $program (${exception.message})',
-				overflowed: false
-			};
+			: try
+				Fs.openSync(stdin, 'r')
+			catch (exception: haxe.Exception)
+				return {
+					status: null,
+					out: '',
+					err: '',
+					failure: 'could not open $stdin as the standard input of $program (${exception.message})',
+					overflowed: false
+				};
 		final captured: CapturedRun = capturedSpawn(program, job.args, options, input, maxBuffer);
 		if (input != null) Fs.closeSync(input);
 		final out: String = captured.out;

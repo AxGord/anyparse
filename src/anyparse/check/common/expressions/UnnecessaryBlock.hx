@@ -85,10 +85,11 @@ final class UnnecessaryBlock extends RuleBase {
 				if (span != null) approved['${span.from}:${span.to}'] = true;
 			}
 			return CheckScan.applyBySpan(
-				plugin, source, violations, [seams.blockStmtKind], (node, span) -> approved['${span.from}:${span.to}'] != true ? null : {
-					span: span,
-					text: source.substring(span.from + 1, span.to - 1).trim()
-				}
+				plugin, source, violations, [seams.blockStmtKind],
+				(node, span) ->
+					approved['${span.from}:${span.to}'] != true
+						? null
+						: {span: span, text: source.substring(span.from + 1, span.to - 1).trim() }
 			);
 		}, CheckScan.parseBranchAwareOrNull);
 	}

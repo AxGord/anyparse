@@ -502,10 +502,10 @@ class ThreadSafetyConditionsTest extends Test {
 			callee,
 			'class A { public static function main():Void { W.show(\'a.svg\'); W.show(); } }'
 		]));
-		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
-			callee,
-			'class A { public static function main():Void W.show(\'a.png\'); }'
-		]), 'another string');
+		Assert.same(
+			['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'],
+			sleepFindings('', [callee, 'class A { public static function main():Void W.show(\'a.png\'); }']), 'another string'
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

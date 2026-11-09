@@ -297,9 +297,7 @@ final class StripCommand implements CliCommand {
 		final cluster: Null<ReconCluster> = walk.clusters[key];
 		if (cluster == null) {
 			CliIo.stderr('apq strip: --from-cluster "$key" matched no cluster key (exact match).\n');
-			final keyEntries: Array<{ key: String, count: Int }> = [
-				for (k => v in walk.clusters) { key: k, count: v.count }
-			];
+			final keyEntries: Array<{ key: String, count: Int }> = [for (k => v in walk.clusters) { key: k, count: v.count }];
 			keyEntries.sort((a, b) -> b.count - a.count);
 			final preview: Int = keyEntries.length > ReconCommand.CLUSTER_PREVIEW_LIMIT
 				? ReconCommand.CLUSTER_PREVIEW_LIMIT

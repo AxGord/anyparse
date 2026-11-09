@@ -175,7 +175,8 @@ class PossibleNullDereferenceTest extends Test {
 
 	public function testCrossFileNonNullDirectNotFlagged(): Void {
 		Assert.equals(
-			0, violationsFiles([
+			0,
+			violationsFiles([
 				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
 				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { h.plain().name; } }' }
 			]).length

@@ -1136,14 +1136,9 @@ final class HaxeRefShape {
 		table.wildcardPatternName = '_';
 		table.exprStatementKind = 'ExprStmt';
 		table.nullCoalAssignKind = 'NullCoalAssign';
-		table.operatorWriteKinds = [
-			for (k in ASSIGN_KINDS) if (k != 'Assign' && k != 'NullCoalAssign') k
-		].concat([
-			'PreIncr',
-			'PreDecr',
-			'PostIncr',
-			'PostDecr'
-		]);
+		table.operatorWriteKinds = [for (k in ASSIGN_KINDS) if (
+			k != 'Assign' && k != 'NullCoalAssign'
+		) k].concat(['PreIncr', 'PreDecr', 'PostIncr', 'PostDecr']);
 		table.numericOperatorKinds = [
 			'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Lt', 'Gt', 'LtEq', 'GtEq', 'BitAnd', 'BitOr', 'BitXor', 'Shl', 'Shr', 'UShr', 'Neg',
 			'BitNot'

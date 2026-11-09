@@ -36,20 +36,24 @@ class OverriddenInlineCheckTest extends Test {
 
 	public function testOverrideOfAPlainMethodIsClean(): Void {
 		Assert.equals(
-			0, CheckFixture.violationsIn(new OverriddenInline(), [
+			0,
+			CheckFixture.violationsIn(new OverriddenInline(), [
 				{ file: 'B.hx', source: 'class B {\n\tpublic function new() {}\n\n\tpublic function f():Int return 1;\n}' },
 				{ file: 'S.hx', source: 'class S extends B {\n\toverride public inline function f():Int return 2;\n}' }
-			]).length,
+			])
+				.length,
 			'an inline OVERRIDE of a plain method is legal; only overriding the inline one is not'
 		);
 	}
 
 	public function testStaticNamesakeIsNoOverride(): Void {
 		Assert.equals(
-			0, CheckFixture.violationsIn(new OverriddenInline(), [
+			0,
+			CheckFixture.violationsIn(new OverriddenInline(), [
 				{ file: 'B.hx', source: 'class B {\n\tpublic static inline function f():Int return 1;\n}' },
 				{ file: 'S.hx', source: 'class S extends B {\n\tpublic static function f():Int return 2;\n}' }
-			]).length
+			])
+				.length
 		);
 	}
 
@@ -64,7 +68,8 @@ class OverriddenInlineCheckTest extends Test {
 
 	public function testAnotherPackagesNamesakeIsNotTheSupertype(): Void {
 		Assert.equals(
-			0, CheckFixture.violationsIn(new OverriddenInline(), [
+			0,
+			CheckFixture.violationsIn(new OverriddenInline(), [
 				{
 					file: 'p/Base.hx',
 					source: 'package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic inline function f():Int return 1;\n}'
@@ -74,7 +79,8 @@ class OverriddenInlineCheckTest extends Test {
 					source: 'package q;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function f():Int return 1;\n}'
 				},
 				{ file: 'q/Sub.hx', source: 'package q;\n\nclass Sub extends q.Base {\n\toverride public function f():Int return 2;\n}' }
-			]).length
+			])
+				.length
 		);
 	}
 

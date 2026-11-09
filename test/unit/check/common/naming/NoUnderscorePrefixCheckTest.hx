@@ -148,7 +148,8 @@ class NoUnderscorePrefixCheckTest extends Test {
 		File.saveContent('$dir/pkg/C.hx', src);
 		var err: String = '';
 		CliFixture.always(
-			CliFixture.removeDir.bind(dir), () -> err = CliFixture.captureStderr(() -> Cli.run([
+			CliFixture.removeDir.bind(dir),
+			() -> err = CliFixture.captureStderr(() -> Cli.run([
 				'lint',
 				'--no-oracle',
 				'--fix',

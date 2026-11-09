@@ -138,14 +138,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * `DIBuilder.hx` `$b{loadBody}` inside a `macro class` body). The
 	 * asymmetry is intentional, not an oversight.
 	 */
-	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
-		'BlockExpr',
-		'ObjectLit',
-		'ArrayExpr',
-		'DollarBlockExpr',
-		'DollarReifExpr',
-		'Is'
-	];
+	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> =
+		['BlockExpr', 'ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'DollarReifExpr', 'Is'];
 
 	/**
 	 * `HxStatement` constructors whose prior occurrence in a BlockBody
@@ -834,10 +828,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function importLeafClassifierField(name: String, walker: String): Field {
 		final cases: Array<Case> = [
-			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
-				expr: ECall(ident(walker), [ident('_c')]),
-				pos: Context.currentPos()
-			})
+			caseBind(HX_DECL, 'Conditional', [0 => '_c'], { expr: ECall(ident(walker), [ident('_c')]), pos: Context.currentPos() })
 		];
 		for (c in IMPORT_PATH_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_p'], macro { ctorName: $v{c}, path: _p }));
 		for (c in IMPORT_ALIAS_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_a'], macro { ctorName: $v{c}, path: _a.path }));
@@ -859,10 +850,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function keepsBlankLeafClassifierField(): Field {
 		final cases: Array<Case> = [
-			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
-				expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]),
-				pos: Context.currentPos()
-			})
+			caseBind(
+				HX_DECL, 'Conditional', [0 => '_c'],
+				{ expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]), pos: Context.currentPos() }
+			)
 		];
 		for (c in KEEPS_BLANK_CTORS) cases.push(caseOf(HX_DECL, [c], macro { ctorName: $v{c}, path: '' }));
 		final body: Expr = sw(field(ident('e'), 'decl'), cases, macro null);

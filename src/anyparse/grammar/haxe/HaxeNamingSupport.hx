@@ -157,13 +157,11 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * shipped default and the configured roster go through one predicate, instead of the built-in
 	 * being a second code path nothing keeps in step.
 	 */
-	private static final BUILTIN_CONTRACTS: Array<FrameworkContract> = [
-		{
-			root: 'Test',
-			names: [],
-			prefixes: ['test', 'spec', 'setup', 'teardown']
-		}
-	];
+	private static final BUILTIN_CONTRACTS: Array<FrameworkContract> = [{
+		root: 'Test',
+		names: [],
+		prefixes: ['test', 'spec', 'setup', 'teardown']
+	}];
 
 	/**
 	 * The effective policy of each directory `policyFor` has already resolved, so a scope walks up

@@ -59,10 +59,7 @@ final class OracleServerStaleTest extends Test {
 	@:killer('M-POOL-INVALIDATION-REACHES-EVERYTHING')
 	public function testAFileAMacroReadsThatMovesIsSeen(): Void {
 		final after: Null<ProcessRun> = compiledAfter([
-			{
-				name: 'Main.hx',
-				source: '@:build(Reader.check())\nclass Main {\n\tstatic function main() {\n\t\ttrace(1);\n\t}\n}\n'
-			},
+			{ name: 'Main.hx', source: '@:build(Reader.check())\nclass Main {\n\tstatic function main() {\n\t\ttrace(1);\n\t}\n}\n' },
 			{
 				name: 'Reader.hx',
 				source: 'import haxe.macro.Context;\n\nclass Reader {\n\tpublic static function check() {\n'

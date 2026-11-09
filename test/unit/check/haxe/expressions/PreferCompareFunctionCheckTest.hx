@@ -225,11 +225,7 @@ class PreferCompareFunctionCheckTest extends Test {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final compare: PreferCompareFunction = new PreferCompareFunction();
 		compare.setConfigResolver(bare);
-		final checks: Array<Check> = [
-			compare,
-			new PreferIfExpressionChain(),
-			new PreferIfExpressionReturn()
-		];
+		final checks: Array<Check> = [compare, new PreferIfExpressionChain(), new PreferIfExpressionReturn()];
 		for (statement in [
 			'xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);',
 			'xs.sort(function(a:Int, b:Int) { if (a < b) { return -1; } else if (a > b) { return 1; } else { return 0; } });',

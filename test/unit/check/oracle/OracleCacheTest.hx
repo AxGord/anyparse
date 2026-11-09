@@ -412,10 +412,9 @@ final class OracleCacheTest extends Test {
 
 	/** Whether this host has a `haxe` that answers at all — the skip gate every compiler-dependent test opens with. */
 	private function oracleWorks(): Bool {
-		final dir: String = CliFixture.writeDir('oraclecacheprobe', [
-			{ name: 'Good.hx', source: VALID },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'oraclecacheprobe', [{ name: 'Good.hx', source: VALID }, { name: 'check.hxml', source: HXML }]
+		);
 		final ok: Bool = CompilerOracle.typecheck('check.hxml', dir).match(Confirmed);
 		CliFixture.removeDir(dir);
 		return ok;

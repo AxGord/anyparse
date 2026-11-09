@@ -107,10 +107,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testDependencyImportCarried(): Void {
 		final a: String = 'package pkg;\n\nimport ext.Ext;\n\nclass Foo {\n\tvar e:Ext;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 5, 7, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the carried dependency import');
 		Assert.isTrue(newB.contains('class Foo'), 'Foo should land in B');
@@ -126,10 +125,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testDependencyImportInsideAnAnonymousStructureCarried(): Void {
 		final a: String = 'package pkg;\n\nimport ext.Ext;\n\nclass Foo {\n\tvar e:Array<{node:Ext}>;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 5, 7, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('import ext.Ext;'), 'B should gain the import the anon field type needs');
 		Assert.isTrue(newB.contains('var e:Array<{node:Ext}>;'), 'Foo body should land in B');
@@ -144,10 +142,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testDocCommentMovesWithType(): Void {
 		final a: String = 'package pkg;\n\n/** the foo */\nclass Foo {}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 4, 7, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('/** the foo */'), 'doc-comment should move to B');
@@ -164,10 +161,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testMetaMovesWithType(): Void {
 		final a: String = 'package pkg;\n\n@:keep\nclass Foo {}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 4, 7, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(newB.contains('@:keep'), 'meta should move to B');
@@ -179,10 +175,9 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass Foo {\n\tvar field:Int;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		// Line 4: the field name `field` at col 6 — a value decl, not a type.
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 6, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		], plugin(), typeRefShape());
+		final result: MoveResult = MoveSymbol.moveType(
+			'pkg/A.hx', 4, 6, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }], plugin(), typeRefShape()
+		);
 		assertRefusal('is not on a type declaration', result);
 	}
 
@@ -312,10 +307,9 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n}\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		// `typedef Foo` on line 3; `Foo` at col 9.
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 3, 9, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		// Byte-exact: Bar keeps its own doc, and the blank line the typedef sat
@@ -344,10 +338,9 @@ class MoveSymbolSliceTest extends Test {
 		final a: String = 'package pkg;\n\nprivate typedef Priv = {\n\tfinal x:Int;\n}\n\nclass A {}\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		// `private typedef Priv` on line 3; `Priv` at col 17.
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 17, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 3, 17, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.equals('package pkg;\n\nclass A {}\n', newA);
@@ -365,10 +358,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testMoveSemicolonTerminatedTypedefUnchanged(): Void {
 		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n};\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 3, 9, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		final newA: String = changeFor(changes, 'pkg/A.hx').newSource;
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.equals('package pkg;\n\n/** the bar */\ntypedef Bar = {\n\tfinal y:Int;\n};', newA);
@@ -383,10 +375,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testMoveTypedefWithNoNeighbourUnchanged(): Void {
 		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 3, 9, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		// The source loses the blank line that separated the decl from the import block as well:
 		// with nothing following the cut it is a trailing blank, which `fmt --list` rejects.
 		Assert.equals('package pkg;\n', changeFor(changes, 'pkg/A.hx').newSource);
@@ -404,10 +395,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testMoveTrailingBlankRunAtEofCollapses(): Void {
 		final a: String = 'package pkg;\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n\n\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 9, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 3, 9, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		Assert.equals('package pkg;\n', changeFor(changes, 'pkg/A.hx').newSource);
 		Assert.equals('package pkg;\n\nclass B {}\n\ntypedef Foo = {\n\tfinal x:Int;\n}\n', changeFor(changes, 'pkg/B.hx').newSource);
 	}
@@ -425,10 +415,9 @@ class MoveSymbolSliceTest extends Test {
 			+ '/** the keeper */\nfinal class Keeper {\n\tpublic function new() {}\n}\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		// `private final class Hidden` on line 4; `Hidden` at col 21.
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 21, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		]);
+		final changes: Array<MoveChange> = okChanges(
+			'pkg/A.hx', 4, 21, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }]
+		);
 		Assert.equals(
 			'package pkg;\n\n/** the keeper */\nfinal class Keeper {\n\tpublic function new() {}\n}\n',
 			changeFor(changes, 'pkg/A.hx').newSource
@@ -448,10 +437,9 @@ class MoveSymbolSliceTest extends Test {
 	public function testMovePrivateTypeStillUsedRefused(): Void {
 		final a: String = 'package pkg;\n\nprivate typedef Priv = {\n\tfinal a:Int;\n}\n\nclass A {\n\tvar p:Priv;\n}\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 17, 'pkg/B.hx', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b }
-		], plugin(), typeRefShape());
+		final result: MoveResult = MoveSymbol.moveType(
+			'pkg/A.hx', 3, 17, 'pkg/B.hx', [{ file: 'pkg/A.hx', source: a }, { file: 'pkg/B.hx', source: b }], plugin(), typeRefShape()
+		);
 		switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
@@ -1075,10 +1063,10 @@ class MoveSymbolSliceTest extends Test {
 	 */
 	public function testTheSameUnnameableImportOnBothSidesIsNotACollision(): Void {
 		inline function move(mover: String, host: String, dep: String): Void {
-			final files: Array<{ file: String, source: String }> = [
-				{ file: 'p/Mover.hx', source: mover },
-				{ file: 'p/Host.hx', source: host }
-			];
+			final files: Array<{ file: String, source: String }> = [{
+				file: 'p/Mover.hx',
+				source: mover
+			}, { file: 'p/Host.hx', source: host }];
 			switch MoveSymbol.moveType('p/Mover.hx', 7, 7, 'p/Host.hx', files, plugin(), typeRefShape()) {
 				case Ok(changes, _):
 					Assert.isTrue(changeFor(changes, 'p/Host.hx').newSource.contains('var d:$dep'), 'the decl moved');
@@ -1332,10 +1320,7 @@ class MoveSymbolSliceTest extends Test {
 		// give the destination static extensions it never had.
 		final changes: Array<MoveChange> = okChanges('p/Mover.hx', 8, 7, 'p/Host.hx', [
 			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
-			{
-				file: 'p/Mover.hx',
-				source: 'package p;\n\nimport q.Mod;\n#if neko\nusing q.Mod;\n#end\n\nclass Mover {\n\tvar d:Sub;\n}'
-			},
+			{ file: 'p/Mover.hx', source: 'package p;\n\nimport q.Mod;\n#if neko\nusing q.Mod;\n#end\n\nclass Mover {\n\tvar d:Sub;\n}' },
 			{ file: 'p/Host.hx', source: 'package p;\n\nclass Host {}' }
 		]);
 		final host: String = changeFor(changes, 'p/Host.hx').newSource;
@@ -1360,10 +1345,7 @@ class MoveSymbolSliceTest extends Test {
 		final changes: Array<MoveChange> = okChanges('q/Mod.hx', 5, 7, 'q/Dest.hx', [
 			{ file: 'q/Mod.hx', source: 'package q;\n\nclass Mod {}\n\nclass Sub {}' },
 			{ file: 'q/Dest.hx', source: 'package q;\n\nclass Dest {}' },
-			{
-				file: 'r/Uses.hx',
-				source: 'package r;\n\nimport q.Mod;\nimport q.Mod.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}'
-			}
+			{ file: 'r/Uses.hx', source: 'package r;\n\nimport q.Mod;\nimport q.Mod.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}' }
 		]);
 		Assert.equals(
 			'package r;\n\nimport q.Mod;\nimport q.Dest.Sub;\n\nclass Uses {\n\tvar a:Mod;\n\tvar b:Sub;\n}',

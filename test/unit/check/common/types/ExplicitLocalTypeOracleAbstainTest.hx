@@ -247,10 +247,9 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 	 * at all, which every caller reports as a skip rather than a pass it did not earn.
 	 */
 	private static function fixedMain(hxml: String): Null<String> {
-		final dir: String = CliFixture.writeDir('eltabstain', [
-			{ name: 'check.hxml', source: hxml },
-			{ name: 'apq.json', source: APQLINT }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'eltabstain', [{ name: 'check.hxml', source: hxml }, { name: 'apq.json', source: APQLINT }]
+		);
 		FileSystem.createDirectory('$dir/src');
 		FileSystem.createDirectory('$dir/tests');
 		FileSystem.createDirectory('$dir/tests/pkg');

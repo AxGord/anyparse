@@ -359,10 +359,7 @@ final class TyperConformance {
 		final dir: String = Path.directory(stderr);
 		final files: Array<{ file: String, source: String }> = [];
 		collect(dir, files);
-		final project: Array<{ file: String, source: String }> = files.map(f -> {
-			file: f.file.substr(dir.length + 1),
-			source: f.source
-		});
+		final project: Array<{ file: String, source: String }> = files.map(f -> {file: f.file.substr(dir.length + 1), source: f.source });
 		final typers: Map<String, Null<FileTyper>> = [];
 		final projectName: String = Path.withoutDirectory(dir);
 		final lines: Array<String> = File.getContent(stderr).split('\n');

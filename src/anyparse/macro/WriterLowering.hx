@@ -284,11 +284,7 @@ class WriterLowering {
 		_shape = shape;
 		_formatInfo = formatInfo;
 		_ctx = ctx;
-		_ctorPat = {
-			shape: shape,
-			isTriviaBearing: isTriviaBearing,
-			ruleCtorPath: ruleCtorPath
-		};
+		_ctorPat = { shape: shape, isTriviaBearing: isTriviaBearing, ruleCtorPath: ruleCtorPath };
 		_fieldSep = {
 			ctx: ctx,
 			ctorPat: _ctorPat,
@@ -643,10 +639,7 @@ class WriterLowering {
 			{ appendTrailingComma: $callTcExpr, flatTrailingComma: $callFlatTcExpr }
 		);
 		final chainRulesExpr: Expr = optFieldAccess(chainField);
-		final writeIdent: Expr = {
-			expr: EConst(CIdent(writeFnName)),
-			pos: Context.currentPos()
-		};
+		final writeIdent: Expr = { expr: EConst(CIdent(writeFnName)), pos: Context.currentPos() };
 		// ω-methodchain-reeval-after-callparam (axis 2): a chain segment's call
 		// args bypass the normal `HxExpr.Call` postfix path's per-arg
 		// `_setCallArgChainNest` wrapping (the chain segment goes through
@@ -1606,10 +1599,7 @@ class WriterLowering {
 	private function mapWrapFor(field: Null<String>): Null<SepStarMapWrap> {
 		if (field == null) return null;
 		final kind: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, ARRAY_BRACKET_KIND_PRED, [macro _arr[0].node]);
-		return {
-			field: field,
-			isMapLiteralExpr: macro (_arr.length > 0 && $kind == 1)
-		};
+		return { field: field, isMapLiteralExpr: macro (_arr.length > 0 && $kind == 1) };
 	}
 
 	/**
@@ -1646,9 +1636,8 @@ class WriterLowering {
 					_ml = $linkMoreAccess;
 				}
 				anyparse.format.wrap.WrapList.emit(
-					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess, {
-						trailBreak: anyparse.core.Doc.Empty
-					}
+					'', '', ',', _items, opt, anyparse.core.Doc.Empty, anyparse.core.Doc.Empty, false, $knobAccess,
+					{ trailBreak: anyparse.core.Doc.Empty }
 				);
 			} else {
 				_headPlusMore;
@@ -1704,10 +1693,9 @@ class WriterLowering {
 			&& child.annotations[AnnotationKeys.LIT_TRAIL_OPTIONAL] == true
 			&& _ctx.trivia
 			&& isTriviaBearing(typePath);
-		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
+		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot
+			? { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() }
+			: null;
 		return {
 			fieldName: fieldName,
 			kwLead: kwLead,

@@ -555,22 +555,14 @@ final class FixVerifier {
 						appliedEdits += edits.length;
 						edits.length;
 					case Reverted(cause):
-						reverted.push({
-							file: entry.file,
-							rule: check.id(),
-							cause: cause
-						});
+						reverted.push({ file: entry.file, rule: check.id(), cause: cause });
 						0;
 					case Partial(keptEdits, revertedEdits, probes, cause):
 						appliedEdits += keptEdits;
 						if (keptEdits > 0)
 							applied.push(entry.file)
 						else
-							reverted.push({
-								file: entry.file,
-								rule: check.id(),
-								cause: cause
-							});
+							reverted.push({ file: entry.file, rule: check.id(), cause: cause });
 						partials.push({
 							file: entry.file,
 							rule: check.id(),

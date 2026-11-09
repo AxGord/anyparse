@@ -164,10 +164,7 @@ class RedundantThisCheckTest extends Test {
 	public function testUsingExtensionSilentEvenWithBaseInSet(): Void {
 		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
-			{
-				file: 'W.hx',
-				source: 'using Type; class W extends Base { function m():Class<Dynamic> { return this.getClass(); } }'
-			}
+			{ file: 'W.hx', source: 'using Type; class W extends Base { function m():Class<Dynamic> { return this.getClass(); } }' }
 		]);
 		Assert.equals(0, vs.length);
 	}
@@ -194,10 +191,7 @@ class RedundantThisCheckTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
 			{ file: 'Lib.hx', source: 'class Lib { public function getClass():Class<Dynamic> return null; }' },
 			{ file: 'pa/S.hx', source: 'package pa; class S extends Lib {}' },
-			{
-				file: 'pr/S.hx',
-				source: 'package pr; using Type; class S { function m():Class<Dynamic> { return this.getClass(); } }'
-			}
+			{ file: 'pr/S.hx', source: 'package pr; using Type; class S { function m():Class<Dynamic> { return this.getClass(); } }' }
 		]);
 		Assert.equals(0, vs.length);
 	}

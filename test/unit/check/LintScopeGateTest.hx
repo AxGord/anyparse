@@ -245,9 +245,7 @@ class LintScopeGateTest extends Test {
 
 	@:access(anyparse.query.Cli)
 	private function activeScopeIds(): Array<String> {
-		return [
-			for (c in LintArgs.partitionChecks(Linter.builtins(), true).activeScope) c.id()
-		];
+		return [for (c in LintArgs.partitionChecks(Linter.builtins(), true).activeScope) c.id()];
 	}
 
 	/**

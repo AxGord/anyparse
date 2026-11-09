@@ -52,10 +52,7 @@ class TrivialGetterCheckTestBase extends Test {
 	 * a subtype, an owner) and assert exactly one finding, handing back the check so the caller can
 	 * drive `fix` / `crossFileFix` with the same instance.
 	 */
-	private function runFilesAndExpectOne(files: Array<{ file: String, source: String }>): {
-		check: TrivialGetter,
-		vs: Array<Violation>
-	} {
+	private function runFilesAndExpectOne(files: Array<{ file: String, source: String }>): { check: TrivialGetter, vs: Array<Violation> } {
 		final check: TrivialGetter = new TrivialGetter();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files);
 		Assert.equals(1, vs.length);

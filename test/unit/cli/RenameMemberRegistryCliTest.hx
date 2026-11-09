@@ -195,10 +195,7 @@ class RenameMemberRegistryCliTest extends Test {
 			{ name: 'src/p/Caller.hx', source: CALLER },
 			{ name: 'reg/p.json', source: ARMS },
 			{ name: 'hxformat.json', source: File.getContent('hxformat.json') },
-			{
-				name: 'apq.json',
-				source: '{"move": {"scope": ["src"], "registries": [{"file": "reg", "keys": ["arms.type"], $extra}]}}\n'
-			}
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"], "registries": [{"file": "reg", "keys": ["arms.type"], $extra}]}}\n' }
 		]);
 	}
 	#end

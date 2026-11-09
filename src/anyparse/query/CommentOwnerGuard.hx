@@ -200,10 +200,7 @@ final class CommentOwnerGuard {
 	 * condition or a returned value can be a single character, and `above "a"` names nothing a
 	 * reader can find in the file.
 	 */
-	private static function crossedCarry(spans: Array<Span>, placed: Array<Span>, hit: PlacedComment): Null<{
-		code: Span,
-		hoisted: Bool
-	}> {
+	private static function crossedCarry(spans: Array<Span>, placed: Array<Span>, hit: PlacedComment): Null<{ code: Span, hoisted: Bool }> {
 		var code: Null<Span> = null;
 		var hoisted: Bool = false;
 		for (k => span in spans) {

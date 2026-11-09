@@ -189,9 +189,7 @@ class LintReportChannelSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-LINT-SUMMARY-ONE-SHAPE')
 	public function testASummaryIsPerRuleAndOneRuleIsByFile(): Void {
-		final many: Array<Violation> = [
-			for (i in 0...12) finding('F$i.hx', 'rule-a', Severity.Warning)
-		].concat([
+		final many: Array<Violation> = [for (i in 0...12) finding('F$i.hx', 'rule-a', Severity.Warning)].concat([
 			finding('F0.hx', 'rule-a', Severity.Warning),
 			finding('G.hx', 'rule-b', Severity.Error)
 		]);

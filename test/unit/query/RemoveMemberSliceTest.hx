@@ -359,10 +359,10 @@ class RemoveMemberSliceTest extends Test {
 		walk(tree);
 		final regionNN: QueryNode = region ?? throw 'the fixture must hold a conditional region';
 		final memberNN: QueryNode = member ?? throw 'the fixture must hold the guarded member';
-		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [
-			{ node: regionNN, parent: tree },
-			{ node: memberNN, parent: regionNN }
-		];
+		final targets: Array<{ node: QueryNode, parent: Null<QueryNode> }> = [{
+			node: regionNN,
+			parent: tree
+		}, { node: memberNN, parent: regionNN }];
 		switch ElementSpan.deleteNodes(source, targets, true, plugin) {
 			case Ok(text):
 				Assert.equals('class C {\n\tvar keep:Int;\n}\n', text);

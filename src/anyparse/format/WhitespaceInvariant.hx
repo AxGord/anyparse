@@ -67,11 +67,13 @@ final class WhitespaceInvariant {
 		final shared: Int = leftLen < rightLen ? leftLen : rightLen;
 		var i: Int = 0;
 		while (i < shared && left.text.charCodeAt(i) == right.text.charCodeAt(i)) i++;
-		return i == shared && leftLen == rightLen ? null : {
-			line: i < left.lines.length ? left.lines[i] : lastLine(left),
-			expected: left.text.substr(i, WINDOW),
-			actual: right.text.substr(i, WINDOW)
-		};
+		return i == shared && leftLen == rightLen
+			? null
+			: {
+				line: i < left.lines.length ? left.lines[i] : lastLine(left),
+				expected: left.text.substr(i, WINDOW),
+				actual: right.text.substr(i, WINDOW)
+			};
 	}
 
 	/**

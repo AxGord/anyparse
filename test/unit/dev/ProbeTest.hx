@@ -57,11 +57,10 @@ final class ProbeTest extends Test {
 				}
 			]
 		};
-		Assert.same([
-			'DEVIATES #0 lost: apq echo',
-			'  failure: $failure',
-			'  exit: 0 → 1'
-		], Probe.judge(kit, [seen(answer(1, 'a', []), '', failure)], false).lines);
+		Assert.same(
+			['DEVIATES #0 lost: apq echo', '  failure: $failure', '  exit: 0 → 1'],
+			Probe.judge(kit, [seen(answer(1, 'a', []), '', failure)], false).lines
+		);
 	}
 
 	@:pin('control')

@@ -128,12 +128,14 @@ final class LintFormat {
 		return LintExplainedDocumentWriter.write({
 			findings: findings,
 			longLocks: longLocks == null ? null : {
-				long: longLocks.long.map(l -> {
-					lock: l.lock,
-					reasons: l.reasons.map(reasonRecord.bind(_, sourceOf, indexes)),
-					circular: l.circular,
-					aside: reasonRecords(l.aside, sourceOf, indexes)
-				}),
+				long: longLocks.long.map(
+					l -> {
+						lock: l.lock,
+						reasons: l.reasons.map(reasonRecord.bind(_, sourceOf, indexes)),
+						circular: l.circular,
+						aside: reasonRecords(l.aside, sourceOf, indexes)
+					}
+				),
 				mainShort: longLocks.mainShort.map(t -> takeRecord(t, indexFor(t.file, sourceOf, indexes))),
 				dominated: longLocks.dominated.map(d -> {lock: d.lock, by: d.by })
 			}

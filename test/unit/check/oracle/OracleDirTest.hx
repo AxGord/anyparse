@@ -136,11 +136,7 @@ final class OracleDirTest extends Test {
 
 	/** The fixture's one configuration under `defines`, compiled from `sub/`. */
 	private static function at(root: String, defines: Array<String>): OracleConfig {
-		return {
-			hxml: '$root/sub/check.hxml',
-			dir: '$root/sub',
-			defines: defines
-		};
+		return { hxml: '$root/sub/check.hxml', dir: '$root/sub', defines: defines };
 	}
 	#end
 

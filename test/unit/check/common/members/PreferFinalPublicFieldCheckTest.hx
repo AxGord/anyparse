@@ -303,7 +303,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** (b) The same unresolvable chain write poisons a String-typed candidate — the RHS could target it. */
 	public function testUnresolvedChainStringRhsStringTypedNotFlagged(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'A.hx', source: 'class A { public var title:String = "a"; }' },
 				{ file: 'B.hx', source: 'class B { public function poke(h:Holder):Void { h.inner.title = "x"; } }' }
 			]).length
@@ -340,7 +341,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** (e) A compound `+=` through an unresolvable receiver poisons regardless of its literal RHS. */
 	public function testCompoundAssignUnresolvedPoisonsRegardlessOfRhs(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'Marker.hx', source: 'class Marker {}' },
 				{ file: 'A.hx', source: 'class A { public var count:Marker = new Marker(); }' },
 				{ file: 'P.hx', source: 'class P { public function f(h:Holder):Void { h.inner.count += 1; } }' }
@@ -351,7 +353,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** (f) A `Dynamic`-typed receiver never resolves — its write poisons the field name. */
 	public function testDynamicReceiverPoisons(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'Marker.hx', source: 'class Marker {}' },
 				{ file: 'A.hx', source: 'class A { public var x:Marker = new Marker(); }' },
 				{ file: 'D.hx', source: 'class D { public function f(d:Dynamic):Void { d.x = g(); } function g():Int { return 1; } }' }
@@ -362,7 +365,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** (g) An abstract-typed candidate stays poisoned by a String-literal unresolved write — `@:from` can carry the literal into it. */
 	public function testAbstractTypedCandidateStringRhsPoisoned(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'Abs.hx', source: 'abstract Abs(String) from String {}' },
 				{ file: 'A.hx', source: 'class A { public var title:Abs = "a"; }' },
 				{ file: 'B.hx', source: 'class B { public function poke(h:Holder):Void { h.inner.title = "x"; } }' }
@@ -413,7 +417,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 */
 	public function testPatternVariableDoesNotResolveViaSupertypeMember(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'Base3.hx', source: 'class Base3 { public var item:Tab3; }' },
 				{
 					file: 'Sub3.hx',
@@ -583,7 +588,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** A candidate whose declared type resolves to NO indexed decl (external/unknown) stays poisoned. */
 	public function testUnknownCandidateTypeStaysPoisoned(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'A.hx', source: 'class A { public var title:ExtT = null; }' },
 				{ file: 'B.hx', source: 'class B { public function poke(h:Holder):Void { h.inner.title = "x"; } }' }
 			]).length
@@ -593,7 +599,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** A candidate whose declared type's simple name is declared TWICE stays poisoned (ambiguous). */
 	public function testAmbiguousCandidateTypeStaysPoisoned(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'a/DupM.hx', source: 'class DupM {}' },
 				{ file: 'b/DupM.hx', source: 'class DupM {}' },
 				{ file: 'A.hx', source: 'class A { public var title:DupM = null; }' },
@@ -605,7 +612,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** A candidate with NO type annotation has no provable type — stays poisoned. */
 	public function testUntypedCandidateFieldStaysPoisoned(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'A.hx', source: 'class A { public var title = makeM(); static function makeM():Dynamic { return null; } }' },
 				{ file: 'B.hx', source: 'class B { public function poke(h:Holder):Void { h.inner.title = "x"; } }' }
 			]).length
@@ -618,7 +626,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 */
 	public function testUntypedWriteStaysPoisoned(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'PlainQ.hx', source: 'class PlainQ {}' },
 				{ file: 'A.hx', source: 'class A { public var q:PlainQ = new PlainQ(); }' },
 				{ file: 'U.hx', source: 'class U { public function f():Void { untyped z.q = "s"; } }' }
@@ -653,7 +662,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 */
 	public function testOwnerTypeParamCandidatePoisons(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'Cell.hx', source: 'class Cell<Data> { public var v:Null<Data> = null; }' },
 				{ file: 'Data.hx', source: 'class Data {}' },
 				{ file: 'W6.hx', source: 'class W6 { public function f(h:HH):Void { h.q.v = 5; } }' }
@@ -714,7 +724,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** A public field a RESOLVABLE implemented interface declares as a `var` is skipped. */
 	public function testResolvableInterfaceVarPublicSkips(): Void {
 		Assert.equals(
-			0, multi([
+			0,
+			multi([
 				{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
 				{ file: 'C.hx', source: 'class C implements I {\n\tpublic var needsResync:Bool = false;\n}' }
 			]).length
@@ -724,7 +735,8 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** Control: a public field an implemented interface does NOT declare still converts. */
 	public function testNonInterfacePublicFieldStillConverts(): Void {
 		Assert.equals(
-			1, multi([
+			1,
+			multi([
 				{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
 				{ file: 'C.hx', source: 'class C implements I {\n\tpublic var other:Int = 0;\n}' }
 			]).length

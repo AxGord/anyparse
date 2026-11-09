@@ -178,10 +178,9 @@ class GraphCliTest extends Test {
 	public function testTheImportPathWarnsOfAnUnparsedFile(): Void {
 		#if nodejs
 		final root: String = CliFixture.writeTree(
-			'graphcli', GraphFixture.FILES.map(f -> {
-				name: f.file,
-				source: f.source
-			}).concat([{ name: 'pkg/c/Broken.hx', source: 'package pkg.c;\n\nclass Broken {\n' }])
+			'graphcli',
+			GraphFixture.FILES.map(f -> {name: f.file, source: f.source })
+				.concat([{ name: 'pkg/c/Broken.hx', source: 'package pkg.c;\n\nclass Broken {\n' }])
 		);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			var code: Int = -1;

@@ -77,15 +77,7 @@ final class ExtractVar {
 	 * declarations, members, fields, param wrappers). A target whose kind
 	 * ends with any of these is excluded from selection.
 	 */
-	private static final STRUCTURAL_SUFFIXES: Array<String> = [
-		'Stmt',
-		'Member',
-		'Field',
-		'Decl',
-		'Named',
-		'Required',
-		'Optional'
-	];
+	private static final STRUCTURAL_SUFFIXES: Array<String> = ['Stmt', 'Member', 'Field', 'Decl', 'Named', 'Required', 'Optional'];
 
 	/**
 	 * Block-container kinds: a `{ }` block whose direct children are
@@ -173,10 +165,7 @@ final class ExtractVar {
 			span: new Span(lineStart, lineStart),
 			text: '${indent}final $name = $exprText;\n'
 		};
-		final replaceEdit: { span: Span, text: String } = {
-			span: new Span(targetSpan.from, effTo),
-			text: name
-		};
+		final replaceEdit: { span: Span, text: String } = { span: new Span(targetSpan.from, effTo), text: name };
 
 		final rewritten: String = CanonicalEdit.applyEdits(source, [insertEdit, replaceEdit]);
 		if (rewritten == source) return Err('extract of "$name" is a no-op');

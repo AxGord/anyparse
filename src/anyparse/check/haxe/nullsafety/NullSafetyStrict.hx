@@ -106,11 +106,12 @@ final class NullSafetyStrict extends HaxeRule implements DefaultOff implements R
 				final metaSpan: Null<Span> = meta?.span;
 				if (meta != null) typeEntries.push(meta);
 				final checked: Bool = !run.exists(n -> n.kind == externKind);
-				if (checked && meta == null) out.push({
-					span: decl.fullSpan,
-					message: '${decl.name} declares no $entry',
-					edit: AddMeta.entryEdit(source, tree, decl.declNode, entry)
-				});
+				if (checked && meta == null)
+					out.push({
+						span: decl.fullSpan,
+						message: '${decl.name} declares no $entry',
+						edit: AddMeta.entryEdit(source, tree, decl.declNode, entry)
+					});
 				if (checked && meta != null && metaSpan != null && !STRICT_ARGS.contains(argOf(meta) ?? ''))
 					add(metaSpan, 'null safety here is ${argOf(meta) ?? 'loose'}, not strict: make it $entry', true);
 			}

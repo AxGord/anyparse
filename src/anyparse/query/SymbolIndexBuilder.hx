@@ -129,10 +129,7 @@ final class SymbolIndexBuilder {
 	 * whole. `HxDeclHead` has exactly these two branches (`class` / `abstract`
 	 * are the only forms observed splitting a header across `#if`).
 	 */
-	private static final DECL_HEAD_KINDS: Map<String, String> = [
-		'ClassHead' => 'ClassDecl',
-		'AbstractHead' => 'AbstractDecl'
-	];
+	private static final DECL_HEAD_KINDS: Map<String, String> = ['ClassHead' => 'ClassDecl', 'AbstractHead' => 'AbstractDecl'];
 
 	/**
 	 * Parse every entry with `plugin` and extract its `FileInfo`. Entries whose source does not

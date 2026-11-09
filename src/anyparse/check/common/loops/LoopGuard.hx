@@ -167,10 +167,7 @@ final class LoopGuard extends RuleBase {
 				if (headerSpan == null || andOp == null) return;
 				final kept: String = source.substring(headerSpan.from, headerSpan.to);
 				final lhs: String = seams.negation.andLowerPrecedenceKinds.contains(headerCond.kind) ? '($kept)' : kept;
-				edits.push({
-					span: headerSpan,
-					text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}'
-				});
+				edits.push({ span: headerSpan, text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}' });
 				edits.push({ span: bodySpan, text: '{$rest}' });
 			});
 			return CanonicalEdit.dropContainedEdits(edits);

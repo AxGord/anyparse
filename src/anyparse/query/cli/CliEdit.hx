@@ -275,11 +275,7 @@ final class CliEdit {
 		if (select == null && matchPat == null) return null;
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		return switch Address.resolve(tree, source, plugin, {
-			select: select,
-			match: matchPat,
-			nth: nth
-		}) {
+		return switch Address.resolve(tree, source, plugin, { select: select, match: matchPat, nth: nth }) {
 			case Ok(_, node):
 				node != null && CheckScan.modifierKinds(plugin.refShape()).contains(node.kind) ? node.kind.toLowerCase() : null;
 			case Err(_): null;

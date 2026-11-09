@@ -30,12 +30,7 @@ final class MemberKinds {
 	 * method (Haxe's `abstract`), and a move that carries a data field carries its
 	 * initializer while a moved method carries none.
 	 */
-	public static final DATA_FIELD_KINDS: Array<String> = [
-		'VarMember',
-		'FinalMember',
-		'VarField',
-		'FinalField'
-	];
+	public static final DATA_FIELD_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
 
 	/**
 	 * Every member kind a type body can declare that is not a constructor — the data fields above
@@ -57,11 +52,7 @@ final class MemberKinds {
 	 * `CanonicalEdit.docSplittingEdit` refuses that insert shape today; the pin is
 	 * `unit.query.DocOwnerGuardSliceTest.testTheInsertThatStrandedFieldMemberKindsIsRefused`.
 	 */
-	public static final FIELD_MEMBER_KINDS: Array<String> = DATA_FIELD_KINDS.concat([
-		'FnMember',
-		'FinalModifiedMember',
-		'FnField'
-	]);
+	public static final FIELD_MEMBER_KINDS: Array<String> = DATA_FIELD_KINDS.concat(['FnMember', 'FinalModifiedMember', 'FnField']);
 
 	/**
 	 * Function-declaration kinds — class methods (`FnMember`, plus the
@@ -74,11 +65,7 @@ final class MemberKinds {
 	 * `HxFinalModifierMember.fn`), so it resolves through `resolveCursorNode`
 	 * / `innermostWhere` exactly like a plain method.
 	 */
-	public static final FN_DECL_KINDS: Array<String> = [
-		'FnMember',
-		'FinalModifiedMember',
-		'LocalFnStmt'
-	];
+	public static final FN_DECL_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember', 'LocalFnStmt'];
 
 	/**
 	 * The grammar decl-node kinds that count as a top-level type

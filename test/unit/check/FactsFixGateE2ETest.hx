@@ -484,12 +484,8 @@ class FactsFixGateE2ETest extends Test {
 	public function testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth(): Void {
 		#if (sys || nodejs)
 		final apqlint: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
-		final own: Array<{ name: String, source: String }> = [
-			{
-				name: 'Other.hx',
-				source: 'import Main.items as stuff;\n\n$REPLACE_OTHER'
-			}
-		];
+		final own: Array<{ name: String, source: String }> =
+			[{ name: 'Other.hx', source: 'import Main.items as stuff;\n\n$REPLACE_OTHER' }];
 		final ambient: Array<{ name: String, source: String }> = [
 			{ name: 'Other.hx', source: REPLACE_OTHER },
 			{ name: 'import.hx', source: 'import Main.items as stuff;\n' }

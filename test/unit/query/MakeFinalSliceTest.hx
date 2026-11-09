@@ -60,10 +60,12 @@ class MakeFinalSliceTest extends Test {
 	public function testCrossFileWriteRefused(): Void {
 		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var v:Int = 0;\n\tpublic function new() {}\n}';
 		final user: String = 'package pkg;\n\nclass User {\n\tpublic function new() {}\n\tpublic function set(c:Cfg):Void c.v = 9;\n}';
-		assertErr('is reassigned outside the constructor', MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'v', [
-			{ file: 'pkg/Cfg.hx', source: src },
-			{ file: 'pkg/User.hx', source: user }
-		], plugin()));
+		assertErr(
+			'is reassigned outside the constructor',
+			MakeFinal.makeFinal(
+				'pkg/Cfg.hx', 'Cfg', 'v', [{ file: 'pkg/Cfg.hx', source: src }, { file: 'pkg/User.hx', source: user }], plugin()
+			)
+		);
 	}
 
 	/** A field never assigned (no init, no ctor write) is refused. */

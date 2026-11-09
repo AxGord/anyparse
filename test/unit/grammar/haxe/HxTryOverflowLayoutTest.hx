@@ -32,24 +32,18 @@ class HxTryOverflowLayoutTest extends Test {
 	@:killer('M-TRY-FIT-BODY-HARD')
 	public function testATwoArgumentCallBreaksAtTheSeams(): Void {
 		final src: String = inClass('final carried: CarriedDocuments = try $CALL_2 $CATCH $BODY;');
-		contains(HxWriteFixture.triviaWrite(src, CONFIG), expectLines([
-			'final carried:CarriedDocuments = try',
-			'\t$CALL_2',
-			CATCH,
-			'\t$BODY;'
-		]));
+		contains(
+			HxWriteFixture.triviaWrite(src, CONFIG), expectLines(['final carried:CarriedDocuments = try', '\t$CALL_2', CATCH, '\t$BODY;'])
+		);
 	}
 
 	@:pin('control')
 	@:killer('M-TRY-FIT-SEP-HARD')
 	public function testAOneArgumentCallTakesTheSameShape(): Void {
 		final src: String = inClass('final carried: CarriedDocuments = try $CALL_1 $CATCH $BODY;');
-		contains(HxWriteFixture.triviaWrite(src, CONFIG), expectLines([
-			'final carried:CarriedDocuments = try',
-			'\t$CALL_1',
-			CATCH,
-			'\t$BODY;'
-		]));
+		contains(
+			HxWriteFixture.triviaWrite(src, CONFIG), expectLines(['final carried:CarriedDocuments = try', '\t$CALL_1', CATCH, '\t$BODY;'])
+		);
 	}
 
 	@:pin('control')

@@ -1044,9 +1044,7 @@ final class ReconCommand implements CliCommand {
 			final hit: Null<ReconCluster> = clusters[wanted];
 			if (hit == null) {
 				CliIo.stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
-				final keyEntries: Array<{ key: String, count: Int }> = [
-					for (k => v in clusters) { key: k, count: v.count }
-				];
+				final keyEntries: Array<{ key: String, count: Int }> = [for (k => v in clusters) { key: k, count: v.count }];
 				keyEntries.sort((a, b) -> b.count - a.count);
 				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 				if (preview == 0) {
@@ -1073,9 +1071,7 @@ final class ReconCommand implements CliCommand {
 	}
 
 	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [
-			for (k => v in clusters) { key: k, cluster: v }
-		];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in clusters) { key: k, cluster: v }];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
 		CliIo.sysPrint('\n');
@@ -1108,9 +1104,7 @@ final class ReconCommand implements CliCommand {
 	private static function printReconClusterDrill(
 		matches: Map<String, ReconCluster>, totalAcrossSweep: Int, needle: String, records: Array<ReconRecord>, showSource: Bool
 	): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [
-			for (k => v in matches) { key: k, cluster: v }
-		];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in matches) { key: k, cluster: v }];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		var matched: Int = 0;
 		for (e in entries) matched += e.cluster.count;

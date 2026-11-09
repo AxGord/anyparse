@@ -141,7 +141,8 @@ class ThreadSafetyRootCauseTest extends Test {
 		final hub: String = 'interface IHub { function addEventListener(f:Node->Void):Void; }'
 			+ ' class Node { public var hub:IHub = null; public function new() {} }';
 		final registered: Array<Violation> = ThreadSafetyCheckTest.violations(
-			CONFIG.replace('"spawns"', '"registers":["addEventListener"],"spawns"'), [
+			CONFIG.replace('"spawns"', '"registers":["addEventListener"],"spawns"'),
+			[
 				ThreadSafetyCheckTest.MUTEX,
 				RUNNER,
 				hub,

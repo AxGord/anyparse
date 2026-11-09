@@ -103,9 +103,9 @@ final class CompilerOracle {
 		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
 		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
 		final bound: Int = parallel ?? ProcessSpawn.parallelism();
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }
-		], ORACLE_BUFFER, bound, stopAfterFailure);
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll(
+			[for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }], ORACLE_BUFFER, bound, stopAfterFailure
+		);
 		final plain: Map<Int, ProcessRun> = plainRetries(asked, runs, bound, decisive);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<OracleReading> = [];
@@ -208,11 +208,7 @@ final class CompilerOracle {
 		// proved, which is not the same answer as a build that typechecks. Re-bound because strict
 		// null-safety does not carry a narrowed local into a structure literal.
 		final failing: OracleOutcome = first ?? (oracles.length == 0 ? Unavailable('no compiler oracle is configured') : Confirmed);
-		return {
-			judging: green,
-			excluded: excluded,
-			verdict: green.length == 0 ? failing : Confirmed
-		};
+		return { judging: green, excluded: excluded, verdict: green.length == 0 ? failing : Confirmed };
 	}
 
 	/**
@@ -289,9 +285,10 @@ final class CompilerOracle {
 		final retried: Array<Int> = [
 			for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0 && decided(runs[k], decisive) == null) k
 		];
-		final plain: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }
-		], ORACLE_BUFFER, parallel ?? ProcessSpawn.parallelism(), false);
+		final plain: Array<ProcessRun> = ProcessSpawn.runAll(
+			[for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
+			ORACLE_BUFFER, parallel ?? ProcessSpawn.parallelism(), false
+		);
 		invocations += plain.length;
 		return [for (j in 0...retried.length) retried[j] => plain[j]];
 	}
@@ -319,9 +316,9 @@ final class CompilerOracle {
 		memo: OracleRunMemo, asked: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool
 	): Array<ProcessRun> {
 		return verbose
-			? ProcessSpawn.runAll([
-				for (o in asked) { args: argsOf(o, verbose), cwd: o.dir }
-			], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure)
+			? ProcessSpawn.runAll(
+				[for (o in asked) { args: argsOf(o, verbose), cwd: o.dir }], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
+			)
 			: warmFirst(memo, asked, stopAfterFailure);
 	}
 

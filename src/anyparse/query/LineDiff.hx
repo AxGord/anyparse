@@ -35,10 +35,12 @@ final class LineDiff {
 		final a: Array<String> = old.slice(head, old.length - tail);
 		final b: Array<String> = now.slice(head, now.length - tail);
 		final middle: Null<LineEdits> = shortestScript(a, b, maxEdits);
-		return middle == null ? null : {
-			inserted: middle.inserted.map(i -> i + head),
-			deleted: middle.deleted.map(d -> {line: d.line + head, before: d.before + head })
-		};
+		return middle == null
+			? null
+			: {
+				inserted: middle.inserted.map(i -> i + head),
+				deleted: middle.deleted.map(d -> {line: d.line + head, before: d.before + head })
+			};
 	}
 
 	/**

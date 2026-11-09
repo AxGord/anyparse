@@ -278,10 +278,7 @@ final class DefiniteAssignmentGuard {
 	/** Record one finding, at most one per name per unit. */
 	private static function report(ctx: WalkCtx, name: String, span: Null<Span>): Void {
 		for (had in ctx.out) if (had.name == name) return;
-		ctx.out.push({
-			name: name,
-			span: span
-		});
+		ctx.out.push({ name: name, span: span });
 	}
 
 	/**

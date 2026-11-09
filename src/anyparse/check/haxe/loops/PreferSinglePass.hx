@@ -214,11 +214,7 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 		final plain: Bool = s.paramKinds.contains(param.kind) && param.kind != s.optionalParamKind && param.kind != s.restParamKind;
 		// A typed, defaulted or optional parameter has more text than its name, and the merged lambda would drop it.
 		final bare: Bool = SourceText.nodeText(param, source) == binder;
-		return !plain || !bare || binder == null || bodySpan == null ? null : {
-			binder: binder,
-			body: body,
-			bodySpan: bodySpan
-		};
+		return !plain || !bare || binder == null || bodySpan == null ? null : { binder: binder, body: body, bodySpan: bodySpan };
 	}
 
 	/** The operand text, parenthesised when its root binds looser than the `&&` it joins. */

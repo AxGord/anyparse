@@ -504,16 +504,10 @@ final class MoveFamilyCaptureTest extends Test {
 				source: 'package a;\n\nimport a.Src.*;\n\nclass User {\n\n\tpublic function new() {}\n\n'
 					+ '\tpublic function go(): Int return helper(1) + stays(2);\n\n}\n'
 			},
-			{
-				file: 'b/Dest.hx',
-				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
-			}
+			{ file: 'b/Dest.hx', source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n' }
 		];
 		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
-			{
-				file: 'a/Src.hx',
-				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
-			},
+			{ file: 'a/Src.hx', source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n' },
 			{
 				file: 'a/User.hx',
 				source: 'package a;\n\nimport a.Src.*;\nimport b.Dest;\n\nclass User {\n\n\tpublic functi'
@@ -557,20 +551,14 @@ final class MoveFamilyCaptureTest extends Test {
 				source: 'package a;\n\nimport a.Src.*;\n\nclass Wild {\n\n\tpublic function new() {}\n\n'
 					+ '\tpublic function go(): Int return helper(1);\n\n}\n'
 			},
-			{
-				file: 'b/Dest.hx',
-				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
-			},
+			{ file: 'b/Dest.hx', source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n' },
 			{
 				file: 'c/Other.hx',
 				source: 'package c;\n\nclass Other {\n\n\tpublic static function helper(n: Int): Int return n + 2;\n\n}\n'
 			}
 		];
 		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
-			{
-				file: 'a/Src.hx',
-				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
-			},
+			{ file: 'a/Src.hx', source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n' },
 			{
 				file: 'a/Wild.hx',
 				source: 'package a;\n\nimport a.Src.*;\nimport b.Dest;\n\nclass Wild {\n\n\tpublic functi'
@@ -609,10 +597,7 @@ final class MoveFamilyCaptureTest extends Test {
 				source: 'package a;\n\nclass Src {\n\n\tpublic static function helper(n: Int): Int return'
 					+ ' n + 1;\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
 			},
-			{
-				file: 'b/Dest.hx',
-				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
-			}
+			{ file: 'b/Dest.hx', source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n' }
 		];
 		capture(MoveMember.move('a/Src.hx', 'Src', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
 			{
@@ -621,10 +606,7 @@ final class MoveFamilyCaptureTest extends Test {
 				+ 'ion new() {}\n\n\tpublic function shadowed(): Int {\n\t\tfinal helper: Int = 5;\n\t\treturn helper;'
 				+ '\n\t}\n\n\tpublic function free(): Int return Dest.helper(1);\n\n}\n'
 			},
-			{
-				file: 'a/Src.hx',
-				source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n'
-			},
+			{ file: 'a/Src.hx', source: 'package a;\n\nclass Src {\n\n\tpublic static function stays(n: Int): Int return n - 1;\n\n}\n' },
 			{
 				file: 'b/Dest.hx',
 				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n\tpublic static func'
@@ -659,14 +641,8 @@ final class MoveFamilyCaptureTest extends Test {
 				source: 'package a;\n\nimport z.Free.*;\nimport a.Src.*;\n\nclass User {\n\n\tpublic func'
 					+ 'tion new() {}\n\n\tpublic function go(): Int return helper(1) + mainStatic();\n\n}\n'
 			},
-			{
-				file: 'b/Dest.hx',
-				source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n'
-			},
-			{
-				file: 'z/Free.hx',
-				source: 'package z;\n\nclass Free {\n\n\tpublic static function helper(n: Int): Int return n + 9;\n\n}\n'
-			}
+			{ file: 'b/Dest.hx', source: 'package b;\n\nclass Dest {\n\n\tpublic function new() {}\n\n}\n' },
+			{ file: 'z/Free.hx', source: 'package z;\n\nclass Free {\n\n\tpublic static function helper(n: Int): Int return n + 9;\n\n}\n' }
 		];
 		capture(MoveMember.move('a/Src.hx', 'Extra', ['helper'], 'Dest', null, false, false, scope, plugin(), typeRefShape()), [
 			{

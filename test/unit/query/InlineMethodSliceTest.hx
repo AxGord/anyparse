@@ -195,10 +195,9 @@ class InlineMethodSliceTest extends Test {
 			+ '\tstatic function u():String\n\t\treturn path("x");\n}';
 		final caller: String =
 			'package r;\n\nimport q.Fixture.A.path;\n\nclass B {\n\tstatic function w():String\n\t\treturn path("y");\n}';
-		assertRefusedWith(source, 4, 18, 'referenced from another file', [
-			{ file: FIXTURE_FILE, source: source },
-			{ file: 'B.hx', source: caller }
-		]);
+		assertRefusedWith(
+			source, 4, 18, 'referenced from another file', [{ file: FIXTURE_FILE, source: source }, { file: 'B.hx', source: caller }]
+		);
 	}
 
 	/** A same-named call through a VALUE receiver may be this declaration and is not provable — still refused. */

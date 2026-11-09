@@ -232,11 +232,13 @@ final class MainRepeats {
 
 	/** The worst of `way` and `known` on every count: the most turns, the worst turn, every entry of both. */
 	private static function merged(way: BoundedWay, known: Null<BoundedWay>): BoundedWay {
-		return known == null ? way : {
-			turns: Math.max(way.turns, known.turns),
-			cost: Math.max(way.cost, known.cost),
-			entries: known.entries.concat([for (e in way.entries) if (!known.entries.contains(e)) e])
-		};
+		return known == null
+			? way
+			: {
+				turns: Math.max(way.turns, known.turns),
+				cost: Math.max(way.cost, known.cost),
+				entries: known.entries.concat([for (e in way.entries) if (!known.entries.contains(e)) e])
+			};
 	}
 
 }

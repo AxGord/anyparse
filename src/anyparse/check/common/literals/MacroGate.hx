@@ -283,16 +283,8 @@ final class MacroGate {
 		if (callee.kind != fieldAccessKind || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		return receiver.kind == identKind || receiver.kind == fieldAccessKind
-			? {
-				name: name,
-				receiver: receiver.name,
-				qualified: receiver.kind == fieldAccessKind
-			}
-			: {
-				name: name,
-				receiver: null,
-				qualified: false
-			};
+			? { name: name, receiver: receiver.name, qualified: receiver.kind == fieldAccessKind }
+			: { name: name, receiver: null, qualified: false };
 	}
 
 }

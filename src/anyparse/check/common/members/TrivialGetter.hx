@@ -1163,10 +1163,13 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	): Bool {
 		// The member's own host, not the container: a guarded member's modifier run lives inside the
 		// `#if` region, and a group span computed against the container would leave it behind.
-		for (d in deleted) edits.push({
-			span: ElementSpan.lineExtendedSpan(source, ElementSpan.declGroupSpan(d.node, MemberKinds.memberHostOf(cls, d.node), d.span)),
-			text: ''
-		});
+		for (d in deleted)
+			edits.push({
+				span: ElementSpan.lineExtendedSpan(
+					source, ElementSpan.declGroupSpan(d.node, MemberKinds.memberHostOf(cls, d.node), d.span)
+				),
+				text: ''
+			});
 		final fieldSpan: Null<Span> = fieldNode.span;
 		if (fieldSpan == null) return false;
 		edits.push({

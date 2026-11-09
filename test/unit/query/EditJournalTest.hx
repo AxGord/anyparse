@@ -22,10 +22,11 @@ class EditJournalTest extends Test {
 		// a reorder deletes a member where it was and inserts it elsewhere: nothing inside it maps, the rest does
 		final before: String = 'a {x}\nb {y}\n';
 		final after: String = 'b {y}\na {x}\n';
-		final journal: EditJournal = journalOf(before, [
-			{ span: new Span(0, 6), text: '' },
-			{ span: new Span(12, 12), text: 'a {x}\n' }
-		], after);
+		final journal: EditJournal = journalOf(
+			before,
+			[{ span: new Span(0, 6), text: '' }, { span: new Span(12, 12), text: 'a {x}\n' }],
+			after
+		);
 		Assert.same(Unmapped(EditJournal.UNMAPPED_REWRITTEN), journal.back(before, after, spanOf(after, 'a {x}')));
 		Assert.same(Mapped(new Span(6, 11)), journal.back(before, after, spanOf(after, 'b {y}')));
 	}
@@ -35,10 +36,11 @@ class EditJournalTest extends Test {
 		// two members with the same body swapped: the text alone cannot tell them apart, the edits do
 		final before: String = 'a {r}\nb {r}\n';
 		final after: String = 'b {r}\na {r}\n';
-		final journal: EditJournal = journalOf(before, [
-			{ span: new Span(0, 6), text: '' },
-			{ span: new Span(12, 12), text: 'a {r}\n' }
-		], after);
+		final journal: EditJournal = journalOf(
+			before,
+			[{ span: new Span(0, 6), text: '' }, { span: new Span(12, 12), text: 'a {r}\n' }],
+			after
+		);
 		Assert.same(Mapped(new Span(9, 10)), journal.back(before, after, new Span(3, 4)));
 		Assert.same(Unmapped(EditJournal.UNMAPPED_REWRITTEN), journal.back(before, after, new Span(9, 10)));
 	}

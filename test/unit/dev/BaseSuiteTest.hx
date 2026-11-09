@@ -278,7 +278,8 @@ final class BaseSuiteTest extends Test {
 		cmd('git $git commit -q -m base').at(tree).check();
 		final base: String = cmd('git rev-parse HEAD').at(tree).check().out.trim();
 		if (withBaseline) File.saveContent(
-			Path.join([logs, GateTree.BASELINE_FILE]), BaselineWriter.write({
+			Path.join([logs, GateTree.BASELINE_FILE]),
+			BaselineWriter.write({
 				base: base,
 				lists: JObject([]),
 				infra: [],

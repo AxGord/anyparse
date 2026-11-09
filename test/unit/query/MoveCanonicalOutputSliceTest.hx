@@ -128,10 +128,9 @@ final class MoveCanonicalOutputSliceTest extends Test {
 		);
 		CliFixture.removeDir(drifted);
 
-		final canonical: String = CliFixture.writeDir('movedestcanon', [
-			{ name: 'Src.hx', source: src },
-			{ name: 'Dest.hx', source: DEST }
-		]);
+		final canonical: String = CliFixture.writeDir(
+			'movedestcanon', [{ name: 'Src.hx', source: src }, { name: 'Dest.hx', source: DEST }]
+		);
 		Assert.equals(0, Cli.run(['fmt', '$canonical/Dest.hx', '--write']));
 		Assert.equals(0, Cli.run([
 			'move',

@@ -203,11 +203,7 @@ final class CtorFieldWrite {
 		if (found.length != 1 || found[0].inClosure) return null;
 		final assign: QueryNode = found[0].assign;
 		final targetSpan: Null<Span> = assign.children[0].span;
-		return targetSpan == null ? null : {
-			assign: assign,
-			rhs: assign.children[1],
-			target: targetSpan
-		};
+		return targetSpan == null ? null : { assign: assign, rhs: assign.children[1], target: targetSpan };
 	}
 
 	/**
@@ -698,10 +694,8 @@ final class CtorFieldWrite {
 			node.kind == assignKind
 			&& node.children.length >= 2
 			&& ctorTargetIsField(node.children[0], fieldFrom, fieldName, container, shape)
-		) out.push({
-			assign: node,
-			inClosure: enclosed
-		});
+		)
+			out.push({ assign: node, inClosure: enclosed });
 		for (child in node.children)
 			collectCtorFieldWrites(child, fieldFrom, fieldName, container, shape, assignKind, closures, enclosed, out);
 	}

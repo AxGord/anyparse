@@ -120,10 +120,9 @@ class UnusedPrivateCheckTest extends Test {
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}' }
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		final result: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), report, plugin);
 		Assert.equals(0, result.filter(v -> v.file == 'pkg/C.hx').length);
 	}
@@ -871,10 +870,9 @@ class UnusedPrivateCheckTest extends Test {
 			}
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) } }
+		);
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/D.hx');
 		Assert.equals(1, vs.length, 'the member is still REPORTED — only the deletion is withheld');
@@ -935,7 +933,8 @@ class UnusedPrivateCheckTest extends Test {
 		final user: String =
 			'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n\t\treturn Type.createInstance(U, []);\n\t}\n\n}\n';
 		Assert.equals(
-			0, ctorFindings([
+			0,
+			ctorFindings([
 				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
 				{ file: 'pkg/V.hx', source: user }
 			]).length
@@ -947,7 +946,8 @@ class UnusedPrivateCheckTest extends Test {
 	public function testStaticReceiverIsNoClassValue(): Void {
 		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function read():Int {\n\t\treturn U.K;\n\t}\n\n}\n';
 		Assert.equals(
-			1, ctorFindings([
+			1,
+			ctorFindings([
 				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
 				{ file: 'pkg/V.hx', source: user }
 			]).length
@@ -960,7 +960,8 @@ class UnusedPrivateCheckTest extends Test {
 		// The alias's own name is a class value of `U` the value scan was not asked about.
 		final alias: String = 'package pkg;\n\ntypedef UAlias = U;\n';
 		Assert.equals(
-			0, ctorFindings([
+			0,
+			ctorFindings([
 				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
 				{ file: 'pkg/UAlias.hx', source: alias }
 			]).length
@@ -973,7 +974,8 @@ class UnusedPrivateCheckTest extends Test {
 		final user: String = 'package pkg;\n\nimport pkg.U as K;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n'
 			+ '\t\treturn Type.createInstance(K, []);\n\t}\n\n}\n';
 		Assert.equals(
-			0, ctorFindings([
+			0,
+			ctorFindings([
 				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
 				{ file: 'pkg/V.hx', source: user }
 			]).length
@@ -986,7 +988,8 @@ class UnusedPrivateCheckTest extends Test {
 		final user: String = 'package pkg;\n\nclass V {\n\n\tpublic static function make():Dynamic {\n'
 			+ '\t\treturn Type.createInstance(pkg.U, []);\n\t}\n\n}\n';
 		Assert.equals(
-			0, ctorFindings([
+			0,
+			ctorFindings([
 				{ file: 'pkg/U.hx', source: utilityClass('pkg', 'U') },
 				{ file: 'pkg/V.hx', source: user }
 			]).length

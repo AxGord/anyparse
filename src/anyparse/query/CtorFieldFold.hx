@@ -276,15 +276,17 @@ final class CtorFieldFold {
 		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
 		// Asked LAST, once every gate has passed: `extract` may have side effects (a name ledger, a
 		// pending member insertion), and a caller must not pay them for a fold that then refuses.
-		final elseText: String = (extract == null
-			? null
-			: extract({
-				container: base.container,
-				fieldName: decl.name,
-				typeAnnotation: declaredTypeAnnotation(source, decl.node),
-				defaultNode: decl.initNode,
-				defaultText: defaultText
-			})) ?? defaultText;
+		final elseText: String = (
+			extract == null
+				? null
+				: extract({
+					container: base.container,
+					fieldName: decl.name,
+					typeAnnotation: declaredTypeAnnotation(source, decl.node),
+					defaultNode: decl.initNode,
+					defaultText: defaultText
+				})
+		) ?? defaultText;
 		// The condition is a `ParenGuard` hole: it gains a pair exactly where it would bind across `?`
 		// bare (a ternary, an assignment, an arrow lambda, `in`).
 		final head: String = '$targetText = ';
@@ -395,10 +397,9 @@ final class CtorFieldFold {
 		final close: Int = source.indexOf(')', i);
 		if (close < 0 || close >= limit) return null;
 		final accessors: Array<String> = source.substring(i + 1, close).split(',').map(StringTools.trim);
-		return accessors.length != 2 || accessors[0] != 'default' || accessors[1] != 'null' ? null : {
-			dropped: new Span(nameEnd, close + 1),
-			end: close + 1
-		};
+		return accessors.length != 2 || accessors[0] != 'default' || accessors[1] != 'null'
+			? null
+			: { dropped: new Span(nameEnd, close + 1), end: close + 1 };
 	}
 
 	/**

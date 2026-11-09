@@ -167,10 +167,7 @@ class AmbientImportRulesTest extends Test {
 
 	/** A module whose sibling a NEARER ambient group binds to another declaration. */
 	private static final SIBLING_NEARER_TREE: Array<{ name: String, source: String }> = [
-		{
-			name: 'src/aaa/Modqqw.hx',
-			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
-		},
+		{ name: 'src/aaa/Modqqw.hx', source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n' },
 		{ name: 'src/ccc/Othqqw.hx', source: 'package ccc;\n\nclass Othqqw {}\n' },
 		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
 		{ name: 'src/inner/import.hx', source: 'import ccc.Othqqw;\n' },
@@ -182,10 +179,7 @@ class AmbientImportRulesTest extends Test {
 
 	/** The same shape with the nearer group binding nothing of the statement's — where the deletion IS safe. */
 	private static final SIBLING_NEARER_CONTROL: Array<{ name: String, source: String }> = [
-		{
-			name: 'src/aaa/Modqqw.hx',
-			source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n'
-		},
+		{ name: 'src/aaa/Modqqw.hx', source: 'package aaa;\n\nclass Modqqw {}\n\nclass Othqqw {}\n' },
 		{ name: 'src/ccc/Elsqqw.hx', source: 'package ccc;\n\nclass Elsqqw {}\n' },
 		{ name: 'src/import.hx', source: 'import aaa.Modqqw;\n' },
 		{ name: 'src/inner/import.hx', source: 'import ccc.Elsqqw;\n' },
@@ -467,7 +461,8 @@ class AmbientImportRulesTest extends Test {
 		final root: String = CliFixture.writeTree('apq_ambient_two_roots', TWO_ROOT_TREE);
 		var out: String = '';
 		CliFixture.always(
-			CliFixture.removeDir.bind(root), () -> out = CliFixture.inDir('$root/src', [
+			CliFixture.removeDir.bind(root),
+			() -> out = CliFixture.inDir('$root/src', [
 				'lint',
 				'app/C2.hx',
 				'app/import.hx',

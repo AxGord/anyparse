@@ -100,7 +100,8 @@ class UnresolvedTypeNameCheckTest extends Test {
 	public function testImportOfModuleBindsItsSecondaryType(): Void {
 		final module: { file: String, source: String } = { file: 'b/M.hx', source: 'package b; class M {} class Helper {}' };
 		Assert.equals(
-			0, violationsIn([
+			0,
+			violationsIn([
 				module,
 				{ file: 'a/C.hx', source: 'package a; import b.M; class C { var h: Helper; }' }
 			]).length

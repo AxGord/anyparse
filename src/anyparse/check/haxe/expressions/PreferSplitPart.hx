@@ -295,10 +295,12 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 			final found: Array<MemberInfo> = type.type.members.filter(m -> m.name == name);
 			return found.length != 1 || !isTextCut(found[0], string, typeSyntax);
 		});
-		return lacking.length == 0 ? { path: path, problems: [] } : {
-			path: null,
-			problems: lacking.map(name -> '$key: "$path" has no one public static function $name($string, $string): $string')
-		};
+		return lacking.length == 0
+			? { path: path, problems: [] }
+			: {
+				path: null,
+				problems: lacking.map(name -> '$key: "$path" has no one public static function $name($string, $string): $string')
+			};
 	}
 
 	private static function isTextCut(m: MemberInfo, string: String, typeSyntax: TypeSyntaxReader): Bool {

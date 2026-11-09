@@ -125,9 +125,7 @@ final class StdResolver {
 	 * set-but-nonexistent path is still skipped by `discover` rather than here. Pure.
 	 */
 	public static function stdEntryOf(value: String, separator: String, holdsStd: (String) -> Bool): Null<String> {
-		final entries: Array<String> = [
-			for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e)
-		];
+		final entries: Array<String> = [for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e)];
 		if (entries.length <= 1) return entries.length == 0 ? null : entries[0];
 		for (e in entries) if (holdsStd(e)) return e;
 		return null;
@@ -140,11 +138,7 @@ final class StdResolver {
 	 * subtrees (`js/`, `cpp/`, `python/`, …). Pure — no I/O.
 	 */
 	public static function resolutionSpecs(stdDir: String): Array<String> {
-		return [
-			Path.join([stdDir, '*.hx']),
-			Path.join([stdDir, 'haxe']),
-			Path.join([stdDir, 'sys'])
-		];
+		return [Path.join([stdDir, '*.hx']), Path.join([stdDir, 'haxe']), Path.join([stdDir, 'sys'])];
 	}
 
 	/**

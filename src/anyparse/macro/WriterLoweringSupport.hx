@@ -79,18 +79,12 @@ final class WriterLoweringSupport {
 	 * (issue_48-v2 bare-ref hardline).
 	 */
 	private static inline function beforeNewlineAccess(fieldName: String): Expr {
-		return {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
-			pos: Context.currentPos()
-		};
+		return { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: Context.currentPos() };
 	}
 
 	/** ω-region-prefix-blank — `value.<field>BeforeBlank`, sibling of `beforeNewlineAccess`. */
 	private static inline function beforeBlankAccess(fieldName: String): Expr {
-		return {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX),
-			pos: Context.currentPos()
-		};
+		return { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX), pos: Context.currentPos() };
 	}
 
 	/**
@@ -102,10 +96,7 @@ final class WriterLoweringSupport {
 	 * field's first token; emitted by the bare-Ref non-first separator.
 	 */
 	private static inline function beforeLeadingAccess(fieldName: String): Expr {
-		return {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		};
+		return { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX), pos: Context.currentPos() };
 	}
 
 	/**
@@ -233,10 +224,7 @@ final class WriterLoweringSupport {
 		final optArg: Expr = optExpr ?? macro opt;
 		final args: Array<Expr> = [valueExpr, optArg];
 		if (hasPratt) args.push(macro $v{ctxPrec});
-		return {
-			expr: ECall(macro $i{writeFnName}, args),
-			pos: Context.currentPos()
-		};
+		return { expr: ECall(macro $i{writeFnName}, args), pos: Context.currentPos() };
 	}
 
 	/**

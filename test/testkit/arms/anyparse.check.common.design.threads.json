@@ -735,8 +735,8 @@
 			"name": "M-TS-DOM-EXPLAIN-DROPPED",
 			"type": "anyparse.check.common.design.threads.LongLockExplain",
 			"method": "report",
-			"find": "if (by.length > 0) { lock: lock, by: by.copy() }",
-			"replace": "if (false) { lock: lock, by: by.copy() }",
+			"find": "if (by.length > 0) {",
+			"replace": "if (false) {",
 			"note": "--explain-long names no dominated lock"
 		},
 		{

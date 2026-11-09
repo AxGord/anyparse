@@ -313,10 +313,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics> {
 		final opts: HxModuleWriteOptions = writeOptionsOf(optsJson);
-		return {
-			lineWidth: opts.lineWidth,
-			indentWidth: opts.indentChar == Tab ? opts.tabWidth : opts.indentSize
-		};
+		return { lineWidth: opts.lineWidth, indentWidth: opts.indentChar == Tab ? opts.tabWidth : opts.indentSize };
 	}
 
 	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy> {
@@ -401,10 +398,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// paren-less `@:name`, and `PlainMeta` for the verbatim raw catch-all (`@:name(args)` carried
 		// inline as the node's `name` slot). Decl-host kinds are shared with `refShape` so an
 		// annotation attributes to the same binding-declaration nodes the refs walker recognises.
-		return {
-			metaKinds: ['MetaCall', 'Meta', 'PlainMeta'],
-			declHostKinds: HaxeRefShape.DECL_HOST_KINDS
-		};
+		return { metaKinds: ['MetaCall', 'Meta', 'PlainMeta'], declHostKinds: HaxeRefShape.DECL_HOST_KINDS };
 	}
 
 	public function selectKindEquivalence(): KindEquivalence {

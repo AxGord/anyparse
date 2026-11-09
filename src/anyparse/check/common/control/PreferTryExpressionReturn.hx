@@ -111,15 +111,17 @@ final class PreferTryExpressionReturn extends RuleBase {
 		final catchKind: Null<String> = shape.catchClauseKind;
 		if (catchKind == null) return null;
 		final returnKinds: Null<Array<String>> = shape.valueReturnKinds;
-		return returnKinds == null || returnKinds.length == 0 ? null : {
-			tryKinds: tryKinds,
-			returnKinds: returnKinds,
-			tryShape: {
-				catchKind: catchKind,
-				blockStmtKind: shape.blockStmtKind,
-				tryKinds: tryKinds.concat(shape.tryExpressionKinds ?? [])
-			}
-		};
+		return returnKinds == null || returnKinds.length == 0
+			? null
+			: {
+				tryKinds: tryKinds,
+				returnKinds: returnKinds,
+				tryShape: {
+					catchKind: catchKind,
+					blockStmtKind: shape.blockStmtKind,
+					tryKinds: tryKinds.concat(shape.tryExpressionKinds ?? [])
+				}
+			};
 	}
 
 	/** Walk `node`, flagging every collapsible `try` statement. */

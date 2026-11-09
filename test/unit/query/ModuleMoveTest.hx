@@ -710,10 +710,10 @@ class ModuleMoveTest extends Test {
 	@:killer('M-MODMOVE-USING-STATEMENT-COUNTS')
 	public function testAUsingStatementTheMoveAddsDoesNotCountAsAUseOfItsName(): Void {
 		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(s: String): String return StringTools.trim(s);\n}\n';
-		final out: ModuleMoveOutcome = moved([move('src/p/A.hx', 'src/s/A.hx')], [
-			file('src/p/A.hx', a),
-			file('src/p/import.hx', 'using StringTools;\n')
-		]);
+		final out: ModuleMoveOutcome = moved(
+			[move('src/p/A.hx', 'src/s/A.hx')],
+			[file('src/p/A.hx', a), file('src/p/import.hx', 'using StringTools;\n')]
+		);
 		Assert.isTrue(textOf(out, 'src/s/A.hx').contains('using StringTools;'));
 	}
 

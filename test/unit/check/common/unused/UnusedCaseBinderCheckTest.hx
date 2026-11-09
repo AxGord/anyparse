@@ -138,11 +138,12 @@ class UnusedCaseBinderCheckTest extends Test {
 			name: 'src/pk/Mod.hx',
 			source: 'package pk;\n\nfinal modval = \'x\';\n\nclass Mod {}\n'
 		};
-		final use: String -> { name: String, source: String } = head -> {
-			name: 'src/qk/A.hx',
-			source: 'package qk;\n\n$head\n\nclass A {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [modval]: r();'
-				+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
-		};
+		final use: String -> { name: String, source: String } = head ->
+			{
+				name: 'src/qk/A.hx',
+				source: 'package qk;\n\n$head\n\nclass A {\n\tfunction f(v: Dynamic): Void {\n\t\tswitch v {\n\t\t\tcase [modval]: r();'
+					+ '\n\t\t\tcase _: r();\n\t\t}\n\t}\n}\n'
+			};
 		Assert.equals(0, violationsOnDisk([mod, use('import pk.Mod;')], 'src/qk/A.hx'));
 		Assert.equals(1, violationsOnDisk([mod, use('import pk.Mod.*;')], 'src/qk/A.hx'));
 		Assert.equals(1, violationsOnDisk([mod, use('import pk.*;')], 'src/qk/A.hx'));

@@ -189,11 +189,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 			return null;
 		}
 		final root: QueryNode = tree;
-		final resolved: Null<QueryNode> = switch Address.resolve(root, source, plugin, {
-			select: select,
-			match: matchPat,
-			nth: nth
-		}) {
+		final resolved: Null<QueryNode> = switch Address.resolve(root, source, plugin, { select: select, match: matchPat, nth: nth }) {
 			case Ok(_, node): node;
 			case Err(message):
 				CliIo.stderr('apq $op: $message\n');

@@ -114,13 +114,7 @@ class FixVerifierBisectTest extends Test {
 	 */
 	public function testUncanonicalInputIsNotChargedToTheCheck(): Void {
 		final entry: { file: String, source: String } = { file: 'pkg/C.hx', source: 'class C {\n  function f():Void {}\n}\n' };
-		final edits: Array<GroupedEdit> = [
-			{
-				span: new Span(0, 5),
-				text: 'class',
-				group: null
-			}
-		];
+		final edits: Array<GroupedEdit> = [{ span: new Span(0, 5), text: 'class', group: null }];
 		var written: Int = 0;
 		// A coverage that covers NOTHING, which pins the ORDER the two gates run in: the
 		// canonical gate answers first, so a source the writer refuses stays `SourceNotCanonical`

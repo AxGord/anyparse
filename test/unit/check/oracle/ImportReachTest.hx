@@ -286,11 +286,7 @@ final class ImportReachTest extends Test {
 	}
 
 	private static function leaf(root: String, hxml: String): OracleConfig {
-		return {
-			hxml: '$root/leaf/$hxml',
-			dir: '$root/leaf',
-			defines: []
-		};
+		return { hxml: '$root/leaf/$hxml', dir: '$root/leaf', defines: [] };
 	}
 
 	/** The groups `lint --fix` would collect for `C.hx` under `reach`. */

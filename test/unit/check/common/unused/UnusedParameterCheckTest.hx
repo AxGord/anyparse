@@ -295,10 +295,9 @@ class UnusedParameterCheckTest extends Test {
 			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.h(1, 2); }\n}' }
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+		);
 		final check: UnusedParameter = new UnusedParameter();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin);
 		Assert.equals(1, vs.length);

@@ -207,11 +207,7 @@ class StarBlockEndedTest extends Test {
 	public function testRoundTripNested(): Void {
 		roundTrip(Block([
 			Atom('outer'),
-			Block([
-				Atom('inner1'),
-				Block([Atom('deep')]),
-				Atom('inner2')
-			]),
+			Block([Atom('inner1'), Block([Atom('deep')]), Atom('inner2')]),
 			Atom('tail')
 		]));
 	}

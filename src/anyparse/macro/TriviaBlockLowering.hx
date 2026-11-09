@@ -71,14 +71,8 @@ final class TriviaBlockLowering {
 		// `currHasDocComputeExpr` only when the look-through info resolved.
 		final condLeadingDocExpr: Expr = condLeadingDocInfo != null ? {
 			final pos: Position = Context.currentPos();
-			final classifierAccess: Expr = {
-				expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName),
-				pos: pos
-			};
-			final bodyAccess: Expr = {
-				expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName),
-				pos: pos
-			};
+			final classifierAccess: Expr = { expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName), pos: pos };
+			final bodyAccess: Expr = { expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName), pos: pos };
 			final scanBody: Expr = macro {
 				final _condBody = $bodyAccess;
 				if (_condBody.length > 0 && anyparse.format.MemberGap.docLed(_condBody[0].leadingComments)) _currHasDocComment = true;
@@ -108,10 +102,7 @@ final class TriviaBlockLowering {
 	): Expr {
 		final staticPromoteExpr: Expr = staticVarSubdiv ? {
 			final pos: Position = Context.currentPos();
-			final modAccess: Expr = {
-				expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName),
-				pos: pos
-			};
+			final modAccess: Expr = { expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName), pos: pos };
 			final staticIdent: Expr = { expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos };
 			macro {
 				if (_currKind == 1 || _currKind == 2) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
@@ -121,14 +112,8 @@ final class TriviaBlockLowering {
 			};
 		} : macro {};
 		return interMember ? {
-			final classifierAccess: Expr = {
-				expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
-				pos: Context.currentPos()
-			};
-			final switchExpr: Expr = {
-				expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
-				pos: Context.currentPos()
-			};
+			final classifierAccess: Expr = { expr: EField(macro _t.node, interMemberInfo.classifierFieldName), pos: Context.currentPos() };
+			final switchExpr: Expr = { expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null), pos: Context.currentPos() };
 			macro {
 				_currKind = $switchExpr;
 				$staticPromoteExpr;
@@ -339,10 +324,7 @@ final class TriviaBlockLowering {
 	 */
 	private static function triviaBlockUniformBetweenAddExpr(uniformBetween: Bool, uniformBetweenOptField: Null<String>): Expr {
 		if (!uniformBetween) return macro false;
-		final optAccess: Expr = {
-			expr: EField(macro opt, uniformBetweenOptField),
-			pos: Context.currentPos()
-		};
+		final optAccess: Expr = { expr: EField(macro opt, uniformBetweenOptField), pos: Context.currentPos() };
 		return macro $optAccess > 0;
 	}
 
@@ -713,10 +695,9 @@ final class TriviaBlockLowering {
 		// close onto the switch-close line (`}}`). Unlike `emptyCurly` (which
 		// governs a self-contained `{}` pair), this is unconditional.
 		if (forceBreak) return macro _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})]);
-		final emptyCurlyAccess: Expr = emptyCurlyKnob != null ? {
-			expr: EField(macro opt, emptyCurlyKnob),
-			pos: Context.currentPos()
-		} : macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
+		final emptyCurlyAccess: Expr = emptyCurlyKnob != null
+			? { expr: EField(macro opt, emptyCurlyKnob), pos: Context.currentPos() }
+			: macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
 		return emptyCurlyBreak
 			? macro (
 				$emptyCurlyAccess == anyparse.format.EmptyCurly.Break
@@ -733,14 +714,12 @@ final class TriviaBlockLowering {
 	 * Both knobs null → unconditional `_dhl()`.
 	 */
 	private static function triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob: Null<String>, rightCurlyAnonFnKnob: Null<String>): Expr {
-		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null ? {
-			expr: EField(macro opt, rightCurlyKnob),
-			pos: Context.currentPos()
-		} : null;
-		final rightCurlyAnonFnAccess: Null<Expr> = rightCurlyKnob == null && rightCurlyAnonFnKnob != null ? {
-			expr: EField(macro opt, rightCurlyAnonFnKnob),
-			pos: Context.currentPos()
-		} : null;
+		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null
+			? { expr: EField(macro opt, rightCurlyKnob), pos: Context.currentPos() }
+			: null;
+		final rightCurlyAnonFnAccess: Null<Expr> = rightCurlyKnob == null && rightCurlyAnonFnKnob != null
+			? { expr: EField(macro opt, rightCurlyAnonFnKnob), pos: Context.currentPos() }
+			: null;
 		return if (rightCurlyAccess != null)
 			macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
 		else if (rightCurlyAnonFnAccess != null)

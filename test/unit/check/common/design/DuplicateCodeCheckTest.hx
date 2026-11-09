@@ -37,7 +37,8 @@ class DuplicateCodeCheckTest extends Test {
 
 	public function testTwoStatementRunNotFlagged(): Void {
 		Assert.equals(
-			0, violations(src([
+			0,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\ttrace(alpha, beta);',
@@ -74,7 +75,8 @@ class DuplicateCodeCheckTest extends Test {
 
 	public function testDifferentIdentifiersNotFlagged(): Void {
 		Assert.equals(
-			0, violations(src([
+			0,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\ttrace(alpha, beta);',
@@ -133,7 +135,8 @@ class DuplicateCodeCheckTest extends Test {
 
 	public function testBelowContentGateNotFlagged(): Void {
 		Assert.equals(
-			0, violations(src([
+			0,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\ti++;',
@@ -235,7 +238,8 @@ class DuplicateCodeCheckTest extends Test {
 	@:killer('M-DUP-CODE-BARE-RUN-OFF')
 	public function testABareDeclarationRunIsNotAClone(): Void {
 		Assert.equals(
-			0, violations(src([
+			0,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\tfinal total:Int = 0;',
@@ -329,7 +333,8 @@ class DuplicateCodeCheckTest extends Test {
 	@:killer('M-DUP-CODE-NORM-KEY')
 	public function testALiteralInteriorDifferenceIsNotACloneWhileItsLayoutTwinIs(): Void {
 		Assert.equals(
-			0, violations(src([
+			0,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\ttrace(alpha, "one  two");',
@@ -346,7 +351,8 @@ class DuplicateCodeCheckTest extends Test {
 			'the literal prints different text in each copy'
 		);
 		Assert.equals(
-			1, violations(src([
+			1,
+			violations(src([
 				'class C {',
 				'\tfunction f():Void {',
 				'\t\ttrace(alpha, "one two");',

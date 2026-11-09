@@ -64,14 +64,16 @@ final class RuleIndex {
 			languages: Array<String>,
 			defaultOn: Bool,
 			scopeDependent: Bool
-		}> = checks.map(c -> {
-			id: c.id(),
-			category: c.category(),
-			description: c.description(),
-			languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
-			defaultOn: !(c is DefaultOff),
-			scopeDependent: c is ScopeDependent
-		});
+		}> = checks.map(
+			c -> {
+				id: c.id(),
+				category: c.category(),
+				description: c.description(),
+				languages: c is LanguageBound ? (cast c: LanguageBound).languages() : [],
+				defaultOn: !(c is DefaultOff),
+				scopeDependent: c is ScopeDependent
+			}
+		);
 		return JsonPrinter.print(records, null, '  ') + '\n';
 	}
 

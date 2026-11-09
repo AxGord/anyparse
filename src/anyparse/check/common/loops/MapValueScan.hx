@@ -194,10 +194,9 @@ final class MapValueScan {
 		final span: Null<Span> = node.span;
 		if (span != null && span.from == at && seams.declKinds.contains(node.kind)) {
 			final host: Null<QueryNode> = parent != null && parent == container ? container : null;
-			return host == null ? { owner: null, exported: false } : {
-				owner: CheckScan.typeDeclName(host, seams.containerKinds),
-				exported: precededByPublic(host, slot, seams)
-			};
+			return host == null
+				? { owner: null, exported: false }
+				: { owner: CheckScan.typeDeclName(host, seams.containerKinds), exported: precededByPublic(host, slot, seams) };
 		}
 		final host: Null<QueryNode> = seams.containerKinds.contains(node.kind) ? node : container;
 		for (i in 0...node.children.length) {

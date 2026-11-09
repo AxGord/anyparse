@@ -243,18 +243,21 @@ final class CondDirectives {
 	 */
 	public static function skipMarks(source: String, shape: RefShape, regions: Array<LexRegion>): Array<SkipMark> {
 		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		return scan(source, shape, () -> regions).map(directive -> {
-			from: directive.span.from,
-			to: directive.span.to,
-			role: if (directive.keyword == shape.conditionalIfKeyword)
-				SkipMarkRole.Open
-			else if (directive.keyword == shape.conditionalEndKeyword)
-				SkipMarkRole.Close
-			else if (elseKeywords.contains(directive.keyword))
-				SkipMarkRole.Next
-			else
-				SkipMarkRole.Other
-		});
+		return scan(source, shape, () -> regions)
+			.map(
+				directive -> {
+					from: directive.span.from,
+					to: directive.span.to,
+					role: if (directive.keyword == shape.conditionalIfKeyword)
+						SkipMarkRole.Open
+					else if (directive.keyword == shape.conditionalEndKeyword)
+						SkipMarkRole.Close
+					else if (elseKeywords.contains(directive.keyword))
+						SkipMarkRole.Next
+					else
+						SkipMarkRole.Other
+				}
+			);
 	}
 
 	/**
@@ -299,11 +302,7 @@ final class CondDirectives {
 		final condition: Null<Span> = takesCondition(keyword, keywords.opener, keywords.closer)
 			? CondCondition.conditionAt(source, afterKeyword)
 			: null;
-		return {
-			keyword: keyword,
-			span: new Span(from, condition == null ? afterKeyword : condition.to),
-			condition: condition
-		};
+		return { keyword: keyword, span: new Span(from, condition == null ? afterKeyword : condition.to), condition: condition };
 	}
 
 	/** The first offset at or after `from` holding one of `markers`, -1 when none follows. */

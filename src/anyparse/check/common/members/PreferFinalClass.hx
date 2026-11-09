@@ -115,11 +115,8 @@ final class PreferFinalClass extends RuleBase {
 				final metaSpan: Span = ms;
 				final dk: String = decl.kind;
 				final ds: Null<Span> = decl.span;
-				if ((dk == plainKind || dk == finalKind) && ds != null) out.push({
-					metaSpan: metaSpan,
-					redundant: dk == finalKind,
-					declFrom: ds.from
-				});
+				if ((dk == plainKind || dk == finalKind) && ds != null)
+					out.push({ metaSpan: metaSpan, redundant: dk == finalKind, declFrom: ds.from });
 			}
 		}
 		for (child in children) walk(child, metaName, metaKinds, plainKind, finalKind, out);

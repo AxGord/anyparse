@@ -373,11 +373,7 @@ final class PreferLocalFunction extends RuleBase {
 			case Function(params, ret, _): { params: [for (p in params) { optional: p.optional, type: p.type.text }], ret: ret.text };
 			case _: null;
 		};
-		return {
-			survives: signature != null,
-			returnsVoid: signature != null && signature.ret == s.voidTypeName,
-			signature: signature
-		};
+		return { survives: signature != null, returnsVoid: signature != null && signature.ret == s.voidTypeName, signature: signature };
 	}
 
 	/**

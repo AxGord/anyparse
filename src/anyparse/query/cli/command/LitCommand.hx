@@ -457,9 +457,7 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 				case '--kind':
 					// Segments are trimmed like `--kinds` on the call-graph walkers trims its own, so
 					// `--kind 'Literal, Comment'` names two kinds instead of failing on `" Comment"`.
-					kindFilter = [
-						for (k in arg.value().split(',')) k.trim()
-					];
+					kindFilter = [for (k in arg.value().split(',')) k.trim()];
 				case '--any-kind':
 					kindFilter = [];
 				case '--include-comments':

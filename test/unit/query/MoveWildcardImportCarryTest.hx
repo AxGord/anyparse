@@ -31,10 +31,7 @@ final class MoveWildcardImportCarryTest extends Test {
 
 	/** The package of `Tools`, whose main class declares the static `qfun` that `Moved` calls bare. */
 	private static final MODULE_Q: Array<{ name: String, source: String }> = [
-		{
-			name: 'src/q/Tools.hx',
-			source: 'package q;\n\nclass Tools {\n\tpublic static function qfun(): Int return 1;\n}\n'
-		}
+		{ name: 'src/q/Tools.hx', source: 'package q;\n\nclass Tools {\n\tpublic static function qfun(): Int return 1;\n}\n' }
 	];
 
 	/** `Moved` (line 5, column 7) calls `qfun`, which no statement of the source's own spells. */
@@ -75,12 +72,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	@:killer('M-CARRY-TYPE-WILDCARD-CLASH-BLIND')
 	public function testADestinationNamingAnotherTypeOfThePackageRefuses(): Void {
 		#if (sys || nodejs)
-		final tree: Array<{ name: String, source: String }> = PACKAGE_Q.concat([
-			{
-				name: 'src/r/Other.hx',
-				source: 'package r;\n\nclass Other {}\n'
-			}
-		]);
+		final tree: Array<{ name: String, source: String }> = PACKAGE_Q.concat([{
+			name: 'src/r/Other.hx',
+			source: 'package r;\n\nclass Other {}\n'
+		}]);
 		switch moved('package r;\n\nclass Dest {\n\tvar o: Other;\n}\n', HOST_OWN_WILDCARD, 7, tree) {
 			case Ok(_, _):
 				Assert.fail('the carried wildcard would rebind the destination\'s Other from r.Other to q.Other — the move must refuse');
@@ -124,12 +119,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	/** The destination names `Other` through an explicit import, which outranks any wildcard: nothing rebinds, the move goes through. */
 	@:pin('guard')
 	public function testADestinationImportingTheOtherTypeExplicitlyTakesTheMove(): Void {
-		final tree: Array<{ name: String, source: String }> = PACKAGE_Q.concat([
-			{
-				name: 'src/r/Other.hx',
-				source: 'package r;\n\nclass Other {}\n'
-			}
-		]);
+		final tree: Array<{ name: String, source: String }> = PACKAGE_Q.concat([{
+			name: 'src/r/Other.hx',
+			source: 'package r;\n\nclass Other {}\n'
+		}]);
 		assertCarries(
 			moved('package r;\n\nimport r.Other;\n\nclass Dest {\n\tvar o: Other;\n}\n', HOST_OWN_WILDCARD, 7, tree), 'import q.*;'
 		);
@@ -185,12 +178,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	@:pin('guard')
 	public function testAGuardedAmbientModuleStaticWildcardRefuses(): Void {
 		#if (sys || nodejs)
-		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
-			{
-				name: 'src/p/import.hx',
-				source: '#if js\nimport q.Tools.*;\n#end\n'
-			}
-		]);
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([{
+			name: 'src/p/import.hx',
+			source: '#if js\nimport q.Tools.*;\n#end\n'
+		}]);
 		switch moved('package r;\n\nclass Dest {}\n', HOST_BARE_CALL, 5, tree) {
 			case Ok(_, _):
 				Assert.fail('a guarded ambient wildcard cannot be carried — the move must refuse');
@@ -265,12 +256,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	public function testADestinationHoldingTheWildcardOnlyUnderAnIfStillGetsIt(): Void {
 		final host: String =
 			'package p;\n\nimport q.Tools.*;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {\n\t\ttrace(qfun());\n\t}\n}\n';
-		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
-			{
-				name: 'src/r/import.hx',
-				source: '#if foo\nimport q.Tools.*;\n#end\n'
-			}
-		]);
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([{
+			name: 'src/r/import.hx',
+			source: '#if foo\nimport q.Tools.*;\n#end\n'
+		}]);
 		assertCarries(moved('package r;\n\nclass Dest {}\n', host, 7, tree), 'import q.Tools.*;');
 	}
 
@@ -298,10 +287,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	): MoveResult {
 		var result: MoveResult = Err('the fixture did not run');
 		#if (sys || nodejs)
-		final tree: Array<{ name: String, source: String }> = extra.concat([
-			{ name: 'src/p/Host.hx', source: host },
-			{ name: destName, source: dest }
-		]);
+		final tree: Array<{ name: String, source: String }> = extra.concat([{
+			name: 'src/p/Host.hx',
+			source: host
+		}, { name: destName, source: dest }]);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = tree.map(entry -> {file: '$root/${entry.name}', source: entry.source });
@@ -318,12 +307,11 @@ final class MoveWildcardImportCarryTest extends Test {
 	 */
 	private static function assertRepointed(extra: Array<{ name: String, source: String }>, use: String): Void {
 		#if (sys || nodejs)
-		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([
-			{
-				name: 'src/q/Dest.hx',
-				source: 'package q;\n\nclass Dest {}\n'
-			}
-		]).concat(extra);
+		final tree: Array<{ name: String, source: String }> = MODULE_Q.concat([{
+			name: 'src/q/Dest.hx',
+			source: 'package q;\n\nclass Dest {}\n'
+		}])
+			.concat(extra);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final scope: Array<{ file: String, source: String }> = tree.map(entry -> {file: '$root/${entry.name}', source: entry.source });

@@ -24,19 +24,13 @@ class LintScoreTest extends Test {
 	/** Three findings of one key are one key and two duplicates; each verdict counts its keys, a key no entry labels is unlabelled. */
 	@:pin('control') @:killer('M-SCORE-DUPLICATES-AS-KEYS')
 	public function testFindingsMeetEntriesByKey(): Void {
-		final result: LintScoreResult = score(
-			[
-				entry('A', 'A.b', 'S.f', 'real-long'),
-				entry('B', 'C.d', 'C._m', 'false')
-			],
-			[
-				finding('A', 'A.b', 'S.f'),
-				finding('A', 'A.b', 'S.f'),
-				finding('A', 'A.b', 'S.f'),
-				finding('B', 'C.d', 'C._m'),
-				finding('B', 'X.y', 'X._n')
-			]
-		);
+		final result: LintScoreResult = score([entry('A', 'A.b', 'S.f', 'real-long'), entry('B', 'C.d', 'C._m', 'false')], [
+			finding('A', 'A.b', 'S.f'),
+			finding('A', 'A.b', 'S.f'),
+			finding('A', 'A.b', 'S.f'),
+			finding('B', 'C.d', 'C._m'),
+			finding('B', 'X.y', 'X._n')
+		]);
 		final all: LintScoreBucket = result.overall;
 		Assert.same([5, 3, 1, 1, 1], [
 			all.findings,

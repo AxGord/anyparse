@@ -153,15 +153,7 @@ final class ConstantCondition extends RuleBase {
 			// expression-position one sits in a value slot, so it stays report-only).
 			if (!seams.ifStatementKinds.contains(node.kind)) return null;
 			final inBlock: Bool = parent != null && blockKinds.contains(parent.kind);
-			return inBlock
-				? {
-					span: ElementSpan.lineExtendedSpan(source, nspan),
-					text: ''
-				}
-				: {
-					span: nspan,
-					text: '{}'
-				};
+			return inBlock ? { span: ElementSpan.lineExtendedSpan(source, nspan), text: '' } : { span: nspan, text: '{}' };
 		}
 		final tspan: Null<Span> = taken.span;
 		return tspan == null ? null : { span: nspan, text: source.substring(tspan.from, tspan.to) };

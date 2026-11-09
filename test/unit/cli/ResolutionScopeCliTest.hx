@@ -155,10 +155,7 @@ class ResolutionScopeCliTest extends Test {
 	 */
 	public function testRelativeReportOverlappingAbsoluteRootStillResolves(): Void {
 		#if (sys || nodejs)
-		final raw: String = CliFixture.writeDir('resrel', [
-			{ name: 'Base.hx', source: BASE },
-			{ name: 'Derived.hx', source: DERIVED }
-		]);
+		final raw: String = CliFixture.writeDir('resrel', [{ name: 'Base.hx', source: BASE }, { name: 'Derived.hx', source: DERIVED }]);
 		final oldCwd: String = Sys.getCwd();
 		Sys.setCwd(raw);
 		final dir: String = stripTrailingSlash(Sys.getCwd());
@@ -412,10 +409,9 @@ class ResolutionScopeCliTest extends Test {
 		#if (sys || nodejs)
 		final source: String =
 			'package q;\n\nclass Z {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
-		final proj: String = CliFixture.writeDir('resstdquotes', [
-			{ name: 'Z.hx', source: source },
-			{ name: 'apq.json', source: '{"rules":{}}' }
-		]);
+		final proj: String = CliFixture.writeDir(
+			'resstdquotes', [{ name: 'Z.hx', source: source }, { name: 'apq.json', source: '{"rules":{}}' }]
+		);
 		final haxelibBefore: Int = HaxelibResolver.invocations;
 		final stdBefore: Int = StdResolver.discoveries;
 		// Both exit codes asserted: an ERRORED run spawns nothing either, so without this the
@@ -555,10 +551,9 @@ class ResolutionScopeCliTest extends Test {
 	 * `lintWithLib`: whatever resolves here comes from the auto-discovered std alone.
 	 */
 	private static function lintConfigLess(rule: String, name: String, source: String): Int {
-		final proj: String = CliFixture.writeDir('resnocfg', [
-			{ name: name, source: source },
-			{ name: 'apq.json', source: '{"rules":{}}' }
-		]);
+		final proj: String = CliFixture.writeDir(
+			'resnocfg', [{ name: name, source: source }, { name: 'apq.json', source: '{"rules":{}}' }]
+		);
 		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
 		CliFixture.removeDir(proj);
 		return exit;

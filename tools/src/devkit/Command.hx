@@ -102,11 +102,9 @@ final class Command {
 	 * first change of `progress`: a command that queues behind a lease wrapper has not begun, and is not silent.
 	 */
 	public function watched(ms: Int, progress: String, awaitProgress: Bool = false): Command {
-		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
-			idle: ms,
-			progress: progress,
-			awaitProgress: awaitProgress
-		});
+		return new Command(
+			argv, _cwd, _env, _timeout, _input, _upstream, _tethered, { idle: ms, progress: progress, awaitProgress: awaitProgress }
+		);
 	}
 
 	/**
@@ -211,11 +209,7 @@ final class Command {
 	/** The command running `argv[0]` over the rest of `argv`. */
 	public static function of(argv: Array<String>): Command {
 		if (argv.length == 0) throw new Exception('a command needs a program to run');
-		return new Command(argv.copy(), null, {}, 0, null, null, false, {
-			idle: 0,
-			progress: null,
-			awaitProgress: false
-		});
+		return new Command(argv.copy(), null, {}, 0, null, null, false, { idle: 0, progress: null, awaitProgress: false });
 	}
 
 	/** One argument of a `Cmd.cmd` template: `value` as text; a null `value` (`source` in the template) throws. */

@@ -171,13 +171,7 @@ final class WriterPrattLowering {
 		pc: PrattLoweringCtx, c: WriterLowering.LowerBranchCtx, opText: String, isAsymmetric: Bool, leftCtx: Int, rightCtx: Int,
 		leftCall: Expr, rightOptExpr: Null<Expr>, rightEmit: Expr
 	): Expr {
-		final plainExpr: Expr = macro _dc([
-			$leftCall,
-			_dt(' '),
-			_dt($v{opText}),
-			_dop(' '),
-			$rightEmit
-		]);
+		final plainExpr: Expr = macro _dc([$leftCall, _dt(' '), _dt($v{opText}), _dop(' '), $rightEmit]);
 		if (opText != '=' || isAsymmetric) return plainExpr;
 		final argTypeCT: ComplexType = pc.ruleValueCT(c.typePath);
 		final rightArg: Expr = macro $i{c.argNames[1]};
@@ -437,10 +431,7 @@ final class WriterPrattLowering {
 						)
 					])
 					: _glued
-				: _dg(_dc([
-					_left,
-					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right]))
-				]));
+				: _dg(_dc([_left, _dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right]))]));
 			final _rhsTrail: Null<String> = $rhsTrailExpr;
 			final _innerT: anyparse.core.Doc = _rhsTrail != null ? _dc([_inner, trailingCommentDocVerbatim(_rhsTrail, opt)]) : _inner;
 			if ($v{prec} < ctxPrec)
@@ -480,10 +471,7 @@ final class WriterPrattLowering {
 		// shape via `_hasLeadComment`, while a comment-free `??` chain stays glued
 		// under this NoWrap cascade.
 		final chainRulesExpr: Expr = isChainNullCoal
-			? macro ({
-				rules: [],
-				defaultMode: anyparse.format.wrap.WrapMode.NoWrap
-			}: anyparse.format.wrap.WrapRules)
+			? macro ({ rules: [], defaultMode: anyparse.format.wrap.WrapMode.NoWrap }: anyparse.format.wrap.WrapRules)
 			: optFieldAccess(chainRulesField);
 		final argTypeCT: ComplexType = pc.ruleValueCT(typePath);
 		// Leaf operands render at the chain's own precedence. A
@@ -708,11 +696,7 @@ final class WriterPrattLowering {
 		else if (isAssign && !isTight)
 			assignEmitExpr(pc, c, opText, isAsymmetric, leftCtx, rightCtx, leftCall, rightOptExpr, rightEmit)
 		else
-			macro _dc([
-				$leftCall,
-				$opEmitExpr,
-				$rightCall
-			]);
+			macro _dc([$leftCall, $opEmitExpr, $rightCall]);
 		return macro {
 			final _inner: anyparse.core.Doc = $innerExpr;
 			if ($v{prec} < ctxPrec)
@@ -745,10 +729,7 @@ final class WriterPrattLowering {
 		if (children.length == 2) {
 			final suffixRef: String = children[1].annotations.get(AnnotationKeys.BASE_REF);
 			final suffixFn: String = pc.writeFnFor(suffixRef);
-			final suffixCall: Expr = {
-				expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
-				pos: Context.currentPos()
-			};
+			final suffixCall: Expr = { expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]), pos: Context.currentPos() };
 			final close: String = postfixClose ?? '';
 			if (close.length > 0) {
 				// ω-bracket-config: `HxExpr.IndexAccess` (`@:postfix('[',
@@ -1016,10 +997,7 @@ final class WriterPrattLowering {
 			elemOptArg = macro _args[_i].trailingComment != null ? _setArrowValueIfElemTrailComment($elemOptArg, opt) : $elemOptArg;
 		final elemCallArgs: Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, elemCallArgs),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, elemCallArgs), pos: Context.currentPos() };
 
 		final argsAccess: Expr = macro $i{argNames[1]};
 		final argsInit: Expr = isTriviaStar

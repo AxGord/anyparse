@@ -105,7 +105,8 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 		Assert.same(
 			['info A A.done | FileSystem.stat', 'warning A A.main | for (i in 0...1000)'],
 			ThreadSafetyRegistersTest.graded(ThreadSafetyCheckTest.violations(
-				config('"Runner.create",{"call":"FileIO.readAndProcess","main":[2]}', '"shortSinks":["FileSystem.stat"],'), [
+				config('"Runner.create",{"call":"FileIO.readAndProcess","main":[2]}', '"shortSinks":["FileSystem.stat"],'),
+				[
 					IO,
 					'class Runner { public static function create(fn:()->Void):Void {} }',
 					'class A { $MEMBERS public static function main():Void'

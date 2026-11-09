@@ -26,10 +26,9 @@ final class BaselineWarmTest extends Test {
 	}
 
 	public function testTheDetachedRunTakesItsLeaseFromThePoolAndCarriesTheRecipe(): Void {
-		final argv: Array<String> = BaselineWarm.argvOf(Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache', {
-			frozen: ['/pony'],
-			infra: ['/a']
-		});
+		final argv: Array<String> = BaselineWarm.argvOf(
+			Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache', { frozen: ['/pony'], infra: ['/a'] }
+		);
 		Assert.equals('/plugin/scripts/wf-run', argv[0]);
 		Assert.isTrue(argv.contains('--threads'), argv.join(' '));
 		final tail: Array<String> = argv.slice(argv.indexOf('--') + 1);
@@ -146,11 +145,7 @@ final class BaselineWarmTest extends Test {
 	/** A gate run that stays running for `ticks` polls and then ends with `result`; it logs its own cancellation. */
 	private static function running(log: Array<String>, name: String, ticks: Int, result: Outcome): Warming {
 		var left: Int = ticks;
-		return {
-			running: () -> left-- > 0,
-			cancel: () -> log.push('cancel $name'),
-			ended: () -> result
-		};
+		return { running: () -> left-- > 0, cancel: () -> log.push('cancel $name'), ended: () -> result };
 	}
 
 }

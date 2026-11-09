@@ -119,11 +119,8 @@ final class WriterFieldSepLowering {
 		if (curlyPatterns.length + otherBlockPatterns.length == 0) return withPadTrailingDrop(prevPadTrailing, flagBased);
 		final cases: Array<Case> = [];
 		if (curlyPatterns.length > 0) cases.push({ values: curlyPatterns, expr: flagBased, guard: null });
-		if (otherBlockPatterns.length > 0) cases.push({
-			values: otherBlockPatterns,
-			expr: sameLineNonCurlyBlockPolicySwitch(optFlag),
-			guard: null
-		});
+		if (otherBlockPatterns.length > 0)
+			cases.push({ values: otherBlockPatterns, expr: sameLineNonCurlyBlockPolicySwitch(optFlag), guard: null });
 		cases.push({ values: [macro _], expr: macro _dhl(), guard: null });
 		final ctorSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
 		// omega-else-switch CLOSE side: a `switch` the knob glued to the PREVIOUS
@@ -162,14 +159,12 @@ final class WriterFieldSepLowering {
 		ctx: FieldSepCtx, useTriviaGap: Bool, fieldName: String, child: ShapeNode, prevBodyField: Null<PrevBodyInfo>, typePath: String,
 		prevPadTrailing: Null<Expr>
 	): Expr {
-		final beforeKwLeadingExpr: Null<Expr> = useTriviaGap ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
-		final beforeKwTrailingExpr: Null<Expr> = useTriviaGap ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
+		final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
+			? { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX), pos: Context.currentPos() }
+			: null;
+		final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
+			? { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX), pos: Context.currentPos() }
+			: null;
 		// omega-bracket-body-glue CLOSE side: the gap before a keyword whose PRECEDING
 		// sibling is a body the knob hugs to its head. `HxIfExpr.elseBranch` is the one
 		// consumer. Turning the knob on is the explicit statement that this shape

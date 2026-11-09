@@ -178,7 +178,8 @@ class ThreadSafetyFindingDataTest extends Test {
 		#if (sys || nodejs)
 		final found: Array<Violation> =
 			ThreadSafetyCheckTest.violations(
-				'{"rules":{"thread-safety":{"sinks":["File.saveContent"],"lockPairs":["Mut.lock/unlock"]}}}', [
+				'{"rules":{"thread-safety":{"sinks":["File.saveContent"],"lockPairs":["Mut.lock/unlock"]}}}',
+				[
 					'class A { private final _m:Mut; function work():Void { _m.lock(); save(); _m.unlock(); } '
 					+ 'function save():Void File.saveContent(1, 2); }',
 					'class Mut { public function lock():Void {} public function unlock():Void {} }'
@@ -203,7 +204,8 @@ class ThreadSafetyFindingDataTest extends Test {
 		#if (sys || nodejs)
 		final found: Array<Violation> =
 			ThreadSafetyCheckTest.violations(
-				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"]}}}', [
+				'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"]}}}',
+				[
 					ThreadSafetyCheckTest.MUTEX,
 					'class Db { final _m:Mutex = new Mutex(); public function new() {}'
 					+ ' public function add(kind:Int):Void { _m.acquire(); if (kind == 0) throw "unsupported"; _m.release(); } }'

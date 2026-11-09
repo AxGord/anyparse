@@ -127,10 +127,9 @@ class LintUnusedImportDottedSliceTest extends Test {
 	public function testSecondaryTypeQualifiedTailDoesNotKeepImport(): Void {
 		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tpublic var x: a.b.Mod.ModExtra;\n}';
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{ file: 'a/b/Mod.hx', source: mod },
-			{ file: 'pkg/C.hx', source: use }
-		]);
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			new UnusedImport(), [{ file: 'a/b/Mod.hx', source: mod }, { file: 'pkg/C.hx', source: use }]
+		);
 
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);

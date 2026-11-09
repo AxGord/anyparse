@@ -27,11 +27,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 
 	/** A gate is driven by the file it needs, and answers with a sentence naming ITSELF. */
 	private static final GATES: Array<Gate> = [
-		{
-			name: 'no-body',
-			fragment: 'has no body',
-			files: [{ file: 'C.hx', source: 'class C {\n\tprivate function dead(): Int;\n}\n' }]
-		},
+		{ name: 'no-body', fragment: 'has no body', files: [{ file: 'C.hx', source: 'class C {\n\tprivate function dead(): Int;\n}\n' }] },
 		{
 			name: 'side-effecting-initializer',
 			fragment: 'not provably side-effect-free',
@@ -46,11 +42,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 				{ file: 'C.hx', source: 'class C extends Base {\n\tprivate function impl(): Int {\n\t\treturn 1;\n\t}\n}\n' }
 			]
 		},
-		{
-			name: 'rtti',
-			fragment: '`@:rtti`',
-			files: [{ file: 'C.hx', source: '@:rtti\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }]
-		},
+		{ name: 'rtti', fragment: '`@:rtti`', files: [{ file: 'C.hx', source: '@:rtti\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }] },
 		{
 			name: 'build-macro',
 			fragment: '`@:build` macro',
@@ -58,11 +50,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 				{ file: 'C.hx', source: '@:build(M.build())\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }
 			]
 		},
-		{
-			name: 'keep',
-			fragment: '`@:keep`',
-			files: [{ file: 'C.hx', source: '@:keep\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }]
-		},
+		{ name: 'keep', fragment: '`@:keep`', files: [{ file: 'C.hx', source: '@:keep\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }] },
 		{
 			name: 'reflected-name',
 			fragment: 'occurs in a STRING',

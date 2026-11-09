@@ -2956,10 +2956,9 @@ class MemberReachFactsTest extends Test {
 			final files: Map<String, String> = pinnedGrids(mine, other, base);
 			final main: String = files['Main.hx'] ?? '';
 			final at: Int = main.indexOf('g.items');
-			final member: MemberRef = site ? { owner: 'Grid', name: 'items', site: new Span(at, at + 'g.items'.length) } : {
-				owner: 'Grid',
-				name: 'items'
-			};
+			final member: MemberRef = site
+				? { owner: 'Grid', name: 'items', site: new Span(at, at + 'g.items'.length) }
+				: { owner: 'Grid', name: 'items' };
 			return ask(files, null, true, member, false, null, null, null, true);
 		}
 		assertMatch(question(null, null), r -> r.match(Proven));
@@ -5017,9 +5016,10 @@ class MemberReachFactsTest extends Test {
 		if (facts != null && edit != null) edit(facts);
 		lastDropped = facts == null ? [] : [for (d in facts.dropped) '${d.name}: ${d.reason}'];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final project: Array<{ file: String, source: String }> = [
-			for (name => text in files) { file: Path.join([dir, name]), source: text }
-		];
+		final project: Array<{ file: String, source: String }> = [for (name => text in files) {
+			file: Path.join([dir, name]),
+			source: text
+		}];
 		final libraries: Array<{ file: String, source: String }> = [
 			for (name => text in library ?? []) { file: Path.join([dir, name]), source: text }
 		];

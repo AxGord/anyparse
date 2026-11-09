@@ -59,10 +59,7 @@ final class NamingCrossRenameTest extends Test {
 	@:pin('control')
 	@:killer('M-XRENAME-NOT-CANDIDATE', 'M-XRENAME-FINDINGS-NONE', 'M-XRENAME-EDITS-DROPPED')
 	public function testATypedefRenamesInEveryFileThatNamesIt(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/T.hx', source: TYPES },
-			{ file: 'pkg/U.hx', source: USER }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/T.hx', source: TYPES }, { file: 'pkg/U.hx', source: USER }];
 		final sets: Array<RiskyCrossFileEdit> = armSets(files, [], 'JSON_POINT');
 		Assert.equals(1, sets.length);
 		if (sets.length == 0) return;
@@ -77,10 +74,8 @@ final class NamingCrossRenameTest extends Test {
 	@:pin('control')
 	@:killer('M-XRENAME-INDEXED-UNDERLYING')
 	public function testAnEnumAbstractAndItsValuesRename(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/E.hx', source: ENUMS },
-			{ file: 'pkg/F.hx', source: ENUM_USER }
-		];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/E.hx', source: ENUMS }, { file: 'pkg/F.hx', source: ENUM_USER }];
 		for (name in ['MY_ACTIONS', 'goals', 'high']) Assert.equals(1, armSets(files, [], name).length, name);
 		final fast: Array<RiskyCrossFileEdit> = armSets(files, [], 'fast');
 		Assert.equals(0, fast.length, 'an implicit String value is its name');
@@ -286,12 +281,10 @@ final class NamingCrossRenameTest extends Test {
 			Assert.equals(c.reason, _lastReason, c.what);
 		}
 		// A library declaring the new name: no project file spells it, the index still holds it.
-		final library: Array<{ file: String, source: String }> = [
-			{
-				file: 'lib/ext/JsonPoint.hx',
-				source: 'package ext;\n\nclass JsonPoint {}\n'
-			}
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'lib/ext/JsonPoint.hx',
+			source: 'package ext;\n\nclass JsonPoint {}\n'
+		}];
 		Assert.equals(0, armSets([types, user], [], 'JSON_POINT', library).length, 'a library type of the new name');
 		Assert.equals(NamingCrossRename.NEW_NAME_TAKEN, _lastReason, 'a library type of the new name');
 	}
@@ -308,7 +301,8 @@ final class NamingCrossRenameTest extends Test {
 		final property: String = 'package pkg;\n\nenum abstract Handle(Int) {\n\tvar Top;\n\n\tpublic var goals(get, never):Bool;\n\n'
 			+ '\tinline function get_goals():Bool {\n\t\treturn true;\n\t}\n}\n';
 		Assert.equals(
-			1, armSets([
+			1,
+			armSets([
 				{ file: 'pkg/E.hx', source: ENUMS },
 				{ file: 'pkg/F.hx', source: ENUM_USER },
 				{ file: 'pkg/Handle.hx', source: property }
@@ -326,10 +320,7 @@ final class NamingCrossRenameTest extends Test {
 	@:pin('control')
 	@:killer('M-XRENAME-NO-PROJECT')
 	public function testTheArmNeedsTheWholeProject(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/T.hx', source: TYPES },
-			{ file: 'pkg/U.hx', source: USER }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/T.hx', source: TYPES }, { file: 'pkg/U.hx', source: USER }];
 		final check: Naming = new Naming();
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final own: Array<Violation> = check.riskyCrossFileFindings(findings(check, files, plugin, 'JSON_POINT'));
@@ -347,10 +338,7 @@ final class NamingCrossRenameTest extends Test {
 
 	/** The safe paths still decline a type, now pointing at the arm. */
 	public function testTheSafePathsPointAtTheArm(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/T.hx', source: TYPES },
-			{ file: 'pkg/U.hx', source: USER }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/T.hx', source: TYPES }, { file: 'pkg/U.hx', source: USER }];
 		final check: Naming = new Naming();
 		final plugin: GrammarPlugin = scoped(files, []);
 		final vs: Array<Violation> = findings(check, files, plugin, 'JSON_POINT');

@@ -37,7 +37,8 @@ final class TokenReportTest extends Test {
 		});
 		Assert.floatEquals(2, TokenReport.costOf(sonnet));
 		Assert.equals(
-			0.0, TokenReport.costOf(turn('claude-future-9', 0, {
+			0.0,
+			TokenReport.costOf(turn('claude-future-9', 0, {
 				input: MILLION,
 				output: 0,
 				cacheRead: 0,

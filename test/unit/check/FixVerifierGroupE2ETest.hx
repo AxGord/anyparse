@@ -85,10 +85,9 @@ final class FixVerifierGroupE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifgroup', [
-			{ name: 'Main.hx', source: POISON_MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifgroup', [{ name: 'Main.hx', source: POISON_MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: POISON_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,

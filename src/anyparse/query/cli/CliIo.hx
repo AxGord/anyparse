@@ -273,12 +273,7 @@ final class CliIo {
 	 * read-only file, replacing a link, or flattening a file's permission bits.
 	 */
 	public static function writeFile(path: String, content: String): Void {
-		writeFiles([
-			{
-				path: path,
-				content: content
-			}
-		]);
+		writeFiles([{ path: path, content: content }]);
 	}
 
 	/**
@@ -535,11 +530,7 @@ final class CliIo {
 			// symlink-resolved form reads as being about a different file.
 			throw new WriteFailure(path, exception.message);
 		}
-		return {
-			staged: staged,
-			target: target,
-			asked: path
-		};
+		return { staged: staged, target: target, asked: path };
 	}
 
 	/**

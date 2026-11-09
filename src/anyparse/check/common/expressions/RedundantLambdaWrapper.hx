@@ -567,13 +567,12 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function collectBindings(node: QueryNode, scope: FileScope, seams: Seams): Void {
 		final name: Null<String> = node.name;
 		if (name != null && seams.binderKinds.contains(node.kind)) bind(scope, name, node, seams);
-		if (
-			name != null && (seams.localFunctionKinds.contains(node.kind) || seams.inlineFunctionKinds.contains(node.kind))
-		) scope.localFns.set(name, {
-			arity: countParams(node, seams),
-			isStatic: false,
-			safe: !scope.localFns.exists(name) && !seams.inlineFunctionKinds.contains(node.kind) && plainParams(node, seams)
-		});
+		if (name != null && (seams.localFunctionKinds.contains(node.kind) || seams.inlineFunctionKinds.contains(node.kind)))
+			scope.localFns.set(name, {
+				arity: countParams(node, seams),
+				isStatic: false,
+				safe: !scope.localFns.exists(name) && !seams.inlineFunctionKinds.contains(node.kind) && plainParams(node, seams)
+			});
 		// A bare-arrow lambda binds its parameter as a plain identifier node, not a declared one.
 		if (seams.lambdaKinds.contains(node.kind)) for (i in 0...node.children.length - 1) {
 			final param: QueryNode = node.children[i];
@@ -660,8 +659,12 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function modifierKindsOf(shape: RefShape): Array<String> {
 		final out: Array<String> = (shape.modifierOrderKinds ?? []).concat(shape.visibilityModifierKinds ?? []);
 		for (kind in [
-			 shape.staticModifierKind, shape.inlineModifierKind,    shape.macroModifierKind,
-			shape.dynamicModifierKind, shape.externModifierKind, shape.overrideModifierKind
+			shape.staticModifierKind,
+			shape.inlineModifierKind,
+			shape.macroModifierKind,
+			shape.dynamicModifierKind,
+			shape.externModifierKind,
+			shape.overrideModifierKind
 		]) {
 			if (kind != null && !out.contains(kind)) out.push(kind);
 		}

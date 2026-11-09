@@ -194,11 +194,7 @@ final class OracleDeclaration {
 		final command: Null<String> = declared.generate;
 		final inputs: Null<Array<String>> = declared.generateInputs;
 		if (command == null && inputs != null) drops.push('compilerOracle[$index] declares "generateInputs" without "generate" — ignored');
-		final config: OracleConfig = {
-			hxml: resolved,
-			dir: probed,
-			defines: declared.defines
-		};
+		final config: OracleConfig = { hxml: resolved, dir: probed, defines: declared.defines };
 		if (command != null) config.generate = {
 			command: command,
 			root: baseDir ?? '.',

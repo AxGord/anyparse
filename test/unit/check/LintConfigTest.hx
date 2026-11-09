@@ -252,28 +252,14 @@ class LintConfigTest extends Test {
 		final asArray: Array<OracleConfig> = LintConfig.parse('{"compilerOracle":[{"hxml":"build.hxml"}]}', '/proj')
 			.compilerOracles(new HaxeQueryPlugin());
 		Assert.same(asString, asArray, 'one string and a one-element array are the same list');
-		Assert.same([
-			{
-				hxml: '/proj/build.hxml',
-				dir: '/proj',
-				defines: []
-			}
-		], asString, 'and the string form declares no defines');
+		Assert.same([{ hxml: '/proj/build.hxml', dir: '/proj', defines: [] }], asString, 'and the string form declares no defines');
 		final withDefines: Array<OracleConfig> = LintConfig.parse(
 			'{"compilerOracle":[{"hxml":"build.hxml"},{"hxml":"build.hxml","defines":["GRID_MODE","android"]}]}', '/proj'
 		)
 			.compilerOracles(new HaxeQueryPlugin());
 		Assert.same([
-			{
-				hxml: '/proj/build.hxml',
-				dir: '/proj',
-				defines: []
-			},
-			{
-				hxml: '/proj/build.hxml',
-				dir: '/proj',
-				defines: ['GRID_MODE', 'android']
-			}
+			{ hxml: '/proj/build.hxml', dir: '/proj', defines: [] },
+			{ hxml: '/proj/build.hxml', dir: '/proj', defines: ['GRID_MODE', 'android'] }
 		], withDefines, 'two configurations may share one hxml and differ only in a define');
 		Assert.equals(
 			'/proj/build.hxml -D GRID_MODE -D android', OracleDeclaration.describeOracle(withDefines[1]),

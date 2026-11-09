@@ -369,16 +369,10 @@ class ApqReconCliTest extends Test {
 		final dir: String = mkTempDir('apq_recon_predict_source_sweep');
 		final fixture: String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
 		File.saveContent('$dir/bad.hxtest', fixture);
-		Assert.equals(0, Cli.run([
-			'recon',
-			'--predict-strip',
-			'--source',
-			'--replace',
-			'XYZ',
-			'--with',
-			'WAT',
-			dir
-		]), '--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)');
+		Assert.equals(
+			0, Cli.run(['recon', '--predict-strip', '--source', '--replace', 'XYZ', '--with', 'WAT', dir]),
+			'--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -654,13 +648,10 @@ class ApqReconCliTest extends Test {
 		final fixture: String = '{}\n---\n\n{foo: bar}\n\n---\n\n{foo: bar}\n';
 		final fixturePath: String = '$dir/probe.hxtest';
 		File.saveContent(fixturePath, fixture);
-		Assert.equals(1, Cli.run([
-			'recon',
-			'--probe',
-			fixturePath,
-			'--predict-relax',
-			'--source'
-		]), '--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)');
+		Assert.equals(
+			1, Cli.run(['recon', '--probe', fixturePath, '--predict-relax', '--source']),
+			'--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -692,14 +683,10 @@ class ApqReconCliTest extends Test {
 		// → 0 matched records → runtime exit (parallel of the
 		// non-`--source` test above), proves the combination is accepted.
 		final dir: String = mkTempDir('apq_recon_relax_no_target_source');
-		Assert.equals(1, Cli.run([
-			'recon',
-			'--predict-relax',
-			'--no-target-cluster',
-			'anything',
-			'--source',
-			dir
-		]), '--predict-relax --no-target-cluster --source on empty corpus is a runtime exit');
+		Assert.equals(
+			1, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'anything', '--source', dir]),
+			'--predict-relax --no-target-cluster --source on empty corpus is a runtime exit'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

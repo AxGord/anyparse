@@ -74,11 +74,14 @@ final class LintOracleRun {
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0) return resolution;
 		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
-		if (!complete) return declared ? {
-			declared: resolution.declared,
-			sources: resolution.sources,
-			buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
-		} : resolution;
+		if (!complete)
+			return declared
+				? {
+					declared: resolution.declared,
+					sources: resolution.sources,
+					buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
+				}
+				: resolution;
 		if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;

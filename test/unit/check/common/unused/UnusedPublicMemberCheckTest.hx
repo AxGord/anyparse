@@ -396,7 +396,8 @@ import anyparse.check.common.unused.UnusedPublicMember;
 	/** The twin: the same unreadable file, now spelling the member — the textual proof reads it and refuses. */
 	public function testUnreadableFileSpellingTheMemberStillSuppresses(): Void {
 		Assert.equals(
-			0, violationsOf([
+			0,
+			violationsOf([
 				{ file: 'C.hx', source: 'class C {\n\tpublic function orphaned():Void {}\n}' },
 				{ file: 'B.hx', source: 'class B {\n\tfunction q(: {{{\n\tc.orphaned();\n}\n' }
 			]).length

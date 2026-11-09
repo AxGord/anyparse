@@ -167,11 +167,9 @@ final class TriviaPairSlots {
 	 */
 	public static function buildBeforeLeadingSlot(child: ShapeNode, pos: Position): Field {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final arrayStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Array',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
+		final arrayStrCT: ComplexType = TPath(
+			{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+		);
 		return {
 			name: fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX,
 			kind: FVar(arrayStrCT),

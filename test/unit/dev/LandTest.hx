@@ -639,11 +639,9 @@ final class LandTest extends Test {
 	@:killer('M-LAND-CANDIDATE-LEFT')
 	public function testAWriterThatThrowsLeavesMainAsItWas(): Void {
 		final tools: FormatTools = rewriting('layout', Passed);
-		final run: Landing = formatting({
-			rewrite: tools.rewrite,
-			changes: (tree, base, files) -> throw new Exception('boom'),
-			settled: tools.settled
-		});
+		final run: Landing = formatting(
+			{ rewrite: tools.rewrite, changes: (tree, base, files) -> throw new Exception('boom'), settled: tools.settled }
+		);
 		Assert.equals(1, run.status);
 		Assert.isTrue(run.output.indexOf('boom') >= 0, run.output);
 		Assert.equals('', run.dirty);

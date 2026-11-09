@@ -223,7 +223,8 @@ final class BaseSuite {
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
 		final status: Int = withEngine(
-			checkout, () -> Shard.run({
+			checkout,
+			() -> Shard.run({
 				repo: checkout,
 				testJs: Path.join([checkout, 'bin/test.js']),
 				shards: shards,

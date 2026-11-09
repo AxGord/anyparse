@@ -146,11 +146,9 @@ final class TypeNameBinding {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) return Bound(own.map(t -> {file: fi, type: t }));
 		final order: StatementOrder = orderOf(fi, at);
-		final asked: StatementOrder = without == null ? order : {
-			explicit: order.explicit.filter(o -> o != without),
-			wildcards: order.wildcards.filter(o -> o != without),
-			use: order.use
-		};
+		final asked: StatementOrder = without == null
+			? order
+			: { explicit: order.explicit.filter(o -> o != without), wildcards: order.wildcards.filter(o -> o != without), use: order.use };
 		return switch explicitFrom(name, fi, asked, 0, false) {
 			case Decls(decls): Bound(decls);
 			case Unreadable(_), Either(_): Unknown;
@@ -683,10 +681,8 @@ final class TypeNameBinding {
 	 */
 	public static function splitPath(path: String): Null<ImportPath> {
 		final segments: Array<String> = path.split('.');
-		for (i in 0...segments.length) if (!isPackageSegment(segments[i])) return {
-			module: segments.slice(0, i + 1).join('.'),
-			rest: segments.slice(i + 1)
-		};
+		for (i in 0...segments.length) if (!isPackageSegment(segments[i]))
+			return { module: segments.slice(0, i + 1).join('.'), rest: segments.slice(i + 1) };
 		return null;
 	}
 

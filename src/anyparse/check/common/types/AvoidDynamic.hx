@@ -536,16 +536,8 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		if (init == null) return { present: false, isNull: false, type: null };
 		final i: QueryNode = init;
 		return shape.nullLiteralKind != null && i.kind == shape.nullLiteralKind
-			? {
-				present: true,
-				isNull: true,
-				type: null
-			}
-			: {
-				present: true,
-				isNull: false,
-				type: sourceType(i, root, shape, dynName, declaredTypes)
-			};
+			? { present: true, isNull: true, type: null }
+			: { present: true, isNull: false, type: sourceType(i, root, shape, dynName, declaredTypes) };
 	}
 
 	/** The distinct values of `xs`, order-preserving. */

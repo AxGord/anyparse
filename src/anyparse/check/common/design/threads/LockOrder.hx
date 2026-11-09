@@ -211,10 +211,8 @@ final class LockOrder {
 				held: h,
 				taken: taken
 			});
-			if (_graph.node(e.to)?.isExternal == false) enter(heldState(e.to, ctx, _conditions.entered(e, state.valuation), held, {
-				parent: state,
-				via: e
-			}));
+			if (_graph.node(e.to)?.isExternal == false)
+				enter(heldState(e.to, ctx, _conditions.entered(e, state.valuation), held, { parent: state, via: e }));
 		}
 	}
 

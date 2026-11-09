@@ -440,11 +440,12 @@ final class MoveMember {
 					final offset: Int = dotted
 						? RefactorSupport.pathOffset(source, recvSpan, path)
 						: SourceText.identTokenOffset(source, recvSpan, prep.srcTypeName);
-					if (offset >= 0 && !out.exists(h -> h.span.from == offset)) out.push({
-						span: new Span(offset, offset + path.length),
-						text: dotted ? destPath : prep.destTypeName,
-						needsImport: !dotted
-					});
+					if (offset >= 0 && !out.exists(h -> h.span.from == offset))
+						out.push({
+							span: new Span(offset, offset + path.length),
+							text: dotted ? destPath : prep.destTypeName,
+							needsImport: !dotted
+						});
 				}
 			}
 			for (c in children) walk(c);
@@ -751,15 +752,7 @@ final class MoveMember {
 	private static function nameQualifyEdit(
 		offset: Int, interp: Null<Span>, name: String, qualifier: String
 	): { span: Span, text: String } {
-		return interp == null
-			? {
-				span: new Span(offset, offset),
-				text: qualifier
-			}
-			: {
-				span: interp,
-				text: '$${$qualifier$name}'
-			};
+		return interp == null ? { span: new Span(offset, offset), text: qualifier } : { span: interp, text: '$${$qualifier$name}' };
 	}
 
 	/**
@@ -880,10 +873,7 @@ final class MoveMember {
 		if (isAllWhitespace(indent))
 			movedTextEdits.push({ span: new Span(lineStart, lineStart), text: '$indent@:access($accessPath)\n' });
 		else
-			movedTextEdits.push({
-				span: new Span(m.group.groupSpan.from, m.group.groupSpan.from),
-				text: '@:access($accessPath) '
-			});
+			movedTextEdits.push({ span: new Span(m.group.groupSpan.from, m.group.groupSpan.from), text: '@:access($accessPath) ' });
 		advisoryExtras.push(
 			'moved body of "${m.name}" references private member(s) of "${prep.srcTypeName}" — added @:access($accessPath)'
 		);

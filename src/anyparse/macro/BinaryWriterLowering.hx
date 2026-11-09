@@ -78,10 +78,7 @@ class BinaryWriterLowering {
 			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null) Context.fatalError('BinaryWriterLowering: struct field missing base.fieldName', Context.currentPos());
 
-			final fieldAccess: Expr = {
-				expr: EField(macro value, fieldName),
-				pos: Context.currentPos()
-			};
+			final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
 
 			// @:length — write length-prefix bytes before the lead/field.
 			final lenPrefix: Null<{ width: Int, encoding: String }> = child.annotations.get('bin.lengthPrefix');
@@ -194,10 +191,7 @@ class BinaryWriterLowering {
 		if (inner.kind != Ref) Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = 'write${simpleName(elemRefName)}';
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]), pos: Context.currentPos() };
 		steps.push(macro {
 			final _arr = $fieldAccess;
 			var _i: Int = 0;

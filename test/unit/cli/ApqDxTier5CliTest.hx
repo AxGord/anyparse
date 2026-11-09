@@ -84,24 +84,16 @@ class ApqDxTier5CliTest extends Test {
 		// could ever match it — the cross-project hint that fires here is the whole point. This
 		// used to assert exit 0: read-only or not, a spelling nothing can match is the user's
 		// mistake, and a script driving `ast` had no way to tell it from an absent node.
-		Assert.equals(2, Cli.run([
-			'probe',
-			'class C {}',
-			'--select',
-			'HxCatchClause'
-		]), 'ast --select on a kind no grammar projects is a usage error');
+		Assert.equals(
+			2, Cli.run(['probe', 'class C {}', '--select', 'HxCatchClause']), 'ast --select on a kind no grammar projects is a usage error'
+		);
 	}
 
 	public function testAstSelectLowercaseSelectorIsAlsoAUsageError(): Void {
 		// Lowercase selector — the cross-project hint stays silent (field-shape, not a TypeName),
 		// but the vocabulary verdict is the same: `unknownField` is no kind either, so the exit
 		// follows the spelling and not the shape of the token.
-		Assert.equals(2, Cli.run([
-			'probe',
-			'class C {}',
-			'--select',
-			'unknownField'
-		]), 'a lowercase non-kind is a usage error too');
+		Assert.equals(2, Cli.run(['probe', 'class C {}', '--select', 'unknownField']), 'a lowercase non-kind is a usage error too');
 	}
 
 	// --- 5. self-status --source ---
@@ -427,13 +419,7 @@ class ApqDxTier5CliTest extends Test {
 			Reflect.setField(env, PROBE_PATH_ENV, slot);
 		else
 			Reflect.deleteField(env, PROBE_PATH_ENV);
-		return js.node.ChildProcess.spawnSync('node', [
-			engine,
-			'probe',
-			source,
-			'--lang',
-			'haxe'
-		], cast { encoding: 'utf8', env: env });
+		return js.node.ChildProcess.spawnSync('node', [engine, 'probe', source, '--lang', 'haxe'], cast { encoding: 'utf8', env: env });
 	}
 
 	/** There is no `sys.FileSystem` symlink, and the guard under test only means anything against a real one. */

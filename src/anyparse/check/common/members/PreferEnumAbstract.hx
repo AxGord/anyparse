@@ -303,9 +303,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		if (candidates.length == 0) return candidates;
 		final names: Array<String> = [];
 		for (c in candidates) if (!names.contains(c.name)) names.push(c.name);
-		final mentioning: Array<{ file: String, source: String }> = [
-			for (entry in files) if (mentionsAny(entry.source, names)) entry
-		];
+		final mentioning: Array<{ file: String, source: String }> = [for (entry in files) if (mentionsAny(entry.source, names)) entry];
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(mentioning, plugin);
 		return [
 			for (c in candidates)
@@ -453,11 +451,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 					else
 						existing.push(decl);
 				}
-				for (prefix => group in byPrefix) if (group.length >= MIN_GROUP) out.push({
-					prefix: prefix,
-					span: group[0].span,
-					members: group.map(d -> d.name)
-				});
+				for (prefix => group in byPrefix) if (group.length >= MIN_GROUP)
+					out.push({ prefix: prefix, span: group[0].span, members: group.map(d -> d.name) });
 			}
 		}
 		for (i in 0...node.children.length) collectGroups(out, whole, node.children[i], node.children, i, source, containerKinds, cfg);
@@ -560,10 +555,12 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		if (keyword.length == 0 || !isBareWord(keyword)) return null;
 		var after: Int = nameStart + name.length;
 		while (after < limit && SourceText.isSpace(source.fastCodeAt(after))) after++;
-		return after >= source.length || source.charAt(after) != syntax.bodyOpen ? null : {
-			span: new Span(span.from, nameStart + name.length),
-			text: syntax.head.replace(NAME_SLOT, name).replace(UNDER_SLOT, typeName)
-		};
+		return after >= source.length || source.charAt(after) != syntax.bodyOpen
+			? null
+			: {
+				span: new Span(span.from, nameStart + name.length),
+				text: syntax.head.replace(NAME_SLOT, name).replace(UNDER_SLOT, typeName)
+			};
 	}
 
 	/** Where the declaration HEAD ends at the latest: the first child's start, else the container's own end. */

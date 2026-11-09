@@ -106,15 +106,16 @@ final class BranchesTest extends Test {
 			final readings: Map<String, Int> = Branches.run(
 				'r1', [['a'], ['b']],
 				['b', 'a'],
-				names -> names[0] == 'a'
-					? Command.of([
-						'node',
-						'-e',
-						'require("fs").writeFileSync(process.argv[1], process.argv[2])',
-						report(names),
-						left
-					])
-					: Command.of(['node', '-e', 'console.error("boom: it broke"); process.exitCode = 3']),
+				names ->
+					names[0] == 'a'
+						? Command.of([
+							'node',
+							'-e',
+							'require("fs").writeFileSync(process.argv[1], process.argv[2])',
+							report(names),
+							left
+						])
+						: Command.of(['node', '-e', 'console.error("boom: it broke"); process.exitCode = 3']),
 				report, summary
 			);
 			Assert.equals(1, readings['n']);

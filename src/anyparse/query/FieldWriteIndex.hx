@@ -405,10 +405,7 @@ final class FieldWriteIndex {
 			final parsed: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (parsed == null) continue;
 			final tree: QueryNode = parsed;
-			final typed: {
-				sources: Map<Int, String>,
-				params: Map<Int, Array<String>>
-			} = provider == null
+			final typed: { sources: Map<Int, String>, params: Map<Int, Array<String>> } = provider == null
 				? { sources: [], params: [] }
 				: { sources: provider.declaredTypeSources(entry.source), params: provider.typeParamNames(entry.source) };
 			final ctx: ScanCtx = {
@@ -473,11 +470,7 @@ final class FieldWriteIndex {
 		if (c.containerKinds.contains(node.kind)) {
 			final nm: Null<String> = node.name;
 			if (nm != null) {
-				ctx = {
-					name: nm,
-					kind: node.kind,
-					memberFroms: directMemberFroms(node)
-				};
+				ctx = { name: nm, kind: node.kind, memberFroms: directMemberFroms(node) };
 				final sp: Null<Span> = node.span;
 				if (sp != null) mergeTypeParams(c.typeParams, nm, c.headerTypeParams[sp.from] ?? []);
 			}

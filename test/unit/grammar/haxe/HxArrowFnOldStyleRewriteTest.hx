@@ -27,10 +27,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 
 	public function testRewriteSinglePositionalArrow(): Void {
 		// `(Int->Int) -> Int` → `Arrow(Parens(Arrow(Int,Int)), Int)`.
-		final input: HxType = ArrowFn({
-			args: [Positional(Arrow(named('Int'), named('Int')))],
-			ret: named('Int')
-		});
+		final input: HxType = ArrowFn({ args: [Positional(Arrow(named('Int'), named('Int')))], ret: named('Int') });
 		final out: Null<HxType> = HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts());
 		Assert.notNull(out);
 		switch out {
@@ -45,26 +42,17 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 		// `(Int) -> Int` — single Positional but inner is Named, NOT
 		// Arrow. Rewrite must return null (writer keeps default
 		// ArrowFn emission, around-spaced).
-		final input: HxType = ArrowFn({
-			args: [Positional(named('Int'))],
-			ret: named('Int')
-		});
+		final input: HxType = ArrowFn({ args: [Positional(named('Int'))], ret: named('Int') });
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteSingleNamedReturnsNull(): Void {
-		final input: HxType = ArrowFn({
-			args: [NamedParam({ name: 'x', type: named('String') })],
-			ret: named('Void')
-		});
+		final input: HxType = ArrowFn({ args: [NamedParam({ name: 'x', type: named('String') })], ret: named('Void') });
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 
 	public function testRewriteMultiArgReturnsNull(): Void {
-		final input: HxType = ArrowFn({
-			args: [Positional(named('Int')), Positional(named('String'))],
-			ret: named('Bool')
-		});
+		final input: HxType = ArrowFn({ args: [Positional(named('Int')), Positional(named('String'))], ret: named('Bool') });
 		Assert.isNull(HaxeTypeRewrites.arrowFnOldStyleRewrite(input, makeOpts()));
 	}
 

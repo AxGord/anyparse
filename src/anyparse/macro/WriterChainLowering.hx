@@ -505,10 +505,7 @@ final class WriterChainLowering {
 		// forces the break; it drops before an already-hardline next emit
 		// (the chain-segment `.n()` case), so sound seams stay byte-identical.
 		if (!c.isTriviaStar) return dcExpr;
-		final closeTrailRef: Expr = {
-			expr: EConst(CIdent(c.argNames[2])),
-			pos: Context.currentPos()
-		};
+		final closeTrailRef: Expr = { expr: EConst(CIdent(c.argNames[2])), pos: Context.currentPos() };
 		return macro {
 			final _dcResult: anyparse.core.Doc = $dcExpr;
 			final _trailClose: Null<String> = $closeTrailRef;

@@ -40,10 +40,7 @@ class CrossRenameSliceTest extends Test {
 		final expectedA: String = 'class Bar {\n\tpublic function new() {}\n}';
 		final expectedB: String = 'class Use {\n\tvar f:Bar;\n\tfunction g(a:Bar):Bar {\n\t\treturn new Bar();\n\t}\n}';
 		// `class Foo` — `Foo` starts at col 7.
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'a.hx').count);
@@ -63,10 +60,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
 		final b: String = 'class Use {\n\tvar f:Array<{node:Foo}>;\n\tfunction g(p:{cb:Foo -> Void}):Void {}\n}';
 		final expectedB: String = 'class Use {\n\tvar f:Array<{node:Bar}>;\n\tfunction g(p:{cb:Bar -> Void}):Void {}\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(2, changeFor(changes, 'b.hx').count);
@@ -82,10 +76,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
 		final b: String = 'class Use {\n\tfunction g():(Foo:Int) -> Void {\n\t\treturn null;\n\t}\n\n\tvar f:Foo;\n}';
 		final expectedB: String = 'class Use {\n\tfunction g():(Foo:Int) -> Void {\n\t\treturn null;\n\t}\n\n\tvar f:Bar;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'b.hx').count);
@@ -106,10 +97,7 @@ class CrossRenameSliceTest extends Test {
 		final expectedB: String = 'import pkg.Bar;\nclass Use {\n\tvar f:Bar;\n\tfunction g(a:Bar):Bar {\n\t\treturn new Bar();\n\t}\n}';
 		// `final class Foo` — `Foo` starts at col 13 (after
 		// `final class `).
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(2, changes.length);
 		final newA: String = changeFor(changes, 'a.hx').newSource;
 		Assert.equals(expectedA, newA);
@@ -130,10 +118,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {}';
 		final b: String = 'import pkg.Foo;\nclass Use {\n\tvar f:Foo;\n}';
 		final expectedB: String = 'import pkg.Bar;\nclass Use {\n\tvar f:Bar;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals('class Bar {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		// import segment + type position = 2 occurrences in b.hx.
@@ -146,10 +131,7 @@ class CrossRenameSliceTest extends Test {
 	public function testUsingSegmentRename(): Void {
 		final a: String = 'class Foo {}';
 		final b: String = 'using pkg.Foo;\nclass Use {}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals('using pkg.Bar;\nclass Use {}', changeFor(changes, 'b.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'b.hx').count);
 	}
@@ -162,10 +144,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {}';
 		final b: String = 'class Use extends Foo {\n\tvar xs:Array<Foo>;\n}';
 		final expectedB: String = 'class Use extends Bar {\n\tvar xs:Array<Bar>;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(2, changeFor(changes, 'b.hx').count);
 	}
@@ -177,10 +156,9 @@ class CrossRenameSliceTest extends Test {
 	public function testAmbiguousDeclRefused(): Void {
 		final a: String = 'class Foo {}';
 		final dup: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'dup.hx', source: dup }
-		], plugin(), typeRefShape(), refShape());
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			'a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'dup.hx', source: dup }], plugin(), typeRefShape(), refShape()
+		);
 		assertErr('ambiguous, refusing', result);
 	}
 
@@ -204,10 +182,10 @@ class CrossRenameSliceTest extends Test {
 	public function testSkipParseScopeFileRefused(): Void {
 		final a: String = 'class Foo {}';
 		final broken: String = 'class @@@ not valid haxe @@@';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'broken.hx', source: broken }
-		], plugin(), typeRefShape(), refShape());
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			'a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'broken.hx', source: broken }],
+			plugin(), typeRefShape(), refShape()
+		);
 		assertErr('do not parse', result);
 	}
 
@@ -233,10 +211,7 @@ class CrossRenameSliceTest extends Test {
 	public function testEnumDeclKind(): Void {
 		final a: String = 'enum Color {\n\tRed;\n}';
 		final b: String = 'class Use {\n\tvar c:Color;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Hue', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Hue', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals('enum Hue {\n\tRed;\n}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar c:Hue;\n}', changeFor(changes, 'b.hx').newSource);
 	}
@@ -245,10 +220,9 @@ class CrossRenameSliceTest extends Test {
 	public function testInterfaceDeclKind(): Void {
 		final a: String = 'interface Drawable {}';
 		final b: String = 'class Use implements Drawable {}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 11, 'Paintable', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges(
+			'a.hx', a, 1, 11, 'Paintable', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]
+		);
 		Assert.equals('interface Paintable {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use implements Paintable {}', changeFor(changes, 'b.hx').newSource);
 	}
@@ -257,10 +231,7 @@ class CrossRenameSliceTest extends Test {
 	public function testTypedefDeclKind(): Void {
 		final a: String = 'typedef Id = Int;';
 		final b: String = 'class Use {\n\tvar id:Id;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Key', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 9, 'Key', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals('typedef Key = Int;', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar id:Key;\n}', changeFor(changes, 'b.hx').newSource);
 	}
@@ -269,10 +240,7 @@ class CrossRenameSliceTest extends Test {
 	public function testAbstractDeclKind(): Void {
 		final a: String = 'abstract Meters(Int) {}';
 		final b: String = 'class Use {\n\tvar m:Meters;\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Feet', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 10, 'Feet', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals('abstract Feet(Int) {}', changeFor(changes, 'a.hx').newSource);
 		Assert.equals('class Use {\n\tvar m:Feet;\n}', changeFor(changes, 'b.hx').newSource);
 	}
@@ -290,10 +258,7 @@ class CrossRenameSliceTest extends Test {
 		final b: String = 'import pkg.Foo;\nclass C {\n\tfunction m() {\n\t\tFoo.create();\n\t\tvar v = Foo.CONST;\n\t}\n}';
 		final expectedA: String = 'class Bar {\n\tpublic static function create():Bar return null;\n\tpublic static var CONST = 1;\n}';
 		final expectedB: String = 'import pkg.Bar;\nclass C {\n\tfunction m() {\n\t\tBar.create();\n\t\tvar v = Bar.CONST;\n\t}\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
 		// decl name + `:Foo` return type.
@@ -314,10 +279,7 @@ class CrossRenameSliceTest extends Test {
 	public function testShadowingLocalValueNotRenamed(): Void {
 		final a: String = 'class Foo {\n\tpublic static function create():Void {}\n}';
 		final b: String = 'class C {\n\tfunction m() {\n\t\tvar Foo = makeThing();\n\t\tFoo.run();\n\t}\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		// Only the type declaration in a.hx is renamed.
 		Assert.equals(1, changes.length);
 		Assert.equals('class Widget {\n\tpublic static function create():Void {}\n}', changeFor(changes, 'a.hx').newSource);
@@ -335,10 +297,7 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {\n\tpublic static function create():Void {}\n}';
 		final b: String =
 			'class C {\n\tfunction m(e) {\n\t\tvar c = Foo;\n\t\tvar r = switch e {\n\t\t\tcase Foo: 1;\n\t\t\tcase _: 0;\n\t\t};\n\t}\n}';
-		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
-			{ file: 'a.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [{ file: 'a.hx', source: a }, { file: 'b.hx', source: b }]);
 		// Only the type declaration in a.hx is renamed.
 		Assert.equals(1, changes.length);
 		Assert.equals('class Widget {\n\tpublic static function create():Void {}\n}', changeFor(changes, 'a.hx').newSource);
@@ -358,10 +317,9 @@ class CrossRenameSliceTest extends Test {
 		final b: String = 'package zone;\n\nclass Z {\n\tvar near:pkg.Boxes.Rim = new pkg.Boxes.Rim();\n\tvar far:ext.Other.Rim = null;\n}';
 		final expectedB: String =
 			'package zone;\n\nclass Z {\n\tvar near:pkg.Boxes.Edge = new pkg.Boxes.Edge();\n\tvar far:ext.Other.Rim = null;\n}';
-		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 7, 7, 'Edge', [
-			{ file: 'pkg/Boxes.hx', source: a },
-			{ file: 'zone/Z.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges(
+			'pkg/Boxes.hx', a, 7, 7, 'Edge', [{ file: 'pkg/Boxes.hx', source: a }, { file: 'zone/Z.hx', source: b }]
+		);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'zone/Z.hx').newSource);
 		Assert.equals(2, changeFor(changes, 'zone/Z.hx').count);
@@ -400,10 +358,9 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}';
 		final b: String = 'import pkg.Boxes;\n\nclass Z {\n\tvar b:pkg.Boxes = new pkg.Boxes();\n}';
 		final expectedB: String = 'import pkg.Crates;\n\nclass Z {\n\tvar b:pkg.Crates = new pkg.Crates();\n}';
-		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 3, 7, 'Crates', [
-			{ file: 'pkg/Boxes.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges(
+			'pkg/Boxes.hx', a, 3, 7, 'Crates', [{ file: 'pkg/Boxes.hx', source: a }, { file: 'b.hx', source: b }]
+		);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(3, changeFor(changes, 'b.hx').count);
@@ -421,10 +378,9 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'package pkg;\n\nclass Boxes {\n\tpublic static final M:Int = 5;\n}';
 		final b: String = 'class Z {\n\tvar n:Int = pkg.Boxes.M + other.Boxes.M;\n}';
 		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Crates.M + other.Boxes.M;\n}';
-		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 3, 7, 'Crates', [
-			{ file: 'pkg/Boxes.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges(
+			'pkg/Boxes.hx', a, 3, 7, 'Crates', [{ file: 'pkg/Boxes.hx', source: a }, { file: 'b.hx', source: b }]
+		);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 		Assert.equals(1, changeFor(changes, 'b.hx').count);
@@ -440,10 +396,9 @@ class CrossRenameSliceTest extends Test {
 			'package pkg;\n\nclass Boxes {\n\tpublic function new() {}\n}\n\nclass Rim {\n\tpublic static final K:Int = 1;\n}';
 		final b: String = 'class Z {\n\tvar n:Int = pkg.Boxes.Rim.K;\n}';
 		final expectedB: String = 'class Z {\n\tvar n:Int = pkg.Boxes.Edge.K;\n}';
-		final changes: Array<FileChange> = okChanges('pkg/Boxes.hx', a, 7, 7, 'Edge', [
-			{ file: 'pkg/Boxes.hx', source: a },
-			{ file: 'b.hx', source: b }
-		]);
+		final changes: Array<FileChange> = okChanges(
+			'pkg/Boxes.hx', a, 7, 7, 'Edge', [{ file: 'pkg/Boxes.hx', source: a }, { file: 'b.hx', source: b }]
+		);
 		Assert.equals(2, changes.length);
 		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
 	}

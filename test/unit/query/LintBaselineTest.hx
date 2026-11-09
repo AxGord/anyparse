@@ -125,7 +125,8 @@ class LintBaselineTest extends Test {
 		final live: Violation = withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f');
 		Assert.equals(0, delta([live], before).length);
 		Assert.equals(
-			1, delta([
+			1,
+			delta([
 				live,
 				withData(violation('src/A.hx', Severity.Warning, 'thread-safety', message), 'S.f')
 			], before).length

@@ -206,9 +206,9 @@ final class MutationSlot {
 	 * whose union is that run; null when `filter` is not a plain class list.
 	 */
 	public static function fallbackTokens(filter: String, slices: Int): Null<Array<String>> {
-		return filter == '' || filter == 'ALL' || filter.indexOf('#') >= 0 || filter.indexOf('test:') >= 0 ? null : [
-			for (i in 0...slices) filter.split(',').map(cls -> '$cls#$i/$slices').join(',')
-		];
+		return filter == '' || filter == 'ALL' || filter.indexOf('#') >= 0 || filter.indexOf('test:') >= 0
+			? null
+			: [for (i in 0...slices) filter.split(',').map(cls -> '$cls#$i/$slices').join(',')];
 	}
 
 	/** The transcripts `logs` — the slices of one run when there are several — classified against `expected`. */

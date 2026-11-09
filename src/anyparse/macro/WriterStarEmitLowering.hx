@@ -110,10 +110,7 @@ final class WriterStarEmitLowering {
 			branch.fmtHasFlag('forceMultiInTypedef') ? macro _clearNestedType(opt) : macro opt
 		];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, elemCallArgs),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, elemCallArgs), pos: Context.currentPos() };
 
 		final argsAccess: Expr = macro $i{argNames[0]};
 		final parts: Array<Expr> = [];
@@ -194,10 +191,7 @@ final class WriterStarEmitLowering {
 				? (macro $fieldAccess != null && $fieldAccess.length > 0)
 				: null;
 			final thisTransparent: Expr = macro $fieldAccess == null || $fieldAccess.length == 0;
-			return {
-				prevAnyStarNonEmpty: null,
-				prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent)
-			};
+			return { prevAnyStarNonEmpty: null, prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent) };
 		}
 		// ω-member-meta: inter-Star separator — a non-first bare-tryparse Star
 		// following another that may have emitted content gets a leading
@@ -552,11 +546,8 @@ final class WriterStarEmitLowering {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 			final suppressAdditionalExpr: Expr = bodyAware;
 			final wrapListCall: Expr = macro anyparse.format.wrap.WrapList.emit(
-				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr, {
-					appendTrailingComma: $tcExpr,
-					suppressAdditionalIndent: $suppressAdditionalExpr,
-					groupRestProbe: $groupRestProbeExpr
-				}
+				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr,
+				{ appendTrailingComma: $tcExpr, suppressAdditionalIndent: $suppressAdditionalExpr, groupRestProbe: $groupRestProbeExpr }
 			);
 			// `@:fmt(elemChainOp('<op>'))`: the Star's elements may be chains of `<op>`, which then count as gaps of the list
 			// itself (`ElemChainEmit`, null when the list layout stands).
@@ -746,17 +737,11 @@ final class WriterStarEmitLowering {
 			final firstBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 			final firstBareBranch: Expr = blockShapeAware ? bareSep : (macro _dhl());
 			final firstShapeCases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, optFlag, firstBlockBranch, firstBareBranch);
-			final firstSepShape: Expr = {
-				expr: ESwitch(prevBareRefBody.access, firstShapeCases, null),
-				pos: Context.currentPos()
-			};
+			final firstSepShape: Expr = { expr: ESwitch(prevBareRefBody.access, firstShapeCases, null), pos: Context.currentPos() };
 			final subsequentSepExpr: Expr = if (elemBodyField == null) {
 				sepExpr;
 			} else {
-				final prevElemBodyAccess: Expr = {
-					expr: EField(macro _arr[_si - 1], elemBodyField),
-					pos: Context.currentPos()
-				};
+				final prevElemBodyAccess: Expr = { expr: EField(macro _arr[_si - 1], elemBodyField), pos: Context.currentPos() };
 				final subBlockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 				final subBareBranch: Expr = blockShapeAware ? bareSep : (macro _dhl());
 				final cases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, optFlag, subBlockBranch, subBareBranch);
@@ -906,11 +891,7 @@ final class WriterStarEmitLowering {
 			final sepWithBeforeKwTrailingExpr: Expr = beforeKwSeparator(
 				ctx.fieldSep, useTriviaGap, fieldName, child, prevBodyField, typePath, prevPadTrailing
 			);
-			final kwOptParts: Array<Expr> = [
-				sepWithBeforeKwTrailingExpr,
-				macro _dt($v{kwLead}),
-				innerExpr
-			];
+			final kwOptParts: Array<Expr> = [sepWithBeforeKwTrailingExpr, macro _dt($v{kwLead}), innerExpr];
 			final kwOptBody: Expr = dcCall(kwOptParts);
 			parts.push(macro {
 				final _optVal = $fieldAccess;
@@ -1031,10 +1012,7 @@ final class WriterStarEmitLowering {
 		final fieldName: Null<String> = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
 		final collectsTrivia: Bool = child.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		if (fieldName == null || !ctx.ctx.trivia || !ctx.isTriviaBearing(typePath) || !collectsTrivia) return null;
-		final access: Expr = {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final access: Expr = { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos() };
 		return macro {
 			final _tlc: Array<String> = $access;
 			_tlc.length > 0 && StringTools.startsWith(_tlc[_tlc.length - 1], '//');
@@ -1500,10 +1478,7 @@ final class WriterStarEmitLowering {
 	 * the orphan comments the loop scanned before the close literal, so no captured comment is left unwritten.
 	 */
 	private static function inlineTriviaElemCall(elemFn: String, fieldName: String, movedPastTrail: Expr): Expr {
-		final writeCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _te.node, macro opt]),
-			pos: Context.currentPos()
-		};
+		final writeCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _te.node, macro opt]), pos: Context.currentPos() };
 		final orphanAccess: Expr = {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
 			pos: Context.currentPos()

@@ -126,10 +126,7 @@ final class AddParam {
 		if (insertOffset < 0) return Err('could not locate the parameter list of the function at $line:$col');
 
 		final insertText: String = params.length > 0 ? ', $trimmed' : trimmed;
-		final edit: { span: Span, text: String } = {
-			span: new Span(insertOffset, insertOffset),
-			text: insertText
-		};
+		final edit: { span: Span, text: String } = { span: new Span(insertOffset, insertOffset), text: insertText };
 
 		return switch SignatureEdit.commit(source, [edit], plugin, optsJson, 'adding "$newName" is a no-op') {
 			case Left(message): Err(message);

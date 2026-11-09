@@ -136,15 +136,11 @@ class SpaceFlagTest extends Test {
 		]);
 		FileSystem.createDirectory('$dir/g');
 		for (file in grammarFiles(field, policy, tightColon)) File.saveContent('$dir/g/${file.name}', file.source);
-		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
-			'-cp',
-			'${Sys.getCwd()}/src',
-			'-cp',
-			dir,
-			'--main',
-			'Main',
-			'--interp'
-		], cast { encoding: 'utf8' });
+		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			'haxe',
+			['-cp', '${Sys.getCwd()}/src', '-cp', dir, '--main', 'Main', '--interp'],
+			cast { encoding: 'utf8' }
+		);
 		CliFixture.removeDir(dir);
 		return run.status == 0 ? '${run.stdout}' : '${run.stderr}';
 	}
@@ -157,10 +153,7 @@ class SpaceFlagTest extends Test {
 		final format: String = TriviaTypeSynthTest.FORMAT.replace(defaults, knobbed);
 		return [
 			{ name: 'Atom.hx', source: '$pkg@:re(\'[a-z]+\') @:rawString abstract Atom(String) from String to String {}\n' },
-			{
-				name: 'Pair.hx',
-				source: '$pkg@:peg @:schema(g.Format) @:ws typedef Pair = { var key: Atom; $field }\n'
-			},
+			{ name: 'Pair.hx', source: '$pkg@:peg @:schema(g.Format) @:ws typedef Pair = { var key: Atom; $field }\n' },
 			{ name: 'Opts.hx', source: '${pkg}typedef Opts = anyparse.format.WriteOptions & { gap: anyparse.format.WhitespacePolicy };\n' },
 			{ name: 'W.hx', source: '$pkg@:build(anyparse.macro.Build.buildWriter(g.Pair, g.Opts)) class W {}\n' },
 			{

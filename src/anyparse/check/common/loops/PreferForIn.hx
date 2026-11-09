@@ -371,10 +371,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		if (CheckScan.hasCommentMarker(ctx.source, declSpan.to, loopSpan.from)) return null;
 		if (occurrences(scope, iterator, s) != PROTOCOL_OCCURRENCES) return null;
 		final iterable: String = ctx.source.substring(initSpan.from, initSpan.to).rtrim();
-		return SourceComments.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1)) ? null : {
-			span: new Span(declSpan.from, loopSpan.to),
-			text: 'for ($binder in $iterable) $interior'
-		};
+		return SourceComments.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1))
+			? null
+			: { span: new Span(declSpan.from, loopSpan.to), text: 'for ($binder in $iterable) $interior' };
 	}
 
 	/**

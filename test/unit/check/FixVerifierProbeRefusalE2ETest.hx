@@ -118,10 +118,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 	 * The body deletion of `TABLE` WITHOUT its lead, beside the benign rewrite: the writer refuses
 	 * the whole set, and the rewrite alone is writable and builds.
 	 */
-	private static final HALF_WRITABLE: Array<FakeEdit> = [
-		{ find: 'trace("in");', text: '' },
-		{ find: '"aaa"', text: '"AAA"' }
-	];
+	private static final HALF_WRITABLE: Array<FakeEdit> = [{ find: 'trace("in");', text: '' }, { find: '"aaa"', text: '"AAA"' }];
 
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
@@ -143,12 +140,10 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		// The subset the bisect ACTUALLY probes first is the body deletion beside the poison,
 		// not the body deletion alone — assert that one too, so the guard is not one step
 		// removed from the thing it guards.
-		final withPoison: Array<{ span: Span, text: String }> = slotOnly.concat([
-			{
-				span: new Span(poison, poison + '"ccc"'.length),
-				text: 'NoSuchType.value'
-			}
-		]);
+		final withPoison: Array<{ span: Span, text: String }> = slotOnly.concat([{
+			span: new Span(poison, poison + '"ccc"'.length),
+			text: 'NoSuchType.value'
+		}]);
 		Assert.isTrue(
 			CanonicalEdit.canonicalize(MAIN, slotOnly, false, plugin, null).match(Err(_)),
 			'deleting the body of a brace-less `if` alone must be refused — that refusal IS the arm under test'
@@ -191,10 +186,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifrefusal', [
-			{ name: 'Main.hx', source: MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifrefusal', [{ name: 'Main.hx', source: MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
@@ -237,10 +231,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifrefusal', [
-			{ name: 'Main.hx', source: MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifrefusal', [{ name: 'Main.hx', source: MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final before: Int = CompilerOracle.invocations;
 		final result: FixVerifyResult = FixVerifier.verify(
@@ -286,10 +279,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifrefusal', [
-			{ name: 'Main.hx', source: MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifrefusal', [{ name: 'Main.hx', source: MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
@@ -345,10 +337,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifrefusal', [
-			{ name: 'Main.hx', source: WIDE_MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifrefusal', [{ name: 'Main.hx', source: WIDE_MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: WIDE_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,
@@ -390,10 +381,9 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final dir: String = CliFixture.writeDir('fixverifrefusal', [
-			{ name: 'Main.hx', source: MAIN },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'fixverifrefusal', [{ name: 'Main.hx', source: MAIN }, { name: 'check.hxml', source: HXML }]
+		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files,

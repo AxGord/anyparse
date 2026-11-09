@@ -218,10 +218,9 @@ class OperatorOverloadGateTest extends Test {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final at: Int = use.indexOf(needle);
 		Assert.isTrue(at >= 0, 'the fixture holds $needle');
-		final found: Array<Violation> = CheckFixture.violationsIn(check, [
-			{ file: 'Decl.hx', source: decl },
-			{ file: 'Use.hx', source: use }
-		], plugin);
+		final found: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'Decl.hx', source: decl }, { file: 'Use.hx', source: use }], plugin
+		);
 		return found.exists(v -> {
 			final span: Null<Span> = v.span;
 			return v.file == 'Use.hx'
@@ -234,10 +233,10 @@ class OperatorOverloadGateTest extends Test {
 
 	/** The one `prefer-ternary-return` edit over `NEGATED_VALUE_USE`'s guard pair, with `decl` in the same run. */
 	private function ternaryReturnFix(decl: String): String {
-		final run: FixRun = CheckFixture.fixRun(new PreferTernaryReturn(), [
-			{ file: 'Use.hx', source: NEGATED_VALUE_USE },
-			{ file: 'Decl.hx', source: decl }
-		], 'Use.hx', new HaxeQueryPlugin());
+		final run: FixRun = CheckFixture.fixRun(
+			new PreferTernaryReturn(), [{ file: 'Use.hx', source: NEGATED_VALUE_USE }, { file: 'Decl.hx', source: decl }],
+			'Use.hx', new HaxeQueryPlugin()
+		);
 		Assert.equals(1, run.edits.length);
 		return run.edits.length == 0 ? '' : run.edits[0].text;
 	}
@@ -247,10 +246,10 @@ class OperatorOverloadGateTest extends Test {
 		final at: Int = DEFAULT_FIRST_USE.indexOf(needle);
 		Assert.isTrue(at >= 0, 'the fixture holds $needle');
 		final config: LintConfig = LintConfig.parse(InvertNegatedIfElseCheckTest.lastConfig());
-		final found: Array<Violation> = CheckFixture.violationsIn(new InvertNegatedIfElse(), [
-			{ file: 'Decl.hx', source: decl },
-			{ file: 'Use.hx', source: DEFAULT_FIRST_USE }
-		], new HaxeQueryPlugin(), _ -> config);
+		final found: Array<Violation> = CheckFixture.violationsIn(
+			new InvertNegatedIfElse(), [{ file: 'Decl.hx', source: decl }, { file: 'Use.hx', source: DEFAULT_FIRST_USE }],
+			new HaxeQueryPlugin(), _ -> config
+		);
 		return found.exists(v -> {
 			final span: Null<Span> = v.span;
 			return v.file == 'Use.hx' && span != null && span.from <= at && at < span.to;

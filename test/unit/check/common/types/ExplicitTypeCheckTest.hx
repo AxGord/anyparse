@@ -676,12 +676,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * (default: the shared `I` interface) — the resolving path `lint --fix` takes.
 	 */
 	private function scopedFix(impl: String, ?decls: Array<{ file: String, source: String }>): String {
-		final files: Array<{ file: String, source: String }> = [{ file: 'Impl.hx', source: impl }].concat(decls ?? [
-			{
-				file: 'I.hx',
-				source: IFACE
-			}
-		]);
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'Impl.hx',
+			source: impl
+		}].concat(decls ?? [{ file: 'I.hx', source: IFACE }]);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'Impl.hx');

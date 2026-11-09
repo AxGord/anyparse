@@ -512,10 +512,7 @@ class PreferSwitchCheckTest extends Test {
 		final modes: String = 'enum abstract Mode(Int) {\n\tvar LINES = 1;\n\tvar POINTS = 2;\n}';
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = entries(src, modes);
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: files, projectRoots: [], library: new LibrarySources([]) }
-		});
+		plugin.setResolutionScope({ declared: true, sources: () -> {report: files, projectRoots: [], library: new LibrarySources([]) } });
 		final check: PreferSwitch = new PreferSwitch();
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin).filter(v -> v.file == 'C.hx');
 		Assert.equals(1, own.length);

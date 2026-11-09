@@ -440,10 +440,9 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 				: null;
 		}
 		final call: Null<MethodCall> = methodCallParts(cond, s);
-		return call != null && call.method == CONTAINS_METHOD && NodeShape.hasOneArgCallShape(cond) ? {
-			receiver: call.recv,
-			search: cond.children[1]
-		} : null;
+		return call != null && call.method == CONTAINS_METHOD && NodeShape.hasOneArgCallShape(cond)
+			? { receiver: call.recv, search: cond.children[1] }
+			: null;
 	}
 
 	/**

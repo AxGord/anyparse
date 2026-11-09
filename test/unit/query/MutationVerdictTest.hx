@@ -25,37 +25,30 @@ using StringTools;
 class MutationVerdictTest extends Test {
 
 	public function testGreenRunSurvives(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(0, 0, 0, true, [
-			'unit.SampleTest',
-			'  testOne: OK ..'
-		]), '');
+		final verdict: MutationVerdictResult = classify(transcript(0, 0, 0, true, ['unit.SampleTest', '  testOne: OK ..']), '');
 		Assert.equals('SURVIVED', label(verdict));
 		Assert.equals('0 tests failed / 12 assertions', verdict.detail);
 	}
 
 	public function testRedRunWithNoExpectationsIsKilled(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testOne: OK ..',
-			'  testTwo: FAILURE expected 1 but was 2'
-		]), '');
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testOne: OK ..', '  testTwo: FAILURE expected 1 but was 2']), ''
+		);
 		Assert.equals('KILLED', label(verdict));
 		Assert.equals('1 tests failed / 12 assertions: unit.SampleTest.testTwo', verdict.detail);
 	}
 
 	public function testMatchedExpectationIsKilled(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testTwo: FAILURE expected 1 but was 2'
-		]), 'SampleTest.testTwo');
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2']), 'SampleTest.testTwo'
+		);
 		Assert.equals('KILLED', label(verdict));
 	}
 
 	public function testUnmatchedExpectationIsMismatch(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testTwo: FAILURE expected 1 but was 2'
-		]), 'SampleTest.testNeverRan');
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2']), 'SampleTest.testNeverRan'
+		);
 		Assert.equals('MISMATCH', label(verdict));
 		Assert.stringContains('missing: SampleTest.testNeverRan', verdict.detail);
 	}
@@ -83,21 +76,18 @@ class MutationVerdictTest extends Test {
 	 * exists never to get wrong.
 	 */
 	public function testWarningOnlyRunIsRedNotSurvived(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(0, 0, 1, false, [
-			'unit.SampleTest',
-			'  testOne: WARNING no assertions'
-		]), '');
+		final verdict: MutationVerdictResult = classify(
+			transcript(0, 0, 1, false, ['unit.SampleTest', '  testOne: WARNING no assertions']), ''
+		);
 		Assert.equals('KILLED', label(verdict));
 		Assert.stringContains('unit.SampleTest.testOne', verdict.detail);
 	}
 
 	/** A typo'd filter must be loud; silently it would read as a finding. */
 	public function testNoTestsExecutedIsItsOwnVerdict(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(0, 0, 1, false, [
-			'unit.SampleTest',
-			'  testOne: WARNING',
-			'    line: 0, No tests executed.'
-		]), '');
+		final verdict: MutationVerdictResult = classify(
+			transcript(0, 0, 1, false, ['unit.SampleTest', '  testOne: WARNING', '    line: 0, No tests executed.']), ''
+		);
 		Assert.equals('NO-TESTS', label(verdict));
 	}
 
@@ -108,14 +98,10 @@ class MutationVerdictTest extends Test {
 	 * a red run as SURVIVED.
 	 */
 	public function testResultsLinePrintedByATestDoesNotSpoofTheVerdict(): Void {
-		final chatter: Array<String> = [
-			'results: ALL TESTS OK (success: true)',
-			'assertations: 999'
-		];
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testTwo: FAILURE expected 1 but was 2'
-		], chatter), '');
+		final chatter: Array<String> = ['results: ALL TESTS OK (success: true)', 'assertations: 999'];
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2'], chatter), ''
+		);
 		Assert.equals('KILLED', label(verdict));
 		Assert.stringContains('/ 12 assertions', verdict.detail, 'the count comes from the real header, not the chatter');
 	}
@@ -134,10 +120,9 @@ class MutationVerdictTest extends Test {
 
 	/** Expectations are trimmed and blanks dropped, as the manifest allows. */
 	public function testBlankExpectationEntriesAreIgnored(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testTwo: FAILURE expected 1 but was 2'
-		]), ' SampleTest.testTwo , ');
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2']), ' SampleTest.testTwo , '
+		);
 		Assert.equals('KILLED', label(verdict));
 		Assert.isFalse(verdict.detail.indexOf('+extra') >= 0, 'a blank entry must not become an unmatched failure');
 	}
@@ -148,10 +133,9 @@ class MutationVerdictTest extends Test {
 	 * and one reading a third only has to check it is non-empty.
 	 */
 	public function testFullIsAbsentWhenNothingWasCapped(): Void {
-		final verdict: MutationVerdictResult = classify(transcript(1, 0, 0, false, [
-			'unit.SampleTest',
-			'  testTwo: FAILURE expected 1 but was 2'
-		]), '');
+		final verdict: MutationVerdictResult = classify(
+			transcript(1, 0, 0, false, ['unit.SampleTest', '  testTwo: FAILURE expected 1 but was 2']), ''
+		);
 		Assert.isNull(verdict.full);
 	}
 
@@ -187,9 +171,10 @@ class MutationVerdictTest extends Test {
 		// utest's own shape for a slice no test fell into: one red row
 		final none: String = transcript(1, 0, 0, false, ['  : FAILURE F', '    line: 1, No tests executed.']);
 		inline function merged(raws: Array<String>, expectCsv: String): MutationVerdictResult {
-			return MutationVerdict.classify(MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)), [
-				for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
-			]);
+			return MutationVerdict.classify(
+				MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)),
+				[for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()]
+			);
 		}
 		final survived: MutationVerdictResult = merged([green, none, green], 'unit.SampleTest.testTwo');
 		Assert.equals('SURVIVED', label(survived));
@@ -201,9 +186,7 @@ class MutationVerdictTest extends Test {
 	}
 
 	private function classify(raw: String, expectCsv: String): MutationVerdictResult {
-		final expected: Array<String> = [
-			for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()
-		];
+		final expected: Array<String> = [for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()];
 		return MutationVerdict.classify(TestTranscript.parseTestSummary(raw), expected);
 	}
 

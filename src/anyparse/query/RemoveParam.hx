@@ -94,11 +94,7 @@ final class RemoveParam {
 
 		// The completeness proof and slot-removal edits are the shared core
 		// `paramSlotEdits`, reused by the `unused-parameter` lint autofix.
-		final result: {
-			edits: Array<{ span: Span, text: String }>,
-			error: Null<String>,
-			callSites: Int
-		} = paramSlotEdits(
+		final result: { edits: Array<{ span: Span, text: String }>, error: Null<String>, callSites: Int } = paramSlotEdits(
 			source, fn.tree, fn.decl, index, name, fn.binding, shape, SignatureEdit.receiversOf(file, source, plugin, shape, fn.binding)
 		);
 		final error: Null<String> = result.error;

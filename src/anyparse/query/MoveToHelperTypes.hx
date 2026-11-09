@@ -86,10 +86,8 @@ final class MoveToHelperTypes {
 		for (cut in sourceCuts(prep.srcSource, types.map(t -> t.cut))) ScopeFiles.editsFor(editsByFile, prep.srcFile).push(cut);
 		var end: Int = prep.destSource.length;
 		while (end > 0 && SourceText.isSpace(prep.destSource.fastCodeAt(end - 1))) end--;
-		ScopeFiles.editsFor(editsByFile, prep.destFile).push({
-			span: new Span(end, prep.destSource.length),
-			text: '\n\n${types.map(t -> t.text).join('\n\n')}\n'
-		});
+		ScopeFiles.editsFor(editsByFile, prep.destFile)
+			.push({ span: new Span(end, prep.destSource.length), text: '\n\n${types.map(t -> t.text).join('\n\n')}\n' });
 		advisory.push(
 			'moved the private type(s) '
 			+ types.map(t -> '"${t.name}"').join(', ')

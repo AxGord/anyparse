@@ -153,10 +153,7 @@ class PreferArrowCallbackCheckTest extends Test {
 	/** A typedef parameter type hops to its function-type alias (indexed, cross-file). */
 	public function testTypedefHopResolvedFixed(): Void {
 		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'TU.hx',
-				source: 'typedef Cb = Void->Void;\n\nclass TU {\n\tpublic static function go2(cb:Cb):Void {}\n}'
-			},
+			{ file: 'TU.hx', source: 'typedef Cb = Void->Void;\n\nclass TU {\n\tpublic static function go2(cb:Cb):Void {}\n}' },
 			{
 				file: 'UseTd.hx',
 				source: 'class UseTd {\n\tfunction m():Void {\n\t\tTU.go2(function() { fire(); });\n\t}\n\tfunction fire():Void {}\n}'
@@ -168,10 +165,7 @@ class PreferArrowCallbackCheckTest extends Test {
 	/** A declaration fully wrapped in an `#if` region (openfl-style) still yields its member signature. */
 	public function testConditionalWrappedDeclResolvedFixed(): Void {
 		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'Disp2.hx',
-				source: '#if !flash\nclass Disp2 {\n\tpublic function on(f:Int->Void):Void {}\n}\n#end'
-			},
+			{ file: 'Disp2.hx', source: '#if !flash\nclass Disp2 {\n\tpublic function on(f:Int->Void):Void {}\n}\n#end' },
 			{
 				file: 'UseC2.hx',
 				source: 'class UseC2 {\n\tvar d:Disp2;\n\tfunction m():Void {\n\t\td.on(function(i) { go(i); });\n\t}\n'
@@ -429,10 +423,7 @@ class PreferArrowCallbackCheckTest extends Test {
 	private function genericCtorFixture(stmt: String): Array<{ file: String, source: String }> {
 		return [
 			{ file: 'TookG.hx', source: 'class TookG<T> {\n\tpublic function new(cb:Void->Void) {}\n}' },
-			{
-				file: 'UseGN.hx',
-				source: 'class UseGN {\n\tfunction m():Void {\n\t\t$stmt\n\t}\n\tfunction go():Void {}\n}'
-			}
+			{ file: 'UseGN.hx', source: 'class UseGN {\n\tfunction m():Void {\n\t\t$stmt\n\t}\n\tfunction go():Void {}\n}' }
 		];
 	}
 

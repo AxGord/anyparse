@@ -167,10 +167,7 @@ class TransformLowering {
 		}
 
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-		final pattern: Expr = {
-			expr: ECall(ctorRef, [for (name in argNames) macro $i{name}]),
-			pos: Context.currentPos()
-		};
+		final pattern: Expr = { expr: ECall(ctorRef, [for (name in argNames) macro $i{name}]), pos: Context.currentPos() };
 		final rebuiltArgs: Array<Expr> = [
 			for (i in 0...branch.children.length) rebuildExpr(branch.children[i], macro $i{argNames[i]})
 		];

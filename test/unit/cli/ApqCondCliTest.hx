@@ -188,11 +188,10 @@ class ApqCondCliTest extends Test {
 		final f: String = CliFixture.write(
 			'cond_compound', 'class C {\n\tfunction f():Void {\n\t\t#if (sys || nodejs)\n\t\ta();\n\t\t#end\n\t}\n}'
 		);
-		Assert.same([
-			'$f:',
-			'  3:3: #if (sys || nodejs) [live]',
-			'      a();'
-		], lines(CliFixture.captureStdout(() -> Cli.run(['cond', 'nodejs', f]))));
+		Assert.same(
+			['$f:', '  3:3: #if (sys || nodejs) [live]', '      a();'],
+			lines(CliFixture.captureStdout(() -> Cli.run(['cond', 'nodejs', f])))
+		);
 		var text: Int = -1;
 		CliFixture.captureStderr(() -> text = Cli.run(['lit', '#if nodejs', f, '--include-directives', '--exact', '--exit-on-empty']));
 		Assert.equals(1, text, 'the text route does not see this site at all');
@@ -220,11 +219,7 @@ class ApqCondCliTest extends Test {
 			'', CliFixture.captureStderr(() -> printed = lines(CliFixture.captureStdout(() -> Cli.run(['cond', 'nodejs', f])))),
 			'the parse failure is still reported'
 		);
-		Assert.same([
-			'$f:',
-			'  2:2: #if nodejs [live, no parse]',
-			'      var x:Int = 0'
-		], printed);
+		Assert.same(['$f:', '  2:2: #if nodejs [live, no parse]', '      var x:Int = 0'], printed);
 		FileSystem.deleteFile(f);
 		#else
 		Assert.pass('non-sys target');

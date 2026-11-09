@@ -181,14 +181,8 @@ class SwallowedExceptionCheckTest extends Test {
 
 	/** A bare body that uses the variable, returns, throws or jumps handles the exception. */
 	public function testBareCatchBodyHandledNotFlagged(): Void {
-		for (body in [
-			'log(e)',
-			'return false',
-			'return',
-			'throw new Foo()',
-			'continue',
-			'break'
-		]) Assert.equals(0, violations('class C { function f() { for (x in xs) { try g(x) catch (e:Exception) $body; } } }').length, body);
+		for (body in ['log(e)', 'return false', 'return', 'throw new Foo()', 'continue', 'break'])
+			Assert.equals(0, violations('class C { function f() { for (x in xs) { try g(x) catch (e:Exception) $body; } } }').length, body);
 	}
 
 	/** A bare body that only yields a value is the recovery value of the try, in a `case` body as well as after the try. */

@@ -49,10 +49,7 @@ class AmbientImportSubtypeShieldTest extends Test {
 		{ name: 'a/T.hx', source: utilityClass('a', 'T') },
 		{ name: 'lib/U.hx', source: utilityClass('lib', 'U') },
 		{ name: 'other/U.hx', source: utilityClass('other', 'U') },
-		{
-			name: 'lib/Sub.hx',
-			source: 'package lib;\n\nclass Sub extends U {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n'
-		}
+		{ name: 'lib/Sub.hx', source: 'package lib;\n\nclass Sub extends U {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n}\n' }
 	];
 
 	@:pin('control')

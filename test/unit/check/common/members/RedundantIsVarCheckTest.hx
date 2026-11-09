@@ -185,7 +185,8 @@ import anyparse.query.cli.command.LintArgs;
 			'class C extends Missing {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n}';
 		Assert.equals(0, violations(sub).length);
 		Assert.equals(
-			1, violationsOf([
+			1,
+			violationsOf([
 				{ file: 'C.hx', source: sub },
 				{ file: 'Missing.hx', source: 'class Missing {}' }
 			]).length
@@ -250,10 +251,9 @@ import anyparse.query.cli.command.LintArgs;
 		report: Array<{ file: String, source: String }>, reach: Array<{ file: String, source: String }>
 	): GrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach) } }
+		);
 		return plugin;
 	}
 

@@ -37,10 +37,13 @@ class SafeDeleteSliceTest extends Test {
 		final svc: String = 'package pkg;\n\nclass Svc {\n\tpublic function new() {}\n\tpublic function used():Int return 1;\n}';
 		final client: String =
 			'package pkg;\n\nclass Client {\n\tpublic function new() {}\n\tpublic function go(s:Svc):Int return s.used();\n}';
-		assertReferencedFrom('pkg/Client.hx', SafeDelete.safeDelete('pkg/Svc.hx', 'Svc', 'used', false, [
-			{ file: 'pkg/Svc.hx', source: svc },
-			{ file: 'pkg/Client.hx', source: client }
-		], plugin(), refShape()));
+		assertReferencedFrom(
+			'pkg/Client.hx',
+			SafeDelete.safeDelete(
+				'pkg/Svc.hx', 'Svc', 'used', false, [{ file: 'pkg/Svc.hx', source: svc }, { file: 'pkg/Client.hx', source: client }],
+				plugin(), refShape()
+			)
+		);
 	}
 
 	/**

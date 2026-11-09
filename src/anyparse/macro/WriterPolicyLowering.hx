@@ -525,10 +525,12 @@ final class WriterPolicyLowering {
 		// The operand's LEFTMOST token decides, not its root: `cast (x) is Bool` is
 		// `CastExpr(Is(ParenExpr(x), Bool))` and still writes `cast(x) is Bool`. Every operator
 		// branch renders its first child first, so the walk descends through those alone.
-		final descend: Expr = leftOperandCtors.length == 0 ? macro false : {
-			expr: ESwitch(macro _c, [{ values: [for (n in leftOperandCtors) macro $v{n}], expr: macro true }], macro false),
-			pos: Context.currentPos()
-		};
+		final descend: Expr = leftOperandCtors.length == 0
+			? macro false
+			: {
+				expr: ESwitch(macro _c, [{ values: [for (n in leftOperandCtors) macro $v{n}], expr: macro true }], macro false),
+				pos: Context.currentPos()
+			};
 		return macro {
 			var _op: EnumValue = $operandAccess;
 			var _c: String = Type.enumConstructor(_op);

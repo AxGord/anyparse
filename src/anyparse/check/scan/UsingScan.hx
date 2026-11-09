@@ -287,10 +287,9 @@ final class UsingScan {
 			if (inner != null) return { span: new Span(inner.to, inner.to), text: '\nusing $module;' };
 		}
 		final at: Null<Span> = lastAnchor(header.root);
-		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
-			span: new Span(at.to, at.to),
-			text: '\nusing $module;'
-		};
+		return at == null
+			? { span: new Span(0, 0), text: 'using $module;\n\n' }
+			: { span: new Span(at.to, at.to), text: '\nusing $module;' };
 	}
 
 	/**

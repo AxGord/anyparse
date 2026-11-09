@@ -213,10 +213,9 @@ final class MoveGuardedImportCarryTest extends Test {
 			{ file: 'b/Host.hx', source: 'package b;\n' }
 		]);
 		Assert.isTrue(sourceOf(inScope, 'b/Host.hx').contains('import c.Mod;'), 'a module in scope is carried');
-		final outOfScope: Array<MoveChange> = okChanges('a/Src.hx', 5, 7, 'b/Host.hx', [
-			{ file: 'a/Src.hx', source: src },
-			{ file: 'b/Host.hx', source: 'package b;\n' }
-		]);
+		final outOfScope: Array<MoveChange> = okChanges(
+			'a/Src.hx', 5, 7, 'b/Host.hx', [{ file: 'a/Src.hx', source: src }, { file: 'b/Host.hx', source: 'package b;\n' }]
+		);
 		Assert.isFalse(sourceOf(outOfScope, 'b/Host.hx').contains('import c.Mod;'), 'a module outside the scope index is not carried');
 	}
 
@@ -326,10 +325,10 @@ final class MoveGuardedImportCarryTest extends Test {
 
 	/** The refusal `src` produces when its `Src` type is moved to a bare `b/Host.hx`. */
 	private function refusalOf(src: String, line: Int, col: Int): String {
-		final result: MoveResult = MoveSymbol.moveType('a/Src.hx', line, col, 'b/Host.hx', [
-			{ file: 'a/Src.hx', source: src },
-			{ file: 'b/Host.hx', source: 'package b;\n' }
-		], plugin(), typeRefShape());
+		final result: MoveResult = MoveSymbol.moveType(
+			'a/Src.hx', line, col, 'b/Host.hx', [{ file: 'a/Src.hx', source: src }, { file: 'b/Host.hx', source: 'package b;\n' }],
+			plugin(), typeRefShape()
+		);
 		return switch result {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');

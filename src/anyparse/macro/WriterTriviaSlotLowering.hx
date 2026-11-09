@@ -56,45 +56,38 @@ final class WriterTriviaSlotLowering {
 		final prevBareRefBody: Null<PrevBodyInfo> = args.prevBareRefBody;
 		final prevTrailFieldName: Null<String> = args.prevTrailFieldName;
 		final fieldName: Null<String> = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final trailBBAccess: Null<Expr> = fieldName == null ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final trailBBAccess: Null<Expr> = fieldName == null
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX), pos: Context.currentPos() };
 
-		final trailLCAccess: Null<Expr> = fieldName == null ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
-			pos: Context.currentPos()
-		};
-		final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final trailLCAccess: Null<Expr> = fieldName == null
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: Context.currentPos() };
+		final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX), pos: Context.currentPos() };
 		// ω-open-trailing: same-line `// comment` captured right after
 		// the open literal. Synthesised only when the Star carries
 		// `@:lead` AND not `@:tryparse` (parallel to TrailingClose's
 		// `@:trail` gate; tryparse writer helper does not consume the
 		// slot, and the synth gate omits it for tryparse Stars — see
 		// `TriviaTypeSynth.buildStarTrailingSlots`).
-		final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse') ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse')
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX), pos: Context.currentPos() };
 		// ω-trail-blank-after: synth slot is only present on tryparse +
 		// nestBody Stars. Forward null elsewhere so the slot access
 		// doesn't reference a non-existent field.
-		final trailBAAccess: Null<Expr> =
-			fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody') ? null : {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final trailBAAccess: Null<Expr> = fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody')
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX), pos: Context.currentPos() };
 		// ω-objectlit-source-trail-comma: synth slot is only present on
 		// sep-Stars with a close literal. Forward null elsewhere so the
 		// slot access doesn't reference a non-existent field. Mirrors
 		// the `@:trail` / `@:sep` parser-side gate in TriviaTypeSynth.
-		final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null ? null : {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null
+			? null
+			: { expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() };
 		return {
 			starNode: starNode,
 			fieldAccess: fieldAccess,

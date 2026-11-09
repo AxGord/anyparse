@@ -138,10 +138,11 @@ final class WriterRefFieldLowering {
 		// `issue_147_between_fields_with_comments`) went byte-fail.
 		final boolFlagArgs: Null<Array<String>> = readBoolFlagStarCtorArgs(child);
 		final optArgExpr: Expr = boolFlagArgs != null ? (macro _wo) : optionalRefOptArgExpr(ctx, child, refName, elseChainSuppressExpr);
-		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(ctx, boolFlagArgs, {
-			expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]),
-			pos: Context.currentPos()
-		}, typePath, child.fmtHasFlag('propagateExprPosition'));
+		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(
+			ctx, boolFlagArgs,
+			{ expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]), pos: Context.currentPos() },
+			typePath, child.fmtHasFlag('propagateExprPosition')
+		);
 		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
 		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
 		// `@:fmt(bodyPolicy)` routes `indentValueIfCtor` through the subtractive
@@ -426,10 +427,9 @@ final class WriterRefFieldLowering {
 			)
 			: null;
 		// `<field>BodyOnSameLine:Bool`: read by the `nestBodyOnSourceNewline` branch below.
-		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap ? {
-			expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
-			pos: Context.currentPos()
-		} : null;
+		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap
+			? { expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX), pos: Context.currentPos() }
+			: null;
 		final sepWithBeforeKwTrailingExpr: Expr = beforeKwSeparator(
 			ctx.fieldSep, useTriviaGap, fieldName, child, prevBodyField, typePath, prevPadTrailing
 		);
@@ -502,10 +502,9 @@ final class WriterRefFieldLowering {
 		// the `@:optional` twin of `HxIfStmt.thenBody`, so without this the
 		// comment in `} catch (e:T) // c` + newline `{` was captured and
 		// then silently dropped.
-		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
-			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-			pos: Context.currentPos()
-		};
+		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
+			? null
+			: { expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos() };
 		// The own-line run between the head and a present body: the `<field>BeforeLeading` slot a
 		// `@:fmt(bareRefSepWhenPresent)` field grows (`TriviaPairSlots.isBareNonFirstRef`).
 		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && child.fmtHasFlag('bareRefSepWhenPresent') && ctx.isTriviaBearing(typePath)
@@ -842,12 +841,14 @@ final class WriterRefFieldLowering {
 				&& leadText == null
 				&& !isRaw
 				&& ctx.isTriviaBearing(typePath);
-			final headGap: Null<HeadGapSlots> = !ownGap && prevTrailFieldName == null ? null : {
-				afterTrail: prevTrailFieldName == null
-					? macro null
-					: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-				beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
-			};
+			final headGap: Null<HeadGapSlots> = !ownGap && prevTrailFieldName == null
+				? null
+				: {
+					afterTrail: prevTrailFieldName == null
+						? macro null
+						: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+					beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
+				};
 			emitBareRefNonBodyPolicy(
 				ctx, child, parts, refName, fieldName, typePath, effAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
 				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing, headGap
@@ -1232,13 +1233,11 @@ final class WriterRefFieldLowering {
 			flagSwitch;
 		} else {
 			final listCases: Array<Case> = fitValueListCases(listPatterns, optFlag, blockLayoutExpr, inlineLayoutExpr);
-			final shapeCases: Array<Case> = [
-				{
-					values: blockPatterns,
-					expr: blockLayoutExpr,
-					guard: null
-				}
-			].concat(listCases).concat([{ values: [macro _], expr: flagSwitch, guard: null }]);
+			final shapeCases: Array<Case> = [{
+				values: blockPatterns,
+				expr: blockLayoutExpr,
+				guard: null
+			}].concat(listCases).concat([{ values: [macro _], expr: flagSwitch, guard: null }]);
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —
@@ -1649,10 +1648,7 @@ final class WriterRefFieldLowering {
 			e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 			e;
 		};
-		final baseRawWriteCall: Expr = {
-			expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
-			pos: Context.currentPos()
-		};
+		final baseRawWriteCall: Expr = { expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]), pos: Context.currentPos() };
 		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(ctx, boolFlagArgs, baseRawWriteCall, typePath, propagateExpr);
 		// ω-condition-parens (Stage C): `@:fmt(sharpCondParensInside('<openKnob>',
 		// '<closeKnob>'))` injects inner-paren pad into the verbatim `#if (cond)`

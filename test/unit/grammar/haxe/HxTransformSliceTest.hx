@@ -67,10 +67,9 @@ class HxTransformSliceTest extends Test {
 	public function testRenameIdentifierRewritesEveryOccurrence(): Void {
 		final src: String = 'class C { function f() { return foo + keep + foo; } }';
 		final ast: HxModule = HaxeModuleParser.parse(src);
-		final out: String = HxModuleWriter.write(HxModuleAst.transform(ast, {
-			hxIdentLit: renameFooToBar,
-			hxExprIdentLit: renameExprFooToBar
-		}));
+		final out: String = HxModuleWriter.write(
+			HxModuleAst.transform(ast, { hxIdentLit: renameFooToBar, hxExprIdentLit: renameExprFooToBar })
+		);
 		// Every `foo` identifier became `bar`; `keep` is untouched.
 		Assert.isTrue(out.indexOf('foo') == -1, 'a `foo` survived the rename in: <$out>');
 		Assert.isTrue(out.indexOf('bar') != -1, 'no `bar` produced by the rename in: <$out>');
@@ -81,9 +80,7 @@ class HxTransformSliceTest extends Test {
 		// A rename hook that matches nothing is a structural identity.
 		final src: String = 'class C { function f() { return a + b; } }';
 		final ast: HxModule = HaxeModuleParser.parse(src);
-		final renamed: String = HxModuleWriter.write(HxModuleAst.transform(ast, {
-			hxIdentLit: renameFooToBar
-		}));
+		final renamed: String = HxModuleWriter.write(HxModuleAst.transform(ast, { hxIdentLit: renameFooToBar }));
 		final plain: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.equals(plain, renamed, 'non-matching rename hook changed output');
 	}
@@ -93,9 +90,7 @@ class HxTransformSliceTest extends Test {
 	public function testDoubleIntLiteralsRewritesEveryOccurrence(): Void {
 		final src: String = 'class C { var a:Int = 21; var b:Int = 50; }';
 		final ast: HxModule = HaxeModuleParser.parse(src);
-		final out: String = HxModuleWriter.write(HxModuleAst.transform(ast, {
-			hxIntLit: doubleInt
-		}));
+		final out: String = HxModuleWriter.write(HxModuleAst.transform(ast, { hxIntLit: doubleInt }));
 		// Both literals are doubled. The `Int` type names are HxTypeName, not
 		// HxIntLit, so they are untouched.
 		Assert.isTrue(out.indexOf('= 42;') != -1, 'first int literal not doubled in: <$out>');

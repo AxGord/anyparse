@@ -284,11 +284,9 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		if (prefix == null) return null;
 		final kept: Array<Span> = value.kept.copy();
 		kept.push(new Span(declSpan.from, prefix.keptTo));
-		return IfExpressionChain.droppedComment(region, kept, comments) ? null : {
-			declSpan: declSpan,
-			editSpan: region,
-			text: '${prefix.text} = ${value.text};'
-		};
+		return IfExpressionChain.droppedComment(region, kept, comments)
+			? null
+			: { declSpan: declSpan, editSpan: region, text: '${prefix.text} = ${value.text};' };
 	}
 
 	/**

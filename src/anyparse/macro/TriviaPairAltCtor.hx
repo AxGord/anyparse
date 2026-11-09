@@ -373,11 +373,7 @@ final class TriviaPairAltCtor {
 				// position; today's `isAltCloseTrailingBranch` consumers all
 				// carry `@:lead`.
 				final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-				final arrayStrCT: ComplexType = TPath({
-					pack: [],
-					name: 'Array',
-					params: [TPType(strCT)]
-				});
+				final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
 				args.push({ name: 'trailingBlankBefore', type: boolCT });
 				args.push({ name: 'trailingLeading', type: arrayStrCT });
 				// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia

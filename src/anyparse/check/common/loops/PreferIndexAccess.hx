@@ -114,7 +114,8 @@ final class PreferIndexAccess extends RuleBase {
 			) -> Null<Match> = (call, parentKind) ->
 				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolveBinders);
 			collect(
-				root, null, c, matcher, m -> violations.push({
+				root, null, c, matcher,
+				m -> violations.push({
 					file: entry.file,
 					span: m.callSpan,
 					rule: 'prefer-index-access',

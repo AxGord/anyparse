@@ -450,10 +450,7 @@ class PreferInlineCheckTest extends Test {
 				file: 'B.hx',
 				source: 'abstract class B {\n\tprivate abstract function hook():Void;\n\tprivate abstract function calc():Int;\n}'
 			},
-			{
-				file: 'S.hx',
-				source: 'class S extends B {\n\tprivate function hook():Void {}\n\tprivate function calc():Int return 1;\n}'
-			}
+			{ file: 'S.hx', source: 'class S extends B {\n\tprivate function hook():Void {}\n\tprivate function calc():Int return 1;\n}' }
 		];
 		Assert.equals(0, CheckFixture.violationsIn(new PreferInline(), files).length);
 	}

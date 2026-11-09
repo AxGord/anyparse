@@ -98,11 +98,7 @@ final class MemberRegistryRename {
 			else if (member != null)
 				followRecord(record, member, module, rename, plugin, edits, notes);
 		}
-		return {
-			text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits),
-			count: edits.length,
-			notes: notes
-		};
+		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
 	}
 
 	private static inline function unprovenReplace(record: MemberRecord, old: String): String {

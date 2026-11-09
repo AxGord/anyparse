@@ -128,15 +128,11 @@ class SiblingScopeTest extends Test {
 		FileSystem.createDirectory('$dir/g');
 		for (file in grammarFiles(listFlag, itemSource ?? ITEM_SOURCE, slotFlag ?? SLOT))
 			File.saveContent('$dir/g/${file.name}', file.source);
-		final build: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
-			'-cp',
-			'${Sys.getCwd()}/src',
-			'-cp',
-			dir,
-			'--main',
-			'Main',
-			'--no-output'
-		], cast { encoding: 'utf8' });
+		final build: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(
+			'haxe',
+			['-cp', '${Sys.getCwd()}/src', '-cp', dir, '--main', 'Main', '--no-output'],
+			cast { encoding: 'utf8' }
+		);
 		CliFixture.removeDir(dir);
 		return build.status == 0 ? '' : '${build.stderr}';
 	}

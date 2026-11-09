@@ -116,10 +116,8 @@ final class CondBranchProjection {
 			runs.push({ nodes: kids.slice(start, i), span: new Span(bounds[start].from, bounds[i - 1].to) });
 			start = i;
 		}
-		if (kids.length > start) runs.push({
-			nodes: kids.slice(start, kids.length),
-			span: new Span(bounds[start].from, bounds[kids.length - 1].to)
-		});
+		if (kids.length > start)
+			runs.push({ nodes: kids.slice(start, kids.length), span: new Span(bounds[start].from, bounds[kids.length - 1].to) });
 		return runs;
 	}
 

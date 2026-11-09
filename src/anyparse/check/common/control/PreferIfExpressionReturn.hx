@@ -298,7 +298,8 @@ final class PreferIfExpressionReturn extends RuleBase {
 		s: Seams, blockKinds: Array<String>
 	): Void {
 		if (blockKinds.contains(node.kind)) eachMergedRun(
-			node.children, source, comments, s, (_, merge, span) -> out.push({
+			node.children, source, comments, s,
+			(_, merge, span) -> out.push({
 				file: file,
 				span: span,
 				rule: RULE_ID,
@@ -496,11 +497,9 @@ final class PreferIfExpressionReturn extends RuleBase {
 		for (i => pair in pairs) {
 			kept.push(pair.cond);
 			kept.push(pair.value);
-			seats.push({
-				condEnd: pair.cond.to,
-				value: pair.value,
-				nextStart: i + 1 < pairs.length ? pairs[i + 1].cond.from : terminalValue.from
-			});
+			seats.push(
+				{ condEnd: pair.cond.to, value: pair.value, nextStart: i + 1 < pairs.length ? pairs[i + 1].cond.from : terminalValue.from }
+			);
 		}
 		final carried: Null<Carried> =
 			IfExpressionChain.carriedComments(region, kept, IfExpressionChain.carryGaps(seats), source, comments);

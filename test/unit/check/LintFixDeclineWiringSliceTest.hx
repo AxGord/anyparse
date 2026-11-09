@@ -1198,13 +1198,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 			applied: ['Covered.hx'],
 			appliedEdits: 2,
 			excluded: [],
-			reverted: [
-				{
-					file: 'Rejected.hx',
-					rule: 'avoid-dynamic',
-					cause: OracleRejected
-				}
-			],
+			reverted: [{ file: 'Rejected.hx', rule: 'avoid-dynamic', cause: OracleRejected }],
 			partials: [],
 			declined: [
 				{

@@ -39,8 +39,8 @@
 			"name": "M-ORPHAN-UNREADABLE-ANY-FILE",
 			"type": "anyparse.check.common.members.OrphanAccessor",
 			"method": "unreadableDecline",
-			"find": "\t\t\tname,\n",
-			"replace": "\t\t\t'',\n",
+			"find": "[name, wantGetter",
+			"replace": "['', wantGetter",
 			"note": "the reflection-shaped probe asks an EMPTY name, which `skippedFilesMentioning` reads as every admitted skipped file, so the per-NAME shape collapses back into the run-wide veto and an unparseable project file spelling nothing declines the deletion"
 		},
 		{
@@ -70,8 +70,8 @@
 			"name": "M-ORPHAN-UNREADABLE-REFLECTIVE-NARROWED",
 			"type": "anyparse.check.common.members.OrphanAccessor",
 			"method": "unreadableDecline",
-			"find": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t]);",
-			"replace": "\t\t\twantGetter ? CheckScan.GET_PREFIX : CheckScan.SET_PREFIX\n\t\t], ownerFile);",
+			"find": "CheckScan.SET_PREFIX]);",
+			"replace": "CheckScan.SET_PREFIX], ownerFile);",
 			"note": "the REFLECTION-shaped names take the per-owner narrowing too, so an unparseable installed source holding `Reflect.field(o, 'get_data')` or a computed accessor name stops vetoing a project deletion — T868's argument, unlearned one seam over"
 		},
 		{

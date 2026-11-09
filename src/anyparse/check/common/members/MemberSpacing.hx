@@ -385,11 +385,9 @@ final class MemberSpacing {
 			if (t == '#end') lastEndTo = cursor + seg.length;
 			cursor += seg.length + 1;
 		}
-		final ifEdit: Null<{ span: Span, text: String }> =
-			firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1 ? {
-				span: new Span(gapFrom, firstIfStart),
-				text: GROUP_SEPARATOR
-			} : null;
+		final ifEdit: Null<{ span: Span, text: String }> = firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1
+			? { span: new Span(gapFrom, firstIfStart), text: GROUP_SEPARATOR }
+			: null;
 		final endEdit: Null<{ span: Span, text: String }> = if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1) {
 			final tail: String = source.substring(lastEndTo, gapTo);
 			{ span: new Span(lastEndTo, gapTo), text: GROUP_SEPARATOR + tail.substring(tail.lastIndexOf('\n') + 1) };

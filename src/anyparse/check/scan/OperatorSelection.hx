@@ -245,10 +245,7 @@ final class OperatorSelection {
 		if (cached != null) return cached;
 		final index: Null<SymbolIndex> = indexHolding(file);
 		final binder: Null<OperandBinder> = index == null ? null : OperandBinder.forFile(_plugin, file, source, tree, index);
-		final typing: OperandTyping = {
-			written: binder == null ? _ -> Unknown : binder.tierOf,
-			proven: factsProof(file, source)
-		};
+		final typing: OperandTyping = { written: binder == null ? _ -> Unknown : binder.tierOf, proven: factsProof(file, source) };
 		_typingByFile[file] = typing;
 		return typing;
 	}

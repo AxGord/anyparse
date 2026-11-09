@@ -48,10 +48,7 @@ class RedundantImportVisibleTest extends Test {
 	/** A module importing its own sub-type: the module's own types outrank every statement. */
 	public function testImportOfTheModulesOwnSubTypeIsRedundant(): Void {
 		final vs: Array<Violation> = violations([
-			{
-				file: 'app/C.hx',
-				source: 'package app;\n\nimport app.C.Extra;\n\nclass C {\n\n\tvar e:Extra;\n\n}\n\nclass Extra {}\n'
-			}
+			{ file: 'app/C.hx', source: 'package app;\n\nimport app.C.Extra;\n\nclass C {\n\n\tvar e:Extra;\n\n}\n\nclass Extra {}\n' }
 		]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('this module declares them'), vs[0].message);
@@ -75,7 +72,8 @@ class RedundantImportVisibleTest extends Test {
 	@:pin('control') @:killer('M-KEPTWITHOUT-STATEMENT-KEPT')
 	public function testNearerPackageModuleOfTheNameKeepsIt(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{ file: 'app/sub/C.hx', source: 'package app.sub;\n\nimport app.Helper;\n\nclass C {\n\n\tvar h:Helper;\n\n}\n' },
 				{ file: 'app/Helper.hx', source: HELPER },
 				{ file: 'app/sub/Helper.hx', source: 'package app.sub;\n\nclass Helper {}\n' }
@@ -86,7 +84,8 @@ class RedundantImportVisibleTest extends Test {
 	/** A package wildcard is asked before the package tiers, so it decides the name once the statement goes. */
 	public function testWildcardOfAnotherPackageKeepsIt(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{
 					file: 'app/sub/C.hx',
 					source: 'package app.sub;\n\nimport w.*;\nimport app.Helper;\n\nclass C {\n\n\tvar h:Helper;\n\n}\n'
@@ -100,7 +99,8 @@ class RedundantImportVisibleTest extends Test {
 	/** An enum import brings its constructors, which no package lookup does. */
 	public function testEnumImportBindingConstructorsIsKept(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{ file: 'app/C.hx', source: 'package app;\n\nimport app.Color;\n\nclass C {\n\n\tvar c:Color = Red;\n\n}\n' },
 				{ file: 'app/Color.hx', source: 'package app;\n\nenum Color {\n\tRed;\n}\n' }
 			]).length
@@ -110,7 +110,8 @@ class RedundantImportVisibleTest extends Test {
 	/** A module import brings the module's sub-types too, which the package lookup never reaches. */
 	public function testModuleWithSubTypesIsKept(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{ file: 'app/C.hx', source: 'package app;\n\nimport app.Helper;\n\nclass C {\n\n\tvar e:Extra;\n\n}\n' },
 				{ file: 'app/Helper.hx', source: 'package app;\n\nclass Helper {}\n\nclass Extra {}\n' }
 			]).length
@@ -119,7 +120,8 @@ class RedundantImportVisibleTest extends Test {
 
 	public function testAliasAndGuardedStatementsAreKept(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{
 					file: 'app/C.hx',
 					source: 'package app;\n\nimport app.Helper as H;\n#if js\nimport app.Helper;\n#end\n\nclass C {\n\n\tvar h:H;\n\n}\n'
@@ -132,7 +134,8 @@ class RedundantImportVisibleTest extends Test {
 	/** Two statements binding the name are each other's reason, so neither is flagged by this arm. */
 	public function testSecondOwnBinderKeepsBoth(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{
 					file: 'app/C.hx',
 					source: 'package app;\n\nimport app.Helper;\nimport app.Helper;\n\nclass C {\n\n\tvar h:Helper;\n\n}\n'
@@ -145,7 +148,8 @@ class RedundantImportVisibleTest extends Test {
 	/** A `using` of the same module is a second own statement binding the name, so the import is not this arm's to judge. */
 	public function testImportBesideAUsingOfTheSameModuleIsKept(): Void {
 		Assert.equals(
-			0, violations([
+			0,
+			violations([
 				{ file: 'app/C.hx', source: 'package app;\n\nimport app.Tools;\n\nusing app.Tools;\n\nclass C {\n\n\tvar t:Tools;\n\n}\n' },
 				{
 					file: 'app/Tools.hx',

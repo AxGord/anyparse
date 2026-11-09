@@ -77,10 +77,7 @@ final class TypeParamShadowTest extends Test {
 	/** A plugin whose resolution scope is exactly `report`. */
 	private function scopedPlugin(report: Array<{ file: String, source: String }>): CachingGrammarPlugin {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources([]) }
-		});
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources([]) } });
 		return scoped;
 	}
 

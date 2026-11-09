@@ -454,10 +454,7 @@ class PreferFindCheckTest extends Test {
 	private function fixResultWith(source: String, other: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferFind = new PreferFind();
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'C.hx', source: source },
-			{ file: 'Other.hx', source: other }
-		];
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }, { file: 'Other.hx', source: other }];
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			source, CheckFixture.violationsIn(check, files, plugin), plugin, CheckFixture.index(files, plugin)
 		);

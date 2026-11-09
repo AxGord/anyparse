@@ -23,7 +23,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	 */
 	public function testStructuralTypedefMemberNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' }
 			]).length
@@ -36,7 +37,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	 */
 	public function testShorthandStructuralTypedefMemberNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { x:Int, tag:String }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; public var tag:String = ""; }' }
 			]).length
@@ -49,7 +51,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	 */
 	public function testStructuralMethodMemberNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { function x():Bool; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }' }
 			]).length
@@ -80,7 +83,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	 */
 	public function testSubtypeStructuralConformanceNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; var y:Int; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
 				{ file: 'D.hx', source: 'class D extends C { public var y:Int = 0; }' }
@@ -109,7 +113,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	 */
 	public function testFinalStructuralTypedefMemberStillFlagged(): Void {
 		Assert.equals(
-			1, ownerViolations([
+			1,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { final x:Int; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' }
 			]).length
@@ -119,7 +124,8 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	/** A structure the class does NOT satisfy (it lacks `y`) leaves the field flagged. */
 	public function testUnsatisfiedStructuralTypedefStillFlagged(): Void {
 		Assert.equals(
-			1, ownerViolations([
+			1,
+			ownerViolations([
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; var y:Int; }' },
 				{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' }
 			]).length

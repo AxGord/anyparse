@@ -546,7 +546,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 			+ ' public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
 			+ ' public function quick():Void { _l.acquire(); _l.release(); }'
 			+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.work()); $use d.quick(); } }'
-		])).map(v -> v.message);
+		]))
+			.map(v -> v.message);
 	}
 
 	/**
@@ -606,7 +607,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 			+ '$write } public function quick():Void { _l.acquire(); _l.release(); }'
 			+ ' public function risky():Void { _l.acquire(); throw "x"; } public static function main():Void {'
 			+ ' final d:D = new D(); arr.push(d); Runner.create(() -> d.work()); d.alias("_l", new Mutex()); d.quick(); d.risky(); } }'
-		]).map(v -> v.message);
+		])
+			.map(v -> v.message);
 	}
 
 	/** How many findings of `found(alias)` report the main thread's take of `_l` in `D.quick`. */
@@ -633,7 +635,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 			+ '= null; public function new() {} public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); } public function '
 			+ 'alias(k:String):Void { $alias } public function quick():Void { _l.acquire(); _l.release(); } public static function '
 			+ 'main():Void { final d:D = new D(); owners.add(d); arr.push(d); Runner.create(() -> d.work()); d.alias("_l"); d.quick(); } }'
-		]).map(v -> v.message);
+		])
+			.map(v -> v.message);
 	}
 
 	/** How many findings of `nodeFindings` report the main thread's take of `_l` in `D.quick`. */
@@ -664,7 +667,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 			+ ' public function work():Void { _m.acquire(); Sys.sleep(1); _m.release(); }'
 			+ ' public function quick():Void { _l.acquire(); _l.release(); } public static function main():Void {'
 			+ ' final d:D = new D(); Runner.create(() -> d.work()); Node.poke(new Other(), "x", null); $use d.quick(); } }'
-		]).map(v -> v.message);
+		])
+			.map(v -> v.message);
 	}
 	#end
 

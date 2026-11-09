@@ -42,10 +42,9 @@ final class ParamAscription {
 		typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): ParamVerdict {
 		final subject: Null<ParamSubject> = wholeDynamicParam(tree, span, shape, dynName);
-		return subject == null ? { subject: false, edits: null } : {
-			subject: true,
-			edits: editsFor(subject, tree, source, shape, dynName, castTargets, typeParams, symbols)
-		};
+		return subject == null
+			? { subject: false, edits: null }
+			: { subject: true, edits: editsFor(subject, tree, source, shape, dynName, castTargets, typeParams, symbols) };
 	}
 
 	/**

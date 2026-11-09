@@ -226,10 +226,7 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 			: spanText(ctx.source, condSpan);
 		final lift: Null<String> = liftedText(arms, [condSpan, kept.region], loopSpan, ctx);
 		final head: String = 'while ($condText) ${kept.text}';
-		return {
-			span: loopSpan,
-			text: lift == null ? null : lift == '' ? head : '$head\n$lift'
-		};
+		return { span: loopSpan, text: lift == null ? null : lift == '' ? head : '$head\n$lift' };
 	}
 
 	/**

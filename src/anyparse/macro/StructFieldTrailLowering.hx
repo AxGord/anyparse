@@ -268,11 +268,9 @@ final class StructFieldTrailLowering {
 				// last modifier and the member keyword; emitted by the
 				// writer's bare-Ref non-first separator. Empty in the
 				// common case (no inter-modifier comment) → byte-inert.
-				final arrayStrCT: ComplexType = TPath({
-					pack: [],
-					name: 'Array',
-					params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-				});
+				final arrayStrCT: ComplexType = TPath(
+					{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+				);
 				parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
 				parseSteps.push({
 					expr: EVars([
@@ -422,11 +420,9 @@ final class StructFieldTrailLowering {
 	 * `emitPreFieldWs`'s mandatory bare-Ref arm, which this field bypasses.
 	 */
 	private static function emitAbsentOnBeforeSlots(fieldName: String, parseSteps: Array<Expr>, hasBeforeBlankSlot: Bool): Void {
-		final arrayStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Array',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
+		final arrayStrCT: ComplexType = TPath(
+			{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+		);
 		parseSteps.push(macro final _absentWsPos: Int = ctx.pos);
 		// The stash a PRECEDING empty bare-tryparse Star left behind lives in bytes
 		// BEFORE `_absentWsPos`, so rewinding cannot make it re-scannable — it has to

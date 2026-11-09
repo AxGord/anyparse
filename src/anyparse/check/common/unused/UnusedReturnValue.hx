@@ -195,10 +195,9 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 		final resolved: Null<{ nominal: String, desc: String }> = resolveReturn(
 			call.children[0], root, declaredTypes, returnTypes, allow, ctx
 		);
-		return resolved == null ? null : {
-			span: at,
-			message: 'the ${resolved.nominal} result of ${resolved.desc} is discarded — a possibly-lost value'
-		};
+		return resolved == null
+			? null
+			: { span: at, message: 'the ${resolved.nominal} result of ${resolved.desc} is discarded — a possibly-lost value' };
 	}
 
 	/**

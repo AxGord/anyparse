@@ -924,10 +924,9 @@ class CrossScopeSoundnessTest extends Test {
 		final library: Array<SourceFile> = placement == LIBS_ONLY
 			? [{ file: LIB_FILE, source: LIB_THIRD_PARTY }]
 			: roots.concat(placement == LIBRARY_ONLY ? reach : []);
-		plugin.setResolutionScope({
-			declared: true,
-			sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) }
-		});
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) } }
+		);
 		return plugin;
 	}
 

@@ -331,10 +331,9 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final span: Null<Span> = target?.span;
 		if (target == null || target.kind != seams.assignKind || grandSlot != 0 || key == null || receiver == null || span == null)
 			return 'an index read answers Null<Bool>, which has() does not';
-		edits.push({
-			span: span,
-			text: '${site.source.substring(receiver.from, receiver.to)}.add(${site.source.substring(key.from, key.to)})'
-		});
+		edits.push(
+			{ span: span, text: '${site.source.substring(receiver.from, receiver.to)}.add(${site.source.substring(key.from, key.to)})' }
+		);
 		return null;
 	}
 

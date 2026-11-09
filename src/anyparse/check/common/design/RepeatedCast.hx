@@ -129,9 +129,9 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 			locals: locals,
 			chains: new StableChain(tree, shape, locals, TypeInfoMemo.declaredTypeSources(typeInfo, source), symbols, file),
 			units: ShapeVocab.functionLikeKinds(shape),
-			blockKinds: (plugin.controlFlowSupport()?.blockKinds() ?? []).concat([
-				for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k
-			]),
+			blockKinds: (plugin.controlFlowSupport()?.blockKinds() ?? []).concat(
+				[for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k]
+			),
 			loopKinds: ShapeVocab.loopKinds(shape),
 			inOrderKinds: inOrderKinds(shape, shortCircuit),
 			conditionKinds: branching.concat(shortCircuit),
@@ -367,7 +367,8 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 				shape.checkTypeKind,
 				shape.uncheckedCastKind
 			]) if (k != null) k
-		]).concat([for (k in shape.pureOperatorKinds ?? []) if (!shortCircuit.contains(k)) k]);
+		])
+			.concat([for (k in shape.pureOperatorKinds ?? []) if (!shortCircuit.contains(k)) k]);
 	}
 
 	/**

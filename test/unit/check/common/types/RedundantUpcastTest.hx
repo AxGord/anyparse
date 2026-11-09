@@ -137,7 +137,8 @@ class RedundantUpcastTest extends Test {
 				source: 'package pkg;\n\nimport other.Sub;\n\nclass Main {\n\n\tfunction f(s:Sub):Base {\n'
 				+ '\t\tfinal b:Base = cast(s, Base);\n\t\treturn b;\n\t}\n\n}\n'
 			}
-		]).length;
+		])
+			.length;
 	}
 
 	/** `redundant-upcast` findings over `cast(s, Base)` with `s` declared `operand`, beside `my.Eof extends Base`. */
@@ -150,7 +151,8 @@ class RedundantUpcastTest extends Test {
 				source: 'package my;\n\nclass Main {\n\n\tfunction f(s:$operand):Base {\n\t\tfinal b:Base = cast(s, Base);\n\t\treturn b;\n'
 				+ '\t}\n\n}\n'
 			}
-		]).length;
+		])
+			.length;
 	}
 
 }

@@ -314,10 +314,9 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	 * zero-behaviour-change clarification (Haxe 4.1 already binds a bare `catch (e)` as
 	 * `haxe.Exception`), so it fires unconditionally, keeping the original variable name.
 	 */
-	private static function bareSwapEdit(catchNode: QueryNode, source: String, exText: String, flagged: Map<String, Bool>): Null<{
-		span: Span,
-		text: String
-	}> {
+	private static function bareSwapEdit(
+		catchNode: QueryNode, source: String, exText: String, flagged: Map<String, Bool>
+	): Null<{ span: Span, text: String }> {
 		final b: Null<{ varName: String, to: Int, from: Int }> = catchBareRegion(catchNode, source);
 		return b == null || !flagged.exists('${b.from}:${b.to}') ? null : { span: new Span(b.from, b.to), text: '(${b.varName}:$exText)' };
 	}

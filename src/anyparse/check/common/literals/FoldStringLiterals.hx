@@ -397,7 +397,8 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 					groups: planned.groups,
 					constant: planned.constant,
 					message: planned.message + refused
-				});
+				}
+				);
 			}
 			// A literal is never descended into; a chain only when it did not plan as
 			// a whole, so an inner chain still gets its own chance. A conditional

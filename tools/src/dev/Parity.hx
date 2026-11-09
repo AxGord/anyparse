@@ -272,7 +272,8 @@ final class Parity {
 			argv: ['apq', name, '--help'],
 			stdin: null,
 			files: files
-		});
+		}
+		);
 	}
 
 	/** `argv` (`apq|hxq <command> …`) run by the shim of `shimTree` on `engine`, the code cache off on both sides alike. */

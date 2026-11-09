@@ -166,11 +166,12 @@ final class NegatedCondition {
 	public static function swapOf(cond: QueryNode, thenArm: QueryNode, elseArm: QueryNode, site: InversionSite): Null<Swap> {
 		final kept: Null<QueryNode> = invertibleOperand(cond, elseArm, site);
 		final keptSpan: Null<Span> = kept?.span;
-		if (kept != null && keptSpan != null) return {
-			condition: site.source.substring(keptSpan.from, keptSpan.to),
-			dropsComment: dropsComment(cond, kept, site.source),
-			defaultLast: false
-		};
+		if (kept != null && keptSpan != null)
+			return {
+				condition: site.source.substring(keptSpan.from, keptSpan.to),
+				dropsComment: dropsComment(cond, kept, site.source),
+				defaultLast: false
+			};
 		final turned: Null<String> = defaultLastCondition(cond, thenArm, elseArm, site);
 		return turned == null ? null : { condition: turned, dropsComment: false, defaultLast: true };
 	}

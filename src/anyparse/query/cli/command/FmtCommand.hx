@@ -211,10 +211,7 @@ final class FmtCommand implements CliCommand {
 		// status must not read it as success — the same call `test-summary` makes for a
 		// transcript it could not parse. Only the SUMMARY needed splitting; the status
 		// was never the half that lied.
-		return {
-			exit: failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK,
-			summary: summary
-		};
+		return { exit: failed > 0 || unsettled > 0 ? EXIT_RUNTIME : EXIT_OK, summary: summary };
 	}
 
 	/**

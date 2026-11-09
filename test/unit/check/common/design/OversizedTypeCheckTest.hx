@@ -459,9 +459,7 @@ class OversizedTypeCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-OVERSIZED-CONST-COUNTED')
 	public function testAConstantTableIsNotReported(): Void {
-		final consts: Array<String> = [
-			for (i in 0...60) '\tpublic static inline final C$i:UInt = 0x${i.hex(6)};'
-		];
+		final consts: Array<String> = [for (i in 0...60) '\tpublic static inline final C$i:UInt = 0x${i.hex(6)};'];
 		Assert.equals(0, violations('class C {\n${consts.join('\n')}\n\tpublic function new() {}\n}').length);
 	}
 

@@ -202,11 +202,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 	public function testMacroFinalTypedExpr(): Void {
 		// The real `Lowering` shape: `macro final _x:Int = ctx.pos`.
 		switch initOf('class C { var x = macro final _x:Int = ctx.pos; }') {
-			case MacroExpr(FinalExpr({
-				name: nm,
-				type: Named({ name: tn }),
-				init: FieldAccess(IdentExpr(o), f)
-			})):
+			case MacroExpr(FinalExpr({ name: nm, type: Named({ name: tn }), init: FieldAccess(IdentExpr(o), f) })):
 				Assert.equals('_x', (nm: String));
 				Assert.equals('Int', (tn: String));
 				Assert.equals('ctx', (o: String));
@@ -282,11 +278,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// slice; `:$fieldCT` is Slice T (DollarType); `= $fieldAccess` is
 		// DollarIdentExpr — all three compose in one HxVarDecl.
 		switch initOf("class C { var x = macro final $localName:$fieldCT = $fieldAccess; }") {
-			case MacroExpr(FinalExpr({
-				name: nm,
-				type: DollarType(tn),
-				init: DollarIdentExpr(rhs)
-			})):
+			case MacroExpr(FinalExpr({ name: nm, type: DollarType(tn), init: DollarIdentExpr(rhs) })):
 				Assert.equals("$localName", (nm: String));
 				Assert.equals('fieldCT', (tn: String));
 				Assert.equals('fieldAccess', (rhs: String));

@@ -150,11 +150,10 @@ final class ExtractConstant {
 		moduleExists: Bool, moduleSource: Null<String>, modulePkg: String, moduleClass: String, modulePath: String, name: String,
 		memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		if (!moduleExists) return switch NewFile.create({
-			className: moduleClass,
-			pkg: modulePkg,
-			fields: [memberText, 'private function new() {}']
-		}, plugin, optsJson).result {
+		if (!moduleExists) return switch NewFile.create(
+			{ className: moduleClass, pkg: modulePkg, fields: [memberText, 'private function new() {}'] }, plugin, optsJson
+		)
+			.result {
 			case Ok(text): Ok(text);
 			case Err(message): Err('module: $message');
 		};

@@ -85,10 +85,7 @@ final class RedundantCastType extends RuleBase implements DefaultOff {
 			: CheckScan.applyBySpan(plugin, source, violations, [checkedCastKind], (node, span) -> {
 				if (node.children.length != 1) return null;
 				final operandSpan: Null<Span> = node.children[0].span;
-				return operandSpan == null ? null : {
-					span: span,
-					text: 'cast ${source.substring(operandSpan.from, operandSpan.to)}'
-				};
+				return operandSpan == null ? null : { span: span, text: 'cast ${source.substring(operandSpan.from, operandSpan.to)}' };
 			});
 	}
 

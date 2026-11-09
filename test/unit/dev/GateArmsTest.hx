@@ -161,11 +161,7 @@ final class GateArmsTest extends Test {
 				member('pkg.A.gone', 'removed'),
 				node('type', 'pkg.A', 'changed')
 			]));
-			knob(tree, 'focus', graph([
-				member('pkg.A.edited'),
-				member('pkg.Other.near'),
-				node('type', 'pkg.Far.near')
-			]));
+			knob(tree, 'focus', graph([member('pkg.A.edited'), member('pkg.Other.near'), node('type', 'pkg.Far.near')]));
 			knob(tree, 'all-killed');
 			Assert.isTrue(outcomeOf(tree, []).match(Passed), 'every selected arm killed');
 			final runs: String = File.getContent(Path.join([tree, 'runs.log']));

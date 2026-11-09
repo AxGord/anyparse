@@ -389,10 +389,12 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		if (receiver.kind == seams.callKind) return callReceiver(receiver, callSpan, ctx);
 		if (seams.literalTypeNames.exists(receiver.kind)) return { decls: [], nonNull: true };
 		final constructed: Bool = receiver.kind == seams.shape.newExprKind;
-		return !constructed && receiver.kind != seams.identKind ? unresolved : {
-			decls: boundDecls(ctx.binder?.tierOf(receiver)),
-			nonNull: constructed || TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
-		};
+		return !constructed && receiver.kind != seams.identKind
+			? unresolved
+			: {
+				decls: boundDecls(ctx.binder?.tierOf(receiver)),
+				nonNull: constructed || TypeResolver.isProvablyNonNull(receiver, ctx.root, seams.shape, ctx.nullity)
+			};
 	}
 
 	/**
@@ -424,11 +426,15 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		}
 		final owners: Null<Array<ResolvedType>> = binder.receiverDecls(owner);
 		final metaName: Null<String> = seams.shape.nullSafetyMetaName;
-		return owners == null || metaName == null ? unresolved : {
-			decls: boundDecls(binder.tierOf(call)),
-			nonNull: TypeResolver.enclosingIsNullSafe(ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg, seams.shape.refsCache)
-				&& ctx.nullity.ofMemberReturn(owners, method) != Unproven
-		};
+		return owners == null || metaName == null
+			? unresolved
+			: {
+				decls: boundDecls(binder.tierOf(call)),
+				nonNull: TypeResolver.enclosingIsNullSafe(
+					ctx.root, callSpan, metaName, seams.shape.nullSafetyDisableArg, seams.shape.refsCache
+				)
+					&& ctx.nullity.ofMemberReturn(owners, method) != Unproven
+			};
 	}
 
 	/** The declarations a binding answer names: none for a built-in (`Free`), null when it is not proven. */

@@ -130,10 +130,7 @@ final class HxTrailingCommentOverflowListSliceTest extends Test {
 	];
 
 	/** The head operand's operator comment stays: above the head is the statement, not the chain. */
-	private static final CHAIN: Array<String> = [
-		'return alpha(first) || // a comment long enough to overflow',
-		'\tbeta(second);'
-	];
+	private static final CHAIN: Array<String> = ['return alpha(first) || // a comment long enough to overflow', '\tbeta(second);'];
 
 	public function new(): Void {
 		super();

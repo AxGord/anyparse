@@ -321,11 +321,12 @@ final class MutationArmAddressTest extends Test {
 		}
 		final node: QueryNode = matches[0];
 		final span: Null<Span> = node.span;
-		if (span != null) return {
-			source: source,
-			node: node,
-			group: ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source))
-		};
+		if (span != null)
+			return {
+				source: source,
+				node: node,
+				group: ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source))
+			};
 		stale.push('$address: the resolved ${node.kind} node carries no span to search');
 		return null;
 		#else

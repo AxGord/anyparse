@@ -125,10 +125,9 @@ final class LintFixFollowUpRoundTest extends Test {
 	#if (sys || nodejs)
 	/** Whether a real `haxe` on PATH typechecks a trivial fixture - the test above proves nothing without one. */
 	private function oracleWorks(): Bool {
-		final dir: String = CliFixture.writeDir('followupprobe', [
-			{ name: 'Main.hx', source: TRIVIAL },
-			{ name: 'check.hxml', source: HXML }
-		]);
+		final dir: String = CliFixture.writeDir(
+			'followupprobe', [{ name: 'Main.hx', source: TRIVIAL }, { name: 'check.hxml', source: HXML }]
+		);
 		final outcome: OracleOutcome = CompilerOracle.typecheck('check.hxml', dir);
 		CliFixture.removeDir(dir);
 		return switch outcome {

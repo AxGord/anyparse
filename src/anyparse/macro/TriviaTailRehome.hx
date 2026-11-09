@@ -62,12 +62,14 @@ final class TriviaTailRehome {
 		if (elem.kind != Ref) return null;
 		final rule: String = elem.annotations[AnnotationKeys.BASE_REF];
 		return TriviaTypeSynth.refIsBearing(rule)
-			? MacroStringTools.toFieldExpr(packOf(rule).concat([
-				TriviaTypeSynth.SYNTH_SUBPACK,
-				TriviaTypeSynth.SYNTH_MODULE_LEAF,
-				CLASS_NAME,
-				fnName(rule)
-			]))
+			? MacroStringTools.toFieldExpr(
+				packOf(rule).concat([
+					TriviaTypeSynth.SYNTH_SUBPACK,
+					TriviaTypeSynth.SYNTH_MODULE_LEAF,
+					CLASS_NAME,
+					fnName(rule)
+				])
+			)
 			: null;
 	}
 
@@ -236,10 +238,7 @@ final class TriviaTailRehome {
 		]);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 		inline function rebuild(index: Int, with: Expr): Expr {
-			return {
-				expr: ECall(ctorRef, [for (i in 0...binders.length) i == index ? with : macro $i{binders[i]}]),
-				pos: pos
-			};
+			return { expr: ECall(ctorRef, [for (i in 0...binders.length) i == index ? with : macro $i{binders[i]}]), pos: pos };
 		}
 		final body: Null<Expr> = switch altTail(branch, argNames) {
 			case Slot(index):

@@ -630,8 +630,8 @@
 			"name": "M-ADDMETA-ZERO-WIDTH-INSERT",
 			"type": "anyparse.query.AddMeta",
 			"method": "runEdit",
-			"find": "span: new Span(at, at + 1),\ntext: '${texts.join('\\n$indent')}\\n$indent${source.charAt(at)}'",
-			"replace": "span: new Span(at, at),\ntext: '${texts.join('\\n$indent')}\\n$indent'",
+			"find": "span: new Span(at, at + 1), text: '${texts.join('\\n$indent')}\\n$indent${source.charAt(at)}'",
+			"replace": "span: new Span(at, at), text: '${texts.join('\\n$indent')}\\n$indent'",
 			"note": "the entry is spliced as a zero-width insert again, so the doc-splitting guard refuses every annotation on a documented declaration"
 		},
 		{
@@ -1060,11 +1060,11 @@
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
 			"find": [
-				"\t\t\t\t\tif ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {\n",
+				"\t\t\t\t\tif ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name))\n",
 				"if (each.length == 0) {\n\t\t\t\t\t\t\tunresolvedAt(span, UnresolvedReceiver(calleeName), currentType);\n"
 			],
 			"replace": [
-				"\t\t\t\t\tif (false) return {\n",
+				"\t\t\t\t\tif (false)\n",
 				"if (each.length == 0) {\n\t\t\t\t\t\t\t{}\n"
 			],
 			"note": "an unbound upper-case receiver is no longer a TYPE and its unresolved call is not recorded, so a static call (Main.grow()) that grows the collection reaches nothing"

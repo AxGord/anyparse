@@ -432,11 +432,7 @@ final class WriterTriviaStarDispatch {
 		final condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo> = condLeadingDocArgs != null && beforeDocComments
 			? buildCondLeadingDocLookThroughInfo(tc, elemRefName, condLeadingDocArgs)
 			: null;
-		return {
-			interMemberInfo: interMemberInfo,
-			staticVarSubdivInfo: staticVarSubdivInfo,
-			condLeadingDocInfo: condLeadingDocInfo
-		};
+		return { interMemberInfo: interMemberInfo, staticVarSubdivInfo: staticVarSubdivInfo, condLeadingDocInfo: condLeadingDocInfo };
 	}
 
 	/**
@@ -635,15 +631,8 @@ final class WriterTriviaStarDispatch {
 				Context.currentPos()
 			);
 		final pos: Position = Context.currentPos();
-		final condCasePattern: Expr = {
-			expr: ECall({ expr: EConst(CIdent(condCtor)), pos: pos }, [macro _inner]),
-			pos: pos
-		};
-		return {
-			classifierFieldName: fieldName,
-			condCasePattern: condCasePattern,
-			bodyFieldName: bodyField
-		};
+		final condCasePattern: Expr = { expr: ECall({ expr: EConst(CIdent(condCtor)), pos: pos }, [macro _inner]), pos: pos };
+		return { classifierFieldName: fieldName, condCasePattern: condCasePattern, bodyFieldName: bodyField };
 	}
 
 	/**

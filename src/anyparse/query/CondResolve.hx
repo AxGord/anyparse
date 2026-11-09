@@ -132,10 +132,7 @@ final class CondResolve {
 		for (nested in outermost(inner)) {
 			final folded: FoldedRegion = fold(source, nested, decided);
 			count += folded.count;
-			edits.push({
-				span: editSpan(text, nested.span.from - body.from, nested.span.to - body.from, folded.text),
-				text: folded.text
-			});
+			edits.push({ span: editSpan(text, nested.span.from - body.from, nested.span.to - body.from, folded.text), text: folded.text });
 		}
 		return { text: CanonicalEdit.applyEdits(text, edits).trim(), count: count };
 	}

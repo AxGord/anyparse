@@ -14,24 +14,18 @@ import haxe.macro.Expr;
  */
 class QueryWalkerCodegen {
 
-	private static final NODE_ARRAY_CT: ComplexType = TPath({
-		pack: [],
-		name: 'Array',
-		params: [TPType(TPath({ pack: ['anyparse', 'query'], name: 'QueryNode', params: [] }))]
-	});
+	private static final NODE_ARRAY_CT: ComplexType = TPath(
+		{ pack: [], name: 'Array', params: [TPType(TPath({ pack: ['anyparse', 'query'], name: 'QueryNode', params: [] }))] }
+	);
 	private static final BOOL_CT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 	private static final STRING_CT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 	private static final VOID_CT: ComplexType = TPath({ pack: [], name: 'Void', params: [] });
-	private static final NULL_STRING_CT: ComplexType = TPath({
-		pack: [],
-		name: 'Null',
-		params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-	});
-	private static final NULL_SPAN_CT: ComplexType = TPath({
-		pack: [],
-		name: 'Null',
-		params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))]
-	});
+	private static final NULL_STRING_CT: ComplexType = TPath(
+		{ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+	);
+	private static final NULL_SPAN_CT: ComplexType = TPath(
+		{ pack: [], name: 'Null', params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))] }
+	);
 
 	// The two argument shapes several generated entries share. Named rather than repeated
 	// because the macro BODIES reference these parameters by name (`source`, `withTypeRefs`),
@@ -110,11 +104,7 @@ class QueryWalkerCodegen {
 			name: name,
 			access: [APublic, AStatic],
 			doc: doc,
-			kind: FFun({
-				args: [],
-				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
-				expr: macro return $literal
-			}),
+			kind: FFun({ args: [], ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }), expr: macro return $literal }),
 			pos: Context.currentPos()
 		};
 	}
@@ -193,11 +183,7 @@ class QueryWalkerCodegen {
 			name: '_root',
 			access: [APrivate, AStatic],
 			doc: 'The parse root of `source`, memoised on the last source seen; null when it does not parse.',
-			kind: FFun({
-				args: [SOURCE_ARG],
-				ret: nullRootCT(result.rootCT),
-				expr: body
-			}),
+			kind: FFun({ args: [SOURCE_ARG], ret: nullRootCT(result.rootCT), expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -268,11 +254,7 @@ class QueryWalkerCodegen {
 			access: [APublic, AStatic],
 			doc: 'Parse `source` into the grammar root, memoised on the last source seen; null when it does not parse. '
 				+ 'The handle a caller projects more than once instead of re-parsing per projection.',
-			kind: FFun({
-				args: [SOURCE_ARG],
-				ret: nullRootCT(result.rootCT),
-				expr: body
-			}),
+			kind: FFun({ args: [SOURCE_ARG], ret: nullRootCT(result.rootCT), expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -306,11 +288,7 @@ class QueryWalkerCodegen {
 			access: [APublic, AStatic],
 			doc: 'Parse `source` into the grammar root, RAISING the parser\'s own error when it does not parse — the diagnostic twin '
 				+ 'of `parseRoot`, for a caller that must name the line and column rather than report a bare failure.',
-			kind: FFun({
-				args: [SOURCE_ARG],
-				ret: result.rootCT,
-				expr: body
-			}),
+			kind: FFun({ args: [SOURCE_ARG], ret: result.rootCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -342,14 +320,7 @@ class QueryWalkerCodegen {
 			access: [APublic, AStatic],
 			doc: 'Translate an already-parsed `${result.rootTypePath}` into the engine\'s `QueryNode` children. '
 				+ '`withTypeRefs` surfaces skipped name-slot types as `TypeRef` nodes (the `apq uses` projection).',
-			kind: FFun({
-				args: [
-					{ name: 'root', type: nullRootCT(result.rootCT) },
-					WITH_TYPE_REFS_ARG
-				],
-				ret: NODE_ARRAY_CT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'root', type: nullRootCT(result.rootCT) }, WITH_TYPE_REFS_ARG], ret: NODE_ARRAY_CT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -365,14 +336,7 @@ class QueryWalkerCodegen {
 			access: [APublic, AStatic],
 			doc: 'Translate a parsed `${result.rootTypePath}` into `QueryNode` children - `walkRoot` over `parseRoot(source)`. '
 				+ '`withTypeRefs` surfaces skipped name-slot types as `TypeRef` nodes (the `apq uses` projection).',
-			kind: FFun({
-				args: [
-					SOURCE_ARG,
-					WITH_TYPE_REFS_ARG
-				],
-				ret: NODE_ARRAY_CT,
-				expr: body
-			}),
+			kind: FFun({ args: [SOURCE_ARG, WITH_TYPE_REFS_ARG], ret: NODE_ARRAY_CT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

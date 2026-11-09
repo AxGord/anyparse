@@ -196,11 +196,13 @@ final class OracleCache {
 		if (chain == null) return null;
 		final probe: CompilerProbe = compilerProbe(root, chain.libs);
 		final hashed: Map<String, String> = [];
-		return probe.ok ? {
-			fingerprint: ContentHash.md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
-			roots: [root].concat(rootsOf(root, chain, probe)),
-			hashed: hashed
-		} : null;
+		return probe.ok
+			? {
+				fingerprint: ContentHash.md5(buildManifest(root, chain, probe, defines ?? [], memo, walks, hashed).join('\n')),
+				roots: [root].concat(rootsOf(root, chain, probe)),
+				hashed: hashed
+			}
+			: null;
 		#else
 		return null;
 		#end

@@ -540,11 +540,12 @@ final class LintFixVerify {
 		coverage: Array<ConfigCoverage>, ledger: Map<String, RuleFixOutcome>
 	): AssistedOutcome {
 		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0, excluded: [] };
-		if (oracles.length == 0) return {
-			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compiler oracle for this run)',
-			appliedCount: 0,
-			excluded: []
-		};
+		if (oracles.length == 0)
+			return {
+				tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compiler oracle for this run)',
+				appliedCount: 0,
+				excluded: []
+			};
 		// Per configuration, and a RED one is dropped rather than allowed to stop the phase — the
 		// same rule `FixVerifier` takes its baseline by, for the same reason: a configuration that
 		// does not typecheck before any annotation can judge none, while a green sibling still can.
@@ -573,10 +574,13 @@ final class LintFixVerify {
 		// alone). What the suite does cover is the shared entry itself and the identical wiring
 		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
 		// one so the two cannot drift apart unnoticed.
-		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(check -> {
-			check: check,
-			all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
-		});
+		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(
+			check ->
+				{
+					check: check,
+					all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
+				}
+		);
 		// Nothing to annotate costs nothing: no probe, no display server.
 		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))
 			return { tail: ', oracle-assisted: 0 applied${excludedTail(excluded)}', appliedCount: 0, excluded: excluded };
@@ -590,11 +594,12 @@ final class LintFixVerify {
 		final coverageMemo: OracleCoverageMemo = { probes: coverage.copy(), usable: null };
 		final current: UsableCoverage = compiler.usableOnce(coverageMemo, measured.judging, excluded);
 		final stop: Null<String> = current.stop;
-		if (stop != null) return {
-			tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $stop)',
-			appliedCount: 0,
-			excluded: excluded
-		};
+		if (stop != null)
+			return {
+				tail: ', oracle-assisted skipped (the oracle\'s compiled set is unknown: $stop)',
+				appliedCount: 0,
+				excluded: excluded
+			};
 		final display: DisplayHandle = {
 			compiler: compiler,
 			configs: current.configs,
@@ -612,11 +617,7 @@ final class LintFixVerify {
 			if (allEdits.length == 0) continue;
 			final gap: Null<String> = assistedEditsAreVerifiable(current.coverages, excluded, entry, allEdits, plugin);
 			if (gap != null) {
-				declines.push({
-					file: entry.file,
-					reason: gap,
-					edits: allEdits.length
-				});
+				declines.push({ file: entry.file, reason: gap, edits: allEdits.length });
 				continue;
 			}
 			final blamed: Array<String> = [];

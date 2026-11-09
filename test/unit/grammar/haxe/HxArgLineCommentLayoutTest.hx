@@ -20,14 +20,7 @@ final class HxArgLineCommentLayoutTest extends Test {
 		'fillLine',
 		'fillLineWithLeadingBreak'
 	];
-	private static final NEW_LEAD: Array<String> = [
-		'final o = new Foo(',
-		'\tfirst,',
-		'\t// lead',
-		'\tsecond,',
-		'\tthird',
-		');'
-	];
+	private static final NEW_LEAD: Array<String> = ['final o = new Foo(', '\tfirst,', '\t// lead', '\tsecond,', '\tthird', ');'];
 	private static final CHAIN_ARGS: Array<String> = [
 		'x.m(',
 		'\ta, // after the separator',

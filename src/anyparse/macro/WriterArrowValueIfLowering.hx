@@ -341,11 +341,7 @@ final class WriterArrowValueIfLowering {
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ac.ruleCtorPath(refPath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
 			final arity: Int = branch.children.length + TriviaPairConverters.countAltExtras(branch);
 			final args: Array<Expr> = [for (i in 0...arity) i == trailIndex ? macro _aifValueTrail : macro _];
-			cases.push({
-				values: [{ expr: ECall(ctorRef, args), pos: pos }],
-				expr: macro _aifValueTrail == null,
-				guard: null
-			});
+			cases.push({ values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: macro _aifValueTrail == null, guard: null });
 		}
 		if (cases.length == 0) return macro true;
 		final access: Expr = { expr: EField(rootExpr, fieldName), pos: pos };

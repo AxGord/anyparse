@@ -834,10 +834,7 @@ class Lowering {
 				'Lowering: @:prefix operator must be symbolic (word-like prefix ops not supported yet): "$prefixOp"', Context.currentPos()
 			);
 		final operandCT: ComplexType = ruleReturnCT(typePath);
-		final recurseCall: Expr = {
-			expr: ECall(macro $i{recurseFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final recurseCall: Expr = { expr: ECall(macro $i{recurseFnName}, [macro ctx]), pos: Context.currentPos() };
 		final ctorCall: Expr = { expr: ECall(ctorRef, [macro _operand]), pos: Context.currentPos() };
 		return macro {
 			skipWs(ctx);
@@ -889,11 +886,7 @@ class Lowering {
 		branch: ShapeNode, ctorRef: Expr, leadText: String, trailText: String, sepText: Null<String>, elemCT: ComplexType, elemCall: Expr,
 		closeNextOrEofExpr: Expr
 	): Expr {
-		final wrappedCT: ComplexType = TPath({
-			pack: ['anyparse', 'runtime'],
-			name: 'Trivial',
-			params: [TPType(elemCT)]
-		});
+		final wrappedCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] });
 		// ω-close-trailing-alt: synth ctor of close-peek `@:trivia`
 		// Alt branches (e.g. `HxStatementT.BlockStmt`) carries an
 		// extra positional `closeTrailing:Null<String>` arg captured
@@ -933,10 +926,7 @@ class Lowering {
 			// define for non-sep branches (BlockStmt, BlockExpr).
 			if (sepText != null) ctorArgsTrivia.push(macro _trailPresent);
 		}
-		final ctorCallTrivia: Expr = {
-			expr: ECall(ctorRef, ctorArgsTrivia),
-			pos: Context.currentPos()
-		};
+		final ctorCallTrivia: Expr = { expr: ECall(ctorRef, ctorArgsTrivia), pos: Context.currentPos() };
 		final sepMatchExpr: Expr = if (sepText != null) {
 			// Same horizontal-whitespace-only skip as the struct-field
 			// trivia+sep path — avoids `skipWs` consuming the trailing
@@ -1184,10 +1174,7 @@ class Lowering {
 		// → `parseHxExprAtom` / `parseHxExprSAtom` / `parseHxExprTAtom`).
 		final atomOperand: Bool = branch.fmtHasFlag(ATOM_OPERAND_FLAG);
 		final subFnName: String = atomOperand ? '${parseFnName(refName)}Atom' : parseFnName(refName);
-		final wholeCall: Expr = {
-			expr: ECall(macro $i{subFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final wholeCall: Expr = { expr: ECall(macro $i{subFnName}, [macro ctx]), pos: Context.currentPos() };
 		// `@:fmt(atomOperandWhen('A', …))`: the operand is ONE atom (no postfix — the enclosing atom
 		// wrapper applies those to this ctor) when that atom is one of the listed ctors, and a whole
 		// expression otherwise. `HxExpr.CastExpr` lists `ECheckTypeExpr`: Haxe 4.3.7 ends a cast at
@@ -1247,10 +1234,7 @@ class Lowering {
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro ctx]), pos: Context.currentPos() };
 		// See struct-field close-peek (emitStarFieldSteps) for why
 		// we flip to full-string `peekLit` when close is multi-byte.
 		final closeCharCode: Int = trailText.charCodeAt(0);

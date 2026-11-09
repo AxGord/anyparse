@@ -189,18 +189,12 @@ final class GuardContinue extends RuleBase {
 		final assignKind: Null<String> = shape.assignKind;
 		if (assignKind == null) return null;
 		final baseLiterals: Array<String> = [
-			for (k in [
-				(shape.boolLitKind: Null<String>),
-				shape.nullLiteralKind
-			]) if (k != null) k
+			for (k in [(shape.boolLitKind: Null<String>), shape.nullLiteralKind]) if (k != null) k
 		];
 		final literalKinds: Array<String> = baseLiterals.concat(shape.numericLiteralKinds ?? []);
 		if (literalKinds.length == 0) return null;
 		final loopJumpKinds: Array<String> = [
-			for (k in [
-				(shape.breakStatementKind: Null<String>),
-				shape.continueStatementKind
-			]) if (k != null) k
+			for (k in [(shape.breakStatementKind: Null<String>), shape.continueStatementKind]) if (k != null) k
 		];
 		return {
 			exprStmtKind: exprStmtKind,
@@ -459,11 +453,7 @@ final class GuardContinue extends RuleBase {
 		final inner: String = source.substring(innerFrom, thenSpan.to - 1);
 		final headLength: Int = stmtSpan.to - innerFrom;
 		return headLength >= 0 && standaloneCount(inner.substring(0, headLength), name) == 1 && standaloneCount(inner, name) == spans.length
-			? {
-				name: name,
-				newName: newName,
-				spans: spans
-			}
+			? { name: name, newName: newName, spans: spans }
 			: null;
 	}
 
@@ -690,10 +680,7 @@ private typedef HoistSeams = {
  * exact last statement), and the collision renames the de-nested block needs (empty
  * when no de-nested local clashes with the surrounding scope).
  */
-private typedef Candidate = GuardedIf & {
-	var tail: Array<QueryNode>;
-	var renames: Array<LocalRename>;
-}
+private typedef Candidate = GuardedIf & { var tail: Array<QueryNode>; var renames: Array<LocalRename>; }
 
 /**
  * One de-nested local renamed out of a scope collision: the name it binds, the

@@ -98,10 +98,7 @@ final class StarFieldLowering {
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro ctx]), pos: Context.currentPos() };
 		final openText: Null<String> = starNode.annotations[AnnotationKeys.LIT_LEAD_TEXT];
 		final closeText: Null<String> = starNode.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
 		final sepText: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
@@ -239,10 +236,7 @@ final class StarFieldLowering {
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro ctx]), pos: Context.currentPos() };
 		// `@:lead` and `@:trail` are guaranteed non-null at this point —
 		// the validation block in `lowerStruct` rejects optional Star
 		// without both before the field-value switch fires.
@@ -375,10 +369,7 @@ final class StarFieldLowering {
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = sc.parseFnName(elemRefName);
 		final elemCT: ComplexType = sc.ruleReturnCT(elemRefName);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro ctx]), pos: Context.currentPos() };
 		final isTriviaCollects: Bool = sc.ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		// Element wrap and accumulator types — Trivial<T> in trivia mode.
 		final accumElemCT: ComplexType = isTriviaCollects
@@ -548,11 +539,9 @@ final class StarFieldLowering {
 			// also reference a non-existent field.
 			if (!tryparse) {
 				final trailOpenLocal: String = trailingOpenLocalName(localName);
-				final nullStrCT: ComplexType = TPath({
-					pack: [],
-					name: 'Null',
-					params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-				});
+				final nullStrCT: ComplexType = TPath(
+					{ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+				);
 				parseSteps.push({
 					expr: EVars([
 						{
@@ -566,11 +555,7 @@ final class StarFieldLowering {
 				});
 			}
 		}
-		final wrappedCT: ComplexType = TPath({
-			pack: ['anyparse', 'runtime'],
-			name: 'Trivial',
-			params: [TPType(elemCT)]
-		});
+		final wrappedCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] });
 		final accumCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(wrappedCT)] });
 		parseSteps.push({
 			expr: EVars([
@@ -751,11 +736,7 @@ final class StarFieldLowering {
 		// entirely.
 		final trailCloseLocal: String = trailingCloseLocalName(localName);
 		final trailCloseCapture: Expr = trailCloseCaptureExpr(starNode);
-		final nullStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Null',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
+		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] });
 		parseSteps.push({
 			expr: EVars([
 				{
@@ -1156,11 +1137,9 @@ final class StarFieldLowering {
 	 */
 	private static function pushOrphanTrailLocals(parseSteps: Array<Expr>, localName: String): Void {
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		final arrayStrCT: ComplexType = TPath({
-			pack: [],
-			name: 'Array',
-			params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-		});
+		final arrayStrCT: ComplexType = TPath(
+			{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+		);
 		parseSteps.push({
 			expr: EVars([
 				{

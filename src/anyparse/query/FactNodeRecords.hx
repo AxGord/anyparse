@@ -112,7 +112,8 @@ final class FactNodeRecords {
 		fresh: (String, String, FactPos) -> Bool
 	): Void {
 		FactMerge.collect(
-			record.calls, c -> place(c.p), FactNodeRecordText.compactFactCallRecord, fresh.bind('call'), (c, where) -> ({
+			record.calls, c -> place(c.p), FactNodeRecordText.compactFactCallRecord, fresh.bind('call'),
+			(c, where) -> ({
 				target: c.t,
 				access: c.a,
 				receiver: c.r,
@@ -128,7 +129,8 @@ final class FactNodeRecords {
 			node.calls
 		);
 		FactMerge.collect(
-			record.news, x -> place(x.p), FactNodeRecordText.compactFactNewRecord, fresh.bind('new'), (x, where) -> ({
+			record.news, x -> place(x.p), FactNodeRecordText.compactFactNewRecord, fresh.bind('new'),
+			(x, where) -> ({
 				type: x.t,
 				instance: x.ty,
 				at: where,
@@ -137,7 +139,8 @@ final class FactNodeRecords {
 			node.news
 		);
 		FactMerge.collect(
-			record.fields, f -> place(f.p), FactNodeRecordText.compactFactFieldRecord, fresh.bind('field'), (f, where) -> ({
+			record.fields, f -> place(f.p), FactNodeRecordText.compactFactFieldRecord, fresh.bind('field'),
+			(f, where) -> ({
 				owner: f.o,
 				field: f.f,
 				access: f.a,
@@ -158,7 +161,8 @@ final class FactNodeRecords {
 			(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
 		);
 		FactMerge.collect(
-			record.flows, f -> place(f.p), FactNodeRecordText.compactFactFlowRecord, fresh.bind('flow'), (f, where) -> ({
+			record.flows, f -> place(f.p), FactNodeRecordText.compactFactFlowRecord, fresh.bind('flow'),
+			(f, where) -> ({
 				from: f.s,
 				to: f.d,
 				via: f.c,
@@ -168,7 +172,8 @@ final class FactNodeRecords {
 			node.flows
 		);
 		FactMerge.collect(
-			record.hands, h -> place(h.p), FactNodeRecordText.compactFactHandRecord, fresh.bind('hand'), (h, where) -> ({
+			record.hands, h -> place(h.p), FactNodeRecordText.compactFactHandRecord, fresh.bind('hand'),
+			(h, where) -> ({
 				target: h.t,
 				from: h.s,
 				to: h.d,
@@ -189,7 +194,8 @@ final class FactNodeRecords {
 			(i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact), node.iterations
 		);
 		FactMerge.collect(
-			record.refl, r -> place(r.p), FactNodeRecordText.compactFactReflRecord, fresh.bind('refl'), (r, where) -> ({
+			record.refl, r -> place(r.p), FactNodeRecordText.compactFactReflRecord, fresh.bind('refl'),
+			(r, where) -> ({
 				target: r.t,
 				name: r.n,
 				memberName: r.m,
@@ -205,7 +211,8 @@ final class FactNodeRecords {
 			node.reflection
 		);
 		FactMerge.collect(
-			record.native, n -> place(n.p), FactNodeRecordText.compactFactNativeRecord, fresh.bind('native'), (n, where) -> ({
+			record.native, n -> place(n.p), FactNodeRecordText.compactFactNativeRecord, fresh.bind('native'),
+			(n, where) -> ({
 				kind: n.w,
 				name: n.n,
 				at: where,
@@ -222,12 +229,7 @@ final class FactNodeRecords {
 		);
 		FactMerge.collect(
 			record.reads, r -> place([for (i in 0...r.length - 2) readInt(r[i])]), readText, fresh.bind('read'),
-			(r, where) -> ({
-				type: readString(r[r.length - 2]),
-				name: readString(r[r.length - 1]),
-				at: where
-			}: LocalReadFact),
-			node.reads
+			(r, where) -> ({type: readString(r[r.length - 2]), name: readString(r[r.length - 1]), at: where }: LocalReadFact), node.reads
 		);
 	}
 

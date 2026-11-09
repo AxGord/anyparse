@@ -688,11 +688,9 @@ final class CallGraphEdges {
 				final returned: Null<String> = written == null
 					? null
 					: nominalOf(written, currentType, member, typeScopeOf(recv, currentType));
-				return returned == null || nullableWrappers.contains(returned) ? null : {
-					typeName: returned,
-					isValue: true,
-					isDynamic: false
-				};
+				return returned == null || nullableWrappers.contains(returned)
+					? null
+					: { typeName: returned, isValue: true, isDynamic: false };
 			}
 			if (recv.kind == identKind && name != null) {
 				final span: Null<Span> = recv.span;
@@ -704,28 +702,17 @@ final class CallGraphEdges {
 						&& g.types.generics.declaresTypeParam(currentType, underlying)
 						? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))
 						: underlying;
-					return self == null ? null : {
-						typeName: self,
-						isValue: true,
-						isDynamic: false
-					};
+					return self == null ? null : { typeName: self, isValue: true, isDynamic: false };
 				}
 				if (name == 'super') {
 					final superclass: Null<String> = currentType == null ? null : g.types.superclassOf(currentType);
-					return superclass == null ? null : {
-						typeName: superclass,
-						isValue: false,
-						isDynamic: false
-					};
+					return superclass == null ? null : { typeName: superclass, isValue: false, isDynamic: false };
 				}
 				// a value's declared type is the walk's (below); a bare type-like name binding nothing is a TYPE receiver
 				if (span != null) {
 					final bound: Null<Int> = Refs.bindingAt(name, span.from, tree, shape);
-					if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name)) return {
-						typeName: g.types.imports.typeOf(file, name),
-						isValue: false,
-						isDynamic: false
-					};
+					if ((bound == null || bound < 0) && CallGraphNames.isTypeLike(name))
+						return { typeName: g.types.imports.typeOf(file, name), isValue: false, isDynamic: false };
 				}
 			} else if (
 				isAccessKind(recv.kind) && name != null && CallGraphNames.isTypeLike(name) && typeSourceOf(recv, currentType) == null
@@ -738,11 +725,7 @@ final class CallGraphEdges {
 			}
 			final written: Null<String> = typeSourceOf(recv, currentType);
 			final nominal: Null<String> = written == null ? null : nominalOf(written, currentType, member, typeScopeOf(recv, currentType));
-			return nominal == null ? null : {
-				typeName: nominal,
-				isValue: true,
-				isDynamic: nullableWrappers.contains(nominal)
-			};
+			return nominal == null ? null : { typeName: nominal, isValue: true, isDynamic: nullableWrappers.contains(nominal) };
 		}
 
 		/**
@@ -837,11 +820,9 @@ final class CallGraphEdges {
 				: g.memberOnChain(innerRecv.typeName, innerName) ?? (
 					g.types.declarationCount(innerRecv.typeName) == 0 ? g.externalNode(innerRecv.typeName, innerName) : null
 				);
-			return target == null ? null : {
-				target: target,
-				receiverSource: typeSourceOf(inner.children[0], currentType),
-				onType: innerRecv?.typeName
-			};
+			return target == null
+				? null
+				: { target: target, receiverSource: typeSourceOf(inner.children[0], currentType), onType: innerRecv?.typeName };
 		};
 
 		/**
@@ -1220,10 +1201,11 @@ final class CallGraphEdges {
 			} else {
 				unresolvedAt(span, ComplexCallee(callee.kind), currentType);
 			}
-			if (span != null) sites[span.from] = {
-				target: calleeId,
-				receiver: isAccessKind(callee.kind) && callee.children.length > 0 ? callee.children[0] : null
-			};
+			if (span != null)
+				sites[span.from] = {
+					target: calleeId,
+					receiver: isAccessKind(callee.kind) && callee.children.length > 0 ? callee.children[0] : null
+				};
 			scanArgs(call.children, 1, calleeId, calleeName, currentType);
 		}
 

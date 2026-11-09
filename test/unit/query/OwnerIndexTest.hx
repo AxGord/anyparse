@@ -126,10 +126,7 @@ class OwnerIndexTest extends Test {
 	public function testEachDuplicatedQuestionFindsItsOwnerOnThisTree(): Void {
 		#if (sys || nodejs)
 		final io: ResolvedInputs = CliArgs.resolveInputPaths('haxe', ['${CliFixture.repoRoot()}/src']);
-		final files: Array<{ file: String, source: String }> = io.paths.map(path -> {
-			file: path,
-			source: sys.io.File.getContent(path)
-		});
+		final files: Array<{ file: String, source: String }> = io.paths.map(path -> {file: path, source: sys.io.File.getContent(path) });
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 		for (asked in OWNED) {
 			final top: Array<String> = owners.rank(asked.question, TOP).map(hit -> hit.entry.type);

@@ -247,11 +247,9 @@ final class TokenTranscriptTest extends Test {
 
 	public function testAScriptThatWritesAHxIsASeparateCountAndADeniedWriteIsNotCounted(): Void {
 		final script: String = "python3 - <<'EOF'\nopen('src/A.hx', 'w').write('x')\nEOF";
-		final ran: AgentReading = TokenTranscript.read('a', transcript([
-			user('x'),
-			call('t1', 'Bash', ['command' => script]),
-			result('t1', '')
-		]), null);
+		final ran: AgentReading = TokenTranscript.read(
+			'a', transcript([user('x'), call('t1', 'Bash', ['command' => script]), result('t1', '')]), null
+		);
 		Assert.equals(1, ran.scriptWrites.length);
 		Assert.equals(0, ran.hxWrites.length);
 		final denied: AgentReading = TokenTranscript.read('a', transcript([

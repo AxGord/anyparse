@@ -613,11 +613,13 @@ final class MemberLookup {
 		final local: Null<String> = reader == null ? written : _refs.spelledIn(written, host.file, reader, scope, _typeSyntax);
 		if (local == null) return null;
 		final bound: Null<String> = _ancestors.boundType(start, host, args, local, first.declFrom, first.typeParamNames);
-		return bound == null ? null : {
-			text: first.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
-			host: host,
-			member: first
-		};
+		return bound == null
+			? null
+			: {
+				text: first.optional ? NominalTypes.optionalValueType(bound, _optionalWrapper, _typeSyntax) : bound,
+				host: host,
+				member: first
+			};
 	}
 
 	/** `declaredMemberClosure` from `start` on a fresh walk, asked once per declaration and member name (`QueryCache.declaredMember`). */

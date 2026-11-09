@@ -19,16 +19,12 @@ class SpanInfoCodegen {
 		sub: 'SpanTypeInfo',
 		params: []
 	});
-	private static final NULL_SPAN_CT: ComplexType = TPath({
-		pack: [],
-		name: 'Null',
-		params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))]
-	});
-	private static final NULL_STRING_CT: ComplexType = TPath({
-		pack: [],
-		name: 'Null',
-		params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-	});
+	private static final NULL_SPAN_CT: ComplexType = TPath(
+		{ pack: [], name: 'Null', params: [TPType(TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] }))] }
+	);
+	private static final NULL_STRING_CT: ComplexType = TPath(
+		{ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
+	);
 	private static final STRING_CT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 	private static final INT_CT: ComplexType = TPath({ pack: [], name: 'Int', params: [] });
 	private static final BOOL_CT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
@@ -164,11 +160,7 @@ class SpanInfoCodegen {
 			name: 'spanInfo',
 			access: [APublic, AStatic],
 			doc: 'The six span-indexed type/accessor maps of a parsed `${result.rootTypePath}`, in one walk.',
-			kind: FFun({
-				args: [{ name: 'source', type: STRING_CT }],
-				ret: BUNDLE_CT,
-				expr: body
-			}),
+			kind: FFun({ args: [{ name: 'source', type: STRING_CT }], ret: BUNDLE_CT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

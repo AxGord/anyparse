@@ -277,11 +277,7 @@ final class JsonLayoutWriter {
 	/** The inline gaps of the existing non-empty container `model`: before its first entry, between entries, before its closer. */
 	private function inlineGapsOf(model: QueryNode): InlineGaps {
 		final layout: ContainerLayout = layoutOf(model);
-		return {
-			first: slice(layout.leads[0]),
-			sep: layout.leads.length > 1 ? slice(layout.leads[1]) : ' ',
-			close: slice(layout.close)
-		};
+		return { first: slice(layout.leads[0]), sep: layout.leads.length > 1 ? slice(layout.leads[1]) : ' ', close: slice(layout.close) };
 	}
 
 	/** The nearest untouched sibling of the new element `item` in the array `array` with `item`'s kind, preceding first. */

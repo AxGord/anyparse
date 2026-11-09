@@ -200,11 +200,9 @@ final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		return ifKinds.length == 0 || blockStmtKind == null || support == null ? null : {
-			ifKinds: ifKinds,
-			blockStmtKind: blockStmtKind,
-			blockKinds: support.blockKinds()
-		};
+		return ifKinds.length == 0 || blockStmtKind == null || support == null
+			? null
+			: { ifKinds: ifKinds, blockStmtKind: blockStmtKind, blockKinds: support.blockKinds() };
 	}
 
 }

@@ -82,10 +82,7 @@ final class PrattPostfixLowering {
 		final returnCT: ComplexType = oc.ruleReturnCT(typePath);
 		final loopFnName: String = oc.parseFnName(typePath);
 		final atomFnName: String = '${loopFnName}Atom';
-		final atomCall: Expr = {
-			expr: ECall(macro $i{atomFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final atomCall: Expr = { expr: ECall(macro $i{atomFnName}, [macro ctx]), pos: Context.currentPos() };
 		final operatorBranches: Array<ShapeNode> = [
 			for (b in node.children)
 				if (b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.TERNARY_OP) != null) b
@@ -126,20 +123,14 @@ final class PrattPostfixLowering {
 		// the post-op `skipWs` discards it (the outer Pratt rewind only fires
 		// on no-match). Plain mode keeps `skipWs` (no Trivia channel).
 		final skipFnName: String = oc.ctx.trivia ? 'skipWsAndStash' : 'skipWs';
-		final skipCall: Expr = {
-			expr: ECall(macro $i{skipFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final skipCall: Expr = { expr: ECall(macro $i{skipFnName}, [macro ctx]), pos: Context.currentPos() };
 		var opChain: Expr = macro _matched = false;
 		for (i in 0...operatorBranches.length) {
 			final branch: ShapeNode = operatorBranches[operatorBranches.length - 1 - i];
 			final opText: String = getOperatorText(branch);
 			final branchBody: Expr = buildPrattBranchBody(oc, branch, typePath, simple, skipCall);
 			final matchFnName: String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';
-			final matchCall: Expr = {
-				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]),
-				pos: Context.currentPos()
-			};
+			final matchCall: Expr = { expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]), pos: Context.currentPos() };
 			opChain = macro if ($matchCall)
 				$branchBody
 			else
@@ -211,10 +202,7 @@ final class PrattPostfixLowering {
 		final returnCT: ComplexType = oc.ruleReturnCT(typePath);
 		final enumSimple: String = simple;
 		final selfFnName: String = oc.parseFnName(typePath);
-		final coreCall: Expr = {
-			expr: ECall(macro $i{coreFnName}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final coreCall: Expr = { expr: ECall(macro $i{coreFnName}, [macro ctx]), pos: Context.currentPos() };
 		final postfixBranches: Array<ShapeNode> = [
 			for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b
 		];
@@ -336,10 +324,7 @@ final class PrattPostfixLowering {
 			// Ternary branch: three operands (cond, middle, right).
 			// Both middle and right parse at minPrec=0 (full expression).
 			final sepText: String = branch.annotations[AnnotationKeys.TERNARY_SEP];
-			final fullExprCall: Expr = {
-				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
-				pos: Context.currentPos()
-			};
+			final fullExprCall: Expr = { expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]), pos: Context.currentPos() };
 			// ω-keep-ternary-operand-comment: `@:fmt(captureTernaryTrail)` grows
 			// two operand-trailing slots. The CONDITION's comment is already in
 			// scope as the Pratt loop's `_opTrailComment` (collected before the
@@ -360,10 +345,7 @@ final class PrattPostfixLowering {
 				ctorArgs.push(macro _opTrailComment);
 				ctorArgs.push(macro _thenTrailComment);
 			}
-			final ctorCall: Expr = {
-				expr: ECall(ctorRef, ctorArgs),
-				pos: Context.currentPos()
-			};
+			final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 			final thenTrailCapture: Expr = captureTernaryTrail
 				? macro final _thenTrailComment: Null<String> = collectTrailingBeforeSep(ctx)
 				: macro {};
@@ -584,10 +566,7 @@ final class PrattPostfixLowering {
 		}
 		final elemRefName: String = inner.annotations[AnnotationKeys.BASE_REF];
 		final elemFn: String = simpleName(elemRefName) == enumSimple ? selfFnName : oc.parseFnName(elemRefName);
-		final elemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final elemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro ctx]), pos: Context.currentPos() };
 		final elemCT: ComplexType = oc.ruleReturnCT(elemRefName);
 		// See struct-field close-peek (emitStarFieldSteps) for why
 		// we flip to full-string `peekLit` when close is multi-byte.
@@ -626,11 +605,7 @@ final class PrattPostfixLowering {
 		// in `collectTrailing` instead of being eaten by `skipWs`.
 		final triviaCollect: Bool = oc.ctx.trivia && starNode.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		if (triviaCollect && sepText != null) {
-			final wrappedCT: ComplexType = TPath({
-				pack: ['anyparse', 'runtime'],
-				name: 'Trivial',
-				params: [TPType(elemCT)]
-			});
+			final wrappedCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] });
 			final sepCharCode: Int = sepText.charCodeAt(0);
 			return buildPostfixCallArgsTriviaLoop(
 				elemCT, elemCall, wrappedCT, closeNotNextExpr, sepCharCode, sepText, close, ctorCallTrivia
@@ -708,10 +683,7 @@ final class PrattPostfixLowering {
 		// the suffix is usually a Terminal like HxIdentLit and the
 		// `parseXxxSuffix` call is just a terminal call.
 		final suffixFn: String = simpleName(suffixRef) == enumSimple ? selfFnName : oc.parseFnName(suffixRef);
-		final suffixCall: Expr = {
-			expr: ECall(macro $i{suffixFn}, [macro ctx]),
-			pos: Context.currentPos()
-		};
+		final suffixCall: Expr = { expr: ECall(macro $i{suffixFn}, [macro ctx]), pos: Context.currentPos() };
 		final suffixCT: ComplexType = oc.ruleReturnCT(suffixRef);
 		// A `@:postfix('.')` ctor carrying `@:fmt(captureChainNewline)`
 		// (`HxExpr.FieldAccess`) grows a `chainLeadComment` synth arg in Trivia
@@ -736,21 +708,8 @@ final class PrattPostfixLowering {
 			expr: ECall(
 				ctorRef,
 				captureChainNl
-					? [
-						macro left,
-						macro _suffix,
-						macro _opTrailComment
-					]
-					: captureOpSpace
-						? [
-							macro left,
-							macro _suffix,
-							macro _opSpaceBefore
-						]
-						: [
-							macro left,
-							macro _suffix
-						]
+					? [macro left, macro _suffix, macro _opTrailComment]
+					: captureOpSpace ? [macro left, macro _suffix, macro _opSpaceBefore] : [macro left, macro _suffix]
 			),
 			pos: Context.currentPos()
 		};

@@ -118,10 +118,7 @@ final class LintFixDriver {
 		// time a create is about to reach disk: a creating fix writes during the pass, so a baseline
 		// measured after that would report the run's own file as a pre-existing condition — the
 		// mistake the post-safe-write baseline below already cost once.
-		final preWrite: { taken: Bool, baseline: Null<OracleBaseline> } = {
-			taken: false,
-			baseline: null
-		};
+		final preWrite: { taken: Bool, baseline: Null<OracleBaseline> } = { taken: false, baseline: null };
 		function baselineBeforeCreate(): Void {
 			if (preWrite.taken) return;
 			preWrite.taken = true;
@@ -1203,24 +1200,15 @@ final class LintFixDriver {
 				}
 				final original: String = originalOf[entry.file] ?? entry.source;
 				entry.source = original;
-				undo.push({
-					path: entry.file,
-					content: original
-				});
+				undo.push({ path: entry.file, content: original });
 			}
 			// The other half of the same question: a path the snapshot holds and the run no longer does was DELETED by
 			// this round, so its revert writes the snapshot's bytes back and the file rejoins `files`.
 			for (path in list) {
 				final original: Null<String> = originalOf[path];
 				if (original == null || files.exists(entry -> entry.file == path)) continue;
-				files.push({
-					file: path,
-					source: original
-				});
-				undo.push({
-					path: path,
-					content: original
-				});
+				files.push({ file: path, source: original });
+				undo.push({ path: path, content: original });
 			}
 			CliIo.writeFiles(undo);
 			for (path in remove) {

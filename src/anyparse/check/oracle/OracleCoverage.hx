@@ -399,11 +399,7 @@ final class OracleCoverage implements CompiledSet {
 		#if (sys || nodejs)
 		final resolved: Array<String> = paths.map(path -> FileIdentity.canonical(root, path));
 		return new OracleCoverage(resolved, [
-			{
-				files: resolved,
-				defines: defines ?? [],
-				classPaths: (classPaths ?? []).map(path -> FileIdentity.canonical(root, path))
-			}
+			{ files: resolved, defines: defines ?? [], classPaths: (classPaths ?? []).map(path -> FileIdentity.canonical(root, path)) }
 		], '');
 		#else
 		return unknown(UNSUPPORTED_TARGET);
@@ -449,21 +445,13 @@ final class OracleCoverage implements CompiledSet {
 				continue;
 			}
 			if (line.startsWith(DEFINES_PREFIX)) {
-				arms.push({
-					files: [],
-					defines: definesOf(line),
-					classPaths: pendingRoots
-				});
+				arms.push({ files: [], defines: definesOf(line), classPaths: pendingRoots });
 				pendingRoots = [];
 				continue;
 			}
 			final parsed: Bool = line.startsWith(PARSED_PREFIX);
 			if (!parsed && !line.startsWith(MACRO_DEFINE_PREFIX)) continue;
-			if (arms.length == 0) arms.push({
-				files: [],
-				defines: [],
-				classPaths: []
-			});
+			if (arms.length == 0) arms.push({ files: [], defines: [], classPaths: [] });
 			final arm: CompiledArm = arms[arms.length - 1];
 			if (parsed) {
 				final path: String = line.substr(PARSED_PREFIX.length);

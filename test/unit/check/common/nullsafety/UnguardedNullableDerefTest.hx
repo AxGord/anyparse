@@ -79,7 +79,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testCrossFileInstanceReturnFlagged(): Void {
 		Assert.equals(
-			1, violationsFiles([
+			1,
+			violationsFiles([
 				{ file: 'Helper.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
 				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
 			]).length
@@ -88,7 +89,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testCrossFileStaticReturnFlagged(): Void {
 		Assert.equals(
-			1, violationsFiles([
+			1,
+			violationsFiles([
 				{ file: 'Helper.hx', source: 'class Helper { public static function make():Null<Foo> return null; }' },
 				{ file: 'Caller.hx', source: 'class Caller { function g() { var u = Helper.make(); u.name; } }' }
 			]).length
@@ -97,7 +99,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testCrossFileNonNullReturnNotFlagged(): Void {
 		Assert.equals(
-			0, violationsFiles([
+			0,
+			violationsFiles([
 				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
 				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.plain(); u.name; } }' }
 			]).length
@@ -106,7 +109,8 @@ class UnguardedNullableDerefTest extends Test {
 
 	public function testCrossFileAmbiguousReturnNotFlagged(): Void {
 		Assert.equals(
-			0, violationsFiles([
+			0,
+			violationsFiles([
 				{ file: 'A.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
 				{ file: 'B.hx', source: 'class Helper { public function findUser(s:String):Foo return null; }' },
 				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
@@ -118,7 +122,8 @@ class UnguardedNullableDerefTest extends Test {
 		// A bound local whose type is inferred (unannotated `var Box = new Safe()`) must NOT be
 		// reinterpreted as a same-named indexed class — the static-fallback collision (R1).
 		Assert.equals(
-			0, violationsFiles([
+			0,
+			violationsFiles([
 				{ file: 'Box.hx', source: 'class Box { public function get():Null<Foo> return null; }' },
 				{
 					file: 'Main.hx',
@@ -481,14 +486,16 @@ class UnguardedNullableDerefTest extends Test {
 	@:killer('M-NULLABLE-FLOW-EXCLUDE-NONE')
 	public function testReflectCopyBindingNotFlagged(): Void {
 		Assert.equals(
-			0, violationsFiles([
+			0,
+			violationsFiles([
 				REFLECT,
 				{ file: 'C.hx', source: 'class C { function f(o:Foo) { var s = Reflect.copy(o); s.fill = 1; } }' }
 			]).length,
 			'an identity-nullable copy of a non-null value does not seed the flow'
 		);
 		Assert.equals(
-			1, violationsFiles([
+			1,
+			violationsFiles([
 				REFLECT,
 				{ file: 'C.hx', source: 'class C { function f(o:Foo) { var s = Reflect.other(o); s.fill = 1; } }' }
 			]).length,
@@ -674,7 +681,8 @@ class UnguardedNullableDerefTest extends Test {
 	@:killer('M-DECL-INIT-RECEIVER-MODE-NOMINAL')
 	public function testDeclaredNullableFromANullableFieldStillFlagged(): Void {
 		Assert.equals(
-			1, violationsFiles([
+			1,
+			violationsFiles([
 				{ file: 'Ev.hx', source: 'class Ev { public final itemData:Null<Foo>; public function new() { itemData = null; } }' },
 				{ file: 'C.hx', source: 'class C { function f(event:Ev) { final item: Null<Foo> = event.itemData; item.bar; } }' }
 			]).length,

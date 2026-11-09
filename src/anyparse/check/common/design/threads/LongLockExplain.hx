@@ -162,9 +162,10 @@ final class LongLockExplain {
 				};
 			}
 		];
-		final dominated: Array<{ lock: String, by: Array<String> }> = [
-			for (lock => by in dominators) if (by.length > 0) { lock: lock, by: by.copy() }
-		];
+		final dominated: Array<{ lock: String, by: Array<String> }> = [for (lock => by in dominators) if (by.length > 0) {
+			lock: lock,
+			by: by.copy()
+		}];
 		dominated.sort((a, b) -> Reflect.compare(a.lock, b.lock));
 		return { long: out, mainShort: shortTakes(mainTakes, long), dominated: dominated };
 	}

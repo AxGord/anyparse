@@ -192,15 +192,7 @@ class ApqHxqDxV8CliTest extends Test {
 		// isolation diagnostic only makes sense with ≥2 patterns.
 		#if (sys || nodejs)
 		final input: String = CliFixture.write('apq_strip_pp', 'class C { var x:Int = 1; }');
-		Assert.equals(2, Cli.run([
-			'strip',
-			input,
-			'--replace',
-			'var',
-			'--with',
-			'final',
-			'--per-pattern'
-		]));
+		Assert.equals(2, Cli.run(['strip', input, '--replace', 'var', '--with', 'final', '--per-pattern']));
 		FileSystem.deleteFile(input);
 		#else
 		Assert.pass('non-sys target');

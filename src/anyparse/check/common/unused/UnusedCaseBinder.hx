@@ -202,11 +202,7 @@ final class UnusedCaseBinder extends RuleBase {
 			final span: Null<Span> = group[0].node.span;
 			if (span == null) continue;
 			final reported: Span = span;
-			out.push({
-				span: reported,
-				name: name,
-				edits: [for (binder in group) { span: binder.editSpan, text: binder.editText }]
-			});
+			out.push({ span: reported, name: name, edits: [for (binder in group) { span: binder.editSpan, text: binder.editText }] });
 		}
 	}
 

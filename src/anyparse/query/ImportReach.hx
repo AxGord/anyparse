@@ -18,10 +18,7 @@ using Lambda;
 @:nullSafety(Strict)
 final class ImportReach {
 
-	private final _memo: OracleCoverageMemo = {
-		probes: [],
-		usable: null
-	};
+	private final _memo: OracleCoverageMemo = { probes: [], usable: null };
 	private final _oracles: Array<OracleConfig>;
 	private final _provider: OracleProvider;
 

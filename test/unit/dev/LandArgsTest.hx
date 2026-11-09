@@ -39,8 +39,30 @@ final class LandArgsTest extends Test {
 
 	public function testEveryOptionOfTheUsageIsReadWhereverTheBranchStands(): Void {
 		final parsed: LandArgs = new LandArgs([
-			      '-m', 'msg', '--rounds', '2', '--tokens', '9', '--allow-blast', '--snapshot',        '--full', '--allow',            'x', '--resolve',
-			'p#k=ours',   'B',  '--queue', 'q',   '--logs', 'l',        '--repo',          'r', '--warm-frozen',       'f', '--warm-infra',         'i'
+			'-m',
+			'msg',
+			'--rounds',
+			'2',
+			'--tokens',
+			'9',
+			'--allow-blast',
+			'--snapshot',
+			'--full',
+			'--allow',
+			'x',
+			'--resolve',
+			'p#k=ours',
+			'B',
+			'--queue',
+			'q',
+			'--logs',
+			'l',
+			'--repo',
+			'r',
+			'--warm-frozen',
+			'f',
+			'--warm-infra',
+			'i'
 		]);
 		Assert.equals('B', parsed.branch);
 		Assert.equals('msg', parsed.message);

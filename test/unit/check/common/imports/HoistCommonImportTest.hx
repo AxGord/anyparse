@@ -97,14 +97,8 @@ class HoistCommonImportTest extends Test {
 	private static final NESTED_TREE: Array<TreeFile> = [
 		{ name: 'src/qqz/Zqqwwee.hx', source: 'package qqz;\n\nclass Zqqwwee {}\n' },
 		{ name: 'src/qqz/Yqqwwee.hx', source: 'package qqz;\n\nclass Yqqwwee {}\n' },
-		{
-			name: 'src/aqq/OneQq.hx',
-			source: 'package aqq;\n\nimport qqz.Zqqwwee;\n\nclass OneQq {\n\n\tvar a: Zqqwwee;\n\n}\n'
-		},
-		{
-			name: 'src/aqq/TwoQq.hx',
-			source: 'package aqq;\n\nimport qqz.Zqqwwee;\n\nclass TwoQq {\n\n\tvar a: Zqqwwee;\n\n}\n'
-		},
+		{ name: 'src/aqq/OneQq.hx', source: 'package aqq;\n\nimport qqz.Zqqwwee;\n\nclass OneQq {\n\n\tvar a: Zqqwwee;\n\n}\n' },
+		{ name: 'src/aqq/TwoQq.hx', source: 'package aqq;\n\nimport qqz.Zqqwwee;\n\nclass TwoQq {\n\n\tvar a: Zqqwwee;\n\n}\n' },
 		{
 			name: 'src/aqq/bqq/ThreeQq.hx',
 			source: 'package aqq.bqq;\n\nimport qqz.Yqqwwee;\nimport qqz.Zqqwwee;\n\nclass ThreeQq {\n\n\tvar a: Zqqwwee;\n'
@@ -245,12 +239,14 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-HOIST-USING-DEMOTION')
 	public function testKeepsAnAllowListedUsingWhereARivalRemains(): Void {
-		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Cqqwwee;\n', CALLS_TQQ).concat([
-			{
-				name: 'src/qqz/Cqqwwee.hx',
-				source: 'package qqz;\n\nclass Cqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n}\n'
-			}
-		]);
+		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Cqqwwee;\n', CALLS_TQQ)
+			.concat([
+				{
+					name: 'src/qqz/Cqqwwee.hx',
+					source: 'package qqz;\n\nclass Cqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n'
+					+ '}\n'
+				}
+			]);
 		Assert.equals('', planned(tree));
 	}
 
@@ -270,11 +266,12 @@ class HoistCommonImportTest extends Test {
 	public function testKeepsAUsingWhoseForwardedAccessARivalAnswers(): Void {
 		final extension: (String) -> String = type ->
 			'package qqz;\n\nclass $type {\n\n\tpublic static function tqq(w: Wqqz): String {\n\t\treturn \'$type\';\n\t}\n\n}\n';
-		final module: (String) -> TreeFile = name -> {
-			name: 'src/aqq/$name.hx',
-			source: 'package aqq;\n\nimport qqz.Fwqqz;\n\nusing qqz.Cqqwwee;\nusing qqz.Sqqwwee;\n\nclass $name {\n\n'
-				+ '\tfunction f(x: Fwqqz): String {\n\t\treturn x.tqq();\n\t}\n\n}\n'
-		};
+		final module: (String) -> TreeFile = name ->
+			{
+				name: 'src/aqq/$name.hx',
+				source: 'package aqq;\n\nimport qqz.Fwqqz;\n\nusing qqz.Cqqwwee;\nusing qqz.Sqqwwee;\n\nclass $name {\n\n'
+					+ '\tfunction f(x: Fwqqz): String {\n\t\treturn x.tqq();\n\t}\n\n}\n'
+			};
 		final tree: Array<TreeFile> = [
 			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee"] } } }\n' },
 			{ name: 'src/qqz/Wqqz.hx', source: 'package qqz;\n\nclass Wqqz {}\n' },
@@ -297,10 +294,17 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-HOIST-USINGS-SOURCE-ORDER')
 	public function testHoistedUsingsKeepTheirSourceOrder(): Void {
-		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n').map(file -> file.name == 'apq.json' ? {
-			name: file.name,
-			source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
-		} : file);
+		final tree: Array<TreeFile> = usingTree(
+			'qqz.Sqqwwee', 'using qqz.Rqqwwee;\n'
+		)
+			.map(file ->
+				file.name == 'apq.json'
+					? {
+						name: file.name,
+						source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Rqqwwee"] } } }\n'
+					}
+					: file
+			);
 		Assert.equals('using qqz.Sqqwwee;|using qqz.Rqqwwee;|', hoisted(tree));
 	}
 
@@ -385,18 +389,21 @@ class HoistCommonImportTest extends Test {
 			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
 			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
 			planned(COMMON_TREE.map(entry -> switch entry.name {
-				case 'src/aqq/OneQq.hx': {
-					name: entry.name,
-					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.hqq;\nimport qqz.Zqqwwee;')
-				};
-				case 'src/aqq/TwoQq.hx': {
-					name: entry.name,
-					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.Gqqwwee;\nimport qqz.Zqqwwee;')
-				};
-				case 'src/aqq/ThreeQq.hx': {
-					name: entry.name,
-					source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Pqqwwee.Hqqwwee;\nimport qqz.Zqqwwee;')
-				};
+				case 'src/aqq/OneQq.hx':
+					{
+						name: entry.name,
+						source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.hqq;\nimport qqz.Zqqwwee;')
+					};
+				case 'src/aqq/TwoQq.hx':
+					{
+						name: entry.name,
+						source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Kqqwwee.Gqqwwee;\nimport qqz.Zqqwwee;')
+					};
+				case 'src/aqq/ThreeQq.hx':
+					{
+						name: entry.name,
+						source: entry.source.replace('import qqz.Zqqwwee;', 'import qqz.Pqqwwee.Hqqwwee;\nimport qqz.Zqqwwee;')
+					};
 				case _: entry;
 			}).concat([kqq]))
 		);
@@ -424,10 +431,15 @@ class HoistCommonImportTest extends Test {
 			'src/aqq/OneQq.hx:qqz.Zqqwwee@src/import.hx,src/aqq/ThreeQq.hx:qqz.Zqqwwee@src/import.hx,'
 			+ 'src/aqq/TwoQq.hx:qqz.Zqqwwee@src/import.hx',
 			planned(
-				COMMON_TREE.filter(entry -> entry.name.startsWith('src/aqq/')).map(entry -> entry.name == 'src/aqq/FourQq.hx' ? {
-					name: entry.name,
-					source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
-				} : entry),
+				COMMON_TREE.filter(entry -> entry.name.startsWith('src/aqq/'))
+					.map(entry ->
+						entry.name == 'src/aqq/FourQq.hx'
+							? {
+								name: entry.name,
+								source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
+							}
+							: entry
+					),
 				LIBRARY_FILES
 			)
 		);
@@ -449,10 +461,12 @@ class HoistCommonImportTest extends Test {
 	public function testABuildParsingAReceiverButNotTheStatementWithholdsIt(): Void {
 		// FourQq's own statement resolves under the statement's classpath entry, which vouches for nothing the statement's
 		// module imports in turn: the second build reads FourQq and that entry, never the statement's module
-		final tree: Array<TreeFile> = aqqTree().map(entry -> entry.name == 'src/aqq/FourQq.hx' ? {
-			name: entry.name,
-			source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n'
-		} : entry);
+		final tree: Array<TreeFile> = aqqTree()
+			.map(entry ->
+				entry.name == 'src/aqq/FourQq.hx'
+					? {name: entry.name, source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n' }
+					: entry
+			);
 		Assert.equals('', planned(tree, LIBRARY_FILES, [
 			AQQ_MODULES.concat([LIBRARY_FILES[0].file]),
 			['src/aqq/FourQq.hx', LIBRARY_FILES[1].file]
@@ -582,7 +596,8 @@ class HoistCommonImportTest extends Test {
 	@:pin('guard')
 	public function testExtendingAnExistingSourceIsAnEdit(): Void {
 		Assert.equals(
-			'edit', slicesOf(COMMON_TREE.concat([
+			'edit',
+			slicesOf(COMMON_TREE.concat([
 				{ name: 'src/import.hx', source: 'import aqq.Aqqwwee;\n' },
 				{ name: 'src/aqq/Aqqwwee.hx', source: 'package aqq;\n\nclass Aqqwwee {}\n' }
 			])).head
@@ -607,10 +622,12 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-SINK-SHARE-BLIND')
 	public function testKeepsAStatementEnoughModulesRead(): Void {
 		Assert.equals(
-			'', sunk(SINK_TREE.map(entry -> entry.name == 'src/aqq/TwoQq.hx' ? {
-				name: entry.name,
-				source: 'package aqq;\n\nclass TwoQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
-			} : entry))
+			'',
+			sunk(SINK_TREE.map(entry ->
+				entry.name == 'src/aqq/TwoQq.hx'
+					? {name: entry.name, source: 'package aqq;\n\nclass TwoQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+					: entry
+			))
 		);
 	}
 
@@ -636,10 +653,9 @@ class HoistCommonImportTest extends Test {
 	/** A source keeping another statement, or a comment, is EDITED: deleting it would take them along. */
 	@:pin('guard')
 	public function testTheSinkKeepsASourceThatCarriesMore(): Void {
-		final commented: Array<TreeFile> = SINK_TREE.map(entry -> entry.name == 'src/aqq/import.hx' ? {
-			name: entry.name,
-			source: '// shared\nimport qqz.Rqqwwee;\n'
-		} : entry);
+		final commented: Array<TreeFile> = SINK_TREE.map(
+			entry -> entry.name == 'src/aqq/import.hx' ? {name: entry.name, source: '// shared\nimport qqz.Rqqwwee;\n' } : entry
+		);
 		Assert.equals('// shared||', fileAfter(commented, 'src/aqq/import.hx'));
 	}
 
@@ -651,13 +667,18 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-SINK-RIVAL-BLIND')
 	public function testRefusesASinkWhereANearerSourceBindsTheName(): Void {
 		Assert.equals(
-			'', sunk(SINK_TREE.map(entry -> entry.name == 'src/aqq/OneQq.hx' ? {
-				name: 'src/aqq/bqq/OneQq.hx',
-				source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
-			} : entry).concat([
-				{ name: 'src/wqq/Rqqwwee.hx', source: 'package wqq;\n\nclass Rqqwwee {}\n' },
-				{ name: 'src/aqq/bqq/import.hx', source: 'import wqq.Rqqwwee;\n' }
-			]))
+			'',
+			sunk(
+				SINK_TREE.map(entry ->
+					entry.name == 'src/aqq/OneQq.hx'
+						? {name: 'src/aqq/bqq/OneQq.hx', source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+						: entry
+				)
+					.concat([
+						{ name: 'src/wqq/Rqqwwee.hx', source: 'package wqq;\n\nclass Rqqwwee {}\n' },
+						{ name: 'src/aqq/bqq/import.hx', source: 'import wqq.Rqqwwee;\n' }
+					])
+			)
 		);
 	}
 
@@ -668,10 +689,11 @@ class HoistCommonImportTest extends Test {
 		Assert.equals(
 			'',
 			sunk(
-				SINK_TREE.map(entry -> entry.name == 'src/aqq/OneQq.hx' ? {
-					name: entry.name,
-					source: 'package aqq;\n\nimport eqq.Rqqwwee;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n'
-				} : entry)
+				SINK_TREE.map(entry ->
+					entry.name == 'src/aqq/OneQq.hx'
+						? {name: entry.name, source: 'package aqq;\n\nimport eqq.Rqqwwee;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+						: entry
+				)
 					.concat([{ name: 'src/eqq/Rqqwwee.hx', source: 'package eqq;\n\nclass Rqqwwee {}\n' }])
 			)
 		);
@@ -743,11 +765,12 @@ class HoistCommonImportTest extends Test {
 		final root: String = CliFixture.writeTree(
 			'apq_hoist_sink_rename',
 			SINK_TREE.map(entry -> switch entry.name {
-				case 'src/aqq/OneQq.hx': {
-					name: entry.name,
-					source: 'package aqq;\n\nclass OneQq extends qqz.Base {\n\n\tfunction f():Int {\n\t\treturn shape;\n\t}\n\n'
-						+ '\tvar a:Rqqwwee;\n\n}\n'
-				};
+				case 'src/aqq/OneQq.hx':
+					{
+						name: entry.name,
+						source: 'package aqq;\n\nclass OneQq extends qqz.Base {\n\n\tfunction f():Int {\n\t\treturn shape;\n\t}\n\n'
+							+ '\tvar a:Rqqwwee;\n\n}\n'
+					};
 				case _: entry;
 			})
 				.concat([
@@ -886,23 +909,14 @@ class HoistCommonImportTest extends Test {
 	private function slicesOf(tree: Array<TreeFile>): { head: String, groups: Int } {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_hoist_slices', tree);
-		var out: { head: String, groups: Int } = {
-			head: '',
-			groups: 0
-		};
+		var out: { head: String, groups: Int } = { head: '', groups: 0 };
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final slices: Array<Array<CrossFileEdits>> = fixOf(tree, root);
-			out = {
-				head: slices.length == 0 ? '' : slices[0][0].create != null ? 'create' : 'edit',
-				groups: slices.length
-			};
+			out = { head: slices.length == 0 ? '' : slices[0][0].create != null ? 'create' : 'edit', groups: slices.length };
 		});
 		return out;
 		#else
-		return {
-			head: '',
-			groups: 0
-		};
+		return { head: '', groups: 0 };
 		#end
 	}
 
@@ -1000,10 +1014,7 @@ class HoistCommonImportTest extends Test {
 
 	/** One module of `aqq` carrying `statement` and reading `name`. */
 	private static function carrying(module: String, statement: String, name: String): TreeFile {
-		return {
-			name: 'src/aqq/$module.hx',
-			source: 'package aqq;\n\n$statement\n\nclass $module {\n\n\tvar a: $name;\n\n}\n'
-		};
+		return { name: 'src/aqq/$module.hx', source: 'package aqq;\n\n$statement\n\nclass $module {\n\n\tvar a: $name;\n\n}\n' };
 	}
 
 	/**
@@ -1041,10 +1052,7 @@ class HoistCommonImportTest extends Test {
 		) -> String = (type, method) ->
 			'package qqz;\n\nclass $type {\n\n\tpublic static function $method(s:String):String {\n\t\treturn s;\n\t}\n\n}\n';
 		final tree: Array<TreeFile> = [
-			{
-				name: 'apq.json',
-				source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Pqqwwee"] } } }\n'
-			},
+			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Pqqwwee"] } } }\n' },
 			{ name: 'src/qqz/Sqqwwee.hx', source: extension('Sqqwwee', 'tqq') },
 			{ name: 'src/qqz/Rqqwwee.hx', source: extension('Rqqwwee', 'uqq') },
 			{ name: 'src/qqz/Pqqwwee.hx', source: extension('Pqqwwee', 'vqq') },

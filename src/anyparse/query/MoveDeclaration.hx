@@ -81,25 +81,40 @@ final class MoveDeclaration {
 			'mirrors'
 		]);
 		if (unknown != null) return Left(unknown);
-		return try Right({
-			scope: strings(section, 'scope').map(at),
-			text: strings(section, 'text').map(at),
-			textExclude: strings(section, 'textExclude').map(at),
-			textExtensions: strings(section, 'textExtensions'),
-			registries: objects(section, 'registries', ['file', 'keys', 'byPackage', 'members']).map(r -> registry(r, at)),
-			sortedLists: [
-				for (list in objects(section, 'sortedLists', ['parts']))
-					objects(list, 'parts', ['file', 'select']).map(part -> {
-						file: at(string(part, 'sortedLists.parts', 'file')),
-						select: string(part, 'sortedLists.parts', 'select')
-					})
-			],
-			mirrors: objects(section, 'mirrors', ['source', 'test', 'suffixes']).map(m -> {
-				source: at(string(m, 'mirrors', 'source')),
-				test: at(string(m, 'mirrors', 'test')),
-				suffixes: strings(m, 'suffixes')
+		return try
+			Right({
+				scope: strings(section, 'scope').map(at),
+				text: strings(section, 'text').map(at),
+				textExclude: strings(section, 'textExclude').map(at),
+				textExtensions: strings(section, 'textExtensions'),
+				registries: objects(section, 'registries', ['file', 'keys', 'byPackage', 'members']).map(r -> registry(r, at)),
+				sortedLists: [
+					for (list in objects(section, 'sortedLists', ['parts']))
+						objects(
+							list, 'parts', ['file', 'select']
+						)
+							.map(
+								part ->
+									{
+										file: at(string(part, 'sortedLists.parts', 'file')),
+										select: string(part, 'sortedLists.parts', 'select')
+									}
+							)
+				],
+				mirrors: objects(
+					section, 'mirrors', ['source', 'test', 'suffixes']
+				)
+					.map(
+						m ->
+							{
+								source: at(string(m, 'mirrors', 'source')),
+								test: at(string(m, 'mirrors', 'test')),
+								suffixes: strings(m, 'suffixes')
+							}
+					)
 			})
-		}) catch (exception: Exception) Left(exception.message);
+		catch (exception: Exception)
+			Left(exception.message);
 	}
 
 	/** The string array at `key` of `node` (empty when absent); throws naming the key when it is anything else. */

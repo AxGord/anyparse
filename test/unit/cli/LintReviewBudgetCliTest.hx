@@ -103,10 +103,10 @@ final class LintReviewBudgetCliTest extends Test {
 
 	/** One `lint --fix --rule member-order` run over a fresh copy of the oversized type: its stderr and the file afterwards. */
 	private static function fixRun(extra: Array<String>, count: Int = 80, config: String = '{}'): BudgetRun {
-		final dir: String = CliFixture.writeTree('apq_review_budget', [
-			{ name: 'C.hx', source: oversized(count) },
-			{ name: 'apq.json', source: config }
-		]);
+		final dir: String = CliFixture.writeTree(
+			'apq_review_budget',
+			[{ name: 'C.hx', source: oversized(count) }, { name: 'apq.json', source: config }]
+		);
 		var before: String = '';
 		var err: String = '';
 		var after: String = '';

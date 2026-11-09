@@ -486,10 +486,7 @@ final class WriterTriviaStarEmitLowering {
 		final subsequentSepOverride: Null<Expr> = if (elemBodyField == null) {
 			null;
 		} else {
-			final prevElemBodyAccess: Expr = {
-				expr: EField(macro _arr[_si - 1].node, elemBodyField),
-				pos: Context.currentPos()
-			};
+			final prevElemBodyAccess: Expr = { expr: EField(macro _arr[_si - 1].node, elemBodyField), pos: Context.currentPos() };
 			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
 			final bareBranch: Expr = blockShapeAware ? bareSep : bareSepBreak(barePolicyFields[1], sepExpr, softSeam);
 			final cases: Array<Case> = shapeSepCases(blockPatterns, listPatterns, seamFlag, blockBranch, bareBranch);
@@ -538,10 +535,7 @@ final class WriterTriviaStarEmitLowering {
 			final extras: Int = branchSynthExtraArity(ctx.ctorPat, prevBareRefBody.typePath, branch);
 			final patternArgs: Array<Expr> = [macro _, macro _ct];
 			for (_ in 0...extras - 1) patternArgs.push(macro _);
-			final pattern: Expr = {
-				expr: ECall(ctorRef, patternArgs),
-				pos: Context.currentPos()
-			};
+			final pattern: Expr = { expr: ECall(ctorRef, patternArgs), pos: Context.currentPos() };
 			cases.push({ values: [pattern], guard: macro _ct != null && StringTools.startsWith(_ct, '//'), expr: macro _de() });
 			cases.push({ values: [pattern], guard: macro _ct != null && _t.newlineBefore, expr: macro _dhl() });
 		}

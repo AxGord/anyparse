@@ -148,12 +148,12 @@ class DefiniteAssignmentGuardTest extends Test {
 	/** The guard's answer for `source` with `fragment` replaced by `replacement`, as one edit. */
 	private function refuse(source: String, fragment: String, replacement: String): Null<String> {
 		final at: Int = source.indexOf(fragment);
-		if (at >= 0) return DefiniteAssignmentGuard.unassignedRead(source, [
-			{
-				span: new Span(at, at + fragment.length),
-				text: replacement
-			}
-		], new HaxeQueryPlugin());
+		if (at >= 0)
+			return DefiniteAssignmentGuard.unassignedRead(
+				source,
+				[{ span: new Span(at, at + fragment.length), text: replacement }],
+				new HaxeQueryPlugin()
+			);
 		Assert.fail('fixture does not contain "$fragment"');
 		return null;
 	}

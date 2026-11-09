@@ -487,7 +487,8 @@ class PreferFinalFieldCheckTest extends Test {
 	 */
 	public function testPublicFieldsMetaStructuralTypedefMemberNotFlagged(): Void {
 		Assert.equals(
-			0, ownerViolations([
+			0,
+			ownerViolations([
 				{ file: 'C.hx', source: '@:publicFields\nclass C { var x:Int = 0; }' },
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; }' }
 			]).length
@@ -497,7 +498,8 @@ class PreferFinalFieldCheckTest extends Test {
 	/** A structure the class does NOT satisfy (it lacks `y`) leaves the field flagged. */
 	public function testUnsatisfiedStructuralTypedefStillFlagged(): Void {
 		Assert.equals(
-			1, ownerViolations([
+			1,
+			ownerViolations([
 				{ file: 'C.hx', source: '@:publicFields\nclass C { var x:Int = 0; }' },
 				{ file: 'S.hx', source: 'typedef S = { var x:Int; var y:Int; }' }
 			]).length

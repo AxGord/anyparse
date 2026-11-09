@@ -45,11 +45,7 @@ final class PostLand {
 	private static final TOTALS: EReg = ~/--- suite-shard: \d+ classes \/ (\d+) tests \/ (\d+) assertions/;
 
 	/** The pool's lease for the run: flexible, and behind the leases a land asks for. */
-	private static final ASK: Ask = {
-		min: Lease.HEAVY_MIN,
-		max: Shard.DEFAULT_SHARDS,
-		priority: 0
-	};
+	private static final ASK: Ask = { min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 };
 
 	/** The commits whose whole suite ended red and were not cleared. */
 	public static inline function red(cache: String): Array<String> {

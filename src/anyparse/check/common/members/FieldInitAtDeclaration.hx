@@ -563,11 +563,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 					byStmt[cand.stmtFrom] = cand;
 			}
 		});
-		return {
-			byStmt: byStmt,
-			embedded: embedded,
-			coMoversOrderSafe: coMoversOrderSafe
-		};
+		return { byStmt: byStmt, embedded: embedded, coMoversOrderSafe: coMoversOrderSafe };
 	}
 
 	/**
@@ -627,10 +623,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 			|| member.children.length >= 1
 			|| source.substring(span.from, span.to).indexOf('(') >= 0
 			? null
-			: {
-				name: name,
-				span: span
-			};
+			: { name: name, span: span };
 	}
 
 	/**
@@ -650,11 +643,8 @@ final class FieldInitAtDeclaration extends RuleBase {
 		final target: QueryNode = assign.children[0];
 		for (member in container.children) {
 			final mv: Null<{ name: String, span: Span }> = movableField(member, statics, source, shape);
-			if (mv != null && denotesMember(target, mv.span.from, mv.name, container, shape)) return {
-				name: mv.name,
-				span: mv.span,
-				rhs: assign.children[1]
-			};
+			if (mv != null && denotesMember(target, mv.span.from, mv.name, container, shape))
+				return { name: mv.name, span: mv.span, rhs: assign.children[1] };
 		}
 		return null;
 	}
@@ -911,22 +901,14 @@ final class FieldInitAtDeclaration extends RuleBase {
 		);
 		if (init != null) {
 			final stmtSpan: Null<Span> = init.stmt.span;
-			return stmtSpan == null ? null : {
-				rhs: init.rhs,
-				at: stmtSpan,
-				embedded: false
-			};
+			return stmtSpan == null ? null : { rhs: init.rhs, at: stmtSpan, embedded: false };
 		}
 		final write: Null<{ assign: QueryNode, rhs: QueryNode, target: Span }> = CtorFieldWrite.soleConstructorFieldWrite(
 			container, ctor, member, shape
 		);
 		if (write == null) return null;
 		final assignSpan: Null<Span> = write.assign.span;
-		return assignSpan == null ? null : {
-			rhs: write.rhs,
-			at: assignSpan,
-			embedded: true
-		};
+		return assignSpan == null ? null : { rhs: write.rhs, at: assignSpan, embedded: true };
 	}
 
 	/**

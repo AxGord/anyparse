@@ -75,10 +75,7 @@ class TransformCodegen {
 	 * One `private static function _transform<T>(node:T, visit):T` field.
 	 */
 	private static function transformField(fn: TransformLowering.TransformFn, visitCT: ComplexType): Field {
-		final args: Array<FunctionArg> = [
-			{ name: 'node', type: fn.paramCT },
-			{ name: 'visit', type: visitCT }
-		];
+		final args: Array<FunctionArg> = [{ name: 'node', type: fn.paramCT }, { name: 'visit', type: visitCT }];
 		return {
 			name: fn.fnName,
 			access: [APrivate, AStatic],
@@ -95,10 +92,7 @@ class TransformCodegen {
 	 */
 	private static function publicTransformField(result: TransformLowering.TransformResult, visitCT: ComplexType): Field {
 		final rootCT: ComplexType = result.rootCT;
-		final args: Array<FunctionArg> = [
-			{ name: 'root', type: rootCT },
-			{ name: 'visit', type: visitCT }
-		];
+		final args: Array<FunctionArg> = [{ name: 'root', type: rootCT }, { name: 'visit', type: visitCT }];
 		final callee: Expr = { expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() };
 		final body: Expr = {
 			expr: EReturn({ expr: ECall(callee, [macro root, macro visit]), pos: Context.currentPos() }),

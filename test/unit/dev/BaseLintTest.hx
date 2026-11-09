@@ -221,7 +221,8 @@ final class BaseLintTest extends Test {
 			cmd('git $git commit -q -m slice').at(tree).check();
 		}
 		File.saveContent(
-			Path.join([logs, GateTree.BASELINE_FILE]), BaselineWriter.write({
+			Path.join([logs, GateTree.BASELINE_FILE]),
+			BaselineWriter.write({
 				base: base,
 				lists: JObject([]),
 				infra: infra ? [{ tree: dir.file('infra'), snapshot: dir.file('infra.json') }] : [],

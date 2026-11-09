@@ -113,11 +113,9 @@ final class NamingRenames {
 		final bodyScoped: Bool = isBodyScopedCategory(decl.category);
 		final ownerName: Null<String> = decl.enclosingType;
 		// The owner half applies to members only; the index + file half applies to every declaration.
-		final ctx: Null<RenameContext> = resolutionIndex == null ? null : {
-			index: resolutionIndex,
-			file: file,
-			ownerName: bodyScoped ? null : ownerName
-		};
+		final ctx: Null<RenameContext> = resolutionIndex == null
+			? null
+			: { index: resolutionIndex, file: file, ownerName: bodyScoped ? null : ownerName };
 		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name), bodyScoped, ctx
 		);
@@ -612,11 +610,7 @@ final class NamingRenames {
 		// treatment here. A receiver whose type does not RESOLVE stays out of both halves and keeps
 		// blocking — fail-closed.
 		final ownerName: Null<String> = ctx?.ownerName;
-		final attributed: {
-			bareBound: Array<Span>,
-			typedBound: Array<Span>,
-			ignore: Array<Span>
-		} = ctx == null || ownerName == null
+		final attributed: { bareBound: Array<Span>, typedBound: Array<Span>, ignore: Array<Span> } = ctx == null || ownerName == null
 			? { bareBound: [], typedBound: [], ignore: [] }
 			: inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, ctx.index);
 		final foreign: Array<Span> = attributed.ignore;

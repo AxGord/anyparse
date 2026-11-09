@@ -358,10 +358,7 @@ final class BackingFieldRefs {
 		return subtypeRefWalk(
 			tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans, shape
 		)
-			? {
-				renameEdits: renameEdits,
-				excludeSpans: excludeSpans
-			}
+			? { renameEdits: renameEdits, excludeSpans: excludeSpans }
 			: null;
 	}
 

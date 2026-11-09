@@ -499,10 +499,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		} else {
 			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [for (_ in 0...ctorArity(ref, ANON_CTOR)) '_']);
 			{
-				expr: ESwitch(value, [
-					{ values: [anonPattern], expr: walkArm },
-					{ values: [macro _], expr: skipArm }
-				], null),
+				expr: ESwitch(value, [{ values: [anonPattern], expr: walkArm }, { values: [macro _], expr: skipArm }], null),
 				pos: Context.currentPos()
 			};
 		}
@@ -755,14 +752,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		}
 
 		return body.length == 0
-			? {
-				values: [pattern],
-				expr: macro {}
-			}
-			: {
-				values: [pattern],
-				expr: block([macro final _s: anyparse.runtime.Span = _span].concat(body))
-			};
+			? { values: [pattern], expr: macro {} }
+			: { values: [pattern], expr: block([macro final _s: anyparse.runtime.Span = _span].concat(body)) };
 	}
 
 	/** Recurse one value for nested type refs, guarding optionality and looping arrays. */

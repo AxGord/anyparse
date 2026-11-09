@@ -275,15 +275,14 @@ class ThreadSafetyDominanceTest extends Test {
 	@:pin('control') @:killer('M-TS-DOM-UNDECIDED') @:killer('M-TS-DOM-ENTRY-NONE')
 	public function testAConditionalTakeTheValuationDecidesCounts(): Void {
 		#if (sys || nodejs)
-		Assert.same([
-			'info B D.outer | D._outer',
-			'info B D.quick | D._outer',
-			'warning B D.slow | D._outer'
-		], holds(run(
-			'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'
-			+ ' if (!batch) _outer.release(); } public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
-			'd.slow(false); d.outer();', true, CLOSED
-		)));
+		Assert.same(
+			['info B D.outer | D._outer', 'info B D.quick | D._outer', 'warning B D.slow | D._outer'],
+			holds(run(
+				'public function slow(batch:Bool):Void { if (!batch) _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release();'
+				+ ' if (!batch) _outer.release(); } public function outer():Void { _outer.acquire(); slow(true); _outer.release(); }',
+				'd.slow(false); d.outer();', true, CLOSED
+			))
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

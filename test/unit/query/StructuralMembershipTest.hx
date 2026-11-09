@@ -157,34 +157,35 @@ class StructuralMembershipTest extends Test {
 
 	/** The alias fixture set: the two std container shapes verbatim, plus one refusal per alias form. */
 	private function aliasFiles(): Array<{ file: String, source: String }> {
-		return iterableFiles().concat([
-			{ file: 'Use.hx', source: 'class Use {}' },
-			{ file: 'List.hx', source: 'typedef List<T> = haxe.ds.List<T>;' },
-			{
-				file: 'haxe/ds/List.hx',
-				source: 'package haxe.ds;\n\nclass List<T> {\n\tpublic function iterator():ListIterator<T> return null;\n}\n\n'
-				+ 'private class ListIterator<T> {\n\tpublic function hasNext() return false;\n\n\tpublic function next() return null;\n}'
-			},
-			{ file: 'Map.hx', source: 'typedef Map<K, V> = haxe.ds.Map<K, V>;' },
-			{
-				file: 'haxe/ds/Map.hx',
-				source: 'package haxe.ds;\n\nabstract Map<K, V>(IMap<K, V>) {\n\t'
-				+ 'public inline function iterator():Iterator<V> return null;\n}'
-			},
-			{ file: 'Renamed.hx', source: 'typedef Renamed = deep.Sack;' },
-			{ file: 'deep/Sack.hx', source: 'package deep;\n\nclass Sack {\n\tpublic function iterator():DeepIter return null;\n}' },
-			{ file: 'Chained.hx', source: 'typedef Chained = Renamed;' },
-			{ file: 'PlainAlias.hx', source: 'typedef PlainAlias = Widget;' },
-			{ file: 'Outside.hx', source: 'typedef Outside = nowhere.Gone;' },
-			{ file: 'Anon.hx', source: 'typedef Anon = { var a:Int; };' },
-			{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' },
-			{ file: 'IterStruct.hx', source: 'typedef IterStruct = {\n\tfunction iterator():BagIter;\n}' },
-			{ file: 'SubStruct.hx', source: 'typedef SubStruct = {\n\t> IterStruct,\n\tvar a:Widget;\n}' },
-			{ file: 'Commented.hx', source: 'typedef Commented = /* c */ deep.Sack;' },
-			{ file: 'CommentedDup.hx', source: 'typedef CommentedDup = /* c */ deep.Twin;' },
-			{ file: 'deep/Twin.hx', source: 'package deep;\n\nclass Twin {\n\tpublic function iterator():DeepIter return null;\n}' },
-			{ file: 'other/Twin.hx', source: 'package other;\n\nclass Twin {}' }
-		]);
+		return iterableFiles()
+			.concat([
+				{ file: 'Use.hx', source: 'class Use {}' },
+				{ file: 'List.hx', source: 'typedef List<T> = haxe.ds.List<T>;' },
+				{
+					file: 'haxe/ds/List.hx',
+					source: 'package haxe.ds;\n\nclass List<T> {\n\tpublic function iterator():ListIterator<T> return null;\n}\n\nprivate '
+					+ 'class ListIterator<T> {\n\tpublic function hasNext() return false;\n\n\tpublic function next() return null;\n}'
+				},
+				{ file: 'Map.hx', source: 'typedef Map<K, V> = haxe.ds.Map<K, V>;' },
+				{
+					file: 'haxe/ds/Map.hx',
+					source: 'package haxe.ds;\n\nabstract Map<K, V>(IMap<K, V>) {\n\t'
+					+ 'public inline function iterator():Iterator<V> return null;\n}'
+				},
+				{ file: 'Renamed.hx', source: 'typedef Renamed = deep.Sack;' },
+				{ file: 'deep/Sack.hx', source: 'package deep;\n\nclass Sack {\n\tpublic function iterator():DeepIter return null;\n}' },
+				{ file: 'Chained.hx', source: 'typedef Chained = Renamed;' },
+				{ file: 'PlainAlias.hx', source: 'typedef PlainAlias = Widget;' },
+				{ file: 'Outside.hx', source: 'typedef Outside = nowhere.Gone;' },
+				{ file: 'Anon.hx', source: 'typedef Anon = { var a:Int; };' },
+				{ file: 'Fn.hx', source: 'typedef Fn = Bag -> Widget;' },
+				{ file: 'IterStruct.hx', source: 'typedef IterStruct = {\n\tfunction iterator():BagIter;\n}' },
+				{ file: 'SubStruct.hx', source: 'typedef SubStruct = {\n\t> IterStruct,\n\tvar a:Widget;\n}' },
+				{ file: 'Commented.hx', source: 'typedef Commented = /* c */ deep.Sack;' },
+				{ file: 'CommentedDup.hx', source: 'typedef CommentedDup = /* c */ deep.Twin;' },
+				{ file: 'deep/Twin.hx', source: 'package deep;\n\nclass Twin {\n\tpublic function iterator():DeepIter return null;\n}' },
+				{ file: 'other/Twin.hx', source: 'package other;\n\nclass Twin {}' }
+			]);
 	}
 
 	/** The fixture set: one iterable pair, six near-misses, a cross-package iterator, and a generic extension module. */

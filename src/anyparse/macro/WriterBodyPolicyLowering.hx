@@ -468,10 +468,12 @@ final class WriterBodyPolicyLowering {
 			pos: Context.currentPos()
 		};
 		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
-		final sameSepBlock: Expr = hasKwSlots ? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt) : {
-			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null }], sameSepBlockSameLayout),
-			pos: Context.currentPos()
-		};
+		final sameSepBlock: Expr = hasKwSlots
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
+			: {
+				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null }], sameSepBlockSameLayout),
+				pos: Context.currentPos()
+			};
 		return macro _dc([$sameSepBlock, $writeCall]);
 	}
 
@@ -545,10 +547,7 @@ final class WriterBodyPolicyLowering {
 			final _body: anyparse.core.Doc = $writeCall;
 			$fitInnerExpr;
 		};
-		final elseAccess: Expr = {
-			expr: EField(macro value, elseFieldName),
-			pos: Context.currentPos()
-		};
+		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
 		return macro {
 			final _body: anyparse.core.Doc = $writeCall;
 			// ω-elseif-body-break: `_inElseIfBranch` (set by an enclosing `else if`
@@ -759,10 +758,9 @@ final class WriterBodyPolicyLowering {
 
 	/** The runtime test "is `value` built by one of `patterns`" — constant `false` for an empty list. */
 	private static function isOneOfCtors(value: Expr, patterns: Array<Expr>): Expr {
-		return patterns.length == 0 ? macro false : {
-			expr: ESwitch(value, [{ values: patterns, expr: macro true, guard: null }], macro false),
-			pos: Context.currentPos()
-		};
+		return patterns.length == 0
+			? macro false
+			: { expr: ESwitch(value, [{ values: patterns, expr: macro true, guard: null }], macro false), pos: Context.currentPos() };
 	}
 
 	/**

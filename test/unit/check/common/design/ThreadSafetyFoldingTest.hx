@@ -21,7 +21,8 @@ class ThreadSafetyFoldingTest extends Test {
 	public function testAWaitInsideASinksBodyIsTheSinks(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A Net.fetch | Lock.wait', 'warning A A.main | Net.fetch'], graded(run([
+			['info A Net.fetch | Lock.wait', 'warning A A.main | Net.fetch'],
+			graded(run([
 				NET,
 				'class A { public static function main():Void { final n:Net = new Net(); n.fetch(); } }'
 			])).filter(g -> g.indexOf('Net.deep') < 0)

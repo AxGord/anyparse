@@ -418,10 +418,7 @@ class MoveToHelperSliceTest extends Test {
 				source: 'package io;\n\nclass Output {\n\tpublic function new() {}\n\n\tpublic function helperFn(): Int {\n\t\treturn 1;\n'
 					+ '\t}\n}\n'
 			},
-			{
-				file: 'a/Util.hx',
-				source: 'package a;\n\nclass Util {\n\tpublic static function helperFn(): Int {\n\t\treturn 2;\n\t}\n}\n'
-			}
+			{ file: 'a/Util.hx', source: 'package a;\n\nclass Util {\n\tpublic static function helperFn(): Int {\n\t\treturn 2;\n\t}\n}\n' }
 		];
 		refused(move('work', 'SrcTools', files), 'may be a supertype of "Src"');
 		refused(
