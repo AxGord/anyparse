@@ -240,6 +240,7 @@ final class TriviaSepLowering {
 
 		final ignoreCheckExpr: Expr = checks.ignoreCheckExpr;
 		final noWrapFlatCheckExpr: Expr = checks.noWrapFlatCheckExpr;
+		final noWrapDefaultCheckExpr: Expr = checks.noWrapDefaultCheckExpr;
 		final triviaLeadDoc: Expr = checks.triviaLeadDoc;
 		final wrapLeadFlatDoc: Expr = checks.wrapLeadFlatDoc;
 		final wrapLeadBreakDoc: Expr = checks.wrapLeadBreakDoc;
@@ -336,6 +337,7 @@ final class TriviaSepLowering {
 			uniformStmtBlanks: uniformStmtBlanks,
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
+			noWrapDefaultCheckExpr: noWrapDefaultCheckExpr,
 			predicateScanExpr: predicateScan,
 			matrixSucceedsExpr: matrixSucc,
 			forceMultiExpr: triviaSepForceMultiExpr(sepCtx),
@@ -742,8 +744,8 @@ final class TriviaSepLowering {
 		final ignoreCheckExpr: Expr = forceMultiInTypedef ? macro ($ignoreResolved) && !opt._inTypedefBody : ignoreResolved;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
-		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — the shape
-		// the loader builds for a user `arrayWrap.defaultWrap: noWrap` block,
+		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — a block that
+		// names `"rules": []`; one without `rules` inherits the built-in cascade,
 		// see `Loader.wrapRulesFromConfig`). This is the fork's `noWrap()`
 		// policy (`MarkWrappingBase.noWrap` → `noWrappingBetween`): every
 		// element cuddles flat, and the ONLY break is the unsuppressible
@@ -758,6 +760,12 @@ final class TriviaSepLowering {
 		final noWrapFlatCheckExpr: Expr = wrapRulesField != null ? {
 			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
+		} : macro false;
+		// The config's fallback mode is `noWrap`, with or without a rule cascade before it.
+		final noWrapDefaultCheckExpr: Expr = wrapRulesField != null ? {
+			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
+			final isNoWrap: Expr = macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap;
+			forceMultiInTypedef ? macro $isNoWrap && !opt._inTypedefBody : isNoWrap;
 		} : macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
@@ -811,6 +819,7 @@ final class TriviaSepLowering {
 		return {
 			ignoreCheckExpr: ignoreCheckExpr,
 			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
+			noWrapDefaultCheckExpr: noWrapDefaultCheckExpr,
 			triviaLeadDoc: knobNextOrEmpty,
 			wrapLeadFlatDoc: wrapLeadFlatDoc,
 			wrapLeadBreakDoc: knobNextOrEmpty,
@@ -1162,11 +1171,13 @@ final class TriviaSepLowering {
 				// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
 				// element's flag — EXCEPT for a comprehension (`for`/`while` sole element), whose element genuinely starts on
 				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
-				// newlines, so they are always counted.
+				// newlines, so they are always counted. A `noWrap` fallback leaves layout to the cascade whatever the source
+				// did; only a pure-`noWrap` array still reads them, for its matrix and comprehension shapes.
 				if (
 					_t.newlineBefore
 					&& !_ignoreEmit
 					&& !_matrixOff
+					&& (!_noWrapDefault || $v{reflowSourceMultiline} && _noWrapRules)
 					&& !($v{reflowSourceMultiline} && _ti == 0 && !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t))
 				)
 					_hasSourceNewlines = true;
@@ -1256,6 +1267,7 @@ final class TriviaSepLowering {
 
 		final ignoreCheckExpr: Expr = c.ignoreCheckExpr;
 		final noWrapFlatCheckExpr: Expr = c.noWrapFlatCheckExpr;
+		final noWrapDefaultCheckExpr: Expr = c.noWrapDefaultCheckExpr;
 		final predicateScanExpr: Expr = c.predicateScanExpr;
 		final matrixSucceedsExpr: Expr = c.matrixSucceedsExpr;
 
@@ -1300,15 +1312,12 @@ final class TriviaSepLowering {
 			// to Ignore (a single `defaultMode`, so this only ever flips for
 			// an actual NoWrap config). Scoped to the
 			// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
-			// flag (the only Star carrying it). The fork flattens noWrap
-			// arrays (`arrayLiteralWrapping` → `applyWrappingPlace`) but
-			// does NOT flatten a source-multiline OBJECT literal under
-			// noWrap — `objectLiteralWrapping` force-one-per-lines any
-			// `!isOriginalSameLine` body BEFORE consulting the rule. Object
-			// literals (no `reflowSourceMultiline`) therefore keep their
-			// legacy source-multiline force-multi shape. Drives the fork's
-			// `noWrap()` flat-with-comment-break layout below.
+			// flag (the only Star carrying it). Other lists under a `noWrap`
+			// fallback go flat through the scan, which counts no source
+			// break for them. Drives the fork's `noWrap()`
+			// flat-with-comment-break layout below.
 			final _noWrapRules: Bool = $noWrapFlatCheckExpr;
+			final _noWrapDefault: Bool = $noWrapDefaultCheckExpr;
 			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && _noWrapRules && !_ignoreEmit;
 			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
 			// entirely — like the `Ignore` policy it DROPS source newlines

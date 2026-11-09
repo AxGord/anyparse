@@ -216,12 +216,11 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 				'final applied: { tail: String, appliedCount: Int } = candidates.length == 0\n\t\t\t'
 				+ '? { tail: \', oracle-assisted: 0 applied\', appliedCount: 0 }\n\t\t\t: $call;'
 			),
-			flat
+			flat,
+			crossStatement(
+				'final applied: {\n\t\t\ttail: String,\n\t\t\tappliedCount: Int\n\t\t} = candidates.length == 0 ? {$fields} : $call;'
+			)
 		]) Assert.equals(flat, HxWriteFixture.triviaWrite(src, xconfig), src);
-		final broken: String = crossStatement(
-			'final applied: {\n\t\t\ttail: String,\n\t\t\tappliedCount: Int\n\t\t} = candidates.length == 0 ? {$fields} : $call;'
-		);
-		Assert.equals(broken, HxWriteFixture.triviaWrite(broken, xconfig));
 	}
 
 	private static function statement(s: String): String {

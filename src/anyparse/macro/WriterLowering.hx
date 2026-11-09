@@ -2453,6 +2453,7 @@ typedef SepStarDispatchCtx = {
 	final uniformStmtBlanks: Bool;
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;
+	final noWrapDefaultCheckExpr: Expr;
 	final predicateScanExpr: Expr;
 	final matrixSucceedsExpr: Expr;
 	final forceMultiExpr: Expr;
@@ -2538,6 +2539,7 @@ typedef SepStarTrailExprs = {
 typedef SepStarChecks = {
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;
+	final noWrapDefaultCheckExpr: Expr;
 	final triviaLeadDoc: Expr;
 	final wrapLeadFlatDoc: Expr;
 	final wrapLeadBreakDoc: Expr;

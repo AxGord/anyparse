@@ -132,4 +132,5 @@ is always dropped and a mandatory comma (`{> Base,}`) always written, whatever t
 An object, array or map literal and an anonymous type lay out by `wrapping.objectLiteral` / `arrayWrap` / `mapWrap` /
 `anonType` alone (item count, item length, line width): a break the source put between items, grid rows included, does
 not keep a list open, and the built-in fallback of those four is `ignore`. A `"defaultWrap": "noWrap"` block on one of
-them restores the source-driven fallback for that list. A typedef's body keeps its source lines until its own decision.
+them lays that list out by its rules and otherwise flat, without reading source breaks, except that a grid-shaped array and, under `"rules": []`, a comprehension still follow the source; the other non-`ignore` values
+(`onePerLine` is the pinned one) still read them. A typedef's body keeps its source lines until its own decision.

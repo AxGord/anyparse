@@ -15,9 +15,9 @@ class HxTryOverflowLayoutTest extends Test {
 
 	private static inline final CONFIG: String = '{"wrapping":{"maxLineLength":140}}';
 	private static final CONFIG_A: String = '{"wrapping":{"maxLineLength":140},"sameLine":{"expressionTryOverflow":"same"}}';
-	private static final CONFIG_NO_WRAP: String = '{"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"noWrap"}}}';
+	private static final CONFIG_KEEP_ARRAY: String = '{"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"onePerLine"}}}';
 	private static final CONFIG_IF_FIT: String =
-		'{"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"noWrap"}},"sameLine":{"ifBody":"fitLine","expressionIf":"next"}}';
+		'{"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"onePerLine"}},"sameLine":{"ifBody":"fitLine","expressionIf":"next"}}';
 	private static final CALL_2: String = 'PackageDocumentCarry.carry(documents, members[0].keys)';
 	private static final CALL_1: String = 'PackageDocumentCarry.carry(documentsdocumentsdocumentsdocumentsdocuments)';
 	private static final CATCH: String = 'catch (exception:Exception)';
@@ -149,10 +149,10 @@ class HxTryOverflowLayoutTest extends Test {
 			'final a: Int = try run(first, $wide) catch (e: Any) null;',
 			'final a: Int = try run(first) catch (e: Any) return Left($wide);'
 		]) {
-			final once: String = HxWriteFixture.triviaWrite(inClass(stmt), CONFIG_NO_WRAP);
+			final once: String = HxWriteFixture.triviaWrite(inClass(stmt), CONFIG_KEEP_ARRAY);
 			contains(once, 'try\n\t\t\trun(');
 			contains(once, '\t\tcatch (e:Any)\n');
-			Assert.equals(once, HxWriteFixture.triviaWrite(once, CONFIG_NO_WRAP));
+			Assert.equals(once, HxWriteFixture.triviaWrite(once, CONFIG_KEEP_ARRAY));
 		}
 	}
 

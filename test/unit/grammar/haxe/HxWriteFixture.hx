@@ -55,8 +55,8 @@ final class HxWriteFixture {
 	}
 
 	/**
-	 * `configJson` with every list that would otherwise reflow by width back on a `noWrap` fallback, whose cascade keeps a
-	 * source break: for a fixture whose subject is not how a list wraps.
+	 * `configJson` with every list that would otherwise reflow by width on a `onePerLine` fallback, which keeps a source
+	 * break (an explicit `noWrap` does not): for a fixture whose subject is not how a list wraps.
 	 */
 	public static function listsKeepSource(configJson: String): String {
 		final config: JValue = JValueParser.parse(configJson);
@@ -64,7 +64,7 @@ final class HxWriteFixture {
 		for (key in ['objectLiteral', 'arrayWrap', 'mapWrap', 'anonType']) {
 			final section: Array<JEntry> = objectAt(wrapping, key);
 			if (!section.exists(entry -> (entry.key: String) == 'defaultWrap'))
-				section.push({ key: 'defaultWrap', value: JString('noWrap') });
+				section.push({ key: 'defaultWrap', value: JString('onePerLine') });
 		}
 		return JValueWriter.write(config);
 	}

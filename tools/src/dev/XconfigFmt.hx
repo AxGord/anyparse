@@ -25,7 +25,7 @@ final class XconfigFmt {
 	 * The files the writer settles only on a second rewrite under the vendored config. Compared for equality:
 	 * a file joining is a regression and one leaving is progress, and either is recorded here with the measurement.
 	 */
-	public static final XCONFIG_ONE_PASS: Array<String> = ['test/unit/check/common/imports/HoistCommonImportTest.hx'];
+	public static final XCONFIG_ONE_PASS: Array<String> = [];
 
 	/** The files under the scratch `root` that `fmt --one-pass`'s stderr `err` names, relative to `root`, sorted. */
 	public static function onePassSet(err: String, root: String): Array<String> {

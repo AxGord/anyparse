@@ -2360,6 +2360,22 @@
 			"find": "_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0",
 			"replace": "false",
 			"note": "the plain writer emits no break after the last metadata while the following separator is still dropped, so metadata glues to the declaration"
+		},
+		{
+			"name": "M-EXPLICIT-NOWRAP-READS-SOURCE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepPredicateScanExpr",
+			"find": "&& (!_noWrapDefault || $v{reflowSourceMultiline} && _noWrapRules)",
+			"replace": "",
+			"note": "a list on a noWrap fallback counts source line breaks again and stays broken where the name says flat"
+		},
+		{
+			"name": "M-EXPLICIT-NOWRAP-TYPEDEF-BODY",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepCheckExprs",
+			"find": "macro $isNoWrap && !opt._inTypedefBody",
+			"replace": "isNoWrap",
+			"note": "a typedef body under an explicit anonType noWrap collapses, a move owned by the typedef-RHS slice"
 		}
 	]
 }
