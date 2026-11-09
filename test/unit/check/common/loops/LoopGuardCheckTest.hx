@@ -423,6 +423,22 @@ class LoopGuardCheckTest extends Test {
 		Assert.equals(wrapPositioned('do if (c && !g) {\n\t\t\ttrace(1);\n\t\t} while (ok);'), applyFix(src));
 	}
 
+	/** A comment trailing the `continue;` line would land after the lifted header's `{`, describing the inverted condition. */
+	@:pin('control') @:killer('M-LOOPGUARD-TRAILING-COMMENT-LIFTED')
+	public function testCommentAfterGuardNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (x == 0) continue; // not a run head\n\t\t\ttrace(x);\n\t\t}')).length);
+	}
+
+	/** An own-line comment after the guard stays above the kept statements inside the new block, where it reads true. */
+	@:pin('control') @:killer('M-LOOPGUARD-OWN-LINE-COMMENT-DECLINED')
+	public function testOwnLineCommentAfterGuardStillFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(wrap('for (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\t// own line\n\t\t\ttrace(x);\n\t\t\ttrace(x);\n\t\t}'))
+				.length
+		);
+	}
+
 	private inline function wrap(loopCode: String): String {
 		return wrapIn('xs:Array<Int>', loopCode);
 	}

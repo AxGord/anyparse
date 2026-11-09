@@ -674,6 +674,22 @@
 			"note": "the LIFT arm takes a statement block alone, so a do-while's body block is never lifted"
 		},
 		{
+			"name": "M-LOOPGUARD-OWN-LINE-COMMENT-DECLINED",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "commentFollowsGuard",
+			"find": "guardLineEnd(source, guardSpan.to, nextSpan.from)",
+			"replace": "nextSpan.from",
+			"note": "the decline widens to the whole gap, so an own-line comment between the guard and the next statement, which reads true above the kept statements, loses the finding and its fix"
+		},
+		{
+			"name": "M-LOOPGUARD-TRAILING-COMMENT-LIFTED",
+			"type": "anyparse.check.common.loops.LoopGuard",
+			"method": "commentFollowsGuard",
+			"find": " || CheckScan.hasCommentMarker(source, guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from)));",
+			"replace": ");",
+			"note": "a comment trailing the `continue;` line is lifted onto the inverted header's `{`, where it reads as describing the condition that KEEPS the item"
+		},
+		{
 			"name": "M-LOOPGUARD-EXPR-BODY-KEPT",
 			"type": "anyparse.check.common.loops.LoopGuard",
 			"method": "match",

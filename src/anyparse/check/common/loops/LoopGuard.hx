@@ -291,12 +291,29 @@ final class LoopGuard extends RuleBase {
 	 */
 	private static function matchBlock(body: QueryNode, source: String, s: Seams, headerCond: Null<QueryNode>): Null<Candidate> {
 		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
-		return guard == null ? null : {
+		return guard == null || commentFollowsGuard(source, guard, body.children[1]) ? null : {
 			guard: guard,
 			body: body,
 			cond: guard.children[0],
 			headerCond: headerCond
 		};
+	}
+
+	/**
+	 * Whether a comment sits between `guard` and the `next` statement (a trailing `// why` on the `continue;` line), or a span is
+	 * unknown. The lift would carry it after the new header's `{`, where it reads as describing the inverted condition.
+	 */
+	private static function commentFollowsGuard(source: String, guard: QueryNode, next: QueryNode): Bool {
+		final guardSpan: Null<Span> = guard.span;
+		final nextSpan: Null<Span> = next.span;
+		return guardSpan == null
+			|| (nextSpan == null || CheckScan.hasCommentMarker(source, guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from)));
+	}
+
+	/** The end of the line `from` sits on, capped at `limit`: the part of the gap a trailing comment on the guard's own line can occupy. */
+	private static function guardLineEnd(source: String, from: Int, limit: Int): Int {
+		final lineBreak: Int = source.indexOf('\n', from);
+		return lineBreak < 0 || lineBreak > limit ? limit : lineBreak;
 	}
 
 }
