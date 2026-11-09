@@ -50,6 +50,9 @@ final class Parity {
 	/** The shims an invocation may name as its program: both run the engine `HXQ_BIN` pins. */
 	private static final SHIMS: Array<String> = ['apq', 'hxq'];
 
+	private static final GIT_DIR: String = '.git';
+	private static final FIXTURE_DATE: String = '2020-01-01T00:00:00Z';
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final repo: String = Repo.resolve(args.option('--repo'));
@@ -167,11 +170,13 @@ final class Parity {
 		for (given in parsed.invocations ?? []) {
 			if (given.argv.length == 0 || !SHIMS.contains(given.argv[0]))
 				throw new UsageError('invocation ${given.name} of $file runs `${given.argv.join(' ')}`, not `apq|hxq …`');
+			final commits: Array<Map<String, String>> = (given.commits ?? []).map(filesOf);
 			invocations.push({
 				name: given.name,
 				argv: given.argv,
 				stdin: given.stdin,
-				files: given.files == null ? files : filesOf(given.files)
+				files: given.files != null ? filesOf(given.files) : commits.length > 0 ? commits[commits.length - 1] : files,
+				commits: commits
 			});
 		}
 		return { files: files, invocations: invocations, commandHelp: parsed.commandHelp == true };
@@ -185,7 +190,9 @@ final class Parity {
 	public static function side(
 		shimTree: String, engine: String, invocations: Array<Invocation>, work: TempDir, threads: Int, oneProcess: Bool
 	): Array<Outcome> {
-		final dirs: Array<String> = [for (i => invocation in invocations) fixture(work.file('$i'), invocation.files)];
+		final dirs: Array<String> = [
+			for (i => invocation in invocations) fixture(work.file('$i'), invocation.files, invocation.commits)
+		];
 		final results: Array<Result> = if (oneProcess) {
 			batched(shimTree, engine, invocations, dirs, work, threads);
 		} else {
@@ -209,15 +216,26 @@ final class Parity {
 		];
 	}
 
-	/** The directory `dir`, emptied and holding `files` (path relative to it => content). */
-	public static function fixture(dir: String, files: Map<String, String>): String {
+	/**
+	 * The directory `dir`, emptied and holding `files` (path relative to it => content).
+	 * With `commits`, `dir` is first a git repository into which each tree is committed in order,
+	 * and `files` is the working tree on top of the last commit.
+	 */
+	public static function fixture(dir: String, files: Map<String, String>, ?commits: Array<Map<String, String>>): String {
 		js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", dir);
 		FileSystem.createDirectory(dir);
-		for (name => text in files) {
-			final path: String = Path.join([dir, name]);
-			FileSystem.createDirectory(Path.directory(path));
-			File.saveContent(path, text);
+		final history: Array<Map<String, String>> = commits ?? [];
+		if (history.length > 0) {
+			git(dir, ['init', '-q']);
+			for (tree in history) {
+				clearTree(dir);
+				writeTree(dir, tree);
+				git(dir, ['add', '-A']);
+				git(dir, ['commit', '-q', '--allow-empty', '-m', 'fixture']);
+			}
+			clearTree(dir);
 		}
+		writeTree(dir, files);
 		return dir;
 	}
 
@@ -271,7 +289,8 @@ final class Parity {
 			name: 'help $name',
 			argv: ['apq', name, '--help'],
 			stdin: null,
-			files: files
+			files: files,
+			commits: []
 		}
 		);
 	}
@@ -286,7 +305,7 @@ final class Parity {
 	/** Every file below `dir/prefix`, by its path relative to `dir`, with its content. */
 	private static function snapshot(dir: String, prefix: String): Map<String, String> {
 		final files: Map<String, String> = [];
-		for (name in FileSystem.readDirectory(Path.join([dir, prefix]))) {
+		for (name in FileSystem.readDirectory(Path.join([dir, prefix]))) if (prefix != '' || name != GIT_DIR) {
 			final path: String = prefix == '' ? name : '$prefix/$name';
 			final full: String = Path.join([dir, path]);
 			if (FileSystem.isDirectory(full))
@@ -382,6 +401,40 @@ final class Parity {
 		return results;
 	}
 
+	/** Writes `files` under `dir`; the keys are paths relative to it. */
+	private static function writeTree(dir: String, files: Map<String, String>): Void {
+		for (name => text in files) {
+			final path: String = Path.join([dir, name]);
+			FileSystem.createDirectory(Path.directory(path));
+			File.saveContent(path, text);
+		}
+	}
+
+	/** Empties `dir` except its repository. */
+	private static function clearTree(dir: String): Void {
+		for (name in FileSystem.readDirectory(dir)) {
+			if (name != GIT_DIR) js.Syntax.code("require('fs').rmSync({0}, { recursive: true, force: true })", Path.join([dir, name]));
+		}
+	}
+
+	/** One git command in a fixture repository, deaf to the machine's git configuration and dated alike every run. */
+	private static function git(dir: String, args: Array<String>): Void {
+		final config: Array<String> = [
+			'user.name=probe',
+			'user.email=probe@example.invalid',
+			'commit.gpgsign=false',
+			'init.defaultBranch=main',
+			'core.hooksPath=/dev/null'
+		];
+		Command.of(['git'].concat(Command.flat(config.map(setting -> ['-c', setting]))).concat(args))
+			.at(dir)
+			.env('GIT_CONFIG_GLOBAL', '/dev/null')
+			.env('GIT_CONFIG_NOSYSTEM', '1')
+			.env('GIT_AUTHOR_DATE', FIXTURE_DATE)
+			.env('GIT_COMMITTER_DATE', FIXTURE_DATE)
+			.check();
+	}
+
 }
 
 /** A parity suite: the fixture files every invocation starts from unless it names its own, and the invocations. */
@@ -397,10 +450,15 @@ typedef Suite = {
 
 /** One CLI call of a suite: its program (`apq` or `hxq`) and arguments, its standard input, and the files it starts from. */
 typedef Invocation = {
+
 	var name: String;
 	var argv: Array<String>;
 	var stdin: Null<String>;
 	var files: Map<String, String>;
+
+	/** Trees committed in order into a git repository; `files` is then the working tree on top of the last commit. */
+	var ?commits: Array<Map<String, String>>;
+
 }
 
 /** What one engine answered to one invocation: exit status, both streams, a failure to run, and the fixture files after it. */

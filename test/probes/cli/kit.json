@@ -8628,6 +8628,52 @@
 				"err": "95a3e042413837d3",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "hxq changed HEAD after classes C and D swap, x y z reverse and g is edited",
+			"argv": [
+				"hxq",
+				"changed",
+				"HEAD"
+			],
+			"commits": [
+				{
+					"C.hx": "class C {\n\tpublic var x: Int;\n\tpublic var y: Int;\n\tpublic var z: Int;\n\n\tpublic function g(): Int {\n\t\treturn 1;\n\t}\n}\n\nclass D {\n\tpublic function h(): Int {\n\t\treturn 2;\n\t}\n}\n"
+				}
+			],
+			"files": {
+				"C.hx": "class D {\n\tpublic function h(): Int {\n\t\treturn 2;\n\t}\n}\n\nclass C {\n\tpublic var z: Int;\n\tpublic var y: Int;\n\tpublic var x: Int;\n\n\tpublic function g(): Int {\n\t\treturn 3;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "3f1d4f8fd1de7153",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq changed HEAD --diff C.hx after classes C and D swap, x y z reverse and g is edited",
+			"argv": [
+				"hxq",
+				"changed",
+				"HEAD",
+				"--diff",
+				"C.hx"
+			],
+			"commits": [
+				{
+					"C.hx": "class C {\n\tpublic var x: Int;\n\tpublic var y: Int;\n\tpublic var z: Int;\n\n\tpublic function g(): Int {\n\t\treturn 1;\n\t}\n}\n\nclass D {\n\tpublic function h(): Int {\n\t\treturn 2;\n\t}\n}\n"
+				}
+			],
+			"files": {
+				"C.hx": "class D {\n\tpublic function h(): Int {\n\t\treturn 2;\n\t}\n}\n\nclass C {\n\tpublic var z: Int;\n\tpublic var y: Int;\n\tpublic var x: Int;\n\n\tpublic function g(): Int {\n\t\treturn 3;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "bcfc613c7aca98be",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

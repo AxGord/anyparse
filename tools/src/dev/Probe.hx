@@ -421,7 +421,8 @@ final class Probe {
 					name: invocation.name,
 					argv: invocation.argv,
 					stdin: invocation.stdin,
-					files: files
+					files: files,
+					commits: invocation.commits
 				};
 			}
 		];

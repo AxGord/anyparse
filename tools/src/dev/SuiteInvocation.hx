@@ -17,6 +17,9 @@ typedef SuiteInvocation = {
 
 	/** File name to content; the keys are data. */
 	@:optional var files: JValue;
+
+	/** Trees committed in order into a git repository, file name to content; `files` is then the working tree (default: last commit). */
+	@:optional var commits: Array<JValue>;
 	@:optional var compile: CompileSpec;
 	@:optional var expect: Expectation;
 

@@ -314,6 +314,29 @@ final class ProbeTest extends Test {
 		Assert.same(['/* b */'], Probe.commentsOf('final s = \'/* a\'; /* b */\n'));
 	}
 
+	@:pin('control')
+	@:killer('M-PROBE-RERUN-DROPS-COMMITS')
+	public function testAFixpointRowRunsItsSecondPassInTheSameRepository(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final stand: String = dir.file('stand.js');
+			File.saveContent(stand, "process.stdout.write(require('fs').existsSync('.git') ? 'repository\\n' : 'plain\\n');");
+			final kitFile: String = dir.file('kit.json');
+			File.saveContent(
+				kitFile,
+				'{"invocations":[{"name":"fmt","argv":["apq","fmt","A.hx"],"files":{"A.hx":"x"},"commits":[{"A.hx":"y"}],'
+				+ '"fixpoint":"A.hx"}]}'
+			);
+			final seen: Array<Seen> = Probe.observe(tree, Path.normalize(stand), Probe.load(kitFile), false, 1, false);
+			Assert.equals('repository\n', seen[0].out);
+			Assert.equals(true, seen[0].answer.onePass);
+		});
+	}
+
 	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */
 	private static function engine(file: String, mark: String): String {
 		File.saveContent(file, [

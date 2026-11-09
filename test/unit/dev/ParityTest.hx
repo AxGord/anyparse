@@ -1,7 +1,9 @@
 package unit.dev;
 
+import anyparse.util.Compare;
 import dev.Parity;
 import dev.Repo;
+import devkit.Command;
 import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
@@ -9,6 +11,8 @@ import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /**
  * `dev.Parity`: what it reports between two outcomes of one invocation, the command list it reads from `apq --help`, and a
@@ -168,6 +172,70 @@ final class ParityTest extends Test {
 			Assert.raises(Parity.nodeFlags.bind(bare), Exception);
 			Assert.raises(() -> Parity.engineArgv(bare, ['hxq', 'fmt', 'A.hx']), Exception);
 			Assert.same(['fmt', 'A.hx'], Parity.engineArgv(bare, ['apq', 'fmt', 'A.hx']), 'the apq shim adds nothing, so it reads nothing');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-FIXTURE-NO-REPO')
+	public function testCommitsMakeTheFixtureARepositoryWhoseHeadIsTheLastCommitAndTheFilesTheWorkingTree(): Void {
+		TempDir.with(work -> {
+			final first: Map<String, String> = ['a.hx' => 'zero', 'gone.hx' => 'g'];
+			final second: Map<String, String> = ['a.hx' => 'one', 'gone.hx' => 'g', 'b.hx' => 'b'];
+			final dir: String = Parity.fixture(work.file('repo'), ['a.hx' => 'two', 'new.hx' => 'n'], [first, second]);
+			Assert.equals('one', Command.of(['git', '-C', dir, 'show', 'HEAD:a.hx']).text());
+			Assert.equals('2', Command.of(['git', '-C', dir, 'rev-list', '--count', 'HEAD']).text().trim());
+			final status: Array<String> = Command.of(['git', '-C', dir, 'status', '--porcelain']).text().rtrim().split('\n');
+			status.sort(Compare.compareString);
+			Assert.same([' D b.hx', ' D gone.hx', ' M a.hx', '?? new.hx'], status);
+			Assert.equals(
+				'probe|probe@example.invalid|2020-01-01T00:00:00Z|2020-01-01T00:00:00Z',
+				Command.of(['git', '-C', dir, 'log', '-1', '--format=%an|%ae|%aI|%cI']).text().rtrim()
+			);
+			Assert.isFalse(FileSystem.exists(Path.join([Parity.fixture(work.file('plain'), ['a.hx' => 'x']), '.git'])));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-SNAPSHOT-READS-REPO')
+	public function testTheRepositoryOfAFixtureIsNotAFileTheInvocationWrote(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final invocation: Invocation = {
+				name: 'writes',
+				argv: ['hxq', 'write'],
+				stdin: null,
+				files: ['a.hx' => 'two'],
+				commits: [['a.hx' => 'one']]
+			};
+			final outcomes: Array<Outcome> = TempDir.with(work ->
+				Parity.side(tree, engine(dir.file('e.js'), 'A'), [invocation], work, 1, false)
+			);
+			final names: Array<String> = [for (name in outcomes[0].files.keys()) name];
+			names.sort(Compare.compareString);
+			Assert.same(['a.hx', 'log', 'out.txt'], names);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-PARITY-COMMITS-DROPPED')
+	public function testAnInvocationReadsItsCommitsAndWorksOnTheLastOneUnlessItNamesFiles(): Void {
+		TempDir.with(dir -> {
+			final suite: String = dir.file('suite.json');
+			File.saveContent(suite, '{"files": {"s.hx": "shared"}, "invocations": [
+			{"name": "bare", "argv": ["hxq", "x"]},
+			{"name": "committed", "argv": ["hxq", "x"], "commits": [{"a.hx": "1"}, {"a.hx": "2"}]},
+			{"name": "edited", "argv": ["hxq", "x"], "commits": [{"a.hx": "1"}], "files": {"a.hx": "3"}}
+		]}');
+			final runs: Array<Invocation> = Parity.load(suite).invocations;
+			Assert.same([], runs[0].commits ?? []);
+			Assert.same(['s.hx' => 'shared'], runs[0].files);
+			Assert.same([['a.hx' => '1'], ['a.hx' => '2']], runs[1].commits);
+			Assert.same(['a.hx' => '2'], runs[1].files);
+			Assert.same(['a.hx' => '3'], runs[2].files);
 		});
 	}
 

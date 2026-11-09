@@ -2258,6 +2258,38 @@
 			"find": "cache, !hxcppOnly)",
 			"replace": "cache, true)",
 			"note": "the detached row-only run runs the whole suite and the whole lint of a land whose battery already ran them"
+		},
+		{
+			"name": "M-PARITY-FIXTURE-NO-REPO",
+			"type": "dev.Parity",
+			"method": "fixture",
+			"find": "if (history.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a fixture with commits stays a plain directory, so a row that reads history exits 1 beside a tree no repository holds"
+		},
+		{
+			"name": "M-PARITY-SNAPSHOT-READS-REPO",
+			"type": "dev.Parity",
+			"method": "snapshot",
+			"find": "prefix != '' || name != GIT_DIR",
+			"replace": "true",
+			"note": "the repository of a fixture is read as files the invocation wrote, so every git row deviates by the repository's own bookkeeping"
+		},
+		{
+			"name": "M-PARITY-COMMITS-DROPPED",
+			"type": "dev.Parity",
+			"method": "load",
+			"find": "commits: commits",
+			"replace": "commits: []",
+			"note": "a row's commits are not carried into its invocation, so a git row runs in a plain directory"
+		},
+		{
+			"name": "M-PROBE-RERUN-DROPS-COMMITS",
+			"type": "dev.Probe",
+			"method": "rerun",
+			"find": "commits: invocation.commits",
+			"replace": "commits: []",
+			"note": "the second pass of a fixpoint row runs in a plain directory, so a row that reads history answers differently the second time and reports it is not a fixed point"
 		}
 	]
 }
