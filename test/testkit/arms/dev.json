@@ -1008,9 +1008,9 @@
 			"name": "M-POSTLAND-STARTS-AFTER-WHOLE-BATTERY",
 			"type": "dev.PostLand",
 			"method": "afterwards",
-			"find": " || !impacted",
-			"replace": "",
-			"note": "a land whose battery already ran the whole suite starts a second whole suite after it"
+			"find": "if (!impacted && row.match(Skipped(_)))",
+			"replace": "if (false)",
+			"note": "a land whose battery ran every class and changed no src/ still starts a background run"
 		},
 		{
 			"name": "M-POSTLAND-GREEN-KEEPS-LOG",
@@ -2202,6 +2202,62 @@
 			"find": "if (!FileSystem.exists(Path.join([repo, dir])))",
 			"replace": "if (false)",
 			"note": "a tree that does not exist stops the census with the file system's error and not with a message naming the tree"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-RUNS-ON-NON-SRC",
+			"type": "dev.PostLand",
+			"method": "hxcppRow",
+			"find": "changed != null && !changed.exists(GateTree.isEngineInput)",
+			"replace": "false",
+			"note": "the hxcpp build runs on every land, a doc-only land included, paying minutes of C++ compile for nothing"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-SKIPS-SRC",
+			"type": "dev.PostLand",
+			"method": "hxcppRow",
+			"find": ": build()",
+			"replace": ": Skipped('cut')",
+			"note": "the hxcpp build never runs, so a src/ land that breaks only the C++ compile stays green"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-UNKNOWN-CHANGE-SKIPS",
+			"type": "dev.PostLand",
+			"method": "hxcppRow",
+			"find": "changed != null && !changed.exists(GateTree.isEngineInput)",
+			"replace": "changed == null || !changed.exists(GateTree.isEngineInput)",
+			"note": "a land whose changed files git cannot name skips the hxcpp build instead of running it"
+		},
+		{
+			"name": "M-POSTLAND-WHOLE-LAND-SKIPS-THE-ROW",
+			"type": "dev.PostLand",
+			"method": "afterwards",
+			"find": "!impacted && row.match(Skipped(_))",
+			"replace": "!impacted",
+			"note": "a land whose battery ran every class starts nothing, so a src/ change of it (a macro, a grammar) that breaks only the C++ compile is never built for hxcpp"
+		},
+		{
+			"name": "M-POSTLAND-WHOLE-LAND-RUNS-THE-SUITE",
+			"type": "dev.PostLand",
+			"method": "afterwards",
+			"find": "start(repo, sha, cache, impacted)",
+			"replace": "start(repo, sha, cache, true)",
+			"note": "a land whose battery ran every class runs the whole suite and the whole lint again after it instead of the hxcpp build alone"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-VERB-WRITES-RECORD",
+			"type": "dev.PostLand",
+			"method": "main",
+			"find": "return hxcppProbe(Repo.resolve(repo), shas[0], cache);",
+			"replace": "return run(Repo.resolve(repo), shas[0], cache, false);",
+			"note": "the manual hxcpp probe keeps a running and a red record, so probing a red commit makes every later land refuse"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-ONLY-FLAG-IGNORED",
+			"type": "dev.PostLand",
+			"method": "main",
+			"find": "cache, !hxcppOnly)",
+			"replace": "cache, true)",
+			"note": "the detached row-only run runs the whole suite and the whole lint of a land whose battery already ran them"
 		}
 	]
 }

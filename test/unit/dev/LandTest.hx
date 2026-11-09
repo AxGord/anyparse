@@ -814,6 +814,16 @@ final class LandTest extends Test {
 		}));
 	}
 
+	public function testAWholeLandThatChangedSrcStartsTheHxcppBuildOfTheLandedCommit(): Void {
+		final run: Landing = landing(
+			() -> Passed, 'src/anyparse/core/Note.hx', { full: false, landed: 0 }, null,
+			{ impact: WholeSuite('a macro depends on the change') }
+		);
+		Assert.equals(0, run.status, run.output);
+		Assert.same([run.headAfter], run.started);
+		Assert.stringContains('hxcpp build of', run.output);
+	}
+
 	/**
 	 * A repository whose `batch/hxqb-S1` branch adds a file in one commit, landed on `main` with `build` standing in for the
 	 * compiler, which writes `bin/engine.out` (ignored, as the real binaries are) into the tree it builds. `setup` shapes the
@@ -871,7 +881,7 @@ final class LandTest extends Test {
 				skills: skillsDir,
 				battery: request,
 				impact: scopeSeam(shape, bases),
-				postLand: (tree, sha, snapshots) -> {
+				postLand: (tree, sha, snapshots, suite) -> {
 					started.push(sha);
 					return Passed;
 				},

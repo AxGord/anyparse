@@ -27,11 +27,14 @@ using StringTools;
 final class PostLand {
 
 	public static inline final USAGE: String =
-		'usage: dev post-land run <sha> [--repo <dir>] [--cache <dir>] | status [--cache <dir>] | clear (<sha>... | --all) [--cache <dir>]';
+		'usage: dev post-land run <sha> [--hxcpp-only] [--repo <dir>] [--cache <dir>] | hxcpp <sha> [--repo <dir>] [--cache <dir>] | status [--cache <dir>] | clear (<sha>... | --all) [--cache <dir>]';
 
 	private static inline final RUNNING: String = 'running';
 	private static inline final RED: String = 'red';
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
+	private static inline final HXCPP_TIMEOUT_MS: Int = 30 * 60 * 1000;
+	private static final HXCPP_ONLY: String = '--hxcpp-only';
+	private static final HXCPP_CACHE: String = 'hxcpp-compile';
 
 	/** The directory of the snapshot cache that holds the records and the run's own copy of `dev.js`. */
 	private static final DIRECTORY: String = 'post-land';
@@ -70,13 +73,17 @@ final class PostLand {
 		final cache: String = args.option('--cache') ?? Land.cacheDir(Sys.getEnv);
 		final repo: Null<String> = args.option('--repo');
 		final all: Bool = args.flag('--all');
-		final words: Array<String> = args.rest(['<run|status|clear>']);
+		final hxcppOnly: Bool = args.flag('--hxcpp-only');
+		final words: Array<String> = args.rest(['<run|hxcpp|status|clear>']);
 		final verb: String = words[0];
 		final shas: Array<String> = words.slice(1);
 		switch verb {
 			case 'run':
 				if (shas.length != 1) throw new UsageError('run takes one <sha>');
-				return run(Repo.resolve(repo), shas[0], cache);
+				return run(Repo.resolve(repo), shas[0], cache, !hxcppOnly);
+			case 'hxcpp':
+				if (shas.length != 1) throw new UsageError('hxcpp takes one <sha>');
+				return hxcppProbe(Repo.resolve(repo), shas[0], cache);
 			case 'status':
 				if (shas.length > 0) throw new UsageError('status takes no <sha>');
 				for (line in statusLines(cache)) Sys.println(line);
@@ -143,8 +150,12 @@ final class PostLand {
 	 * The command line of the run for `sha`: a copy of `dev.js` the run owns (a later land rebuilds the shared one), under
 	 * the pool lease `mode` grants it.
 	 */
-	public static function argvOf(mode: LeaseMode, script: String, repo: String, sha: String, cache: String): Array<String> {
-		return leased(mode, ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache], 'post-land $sha');
+	public static function argvOf(
+		mode: LeaseMode, script: String, repo: String, sha: String, cache: String, suite: Bool = true
+	): Array<String> {
+		return leased(mode, ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache].concat(
+			suite ? [] : [HXCPP_ONLY]
+		), 'post-land $sha');
 	}
 
 	/**
@@ -152,11 +163,11 @@ final class PostLand {
 	 * the process does, so a run that never reaches its first line still shows in `status`; the pid of the process started is
 	 * the run's until the run writes its own.
 	 */
-	public static function start(repo: String, sha: String, cache: String): Outcome {
+	public static function start(repo: String, sha: String, cache: String, suite: Bool): Outcome {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
 		remove(fileOf(cache, sha, PID));
-		final pid: Int = launch(directory(cache), sha, repo, script -> argvOf(Lease.pooled(), script, repo, sha, cache));
+		final pid: Int = launch(directory(cache), sha, repo, script -> argvOf(Lease.pooled(), script, repo, sha, cache, suite));
 		keepFirst(fileOf(cache, sha, PID), pid);
 		return Passed;
 	}
@@ -174,7 +185,7 @@ final class PostLand {
 				note('whole suite LOST: $sha (`node bin/dev.js post-land status`)');
 				continue;
 			}
-			final again: Outcome = start(repo, sha, cache);
+			final again: Outcome = start(repo, sha, cache, true);
 			if (!again.match(Passed)) return again;
 			note('whole suite of $sha was lost, runs again in the background (`node bin/dev.js post-land status`)');
 		}
@@ -187,12 +198,18 @@ final class PostLand {
 	 * land by `start`; a land whose battery ran every class has nothing left to start.
 	 */
 	public static function afterwards(
-		start: Null<PostLandStart>, impacted: Bool, repo: String, head: String, cache: Null<String>, note: String -> Void
+		start: Null<PostLandStart>, impacted: Bool, repo: String, head: String, cache: Null<String>, moved: Null<Array<String>>,
+		note: String -> Void
 	): Outcome {
-		if (start == null || cache == null || !impacted) return Skipped('the battery ran the whole suite');
+		if (start == null || cache == null) return Skipped('no battery');
+		final row: Outcome = hxcppRow(moved, () -> Passed);
+		if (!impacted && row.match(Skipped(_))) return Skipped('the battery ran the whole suite and the land touched no src/');
 		final sha: String = Battery.keyOf(repo, head) ?? head;
-		final started: Outcome = start(repo, sha, cache);
-		if (started.match(Passed)) note('whole suite of $sha runs in the background, no lock held (`node bin/dev.js post-land status`)');
+		final started: Outcome = start(repo, sha, cache, impacted);
+		if (started.match(Passed))
+			note(
+				'${impacted ? 'whole suite' : 'hxcpp build'} of $sha runs in the background, no lock held (`node bin/dev.js post-land status`)'
+			);
 		return started;
 	}
 
@@ -296,6 +313,29 @@ final class PostLand {
 		return refusal == null ? Passed : Failed(refusal);
 	}
 
+	/**
+	 * The hxcpp row of a run: `build` when the land changed an engine input (or `changed` is null, git could not say), a skip
+	 * otherwise. No gate or battery row compiles for hxcpp, so a break only the C++ compile reports survives until this runs.
+	 */
+	public static function hxcppRow(changed: Null<Array<String>>, build: () -> Outcome): Outcome {
+		return changed != null && !changed.exists(GateTree.isEngineInput) ? Skipped('the land touched no src/') : build();
+	}
+
+	/**
+	 * The full build of `tools/bench-hxcpp.hxml` in `tree`, Haxe and C++ compile both (neither `--no-output` nor
+	 * `-D no-compilation` reaches the C++ errors), through a compile cache of the snapshot cache so a later run only recompiles what moved.
+	 */
+	public static function hxcppBuild(tree: String, cache: String): Outcome {
+		final built: Result = cmd('haxe tools/bench-hxcpp.hxml')
+			.at(tree)
+			.env('HXCPP_COMPILE_CACHE', Path.join([cache, HXCPP_CACHE]))
+			.env('HXCPP_COMPILE_THREADS', Std.string(PoolLease.threads() ?? Shard.DEFAULT_SHARDS))
+			.timeout(HXCPP_TIMEOUT_MS)
+			.run();
+		Sys.println(built.out + built.err);
+		return built.ok ? Passed : Failed('the hxcpp build failed: ${built.firstError()}');
+	}
+
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
 		return fileOf(cache, sha, state);
 	}
@@ -328,11 +368,14 @@ final class PostLand {
 		);
 	}
 
-	private static function run(repo: String, sha: String, cache: String): Int {
+	private static function run(repo: String, sha: String, cache: String, suite: Bool): Int {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
 		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
-		final verdict: Outcome = inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(repo, sha, cache, work, tree));
+		final verdict: Outcome = inWorktree(
+			repo, sha, DIRECTORY,
+			(work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
+		);
 		settle(cache, sha, verdict);
 		switch verdict {
 			case Failed(why):
@@ -362,9 +405,9 @@ final class PostLand {
 		final counts: Null<Array<Int>> = countsOf(text);
 		if (counts != null)
 			File.saveContent(Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-suite.txt']), '${counts[0]} ${counts[1]}\n');
-		return ran.ok
-			? wholeLint(repo, sha, cache, tree)
-			: Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
+		if (!ran.ok) return Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
+		final linted: Outcome = wholeLint(repo, sha, cache, tree);
+		return linted.match(Failed(_)) ? linted : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache));
 	}
 
 	private static function directory(cache: String): String {
@@ -395,7 +438,27 @@ final class PostLand {
 		return copy;
 	}
 
+	private static function hxcppProbe(repo: String, sha: String, cache: String): Int {
+		final verdict: Outcome = inWorktree(
+			repo, sha, DIRECTORY, (work, tree) -> hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
+		);
+		switch verdict {
+			case Failed(why):
+				Sys.println('post-land: hxcpp $sha RED — $why');
+				return 1;
+			case Skipped(why):
+				Sys.println('post-land: hxcpp $sha skipped — $why');
+				return 0;
+			case _:
+				Sys.println('post-land: hxcpp $sha green');
+				return 0;
+		}
+	}
+
 }
 
-/** The start of the whole suite of a landed commit: the tree, the commit and the snapshot cache. */
-typedef PostLandStart = (tree:String, sha:String, cache:String) -> Outcome;
+/**
+ * The start of the run for a landed commit: the tree, the commit, the snapshot cache and whether the whole suite runs.
+ * A land whose battery ran every class starts the hxcpp build alone.
+ */
+typedef PostLandStart = (tree:String, sha:String, cache:String, suite:Bool) -> Outcome;

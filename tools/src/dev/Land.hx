@@ -163,7 +163,10 @@ final class Land {
 			{ name: 'prose-refs', step: _prose.run },
 			{
 				name: 'post-land',
-				step: () -> PostLand.afterwards(_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _summary.detail)
+				step: () ->
+					PostLand.afterwards(
+						_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _merged(_repo), _summary.detail
+					)
 			},
 			{ name: 'warm', step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail) }
 		];

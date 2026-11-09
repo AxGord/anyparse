@@ -1,12 +1,15 @@
 package unit.dev;
 
 import dev.PostLand;
+import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
 import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
 import utest.Test;
+
+using StringTools;
 
 /** `dev post-land`: the records a whole-suite run leaves, what a land does with them, and the command line of the run. */
 final class PostLandTest extends Test {
@@ -91,24 +94,43 @@ final class PostLandTest extends Test {
 			'--cache',
 			'/cache'
 		], PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache'));
+		Assert.same([
+			'node',
+			'/cache/abc.dev.js',
+			'post-land',
+			'run',
+			'abc',
+			'--repo',
+			'/repo',
+			'--cache',
+			'/cache',
+			'--hxcpp-only'
+		], PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache', false));
 	}
 
 	@:pin('control')
 	@:killer('M-POSTLAND-STARTS-AFTER-WHOLE-BATTERY')
-	public function testOnlyALandThatRanAnImpactSuiteStartsTheWholeSuite(): Void {
+	@:killer('M-POSTLAND-WHOLE-LAND-SKIPS-THE-ROW')
+	@:killer('M-POSTLAND-WHOLE-LAND-RUNS-THE-SUITE')
+	public function testALandThatRanAnImpactSuiteStartsTheWholeSuiteAndAWholeLandOfSrcStartsTheHxcppRowAlone(): Void {
 		final started: Array<String> = [];
-		final start: (String, String, String) -> Outcome = (tree, sha, cache) -> {
-			started.push(sha);
+		final start: (String, String, String, Bool) -> Outcome = (tree, sha, cache, suite) -> {
+			started.push('$sha ${suite ? 'suite' : 'row'}');
 			return Passed;
 		};
-		Assert.isTrue(PostLand.afterwards(start, false, '/nowhere', 'abc', '/cache', _ -> {}).match(Skipped(_)));
-		Assert.isTrue(PostLand.afterwards(null, true, '/nowhere', 'abc', '/cache', _ -> {}).match(Skipped(_)));
-		Assert.isTrue(PostLand.afterwards(start, true, '/nowhere', 'abc', null, _ -> {}).match(Skipped(_)));
+		final docs: Array<String> = ['docs/testing.md'];
+		final engine: Array<String> = ['docs/testing.md', 'src/anyparse/macro/Build.hx'];
+		Assert.isTrue(PostLand.afterwards(start, false, '/nowhere', 'abc', '/cache', docs, _ -> {}).match(Skipped(_)));
+		Assert.isTrue(PostLand.afterwards(null, true, '/nowhere', 'abc', '/cache', engine, _ -> {}).match(Skipped(_)));
+		Assert.isTrue(PostLand.afterwards(start, true, '/nowhere', 'abc', null, engine, _ -> {}).match(Skipped(_)));
 		Assert.same([], started);
 		final notes: Array<String> = [];
-		Assert.isTrue(PostLand.afterwards(start, true, '/nowhere', 'abc', '/cache', notes.push).match(Passed));
-		Assert.same(['abc'], started);
+		Assert.isTrue(PostLand.afterwards(start, true, '/nowhere', 'abc', '/cache', docs, notes.push).match(Passed));
+		Assert.same(['abc suite'], started);
 		Assert.equals(1, notes.length);
+		Assert.isTrue(PostLand.afterwards(start, false, '/nowhere', 'def', '/cache', engine, _ -> {}).match(Passed));
+		Assert.isTrue(PostLand.afterwards(start, false, '/nowhere', 'ghi', '/cache', null, _ -> {}).match(Passed));
+		Assert.same(['abc suite', 'def row', 'ghi row'], started);
 	}
 
 	public function testALandWithoutABatteryIsNotRefusedByARecord(): Void {
@@ -144,7 +166,7 @@ final class PostLandTest extends Test {
 	public function testARunRecordWhoseProcessIsGoneReadsLostAndIsNotRunning(): Void {
 		TempDir.with(dir -> {
 			record(dir, 'abc12345.running', 'log');
-			record(dir, 'abc12345.pid', Std.string(deadPid()));
+			record(dir, 'abc12345.pid', '${deadPid()}');
 			record(dir, 'def67890.running', 'log');
 			Assert.same([], PostLand.running(dir.path));
 			Assert.same(['abc12345', 'def67890'], sorted(PostLand.lost(dir.path)));
@@ -161,19 +183,19 @@ final class PostLandTest extends Test {
 	public function testALandStartsTheWholeSuiteOfALostRunAgainAndAliveOnesAreLeftAlone(): Void {
 		TempDir.with(dir -> {
 			record(dir, 'abc12345.running', 'log');
-			record(dir, 'abc12345.pid', Std.string(deadPid()));
+			record(dir, 'abc12345.pid', '${deadPid()}');
 			record(dir, 'def67890.running', 'log');
 			record(dir, 'def67890.pid', '${js.Node.process.pid}');
 			final started: Array<String> = [];
 			final notes: Array<String> = [];
-			final start: (String, String, String) -> Outcome = (repo, sha, cache) -> {
+			final start: (String, String, String, Bool) -> Outcome = (repo, sha, cache, suite) -> {
 				started.push('$sha@$repo');
 				return Passed;
 			};
 			Assert.isTrue(PostLand.unsettled(dir.path, start, '/repo', notes.push).match(Passed));
 			Assert.same(['abc12345@/repo'], started);
 			Assert.equals(1, notes.filter(n -> n.indexOf('abc12345') >= 0 && n.indexOf('again') >= 0).length, notes.join('\n'));
-			Assert.isTrue(PostLand.unsettled(dir.path, (_, _, _) -> Failed('no lease'), '/repo', _ -> {}).match(Failed(_)));
+			Assert.isTrue(PostLand.unsettled(dir.path, (_, _, _, _) -> Failed('no lease'), '/repo', _ -> {}).match(Failed(_)));
 		});
 	}
 
@@ -182,7 +204,7 @@ final class PostLandTest extends Test {
 	public function testClearingALostRunRemovesItsRecordsAndLeavesALiveOne(): Void {
 		TempDir.with(dir -> {
 			leftBy(dir, 'abc12345');
-			record(dir, 'abc12345.pid', Std.string(deadPid()));
+			record(dir, 'abc12345.pid', '${deadPid()}');
 			leftBy(dir, 'def67890');
 			record(dir, 'def67890.pid', '${js.Node.process.pid}');
 			Assert.same(['abc12345'], PostLand.clear(dir.path, ['abc12345', 'def67890']));
@@ -199,6 +221,75 @@ final class PostLandTest extends Test {
 			Assert.isTrue(pid > 0, 'pid $pid');
 			Assert.isTrue(alive(pid), 'pid $pid');
 			if (pid > 0) js.Syntax.code('(function (p) { try { process.kill(p); } catch (e) { } })({0})', pid);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-HXCPP-RUNS-ON-NON-SRC')
+	public function testALandThatTouchedNoSrcSkipsTheHxcppBuild(): Void {
+		var built: Int = 0;
+		final verdict: Outcome = PostLand.hxcppRow(['docs/testing.md', 'tools/src/dev/PostLand.hx'], () -> {
+			built++;
+			return Passed;
+		});
+		Assert.equals(0, built);
+		Assert.isTrue(verdict.match(Skipped(_)));
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-HXCPP-SKIPS-SRC')
+	public function testALandThatTouchedSrcRunsTheHxcppBuildAndAFailedBuildIsItsVerdict(): Void {
+		var built: Int = 0;
+		final verdict: Outcome = PostLand.hxcppRow(['docs/testing.md', 'src/anyparse/check/Linter.hx'], () -> {
+			built++;
+			return Failed('the hxcpp build failed');
+		});
+		Assert.equals(1, built);
+		Assert.isTrue(verdict.match(Failed('the hxcpp build failed')));
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-HXCPP-UNKNOWN-CHANGE-SKIPS')
+	public function testALandWhoseChangeGitCannotSayRunsTheHxcppBuild(): Void {
+		var built: Int = 0;
+		final verdict: Outcome = PostLand.hxcppRow(null, () -> {
+			built++;
+			return Passed;
+		});
+		Assert.equals(1, built);
+		Assert.isTrue(verdict.match(Passed));
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-HXCPP-VERB-WRITES-RECORD')
+	public function testTheHxcppVerbIsARecordlessProbeThatANamelessCommitCannotMakeRed(): Void {
+		TempDir.with(dir -> {
+			final repo: String = scratchRepo(dir);
+			final cache: String = dir.file('cache');
+			Assert.equals(1, PostLand.main([
+				'hxcpp',
+				'0123456789012345678901234567890123456789',
+				'--repo',
+				repo,
+				'--cache',
+				cache
+			]));
+			Assert.same([], PostLand.red(cache));
+			Assert.same([], PostLand.running(cache));
+			Assert.same([], PostLand.lost(cache));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-HXCPP-ONLY-FLAG-IGNORED')
+	public function testARunInHxcppOnlyModeOfALandWithoutSrcSkipsTheBuildAndLeavesNoRecord(): Void {
+		TempDir.with(dir -> {
+			final repo: String = scratchRepo(dir);
+			final cache: String = dir.file('cache');
+			final head: String = cmd('git -C $repo rev-parse HEAD').run().out.trim();
+			Assert.equals(0, PostLand.main(['run', head, '--hxcpp-only', '--repo', repo, '--cache', cache]));
+			Assert.same([], PostLand.red(cache));
+			Assert.same([], FileSystem.readDirectory(dir.file('cache/post-land')));
 		});
 	}
 
@@ -231,6 +322,20 @@ final class PostLandTest extends Test {
 	private static function alive(pid: Int): Bool {
 		return pid > 0
 			&& js.Syntax.code('(function (p) { try { process.kill(p, 0); return true; } catch (e) { return false; } })({0})', pid);
+	}
+
+	private static function scratchRepo(dir: TempDir): String {
+		final repo: String = dir.file('repo');
+		FileSystem.createDirectory(repo);
+		cmd('git -C $repo init -q').run().check();
+		File.saveContent('$repo/a.txt', 'a');
+		cmd('git -C $repo add -A').run().check();
+		cmd('git -C $repo -c user.email=a@b.c -c user.name=n commit -q -m one').run().check();
+		FileSystem.createDirectory('$repo/docs');
+		File.saveContent('$repo/docs/note.md', 'note');
+		cmd('git -C $repo add -A').run().check();
+		cmd('git -C $repo -c user.email=a@b.c -c user.name=n commit -q -m two').run().check();
+		return repo;
 	}
 
 }
