@@ -121,7 +121,7 @@ class UnusedPrivateCheckTest extends Test {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		final result: Array<Violation> = CheckFixture.violationsIn(new UnusedPrivate(), report, plugin);
 		Assert.equals(0, result.filter(v -> v.file == 'pkg/C.hx').length);
@@ -871,7 +871,7 @@ class UnusedPrivateCheckTest extends Test {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: library, library: new LibrarySources(library) } }
 		);
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/D.hx');

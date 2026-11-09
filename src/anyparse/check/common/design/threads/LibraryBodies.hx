@@ -171,7 +171,7 @@ final class LibraryBodies {
 					types: []
 				}
 			]);
-			sources.map(s -> {file: s.file, source: blanked(s.source, liveness.skippedOf(s.file, s.source)) });
+			sources.map(s -> { file: s.file, source: blanked(s.source, liveness.skippedOf(s.file, s.source)) });
 		});
 		return new LibraryBodies(
 			{ graph: project.graph, known: project.sinks.builtin.concat(project.sinks.natives) }, plugin, kept, picked.options

@@ -2337,7 +2337,7 @@
 			"name": "M-REACH-FOLDED-BODIES",
 			"type": "anyparse.query.MemberReach",
 			"method": "bodySpans",
-			"find": "? null : declared.map(d -> {file: d.file, span: d.span });",
+			"find": "? null : declared.map(d -> { file: d.file, span: d.span });",
 			"replace": "? null : [{ file: declared[0].file, span: declared[0].span }];",
 			"note": "a node folding a declaration per branch of a region is read by its first declaration's text only, so what another one runs is never seen"
 		},
@@ -5370,7 +5370,7 @@
 			"name": "M-BINDING-OWN-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "tierOf",
-			"find": "if (own.length > 0) return Bound(own.map(t -> {file: fi, type: t }));",
+			"find": "if (own.length > 0) return Bound(own.map(t -> { file: fi, type: t }));",
 			"replace": "",
 			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
 		},

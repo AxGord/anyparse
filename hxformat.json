@@ -137,7 +137,8 @@
 		"bracesConfig": {
 			"objectLiteralBraces": {
 				"openingPolicy": "after",
-				"closingPolicy": "before"
+				"closingPolicy": "before",
+				"arrowBodyOpenPad": true
 			},
 			"anonTypeBraces": {
 				"openingPolicy": "after",

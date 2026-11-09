@@ -284,7 +284,7 @@ class FieldWriteResolutionScopeTest extends Test {
 	private static function scoped(report: Array<SourceFile>, roots: Array<SourceFile>, library: Array<SourceFile>): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) } }
 		);
 		return plugin;
 	}

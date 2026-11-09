@@ -144,7 +144,7 @@ final class TypeNameBinding {
 	 */
 	public function tierOf(name: String, fi: FileInfo, ?at: Int, ?without: ImportInfo): Tier {
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
-		if (own.length > 0) return Bound(own.map(t -> {file: fi, type: t }));
+		if (own.length > 0) return Bound(own.map(t -> { file: fi, type: t }));
 		final order: StatementOrder = orderOf(fi, at);
 		final asked: StatementOrder = without == null
 			? order
@@ -270,7 +270,7 @@ final class TypeNameBinding {
 		final out: NameTargets = { bound: null, guarded: [], unlisted: [] };
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
 		if (own.length > 0) {
-			out.bound = InIndex(own.map(t -> {file: fi, type: t }));
+			out.bound = InIndex(own.map(t -> { file: fi, type: t }));
 			return out;
 		}
 		final order: StatementOrder = orderOf(fi, at);

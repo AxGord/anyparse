@@ -111,7 +111,7 @@ class ReflectionMemoTest extends Test {
 	 */
 	private function scoped(report: Array<ScopeFile>): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources([]) } });
+		plugin.setResolutionScope({ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources([]) } });
 		return plugin;
 	}
 

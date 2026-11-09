@@ -173,7 +173,7 @@ final class ImportOutsideGuard extends RuleBase {
 		final kept: HeaderHalves = { imports: guardedImports, usings: guardedUsings };
 		if (rebindsAName(moved, kept, [importAt, usingAt], aliasStarts, bindings)) return [];
 		final edits: Array<{ span: Span, text: String }> = movedImports.concat(movedUsings)
-			.map(line -> {span: new Span(line.chunkFrom, line.chunkTo), text: '' });
+			.map(line -> { span: new Span(line.chunkFrom, line.chunkTo), text: '' });
 		final importText: String = textOf(source, movedImports);
 		final usingText: String = textOf(source, movedUsings);
 		// Two zero-width edits at one offset would apply in an unspecified order, so a shared

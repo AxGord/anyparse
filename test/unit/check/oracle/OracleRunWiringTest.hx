@@ -114,7 +114,7 @@ final class OracleRunWiringTest extends Test {
 		final oracles: Array<OracleConfig> = [{ hxml: 'check.hxml', dir: '.', defines: [] }];
 		final resolution: ResolutionScope = {
 			declared: true,
-			sources: () -> {report: [], projectRoots: [], library: new LibrarySources([]) }
+			sources: () -> { report: [], projectRoots: [], library: new LibrarySources([]) }
 		};
 		function carried(args: Array<String>): Bool {
 			final ahead: AheadBuilds = { probe: null };

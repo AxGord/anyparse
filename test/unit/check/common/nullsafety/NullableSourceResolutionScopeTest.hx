@@ -112,7 +112,7 @@ class NullableSourceResolutionScopeTest extends Test {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		return plugin;
 	}

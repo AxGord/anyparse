@@ -491,7 +491,7 @@ final class FieldWrites {
 	private function heldIndex(): SymbolIndex {
 		final built: Null<SymbolIndex> = _index;
 		if (built != null) return built;
-		final index: SymbolIndex = IndexScope.over(_graph.heldFiles().map(held -> {file: held.file, source: held.source }), _plugin);
+		final index: SymbolIndex = IndexScope.over(_graph.heldFiles().map(held -> { file: held.file, source: held.source }), _plugin);
 		_index = index;
 		return index;
 	}
@@ -519,7 +519,7 @@ final class FieldWrites {
 				String, Null<String>, QueryNode
 			) -> Null<String> = (file, fn, node) -> typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
 			final all: Array<FieldWriteSite> = [for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s];
-			stores = all.concat(unplaced()).map(s -> {site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) });
+			stores = all.concat(unplaced()).map(s -> { site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) });
 			_stores = stores;
 		}
 		return stores.find(s -> s.site == site)?.types;

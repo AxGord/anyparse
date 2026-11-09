@@ -127,7 +127,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return fixGrouped(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
+		return fixGrouped(source, violations, plugin, index).map(edit -> { span: edit.span, text: edit.text });
 	}
 
 	/** An `import` and the rewrites that need it are kept or dropped together. */

@@ -28,7 +28,7 @@ class HoistCommonImportNamesFirstTest extends Test {
 		final root: String = CliFixture.writeTree('apq_hoist_names_first', TREE);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = TREE.map(entry -> {file: '$root/${entry.name}', source: entry.source });
+			final files: Array<{ file: String, source: String }> = TREE.map(entry -> { file: '$root/${entry.name}', source: entry.source });
 			final readable: Int = CheckFixture.violationsIn(new HoistCommonImport(), files).length;
 			final locked: String = '$root/src/aqq/FourQq.hx';
 			Sys.command('chmod', ['000', locked]);

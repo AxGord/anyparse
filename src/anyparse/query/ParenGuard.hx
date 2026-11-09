@@ -116,7 +116,7 @@ final class ParenGuard {
 	 * non-overlapping spans, and a metavariable expands once per occurrence).
 	 */
 	public static function guard(source: String, edits: Array<GuardedEdit>, plugin: GrammarPlugin): Array<{ span: Span, text: String }> {
-		final plain: Array<{ span: Span, text: String }> = edits.map(e -> {span: e.span, text: e.text });
+		final plain: Array<{ span: Span, text: String }> = edits.map(e -> { span: e.span, text: e.text });
 		final shape: RefShape = plugin.refShape();
 		final declared: Null<ParenDelimiters> = shape.parenDelimiters;
 		if (shape.parenKind == null || declared == null) return plain;

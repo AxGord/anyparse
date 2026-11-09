@@ -557,7 +557,7 @@ final class LintDiff {
 	private static function severityDeltas(added: Array<LintDiffEntry>, removed: Array<LintDiffEntry>): Array<LintDiffSeverityDelta> {
 		final counted: LintDiffBuckets = bucket(added, removed, e -> e.severity);
 		counted.names.sort(compareSeverity);
-		return counted.names.map(n -> {severity: n, added: counted.added[n] ?? 0, removed: counted.removed[n] ?? 0 });
+		return counted.names.map(n -> { severity: n, added: counted.added[n] ?? 0, removed: counted.removed[n] ?? 0 });
 	}
 
 	/** `SEVERITY_ORDER` rank first, unknown names after all known ones, then alphabetical. */

@@ -524,7 +524,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		final check: PreferStaticExtension = new PreferStaticExtension();
 		check.setConfigResolver(_ -> LintConfig.parse(EXT_CONFIG));

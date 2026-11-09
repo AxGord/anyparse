@@ -277,7 +277,7 @@ final class StructuralMergeTest extends Test {
 
 	/** The conflicts as plain records, for `Assert.same`. */
 	private static function plain(conflicts: Array<MergeConflict>): Array<{ key: String, ours: String, theirs: String }> {
-		return conflicts.map(c -> {key: c.key, ours: (c.ours: String), theirs: (c.theirs: String) });
+		return conflicts.map(c -> { key: c.key, ours: (c.ours: String), theirs: (c.theirs: String) });
 	}
 
 	/** Module `a.C` importing `imports` and holding `members`, as the writer emits it. */

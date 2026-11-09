@@ -571,7 +571,9 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/SBase.hx', source: baseSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/SSub.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(lib) } }
+		);
 		final reportIndex: SymbolIndex = CheckFixture.index(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
@@ -1104,7 +1106,7 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	): Int {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: roots, library: new LibrarySources(roots.concat(library)) } }
 		);
 		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		final check: Naming = new Naming();

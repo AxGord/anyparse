@@ -1522,7 +1522,7 @@ class ThreadSafetyCheckTest extends Test {
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
 		final root: String = CliFixture.writeTree('threadsafetychains', tree);
 		final files: Array<{ file: String, source: String }> = order.map(name ->
-			{file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
+			{ file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
 		);
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		final found: Array<String> = [
@@ -1603,12 +1603,12 @@ class ThreadSafetyCheckTest extends Test {
 		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apq.json', source: config }].concat(beside ?? []));
 		// Each source a root module named after its first type: the compiler binds a bare name to a module's MAIN type only.
 		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(sources)
-			.map(entry -> {file: '$dir/${entry.file}', source: entry.source });
+			.map(entry -> { file: '$dir/${entry.file}', source: entry.source });
 		// Through `Linter.run`, not `run`: the `sinks` / `exclude` gate is `FileGated`, applied where findings enter the tool.
 		// a `library` the resolution scope holds and the run does not (`QueryTestHelpers.projectPlugin`), under `lib/`
 		final libraryFiles: Null<Array<{ file: String, source: String }>> = library == null
 			? null
-			: QueryTestHelpers.rootModules(library).map(entry -> {file: '$dir/lib/${entry.file}', source: entry.source });
+			: QueryTestHelpers.rootModules(library).map(entry -> { file: '$dir/lib/${entry.file}', source: entry.source });
 		final plugin: GrammarPlugin = libraryFiles == null
 			? new HaxeQueryPlugin()
 			: QueryTestHelpers.projectPlugin(files, libraryFiles, true, false, defines);

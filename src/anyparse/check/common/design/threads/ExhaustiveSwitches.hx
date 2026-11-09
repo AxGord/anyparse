@@ -538,7 +538,7 @@ final class ExhaustiveSwitches {
 	private function writesTo(name: String): Array<WriteSite> {
 		final known: Null<Array<WriteSite>> = _writesOf[name];
 		if (known != null) return known;
-		final sites: Array<WriteSite> = _writes.of(name).map(w -> {node: w.write, at: contextOf(w.file, w.write), site: w });
+		final sites: Array<WriteSite> = _writes.of(name).map(w -> { node: w.write, at: contextOf(w.file, w.write), site: w });
 		_writesOf[name] = sites;
 		return sites;
 	}

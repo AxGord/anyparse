@@ -553,7 +553,7 @@ final class PreferIfExpressionReturn extends RuleBase {
 		final merge: Null<Merge> = m.merge;
 		if (merge != null) return mergedEdit(m, merge, source, s, emit);
 		final built: Array<{ cond: String, value: String }> = m.pairs.map(p ->
-			{cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
+			{ cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
 		);
 		return { span: span, text: IfExpressionChain.buildText(text(source, m.prefix), built, text(source, m.terminalValue)) };
 	}

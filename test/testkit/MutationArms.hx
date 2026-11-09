@@ -251,7 +251,7 @@ final class MutationArms {
 	/** `parseAll` over the documents of the registry directory `path`, each named by its file name. */
 	public static function parseDirectory(path: String): ArmTable {
 		return readSources(
-			RegistryFiles.of(path).map(file -> {file: Path.withoutDirectory(file), text: File.getContent(file) }),
+			RegistryFiles.of(path).map(file -> { file: Path.withoutDirectory(file), text: File.getContent(file) }),
 			FileSystem.isDirectory(path)
 		);
 	}

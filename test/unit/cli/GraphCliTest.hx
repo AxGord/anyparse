@@ -179,7 +179,7 @@ class GraphCliTest extends Test {
 		#if nodejs
 		final root: String = CliFixture.writeTree(
 			'graphcli',
-			GraphFixture.FILES.map(f -> {name: f.file, source: f.source })
+			GraphFixture.FILES.map(f -> { name: f.file, source: f.source })
 				.concat([{ name: 'pkg/c/Broken.hx', source: 'package pkg.c;\n\nclass Broken {\n' }])
 		);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
@@ -271,7 +271,7 @@ class GraphCliTest extends Test {
 	#if (sys || nodejs)
 	/** Run `body` over the graph fixture written to a fresh directory, removed afterwards. */
 	private static function withFixture(body: (root:String) -> Void): Void {
-		final root: String = CliFixture.writeTree('graphcli', GraphFixture.FILES.map(f -> {name: f.file, source: f.source }));
+		final root: String = CliFixture.writeTree('graphcli', GraphFixture.FILES.map(f -> { name: f.file, source: f.source }));
 		CliFixture.always(CliFixture.removeDir.bind(root), body.bind(root));
 	}
 	#end

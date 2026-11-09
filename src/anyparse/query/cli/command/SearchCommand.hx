@@ -188,7 +188,7 @@ final class SearchCommand implements CliCommand implements LeadingQuery implemen
 		if (o.explain && allEntries.length == 0) searchExplainHistogram(parsed.root.kind, collected.kindCounts);
 
 		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = CliWalk.capAndReport(
-			CMD, allEntries, o.limit, e -> e.matches.length, (e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) },
+			CMD, allEntries, o.limit, e -> e.matches.length, (e, k) -> { file: e.file, source: e.source, matches: e.matches.slice(0, k) },
 			paths.length
 		);
 		renderSearchResults(shown, o.json, o.flat);

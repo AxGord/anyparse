@@ -35,7 +35,7 @@ class LintFixFactsSettleTest extends Test {
 		final seen: Array<String> = [];
 		final resolution: ResolutionScope = {
 			declared: true,
-			sources: () -> {report: [], projectRoots: [], library: new LibrarySources([]) },
+			sources: () -> { report: [], projectRoots: [], library: new LibrarySources([]) },
 			facts: () -> null,
 			factsSettled: () -> seen.push(File.getContent(file))
 		};

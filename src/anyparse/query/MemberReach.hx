@@ -1627,7 +1627,7 @@ final class MemberReach {
 		final constructs: Bool = bodies.foreach(n ->
 			n.kind == FactKinds.CTOR || (node.name == CallGraph.INIT_NAME && n.kind == FactKinds.VAR)
 		);
-		final work: Array<{ n: FactNode, fresh: Bool }> = bodies.map(n -> {n: n, fresh: constructs });
+		final work: Array<{ n: FactNode, fresh: Bool }> = bodies.map(n -> { n: n, fresh: constructs });
 		while (work.length > 0) {
 			final item: Null<{ n: FactNode, fresh: Bool }> = work.pop();
 			if (item == null) break;
@@ -2366,7 +2366,7 @@ final class MemberReach {
 	private function bodySpans(g: CallGraph, node: FnNode): Null<Array<Occurrence>> {
 		final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 		if (declared.length > 0)
-			return _scope.facts?.typedElsewhere(node, declared) == true ? null : declared.map(d -> {file: d.file, span: d.span });
+			return _scope.facts?.typedElsewhere(node, declared) == true ? null : declared.map(d -> { file: d.file, span: d.span });
 		final type: Null<String> = node.typeName;
 		final files: Array<String> = g.initializerFiles(node.id);
 		final isStatic: Bool = node.name == CallGraph.STATIC_INIT_NAME;
@@ -2968,7 +2968,7 @@ final class MemberReach {
 		final scoped: Null<Array<{ file: String, source: String }>> = host?.completeProjectFiles();
 		final project: Array<{ file: String, source: String }> = scoped == null
 			? [{ file: file, source: source }]
-			: scoped.map(f -> f.file == file ? {file: file, source: source } : f);
+			: scoped.map(f -> f.file == file ? { file: file, source: source } : f);
 		if (scoped != null && !project.exists(f -> f.file == file)) project.push({ file: file, source: source });
 		// an edit applied earlier in the pass to ANY project file makes the memoised graph describe code that is gone:
 		// taken in place when it changed no declaration, else the analysis is rebuilt

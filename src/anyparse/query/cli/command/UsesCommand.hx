@@ -110,7 +110,7 @@ final class UsesCommand implements CliCommand implements LeadingQuery {
 
 		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> =
 			CliWalk.capAndReport(
-				'uses', allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				'uses', allEntries, o.limit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 				paths.length
 			);
 		for (entry in shown)

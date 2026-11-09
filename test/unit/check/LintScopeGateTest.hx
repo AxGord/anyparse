@@ -270,7 +270,7 @@ class LintScopeGateTest extends Test {
 	): ReflectionSurface {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: scopeReport, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: scopeReport, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		return ReflectionScan.reflectionSurface(report, plugin);
 	}

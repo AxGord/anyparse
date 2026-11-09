@@ -109,7 +109,7 @@ class ResolutionProjectFilesTest extends Test {
 	): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: REPORT, projectRoots: roots, library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: REPORT, projectRoots: roots, library: new LibrarySources(library) } }
 		);
 		return plugin;
 	}

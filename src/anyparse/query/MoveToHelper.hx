@@ -106,7 +106,7 @@ final class MoveToHelper {
 		);
 		if (destError != null) return Err(destError);
 		final carryError: Null<String> = MoveMember.pushImportEdits(
-			prep, typeRefShape, edits.callerFiles, plugin, edits.editsByFile, types.map(t -> {span: t.group, name: t.name }),
+			prep, typeRefShape, edits.callerFiles, plugin, edits.editsByFile, types.map(t -> { span: t.group, name: t.name }),
 			types.map(t -> t.name)
 		);
 		if (carryError != null) return Err(carryError);

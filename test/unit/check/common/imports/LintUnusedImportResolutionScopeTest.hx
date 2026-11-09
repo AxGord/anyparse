@@ -140,7 +140,9 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		report: Array<{ file: String, source: String }>, lib: Array<{ file: String, source: String }>
 	): CachingGrammarPlugin {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(lib) } }
+		);
 		return scoped;
 	}
 

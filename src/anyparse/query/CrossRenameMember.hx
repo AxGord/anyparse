@@ -412,7 +412,7 @@ final class CrossRenameMember {
 			if (offsets.length == 0) continue;
 
 			final edits: Array<{ span: Span, text: String }> = offsets.map(off ->
-				{span: new Span(off, off + target.memberName.length), text: newName }
+				{ span: new Span(off, off + target.memberName.length), text: newName }
 			);
 			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 

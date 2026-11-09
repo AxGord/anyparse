@@ -279,7 +279,7 @@ class OperandTypingTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final tree: Array<{ file: String, source: String }> = [has, shadow, use(
 				'', '', '!h.any'
-			)].concat(DECLS).map(f -> {file: '$root/${f.file}', source: f.source });
+			)].concat(DECLS).map(f -> { file: '$root/${f.file}', source: f.source });
 			for (f in tree) sys.io.File.saveContent(f.file, f.source);
 			Assert.isFalse(inverts(tree, '$root/'));
 		});

@@ -523,7 +523,7 @@ final class ModuleMove {
 		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
 		newPathOf: Map<String, String>, plugin: GrammarPlugin
 	): SymbolIndex {
-		return indexWith(files.map(e -> {file: newPathOf[e.file] ?? e.file, source: texts[e.file] ?? e.source }), library, plugin);
+		return indexWith(files.map(e -> { file: newPathOf[e.file] ?? e.file, source: texts[e.file] ?? e.source }), library, plugin);
 	}
 
 	/**

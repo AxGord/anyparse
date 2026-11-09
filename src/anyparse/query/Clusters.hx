@@ -132,7 +132,7 @@ final class Clusters {
 		function fanIn(id: String): Int return (inNeighbors[id] ?? []).length;
 
 		final hubIds: Array<String> = pickHubs(memberIds, adj, fanIn, hubCount);
-		final hubs: Array<ClusterHub> = hubIds.map(id -> {id: id, fanIn: fanIn(id) });
+		final hubs: Array<ClusterHub> = hubIds.map(id -> { id: id, fanIn: fanIn(id) });
 		hubs.sort((a, b) -> a.fanIn == b.fanIn ? (a.id < b.id ? -1 : 1) : b.fanIn - a.fanIn);
 
 		final components: Array<Array<String>> = componentsOf(memberIds, adj, hubIds);

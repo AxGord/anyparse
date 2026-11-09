@@ -341,7 +341,7 @@ final class Parity {
 		final commands: Array<Command> = [
 			for (s => share in shares) {
 				final calls: BatchCalls = {
-					calls: share.map(i -> {argv: engineArgv(shimTree, invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
+					calls: share.map(i -> { argv: engineArgv(shimTree, invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
 				};
 				final callsFile: String = work.file('batch-$s.json');
 				File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));

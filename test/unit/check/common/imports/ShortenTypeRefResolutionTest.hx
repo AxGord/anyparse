@@ -295,7 +295,7 @@ class ShortenTypeRefResolutionTest extends Test {
 			{ file: 'haxe/ds/Map.hx', source: 'package haxe.ds;\n\nabstract Map<K, V>(Dynamic) {}\n' }
 		].concat(extra);
 		scoped.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		return scoped;
 	}

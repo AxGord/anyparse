@@ -217,7 +217,7 @@ final class RuleScopeTest extends Test {
 	}
 
 	private static function withText(sources: Array<ImpactSource>, name: String, text: String): Array<ImpactSource> {
-		return sources.map(s -> s.path == at(name) ? {path: s.path, text: text } : s);
+		return sources.map(s -> s.path == at(name) ? { path: s.path, text: text } : s);
 	}
 
 	/** A source of the query package that names `imported` and runs `call`. */
@@ -238,7 +238,7 @@ final class RuleScopeTest extends Test {
 	}
 
 	private static function withPath(sources: Array<ImpactSource>, path: String, text: String): Array<ImpactSource> {
-		return sources.map(s -> s.path == path ? {path: path, text: text } : s);
+		return sources.map(s -> s.path == path ? { path: path, text: text } : s);
 	}
 
 	private static function quoted(id: String): String {

@@ -518,7 +518,7 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testWithoutANameOracleTheValueSiteIsDeclined(): Void {
 		final src: String = inClass('import pkg.deep.Foo;\n\n', '\t\tg(pkg.deep.Foo.make());\n\t\tfinal v:pkg.deep.Foo = g();\n');
 		final asked: AskedFix = askedWith(null, src);
-		final out: String = CanonicalEdit.applyEdits(src, asked.edits.map(e -> {span: e.span, text: e.text }));
+		final out: String = CanonicalEdit.applyEdits(src, asked.edits.map(e -> { span: e.span, text: e.text }));
 		Assert.isTrue(out.indexOf('g(pkg.deep.Foo.make());') != -1 && out.indexOf('final v:Foo = g();') != -1, 'type site only, got: $out');
 		Assert.equals(2, asked.findings.length);
 		Assert.equals(
@@ -852,7 +852,7 @@ class ShortenTypeRefCheckTest extends Test {
 		scoped.setResolutionScope({
 			declared: true,
 			sources: () ->
-				{report: report, projectRoots: [], library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
+				{ report: report, projectRoots: [], library: new LibrarySources([{ file: 'pkg/deep/Mod.hx', source: MOD_SOURCE }]) }
 		});
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(2, vs.length);
@@ -1059,7 +1059,7 @@ class ShortenTypeRefCheckTest extends Test {
 
 	/** `suppressedEdits` applied — the flat projection `Check.fix` owes `fixGrouped`. */
 	private function suppressedFix(src: String): String {
-		return CanonicalEdit.applyEdits(src, suppressedEdits(src).map(e -> {span: e.span, text: e.text }));
+		return CanonicalEdit.applyEdits(src, suppressedEdits(src).map(e -> { span: e.span, text: e.text }));
 	}
 
 	/** The grouped edits and the findings they were asked for, by a value-positions rule carrying `oracle` (none when null). */

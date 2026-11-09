@@ -37,7 +37,7 @@ final class ArmRegistry {
 		catch (exception: Exception)
 			throw new ArmRegistryError(exception.message);
 		if (cut == null) throw new ArmRegistryError('no $ARRAY_KEY array');
-		final records: Array<ArmRecord> = cut.records.map(body -> {key: keyOf(body), text: body });
+		final records: Array<ArmRecord> = cut.records.map(body -> { key: keyOf(body), text: body });
 		final keys: Array<String> = [];
 		for (record in records) {
 			if (keys.contains(record.key)) throw new ArmRegistryError('arm ${record.key} is declared twice');

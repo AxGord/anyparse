@@ -112,13 +112,13 @@ final class CallSelection {
 			final m: MemberInfo = members[0];
 			return {
 				kind: m.signatures.length == 1 ? Single : Meta,
-				candidates: m.signatures.map(s -> {signature: s, member: m, host: host })
+				candidates: m.signatures.map(s -> { signature: s, member: m, host: host })
 			};
 		}
 		// several members of one name are overloads only when every one is; a static's take in no supertype's
 		return !onType || members.exists(m -> !m.isOverload || !m.isStatic || m.signatures.length != 1)
 			? null
-			: { kind: Proper, candidates: members.map(m -> {signature: m.signatures[0], member: m, host: host }) };
+			: { kind: Proper, candidates: members.map(m -> { signature: m.signatures[0], member: m, host: host }) };
 	}
 
 	/**
@@ -319,7 +319,7 @@ final class CallSelection {
 
 	/** The slot model of `signature`'s parameters (`ArgumentSlots`): which a call may leave out, which takes the rest. */
 	public static function slotsOf(signature: CallSignature): Array<SlotParam> {
-		return signature.params.map(p -> {optional: p.form == Optional || p.form == Defaulted, rest: p.form == Rest });
+		return signature.params.map(p -> { optional: p.form == Optional || p.form == Defaulted, rest: p.form == Rest });
 	}
 
 	/**

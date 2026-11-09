@@ -89,7 +89,7 @@ final class UnnecessaryBlock extends RuleBase {
 				(node, span) ->
 					approved['${span.from}:${span.to}'] != true
 						? null
-						: {span: span, text: source.substring(span.from + 1, span.to - 1).trim() }
+						: { span: span, text: source.substring(span.from + 1, span.to - 1).trim() }
 			);
 		}, CheckScan.parseBranchAwareOrNull);
 	}

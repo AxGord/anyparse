@@ -61,7 +61,7 @@ final class DuplicateImport extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RunScan.spanEdits(violations, (v, span) -> v.severity == Severity.Warning ? {span: span, text: '' } : null);
+		return RunScan.spanEdits(violations, (v, span) -> v.severity == Severity.Warning ? { span: span, text: '' } : null);
 	}
 
 }

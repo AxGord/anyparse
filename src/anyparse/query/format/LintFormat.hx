@@ -137,7 +137,7 @@ final class LintFormat {
 					}
 				),
 				mainShort: longLocks.mainShort.map(t -> takeRecord(t, indexFor(t.file, sourceOf, indexes))),
-				dominated: longLocks.dominated.map(d -> {lock: d.lock, by: d.by })
+				dominated: longLocks.dominated.map(d -> { lock: d.lock, by: d.by })
 			}
 		}, options);
 	}
@@ -344,7 +344,7 @@ final class LintFormat {
 			if (seen == null) order.push(v.file);
 			counts[v.file] = (seen ?? 0) + 1;
 		}
-		final files: Array<{ file: String, count: Int }> = order.map(file -> {file: file, count: counts[file] ?? 0 });
+		final files: Array<{ file: String, count: Int }> = order.map(file -> { file: file, count: counts[file] ?? 0 });
 		files.sort((a, b) -> a.count != b.count ? b.count - a.count : Reflect.compare(a.file, b.file));
 		return files;
 	}
@@ -365,7 +365,7 @@ final class LintFormat {
 			member: data.member,
 			subject: data.subject,
 			chain: data.chain,
-			repeatedBy: repeated?.map(r -> {member: r.member, at: r.at })
+			repeatedBy: repeated?.map(r -> { member: r.member, at: r.at })
 		};
 	}
 

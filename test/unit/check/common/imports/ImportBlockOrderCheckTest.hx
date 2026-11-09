@@ -405,7 +405,7 @@ class ImportBlockOrderCheckTest extends Test {
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
 			return;
 		}
-		final files: Array<{ file: String, source: String }> = libs.map(f -> {file: '$dir/${f.name}', source: f.source });
+		final files: Array<{ file: String, source: String }> = libs.map(f -> { file: '$dir/${f.name}', source: f.source });
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);
@@ -469,7 +469,7 @@ class ImportBlockOrderCheckTest extends Test {
 			Assert.pass('haxe unavailable — skipped: ${before.err}${before.failure}');
 			return;
 		}
-		final files: Array<{ file: String, source: String }> = libs.map(f -> {file: '$dir/${f.name}', source: f.source });
+		final files: Array<{ file: String, source: String }> = libs.map(f -> { file: '$dir/${f.name}', source: f.source });
 		files.push({ file: '$dir/Main.hx', source: main });
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ImportBlockOrder = configured(null);

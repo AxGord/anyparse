@@ -224,7 +224,7 @@ final class ArgumentValues {
 		edge: CallEdge, args: Array<QueryNode>, callee: QueryNode, params: Array<QueryNode>, calleeFile: String
 	): Null<Array<Array<Int>>> {
 		final given: Array<Null<WrittenType>> = args.map(a -> _types.argumentType(a, edge.file, edge.from));
-		final slots: Array<SlotParam> = params.map(p -> {optional: skippable(p), rest: p.kind == _shape.restParamKind });
+		final slots: Array<SlotParam> = params.map(p -> { optional: skippable(p), rest: p.kind == _shape.restParamKind });
 		final wanted: Array<Null<String>> = params.map(p -> _types.annotationOf(p, calleeFile));
 		function fit(a: Int, p: Int): ArgumentFit {
 			return _types.fit(args[a], given[a], wanted[p], calleeFile, slots[p].optional, edge.from, edge.to);

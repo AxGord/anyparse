@@ -117,7 +117,7 @@ final class ExtractSuperclass {
 		);
 		if (headerEdit == null)
 			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add extends (nothing written)');
-		final edits: Array<{ span: Span, text: String }> = moved.map(m -> {span: m.cut, text: '' });
+		final edits: Array<{ span: Span, text: String }> = moved.map(m -> { span: m.cut, text: '' });
 		edits.push(headerEdit);
 		// The WRITER gives back the separator a cut left doubled, and it is the only thing
 		// that can: the hand-rolled newline-run collapse that stood here read the whole file

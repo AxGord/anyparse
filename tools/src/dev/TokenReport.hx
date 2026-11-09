@@ -177,7 +177,7 @@ final class TokenReport {
 				calls: sum.calls,
 				outTok: tokens(sum.outChars),
 				over5k: sum.over5k,
-				biggest: sum.biggest.map(big -> {outTok: tokens(big.outChars), call: big.call })
+				biggest: sum.biggest.map(big -> { outTok: tokens(big.outChars), call: big.call })
 			}
 		];
 		rows.sort((a, b) -> b.outTok - a.outTok);

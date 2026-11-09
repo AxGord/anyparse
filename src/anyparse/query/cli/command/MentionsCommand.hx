@@ -311,7 +311,7 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 		}
 		if (litEntries.length == 0) return false;
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.capAndReport(
-			CMD, litEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			CMD, litEntries, limit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 			valueTrees.length
 		);
 		CliIo.sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');

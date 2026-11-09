@@ -222,7 +222,7 @@ class RedundantImportVisibleTest extends Test {
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = analysed.map(name ->
-				{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+				{ file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
 			);
 			out = CheckFixture.violationsIn(new RedundantImport(), files)
 				.map(v -> '${v.file.substr(root.length + 1)}: ${v.message}')

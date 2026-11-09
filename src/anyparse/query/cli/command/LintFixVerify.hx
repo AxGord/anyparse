@@ -460,7 +460,7 @@ final class LintFixVerify {
 		// the cold compiles print what they parse, so a verdict is kept only when each file it read is one the fingerprint hashed
 		final compiled: Array<OracleReading> = !warmServer || EnvFlag.isSet('APQ_NO_ORACLE_SERVER')
 			? compiler.typecheckEachReading(pending, false)
-			: pending.map(oracle -> {outcome: compiledOracleVerdict(compiler, oracle, paths), parsed: null });
+			: pending.map(oracle -> { outcome: compiledOracleVerdict(compiler, oracle, paths), parsed: null });
 		for (k => i in compile) {
 			final outcome: OracleOutcome = compiled[k].outcome ?? Unavailable('the typecheck was cancelled');
 			outcomes[i] = outcome;
@@ -938,7 +938,7 @@ final class LintFixVerify {
 		// three rollback CAUSES below are environment-shaped (a compiler that will not launch, an
 		// error text naming no candidate, a batch that never settles) and a fixture cannot stage
 		// them against a real haxe. A test supplies canned verdicts; production the grammar's oracle.
-		CliIo.writeFiles(candidates.map(c -> {path: c.file, content: c.after }));
+		CliIo.writeFiles(candidates.map(c -> { path: c.file, content: c.after }));
 		final reverted: Array<String> = [];
 		var confirmed: Bool = false;
 		var reason: String = 'compiler rejected';
@@ -1015,7 +1015,7 @@ final class LintFixVerify {
 		// circumstances. Per-CULPRIT reverts above stay individual — those are incremental by
 		// construction, one round per oracle verdict.
 		final undo: Array<{ file: String, before: String, after: String }> = candidates.filter(c -> !reverted.contains(c.file));
-		CliIo.writeFiles(undo.map(c -> {path: c.file, content: c.before }));
+		CliIo.writeFiles(undo.map(c -> { path: c.file, content: c.before }));
 		for (c in undo) reverted.push(c.file);
 	}
 

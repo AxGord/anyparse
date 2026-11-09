@@ -419,7 +419,7 @@ final class SuiteImpact {
 	/** The types each of `sources` declares, read off one symbol index over them all. */
 	public static function declaredTypes(sources: Array<ImpactSource>): DeclaredTypes {
 		final index: SymbolIndex = IndexScope.over(
-			sources.map(source -> {file: source.path, source: source.text }), new CachingGrammarPlugin(new HaxeQueryPlugin())
+			sources.map(source -> { file: source.path, source: source.text }), new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);
 		return {
 			types: [for (info in index.allFiles()) info.file => [for (type in info.types) type.name]],

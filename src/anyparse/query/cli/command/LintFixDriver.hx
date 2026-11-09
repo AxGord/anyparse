@@ -751,7 +751,7 @@ final class LintFixDriver {
 		// the two answers disagree, which is exactly what that interface's contract forbids.
 		final carrying: Array<CarryingEdit> = check is CarryingFix ? (cast check: CarryingFix).fixCarrying(source, own, cached, index) : [];
 		final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
-			? carrying.map(edit -> {span: edit.span, text: edit.text })
+			? carrying.map(edit -> { span: edit.span, text: edit.text })
 			: check.fix(source, own, cached, index);
 		// The guard runs BEFORE the ledger, because the ledger's subject is what the check
 		// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule

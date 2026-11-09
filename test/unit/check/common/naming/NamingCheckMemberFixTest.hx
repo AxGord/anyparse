@@ -1044,7 +1044,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
@@ -1095,7 +1095,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: library, library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: library, library: new LibrarySources(library) } }
 		);
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == 'pkg/C.hx');
@@ -1163,7 +1163,9 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(lib) } });
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(lib) } }
+		);
 		final reportIndex: SymbolIndex = CheckFixture.index(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped).filter(v -> v.file == 'pkg/Sub.hx');

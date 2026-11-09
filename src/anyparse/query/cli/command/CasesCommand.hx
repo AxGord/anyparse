@@ -116,7 +116,7 @@ final class CasesCommand implements CliCommand implements LeadingQuery {
 
 		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> =
 			CliWalk.capAndReport(
-				'cases', allEntries, limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+				'cases', allEntries, limit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 				paths.length
 			);
 		for (entry in shown) CliIo.sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));

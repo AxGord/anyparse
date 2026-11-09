@@ -200,7 +200,7 @@ final class RefsCommand implements CliCommand implements LeadingQuery {
 			// represented, and a shared budget would let the first one eat it.
 			final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> =
 				CliWalk.capAndReport(
-					CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+					CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 					paths.length
 				);
 			if (o.json)

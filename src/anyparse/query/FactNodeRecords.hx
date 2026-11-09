@@ -158,7 +158,7 @@ final class FactNodeRecords {
 		);
 		FactMerge.collect(
 			record.elems, x -> place(x.p), FactNodeRecordText.compactFactElemRecord, fresh.bind('elem'),
-			(x, where) -> ({receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
+			(x, where) -> ({ receiver: x.r, receiverAt: place(x.rp), at: where }: ElementWriteFact), node.elementWrites
 		);
 		FactMerge.collect(
 			record.flows, f -> place(f.p), FactNodeRecordText.compactFactFlowRecord, fresh.bind('flow'),
@@ -183,15 +183,15 @@ final class FactNodeRecords {
 		);
 		FactMerge.collect(
 			record.gens, x -> place(x.p), FactNodeRecordText.compactFactGenRecord, fresh.bind('gen'),
-			(x, where) -> ({declared: x.d, applied: x.s, at: where }: InstantiationFact), node.instantiations
+			(x, where) -> ({ declared: x.d, applied: x.s, at: where }: InstantiationFact), node.instantiations
 		);
 		FactMerge.collect(
 			record.strs, s -> place(s.p), FactNodeRecordText.compactFactStrRecord, fresh.bind('str'),
-			(s, where) -> ({operand: s.o, at: where, exact: s.x == true }: StringFact), node.strings
+			(s, where) -> ({ operand: s.o, at: where, exact: s.x == true }: StringFact), node.strings
 		);
 		FactMerge.collect(
 			record.iters, i -> place(i.p), FactNodeRecordText.compactFactIterRecord, fresh.bind('iter'),
-			(i, where) -> ({binder: i.v, iterated: i.i, at: where }: IterationFact), node.iterations
+			(i, where) -> ({ binder: i.v, iterated: i.i, at: where }: IterationFact), node.iterations
 		);
 		FactMerge.collect(
 			record.refl, r -> place(r.p), FactNodeRecordText.compactFactReflRecord, fresh.bind('refl'),
@@ -225,11 +225,11 @@ final class FactNodeRecords {
 		);
 		FactMerge.collect(
 			record.vars, v -> place(v.p), FactNodeRecordText.compactFactVarRecord, fresh.bind('var'),
-			(v, where) -> ({name: v.n, type: v.t, at: where }: VarFact), node.vars
+			(v, where) -> ({ name: v.n, type: v.t, at: where }: VarFact), node.vars
 		);
 		FactMerge.collect(
 			record.reads, r -> place([for (i in 0...r.length - 2) readInt(r[i])]), readText, fresh.bind('read'),
-			(r, where) -> ({type: readString(r[r.length - 2]), name: readString(r[r.length - 1]), at: where }: LocalReadFact), node.reads
+			(r, where) -> ({ type: readString(r[r.length - 2]), name: readString(r[r.length - 1]), at: where }: LocalReadFact), node.reads
 		);
 	}
 

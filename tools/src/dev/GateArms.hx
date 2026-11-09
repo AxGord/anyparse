@@ -254,7 +254,7 @@ final class GateArms {
 		final report: String = changedReport(gate, base, touched);
 		final layout: Array<String> = layoutOf(report).map(moduleOf).filter(m -> m != '');
 		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
-		final touches: Array<ModuleTouch> = touched.map(file -> {module: moduleOf(file), members: said[file] })
+		final touches: Array<ModuleTouch> = touched.map(file -> { module: moduleOf(file), members: said[file] })
 			.filter(t -> t.module != '' && !layout.contains(t.module));
 		return { touches: touches, layout: layout };
 	}

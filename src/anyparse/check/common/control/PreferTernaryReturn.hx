@@ -100,7 +100,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return fixCarrying(source, violations, plugin, index).map(edit -> {span: edit.span, text: edit.text });
+		return fixCarrying(source, violations, plugin, index).map(edit -> { span: edit.span, text: edit.text });
 	}
 
 	/**
@@ -131,7 +131,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
 		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin, site);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits(
-			edits.map(edit -> {span: edit.span, text: edit.text })
+			edits.map(edit -> { span: edit.span, text: edit.text })
 		);
 		return edits.filter(edit -> kept.exists(alive -> alive.span.from == edit.span.from && alive.span.to == edit.span.to));
 	}

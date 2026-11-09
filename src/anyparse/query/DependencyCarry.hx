@@ -1141,7 +1141,7 @@ final class DependencyCarry {
 	private static function wildcardStaticProviders(info: FileInfo, files: Array<FileInfo>, shape: RefShape): Array<WildProvider> {
 		final out: Array<WildProvider> = [];
 		final groups: Array<{ file: Null<String>, imports: Array<ImportInfo> }> = info.ambientImports.map(g ->
-			{file: g.file, imports: g.imports }
+			{ file: g.file, imports: g.imports }
 		);
 		groups.reverse();
 		groups.push({ file: null, imports: info.imports });

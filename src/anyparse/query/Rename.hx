@@ -416,7 +416,7 @@ final class Rename {
 	 * change length.
 	 */
 	private static function spliceRename(source: String, occurrences: Array<Span>, newName: String): String {
-		final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> {span: occ, text: newName });
+		final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> { span: occ, text: newName });
 		return CanonicalEdit.applyEdits(source, edits);
 	}
 

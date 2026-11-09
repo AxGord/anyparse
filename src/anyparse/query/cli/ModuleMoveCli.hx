@@ -165,7 +165,7 @@ final class ModuleMoveCli {
 
 	/** Each of `paths` with its text. */
 	private static function readAll(paths: Array<String>): Array<{ file: String, source: String }> {
-		return paths.map(p -> {file: p, source: CliIo.readSourceForParse(p) });
+		return paths.map(p -> { file: p, source: CliIo.readSourceForParse(p) });
 	}
 
 	/** One line per module OUTSIDE the scope that spells a relocated path — its references would be left unproven. */
@@ -220,7 +220,7 @@ final class ModuleMoveCli {
 			created.push(c.file);
 		for (r in removed) restore.push({ path: r, content: CliIo.readFile(r) });
 		final dirs: Array<String> = missingDirectories(created);
-		CliIo.writeFiles(changes.map(c -> {path: c.file, content: c.newSource }));
+		CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
 		final state: WrittenState = { restore: restore, created: created, dirs: dirs };
 		for (r in removed) if (!CliIo.deletePath(r)) {
 			rollback(state);

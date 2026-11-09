@@ -464,7 +464,7 @@ class HoistCommonImportTest extends Test {
 		final tree: Array<TreeFile> = aqqTree()
 			.map(entry ->
 				entry.name == 'src/aqq/FourQq.hx'
-					? {name: entry.name, source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n' }
+					? { name: entry.name, source: 'package aqq;\n\nimport qqz.Yqqwwee;\n\nclass FourQq {\n\n\tvar b: Yqqwwee;\n\n}\n' }
 					: entry
 			);
 		Assert.equals('', planned(tree, LIBRARY_FILES, [
@@ -625,7 +625,7 @@ class HoistCommonImportTest extends Test {
 			'',
 			sunk(SINK_TREE.map(entry ->
 				entry.name == 'src/aqq/TwoQq.hx'
-					? {name: entry.name, source: 'package aqq;\n\nclass TwoQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+					? { name: entry.name, source: 'package aqq;\n\nclass TwoQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
 					: entry
 			))
 		);
@@ -654,7 +654,7 @@ class HoistCommonImportTest extends Test {
 	@:pin('guard')
 	public function testTheSinkKeepsASourceThatCarriesMore(): Void {
 		final commented: Array<TreeFile> = SINK_TREE.map(
-			entry -> entry.name == 'src/aqq/import.hx' ? {name: entry.name, source: '// shared\nimport qqz.Rqqwwee;\n' } : entry
+			entry -> entry.name == 'src/aqq/import.hx' ? { name: entry.name, source: '// shared\nimport qqz.Rqqwwee;\n' } : entry
 		);
 		Assert.equals('// shared||', fileAfter(commented, 'src/aqq/import.hx'));
 	}
@@ -671,7 +671,7 @@ class HoistCommonImportTest extends Test {
 			sunk(
 				SINK_TREE.map(entry ->
 					entry.name == 'src/aqq/OneQq.hx'
-						? {name: 'src/aqq/bqq/OneQq.hx', source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+						? { name: 'src/aqq/bqq/OneQq.hx', source: 'package aqq.bqq;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
 						: entry
 				)
 					.concat([
@@ -691,7 +691,7 @@ class HoistCommonImportTest extends Test {
 			sunk(
 				SINK_TREE.map(entry ->
 					entry.name == 'src/aqq/OneQq.hx'
-						? {name: entry.name, source: 'package aqq;\n\nimport eqq.Rqqwwee;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
+						? { name: entry.name, source: 'package aqq;\n\nimport eqq.Rqqwwee;\n\nclass OneQq {\n\n\tvar a:Rqqwwee;\n\n}\n' }
 						: entry
 				)
 					.concat([{ name: 'src/eqq/Rqqwwee.hx', source: 'package eqq;\n\nclass Rqqwwee {}\n' }])
@@ -736,7 +736,7 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-SINK-HYSTERESIS-OFF')
 	public function testAFixedTreeIsAFixedPointOfBothDirections(): Void {
 		#if (sys || nodejs)
-		final tree: Array<TreeFile> = COMMON_TREE.map(entry -> {name: entry.name, source: entry.source.replace('a: ', 'a:') });
+		final tree: Array<TreeFile> = COMMON_TREE.map(entry -> { name: entry.name, source: entry.source.replace('a: ', 'a:') });
 		final verdicts: Array<String> = [];
 		for (config in ['{}', '{ "rules": { "hoist-common-import": { "sinkThreshold": 70 } } }']) {
 			final root: String = CliFixture.writeTree('apq_hoist_fixpoint', tree);
@@ -1080,7 +1080,7 @@ class HoistCommonImportTest extends Test {
 	/** One `lint --fix` over every `.hx` under `root`, by both import-moving directions and the two rules that clean up after them. */
 	private static function fixOnDisk(root: String, config: String, ?checks: Array<Check>): Void {
 		final files: Array<{ file: String, source: String }> = modulesUnder(root)
-			.map(path -> {file: path, source: sys.io.File.getContent(path) });
+			.map(path -> { file: path, source: sys.io.File.getContent(path) });
 		CliFixture.captureStderr(() ->
 			LintFixDriver.runLintFix(
 				files, checks ?? [new HoistCommonImport(), new UnusedImport(), new EmptyAmbientSource()], new HaxeQueryPlugin(),

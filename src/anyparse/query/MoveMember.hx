@@ -936,7 +936,7 @@ final class MoveMember {
 		// ALIAS for an alias one — the moment an alias dependency became carriable it would have
 		// emitted `import D;` here while `MoveSymbol` emitted the same wrong line separately.
 		final carried: Array<String> = [];
-		final decls: Array<{ span: Span, name: String }> = prep.moved.map(m -> {span: m.group.groupSpan, name: prep.srcTypeName })
+		final decls: Array<{ span: Span, name: String }> = prep.moved.map(m -> { span: m.group.groupSpan, name: prep.srcTypeName })
 			.concat(extraDecls ?? []);
 		for (d in decls) switch DependencyCarry.dependencyImportLinesToCarry(
 			prep.srcSource, d.span, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape, d.name, travelling

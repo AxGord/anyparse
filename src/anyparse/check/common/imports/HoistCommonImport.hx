@@ -472,7 +472,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 				final spans: Array<Span> = leaving[site] ?? [];
 				remainsBlank(sourceOf[site] ?? '', spans)
 					? { file: site, edits: [], remove: true }
-					: { file: site, edits: spans.map(span -> {span: span, text: '' }) };
+					: { file: site, edits: spans.map(span -> { span: span, text: '' }) };
 			}
 		];
 		for (file in readers) out.push({ file: file, edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')] });

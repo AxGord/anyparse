@@ -121,7 +121,7 @@ final class NamingRenames {
 		);
 		if (renameSpans == null) return RenameRefusal.rename(flaggedAt, declFrom, RenameRefusal.OCCURRENCE_UNRESOLVED);
 		final spans: Array<Span> = renameSpans;
-		final edits: Array<{ span: Span, text: String }> = spans.map(occ -> {span: occ, text: newName });
+		final edits: Array<{ span: Span, text: String }> = spans.map(occ -> { span: occ, text: newName });
 		final scope: Span = claimScope(tree, shape, span.from, bodyScoped, source.length);
 		if (!collides) return { newName: newName, edits: edits, scope: scope };
 		final qualified: Null<Array<{ span: Span, text: String }>> = qualifyCapturedEdits(
@@ -211,7 +211,7 @@ final class NamingRenames {
 			if (source.substring(orig, end) != newName || sorted.exists(s -> orig < s.to && end > s.from)) return null;
 			captured.push({ span: new Span(orig, end), text: '$self.$newName' });
 		}
-		return edits.map(e -> {span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }).concat(captured);
+		return edits.map(e -> { span: e.span, text: targets.contains(e.span.from) ? '$self.$newName' : e.text }).concat(captured);
 	}
 
 	/**
@@ -471,7 +471,7 @@ final class NamingRenames {
 			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
 			// member is not reachable from it (see `unrelatedTypeSpans`).
 			final unrelated: Array<Span> = unrelatedTypeSpans(fileTree, c.ownerName, shape, resolutionIndex);
-			final baseEdits: Array<{ span: Span, text: String }> = spans.map(s -> {span: s, text: c.targetName });
+			final baseEdits: Array<{ span: Span, text: String }> = spans.map(s -> { span: s, text: c.targetName });
 			// The param idiom, reached one path over from where the single-file rename repairs it:
 			// `__x = x` renamed to `x` is the self-assignment `x = x`, and qualified it reads
 			// `this.x = x`. Only the DECLARING file can be repaired that way - `this.` names the enclosing
@@ -1061,7 +1061,7 @@ final class NamingRenames {
 	 */
 	private static function indexSources(index: SymbolIndex): Array<ScopeFile> {
 		final files: Array<String> = index.allFiles().map(fi -> fi.file).concat(index.skippedFiles());
-		return files.map(file -> {file: file, source: index.sourceOf(file) ?? '' });
+		return files.map(file -> { file: file, source: index.sourceOf(file) ?? '' });
 	}
 
 	/**

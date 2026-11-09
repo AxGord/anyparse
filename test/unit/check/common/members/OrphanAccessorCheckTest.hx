@@ -846,7 +846,7 @@ import anyparse.query.CachingGrammarPlugin;
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({
 			declared: true,
-			sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach.concat(thirdParty)) }
+			sources: () -> { report: report, projectRoots: reach, library: new LibrarySources(reach.concat(thirdParty)) }
 		});
 		return plugin;
 	}

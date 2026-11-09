@@ -276,7 +276,7 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 		// The cap is PER TARGET: a run that asked for three texts wants all three
 		// represented, and a shared budget would let the first one eat it.
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = CliWalk.capAndReport(
-			CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) },
+			CMD, allEntries, o.limit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) },
 			paths.length
 		);
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));

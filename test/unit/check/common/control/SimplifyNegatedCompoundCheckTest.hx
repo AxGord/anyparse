@@ -497,7 +497,7 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 			QueryTestHelpers.rootModules([for (i => piece in model.split('\nclass ')) i == 0 ? piece : 'class $piece']);
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		final check: SimplifyNegatedCompound = new SimplifyNegatedCompound();
 		final files: Array<{ file: String, source: String }> = report.concat(library);

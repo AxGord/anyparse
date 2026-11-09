@@ -466,7 +466,7 @@ final class FixVerifier {
 				// all-null group array it yields bisects per edit exactly as it did before.
 				final edits: Array<GroupedEdit> = check is GroupedFix
 					? (cast check: GroupedFix).fixGrouped(entry.source, own, plugin, index)
-					: flatFix(check, entry.source, own, plugin, index).map(e -> {span: e.span, text: e.text, group: null });
+					: flatFix(check, entry.source, own, plugin, index).map(e -> { span: e.span, text: e.text, group: null });
 				if (edits.length == 0) {
 					pending.push({
 						entry: entry,
@@ -640,7 +640,7 @@ final class FixVerifier {
 			if (seen == null) order.push(reason);
 			counts[reason] = (seen ?? 0) + 1;
 		}
-		return order.map(text -> {text: text, count: counts[text] ?? 0 });
+		return order.map(text -> { text: text, count: counts[text] ?? 0 });
 	}
 
 	/**
@@ -675,7 +675,7 @@ final class FixVerifier {
 		excluded: Array<OracleExclusion>, write: (String, String) -> Void, rounds: Array<Int>
 	): EntryPrep {
 		final before: String = entry.source;
-		final full: Array<{ span: Span, text: String }> = edits.map(e -> {span: e.span, text: e.text });
+		final full: Array<{ span: Span, text: String }> = edits.map(e -> { span: e.span, text: e.text });
 		// Three outcomes, not two: an `Err` here is the WRITER declining the spliced
 		// source, which is not the same event as a check that proposed nothing — and
 		// `case _: return NoChange` recorded both as the latter, so a refused edit set
@@ -1062,7 +1062,7 @@ final class FixVerifier {
 	): Array<{ span: Span, text: String }> {
 		final flat: Array<Int> = [for (u in unitIndices) for (i in units[u]) i];
 		flat.sort((a, b) -> a - b);
-		return flat.map(i -> {span: edits[i].span, text: edits[i].text });
+		return flat.map(i -> { span: edits[i].span, text: edits[i].text });
 	}
 
 	/** The flat edits `check` proposes for `own` in `source`: a `RiskyArm`'s risky arm, every other check's `fix`. */

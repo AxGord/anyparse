@@ -145,7 +145,7 @@ class RunScanTest extends Test {
 
 	public function testSpanEditsSkipSpanlessAndDeclined(): Void {
 		final edits: Array<FixEdit> = RunScan.spanEdits(
-			[spanned(3, 7), violation('x'), spanned(10, 12)], (v, span) -> span.from > 5 ? null : {span: span, text: '' }
+			[spanned(3, 7), violation('x'), spanned(10, 12)], (v, span) -> span.from > 5 ? null : { span: span, text: '' }
 		);
 		Assert.equals(1, edits.length);
 		Assert.equals(3, edits[0].span.from);

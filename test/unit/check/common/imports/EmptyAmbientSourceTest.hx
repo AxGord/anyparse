@@ -104,7 +104,7 @@ class EmptyAmbientSourceTest extends Test {
 
 	/** The run's file set over that tree. */
 	private static function filesOf(root: String, ambient: String, module: Null<String>): Array<{ file: String, source: String }> {
-		return treeOf(ambient, module).map(entry -> {file: '$root/${entry.name}', source: entry.source });
+		return treeOf(ambient, module).map(entry -> { file: '$root/${entry.name}', source: entry.source });
 	}
 
 }

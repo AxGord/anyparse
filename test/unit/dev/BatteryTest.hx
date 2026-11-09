@@ -191,7 +191,7 @@ final class BatteryTest extends Test {
 			final steps: Array<StepRecord> = BranchReportJsonParser.parse(File.getContent(dir.file('work/branch-suite.json'))).steps;
 			Assert.same(
 				[{ name: 'suite', outcome: 'passed' }, { name: 'corpus', outcome: 'failed' }],
-				steps.map(s -> {name: s.name, outcome: s.outcome })
+				steps.map(s -> { name: s.name, outcome: s.outcome })
 			);
 		});
 	}
@@ -272,7 +272,7 @@ final class BatteryTest extends Test {
 			final report: BranchReportJson = BranchReportJsonParser.parse(File.getContent(dir.file('work/branch-suite.json')));
 			Assert.same(
 				[{ name: 'suite', outcome: 'skipped' }, { name: 'corpus', outcome: 'passed' }],
-				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+				report.steps.map(s -> { name: s.name, outcome: s.outcome })
 			);
 			final readings: Map<String, Int> = [for (r in report.readings) r.name => r.value];
 			Assert.equals(7, readings['tests'], 'the next base\'s suite counts are the gate\'s');
@@ -311,7 +311,7 @@ final class BatteryTest extends Test {
 			final report: BranchReportJson = impactRun(dir, ['unit.cli.ApqDxTier5CliTest']);
 			Assert.same(
 				[{ name: 'suite', outcome: 'passed' }, { name: 'corpus', outcome: 'skipped' }],
-				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+				report.steps.map(s -> { name: s.name, outcome: s.outcome })
 			);
 			Assert.same(
 				[1],
@@ -328,7 +328,7 @@ final class BatteryTest extends Test {
 			final report: BranchReportJson = impactRun(dir, []);
 			Assert.same(
 				[{ name: 'suite', outcome: 'skipped' }, { name: 'corpus', outcome: 'skipped' }],
-				report.steps.map(s -> {name: s.name, outcome: s.outcome })
+				report.steps.map(s -> { name: s.name, outcome: s.outcome })
 			);
 		});
 	}

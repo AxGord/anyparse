@@ -925,7 +925,7 @@ class CrossScopeSoundnessTest extends Test {
 			? [{ file: LIB_FILE, source: LIB_THIRD_PARTY }]
 			: roots.concat(placement == LIBRARY_ONLY ? reach : []);
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: roots, library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: roots, library: new LibrarySources(library) } }
 		);
 		return plugin;
 	}

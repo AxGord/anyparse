@@ -21,7 +21,9 @@ class ChangedCommandPathsTest extends Test {
 	public function testNPathsAnswerTheNoPathRunFilteredByThem(): Void {
 		#if nodejs
 		final names: Array<String> = [for (i in 0...COUNT) 'src/f${pad(i)}.hx'];
-		final root: String = CliFixture.writeTree('apq_changed_paths', names.map(n -> {name: n, source: 'class C${n.substr(5, 4)} {}\n' }));
+		final root: String = CliFixture.writeTree(
+			'apq_changed_paths', names.map(n -> { name: n, source: 'class C${n.substr(5, 4)} {}\n' })
+		);
 		CliFixture.git(root, ['init', '-q']);
 		CliFixture.git(root, ['add', '-A']);
 		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);

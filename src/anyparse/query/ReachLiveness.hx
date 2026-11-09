@@ -170,7 +170,7 @@ final class ReachLiveness {
 			}
 		}
 		final facts: Array<DefineFacts> = _configurations.map(
-			c -> {defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)), values: c.values }
+			c -> { defined: c.defined, undefined: flags.filter(f -> !c.everDefined.contains(f)), values: c.values }
 		);
 		final dead: Array<Span> = CondRegionLiveness.deadSpans(source, _shape, facts, regions);
 		_dead[file] = dead;

@@ -491,7 +491,7 @@ class AmbientImportRulesTest extends Test {
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final files: Array<{ file: String, source: String }> = analysed.map(name ->
-				{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+				{ file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
 			);
 			out = reported(files, '$root/');
 		});

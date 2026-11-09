@@ -70,7 +70,7 @@ final class ReachBuildsCache {
 			key: key.key,
 			stats: [for (file => stat in stats) [file, stat]],
 			configurations: configurations.map(recordOf),
-			library: builds.library.map(f -> {file: f.file, hash: ContentHash.md5(f.source) })
+			library: builds.library.map(f -> { file: f.file, hash: ContentHash.md5(f.source) })
 		};
 		final path: String = cacheFile(oracles);
 		// staged under this process's name and renamed, so a concurrent reader meets the old record or the new one whole
@@ -177,7 +177,7 @@ final class ReachBuildsCache {
 			everDefined: c.everDefined,
 			values: [for (name => value in c.values) [name, value]],
 			compiled: c.compiled,
-			types: c.types.map(t -> {name: t.name, file: t.file })
+			types: c.types.map(t -> { name: t.name, file: t.file })
 		};
 		final parsed: Null<Array<String>> = c.parsed;
 		if (parsed != null) record.parsed = parsed;
@@ -217,7 +217,7 @@ final class ReachBuildsCache {
 			everDefined: c.everDefined,
 			values: values,
 			compiled: c.compiled,
-			types: c.types.map(t -> {name: t.name, file: t.file })
+			types: c.types.map(t -> { name: t.name, file: t.file })
 		};
 		final parsed: Null<Array<String>> = c.parsed;
 		if (parsed != null) read.parsed = parsed;

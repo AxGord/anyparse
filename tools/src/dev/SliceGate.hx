@@ -133,7 +133,7 @@ final class SliceGate {
 			_gate.base, _gate.options.infra, _gate.options.allow, _gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
 		);
 		if (!build()) return finish(title);
-		final digests: Array<FrozenTree> = _gate.options.frozen.map(dir -> {dir: dir, digest: GateTree.diffDigest(dir) });
+		final digests: Array<FrozenTree> = _gate.options.frozen.map(dir -> { dir: dir, digest: GateTree.diffDigest(dir) });
 		final reused: Null<Baseline> = key == null ? null : BaselineCache.restore(BaselineCache.defaultCache(), key, _gate.logs, digests);
 		if (reused != null) {
 			final kept: Baseline = reused;

@@ -252,7 +252,7 @@ import anyparse.query.cli.command.LintArgs;
 	): GrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: reach, library: new LibrarySources(reach) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: reach, library: new LibrarySources(reach) } }
 		);
 		return plugin;
 	}

@@ -462,7 +462,7 @@ class PrivateAccessFormParityTest extends Test {
 	/** A plugin whose declared resolution scope is the report itself — what a project-wide `lint --fix` runs under. */
 	private static function scoped(report: Array<SourceFile>): CachingGrammarPlugin {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope({ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources([]) } });
+		plugin.setResolutionScope({ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources([]) } });
 		return plugin;
 	}
 

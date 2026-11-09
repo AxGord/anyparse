@@ -388,7 +388,7 @@ final class OracleGeneration {
 
 	/** Every path of `paths` with its content hash, through `memo`. */
 	private static function hashAll(paths: Array<String>, memo: Map<String, String>): Array<FileHash> {
-		return #if (sys || nodejs) paths.map(path -> {path: path, hash: hashOf(path, memo) }) #else [] #end;
+		return #if (sys || nodejs) paths.map(path -> { path: path, hash: hashOf(path, memo) }) #else [] #end;
 	}
 
 	/** Drop `me`'s shared and exclusive holds on every group of `groups`. */
@@ -411,7 +411,7 @@ final class OracleGeneration {
 		final moved: Null<FileHash> = s.implicitBefore.find(held -> hashOf(held.path, after) != held.hash);
 		final implicit: Array<FileHash> = implicitInputs(
 			s.group, libraries
-		).map(path -> {path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) });
+		).map(path -> { path: path, hash: hashIn(s.implicitBefore, path) ?? hashOf(path, after) });
 		if (moved != null) return ' — NOT recorded: ${moved.path} changed while it ran, so the next run regenerates';
 		writeRecord(s.group, s.inputs, implicit, after);
 		final raced: Null<FileHash> = s.inputs.find(held -> hashOf(held.path, after) != held.hash);

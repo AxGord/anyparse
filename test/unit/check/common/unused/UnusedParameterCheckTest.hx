@@ -296,7 +296,7 @@ class UnusedParameterCheckTest extends Test {
 		];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
-			{ declared: true, sources: () -> {report: report, projectRoots: [], library: new LibrarySources(library) } }
+			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
 		);
 		final check: UnusedParameter = new UnusedParameter();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin);

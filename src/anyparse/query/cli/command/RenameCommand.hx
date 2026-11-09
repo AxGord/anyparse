@@ -222,7 +222,7 @@ final class RenameCommand implements CliCommand {
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
-					CliIo.writeFiles(changes.map(c -> {path: c.file, content: c.newSource }));
+					CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
 					CliIo.stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');
@@ -367,7 +367,7 @@ final class RenameCommand implements CliCommand {
 				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
 				if (write) {
-					CliIo.writeFiles([change].concat(registries.changes).map(c -> {path: c.file, content: c.newSource }));
+					CliIo.writeFiles([change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }));
 					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
 					for (r in registries.changes) CliIo.stderr('apq rename: wrote ${r.file}, registry record(s) followed\n');
 				} else {

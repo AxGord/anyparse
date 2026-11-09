@@ -117,7 +117,7 @@ final class TypeRefIndex {
 	 * Every indexed decl named `typeName` (simple name), each paired with its declaring file.
 	 */
 	public function resolvedDeclsNamed(typeName: String): Array<ResolvedType> {
-		return named(typeName).map(r -> {file: r.file, type: r.type });
+		return named(typeName).map(r -> { file: r.file, type: r.type });
 	}
 
 	/**

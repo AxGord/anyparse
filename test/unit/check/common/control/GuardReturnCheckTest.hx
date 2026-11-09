@@ -697,7 +697,7 @@ class GuardReturnCheckTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
-			sources: () -> {report: report, projectRoots: [], library: new LibrarySources([{ file: 'Res.hx', source: model }]) }
+			sources: () -> { report: report, projectRoots: [], library: new LibrarySources([{ file: 'Res.hx', source: model }]) }
 		});
 		return CheckFixture.violationsIn(new GuardReturn(), report, scoped);
 	}

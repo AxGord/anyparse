@@ -406,7 +406,7 @@ class AmbientImportResolutionTest extends Test {
 	private function indexOf(root: String): SymbolIndex {
 		#if (sys || nodejs)
 		final files: Array<{ file: String, source: String }> = TREE.map(entry ->
-			{file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
+			{ file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
 		);
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
@@ -418,7 +418,7 @@ class AmbientImportResolutionTest extends Test {
 	private function indexOfTree(root: String, names: Array<String>): SymbolIndex {
 		#if (sys || nodejs)
 		final files: Array<{ file: String, source: String }> = names.map(name ->
-			{file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
+			{ file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
 		);
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else

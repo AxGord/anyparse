@@ -156,7 +156,7 @@ class BuildBranchesTest extends Test {
 		final onRead: () -> Void = read ?? () -> {};
 		plugin.setResolutionScope({
 			declared: true,
-			sources: () -> {report: files, projectRoots: [], library: new LibrarySources([]) },
+			sources: () -> { report: files, projectRoots: [], library: new LibrarySources([]) },
 			builds: () -> {
 				onRead();
 				{ configurations: configurations, library: [] };

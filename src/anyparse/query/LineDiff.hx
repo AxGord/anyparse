@@ -39,7 +39,7 @@ final class LineDiff {
 			? null
 			: {
 				inserted: middle.inserted.map(i -> i + head),
-				deleted: middle.deleted.map(d -> {line: d.line + head, before: d.before + head })
+				deleted: middle.deleted.map(d -> { line: d.line + head, before: d.before + head })
 			};
 	}
 

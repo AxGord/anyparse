@@ -33,7 +33,7 @@ class OwnerParaphraseTest extends Test {
 		#if (sys || nodejs)
 		final root: String = CliFixture.repoRoot();
 		final io: ResolvedInputs = CliArgs.resolveInputPaths('haxe', ['$root/src']);
-		final files: Array<{ file: String, source: String }> = io.paths.map(path -> {file: path, source: sys.io.File.getContent(path) });
+		final files: Array<{ file: String, source: String }> = io.paths.map(path -> { file: path, source: sys.io.File.getContent(path) });
 		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
 		for (name in BENCHMARKS) {
 			final benchmark: ParaphraseBenchmark = ParaphraseBenchmarkParser.parse(sys.io.File.getContent('$root/$name'));
