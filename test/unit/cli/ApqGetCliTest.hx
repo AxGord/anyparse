@@ -138,6 +138,33 @@ class ApqGetCliTest extends Test {
 		#end
 	}
 
+	/** An explicit file no grammar claims is one refusal line and exit 1, after the earlier documents answered. */
+	@:killer('M-GET-WHERE-UNCLAIMED-ABORTS')
+	@:pin('control')
+	public function testWhereRefusesAFileNoGrammarClaims(): Void {
+		#if (sys || nodejs)
+		final dir: String = CliFixture.writeDir(
+			'apq_get_where_unclaimed', [{ name: 'a.json', source: WHERE_A }, { name: 'note.txt', source: 'plain text' }]
+		);
+		for (order in [['a.json', 'note.txt'], ['note.txt', 'a.json']]) {
+			var exit: Int = -1;
+			var out: String = '';
+			final err: String = CliFixture.captureStderr(() ->
+				out = CliFixture.captureStdout(() ->
+					exit = Cli.run(['get', '--where', 'member=run'].concat(order.map(name -> '$dir/$name')))
+				)
+			);
+			Assert.equals(1, exit, 'an unclaimed file fails the run, it does not abort it ($order): $err');
+			Assert.isTrue(err.indexOf('note.txt: no registered grammar claims the file') >= 0, err);
+			Assert.equals(1, err.split('\n').filter(line -> line != '').length, 'one line ($order): $err');
+			Assert.equals('$dir/a.json arms.0\n', out, 'the other document still answers ($order)');
+		}
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** `--where` takes `<path>=<value>` and does not combine with `--select`. */
 	public function testWhereRefusesAMalformedClause(): Void {
 		#if (sys || nodejs)

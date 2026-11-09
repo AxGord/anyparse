@@ -1052,6 +1052,14 @@
 			"find": "o.fixProbes, o.reviewBudget",
 			"replace": "o.fixProbes, null",
 			"note": "the fix driver is not told the run's budget, so the headline never names it though the configs carry it"
+		},
+		{
+			"name": "M-GET-WHERE-UNCLAIMED-ABORTS",
+			"type": "anyparse.query.cli.command.GetCommand",
+			"method": "pluginFor",
+			"find": "return named == null ? null : CliArgs.pickPlugin(named);",
+			"replace": "if (named == null) throw new UsageFailure('no grammar');\nreturn CliArgs.pickPlugin(named);",
+			"note": "an unclaimed file throws a UsageFailure again instead of reaching load's refusal line, so a --where run over several documents aborts with exit 2 after earlier matches printed"
 		}
 	]
 }

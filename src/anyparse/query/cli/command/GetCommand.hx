@@ -102,8 +102,12 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 	/** `file` (or stdin for `-`) parsed as a data document, or null after saying why it is not one. */
 	private static function load(file: String, lang: Null<String>, ctx: CliContext): Null<LoadedDocument> {
 		final fromStdin: Bool = file == STDIN;
-		final plugin: GrammarPlugin = pluginFor(file, lang, fromStdin);
 		final label: String = fromStdin ? '<stdin>' : file;
+		final plugin: Null<GrammarPlugin> = pluginFor(file, lang, fromStdin);
+		if (plugin == null) {
+			CliIo.stderr('apq get: $label: no registered grammar claims the file — pass --lang <name>\n');
+			return null;
+		}
 		final shape: RefShape = plugin.refShape();
 		if (!DataPath.walkable(shape)) {
 			CliIo.stderr('apq get: $label: the ${plugin.langName()} grammar declares no object or array, so no path names a value in it\n');
@@ -179,11 +183,12 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 		};
 	}
 
-	/** The grammar of `file`: its extension's, else `--lang`'s; stdin has only `--lang` (the dispatcher fills it in from the content). */
-	private static function pluginFor(file: String, lang: Null<String>, fromStdin: Bool): GrammarPlugin {
+	/**
+	 * The grammar of `file`: its extension's, else `--lang`'s, else null; stdin has only `--lang` (filled in by the dispatcher).
+	 */
+	private static function pluginFor(file: String, lang: Null<String>, fromStdin: Bool): Null<GrammarPlugin> {
 		final named: Null<String> = fromStdin ? lang : CliArgs.langOfFile(file) ?? lang;
-		if (named == null) throw new UsageFailure('$file: no --lang, and no registered grammar claims the file — pass --lang <name>');
-		return CliArgs.pickPlugin(named);
+		return named == null ? null : CliArgs.pickPlugin(named);
 	}
 
 	/** The node `--select` names, or null after saying why there is none. */
