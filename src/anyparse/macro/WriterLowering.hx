@@ -333,7 +333,8 @@ class WriterLowering {
 			ctx: ctx,
 			isTriviaBearing: isTriviaBearing,
 			ruleCtorPath: ruleCtorPath,
-			branchSynthExtraArity: branchSynthExtraArity.bind(_ctorPat)
+			branchSynthExtraArity: branchSynthExtraArity.bind(_ctorPat),
+			writeFnFor: writeFnFor
 		};
 		_braceSym = {
 			shape: shape,

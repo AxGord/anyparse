@@ -2534,6 +2534,20 @@
 			"method": "isCtorKwBodyRef",
 			"force": "false",
 			"note": "a first field after its ctor's keyword grows no kw-trivia slots, so the comment between `do` and its body is dropped at parse"
+		},
+		{
+			"name": "M-VIF-WIDTH-NEVER-REFUSES",
+			"type": "anyparse.macro.WriterArrowValueIfLowering",
+			"method": "arrowValueIfValueWidthExpr",
+			"force": "macro true",
+			"note": "the value-width cap never refuses, so a fitting chain with a wide value collapses onto one line"
+		},
+		{
+			"name": "M-VIF-WIDTH-ALWAYS-REFUSES",
+			"type": "anyparse.macro.WriterArrowValueIfLowering",
+			"method": "arrowValueIfValueWidthExpr",
+			"force": "macro false",
+			"note": "the value-width cap refuses every chain, so even a chain of narrow values keeps the expressionIf policy layout"
 		}
 	]
 }

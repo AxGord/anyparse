@@ -255,6 +255,18 @@ final class HxModuleWriteOptions {
 	public var expressionIfFitMaxBranches: Int = 0;
 
 	/**
+	 * omega-value-if-fit value-width cap: the widest a single VALUE of an `expressionIfFit` chain may
+	 * render on one line and still let the chain collapse. Every value is measured -- each branch and
+	 * the final `else` -- so one wide value keeps the whole chain on the `expressionIf` policy layout.
+	 * A value that cannot render flat at all (a block) refuses too. `0` (default) means no cap.
+	 *
+	 * This is the "simple chain" gate: literals, names, field paths and short calls are narrow, while
+	 * collections, lambdas and nested chains are wide, so a width says what a list of node kinds would
+	 * without the grammar naming one. Fed by `sameLine.expressionIfFitMaxValueWidth`.
+	 */
+	public var expressionIfFitMaxValueWidth: Int = 0;
+
+	/**
 	 * omega-elseif-comment-reflow: when `true`, an `else if` whose nested `if`
 	 * carries EXACTLY one interposed `//` line comment glues as usual and
 	 * re-emits that comment at the end of the nested `if`'s head line - after

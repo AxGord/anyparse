@@ -329,13 +329,7 @@ final class HaxeFormatConfigLoader {
 		// three `expressionIf*` body policies - it overrides them, and only for
 		// a value-if chain that is the direct body of an arrow lambda.
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
-		// omega-value-if-fit: the same shape of knob for EVERY value-if rather than only an arrow
-		// body -- it fans out into no body policy either, it decides whether a FITTING chain may
-		// collapse to one line while a breaking one keeps exactly the policy layout.
-		if (section.expressionIfFit != null) opt.expressionIfFit = section.expressionIfFit;
-		// omega-value-if-fit branch cap: read even when `expressionIfFit` itself is absent -- a
-		// config may set the cap once and toggle the knob, and the cap is inert while it is off.
-		if (section.expressionIfFitMaxBranches != null) opt.expressionIfFitMaxBranches = section.expressionIfFitMaxBranches;
+		applyValueIfFit(section, opt);
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.
@@ -1253,6 +1247,17 @@ final class HaxeFormatConfigLoader {
 	private static function addKnobWithoutPolicy(cfg: HxFormatConfig, opt: HxModuleWriteOptions): Bool {
 		final stated: Bool = cfg.wrapping?.trailingComma != null;
 		return !stated && (opt.trailingCommaArrays || opt.trailingCommaArgs || opt.trailingCommaObjectLits);
+	}
+
+	/**
+	 * omega-value-if-fit: the knob that lets EVERY value-if chain collapse when it fits, and the two caps
+	 * that narrow it to a simple chain. None fans out into a body policy; the caps are read even when the
+	 * knob is absent -- a config may set them once and toggle the knob, and they are inert while it is off.
+	 */
+	private static function applyValueIfFit(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
+		if (section.expressionIfFit != null) opt.expressionIfFit = section.expressionIfFit;
+		if (section.expressionIfFitMaxBranches != null) opt.expressionIfFitMaxBranches = section.expressionIfFitMaxBranches;
+		if (section.expressionIfFitMaxValueWidth != null) opt.expressionIfFitMaxValueWidth = section.expressionIfFitMaxValueWidth;
 	}
 
 }

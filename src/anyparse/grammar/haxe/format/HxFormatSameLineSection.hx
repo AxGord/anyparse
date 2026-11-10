@@ -138,6 +138,14 @@ typedef HxFormatSameLineSection = {
 	 */
 	@:optional
 	var expressionIfFitMaxBranches: Int;
+
+	/**
+	 * Widest a single value of an `expressionIfFit` chain may render on one line and still let the chain
+	 * collapse; one wider value keeps the whole chain on the `expressionIf` layout. `0` (default) is no
+	 * cap. Inert while `expressionIfFit` is off.
+	 */
+	@:optional
+	var expressionIfFitMaxValueWidth: Int;
 	@:optional
 	var elseIfCommentReflow: Bool;
 

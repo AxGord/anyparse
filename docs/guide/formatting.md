@@ -143,3 +143,20 @@ A simple one fills the argument line with its neighbours. The test is the nested
 `wrapping.callParameter`, measured over the literal's own items; `onePerLine` gives the literal its own line, any other
 mode lets it fill. A `callParameter` block that does not name the key keeps the built-in one. Details:
 `docs/haxe-format-config.md`.
+
+## A simple value `if` on one line: `sameLine.expressionIfFit` and its caps
+
+Under `sameLine.expressionIf: next` every value `if` breaks, each value on its own line. `sameLine.expressionIfFit: true` keeps a chain on one line when it fits, and two caps narrow that to a simple chain; a chain either cap refuses keeps the `next` layout whole, never half-joined:
+
+- `expressionIfFitMaxBranches` — the most values a chain may hold (`if (c) a else b` is 2, `if (c) a else if (d) b else e` is 3);
+- `expressionIfFitMaxValueWidth` — the widest one value may render (each branch and the final `else`); a value that cannot render flat, such as a block, refuses too.
+
+`0` is no cap. With `"expressionIfFit": true, "expressionIfFitMaxValueWidth": 8`:
+
+```haxe
+return if (a < b) -1 else if (a > b) 1 else 0;
+final a = if (c)
+	1
+else
+	make(x, y);
+```

@@ -102,6 +102,7 @@ final class WriterArrowValueIfLowering {
 		final fitAccess: Expr = args.length == FIT_KNOB_ARG_COUNT ? optFieldAccess(args[3]) : macro false;
 		final spineCleanExpr: Expr = arrowValueIfSpineCleanExpr(ac, node, args[1], args[2]);
 		final branchCapExpr: Expr = arrowValueIfBranchCapExpr(ac, node, args[1], args[2]);
+
 		return macro {
 			final _aifGate: Bool = $knobAccess && opt._inArrowLambdaBody;
 			// The arrow gate is checked FIRST and excludes the fit gate: a chain in an arrow body
@@ -195,7 +196,8 @@ final class WriterArrowValueIfLowering {
 
 	/**
 	 * omega-value-if-fit branch cap - the runtime gate `_vifFit` folds in: true when no cap is
-	 * configured, else the chain's branch count measured against it.
+	 * configured, else the chain's branch count measured against it -- and then the value-width cap
+	 * (`arrowValueIfValueWidthExpr`), the other half of "a simple chain".
 	 *
 	 * A SECOND spine walk, deliberately not folded into `arrowValueIfSpineCleanExpr` -- that one runs
 	 * under `_anyGate` (either knob), while the count must run only when the fit knob is on AND a cap
@@ -204,7 +206,8 @@ final class WriterArrowValueIfLowering {
 	 */
 	private static function arrowValueIfBranchCapExpr(ac: ArrowValueIfCtx, node: ShapeNode, spineField: String, spineCtor: String): Expr {
 		final countExpr: Expr = arrowValueIfBranchCountExpr(ac, node, spineField, spineCtor);
-		return macro opt.expressionIfFitMaxBranches <= 0 || $countExpr <= opt.expressionIfFitMaxBranches;
+		final valueWidthExpr: Expr = arrowValueIfValueWidthExpr(ac, node, spineField, spineCtor);
+		return macro (opt.expressionIfFitMaxBranches <= 0 || $countExpr <= opt.expressionIfFitMaxBranches) && $valueWidthExpr;
 	}
 
 	/**
@@ -417,6 +420,87 @@ final class WriterArrowValueIfLowering {
 			: optExpr;
 	}
 
+	/**
+	 * omega-value-if-fit value-width cap - the "simple chain" gate `_vifFit` folds in: true when the
+	 * type carries no `@:fmt(valueIfFitValueWidth('<knobField>', '<valueField>'))` or its knob is
+	 * `0`, else every VALUE of the chain (each member's `<valueField>` plus the final `else` value)
+	 * must render flat within the knob's width. A value with a forced break (a block, a
+	 * multi-statement lambda) has no flat width and refuses the chain.
+	 *
+	 * The width of the written value rather than its constructor is the measure, so the grammar
+	 * names no list of "simple" kinds: a literal, a name, a field path or a short call is narrow, a
+	 * collection, a lambda or a nested chain is wide.
+	 */
+	private static function arrowValueIfValueWidthExpr(ac: ArrowValueIfCtx, node: ShapeNode, spineField: String, spineCtor: String): Expr {
+		final args: Null<Array<String>> = node.fmtReadStringArgs('valueIfFitValueWidth');
+		if (args == null) return macro true;
+		if (args.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(valueIfFitValueWidth) expects 2 string args (knobField, valueField), got ${args.length}',
+				Context.currentPos()
+			);
+		final knobAccess: Expr = optFieldAccess(args[0]);
+		final valueNode: Null<ShapeNode> = findFieldByName(node, args[1]);
+		final spineNode: Null<ShapeNode> = findFieldByName(node, spineField);
+		if (valueNode == null || spineNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(valueIfFitValueWidth) valueField or spineField not found on the struct', Context.currentPos()
+			);
+		final valueRef: Null<String> = valueNode.annotations.get(AnnotationKeys.BASE_REF);
+		final spineRef: Null<String> = spineNode.annotations.get(AnnotationKeys.BASE_REF);
+		if (valueRef == null || spineRef == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(valueIfFitValueWidth) valueField and spineField must be rule refs', Context.currentPos()
+			);
+		final valueFn: String = ac.writeFnFor(valueRef);
+		final spineFn: String = ac.writeFnFor(spineRef);
+		final valueAccess: Expr = { expr: EField(macro _vwCur, args[1]), pos: Context.currentPos() };
+		final spineAccess: Expr = { expr: EField(macro _vwCur, spineField), pos: Context.currentPos() };
+		final capture: Null<Expr> = ctorCapturePattern(ac, spineRef, spineCtor, '_vwInner');
+		final tailFits: Expr = macro {
+			final _vwW: Int = anyparse.format.wrap.WrapList.flatLength($i{spineFn}(_vwNext, opt));
+			_vwW >= 0 && _vwW <= $knobAccess;
+		};
+		final stepCases: Array<Case> = capture == null
+			? [
+				{
+					values: [macro _],
+					expr: macro {
+						_vwOk = $tailFits;
+						break;
+					},
+					guard: null
+				}
+			]
+			: [
+				{ values: [capture], expr: macro _vwCur = _vwInner, guard: null },
+				{
+					values: [macro _],
+					expr: macro {
+						_vwOk = $tailFits;
+						break;
+					},
+					guard: null
+				}
+			];
+		final stepSwitch: Expr = { expr: ESwitch(macro _vwNext, stepCases, null), pos: Context.currentPos() };
+		return macro $knobAccess <= 0 || {
+			var _vwCur = value;
+			var _vwOk: Bool = true;
+			while (true) {
+				final _vwW: Int = anyparse.format.wrap.WrapList.flatLength($i{valueFn}($valueAccess, opt));
+				if (_vwW < 0 || _vwW > $knobAccess) {
+					_vwOk = false;
+					break;
+				}
+				final _vwNext = $spineAccess;
+				if (_vwNext == null) break;
+				$stepSwitch;
+			}
+			_vwOk;
+		};
+	}
+
 }
 
 /**
@@ -433,5 +517,6 @@ typedef ArrowValueIfCtx = {
 	final isTriviaBearing: (refName:String) -> Bool;
 	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
 	final branchSynthExtraArity: (bodyTypePath:String, branch:ShapeNode) -> Int;
+	final writeFnFor: (refName:String) -> String;
 }
 #end

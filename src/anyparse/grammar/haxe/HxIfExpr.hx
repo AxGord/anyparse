@@ -59,7 +59,8 @@ package anyparse.grammar.haxe;
  * knob too; recorded rather than gated.
  */
 @:peg
-@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', 'expressionIfFit'))
+@:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', 'expressionIfFit'),
+	valueIfFitValueWidth('expressionIfFitMaxValueWidth', 'thenBranch'))
 typedef HxIfExpr = {
 	@:lead('(')
 	@:trail(')')

@@ -27,6 +27,9 @@ final class HxValueIfFitSliceTest extends Test {
 	private static final CAP3: String =
 		'$BASE, "sameLine": {"expressionIf": "next", "expressionIfFit": true, "expressionIfFitMaxBranches": 3}}';
 	private static final CAP2_KNOB_OFF: String = '$BASE, "sameLine": {"expressionIf": "next", "expressionIfFitMaxBranches": 2}}';
+	private static final WIDTH8: String =
+		'$BASE, "sameLine": {"expressionIf": "next", "expressionIfFit": true, "expressionIfFitMaxValueWidth": 8}}';
+	private static final WIDTH8_KNOB_OFF: String = '$BASE, "sameLine": {"expressionIf": "next", "expressionIfFitMaxValueWidth": 8}}';
 
 	public function new(): Void {
 		super();
@@ -142,6 +145,61 @@ final class HxValueIfFitSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal a:Int = if (c) 1 else 2;\n\t}\n}';
 		final out: String = 'class C {\n\tfunction test() {\n\t\tfinal a:Int = if (c)\n\t\t\t1\n\t\telse\n\t\t\t2;\n\t}\n}';
 		Assert.equals(out, triviaWrite(src, CAP2_KNOB_OFF));
+	}
+
+	/** omega-value-if-fit value-width cap: a chain of narrow values -- the `compareInt` shape -- still collapses under the cap. */
+	@:pin('control')
+	@:killer('M-VIF-WIDTH-ALWAYS-REFUSES')
+	public function testValueWidthCapAllowsNarrowValues(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\treturn if (a < b) -1 else if (a > b) 1 else 0;\n\t}\n}';
+		Assert.equals(src, triviaWrite(src, WIDTH8));
+	}
+
+	/** A value exactly at the cap still collapses: the cap is inclusive. */
+	@:pin('control')
+	@:killer('M-VIF-WIDTH-ALWAYS-REFUSES')
+	public function testValueWidthCapIsInclusive(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c) [1, 2, 3] else [];\n\t}\n}';
+		Assert.equals(
+			src,
+			triviaWrite(src, '$BASE, "sameLine": {"expressionIf": "next", "expressionIfFit": true, "expressionIfFitMaxValueWidth": 9}}')
+		);
+	}
+
+	/** A value one column past the cap refuses: the FITTING chain keeps the `expressionIf` policy layout. */
+	@:pin('control')
+	@:killer('M-VIF-WIDTH-NEVER-REFUSES')
+	public function testValueWidthCapRefusesWideValue(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c) [1, 2, 3] else [];\n\t}\n}';
+		final out: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c)\n\t\t\t[1, 2, 3]\n\t\telse\n\t\t\t[];\n\t}\n}';
+		Assert.equals(out, triviaWrite(src, WIDTH8));
+	}
+
+	/** The final `else` value is measured too, not only the members' then-values. */
+	@:pin('control')
+	@:killer('M-VIF-WIDTH-NEVER-REFUSES')
+	public function testValueWidthCapMeasuresFinalElse(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c) 1 else make(x, y);\n\t}\n}';
+		final out: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c)\n\t\t\t1\n\t\telse\n\t\t\tmake(x, y);\n\t}\n}';
+		Assert.equals(out, triviaWrite(src, WIDTH8));
+	}
+
+	/** ★ One wide MIDDLE value refuses the whole chain -- no member collapses while another breaks. */
+	@:pin('control')
+	@:killer('M-VIF-WIDTH-NEVER-REFUSES')
+	public function testValueWidthCapRefusalIsChainWide(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c) 1 else if (d) make(x, y) else if (e) 3 else 4;\n\t}\n}';
+		final out: String = 'class C {\n\tfunction test() {\n\t\tfinal a = if (c)\n\t\t\t1\n\t\telse if (d)'
+			+ '\n\t\t\tmake(x, y)\n\t\telse if (e)\n\t\t\t3\n\t\telse\n\t\t\t4;\n\t}\n}';
+		Assert.equals(out, triviaWrite(src, WIDTH8));
+	}
+
+	/** The width cap is inert while the knob itself is off. */
+	@:pin('guard')
+	public function testValueWidthCapInertWithKnobOff(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\treturn if (a < b) -1 else 0;\n\t}\n}';
+		final out: String = 'class C {\n\tfunction test() {\n\t\treturn if (a < b)\n\t\t\t-1\n\t\telse\n\t\t\t0;\n\t}\n}';
+		Assert.equals(out, triviaWrite(src, WIDTH8_KNOB_OFF));
 	}
 
 	private inline function triviaWrite(src: String, config: String): String {
