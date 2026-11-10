@@ -1150,6 +1150,22 @@
 			"find": "forwardsToMacro(candidate.fn, binderOfFile, shape)",
 			"replace": "false",
 			"note": "a thin forward to a macro callee is flagged again, so the safe fix inlines the call and copies the macro's expansion to every call site"
+		},
+		{
+			"name": "M-INLINE-MACRO-GATE-REPORT-SCOPE",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "run",
+			"find": "collectMacroConsumedModules(RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files)",
+			"replace": "collectMacroConsumedModules(files)",
+			"note": "inline-constant reads the macro-consumption gate over the linted files only, so a macro-context reader outside the report no longer keeps a constant inline"
+		},
+		{
+			"name": "M-INLINE-MACRO-GATE-LIBRARY-HALF",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "run",
+			"find": "RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files)",
+			"replace": "ReflectionScan.scopeFiles(files, plugin))",
+			"note": "inline-constant reads macro-context files of the library half too, so a library type sharing a project class name keeps its constants inline"
 		}
 	]
 }

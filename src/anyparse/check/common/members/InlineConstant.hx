@@ -7,6 +7,7 @@ import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -210,7 +211,7 @@ final class InlineConstant extends RuleBase {
 		if (resolved == null) return [];
 		final seams: ConstantFieldSeams = resolved;
 		final reflected: ReflectionSurface = ReflectionScan.reflectionSurface(files, plugin);
-		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
+		final macroConsumed: Array<String> = collectMacroConsumedModules(RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files);
 		final proof: InitProof = (container, init) -> isInlinableInitializer(container, init, seams);
 		final facts: RunFacts = {
 			reflected: reflected,
