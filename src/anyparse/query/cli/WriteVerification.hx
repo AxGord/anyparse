@@ -162,6 +162,7 @@ final class WriteVerification {
 
 	/** Print the errors of `rejected` (each distinct line once) and say `why` the run's files were put back. */
 	private static function putBack(op: String, rejected: Array<BuildAnswer>, why: String): Void {
+
 		printErrors(op, rejected);
 		CliIo.stderr('apq $op: $why — every file put back\n');
 	}
@@ -207,7 +208,7 @@ final class WriteVerification {
 		final written: Array<JournalState> = journal.current();
 		journal.rollback();
 		if (blamed.length > 0) {
-			putBack(op, blamed, 'the created module does not typecheck in ${names(blamed)}');
+			putBack(op, blamed, createdWhy('the created module does not typecheck in ${names(blamed)}'));
 			return true;
 		}
 		final before: Array<BuildAnswer> = compile(compiler, red.map(r -> r.oracle), parallel, []);
@@ -241,7 +242,7 @@ final class WriteVerification {
 				for (a in green) if (!vouching.contains(a.oracle.hxml)) vouching.push(a.oracle.hxml);
 			} else if (created.contains(file)) {
 				journal.rollback();
-				putBack(op, holders, 'the written $file typechecks in no configured build that compiles it');
+				putBack(op, holders, createdWhy('the written $file typechecks in no configured build that compiles it'));
 				return false;
 			} else {
 				printErrors(op, holders);
@@ -307,7 +308,7 @@ final class WriteVerification {
 		if (pending.length == 0) return true;
 		if (blamed.length == 0) return null;
 		journal.rollback();
-		putBack(op, blamed, 'the written ${pending.join(', ')} typechecks in no configured build that compiles it');
+		putBack(op, blamed, createdWhy('the written ${pending.join(', ')} typechecks in no configured build that compiles it'));
 		return false;
 	}
 
@@ -393,6 +394,11 @@ final class WriteVerification {
 		}
 		for (entry in CliArgs.grammars()) plugins.push(entry.make());
 		return OracleProviders.firstOf(plugins);
+	}
+
+	/** `what` plus the way past a created module whose dependencies do not exist yet: `--no-verify` writes it unjudged. */
+	private static function createdWhy(what: String): String {
+		return '$what (write it ahead of its dependencies with $OPT_OUT, or create the dependency first)';
 	}
 
 }

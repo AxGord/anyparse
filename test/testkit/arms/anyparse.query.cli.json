@@ -367,6 +367,13 @@
 			"note": "every green build vouches for the write, including one that never parsed a written file"
 		},
 		{
+			"name": "M-WRITE-VERIFY-REFUSAL-NAMES-NO-VERIFY",
+			"type": "anyparse.query.cli.WriteVerification",
+			"method": "createdWhy",
+			"force": "what",
+			"note": "the refusal of a created module that does not typecheck says nothing of --no-verify, so a module whose dependency is written next has no named way through"
+		},
+		{
 			"name": "M-WRITE-JOURNAL-NO-RECORD",
 			"type": "anyparse.query.cli.WriteJournal",
 			"method": "note",

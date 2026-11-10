@@ -481,6 +481,22 @@ class WriteVerificationCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-WRITE-VERIFY-REFUSAL-NAMES-NO-VERIFY')
+	public function testTheRefusalOfACreatedModuleNamesNoVerify(): Void {
+		#if (sys || nodejs)
+		final dir: String = sourceProject();
+		if (!compiles(dir)) return;
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() -> rc = newModule(dir, 'pkg/Bad.hx', 'return "x";'));
+		Assert.equals(1, rc, printed);
+		Assert.isTrue(printed.contains('--no-verify'), printed);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * A project of two builds over `src/`, the cheap one `Good` alone and the larger one `Big` (in `more/`, also a class path
 	 * of it), with `extras` written beside them (paths relative to the project) and an `apq.json` naming both.
