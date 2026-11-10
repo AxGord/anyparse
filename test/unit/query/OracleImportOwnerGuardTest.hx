@@ -1,9 +1,7 @@
 package unit.query;
 
-import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
-import anyparse.runtime.Span;
 import sys.io.File;
 import unit.cli.CliFixture;
 
@@ -32,9 +30,6 @@ final class OracleImportOwnerGuardTest extends Test {
 	/** The statement kinds whose node name is the path they bring in. */
 	private static final PATH_KINDS: Array<String> = ['ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl'];
 
-	/** The alias import kinds, whose node name is only the alias: `ModuleScan.aliasTargetOf` decodes the path from the statement. */
-	private static final ALIAS_KINDS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];
-
 	@:pin('guard')
 	public function testOnlyTheHaxeOraclesOwnersImportTheHaxeOracle(): Void {
 		final root: String = CliFixture.repoRoot();
@@ -49,7 +44,7 @@ final class OracleImportOwnerGuardTest extends Test {
 				found.push('$path does not parse, so its imports are unread');
 				continue;
 			}
-			for (name in guardedImports(tree, source)) found.push('$path imports $name');
+			for (name in guardedImports(tree)) found.push('$path imports $name');
 		}
 		Assert.equals('', found.join('\n'), 'ask the module\'s OracleProvider instead of naming the Haxe oracle');
 	}
@@ -73,24 +68,18 @@ final class OracleImportOwnerGuardTest extends Test {
 			'anyparse.check.haxe.facts.*',
 			'anyparse.check.haxe.oracle.CompilerOracle',
 			'anyparse.check.haxe.oracle.CompilerOracle'
-		], guardedImports(tree, source));
+		], guardedImports(tree));
 	}
 
 	/**
-	 * The paths of the statements of `tree`, read from `source`, that name a guarded package, in source order. An alias import
-	 * keeps only its alias as the node's name, so its path is decoded from its own span by `ModuleScan.aliasTargetOf`.
+	 * The paths of the statements of `tree` that name a guarded package, in source order. An alias import keeps only its
+	 * alias as the node's name, so its path is the node's `target`.
 	 */
-	private static function guardedImports(tree: QueryNode, source: String): Array<String> {
+	private static function guardedImports(tree: QueryNode): Array<String> {
 		final out: Array<String> = [];
 		function visit(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
-			if (name != null && PATH_KINDS.contains(node.kind)) {
-				if (GUARDED.exists(prefix -> name.startsWith(prefix))) out.push(name);
-			} else if (span != null && ALIAS_KINDS.contains(node.kind)) {
-				final path: String = ModuleScan.aliasTargetOf(source.substring(span.from, span.to));
-				if (GUARDED.exists(prefix -> path.startsWith(prefix))) out.push(path);
-			}
+			final path: Null<String> = node.target ?? (PATH_KINDS.contains(node.kind) ? node.name : null);
+			if (path != null && GUARDED.exists(prefix -> path.startsWith(prefix))) out.push(path);
 			for (child in node.children) visit(child);
 		}
 		visit(tree);

@@ -10533,8 +10533,8 @@
 			"name": "M-CONDBRANCH-TYPE-ARGS-DROPPED",
 			"type": "anyparse.query.CondBranchProjection",
 			"method": "projectBranches",
-			"find": "node.span, node.type, node.typeArgCount)",
-			"replace": "node.span, node.type)",
+			"find": "node.span, node.type, node.typeArgCount, node.target)",
+			"replace": "node.span, node.type, 0, node.target)",
 			"note": "a node the branch projection rebuilds loses its type-argument count"
 		},
 		{
@@ -11234,7 +11234,7 @@
 			"name": "M-XREN-THROUGH-IMPORT-UNREAD",
 			"type": "anyparse.query.CrossRename",
 			"method": "collectOccurrences",
-			"find": "add(throughOffset(source, span, importedPath(node, source, refShape), paths.absolute, typeName));",
+			"find": "add(throughOffset(source, span, importedPath(node), paths.absolute, typeName));",
 			"replace": "",
 			"note": "an import whose path runs THROUGH the type (`import p.C.K;`, `import p.C.*;`) or an alias import's path is left on the old name"
 		},
@@ -11250,8 +11250,8 @@
 			"name": "M-XREN-ALIAS-NAME-READ",
 			"type": "anyparse.query.CrossRename",
 			"method": "importedPath",
-			"find": "ModuleScan.aliasTargetOf(source.substring(span.from, span.to))",
-			"replace": "node.name ?? ''",
+			"find": "return node.target ?? node.name ?? '';",
+			"replace": "return node.name ?? '';",
 			"note": "an alias import is read by its ALIAS, so its path keeps the old name"
 		},
 		{
@@ -15707,21 +15707,6 @@
 			"note": "a line break crossed on the walk back no longer sends it to the regions, so `++ // c` then the name on the next line is not read as a write"
 		},
 		{
-			"name": "M-MODULESCAN-COMMENTS-KEPT",
-			"type": "anyparse.query.ModuleScan",
-			"method": "stripNonCode",
-			"force": "text",
-			"note": "an alias import's comments stay in the text, so a `z.W as` inside one decodes as the aliased path"
-		},
-		{
-			"name": "M-MODULESCAN-STRINGS-KEPT",
-			"type": "anyparse.query.ModuleScan",
-			"method": "stripNonCode",
-			"find": "region.kind != LexRegionKind.RegexLit",
-			"replace": "region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment",
-			"note": "a string literal stays in an alias import's text, so a `z.W as` inside one decodes as the aliased path"
-		},
-		{
 			"name": "M-MODULESCAN-SUBTYPE-PATH-BARE",
 			"type": "anyparse.query.ModuleScan",
 			"method": "pathOfDecl",
@@ -15736,14 +15721,6 @@
 			"find": "decl.isMain ? file.module : '${file.module}.${decl.name}'",
 			"replace": "'${file.module}.${decl.name}'",
 			"note": "a module's main type is named like any sub-module type, so the import path of the type a file is named for repeats the type name after the module"
-		},
-		{
-			"name": "M-FRAGMENT-REGIONS-STRING-BLIND",
-			"type": "anyparse.query.LexicalRegions",
-			"method": "ofFragment",
-			"find": "if (c == '\"'.code || c == '\\''.code) {",
-			"replace": "if (false) {",
-			"note": "a quote opens no literal, so a `//` inside a string literal of a statement fragment cuts the scan as a line comment"
 		},
 		{
 			"name": "M-LEX-HOLES-CLAIMED-AT-OWN-DEPTH",
@@ -16361,6 +16338,14 @@
 			"find": "final docs: Int = hits.count(hit -> hit.doc);",
 			"replace": "final docs: Int = 0;",
 			"note": "the note counts every remaining mention as plain, so a leftover in a member's documentation is not told apart from a stray comment"
+		},
+		{
+			"name": "M-INDEX-ALIAS-KEYWORD-FIXED",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "importOf",
+			"find": "shape.importAliasKeywords?.get(node.kind)",
+			"replace": "shape.importAliasKeywords?.get(\"ImportAliasDecl\")",
+			"note": "every alias import is recorded as spelling `as`, so a repoint restyles an `in` import"
 		}
 	]
 }

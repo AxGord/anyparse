@@ -383,6 +383,7 @@ class AmbientImportResolutionTest extends Test {
 						kind: ImportKind.Import,
 						alias: null,
 						aliasTarget: null,
+						aliasKeyword: null,
 						span: new Span(0, 0),
 						guarded: false
 					}

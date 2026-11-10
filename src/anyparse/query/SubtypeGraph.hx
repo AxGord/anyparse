@@ -688,11 +688,8 @@ final class SubtypeGraph {
 	 * order: one hop (`typedef U = Util`), a chain (`typedef A = B; typedef B = Util`), a
 	 * target written QUALIFIED or living in another module (`typedef C = pkg.Util`), since
 	 * `aliasTargetNominal` is already the simple name — and an IMPORT alias
-	 * (`import pkg.Util as U;`), whose path the grammar keeps out of the node entirely and
-	 * which `ImportInfo.aliasTarget` now carries, decoded from the statement source by
-	 * `ModuleScan.aliasTargetOf`. That decoder was already the ONLY one reading an alias
-	 * import's path (the same-named `MapScopeScan.aliasTargetOf` answers about a TYPEDEF's
-	 * underlying, from the AST), so this is its second caller rather than a second copy.
+	 * (`import pkg.Util as U;`), whose path `ImportInfo.aliasTarget` carries from the node's
+	 * `target` slot.
 	 * Import aliases are per-FILE, so the hop is read from the file the SUBTYPE is declared
 	 * in. It is applied to every name in the closure, not only the written one, so a name
 	 * that arrived through ANOTHER file's typedef edge is also offered to this file's
@@ -708,8 +705,8 @@ final class SubtypeGraph {
 	 *  - a `#if`-GUARDED `typedef` — `aliasTargetNominal` is deliberately null for one, because
 	 *    every branch projects under one `Conditional` and following the indexed branch would
 	 *    commit to whichever happened to be first and be wrong for the other compilation. The
-	 *    IMPORT-alias twin of that shape IS closed, above — a typedef has no statement text
-	 *    to key a branch apart by, which is the whole difference.
+	 *    IMPORT-alias twin of that shape IS closed, above — its dedup key carries the node's `target` slot, while a typedef's
+	 *    branches share one `Conditional` with no slot to key them apart by, which is the whole difference.
 	 *
 	 * An ABSTRACT over the type (`abstract A(Util)`) is not a gap: Haxe gives it no `extends`, no
 	 * `super()` and no access to the underlying type's privates, so the ctor really is dead there

@@ -3,7 +3,6 @@ package anyparse.query;
 using Lambda;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 /**
  * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
@@ -246,48 +245,6 @@ final class LexicalRegions {
 			case StringLit, RegexLit:
 				for (hole in region.holes ?? []) eachComment(hole.regions, onComment);
 		}
-	}
-
-	/**
-	 * The regions of a statement FRAGMENT read with no grammar plugin — the one answer to "which `//` and `/*` of
-	 * this text are comments and which sit inside a quoted literal" for a caller that holds only the text (an import
-	 * statement sliced out of a source). C-family comments and single-line `"` / `'` literals, nothing else: no
-	 * interpolation holes and no regex literals, so it is NOT a lexer for a whole file — a caller that holds the
-	 * plugin asks `GrammarPlugin.lexicalRegions`. A line comment ends before its line break; a literal nothing
-	 * closes is no region, a block comment nothing closes runs to the end.
-	 */
-	public static function ofFragment(text: String): Array<LexRegion> {
-		final out: Array<LexRegion> = [];
-		final n: Int = text.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '"'.code || c == '\''.code) {
-				final end: Int = Strings.quotedEnd(text, i);
-				if (end > i) {
-					out.push({ from: i, to: end, kind: LexRegionKind.StringLit });
-					i = end;
-					continue;
-				}
-			} else if (c == '/'.code && i + 1 < n) {
-				final next: Int = text.fastCodeAt(i + 1);
-				final block: Bool = next == '*'.code;
-				if (block || next == '/'.code) {
-					final close: Int = block ? text.indexOf('*/', i + 2) : text.indexOf('\n', i + 2);
-					final to: Int = if (close < 0)
-						n
-					else if (block)
-						close + 2
-					else
-						close;
-					out.push({ from: i, to: to, kind: block ? LexRegionKind.BlockComment : LexRegionKind.LineComment });
-					i = to;
-					continue;
-				}
-			}
-			i++;
-		}
-		return out;
 	}
 
 	/** The entries waiting at `depth`, the level created on first use. */

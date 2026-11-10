@@ -22,12 +22,12 @@ using StringTools;
  */
 class ParseDiskCacheTest extends Test {
 
-	private static final SOURCE: String = 'package disk.cache;\n\nclass Holder<T> {\n\n\tvar items: Array<Int> = [];\n\n'
-		+ '\tpublic function pick<U>(source: Map<String, T>, key: String): Null<U> {\n\t\tfinal made = new Map<String, Int>();\n'
-		+ '\t\treturn null;\n\t}\n\n}\n';
+	private static final SOURCE: String = 'package disk.cache;\n\nimport disk.Other.Kept as Alias;\n\nclass Holder<T> {\n\n'
+		+ '\tvar items: Array<Int> = [];\n\n\tpublic function pick<U>(source: Map<String, T>, key: '
+		+ 'String): Null<U> {\n\t\tfinal made = new Map<String, Int>();\n\t\treturn null;\n\t}\n\n}\n';
 	private static final OTHER: String = 'package disk.cache;\n\nclass Holder {\n\n\tpublic function new() {}\n\n}\n';
 
-	/** A stored tree and bundle come back as what a parse gave: every node field, the declared-type slot, every map. */
+	/** A stored tree and bundle come back as what a parse gave: every node field, the declared-type and target slots, every map. */
 	public function testReadGivesBackWhatTheParseGave(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.write('diskcacheround', SOURCE);
@@ -207,7 +207,13 @@ class ParseDiskCacheTest extends Test {
 	private static function sameTree(a: QueryNode, b: QueryNode): Bool {
 		final spanA: Null<Span> = a.span;
 		final spanB: Null<Span> = b.span;
-		if (a.kind != b.kind || a.name != b.name || a.typeArgCount != b.typeArgCount || a.children.length != b.children.length)
+		if (
+			a.kind != b.kind
+			|| a.name != b.name
+			|| a.target != b.target
+			|| a.typeArgCount != b.typeArgCount
+			|| a.children.length != b.children.length
+		)
 			return false;
 		if ((spanA == null) != (spanB == null) || (spanA != null && spanB != null && (spanA.from != spanB.from || spanA.to != spanB.to)))
 			return false;

@@ -1314,6 +1314,7 @@ final class HaxeRefShape {
 		// the classes a `Map` value may be: the ones its `@:from` conversions take, and the one it builds for enum keys
 		table.keyedIterationHolders = ['Map' => ['IntMap', 'StringMap', 'ObjectMap', 'EnumValueMap']];
 		table.importAliasKinds = ['ImportAliasDecl', 'ImportAliasInDecl'];
+		table.importAliasKeywords = ['ImportAliasDecl' => 'as', 'ImportAliasInDecl' => 'in'];
 		table.untypedKinds = ['UntypedExpr'];
 		table.casePatternBinderKinds = ['Capture'];
 		// The Haxe extractor: `case f(_) => p:` evaluates `f` on the subject before

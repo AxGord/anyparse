@@ -228,9 +228,8 @@ final class SafeDelete {
 		var count: Int = 0;
 		function walk(node: QueryNode): Void {
 			final name: String = node.name ?? '';
-			final span: Null<Span> = node.span;
 			if (ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
-				final aliased: String = span == null ? '' : ModuleScan.aliasTargetOf(entry.source.substring(span.from, span.to));
+				final aliased: String = node.target ?? '';
 				if (SourceText.lastSegment(name) == memberName || (aliased != '' && SourceText.lastSegment(aliased) == memberName)) count++;
 				return;
 			}

@@ -3,12 +3,10 @@ package anyparse.query;
 import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 using Lambda;
 
@@ -208,91 +206,11 @@ final class ModuleScan {
 	}
 
 	/**
-	 * The dotted path of one `import a.b.C as D;` statement text — the identifier run BEFORE the
-	 * trailing `as` / `in` keyword, which is where the aliased path always sits — or `''` when it
-	 * does not decode. Comments are stripped first: a `/* … *\/` between the keyword and the path
-	 * would otherwise be decoded AS the path, and a wrong target silently prints the alias for
-	 * the wrong type. `''` still occupies the alias's name, which is what the collision gate
-	 * needs.
-	 *
-	 * The project's ONLY decoder of an alias import's path, and deliberately so. Four call
-	 * sites: `aliasTargetsOf` just below (which `TypeRefPrinter` reaches for a whole file's
-	 * map), `TypeRefPrinter`'s shadow gate directly, and `SymbolIndexBuilder` TWICE — its
-	 * extraction loop, which files the answer into `ImportInfo.aliasTarget` for the whole
-	 * index to read, and `importDedupKey`, which keys a guarded alias statement by the path
-	 * it binds so two branches binding one name are not read as one import.
-	 *
-	 * The sibling `aliasKeywordOf` has one caller, `MoveSymbol`, which re-emits a repointed
-	 * alias statement; it does NOT call this one.
-	 *
-	 * The consumers read imprecision in OPPOSITE directions, which any future tightening has to
-	 * weigh: `TypeRefPrinter` compares the result to a full canonical path, so a partial decode
-	 * reads as "shadow" and withholds; `SymbolIndex` takes its last segment, so a partial decode
-	 * costs an alias EDGE — the direction that deletes; and a REWRITER (`aliasKeywordOf`'s
-	 * caller) gets `''` and falls back to `as`, which restyles an `in` import rather than
-	 * losing it.
-	 */
-	public static function aliasTargetOf(stmt: String): String {
-		final runs: Array<String> = identRuns(stmt);
-		final at: Int = aliasKeywordIndexIn(runs);
-		return at < 0 ? '' : runs[at - 1];
-	}
-
-	/**
-	 * Which of the two spellings an alias import statement uses — `'as'`, `'in'`, or `''` when `stmt`
-	 * decodes as no alias import at all. The twin of `aliasTargetOf` over the same run scan and the same
-	 * keyword rule, for a rewriter that must re-emit the statement: an `import p.T in U;` re-emitted as
-	 * `as` is a silent style change in a file the caller only meant to repoint.
-	 */
-	public static function aliasKeywordOf(stmt: String): String {
-		final runs: Array<String> = identRuns(stmt);
-		final at: Int = aliasKeywordIndexIn(runs);
-		return at < 0 ? '' : runs[at];
-	}
-
-	/**
 	 * The import path the declaration `decl` of `file` carries: the module itself for its main type, else
 	 * `module.name`. The owner of that rule; a site that spells it inline should call this.
 	 */
 	public static function pathOfDecl(file: FileInfo, decl: TypeDeclInfo): String {
 		return decl.isMain ? file.module : '${file.module}.${decl.name}';
-	}
-
-	/**
-	 * The index in `runs` of the `as` / `in` keyword an alias import spells, or -1 when there
-	 * is none (or it leads the statement, which no path can precede). The one place that
-	 * decision is made, so `aliasTargetOf` and `aliasKeywordOf` cannot drift apart on which
-	 * run is the keyword. Takes the runs rather than the statement so each caller scans once.
-	 */
-	private static function aliasKeywordIndexIn(runs: Array<String>): Int {
-		for (r => run in runs) if ((run == 'as' || run == 'in') && r > 0) return r;
-		return -1;
-	}
-
-	/**
-	 * `stmt`s maximal runs of identifier characters and `.`, comments and string literals stripped
-	 * first so their text cannot read as code.
-	 */
-	private static function identRuns(stmt: String): Array<String> {
-		final bare: String = stripNonCode(stmt);
-		final runs: Array<String> = [];
-		final n: Int = bare.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = bare.fastCodeAt(i);
-			if (!Strings.isIdentChar(c) && c != '.'.code) {
-				i++;
-				continue;
-			}
-			final start: Int = i;
-			while (i < n) {
-				final cc: Int = bare.fastCodeAt(i);
-				if (!Strings.isIdentChar(cc) && cc != '.'.code) break;
-				i++;
-			}
-			runs.push(bare.substring(start, i));
-		}
-		return runs;
 	}
 
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
@@ -404,36 +322,17 @@ final class ModuleScan {
 	}
 
 	/**
-	 * Every `import <path> as <alias>;` in the file, mapped alias -> target path. The grammar
-	 * exposes only the ALIAS in the node's name slot (the documented `ImportInfo` limitation),
-	 * so the target is recovered by slicing the statement's own source. A statement that does
-	 * not decode maps to `''` — the alias still counts as a bound name through the key.
+	 * Every alias import of the file, mapped alias -> the path its node carries as `target`: a top-level node with a
+	 * target is a binding the grammar declared, whatever its kind is called.
 	 */
-	private static function aliasTargetsOf(source: String, root: QueryNode): Map<String, String> {
+	private static function aliasTargetsOf(root: QueryNode): Map<String, String> {
 		final out: Map<String, String> = [];
-		for (c in root.children) if (c.kind == 'ImportAliasDecl' || c.kind == 'ImportAliasInDecl') {
+		for (c in root.children) {
 			final alias: Null<String> = c.name;
-			final span: Null<Span> = c.span;
-			if (alias != null && span != null) out[alias] = aliasTargetOf(source.substring(span.from, span.to));
+			final target: Null<String> = c.target;
+			if (alias != null && target != null) out[alias] = target;
 		}
 		return out;
-	}
-
-	/**
-	 * `text` with every comment and every string literal replaced by a space, so a lexical scan cannot
-	 * read their content as code. The regions come from `LexicalRegions.ofFragment`, which is also why a
-	 * comment marker inside a literal is not a comment.
-	 */
-	private static function stripNonCode(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		var at: Int = 0;
-		for (region in LexicalRegions.ofFragment(text)) if (region.kind != LexRegionKind.RegexLit) {
-			buf.addSub(text, at, region.from - at);
-			buf.addChar(' '.code);
-			at = region.to;
-		}
-		buf.addSub(text, at);
-		return buf.toString();
 	}
 
 }

@@ -22,13 +22,15 @@ package anyparse.grammar.haxe;
  * `WriterLowering.buildBetweenCtorBlankInfo`'s matched-ctor body so
  * the `blankLinesBetweenSameCtorByLevel` cascade sees this ctor's
  * payload as a path String — same role as `HxTypeName` carries for the
- * sibling `ImportDecl` / `ImportWildDecl` ctors.
+ * sibling `ImportDecl` / `ImportWildDecl` ctors. Its `@:queryTarget` puts it in the query node's
+ * `target` slot, beside the alias the node is named by.
  *
  * `using ... as ...` is not legal Haxe and is not added — only `import`
  * supports the alias form.
  */
 @:peg
 typedef HxImportAlias = {
+	@:queryTarget
 	var path: HxTypeName;
 	@:kw('as')
 	var name: HxIdentLit;

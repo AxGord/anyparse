@@ -225,20 +225,6 @@ class LexicalRegionsTest extends Test {
 		Assert.equals(1, asked, 'a slash asks once');
 	}
 
-	/** A statement fragment's comments end where the lexer's would: a line comment before its break, one nothing closes at the end. */
-	@:pin('guard')
-	public function testOfFragmentEndsAComment(): Void {
-		final line: Array<LexRegion> = LexicalRegions.ofFragment('a // b\nc');
-		Assert.equals(1, line.length);
-		Assert.equals(2, line[0].from);
-		Assert.equals(6, line[0].to);
-		final open: Array<LexRegion> = LexicalRegions.ofFragment('a /* b');
-		Assert.equals(6, open[0].to);
-		final tail: Array<LexRegion> = LexicalRegions.ofFragment('a // b');
-		Assert.equals(6, tail[0].to);
-		Assert.equals(0, LexicalRegions.ofFragment('a / b').length);
-	}
-
 	/** Both region ends and their text, for a failure message that says what was actually scanned. */
 	private function dump(source: String, regions: Array<LexRegion>): String {
 		return regions.map(region -> '[${region.from},${region.to}) ${source.substring(region.from, region.to)}').join(' | ');

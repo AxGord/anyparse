@@ -13,7 +13,8 @@ package anyparse.grammar.haxe;
  * Shape mirrors `HxImportAlias`: a dotted-ident `HxTypeName` followed by the mandatory
  * `in <ident>` suffix; the leading `import` keyword and the trailing `;` live on the
  * `HxDecl.ImportAliasInDecl` ctor. Both fields live in this wrapper struct because a
- * multi-positional ctor is an unsupported enum branch shape.
+ * multi-positional ctor is an unsupported enum branch shape; `path` is the query node's
+ * `target` (`@:queryTarget`), as on `HxImportAlias`.
  *
  * `@:kw('in')` on `name` is hard, not `@:optional`: a missing `in` rolls back to the plain
  * `ImportDecl` branch (the same tryBranch-rollback reason as `HxImportAlias.name`'s
@@ -23,6 +24,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxImportAliasIn = {
+	@:queryTarget
 	var path: HxTypeName;
 	@:kw('in')
 	var name: HxIdentLit;

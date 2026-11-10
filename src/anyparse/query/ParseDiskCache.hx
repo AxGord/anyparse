@@ -43,10 +43,11 @@ final class ParseDiskCache {
 	private static inline final TYPE_ARGS: Int = 4;
 	private static inline final CHILD_COUNT: Int = 5;
 	private static inline final HAS_TYPE: Int = 6;
-	private static inline final NODE_WIDTH: Int = 7;
+	private static inline final TARGET: Int = 7;
+	private static inline final NODE_WIDTH: Int = 8;
 
 	/** The scheme tag opening every entry: bump it and every stored entry misses. */
-	private static final FORMAT_TAG: String = 'apq-parse-cache v1';
+	private static final FORMAT_TAG: String = 'apq-parse-cache v2';
 
 	private static final DIR_PREFIX: String = 'apq-parse-cache-';
 	private static final SWITCH_VARIABLE: String = 'APQ_PARSE_CACHE';
@@ -112,7 +113,8 @@ final class ParseDiskCache {
 	private static function writeNode(node: QueryNode, into: StoredTree, interned: Map<String, Int>): Void {
 		final span: Null<Span> = node.span;
 		final type: Null<QueryNode> = node.type;
-		// The order is the `KIND` .. `HAS_TYPE` offsets `readNode` reads back.
+		final target: Null<String> = node.target;
+		// The order is the `KIND` .. `TARGET` offsets `readNode` reads back.
 		into.ints.push(intern(node.kind, into.strings, interned));
 		into.ints.push(node.name == null ? -1 : intern(node.name, into.strings, interned));
 		into.ints.push(span == null ? -1 : span.from);
@@ -120,6 +122,7 @@ final class ParseDiskCache {
 		into.ints.push(node.typeArgCount);
 		into.ints.push(node.children.length);
 		into.ints.push(type == null ? 0 : 1);
+		into.ints.push(target == null ? -1 : intern(target, into.strings, interned));
 		for (child in node.children) writeNode(child, into, interned);
 		if (type != null) writeNode(type, into, interned);
 	}
@@ -147,11 +150,13 @@ final class ParseDiskCache {
 		cursor[0] = at + NODE_WIDTH;
 		final nameIndex: Int = ints[at + NAME];
 		final spanFrom: Int = ints[at + SPAN_FROM];
+		final targetIndex: Int = ints[at + TARGET];
 		final children: Array<QueryNode> = [for (_ in 0...ints[at + CHILD_COUNT]) readNode(from, cursor)];
 		final type: Null<QueryNode> = ints[at + HAS_TYPE] == 1 ? readNode(from, cursor) : null;
 		return new QueryNode(
 			from.strings[ints[at + KIND]], nameIndex < 0 ? null : from.strings[nameIndex], children,
-			spanFrom < 0 ? null : new Span(spanFrom, ints[at + SPAN_TO]), type, ints[at + TYPE_ARGS]
+			spanFrom < 0 ? null : new Span(spanFrom, ints[at + SPAN_TO]), type, ints[at + TYPE_ARGS],
+			targetIndex < 0 ? null : from.strings[targetIndex]
 		);
 	}
 

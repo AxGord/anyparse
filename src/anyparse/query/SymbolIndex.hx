@@ -34,9 +34,9 @@ enum abstract ImportKind(Int) {
  * statement's source range.
  *
  * `aliasTarget` is the DOTTED PATH an `Alias` statement binds that alias to —
- * the half `raw` cannot carry, decoded from the statement source by the one
- * decoder that reads it (`ModuleScan.aliasTargetOf`). Null for every other
- * kind and for an alias statement that does not decode. Without it the index
+ * the half `raw` cannot carry, read off the node's `target` slot, which the
+ * grammar declares (`@:queryTarget`). Null for every other kind and for an alias
+ * node with no target. Without it the index
  * cannot tell that `class C extends U` under `import pkg.Base as U;` is a
  * subtype of `Base`, and `hasSubtype` answering false is a licence SIX autofix
  * consumers take to delete or rewrite: `prefer-inline` and `prefer-enum-abstract` read
@@ -54,12 +54,17 @@ enum abstract ImportKind(Int) {
  * because usage is `#if`-conditional while the reference scan is branch-blind.
  */
 typedef ImportInfo = {
+
 	var raw: String;
 	var kind: ImportKind;
 	var alias: Null<String>;
 	var aliasTarget: Null<String>;
+
+	/** The keyword an alias import writes before its alias (`GrammarPlugin.importAliasKeywords`); null for every other kind. */
+	var aliasKeyword: Null<String>;
 	var span: Span;
 	var guarded: Bool;
+
 }
 
 /**
@@ -1143,17 +1148,14 @@ final class SymbolIndex {
 	/**
 	 * The dotted MODULE PATH an import statement names — `imp.raw` for every kind except
 	 * `Alias`, whose `raw` is the ALIAS the statement binds and whose path lives in
-	 * `aliasTarget`. Null only for an alias statement whose path did not decode. Distinct from `importPathOf`,
-	 * which answers about a TYPE: the path some other file would import it by.
+	 * `aliasTarget`, the node's `target` slot. Null only for an alias node that carries no target. Distinct from
+	 * `importPathOf`, which answers about a TYPE: the path some other file would import it by.
 	 *
-	 * That null is read in OPPOSITE directions by the consumers, which any future tightening has
-	 * to weigh — the same trade `ModuleScan.aliasTargetOf` records for its own: comparing it to a
-	 * path makes `filesImportingModule` omit the file and `MoveSymbol`s cross-package gate refuse
-	 * (both withhold), while `MoveSymbol`s importer loop then leaves that file unrepointed and
-	 * `duplicate-import`s `?? raw` fallback keys two undecoded aliases alike. Undecodable is not a
-	 * shape the grammar can currently produce — an `ImportAliasDecl` node with no `as` / `in` run
-	 * past position 0 — so none of that is reachable today; it is written down because this is now
-	 * the single seat everything routes through.
+	 * That null is read in OPPOSITE directions by the consumers: comparing it to a path makes
+	 * `filesImportingModule` omit the file and `MoveSymbol`s cross-package gate refuse (both withhold),
+	 * while `MoveSymbol`s importer loop then leaves that file unrepointed and `duplicate-import`s `?? raw`
+	 * fallback keys two such aliases alike. The grammar's alias declaration always fills the slot (its
+	 * `@:queryTarget` field is mandatory), so only a node a plugin builds by hand can reach it.
 	 *
 	 * The one seat of the MODULE-PATH question — not of every question about an import. A rule
 	 * asking about the BOUND NAME (`unused-import`, `redundant-import`) is right to read `raw`,

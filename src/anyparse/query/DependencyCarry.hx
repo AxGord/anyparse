@@ -163,7 +163,7 @@ final class DependencyCarry {
 			// and via a MODULE import, which now reaches here and repeats).
 			// An ambient statement's span addresses its own file, whose text is not at hand; only an alias reads the
 			// text, for its `as` / `in` keyword, and the compiler takes either.
-			final line: String = DependencyCarry.importLineFor(statement, mine.ambientFile == null ? source : '');
+			final line: String = DependencyCarry.importLineFor(statement);
 			if (!carried.contains(line)) carried.push(line);
 		}
 		final wildRefusal: Null<String> = foldWildcardCarry(
@@ -394,7 +394,7 @@ final class DependencyCarry {
 		dep: String, source: String, cursorInfo: FileInfo, directives: Array<CondDirective>, shape: RefShape,
 		guarded: Array<{ condition: String, lines: Array<String> }>
 	): Null<String> {
-		return foldGuardedResult(GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape), source, guarded);
+		return foldGuardedResult(GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape), guarded);
 	}
 
 	/**
@@ -406,7 +406,7 @@ final class DependencyCarry {
 	 * `GuardedImportCarry.carryFor` does), and everything after the selection is identical.
 	 */
 	private static function foldGuardedResult(
-		result: GuardedCarry, source: String, guarded: Array<{ condition: String, lines: Array<String> }>
+		result: GuardedCarry, guarded: Array<{ condition: String, lines: Array<String> }>
 	): Null<String> {
 		switch result {
 			case GuardedNone:
@@ -418,7 +418,7 @@ final class DependencyCarry {
 				) ?? { condition: condition, lines: [] };
 				if (!guarded.contains(group)) guarded.push(group);
 				for (imp in imports) {
-					final line: String = DependencyCarry.importLineFor(imp, source);
+					final line: String = DependencyCarry.importLineFor(imp);
 					if (!group.lines.contains(line)) group.lines.push(line);
 				}
 		}
@@ -909,7 +909,7 @@ final class DependencyCarry {
 				SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, index, files, true, destRegions, null
 			) != null)
 				continue;
-			final line: String = DependencyCarry.importLineFor(imp, cursorInfo.imports.contains(imp) ? source : '');
+			final line: String = DependencyCarry.importLineFor(imp);
 			if (!carried.contains(line)) carried.push(line);
 		}
 		return carried;
@@ -1000,22 +1000,20 @@ final class DependencyCarry {
 	}
 
 	/**
-	 * `import <path>;` / `using <path>;` / `import <path> as <alias>;` text for a carried import,
-	 * spelled out of `statementSource` — which MUST be the source of the file `imp` was read from,
-	 * since the `as` / `in` keyword is recovered by slicing `imp.span` out of it. `raw` is the path
-	 * for every kind but `Alias`, where it is the alias, so the path comes from the project's one
-	 * decoder and the suffix from `importStatementText`, which already writes a repointed one.
+	 * `import <path>;` / `using <path>;` / `import <path> as <alias>;` text for a carried import. `raw` is the path for
+	 * every kind but `Alias`, where it is the alias, so the path comes from `SymbolIndex.pathImportedBy` and the suffix
+	 * from `importStatementText`, which already writes a repointed one in the statement's own keyword.
 	 *
-	 * The undecodable case throws rather than falling back: the value a fallback would produce is
+	 * A path-less statement throws rather than falling back: the value a fallback would produce is
 	 * `import <the alias>;`, the exact line this seam exists to stop emitting, and it would reach
 	 * the destination file silently. The carry filter already drops such a statement, so widening
 	 * that filter without widening this is what the throw is here to catch.
 	 */
 	@:access(anyparse.query.MoveSymbol)
-	private static function importLineFor(imp: ImportInfo, statementSource: String): String {
+	private static function importLineFor(imp: ImportInfo): String {
 		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
-		if (path == null) throw new Exception('importLineFor: carried import "${imp.raw}" names no decodable module path');
-		return MoveSymbol.importStatementText(imp, path, statementSource.substring(imp.span.from, imp.span.to));
+		if (path == null) throw new Exception('importLineFor: carried import "${imp.raw}" names no module path');
+		return MoveSymbol.importStatementText(imp, path);
 	}
 
 	/**
@@ -1063,7 +1061,7 @@ final class DependencyCarry {
 			final refusal: Null<String> = rivalWildcardCollision(provider, wanted, destInfo, files, shape);
 			if (refusal != null) return refusal;
 			if (!provider.imp.guarded) {
-				final line: String = DependencyCarry.importLineFor(provider.imp, provider.ambientFile == null ? source : '');
+				final line: String = DependencyCarry.importLineFor(provider.imp);
 				if (!carried.contains(line)) carried.push(line);
 				continue;
 			}
@@ -1074,7 +1072,7 @@ final class DependencyCarry {
 			final walk: Array<CondDirective> = scanned ?? GuardedImportCarry.directivesOf(source, plugin);
 			scanned = walk;
 			final guardRefusal: Null<String> = foldGuardedResult(
-				GuardedImportCarry.carryForProviders([provider.imp], wanted[0], cursorInfo.file, source, walk, shape), source, guarded
+				GuardedImportCarry.carryForProviders([provider.imp], wanted[0], cursorInfo.file, source, walk, shape), guarded
 			);
 			if (guardRefusal != null) return guardRefusal;
 		}

@@ -81,7 +81,7 @@ final class EnumCtorRefs {
 	): CtorOffsets {
 		final ctor: String = target.ctor;
 		final fi: Null<FileInfo> = index.fileInfo(entry.file);
-		final out: Array<Int> = importOffsets(entry, target, refShape)
+		final out: Array<Int> = importOffsets(entry, target)
 			.concat([
 				for (off in aliasReceiverOffsets(entry, target, fi, index, refShape, regions)) if (!proven.contains(off)) off
 			]);
@@ -161,15 +161,13 @@ final class EnumCtorRefs {
 	}
 
 	/** The offset of the constructor's segment in every import naming the constructor itself (`import p.E.A;`, aliased or not). */
-	private static function importOffsets(entry: ParsedFile, target: CtorTarget, refShape: RefShape): Array<Int> {
+	private static function importOffsets(entry: ParsedFile, target: CtorTarget): Array<Int> {
 		final ctorPath: String = '${typePathOf(target)}.${target.ctor}';
 		final out: Array<Int> = [];
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
 			if (span != null && ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
-				final off: Int = CrossRename.throughOffset(
-					entry.source, span, CrossRename.importedPath(node, entry.source, refShape), ctorPath, target.ctor
-				);
+				final off: Int = CrossRename.throughOffset(entry.source, span, CrossRename.importedPath(node), ctorPath, target.ctor);
 				if (off >= 0 && !out.contains(off)) out.push(off);
 			}
 			for (c in node.children) walk(c);

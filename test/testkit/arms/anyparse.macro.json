@@ -2620,6 +2620,13 @@
 			"find": "if (next >= 0) p = next;",
 			"replace": "if (false) p = next;",
 			"note": "an optional part is never consumed, so a shape whose next part follows it fails wherever the part is present"
+		},
+		{
+			"name": "M-QUERY-TARGET-NONE",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "seqTargetOf",
+			"force": "null",
+			"note": "no node carries a @:queryTarget field, so an alias import projects only its alias and its path is lost"
 		}
 	]
 }

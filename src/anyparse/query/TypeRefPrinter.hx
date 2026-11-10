@@ -117,7 +117,7 @@ final class TypeRefPrinter {
 			IndexScope.declarationsOf(file, source, plugin);
 		_pkg = root == null ? null : ModuleScan.packageOf(root);
 		_module = root == null || file == null ? null : ModuleScan.moduleOf(root, file);
-		_aliasTargets = source == null || root == null ? [] : ModuleScan.aliasTargetsOf(source, root);
+		_aliasTargets = root == null ? [] : ModuleScan.aliasTargetsOf(root);
 		// Ctor-hoisted like every sibling scan: both `shadowedByGuardedImport` and
 		// `shadowedByBulkImport` ask for these, once per printed reference.
 		_guardedImports = root == null ? [] : ModuleScan.guardedImportDecls(root);
@@ -713,24 +713,19 @@ final class TypeRefPrinter {
 	 *
 	 * A guarded import binding `simple` to `canonical` ITSELF is not a shadow, and it still cannot
 	 * enable the short form: it is absent from `_importMap`, so route 1 never fires, and its own
-	 * statement text carries the simple name, so route 2's freeness scan refuses. An alias whose
-	 * target does not decode counts as a shadow — the alias occupies the name whatever it names.
+	 * statement text carries the simple name, so route 2's freeness scan refuses. An alias node
+	 * with no target counts as a shadow — the alias occupies the name whatever it names.
 	 */
 	private function shadowedByGuardedImport(canonical: String, simple: String): Bool {
-		final root: Null<QueryNode> = _root;
-		final source: Null<String> = _source;
-		if (root == null || source == null) return false;
 		for (c in _guardedImports) {
 			final raw: Null<String> = c.name;
 			if (raw == null) continue;
-			final span: Null<Span> = c.span;
 			switch c.kind {
 				case 'ImportDecl':
 					if (SourceText.lastSegment(raw) == simple && raw != canonical) return true;
 				// The grammar's name slot for an alias declaration IS the alias, never the aliased path.
 				case 'ImportAliasDecl', 'ImportAliasInDecl':
-					if (raw == simple && (span == null || ModuleScan.aliasTargetOf(source.substring(span.from, span.to)) != canonical))
-						return true;
+					if (raw == simple && c.target != canonical) return true;
 				case _:
 			}
 		}
@@ -750,7 +745,7 @@ final class TypeRefPrinter {
 	/**
 	 * A printer over a file's FULL scope: its path `file` (which names the module its own types
 	 * resolve through), its parsed `root` (top-level decls and import statements), raw `source`
-	 * (the alias-target recovery and the short-name freeness scan), the plain-import map, and
+	 * (the short-name freeness scan), the plain-import map, and
 	 * optionally the cross-file `index` for same-package / root-package / canonical-path
 	 * resolution. This is the form that can ADD imports.
 	 */

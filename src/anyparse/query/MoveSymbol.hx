@@ -832,20 +832,18 @@ final class MoveSymbol {
 	 * `newImportPath`, preserving the statement's kind (`import` vs. `using`) and its `as` / `in` alias
 	 * suffix. The whole statement span is replaced and re-emitted with single-space
 	 * separators, so the source's own spacing does NOT survive — only its meaning does.
-	 * `statementText` is that file's own bytes for the span, which is the only place the
-	 * alias spelling is recorded (both forms share one `ImportKind`).
+	 * The alias spelling is `imp.aliasKeyword`, the keyword the grammar declares for the
+	 * statement's node kind (both forms share one `ImportKind`).
 	 */
-	private static function importStatementText(imp: ImportInfo, newImportPath: String, statementText: String): String {
+	private static function importStatementText(imp: ImportInfo, newImportPath: String): String {
 		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
 		final alias: Null<String> = imp.alias;
 		if (alias == null) return '$keyword $newImportPath;';
 		// The two spellings are interchangeable to the compiler but not to the file's author, and
 		// this rewrite is a repoint, not a restyle — so the statement's own keyword is re-emitted.
-		// `''` means the text did not decode as an alias import; every caller gates on
-		// `pathImportedBy(imp)` matching a path, which an undecodable statement never does, so it
-		// cannot arrive here — `as` is what it would fall back on.
-		final spelling: String = ModuleScan.aliasKeywordOf(statementText);
-		return '$keyword $newImportPath ${spelling == '' ? 'as' : spelling} $alias;';
+		final spelling: Null<String> = imp.aliasKeyword;
+		if (spelling == null) throw new Exception('the grammar declares no keyword for the alias import "$alias" (importAliasKeywords)');
+		return '$keyword $newImportPath $spelling $alias;';
 	}
 
 	/**
@@ -890,8 +888,7 @@ final class MoveSymbol {
 				final statement: String = destSource.substring(imp.span.from, imp.span.to);
 				ScopeFiles.editsFor(editsByFile, destInfo.file).push({
 					span: imp.span,
-					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '')
-					+ importStatementText(imp, newImportPath, statement)
+					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '') + importStatementText(imp, newImportPath)
 				});
 				continue;
 			}
@@ -910,7 +907,7 @@ final class MoveSymbol {
 			ScopeFiles.editsFor(editsByFile, destInfo.file).push(
 				redundant
 					? { span: removeImportSpan(destSource, imp), text: '' }
-					: { span: imp.span, text: importStatementText(imp, newImportPath, destSource.substring(imp.span.from, imp.span.to)) }
+					: { span: imp.span, text: importStatementText(imp, newImportPath) }
 			);
 		}
 		destinationUsingMirror(editsByFile, target, destSource, oldImportPath, newImportPath);
@@ -945,10 +942,8 @@ final class MoveSymbol {
 		if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == oldImportPath)) return;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {
 			final statement: String = destSource.substring(imp.span.from, imp.span.to);
-			ScopeFiles.editsFor(editsByFile, destInfo.file).push({
-				span: imp.span,
-				text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath, statement)}'
-			});
+			ScopeFiles.editsFor(editsByFile, destInfo.file)
+				.push({ span: imp.span, text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath)}' });
 		}
 	}
 
@@ -968,8 +963,9 @@ final class MoveSymbol {
 		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 		if (path == null) return null;
 		final moduleWide: Bool = imp.kind == ImportKind.Import || imp.kind == ImportKind.Using;
-		// The path an alias statement names is not its `raw` (which is the ALIAS), and the statement's
-		// own text is what tells `as` from `in`.
+		// The path an alias statement names is not its `raw` (which is the ALIAS); `importStatementText`
+		// reads `as` or `in` from `ImportInfo.aliasKeyword`. `statement` is only the original line, kept
+		// beside a repoint.
 		final statement: String = src.substring(imp.span.from, imp.span.to);
 		if (path == plan.oldPath) {
 			// Repointing a module statement at the moved type's SUB-TYPE path strips the module's other
@@ -981,17 +977,14 @@ final class MoveSymbol {
 				&& plan.mainMoved
 				&& plan.remaining.length > 0
 				&& (imp.kind == ImportKind.Using || needsRemaining);
-			return {
-				span: imp.span,
-				text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath, statement)
-			};
+			return { span: imp.span, text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath) };
 		}
 		// The mirror: a SECONDARY type leaving a module this file imports as a module. Nothing here
 		// spells the OLD path, so the repoint above never sees the statement and the moved type simply
 		// leaves this file's scope. The new statement goes in the old one's SLOT so that a later import
 		// binding the same name still wins.
 		return moduleWide && !plan.mainMoved && path == plan.sourceModule && needsMoved
-			? { span: imp.span, text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath, statement)}' }
+			? { span: imp.span, text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath)}' }
 			: null;
 	}
 

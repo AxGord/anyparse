@@ -106,6 +106,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private static final QUERY_NAME_META: String = ':queryName';
 
 	/**
+	 * Grammar opt-in on a String field: the field is the PATH the node binds under the name its name slot holds
+	 * (`QueryNode.target`). Haxe tags `HxImportAlias.path`, so `import a.b.C as D;` projects named `D` with target
+	 * `a.b.C`. Read on the node's own `Seq`, or on the struct a ctor's payload is — the alias import's shape.
+	 */
+	private static final QUERY_TARGET_META: String = ':queryTarget';
+
+	/**
 	 * Grammar opt-in on a `type` field — or on any other field holding the one type a
 	 * node is ABOUT, such as an abstract's underlying type: project it into the ENCLOSING
 	 * addressable node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
@@ -412,9 +419,12 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
 		]);
 		final typeArgs: Expr = ctorTypeArgCount(branch, argNames);
+		final targetExpr: Expr = firstNonNullName([
+			for (i in 0...branch.children.length) payloadTargetOf(branch.children[i], ident(argNames[i]))
+		]);
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			$v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span,
-			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs
+			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs, $targetExpr
 		)));
 		return { values: [pattern], expr: block(body) };
 	}
@@ -449,9 +459,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			for (e in seqFieldDescent(child, '_children', TYPE_SLOT_LOCAL, field(ident('v'), PairedShapeLowering.SPAN_FIELD))) body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
 		final typeArgs: Expr = seqTypeArgCount(node, ident('v')) ?? macro 0;
+		final targetExpr: Expr = seqTargetOf(node, ident('v')) ?? macro null;
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span,
-			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs
+			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs, $targetExpr
 		)));
 		return block(body);
 	}
@@ -663,6 +674,27 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		}
 		out.push(macro return null);
 		return block(out);
+	}
+
+	/**
+	 * The `@:queryTarget` field of the `Seq` `node` read off `owner`, or null when no field carries the tag. A tagged
+	 * field that is no String cannot be a path, so it stops the build rather than being skipped.
+	 */
+	private function seqTargetOf(node: ShapeNode, owner: Expr): Null<Expr> {
+		final tagged: Null<ShapeNode> = node.children.find(f -> f.hasMeta(QUERY_TARGET_META));
+		if (tagged == null) return null;
+		if (!isStringSlot(tagged)) Context.error('@:queryTarget field "${fieldNameOf(tagged)}" is not a String', Context.currentPos());
+		final value: Expr = field(owner, fieldNameOf(tagged));
+		return macro ($value: Null<String>);
+	}
+
+	/** The `@:queryTarget` path of a ctor operand whose payload is a `Seq` struct, or null when it carries none. */
+	private function payloadTargetOf(child: ShapeNode, access: Expr): Null<Expr> {
+		final ref: Null<String> = refOf(child);
+		final rule: Null<ShapeNode> = ref == null ? null : _shape.rules.get(ref);
+		if (rule == null || rule.kind != Seq) return null;
+		final target: Null<Expr> = seqTargetOf(rule, access);
+		return target == null || !isOptional(child) ? target : macro $access == null ? null : $target;
 	}
 
 	/** Whether the `Seq` field `f` holds a String — a `Ref` to a String terminal, or an inline String terminal. */

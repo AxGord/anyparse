@@ -248,9 +248,9 @@ final class Metavar {
 			if (bare != null)
 				return tree.kind == identKind && newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
-					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType, tree.typeArgCount);
+					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span, newType, tree.typeArgCount, tree.target);
 		}
-		return new QueryNode(tree.kind, n, newChildren, tree.span, newType, tree.typeArgCount);
+		return new QueryNode(tree.kind, n, newChildren, tree.span, newType, tree.typeArgCount, tree.target);
 	}
 
 	/**
@@ -423,7 +423,7 @@ final class PatternStar {
 		final newType: Null<QueryNode> = slot == null ? null : reclassify(slot);
 		return tree.name == PLACEHOLDER && children.length == 0 && span != null && span.to - span.from == PLACEHOLDER.length
 			? new QueryNode(KIND, null, [], span)
-			: new QueryNode(tree.kind, tree.name, children, tree.span, newType, tree.typeArgCount);
+			: new QueryNode(tree.kind, tree.name, children, tree.span, newType, tree.typeArgCount, tree.target);
 	}
 
 	/**

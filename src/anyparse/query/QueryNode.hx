@@ -65,8 +65,17 @@ final class QueryNode {
 	 */
 	public final typeArgCount: Int;
 
+	/**
+	 * The path a BINDING declaration names when `name` holds the local name it binds instead — Haxe's
+	 * `import a.b.C as D;`, whose `name` is `D` and whose target is `a.b.C`; null for every other node.
+	 * The grammar declares the field (`@:queryTarget`), so the path is the parser's reading of the
+	 * statement, never a re-scan of its text: comments between its tokens are trivia the parse skipped.
+	 */
+	public final target: Null<String>;
+
 	public function new(
-		kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span>, ?type: Null<QueryNode>, typeArgCount: Int = 0
+		kind: String, name: Null<String>, children: Array<QueryNode>, ?span: Null<Span>, ?type: Null<QueryNode>, typeArgCount: Int = 0,
+		?target: Null<String>
 	) {
 		this.kind = kind;
 		this.name = name;
@@ -74,6 +83,7 @@ final class QueryNode {
 		this.span = span;
 		this.type = type;
 		this.typeArgCount = typeArgCount;
+		this.target = target;
 	}
 
 }

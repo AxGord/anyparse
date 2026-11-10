@@ -181,6 +181,14 @@ final class CrossRename {
 	}
 
 	/**
+	 * The dotted path an import statement names — its name slot, or for an alias import (whose name
+	 * slot is the ALIAS) the aliased path its node carries as `target`.
+	 */
+	private static inline function importedPath(node: QueryNode): String {
+		return node.target ?? node.name ?? '';
+	}
+
+	/**
 	 * Resolve the cursor to the type declaration it sits on, returning the
 	 * node that carries the type NAME (the decl node itself, or the inner
 	 * `ClassForm` of a `final class`). The rest of the rename reads
@@ -257,7 +265,7 @@ final class CrossRename {
 			} else if (span != null && ModuleScan.IMPORT_DECL_KINDS.contains(node.kind)) {
 				if (node.kind == 'ImportDecl' || node.kind == 'UsingDecl')
 					add(RefactorSupport.lastSegmentOffset(source, span, node.name, typeName));
-				add(throughOffset(source, span, importedPath(node, source, refShape), paths.absolute, typeName));
+				add(throughOffset(source, span, importedPath(node), paths.absolute, typeName));
 			}
 			final children: Array<QueryNode> = node.children;
 			if (node.kind == MemberKinds.FIELD_ACCESS_KIND) {
@@ -408,17 +416,6 @@ final class CrossRename {
 	private static function grantOffset(source: String, arg: QueryNode, typeName: String, grant: String): Int {
 		final span: Null<Span> = arg.span;
 		return span == null ? -1 : throughOffset(source, span, RefactorSupport.flattenPath(arg), grant, typeName);
-	}
-
-	/**
-	 * The dotted path an import statement names — its name slot, or for an alias import (whose name
-	 * slot is the ALIAS) the aliased path, decoded by the project's one decoder of that text.
-	 */
-	private static function importedPath(node: QueryNode, source: String, refShape: RefShape): String {
-		final span: Null<Span> = node.span;
-		return span != null && (refShape.importAliasKinds ?? []).contains(node.kind)
-			? ModuleScan.aliasTargetOf(source.substring(span.from, span.to))
-			: node.name ?? '';
 	}
 
 	/**

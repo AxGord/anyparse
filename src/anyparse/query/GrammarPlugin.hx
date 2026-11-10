@@ -3265,6 +3265,14 @@ final class RefShape {
 	public var importAliasKinds: Null<Array<String>>;
 
 	/**
+	 * The keyword each `importAliasKinds` kind writes before its alias — Haxe `ImportAliasDecl` → `as`,
+	 * `ImportAliasInDecl` → `in` — for a rewriter that re-emits a repointed alias statement in its own
+	 * spelling. Every `importAliasKinds` kind needs one: a statement whose keyword is unknown cannot be
+	 * re-emitted, so a rewrite of it refuses.
+	 */
+	public var importAliasKeywords: Null<Map<String, String>>;
+
+	/**
 	 * Expression kinds whose SUBTREE escapes the type system (Haxe `untyped` —
 	 * `UntypedExpr`). A write inside one has neither a trustworthy receiver type
 	 * nor a trustworthy RHS type, so `FieldWriteIndex` treats the subtree like an
