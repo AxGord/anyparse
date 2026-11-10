@@ -239,12 +239,12 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		return options.modules.length == 0
 			? []
 			: RunScan.edits(plugin, source, root -> {
-				final header: UsingHeader = UsingScan.headerOf(root, source, plugin);
+				final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
+				final header: UsingHeader = UsingScan.headerOf(root, source, plugin, resolution?.fileInfo(file));
 				// `Cli` hands `fix` the REPORT-scoped index, but the gates must re-derive on the SAME
 				// scope `run` proved them on — the plugin's resolution index (report files UNION the
 				// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
 				// every finding degrades to report-only, and the autofix silently never fires.
-				final resolution: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
 				final byKey: Map<String, Candidate> = [];
 				for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 					byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;

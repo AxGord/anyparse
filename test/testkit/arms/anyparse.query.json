@@ -12327,7 +12327,7 @@
 			"name": "M-ADDIMPORT-USING-TAKES-IMPORT-SEAT",
 			"type": "anyparse.query.AddImport",
 			"method": "addImport",
-			"find": "? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin), trimmed)",
+			"find": "? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin, null), trimmed)",
 			"replace": "? importEdit(source, tree, plugin, trimmed)",
 			"note": "a fresh `using` takes the import ladder again, which for a using-only header appends it BELOW the group: top static-extension priority, re-targeting the calls the file already makes"
 		},
@@ -16362,6 +16362,14 @@
 			"find": "c.span.from == imp.span.from && c.span.to == imp.span.to",
 			"replace": "c.span.from <= imp.span.from && c.span.to >= imp.span.to",
 			"note": "an import under a further #if inside the destination's whole-body guard is read as held for the whole module, so the carry leaves the moved code without it in the builds where only the outer guard holds"
+		},
+		{
+			"name": "M-AMBIENT-USING-GUARDED-COUNTS",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "unguardedAmbientUsings",
+			"find": "imp.kind == ImportKind.Using && !imp.guarded",
+			"replace": "imp.kind == ImportKind.Using",
+			"note": "a `using` the folder's import.hx guards with `#if` reads as covering every build, so a rewrite drops its own `using` and fails in the builds the region is compiled out of"
 		}
 	]
 }

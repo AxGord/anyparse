@@ -498,4 +498,11 @@ final class TypeRefIndex {
 		return false;
 	}
 
+	/** The paths of the UNGUARDED `using` statements `fi` receives from its ambient chain — those that bind in every build. */
+	public static function unguardedAmbientUsings(fi: FileInfo): Array<String> {
+		return [
+			for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using && !imp.guarded) imp.raw
+		];
+	}
+
 }

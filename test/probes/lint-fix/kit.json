@@ -1692,6 +1692,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "AMBIENT-USING-NO-INSERT",
+			"note": "a using the folder's import.hx already supplies is in scope: prefer-exists and prefer-static-extension rewrite and insert no second using",
+			"argv": [
+				"hxq",
+				"lint",
+				"lib/A.hx",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{ \"compilerOracle\": \"build.hxml\", \"rules\": { \"prefer-exists\": true, \"prefer-static-extension\": true } }\n",
+				"build.hxml": "-cp .\nlib.A\n--js out.js\n--no-output\n",
+				"lib/import.hx": "using Lambda;\nusing StringTools;\n",
+				"lib/A.hx": "package lib;\n\nclass A {\n\tpublic static function has(arr:Array<Int>):Bool {\n\t\tfor (x in arr) if (x > 0) return true;\n\t\treturn false;\n\t}\n\n\tpublic static function t(s:String):String {\n\t\treturn StringTools.trim(s);\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f131188b6052efe9",
+				"files": "5ac73425cffbf6fb",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

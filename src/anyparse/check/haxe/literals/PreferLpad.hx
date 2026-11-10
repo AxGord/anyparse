@@ -178,8 +178,8 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 				accepted.push(found);
 			}
 			if (edits.length == 0) return edits;
-			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
 			final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
+			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin, symbols?.fileInfo(violations[0].file));
 			// Two ways the file refuses the rewrite outright, both answering "the calls would not resolve
 			// the way this file's own declarations say they should". A second `using` supplying `lpad`
 			// outranks the inserted one, so the rewritten calls would resolve there instead; and

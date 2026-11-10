@@ -108,7 +108,7 @@ final class PreferUsingOverStaticImport extends HaxeRule implements RiskyFix {
 		symbols: () -> Null<SymbolIndex>
 	): Array<Finding> {
 		final out: Array<Finding> = [];
-		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin, info);
 		var membersByModule: Null<Map<String, Array<String>>> = null;
 		for (imp in info.imports) {
 			final module: String = SourceText.parentPath(imp.raw);

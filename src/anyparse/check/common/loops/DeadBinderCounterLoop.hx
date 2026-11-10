@@ -159,7 +159,7 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 			final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(
 				[{ file: file, source: source }], plugin, IndexScope.resolutionIndexOf(plugin) ?? index
 			);
-			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin, symbols()?.fileInfo(file));
 			final lambdaBlocked: Bool = UsingScan.conflictingUsing(
 				UsingScan.usingModules(header), LAMBDA_MODULE, COUNT_METHOD, plugin, symbols, []
 			);

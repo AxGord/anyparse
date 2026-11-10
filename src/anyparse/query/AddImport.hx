@@ -68,7 +68,7 @@ final class AddImport {
 		// the lowest static-extension priority, since Haxe ranks them in REVERSE declaration order and an
 		// insert below the group would re-target every same-named extension call the file already makes.
 		final edit: { span: Span, text: String } = asUsing
-			? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin), trimmed)
+			? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin, null), trimmed)
 			: importEdit(source, tree, plugin, trimmed);
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}

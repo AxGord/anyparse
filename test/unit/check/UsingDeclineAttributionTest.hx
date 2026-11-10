@@ -258,7 +258,7 @@ class UsingDeclineAttributionTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) throw 'the fixture must parse';
-		return UsingScan.headerOf(tree, source, plugin);
+		return UsingScan.headerOf(tree, source, plugin, null);
 	}
 
 	/** A finding at a span no site of any rule sits at — the "skipped for its own cause" half of every subset assertion here. */

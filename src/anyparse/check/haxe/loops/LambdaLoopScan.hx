@@ -162,7 +162,9 @@ final class LambdaLoopScan {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
-		final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+		final header: UsingHeader = UsingScan.headerOf(
+			tree, source, plugin, symbols?.fileInfo(violations.length == 0 ? '' : violations[0].file)
+		);
 		final conflicted: Bool = UsingScan.conflictingUsing(
 			UsingScan.usingModules(header), LAMBDA_MODULE, method(kind), plugin, () -> symbols, []
 		);
@@ -787,7 +789,9 @@ final class LambdaLoopScan {
 			qualified: () -> {
 				if (!reachesBuilt) {
 					reachesBuilt = true;
-					reaches = UsingScan.qualifiedCallReaches(UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, methodName, index);
+					reaches = UsingScan.qualifiedCallReaches(
+						UsingScan.headerOf(tree, source, plugin, null), LAMBDA_MODULE, methodName, index
+					);
 				}
 				return reaches;
 			},

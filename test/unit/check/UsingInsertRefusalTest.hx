@@ -151,7 +151,7 @@ class UsingInsertRefusalTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, SRC);
 		if (tree == null) throw 'the fixture must parse';
-		return UsingScan.headerOf(tree, SRC, plugin);
+		return UsingScan.headerOf(tree, SRC, plugin, null);
 	}
 
 	/** The zero-width byte the insert would go at — derived, never spelled, so a header change cannot make the fixture lie. */

@@ -138,7 +138,9 @@ final class PreferFind extends HaxeRule {
 		// index when it has one, the caller's otherwise.
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, s) -> {
 			final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
-			final header: UsingHeader = UsingScan.headerOf(tree, source, plugin);
+			final header: UsingHeader = UsingScan.headerOf(
+				tree, source, plugin, symbols?.fileInfo(violations.length == 0 ? '' : violations[0].file)
+			);
 			final conflicted: Bool = UsingScan.conflictingUsing(
 				UsingScan.usingModules(header), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, []
 			);
@@ -439,7 +441,9 @@ final class PreferFind extends HaxeRule {
 			qualified: () -> {
 				if (!reachesBuilt) {
 					reachesBuilt = true;
-					reaches = UsingScan.qualifiedCallReaches(UsingScan.headerOf(tree, source, plugin), LAMBDA_MODULE, FIND_METHOD, index);
+					reaches = UsingScan.qualifiedCallReaches(
+						UsingScan.headerOf(tree, source, plugin, null), LAMBDA_MODULE, FIND_METHOD, index
+					);
 				}
 				return reaches;
 			}

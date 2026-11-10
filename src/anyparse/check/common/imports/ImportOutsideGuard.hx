@@ -116,7 +116,7 @@ final class ImportOutsideGuard extends RuleBase {
 	private static function guardedModule(source: String, plugin: GrammarPlugin): Null<{ tree: QueryNode, guard: QueryNode }> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
-		final guard: Null<QueryNode> = UsingScan.headerOf(tree, source, plugin).guard;
+		final guard: Null<QueryNode> = UsingScan.headerOf(tree, source, plugin, null).guard;
 		return guard == null ? null : { tree: tree, guard: guard };
 	}
 

@@ -1459,6 +1459,14 @@
 			"method": "hasUsingModule",
 			"force": "true",
 			"note": "every module counts as brought in by `using`, so `prefer-using-over-static-import` reports an import no extension call can replace"
+		},
+		{
+			"name": "M-PSE-AMBIENT-USING-IGNORED",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "hasUsingModule",
+			"find": "ambientCovers(header.ambientUsings, module)",
+			"replace": "false",
+			"note": "a `using` the folder's import.hx already supplies reads as absent, so the fix inserts a second one the redundant-import check then removes"
 		}
 	]
 }

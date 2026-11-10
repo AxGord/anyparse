@@ -4,6 +4,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeRefIndex;
 
 /**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,
@@ -64,9 +65,10 @@ final class UsingScan {
 	 * Build it ONCE per file and pass it to the three readers: `guardOf` scans the file's directives,
 	 * which a per-site rebuild would repeat for every candidate.
 	 */
-	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin): UsingHeader {
+	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin, ambient: Null<FileInfo>): UsingHeader {
 		return {
 			root: tree,
+			ambientUsings: ambient == null ? [] : TypeRefIndex.unguardedAmbientUsings(ambient),
 			guard: ModuleScan.guardedBodyRegion(tree, source, plugin),
 			guardedUsings: [
 				for (g in ModuleScan.guardedImportScopes(tree, source, plugin)) if (g.decl.kind == USING_DECL_KIND) g
@@ -93,7 +95,8 @@ final class UsingScan {
 	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
 	 */
 	public static function hasUsingModule(header: UsingHeader, module: String): Bool {
-		return headerDecls(header).exists(child -> child.kind == USING_DECL_KIND && bindsModule(child.name, module));
+		return ambientCovers(header.ambientUsings, module)
+			|| headerDecls(header).exists(child -> child.kind == USING_DECL_KIND && bindsModule(child.name, module));
 	}
 
 	/**
@@ -397,6 +400,14 @@ final class UsingScan {
 		return plugin.knownExtensionMethods(module) != null ? verdict : worse(verdict, supplied(module, module, method, symbols, file));
 	}
 
+	/**
+	 * Whether one of `ambient` — the unguarded `using` paths a file's folder chain supplies (`TypeRefIndex.unguardedAmbientUsings`) —
+	 * brings `module` into scope, so an insert would only repeat what the folder's `import.hx` already says.
+	 */
+	public static function ambientCovers(ambient: Array<String>, module: String): Bool {
+		return ambient.exists(path -> bindsModule(path, module));
+	}
+
 	/** The graver of two verdicts. */
 	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
 		return if (a == UsingConflict.Conflict || b == UsingConflict.Conflict)
@@ -559,6 +570,9 @@ typedef UsingHeader = {
 
 	final root: QueryNode;
 	final guard: Null<QueryNode>;
+
+	/** The unguarded `using` paths the file's folder chain (`import.hx`) supplies, empty when the caller holds no index. */
+	final ambientUsings: Array<String>;
 
 	/**
 	 * Every `using` the module declares inside a conditional-compilation region, each paired with
