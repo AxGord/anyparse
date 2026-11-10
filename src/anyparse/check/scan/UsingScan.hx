@@ -454,7 +454,7 @@ final class UsingScan {
 	private static function typesUsedBy(path: String, index: SymbolIndex, ?file: String): Null<Array<UsedType>> {
 		final out: Array<UsedType> = [];
 		function wholeModule(fi: FileInfo): Void {
-			for (t in fi.types) out.push({ path: t.isMain ? fi.module : '${fi.module}.${t.name}', type: t, file: fi });
+			for (t in fi.types) out.push({ path: ModuleScan.pathOfDecl(fi, t), type: t, file: fi });
 		}
 		final dot: Int = path.lastIndexOf('.');
 		for (fi in index.allFiles()) {
@@ -467,7 +467,7 @@ final class UsingScan {
 		if (dot < 0 && info != null) for (d in index.refs.names.bind(path, info) ?? []) if (d.type.isMain)
 			wholeModule(d.file)
 		else
-			out.push({ path: '${d.file.module}.${d.type.name}', type: d.type, file: d.file });
+			out.push({ path: ModuleScan.pathOfDecl(d.file, d.type), type: d.type, file: d.file });
 		return out.length == 0 ? null : out;
 	}
 

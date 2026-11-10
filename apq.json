@@ -128,8 +128,6 @@
 				"anyparse.query.TypeRefIndex.declaringFiles",
 				"anyparse.query.TypeRefIndex.declsNamed",
 				"anyparse.query.TypeRefIndex.resolvedDeclsNamed",
-				"anyparse.query.ModuleScan.isMainTypeIn",
-				"anyparse.query.ModuleScan.declaresTypeNamed",
 				"anyparse.query.TypeNameBinding.shadowedOnDisk",
 				"anyparse.query.TypeNameBinding.STD_TYPE_NAMES",
 				"anyparse.query.StdTypes.moduleTypes",

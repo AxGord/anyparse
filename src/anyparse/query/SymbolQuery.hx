@@ -59,7 +59,7 @@ final class SymbolQuery {
 			for (type in info.types) if (kindFilter == null || type.kind == kindFilter) {
 				final pos: Position = type.span.lineCol(src);
 				rows.push({
-					qualified: type.isMain ? info.module : '${info.module}.${type.name}',
+					qualified: ModuleScan.pathOfDecl(info, type),
 					name: type.name,
 					kind: type.kind,
 					file: info.file,

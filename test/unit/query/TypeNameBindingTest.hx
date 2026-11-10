@@ -424,7 +424,7 @@ class TypeNameBindingTest extends Test {
 
 	@:pin('control')
 	@:killer('M-BINDINGS-DECLS-AT-SUBTYPE')
-	@:killer('M-CANONICAL-SUBTYPE')
+	@:killer('M-MODULESCAN-SUBTYPE-PATH-BARE')
 	public function testADeclarationIsAtItsCanonicalPath(): Void {
 		final index: SymbolIndex = indexOf(['p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n']);
 		function at(path: String): String {

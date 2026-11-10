@@ -657,8 +657,8 @@ final class TypeNameBinding {
 	 * The path the compiler names a declaration by: a module's main type by the module's path, a sub-type by the module's
 	 * path and its own name.
 	 */
-	public static function canonicalPath(decl: ResolvedType): String {
-		return decl.type.isMain ? decl.file.module : '${decl.file.module}.${decl.type.name}';
+	public static inline function canonicalPath(decl: ResolvedType): String {
+		return ModuleScan.pathOfDecl(decl.file, decl.type);
 	}
 
 	/**

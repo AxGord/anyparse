@@ -4,6 +4,7 @@ import anyparse.check.Check.ScopeDependent;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
+import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -558,10 +559,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 	/** Member names keyed by importable path (`module` for a main type, `module.Type` for a sub-module type). */
 	private static function membersByImportPath(index: SymbolIndex): Map<String, Array<String>> {
 		final map: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) for (t in info.types) {
-			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
-			map[memberPath] = [for (m in t.members) m.name];
-		}
+		for (info in index.allFiles()) for (t in info.types) map[ModuleScan.pathOfDecl(info, t)] = [for (m in t.members) m.name];
 		return map;
 	}
 

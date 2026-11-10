@@ -9,6 +9,7 @@ import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
+import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -411,11 +412,6 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 			];
 	}
 
-	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
-	private static inline function qualifiedPath(d: ResolvedType): String {
-		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
-	}
-
 	/** The per-file `types` / `addUsing` options, with each configured module paired to the simple name a call site is matched by. */
 	private static function readOptions(config: LintConfig): Options {
 		final modules: Array<String> = config.stringListOption(RULE_ID, 'types') ?? ['Lambda', 'StringTools'];
@@ -555,7 +551,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		final decls: Array<ResolvedType> = index.refs.names.bind(name, info, at) ?? [];
 		final paths: Array<String> = [];
 		for (d in decls) {
-			final path: String = qualifiedPath(d);
+			final path: String = ModuleScan.pathOfDecl(d.file, d.type);
 			if (!paths.contains(path)) paths.push(path);
 		}
 		final bound: Bool = paths.length == 1 && paths[0] == module;

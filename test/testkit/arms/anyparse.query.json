@@ -9967,14 +9967,6 @@
 			"note": "a sub-type is at no path, so a project sub-type at a std container's spelling reads as the std one"
 		},
 		{
-			"name": "M-CANONICAL-SUBTYPE",
-			"type": "anyparse.query.TypeNameBinding",
-			"method": "canonicalPath",
-			"find": "return decl.type.isMain ? decl.file.module : '${decl.file.module}.${decl.type.name}';",
-			"replace": "return decl.file.module;",
-			"note": "a sub-type is spelled by its module's path, the main type's, so the text names another type"
-		},
-		{
 			"name": "M-USING-MODULE-TYPES",
 			"type": "anyparse.query.StaticExtensions",
 			"method": "usingTypes",
