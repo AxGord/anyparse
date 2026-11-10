@@ -214,7 +214,7 @@ final class StructureFieldOffsets {
 
 	/** Whether the literal field `field` names `name`, bare or quoted: a quoted key is the same field. */
 	private static function namesField(field: QueryNode, name: String): Bool {
-		return field.name == name || field.name == '"$name"';
+		return field.name == name || field.name == '"$name"' || field.name == '\'$name\'';
 	}
 
 	/**

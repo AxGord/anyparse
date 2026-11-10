@@ -16101,6 +16101,14 @@
 			"note": "a literal a written type proves builds the member keeps the old field name"
 		},
 		{
+			"name": "M-SINGLE-QUOTED-KEY-NAMES-FIELD",
+			"type": "anyparse.query.StructureFieldOffsets",
+			"method": "namesField",
+			"find": " || field.name == '\\'$name\\''",
+			"replace": "",
+			"note": "a literal field keyed in single quotes is not the member, so a rename leaves it behind"
+		},
+		{
 			"name": "M-LITERAL-FIELD-OTHER-TYPE",
 			"type": "anyparse.query.StructureFieldOffsets",
 			"method": "buildsStructure",

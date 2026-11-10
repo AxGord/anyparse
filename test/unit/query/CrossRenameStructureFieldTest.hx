@@ -337,6 +337,16 @@ class CrossRenameStructureFieldTest extends Test {
 		}
 	}
 
+	/** A single-quoted key names the field inside its quotes like a double-quoted one. */
+	@:pin('control')
+	@:killer('M-SINGLE-QUOTED-KEY-NAMES-FIELD')
+	public function testASingleQuotedKeyMoves(): Void {
+		final source: String = '${STRUCTURE}class C {\n\tstatic function a(): Ctx return {\'flag\': true, other: 1};\n}\n';
+		final result: String = renamed(source);
+		Assert.equals(-1, result.indexOf('flag'), result);
+		Assert.isTrue(result.contains("{'enabled': true, other: 1}"), result);
+	}
+
 	private function renamed(source: String): String {
 		return okChanges(source, [{ file: 'A.hx', source: source }], 'A.hx')[0].newSource;
 	}
