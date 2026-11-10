@@ -4,6 +4,7 @@ package anyparse.grammar.haxe;
 import anyparse.core.ShapeTree.ShapeNode;
 import anyparse.macro.AnnotationKeys;
 import anyparse.macro.AstPredLowering;
+import anyparse.macro.CondConditionReader;
 import anyparse.macro.MacroNames.*;
 import anyparse.macro.MetaInspect;
 import anyparse.macro.TriviaTypeSynth;
@@ -659,9 +660,13 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function condSpliceTailElseLedField(): Field {
 		final verdict: Expr = condSpliceElseVerdictExpr();
+		final conditionReader: String = CondConditionReader.of(_shape) ?? Context.fatalError(
+			'HxAstPredLowering: the grammar declares no condition reader for the splice-tail atom', Context.currentPos()
+		);
+		final reader: Expr = macro $p{conditionReader.split('.')};
 		final body: Expr = macro {
 			final n: Int = raw.length;
-			final i: Int = anyparse.runtime.CondCondition.skipConditionAtom(raw, 0);
+			final i: Int = anyparse.runtime.CondCondition.skipConditionAtom(raw, 0, $reader);
 			$verdict;
 		};
 		return predField(

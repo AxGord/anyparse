@@ -7,8 +7,8 @@ import anyparse.grammar.haxe.HxClassDecl;
 import utest.Assert;
 
 /**
- * The `#if` condition terminal `HxPpCondLit` reads its extent through `CondCondition.expressionEnd`, the reader the
- * query side and the splice predicates already ask, instead of a regex of its own. Each test is a form the regex
+ * The `#if` condition terminal `HxPpCondLit` reads its extent through `HxPpCondScan.endAt`, generated from `HxPpCond`
+ * and asked by the query side and the splice predicates too, instead of a regex of its own. Each test is a form the regex
  * read differently: it could not count a group past four levels, it closed a group on a quoted `)`, and it allowed
  * no blank after a `!`.
  */

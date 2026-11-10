@@ -60,6 +60,7 @@ class QueryWalkerCodegen {
 			+ '`opaqueCondRegionKinds`, derived by the same walk from the `@:condRegionCondition` terminal as well. Published through '
 			+ '`RefShape.conditionalRegionKinds` and read by `CondRegionScan.isConditionalKind`.'
 		));
+		fields.push(conditionEndField(result.conditionReader));
 		fields.push(kindsField(
 			'projectedKinds', result.projectedKinds,
 			'Every node kind this walker can project - the grammar\'s whole `QueryNode.kind` vocabulary, derived from the same shape the '
@@ -105,6 +106,30 @@ class QueryWalkerCodegen {
 			access: [APublic, AStatic],
 			doc: doc,
 			kind: FFun({ args: [], ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }), expr: macro return $literal }),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * `conditionEnd(input, at)`: where the grammar's conditional-compilation condition starting at `at` ends, `at` when
+	 * none — the `@:scan` reader of its condition terminal, so a scan over raw source reads the condition the parser
+	 * reads. A grammar declaring no condition terminal answers `at` everywhere.
+	 */
+	private static function conditionEndField(reader: Null<String>): Field {
+		final body: Expr = reader == null ? macro return at : macro return $p{reader.split('.')}(input, at);
+		return {
+			name: 'conditionEnd',
+			access: [APublic, AStatic],
+			doc: 'Where the conditional-compilation condition starting at `at` ends, `at` when none; derived from the grammar\'s '
+				+ '`@:condRegionCondition` terminal and published through `RefShape.conditionEnd`.',
+			kind: FFun({
+				args: [
+					{ name: 'input', type: macro : anyparse.runtime.Input },
+					{ name: 'at', type: macro : Int }
+				],
+				ret: macro : Int,
+				expr: body
+			}),
 			pos: Context.currentPos()
 		};
 	}

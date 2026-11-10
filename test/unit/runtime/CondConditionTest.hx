@@ -1,6 +1,8 @@
 package unit.runtime;
 
+import anyparse.grammar.haxe.HxPpCondScan;
 import anyparse.runtime.CondCondition;
+import anyparse.runtime.Input;
 
 /**
  * `CondCondition` — where a `#if` condition ends, read once for the query side and the generated
@@ -9,19 +11,22 @@ import anyparse.runtime.CondCondition;
 @:nullSafety(Strict)
 final class CondConditionTest extends Test {
 
+	/** The Haxe grammar's condition reader: the pins below read Haxe conditions through the generic span helper. */
+	private static final READER: (input:Input, at:Int) -> Int = HxPpCondScan.endAt;
+
 	@:pin('control')
 	@:killer('M-COND-ATOM-ENDS-AT-WS')
 	public function testTheConditionAtomEndsAtWhitespaceOutsideParentheses(): Void {
 		final fragment: String = '  !(a || b) else x';
-		Assert.equals(fragment.indexOf('else'), CondCondition.skipConditionAtom(fragment, 0));
+		Assert.equals(fragment.indexOf('else'), CondCondition.skipConditionAtom(fragment, 0, READER));
 		final quoted: String = "(a == ')' && b)\n\telse x";
-		Assert.equals(quoted.indexOf('else'), CondCondition.skipConditionAtom(quoted, 0));
+		Assert.equals(quoted.indexOf('else'), CondCondition.skipConditionAtom(quoted, 0, READER));
 		final unbalanced: String = '(a b else';
-		Assert.equals(unbalanced.length, CondCondition.skipConditionAtom(unbalanced, 0));
+		Assert.equals(unbalanced.length, CondCondition.skipConditionAtom(unbalanced, 0, READER));
 		final strayClose: String = 'a) else';
-		Assert.equals(strayClose.indexOf(')'), CondCondition.skipConditionAtom(strayClose, 0));
+		Assert.equals(strayClose.indexOf(')'), CondCondition.skipConditionAtom(strayClose, 0, READER));
 		final noOperand: String = ') else';
-		Assert.equals(noOperand.length, CondCondition.skipConditionAtom(noOperand, 0));
+		Assert.equals(noOperand.length, CondCondition.skipConditionAtom(noOperand, 0, READER));
 	}
 
 	/**
@@ -32,12 +37,12 @@ final class CondConditionTest extends Test {
 	@:killer('M-COND-ATOM-IS-CONDITION-OPERAND')
 	public function testTheConditionAtomIsTheConditionOperand(): Void {
 		final comma: String = '(haxe_ver >= 4.2), AExtern';
-		Assert.equals(comma.indexOf(','), CondCondition.skipConditionAtom(comma, 0));
-		Assert.equals(comma.indexOf(','), CondCondition.conditionAt(comma, 0)?.to);
+		Assert.equals(comma.indexOf(','), CondCondition.skipConditionAtom(comma, 0, READER));
+		Assert.equals(comma.indexOf(','), CondCondition.conditionAt(comma, 0, READER)?.to);
 		final bang: String = 'flag! image';
-		Assert.equals(bang.indexOf('!'), CondCondition.skipConditionAtom(bang, 0));
+		Assert.equals(bang.indexOf('!'), CondCondition.skipConditionAtom(bang, 0, READER));
 		final glued: String = 'a&&b else';
-		Assert.equals(1, CondCondition.skipConditionAtom(glued, 0));
+		Assert.equals(1, CondCondition.skipConditionAtom(glued, 0, READER));
 	}
 
 }

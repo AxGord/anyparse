@@ -101,7 +101,9 @@ class Build {
 			'parse${rootSimple}T';
 		else
 			'parse$rootSimple';
-		final fields: Array<Field> = Codegen.emit(rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName);
+		final fields: Array<Field> = Codegen.emit(
+			rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName, CondConditionReader.of(shape)
+		);
 		if (!ctx.trivia && !ctx.spans) NativeDocLowering.overParser(fields, shape, formatInfo, rootReturnCT);
 
 		#if anyparse_dump
@@ -314,6 +316,24 @@ class Build {
 		#end
 
 		return CppLiteralGuard.guard(fields);
+	}
+
+	/**
+	 * `@:build` entry point for an EXTENT reader - the answer to "where does a match of this shape end in raw text",
+	 * generated from a declared `@:peg` type instead of a hand scanner. Applied to a marker class with the shape's root:
+	 *
+	 * ```haxe
+	 * @:build(anyparse.macro.Build.buildExtentScan(anyparse.grammar.haxe.HxPpCond))
+	 * final class HxPpCondScan {}
+	 * ```
+	 *
+	 * The shape needs no format: an extent skips nothing it does not declare, so only the BASE shape is built and
+	 * `ExtentScanLowering` emits `endAt(input, at)`, the reader a `@:scan` terminal names.
+	 */
+	public static macro function buildExtentScan(target: Expr): Array<Field> {
+		final path: String = extractTypePath(target) ?? Context.fatalError('buildExtentScan expects the shape root type', target.pos);
+		final shape: ShapeBuilder.ShapeResult = new ShapeBuilder().build(Context.getType(path));
+		return CppLiteralGuard.guard(ExtentScanLowering.generate(shape));
 	}
 
 	/**

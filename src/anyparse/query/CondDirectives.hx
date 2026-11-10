@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.BodySkip.SkipMark;
 import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.CondCondition;
+import anyparse.runtime.Input;
 import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
@@ -275,7 +276,8 @@ final class CondDirectives {
 			all: all,
 			markers: [for (keyword in all) keyword.fastCodeAt(0)],
 			opener: ifKeyword,
-			closer: closer
+			closer: closer,
+			conditionEnd: shape.conditionEnd
 		};
 	}
 
@@ -299,8 +301,9 @@ final class CondDirectives {
 	 */
 	private static function read(source: String, from: Int, keyword: String, keywords: DirectiveKeywords): CondDirective {
 		final afterKeyword: Int = from + keyword.length;
-		final condition: Null<Span> = takesCondition(keyword, keywords.opener, keywords.closer)
-			? CondCondition.conditionAt(source, afterKeyword)
+		final reader: Null<(input:Input, at:Int) -> Int> = keywords.conditionEnd;
+		final condition: Null<Span> = reader != null && takesCondition(keyword, keywords.opener, keywords.closer)
+			? CondCondition.conditionAt(source, afterKeyword, reader)
 			: null;
 		return { keyword: keyword, span: new Span(from, condition == null ? afterKeyword : condition.to), condition: condition };
 	}
@@ -359,12 +362,13 @@ typedef OwnRegion = { final directives: Array<CondDirective>; final nested: Bool
 /**
  * The directive keyword vocabulary `CondDirectives.scan` threads through one walk: every declared
  * keyword longest-first (so a longer keyword is never read as a shorter prefix of itself), the set
- * of first characters that can open one, and the opener / closer singled out because a keyword's
- * condition-bearing-ness is decided against them.
+ * of first characters that can open one, the opener / closer singled out because a keyword's
+ * condition-bearing-ness is decided against them, and the grammar's reader of where a condition ends.
  */
 private typedef DirectiveKeywords = {
 	final all: Array<String>;
 	final markers: Array<Int>;
 	final opener: String;
 	final closer: Null<String>;
+	final conditionEnd: Null<(input:Input, at:Int) -> Int>;
 };

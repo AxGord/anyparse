@@ -85,7 +85,7 @@ Passes 1, 3, 4, 5 are the common framework. Pass 2 is where all strategies live.
 
 ### Entry points — not every build runs all five
 
-`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` runs 1, 2, 3, 4, 5 over the writer lowering (it registers the same strategies through `Build.registerStrategies`); `buildQueryWalker` runs 1, 3, 4, 5 over its own lowering with no strategy pass. `buildTransform` and `buildLexicalScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
+`Build` exposes one `@:build` entry per artefact, and each takes the passes it needs. `buildParser` runs all five. `buildWriter` runs 1, 2, 3, 4, 5 over the writer lowering (it registers the same strategies through `Build.registerStrategies`); `buildQueryWalker` runs 1, 3, 4, 5 over its own lowering with no strategy pass. `buildTransform`, `buildLexicalScan` and `buildExtentScan` need only the BASE shape, so the strategy-annotate, trivia and span passes are skipped.
 
 `buildLexicalScan` is the smallest of them and the one worth knowing about, because it answers a question no parse can: **which bytes of a source are not code**, over raw and possibly unparseable text. It reads the grammar's `@:lexical` / `@:balanced` / `@:re` / `@:lead` / `@:trail` / `@:lit` plus the format's comment delimiters, lowers them to one region spec per non-code shape (`LexicalLowering`) and emits a specialised byte walk plus the two entries every consumer calls (`LexicalCodegen`). `anyparse.grammar.haxe.HaxeLexicalRegions` is its production consumer, `unit.minilex.MiniLexScan` the second-grammar pin that proves nothing about Haxe survives inside the macro. See `strategies.md` § Lexical.
 

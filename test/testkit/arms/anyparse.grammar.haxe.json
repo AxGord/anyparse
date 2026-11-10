@@ -1198,6 +1198,87 @@
 			"find": "@:fmt(padLeading, padTrailing, conditionalBodyIndent)",
 			"replace": "@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine)",
 			"note": "a value region's #elseif body takes one element per line, so it breaks between inline #if and #else branches"
+		},
+		{
+			"name": "M-COND-OPERAND-PAREN-GROUP",
+			"type": "anyparse.grammar.haxe.HxPpCond",
+			"method": "Group",
+			"kind": "ParamCtor",
+			"find": "Group(group: HxPpCondGroup)",
+			"replace": "@:lead('#') Group(group: HxPpCondGroup)",
+			"note": "a parenthesised condition is no operand, so the generated splice predicate stops before the infix operator after the group and the region skip-parses"
+		},
+		{
+			"name": "M-COND-GROUP-STOPS-AT-LINE",
+			"type": "anyparse.grammar.haxe.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[^()\\'\"/]",
+			"replace": "[^()\\'\"/\\\\r\\\\n]",
+			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
+		},
+		{
+			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
+			"type": "anyparse.grammar.haxe.HxPpCondFlag",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[A-Za-z0-9_]*)*'",
+			"replace": "[A-Za-z0-9_]*)*(?: &&[ \\\\t\\\\r\\\\n]*[A-Za-z_][A-Za-z0-9_]*)?'",
+			"note": "a `&&` after a flag and the flag after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
+		},
+		{
+			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
+			"type": "anyparse.grammar.haxe.HxPpCondBlank",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[ \\\\t\\\\r\\\\n]*",
+			"replace": "[ \\\\t]*",
+			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
+		},
+		{
+			"name": "M-COND-GROUP-DEPTH-CAP",
+			"type": "anyparse.grammar.haxe.HxPpCondGroupItem",
+			"method": "Inner",
+			"kind": "ParamCtor",
+			"find": "Inner(group: HxPpCondGroup)",
+			"replace": "@:lead('#') Inner(group: HxPpCondGroup)",
+			"note": "a group nested inside a group is no piece of it, so the condition terminal rejects a nested `#if` group the way a depth-capped regex did"
+		},
+		{
+			"name": "M-COND-GROUP-QUOTE-BLIND",
+			"type": "anyparse.grammar.haxe.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[^()\\'\"/]",
+			"replace": "[^()/]",
+			"note": "a group's text runs over a quote, so a quoted `)` inside a group closes it, the condition terminal stops inside the string and the region no longer parses"
+		},
+		{
+			"name": "M-COND-GROUP-COMMENT-BLIND",
+			"type": "anyparse.grammar.haxe.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "|/(?!\\\\*)",
+			"replace": "|/",
+			"note": "a block comment inside a group is read as condition text, so its quote opens a string or its paren closes the group and the region no longer parses"
+		},
+		{
+			"name": "M-COND-NUMBER-DOTTED",
+			"type": "anyparse.grammar.haxe.HxPpCondNumber",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[0-9][0-9.]*",
+			"replace": "[0-9]+",
+			"note": "a numeric operand stops at its dot, so `#if 4.2` reads `4` and leaves `.2` to the region body"
+		},
+		{
+			"name": "M-COND-QUOTED-OPERAND",
+			"type": "anyparse.grammar.haxe.HxPpCond",
+			"method": "Quoted",
+			"kind": "ParamCtor",
+			"find": "Quoted(text: HxPpCondQuoted)",
+			"replace": "@:lead('#') Quoted(text: HxPpCondQuoted)",
+			"note": "a quoted string is no condition operand, so a quoted `#if` condition carries no condition at all"
 		}
 	]
 }

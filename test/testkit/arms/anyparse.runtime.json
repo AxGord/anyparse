@@ -148,7 +148,7 @@
 			"name": "M-COND-ATOM-ENDS-AT-WS",
 			"type": "anyparse.runtime.CondCondition",
 			"method": "skipConditionAtom",
-			"find": "final atom: Null<Span> = conditionIn(input, at);",
+			"find": "final atom: Null<Span> = conditionIn(input, at, reader);",
 			"replace": "final atom: Null<Span> = null;",
 			"note": "the atom no longer reads the condition operand, so the else keyword after a condition is never reached"
 		},
@@ -161,68 +161,12 @@
 			"note": "the atom swallows the byte glued after the condition operand, so the splice predicate and the query side read different conditions"
 		},
 		{
-			"name": "M-COND-OPERAND-PAREN-GROUP",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "scanOperand",
-			"find": "if (c == '('.code) return scanParens(input, at);",
-			"replace": "",
-			"note": "a parenthesised condition is no operand, so the generated splice predicate stops before the infix operator after the group and the region skip-parses"
-		},
-		{
 			"name": "M-COND-KEYWORD-OPERAND-SAME-LINE",
 			"type": "anyparse.runtime.CondCondition",
 			"method": "conditionIn",
 			"find": "final start: Int = skipBlank(input, from);",
 			"replace": "final start: Int = from + skipBlank(new StringInput(input.substring(from, input.length).split('\\n')[0]), 0);",
 			"note": "the condition must start on the keyword's own line, so `#if` / `false` on two lines reads no condition at all"
-		},
-		{
-			"name": "M-COND-GROUP-STOPS-AT-LINE",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "scanParens",
-			"find": "\t\t\tfinal c: Int = input.charCodeAt(i);\n",
-			"replace": "\t\t\tfinal c: Int = input.charCodeAt(i);\n\t\t\tif (isLineBreak(c)) return at;\n",
-			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
-		},
-		{
-			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "expressionEnd",
-			"find": "return operandEnd > operand ? operandEnd : at;",
-			"replace": "return operandEnd > operand ? (input.substring(operandEnd, operandEnd + 3) == ' &&' ? expressionEnd(input, skipBlank(input, operandEnd + 3)) : operandEnd) : at;",
-			"note": "a `&&` after the operand and the operand after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
-		},
-		{
-			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "expressionEnd",
-			"find": "operand = skipBlank(input, operand + 1);",
-			"replace": "operand = operand + 1;",
-			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
-		},
-		{
-			"name": "M-COND-GROUP-DEPTH-CAP",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "scanParens",
-			"find": "depth++;",
-			"replace": "if (++depth > 4) return at;",
-			"note": "a group nested past four levels is no operand, so the condition terminal rejects a depth-five `#if` the way its old regex did"
-		},
-		{
-			"name": "M-COND-GROUP-QUOTE-BLIND",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "scanParens",
-			"find": "if (isQuote(c)) {",
-			"replace": "if (false) {",
-			"note": "a quoted `)` inside a group closes it, so the condition terminal stops inside the string and the region no longer parses"
-		},
-		{
-			"name": "M-COND-GROUP-COMMENT-BLIND",
-			"type": "anyparse.runtime.CondCondition",
-			"method": "scanParens",
-			"find": "if (c == '/'.code && input.charCodeAt(i + 1) == '*'.code) {",
-			"replace": "if (false) {",
-			"note": "a block comment inside a group is read as condition text, so its quote opens a string or its paren closes the group and the region no longer parses"
 		}
 	]
 }

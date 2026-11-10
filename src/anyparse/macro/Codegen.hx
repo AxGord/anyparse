@@ -37,7 +37,7 @@ class Codegen {
 
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		trivia: Bool = false, ?rootFnName: Null<String>
+		trivia: Bool = false, ?rootFnName: Null<String>, ?conditionReader: Null<String>
 	): Array<Field> {
 		final fields: Array<Field> = formatInfo.isBinary ? [binaryEntry(rootTypePath, rootReturnCT, rootFnName)] : [
 			publicEntryWith(rootTypePath, rootReturnCT, rootFnName),
@@ -59,7 +59,7 @@ class Codegen {
 		// word-op postfix dispatch's same-line gate reads it in EVERY build.
 		fields.push(hasNewlineInField());
 		fields.push(endsWithBlockCloseField());
-		fields.push(spliceFragmentIsInfixField());
+		fields.push(spliceFragmentIsInfixField(conditionReader));
 		if (trivia) {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
@@ -888,26 +888,30 @@ class Codegen {
 	 * All four of those were live PASS shapes that a newline-blind relaxation
 	 * broke; the infix test is what keeps them with their own productions.
 	 *
-	 * CONDITION-ATOM SKIP. The atom is `CondCondition.conditionAt`'s: `!`*
-	 * and one operand. An unparenthesised
+	 * CONDITION-ATOM SKIP. The atom is the condition the grammar declares, read
+	 * by the reader `CondConditionReader` finds on its condition terminal (Haxe:
+	 * `!`* and one operand). An unparenthesised
 	 * multi-term condition (`#if a && b`) is deliberately read as atom `a`
 	 * plus an infix fragment: both readings agree that nothing scope-level
 	 * follows, which is all this predicate has to decide. Comments between
 	 * the atom and the fragment are skipped so a leading `/` is unambiguously
 	 * a division operator.
 	 */
-	private static function spliceFragmentIsInfixField(): Field {
-		final skipCondAtom: Expr = spliceCondAtomSkipExpr();
+	private static function spliceFragmentIsInfixField(conditionReader: Null<String>): Field {
 		final skipGap: Expr = spliceGapSkipExpr();
 		final infixTest: Expr = infixOpByteTestExpr();
-		final body: Expr = macro {
-			var i: Int = from;
-			$skipCondAtom;
-			$skipGap;
-			if (i >= input.length) return false;
-			final c: Int = input.charCodeAt(i);
-			return $infixTest;
-		};
+		// A grammar declaring no condition has no splice tail to admit: an own-line word operator never continues.
+		final skipCondAtom: Null<Expr> = conditionReader == null ? null : spliceCondAtomSkipExpr(conditionReader);
+		final body: Expr = skipCondAtom == null
+			? macro return false
+			: macro {
+				var i: Int = from;
+				$skipCondAtom;
+				$skipGap;
+				if (i >= input.length) return false;
+				final c: Int = input.charCodeAt(i);
+				return $infixTest;
+			};
 		return {
 			name: 'spliceFragmentIsInfix',
 			access: [APrivate, AStatic],
@@ -925,13 +929,14 @@ class Codegen {
 
 	/**
 	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
-	 * past the preprocessor CONDITION ATOM as `CondCondition.conditionAt`
+	 * past the preprocessor CONDITION ATOM as the grammar's condition reader
 	 * reads it, so the parser and the query side agree on where a condition
 	 * ends. No operand is read as "no infix fragment".
 	 */
-	private static function spliceCondAtomSkipExpr(): Expr {
+	private static function spliceCondAtomSkipExpr(conditionReader: String): Expr {
+		final reader: Expr = macro $p{conditionReader.split('.')};
 		return macro {
-			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionIn(input, from);
+			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionIn(input, from, $reader);
 			if (atom == null) return false;
 			i = atom.to;
 		};

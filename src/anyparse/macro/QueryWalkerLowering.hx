@@ -182,7 +182,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * the raw set with it would make every ordinary `#if` refuse a rename of a name its CONDITION
 	 * spells.
 	 */
-	private static final COND_REGION_CONDITION_META: String = ':condRegionCondition';
+	private static final COND_REGION_CONDITION_META: String = CondConditionReader.META;
 
 	/**
 	 * The kind the `_typeRefs` projection MINTS for a nominal type name. No grammar ctor
@@ -280,6 +280,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			typeRefs: typeRefs,
 			opaqueCondRegionKinds: condKindsReaching(rawSeeds),
 			conditionalRegionKinds: condKindsReaching(rawSeeds.concat(condSeedRules(COND_REGION_CONDITION_META))),
+			conditionReader: CondConditionReader.of(_shape),
 			projectedKinds: projectedKinds(),
 			ambiguousProjectedKinds: ambiguousProjectedKinds()
 		};
@@ -1003,6 +1004,12 @@ typedef QueryWalkerResult = {
 	 * model. Derived by the same walk from the `@:condRegionCondition` terminal as well.
 	 */
 	final conditionalRegionKinds: Array<String>;
+
+	/**
+	 * The qualified reader of where the grammar's conditional-compilation condition ends (`CondConditionReader`), or
+	 * null when the grammar declares no condition terminal.
+	 */
+	final conditionReader: Null<String>;
 
 	/**
 	 * Every node kind the generated walker can project - the grammar's whole

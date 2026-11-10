@@ -2596,6 +2596,30 @@
 			"find": "? anyparse.format.wrap.WrapMode.OnePerLine",
 			"replace": "? anyparse.format.wrap.WrapMode.OnePerLine : opt._inTypedefBody ? anyparse.format.wrap.WrapMode.NoWrap",
 			"note": "a typedef body stays on one line past the anonType rules, so a wide one no longer wraps"
+		},
+		{
+			"name": "M-EXTENT-ORDERED-CHOICE",
+			"type": "anyparse.macro.ExtentScanLowering",
+			"method": "generate",
+			"find": "if (end >= 0) return end;",
+			"replace": "return end;",
+			"note": "an enum answers its first constructor whether or not it matched, so a failed branch never falls back to the next one"
+		},
+		{
+			"name": "M-EXTENT-PART-TRAIL",
+			"type": "anyparse.macro.ExtentScanLowering",
+			"method": "seqBody",
+			"find": "pushLiteral(steps, trail);",
+			"replace": "",
+			"note": "a field trail is never matched, so an extent stops before the closer it declares"
+		},
+		{
+			"name": "M-EXTENT-OPTIONAL-PART",
+			"type": "anyparse.macro.ExtentScanLowering",
+			"method": "partStep",
+			"find": "if (next >= 0) p = next;",
+			"replace": "if (false) p = next;",
+			"note": "an optional part is never consumed, so a shape whose next part follows it fails wherever the part is present"
 		}
 	]
 }

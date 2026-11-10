@@ -1842,6 +1842,14 @@ final class RefShape {
 	public var conditionalEndKeyword: Null<String>;
 
 	/**
+	 * Where a conditional-compilation condition starting at `at` ends, `at` when none — the reader `CondDirectives`
+	 * delimits every directive's condition with. A plugin publishes its generated walker's `conditionEnd`, derived from
+	 * the grammar's condition terminal, so a scan over source the parser never saw reads the parser's condition.
+	 * Optional; unset means a directive carries no condition.
+	 */
+	public var conditionEnd: Null<(input:anyparse.runtime.Input, at:Int) -> Int>;
+
+	/**
 	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute
 	 * to the declaration that FOLLOWS its `#end` (Haxe `EnumKw` / `AbstractKw` / `FinalKw`,
 	 * the `@:kw` arms of `HxCondDeclPrefix`). They are not ordinary modifier siblings because

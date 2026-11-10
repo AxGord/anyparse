@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.CondCondition;
+import anyparse.runtime.Input;
 import anyparse.util.Strings;
 
 using StringTools;
@@ -77,18 +78,23 @@ final class IfFalseDeadCode extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree));
+		final reader: Null<ConditionReader> = plugin.refShape().conditionEnd;
+		return reader == null
+			? []
+			: RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, reader));
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
+		final reader: Null<ConditionReader> = plugin.refShape().conditionEnd;
+		if (reader == null) return edits;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final isTrueBranch: Bool = isIfTrueAt(source, span.from);
-			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to));
+			final isTrueBranch: Bool = isIfTrueAt(source, span.from, reader);
+			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to), reader);
 			if (region == null) continue;
 			if (isTrueBranch) {
 				if (region.elsePos != -1 && !isTrivialBody(region.otherwise)) continue;
@@ -102,29 +108,29 @@ final class IfFalseDeadCode extends RuleBase {
 	}
 
 	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
-	private static inline function isIfFalseAt(source: String, from: Int): Bool {
-		return isIfLiteralAt(source, from, 'false');
+	private static inline function isIfFalseAt(source: String, from: Int, reader: ConditionReader): Bool {
+		return isIfLiteralAt(source, from, 'false', reader);
 	}
 
 	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
-	private static inline function isIfTrueAt(source: String, from: Int): Bool {
-		return isIfLiteralAt(source, from, 'true');
+	private static inline function isIfTrueAt(source: String, from: Int, reader: ConditionReader): Bool {
+		return isIfLiteralAt(source, from, 'true', reader);
 	}
 
-	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode): Void {
+	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, reader: ConditionReader): Void {
 		final span: Null<Span> = node.span;
-		final isFalse: Bool = span != null && isIfFalseAt(source, span.from);
-		final isTrueBranch: Bool = span != null && !isFalse && isIfTrueAt(source, span.from);
+		final isFalse: Bool = span != null && isIfFalseAt(source, span.from, reader);
+		final isTrueBranch: Bool = span != null && !isFalse && isIfTrueAt(source, span.from, reader);
 		if (span != null && (isFalse || isTrueBranch))
 			out.push({
 				file: file,
 				span: span,
 				rule: 'if-false',
 				severity: Severity.Warning,
-				message: deadRegionMessage(source.substring(span.from, span.to), isTrueBranch)
+				message: deadRegionMessage(source.substring(span.from, span.to), isTrueBranch, reader)
 			});
 		else
-			for (c in node.children) walk(out, file, source, c);
+			for (c in node.children) walk(out, file, source, c, reader);
 	}
 
 	/**
@@ -138,9 +144,9 @@ final class IfFalseDeadCode extends RuleBase {
 	 * message — report-only for an unrelated reason (the rewrite is a
 	 * semantic transform, not a triviality question).
 	 */
-	private static function deadRegionMessage(slice: String, isTrueBranch: Bool): String {
+	private static function deadRegionMessage(slice: String, isTrueBranch: Bool, reader: ConditionReader): String {
 		final base: String = isTrueBranch ? TRUE_MESSAGE : FALSE_MESSAGE;
-		final region: Null<EliminatedRegion> = eliminatedRegion(slice);
+		final region: Null<EliminatedRegion> = eliminatedRegion(slice, reader);
 		if (region == null) return base;
 		final eliminated: Null<String> = isTrueBranch ? (region.elsePos == -1 ? null : region.otherwise) : region.then;
 		return eliminated == null || isTrivialBody(eliminated) ? base : base + DEAD_BRANCH_NOTE;
@@ -159,14 +165,14 @@ final class IfFalseDeadCode extends RuleBase {
 	 * chain (`fix` stays report-only; `deadRegionMessage` keeps the base
 	 * message) or a malformed region (`#else` with no matching `#end`).
 	 */
-	private static function eliminatedRegion(slice: String): Null<EliminatedRegion> {
+	private static function eliminatedRegion(slice: String, reader: ConditionReader): Null<EliminatedRegion> {
 		if (findTopLevelMarker(slice, '#elseif') != -1) return null;
 		final elsePos: Int = findTopLevelMarker(slice, '#else');
 		final endPos: Int = slice.lastIndexOf('#end');
 		if (elsePos != -1 && endPos <= elsePos) return null;
 		final bodyEnd: Int = elsePos == -1 ? endPos : elsePos;
 		return {
-			then: slice.substring(bodyStart(slice), bodyEnd),
+			then: slice.substring(bodyStart(slice, reader), bodyEnd),
 			elsePos: elsePos,
 			otherwise: elsePos == -1 ? '' : slice.substring(elsePos + '#else'.length, endPos).trim()
 		};
@@ -176,9 +182,9 @@ final class IfFalseDeadCode extends RuleBase {
 	 * `true` iff the source at `from` opens with `#if <literal>` / `#if (<literal>)` and the condition is NOTHING
 	 * ELSE: `#if false && x` is a conditional on `x`, not a dead region.
 	 */
-	private static function isIfLiteralAt(source: String, from: Int, literal: String): Bool {
+	private static function isIfLiteralAt(source: String, from: Int, literal: String, reader: ConditionReader): Bool {
 		if (!sliceStartsWith(source, from, '#if')) return false;
-		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length);
+		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length, reader);
 		if (condition == null) return false;
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
 		return Strings.stripOuterParens(text) == literal;
@@ -188,8 +194,8 @@ final class IfFalseDeadCode extends RuleBase {
 	 * Index in `slice` (which itself opens with the region's own `#if <literal>` / `#if (<literal>)`) right after the
 	 * condition, where the THEN body begins — the same condition `isIfLiteralAt` read, restarted at `slice[0]`.
 	 */
-	private static function bodyStart(slice: String): Int {
-		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length);
+	private static function bodyStart(slice: String, reader: ConditionReader): Int {
+		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length, reader);
 		return condition == null ? '#if'.length : condition.to;
 	}
 
@@ -243,3 +249,6 @@ final class IfFalseDeadCode extends RuleBase {
 
 /** The resolved region `eliminatedRegion` reads in both `fix` and `deadRegionMessage`. */
 private typedef EliminatedRegion = { final then: String; final elsePos: Int; final otherwise: String; };
+
+/** The grammar's reader of where a `#if` condition ends (`RefShape.conditionEnd`). */
+private typedef ConditionReader = (input:Input, at:Int) -> Int;
