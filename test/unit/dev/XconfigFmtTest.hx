@@ -198,6 +198,45 @@ final class XconfigFmtTest extends Test {
 		});
 	}
 
+	/** The whole-tree stand formats every `TREE_SCOPE` entry, not only the touched files, and holds when the filed set is met. */
+	public function testTheWholeStandFormatsTheWholeScopeAndHolds(): Void {
+		TempDir.with(dir -> {
+			final repo: String = fixtureRepo(dir, FILED);
+			final root: String = dir.file('scratch');
+			var seen: Array<String> = [];
+			final both: String = FILED.map(file -> 'apq fmt: $root/$file: the writer needed 2 rewrites to reach its fixed point')
+				.join('\n');
+			final stand: XconfigStand = XconfigFmt.wholeStand(args -> {
+				seen = args;
+				return printing('$both\n$SUMMARY');
+			}, repo, root, FILED);
+			Assert.isTrue(stand.match(Holds), '$stand');
+			Assert.same(['fmt', '--list', '--one-pass'].concat(GateTree.TREE_SCOPE.map(dirName -> '$root/$dirName')), seen);
+		});
+	}
+
+	/** An untouched filed file that now settles breaks the whole-tree stand, which the touched-only stand never compares. */
+	public function testTheWholeStandCatchesAnUntouchedFileThatSettles(): Void {
+		TempDir.with(dir -> {
+			final repo: String = fixtureRepo(dir, FILED);
+			switch XconfigFmt.wholeStand(_ -> printing(SUMMARY), repo, dir.file('scratch'), FILED) {
+				case Breaks(failure): Assert.contains('- ${FILED[0]}', failure.detail);
+				case other: Assert.fail('expected Breaks, got $other');
+			}
+		});
+	}
+
+	/** An engine input takes the whole-tree stand (an untouched settling file breaks it); a plain .hx list takes the touched-only one. */
+	public function testTheGateStandWidensExactlyWhenTheFmtScopeDoes(): Void {
+		TempDir.with(dir -> {
+			final repo: String = fixtureRepo(dir, ['src/a/A.hx'].concat(FILED));
+			final settled: Array<String> -> Command = _ -> printing(SUMMARY);
+			Assert.isTrue(GateTree.fmtScope(['src/anyparse/Engine.hx']).length > 1);
+			Assert.isTrue(XconfigFmt.gateStand(settled, repo, ['src/anyparse/Engine.hx'], dir.file('whole'), FILED).match(Breaks(_)));
+			Assert.isTrue(XconfigFmt.gateStand(settled, repo, ['test/unit/dev/Plain.hx'], dir.file('touched'), FILED).match(Holds));
+		});
+	}
+
 	/** A repo holding the vendored config and `files`, each a stub. */
 	private static function fixtureRepo(dir: TempDir, files: Array<String>): String {
 		final repo: String = dir.file('repo');

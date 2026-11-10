@@ -617,7 +617,7 @@ final class SliceGate {
 	 */
 	private function crossConfigFmtOutcome(): Outcome {
 		final stand: XconfigStand = TempDir.with(
-			scratch -> XconfigFmt.touchedStand(args -> _gate.hxq(_gate.tree, args), _gate.tree, _gate.touched, scratch.file('xconfig'))
+			scratch -> XconfigFmt.gateStand(args -> _gate.hxq(_gate.tree, args), _gate.tree, _gate.touched, scratch.file('xconfig'))
 		);
 		return switch stand {
 			case Skipped: Skipped('no touched .hx');

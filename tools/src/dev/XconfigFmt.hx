@@ -129,6 +129,28 @@ final class XconfigFmt {
 	}
 
 	/**
+	 * The cross-config check over the whole `TREE_SCOPE`, the battery's own run: every file of the filed set must still need a
+	 * second rewrite and no other file may, plus every filed file gone from `repo`. A gate whose fmt scope widened to the whole
+	 * tree runs this, so a writer change cannot pass the gate and fail the landing.
+	 */
+	public static function wholeStand(hxq: Array<String> -> Command, repo: String, root: String, ?filed: Array<String>): XconfigStand {
+		final failure: Null<XconfigFailure> = xconfigVerdict(
+			xconfigRun(hxq, repo, root, null), filed ?? XCONFIG_ONE_PASS, missingFiled(repo, filed)
+		);
+		return failure == null ? Holds : Breaks(failure);
+	}
+
+	/**
+	 * The cross-config stand of a slice that touched `touched`: the whole tree when the engine or a formatter config moved (the
+	 * same trigger that widens the gate's fmt row, `ForkFmt.owedBy`), else only the touched files.
+	 */
+	public static function gateStand(
+		hxq: Array<String> -> Command, repo: String, touched: Array<String>, root: String, ?filed: Array<String>
+	): XconfigStand {
+		return ForkFmt.owedBy(touched) ? wholeStand(hxq, repo, root, filed) : touchedStand(hxq, repo, touched, root, filed);
+	}
+
+	/**
 	 * The failure of the files `joined` (needing a second rewrite and not filed) and `left` (filed and settling) plus the filed
 	 * files `gone`, or null when there are none. The line names each half with its remedy, short enough to survive a row's clip at
 	 * any file count; the detail names the files and spells the remedies out.
