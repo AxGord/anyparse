@@ -576,13 +576,6 @@ final class WriterKwRefLowering {
 			);
 			optExpr = macro ($operandIsBlock ? _clearExprPosition($optExpr, opt) : $optExpr);
 		}
-		// omega-macro-reification-braces: `@:fmt(clearBracePolicy)` on a kw-Ref ctor
-		// (`HxExpr.MacroExpr` / `MacroClassExpr`) disarms BOTH halves of the
-		// single-statement brace policy for the whole reified subtree — inside `macro …`
-		// a `{ … }` is an `EBlock` of the emitted value, so adding or removing one
-		// changes what the macro produces, not how it reads. Inert (and allocation-free)
-		// whenever neither knob is set.
-		if (branch.fmtHasFlag('clearBracePolicy')) optExpr = macro _clearBracePolicy($optExpr, opt);
 		if (propagateFieldLevelVar) optExpr = macro _setFieldLevelVar($optExpr, opt);
 		if (interpFlat) optExpr = macro _setChainModeOverride($optExpr, anyparse.format.wrap.WrapMode.NoWrap, opt);
 		if (parenHardFlatten)

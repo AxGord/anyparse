@@ -691,8 +691,8 @@
 			"type": "anyparse.grammar.haxe.HxExpr",
 			"method": "MacroExpr",
 			"kind": "ParamCtor",
-			"find": "@:fmt(clearExprPosition, clearBracePolicy)",
-			"replace": "@:fmt(clearExprPosition, clearBracePolicy, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
+			"find": "@:fmt(clearExprPosition)",
+			"replace": "@:fmt(clearExprPosition, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
 			"note": "`macro` is written like the call-shaped `cast`, so `macro (x + 1)` loses the space the user keeps: it reads as a construct whose operand can be anything"
 		},
 		{

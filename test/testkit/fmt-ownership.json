@@ -126,7 +126,6 @@
 		"bodyPolicy",
 		"bodyPolicySingleLine",
 		"captureSource",
-		"clearBracePolicy",
 		"clearExprPosition",
 		"condExprFitGroup",
 		"condSpliceCaseMarkerDedent",
@@ -184,9 +183,6 @@
 	],
 	"WriterMetaLineEndLowering": [
 		"metaLineEndPolicy"
-	],
-	"WriterOptFanout": [
-		"dropSingleStmtBraces"
 	],
 	"WriterPolicyLowering": [
 		"arrowBodyOpenPadSuppress",

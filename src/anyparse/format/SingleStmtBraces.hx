@@ -59,6 +59,12 @@ class SingleStmtBraces {
 	private static final SYMMETRY_WRAP_SKIP_CTORS: Array<String> = ['IfStmt', 'SwitchStmt', 'SwitchStmtBare'];
 
 	/**
+	 * The expression ctors of a quotation's splice (`$e`, `$e{…}`, `${…}`) - the writer's twin of
+	 * `RefShape.spliceKinds`, sharing the missing kind-name seam `SYMMETRY_WRAP_SKIP_CTORS` names.
+	 */
+	private static final SPLICE_CTORS: Array<String> = ['DollarIdentExpr', 'DollarReifExpr', 'DollarBlockExpr'];
+
+	/**
 	 * Return the block's single inner statement when every gate below passes, so the
 	 * writer emits `if (cond) return x;` instead of `if (cond) { return x; }`, and
 	 * return the body unchanged in every other case.
@@ -332,7 +338,7 @@ class SingleStmtBraces {
 		if (!Reflect.isEnumValue(value) || !Reflect.isEnumValue(sibling)) return false;
 		if (Type.enumConstructor(cast sibling) != blockCtor) return false;
 		final own: String = Type.enumConstructor(cast value);
-		return own != blockCtor && !skipCtors.contains(own);
+		return own != blockCtor && !skipCtors.contains(own) && !isSplice(value);
 	}
 
 	/**
@@ -358,8 +364,9 @@ class SingleStmtBraces {
 	public static function tryBraceVerdict(
 		body: Dynamic, catches: Null<Array<Dynamic>>, drop: Bool, symmetry: Bool, suppress: Bool, blockCtor: String, deBraceable: Bool
 	): Int {
-		if (!drop && !symmetry) return 0;
 		final bodies: Array<Dynamic> = tryGroupBodies(body, catches);
+		// A bare spliced body is neither braced nor bare, so the group has no verdict to repair toward.
+		if ((!drop && !symmetry) || bodies.exists(isSplice)) return 0;
 		var anyBraced: Bool = false;
 		var allDeBrace: Bool = deBraceable;
 		for (i => b in bodies) {
@@ -463,7 +470,8 @@ class SingleStmtBraces {
 	private static inline function needsSymmetryWrap(block: EnumValue, siblingKeepsBraces: Bool, isIfThenBody: Bool): Bool {
 		return siblingKeepsBraces
 			&& (isIfThenBody || !SYMMETRY_WRAP_SKIP_CTORS.contains(Type.enumConstructor(block)))
-			&& innerSelfTerminates(block);
+			&& innerSelfTerminates(block)
+			&& !isSplice(block);
 	}
 
 	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
@@ -805,7 +813,7 @@ class SingleStmtBraces {
 			null
 		else if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt')
 			null // gate 8 keep
-		else if (!innerSelfTerminates(cast inner))
+		else if (!innerSelfTerminates(cast inner) || isSplice(inner))
 			null // gate 3 terminator
 		else if ((elseFollows || suppress) && tailDanglingIf(inner))
 			null
@@ -835,7 +843,7 @@ class SingleStmtBraces {
 		// ending on an else-less `if` would capture an `else` written after the try/catch - which is
 		// exactly what those braces were holding shut. `suppress` (`opt._ssbSuppress`) is the frame the
 		// enclosing `if` arms on a then-body that renders without braces.
-		return if (inner == null || !Reflect.isEnumValue(inner) || !innerSelfTerminates(cast inner))
+		return if (inner == null || !Reflect.isEnumValue(inner) || !innerSelfTerminates(cast inner) || isSplice(inner))
 			null
 		else if (keepTrail && suppress && tailDanglingIf(inner))
 			null
@@ -951,6 +959,17 @@ class SingleStmtBraces {
 	private static function catchCarriesSemi(clause: Any): Bool {
 		final node: Any = hasStructField(clause, 'node') ? Reflect.field(clause, 'node') : clause;
 		return hasStructField(node, 'bodyTrailPresent') && Reflect.field(node, 'bodyTrailPresent') == true;
+	}
+
+	/**
+	 * Whether `v` is a quotation's splice, bare or as the one expression of an `ExprStmt`. What the macro splices may be a
+	 * block or a declaration, so the brace policy neither wraps such a branch, nor strips the braces around it, nor lets it
+	 * decide a group's symmetry - the writer's side of `BranchChain.isSplice`.
+	 */
+	private static function isSplice(v: Null<Any>): Bool {
+		if (v == null || !Reflect.isEnumValue(v)) return false;
+		final ctor: String = Type.enumConstructor(cast v);
+		return ctor == 'ExprStmt' ? isSplice(paramAt(cast v, 0)) : SPLICE_CTORS.contains(ctor);
 	}
 
 }

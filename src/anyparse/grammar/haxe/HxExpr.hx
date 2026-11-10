@@ -134,7 +134,6 @@ enum HxExpr {
 	@:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))
 	MacroTypeExpr(t: HxType);
 	@:kw('macro')
-	@:fmt(clearBracePolicy)
 	MacroClassExpr(v: HxMacroClass);
 
 	/**
@@ -142,7 +141,7 @@ enum HxExpr {
 	 * operand can be anything, where `cast(e)` reads as a call.
 	 */
 	@:kw('macro')
-	@:fmt(clearExprPosition, clearBracePolicy)
+	@:fmt(clearExprPosition)
 	MacroExpr(operand: HxExpr);
 	@:kw('var')
 	VarExpr(decl: HxVarDecl);

@@ -1247,8 +1247,9 @@ final class TriviaSepLowering {
 			anyparse.format.wrap.MatrixWrap.tryLayout(
 				_pdocs, _prow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _pcols
 			) != null;
-		} else
+		} else {
 			false;
+		};
 	}
 
 	/**

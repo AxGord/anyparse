@@ -110,7 +110,7 @@ breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, c
 capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 catchParensGap, catchParensInsideClose, chainNestSuppress,
-clearBracePolicy, clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,
+clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
 constructFitGroup(…), constructFitSep, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,

@@ -614,6 +614,38 @@
 			"find": "case 'IfStmt':",
 			"replace": "case 'IfStmt' if (false):",
 			"note": "an if/else ending on its own semicolon reads as not closing the bare try, so a group that settles bare keeps its braces"
+		},
+		{
+			"name": "M-SSB-SPLICE-TRY-GROUP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "tryBraceVerdict",
+			"find": " || bodies.exists(isSplice)",
+			"replace": "",
+			"note": "a bare spliced try body counts as bare again, so the group is repaired through it and `try $b{e}` becomes `try { $b{e}; }`"
+		},
+		{
+			"name": "M-SSB-SPLICE-VALUE-WRAP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "symmetryNeedsValueWrap",
+			"find": " && !isSplice(value)",
+			"replace": "",
+			"note": "a bare spliced value branch opposite a braced one gains braces"
+		},
+		{
+			"name": "M-SSB-SPLICE-STMT-WRAP",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "needsSymmetryWrap",
+			"find": "&& !isSplice(block)",
+			"replace": "&& true",
+			"note": "a bare spliced statement branch opposite a braced one gains braces"
+		},
+		{
+			"name": "M-SSB-SPLICE-DEBRACE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "deBracedElem",
+			"find": " || isSplice(inner))",
+			"replace": ")",
+			"note": "the braces around a lone splice are stripped, though the splice may be a declaration they scope"
 		}
 	]
 }

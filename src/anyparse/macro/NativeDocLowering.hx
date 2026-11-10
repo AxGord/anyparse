@@ -318,9 +318,9 @@ final class NativeDocLowering {
 				final local: String = nameOf('v');
 				final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
 				for (step in lead) steps.push(step);
-				steps.push(macro if ($access == null)
-					out.add($v{_format.nullLiteral})
-				else {
+				steps.push(macro if ($access == null) {
+					out.add($v{_format.nullLiteral});
+				} else {
 					final $local: $fieldCT = $access;
 					$b{compactValue(child, macro $i{local})};
 				});

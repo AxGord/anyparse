@@ -888,9 +888,9 @@ final class WriterBodyPolicyLowering {
 		final metaCtor: String = metaBlockGlueArgs[1];
 		final blockCtor: String = metaBlockGlueArgs[2];
 		return macro {
-			final _mbgIsMetaBlock: Bool = if (Type.enumConstructor($bodyValueExpr) != $v{exprBodyCtor})
-				false
-			else {
+			final _mbgIsMetaBlock: Bool = if (Type.enumConstructor($bodyValueExpr) != $v{exprBodyCtor}) {
+				false;
+			} else {
 				var _mbgInner: Dynamic = Type.enumParameters($bodyValueExpr)[0];
 				var _mbgSawMeta: Bool = false;
 				while (Type.enumConstructor(_mbgInner) == $v{metaCtor}) {

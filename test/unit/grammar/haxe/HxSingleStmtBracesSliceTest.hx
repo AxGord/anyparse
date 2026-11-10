@@ -661,8 +661,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-SSB-FRAME-OFF')
-	@:killer('M-SSB-DANGLING-NONE')
 	@:killer('M-SSB-TAIL-SEALED-NONE')
 	public inline function testBracedCatchBodySealsTryCatchBeforeElse(): Void {
 		// The block-bodied `TryCatchStmt` arm: the spine ends on the LAST catch clause's

@@ -80,13 +80,12 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		);
 	}
 
-	@:pin('control')
-	@:killer('M-SSB-FRAME-OFF')
-	@:killer('M-SSB-DANGLING-NONE')
+	@:pin('guard')
 	public inline function testDanglingElseKeepsBraces(): Void {
 		// KEY safety gate: the last catch body ends the whole construct, so a de-braced tail ending on
 		// an else-less `if` would capture the `else` that follows the try/catch. Those braces are
-		// load-bearing and the group keeps all of them.
+		// load-bearing and the group keeps all of them. Two guards hold it (`tryDeBraced`'s dangling
+		// test and `staysStatementTry`), so no single cut flips it.
 		roundTrip(
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\ttry {\n\t\t\t\tp();\n\t\t\t} catch (e:Dynamic) {\n'
 			+ '\t\t\t\tif (b) q();\n\t\t\t}\n\t\telse\n\t\t\tr();\n\t}\n}'

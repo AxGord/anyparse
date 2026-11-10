@@ -31,7 +31,9 @@ class BraceSymmetrySliceTest extends Test {
 	private static final SYMMETRIC_NEXT: String =
 		'$BASE, "sameLine": {"expressionIf": "next"}, "whitespace": {"bracesConfig": {"singleStatementBraces": "symmetric"}}}';
 
-	/** The MegaSaveBuilder shape, already canonical under `SYMMETRIC` — see `testAMacroReificationIsNotBraced`. */
+	/**
+	 * The MegaSaveBuilder shape, already canonical under `SYMMETRIC` - see `testABareSpliceTryBodyIsNotBraced`.
+	 */
 	private static final MACRO_TRY: String =
 		'class C {\n\tmacro function f() {\n\t\te = macro try $$b{exprs} catch (err:Dynamic) {\n\t\t\tq();\n\t\t\tr();\n\t\t};\n\t}\n}';
 
@@ -163,15 +165,13 @@ class BraceSymmetrySliceTest extends Test {
 	}
 
 	/**
-	 * Inside a `macro …` reification the code is DATA, so a brace level is part of the
-	 * value the macro returns, not layout. `pony/magic/builder/MegaSaveBuilder.hx` came out
-	 * `macro try { $b{exprs}; } catch (…)`, i.e. `EBlock(exprs)` → `EBlock([EBlock(exprs)])` — an
-	 * added scope in every class that build-macro touches, with no test in Pony that runs it.
-	 *
-	 * `@:fmt(clearBracePolicy)` on `HxExpr.MacroExpr` / `MacroClassExpr` clears BOTH brace knobs
-	 * for the reified subtree, so the whole policy — wrap and de-brace alike — is inert there.
+	 * A spliced try body is neither braced nor bare: `$b{exprs}` may already be a block, and
+	 * `pony/magic/builder/MegaSaveBuilder.hx` came out `try { $b{exprs}; }` when the group was
+	 * repaired through it. The lint's `BranchChain.isSplice` reads it the same way.
 	 */
-	public function testAMacroReificationIsNotBraced(): Void {
+	@:pin('control')
+	@:killer('M-SSB-SPLICE-TRY-GROUP')
+	public function testABareSpliceTryBodyIsNotBraced(): Void {
 		Assert.equals(MACRO_TRY, HxWriteFixture.triviaWrite(MACRO_TRY, SYMMETRIC));
 	}
 
@@ -189,15 +189,47 @@ class BraceSymmetrySliceTest extends Test {
 		Assert.isTrue(out.indexOf('try {') != -1, 'the bare try body must gain braces outside a macro in: <$out>');
 	}
 
-	/** The reification barrier covers the value-`if` repair too, not only the try/catch group. */
-	public function testAValueIfInsideAMacroIsNotBraced(): Void {
+	/**
+	 * Inside a quotation the policy applies as outside it: an added brace level builds `EBlock([e])`,
+	 * which the typer scopes as it scopes every branch body, so `asymmetric-branch-braces` and the
+	 * writer agree on one shape.
+	 */
+	public function testAValueIfInsideAMacroIsBraced(): Void {
 		final src: String = 'class C {\n\tmacro function f() {\n\t\te = macro if (a) p(); else {\n\t\t\tq();\n\t\t\tr();\n\t\t}\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('if (a) {') != -1, 'the bare then-branch must gain braces inside a macro in: <$out>');
+	}
+
+	/** A bare spliced value branch stays bare: what `$e` holds may be a block or a declaration. */
+	@:pin('control')
+	@:killer('M-SSB-SPLICE-VALUE-WRAP')
+	public function testABareSpliceValueBranchIsNotBraced(): Void {
+		final src: String = 'class C {\n\tmacro function f() {\n\t\te = macro if (a) $$e; else {\n\t\t\tq();\n\t\t\tr();\n\t\t}\n\t}\n}';
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, SYMMETRIC));
 	}
 
-	/** …and the DE-brace direction, which changes the emitted AST by exactly as much in reverse. */
-	public function testAMacroReificationIsNotDeBraced(): Void {
+	/** The statement form of the same: a bare `$$e;` branch opposite a braced one is not wrapped. */
+	@:pin('control')
+	@:killer('M-SSB-SPLICE-STMT-WRAP')
+	public function testABareSpliceStatementBranchIsNotBraced(): Void {
+		final src: String = 'class C {\n\tmacro function f() {\n\t\te = macro {\n\t\t\tif (a) $$e; else {\n\t\t\t\tq();\n\t\t\t\tr();\n'
+			+ '\t\t\t}\n\t\t};\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, SYMMETRIC);
+		Assert.isTrue(out.indexOf('{\n\t\t\t\t$$e;') == -1, 'the spliced branch must stay bare in: <$out>');
+	}
+
+	/** The de-brace direction reaches inside a quotation too. */
+	public function testAMacroReificationIsDeBraced(): Void {
 		final src: String = 'class C {\n\tmacro function f() {\n\t\te = macro {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t}\n\t\t};\n\t}\n}';
+		final out: String = HxWriteFixture.triviaWrite(src, REMOVE);
+		Assert.isTrue(out.indexOf('if (a) {') == -1, 'the single-statement body must lose its braces inside a macro in: <$out>');
+	}
+
+	/** …but never around a splice: `{ $$e; }` keeps its braces, since `$$e` may be a declaration they scope. */
+	@:pin('control')
+	@:killer('M-SSB-SPLICE-DEBRACE')
+	public function testABracedSpliceIsNotDeBraced(): Void {
+		final src: String = 'class C {\n\tmacro function f() {\n\t\te = macro {\n\t\t\tif (a) {\n\t\t\t\t$$e;\n\t\t\t}\n\t\t};\n\t}\n}';
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, REMOVE));
 	}
 
