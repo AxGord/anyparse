@@ -319,7 +319,7 @@ final class Cli {
 		final command: CliCommand = registered;
 		final run: () -> Int = if (chooseLanguage) {
 			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
-			() -> runEach(command, chosen, requireMatch, postWriteFix);
+			runEach.bind(command, chosen, requireMatch, postWriteFix);
 		} else {
 			() -> command.run(rest, new CliContext(requireMatch, postWriteFix));
 		};

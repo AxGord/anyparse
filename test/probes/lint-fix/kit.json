@@ -1661,6 +1661,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "PB1",
+			"note": "prefer-bind takes a local whose every write precedes the lambda (g param, i sibling loop, k receiver) and keeps the shapes a write can reach after the callback exists: comprehension or do-while or while-condition write each turn, local function called later, closure created in a loop, compound or arm write after, receiver written after",
+			"argv": [
+				"hxq",
+				"lint",
+				"P1.hx",
+				"--rule",
+				"prefer-bind",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"P1.hx": "class P1 {\n\tstatic function h(n:Int):Void {}\n\n\t// comprehension writing v before the lambda each turn: must NOT flag\n\tstatic function a(xs:Array<Int>):Array<() -> Void> {\n\t\tvar v:Int = 0;\n\t\treturn [for (x in xs) { v = x; () -> h(v); }];\n\t}\n\n\t// do-while: must NOT flag\n\tstatic function b(fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tdo {\n\t\t\tv++;\n\t\t\tfs.push(() -> h(v));\n\t\t} while (v < 3);\n\t}\n\n\t// local function written before, called after: must NOT flag\n\tstatic function c(fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tfunction set() v = 2;\n\t\tfs.push(() -> h(v));\n\t\tset();\n\t}\n\n\t// write in a while condition around the lambda: must NOT flag\n\tstatic function d(next:() -> Int, fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\twhile ((v = next()) > 0) fs.push(() -> h(v));\n\t}\n\n\t// lambda in a local function; write after the local function: must NOT flag\n\tstatic function e(fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tv = 1;\n\t\tfunction make() fs.push(() -> h(v));\n\t\tmake();\n\t\tv = 5;\n\t\tmake();\n\t}\n\n\t// lambda in a closure created in a loop; outer write in the loop before: must NOT flag\n\tstatic function f(xs:Array<Int>, fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tfor (x in xs) {\n\t\t\tv = x;\n\t\t\tfinal mk = () -> fs.push(() -> h(v));\n\t\t\tmk();\n\t\t}\n\t}\n\n\t// param written before only: SHOULD flag\n\tstatic function g(n:Int, fs:Array<() -> Void>):Void {\n\t\tn = n + 1;\n\t\tfs.push(() -> h(n));\n\t}\n\n\t// write before, in a sibling loop that ended: SHOULD flag\n\tstatic function i(xs:Array<Int>, fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tfor (x in xs) v += x;\n\t\tfs.push(() -> h(v));\n\t}\n\n\t// write via compound op after: must NOT flag\n\tstatic function j(fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tv = 3;\n\t\tfs.push(() -> h(v));\n\t\tv += 1;\n\t}\n\n\t// receiver written before only: SHOULD flag\n\tstatic function k(a:P1Obj, b:P1Obj, fs:Array<() -> Void>):Void {\n\t\tvar o:P1Obj = a;\n\t\to = b;\n\t\tfs.push(() -> o.m(1));\n\t}\n\n\t// receiver written after: must NOT flag\n\tstatic function l(a:P1Obj, b:P1Obj, fs:Array<() -> Void>):Void {\n\t\tvar o:P1Obj = a;\n\t\to = b;\n\t\tfs.push(() -> o.m(1));\n\t\to = a;\n\t}\n\n\t// write in a switch arm after: must NOT flag\n\tstatic function m(c:Int, fs:Array<() -> Void>):Void {\n\t\tvar v:Int = 0;\n\t\tv = 2;\n\t\tswitch c {\n\t\t\tcase 1: fs.push(() -> h(v));\n\t\t\tcase _: v = 4;\n\t\t}\n\t}\n}\n\nclass P1Obj {\n\tpublic function new() {}\n\tpublic function m(n:Int):Void {}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "b9ee79c9f5fbfc0a",
+				"err": "34e561e7866bbea1",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

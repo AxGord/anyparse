@@ -78,7 +78,7 @@ an anonymous `function` literal in CALL-ARGUMENT position (`f(function() { … }
 
 ## `prefer-bind`
 
-a zero-parameter arrow lambda wrapping a single call with arguments (`() -> f(a, b)`), replaceable with the partial application `f.bind(a, b)`; `Info`, `--fix` rewrites it. A parameter-bearing lambda (`x -> f(x)`), a block body, and a zero-argument `() -> f()` are left alone. `.bind` evaluates the callee and arguments at bind time rather than call time, so the check fires ONLY when every argument is a stable value (literal, non-interpolated string, identifier / dotted chain, negated numeric literal) — an argument that computes or allocates (`new X()`, a call, `'id-$x'`, `a + 1`) keeps the lambda, whose deferred evaluation is load-bearing
+a zero-parameter arrow lambda wrapping a single call with arguments (`() -> f(a, b)`), replaceable with the partial application `f.bind(a, b)`; `Info`, `--fix` rewrites it. A parameter-bearing lambda (`x -> f(x)`), a block body, and a zero-argument `() -> f()` are left alone. `.bind` evaluates the callee and arguments at bind time rather than call time, so the check fires ONLY when every argument is a stable value (literal, non-interpolated string, identifier / dotted chain, negated numeric literal); a local or parameter counts as stable when every write of it comes before the lambda in its function, none sits in a loop around the lambda and no other closure writes it — an argument that computes or allocates (`new X()`, a call, `'id-$x'`, `a + 1`) keeps the lambda, whose deferred evaluation is load-bearing
 
 ## `prefer-compare-function`
 

@@ -93,15 +93,39 @@
 			"name": "M-BIND-WRITES-IGNORED",
 			"type": "anyparse.check.common.expressions.PreferBind",
 			"method": "unchangingBinding",
-			"find": "return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from);",
-			"replace": "return true;",
+			"find": "|| writesSettled(ident, from, site, ctx)",
+			"replace": "|| true",
 			"note": "a local written after the lambda is created still counts as unchanging"
+		},
+		{
+			"name": "M-BIND-WRITES-AFTER-IGNORED",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "writesSettled",
+			"find": "new Span(from, declaringEnd)",
+			"replace": "new Span(from, siteSpan.from)",
+			"note": "only the writes before the lambda are looked at, so a local written after the callback is created still counts as unchanging"
+		},
+		{
+			"name": "M-BIND-RECEIVER-WRITES-IGNORED",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "stableCallee",
+			"find": "!unchangingBinding(receiver, site, ctx)",
+			"replace": "false",
+			"note": "a local receiver is taken as unchanging whatever writes it has, so one written after the lambda is created is bound"
+		},
+		{
+			"name": "M-BIND-LOOP-WRITE-UNWIDENED",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "writesSettled",
+			"find": "from = Std.int(Math.min(from, span.from));",
+			"replace": "from = siteSpan.from;",
+			"note": "a write in a loop around the lambda, ahead of it in the text, goes unseen though a later turn runs it after an earlier turn created a callback"
 		},
 		{
 			"name": "M-BIND-FIELD-ARG",
 			"type": "anyparse.check.common.expressions.PreferBind",
 			"method": "stableArg",
-			"find": "unchangingBinding(arg, ctx)",
+			"find": "unchangingBinding(arg, site, ctx)",
 			"replace": "true",
 			"note": "any identifier, a field included, is a stable bind argument"
 		},

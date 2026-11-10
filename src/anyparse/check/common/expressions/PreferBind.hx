@@ -7,8 +7,10 @@ import anyparse.query.IndexScope;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.UnchangedLocal;
 
 /**
  * Flags a zero-parameter arrow lambda whose whole body is a single call —
@@ -33,7 +35,8 @@ import anyparse.query.TypeResolver;
  *
  * - an argument is a literal (an interpolation-free string, a negated number
  *   included), or a bare identifier bound to a local or parameter that nothing
- *   WRITES anywhere in the file and whose declared type is written, nominal and not a
+ *   WRITES once the callback exists (all writes precede it, none in a loop around it or by another
+ *   closure) and whose declared type is written, nominal and not a
  *   nullable wrapper — not optional, not initialised with `null`. A field (bare or
  *   `this.x`), a static, a call or any computed value is refused: a field may change
  *   between the two moments, and a call would move its side effect. The nullability
@@ -108,8 +111,8 @@ final class PreferBind extends RuleBase {
 		final callKind: String = seams.callKind;
 		return (call, free) -> {
 			if (call.kind != callKind || free < 0 || free >= call.children.length - 1) return null;
-			for (i in 1...call.children.length) if (i - 1 != free && !stableArg(call.children[i], ctx)) return null;
-			return stableCallee(call.children[0], ctx) ? bindSpelling(call, free, source) : null;
+			for (i in 1...call.children.length) if (i - 1 != free && !stableArg(call.children[i], call, ctx)) return null;
+			return stableCallee(call.children[0], call, ctx) ? bindSpelling(call, free, source) : null;
 		};
 	}
 
@@ -161,7 +164,8 @@ final class PreferBind extends RuleBase {
 			plugin: plugin,
 			index: index.bind(file),
 			declaredTypes: provider?.declaredTypes(source) ?? [],
-			binder: null
+			binder: null,
+			unchanged: null
 		};
 	}
 
@@ -183,16 +187,17 @@ final class PreferBind extends RuleBase {
 		// callee + at least one argument; a parameter-bearing lambda has Required/Optional
 		// children, so children.length != 1 excludes it.
 		if (call.kind != seams.callKind || call.children.length < 2) return null;
-		for (i in 1...call.children.length) if (!stableArg(call.children[i], ctx)) return null;
+		for (i in 1...call.children.length) if (!stableArg(call.children[i], node, ctx)) return null;
 		// The callee last: its proof may build the index, which a lambda with a computed argument never needs.
-		return stableCallee(call.children[0], ctx) ? call : null;
+		return stableCallee(call.children[0], node, ctx) ? call : null;
 	}
 
 	/**
 	 * Whether `arg` holds the same value when the callback is created and when it is called,
-	 * and costs nothing to evaluate: a literal, or an identifier `unchangingBinding` accepts.
+	 * and costs nothing to evaluate: a literal, or an identifier `unchangingBinding` accepts. `site` is the
+	 * node where the callback is created.
 	 */
-	private static function stableArg(arg: QueryNode, ctx: Ctx): Bool {
+	private static function stableArg(arg: QueryNode, site: QueryNode, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		if (numeric.contains(arg.kind) || arg.kind == shape.boolLitKind || arg.kind == shape.nullLiteralKind) return true;
@@ -200,7 +205,7 @@ final class PreferBind extends RuleBase {
 		return if (strings.contains(arg.kind))
 			stringWithoutInterpolation(arg, shape)
 		else if (arg.kind == shape.identKind)
-			unchangingBinding(arg, ctx)
+			unchangingBinding(arg, site, ctx)
 		else
 			arg.kind == shape.negationKind && arg.children.length == 1 && numeric.contains(arg.children[0].kind);
 	}
@@ -210,7 +215,7 @@ final class PreferBind extends RuleBase {
 	 * over: a bare name or `this.m` the enclosing type declares, `local.m` over an unchanging local, or
 	 * `Type.m` on a type name — each proven by `plainMethod`; or a bare name bound to a local function.
 	 */
-	private static function stableCallee(callee: QueryNode, ctx: Ctx): Bool {
+	private static function stableCallee(callee: QueryNode, site: QueryNode, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		if (callee.kind == shape.identKind) return bareCalleeIsMethod(callee, ctx);
 		final method: Null<String> = callee.name;
@@ -221,7 +226,7 @@ final class PreferBind extends RuleBase {
 		if (receiverName == shape.selfReferenceText) return enclosingDeclares(callee, method, ctx);
 		final local: Bool = TypeResolver.identBindingFrom(receiver, ctx.root, shape) != null;
 		// A bound receiver must be a local `bind` reads unchanged; an unbound one must name a type.
-		if (local ? !unchangingBinding(receiver, ctx) : !CasePatternScan.startsUpper(receiverName)) return false;
+		if (local ? !unchangingBinding(receiver, site, ctx) : !CasePatternScan.startsUpper(receiverName)) return false;
 		final owners: Null<Array<ResolvedType>> = binderOf(ctx)?.receiverDecls(receiver);
 		return owners != null && owners.length == 1 && plainMethod(owners[0], method, !local, ctx);
 	}
@@ -298,13 +303,13 @@ final class PreferBind extends RuleBase {
 	}
 
 	/**
-	 * Whether the identifier `ident` is bound to a local or parameter that is never written anywhere
-	 * in the file and whose declared type is written, nominal and non-nullable — so the value `bind`
-	 * captures at creation is the one the lambda would read at the call. A field (resolved or not)
+	 * Whether the identifier `ident` is bound to a local or parameter that nothing writes once the callback
+	 * is created at `site` (`writesSettled`) and whose declared type is written, nominal and non-nullable — so
+	 * the value `bind` captures at creation is the one the lambda would read at the call. A field (resolved or not)
 	 * or a static is refused: it may change in between. A nullable binding is refused too, since null
 	 * safety narrows a capture the compiler sees inside the lambda but rejects it as an argument.
 	 */
-	private static function unchangingBinding(ident: QueryNode, ctx: Ctx): Bool {
+	private static function unchangingBinding(ident: QueryNode, site: QueryNode, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		final name: Null<String> = ident.name;
 		final span: Null<Span> = ident.span;
@@ -319,7 +324,40 @@ final class PreferBind extends RuleBase {
 		final nullKind: Null<String> = shape.nullLiteralKind;
 		if (nullKind != null && TypeResolver.bindingIsNullInitialised(ctx.root, from, TypeResolver.valueBinderDeclKinds(shape), nullKind))
 			return false;
-		return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from);
+		return !Refs.find(name, ctx.root, shape).exists(hit -> hit.kind == RefKind.Write && hit.bindingSpan?.from == from)
+			|| writesSettled(ident, from, site, ctx);
+	}
+
+	/**
+	 * Whether every write of the local bound at offset `binding` happens before the callback is created at `site`: the
+	 * identifier holds in the rest of the function declaring the binding (`UnchangedLocal.holds`, which also refuses a
+	 * write by another closure), widened back to the start of the outermost loop around `site` inside that function that
+	 * does not declare the binding — a write in such a loop runs again after the callback exists.
+	 */
+	private static function writesSettled(ident: QueryNode, binding: Int, site: QueryNode, ctx: Ctx): Bool {
+		final shape: RefShape = ctx.seams.shape;
+		final path: Null<Array<QueryNode>> = TreePath.pathTo(ctx.root, site);
+		final siteSpan: Null<Span> = site.span;
+		if (path == null || siteSpan == null) return false;
+		final functions: Array<String> = ShapeVocab.functionLikeKinds(shape);
+		final loops: Array<String> = ShapeVocab.loopKinds(shape);
+		var declaringEnd: Int = -1;
+		var from: Int = siteSpan.from;
+		for (n in path) {
+			final span: Null<Span> = n.span;
+			if (span == null || n == site) continue;
+			final holdsBinding: Bool = span.from <= binding && binding < span.to;
+			if (functions.contains(n.kind) && holdsBinding) {
+				declaringEnd = span.to;
+				from = siteSpan.from;
+			} else if (declaringEnd >= 0 && loops.contains(n.kind) && !holdsBinding) {
+				from = Std.int(Math.min(from, span.from));
+			}
+		}
+		if (declaringEnd < 0) return false;
+		final unchanged: UnchangedLocal = ctx.unchanged ?? new UnchangedLocal(ctx.root, shape);
+		ctx.unchanged = unchanged;
+		return unchanged.holds(ident, new Span(from, declaringEnd));
 	}
 
 	/** Whether a declaration of `kind` binds a local or a parameter — not a field, whose value any code may change. */
@@ -387,4 +425,5 @@ private typedef Ctx = {
 	final index: () -> Null<SymbolIndex>;
 	final declaredTypes: Map<Int, String>;
 	var binder: Null<OperandBinder>;
+	var unchanged: Null<UnchangedLocal>;
 };

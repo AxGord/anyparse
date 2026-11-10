@@ -254,6 +254,68 @@ class PreferBindCheckTest extends Test {
 		Assert.equals(0, violations('${decl}h(\'$${n + 1}\', 0);\n\t}\n}').length);
 	}
 
+	/**
+	 * A local written only BEFORE the callback is created holds the same value at creation and at the call: a flag
+	 * parsed in a loop and never touched again converts, and the fix binds it.
+	 */
+	@:pin('control')
+	@:killer('M-BIND-WRITES-AFTER-IGNORED')
+	public function testLocalWrittenOnlyBeforeFlaggedAndFixed(): Void {
+		final cls: String = 'class C {\n\tfunction h(n:Bool):Void {}\n\tfunction f(args:Array<String>):Void {\n\t\tBODY\n\t}\n}';
+		final parsed: String = "var flag:Bool = false;\n\t\tfor (a in args) if (a == 'x') flag = true;\n\t\t";
+		Assert.equals(1, violations(cls.replace('BODY', '${parsed}final g = () -> h(flag);')).length);
+		Assert.equals(0, violations(cls.replace('BODY', '${parsed}final g = () -> h(flag);\n\t\tflag = false;')).length, 'a write after');
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(
+			new PreferBind(), cls.replace('BODY', '${parsed}final g = () -> h(flag);')
+		);
+		Assert.equals(1, edits.length);
+		Assert.equals('h.bind(flag)', edits[0].text);
+	}
+
+	/** A write in a loop around the callback runs again after an earlier turn created one, though it precedes it in the text. */
+	@:pin('control')
+	@:killer('M-BIND-LOOP-WRITE-UNWIDENED')
+	public function testLocalWrittenInEnclosingLoopNotFlagged(): Void {
+		final cls: String =
+			'class C {\n\tfunction h(n:Int):Void {}\n\tfunction f(xs:Array<Int>, fs:Array<() -> Void>):Void {\n\t\tBODY\n\t}\n}';
+		Assert.equals(
+			0,
+			violations(cls.replace('BODY', 'var v:Int = 0;\n\t\tfor (x in xs) {\n\t\t\tv = x;\n\t\t\tfs.push(() -> h(v));\n\t\t}')).length
+		);
+		Assert.equals(
+			0, violations(cls.replace('BODY', 'var v:Int = 0;\n\t\twhile (v < 3) {\n\t\t\tv++;\n\t\t\tfs.push(() -> h(v));\n\t\t}')).length
+		);
+		Assert.equals(
+			1,
+			violations(cls.replace('BODY', 'for (x in xs) {\n\t\t\tvar v:Int = x;\n\t\t\tv = 2;\n\t\t\tfs.push(() -> h(v));\n\t\t}'))
+				.length,
+			'a local the loop declares'
+		);
+	}
+
+	/** Another closure that writes the local may run between the creation and the call, wherever its text stands. */
+	@:pin('guard')
+	public function testLocalWrittenByOtherClosureNotFlagged(): Void {
+		final cls: String = 'class C {\n\tfunction h(n:Int):Void {}\n\tfunction f():Void {\n\t\tBODY\n\t}\n}';
+		Assert.equals(0, violations(cls.replace('BODY', 'var v:Int = 0;\n\t\tfinal set = () -> v = 2;\n\t\tfinal g = () -> h(v);')).length);
+	}
+
+	/** A local RECEIVER takes the same proof as an argument: written only before the lambda it converts, written after it it does not. */
+	@:pin('control')
+	@:killer('M-BIND-RECEIVER-WRITES-IGNORED')
+	public function testReceiverWrittenOnlyBeforeFlaggedAndFixed(): Void {
+		final cls: String =
+			'class Obj {\n\tpublic function m(x:Int):Void {}\n}\nclass C {\n\tfunction f(a:Obj, b:Obj):Void {\n\t\tBODY\n\t}\n}';
+		final before: String = cls.replace('BODY', 'var o:Obj = a;\n\t\to = b;\n\t\tfinal g = () -> o.m(1);');
+		Assert.equals(1, violations(before).length);
+		final edits: Array<{ span: Span, text: String }> = CheckFixture.edits(new PreferBind(), before);
+		Assert.equals(1, edits.length);
+		Assert.equals('o.m.bind(1)', edits[0].text);
+		Assert.equals(
+			0, violations(cls.replace('BODY', 'var o:Obj = a;\n\t\tfinal g = () -> o.m(1);\n\t\to = b;')).length, 'a write after'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferBind(), src);
 	}
