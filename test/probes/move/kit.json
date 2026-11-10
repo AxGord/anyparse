@@ -2365,6 +2365,66 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "W1",
+			"note": "dest whose whole body sits in one #if already imports what the moved member needs: the import is not written a second time",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/p/Src.hx",
+				"parse",
+				"--to",
+				"Dst",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Src.hx": "package p;\n\nimport haxe.Json;\n\nclass Src {\n\tpublic static function parse(s:String):Dynamic {\n\t\treturn Json.parse(s);\n\t}\n\n\tpublic static function other():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/p/Dst.hx": "package p;\n\n#if foo\nimport haxe.Json;\n\nclass Dst {\n\tpublic static function a():Dynamic {\n\t\treturn Json.parse(\"1\");\n\t}\n}\n#end\n",
+				"main/Main.hx": "class Main { static function main() { #if foo trace(p.Dst.parse('1')); #end } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "310b48865c1635d9",
+				"files": "d7578215addffbae",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "W2",
+			"note": "dest whose whole-body #if holds the import only under a further #if: the import is carried outside the inner guard",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/p/Src.hx",
+				"parse",
+				"--to",
+				"Dst",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Src.hx": "package p;\n\nimport haxe.Json;\n\nclass Src {\n\tpublic static function parse(s:String):Dynamic {\n\t\treturn Json.parse(s);\n\t}\n\n\tpublic static function other():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/p/Dst.hx": "package p;\n\n#if foo\n#if bar\nimport haxe.Json;\n#end\n\nclass Dst {\n\tpublic static function a():Int {\n\t\treturn 1;\n\t}\n}\n#end\n",
+				"main/Main.hx": "class Main { static function main() { #if foo trace(p.Dst.parse('1')); #end } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "310b48865c1635d9",
+				"files": "8c994d3202840a6e",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

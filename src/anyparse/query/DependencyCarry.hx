@@ -155,7 +155,7 @@ final class DependencyCarry {
 			// them as the same statement would silently leave the moved decl on the DESTINATION's
 			// binding instead of its own. The differing-path case no longer reaches here at all —
 			// the collision gate above refuses it, for the plain and the alias spelling alike.
-			if (destAlreadyHolds(destInfo, statement)) continue;
+			if (destAlreadyHolds(destInfo, statement, destSource, plugin)) continue;
 			final wildErr: Null<String> = typeWildcardCollision(statement, dep, wanted, destInfo, destSource, destRegions, names);
 			if (wildErr != null) return CarryErr(wildErr);
 			// De-dup the carry list (a single import line could provide more
@@ -344,16 +344,24 @@ final class DependencyCarry {
 	 * share a `raw`, and reading them as the same statement would silently leave the moved decl on the
 	 * DESTINATION's binding instead of its own. The differing-path case no longer reaches here at all —
 	 * the collision gate refuses it, for the plain and the alias spelling alike. A `#if`-guarded
-	 * copy holds it in some builds only, so it is no copy: the carried line stays unconditional.
+	 * copy holds it in some builds only, so it is no copy: the carried line stays unconditional —
+	 * unless the guard is the destination's WHOLE-BODY one, which covers every declaration the module
+	 * has, the arriving one included.
 	 */
-	private static function destAlreadyHolds(destInfo: FileInfo, provider: ImportInfo): Bool {
-		return destInfo.imports.exists(
-			imp ->
-				!imp.guarded
-				&& imp.kind == provider.kind
-				&& imp.raw == provider.raw
-				&& SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider)
-		);
+	private static function destAlreadyHolds(destInfo: FileInfo, provider: ImportInfo, destSource: String, plugin: GrammarPlugin): Bool {
+		final same: ImportInfo -> Bool = imp ->
+			imp.kind == provider.kind && imp.raw == provider.raw && SymbolIndex.pathImportedBy(imp) == SymbolIndex.pathImportedBy(provider);
+		if (destInfo.imports.exists(imp -> !imp.guarded && same(imp))) return true;
+		if (!destInfo.imports.exists(imp -> imp.guarded && same(imp))) return false;
+		final body: Null<QueryNode> = ModuleScan.guardedBodyRegion(plugin.parseFileTypeRefs(destSource), destSource, plugin);
+		// A DIRECT child only: an import under a further `#if` inside the body guard holds in fewer builds than the arriving declaration.
+		return body != null
+			&& destInfo.imports.exists(
+				imp ->
+					imp.guarded
+					&& same(imp)
+					&& body.children.exists(c -> c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to)
+			);
 	}
 
 	/**

@@ -16346,6 +16346,22 @@
 			"find": "shape.importAliasKeywords?.get(node.kind)",
 			"replace": "shape.importAliasKeywords?.get(\"ImportAliasDecl\")",
 			"note": "every alias import is recorded as spelling `as`, so a repoint restyles an `in` import"
+		},
+		{
+			"name": "M-CARRY-WHOLE-BODY-GUARD-HOLDS-NOTHING",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "destAlreadyHolds",
+			"find": "c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to",
+			"replace": "false",
+			"note": "an import inside the destination's whole-body guard is read as absent, so the carry writes a second copy of it into the same region"
+		},
+		{
+			"name": "M-CARRY-NESTED-GUARD-HOLDS",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "destAlreadyHolds",
+			"find": "c.span.from == imp.span.from && c.span.to == imp.span.to",
+			"replace": "c.span.from <= imp.span.from && c.span.to >= imp.span.to",
+			"note": "an import under a further #if inside the destination's whole-body guard is read as held for the whole module, so the carry leaves the moved code without it in the builds where only the outer guard holds"
 		}
 	]
 }
