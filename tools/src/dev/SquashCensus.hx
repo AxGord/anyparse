@@ -1,11 +1,11 @@
 package dev;
 
-import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Command;
 import devkit.Result;
 import devkit.Table;
 import devkit.TempDir;
+import devkit.TreeFiles;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -181,22 +181,12 @@ final class SquashCensus {
 
 	/** The `.hx` files under `dir` of `repo`, relative to `repo`, sorted. */
 	private static function hxFiles(repo: String, dir: String): Found {
-		final found: Found = { sources: [], configs: [] };
-		function walk(rel: String): Void {
-			for (entry in FileSystem.readDirectory(Path.join([repo, rel]))) {
-				final child: String = Path.join([rel, entry]);
-				if (GateTree.FORMATTER_CONFIGS.contains(entry)) found.configs.push(child);
-				if (entry.startsWith('.')) continue;
-				if (FileSystem.isDirectory(Path.join([repo, child])))
-					walk(child);
-				else if (entry.endsWith('.hx'))
-					found.sources.push(child);
-			}
-		}
 		if (!FileSystem.exists(Path.join([repo, dir]))) throw new Exception('no such directory: $dir');
-		walk(dir);
-		found.sources.sort(Compare.compareString);
-		return found;
+		final files: Array<String> = TreeFiles.below(repo, dir, TreeFiles.visible);
+		return {
+			sources: files.filter(file -> TreeFiles.visible(Path.withoutDirectory(file)) && file.endsWith('.hx')),
+			configs: files.filter(file -> GateTree.FORMATTER_CONFIGS.contains(Path.withoutDirectory(file)))
+		};
 	}
 
 	/** Every formatter config the writer discovers for a file under `dir`: those in `dir` and in each folder above it up to `repo`. */

@@ -2167,8 +2167,8 @@
 			"name": "M-SQUASH-CENSUS-NESTED-CONFIG-LOST",
 			"type": "dev.SquashCensus",
 			"method": "hxFiles",
-			"find": "if (GateTree.FORMATTER_CONFIGS.contains(entry)) found.configs.push(child);",
-			"replace": "",
+			"find": "files.filter(file -> GateTree.FORMATTER_CONFIGS.contains(Path.withoutDirectory(file)))",
+			"replace": "[]",
 			"note": "a formatter config inside the tree reaches neither copy, so the files under it are formatted under the wrong options"
 		},
 		{

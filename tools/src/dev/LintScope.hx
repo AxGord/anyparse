@@ -9,6 +9,7 @@ import anyparse.query.ConfigFinder;
 import dev.GateLint.LintMove;
 import devkit.Cmd.cmd;
 import devkit.Result;
+import devkit.TreeFiles;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -194,14 +195,7 @@ final class LintScope {
 	}
 
 	private static function hxFilesBelow(repo: String, dir: String): Array<String> {
-		final files: Array<String> = hxFilesIn(repo, dir);
-		final full: String = Path.join([repo, dir]);
-		if (!FileSystem.exists(full) || !FileSystem.isDirectory(full)) return files;
-		for (name in FileSystem.readDirectory(full)) {
-			final sub: String = Path.join([dir, name]);
-			if (FileSystem.isDirectory(Path.join([repo, sub]))) for (file in hxFilesBelow(repo, sub)) files.push(file);
-		}
-		return files;
+		return TreeFiles.below(repo, dir, _ -> true).filter(file -> file.endsWith('.hx'));
 	}
 
 }
