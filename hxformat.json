@@ -88,6 +88,14 @@
 				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}
 			]
 		},
+		"ternaryMultilineBranch": "break",
+		"opBoolChain": {
+			"defaultWrap": "noWrap",
+			"rules": [
+				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},
+				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}
+			]
+		},
 		"callParameter": {
 			"defaultWrap": "fillLineWithLeadingBreak",
 			"rules": [
