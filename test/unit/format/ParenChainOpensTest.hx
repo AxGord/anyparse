@@ -23,6 +23,8 @@ final class ParenChainOpensTest extends Test {
 		+ '"defaultWrap": "noWrap", "rules": []}, "conditionWrapping": {'
 		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final METADATA_CALL_CONFIG: String =
+		'{"wrapping": {"maxLineLength": 40, "metadataCallParameter": {"defaultWrap": "noWrap", "rules": []}}}';
 
 	public function new(): Void {
 		super();
@@ -239,6 +241,16 @@ final class ParenChainOpensTest extends Test {
 			'class C {\n\tfunction f() {\n\t\tvar n = [new G((aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1), 2];\n\t}\n}',
 			'class C {\n\tfunction f() {\n\t\tvar n = [new G((aaaaaaaaaaaa\n\t\t\t+ bbbbbbbbbbbb\n\t\t\t+ cccccccccccc), 1), 2];\n\t}\n}',
 			OBJECT_AND_CALL_CONFIG
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-MARK-OTHER-CLEAR-OFF')
+	public function testNoWrapMetadataArgumentInAnElementStaysGlued(): Void {
+		assertLaidOut(
+			'class C {\n\tfunction f() {\n\t\tvar c = [@:m((aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1) x, 2];\n\t}\n}',
+			'class C {\n\tfunction f() {\n\t\tvar c = [@:m((aaaaaaaaaaaa\n\t\t\t+ bbbbbbbbbbbb\n\t\t\t+ cccccccccccc), 1) x, 2];\n\t}\n}',
+			METADATA_CALL_CONFIG
 		);
 	}
 

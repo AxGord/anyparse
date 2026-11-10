@@ -2290,6 +2290,14 @@
 			"note": "a noWrap new-expression argument nested in an array element keeps the mark and opens its chain paren"
 		},
 		{
+			"name": "M-PAREN-CHAIN-MARK-OTHER-CLEAR-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepStarExpr",
+			"find": "case _: macro _setParenChainInElement($elemOptBase, false, opt);",
+			"replace": "case _: elemOptBase;",
+			"note": "a noWrap metadata-call argument nested in an array element keeps the mark and opens its chain paren"
+		},
+		{
 			"name": "M-TRY-FIT-BODY-HARD",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "bodyBreakWrap",
