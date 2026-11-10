@@ -374,9 +374,12 @@ final class FixtureCompileCache {
 		return root.startsWith('/private/') ? [root, root.substr('/private'.length)] : [root];
 	}
 
-	/** Whether the relative `path` stays inside the directory it is relative to. */
+	/**
+	 * Whether the relative `path` stays inside the directory it is relative to. A quote is refused: the compiler reads a
+	 * quoted hxml value unquoted, so its spelling here would not be the path it reads.
+	 */
 	private static function inside(path: String): Bool {
-		if (Path.isAbsolute(path) || path.indexOf(MARK) >= 0) return false;
+		if (Path.isAbsolute(path) || path.indexOf(MARK) >= 0 || path.indexOf('"') >= 0 || path.indexOf('\'') >= 0) return false;
 		final normal: String = Path.normalize(path);
 		return normal != '..' && !normal.startsWith('../');
 	}

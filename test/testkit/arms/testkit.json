@@ -86,6 +86,14 @@
 			"note": "a compile writing into the fixture it shares with the compiles beside it is recorded, and its replay overwrites the lines a concurrent writer appended"
 		},
 		{
+			"name": "M-FIXTURE-CACHE-QUOTED-PATH",
+			"type": "testkit.FixtureCompileCache",
+			"method": "inside",
+			"find": " || path.indexOf('\"') >= 0 || path.indexOf('\\'') >= 0",
+			"replace": "",
+			"note": "a quote in a fixture path is not refused, so a hxml value the compiler reads unquoted passes the whitelist and its directory is left out of the cache key"
+		},
+		{
 			"name": "M-FIXTURE-CACHE-LOOKUP-NEVER-SERVES",
 			"type": "testkit.FixtureCompileCache",
 			"method": "lookup",

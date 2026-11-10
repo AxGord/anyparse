@@ -167,6 +167,18 @@ class FixtureCompileCacheTest extends Test {
 		});
 	}
 
+	/** A hxml path the compiler reads unquoted (`-cp "../outside"`) leaves its directory out of the key, so the fixture is refused. */
+	@:pin('control')
+	@:killer('M-FIXTURE-CACHE-QUOTED-PATH')
+	public function testAQuotedClassPathOutsideTheFixtureIsRefused(): Void {
+		final f: Fixture = fixture(PROBE);
+		CliFixture.always(() -> for (dir in [f.dir, f.probe]) CliFixture.removeDir(dir), () -> {
+			Assert.notNull(FixtureCompileCache.plan(f.dir, args(f)), 'the unquoted fixture is a plan');
+			for (path in ['"../outside"', '\'../outside\'', '"sub/../../outside"']) for (flag in ['-cp', '--class-path'])
+				Assert.isNull(planWith(f, '$flag $path\n$BUILD'), 'refused: $flag $path');
+		});
+	}
+
 	public function testBothSpellingsOfATempPathMoveTogether(): Void {
 		final from: Array<String> = ['/private/var/x/A'];
 		final to: Array<String> = ['/private/var/y/B'];
