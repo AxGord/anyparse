@@ -27,7 +27,7 @@ final class StubQueryPlugin implements GrammarPlugin {
 	public static inline final LANG: String = 'stub-grammar';
 
 	/** The first line that makes a stdin document this plugin's. */
-	public static inline final SHEBANG: String = '#!stub-grammar';
+	public static final SHEBANG: String = '#!stub-grammar';
 
 	/** The file extensions this plugin reads. */
 	public static final EXTENSIONS: Array<String> = ['.stubgrammar'];
