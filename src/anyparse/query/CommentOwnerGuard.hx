@@ -247,19 +247,26 @@ final class CommentOwnerGuard {
 
 	/**
 	 * The comment BLOCKS of `source`: maximal runs of `tokens` with only whitespace between
-	 * consecutive members, in source order. A trailing comment and the own-line comment on the
-	 * next line form one block, which is the conservative grouping — it can only merge blocks the
-	 * criterion would otherwise have compared, never split one.
+	 * consecutive members, in source order. A trailing comment (code before it on its line) belongs
+	 * to that line's statement, so it closes its block when the next comment is on a later line:
+	 * grouping it with the own-line comment below would read the deletion of the statement between
+	 * them as a weld of comments that still sit on their own code.
 	 */
 	private static function blocksOf(source: String, tokens: Array<CommentToken>): Array<Array<Span>> {
 		final blocks: Array<Array<Span>> = [];
 		var current: Array<Span> = [];
 		var previous: Int = -1;
+		var trailing: Bool = false;
 		for (token in tokens) {
-			if (previous >= 0 && source.substring(previous, token.from).trim() != '') {
-				blocks.push(current);
-				current = [];
+			if (previous >= 0) {
+				final gap: String = source.substring(previous, token.from);
+				final nextLine: Bool = gap.indexOf('\n') >= 0;
+				if (gap.trim() != '' || (nextLine && trailing)) {
+					blocks.push(current);
+					current = [];
+				}
 			}
+			if (current.length == 0) trailing = !SourceText.startsItsLine(source, token.from);
 			current.push(new Span(token.from, token.to));
 			previous = token.to;
 		}

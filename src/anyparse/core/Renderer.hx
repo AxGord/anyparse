@@ -674,15 +674,14 @@ class Renderer {
 	 *  - `hasForcedBreak` alone is not enough either, in BOTH directions. A non-brace
 	 *    body that breaks internally still gains a shorter head line from the arrow
 	 *    break; and a `{`-leading body can break somewhere OTHER than right after `{`
-	 *    — under `wrapping.objectLiteral.defaultWrap: "keep"` a one-line source
-	 *    literal reproduces its own layout, so `{ onDone: () -> { … }, tag: 1 }` has
+	 *    — under a no-wrap object-literal rule `{ onDone: () -> { … }, tag: 1 }` has
 	 *    a forced hardline (the inner block's) while its head line runs on, and it
 	 *    overruns the budget too.
 	 *  - `flatTokenWidthFirstLine(flatDoc) <= 1` is what states "breaks before any
 	 *    other token": a statement block sits behind a `BodyGroup` whose
 	 *    committed-prefix answer is its bare `{`, and a self-breaking object literal
 	 *    measures its `{` and then the hardline — both stay in the population, while
-	 *    the keep-mode literal above measures its whole head run and drops out.
+	 *    the run-on literal above measures its whole head run and drops out.
 	 *
 	 * Read STRUCTURALLY — all three walkers resolve every conditional on its flat
 	 * side — so no render-time width measurement can change which arm a construct
@@ -697,7 +696,7 @@ class Renderer {
 	 * THE THRESHOLD'S SLACK. `<= 0` flips pinned `HxArrowBlockBodyOpenSliceTest`
 	 * cases, so the lower side is held; ABOVE it the threshold has a wide band of
 	 * unguarded slack, because the whole admitted population sits EXACTLY on `<= 1`
-	 * and nothing between there and a `keep`-mode literal's own head width separates
+	 * and nothing between there and such a literal's own head width separates
 	 * them. That upper side is closed by
 	 * `BodyGroupPrefixChargeConsumerTest.testArrowMarkerAdmitsExactlyOneColumn`,
 	 * which rejects a `{a`-headed Doc at width 2 with the other two conjuncts

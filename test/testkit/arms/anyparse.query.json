@@ -665,6 +665,22 @@
 			"note": "the weld criterion answers for nothing, so an edit that closes two comment blocks over the code that stood between them passes the seam"
 		},
 		{
+			"name": "M-COMMENT-TRAILING-GROUPED",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "blocksOf",
+			"find": "nextLine && trailing",
+			"replace": "false",
+			"note": "a trailing comment is grouped with the own-line comment under it again, so deleting the statement between them reads as a weld of comments that still sit on their own code"
+		},
+		{
+			"name": "M-COMMENT-TRAILING-SPLITS-SAME-LINE",
+			"type": "anyparse.query.CommentOwnerGuard",
+			"method": "blocksOf",
+			"find": "nextLine && trailing",
+			"replace": "trailing",
+			"note": "a trailing comment closes its block before a comment on the SAME line too, so two comments the deletion would weld on one line read as two blocks and pass the seam"
+		},
+		{
 			"name": "M-COMMENT-BOUNDARY-BREAK-KEPT",
 			"type": "anyparse.query.CommentRewrite",
 			"method": "literalReplace",

@@ -10,7 +10,7 @@ package anyparse.grammar.haxe;
  * precedes the body content). The containing `Array<HxSwitchCase>` in `HxSwitchStmt`
  * terminates on a close-peek of `}`, where neither keyword matches.
  *
- * `@:fmt(forwardNewlineForBody)` on `CaseBranch` (ω-casepattern-keep) tells `Lowering`'s
+ * `@:fmt(forwardNewlineForBody)` on `CaseBranch` tells `Lowering`'s
  * Case 3 to OMIT the post-`case` `skipWs(ctx)` so the inner `HxCaseBranch.patterns`
  * first-field `collectTrivia` scans the `case`→pattern gap itself and captures `newlineBefore`
  * onto the synth `patternsBeforeNewline:Bool` slot; pairs with field-level
@@ -21,7 +21,7 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(deferKwSpace)` emits the `case ` trailing space as a deferred `_dop(' ')` (OptSpace)
  * instead of a hard `_dt('case ')`: the renderer flushes it as a real space when the pattern
- * stays inline but DROPS it when the pattern Doc opens with the keep-mode break hardline, so
+ * stays inline but DROPS it when the pattern Doc opens with the case-pattern break hardline, so
  * no trailing space precedes the newline. Mirrors the `HxStatement.VarStmt` / `FinalStmt`
  * split.
  */
