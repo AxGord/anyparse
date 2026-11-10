@@ -219,45 +219,6 @@ final class FactsView {
 		this.truth = truth;
 	}
 
-	/** Drop what was read off the text of `file`, which changed. */
-	public function forget(file: String): Void {
-		_conditional.remove(file);
-		_alike.clear();
-		_sole.clear();
-		_soleMember.clear();
-		_unheld.clear();
-		_implicitUnheldAnywhere.clear();
-		_implementing = null;
-		_declarationsNamed = null;
-		_argumentUses = null;
-	}
-
-	/**
-	 * Where an unchecked conversion of the table's builds may put a value its place's type says nothing of — the one predicate
-	 * the readings taking a static type at its word ask (`UncheckedConversions`); read once.
-	 */
-	public function unchecked(): UncheckedConversions {
-		final made: UncheckedConversions = _unchecked ?? new UncheckedConversions(
-			_table, FactsEscapes.inertIds(_scope.shape), _scope.shape.arrayTypeNames ?? []
-		);
-		_unchecked = made;
-		return made;
-	}
-
-	/** What the code a value is handed to as an argument does with it, read off the table once per argument (`ArgumentUses`). */
-	public function argumentUses(): ArgumentUses {
-		final made: ArgumentUses = _argumentUses ?? new ArgumentUses(_table);
-		_argumentUses = made;
-		return made;
-	}
-
-	/** What target code the table holds may do (`FactsNativeReach`), read once. */
-	public function nativeReach(): FactsNativeReach {
-		final made: FactsNativeReach = _nativeReach ?? new FactsNativeReach(_table);
-		_nativeReach = made;
-		return made;
-	}
-
 	/** The table key of `file`: what a fact's `FactPos.file` spells it as (`CompilerFacts.keyOf`). */
 	public inline function keyOf(file: String): String {
 		return _table.keyOf(file);
@@ -322,6 +283,68 @@ final class FactsView {
 	}
 
 	/**
+	 * Whether the reflective member `target` hands the program no member's value read
+	 * off an object, in the builds the table holds (`FactsMethodValues.memberless`).
+	 */
+	public inline function memberless(target: String): Bool {
+		return FactsMethodValues.memberless(_table, target);
+	}
+
+	/** The splice an inlined call made in `n`'s body that holds the position `at` (`FactSites.spliceOf`), or null. */
+	public inline function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
+		return FactSites.spliceOf(n, at);
+	}
+
+	/** The expression macro's expansion in `n`'s body that holds the position `at` (`FactSites.expansionOf`), or null. */
+	public inline function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
+		return FactSites.expansionOf(n, at);
+	}
+
+	/** The sites the expansion `x` in `n`'s body runs at (`FactSites.expansionSites`), or null when none is known. */
+	public inline function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
+		return FactSites.expansionSites(n, x);
+	}
+
+	/** Drop what was read off the text of `file`, which changed. */
+	public function forget(file: String): Void {
+		_conditional.remove(file);
+		_alike.clear();
+		_sole.clear();
+		_soleMember.clear();
+		_unheld.clear();
+		_implicitUnheldAnywhere.clear();
+		_implementing = null;
+		_declarationsNamed = null;
+		_argumentUses = null;
+	}
+
+	/**
+	 * Where an unchecked conversion of the table's builds may put a value its place's type says nothing of — the one predicate
+	 * the readings taking a static type at its word ask (`UncheckedConversions`); read once.
+	 */
+	public function unchecked(): UncheckedConversions {
+		final made: UncheckedConversions = _unchecked ?? new UncheckedConversions(
+			_table, FactsEscapes.inertIds(_scope.shape), _scope.shape.arrayTypeNames ?? []
+		);
+		_unchecked = made;
+		return made;
+	}
+
+	/** What the code a value is handed to as an argument does with it, read off the table once per argument (`ArgumentUses`). */
+	public function argumentUses(): ArgumentUses {
+		final made: ArgumentUses = _argumentUses ?? new ArgumentUses(_table);
+		_argumentUses = made;
+		return made;
+	}
+
+	/** What target code the table holds may do (`FactsNativeReach`), read once. */
+	public function nativeReach(): FactsNativeReach {
+		final made: FactsNativeReach = _nativeReach ?? new FactsNativeReach(_table);
+		_nativeReach = made;
+		return made;
+	}
+
+	/**
 	 * Every typed field access within `span` of `file`, a body an inlined method spliced in read at the sites of its call
 	 * (`CompilerFacts.within`) and one of a method that runs no project code left out (`harmlessSplice`); null — Unknown —
 	 * when a fact there has no place.
@@ -337,14 +360,6 @@ final class FactsView {
 	public function immutableMethod(owner: String, name: String): Bool {
 		final declared: Null<FieldDeclFact> = _table.type(CompilerFacts.baseId(owner))?.fields.find(d -> d.name == name);
 		return declared != null && declared.kinds.foreach(k -> FactKinds.FIXED_METHOD_KINDS.contains(k));
-	}
-
-	/**
-	 * Whether the reflective member `target` hands the program no member's value read
-	 * off an object, in the builds the table holds (`FactsMethodValues.memberless`).
-	 */
-	public inline function memberless(target: String): Bool {
-		return FactsMethodValues.memberless(_table, target);
 	}
 
 	/**
@@ -426,78 +441,6 @@ final class FactsView {
 	}
 
 	/**
-	 * The string conversions a build that converts what lands at a typed place (`UncheckedConversions.convertsSomewhere`) makes
-	 * in the code at `span` of `file`, or none where no build does — under the truth no build the list does not name exists,
-	 * and without it one may: each value a flow puts at a `String` place, or at an array of strings an array of another
-	 * element type is copied into (`UncheckedConversions.stringOperands`), an object of exactly its class where the flow says
-	 * so and the value itself is converted; and a value set by its name — a reflective write (`FIELD_WRITES`) or a write to a
-	 * field of a catch-all — which the object's own field converts as its assignment would, of any type a value that left
-	 * the type system may be (a catch-all operand). Null when a fact there has no place (`CompilerFacts.within`).
-	 */
-	private function conversionSitesIn(file: String, span: Span, harmless: (callee:String) -> Bool): Null<Array<ImplicitSite>> {
-		// noqa: complexity
-		if (truth && !unchecked().convertsSomewhere()) return [];
-		final flows: Null<Array<FlowFact>> = _table.within(file, span, n -> n.flows, f -> f.at, truth, harmless);
-		final writes: Null<Array<ReflectionFact>> = _table.within(
-			file, span, n -> [for (r in n.reflection) if (FIELD_WRITES.contains(r.target)) r], r -> r.at, truth, harmless
-		);
-		final fields: Null<Array<FieldFact>> = _table.within(
-			file, span, n -> [for (f in n.fields) if (f.write && f.owner == null && catchAll(f.receiver)) f], f -> f.at, truth, harmless
-		);
-		if (flows == null || writes == null || fields == null) return null;
-		final out: Array<ImplicitSite> = [];
-		// a site per operand: two conversions of values of one type run the same members
-		final seen: Map<String, Bool> = [];
-		function add(operand: Null<String>, at: Span, exact: Bool): Void {
-			final key: String = '${operand ?? ''}|$exact';
-			if (seen.exists(key)) return;
-			seen[key] = true;
-			out.push({
-				family: Text,
-				span: at,
-				types: [operand == null ? null : simpleSource(operand)],
-				exact: exact,
-				owners: [operand == null ? null : typedOwner(operand)]
-			});
-		}
-		for (f in flows) for (o in conversionOperands(f.from, f.to)) add(o, f.at.span, f.exact && o == f.from);
-		for (r in writes) add(anyValue(), r.at.span, false);
-		for (f in fields) add(anyValue(), f.at.span, false);
-		return out;
-	}
-
-	/**
-	 * The operands, as facts type strings, of the string conversions a value of the facts type `from` put at a place of the facts
-	 * type `to` makes (`UncheckedConversions.stringOperands`) — a value no reader reads may be anything (`anyValue`) and a
-	 * place no reader reads may be a string — read once per pair.
-	 */
-	private function conversionOperands(from: String, to: String): Array<Null<String>> {
-		final key: String = '$from\n$to';
-		final held: Null<Array<Null<String>>> = _conversionOperands[key];
-		if (held != null) return held;
-		final value: Null<FactsType> = FactsTypeTree.read(from);
-		final place: Null<FactsType> = FactsTypeTree.read(to);
-		final out: Array<Null<String>> = value == null || place == null
-			? [anyValue()]
-			: unchecked().stringOperands(value, place).map(FactsTypeTree.text);
-		_conversionOperands[key] = out;
-		return out;
-	}
-
-	/** The language's catch-all type (`RefShape.catchAllTypeNames`): a value of it may be any value, an object of any class. */
-	private function anyValue(): Null<String> {
-		return (_scope.shape.catchAllTypeNames ?? [])[0];
-	}
-
-	/** Whether the facts type string `type` is a catch-all (`RefShape.catchAllTypeNames`), seen through `Null<T>`. */
-	private function catchAll(type: String): Bool {
-		return switch FactsTypeTree.read(unwrapped(type)) {
-			case Named(id, _): (_scope.shape.catchAllTypeNames ?? []).contains(id);
-			case _: false;
-		};
-	}
-
-	/**
 	 * The typed type a facts type string `type` names, seen through a wrapper that keeps its members (`Null<T>`): its id
 	 * (`pack.Name`) when the table holds it, null for any other type — a function or structure type, a type parameter, an
 	 * unknown, or a type no build typed.
@@ -508,7 +451,6 @@ final class FactsView {
 		final id: String = CompilerFacts.baseId(t);
 		return _table.type(id) == null ? null : id;
 	}
-
 
 	/**
 	 * The native sites and the reflective calls the compiler typed in the code at `span` of `file`, when the facts are the
@@ -635,49 +577,6 @@ final class FactsView {
 			for (r in n.reflection) if (r.isValue && meets(r.at.span, span)) return DynamicName(file, r.at.span);
 		}
 		return null;
-	}
-
-	/**
-	 * Whether no `Reflect`/`Type` body spliced into `n` reaches a member: each is of a member the facts name
-	 * (`splicedReflection`) that is no access by name (`ExecutionShape.reflectiveNameCalls`, whose lost call the reading of
-	 * the node's facts would miss) and reads no member's value (`FactsMethodValues.memberless`). What else the bodies run,
-	 * their calls and accesses, is among the node's facts.
-	 */
-	private function splicedReachesNoMember(n: FactNode): Bool {
-		final members: Null<Array<String>> = splicedReflection(n);
-		final named: Map<String, Int> = _scope.shape.execution?.reflectiveNameCalls ?? [];
-		return members != null
-			&& members.foreach(m -> !named.exists(ReachHazards.lastSegments(m, 2)) && FactsMethodValues.memberless(_table, m));
-	}
-
-	/**
-	 * The `Reflect`/`Type` members whose bodies were spliced into `n` (`reflection-inlined`): every method a fact of that
-	 * code lies in the declared code of (`reflection-from:`, `TypedFactsWalk`) and every one an `inlined` call of the node
-	 * names. Null when a fact of such code lies in no method's declared code (`reflection-unattributed`), or none is named:
-	 * what that code stands in for is lost.
-	 */
-	public static function splicedReflection(n: FactNode): Null<Array<String>> {
-		if (FactMarkers.carries(n, m -> m.match(ReflectionUnattributed))) return null;
-		final out: Array<String> = [];
-		for (c in n.incomplete) switch FactMarkers.read(c) {
-			case ReflectionFrom(method):
-				out.push(method);
-			case StaleForeign, InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, Unknown(_):
-		}
-		if (out.length == 0) return null;
-		for (c in n.calls) {
-			final target: Null<String> = c.target;
-			final dot: Int = target == null ? -1 : target.lastIndexOf('.');
-			if (
-				target != null
-				&& c.access == INLINED
-				&& dot > 0
-				&& FactKinds.REFLECTION_CLASSES.contains(target.substr(0, dot))
-				&& !out.contains(target)
-			)
-				out.push(target);
-		}
-		return out;
 	}
 
 	/**
@@ -824,28 +723,6 @@ final class FactsView {
 		return found;
 	}
 
-	/**
-	 * Simple name -> the index's declarations of a type so named: the package-qualified id of each (`declaredId`), its
-	 * file's table key, and whether a build read that file (`CompilerFacts.mayCompileNow`). A typedef aliasing a type of
-	 * its own name (`CallGraphNames.selfAlias`) declares none. Built once.
-	 */
-	private function declarationsNamed(): Map<String, Array<IndexedDeclaration>> {
-		final held: Null<Map<String, Array<IndexedDeclaration>>> = _declarationsNamed;
-		if (held != null) return held;
-		final out: Map<String, Array<IndexedDeclaration>> = [];
-		for (fi in _scope.index.allFiles()) {
-			final key: String = _table.keyOf(fi.file);
-			final read: Bool = _table.mayCompileNow(fi.file);
-			for (t in fi.types) if (!CallGraphNames.selfAlias(t)) {
-				final list: Array<IndexedDeclaration> = out[t.name] ?? [];
-				list.push({ id: declaredId(fi, t), key: key, read: read });
-				out[t.name] = list;
-			}
-		}
-		_declarationsNamed = out;
-		return out;
-	}
-
 	/** Whether the typed type `owner` declares `name` as a method in some build: a read of it there is a function value. */
 	public function isMethod(owner: String, name: String): Bool {
 		return _table.type(CompilerFacts.baseId(owner))?.fields.exists(f ->
@@ -964,22 +841,6 @@ final class FactsView {
 	}
 
 	/**
-	 * The typed types the simple name `type` stands for that hold a function body for a member `name` (`soleMember`): one
-	 * the compiler wrote, not generated — an implementation class's constructor under its own name.
-	 */
-	private function bodyHolders(type: String, name: String): Array<String> {
-		final holders: Array<String> = [];
-		for (t in bySimpleName()[type] ?? []) {
-			final fact: Null<TypeFact> = _table.type(t);
-			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
-			final own: String = fact.kind == FactKinds.IMPL && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
-			final body: Null<FactNode> = _table.node('$t.$own');
-			if (body != null && FactKinds.FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
-		}
-		return holders;
-	}
-
-	/**
 	 * The typed type declaring the member `name` whose read at `span` of `file` the compiler resolved, when the facts are the
 	 * truth and pin it as one of the types the graph's simple name `type` stands for: every field fact of `name` placed at
 	 * exactly that range — at least one — names the same declaring type, written (`rootOf`) as a type the index declares
@@ -1072,27 +933,6 @@ final class FactsView {
 	}
 
 	/**
-	 * The facts of the member `node` the graph folded from several declarations of one typed type (`soleType`), read by
-	 * id rather than by range — or, where the name stands for several typed types, of the one of them that alone declares
-	 * the member (`soleMember`): its body and each further overload of it, every one the union over the builds that typed
-	 * it, whichever declaration each build read. Null when the node is a nested function, which has no id of its own to
-	 * read by, when the type is not one (`soleType`), or when one of those bodies was not typed as a function or was
-	 * placed by a macro.
-	 */
-	private function foldedBodies(node: FnNode): Null<Array<FactNode>> {
-		final type: Null<String> = node.typeName;
-		final name: Null<String> = node.name;
-		if (type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0) return null;
-		final member: String = name;
-		final whole: Null<String> = soleType(type);
-		// a name several typed types share may still name one type's member (`soleMember`)
-		final sole: Null<String> = whole != null && _table.type(whole)?.fields.exists(f -> f.name == member) == true
-			? whole
-			: soleMember(type, member);
-		return sole == null ? null : ownerBodies(sole, member);
-	}
-
-	/**
 	 * Under the truth, the facts of the field initializers the pseudo-node `node` runs (`CallGraph.INIT_NAME`: the instance
 	 * ones; `STATIC_INIT_NAME`: the static ones): every initializer (`VAR_KIND`) of that staticness of each typed type its
 	 * type name stands for (`initializerOwners`) — the union over the builds, every branch some build takes. Null — the
@@ -1134,11 +974,6 @@ final class FactsView {
 			for (t in fi.types)
 				if (t.name == type && !CallGraphNames.selfAlias(t) && !roots.contains(declaredId(fi, t))) return null;
 		return owners.length == 0 ? null : owners;
-	}
-
-	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
-	public static function initializerNode(node: FnNode): Bool {
-		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
 	/**
@@ -1286,6 +1121,182 @@ final class FactsView {
 	}
 
 	/**
+	 * The typed class or interface whose instances — its own, or a subtype's — a value of the facts type string `type` is,
+	 * seen through a wrapper that keeps its members (`Null<T>`): its id, whatever type arguments it is written with, since
+	 * they change no member an instance has. Null for every other type — `Dynamic`, a structure, a function type, a type
+	 * parameter, an unknown, an abstract (a value of which is its underlying one), an enum — and for an extern class, whose
+	 * instances target code makes and may make of anything, or one the builds declare unalike.
+	 */
+	public function objectClass(type: String): Null<String> {
+		final id: String = CompilerFacts.baseId(unwrapped(type));
+		final declared: Null<TypeFact> = _table.type(id);
+		return declared != null && declared.alike && !declared.isExtern && FactKinds.OBJECT_KINDS.contains(declared.kind) ? id : null;
+	}
+
+	/**
+	 * Whether a value of the facts type string `type` is an object of no class unless it is an instance that left the type
+	 * system (`ValueEscapes`): a structure, the catch-all, or a typedef every build declares alike whose every target is one,
+	 * seen through `Null<T>`. A class instance reaches a place of such a type only by escaping, so what a name computed at
+	 * run time reaches on it is a structure's own field — no class member — or a member of an escaped class. A positive
+	 * whitelist: an unknown, a type parameter, an abstract, a function type, an enum and every other type are not.
+	 */
+	public function classless(type: String): Bool {
+		final read: Null<FactsType> = FactsTypeTree.read(type.trim());
+		return read != null && classlessType(read, 0);
+	}
+
+	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */
+	public function methodsOf(id: String): Array<String> {
+		return [
+			for (f in _table.type(id)?.fields ?? []) if (f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))) graphMember(id, f.name)
+		];
+	}
+
+	/**
+	 * The string conversions a build that converts what lands at a typed place (`UncheckedConversions.convertsSomewhere`) makes
+	 * in the code at `span` of `file`, or none where no build does — under the truth no build the list does not name exists,
+	 * and without it one may: each value a flow puts at a `String` place, or at an array of strings an array of another
+	 * element type is copied into (`UncheckedConversions.stringOperands`), an object of exactly its class where the flow says
+	 * so and the value itself is converted; and a value set by its name — a reflective write (`FIELD_WRITES`) or a write to a
+	 * field of a catch-all — which the object's own field converts as its assignment would, of any type a value that left
+	 * the type system may be (a catch-all operand). Null when a fact there has no place (`CompilerFacts.within`).
+	 */
+	private function conversionSitesIn(file: String, span: Span, harmless: (callee:String) -> Bool): Null<Array<ImplicitSite>> {
+		// noqa: complexity
+		if (truth && !unchecked().convertsSomewhere()) return [];
+		final flows: Null<Array<FlowFact>> = _table.within(file, span, n -> n.flows, f -> f.at, truth, harmless);
+		final writes: Null<Array<ReflectionFact>> = _table.within(
+			file, span, n -> [for (r in n.reflection) if (FIELD_WRITES.contains(r.target)) r], r -> r.at, truth, harmless
+		);
+		final fields: Null<Array<FieldFact>> = _table.within(
+			file, span, n -> [for (f in n.fields) if (f.write && f.owner == null && catchAll(f.receiver)) f], f -> f.at, truth, harmless
+		);
+		if (flows == null || writes == null || fields == null) return null;
+		final out: Array<ImplicitSite> = [];
+		// a site per operand: two conversions of values of one type run the same members
+		final seen: Map<String, Bool> = [];
+		function add(operand: Null<String>, at: Span, exact: Bool): Void {
+			final key: String = '${operand ?? ''}|$exact';
+			if (seen.exists(key)) return;
+			seen[key] = true;
+			out.push({
+				family: Text,
+				span: at,
+				types: [operand == null ? null : simpleSource(operand)],
+				exact: exact,
+				owners: [operand == null ? null : typedOwner(operand)]
+			});
+		}
+		for (f in flows) for (o in conversionOperands(f.from, f.to)) add(o, f.at.span, f.exact && o == f.from);
+		for (r in writes) add(anyValue(), r.at.span, false);
+		for (f in fields) add(anyValue(), f.at.span, false);
+		return out;
+	}
+
+	/**
+	 * The operands, as facts type strings, of the string conversions a value of the facts type `from` put at a place of the facts
+	 * type `to` makes (`UncheckedConversions.stringOperands`) — a value no reader reads may be anything (`anyValue`) and a
+	 * place no reader reads may be a string — read once per pair.
+	 */
+	private function conversionOperands(from: String, to: String): Array<Null<String>> {
+		final key: String = '$from\n$to';
+		final held: Null<Array<Null<String>>> = _conversionOperands[key];
+		if (held != null) return held;
+		final value: Null<FactsType> = FactsTypeTree.read(from);
+		final place: Null<FactsType> = FactsTypeTree.read(to);
+		final out: Array<Null<String>> = value == null || place == null
+			? [anyValue()]
+			: unchecked().stringOperands(value, place).map(FactsTypeTree.text);
+		_conversionOperands[key] = out;
+		return out;
+	}
+
+	/** The language's catch-all type (`RefShape.catchAllTypeNames`): a value of it may be any value, an object of any class. */
+	private function anyValue(): Null<String> {
+		return (_scope.shape.catchAllTypeNames ?? [])[0];
+	}
+
+	/** Whether the facts type string `type` is a catch-all (`RefShape.catchAllTypeNames`), seen through `Null<T>`. */
+	private function catchAll(type: String): Bool {
+		return switch FactsTypeTree.read(unwrapped(type)) {
+			case Named(id, _): (_scope.shape.catchAllTypeNames ?? []).contains(id);
+			case _: false;
+		};
+	}
+
+	/**
+	 * Whether no `Reflect`/`Type` body spliced into `n` reaches a member: each is of a member the facts name
+	 * (`splicedReflection`) that is no access by name (`ExecutionShape.reflectiveNameCalls`, whose lost call the reading of
+	 * the node's facts would miss) and reads no member's value (`FactsMethodValues.memberless`). What else the bodies run,
+	 * their calls and accesses, is among the node's facts.
+	 */
+	private function splicedReachesNoMember(n: FactNode): Bool {
+		final members: Null<Array<String>> = splicedReflection(n);
+		final named: Map<String, Int> = _scope.shape.execution?.reflectiveNameCalls ?? [];
+		return members != null
+			&& members.foreach(m -> !named.exists(ReachHazards.lastSegments(m, 2)) && FactsMethodValues.memberless(_table, m));
+	}
+
+	/**
+	 * Simple name -> the index's declarations of a type so named: the package-qualified id of each (`declaredId`), its
+	 * file's table key, and whether a build read that file (`CompilerFacts.mayCompileNow`). A typedef aliasing a type of
+	 * its own name (`CallGraphNames.selfAlias`) declares none. Built once.
+	 */
+	private function declarationsNamed(): Map<String, Array<IndexedDeclaration>> {
+		final held: Null<Map<String, Array<IndexedDeclaration>>> = _declarationsNamed;
+		if (held != null) return held;
+		final out: Map<String, Array<IndexedDeclaration>> = [];
+		for (fi in _scope.index.allFiles()) {
+			final key: String = _table.keyOf(fi.file);
+			final read: Bool = _table.mayCompileNow(fi.file);
+			for (t in fi.types) if (!CallGraphNames.selfAlias(t)) {
+				final list: Array<IndexedDeclaration> = out[t.name] ?? [];
+				list.push({ id: declaredId(fi, t), key: key, read: read });
+				out[t.name] = list;
+			}
+		}
+		_declarationsNamed = out;
+		return out;
+	}
+
+	/**
+	 * The typed types the simple name `type` stands for that hold a function body for a member `name` (`soleMember`): one
+	 * the compiler wrote, not generated — an implementation class's constructor under its own name.
+	 */
+	private function bodyHolders(type: String, name: String): Array<String> {
+		final holders: Array<String> = [];
+		for (t in bySimpleName()[type] ?? []) {
+			final fact: Null<TypeFact> = _table.type(t);
+			if (fact == null || !fact.fields.exists(f -> graphMember(t, f.name) == name)) continue;
+			final own: String = fact.kind == FactKinds.IMPL && name == (_scope.shape.constructorName ?? 'new') ? IMPL_CONSTRUCTOR : name;
+			final body: Null<FactNode> = _table.node('$t.$own');
+			if (body != null && FactKinds.FUNCTION_KINDS.contains(body.kind) && !body.generated) holders.push(t);
+		}
+		return holders;
+	}
+
+	/**
+	 * The facts of the member `node` the graph folded from several declarations of one typed type (`soleType`), read by
+	 * id rather than by range — or, where the name stands for several typed types, of the one of them that alone declares
+	 * the member (`soleMember`): its body and each further overload of it, every one the union over the builds that typed
+	 * it, whichever declaration each build read. Null when the node is a nested function, which has no id of its own to
+	 * read by, when the type is not one (`soleType`), or when one of those bodies was not typed as a function or was
+	 * placed by a macro.
+	 */
+	private function foldedBodies(node: FnNode): Null<Array<FactNode>> {
+		final type: Null<String> = node.typeName;
+		final name: Null<String> = node.name;
+		if (type == null || name == null || node.id.indexOf(NESTED_MARK) >= 0) return null;
+		final member: String = name;
+		final whole: Null<String> = soleType(type);
+		// a name several typed types share may still name one type's member (`soleMember`)
+		final sole: Null<String> = whole != null && _table.type(whole)?.fields.exists(f -> f.name == member) == true
+			? whole
+			: soleMember(type, member);
+		return sole == null ? null : ownerBodies(sole, member);
+	}
+
+	/**
 	 * The package-qualified ids of the index's declarations of the graph type `type`, each once: a copy per build, or one in
 	 * each branch of a conditional region, is one. A typedef aliasing a type of its own name (`CallGraphNames.selfAlias`)
 	 * declares none.
@@ -1376,32 +1387,6 @@ final class FactsView {
 			if (owner != null && owner.id != node.id && owner.span.from == n.at.span.from) return null;
 		}
 		return outer.length == 0 ? null : outer;
-	}
-
-	/** `span` from its declaration's first modifier (`declarationRange`), as it is where `tree` is not read. */
-	private static function declaredIn(tree: Null<QueryNode>, span: Span): Span {
-		return (tree == null ? null : declarationRange(tree, span.from)) ?? span;
-	}
-
-	/**
-	 * The range of the declaration starting at `from` in `tree`, from the start of the `@:meta` and modifier run before it
-	 * (`ElementSpan.declRunStart`): the compiler places a field from its first modifier, and an abstract's constructor —
-	 * `this = …` lowered into a function of the implementation class — at that very start. Null when no node starts there.
-	 */
-	public static function declarationRange(tree: QueryNode, from: Int): Null<Span> {
-		var found: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
-		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
-			if (found != null) return;
-			if (node.span?.from == from) {
-				found = { node: node, parent: parent };
-				return;
-			}
-			for (c in node.children) walk(c, node);
-		}
-		walk(tree, null);
-		final held: Null<{ node: QueryNode, parent: Null<QueryNode> }> = found;
-		final span: Null<Span> = held?.node.span;
-		return held == null || span == null ? null : new Span(ElementSpan.declRunStart(held.node, held.parent, span), span.to);
 	}
 
 	/**
@@ -1639,87 +1624,6 @@ final class FactsView {
 	}
 
 	/**
-	 * The view of `table` for `scope`; null when there is none, or it is not complete (`CompilerFacts.complete`): the table
-	 * then holds less. The table holds every build (`truth`) when `configurations` are the analysis's list of builds — a
-	 * run's is every build it ships (`MemberReach.configuredFor`) — and the table names exactly them, as both probes name a
-	 * configuration (`OracleDeclaration.describeOracle`).
-	 */
-	public static function of(
-		table: Null<CompilerFacts>, scope: ReachProject, ?configurations: Array<ReachConfiguration>
-	): Null<FactsView> {
-		return table == null || !table.complete() ? null : new FactsView(table, scope, namesExactly(table, configurations));
-	}
-
-	/** `of` over the compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`): none when it serves no run. */
-	public static function ofRun(plugin: GrammarPlugin, scope: ReachProject, ?configurations: Array<ReachConfiguration>): Null<FactsView> {
-		return of(plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null, scope, configurations);
-	}
-
-	/**
-	 * `of` over `table`, asked once the reach analysis handed it has built its scope (`MemberReach`): the analysis carries
-	 * the table on without reading it.
-	 */
-	public static function over(table: Null<CompilerFacts>): FactsSource {
-		return (scope, configurations) -> of(table, scope, configurations);
-	}
-
-	/** Whether `table` names exactly the builds `configurations` lists, none missing and none besides: then it holds every build. */
-	private static function namesExactly(table: CompilerFacts, configurations: Null<Array<ReachConfiguration>>): Bool {
-		if (configurations == null) return false;
-		final typed: Array<String> = table.configurations.copy();
-		final listed: Array<String> = configurations.map(c -> c.name);
-		typed.sort(Compare.compareString);
-		listed.sort(Compare.compareString);
-		if (typed.length != listed.length) return false;
-		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
-		return true;
-	}
-
-	/**
-	 * A facts type string spelled as source declares it: every path by its simple name, an implementation class by its
-	 * abstract. Null for a type carrying an unknown or a type parameter, which names no declaration.
-	 */
-	public static function simpleSource(type: String): Null<String> {
-		return type.indexOf('?') >= 0 || type.indexOf('$') >= 0 ? null : IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
-	}
-
-	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`FactSites.placed`). */
-	public static inline function placed(n: FactNode, at: FactPos): Bool {
-		return FactSites.placed(n, at);
-	}
-
-	/** Whether `inner` lies within `outer`. */
-	private static inline function within(inner: Span, outer: Span): Bool {
-		return outer.from <= inner.from && inner.to <= outer.to;
-	}
-
-	/** Whether `a` is wider than `b`. */
-	private static inline function wider(a: Span, b: Span): Bool {
-		return a.to - a.from > b.to - b.from;
-	}
-
-	/** Whether `a` and `b` are one range. */
-	private static inline function sameRange(a: Span, b: Span): Bool {
-		return a.from == b.from && a.to == b.to;
-	}
-
-	/** Whether `a` and `b` share a position. */
-	private static inline function meets(a: Span, b: Span): Bool {
-		return a.from < b.to && b.from < a.to;
-	}
-
-	/**
-	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsTypeStrings.typeId`): its package, then its
-	 * name — a private type's package ends in its module's name, prefixed `_`.
-	 */
-	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
-		final path: Array<String> = fi.pkg == '' ? [] : fi.pkg.split('.');
-		if (t.isPrivate) path.push('_${SourceText.lastSegment(fi.module)}');
-		path.push(t.name);
-		return path.join('.');
-	}
-
-	/**
 	 * The abstract the implementation class `impl` implements: the typed abstract whose implementation the facts say it is
 	 * (`TypeFact.implementation`) — a private abstract's id keeps its module (`pack._Module.Name`), a public one's does not
 	 * (`pack.Name`), and both implementations are `pack._Module.Name_Impl_` — else, for a class no build typed as one, the
@@ -1745,31 +1649,6 @@ final class FactsView {
 		return module < 0 ? abstractName : '${pack.substr(0, module)}.$abstractName';
 	}
 
-	/**
-	 * The typed class or interface whose instances — its own, or a subtype's — a value of the facts type string `type` is,
-	 * seen through a wrapper that keeps its members (`Null<T>`): its id, whatever type arguments it is written with, since
-	 * they change no member an instance has. Null for every other type — `Dynamic`, a structure, a function type, a type
-	 * parameter, an unknown, an abstract (a value of which is its underlying one), an enum — and for an extern class, whose
-	 * instances target code makes and may make of anything, or one the builds declare unalike.
-	 */
-	public function objectClass(type: String): Null<String> {
-		final id: String = CompilerFacts.baseId(unwrapped(type));
-		final declared: Null<TypeFact> = _table.type(id);
-		return declared != null && declared.alike && !declared.isExtern && FactKinds.OBJECT_KINDS.contains(declared.kind) ? id : null;
-	}
-
-	/**
-	 * Whether a value of the facts type string `type` is an object of no class unless it is an instance that left the type
-	 * system (`ValueEscapes`): a structure, the catch-all, or a typedef every build declares alike whose every target is one,
-	 * seen through `Null<T>`. A class instance reaches a place of such a type only by escaping, so what a name computed at
-	 * run time reaches on it is a structure's own field — no class member — or a member of an escaped class. A positive
-	 * whitelist: an unknown, a type parameter, an abstract, a function type, an enum and every other type are not.
-	 */
-	public function classless(type: String): Bool {
-		final read: Null<FactsType> = FactsTypeTree.read(type.trim());
-		return read != null && classlessType(read, 0);
-	}
-
 	private function classlessType(t: FactsType, depth: Int): Bool {
 		return switch t {
 			case Structure(_), Named(CATCH_ALL, []): true;
@@ -1793,26 +1672,146 @@ final class FactsView {
 		return FactsTypeText.unwrap(type.trim(), _scope.shape.memberTransparentWrapperTypeNames ?? []);
 	}
 
-	/** The graph's names (`graphMember`) of every method the typed type `id` declares, an accessor among them. */
-	public function methodsOf(id: String): Array<String> {
-		return [
-			for (f in _table.type(id)?.fields ?? []) if (f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k))) graphMember(id, f.name)
-		];
+	/** Whether the fact at `at` lies in the range of its node `n`, not spliced in from elsewhere (`FactSites.placed`). */
+	public static inline function placed(n: FactNode, at: FactPos): Bool {
+		return FactSites.placed(n, at);
 	}
 
-	/** The splice an inlined call made in `n`'s body that holds the position `at` (`FactSites.spliceOf`), or null. */
-	public inline function spliceOf(n: FactNode, at: FactPos): Null<SpliceFact> {
-		return FactSites.spliceOf(n, at);
+	/**
+	 * The `Reflect`/`Type` members whose bodies were spliced into `n` (`reflection-inlined`): every method a fact of that
+	 * code lies in the declared code of (`reflection-from:`, `TypedFactsWalk`) and every one an `inlined` call of the node
+	 * names. Null when a fact of such code lies in no method's declared code (`reflection-unattributed`), or none is named:
+	 * what that code stands in for is lost.
+	 */
+	public static function splicedReflection(n: FactNode): Null<Array<String>> {
+		if (FactMarkers.carries(n, m -> m.match(ReflectionUnattributed))) return null;
+		final out: Array<String> = [];
+		for (c in n.incomplete) switch FactMarkers.read(c) {
+			case ReflectionFrom(method):
+				out.push(method);
+			case StaleForeign, InlineSite, MacroExpansion, ReflectionInlined, ReflectionUnattributed, Unknown(_):
+		}
+		if (out.length == 0) return null;
+		for (c in n.calls) {
+			final target: Null<String> = c.target;
+			final dot: Int = target == null ? -1 : target.lastIndexOf('.');
+			if (
+				target != null
+				&& c.access == INLINED
+				&& dot > 0
+				&& FactKinds.REFLECTION_CLASSES.contains(target.substr(0, dot))
+				&& !out.contains(target)
+			)
+				out.push(target);
+		}
+		return out;
 	}
 
-	/** The expression macro's expansion in `n`'s body that holds the position `at` (`FactSites.expansionOf`), or null. */
-	public inline function expansionOf(n: FactNode, at: FactPos): Null<ExpansionFact> {
-		return FactSites.expansionOf(n, at);
+	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
+	public static function initializerNode(node: FnNode): Bool {
+		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
-	/** The sites the expansion `x` in `n`'s body runs at (`FactSites.expansionSites`), or null when none is known. */
-	public inline function expansionSites(n: FactNode, x: ExpansionFact): Null<Array<Span>> {
-		return FactSites.expansionSites(n, x);
+	/**
+	 * The range of the declaration starting at `from` in `tree`, from the start of the `@:meta` and modifier run before it
+	 * (`ElementSpan.declRunStart`): the compiler places a field from its first modifier, and an abstract's constructor —
+	 * `this = …` lowered into a function of the implementation class — at that very start. Null when no node starts there.
+	 */
+	public static function declarationRange(tree: QueryNode, from: Int): Null<Span> {
+		var found: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
+		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
+			if (found != null) return;
+			if (node.span?.from == from) {
+				found = { node: node, parent: parent };
+				return;
+			}
+			for (c in node.children) walk(c, node);
+		}
+		walk(tree, null);
+		final held: Null<{ node: QueryNode, parent: Null<QueryNode> }> = found;
+		final span: Null<Span> = held?.node.span;
+		return held == null || span == null ? null : new Span(ElementSpan.declRunStart(held.node, held.parent, span), span.to);
+	}
+
+	/**
+	 * The view of `table` for `scope`; null when there is none, or it is not complete (`CompilerFacts.complete`): the table
+	 * then holds less. The table holds every build (`truth`) when `configurations` are the analysis's list of builds — a
+	 * run's is every build it ships (`MemberReach.configuredFor`) — and the table names exactly them, as both probes name a
+	 * configuration (`OracleDeclaration.describeOracle`).
+	 */
+	public static function of(
+		table: Null<CompilerFacts>, scope: ReachProject, ?configurations: Array<ReachConfiguration>
+	): Null<FactsView> {
+		return table == null || !table.complete() ? null : new FactsView(table, scope, namesExactly(table, configurations));
+	}
+
+	/** `of` over the compiler facts of the run `plugin` serves (`SymbolIndexHost.compilerFacts`): none when it serves no run. */
+	public static function ofRun(plugin: GrammarPlugin, scope: ReachProject, ?configurations: Array<ReachConfiguration>): Null<FactsView> {
+		return of(plugin is SymbolIndexHost ? (cast plugin: SymbolIndexHost).compilerFacts() : null, scope, configurations);
+	}
+
+	/**
+	 * `of` over `table`, asked once the reach analysis handed it has built its scope (`MemberReach`): the analysis carries
+	 * the table on without reading it.
+	 */
+	public static function over(table: Null<CompilerFacts>): FactsSource {
+		return (scope, configurations) -> of(table, scope, configurations);
+	}
+
+	/**
+	 * A facts type string spelled as source declares it: every path by its simple name, an implementation class by its
+	 * abstract. Null for a type carrying an unknown or a type parameter, which names no declaration.
+	 */
+	public static function simpleSource(type: String): Null<String> {
+		return type.indexOf('?') >= 0 || type.indexOf('$') >= 0 ? null : IMPL_NAME.replace(PACKAGE_PREFIX.replace(type, ''), '$1');
+	}
+
+	/** Whether `inner` lies within `outer`. */
+	private static inline function within(inner: Span, outer: Span): Bool {
+		return outer.from <= inner.from && inner.to <= outer.to;
+	}
+
+	/** Whether `a` is wider than `b`. */
+	private static inline function wider(a: Span, b: Span): Bool {
+		return a.to - a.from > b.to - b.from;
+	}
+
+	/** Whether `a` and `b` are one range. */
+	private static inline function sameRange(a: Span, b: Span): Bool {
+		return a.from == b.from && a.to == b.to;
+	}
+
+	/** Whether `a` and `b` share a position. */
+	private static inline function meets(a: Span, b: Span): Bool {
+		return a.from < b.to && b.from < a.to;
+	}
+
+	/** `span` from its declaration's first modifier (`declarationRange`), as it is where `tree` is not read. */
+	private static function declaredIn(tree: Null<QueryNode>, span: Span): Span {
+		return (tree == null ? null : declarationRange(tree, span.from)) ?? span;
+	}
+
+	/** Whether `table` names exactly the builds `configurations` lists, none missing and none besides: then it holds every build. */
+	private static function namesExactly(table: CompilerFacts, configurations: Null<Array<ReachConfiguration>>): Bool {
+		if (configurations == null) return false;
+		final typed: Array<String> = table.configurations.copy();
+		final listed: Array<String> = configurations.map(c -> c.name);
+		typed.sort(Compare.compareString);
+		listed.sort(Compare.compareString);
+		if (typed.length != listed.length) return false;
+		for (i in 0...typed.length) if (typed[i] != listed[i]) return false;
+		return true;
+	}
+
+	/**
+	 * The id the compiler gives the type `t` the indexed file `fi` declares (`TypedFactsTypeStrings.typeId`): its package, then its
+	 * name — a private type's package ends in its module's name, prefixed `_`.
+	 */
+	private static function declaredId(fi: FileInfo, t: TypeDeclInfo): String {
+		final path: Array<String> = fi.pkg == '' ? [] : fi.pkg.split('.');
+		if (t.isPrivate) path.push('_${SourceText.lastSegment(fi.module)}');
+		path.push(t.name);
+		return path.join('.');
 	}
 
 }
