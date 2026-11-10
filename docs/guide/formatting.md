@@ -134,3 +134,12 @@ An object, array or map literal and an anonymous type lay out by `wrapping.objec
 not keep a list open, and the built-in fallback of those four is `ignore`. A `"defaultWrap": "noWrap"` block on one of
 them lays that list out by its rules and otherwise flat, without reading source breaks, except that a grid-shaped array and, under `"rules": []`, a comprehension still follow the source; the other non-`ignore` values
 (`onePerLine` is the pinned one) still read them. A typedef's body keeps its source lines until its own decision.
+
+## A literal argument: `callParameter.containerItemWrap`
+
+When a call's argument list breaks, an array or object literal argument that carries a call takes a line of its own,
+unless it is simple: at most three items, none of them a nested literal, the whole literal at most 60 characters wide.
+A simple one fills the argument line with its neighbours. The test is the nested cascade `containerItemWrap` inside
+`wrapping.callParameter`, measured over the literal's own items; `onePerLine` gives the literal its own line, any other
+mode lets it fill. A `callParameter` block that does not name the key keeps the built-in one. Details:
+`docs/haxe-format-config.md`.

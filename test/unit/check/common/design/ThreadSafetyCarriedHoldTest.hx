@@ -296,8 +296,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		File.saveContent('$root/plugins/Plugin.hx', PLUGIN);
 		final run: Array<String> = sources(path(''));
 		final found: Array<Violation> = Linter.run(
-			[for (i in 0...run.length) { file: '$root/core/F$i.hx', source: run[i] }], new HaxeQueryPlugin(),
-			[new ThreadSafety()]
+			[for (i in 0...run.length) { file: '$root/core/F$i.hx', source: run[i] }], new HaxeQueryPlugin(), [new ThreadSafety()]
 		);
 		CliFixture.removeDir(root);
 		Assert.same(['info B Fs.work | Db.batch (folded)'], holds(found));

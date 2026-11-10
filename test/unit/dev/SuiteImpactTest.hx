@@ -280,9 +280,7 @@ final class SuiteImpactTest extends Test {
 			source('src/anyparse/macro/Codegen.hx', 'package anyparse.macro;\nclass Codegen {}')
 		]);
 		final reach: ArmReach = SuiteImpact.armMisses(
-			tree, ENTRIES,
-			[arm('M-MACRO', 'anyparse.macro.Codegen')],
-			['M-MACRO' => 'unit.query.OtherTest']
+			tree, ENTRIES, [arm('M-MACRO', 'anyparse.macro.Codegen')], ['M-MACRO' => 'unit.query.OtherTest']
 		);
 		Assert.same([], reach.misses);
 		Assert.equals(1, reach.whole);

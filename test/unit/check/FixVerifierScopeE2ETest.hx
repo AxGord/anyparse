@@ -68,9 +68,7 @@ final class FixVerifierScopeE2ETest extends Test {
 			{ file: '$dir/Main.hx', source: MAIN }
 		];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new PreferInline()],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new PreferInline()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — otherwise these negatives are vacuous');
 		Assert.equals(0, result.applied.length, 'an override in a sibling file vetoes the candidate — the oracle cannot see it');
@@ -102,9 +100,7 @@ final class FixVerifierScopeE2ETest extends Test {
 			{ file: '$dir/Lib.hx', source: LIB }
 		];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new PreferInline()],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new PreferInline()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.equals(1, result.applied.length, 'the full-scope run still attributes the candidate to its own file');
 		Assert.notEquals(-1, File.getContent('$dir/Lib.hx').indexOf('inline function one'), 'disk carries the inline');

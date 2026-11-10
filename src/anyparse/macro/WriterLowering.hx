@@ -195,6 +195,12 @@ class WriterLowering {
 	private static final COMPLEX_ITEM_KINDS_PRED: String = 'complexItemKinds';
 
 	/**
+	 * The `AstPreds` name of the per-element OWN-item classifier behind `WrapListOptions.containerItemKinds`, read at
+	 * the same emit sites as `COMPLEX_ITEM_KINDS_PRED` and under the same `@:fmt(complexItems)` flag.
+	 */
+	private static final CONTAINER_ITEM_KINDS_PRED: String = 'containerItemKinds';
+
+	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
 	 * (synthesise the slot) and `StructSeqLowering.computeBeforeSlots` (capture it), so a

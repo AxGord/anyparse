@@ -168,8 +168,7 @@ final class RiddenProbeTest extends Test {
 		Assert.same(apart.types.map(t -> '${t.name} ${t.file}'), carried.types.map(t -> '${t.name} ${t.file}'));
 		final own: String = haxe.io.Path.withoutDirectory(dir);
 		Assert.same(
-			[for (p in apart.parsed ?? []) if (p.indexOf(own) >= 0) p],
-			[for (p in carried.parsed ?? []) if (p.indexOf(own) >= 0) p]
+			[for (p in apart.parsed ?? []) if (p.indexOf(own) >= 0) p], [for (p in carried.parsed ?? []) if (p.indexOf(own) >= 0) p]
 		);
 	}
 	/** Every node the compile typed in the fixture's `Main.hx`, with each call and field access it holds and their ranges. */

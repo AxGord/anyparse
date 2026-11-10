@@ -25,8 +25,7 @@ class ModuleMoveTest extends Test {
 		final user: String =
 			'package other;\n\nimport pkg.A;\nimport pkg.A.Sub;\n\nclass User {\n\tvar s: Sub;\n\tfunction g(): Int return A.f();\n}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
 		);
 		Assert.equals(a.replace('package pkg;', 'package pkg.sub;'), textOf(out, 'src/pkg/sub/A.hx'));
 		Assert.equals(
@@ -68,8 +67,7 @@ class ModuleMoveTest extends Test {
 		final out: ModuleMoveOutcome = moved(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
 			[file('src/pkg/A.hx', a)],
-			[file('arms.json', arms), file('tools/run.sh', script)],
-			[{ file: 'arms.json', keys: ['arms.type'] }]
+			[file('arms.json', arms), file('tools/run.sh', script)], [{ file: 'arms.json', keys: ['arms.type'] }]
 		);
 		Assert.equals(arms.replace('"pkg.A"', '"pkg.sub.A"'), textOf(out, 'arms.json'));
 		Assert.equals('probe src/pkg/sub/A.hx and pkg.sub.A.run(\n', textOf(out, 'tools/run.sh'));
@@ -81,8 +79,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {}\n';
 		final user: String = 'package pkg;\n\nimport haxe.ds.StringMap;\n\nclass User {\n\tvar a: A;\n}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals(
 			'package pkg;\n\nimport haxe.ds.StringMap;\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n}\n',
@@ -96,8 +93,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tvar b: B;\n}\n';
 		final b: String = 'package pkg;\n\nclass B {}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/B.hx', b)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/B.hx', b)]
 		);
 		Assert.equals('package pkg.sub;\n\nclass A {\n\tvar b: B;\n}\n', textOf(out, 'src/pkg/sub/A.hx'));
 		Assert.same([], out.imports);
@@ -118,8 +114,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tvar l: Lst;\n}\n';
 		final lst: String = 'package pkg.sub;\n\nclass Lst {}\n';
 		final reasons: Array<String> = refused(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/sub/Lst.hx', lst)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/sub/Lst.hx', lst)]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('"Lst" means free before the move and pkg.sub.Lst#Lst after it'), reasons[0]);
@@ -149,9 +144,7 @@ class ModuleMoveTest extends Test {
 		final config: String = '{"ownedTypes": [{"types": ["pkg.B"], "owners": ["pkg.A*"]}]}';
 		final reasons: Array<String> = refused(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a)],
-			[file('apq.json', config)],
-			[{ file: 'apq.json', keys: ['ownedTypes.owners'] }]
+			[file('src/pkg/A.hx', a)], [file('apq.json', config)], [{ file: 'apq.json', keys: ['ownedTypes.owners'] }]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('holds the pattern "pkg.A*", which matches pkg.A but not pkg.sub.A'), reasons[0]);
@@ -209,8 +202,7 @@ class ModuleMoveTest extends Test {
 		final user: String =
 			"package other;\n\nclass User {\n\tstatic function f(n: String): Dynamic return Type.resolveClass('pkg.' + n);\n}\n";
 		final reasons: Array<String> = refused(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('src/other/User.hx:4 composes a path from "pkg."'), reasons[0]);
@@ -222,8 +214,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function f(): Int return 1;\n}\n';
 		final user: String = 'package other;\n\nclass User {\n\tfunction g(pkg: Dynamic): Int return pkg.A.f();\n}\n';
 		final reasons: Array<String> = refused(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('"pkg" is also a name this file declares'), reasons[0]);
@@ -235,8 +226,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {}\n';
 		final there: String = 'package pkg.sub;\n\nclass A {}\n';
 		final reasons: Array<String> = refused(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/sub/A.hx', there)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/sub/A.hx', there)]
 		);
 		Assert.same(['src/pkg/sub/A.hx already exists'], reasons);
 	}
@@ -247,8 +237,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {}\n';
 		final user: String = 'package pkg;\n\n#if macro\nimport haxe.macro.Expr;\n\nclass User {\n\tvar a: A;\n}\n#end\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals(
 			'package pkg;\n\n#if macro\nimport haxe.macro.Expr;\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n}\n#end\n',
@@ -276,8 +265,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {}\n\ntypedef Sub = { var x: Int; }\n';
 		final user: String = 'package pkg;\n\nimport pkg.A.Sub;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals(
 			'package pkg;\n\nimport pkg.sub.A.A;\nimport pkg.sub.A.Sub;\n\nclass User {\n\tvar a: A;\n\tvar s: Sub;\n}\n',
@@ -365,8 +353,7 @@ class ModuleMoveTest extends Test {
 		final user: String = "package other;\n\nclass User {\n\tstatic final PK: String = 'p';\n"
 			+ "\tstatic function f(): Dynamic return Type.resolveClass(PK + '.A');\n}\n";
 		final reasons: Array<String> = refused(
-			[move('src/p/A.hx', 'src/p/q/A.hx')],
-			[file('src/p/A.hx', a), file('src/other/User.hx', user)]
+			[move('src/p/A.hx', 'src/p/q/A.hx')], [file('src/p/A.hx', a), file('src/other/User.hx', user)]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('src/other/User.hx:4 composes a path from "p"'), reasons[0]);
@@ -531,8 +518,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {}\n';
 		final user: String = 'package pkg;\n\nimport zz.Q;\n\nclass User {\n\tvar a: A;\n}\n';
 		final reasons: Array<String> = refused(
-			[move('src/pkg/A.hx', 'src/aa/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/aa/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('"A"') && reasons[0].contains('cannot'), reasons[0]);
@@ -571,8 +557,7 @@ class ModuleMoveTest extends Test {
 		final out: ModuleMoveOutcome = moved(
 			[move('src/pkg/Expr.hx', 'src/pkg/sub/Expr.hx')],
 			[file('src/pkg/Expr.hx', expr), file('src/pkg/User.hx', user)],
-			null, null, null, null,
-			[file('std/haxe/macro/Expr.hx', std)]
+			null, null, null, null, [file('std/haxe/macro/Expr.hx', std)]
 		);
 		Assert.equals(
 			'package pkg;\n\nimport pkg.sub.Expr;\n\nclass User {\n\tstatic function main(): Void {\n\t\ttrace(Expr.Field(\'x\'));\n\t}\n'
@@ -604,8 +589,7 @@ class ModuleMoveTest extends Test {
 		final a: String = 'package pkg;\n\nclass A {\n\tvar c: Context;\n}\n\nprivate typedef Context = { var x: Int; }\n';
 		final user: String = 'package other;\n\nimport ext.Context;\n\nclass User {\n\tvar c: Context;\n}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/other/User.hx', user)]
 		);
 		Assert.equals(a.replace('package pkg;', 'package pkg.sub;'), textOf(out, 'src/pkg/sub/A.hx'));
 		Assert.isFalse(out.changes.exists(c -> c.file == 'src/other/User.hx'));
@@ -622,8 +606,7 @@ class ModuleMoveTest extends Test {
 		final cat: String = 'package pkg;\n\nenum abstract Cat(String) {\n\tvar A = \'a\';\n\tvar B = \'b\';\n\n'
 			+ '\tpublic function isA(): Bool return this == A;\n}\n';
 		final out: ModuleMoveOutcome = moved(
-			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a), file('src/pkg/Cat.hx', cat)]
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/Cat.hx', cat)]
 		);
 		Assert.isFalse(out.changes.exists(c -> c.file == 'src/pkg/Cat.hx'));
 		Assert.same([], out.imports);
@@ -645,8 +628,7 @@ class ModuleMoveTest extends Test {
 		]) {
 			final user: String = 'package pkg;\n\nclass User {\n' + local + other + '}\n';
 			final out: ModuleMoveOutcome = moved(
-				[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-				[file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
+				[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 			);
 			Assert.equals(user.replace('package pkg;\n', 'package pkg;\n\nimport pkg.sub.A;\n'), textOf(out, 'src/pkg/User.hx'));
 			Assert.same(['src/pkg/User.hx: import pkg.sub.A;'], out.imports);

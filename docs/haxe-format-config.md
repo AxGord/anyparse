@@ -208,6 +208,29 @@ least one element is a function literal — an arrow lambda in any spelling, or 
 matches a one-line lambda, and `hasMultilineItems` alone cannot say WHICH element breaks, which
 is the whole distinction above.
 
+**`containerItemWrap` is a cascade nested in a list's own rules object.** It answers one question for
+each element that is a call-bearing object / array literal (the `complexItemCount` half of the
+classification), and only when a fill mode (`fillLine`, `fillLineWithLeadingBreak`) breaks the list:
+does that element take a line of its own? `onePerLine` says yes, any other mode lets it fill with its
+neighbours. Its conditions are measured over the LITERAL: `itemCount` and `complexItemCount` count its
+own items, `hasContainerItems` asks whether one of them is itself a literal, and every width condition
+(`totalItemLength`, `anyItemLength`, …) reads the literal's whole flat width — the list holds the
+literal's rendered form, not its items'. `exceedsMaxLineLength` and `lineLength >= n` always read as not firing there. The
+built-in `callParameter` carries one — `onePerLine`, unless the literal has at most three items, no
+nested literal and is at most 60 characters wide:
+
+```json
+"callParameter": { "containerItemWrap": { "defaultWrap": "onePerLine", "rules": [
+  { "conditions": [ { "cond": "itemCount <= n", "value": 3 }, { "cond": "hasContainerItems", "value": 0 },
+                    { "cond": "totalItemLength <= n", "value": 60 } ], "type": "fillLine" }
+] } }
+```
+
+A rules object that does not name the key keeps the built-in nested cascade; one that names it reads
+over the built-in one like any section (`"rules": []` sends every such literal to its own line). A
+list with no built-in nested cascade (`arrayWrap`, …) gives every such element its own line unless a
+block names one.
+
 Capitalised enum spellings (`ItemCountLargerThan`, `ExceedsMaxLineLength`, …) are accepted
 too — including the fork's `HasMultiLineItems`, whose capital `L` differs from hxq's own
 `HasMultilineItems`. All conditions of one rule must hold; the first matching rule wins,

@@ -86,9 +86,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: POISON_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(POISON_TABLE)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(POISON_TABLE)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');
@@ -116,8 +114,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		]);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: DEPENDENT_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(DEPENDENT_TABLE)],
+			files, [new TableFake(DEPENDENT_TABLE)],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
@@ -153,8 +150,7 @@ final class FixVerifierGroupE2ETest extends Test {
 		]);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: DEPENDENT_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(SINGLE_GROUP_TABLE)],
+			files, [new TableFake(SINGLE_GROUP_TABLE)],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');

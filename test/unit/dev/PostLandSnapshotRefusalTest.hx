@@ -63,9 +63,7 @@ final class PostLandSnapshotRefusalTest extends Test {
 	public function testAMarkedRulesMovedMessageCountOnARelintedFileIsNoRefusal(): Void {
 		if (CliFixture.engineOrSkip() == null) return;
 		Assert.isNull(refusalOf(
-			[finding('t.hx', MARKED, 'read by 2 of 3 module(s)')],
-			[finding('t.hx', MARKED, 'read by 2 of 4 module(s)')],
-			['t.hx']
+			[finding('t.hx', MARKED, 'read by 2 of 3 module(s)')], [finding('t.hx', MARKED, 'read by 2 of 4 module(s)')], ['t.hx']
 		));
 	}
 

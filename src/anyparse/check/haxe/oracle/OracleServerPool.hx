@@ -364,9 +364,7 @@ final class OracleServerPool {
 			server,
 			() ->
 				CompilerServer.connect(
-					port, oracle.hxml, oracle.dir,
-					['--display', CompilerServer.invalidateRequest(oracle.hxml)],
-					oracle.defines
+					port, oracle.hxml, oracle.dir, ['--display', CompilerServer.invalidateRequest(oracle.hxml)], oracle.defines
 				)
 		);
 	}
@@ -380,9 +378,7 @@ final class OracleServerPool {
 	private static function invalidation(server: PoolServer, oracle: OracleConfig, path: String): SpawnJob {
 		return {
 			args: CompilerServer.connectArgs(
-				server.port, oracle.hxml,
-				['--display', CompilerServer.invalidateRequest(path)],
-				oracle.defines
+				server.port, oracle.hxml, ['--display', CompilerServer.invalidateRequest(path)], oracle.defines
 			),
 			cwd: oracle.dir
 		};

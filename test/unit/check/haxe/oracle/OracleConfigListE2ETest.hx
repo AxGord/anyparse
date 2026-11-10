@@ -419,9 +419,7 @@ final class OracleConfigListE2ETest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		// the display oracle the Haxe plugin starts is the compiler's, whose raw `typeAt` this asks
 		final display: Null<CompilerDisplayOracle> = cast LintFixVerify.startDisplay(
-			plugin,
-			[oracle(dir, '$dir/check.hxml', ['flag'])],
-			plugin.typeSyntax
+			plugin, [oracle(dir, '$dir/check.hxml', ['flag'])], plugin.typeSyntax
 		);
 		final type: Null<String> = display?.typeAt('$dir/Main.hx', DISPLAY_MAIN.indexOf('trace(v)') + 'trace('.length);
 		display?.stop();
@@ -585,8 +583,7 @@ final class OracleConfigListE2ETest extends Test {
 		File.saveContent('$dir/$name', source);
 		return FixVerifier.verify(
 			[{ file: '$dir/$name', source: source }],
-			[new TestRiskyLiteralRewrite(replacement)],
-			new HaxeQueryPlugin(), oracles, File.saveContent, null, seed
+			[new TestRiskyLiteralRewrite(replacement)], new HaxeQueryPlugin(), oracles, File.saveContent, null, seed
 		);
 	}
 	#end

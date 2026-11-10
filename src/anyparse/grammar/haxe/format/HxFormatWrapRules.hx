@@ -51,4 +51,12 @@ typedef HxFormatWrapRules = {
 	@:optional
 	var itemsAfterCloseParenOnly: Bool;
 
+	/**
+	 * The nested cascade of `WrapRules.containerItemWrap`: whether a call-bearing container element of this list takes
+	 * a line of its own (`onePerLine`) or packs with its neighbours (any other mode) when a fill mode breaks the list.
+	 * Absent inherits the built-in one; a configured block is read over it like any section.
+	 */
+	@:optional
+	var containerItemWrap: HxFormatWrapRules;
+
 };

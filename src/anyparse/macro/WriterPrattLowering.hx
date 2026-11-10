@@ -873,10 +873,19 @@ final class WriterPrattLowering {
 			final complexKindsCall: Expr = AstPredLowering.predCallExpr(
 				pc.shape.root, pc.ctx.trivia, false, WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _args]
 			);
+			final containerKindsCall: Expr = AstPredLowering.predCallExpr(
+				pc.shape.root, pc.ctx.trivia, false, WriterLowering.CONTAINER_ITEM_KINDS_PRED, [macro cast _args]
+			);
 			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
 				? macro {
 					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall;
 					_ck;
+				}
+				: macro null;
+			final containerKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
+				? macro {
+					final _cck: Null<Array<Null<Array<Int>>>> = opt._suppressComplexItems ? null : $containerKindsCall;
+					_cck;
 				}
 				: macro null;
 			final flatTcExpr: Expr = c.isTriviaStar
@@ -889,7 +898,8 @@ final class WriterPrattLowering {
 					sepBeforeFlags: _sepBeforeFlags,
 
 					flatTrailingComma: $flatTcExpr,
-					complexItemKinds: $complexKindsExpr
+					complexItemKinds: $complexKindsExpr,
+					containerItemKinds: $containerKindsExpr
 				}
 			);
 		}

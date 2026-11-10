@@ -188,9 +188,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(TABLE)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(TABLE)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');
@@ -234,9 +232,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final before: Int = CompilerOracle.invocations;
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(TABLE)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(TABLE)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		final spawns: Int = CompilerOracle.invocations - before;
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
@@ -281,9 +277,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(ALL_DOOMED)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(ALL_DOOMED)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(0, result.appliedEdits, 'nothing survives when every unit is doomed');
@@ -339,9 +333,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: WIDE_MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(WIDE_TABLE)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(WIDE_TABLE)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals(1, result.partials.length, 'the file was bisected');
@@ -383,9 +375,7 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		);
 		final files: Array<{ file: String, source: String }> = [{ file: '$dir/Main.hx', source: MAIN }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TableFake(HALF_WRITABLE)],
-			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
+			files, [new TableFake(HALF_WRITABLE)], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		final after: String = File.getContent('$dir/Main.hx');

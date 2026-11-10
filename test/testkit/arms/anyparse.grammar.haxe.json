@@ -1155,6 +1155,13 @@
 			"method": "moduleUnder",
 			"force": "null",
 			"note": "no file is named by a module, so a module created by a write is never offered to a build and is judged unreached"
+		},
+		{
+			"name": "M-CONTAINER-ITEM-WRAP-CONFIG-IGNORED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "containerItemWrapFromConfig",
+			"force": "base",
+			"note": "a configured containerItemWrap block is dropped and the built-in nested cascade stays, so a project cannot send simple literal arguments to their own line"
 		}
 	]
 }

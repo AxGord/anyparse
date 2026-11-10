@@ -178,9 +178,7 @@ final class ProcessSpawnTest extends Test {
 		env.APQ_TEST_CHILD = 'spawn';
 		env.APQ_TEST_CHILD_INPUT = '$dir/jobs.json';
 		final parent: Dynamic = js.node.ChildProcess.spawn(
-			js.Node.process.execPath,
-			[js.Syntax.code('process.argv[1]')],
-			{ env: env, stdio: 'ignore' }
+			js.Node.process.execPath, [js.Syntax.code('process.argv[1]')], { env: env, stdio: 'ignore' }
 		);
 		final child: Null<Int> = waitForPid('$dir/child.txt');
 		Assert.notNull(child, 'the job started its child');

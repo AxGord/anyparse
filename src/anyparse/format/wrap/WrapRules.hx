@@ -41,4 +41,14 @@ typedef WrapRules = {
 	@:optional
 	var chainItemsAfterCloseParenOnly: Bool;
 
+	/**
+	 * Does a call-bearing container element of this list (`WrapListOptions.complexItemKinds` code 2) take a line of its
+	 * own when a fill mode breaks the list? The nested cascade is measured over the CONTAINER — its own item count,
+	 * complex count and nested containers, its whole flat width standing for every width condition — and `onePerLine`
+	 * gives it its own line while any other mode lets it pack with its neighbours. Absent: every such element takes
+	 * its own line.
+	 */
+	@:optional
+	var containerItemWrap: WrapRules;
+
 };

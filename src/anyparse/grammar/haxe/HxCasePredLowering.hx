@@ -114,8 +114,7 @@ final class HxCasePredLowering extends AstPredLowering {
 		final inner: Expr = sw(ident('_e'), [caseOf(HX_EXPR, ['And', 'Or'], macro true)], macro false);
 		final body: Expr = nullSwitch(ident('s'), macro false, [caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], inner)], macro false);
 		return predField(
-			'caseBodyRefusesFlat',
-			[valueArg('s', HX_STATEMENT)],
+			'caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)],
 			macro : Bool, body, 'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.'
 		);
 	}
@@ -146,8 +145,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], exprCall)
 		], macro false);
 		return predField(
-			'caseBodyControlFlowRoot',
-			[valueArg('s', HX_STATEMENT)],
+			'caseBodyControlFlowRoot', [valueArg('s', HX_STATEMENT)],
 			macro : Bool, body, 'True iff a case body statement is a keyword-led control-flow statement (refuses to glue onto the label).'
 		);
 	}
@@ -175,8 +173,7 @@ final class HxCasePredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'MetaExpr', [0 => '_mv'], recurse)
 		], macro false);
 		return predField(
-			'caseBodyControlFlowExpr',
-			[valueArg('e', HX_EXPR)],
+			'caseBodyControlFlowExpr', [valueArg('e', HX_EXPR)],
 			macro : Bool, body, 'True iff a case body expression is the expression form of a keyword-led control-flow construct.'
 		);
 	}

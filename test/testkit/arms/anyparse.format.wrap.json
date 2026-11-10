@@ -523,6 +523,20 @@
 			"find": "return cls == ChainOperatorClass.OpAddSub || cls == ChainOperatorClass.OpBool;",
 			"replace": "return cls == ChainOperatorClass.OpBool;",
 			"note": "a + / - chain in a paren that does not fit no longer opens the paren: it glues and breaks at the operators"
+		},
+		{
+			"name": "M-CONTAINER-ITEM-WRAP-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "chunkKindsByRules",
+			"force": "kinds",
+			"note": "the containerItemWrap cascade is never consulted, so every call-bearing literal argument takes its own line again, simple ones included"
+		},
+		{
+			"name": "M-CONTAINER-OWN-LINE-NEVER",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "containerTakesOwnLine",
+			"force": "false",
+			"note": "every call-bearing literal argument packs with its neighbours, so one with four items, a nested container or a long width no longer takes its own line"
 		}
 	]
 }

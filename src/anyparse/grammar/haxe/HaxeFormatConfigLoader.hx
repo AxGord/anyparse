@@ -225,6 +225,7 @@ final class HaxeFormatConfigLoader {
 		// policy and break the fork-parity fixtures that encode the literal
 		// every-segment reading. Absent == off, which is the pre-slice behaviour.
 		final itemsAfterCloseParen: Null<Bool> = cfg.itemsAfterCloseParenOnly;
+		final containerItemWrap: Null<WrapRules> = containerItemWrapFromConfig(cfg.containerItemWrap, base.containerItemWrap);
 		final src: Null<Array<HxFormatWrapRule>> = cfg.rules;
 		if (src == null) {
 			final clearing: Bool = clearRulesOnDefaultWrap && resolvedDefault != null;
@@ -234,7 +235,8 @@ final class HaxeFormatConfigLoader {
 				defaultMode: defaultMode,
 				defaultLocation: defaultLocation,
 				defaultAdditionalIndent: defaultAdditionalIndent,
-				chainItemsAfterCloseParenOnly: itemsAfterCloseParen
+				chainItemsAfterCloseParenOnly: itemsAfterCloseParen,
+				containerItemWrap: containerItemWrap
 			};
 		}
 		final rules: Array<WrapRule> = [];
@@ -247,8 +249,18 @@ final class HaxeFormatConfigLoader {
 			defaultMode: defaultMode,
 			defaultLocation: defaultLocation,
 			defaultAdditionalIndent: defaultAdditionalIndent,
-			chainItemsAfterCloseParenOnly: itemsAfterCloseParen
+			chainItemsAfterCloseParenOnly: itemsAfterCloseParen,
+			containerItemWrap: containerItemWrap
 		};
+	}
+
+	/**
+	 * A section's `containerItemWrap` block read over the nested cascade it replaces. Absent keeps `base`, so the built-in
+	 * nested cascade survives a section that configures only its own rules; a block with no `base` reads over an empty
+	 * `onePerLine` cascade — every call-bearing container on its own line.
+	 */
+	private static function containerItemWrapFromConfig(cfg: Null<HxFormatWrapRules>, base: Null<WrapRules>): Null<WrapRules> {
+		return cfg == null ? base : wrapRulesFromConfig(cfg, base ?? { rules: [], defaultMode: WrapMode.OnePerLine });
 	}
 
 	private static function wrapRuleFromConfig(raw: HxFormatWrapRule): Null<WrapRule> {

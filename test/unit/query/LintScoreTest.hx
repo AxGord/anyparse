@@ -75,8 +75,7 @@ class LintScoreTest extends Test {
 	public function testRecallCountsMarkedEntries(): Void {
 		final marked: String = entry('A', 'A.c', 'S.f', 'rare', ', "recall": true');
 		final result: LintScoreResult = score(
-			[entry('A', 'A.b', 'S.f', 'real-long'), marked, entry('A', 'A.d', 'S.f', 'false')],
-			[finding('A', 'A.b', 'S.f')]
+			[entry('A', 'A.b', 'S.f', 'real-long'), marked, entry('A', 'A.d', 'S.f', 'false')], [finding('A', 'A.b', 'S.f')]
 		);
 		Assert.same([1, 2], [result.overall.recallHit, result.overall.recallEntries]);
 		Assert.same(['A.c'], result.lost.map(e -> e.member));

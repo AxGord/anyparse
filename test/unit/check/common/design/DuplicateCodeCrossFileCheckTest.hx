@@ -385,9 +385,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 				{ file: name, source: 'class ${name.charAt(2)} { static function f():Void $body }' }
 			);
 			final found: Array<Violation> = Linter.run(
-				files, new HaxeQueryPlugin(),
-				[new DuplicateCode()],
-				f -> f.startsWith('y/') ? off : on, true
+				files, new HaxeQueryPlugin(), [new DuplicateCode()], f -> f.startsWith('y/') ? off : on, true
 			);
 			Assert.same(['x/X.hx'], found.map(v -> v.file));
 		}

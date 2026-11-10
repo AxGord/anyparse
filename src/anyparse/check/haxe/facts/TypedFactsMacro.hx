@@ -249,8 +249,7 @@ final class TypedFactsMacro {
 			case TTypeDecl(r):
 				final d: DefType = r.get();
 				typeLine(
-					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern,
-					[',"target":' + q(typeString(d.type, 0))]
+					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]
 				);
 			case TAbstract(r):
 				final a: AbstractType = r.get();
@@ -378,8 +377,7 @@ final class TypedFactsMacro {
 				if (r == null) continue;
 				final d: DefType = r.get();
 				typeLine(
-					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern,
-					[',"target":' + q(typeString(d.type, 0))]
+					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]
 				);
 			}
 			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];

@@ -205,8 +205,9 @@ typedef WrapListOptions = {
 	 * one-per-line regardless of how narrow it renders. The code-2 subset
 	 * drives the fill-mode CHUNK policy (`shapeFillLine*`): a call-bearing
 	 * container that would otherwise stay PACKED on a shared argument line
-	 * takes a line of its own instead. See `chunkOwnLine` for the two
-	 * positions the policy leaves to the existing glues.
+	 * takes a line of its own instead, unless `WrapRules.containerItemWrap`
+	 * lets it pack. See `chunkOwnLine` for the two positions the policy
+	 * leaves to the existing glues.
 	 *
 	 * Omitted (or an out-of-bounds index) reads as 0 everywhere, so a caller
 	 * that supplies no kinds counts none and keeps the pre-slice layout
@@ -214,6 +215,13 @@ typedef WrapListOptions = {
 	 * `callParameter` chunk policy.
 	 */
 	var ?complexItemKinds: Array<Int>;
+
+	/**
+	 * Per element, length-aligned with `items`: the `complexItemKinds` codes of a container element's OWN items, `null`
+	 * for any other element. Read only for the elements whose `complexItemKinds` code is 2, as the measure of the
+	 * `WrapRules.containerItemWrap` cascade that decides whether such an element takes a line of its own.
+	 */
+	var ?containerItemKinds: Array<Null<Array<Int>>>;
 
 }
 
@@ -3238,6 +3246,36 @@ class WrapList {
 	}
 
 	/**
+	 * `kinds` as the chunk policy reads it under `rules.containerItemWrap`: each call-bearing container element that the
+	 * nested cascade lets pack is re-coded as a plain container, which `chunkOwnLine` leaves in the fill. Without a nested
+	 * cascade or own-item codes `kinds` is returned as it is, so every such element keeps its own line.
+	 */
+	private static function chunkKindsByRules(
+		rules: WrapRules, items: Array<Doc>, kinds: Null<Array<Int>>, ownKinds: Null<Array<Null<Array<Int>>>>
+	): Null<Array<Int>> {
+		final sub: Null<WrapRules> = rules.containerItemWrap;
+		return sub == null || kinds == null || ownKinds == null ? kinds : [
+			for (i => kind in kinds) {
+				final own: Null<Array<Int>> = kind == KIND_CONTAINER && i < ownKinds.length && i < items.length ? ownKinds[i] : null;
+				own != null && !containerTakesOwnLine(sub, items[i], own) ? KIND_CONTAINER_PLAIN : kind;
+			}
+		];
+	}
+
+	/**
+	 * The `containerItemWrap` verdict for one container element: `onePerLine` gives it a line of its own. The cascade
+	 * counts the container's own items (`own`), and its whole flat width answers every width condition — the call holds
+	 * only the container's Doc, not the Docs of its items.
+	 */
+	private static function containerTakesOwnLine(rules: WrapRules, item: Doc, own: Array<Int>): Bool {
+		final width: WrapItemMeasure = measureItems([item], 0);
+		return decideWithLineLengthState(
+			rules, own.length, width.total, width.total, false, width.anyHardline, _ -> false, countComplexItems(own), width.total, true,
+			anyContainerItem(own)
+		) == OnePerLine;
+	}
+
+	/**
 	 * A separator the source left out in front of an item that opens a preprocessor region (`#if …`) is a line break, not
 	 * a soft gap: glued onto the line of the item before it, the region reads as a continuation of THAT item
 	 * (`x:Bool = false #if air, …` parses as a splice tail of `false`), so the parse it came from survives only on its own
@@ -4364,6 +4402,7 @@ class WrapList {
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
 			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
 			complexItemKinds: axes.complexItemKinds,
+			containerItemKinds: axes.containerItemKinds,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
 	}
@@ -4482,6 +4521,8 @@ class WrapList {
 		final cols: Int = continuationCols(
 			rules, opt, items, sepWidth, suppressAdditionalIndent, complexCount, containerItems, multilineLambda
 		);
+		// The chunk policy alone reads this view; the cascade above counts the elements as the grammar classified them.
+		final chunkKinds: Null<Array<Int>> = chunkKindsByRules(rules, items, complexItemKinds, axes.containerItemKinds);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
@@ -4526,8 +4567,7 @@ class WrapList {
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
-				complexItemKinds
+				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets, chunkKinds
 			);
 			return prependLead(body, lead);
 		}
@@ -4599,5 +4639,6 @@ private typedef ResolvedWrapListOptions = {
 	final comprehensionFitMeasure: Bool;
 	final comprehensionBodyMeasure: Bool;
 	final complexItemKinds: Null<Array<Int>>;
+	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
 	final trailBreakDoc: Doc;
 };

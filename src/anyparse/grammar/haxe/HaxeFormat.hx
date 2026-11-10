@@ -254,7 +254,22 @@ final class HaxeFormat implements TextFormat {
 				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 160 }] },
 				{ mode: WrapMode.FillLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
-			defaultMode: WrapMode.NoWrap
+			defaultMode: WrapMode.NoWrap,
+			// A call-bearing literal argument takes its own line when the list breaks, unless it is simple: at most three
+			// items, none a nested container, the whole literal short — then it fills the line with its neighbours.
+			containerItemWrap: {
+				rules: [
+					{
+						mode: WrapMode.FillLine,
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						]
+					}
+				],
+				defaultMode: WrapMode.OnePerLine
+			}
 		};
 	}
 

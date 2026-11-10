@@ -77,9 +77,8 @@ final class HxComplexItems {
 	public static function kinds(elements: Array<Any>): Array<Int> {
 		final out: Array<Int> = [];
 		for (element in elements) {
-			var node: Null<Any> = element;
-			if (node != null && !Reflect.isEnumValue(node)) node = Reflect.field(node, 'node');
-			if (node == null || !Reflect.isEnumValue(node)) {
+			final node: Null<Any> = nodeOf(element);
+			if (node == null) {
 				out.push(NONE);
 				continue;
 			}
@@ -92,6 +91,45 @@ final class HxComplexItems {
 			out.push(kind);
 		}
 		return out;
+	}
+
+	/**
+	 * One entry per element, length-aligned with the writer's item Docs: the `kinds` codes of the element's OWN items when
+	 * it is a container literal — an array's elements, an object literal's field values (a `#if` field group counts as one
+	 * `NONE` item) — and `null` for any other element. The input of `WrapRules.containerItemWrap`, which weighs a container
+	 * element of a list by its own item count and nesting rather than by its kind alone.
+	 */
+	public static function containerItemKinds(elements: Array<Any>): Array<Null<Array<Int>>> {
+		final out: Array<Null<Array<Int>>> = [];
+		for (element in elements) {
+			final node: Null<Any> = nodeOf(element);
+			final own: Null<Array<Any>> = node == null
+				? null
+				: switch Type.enumConstructor(node) {
+					case 'ArrayExpr': Type.enumParameters(node)[0];
+					case 'ObjectLit': objectFieldValues(Type.enumParameters(node)[0]);
+					case _: null;
+				};
+			out.push(own == null ? null : kinds(own));
+		}
+		return out;
+	}
+
+	/** The value expression of each field of an object literal; a field that is not a plain `name: value` stays itself. */
+	private static function objectFieldValues(lit: Null<Any>): Null<Array<Any>> {
+		final fields: Null<Array<Any>> = lit == null ? null : Reflect.field(lit, 'fields');
+		return fields == null ? null : [
+			for (field in fields) {
+				final node: Null<Any> = nodeOf(field);
+				node != null && Type.enumConstructor(node) == 'Field' ? Reflect.field(Type.enumParameters(node)[0], 'value') : field;
+			}
+		];
+	}
+
+	/** The enum value an element carries — the bare node, or the `node` of a trivia-synth `{node: …}` wrapper; else `null`. */
+	private static function nodeOf(element: Null<Any>): Null<Any> {
+		final node: Null<Any> = element != null && !Reflect.isEnumValue(element) ? Reflect.field(element, 'node') : element;
+		return node != null && Reflect.isEnumValue(node) ? node : null;
 	}
 
 	/**

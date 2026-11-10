@@ -916,9 +916,13 @@ final class TriviaSepLowering {
 		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
 		// policy stays off, so the emit call is byte-identical.
 		final complexKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _arr]);
+		final containerKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.CONTAINER_ITEM_KINDS_PRED, [macro cast _arr]);
 		final complexKindsDecl: Expr = c.complexItems
 			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall
 			: macro final _complexKinds: Null<Array<Int>> = null;
+		final containerKindsDecl: Expr = c.complexItems
+			? macro final _containerKinds: Null<Array<Null<Array<Int>>>> = _complexKinds == null ? null : $containerKindsCall
+			: macro final _containerKinds: Null<Array<Null<Array<Int>>>> = null;
 		return if (c.wrapRulesField != null) {
 			final rulesExpr: Expr = wrapRulesAccess(c.wrapRulesField, c.mapWrap);
 			// `@:fmt(bodyAwareCompactIndent(...))`: a function signature with an empty body
@@ -1057,6 +1061,7 @@ final class TriviaSepLowering {
 				// same measure question for a host: counted, it would wrap a signature around a broken list.
 				final _deferIfHardline: Bool = _breakAsOnePerLine || $v{c.deferUnderIgnore} && _ignoreEmit;
 				$complexKindsDecl;
+				$containerKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
 						appendTrailingComma: $appendTrailingCommaExpr,
@@ -1079,7 +1084,8 @@ final class TriviaSepLowering {
 						flatTrailingComma: $flatTrailingCommaExpr,
 						comprehensionFitMeasure: _comprehensionFit,
 						comprehensionBodyMeasure: _isComprehension,
-						complexItemKinds: _complexKinds
+						complexItemKinds: _complexKinds,
+						containerItemKinds: _containerKinds
 					}
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension

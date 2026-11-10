@@ -488,8 +488,7 @@ class MemberReachFactsTest extends Test {
 		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std, interp ? 'Reflect.hx' : 'js/_std/Reflect.hx']));
 		final result: ReachResult = ask(
 			files, configurations, true, null, false, interp ? INTERP_BUILD : null, library, null, listed,
-			[path => sys.io.File.getContent(path)],
-			holders
+			[path => sys.io.File.getContent(path)], holders
 		);
 		Assert.equals('', lastDropped.join('; '), 'the fixture did not compile', pos);
 		return result;
@@ -3214,8 +3213,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(unbuilt, r -> r.match(Unknown(Ambiguous('Grid'))));
 		final base: String = 'class Grid {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {}\n}\n';
 		final unheld: ReachResult = question(
-			'new Grid();\n\t\tnew c.Grid();', ['base/Grid.hx' => base, 'other/Grid.hx' => base], PER_BUILD_CLASSPATH,
-			['c/Grid.hx' => grid('c'), 'Cp.hx' => PICK_CLASSPATH]
+			'new Grid();\n\t\tnew c.Grid();', ['base/Grid.hx' => base, 'other/Grid.hx' => base],
+			PER_BUILD_CLASSPATH, ['c/Grid.hx' => grid('c'), 'Cp.hx' => PICK_CLASSPATH]
 		);
 		assertMatch(unheld, r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
@@ -5156,8 +5155,7 @@ class MemberReachFactsTest extends Test {
 		}
 		for (padding in [0, 8]) {
 			final files: Map<String, String> = utilWith(
-				'public static function other(a:Ro.RoArr):Int return Pa.frameOf(a);',
-				['Ro.hx' => ro, 'Pa.hx' => pa(padding)]
+				'public static function other(a:Ro.RoArr):Int return Pa.frameOf(a);', ['Ro.hx' => ro, 'Pa.hx' => pa(padding)]
 			);
 			assertMatch(hubAsk(files), r -> r.match(Proven));
 		}
@@ -5778,9 +5776,7 @@ class MemberReachFactsTest extends Test {
 		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std ?? '', 'Reflect.hx']));
 		final assigned: String = guardedFixture(null, null, '#if other config = new Main(); #end\n\t\t' + guardedBy('config != null'));
 		final result: ReachResult = ask(
-			['Main.hx' => assigned], [[], ['other']], true, null, false, INTERP_BUILD,
-			[path => sys.io.File.getContent(path)],
-			null, true
+			['Main.hx' => assigned], [[], ['other']], true, null, false, INTERP_BUILD, [path => sys.io.File.getContent(path)], null, true
 		);
 		assertMatch(result, r -> r.match(Unknown(DynamicName(_, _))));
 	}

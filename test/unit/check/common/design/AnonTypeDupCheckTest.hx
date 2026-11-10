@@ -224,9 +224,7 @@ class AnonTypeDupCheckTest extends Test {
 		};
 		for (files in [[x, y], [y, x]]) {
 			final found: Array<Violation> = Linter.run(
-				files, new HaxeQueryPlugin(),
-				[new AnonTypeDup()],
-				f -> f.startsWith('x/') ? on : off, true
+				files, new HaxeQueryPlugin(), [new AnonTypeDup()], f -> f.startsWith('x/') ? on : off, true
 			);
 			Assert.same(['x/X.hx'], found.map(v -> v.file));
 		}

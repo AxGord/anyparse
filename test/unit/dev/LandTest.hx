@@ -693,8 +693,7 @@ final class LandTest extends Test {
 	@:killer('M-LAND-IMPACT-SCOPE-IGNORED')
 	public function testAnImpactLandListsOnlyTheClassesTheMergeReachesAgainstTheCommitBeforeIt(): Void {
 		final run: Landing = landing(
-			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
-			{ impact: Selected(['unit.a.ATest', 'unit.b.BTest']) }
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { impact: Selected(['unit.a.ATest', 'unit.b.BTest']) }
 		);
 		Assert.equals(0, run.status, run.output);
 		final flags: Array<String> = run.flags[0];
@@ -707,8 +706,7 @@ final class LandTest extends Test {
 
 	public function testAnImpactLandStartsTheWholeSuiteOfTheLandedCommit(): Void {
 		final run: Landing = landing(
-			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
-			{ impact: Selected(['unit.a.ATest']) }
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { impact: Selected(['unit.a.ATest']) }
 		);
 		Assert.equals(0, run.status, run.output);
 		Assert.same([run.headAfter], run.started);
@@ -719,8 +717,7 @@ final class LandTest extends Test {
 	@:killer('M-LAND-WHOLE-SCOPE-STARTS-POST-LAND')
 	public function testAChangeNoTextBoundsRunsTheWholeSuiteUnderTheLockAndStartsNothingAfter(): Void {
 		final run: Landing = landing(
-			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
-			{ impact: WholeSuite('a macro depends on the change') }
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { impact: WholeSuite('a macro depends on the change') }
 		);
 		Assert.equals(0, run.status, run.output);
 		Assert.isFalse(run.flags[0].contains('--only'), run.flags[0].join(' '));
@@ -738,8 +735,7 @@ final class LandTest extends Test {
 
 	public function testARedImpactBatteryStartsNoWholeSuite(): Void {
 		final run: Landing = landing(
-			() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true }, null,
-			{ impact: Selected(['unit.a.ATest']) }
+			() -> Passed, 'docs/note.md', { full: false, landed: 0, fails: true }, null, { impact: Selected(['unit.a.ATest']) }
 		);
 		Assert.equals(1, run.status);
 		Assert.same([], run.started);
@@ -816,8 +812,8 @@ final class LandTest extends Test {
 
 	public function testAWholeLandThatChangedSrcStartsTheHxcppBuildOfTheLandedCommit(): Void {
 		final run: Landing = landing(
-			() -> Passed, 'src/anyparse/core/Note.hx', { full: false, landed: 0 }, null,
-			{ impact: WholeSuite('a macro depends on the change') }
+			() -> Passed, 'src/anyparse/core/Note.hx', { full: false, landed: 0 },
+			null, { impact: WholeSuite('a macro depends on the change') }
 		);
 		Assert.equals(0, run.status, run.output);
 		Assert.same([run.headAfter], run.started);

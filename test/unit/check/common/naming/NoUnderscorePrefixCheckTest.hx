@@ -118,9 +118,7 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final on: LintConfig = LintConfig.parse('{"rules":{"no-underscore-prefix":{"enabled":true}}}');
 		final both: Array<Violation> = Linter.collect(
-			files, new HaxeQueryPlugin(),
-			[new Naming(), new NoUnderscorePrefix()],
-			file -> on, false
+			files, new HaxeQueryPlugin(), [new Naming(), new NoUnderscorePrefix()], file -> on, false
 		);
 		Assert.equals(1, both.length, both.map(v -> '${v.rule}: ${v.message}').join(' | '));
 		Assert.equals('no-underscore-prefix', both[0].rule);

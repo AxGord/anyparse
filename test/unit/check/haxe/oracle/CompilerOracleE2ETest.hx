@@ -148,8 +148,7 @@ final class CompilerOracleE2ETest extends Test {
 		final path: String = '$dir/Good.hx';
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: VALID }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TestRiskyLiteralRewrite('2')],
+			files, [new TestRiskyLiteralRewrite('2')],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'a valid risky fix survives the typecheck and is applied');
@@ -173,8 +172,7 @@ final class CompilerOracleE2ETest extends Test {
 		final path: String = '$dir/Good.hx';
 		final files: Array<{ file: String, source: String }> = [{ file: path, source: VALID }];
 		final result: FixVerifyResult = FixVerifier.verify(
-			files,
-			[new TestRiskyLiteralRewrite('"broken"')],
+			files, [new TestRiskyLiteralRewrite('"broken"')],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(0, result.applied.length, 'a compile-breaking risky fix is not applied');
@@ -255,8 +253,7 @@ final class CompilerOracleE2ETest extends Test {
 		}
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: NESTED_MAIN }],
-			[new TestRiskyLiteralRewrite('2')],
-			new HaxeQueryPlugin(), oracles, (p, c) -> File.saveContent(p, c)
+			[new TestRiskyLiteralRewrite('2')], new HaxeQueryPlugin(), oracles, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the nested-config baseline typechecks');
 		Assert.equals(1, result.applied.length, 'the risky fix survives the typecheck and is applied');
