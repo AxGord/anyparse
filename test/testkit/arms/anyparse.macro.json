@@ -2527,6 +2527,13 @@
 			"find": "_ignoreEmit && anyparse.runtime.OpenGluedComment.leads(_arr, _trailOpen)",
 			"replace": "false",
 			"note": "a first element's inline block lead, written right after the open delimiter, reads back as the open trail and breaks the list on the next rewrite"
+		},
+		{
+			"name": "M-DO-KW-COMMENT-DROPPED",
+			"type": "anyparse.macro.TriviaPairSlots",
+			"method": "isCtorKwBodyRef",
+			"force": "false",
+			"note": "a first field after its ctor's keyword grows no kw-trivia slots, so the comment between `do` and its body is dropped at parse"
 		}
 	]
 }

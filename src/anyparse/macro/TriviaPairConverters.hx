@@ -298,7 +298,7 @@ final class TriviaPairConverters {
 			entries.push({ field: fieldName, expr: shapeRawToPairedWrap(access, child, pos) });
 			// Append trivia-only sibling fields with default empty values —
 			// mirror the gates applied in `buildTypeDefinition`'s Seq path.
-			if (TriviaPairSlots.isOptionalKw(child)) {
+			if (TriviaPairSlots.hasKwTriviaSlots(child, child == origNode.children[0])) {
 				entries.push({ field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro (null: Null<String>) });
 				entries.push({ field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro ([]: Array<String>) });
 				entries.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro false });

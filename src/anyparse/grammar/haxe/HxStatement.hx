@@ -115,6 +115,7 @@ enum HxStatement {
 	ThrowStmt(expr: HxExpr);
 	@:kw('do')
 	@:trail(';')
+	@:fmt(forwardNewlineForBody)
 	DoWhileStmt(stmt: HxDoWhileStmt);
 	@:kw('break')
 	@:trail(';')

@@ -177,10 +177,13 @@ final class StructSeqLowering {
 			final hasBeforeBlankSlot: Bool = hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot);
 			final beforeBlankLocal: String = beforeBlankLocalName(fieldName);
 			final afterLeadLocal: Null<String> = afterLeadLocalFor(sc, child, typePath, fieldName);
-			emitPreFieldWs(
-				parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
-				beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
-			);
+			// A first field after its ctor's keyword scans the kw→body gap itself, into the kw-trivia slots below.
+			final ctorKwBody: Bool = isCtorKwBodyField(sc, child, node, typePath);
+			if (!ctorKwBody)
+				emitPreFieldWs(
+					parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot,
+					hasBeforeNewlineSlot, beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
+				);
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
 			// trailing comment after the kw and (b) own-line leading comments
@@ -207,7 +210,7 @@ final class StructSeqLowering {
 			// conditional branch in the codegen (`parseFnName`, `ruleReturnCT`,
 			// `ruleCtorPath` all return the plain form for non-bearing refs in
 			// trivia mode).
-			final hasKwTriviaSlots: Bool = hasKwTriviaSlotsField(sc, typePath, isOptionalRef, isOptionalKwStar, kwLead);
+			final hasKwTriviaSlots: Bool = hasKwTriviaSlotsField(sc, typePath, isOptionalRef, isOptionalKwStar, kwLead, ctorKwBody);
 			final afterKwLocal: String = '_afterKw_$fieldName';
 			final kwLeadingLocal: String = '_kwLeading_$fieldName';
 			final beforeKwNlLocal: String = '_beforeKwNl_$fieldName';
@@ -237,6 +240,8 @@ final class StructSeqLowering {
 					afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal,
 					parseSteps
 				);
+			// The ctor already consumed its keyword: the gap capture an optional kw runs after its commit runs here.
+			if (ctorKwBody) parseSteps.push(commitTriviaAction(sc, true, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal));
 			emitFieldValueByKind(
 				sc, child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
@@ -1245,9 +1250,14 @@ final class StructSeqLowering {
 	 * True for exactly that shape. Pure predicate lifted from `lowerStruct`.
 	 */
 	private static function hasKwTriviaSlotsField(
-		sc: StructSeqCtx, typePath: String, isOptionalRef: Bool, isOptionalKwStar: Bool, kwLead: Null<String>
+		sc: StructSeqCtx, typePath: String, isOptionalRef: Bool, isOptionalKwStar: Bool, kwLead: Null<String>, ctorKwBody: Bool
 	): Bool {
-		return (isOptionalRef || isOptionalKwStar) && kwLead != null && sc.ctx.trivia && sc.isTriviaBearing(typePath);
+		return ctorKwBody || ((isOptionalRef || isOptionalKwStar) && kwLead != null && sc.ctx.trivia && sc.isTriviaBearing(typePath));
+	}
+
+	/** Trivia-mode gate of `TriviaPairSlots.isCtorKwBodyRef` — the slots exist only on a bearing rule's paired type. */
+	private static function isCtorKwBodyField(sc: StructSeqCtx, child: ShapeNode, node: ShapeNode, typePath: String): Bool {
+		return sc.ctx.trivia && sc.isTriviaBearing(typePath) && TriviaPairSlots.isCtorKwBodyRef(child, child == node.children[0]);
 	}
 
 	/**

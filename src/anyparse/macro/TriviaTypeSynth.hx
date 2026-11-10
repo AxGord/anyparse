@@ -496,8 +496,8 @@ class TriviaTypeSynth {
 					// comments captured between kw and body (`KwLeading`).
 					// Writer consumes these to preserve source layout; absent
 					// consumers read `null` / `[]` with no harm.
-					if (TriviaPairSlots.isOptionalKw(child)) for (extra in TriviaPairSlots.buildKwTriviaSlots(child, pos))
-						fields.push(extra);
+					if (TriviaPairSlots.hasKwTriviaSlots(child, child == origNode.children[0]))
+						for (extra in TriviaPairSlots.buildKwTriviaSlots(child, pos)) fields.push(extra);
 					// ω-orphan-trivia: `@:trivia` Star fields grow two
 					// sibling slots capturing trailing trivia (own-line
 					// comments between the last element and the close /

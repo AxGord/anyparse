@@ -108,6 +108,24 @@ final class TriviaPairSlots {
 			&& (child.annotations[AnnotationKeys.BASE_OPTIONAL] == true && child.readMetaString(':kw') != null);
 	}
 
+	/**
+	 * A struct's FIRST Ref field opted in by `@:fmt(ctorKwTrivia)`: the enclosing enum ctor's keyword directly
+	 * precedes it (`@:kw('do')` on `HxStatement.DoWhileStmt`, whose `@:fmt(forwardNewlineForBody)` leaves the
+	 * kw→body gap to this field), so the field captures that gap into the same kw-trivia slots an
+	 * `@:optional @:kw` field grows and the body writes it back through the same `bodyPolicyWrap` path.
+	 */
+	public static function isCtorKwBodyRef(child: ShapeNode, isFirstField: Bool): Bool {
+		return isFirstField && child.kind == Ref && child.fmtHasFlag('ctorKwTrivia');
+	}
+
+	/**
+	 * The one answer to "does this struct field grow the kw-trivia sibling slots" (`buildKwTriviaSlots`): an
+	 * `@:optional @:kw` Ref/Star, or a first field after its ctor's keyword (`isCtorKwBodyRef`).
+	 */
+	public static function hasKwTriviaSlots(child: ShapeNode, isFirstField: Bool): Bool {
+		return isOptionalKw(child) || isCtorKwBodyRef(child, isFirstField);
+	}
+
 	public static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
 		// ω-orphan-prefix-member: `@:fmt(bareRefSepWhenPresent)` puts an
 		// `@:optional @:absentOn` Ref back on the bare-Ref footing — when

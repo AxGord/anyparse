@@ -111,6 +111,7 @@ enum HxExpr {
 	 * reader of a do-while (`RefShape.doWhileLoopKinds`) names the two kinds together.
 	 */
 	@:kw('do')
+	@:fmt(forwardNewlineForBody)
 	DoWhileExpr(stmt: HxDoWhileStmt);
 	@:kw('switch')
 	@:fmt(switchPolicy, propagateExprPosition)

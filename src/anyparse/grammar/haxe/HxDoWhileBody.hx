@@ -33,6 +33,7 @@ enum HxDoWhileBody {
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockBody(stmts: Array<HxStatement>);
 	@:kw('do')
+	@:fmt(forwardNewlineForBody)
 	InnerDoWhile(inner: HxDoWhileStmt);
 	@:trailOpt(';')
 	@:fmt(trailOptParseOnly)

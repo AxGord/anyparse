@@ -50,6 +50,7 @@
 		"captureAfterLead",
 		"captureSourceNewlineAfter",
 		"captureTrailComment",
+		"ctorKwTrivia",
 		"keepBlankAfterStarCtor",
 		"nestBody",
 		"sepBeforeOpt"

@@ -924,6 +924,21 @@ final class WriterRefFieldLowering {
 		// `HxStatement.UntypedBlockStmt`. Multiple entries
 		// cascade through a runtime ternary chain.
 		final policyOverrides: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
+		// A first field after its ctor's keyword (`do`) carries the kw-trivia slots an `else` body does, and
+		// hands them to the wrap the same way (`emitOptionalKwBody`).
+		final ctorKwGap: Bool = ctx.ctx.trivia && TriviaPairSlots.isCtorKwBodyRef(child, isFirstField);
+		final afterKwExpr: Null<Expr> = ctorKwGap
+			? headGapCommentsOutside(
+				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), fieldAccess,
+				valueFieldAccess(fieldName), true
+			)
+			: null;
+		final kwLeadingExpr: Null<Expr> = ctorKwGap
+			? headGapCommentsOutside(
+				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), fieldAccess,
+				valueFieldAccess(fieldName), false
+			)
+			: null;
 		// ω-issue-168: `@:fmt(bodyAllmanIndentForCtor('<ctor>',
 		// '<optField>', '<lcField>'))` runtime-overrides the
 		// policy-decided layout when the body's runtime ctor
@@ -973,6 +988,8 @@ final class WriterRefFieldLowering {
 			kwPolicyFlagName: kwPolicyFlag,
 			afterTrailExpr: afterTrailExpr,
 			beforeLeadingExpr: beforeLeadingExpr,
+			afterKwExpr: afterKwExpr,
+			kwLeadingExpr: kwLeadingExpr,
 			indentObjArgs: indentObjArgs,
 			policyOverrides: policyOverrides,
 			bodyAllmanIndentArgs: bodyAllmanIndentArgs,

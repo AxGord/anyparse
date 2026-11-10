@@ -1119,12 +1119,11 @@ class Lowering {
 		// itself and capture `newlineBefore` onto the synth
 		// `<field>BeforeNewline:Bool` slot. Pairs with field-level
 		// `@:fmt(beforeNewlineSlotFirst)` on the inner struct's first
-		// Ref field — both must be present for the channel to work.
+		// Ref field (`HxStatement.TryCatchStmt`), or with `@:fmt(ctorKwTrivia)`,
+		// which captures the gap into kw-trivia slots (every `do` ctor carrying `HxDoWhileStmt`).
 		// Without the flag the post-kw `skipWs` runs as before, which
 		// is the right default for every other Case 3 kw-branch (`if`,
-		// `while`, `for`, `do`, `switch`, `throw`, etc.). Currently
-		// consumed only by `HxStatement.TryCatchStmt` (issue_362
-		// _untyped_body_keep `try\n\tuntyped {…}` shape).
+		// `while`, `for`, `switch`, `throw`, etc.).
 		final forwardNewlineForBody: Bool = branch.fmtHasFlag('forwardNewlineForBody');
 		appendKwRefLeadSteps(steps, kwLead, leadText, forwardNewlineForBody, triviaWrapOpenNewline);
 		// Capture _start_pos AFTER any lead literal AND its skipWs, so

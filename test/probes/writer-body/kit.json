@@ -48,7 +48,11 @@
 		"chain-force-then/T.hx": "class T {\n\tfunction f(): Void {\n\t\tif (c) { a(); } else { if (d) { e(); f(); } }\n\t}\n}\n",
 		"chain-force-then/hxformat.json": "{ \"whitespace\": { \"bracesConfig\": { \"singleStatementBraces\": \"remove\" } } }\n",
 		"in-for-loop/T.hx": "class T {\n\tfunction f(): Void {\n\t\tfor (i in y) { try { foo(); } catch (s: String) { for (j in z) b(); } }\n\t}\n}\n",
-		"in-for-loop/hxformat.json": "{ \"whitespace\": { \"bracesConfig\": { \"singleStatementBraces\": \"remove\" } } }\n"
+		"in-for-loop/hxformat.json": "{ \"whitespace\": { \"bracesConfig\": { \"singleStatementBraces\": \"remove\" } } }\n",
+		"do/A.hx": "class A {\n\tfunction f() {\n\t\tdo // c\n\t\t\tx();\n\t\twhile (y);\n\t\tdo // d\n\t\t{\n\t\t\tx();\n\t\t} while (y);\n\t\tdo\n\t\t\t// e\n\t\t\tx(); while (y);\n\t}\n}\n",
+		"do/B.hx": "class B {\n\tfunction f() {\n\t\tdo x(); while (y);\n\t\tdo {\n\t\t\tx();\n\t\t} while (y);\n\t\twhile (x) // w\n\t\t\ty();\n\t\tfor (i in a) // e\n\t\t\ty();\n\t\tif (a) b(); else // d\n\t\t\tc();\n\t}\n}\n",
+		"do/E.hx": "class A {\n\tfunction f() {\n\t\tvar g = () -> do // c\n\t\t\tx() while (y);\n\t}\n}\n",
+		"do/N.hx": "class A {\n\tfunction f() {\n\t\tdo do // c\n\t\t\tx(); while (a); while (b);\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -490,6 +494,78 @@
 				"out": "faeed87a9bb1f705",
 				"err": "eef06c7385a6b7eb",
 				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "do/A.hx",
+			"note": "a same-line comment after `do` before a non-block body: it stays on the keyword line and the body takes the next (known defect until WRITER-DO-COMMENT: fmt refused, the round trip dropped the comment)",
+			"fixpoint": "do/A.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"do/A.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "a94cce0bdbffed0d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "do/B.hx",
+			"note": "guard: comment-free do-while bodies (bare and block), and the comments after `while (…)`, `for (…)` and `else` before a non-block body",
+			"fixpoint": "do/B.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"do/B.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "80c11c1792f54f80",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "do/E.hx",
+			"note": "a same-line comment after an expression-position `do` (a lambda body) before a non-block body stays on the keyword line (refused on the base: the round trip dropped the comment)",
+			"fixpoint": "do/E.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"do/E.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "3d37772815d707a9",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "do/N.hx",
+			"note": "a same-line comment after the inner `do` of a nested do-while stays on the keyword line (refused on the base: the round trip dropped the comment)",
+			"fixpoint": "do/N.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"do/N.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "6344a2ab9a40f353",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
 			}
 		}
 	]

@@ -374,7 +374,7 @@ final class WriterArrowValueIfLowering {
 	@:access(anyparse.macro.TriviaTypeSynth)
 	private static function arrowValueIfCommentSlots(child: ShapeNode, node: ShapeNode): Array<{ suffix: String, isList: Bool }> {
 		final slots: Array<{ suffix: String, isList: Bool }> = [];
-		if (TriviaPairSlots.isOptionalKw(child)) {
+		if (TriviaPairSlots.hasKwTriviaSlots(child, child == node.children[0])) {
 			slots.push({ suffix: TriviaTypeSynth.AFTER_KW_SUFFIX, isList: false });
 			slots.push({ suffix: TriviaTypeSynth.KW_LEADING_SUFFIX, isList: true });
 			slots.push({ suffix: TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, isList: true });

@@ -20,6 +20,10 @@ package anyparse.grammar.haxe;
  * rejects it there) — see `anyparse.format.SingleStmtBraces.unwrapDoBody`. Block bodies always
  * take a single space regardless of the policy: the `{` carries its own layout via `blockBody`.
  *
+ * `@:fmt(ctorKwTrivia)` on `body`, paired with `@:fmt(forwardNewlineForBody)` on every ctor carrying it, keeps the
+ * comments between `do` and the body (`do // c`) in the kw-trivia slots an `else` body has, written
+ * back by the same path.
+ *
  * `@:fmt(loopBodyIfElseNext(...))` is the loop-shape gate the `for` / `while` bodies carry:
  * when `sameLine.loopBodyIfElseNext` is on and the body is an `if` that owns an `else`, the
  * placement is replaced by `next` so the `else` stops sitting at the `do`'s own indent. The
@@ -33,7 +37,8 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxDoWhileStmt = {
 	@:trailOpt(';')
-	@:fmt(bodyPolicy('doBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody'))
+	@:fmt(bodyPolicy('doBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody'),
+		ctorKwTrivia)
 	var body: HxDoWhileBody;
 	@:kw('while')
 	@:lead('(')
