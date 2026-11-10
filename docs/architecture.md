@@ -112,7 +112,7 @@ The strategies `Build` registers (the list is `Build.registerStrategies`, called
 |---|---|---|
 | `BaseShape` (a pass, not a plugin) | — | `enum→Alt`, `class→Seq`, `Array<T>→Star`, `Null<T>→Opt`, `abstract→Terminal`. |
 | `Lit` | `@:lit`, `@:lead`, `@:trail`, `@:trailOpt`, `@:wrap`, `@:sep`, `@:sepAlt` | Literal text glue between fields. |
-| `Re` | `@:re`, `@:captureGroup` | Regex terminals for primitive-wrapping abstracts. |
+| `Re` | `@:re`, `@:scan`, `@:captureGroup` | Regex terminals for primitive-wrapping abstracts; `@:scan` names a runtime reader for a terminal no regex can bound. |
 | `Kw` | `@:kw` | Keyword with word boundary. |
 | `Skip` | `@:skip`, `@:ws` | Cross-cutting whitespace/comment consumption. |
 | `Pratt` | `@:infix` | Operator-precedence climbing for binary infix operators. |

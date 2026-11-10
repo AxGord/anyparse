@@ -47,6 +47,8 @@ final class TerminalParseLowering {
 	private static function lowerTerminal(tc: TerminalCtx, node: ShapeNode, typePath: String, simple: String): Expr {
 		final stringEnumValues: Null<Array<{ name: String, value: String }>> = node.annotations['base.stringEnumValues'];
 		if (stringEnumValues != null) return lowerStringEnumTerminal(tc, typePath, simple, stringEnumValues);
+		final reader: Null<String> = node.annotations['re.scan'];
+		if (reader != null) return lowerScanTerminal(tc, node, typePath, simple, reader);
 		final pattern: Null<String> = node.annotations['re.pattern'];
 		if (pattern == null) {
 			Context.fatalError('Lowering: terminal $typePath missing @:re', Context.currentPos());
@@ -275,6 +277,28 @@ final class TerminalParseLowering {
 		};
 		final parts: Array<String> = decodePath.split('.');
 		return { expr: ECall(macro $p{parts}, [macro _matched]), pos: Context.currentPos() };
+	}
+
+	/**
+	 * A `@:scan` terminal: the named static reader answers where the token at `ctx.pos` ends, read on the input in
+	 * place, and an end not past `ctx.pos` is a miss. No first-byte reject is emitted — `terminalFirstToken` claims
+	 * nothing for a terminal without a pattern — and `Re` refuses a capture group beside it, so the whole span is the value.
+	 */
+	private static function lowerScanTerminal(tc: TerminalCtx, node: ShapeNode, typePath: String, simple: String, reader: String): Expr {
+		final decodeExpr: Expr = lowerTerminalDecodeExpr(
+			tc, node, typePath, node.annotations['base.underlying'], node.hasMeta(':rawString')
+		);
+		final call: Expr = { expr: ECall(macro $p{reader.split('.')}, [macro ctx.input, macro ctx.pos]), pos: Context.currentPos() };
+		return macro {
+			final _end: Int = $call;
+			if (_end <= ctx.pos) {
+				ctx.recordFail(ctx.pos, $v{simple});
+				throw anyparse.runtime.ParseError.backtrack;
+			}
+			final _matched: String = ctx.input.substring(ctx.pos, _end);
+			ctx.pos = _end;
+			return $decodeExpr;
+		};
 	}
 
 }

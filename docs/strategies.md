@@ -293,9 +293,11 @@ Literal glue around fields, lowered into `Lit` nodes in a `Seq`: a field with `@
 
 ### Re
 
-Owns: `@:re`, `@:captureGroup`.
+Owns: `@:re`, `@:scan`, `@:captureGroup`.
 
 For an `abstract X(String) @:re("pattern")`, emits a `Re("pattern")` terminal. Used for regex-matched primitives: strings, numbers, identifiers, ASCII tokens. `@:captureGroup(n)` selects which group of the pattern becomes the value.
+
+A terminal whose extent no regex can state — a balanced group of any depth — names a reader instead: `@:scan('pkg.Class.method')`, a static `(input: anyparse.runtime.Input, at: Int) -> Int` answering where the token at `at` ends (`at` for no token), read on the input in place. One terminal carries `@:re` or `@:scan`, never both; a `@:scan` terminal claims no first byte and takes no `@:captureGroup`. Haxe's `#if` condition (`HxPpCondLit`) reads through `CondCondition.expressionEnd`, the one condition reader the query side asks too.
 
 A `String` terminal states how its match becomes a value: `@:rawString` (the match itself), `@:unescape` (the format's backslash table), or a `@:decode('pkg.Class.fn')` / `@:encode('pkg.Class.fn')` pair naming the static codec the parser and the writer call — declared together or refused at compile time, so a value whose spelling differs (Mermaid's entity-coded, quote-or-bare labels, `MermaidText`) is written back the way it was read. The writer refuses one without the other too.
 

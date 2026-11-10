@@ -68,12 +68,6 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		Assert.equals(guard, memberConditionCond('class C { #if $guard var x:Int; #end }'));
 	}
 
-	public function testCondAtomStillRejectsDepthFive(): Void {
-		// The cap moved from two to four, it did not disappear. Pinned so
-		// a future deepening is a deliberate edit, not a silent drift.
-		Assert.raises(HaxeModuleParser.parse.bind('class C { #if ((((( a ))))) var x:Int; #end }'));
-	}
-
 	public function testConditionalAbstractClauseThenBranch(): Void {
 		// lime/utils/ArrayBuffer.hx:10
 		final ad: HxAbstractDecl = firstAbstract('abstract A(Bytes) from Bytes to Bytes #if doc_gen from Dynamic to Dynamic #end {}');

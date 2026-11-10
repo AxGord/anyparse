@@ -931,9 +931,9 @@ class Codegen {
 	 */
 	private static function spliceCondAtomSkipExpr(): Expr {
 		return macro {
-			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionAt(input.substring(from, input.length), 0);
+			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionIn(input, from);
 			if (atom == null) return false;
-			i = from + atom.to;
+			i = atom.to;
 		};
 	}
 

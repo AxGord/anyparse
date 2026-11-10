@@ -181,20 +181,29 @@ final class Strings {
 	 * is a single-line tail must not let a dangling backslash carry the scan into the next line.
 	 */
 	public static function quotedEnd(source: String, at: Int): Int {
-		final quote: Int = source.fastCodeAt(at);
+		return quotedEndOf(i -> i < source.length ? source.fastCodeAt(i) : -1, at);
+	}
+
+	/**
+	 * `quotedEnd` over any character source: `charAt` answers the code at an index and `-1` past the end, so a reader
+	 * that is not a `String` (a parser's input) asks the same question without copying its text.
+	 */
+	public static function quotedEndOf(charAt: (Int) -> Int, at: Int): Int {
+		final quote: Int = charAt(at);
 		var i: Int = at + 1;
-		while (i < source.length) {
-			final c: Int = source.fastCodeAt(i);
+		while (true) {
+			final c: Int = charAt(i);
+			if (c < 0) return at;
 			if (c == '\n'.code || c == '\r'.code) return at;
 			if (c == '\\'.code) {
-				if (i + 1 >= source.length || source.fastCodeAt(i + 1) == '\n'.code || source.fastCodeAt(i + 1) == '\r'.code) return at;
+				final next: Int = charAt(i + 1);
+				if (next < 0 || next == '\n'.code || next == '\r'.code) return at;
 				i += 2;
 				continue;
 			}
 			if (c == quote) return i + 1;
 			i++;
 		}
-		return at;
 	}
 
 	/**

@@ -283,7 +283,8 @@ final class ParseDispatchLowering {
 	 * `Unknown` for a terminal whose values are a closed `enum abstract`
 	 * string set (`base.stringEnumValues`): those take
 	 * `lowerStringEnumTerminal`, which has no regex at all, so the pattern
-	 * this reads does not describe them. `Unknown` too for every pattern
+	 * this reads does not describe them, and for a `@:scan` terminal, whose
+	 * reader no pattern describes. `Unknown` too for every pattern
 	 * `RegexFirstBytes` will not commit to — see its own doc for which,
 	 * and why `null` there is the safe direction.
 	 */

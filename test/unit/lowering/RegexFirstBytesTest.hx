@@ -109,9 +109,9 @@ class RegexFirstBytesTest extends Test {
 				'^'.code, 'i'.code, '|'.code
 			]
 		},
-		// HxPpCondLit — an erasable literal head in front of a group whose
-		// alternatives lead with three different shapes. 65 codes, the widest
-		// set any shipped grammar asks for.
+		// The `#if` condition pattern HxPpCondLit carried before it read through
+		// CondCondition — an erasable literal head in front of a group whose
+		// alternatives lead with three different shapes, the widest set here.
 		{
 			pattern: '!*(?:[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|[0-9]+'
 				+ '|\\((?:[^()]|\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))*\\))',

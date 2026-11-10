@@ -52,7 +52,9 @@
 		"do/A.hx": "class A {\n\tfunction f() {\n\t\tdo // c\n\t\t\tx();\n\t\twhile (y);\n\t\tdo // d\n\t\t{\n\t\t\tx();\n\t\t} while (y);\n\t\tdo\n\t\t\t// e\n\t\t\tx(); while (y);\n\t}\n}\n",
 		"do/B.hx": "class B {\n\tfunction f() {\n\t\tdo x(); while (y);\n\t\tdo {\n\t\t\tx();\n\t\t} while (y);\n\t\twhile (x) // w\n\t\t\ty();\n\t\tfor (i in a) // e\n\t\t\ty();\n\t\tif (a) b(); else // d\n\t\t\tc();\n\t}\n}\n",
 		"do/E.hx": "class A {\n\tfunction f() {\n\t\tvar g = () -> do // c\n\t\t\tx() while (y);\n\t}\n}\n",
-		"do/N.hx": "class A {\n\tfunction f() {\n\t\tdo do // c\n\t\t\tx(); while (a); while (b);\n\t}\n}\n"
+		"do/N.hx": "class A {\n\tfunction f() {\n\t\tdo do // c\n\t\t\tx(); while (a); while (b);\n\t}\n}\n",
+		"cond5/C.hx": "class A {\n\tstatic function f() {\n\t\t#if ((((( a )))))\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n",
+		"condcomment/C.hx": "class A {\n\tstatic function f() {\n\t\t#if (!js /* don't */ && !nodejs)\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -562,6 +564,42 @@
 			"expect": {
 				"exit": 0,
 				"out": "6344a2ab9a40f353",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "cond5/C.hx",
+			"note": "a #if condition group nested five deep is one condition: the parser reads it through CondCondition, and fmt writes it verbatim",
+			"fixpoint": "cond5/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cond5/C.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c6aa4ffb6e725f37",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "condcomment/C.hx",
+			"note": "a block comment holding an apostrophe inside a #if condition group is comment text, not a string opener",
+			"fixpoint": "condcomment/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"condcomment/C.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c52734b997c004ab",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
