@@ -199,6 +199,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	/** The fragment before the READER share in a sink message — the second anchor `messageIdentity` masks from. */
 	private static final READ_LEAD: String = ' is read by ';
 
+	/** The fragment before the count of governed modules, a share's denominator, which moves with every file added to or removed. */
+	private static final GOVERNED_LEAD: String = ' of ';
+
 	/** The `using` modules allowed in an ambient source unless a project names its own list. */
 	private static final DEFAULT_USING_ALLOW: Array<String> = ['StringTools', 'Lambda'];
 
@@ -219,7 +222,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	}
 
 	public function messageIdentity(message: String): String {
-		return MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD);
+		return MessageMask.maskAfter(MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD), GOVERNED_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {

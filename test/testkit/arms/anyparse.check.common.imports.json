@@ -435,6 +435,13 @@
 			"find": "\t\t\tfinal governance: Null<AmbientImportGovernedFiles> = plugin.ambientImportGovernedFiles(site);\n\t\t\tif (governance == null || !governance.bounded) continue;\n\t\t\tfinal names: Array<String> = governance.files;\n",
 			"replace": "\t\t\tfinal governance: Null<AmbientImportGovernance> = plugin.ambientImportGovernance(site);\n\t\t\tif (governance == null || !governance.bounded) continue;\n\t\t\tfinal names: Array<String> = governance.governs.map(governed -> governed.file);\n",
 			"note": "the hoist asks each candidate site for the text of every module it governs, so a governed module the disk cannot open withholds the whole site although the run holds its source"
+		},
+		{
+			"name": "M-HOIST-IDENTITY-DENOMINATOR",
+			"type": "anyparse.check.common.imports.HoistCommonImport",
+			"method": "messageIdentity",
+			"force": "MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD)",
+			"note": "the count of governed modules a share is read against stays in the identity, so a file added beside the finding changes the identity of a finding the change never touched"
 		}
 	]
 }
