@@ -1452,6 +1452,13 @@
 			"find": "if (ReificationScan.isSpliceStatement(s, seams.spliceKinds, seams.exprStmtKind, seams.annotationKinds)) return true;",
 			"replace": "",
 			"note": "a moved run holding a spliced statement passes the collision gate, though the splice may declare any name in the frame it lands in"
+		},
+		{
+			"name": "M-PUOSI-NO-USING",
+			"type": "anyparse.check.scan.UsingScan",
+			"method": "hasUsingModule",
+			"force": "true",
+			"note": "every module counts as brought in by `using`, so `prefer-using-over-static-import` reports an import no extension call can replace"
 		}
 	]
 }

@@ -120,6 +120,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-map-type',
 			'prefer-null-coalescing',
 			'prefer-single-pass',
+			'prefer-using-over-static-import',
 			'redundant-import',
 			'redundant-isvar',
 			'scratch-field',

@@ -1,6 +1,7 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.haxe.expressions.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.scan.RunScan;
@@ -226,9 +227,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 * emits nothing. An edit pair overlapping an already-accepted one is skipped; the loser
 	 * converges on a later `--fix` pass.
 	 */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final s: Seams = seams;
@@ -248,7 +247,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 				final byKey: Map<String, Candidate> = [];
 				for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 					byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
-				final edits: Array<{ span: Span, text: String }> = [];
+				final edits: Array<FixEdit> = [];
 				final needsUsing: Array<String> = [];
 				// The findings whose rewrites actually reached `edits`. Only they are harmed if the `using`
 				// insert is refused below, so only they may be told why: a site this loop skipped was skipped
@@ -284,7 +283,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 							+ ' extension call would not resolve';
 						continue;
 					}
-					final pair: Null<Array<{ span: Span, text: String }>> = rewriteEdits(candidate, source);
+					final pair: Null<Array<FixEdit>> = rewriteEdits(candidate, source);
 					if (pair == null) {
 						violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
 							+ ' never acceptable';
@@ -311,16 +310,11 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 			});
 	}
 
-	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
-	private static inline function qualifiedPath(d: ResolvedType): String {
-		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
-	}
-
 	/**
 	 * Bundle the `RefShape` seams + type provider, or null when a required
 	 * kind / type information is missing (the check is then a no-op).
 	 */
-	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+	public static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final callKind: Null<String> = shape.callKind;
 		final fieldKind: Null<String> = shape.fieldAccessKind;
@@ -341,6 +335,87 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		};
 	}
 
+	/**
+	 * The candidate each of `sites` clears the gates as, in the order given, or null where a gate DROPS it. Shared by the
+	 * qualified `Mod.m(recv)` form and the bare `m(recv)` form of a statically imported extension, so both are judged by one set of
+	 * gates. The typing context is built once per call, and only when there is a site.
+	 */
+	public static function judgeSites(
+		sites: Array<ExtensionSite>, tree: QueryNode, source: String, file: String, s: Seams, plugin: GrammarPlugin,
+		symbols: () -> Null<SymbolIndex>
+	): Array<Null<Candidate>> {
+		if (sites.length == 0) return [];
+		final declaredTypes: Map<Int, String> = s.typed.declaredTypes(source);
+		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
+		// file that actually holds a call on a configured module.
+		final chain: ChainTypeContext = {
+			declaredTypeSources: s.typed.declaredTypeSources(source),
+			source: source,
+			typeSyntax: plugin.typeSyntax
+		};
+		// The conflict verdict depends only on (module, method), while a file repeats the same
+		// pair across every call site — and each miss costs a whole-index member-closure query.
+		final conflicts: Map<String, UsingConflict> = [];
+		return sites.map(site -> classify(site, tree, source, file, s, plugin, symbols, declaredTypes, chain, conflicts));
+	}
+
+	/**
+	 * Why `verdict` gets no rewrite, in this check's own words, or null for the one that does.
+	 *
+	 * The two hedged verdicts already SAY why in the finding's message; what they did not do is put
+	 * it where `apq lint --fix`'s unfixed ledger reads it (`Violation.declineReason`), so a run that
+	 * declined every one of them reported "withheld it, without saying why" over findings whose text
+	 * spelled the reason out.
+	 *
+	 * `Fixable` gets NULL here, and that is not a gap: such a finding can still be declined, but only
+	 * by a PER-SITE gate inside `fix`, which writes its own reason there. Answering for those from
+	 * here would invent a reason at a site that did not decide.
+	 */
+	public static function declineReasonFor(verdict: Verdict): Null<String> {
+		return switch verdict {
+			case Verdict.Fixable: null;
+			case Verdict.UnresolvedReceiver:
+				'the receiver\'s nominal type did not resolve in scope, so whether it declares a same-name member — which Haxe would '
+					+ 'pick over the extension — cannot be answered';
+			case Verdict.UnprovenChannels:
+				'whether the written module name denotes the configured module, or which `using` an ambient import adds, did '
+					+ 'not resolve, so the extension form may bind another function';
+			case _:
+				'the receiver resolved but its member closure did not, so a same-name member the rewrite would silently retarget '
+					+ 'cannot be ruled out';
+		}
+	}
+
+	/**
+	 * The TWO span edits turning `Ext.m(recv, rest)` into `recv.m(rest)` — the head up to the
+	 * receiver is deleted and the gap after it becomes `.m(` (or `.m()` when the receiver is the
+	 * only argument). Two edits rather than one whole-call replacement is what lets a nested
+	 * candidate inside an argument rewrite in the SAME pass without overlapping. Null when a
+	 * comment sits in either deleted region: dropping it silently is never acceptable, so the
+	 * site stays a report-only finding.
+	 */
+	public static function rewriteEdits(candidate: Candidate, source: String): Null<Array<FixEdit>> {
+		final recvSpan: Null<Span> = candidate.recv.span;
+		if (recvSpan == null) return null;
+		final callSpan: Span = candidate.callSpan;
+		final children: Array<QueryNode> = candidate.call.children;
+		final restSpan: Null<Span> = children.length > REST_INDEX ? children[REST_INDEX].span : null;
+		if (children.length > REST_INDEX && restSpan == null) return null;
+		final tailTo: Int = restSpan != null ? restSpan.from : callSpan.to;
+		final tailText: String = restSpan != null ? '.${candidate.method}(' : '.${candidate.method}()';
+		return CheckScan.hasCommentMarker(source, callSpan.from, recvSpan.from) || CheckScan.hasCommentMarker(source, recvSpan.to, tailTo)
+			? null
+			: [
+				{ span: new Span(callSpan.from, recvSpan.from), text: '' },
+				{ span: new Span(recvSpan.to, tailTo), text: tailText }
+			];
+	}
+
+	/** The path a module-level type is imported by: its module's for the main type, the module's plus its name otherwise. */
+	private static inline function qualifiedPath(d: ResolvedType): String {
+		return d.type.isMain ? d.file.module : '${d.file.module}.${d.type.name}';
+	}
+
 	/** The per-file `types` / `addUsing` options, with each configured module paired to the simple name a call site is matched by. */
 	private static function readOptions(config: LintConfig): Options {
 		final modules: Array<String> = config.stringListOption(RULE_ID, 'types') ?? ['Lambda', 'StringTools'];
@@ -357,26 +432,14 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	): Array<Candidate> {
 		final calls: Array<QueryNode> = [];
 		collectCalls(tree, s, calls);
-		if (calls.length == 0) return [];
-		final declaredTypes: Map<Int, String> = s.typed.declaredTypes(source);
-		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
-		// file that actually holds a call on a configured module.
-		final chain: ChainTypeContext = {
-			declaredTypeSources: s.typed.declaredTypeSources(source),
-			source: source,
-			typeSyntax: plugin.typeSyntax
-		};
-		// The conflict verdict depends only on (module, method), while a file repeats the same
-		// pair across every call site — and each miss costs a whole-index member-closure query.
-		final conflicts: Map<String, UsingConflict> = [];
-		final out: Array<Candidate> = [];
+		final sites: Array<ExtensionSite> = [];
 		for (call in calls) {
-			final candidate: Null<Candidate> = classify(
-				call, tree, source, file, s, options, plugin, symbols, declaredTypes, chain, conflicts
-			);
-			if (candidate != null) out.push(candidate);
+			final site: Null<ExtensionSite> = extensionSite(call, tree, s, options, plugin);
+			if (site != null) sites.push(site);
 		}
-		return out;
+		return [
+			for (candidate in judgeSites(sites, tree, source, file, s, plugin, symbols)) if (candidate != null) candidate
+		];
 	}
 
 	/** Append every call node in `node`'s subtree to `out`, skipping reification / conditional subtrees. */
@@ -393,11 +456,10 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 * A null result is a full DROP: the site produces no finding at all.
 	 */
 	private static function classify(
-		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
+		site: ExtensionSite, root: QueryNode, source: String, file: String, s: Seams, plugin: GrammarPlugin,
 		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, UsingConflict>
 	): Null<Candidate> {
-		final site: Null<ExtensionSite> = extensionSite(call, root, s, options, plugin);
-		if (site == null) return null;
+		final call: QueryNode = site.call;
 		final method: String = site.method;
 		final module: String = site.module;
 		final recv: QueryNode = site.recv;
@@ -459,6 +521,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		// deleted regions, where the comment gate already guards them.
 		final recv: QueryNode = BoolExprShape.unwrapParens(call.children[1], s.parenKind);
 		return callSpan == null || recv.span == null ? null : {
+			call: call,
 			typeName: typeName,
 			module: module,
 			method: method,
@@ -652,33 +715,6 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		return firstRest == null || lastRest == null ? null : '$receiver.$method(${excerpt(source, firstRest.from, lastRest.to, call)})';
 	}
 
-	/**
-	 * Why `verdict` gets no rewrite, in this check's own words, or null for the one that does.
-	 *
-	 * The two hedged verdicts already SAY why in the finding's message; what they did not do is put
-	 * it where `apq lint --fix`'s unfixed ledger reads it (`Violation.declineReason`), so a run that
-	 * declined every one of them reported "withheld it, without saying why" over findings whose text
-	 * spelled the reason out.
-	 *
-	 * `Fixable` gets NULL here, and that is not a gap: such a finding can still be declined, but only
-	 * by a PER-SITE gate inside `fix`, which writes its own reason there. Answering for those from
-	 * here would invent a reason at a site that did not decide.
-	 */
-	private static function declineReasonFor(verdict: Verdict): Null<String> {
-		return switch verdict {
-			case Verdict.Fixable: null;
-			case Verdict.UnresolvedReceiver:
-				'the receiver\'s nominal type did not resolve in scope, so whether it declares a same-name member — which Haxe would '
-					+ 'pick over the extension — cannot be answered';
-			case Verdict.UnprovenChannels:
-				'whether the written module name denotes the configured module, or which `using` an ambient import adds, did '
-					+ 'not resolve, so the extension form may bind another function';
-			case _:
-				'the receiver resolved but its member closure did not, so a same-name member the rewrite would silently retarget '
-					+ 'cannot be ruled out';
-		}
-	}
-
 	/** The finding text for `verdict`, carrying the suggested extension form. */
 	private static function messageFor(verdict: Verdict, suggestion: String): String {
 		return switch verdict {
@@ -695,31 +731,6 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	}
 
 	/**
-	 * The TWO span edits turning `Ext.m(recv, rest)` into `recv.m(rest)` — the head up to the
-	 * receiver is deleted and the gap after it becomes `.m(` (or `.m()` when the receiver is the
-	 * only argument). Two edits rather than one whole-call replacement is what lets a nested
-	 * candidate inside an argument rewrite in the SAME pass without overlapping. Null when a
-	 * comment sits in either deleted region: dropping it silently is never acceptable, so the
-	 * site stays a report-only finding.
-	 */
-	private static function rewriteEdits(candidate: Candidate, source: String): Null<Array<{ span: Span, text: String }>> {
-		final recvSpan: Null<Span> = candidate.recv.span;
-		if (recvSpan == null) return null;
-		final callSpan: Span = candidate.callSpan;
-		final children: Array<QueryNode> = candidate.call.children;
-		final restSpan: Null<Span> = children.length > REST_INDEX ? children[REST_INDEX].span : null;
-		if (children.length > REST_INDEX && restSpan == null) return null;
-		final tailTo: Int = restSpan != null ? restSpan.from : callSpan.to;
-		final tailText: String = restSpan != null ? '.${candidate.method}(' : '.${candidate.method}()';
-		return CheckScan.hasCommentMarker(source, callSpan.from, recvSpan.from) || CheckScan.hasCommentMarker(source, recvSpan.to, tailTo)
-			? null
-			: [
-				{ span: new Span(callSpan.from, recvSpan.from), text: '' },
-				{ span: new Span(recvSpan.to, tailTo), text: tailText }
-			];
-	}
-
-	/**
 	 * Append ONE insert edit carrying a `using` line for each module in `modules` — the ones the per-site scope
 	 * test found the file declares nowhere in scope, so the caller has already decided every entry needs one.
 	 * Every insert anchors at the same zero-width position, so they are merged into a single
@@ -731,13 +742,11 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 * modules do not compile without them. Returning `Void` here made "did not insert" indistinguishable
 	 * from "inserted", which is the shape `UsingScan.appendUsingInsert` had on the same branch.
 	 */
-	private static function appendUsingInserts(
-		header: UsingHeader, modules: Array<String>, edits: Array<{ span: Span, text: String }>
-	): Bool {
+	private static function appendUsingInserts(header: UsingHeader, modules: Array<String>, edits: Array<FixEdit>): Bool {
 		var anchor: Null<Span> = null;
 		var text: String = '';
 		for (module in modules) {
-			final insert: { span: Span, text: String } = UsingScan.usingInsertEdit(header, module);
+			final insert: FixEdit = UsingScan.usingInsertEdit(header, module);
 			anchor = insert.span;
 			text += insert.text;
 		}
@@ -766,7 +775,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 }
 
 /** What the gates concluded about one static-utility call site. */
-private enum abstract Verdict(Int) {
+enum abstract Verdict(Int) {
 
 	/** Provably safe to rewrite: the receiver's member closure lacks the method. */
 	final Fixable = 0;
@@ -783,7 +792,7 @@ private enum abstract Verdict(Int) {
 }
 
 /** The `RefShape` kinds + type provider this check reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
+typedef Seams = {
 	var shape: RefShape;
 	var typed: TypeInfoProvider;
 	var identKind: String;
@@ -801,7 +810,7 @@ private typedef Seams = {
 private typedef Options = { var modules: Array<String>; var simpleNames: Array<String>; var addUsing: Bool; };
 
 /** A static-utility call site that cleared every structural + conflict gate, with its receiver verdict and message. */
-private typedef Candidate = {
+typedef Candidate = {
 	var call: QueryNode;
 	var callSpan: Span;
 	var recv: QueryNode;
@@ -812,7 +821,8 @@ private typedef Candidate = {
 };
 
 /** A static call of an extension module's method, as `PreferStaticExtension.extensionSite` reads it. */
-private typedef ExtensionSite = {
+typedef ExtensionSite = {
+	final call: QueryNode;
 	final typeName: String;
 	final module: String;
 	final method: String;

@@ -216,6 +216,7 @@ import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.SubstrNegativeStart;
+import anyparse.check.haxe.imports.PreferUsingOverStaticImport;
 import anyparse.check.haxe.literals.PreferInterpolation;
 import anyparse.check.haxe.literals.PreferLpad;
 import anyparse.check.haxe.literals.TrigraphInString;
@@ -513,6 +514,8 @@ final class Linter {
 			// stepped by an increment, where they need a boolean literal.
 			new PreferCount(),
 			new PreferStaticExtension(),
+			// The import-side twin: a bare call of a statically imported extension takes the same per-call gates.
+			new PreferUsingOverStaticImport(),
 			// Inert without an `idioms` declaration. It claims a run of adjacent `R.f = rhs;` statements, which no other
 			// rule rewrites as a WINDOW: `field-init-at-declaration` moves one constructor write onto its own field, and a
 			// receiver of an idiom type is never the class whose constructor that is. Registry order is free.

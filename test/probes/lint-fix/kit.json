@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "9b18b37debee7eae",
+				"err": "f455fe3a13d47f34",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1626,6 +1626,39 @@
 				"sameRun": [
 					true,
 					true
+				]
+			}
+		},
+		{
+			"name": "PUOSI-INTERP-READ",
+			"note": "a `$name` read inside a string keeps the static import: the finding is report-only with its reason, and the oracle has no import deletion to bisect away",
+			"argv": [
+				"hxq",
+				"lint",
+				"C.hx",
+				"Ext.hx",
+				"--rule",
+				"prefer-using-over-static-import",
+				"--fix"
+			],
+			"files": {
+				"C.hx": "import Ext.deco;\n\nusing Ext;\n\nclass C {\n\tstatic function main():Void {\n\t\tf('x', 'y', 'z');\n\t}\n\n\tstatic function f(a:String, b:String, w:String):Void {\n\t\ttrace('$deco');\n\t\ttrace(deco(w, 2));\n\t}\n}\n",
+				"Ext.hx": "class Ext {\n\tpublic static function deco(w: String, n: Int): String return w;\n}\n",
+				"build.hxml": "-main C\n--no-output\n--interp\n",
+				"apq.json": "{\"compilerOracle\":[{\"hxml\":\"build.hxml\",\"dir\":\".\"}],\"rules\":{\"prefer-using-over-static-import\":true}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "9267bdb8ddb9afbd",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
 				]
 			}
 		}

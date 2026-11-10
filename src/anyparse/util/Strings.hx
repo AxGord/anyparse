@@ -1,7 +1,5 @@
 package anyparse.util;
 
-import StringTools.fastCodeAt;
-
 using StringTools;
 
 /** The text on either side of a delimiter. */
@@ -30,7 +28,7 @@ final class Strings {
 	 */
 	public static function lineStart(source: String, at: Int): Int {
 		var i: Int = at < source.length ? at : source.length;
-		while (i > 0 && fastCodeAt(source, i - 1) != '\n'.code) i--;
+		while (i > 0 && source.fastCodeAt(i - 1) != '\n'.code) i--;
 		return i < 0 ? 0 : i;
 	}
 
@@ -47,7 +45,7 @@ final class Strings {
 	public static function lineOf(source: String, at: Int): Int {
 		final end: Int = at < source.length ? at : source.length;
 		var line: Int = 1;
-		for (i in 0...end) if (fastCodeAt(source, i) == '\n'.code) line++;
+		for (i in 0...end) if (source.fastCodeAt(i) == '\n'.code) line++;
 		return line;
 	}
 
@@ -55,14 +53,14 @@ final class Strings {
 	public static function firstLine(text: String): String {
 		final nl: Int = text.indexOf('\n');
 		if (nl < 0) return text;
-		final end: Int = nl > 0 && fastCodeAt(text, nl - 1) == '\r'.code ? nl - 1 : nl;
+		final end: Int = nl > 0 && text.fastCodeAt(nl - 1) == '\r'.code ? nl - 1 : nl;
 		return text.substring(0, end);
 	}
 
 	/** Whether every character is white space (the set `StringTools.trim` strips); the empty text is blank. */
 	public static function isBlank(text: String): Bool {
 		for (i in 0...text.length) {
-			final c: Int = fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			if (c != ' '.code && (c < '\t'.code || c > '\r'.code)) return false;
 		}
 		return true;
@@ -80,8 +78,8 @@ final class Strings {
 
 	/** Whether `text` is one non-empty ASCII identifier. */
 	public static function isIdentifier(text: String): Bool {
-		if (text.length == 0 || !isIdentStart(fastCodeAt(text, 0))) return false;
-		for (i in 1...text.length) if (!isIdentChar(fastCodeAt(text, i))) return false;
+		if (text.length == 0 || !isIdentStart(text.fastCodeAt(0))) return false;
+		for (i in 1...text.length) if (!isIdentChar(text.fastCodeAt(i))) return false;
 		return true;
 	}
 
@@ -90,7 +88,7 @@ final class Strings {
 		final out: StringBuf = new StringBuf();
 		out.addChar('"'.code);
 		for (i in 0...text.length) {
-			final c: Int = fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			switch c {
 				case '"'.code:
 					out.add('\\"');
@@ -119,7 +117,7 @@ final class Strings {
 	/** Number of characters `c` in `text`. */
 	public static function charCount(text: String, c: Int): Int {
 		var n: Int = 0;
-		for (i in 0...text.length) if (fastCodeAt(text, i) == c) n++;
+		for (i in 0...text.length) if (text.fastCodeAt(i) == c) n++;
 		return n;
 	}
 
@@ -183,13 +181,13 @@ final class Strings {
 	 * is a single-line tail must not let a dangling backslash carry the scan into the next line.
 	 */
 	public static function quotedEnd(source: String, at: Int): Int {
-		final quote: Int = fastCodeAt(source, at);
+		final quote: Int = source.fastCodeAt(at);
 		var i: Int = at + 1;
 		while (i < source.length) {
-			final c: Int = fastCodeAt(source, i);
+			final c: Int = source.fastCodeAt(i);
 			if (c == '\n'.code || c == '\r'.code) return at;
 			if (c == '\\'.code) {
-				if (i + 1 >= source.length || fastCodeAt(source, i + 1) == '\n'.code || fastCodeAt(source, i + 1) == '\r'.code) return at;
+				if (i + 1 >= source.length || source.fastCodeAt(i + 1) == '\n'.code || source.fastCodeAt(i + 1) == '\r'.code) return at;
 				i += 2;
 				continue;
 			}
@@ -221,11 +219,11 @@ final class Strings {
 	 * character. `(a)+(b)` and an unclosed `(()` are not; text inside quotes or comments counts like any other.
 	 */
 	public static function wrappedInParens(text: String): Bool {
-		if (text.length < 2 || fastCodeAt(text, 0) != '('.code) return false;
+		if (text.length < 2 || text.fastCodeAt(0) != '('.code) return false;
 		final last: Int = text.length - 1;
 		var depth: Int = 0;
 		for (i in 0...text.length) {
-			final c: Int = fastCodeAt(text, i);
+			final c: Int = text.fastCodeAt(i);
 			if (c == '('.code)
 				depth++;
 			else if (c == ')'.code && --depth == 0)

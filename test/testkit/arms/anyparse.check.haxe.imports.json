@@ -1,0 +1,45 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.imports. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-PUOSI-OTHER-USE",
+			"type": "anyparse.check.haxe.imports.PreferUsingOverStaticImport",
+			"method": "judge",
+			"find": "if (uses.other) ",
+			"replace": "if (false) ",
+			"note": "a bare name read other than as a call no longer keeps the import, so `prefer-using-over-static-import` deletes an import a remaining read still needs"
+		},
+		{
+			"name": "M-PUOSI-VERDICT",
+			"type": "anyparse.check.haxe.imports.PreferUsingOverStaticImport",
+			"method": "judge",
+			"find": "if (candidate.verdict != Verdict.Fixable)",
+			"replace": "if (false)",
+			"note": "a call whose receiver the gates did not prove is rewritten all the same, so the import goes with calls the extension form may bind elsewhere"
+		},
+		{
+			"name": "M-PUOSI-LOCAL-NAME",
+			"type": "anyparse.check.haxe.imports.PreferUsingOverStaticImport",
+			"method": "isUse",
+			"force": "node.kind == seams.identKind && node.name == member",
+			"note": "a local or parameter of the imported name counts as a use of the import, so the import stays beside calls that are all rewritable"
+		},
+		{
+			"name": "M-PUOSI-BINDING-DECLINE",
+			"type": "anyparse.check.haxe.imports.PreferUsingOverStaticImport",
+			"method": "bindingDecline",
+			"force": "null",
+			"note": "a bare call is taken to mean the import wherever it stands, so a member of the enclosing type that outranks the import is rewritten past"
+		},
+		{
+			"name": "M-PUOSI-INTERP-READ",
+			"type": "anyparse.check.haxe.imports.PreferUsingOverStaticImport",
+			"method": "namesMember",
+			"find": " || node.kind == seams.shape.stringInterpIdentKind",
+			"replace": "",
+			"note": "a `$name` read inside a string is no use of the bare name, so the import is deleted beside a read only the interpolation spells and the build has to revert it"
+		}
+	]
+}

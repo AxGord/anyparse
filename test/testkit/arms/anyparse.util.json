@@ -7,8 +7,8 @@
 			"name": "M-UTIL-LINE-START-PREV",
 			"type": "anyparse.util.Strings",
 			"method": "lineStart",
-			"find": "fastCodeAt(source, i - 1)",
-			"replace": "fastCodeAt(source, i)",
+			"find": "source.fastCodeAt(i - 1)",
+			"replace": "source.fastCodeAt(i)",
 			"note": "the walk back tests the character at the position instead of the one before it, so a position that starts a line, or sits on a break, stops one early"
 		},
 		{
@@ -431,7 +431,7 @@
 			"name": "M-UTIL-QUOTED-ESCAPE-BREAK-OFF",
 			"type": "anyparse.util.Strings",
 			"method": "quotedEnd",
-			"find": "if (i + 1 >= source.length || fastCodeAt(source, i + 1) == '\\n'.code || fastCodeAt(source, i + 1) == '\\r'.code) return at;",
+			"find": "if (i + 1 >= source.length || source.fastCodeAt(i + 1) == '\\n'.code || source.fastCodeAt(i + 1) == '\\r'.code) return at;",
 			"replace": "",
 			"note": "an escape may step over a line break, so a trailing backslash carries the scan into the next line"
 		},
@@ -503,7 +503,7 @@
 			"name": "M-UTIL-PARENS-OPENER",
 			"type": "anyparse.util.Strings",
 			"method": "wrappedInParens",
-			"find": " || fastCodeAt(text, 0) != '('.code",
+			"find": " || text.fastCodeAt(0) != '('.code",
 			"replace": "",
 			"note": "text that does not open with a parenthesis is read from its first inner pair"
 		},

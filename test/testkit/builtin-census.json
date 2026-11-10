@@ -153,6 +153,7 @@
 	"prefer-try-expression-assignment",
 	"prefer-try-expression-return",
 	"prefer-typed-throw",
+	"prefer-using-over-static-import",
 	"prefer-value-loop",
 	"redundant-ascription",
 	"redundant-braces",
