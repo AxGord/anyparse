@@ -70,10 +70,7 @@ typedef DeclarationChange = {
 }
 
 /** One identifier spelled differently at every one of its places. */
-typedef Renaming = {
-	final from: String;
-	final to: String;
-}
+typedef Renaming = { final from: String; final to: String; }
 
 /** One key path of a data document whose value differs between the two versions. */
 typedef ValueChange = {
@@ -113,16 +110,10 @@ typedef FileDelta = {
 }
 
 /** Lines an edit inserted and deleted. */
-private typedef LineCounts = {
-	final added: Int;
-	final removed: Int;
-}
+private typedef LineCounts = { final added: Int; final removed: Int; }
 
 /** An identifier run or a single non-blank character, at its offset in the text it was read from. */
-private typedef BodyToken = {
-	final text: String;
-	final at: Int;
-}
+private typedef BodyToken = { final text: String; final at: Int; }
 
 /**
  * Which declarations of a file changed between two versions of it, matched by NAME — a declaration inserted in the

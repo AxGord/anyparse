@@ -187,13 +187,7 @@ final class LandProse {
 }
 
 /** The paths a commit takes out of the tree: files, and directories that hold none of the tree's files any more. */
-typedef Vanished = {
-	var files: Array<String>;
-	var dirs: Array<String>;
-}
+typedef Vanished = { var files: Array<String>; var dirs: Array<String>; }
 
 /** A prose file: where it is read, and how a hit names it. */
-private typedef ProseFile = {
-	var path: String;
-	var label: String;
-}
+private typedef ProseFile = { var path: String; var label: String; }

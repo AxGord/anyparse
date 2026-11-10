@@ -27,10 +27,7 @@ private typedef SiteFact = {
  * What a call site fixes under every state (`EdgeConditions.siteOf`): the contexts it keeps (`mask`, 0 where nothing runs),
  * and the facts about each tracked parameter its conditions test (`params`, each parameter once).
  */
-private typedef EdgeSite = {
-	final mask: Int;
-	final params: Array<{ param: Int, facts: Array<SiteFact> }>;
-}
+private typedef EdgeSite = { final mask: Int; final params: Array<{ param: Int, facts: Array<SiteFact> }>; }
 
 /**
  * The conditions under which a call site of one function body runs, as far as two kinds of condition decide it: the

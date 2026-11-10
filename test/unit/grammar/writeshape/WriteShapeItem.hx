@@ -4,7 +4,4 @@ package unit.grammar.writeshape;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef WriteShapeItem = {
-	var n: Int;
-	var tags: Array<String>;
-}
+typedef WriteShapeItem = { var n: Int; var tags: Array<String>; }

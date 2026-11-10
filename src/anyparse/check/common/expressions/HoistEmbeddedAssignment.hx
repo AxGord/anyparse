@@ -22,10 +22,7 @@ private typedef Spine = {
 }
 
 /** One statement and every assignment the rule hoists out of it, in source order. */
-private typedef HoistSite = {
-	final stmt: QueryNode;
-	final assigns: Array<QueryNode>;
-}
+private typedef HoistSite = { final stmt: QueryNode; final assigns: Array<QueryNode>; }
 
 /**
  * Flags an assignment written INSIDE a data structure -- an array or object literal being built as

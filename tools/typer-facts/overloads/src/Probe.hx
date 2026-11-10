@@ -1,12 +1,6 @@
-typedef Opts = {
-	a: Float,
-	?b: Int
-}
+typedef Opts = { a: Float, ?b: Int }
 
-typedef Other = {
-	a: Int,
-	?c: String
-}
+typedef Other = { a: Int, ?c: String }
 
 typedef Dy = { d: Dynamic }
 

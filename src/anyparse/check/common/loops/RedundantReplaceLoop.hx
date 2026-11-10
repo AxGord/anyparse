@@ -801,10 +801,7 @@ private typedef Seams = {
 };
 
 /** A destructured `x.method(...)` call: its receiver node and method name. */
-private typedef MethodCall = {
-	final recv: QueryNode;
-	final method: String;
-};
+private typedef MethodCall = { final recv: QueryNode; final method: String; };
 
 /**
  * One resolved `S` / `B` operand: EITHER a plain string literal, OR a bare identifier bound to a

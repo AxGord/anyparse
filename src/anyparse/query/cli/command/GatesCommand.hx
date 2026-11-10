@@ -43,10 +43,7 @@ typedef GateHit = {
  * name without parens, `predicate` the quoted inner symbol. `null` from
  * the extractor means the `@:fmt` argument is not a gate call.
  */
-typedef GateExtract = {
-	gateKind: String,
-	predicate: String
-};
+typedef GateExtract = { gateKind: String, predicate: String };
 
 /**
  * Parsed options for `apq gates` — `lang`, `flat`, `limit`, the `mechanism` to inspect, and

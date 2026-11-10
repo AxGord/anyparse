@@ -5,10 +5,7 @@ package anyparse.query;
  * `content` — the RAW inner source between the quotes (escapes and `$$`
  * preserved verbatim), so two same-`quote` literals fold by plain concatenation.
  */
-typedef StringLiteral = {
-	var quote: String;
-	var content: String;
-}
+typedef StringLiteral = { var quote: String; var content: String; }
 
 /**
  * One atom of a `+`-concatenation after operand expansion — the unit the

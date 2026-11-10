@@ -7,10 +7,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
 /** One module's header lines on one side of the guard, split into imports and `using` lines. */
-private typedef HeaderHalves = {
-	final imports: Array<ImportLine>;
-	final usings: Array<ImportLine>;
-}
+private typedef HeaderHalves = { final imports: Array<ImportLine>; final usings: Array<ImportLine>; }
 
 /**
  * Flags an `import` / `using` written ABOVE the `#if … #end` region that guards the module's

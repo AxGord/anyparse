@@ -778,10 +778,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 }
 
 /** One collapsible arm: the span replaced, and the spliced arm run that replaces it. */
-private typedef Candidate = {
-	final span: Span;
-	final text: String;
-};
+private typedef Candidate = { final span: Span; final text: String; };
 
 /** The nodes one collapse is built from, resolved once by `candidateFor` for `emit` to read. */
 private typedef Frame = {

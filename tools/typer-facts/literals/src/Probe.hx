@@ -1,7 +1,4 @@
-typedef Opts = {
-	a: Int,
-	?b: String
-};
+typedef Opts = { a: Int, ?b: String };
 
 class P {
 

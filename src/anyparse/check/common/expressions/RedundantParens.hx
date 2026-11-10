@@ -858,10 +858,7 @@ private typedef ParenSlots = {
  * An indexed paren node plus whether its own pair can be dropped entirely (rather
  * than collapsed to one pair) — the `fix` lookup's payload.
  */
-private typedef ParenSite = {
-	var node: QueryNode;
-	var dropsParens: Bool;
-}
+private typedef ParenSite = { var node: QueryNode; var dropsParens: Bool; }
 
 /**
  * How a child slot is bounded. `Plain` — nothing delimits it, so a paren there may be

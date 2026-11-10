@@ -1170,7 +1170,7 @@
 			"kind": "TypedefDecl",
 			"find": ", captureAfterLead, propagateTypedefContext)",
 			"replace": ", captureAfterLead)",
-			"note": "an intersection operand of a typedef body is an ordinary anon type, so two fields of it stay on one line"
+			"note": "an intersection operand of a typedef body is an ordinary anon type, so a Next left curly no longer lays it out one field per line"
 		},
 		{
 			"name": "M-ARROW-TYPE-IN-TYPEDEF-BODY",
@@ -1179,7 +1179,7 @@
 			"kind": "EnumDecl",
 			"find": "@:fmt(functionTypeHaxe3, clearTypedefContext)",
 			"replace": "@:fmt(functionTypeHaxe3)",
-			"note": "an anon parameter or return of an old-style function type under a typedef counts as the typedef body and goes one field per line"
+			"note": "an anon parameter or return of an old-style function type under a typedef counts as the typedef body, so a Next left curly lays it out one field per line"
 		},
 		{
 			"name": "M-ARROW-FN-TYPE-IN-TYPEDEF-BODY",
@@ -1188,7 +1188,7 @@
 			"kind": "EnumDecl",
 			"find": "@:fmt(clearTypedefContext)",
 			"replace": "",
-			"note": "an anon parameter of a `(args) -> ret` function type under a typedef counts as the typedef body and goes one field per line"
+			"note": "an anon parameter of a `(args) -> ret` function type under a typedef counts as the typedef body, so a Next left curly lays it out one field per line"
 		},
 		{
 			"name": "M-SEMI-ELSEIF-PER-LINE",

@@ -589,17 +589,10 @@ private typedef ClosedAbstract = {
 }
 
 /** The members of an enum abstract that can build a value: its values, and its functions (whether each is a `@:from`). */
-private typedef AbstractMembers = {
-	final values: Array<QueryNode>;
-	final functions: Array<{ fn: QueryNode, from: Bool }>;
-}
+private typedef AbstractMembers = { final values: Array<QueryNode>; final functions: Array<{ fn: QueryNode, from: Bool }>; }
 
 /** Where an expression is evaluated: its file, the outermost function around it (null outside one) and that function's type. */
-private typedef ValueContext = {
-	final file: String;
-	final fn: Null<QueryNode>;
-	final owner: Null<String>;
-}
+private typedef ValueContext = { final file: String; final fn: Null<QueryNode>; final owner: Null<String>; }
 
 /** A write in the project (an assignment, a compound one, an increment) and where it sits. */
 private typedef WriteSite = {

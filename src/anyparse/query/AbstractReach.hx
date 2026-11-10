@@ -165,17 +165,10 @@ final class AbstractReach {
 }
 
 /** A member whose type its declaration leaves to inference: where it is declared. */
-typedef InferredRef = {
-	var file: String;
-	var type: String;
-	var member: String;
-}
+typedef InferredRef = { var file: String; var type: String; var member: String; }
 
 /** A member read by name, and the types whose declaration of it the read may reach (null: any). */
-typedef MemberRead = {
-	var name: String;
-	var owners: Null<Array<String>>;
-}
+typedef MemberRead = { var name: String; var owners: Null<Array<String>>; }
 
 /** The words of the index's declared signatures: by member name, and by type name (see `ReachGraph.signatureWords`). */
 typedef SignatureWords = {

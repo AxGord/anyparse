@@ -103,8 +103,4 @@ final class Dev {
 }
 
 /** One subcommand of `Dev`. */
-typedef Subcommand = {
-	var name: String;
-	var main: Array<String> -> Int;
-	var usage: String;
-}
+typedef Subcommand = { var name: String; var main: Array<String> -> Int; var usage: String; }

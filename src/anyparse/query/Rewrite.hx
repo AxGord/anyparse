@@ -266,7 +266,4 @@ final class Rewrite {
 }
 
 /** One expanded replacement: its text, and where in it each metavariable's source landed. */
-private typedef Expansion = {
-	text: String,
-	holes: Array<Span>
-};
+private typedef Expansion = { text: String, holes: Array<Span> };

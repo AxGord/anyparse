@@ -54,11 +54,7 @@ typedef ProbeRider = {
  * the `-v` typecheck it stands for (`OracleCoverage.probeArgs`) and the build the probe reports — both null when the
  * rider may have changed either.
  */
-typedef RiddenReading = {
-	arms: Int,
-	verbose: Null<ProcessRun>,
-	configuration: Null<ReachConfiguration>
-};
+typedef RiddenReading = { arms: Int, verbose: Null<ProcessRun>, configuration: Null<ReachConfiguration> };
 
 /**
  * What each configured compiler oracle DEFINES, for the reach analysis to decide conditional compilation with

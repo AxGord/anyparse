@@ -21,10 +21,7 @@ typedef RewrittenModule = {
 }
 
 /** A find and its paired replace in the new spelling. */
-private typedef Carried = {
-	final find: String;
-	final replace: Null<String>;
-}
+private typedef Carried = { final find: String; final replace: Null<String>; }
 
 /** One member across the rewrite: its text after it, the node holding it, and the alignments of the text before it. */
 private typedef Rewrite = {

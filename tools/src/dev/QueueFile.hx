@@ -7,11 +7,7 @@ import haxe.Exception;
 using StringTools;
 
 /** A note on a queue line: who wrote it, when, and what it says. */
-typedef QueueNote = {
-	final from: String;
-	final date: String;
-	final text: String;
-}
+typedef QueueNote = { final from: String; final date: String; final text: String; }
 
 /** One line of the queue file, the fields every consumer asks for; a field the line lacks is empty. */
 typedef QueueLine = {

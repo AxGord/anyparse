@@ -23,10 +23,7 @@ typedef BoundedRepeatEntry = {
  * One well-formed object entry of `spawns`, as written: the call, and the positions of its arguments (from 0, a receiver
  * not counted) whose function value it runs on the main thread later rather than on another thread.
  */
-typedef SpawnArguments = {
-	final call: String;
-	final main: Array<Int>;
-}
+typedef SpawnArguments = { final call: String; final main: Array<Int>; }
 
 /**
  * ONE chain's `thread-safety` options, read and checked in one place: every key the rule knows, each of the shape it

@@ -15,12 +15,11 @@ final class HxFirstElementBlockLeadTest extends Test {
 	@:pin('control')
 	@:killer('M-OPEN-GLUED-COMMENT-AS-TRAIL')
 	public function testATypedefBodyTakesOneRewrite(): Void {
-		// A body of two or more fields goes one per line, so the flat forms are a one-field body and an anon type argument.
-		final once: String = HxWriteFixture.triviaWrite('typedef T = {\n\t/* Comment */ a: Float\n}', '{}');
-		Assert.equals('typedef T = {/* Comment */ a:Float}', once);
+		final once: String = HxWriteFixture.triviaWrite('typedef T = {\n\t/* Comment */ a: Float,\n\t/* Comment */ b: Float\n}', '{}');
+		Assert.equals('typedef T = {/* Comment */ a:Float, /* Comment */ b:Float}', once);
 		Assert.equals(once, HxWriteFixture.triviaWrite(once, '{}'));
-		final single: String = HxWriteFixture.triviaWrite('typedef T = Array<{\n\t/* Comment */ a: Float,\n\tb: Float\n}>', '{}');
-		Assert.equals('typedef T = Array<{/* Comment */ a:Float, b:Float}>', single);
+		final single: String = HxWriteFixture.triviaWrite('typedef T = {\n\t/* Comment */ a: Float,\n\tb: Float\n}', '{}');
+		Assert.equals('typedef T = {/* Comment */ a:Float, b:Float}', single);
 		Assert.equals(single, HxWriteFixture.triviaWrite(single, '{}'));
 	}
 

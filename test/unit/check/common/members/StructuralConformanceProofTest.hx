@@ -272,7 +272,4 @@ class StructuralConformanceProofTest extends Test {
 }
 
 /** One source a fixture hands the rule. */
-private typedef SourceFile = {
-	var file: String;
-	var source: String;
-};
+private typedef SourceFile = { var file: String; var source: String; };

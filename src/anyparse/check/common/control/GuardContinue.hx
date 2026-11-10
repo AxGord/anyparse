@@ -680,10 +680,7 @@ private typedef HoistSeams = {
  * exact last statement), and the collision renames the de-nested block needs (empty
  * when no de-nested local clashes with the surrounding scope).
  */
-private typedef Candidate = GuardedIf & {
-	var tail: Array<QueryNode>;
-	var renames: Array<LocalRename>;
-}
+private typedef Candidate = GuardedIf & { var tail: Array<QueryNode>; var renames: Array<LocalRename>; }
 
 /**
  * One de-nested local renamed out of a scope collision: the name it binds, the
@@ -691,8 +688,4 @@ private typedef Candidate = GuardedIf & {
  * over — the declaration's binder token plus each read, a plain identifier or the
  * identifier of a `$name` interpolation (the `$` itself is outside the span).
  */
-private typedef LocalRename = {
-	var name: String;
-	var newName: String;
-	var spans: Array<Span>;
-}
+private typedef LocalRename = { var name: String; var newName: String; var spans: Array<Span>; }

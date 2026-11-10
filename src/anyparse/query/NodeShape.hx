@@ -1,18 +1,10 @@
 package anyparse.query;
 
 /** The pieces a `receiver.method(…)` call spells: the field-access callee, its one receiver child and the method name. */
-typedef MethodCall = {
-	final callee: QueryNode;
-	final receiver: QueryNode;
-	final method: String;
-};
+typedef MethodCall = { final callee: QueryNode; final receiver: QueryNode; final method: String; };
 
 /** An `x = e` binary whose next statement is `return x;`: the written identifier, its name and the returned identifier. */
-typedef ReturnedAssignment = {
-	final lhs: QueryNode;
-	final name: String;
-	final retIdent: QueryNode;
-};
+typedef ReturnedAssignment = { final lhs: QueryNode; final name: String; final retIdent: QueryNode; };
 
 /**
  * The child shapes a statement or a call projects, read off the kinds a caller names: the assignment an

@@ -711,7 +711,4 @@ enum abstract OccurrenceClass(Int) {
  * One classified word-boundary occurrence: the span of the matched identifier
  * and its lexical class.
  */
-typedef ClassifiedOccurrence = {
-	final span: Span;
-	final kind: OccurrenceClass;
-};
+typedef ClassifiedOccurrence = { final span: Span; final kind: OccurrenceClass; };

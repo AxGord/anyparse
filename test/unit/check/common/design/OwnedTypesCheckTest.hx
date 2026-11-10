@@ -356,7 +356,4 @@ class OwnedTypesCheckTest extends Test {
 }
 
 /** One source file of a fixture project. */
-private typedef FixtureFile = {
-	file: String,
-	source: String
-};
+private typedef FixtureFile = { file: String, source: String };

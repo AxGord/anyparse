@@ -233,7 +233,4 @@ private typedef OracleFields = {
 }
 
 /** A configuration read from the array form, with the position its element had there, for the drop lines. */
-private typedef IndexedOracle = {
-	var index: Int;
-	var config: OracleConfig;
-}
+private typedef IndexedOracle = { var index: Int; var config: OracleConfig; }

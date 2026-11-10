@@ -18,11 +18,7 @@ import sys.io.File;
  * on and each configuration's identity and `OracleCache` fingerprint; and per configuration the directory it compiles
  * from and every source that fingerprint hashed.
  */
-typedef ReachBuildsKey = {
-	var key: String;
-	var bases: Array<String>;
-	var hashed: Array<Map<String, String>>;
-}
+typedef ReachBuildsKey = { var key: String; var bases: Array<String>; var hashed: Array<Map<String, String>>; }
 
 /**
  * The builds an oracle run probed (`ReachDefinesProbe`), kept in a file beside the verdict cache (`OracleCache`) under the

@@ -12,11 +12,7 @@ import sys.io.File;
  * `input` is the pre-format Haxe source, `expected` is the reference
  * formatter's byte-exact output.
  */
-typedef HxTestCase = {
-	final config: String;
-	final input: String;
-	final expected: String;
-}
+typedef HxTestCase = { final config: String; final input: String; final expected: String; }
 
 /**
  * Shared helpers for the haxe-formatter corpus harness. Resolves the
@@ -109,7 +105,10 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/lineends/issue_111_extra_line_break_after_object.hxtest',
 		'test/testcases/lineends/issue_301_typedef_anon_type.hxtest',
 		'test/testcases/lineends/issue_301_typedef_anon_type_wrap_keep.hxtest',
+		'test/testcases/lineends/issue_32_structure_inheritance.hxtest',
+		'test/testcases/emptylines/issue_52_between_types_with_nested_conditional.hxtest',
 		'test/testcases/indentation/issue_114_untyped.hxtest',
+		'test/testcases/indentation/indent_typedef.hxtest',
 		'test/testcases/indentation/issue_138_multiple_objects_in_call.hxtest',
 		'test/testcases/indentation/issue_138_multiple_objects_in_call_curly_next.hxtest',
 		'test/testcases/indentation/issue_367_array_literal_call.hxtest',
@@ -118,9 +117,7 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/indentation/issue_546_wrapping_and_arrow_function.hxtest',
 		'test/testcases/indentation/issue_557_anon_struct_with_assignment.hxtest',
 		'test/testcases/indentation/issue_576_switch_indentation.hxtest',
-		'test/testcases/indentation/object_literal.hxtest',
-		'test/testcases/whitespace/issue_202_structure_inheritance_with_type_parameters.hxtest',
-		'test/testcases/whitespace/issue_202_structure_inheritance_with_type_parameters_empty_lines.hxtest'
+		'test/testcases/indentation/object_literal.hxtest'
 	];
 
 	private static inline final EXPECTED_SECTIONS: Int = 3;

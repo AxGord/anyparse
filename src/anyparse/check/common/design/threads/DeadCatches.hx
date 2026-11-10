@@ -159,7 +159,4 @@ final class DeadCatches {
 }
 
 /** Where a name is read: the function node around it and the type declaring that function (null when the graph names none). */
-private typedef ReadScope = {
-	final fn: QueryNode;
-	final type: Null<String>;
-}
+private typedef ReadScope = { final fn: QueryNode; final type: Null<String>; }

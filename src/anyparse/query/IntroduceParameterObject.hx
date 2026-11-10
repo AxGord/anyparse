@@ -8,11 +8,7 @@ import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
 /** A resolved parameter to fold into the object: its name, type source, and node. */
-private typedef Field = {
-	var name: String;
-	var type: String;
-	var node: QueryNode;
-}
+private typedef Field = { var name: String; var type: String; var node: QueryNode; }
 
 /** Everything resolved before edits are built. */
 private typedef Prep = {

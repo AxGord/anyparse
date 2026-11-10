@@ -7,7 +7,4 @@ package anyparse.format.comment;
 @:peg
 @:raw
 @:schema(anyparse.format.comment.CFamilyCommentFormat)
-typedef BlockCommentLine = {
-	var ws: BlockCommentLineWs;
-	var body: BlockCommentLineBody;
-};
+typedef BlockCommentLine = { var ws: BlockCommentLineWs; var body: BlockCommentLineBody; };

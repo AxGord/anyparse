@@ -616,8 +616,4 @@ private typedef FactsSite = {
 }
 
 /** The member and the type holding a span of a file as it is now, and the member's own span; null where it lies in none. */
-private typedef Home = {
-	final member: Null<String>;
-	final type: Null<String>;
-	final span: Null<Span>;
-}
+private typedef Home = { final member: Null<String>; final type: Null<String>; final span: Null<Span>; }

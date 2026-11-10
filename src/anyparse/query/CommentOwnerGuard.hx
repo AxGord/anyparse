@@ -358,26 +358,16 @@ final class CommentOwnerGuard {
  * is a `//` line comment rather than a `/* … *\/` block. Named here because the carry criterion
  * threads it through three signatures and the structural spelling drowned them.
  */
-typedef CommentToken = {
-	final from: Int;
-	final to: Int;
-	final isLine: Bool;
-}
+typedef CommentToken = { final from: Int; final to: Int; final isLine: Bool; }
 
 /** One `CommentToken` of the source together with the offset it landed at inside a replacement. */
-typedef PlacedComment = {
-	final token: CommentToken;
-	final at: Int;
-}
+typedef PlacedComment = { final token: CommentToken; final at: Int; }
 
 /**
  * Where the splice put each source comment: `copied` answers for every comment no edit covers,
  * keyed by its result offset and length; `placed` holds one entry per edit, in source order.
  */
-typedef CommentAlignment = {
-	final copied: Map<String, Int>;
-	final placed: Array<PlacedEdit>;
-}
+typedef CommentAlignment = { final copied: Map<String, Int>; final placed: Array<PlacedEdit>; }
 
 /**
  * One edit as the splice placed it — where its replacement starts in the result, how long it is,
@@ -387,8 +377,4 @@ typedef CommentAlignment = {
  * the text is all there is to match on, and a queue drawn across the whole file is exactly what
  * invented refusals on deletions; declining to answer keeps the ambiguity from becoming a verdict.
  */
-typedef PlacedEdit = {
-	final at: Int;
-	final length: Int;
-	final covered: Map<String, Int>;
-}
+typedef PlacedEdit = { final at: Int; final length: Int; final covered: Map<String, Int>; }

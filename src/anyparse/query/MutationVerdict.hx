@@ -25,11 +25,7 @@ enum MutationVerdictKind {
  * appends it to the track's own transcript file rather than the console row, so a name `cap`'s window
  * pushed out is still findable without re-deriving it from the raw utest dump.
  */
-typedef MutationVerdictResult = {
-	kind: MutationVerdictKind,
-	detail: String,
-	?full: String
-};
+typedef MutationVerdictResult = { kind: MutationVerdictKind, detail: String, ?full: String };
 
 /**
  * `apq mutation-verdict` — turn one parsed utest transcript into a

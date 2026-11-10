@@ -741,7 +741,4 @@ private typedef GateRan = {
 }
 
 /** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */
-private typedef CorpusFacts = {
-	var fork: Bool;
-	var snapshot: Bool;
-}
+private typedef CorpusFacts = { var fork: Bool; var snapshot: Bool; }

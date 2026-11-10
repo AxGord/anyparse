@@ -199,11 +199,7 @@ private typedef Seams = {
 };
 
 /** The parts of one candidate call. */
-private typedef CallArgs = {
-	final receiver: QueryNode;
-	final value: QueryNode;
-	final type: QueryNode;
-};
+private typedef CallArgs = { final receiver: QueryNode; final value: QueryNode; final type: QueryNode; };
 
 /** What a `run` proof of one file reads. */
 private typedef Proof = {

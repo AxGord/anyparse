@@ -309,8 +309,5 @@ final class TerminalParseLowering {
  * owner declares - `lowerTerminal` writes the rule's `EReg` into it as a
  * side effect, exactly as before the split.
  */
-typedef TerminalCtx = {
-	final formatInfo: FormatReader.FormatInfo;
-	final eregByRule: Map<String, GeneratedRule.EregSpec>;
-}
+typedef TerminalCtx = { final formatInfo: FormatReader.FormatInfo; final eregByRule: Map<String, GeneratedRule.EregSpec>; }
 #end

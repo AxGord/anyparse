@@ -7,7 +7,4 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef GraphPageJson = {
-	var views: Array<GraphPageViewJson>;
-	var legend: String;
-};
+typedef GraphPageJson = { var views: Array<GraphPageViewJson>; var legend: String; };

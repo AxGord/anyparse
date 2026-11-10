@@ -172,8 +172,4 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 }
 
 /** The resolved seams `RedundantAscription` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final checkTypeKind: String;
-	final newExprKind: String;
-	final opaqueKinds: Array<String>;
-};
+private typedef Seams = { final checkTypeKind: String; final newExprKind: String; final opaqueKinds: Array<String>; };

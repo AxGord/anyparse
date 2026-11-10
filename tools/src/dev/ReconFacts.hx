@@ -31,16 +31,10 @@ enum ReconRoute {
 }
 
 /** The route of a recon and the text its stdout carries: the facts, or the reason there are none. */
-typedef ReconVerdict = {
-	final route: ReconRoute;
-	final text: String;
-}
+typedef ReconVerdict = { final route: ReconRoute; final text: String; }
 
 /** How often a name is mentioned in the scope: leaf hits and the files holding them. */
-typedef MentionCount = {
-	final hits: Int;
-	final files: Int;
-}
+typedef MentionCount = { final hits: Int; final files: Int; }
 
 /**
  * `dev recon-facts <ID> <worktree>` — the one answer to "what does the recon of a queue line need that a script can collect, and is the

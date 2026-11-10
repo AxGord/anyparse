@@ -993,10 +993,7 @@ final class ProcessSpawn {
 }
 
 /** A batch directory `ProcessSpawn.writeJobs` made, and the jobs file in it the process driver reads. */
-typedef DriverBatch = {
-	var dir: String;
-	var jobs: String;
-}
+typedef DriverBatch = { var dir: String; var jobs: String; }
 
 /** What `ProcessSpawn.capturedSpawn` left: the spawn's result, both streams read back and whether either was cut at the cap. */
 typedef CapturedRun = {
@@ -1008,8 +1005,4 @@ typedef CapturedRun = {
 }
 
 /** What the module `ProcessSpawn.ANSWER_ENV` names answers for a job it has recorded. */
-typedef RecordedAnswer = {
-	var status: Int;
-	var out: String;
-	var err: String;
-}
+typedef RecordedAnswer = { var status: Int; var out: String; var err: String; }

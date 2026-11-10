@@ -472,11 +472,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
  * The per-file option set of one `run`: whether parameters / locals are in scope, and
  * whether `unused-parameter`'s silencing `_<name>` rename is live (see the class doc).
  */
-private typedef Options = {
-	final params: Bool;
-	final locals: Bool;
-	final silenceGuard: Bool;
-};
+private typedef Options = { final params: Bool; final locals: Bool; final silenceGuard: Bool; };
 
 /**
  * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must

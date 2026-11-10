@@ -107,7 +107,4 @@ final class RenameClaims {
 /**
  * One accepted member rename: the type the new name lands on, and the name itself.
  */
-private typedef MemberClaim = {
-	final owner: String;
-	final newName: String;
-};
+private typedef MemberClaim = { final owner: String; final newName: String; };

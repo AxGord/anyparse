@@ -220,9 +220,5 @@ final class TypedFactsShapes {
 }
 
 /** A field access as the facts name it: the owning type (none for a structure or a dynamic access), the field, the access kind. */
-typedef FieldRef = {
-	final owner: Null<String>;
-	final field: String;
-	final kind: String;
-};
+typedef FieldRef = { final owner: Null<String>; final field: String; final kind: String; };
 #end

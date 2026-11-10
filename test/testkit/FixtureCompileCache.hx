@@ -601,10 +601,7 @@ final class FixtureCompileCache {
 }
 
 /** A compile `FixtureCompileCache.plan` allows: the directories it reads and writes, and its placeheld arguments. */
-typedef CompilePlan = {
-	var roots: Array<String>;
-	var args: Array<String>;
-}
+typedef CompilePlan = { var roots: Array<String>; var args: Array<String>; }
 
 /**
  * What a spawn asks `FixtureCompileCache.lookup`: the program and its arguments, the directory it runs in (null: the
@@ -618,11 +615,7 @@ typedef SpawnRequest = {
 }
 
 /** A recorded compile's answer to a `SpawnRequest`: what the compiler exited with and printed. */
-typedef SpawnAnswer = {
-	var status: Int;
-	var out: String;
-	var err: String;
-}
+typedef SpawnAnswer = { var status: Int; var out: String; var err: String; }
 
 /** A compile's answer. `exited`: it ran to an exit status, so it may be recorded. */
 typedef CompileOutcome = {

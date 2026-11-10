@@ -207,7 +207,4 @@ final class LintScope {
 }
 
 /** The report `LintScope.whole` makes, or the reason it cannot. */
-typedef WholeReport = {
-	report: Null<String>,
-	why: Null<String>
-}
+typedef WholeReport = { report: Null<String>, why: Null<String> }

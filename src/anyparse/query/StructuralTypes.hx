@@ -559,11 +559,7 @@ final class StructuralTypes {
 }
 
 /** The element an `iterator()` method yields (`StructuralTypes.iteratorElement`): as `host` writes it on `member`. */
-typedef IteratorElement = {
-	final text: String;
-	final host: ResolvedType;
-	final member: MemberInfo;
-}
+typedef IteratorElement = { final text: String; final host: ResolvedType; final member: MemberInfo; }
 
 /**
  * One member of the anonymous structure a conformance question is asked about — its name, the

@@ -287,10 +287,7 @@ private enum EntryVerdict {
 /**
  * A file the verifier judges: its path and the text it holds now, which the verifier moves to each decided text.
  */
-typedef FileText = {
-	var file: String;
-	var source: String;
-}
+typedef FileText = { var file: String; var source: String; }
 
 /**
  * One file's risky edit set that the writer accepted and some configuration can judge: `fullText` is the file with

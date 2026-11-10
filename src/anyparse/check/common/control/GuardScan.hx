@@ -8,18 +8,10 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.SymbolIndex;
 
 /** The trailing `if` a guard rewrite inverts: the statement, its condition and its braced then-branch. */
-typedef GuardedIf = {
-	final ifNode: QueryNode;
-	final cond: QueryNode;
-	final thenBlock: QueryNode;
-};
+typedef GuardedIf = { final ifNode: QueryNode; final cond: QueryNode; final thenBlock: QueryNode; };
 
 /** The seams every guard rewrite needs: the grammar's shape, its `if` statement kinds and its control-flow support. */
-typedef GuardSeams = {
-	final shape: RefShape;
-	final ifKinds: Array<String>;
-	final flow: ControlFlowSupport;
-};
+typedef GuardSeams = { final shape: RefShape; final ifKinds: Array<String>; final flow: ControlFlowSupport; };
 
 /**
  * What a guard rewrite of a `GuardedIf` splices: the `if`'s span, where the then-branch's inner text starts, that text

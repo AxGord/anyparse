@@ -68,8 +68,4 @@ final class JvmProbe {
 }
 
 /** The target a probe run is built for, the command that builds it, and the command that runs it. */
-typedef ProbeCommands = {
-	target: String,
-	build: Command,
-	run: Command
-};
+typedef ProbeCommands = { target: String, build: Command, run: Command };

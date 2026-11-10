@@ -328,11 +328,7 @@ final class CondDirectives {
  * inline region (`#if sys trace(1); #end`) continues with ordinary code on the same line, and
  * neither a text search nor a fixer may be handed that as directive text.
  */
-typedef CondDirective = {
-	final keyword: String;
-	final span: Span;
-	final condition: Null<Span>;
-};
+typedef CondDirective = { final keyword: String; final span: Span; final condition: Null<Span>; };
 
 /**
  * One TOP-LEVEL conditional region, as `CondDirectives.topLevelBlocks` delimits it: `span` runs
@@ -358,10 +354,7 @@ typedef CondBlock = {
  * One top-level region's OWN directives as `CondDirectives.ownRegions` reads them (opener, same-depth
  * `#elseif` / `#else`, closer, in source order); `nested` is true once a region sat between them.
  */
-typedef OwnRegion = {
-	final directives: Array<CondDirective>;
-	final nested: Bool;
-};
+typedef OwnRegion = { final directives: Array<CondDirective>; final nested: Bool; };
 
 /**
  * The directive keyword vocabulary `CondDirectives.scan` threads through one walk: every declared

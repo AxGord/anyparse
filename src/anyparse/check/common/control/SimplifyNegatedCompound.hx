@@ -229,11 +229,7 @@ final class SimplifyNegatedCompound extends RuleBase {
 }
 
 /** One accepted rewrite: the `!( … )` node's span, the source replacing it, and the arm that accepted it. */
-private typedef Candidate = {
-	final span: Span;
-	final text: String;
-	final message: String;
-};
+private typedef Candidate = { final span: Span; final text: String; final message: String; };
 
 /** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
 private typedef Seams = {

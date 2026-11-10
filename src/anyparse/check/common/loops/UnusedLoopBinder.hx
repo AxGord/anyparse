@@ -462,7 +462,4 @@ private typedef Candidate = {
 };
 
 /** A key-value loop over a map: its iterable and the body whose reach decides whether the key may go. */
-private typedef KeyedLoop = {
-	var iterable: QueryNode;
-	var body: Span;
-};
+private typedef KeyedLoop = { var iterable: QueryNode; var body: Span; };

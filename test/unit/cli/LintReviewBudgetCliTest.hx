@@ -125,8 +125,4 @@ final class LintReviewBudgetCliTest extends Test {
 }
 
 /** One run's stderr, and the file it was run over afterwards. */
-private typedef BudgetRun = {
-	final before: String;
-	final err: String;
-	final after: String;
-};
+private typedef BudgetRun = { final before: String; final err: String; final after: String; };

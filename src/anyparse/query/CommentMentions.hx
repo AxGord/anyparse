@@ -7,10 +7,7 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /** One written occurrence of a name inside a comment: the name's own span and whether the comment is a doc block. */
-typedef CommentMention = {
-	final span: Span;
-	final doc: Bool;
-};
+typedef CommentMention = { final span: Span; final doc: Bool; };
 
 /**
  * The one answer to "where is a name written inside a comment, doc or plain": every whole-identifier

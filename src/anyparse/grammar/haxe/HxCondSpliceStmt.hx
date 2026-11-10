@@ -21,7 +21,4 @@ package anyparse.grammar.haxe;
  * region keeps its structured representation.
  */
 @:peg
-typedef HxCondSpliceStmt = {
-	var raw: HxCondSpliceRaw;
-	var tail: HxStatement;
-}
+typedef HxCondSpliceStmt = { var raw: HxCondSpliceRaw; var tail: HxStatement; }

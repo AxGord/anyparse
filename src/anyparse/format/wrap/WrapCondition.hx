@@ -18,7 +18,4 @@ package anyparse.format.wrap;
  * complex item" where `0` made them unmatchable and tautological. No
  * shipped config omits `value` on a threshold predicate.
  */
-typedef WrapCondition = {
-	var cond: WrapConditionType;
-	var value: Int;
-};
+typedef WrapCondition = { var cond: WrapConditionType; var value: Int; };

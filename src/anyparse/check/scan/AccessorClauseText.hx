@@ -177,7 +177,4 @@ final class AccessorClauseText {
 }
 
 /** The two accessor identifiers of a property's `(read, write)` clause, as written. */
-typedef AccessorClause = {
-	read: String,
-	write: String
-};
+typedef AccessorClause = { read: String, write: String };

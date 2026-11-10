@@ -503,14 +503,7 @@ final class RawSourceScan {
 }
 
 /** A type a grant may name to reach a private member: the owner itself or one of its superclasses. */
-private typedef GrantTarget = {
-	final name: String;
-	final paths: Array<String>;
-	final unresolved: Bool;
-};
+private typedef GrantTarget = { final name: String; final paths: Array<String>; final unresolved: Bool; };
 
 /** The construction kind and the constructor member name a waiver's `new T()` spells. */
-private typedef WaivedConstruction = {
-	final newKind: String;
-	final name: String;
-};
+private typedef WaivedConstruction = { final newKind: String; final name: String; };

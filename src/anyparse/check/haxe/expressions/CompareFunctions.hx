@@ -5,10 +5,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /** A static function a project names to compare two values of one type. */
-typedef NamedCompare = {
-	final typePath: String;
-	final member: String;
-}
+typedef NamedCompare = { final typePath: String; final member: String; }
 
 /**
  * The compare functions one config chain names, each checked against the resolution index: the one answer to "which

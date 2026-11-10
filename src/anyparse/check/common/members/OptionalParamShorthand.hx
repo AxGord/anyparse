@@ -937,22 +937,14 @@ private typedef Seams = {
  * and modifier gates read. Both `fn` fields are null for a parameter no enclosing function
  * could be found for, which every gated arm treats as a refusal.
  */
-private typedef ParamSite = {
-	final node: QueryNode;
-	final fn: Null<QueryNode>;
-	final fnParent: Null<QueryNode>;
-};
+private typedef ParamSite = { final node: QueryNode; final fn: Null<QueryNode>; final fnParent: Null<QueryNode>; };
 
 /**
  * One `name ?? <fallback>` the hoist arm collected: the whole coalescing node's span (what the
  * fix replaces with a bare `name`), the left operand's span (what the completeness scan
  * excludes), and the fallback node (what the constant proof reads).
  */
-private typedef CoalescingRead = {
-	final coal: Span;
-	final ident: Span;
-	final fallback: QueryNode;
-};
+private typedef CoalescingRead = { final coal: Span; final ident: Span; final fallback: QueryNode; };
 
 /**
  * An accepted hoist: the type to DECLARE (one `Null<>` layer off), the annotation as WRITTEN

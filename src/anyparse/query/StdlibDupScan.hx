@@ -6,10 +6,7 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /** One parameter of a candidate: the name it is written under and its declared primitive type. */
-typedef CandidateParam = {
-	final name: String;
-	final type: String;
-};
+typedef CandidateParam = { final name: String; final type: String; };
 
 /**
  * A literal lifted out of a candidate's OWN body, carried as the verbatim source spelling so a
@@ -18,10 +15,7 @@ typedef CandidateParam = {
  * only constants the stdlib call it corresponds to may need, so the argument pool never has to be
  * invented.
  */
-typedef CandidateLiteral = {
-	final type: String;
-	final code: String;
-};
+typedef CandidateLiteral = { final type: String; final code: String; };
 
 /**
  * A PURE, SELF-CONTAINED function with a primitive signature -- the only shape a differential
@@ -53,10 +47,7 @@ typedef ScanStages = {
 };
 
 /** The candidates a scan admitted plus the per-stage counts that explain everything it refused. */
-typedef ScanResult = {
-	final candidates: Array<StdlibCandidate>;
-	final stages: ScanStages;
-};
+typedef ScanResult = { final candidates: Array<StdlibCandidate>; final stages: ScanStages; };
 
 /**
  * The CANDIDATE FILTER behind `apq stdlib-dup`: which functions in a tree could a differential

@@ -13,9 +13,5 @@ import haxe.macro.Expr;
  * here. The macro merges contributions from all registered strategies
  * into the final generated parser class.
  */
-typedef RuntimeContrib = {
-	ctxFields: Array<Field>,
-	helpers: Array<Field>,
-	cacheKeyContributors: Array<Expr>
-};
+typedef RuntimeContrib = { ctxFields: Array<Field>, helpers: Array<Field>, cacheKeyContributors: Array<Expr> };
 #end

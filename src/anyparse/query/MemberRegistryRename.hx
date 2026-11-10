@@ -23,18 +23,10 @@ private typedef RenamedModule = {
 }
 
 /** A performed member rename as a registry reads it. */
-typedef MemberRename = {
-	final oldName: String;
-	final newName: String;
-	final modules: Array<RenamedModule>;
-}
+typedef MemberRename = { final oldName: String; final newName: String; final modules: Array<RenamedModule>; }
 
 /** A registry document after a rename: its new text (null when no record changed), the values changed, and the records named. */
-typedef RegistryFollow = {
-	final text: Null<String>;
-	final count: Int;
-	final notes: Array<String>;
-}
+typedef RegistryFollow = { final text: Null<String>; final count: Int; final notes: Array<String>; }
 
 /**
  * The one answer to "which values of a declared member registry follow a member rename": what the op's own edit set

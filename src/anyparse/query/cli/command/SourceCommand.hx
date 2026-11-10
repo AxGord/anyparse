@@ -39,11 +39,7 @@ typedef SourceOpts = {
  * (`--range`, `--select`, `--at`) resolves to before anything is printed, and what
  * a selector-menu entry advertises.
  */
-typedef LineRange = {
-	var from: Int;
-	var to: Int;
-};
-
+typedef LineRange = { var from: Int; var to: Int; };
 /**
  * A `--select` / `--at` address resolved: the matched node with the tree and plugin it came
  * from, and `window` — the modifier-folded span whose whole lines the read prints.
@@ -56,11 +52,7 @@ typedef ResolvedNode = {
 };
 
 /** One row of an `--outline`: a node and how many named levels below the outline's root it sits (0 = the root). */
-typedef OutlineEntry = {
-	var node: QueryNode;
-	var depth: Int;
-};
-
+typedef OutlineEntry = { var node: QueryNode; var depth: Int; };
 /**
  * An outline entry that survived the filters: `index` into the entry list, the window it prints
  * (`bounds` in lines), and its one-line `header`, filled once the rows after it are known.

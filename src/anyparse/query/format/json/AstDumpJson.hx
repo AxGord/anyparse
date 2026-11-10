@@ -12,7 +12,4 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef AstDumpJson = {
-	var file: String;
-	var tree: AstNodeJson;
-};
+typedef AstDumpJson = { var file: String; var tree: AstNodeJson; };

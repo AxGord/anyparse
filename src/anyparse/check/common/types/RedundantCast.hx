@@ -99,8 +99,4 @@ final class RedundantCast extends RuleBase {
 }
 
 /** The resolved seams `RedundantCast` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final shape: RefShape;
-	final typedCastKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-};
+private typedef Seams = { final shape: RefShape; final typedCastKinds: Array<String>; final opaqueKinds: Array<String>; };

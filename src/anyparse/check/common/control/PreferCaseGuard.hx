@@ -526,11 +526,7 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 }
 
 /** One convertible branch: the span reported, the span replaced, and the replacement text. */
-private typedef Candidate = {
-	final branch: Span;
-	final edit: Span;
-	final text: String;
-};
+private typedef Candidate = { final branch: Span; final edit: Span; final text: String; };
 
 /**
  * How a case pattern classifies for the convertibility whitelist: `Refused` is outside it
@@ -547,10 +543,7 @@ private enum abstract PatternClass(Int) {
 }
 
 /** A case branch cut into its pattern run, its guard presence, and its body statements. */
-private typedef BranchParts = {
-	final patterns: Array<QueryNode>;
-	final body: Array<QueryNode>;
-};
+private typedef BranchParts = { final patterns: Array<QueryNode>; final body: Array<QueryNode>; };
 
 /** The per-file scan context: the source, the resolved seams, the line budget, and lazy type resolution. */
 private typedef Scan = {

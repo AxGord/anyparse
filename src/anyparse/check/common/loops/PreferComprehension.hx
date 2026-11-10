@@ -1110,10 +1110,7 @@ typedef ComprehensionSeams = {
  * which is also the key the fix looks its edits up by) and the edits that realise it — one for an
  * adjacent pair, two for a gapped one.
  */
-private typedef Match = {
-	var span: Span;
-	var edits: Array<{ span: Span, text: String }>;
-}
+private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
 
 /** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
 typedef ComprehensionCtx = {
@@ -1133,11 +1130,7 @@ typedef ComprehensionCtx = {
  * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at
  * the whole-push-argument position, letting it drop its own annotation.
  */
-typedef ComprehensionAcc = {
-	var checks: Array<QueryNode>;
-	var hoisted: Array<{ from: Int, text: String }>;
-	var elementType: Null<String>;
-}
+typedef ComprehensionAcc = { var checks: Array<QueryNode>; var hoisted: Array<{ from: Int, text: String }>; var elementType: Null<String>; }
 
 /**
  * One link of the inlining chain: the declared local, its initializer, the single use the initializer

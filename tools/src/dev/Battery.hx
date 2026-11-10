@@ -804,13 +804,7 @@ final class Battery {
 }
 
 /** One lint the blast step compares with its base snapshot: the snapshot's label and the tree its paths are under. */
-typedef BlastArm = {
-	var label: String;
-	var root: String;
-}
+typedef BlastArm = { var label: String; var root: String; }
 
 /** One `lint-diff` the blast step ran: the snapshot's label and the exit status, null when it gave none. */
-typedef BlastRun = {
-	var label: String;
-	var status: Null<Int>;
-}
+typedef BlastRun = { var label: String; var status: Null<Int>; }

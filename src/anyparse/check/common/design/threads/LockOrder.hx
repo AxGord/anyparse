@@ -19,10 +19,7 @@ private typedef HeldState = {
 }
 
 /** One way into a state: the call `via` of the `parent` state. */
-private typedef Arrival = {
-	final parent: HeldState;
-	final via: CallEdge;
-}
+private typedef Arrival = { final parent: HeldState; final via: CallEdge; }
 
 /** How a lock held on entering a state came to be held: the function that took it, where it called out, and the path from it. */
 private typedef Climb = {

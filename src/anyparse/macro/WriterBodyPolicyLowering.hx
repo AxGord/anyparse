@@ -1096,8 +1096,5 @@ typedef BodyPolicyCtx = {
 	final foldSsbTrailingComment: (base:Expr, ssbTrailCommentExpr:Null<Expr>) -> Expr;
 }
 /** One `@:fmt(elseSwitch)` test per `KeywordPlacement` value, each `null` on a field without the meta. */
-typedef ElseSwitchTests = {
-	final same: Null<Expr>;
-	final next: Null<Expr>;
-};
+typedef ElseSwitchTests = { final same: Null<Expr>; final next: Null<Expr>; };
 #end

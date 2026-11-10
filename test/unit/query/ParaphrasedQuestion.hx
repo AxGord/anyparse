@@ -4,7 +4,4 @@ package unit.query;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef ParaphrasedQuestion = {
-	var question: String;
-	var owners: Array<String>;
-};
+typedef ParaphrasedQuestion = { var question: String; var owners: Array<String>; };

@@ -11,22 +11,14 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 using StringTools;
 
 /** One occurrence of a lock member's name that unseals the member, unless a proven alias accounts for it. */
-typedef Occurrence = {
-	final file: String;
-	final node: QueryNode;
-	final parent: Null<QueryNode>;
-}
+typedef Occurrence = { final file: String; final node: QueryNode; final parent: Null<QueryNode>; }
 
 /**
  * A lock member (`target`) that only ever holds what another one (`source`) hands it through a constructor parameter:
  * the two name one lock. `keys` are the occurrences the hand-off accounts for — the constructor's write of the target
  * and every read of the source passed to a construction.
  */
-private typedef LockAlias = {
-	final target: String;
-	final source: String;
-	final keys: Array<String>;
-}
+private typedef LockAlias = { final target: String; final source: String; final keys: Array<String>; }
 
 /** A constructor's write of a lock member (`Owner.member`) from its parameter at `param`; `key` names the write. */
 private typedef ConstructorWrite = {
@@ -37,19 +29,13 @@ private typedef ConstructorWrite = {
 }
 
 /** A read of the lock member `member` (`Owner.member`) handed to a construction; `key` names the read. */
-private typedef MemberRead = {
-	final key: String;
-	final member: String;
-}
+private typedef MemberRead = { final key: String; final member: String; }
 
 /**
  * A node naming a reflective construction call (`ExecutionShape.reflectiveInstantiationCalls`): the `call` it makes, in
  * the function `fn`, or null for any other use of the name — a function value, another receiver.
  */
-private typedef Instantiation = {
-	final call: Null<QueryNode>;
-	final fn: Null<String>;
-}
+private typedef Instantiation = { final call: Null<QueryNode>; final fn: Null<String>; }
 
 /**
  * The lock members of a call graph that ALIAS another (`LockSites`): a member written once, in its type's constructor,

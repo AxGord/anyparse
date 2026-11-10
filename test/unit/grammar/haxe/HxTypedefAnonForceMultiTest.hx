@@ -29,10 +29,12 @@ class HxTypedefAnonForceMultiTest extends Test {
 		Assert.isFalse(defaults._inTypedefBody);
 	}
 
-	public function testOneFieldTypedefStaysFlatUnderSame(): Void {
-		// Default `anonTypeLeftCurly = Same`: a one-field body is not forced, the cascade picks `NoWrap`.
-		final out: String = writeFlat('typedef T = {x:Int};', BracePlacement.Same);
-		Assert.isTrue(out.indexOf('typedef T = {x:Int};') != -1, 'expected flat typedef-RHS under Same in: <$out>');
+	public function testFlatTypedefStaysFlatUnderSame(): Void {
+		// Default `anonTypeLeftCurly = Same` — even with the propagation
+		// flag set, the gate `anonTypeLeftCurly == Next` is false → no
+		// force-multi → cascade picks `NoWrap` → output stays flat.
+		final out: String = writeFlat('typedef T = {x:Int, y:Int, z:Int};', BracePlacement.Same);
+		Assert.isTrue(out.indexOf('typedef T = {x:Int, y:Int, z:Int};') != -1, 'expected flat typedef-RHS under Same in: <$out>');
 	}
 
 	public function testFlatTypedefForcedMultiUnderNext(): Void {

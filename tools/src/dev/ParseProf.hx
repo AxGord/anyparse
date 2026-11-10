@@ -17,10 +17,7 @@ using StringTools;
 /**
  * One source file, read once and reused by every workload.
  */
-typedef Src = {
-	var file: String;
-	var source: String;
-}
+typedef Src = { var file: String; var source: String; }
 
 /**
  * Fast-parse / writer profiling and A-B harness for the anyparse core.

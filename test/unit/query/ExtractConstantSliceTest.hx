@@ -300,8 +300,4 @@ class ExtractConstantSliceTest extends Test {
 }
 
 /** Unpacked `Ok` payload of `ExtractConstant.extractInto`, for the cross-file tests. */
-typedef IntoOk = {
-	changes: Array<{ file: String, newSource: String, count: Int }>,
-	moduleSource: String,
-	created: Bool
-};
+typedef IntoOk = { changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool };

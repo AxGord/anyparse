@@ -407,7 +407,4 @@ typedef GateOptions = {
 }
 
 /** What `git diff --name-status -M` names: the changed paths as they are now, and each renamed one's path at the base. */
-typedef ChangedPaths = {
-	var paths: Array<String>;
-	var moved: Map<String, String>;
-}
+typedef ChangedPaths = { var paths: Array<String>; var moved: Map<String, String>; }

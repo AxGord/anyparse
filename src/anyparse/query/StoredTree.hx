@@ -4,7 +4,4 @@ package anyparse.query;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef StoredTree = {
-	final strings: Array<String>;
-	final ints: Array<Int>;
-}
+typedef StoredTree = { final strings: Array<String>; final ints: Array<Int>; }

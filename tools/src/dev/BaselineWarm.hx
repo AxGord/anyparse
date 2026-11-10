@@ -193,17 +193,10 @@ final class BaselineWarm {
 }
 
 /** Which commands a warm run measures: the trees a baseline records as frozen, and the infra trees a rule-code slice lints. */
-typedef WarmRecipe = {
-	var frozen: Array<String>;
-	var infra: Array<String>;
-}
+typedef WarmRecipe = { var frozen: Array<String>; var infra: Array<String>; }
 
 /** A gate run in flight: whether it still runs, how to end it, and what it answered once it ended. */
-typedef Warming = {
-	var running: () -> Bool;
-	var cancel: () -> Void;
-	var ended: () -> Outcome;
-}
+typedef Warming = { var running: () -> Bool; var cancel: () -> Void; var ended: () -> Outcome; }
 
 /** Starts the warm run of a landed commit in `repo`. */
 typedef WarmStart = (repo:String, sha:String) -> Outcome;

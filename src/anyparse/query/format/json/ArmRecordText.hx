@@ -111,8 +111,4 @@ final class ArmRecordText {
 }
 
 /** A record checked and laid out: its name, the type it cuts and its text in the registry's layout, without its indent. */
-typedef ArmRecord = {
-	final name: String;
-	final type: String;
-	final text: String;
-}
+typedef ArmRecord = { final name: String; final type: String; final text: String; }

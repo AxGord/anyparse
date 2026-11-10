@@ -40,10 +40,7 @@ typedef DynCtx = {
 };
 
 /** What one walk calls its findings: the rule id, and the message for a position (`boundary` marks a Reflect/Json transit local). */
-typedef DynReport = {
-	final rule: String;
-	final message: (DynPos, Bool) -> String;
-};
+typedef DynReport = { final rule: String; final message: (DynPos, Bool) -> String; };
 
 /** The declared-type position a raw top type was found in — drives the report taxonomy and message. */
 enum DynPos {

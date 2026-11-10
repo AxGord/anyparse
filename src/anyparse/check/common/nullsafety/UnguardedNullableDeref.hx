@@ -168,8 +168,4 @@ final class UnguardedNullableDeref extends RuleBase implements NoAutofix {
 }
 
 /** Resolved per-run deref-shape constants threaded to `checkDeref`. */
-private typedef Ctx = {
-	var ident: String;
-	var soleChildKinds: Array<String>;
-	var firstChildKinds: Array<String>;
-};
+private typedef Ctx = { var ident: String; var soleChildKinds: Array<String>; var firstChildKinds: Array<String>; };

@@ -328,7 +328,4 @@ final class CallGraphImports {
 }
 
 /** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */
-typedef WrittenIn = {
-	var file: String;
-	var written: Null<String>;
-}
+typedef WrittenIn = { var file: String; var written: Null<String>; }

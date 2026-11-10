@@ -1,7 +1,4 @@
-typedef Pt = {
-	x: Int,
-	y: Int
-}
+typedef Pt = { x: Int, y: Int }
 
 typedef A1 = { ?xs: Array<Float> }
 typedef A2 = { xs: Null<Array<Float>> }

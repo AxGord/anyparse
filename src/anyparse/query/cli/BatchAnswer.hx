@@ -4,8 +4,4 @@ package anyparse.query.cli;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef BatchAnswer = {
-	var status: Int;
-	var out: String;
-	var err: String;
-}
+typedef BatchAnswer = { var status: Int; var out: String; var err: String; }

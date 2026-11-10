@@ -301,10 +301,7 @@ final class ReflectionScan {
  * compiling against the anon spelling; lifting the name into `Check`, next to the `run` signature
  * that introduces the pair, is a sweep across the check layer rather than a change here.
  */
-typedef ScopeFile = {
-	var file: String;
-	var source: String;
-};
+typedef ScopeFile = { var file: String; var source: String; };
 
 /**
  * The reflection SURFACE of a scope: every string a member name — or a type's fully-qualified

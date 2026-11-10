@@ -208,8 +208,4 @@ final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 }
 
 /** The seam kinds `CollapsibleElseIf` reads: the statement-position `if` kinds and the block kind. */
-private typedef Seams = {
-	final ifKinds: Array<String>;
-	final blockStmtKind: String;
-	final blockKinds: Array<String>;
-};
+private typedef Seams = { final ifKinds: Array<String>; final blockStmtKind: String; final blockKinds: Array<String>; };

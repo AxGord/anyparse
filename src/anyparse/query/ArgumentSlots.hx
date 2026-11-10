@@ -11,10 +11,7 @@ enum ArgumentFit {
 }
 
 /** A parameter as a call binds it: one a call may leave out (`?p`, `p = v`), the rest parameter. */
-typedef SlotParam = {
-	final optional: Bool;
-	final rest: Bool;
-}
+typedef SlotParam = { final optional: Bool; final rest: Bool; }
 
 /**
  * THE model of how a call binds its arguments to the parameters of the function it calls — every reader that asks which
@@ -152,7 +149,4 @@ private typedef SlotWalk = {
 }
 
 /** The compiler's own way to bind a call's arguments (`ArgumentSlots.compilerPath`): its verdict, the parameter each bound. */
-private typedef CompilerPath = {
-	final verdict: ArgumentFit;
-	final bound: Array<Int>;
-}
+private typedef CompilerPath = { final verdict: ArgumentFit; final bound: Array<Int>; }

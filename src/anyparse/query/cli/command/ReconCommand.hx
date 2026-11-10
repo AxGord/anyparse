@@ -43,11 +43,7 @@ typedef ReconRecord = {
  * parser is missing — both `runReconSweep` and `strip --from-cluster`
  * surface that as a hard runtime error before consuming the records.
  */
-typedef ReconWalkResult = {
-	var wired: Bool;
-	var records: Array<ReconRecord>;
-	var clusters: Map<String, ReconCluster>;
-};
+typedef ReconWalkResult = { var wired: Bool; var records: Array<ReconRecord>; var clusters: Map<String, ReconCluster>; };
 
 /**
  * Parsed options for `apq recon` — `lang`, `topN`, the probe / cluster filters, and the family of

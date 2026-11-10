@@ -190,7 +190,7 @@ class IntroduceParameterObjectSliceTest extends Test {
 		Assert.equals(0, rc);
 		final out: String = File.getContent('$dir/C.hx');
 		Assert.isTrue(
-			out.contains('f(args: Args)') && out.contains('typedef Args = {\n\ta: Int,\n\tb: Int\n}'),
+			out.contains('f(args: Args)') && out.contains('typedef Args = {a: Int, b: Int}'),
 			'the file\'s own colon policy reached the op:\n$out'
 		);
 		CliFixture.removeDir(dir);

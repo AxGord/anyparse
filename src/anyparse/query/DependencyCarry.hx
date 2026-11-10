@@ -1263,10 +1263,7 @@ enum CarryResult {
  * about it. Asked of the destination and of the source alike, which is why it is not named for
  * either.
  */
-typedef NameBinding = {
-	var path: String;
-	var ownModule: Bool;
-}
+typedef NameBinding = { var path: String; var ownModule: Bool; }
 
 /** What the source means by one dependency, and what a carry writes for it (`DependencyCarry.sourceBindingOf`). */
 private typedef SourceBinding = {
@@ -1280,10 +1277,7 @@ private typedef SourceBinding = {
  * An ambient chain's statement and the file that spells it (`DependencyCarry.ambientProviderOf`) — or a package wildcard
  * and its ambient file, null for the source's own (`DependencyCarry.typeWildcardProviderOf`).
  */
-private typedef AmbientProvider = {
-	final statement: ImportInfo;
-	final file: Null<String>;
-}
+private typedef AmbientProvider = { final statement: ImportInfo; final file: Null<String>; }
 
 /**
  * A simple name paired with the source span it is written at. Two readings, both needing the span
@@ -1294,10 +1288,7 @@ private typedef AmbientProvider = {
  * occurrence and a genuine dependency at another in the same declaration — un-pricing it by NAME drops the
  * dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;` turns into a silent rebind.
  */
-typedef NameSpan = {
-	var name: String;
-	var span: Span;
-}
+typedef NameSpan = { var name: String; var span: Span; }
 
 /**
  * One module-static wildcard of a file (`import pkg.Mod.*;`): the statement, the MODULE its head
@@ -1332,8 +1323,4 @@ private typedef WildProvider = {
  * `${Q.name}` (`MoveMember.qualifyEdit`) — and nothing downstream can recover the flag from the
  * span alone.
  */
-typedef WildBareRef = {
-	var name: String;
-	var span: Span;
-	var interpolated: Bool;
-}
+typedef WildBareRef = { var name: String; var span: Span; var interpolated: Bool; }

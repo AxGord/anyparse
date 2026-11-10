@@ -269,8 +269,4 @@ final class SimplifyBooleanTernary extends RuleBase {
 }
 
 /** The grammar seams this check needs to be live at all: the ternary kind, the boolean-logic engine, and the shape. */
-private typedef Seams = {
-	var shape: RefShape;
-	var ternaryKind: String;
-	var support: BooleanLogicSupport;
-}
+private typedef Seams = { var shape: RefShape; var ternaryKind: String; var support: BooleanLogicSupport; }

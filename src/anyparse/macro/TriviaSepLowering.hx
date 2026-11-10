@@ -855,15 +855,12 @@ final class TriviaSepLowering {
 		// layout of an opted-in list, flat included.
 		final flatTrailingCommaExpr: Expr = keepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable);
 
-		// The `forceMode` option of `WrapList.emit`: a typedef's RHS body (`opt._inTypedefBody`, set by
-		// `propagateTypedefContext` and cleared per field) is laid out one field per line, past the cascade and any
-		// `anonTypeWrap`, once it holds more than one field — the canonical typedef layout — unless it sits inside a type
-		// argument or parentheses (`opt._inNestedType`); a `Next` left curly forces every anon under the typedef. A
-		// one-field body and every other anon type (a type hint, a nested anon) stay cascade-driven (`null`).
+		// The `forceMode` option of `WrapList.emit`: a `Next` left curly lays every anon under a typedef's RHS
+		// (`opt._inTypedefBody`, set by `propagateTypedefContext` and cleared per field) out one field per line. Any
+		// other typedef body, like every other anon type, follows the `anonType` cascade by its complexity (`null`).
 		final forceModeExpr: Expr = forceMultiInTypedef
 			? macro (
-				opt._inTypedefBody
-					&& (_arr.length > 1 && !opt._inNestedType || opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next)
+				opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
 					? anyparse.format.wrap.WrapMode.OnePerLine
 					: (null: Null<anyparse.format.wrap.WrapMode>)
 			)

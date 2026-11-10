@@ -26,10 +26,7 @@ private typedef Entry = {
 }
 
 /** One file's suppression directives plus the line index they were resolved against. */
-private typedef FileDirectives = {
-	var index: LineIndex;
-	var entries: Array<Entry>;
-}
+private typedef FileDirectives = { var index: LineIndex; var entries: Array<Entry>; }
 
 /**
  * Applies inline suppression directives (`noqa` lines and `CHECKSTYLE:OFF`/`ON` regions) to a finding set: `apply` returns the violations

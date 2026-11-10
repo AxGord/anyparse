@@ -10,10 +10,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 
 /** One `lockPairs` entry resolved to graph ids: the node that takes the lock and the one that gives it back. */
-typedef LockPair = {
-	final lockId: String;
-	final unlockId: String;
-}
+typedef LockPair = { final lockId: String; final unlockId: String; }
 
 /** One call that takes a lock, and what the function it sits in does while holding it. */
 typedef LockAcquire = {
@@ -58,22 +55,13 @@ typedef LockAcquire = {
 }
 
 /** A call the graph resolves to no target, by the name its callee is written with, at its site. */
-typedef BlindCall = {
-	final name: String;
-	final span: Span;
-}
+typedef BlindCall = { final name: String; final span: Span; }
 
 /** One throw that leaves a function holding a lock: a `throw` (no `raiser`), or a call that may raise (`ThrowReach`). */
-typedef LockEscape = {
-	final span: Span;
-	final raiser: Null<CallEdge>;
-}
+typedef LockEscape = { final span: Span; final raiser: Null<CallEdge>; }
 
 /** A release of a lock in a function that never took it (`LockSites.crossing`): the lock, and the call giving it back. */
-typedef CrossingRelease = {
-	final lock: String;
-	final edge: CallEdge;
-}
+typedef CrossingRelease = { final lock: String; final edge: CallEdge; }
 
 /**
  * A call giving a lock back (`LockSites.gives`): the call, the lock it gives (null for an unknown one), and — for a call of
@@ -91,10 +79,7 @@ typedef LockGive = {
 }
 
 /** One call that takes or gives back the lock of `pair`: a call of the pair's own member, or of a lock wrapper. */
-private typedef LockCall = {
-	final edge: CallEdge;
-	final pair: LockPair;
-}
+private typedef LockCall = { final edge: CallEdge; final pair: LockPair; }
 
 /**
  * What a lock wrapper does to its one lock: a call of it takes (`takes`) or gives back the `lock` of `pair` — on the

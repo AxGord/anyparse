@@ -37,8 +37,4 @@ package anyparse.grammar.haxe;
  * regions leave their re-opened block unclosed.
  */
 @:peg
-typedef HxCondSpliceBlockTail = {
-	var raw: HxCondBlockTailRaw;
-	var body: HxStatement;
-	var endKw: HxCondEndLit;
-}
+typedef HxCondSpliceBlockTail = { var raw: HxCondBlockTailRaw; var body: HxStatement; var endKw: HxCondEndLit; }

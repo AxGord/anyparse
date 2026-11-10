@@ -48,10 +48,7 @@ typedef OrderedMember = {
  * two constructs merge into one block only when their shapes are equal. A negative
  * `index` marks a construct `assignBranches` refused to model - the reorder bails on it.
  */
-typedef BranchInfo = {
-	var index: Int;
-	var opens: Array<String>;
-}
+typedef BranchInfo = { var index: Int; var opens: Array<String>; }
 
 /**
  * The COLLECTION half of `member-order`: turning a container's raw child list into the

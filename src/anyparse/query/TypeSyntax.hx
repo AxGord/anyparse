@@ -153,15 +153,7 @@ enum TypeShape {
 }
 
 /** One parameter of a function type: its name when it has one, whether it is optional, and its type. */
-typedef TypeParam = {
-	var name: Null<String>;
-	var optional: Bool;
-	var type: TypeSyntax;
-}
+typedef TypeParam = { var name: Null<String>; var optional: Bool; var type: TypeSyntax; }
 
 /** One typed field of a structure type. */
-typedef TypeField = {
-	var name: String;
-	var optional: Bool;
-	var type: TypeSyntax;
-}
+typedef TypeField = { var name: String; var optional: Bool; var type: TypeSyntax; }

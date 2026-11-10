@@ -4,7 +4,4 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef DominatedLockRecord = {
-	var lock: String;
-	var by: Array<String>;
-};
+typedef DominatedLockRecord = { var lock: String; var by: Array<String>; };

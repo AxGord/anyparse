@@ -430,7 +430,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "9bbe058e4e5fa5e8",
+				"out": "f0256f096ce27848",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

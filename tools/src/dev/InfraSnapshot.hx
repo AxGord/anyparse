@@ -4,7 +4,4 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef InfraSnapshot = {
-	var tree: String;
-	var snapshot: String;
-}
+typedef InfraSnapshot = { var tree: String; var snapshot: String; }

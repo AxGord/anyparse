@@ -574,8 +574,4 @@ class BlockCommentNormalizer {
 }
 
 /** One comment body line with its wrap markers removed: `marker` records whether it carried a ` * ` gutter. */
-private typedef StrippedLine = {
-	ws: String,
-	content: String,
-	marker: Bool
-};
+private typedef StrippedLine = { ws: String, content: String, marker: Bool };

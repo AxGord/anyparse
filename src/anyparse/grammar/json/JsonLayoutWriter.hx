@@ -495,27 +495,13 @@ private final class ContainerStyle {
 }
 
 /** Where the gaps of one container sit: before each entry, before each entry's `,` (null: none follows), before the closer. */
-private typedef ContainerLayout = {
-	final leads: Array<Span>;
-	final preCommas: Array<Null<Span>>;
-	final close: Span;
-}
+private typedef ContainerLayout = { final leads: Array<Span>; final preCommas: Array<Null<Span>>; final close: Span; }
 
 /** The whitespace before and after a member's `:`. */
-private typedef KeySep = {
-	final before: String;
-	final after: String;
-}
+private typedef KeySep = { final before: String; final after: String; }
 
 /** The two gaps around one member's `:`. */
-private typedef MemberGaps = {
-	final before: Span;
-	final after: Span;
-}
+private typedef MemberGaps = { final before: Span; final after: Span; }
 
 /** The gaps of an inline container: before its first entry, between two entries, before its closer. */
-private typedef InlineGaps = {
-	final first: String;
-	final sep: String;
-	final close: String;
-}
+private typedef InlineGaps = { final first: String; final sep: String; final close: String; }

@@ -40,11 +40,10 @@ class HxAnonTypeIgnoreReflowTest extends Test {
 		Assert.isTrue(out.indexOf('function f():{\n\t\t$field\n\t} {') != -1, 'expected packed inline anon body in:\n<$out>');
 	}
 
-	public function testTypedefFieldAnonReflowsLikeAnInlineAnon(): Void {
-		// The body goes one field per line by the typedef rule; the anon of a field is an ordinary anon type again.
+	public function testTypedefBodyReflowsLikeAnInlineAnon(): Void {
 		final out: String = write('typedef Outer = {\n\talpha:Int,\n\tnested:{\n\t\tp:Int,\n\t\tq:Int\n\t}\n}');
 		Assert.isTrue(
-			out.indexOf('typedef Outer = {\n\talpha:Int,\n\tnested:{p:Int, q:Int}\n}') != -1, 'expected a collapsed field anon in:\n<$out>'
+			out.indexOf('typedef Outer = {alpha:Int, nested:{p:Int, q:Int}}') != -1, 'expected a collapsed typedef body in:\n<$out>'
 		);
 	}
 

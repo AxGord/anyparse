@@ -24,11 +24,7 @@ using Lambda;
  * unavailable oracle, a batch that did not converge) are different problems and used to print the
  * same line. `reason` is meaningful only when `reverted` is non-empty.
  */
-typedef OracleBatchResult = {
-	final applied: Array<String>;
-	final reverted: Array<String>;
-	final reason: String;
-};
+typedef OracleBatchResult = { final applied: Array<String>; final reverted: Array<String>; final reason: String; };
 
 /**
  * What the risky-fix phase did, in the shape `applyLintFixes` consumes: the summary tail,
@@ -77,11 +73,7 @@ typedef RiskyFixOutcome = {
  * What the oracle-assisted phase did: the summary tail, its edit count, and the configurations it
  * judged nothing with — the last for the driver to name, once per run with the other phases'.
  */
-typedef AssistedOutcome = {
-	var tail: String;
-	var appliedCount: Int;
-	var excluded: Array<OracleExclusion>;
-}
+typedef AssistedOutcome = { var tail: String; var appliedCount: Int; var excluded: Array<OracleExclusion>; }
 
 /**
  * The compiler oracle's half of `apq lint --fix`.

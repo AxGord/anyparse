@@ -125,8 +125,4 @@ final class ErrorPaths {
 }
 
 /** The taint asking which calls block LONG (`all`), the same over the normal paths only (`normal`), and what tells them apart. */
-typedef PathCosts = {
-	final all: LockTaint;
-	final normal: LockTaint;
-	final errors: ErrorPaths;
-}
+typedef PathCosts = { final all: LockTaint; final normal: LockTaint; final errors: ErrorPaths; }

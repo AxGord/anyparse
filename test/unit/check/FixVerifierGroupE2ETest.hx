@@ -16,11 +16,7 @@ import sys.io.File;
 #end
 
 /** One edit the table-driven fake produces: the source text it targets, its replacement, and its group. */
-private typedef FakeEdit = {
-	var find: String;
-	var text: String;
-	var group: Null<Int>;
-}
+private typedef FakeEdit = { var find: String; var text: String; var group: Null<Int>; }
 
 /**
  * End-to-end coverage of `FixVerifier.verify`'s ATOMIC GROUPS: an edit a check declared

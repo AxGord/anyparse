@@ -640,7 +640,4 @@ class PreferKeyValueLoopCheckTest extends Test {
 }
 
 /** A run of the check over one source that reported exactly one finding, kept for the fix call. */
-private typedef CheckRun = {
-	var check: PreferKeyValueLoop;
-	var vs: Array<Violation>;
-}
+private typedef CheckRun = { var check: PreferKeyValueLoop; var vs: Array<Violation>; }

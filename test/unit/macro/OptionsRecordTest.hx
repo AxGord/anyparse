@@ -210,8 +210,5 @@ class OptionsRecordTest extends Test {
 }
 
 #if nodejs
-private typedef BuildRun = {
-	code: Int,
-	out: String
-};
+private typedef BuildRun = { code: Int, out: String };
 #end

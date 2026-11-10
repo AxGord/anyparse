@@ -373,10 +373,7 @@ final class Cli {
  * own sentence, and a count line about a run that never counted anything would
  * be the family's own defect.
  */
-typedef FmtRunResult = {
-	var exit: Int;
-	var summary: String;
-};
+typedef FmtRunResult = { var exit: Int; var summary: String; };
 
 /**
  * What ONE rule's autofix did over a whole `lint --fix` run — the ledger behind the per-rule

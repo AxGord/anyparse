@@ -20,10 +20,7 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /** What one `lint --fix` run answered: its exit code and everything it wrote to stderr. */
-typedef FixRun = {
-	final code: Int;
-	final err: String;
-};
+typedef FixRun = { final code: Int; final err: String; };
 
 /**
  * A safe fix that breaks a module the run never wrote costs that fix, not the run's other safe fixes.

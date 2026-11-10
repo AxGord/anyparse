@@ -594,10 +594,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
  * One convertible comment: the span to REPORT, and the edits that convert it. An above-line run rewrites in place
  * (one edit); a trailing decl comment RELOCATES (two — the tail is cut, the doc is inserted at the decl's anchor).
  */
-private typedef DocCommentRewrite = {
-	comment: Span,
-	edits: Array<{ span: Span, text: String }>
-};
+private typedef DocCommentRewrite = { comment: Span, edits: Array<{ span: Span, text: String }> };
 
 /**
  * A declaration's doc anchor (the start of its leading `@:meta` / modifier run), the declaration's own end, its node
@@ -618,7 +615,4 @@ private typedef Anchor = {
 };
 
 /** Resolved kind-sets the anchor walk threads through its recursion. */
-private typedef Seams = {
-	final decls: Array<String>;
-	final modifiers: Array<String>;
-};
+private typedef Seams = { final decls: Array<String>; final modifiers: Array<String>; };

@@ -441,14 +441,8 @@ private typedef ReShape = {
 	flagHigh: Int
 };
 /** A run of literal characters read out of a pattern, and where reading stopped. */
-private typedef LiteralRun = {
-	text: String,
-	next: Int
-};
+private typedef LiteralRun = { text: String, next: Int };
 
 /** The character codes a pattern's `[^ … ]` set excludes, and where reading stopped. */
-private typedef ExcludedSet = {
-	codes: Array<Int>,
-	next: Int
-};
+private typedef ExcludedSet = { codes: Array<Int>, next: Int };
 #end

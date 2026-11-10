@@ -27,7 +27,7 @@ final class HxAnonTypeSourceTrailCommaSliceTest extends Test {
 	}
 
 	public function testExtensionOnlyTypedefKeepsMandatoryTrailingComma(): Void {
-		Assert.equals('typedef R = {\n\t> A,\n\t> B,\n}', roundTrip('typedef R = {> A, > B,}'));
+		Assert.equals('typedef R = {> A, > B,}', roundTrip('typedef R = {\n\t> A,\n\t> B,\n}'));
 	}
 
 	public function testSingleExtensionKeepsMandatoryTrailingComma(): Void {
@@ -35,19 +35,19 @@ final class HxAnonTypeSourceTrailCommaSliceTest extends Test {
 	}
 
 	public function testExtensionThenFieldsKeepsSourceTrailingComma(): Void {
-		Assert.equals('typedef R = {\n\t> A,\n\tx:Int,\n}', roundTrip('typedef R = {> A, x:Int,}'));
+		Assert.equals('typedef R = {> A, x:Int,}', roundTrip('typedef R = {\n\t> A,\n\tx:Int,\n}'));
 	}
 
 	public function testPlainFieldsKeepSourceTrailingComma(): Void {
-		Assert.equals('typedef R = {\n\tx:Int,\n\ty:Int,\n}', roundTrip('typedef R = {x:Int, y:Int,}'));
+		Assert.equals('typedef R = {x:Int, y:Int,}', roundTrip('typedef R = {\n\tx:Int,\n\ty:Int,\n}'));
 	}
 
 	public function testPlainFieldsWithoutTrailingCommaStayCommaFree(): Void {
-		Assert.equals('typedef R = {\n\tx:Int,\n\ty:Int\n}', roundTrip('typedef R = {x:Int, y:Int}'));
+		Assert.equals('typedef R = {x:Int, y:Int}', roundTrip('typedef R = {\n\tx:Int,\n\ty:Int\n}'));
 	}
 
 	public function testSemicolonSeparatedFieldsUnaffected(): Void {
-		Assert.equals('typedef R = {\n\tvar x:Int;\n\tvar y:Int;\n}', roundTrip('typedef R = {var x:Int; var y:Int;}'));
+		Assert.equals('typedef R = {var x:Int; var y:Int;}', roundTrip('typedef R = {\n\tvar x:Int;\n\tvar y:Int;\n}'));
 	}
 
 	public function testInlineAnonWithoutTrailingCommaUnaffected(): Void {

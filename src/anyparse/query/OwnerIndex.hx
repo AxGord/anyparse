@@ -45,10 +45,7 @@ typedef OwnerEntry = {
 };
 
 /** A ranked answer: the declaration, and how well its name and doc cover the question. */
-typedef OwnerHit = {
-	final entry: OwnerEntry;
-	final score: Float;
-};
+typedef OwnerHit = { final entry: OwnerEntry; final score: Float; };
 
 /**
  * Which declaration answers a question asked in words: every type and member of a scope, ranked by the question's terms

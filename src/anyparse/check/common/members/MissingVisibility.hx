@@ -526,7 +526,4 @@ private typedef FixCtx = {
  * a preceding sibling ranked above visibility (`-1` = none, insert at the member itself), and
  * whether the run carries an `override`.
  */
-private typedef RunState = {
-	final insertAt: Int;
-	final sawOverride: Bool;
-};
+private typedef RunState = { final insertAt: Int; final sawOverride: Bool; };

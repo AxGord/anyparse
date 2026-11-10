@@ -493,16 +493,10 @@ typedef ToolStat = {
 }
 
 /** A call and the size of its answer. */
-typedef BigCall = {
-	var outChars: Int;
-	var call: String;
-}
+typedef BigCall = { var outChars: Int; var call: String; }
 
 /** A prompt opening and the role it names. */
-private typedef RolePrefix = {
-	var prefix: String;
-	var role: String;
-}
+private typedef RolePrefix = { var prefix: String; var role: String; }
 
 /** One API message of an agent: when it began and ended (ms since the epoch) and its usage fields. */
 typedef TurnReading = {
@@ -533,11 +527,7 @@ private typedef PendingCall = {
 }
 
 /** The samples a call gives to the bypass counts, each null when the call is not that kind of access. */
-private typedef Access = {
-	var read: Null<String>;
-	var write: Null<String>;
-	var script: Null<String>;
-}
+private typedef Access = { var read: Null<String>; var write: Null<String>; var script: Null<String>; }
 
 /** One content block of a transcript message, as far as the audit reads it. */
 private typedef Block = {

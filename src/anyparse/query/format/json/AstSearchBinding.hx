@@ -13,8 +13,4 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef AstSearchBinding = {
-	var name: String;
-	var text: String;
-	var span: AstSearchSpan;
-};
+typedef AstSearchBinding = { var name: String; var text: String; var span: AstSearchSpan; };

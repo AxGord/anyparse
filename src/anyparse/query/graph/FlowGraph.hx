@@ -39,11 +39,7 @@ typedef FlowNode = {
 }
 
 /** One edge of a flow chart; a `label` names the branch it leaves a decision by. */
-typedef FlowEdge = {
-	final from: String;
-	final to: String;
-	final label: Null<String>;
-}
+typedef FlowEdge = { final from: String; final to: String; final label: Null<String>; }
 
 /**
  * The control-flow chart of ONE function body (`FlowBuilder`): nodes in the order the body is read, edges in the order

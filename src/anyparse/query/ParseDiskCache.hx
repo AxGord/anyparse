@@ -10,10 +10,7 @@ import haxe.Exception;
 import haxe.io.Path;
 
 /** What `ParseDiskCache` keeps of one source: the two projections a resolution-library parse yields. */
-typedef StoredProjections = {
-	final tree: QueryNode;
-	final spans: SpanTypeInfo;
-};
+typedef StoredProjections = { final tree: QueryNode; final spans: SpanTypeInfo; };
 
 /**
  * The one answer to "is the parse of this source already on disk": a content-addressed, engine-keyed store of the

@@ -746,17 +746,10 @@ private typedef Ctx = {
 };
 
 /** A resolved type-reference candidate — a declaration paired with its declaring file. */
-private typedef Candidate = {
-	file: FileInfo,
-	type: TypeDeclInfo
-};
+private typedef Candidate = { file: FileInfo, type: TypeDeclInfo };
 
 /** A function literal's children split into parameters, return-type hint and body. */
-private typedef FnParts = {
-	final params: Array<QueryNode>;
-	final hint: Null<QueryNode>;
-	final body: QueryNode;
-};
+private typedef FnParts = { final params: Array<QueryNode>; final hint: Null<QueryNode>; final body: QueryNode; };
 
 /** What a candidate literal deserves: an autofixed finding, a report-only finding, or nothing. */
 private enum Verdict {

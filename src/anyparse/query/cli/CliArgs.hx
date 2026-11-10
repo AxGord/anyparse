@@ -488,11 +488,7 @@ final class CliArgs {
  * asked for. Named rather than spelled inline because the reporting seat and its pin both have to
  * write it out.
  */
-typedef ExpandedInputs = {
-	var paths: Array<String>;
-	var singleFile: Bool;
-	var unmatched: Array<String>;
-};
+typedef ExpandedInputs = { var paths: Array<String>; var singleFile: Bool; var unmatched: Array<String>; };
 
 /**
  * What `resolveInputPaths` hands a subcommand: the grammar plugin for `--lang`,
@@ -501,11 +497,7 @@ typedef ExpandedInputs = {
  * Named because three seats spell it out — the resolver itself, `shard-plan`
  * and `self-status`.
  */
-typedef ResolvedInputs = {
-	var plugin: GrammarPlugin;
-	var paths: Array<String>;
-	var singleFile: Bool;
-};
+typedef ResolvedInputs = { var plugin: GrammarPlugin; var paths: Array<String>; var singleFile: Bool; };
 
 /**
  * The pair every `--`-then-scope argv parser builds identically before it starts consuming
@@ -513,10 +505,7 @@ typedef ResolvedInputs = {
  * reads. Named so the shared prologue collapses to one call instead of repeating the same two
  * declarations command by command — the last residue `duplicate-code` still named after the rest of the per-command scaffold was shared.
  */
-typedef PositionalScan = {
-	var inputSpecs: Array<String>;
-	var separator: Int;
-};
+typedef PositionalScan = { var inputSpecs: Array<String>; var separator: Int; };
 
 /**
  * `PositionalScan` plus the two output-shaping flags (`--flat`, `--limit`) a plain

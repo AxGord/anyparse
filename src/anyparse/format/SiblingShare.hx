@@ -256,8 +256,4 @@ final class SiblingShare {
 
 }
 
-private typedef Offer = {
-	final width: Int;
-	final token: BreakToken;
-	final alias: BreakToken;
-}
+private typedef Offer = { final width: Int; final token: BreakToken; final alias: BreakToken; }

@@ -275,7 +275,4 @@ final class LintWarn {
 }
 
 /** The tree an op wrote into and the engine that lints it. */
-typedef Target = {
-	var root: String;
-	var engine: String;
-}
+typedef Target = { var root: String; var engine: String; }

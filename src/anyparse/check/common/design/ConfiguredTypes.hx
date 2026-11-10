@@ -110,7 +110,4 @@ final class ConfiguredTypes {
 }
 
 /** A member together with the resolved type that declares it — see `ConfiguredTypes.memberOf`. */
-typedef OwnedMember = {
-	final owner: ResolvedType;
-	final member: MemberInfo;
-}
+typedef OwnedMember = { final owner: ResolvedType; final member: MemberInfo; }

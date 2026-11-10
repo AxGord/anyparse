@@ -543,17 +543,10 @@ private typedef Seams = {
 }
 
 /** One branch of a region: the offset of its own directive, and the single statement it holds. */
-private typedef Arm = {
-	var headerFrom: Int;
-	var stmt: QueryNode;
-	var stmtSpan: Span;
-}
+private typedef Arm = { var headerFrom: Int; var stmt: QueryNode; var stmtSpan: Span; }
 
 /** A split region: its branches in order, and whether the chain reaches a final `#else`. */
-private typedef Region = {
-	var arms: Array<Arm>;
-	var hasElse: Bool;
-}
+private typedef Region = { var arms: Array<Arm>; var hasElse: Bool; }
 
 /** A branch statement split into the text kept once and the r-value kept per branch. */
 private typedef Parts = {

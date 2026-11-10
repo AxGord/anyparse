@@ -19,18 +19,10 @@ import utest.Test;
 
 using Lambda;
 
-private typedef Shape = {
-	name: String,
-	gen: Int -> String,
-	cfg: Null<String>
-};
+private typedef Shape = { name: String, gen: Int -> String, cfg: Null<String> };
 
 /** One measured mechanism: its shapes, what one of them costs at a depth, and the budget. */
-private typedef Meter = {
-	shapes: Array<Shape>,
-	cost: (Shape, Int) -> Int,
-	budget: Int -> Int
-};
+private typedef Meter = { shapes: Array<Shape>, cost: (Shape, Int) -> Int, budget: Int -> Int };
 
 /**
  * Formatting cost must stay linear in how deeply a construct nests. Each mechanism that made it

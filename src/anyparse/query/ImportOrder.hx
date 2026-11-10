@@ -14,11 +14,7 @@ using Lambda;
  * `using` through the same shape for its POSITION alone: a `using` slot never joins a run and
  * never reaches the ordering surface.
  */
-typedef ImportSlot = {
-	final path: String;
-	final from: Int;
-	final to: Int;
-}
+typedef ImportSlot = { final path: String; final from: Int; final to: Int; }
 
 /**
  * One import as a whole LINE — the unit a RUN is built from, an inserter anchors on and the

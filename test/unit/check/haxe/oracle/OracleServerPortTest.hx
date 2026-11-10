@@ -442,7 +442,4 @@ final class OracleServerPortTest extends Test {
 }
 
 /** What a pool over a one-module tree did: whether a server came up, and the status of a compile through it. */
-private typedef Served = {
-	running: Bool,
-	status: Null<Int>
-};
+private typedef Served = { running: Bool, status: Null<Int> };

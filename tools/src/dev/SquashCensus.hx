@@ -37,11 +37,7 @@ typedef SquashRow = {
 }
 
 /** The census: a row per tree, and the files behind the last two columns. */
-typedef SquashReport = {
-	final rows: Array<SquashRow>;
-	final newOnePass: Array<String>;
-	final differs: Array<String>;
-}
+typedef SquashReport = { final rows: Array<SquashRow>; final newOnePass: Array<String>; final differs: Array<String>; }
 
 /**
  * The one answer to "how much of the writer's output depends on where the author broke lines": `dev squash-census [<dir>...]
@@ -226,13 +222,7 @@ final class SquashCensus {
 }
 
 /** What one formatter run over a tree reported: the files it settles only on a second rewrite, and the ones it could not format. */
-private typedef FmtRun = {
-	final onePass: Array<String>;
-	final unparsed: Array<String>;
-}
+private typedef FmtRun = { final onePass: Array<String>; final unparsed: Array<String>; }
 
 /** What `hxFiles` found under a tree: its `.hx` files and the formatter configs inside it, relative to the repo. */
-private typedef Found = {
-	final sources: Array<String>;
-	final configs: Array<String>;
-}
+private typedef Found = { final sources: Array<String>; final configs: Array<String>; }

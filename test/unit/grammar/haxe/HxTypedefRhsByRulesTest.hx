@@ -13,9 +13,10 @@ final class HxTypedefRhsByRulesTest extends Test {
 	@:pin('control')
 	@:killer('M-TYPEDEF-RHS-KEEPS-SOURCE')
 	public function testASimpleBrokenBodyGoesOnOneLine(): Void {
-		// Two or more fields go one per line by the typedef rule, so the simple body that collapses holds one field.
-		Assert.equals('typedef T = {a:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int\n}', '{}'));
-		Assert.equals('typedef U = {var a:Int;}', HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n}', '{}'));
+		Assert.equals('typedef T = {a:Int, b:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int,\n\tb:Int\n}', '{}'));
+		Assert.equals(
+			'typedef U = {var a:Int; var b:Int;}', HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}', '{}')
+		);
 	}
 
 	@:pin('guard')
@@ -42,12 +43,10 @@ final class HxTypedefRhsByRulesTest extends Test {
 	@:pin('control')
 	@:killer('M-TYPEDEF-STRIPPED-BLANK-HOLDS-LINES')
 	public function testAStrippedBlankDoesNotHoldTheBodyBroken(): Void {
-		// An anon type argument is not forced one field per line, so only the stripped blank could break it.
 		Assert.equals(
-			'typedef T = Array<{var a:Int; var b:Int;}>',
+			'typedef T = {var a:Int; var b:Int;}',
 			HxWriteFixture.triviaWrite(
-				'typedef T = Array<{\n\tvar a:Int;\n\n\tvar b:Int;\n}>',
-				'{"emptyLines":{"typedefEmptyLines":{"existingBetweenFields":"remove"}}}'
+				'typedef T = {\n\tvar a:Int;\n\n\tvar b:Int;\n}', '{"emptyLines":{"typedefEmptyLines":{"existingBetweenFields":"remove"}}}'
 			)
 		);
 	}

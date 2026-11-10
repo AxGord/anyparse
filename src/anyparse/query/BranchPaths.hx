@@ -72,7 +72,4 @@ final class BranchPaths {
 }
 
 /** One branch taken on the way to an occurrence: the conditional (by its span) and the index of the child entered. */
-typedef BranchStep = {
-	final key: String;
-	final idx: Int;
-}
+typedef BranchStep = { final key: String; final idx: Int; }

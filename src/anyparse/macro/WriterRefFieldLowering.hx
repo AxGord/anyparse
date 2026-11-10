@@ -1982,8 +1982,5 @@ typedef RefFieldCtx = {
  * The two head-gap comment slots a bare body field's separator reads, as runtime accesses: the comment cuddled to the
  * prior field's closer (`Null<String>`, `null` when none) and the own-line run before the body (`Array<String>`).
  */
-typedef HeadGapSlots = {
-	final afterTrail: Expr;
-	final beforeLeading: Expr;
-}
+typedef HeadGapSlots = { final afterTrail: Expr; final beforeLeading: Expr; }
 #end

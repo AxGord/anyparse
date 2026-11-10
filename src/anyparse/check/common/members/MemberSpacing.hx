@@ -7,20 +7,14 @@ import anyparse.query.FormatConfigDiscovery;
  * One container's first layout finding: the member the check flags plus the
  * violation message describing what is wrong (member order vs group spacing).
  */
-typedef LayoutIssue = {
-	var member: OrderedMember;
-	var message: String;
-}
+typedef LayoutIssue = { var member: OrderedMember; var message: String; }
 
 /**
  * The spacing context of one container: the opt-in `separateInlineSubgroup` option, and `writer`, the writer's
  * member-gap policy under the file's format config (`GrammarPlugin.memberGapPolicy`) - null when the grammar's writer
  * forces no member gaps, or does not run that policy on this container's kind (`forContainer`).
  */
-typedef SpacingPolicy = {
-	final separateInline: Bool;
-	final writer: Null<MemberGapPolicy>;
-}
+typedef SpacingPolicy = { final separateInline: Bool; final writer: Null<MemberGapPolicy>; }
 
 /** Why a member gap wants the blank lines it wants - the rule `wantedBlanks` answered from, which picks the finding's message. */
 private enum abstract GapRule(Int) {
@@ -47,21 +41,14 @@ private enum abstract GapRule(Int) {
  * MINIMUM - the writer's own answer, which fills an empty gap with `count` blank lines and keeps a fuller one as the
  * source has it - where the check's own rules ask for exactly `count`.
  */
-private typedef GapWant = {
-	final count: Int;
-	final atLeast: Bool;
-	final rule: GapRule;
-}
+private typedef GapWant = { final count: Int; final atLeast: Bool; final rule: GapRule; }
 
 /**
  * The two optional blank-line edits `directiveGapEdits` computes for one cross-condition
  * member gap: `ifEdit` the blank before the gap's `#if`, `endEdit` the blank after its
  * `#end`; each null when that blank already exists or the gap has no such directive.
  */
-private typedef DirectiveGap = {
-	var ifEdit: Null<{ span: Span, text: String }>;
-	var endEdit: Null<{ span: Span, text: String }>;
-}
+private typedef DirectiveGap = { var ifEdit: Null<{ span: Span, text: String }>; var endEdit: Null<{ span: Span, text: String }>; }
 
 /**
  * The BLANK-LINE half of `member-order`: what has to sit in the gap BETWEEN two collected

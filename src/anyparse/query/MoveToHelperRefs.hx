@@ -53,16 +53,10 @@ private typedef CallRewrite = {
 }
 
 /** A node of one file with its parent, the unit `nodeIndex` hands back. */
-private typedef Placed = {
-	final node: QueryNode;
-	final parent: Null<QueryNode>;
-}
+private typedef Placed = { final node: QueryNode; final parent: Null<QueryNode>; }
 
 /** One file's identifiers keyed by where they start, and its member accesses keyed by where they end. */
-private typedef NodeIndex = {
-	final identsByFrom: Map<Int, Placed>;
-	final accessesByTo: Map<Int, Array<Placed>>;
-}
+private typedef NodeIndex = { final identsByFrom: Map<Int, Placed>; final accessesByTo: Map<Int, Array<Placed>>; }
 
 /** What the walk over the moved members collects before `Refs` binds it (`scanMoved`). */
 private typedef MovedScan = {

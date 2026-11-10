@@ -32,28 +32,19 @@ enum StoredValue {
  * What may invoke a function from outside the calls the graph holds (`ThreadSafety`): `seedable` whether code outside the
  * run may, `inertRef` whether a function value handed on runs nothing.
  */
-typedef Entries = {
-	final seedable: (String) -> Bool;
-	final inertRef: (CallEdge) -> Bool;
-}
+typedef Entries = { final seedable: (String) -> Bool; final inertRef: (CallEdge) -> Bool; }
 
 /**
  * What a function writes to one of its parameters (`ReflectiveValues.writesOf`): the values its `=` and `??=` writes store,
  * and the types the values its operator writes store may be.
  */
-typedef Writes = {
-	final values: Array<QueryNode>;
-	final types: Array<String>;
-}
+typedef Writes = { final values: Array<QueryNode>; final types: Array<String>; }
 
 /**
  * The locals and parameters (`<file>:<binding>`) and the field NAMES some initializer or write hands a value its declared
  * type was never checked against (`ReflectiveValues.claims`).
  */
-typedef Claims = {
-	final bindings: Array<String>;
-	final fields: Array<String>;
-}
+typedef Claims = { final bindings: Array<String>; final fields: Array<String>; }
 
 /**
  * What a reflective write on a value the run places on no class STORES, and whether that may be a lock of the type a lock

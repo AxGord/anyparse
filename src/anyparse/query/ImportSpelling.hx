@@ -6,10 +6,7 @@ import anyparse.util.Strings;
  * An `import` / `using` argument as the caller spelled it: the keyword it opened with, or null for
  * a bare module path, and the path with the keyword and the closing `;` taken off.
  */
-typedef ImportSpelled = {
-	var keyword: Null<String>;
-	var path: String;
-};
+typedef ImportSpelled = { var keyword: Null<String>; var path: String; };
 
 /**
  * How an op that takes an import ARGUMENT reads it — `add-import`, `remove-import` and `new`'s

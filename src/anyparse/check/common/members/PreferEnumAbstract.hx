@@ -742,11 +742,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 
 }
 
-private typedef ConstDecl = {
-	final prefix: String;
-	final span: Span;
-	final name: String;
-};
+private typedef ConstDecl = { final prefix: String; final span: Span; final name: String; };
 
 private typedef EnumAbstractCfg = {
 
@@ -804,8 +800,4 @@ private typedef ConversionPlan = {
 	final edits: Array<{ span: Span, text: String }>;
 };
 
-private typedef Group = {
-	final prefix: String;
-	final span: Span;
-	final members: Array<String>;
-};
+private typedef Group = { final prefix: String; final span: Span; final members: Array<String>; };

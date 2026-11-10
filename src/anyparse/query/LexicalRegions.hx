@@ -35,11 +35,7 @@ typedef LexRegion = {
  * A code hole of an interpolating literal: `[from, to)` spans the hole's delimiters too (`${` through `}`), and
  * `regions` are the comments and literals written inside it, nested the same way.
  */
-typedef LexHole = {
-	final from: Int;
-	final to: Int;
-	final regions: Array<LexRegion>;
-};
+typedef LexHole = { final from: Int; final to: Int; final regions: Array<LexRegion>; };
 
 /**
  * A grammar's lexical walk: `onRegion(from, to, kind, depth)` for every region at every nesting depth and

@@ -646,14 +646,7 @@ final class AddElement {
 }
 
 /** One element of a sorted string list (`AddElement.insertSorted`): its string value, its span and its source text. */
-private typedef SortedEntry = {
-	final key: String;
-	final span: Span;
-	final text: String;
-}
+private typedef SortedEntry = { final key: String; final span: Span; final text: String; }
 
 /** One splice of an insert: the text `CanonicalEdit.canonicalize` puts at `span`. */
-private typedef Splice = {
-	span: Span,
-	text: String
-};
+private typedef Splice = { span: Span, text: String };

@@ -23,11 +23,7 @@ enum CollectResult {
 }
 
 /** The function a cursor resolves to, with the tree it lives in and the name it was resolved by. */
-typedef CursorFn = {
-	final tree: QueryNode;
-	final decl: QueryNode;
-	final name: String;
-};
+typedef CursorFn = { final tree: QueryNode; final decl: QueryNode; final name: String; };
 
 /**
  * Outcome of `CallSites.resolveFnAtCursor`: the resolved function, or the diagnostic the calling op reports

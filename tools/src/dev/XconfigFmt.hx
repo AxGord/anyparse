@@ -179,17 +179,10 @@ final class XconfigFmt {
 }
 
 /** One cross-config run: the lines worth showing, whether it ran to its summary line, and the one-pass set it found. */
-typedef XconfigRun = {
-	var shown: Array<String>;
-	var finished: Bool;
-	var onePass: Array<String>;
-}
+typedef XconfigRun = { var shown: Array<String>; var finished: Bool; var onePass: Array<String>; }
 
 /** A failed cross-config check: the one line a gate row quotes (half and remedy, whatever the file count) and the lines beneath it. */
-typedef XconfigFailure = {
-	var line: String;
-	var detail: Array<String>;
-}
+typedef XconfigFailure = { var line: String; var detail: Array<String>; }
 
 /** Where the cross-config check of a slice's touched files stands: nothing to check, held, or broken. */
 enum XconfigStand {

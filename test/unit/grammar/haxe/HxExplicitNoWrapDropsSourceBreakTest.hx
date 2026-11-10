@@ -33,10 +33,14 @@ final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 
 	@:pin('control')
 	@:killer('M-EXPLICIT-NOWRAP-TYPEDEF-BODY')
-	public function testAOneFieldTypedefBodyIsFlat(): Void {
-		// Two or more fields go one per line by the typedef rule, whatever the cascade; one field is the cascade's.
-		Assert.equals('typedef T = {a:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int\n}', config('noWrap', '')));
-		Assert.equals('typedef U = {var a:Int;}', HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n}', config('noWrap', '')));
+	public function testATypedefBodyIsFlat(): Void {
+		Assert.equals(
+			'typedef T = {a:Int, b:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int,\n\tb:Int\n}', config('noWrap', ''))
+		);
+		Assert.equals(
+			'typedef U = {var a:Int; var b:Int;}',
+			HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}', config('noWrap', ''))
+		);
 	}
 
 	private static function config(mode: String, rest: String): String {

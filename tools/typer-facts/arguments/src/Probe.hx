@@ -1,13 +1,6 @@
-typedef Opts = {
-	a: Float,
-	?b: Int,
-	?c: String
-}
+typedef Opts = { a: Float, ?b: Int, ?c: String }
 
-typedef Pt = {
-	x: Int,
-	y: Int
-}
+typedef Pt = { x: Int, y: Int }
 
 class Box<T> {
 
