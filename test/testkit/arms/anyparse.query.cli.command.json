@@ -1203,6 +1203,46 @@
 			"find": "CliIo.sysPrint(CommentMentions.render(entry.path, entry.source, hits, flat));",
 			"replace": "CliIo.sysPrint(CommentMentions.render(entry.path, entry.source, hits.slice(0, 1), flat));",
 			"note": "the comments section is cut to its first hit per file, so a scrub run with a small --limit reads the remaining comment mentions as gone"
+		},
+		{
+			"name": "M-ENCAPSULATE-FIELD-DATA-NOT-REFUSED",
+			"type": "anyparse.query.cli.command.EncapsulateFieldCommand",
+			"method": "runEncapsulateField",
+			"find": "CliArgs.refuseDataGrammar(op, plugin)",
+			"replace": "false",
+			"note": "encapsulate-field never refuses a data grammar, so a data file falls through to a lookup that names it as the missing type"
+		},
+		{
+			"name": "M-MAKE-FINAL-DATA-NOT-REFUSED",
+			"type": "anyparse.query.cli.command.MakeFinalCommand",
+			"method": "run",
+			"find": "CliArgs.refuseDataGrammar(op, plugin)",
+			"replace": "false",
+			"note": "make-final never refuses a data grammar, so a data file falls through to a lookup that names it as the missing type"
+		},
+		{
+			"name": "M-MOVE-MEMBER-DATA-NOT-REFUSED",
+			"type": "anyparse.query.cli.command.MoveMemberCommand",
+			"method": "runMoveMember",
+			"find": "CliArgs.refuseDataGrammar(op, plugin)",
+			"replace": "false",
+			"note": "move-member never refuses a data grammar, so a data file falls through to a lookup that names it as the missing type"
+		},
+		{
+			"name": "M-PULL-UP-DATA-NOT-REFUSED",
+			"type": "anyparse.query.cli.command.PullUpCommand",
+			"method": "runInheritanceMove",
+			"find": "CliArgs.refuseDataGrammar(cmd, plugin)",
+			"replace": "false",
+			"note": "pull-up and push-down never refuse a data grammar, so a data file falls through to a lookup that names it as the missing class"
+		},
+		{
+			"name": "M-SAFE-DELETE-DATA-NOT-REFUSED",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDelete",
+			"find": "CliArgs.refuseDataGrammar(op, plugin)",
+			"replace": "false",
+			"note": "safe-delete never refuses a data grammar, so a data file falls through to a lookup that names it as the missing member"
 		}
 	]
 }

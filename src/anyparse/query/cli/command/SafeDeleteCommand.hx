@@ -81,6 +81,7 @@ final class SafeDeleteCommand implements CliCommand {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
 		final op: String = 'safe-delete';
+		if (CliArgs.refuseDataGrammar(op, plugin)) return EXIT_RUNTIME;
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
 			op, plugin.langName(), scopeDir, [srcFileNN]
 		);

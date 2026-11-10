@@ -92,6 +92,8 @@ final class MoveMemberCommand implements CliCommand {
 		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final destTypeName: String = destType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final op: String = 'move-member';
+		if (CliArgs.refuseDataGrammar(op, plugin)) return EXIT_RUNTIME;
 
 		// A scope that matches nothing would narrow the move silently to the rest, so it refuses instead.
 		final unmatched: Array<String> = CliArgs.expandFor(plugin.langName(), scopes).unmatched;
@@ -100,14 +102,14 @@ final class MoveMemberCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
-			'move-member', plugin.langName(), scopes[0], [srcFileNN], scopes.slice(1)
+			op, plugin.langName(), scopes[0], [srcFileNN], scopes.slice(1)
 		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = MoveMember.move(
 			srcFileNN, srcTypeName, memberNames, destTypeName, via, closure, scaffold, scopeFiles, plugin, plugin.typeRefShape(), keepBare
 		);
-		return MoveCommand.emitMoveResult('move-member', result, srcFileNN, srcFileNN, write, plugin);
+		return MoveCommand.emitMoveResult(op, result, srcFileNN, srcFileNN, write, plugin);
 	}
 
 	private static function printMoveMemberUsage(): Void {

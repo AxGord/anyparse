@@ -80,6 +80,7 @@ final class PullUpCommand implements CliCommand {
 		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final targetTypeName: String = targetType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		if (CliArgs.refuseDataGrammar(cmd, plugin)) return EXIT_RUNTIME;
 
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
 			cmd, plugin.langName(), scopeDir, [srcFileNN]

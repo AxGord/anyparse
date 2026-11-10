@@ -82,11 +82,12 @@ final class EncapsulateFieldCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		final op: String = 'encapsulate-field';
+		if (CliArgs.refuseDataGrammar(op, plugin)) return EXIT_RUNTIME;
 		// Discover the file's format config so the canonical gate matches the project's writer
 		// style (space-after-colon, etc.), else a non-default-formatted file is wrongly rejected.
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
 		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin, optsJson);
-		final op: String = 'encapsulate-field';
 		switch result {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites(op, filePath, rewrites);
