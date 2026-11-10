@@ -46,9 +46,6 @@ final class Battery {
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final BRANCH_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 
-	/** The lines of a failed typer-probe run shown when it names no `DIFFERENT` probe. */
-	private static inline final TAIL_LINES: Int = 20;
-
 	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
 	private static final TESTS: String = 'tests';
 
@@ -176,7 +173,7 @@ final class Battery {
 			case CORPUS_ROW: corpus;
 			case 'fmt': fmt;
 			case 'fmt xconfig': fmtXconfig;
-			case 'typer probes': typerProbes;
+			case 'typer probes': () -> TyperProbesRow.outcome(_plan.repo, Sys.println);
 			case 'jvm probe': jvmProbe;
 			case 'oracle': oracle;
 			case 'lint': lint;
@@ -330,16 +327,6 @@ final class Battery {
 		if (failure == null) return Passed;
 		for (line in failure.detail) Sys.println(line);
 		return Failed(failure.line);
-	}
-
-	/** The typer probe corpus (`tools/typer-facts/`): every probe the typer answers as the compiler does. */
-	private function typerProbes(): Outcome {
-		final run: Result = cmd('node bin/dev.js typer-conformance probes').at(_plan.repo).run();
-		if (run.ok) return Passed;
-		final lines: Array<String> = '${run.out}${run.err}'.split('\n');
-		final different: Array<String> = lines.filter(l -> l.startsWith('DIFFERENT'));
-		Sys.println((different.length > 0 ? different : lines.slice(-TAIL_LINES)).join('\n'));
-		return Failed('the typer answered a probe otherwise than the compiler (DIFFERENT above)');
 	}
 
 	/** `dev jvm-portability` — its build and its gate line — when the core moved since the base (or `--jvm`). */

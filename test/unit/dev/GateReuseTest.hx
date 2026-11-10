@@ -28,9 +28,9 @@ final class GateReuseTest extends Test {
 		final trees: Array<String> = landed(false);
 		Assert.equals(trees[0], trees[1], 'a slice cherry-picked onto the main it was gated on is the tree the gate judged');
 		final taken: Array<String> = GateReuse.rows(passing(trees[0]), facts(trees[1]));
-		Assert.same(['suite', 'corpus', 'jvm probe', 'kit probes'], taken);
+		Assert.same(['suite', 'corpus', 'jvm probe', 'kit probes', 'typer probes'], taken);
 		Assert.equals(
-			'battery: reused gate ${trees[0].substr(0, 9)} for suite, corpus, jvm probe, kit probes',
+			'battery: reused gate ${trees[0].substr(0, 9)} for suite, corpus, jvm probe, kit probes, typer probes',
 			GateReuse.report(passing(trees[0]), facts(trees[1]), taken)
 		);
 	}
@@ -52,6 +52,7 @@ final class GateReuseTest extends Test {
 			step('corpus', Passed),
 			step('jvm', Skipped('neither src/ nor the probe changed')),
 			step('kits', Passed),
+			step('typer probes', Skipped('neither the engine nor a probe changed')),
 			step('lint', NotRun('no baseline'))
 		]);
 		Assert.same(['suite', 'corpus', 'kits'], passed);
@@ -81,18 +82,21 @@ final class GateReuseTest extends Test {
 	public function testARowTheGateWaivedIsNeverTaken(): Void {
 		final record: GateRecord = passing('t1');
 		record.allow = ['suite'];
-		Assert.same(['jvm probe', 'kit probes'], GateReuse.rows(record, facts('t1')), 'nor the corpus, which reads the waived suite');
+		Assert.same(
+			['jvm probe', 'kit probes', 'typer probes'],
+			GateReuse.rows(record, facts('t1')), 'nor the corpus, which reads the waived suite'
+		);
 		record.allow = ['corpus'];
-		Assert.same(['suite', 'jvm probe', 'kit probes'], GateReuse.rows(record, facts('t1')));
+		Assert.same(['suite', 'jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(record, facts('t1')));
 	}
 
 	public function testAFullBatteryRunsItsOwnSuiteAndTheCorpusOverIt(): Void {
 		final full: GateFacts = facts('t1');
 		full.quick = false;
-		Assert.same(['jvm probe', 'kit probes'], GateReuse.rows(passing('t1'), full));
+		Assert.same(['jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(passing('t1'), full));
 		final noSweep: GateRecord = passing('t1');
 		noSweep.sweep = null;
-		Assert.same(['suite', 'jvm probe', 'kit probes'], GateReuse.rows(noSweep, facts('t1')));
+		Assert.same(['suite', 'jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(noSweep, facts('t1')));
 	}
 
 	@:pin('control')
@@ -100,7 +104,7 @@ final class GateReuseTest extends Test {
 	public function testASuiteTheGateRanOnTheClassesItsChangeReachesLeavesTheLandItsOwnSuiteAndCorpus(): Void {
 		final impact: GateRecord = passing('t1');
 		impact.impact = 37;
-		Assert.same(['jvm probe', 'kit probes'], GateReuse.rows(impact, facts('t1')));
+		Assert.same(['jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(impact, facts('t1')));
 		TempDir.with(dir -> {
 			final file: String = dir.file(GateReuse.FILE);
 			GateReuse.write(file, impact);
@@ -155,7 +159,9 @@ final class GateReuseTest extends Test {
 	@:pin('control')
 	@:killer('M-GATE-REUSE-NODE-BLIND')
 	public function testARecordStandsForALandOnlyUnderTheNodeItRanUnder(): Void {
-		Assert.same(['suite', 'corpus', 'jvm probe', 'kit probes'], GateReuse.rows(passing('t1'), facts('t1')), 'the same node');
+		Assert.same(
+			['suite', 'corpus', 'jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(passing('t1'), facts('t1')), 'the same node'
+		);
 		final upgraded: GateFacts = facts('t1');
 		upgraded.node = 'v22.0.0';
 		Assert.same([], GateReuse.rows(passing('t1'), upgraded), 'another node runs the battery');
@@ -212,7 +218,7 @@ final class GateReuseTest extends Test {
 			node: 'v20.1.0',
 			fork: '',
 			allow: [],
-			rows: ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'kits'],
+			rows: ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'kits', 'typer probes'],
 			tests: 5,
 			assertions: 6,
 			sweep: '/logs/${GateReuse.SWEEP}',

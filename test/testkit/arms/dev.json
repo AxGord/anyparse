@@ -2297,6 +2297,30 @@
 			"method": "rebasedMessage",
 			"force": "value",
 			"note": "a message naming a moved module keeps its old path, so a finding whose text quotes the module reads as new at the new path"
+		},
+		{
+			"name": "M-GATE-DEMAND-TYPER-NONE",
+			"type": "dev.SliceGate",
+			"method": "demandOf",
+			"find": "case 'typer probes': facts.recording || !facts.typerMoved ? 0 : 1;",
+			"replace": "case 'typer probes': 0;",
+			"note": "the typer probes branch holds no thread in a gate run, so the heavy branch asks for the thread the probes run on and the gate oversubscribes the pool"
+		},
+		{
+			"name": "M-TYPERROW-SHOWS-TAIL",
+			"type": "dev.TyperProbesRow",
+			"method": "outcome",
+			"find": "different.length > 0 ? different : lines.slice(-TAIL_LINES)",
+			"replace": "lines.slice(-TAIL_LINES)",
+			"note": "a failed run shows the tail of its output even when it names DIFFERENT probes, so the probe that failed can scroll out of the verdict"
+		},
+		{
+			"name": "M-TYPERROW-REACHED-ENGINE-BLIND",
+			"type": "dev.TyperProbesRow",
+			"method": "reached",
+			"find": "GateTree.isEngineInput(file) || ",
+			"replace": "",
+			"note": "a slice that moves the typer does not reach the row, so it passes its gate and fails the land battery"
 		}
 	]
 }

@@ -114,33 +114,37 @@ final class SliceGateTest extends Test {
 
 	/**
 	 * What every branch of a gate run but the heavy one holds is one thread for the short
-	 * rows, the kits row's when the engine or a kit moved, two for the lint row when a
+	 * rows, the kits row's when the engine or a kit moved, one for the typer probes
+	 * when the engine, a probe or the harness moved, two for the lint row when a
 	 * `.hx` file moved, one for the jvm probe when it runs, and the base tree's lint plus one per infra tree when rule code
 	 * moved.
 	 */
 	@:pin('control')
 	@:killer('M-GATE-DEMAND-LISTS-NONE')
 	public function testTheLightBranchesOfAGateHoldWhatItsRowsRun(): Void {
-		for (touchedHx in [false, true]) for (jvmMoved in [false, true]) for (kitsMoved in [false, true]) for (ruleInfra in [null, 0, 3]) {
-			final facts: GateDemand = {
-				recording: false,
-				infra: 0,
-				touchedHx: touchedHx,
-				jvmMoved: jvmMoved,
-				kitsMoved: kitsMoved,
-				ruleInfra: ruleInfra
-			};
-			final expected: Int = 1 + (kitsMoved ? Probe.GATE_THREADS : 0) + (touchedHx ? 2 : 0) + (jvmMoved ? 1 : 0) + (
-				ruleInfra == null ? 0 : 1 + ruleInfra
-			);
-			Assert.equals(expected, Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts, rows)), '$facts');
-		}
+		for (touchedHx in [false, true]) for (jvmMoved in [false, true])
+			for (kitsMoved in [false, true]) for (typerMoved in [false, true]) for (ruleInfra in [null, 0, 3]) {
+				final facts: GateDemand = {
+					recording: false,
+					infra: 0,
+					touchedHx: touchedHx,
+					jvmMoved: jvmMoved,
+					kitsMoved: kitsMoved,
+					typerMoved: typerMoved,
+					ruleInfra: ruleInfra
+				};
+				final expected: Int = 1 + (kitsMoved ? Probe.GATE_THREADS : 0) + (typerMoved ? 1 : 0) + (touchedHx ? 2 : 0) + (
+					jvmMoved ? 1 : 0
+				) + (ruleInfra == null ? 0 : 1 + ruleInfra);
+				Assert.equals(expected, Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts, rows)), '$facts');
+			}
 		Assert.isNull(SliceGate.demandOf({
 			recording: false,
 			infra: 0,
 			touchedHx: true,
 			jvmMoved: true,
 			kitsMoved: true,
+			typerMoved: true,
 			ruleInfra: 3
 		}, ['suite']));
 		Assert.isNull(
@@ -150,6 +154,7 @@ final class SliceGateTest extends Test {
 				touchedHx: false,
 				jvmMoved: false,
 				kitsMoved: false,
+				typerMoved: false,
 				ruleInfra: null
 			}, ['base']),
 			'the base branch is a heavy one beside the suite'
@@ -546,6 +551,30 @@ final class SliceGateTest extends Test {
 			}
 			Assert.notEquals(bases[0], bases[1], 'the base trees are one');
 		}));
+	}
+
+	/**
+	 * The typer probes row holds one thread when the engine, a probe or the harness
+	 * moved and none otherwise, and the gate runs it in a branch of its own.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-DEMAND-TYPER-NONE')
+	public function testTheTyperProbesRowHoldsAThreadOnlyWhenItRuns(): Void {
+		final facts: Bool -> GateDemand = moved -> {
+			recording: false,
+			infra: 0,
+			touchedHx: false,
+			jvmMoved: false,
+			kitsMoved: false,
+			typerMoved: moved,
+			ruleInfra: null
+		};
+		Assert.equals(1, SliceGate.demandOf(facts(true), ['typer probes']));
+		Assert.equals(0, SliceGate.demandOf(facts(false), ['typer probes']));
+		Assert.equals(
+			Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts(false), rows)) + 1,
+			Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts(true), rows))
+		);
 	}
 
 	/**

@@ -32,14 +32,15 @@ final class GateReuse {
 	public static final LOGS_SUFFIX: String = '-logs/slice-gate';
 
 	/**
-	 * Each gate row a battery row may take over, as the pair `[gate row, battery row]`. A row missing here — fmt, typer probes,
-	 * oracle, lint, blast — measures more than its gate namesake, so it always runs.
+	 * Each gate row a battery row may take over, as the pair `[gate row, battery row]`. A row missing
+	 * here — fmt, oracle, lint, blast — measures more than its gate namesake, so it always runs.
 	 */
 	private static final COVERS: Array<Array<String>> = [
 		['suite', 'suite'],
 		['corpus', 'corpus'],
 		['jvm', 'jvm probe'],
-		['kits', 'kit probes']
+		['kits', 'kit probes'],
+		['typer probes', 'typer probes']
 	];
 
 	/**

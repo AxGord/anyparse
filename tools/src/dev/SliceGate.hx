@@ -69,7 +69,8 @@ final class SliceGate {
 		['lint'],
 		['jvm'],
 		['infra4'],
-		['kits']
+		['kits'],
+		['typer probes']
 	];
 
 	/**
@@ -97,7 +98,8 @@ final class SliceGate {
 		'infra4',
 		'scrub',
 		'artifacts',
-		'kits'
+		'kits',
+		'typer probes'
 	];
 
 	/** The branches of a `--baseline` run; `frozen` follows them. The base tree's lint is no reading of it (`BaseLint`). */
@@ -238,6 +240,11 @@ final class SliceGate {
 							_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n')
 						)
 						: Skipped('neither the engine nor a kit changed');
+			case 'typer probes':
+				() ->
+					TyperProbesRow.reached(_gate.touched)
+						? TyperProbesRow.outcome(_gate.tree, text -> File.saveContent(_gate.log('typer-probes.log'), '$text\n'))
+						: Skipped('neither the engine nor a probe changed');
 			case _: () -> NotRun('no row named $name');
 		};
 	}
@@ -327,6 +334,7 @@ final class SliceGate {
 			touchedHx: _gate.touched.exists(f -> f.endsWith('.hx')),
 			jvmMoved: _gate.jvmMoved(),
 			kitsMoved: KitsRow.reached(_gate.touched),
+			typerMoved: TyperProbesRow.reached(_gate.touched),
 			ruleInfra: _gate.ruleCodeMoved() && baseline != null ? baseline.infra.length : null
 		}, rows);
 	}
@@ -688,7 +696,8 @@ final class SliceGate {
 	/**
 	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite), which takes
 	 * what the others leave; one for the short rows; the lint row's two lints (the touched files at the base and now); the
-	 * jvm probe; a lint per tree INFRA gate 4 reads beside the base tree's, which a `--baseline` run lints in its own row —
+	 * jvm probe; the typer probes; a lint per tree INFRA gate 4 reads beside
+	 * the base tree's, which a `--baseline` run lints in its own row —
 	 * each 0 when its rows will skip.
 	 */
 	public static function demandOf(facts: GateDemand, rows: Array<String>): Null<Int> {
@@ -699,6 +708,7 @@ final class SliceGate {
 			case 'lint': facts.touchedHx ? 2 : 0;
 			case 'jvm': facts.jvmMoved ? 1 : 0;
 			case 'kits': facts.recording || !facts.kitsMoved ? 0 : Probe.GATE_THREADS;
+			case 'typer probes': facts.recording || !facts.typerMoved ? 0 : 1;
 			case 'infra4': facts.recording ? facts.infra : 1 + (facts.ruleInfra ?? -1);
 			case _: 0;
 		};
@@ -766,6 +776,9 @@ typedef GateDemand = {
 
 	/** Whether the engine or a probe kit moved, so the kits row runs (`KitsRow.reached`). */
 	var kitsMoved: Bool;
+
+	/** Whether the engine, a probe project or the harness moved, so the typer probes row runs (`TyperProbesRow.reached`). */
+	var typerMoved: Bool;
 
 	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
 	var ruleInfra: Null<Int>;
