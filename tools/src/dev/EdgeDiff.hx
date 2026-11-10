@@ -1,13 +1,13 @@
 package dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.OracleGeneration;
+import anyparse.check.haxe.facts.TypedFactsProbe;
+import anyparse.check.haxe.oracle.OracleGeneration;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
-import anyparse.query.CompilerFacts;
+import anyparse.query.CompilerFacts; // noqa: owned-types
 import anyparse.query.FactsView;
 import anyparse.query.FileIdentity;
 import anyparse.query.HaxelibResolver;
@@ -45,7 +45,7 @@ final class EdgeDiff {
 		final library: Array<SourceFile> = libraryOf(config, project);
 		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles(new HaxeQueryPlugin())).oracles;
 		final started: Float = Sys.time();
-		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
+		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles); // noqa: owned-types
 		Sys.println('facts: ${Math.round(Sys.time() - started)}s, configurations ${facts?.configurations}, dropped ${facts?.dropped}');
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final index: SymbolIndex = SymbolIndex.build(project.concat(library), plugin, library.map(f -> f.file));

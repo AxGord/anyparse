@@ -204,6 +204,12 @@ final class GateArms {
 		return own.length == 0 || own.exists(t -> changes(t, name.substring(at + 1)));
 	}
 
+	/** The module path of the source file `file` under a module root, or empty for any other file. */
+	public static function moduleOf(file: String): String {
+		final root: Null<String> = MODULE_ROOTS.find(r -> file.startsWith(r));
+		return root == null || !file.endsWith('.hx') ? '' : file.substring(root.length, file.length - '.hx'.length).replace('/', '.');
+	}
+
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
 	private static inline function progressOf(gate: GateTree): String {
 		return gate.branchProgress(SliceGate.ARMS_ROW);
@@ -347,12 +353,6 @@ final class GateArms {
 	private static function inModules(record: ArmRecord, modules: Array<String>): Bool {
 		final type: Null<String> = ArmHeadParser.parse(record.text).type;
 		return type != null && modules.exists(m -> belongs(type, m));
-	}
-
-	/** The module path of the source file `file` under a module root, or empty for any other file. */
-	private static function moduleOf(file: String): String {
-		final root: Null<String> = MODULE_ROOTS.find(r -> file.startsWith(r));
-		return root == null || !file.endsWith('.hx') ? '' : file.substring(root.length, file.length - '.hx'.length).replace('/', '.');
 	}
 
 	/**

@@ -1,6 +1,6 @@
 package unit.check.common.imports;
 
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;

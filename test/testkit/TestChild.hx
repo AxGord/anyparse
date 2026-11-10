@@ -7,7 +7,7 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.proc.ProcessRun;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.LintConfig.OracleGenerate;
-import anyparse.check.oracle.OracleGeneration;
+import anyparse.check.haxe.oracle.OracleGeneration;
 import anyparse.proc.SpawnJob;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;

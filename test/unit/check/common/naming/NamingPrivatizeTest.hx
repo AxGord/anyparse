@@ -5,7 +5,7 @@ import sys.io.File;
 #end
 import anyparse.check.common.naming.NamingPrivatize;
 import anyparse.check.common.naming.NamingRenames.RenameRefusal;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeNamingSupport;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;

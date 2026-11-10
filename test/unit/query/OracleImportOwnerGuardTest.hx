@@ -11,9 +11,9 @@ using Lambda;
 using StringTools;
 
 /**
- * The Haxe compiler oracle (`anyparse.check.oracle`) and the typed facts built on it (`anyparse.check.facts`) are reached
- * from generic code only through the `OracleProvider` door. A module outside those two packages, `check/haxe` and
- * `grammar/haxe` that imports one of them names the Haxe compiler where a language-neutral layer stands.
+ * The Haxe compiler oracle (`anyparse.check.haxe.oracle`) and the typed facts built on it (`anyparse.check.haxe.facts`) are reached
+ * from generic code only through the `OracleProvider` door. A module outside `check/haxe` and `grammar/haxe` that imports
+ * one of them names the Haxe compiler where a language-neutral layer stands.
  *
  * Both pins are `guard`s: what a module imports is the text of the source, which no cut of a compiled type changes.
  */
@@ -23,11 +23,11 @@ final class OracleImportOwnerGuardTest extends Test {
 	/** The layer swept, relative to the repository root. */
 	private static final LAYER: String = 'src/anyparse';
 
-	/** The directories that may import the Haxe oracle: its own packages and the Haxe language packages. */
-	private static final OWNERS: Array<String> = ['check/oracle/', 'check/facts/', 'check/haxe/', 'grammar/haxe/'];
+	/** The directories that may import the Haxe oracle: the Haxe language packages. */
+	private static final OWNERS: Array<String> = ['check/haxe/', 'grammar/haxe/'];
 
 	/** The packages only the owners may import from. */
-	private static final GUARDED: Array<String> = ['anyparse.check.oracle.', 'anyparse.check.facts.'];
+	private static final GUARDED: Array<String> = ['anyparse.check.haxe.oracle.', 'anyparse.check.haxe.facts.'];
 
 	/** The statement kinds whose node name is the path they bring in. */
 	private static final PATH_KINDS: Array<String> = ['ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl'];
@@ -56,21 +56,23 @@ final class OracleImportOwnerGuardTest extends Test {
 
 	@:pin('guard')
 	public function testEveryStatementNamingAGuardedPackageIsReportedAndAnotherIsNot(): Void {
-		final source: String = 'package a;\nimport anyparse.check.oracle.OracleCoverage;\nimport anyparse.check.facts.TypedFactsProbe;\n'
-			+ 'import anyparse.check.oracle.*;\nusing anyparse.check.facts.TypedFactsProbe;\nusing anyparse.check.facts.*;\n'
-			+ 'import anyparse.check.oracle.CompilerOracle as Compiler;\nimport anyparse.check.oracle.CompilerOracle in Compiler2;\n'
+		final source: String = 'package a;\nimport anyparse.check.haxe.oracle.OracleCoverage;\n'
+			+ 'import anyparse.check.haxe.facts.TypedFactsProbe;\nimport anyparse.check.haxe.oracle.*;\n'
+			+ 'using anyparse.check.haxe.facts.TypedFactsProbe;\nusing anyparse.check.haxe.facts.*;\n'
+			+ 'import anyparse.check.haxe.oracle.CompilerOracle as Compiler;\n'
+			+ 'import anyparse.check.haxe.oracle.CompilerOracle in Compiler2;\n'
 			+ 'import anyparse.check.LintConfig.OracleConfig;\nimport anyparse.query.OracleProvider;\nclass C {}';
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(new HaxeQueryPlugin(), source);
 		Assert.notNull(tree);
 		if (tree == null) return;
 		Assert.same([
-			'anyparse.check.oracle.OracleCoverage',
-			'anyparse.check.facts.TypedFactsProbe',
-			'anyparse.check.oracle.*',
-			'anyparse.check.facts.TypedFactsProbe',
-			'anyparse.check.facts.*',
-			'anyparse.check.oracle.CompilerOracle',
-			'anyparse.check.oracle.CompilerOracle'
+			'anyparse.check.haxe.oracle.OracleCoverage',
+			'anyparse.check.haxe.facts.TypedFactsProbe',
+			'anyparse.check.haxe.oracle.*',
+			'anyparse.check.haxe.facts.TypedFactsProbe',
+			'anyparse.check.haxe.facts.*',
+			'anyparse.check.haxe.oracle.CompilerOracle',
+			'anyparse.check.haxe.oracle.CompilerOracle'
 		], guardedImports(tree, source));
 	}
 

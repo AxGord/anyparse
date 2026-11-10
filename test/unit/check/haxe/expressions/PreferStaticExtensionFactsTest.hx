@@ -4,11 +4,11 @@ package unit.check.haxe.expressions;
 import sys.io.File;
 #end
 import anyparse.check.LintConfig;
-import anyparse.check.facts.FactsTypeOracle;
-import anyparse.check.facts.TypedFactsProbe;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.StaticExtensionFacts;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.facts.FactsTypeOracle;
+import anyparse.check.haxe.facts.TypedFactsProbe;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli;

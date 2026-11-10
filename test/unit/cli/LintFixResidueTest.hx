@@ -10,7 +10,7 @@ import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.common.control.PreferTernaryReturn;
 import anyparse.check.common.nullsafety.PreferNullCoalescing;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;

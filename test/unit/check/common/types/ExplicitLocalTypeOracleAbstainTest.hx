@@ -6,8 +6,8 @@ import sys.io.File;
 #end
 import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.check.common.types.LiteralInfer;
-import anyparse.check.oracle.CompilerDisplayOracle;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerDisplayOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;

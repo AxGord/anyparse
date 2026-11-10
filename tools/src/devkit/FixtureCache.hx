@@ -35,7 +35,7 @@ final class FixtureCache {
 	private static inline final DIGEST_LENGTH: Int = 16;
 
 	/** What a probe compile's command line holds, as the shim's `case` pattern matches it. */
-	private static final PROBE_PATTERN: String = '*anyparse.check.facts.TypedFactsMacro.run\\(*|*AnyparseReachDefinesProbe.*';
+	private static final PROBE_PATTERN: String = '*anyparse.check.haxe.facts.TypedFactsMacro.run\\(*|*AnyparseReachDefinesProbe.*';
 
 	/** The module `shim` writes beside the shim for `ProcessSpawn`'s in-process lookup. */
 	private static final ANSWER_FILE: String = 'spawn-answer.js';

@@ -5,7 +5,7 @@ import sys.io.File;
 #end
 import anyparse.check.LintConfig;
 import anyparse.check.common.types.ExplicitLocalType;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;

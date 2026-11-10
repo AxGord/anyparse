@@ -2290,6 +2290,13 @@
 			"find": "commits: invocation.commits",
 			"replace": "commits: []",
 			"note": "the second pass of a fixpoint row runs in a plain directory, so a row that reads history answers differently the second time and reports it is not a fixed point"
+		},
+		{
+			"name": "M-GATE-REBASE-MESSAGE-OLD",
+			"type": "dev.GateLint",
+			"method": "rebasedMessage",
+			"force": "value",
+			"note": "a message naming a moved module keeps its old path, so a finding whose text quotes the module reads as new at the new path"
 		}
 	]
 }

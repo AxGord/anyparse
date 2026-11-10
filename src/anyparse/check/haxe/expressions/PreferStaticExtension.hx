@@ -1,8 +1,8 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.facts.FactsTypeOracle;
 import anyparse.check.haxe.expressions.StaticExtensionFacts.ExtensionFactsVerdict;
+import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;

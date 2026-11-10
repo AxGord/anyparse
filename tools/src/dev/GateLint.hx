@@ -5,6 +5,7 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.query.ModulePathTokens;
 import anyparse.util.Compare;
 import dev.BaseBranch.BaseGot;
 import devkit.Command;
@@ -306,14 +307,16 @@ final class GateLint {
 
 	/**
 	 * The lint report `report` with every record of a file `pathsNow` maps filed under the path it maps to: a moved file's
-	 * findings at the base, under the path they are compared at. A report with nothing to rename is answered as it is.
+	 * findings at the base, under the path they are compared at, and a module path a message names read under its new name.
+	 * A report with nothing to rename is answered as it is.
 	 */
 	public static function rebased(report: String, pathsNow: Map<String, String>): String {
 		if ([for (base => now in pathsNow) if (base != now) now].length == 0) return report;
+		final renames: Array<ModuleRename> = moduleRenames(pathsNow);
 		return switch JValueParser.parse(report) {
 			case JArray(records):
 				JValueWriter.write(
-					JArray([for (record in records) rebasedRecord(record, pathsNow)]), JsonFormat.instance.expandedWriteOptions
+					JArray([for (record in records) rebasedRecord(record, pathsNow, renames)]), JsonFormat.instance.expandedWriteOptions
 				);
 			case _: report;
 		}
@@ -415,14 +418,39 @@ final class GateLint {
 			: null;
 	}
 
-	/** The lint record `record` filed under the path `pathsNow` maps its `file` to, every other key kept. */
-	private static function rebasedRecord(record: JValue, pathsNow: Map<String, String>): JValue {
+	/**
+	 * The lint record `record` filed under the path `pathsNow` maps its `file` to, its `message` reading every module in
+	 * `renames` under its new name, every other key kept.
+	 */
+	private static function rebasedRecord(record: JValue, pathsNow: Map<String, String>, renames: Array<ModuleRename>): JValue {
 		return switch record {
 			case JObject(entries): JObject([
-				for (entry in entries) entry.key == 'file' ? JValueTools.entry('file', rebasedFile(entry.value, pathsNow)) : entry
+				for (entry in entries)
+					switch entry.key {
+						case 'file': JValueTools.entry('file', rebasedFile(entry.value, pathsNow));
+						case 'message': JValueTools.entry('message', rebasedMessage(entry.value, renames));
+						case _: entry;
+					}
 			]);
 			case _: record;
 		}
+	}
+
+	/** The message `value` with every bounded spelling of a module in `renames` rewritten, `value` itself when it is no string. */
+	private static function rebasedMessage(value: JValue, renames: Array<ModuleRename>): JValue {
+		final message: Null<String> = JValueTools.string(value);
+		return message == null ? value : JString(ModulePathTokens.rewrite(message, renames));
+	}
+
+	/** The module renames the file moves in `pathsNow` make: a path under a source root is its module path without `.hx`. */
+	private static function moduleRenames(pathsNow: Map<String, String>): Array<ModuleRename> {
+		final out: Array<ModuleRename> = [];
+		for (base => now in pathsNow) {
+			final oldPath: String = GateArms.moduleOf(base);
+			final newPath: String = GateArms.moduleOf(now);
+			if (oldPath != '' && newPath != '' && oldPath != newPath) out.push({ oldPath: oldPath, newPath: newPath });
+		}
+		return out;
 	}
 
 	/** The path `pathsNow` maps the file `value` names to, `value` itself when it maps none. */

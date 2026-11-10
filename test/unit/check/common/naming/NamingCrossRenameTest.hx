@@ -8,7 +8,7 @@ import anyparse.check.FixVerifierCrossFile;
 import anyparse.check.Severity;
 import anyparse.check.common.naming.NamingCrossRename;
 import anyparse.check.common.naming.NamingRenames.RenameRefusal;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.grammar.haxe.HaxeIdentifierCase;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;

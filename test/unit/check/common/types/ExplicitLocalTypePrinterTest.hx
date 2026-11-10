@@ -1,7 +1,7 @@
 package unit.check.common.types;
 
 import anyparse.check.common.types.ExplicitLocalType;
-import anyparse.check.oracle.PositionTypeOracle;
+import anyparse.check.haxe.oracle.PositionTypeOracle;
 import anyparse.query.CanonicalEdit;
 
 /**

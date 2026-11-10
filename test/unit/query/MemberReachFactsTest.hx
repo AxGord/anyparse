@@ -1,8 +1,8 @@
 package unit.query;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.ReachDefinesProbe;
+import anyparse.check.haxe.facts.TypedFactsProbe;
+import anyparse.check.haxe.oracle.ReachDefinesProbe;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;
 import anyparse.query.CompilerFacts;

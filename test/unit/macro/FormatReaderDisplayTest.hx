@@ -1,8 +1,8 @@
 package unit.macro;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.oracle.CompilerDisplayOracle;
-import anyparse.check.oracle.OracleRunMemo;
+import anyparse.check.haxe.oracle.CompilerDisplayOracle;
+import anyparse.check.haxe.oracle.OracleRunMemo;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import unit.cli.CliFixture;

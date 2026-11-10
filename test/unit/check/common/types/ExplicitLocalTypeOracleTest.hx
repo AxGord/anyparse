@@ -1,7 +1,7 @@
 package unit.check.common.types;
 
 import anyparse.check.common.types.LiteralInfer;
-import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.haxe.oracle.CompilerDisplayOracle;
 
 /**
  * Pure-part coverage of the `explicit-local-type` compiler-oracle TAIL — the display

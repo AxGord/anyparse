@@ -1,6 +1,6 @@
 package anyparse.check.haxe.expressions;
 
-import anyparse.check.facts.FactsTypeOracle;
+import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.query.CasePatterns;
 
 /**

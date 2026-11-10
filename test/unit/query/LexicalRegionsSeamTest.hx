@@ -108,7 +108,7 @@ class LexicalRegionsSeamTest extends Test {
 	 *
 	 *  - `check/LintConfig.hx`, `check/LintDocuments.hx`, `check/common/design/RuleDeclaration.hx`,
 	 *    `check/common/design/threads/ThreadSafetyOptions.hx`,
-	 *    `check/config/ApqLintConfig.hx`, `check/config/OwnedTypesDeclaration.hx` and `check/oracle/OracleDeclaration.hx` — `apq.json`
+	 *    `check/config/ApqLintConfig.hx` and `check/config/OwnedTypesDeclaration.hx` — `apq.json`
 	 *    IS a JSON document, so the config reader and the readers of keys whose shape it does not type (`compilerOracle`, `ownedTypes`, the
 	 *    declarative rule options, the `thread-safety` options) consume `anyparse.grammar.json.JValue` as their value type. A shipped
 	 *    grammar used as the serialization of the tool's own data, not as a language.
@@ -153,16 +153,6 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/check/config/OracleDeclarationReader.hx',
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
-			'src/anyparse/check/facts/TypedFactsMacro.hx',
-			'src/anyparse/check/facts/TypedFactsProbe.hx',
-			'src/anyparse/check/facts/TypedFactsShapes.hx',
-			'src/anyparse/check/facts/TypedFactsTypeStrings.hx',
-			'src/anyparse/check/facts/TypedFactsWalk.hx',
-			'src/anyparse/check/oracle/CompilerServer.hx',
-			'src/anyparse/check/oracle/OracleCache.hx',
-
-			'src/anyparse/check/oracle/OracleGeneration.hx',
-			'src/anyparse/check/oracle/ReachDefinesProbe.hx',
 			'src/anyparse/proc/ProcessSpawn.hx',
 			'src/anyparse/proc/SpawnJob.hx',
 			'src/anyparse/query/FactNodeRecords.hx',

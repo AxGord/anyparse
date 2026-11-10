@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.check.oracle.CompilerServer;
+import anyparse.check.haxe.oracle.CompilerServer;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;
 import anyparse.proc.Sleep;

@@ -2,8 +2,8 @@ package unit.check.common.design;
 
 import anyparse.check.LintConfig;
 import anyparse.check.common.design.ThreadSafety;
-import anyparse.check.facts.TypedFactsProbe;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.facts.TypedFactsProbe;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FileIdentity;

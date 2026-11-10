@@ -2,7 +2,7 @@ package unit.check.common.types;
 
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.common.types.AvoidDynamic;
-import anyparse.check.oracle.PositionTypeOracle;
+import anyparse.check.haxe.oracle.PositionTypeOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.runtime.Span;
 

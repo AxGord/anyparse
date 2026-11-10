@@ -201,7 +201,7 @@ final class ProseClaimCensusTest extends Test {
 		'unit.check.common.unused.UnusedPrivateCheckTest#testPrivateMemberKeptWhenSubtypeExtendsImportAlias :: control',
 		'unit.check.common.unused.UnusedPrivateDeclineReasonTest#testAFindingThisCallCannotPlaceGetsNoSentence :: vacuity',
 		'unit.check.haxe.expressions.PreferStaticExtensionCheckTest#testHedgedVerdictsCarryTheirOwnDeclineReason :: base',
-		'unit.check.oracle.OracleCacheTest#testFixNeverConsultsTheCache :: vacuity',
+		'unit.check.haxe.oracle.OracleCacheTest#testFixNeverConsultsTheCache :: vacuity',
 		'unit.check.scan.ReflectionMemoTest#testTheSurfaceIsMemoisedWithinARun :: vacuity',
 		'unit.cli.AddressCliTest#testRemoveElementStillRemovesAMetaBySelector :: control',
 		'unit.cli.ResolutionScopeCliTest#testConfigLessProjectStaysConservativeOnUnresolvableType :: control',

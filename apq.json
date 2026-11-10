@@ -72,8 +72,8 @@
 			],
 			"owners": [
 				"anyparse.query.FactsView",
-				"anyparse.check.facts.FactsTypeOracle",
-				"anyparse.check.facts.TypedFactsProbe",
+				"anyparse.check.haxe.facts.FactsTypeOracle",
+				"anyparse.check.haxe.facts.TypedFactsProbe",
 				"anyparse.query.FactsTypeText",
 				"anyparse.query.FactsTypeTree",
 				"anyparse.check.haxe.expressions.StaticExtensionFacts",
@@ -91,7 +91,7 @@
 				"anyparse.query.SymbolIndexHost",
 				"anyparse.query.cli.command.LintOracleRun",
 				"anyparse.query.cli.command.LintCommand",
-				"anyparse.check.facts.TypedFactsRun",
+				"anyparse.check.haxe.facts.TypedFactsRun",
 				"anyparse.grammar.haxe.HaxeQueryPlugin",
 				"anyparse.query.OracleProviders",
 				"anyparse.query.OracleProvider"
@@ -171,7 +171,7 @@
 		},
 		{
 			"types": [
-				"anyparse.check.facts.FactsTypeOracle"
+				"anyparse.check.haxe.facts.FactsTypeOracle"
 			],
 			"owners": [
 				"anyparse.check.haxe.expressions.FactsBindings",

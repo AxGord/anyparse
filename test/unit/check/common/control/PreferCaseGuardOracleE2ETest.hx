@@ -5,7 +5,7 @@ import sys.io.File;
 #end
 import anyparse.check.FixVerifier;
 import anyparse.check.common.control.PreferCaseGuard;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;

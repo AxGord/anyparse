@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.oracle.CompilerDisplayOracle;
+import anyparse.check.haxe.oracle.CompilerDisplayOracle;
 import anyparse.core.TempScratch;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypingService;

@@ -1,8 +1,8 @@
 package unit.dev;
 
 import dev.SlotServer;
-import unit.check.oracle.PortHolder.unusedPort;
-import unit.check.oracle.PortHolder.watching;
+import unit.check.haxe.oracle.PortHolder.unusedPort;
+import unit.check.haxe.oracle.PortHolder.watching;
 import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;

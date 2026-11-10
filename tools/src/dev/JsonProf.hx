@@ -1,8 +1,8 @@
 package dev;
 
-import anyparse.check.oracle.ReachBuildsRecord;
-import anyparse.check.oracle.ReachBuildsRecordParser;
-import anyparse.check.oracle.ReachBuildsRecordWriter;
+import anyparse.check.haxe.oracle.ReachBuildsRecord;
+import anyparse.check.haxe.oracle.ReachBuildsRecordParser;
+import anyparse.check.haxe.oracle.ReachBuildsRecordWriter;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.FactNodeRecords;
 import anyparse.query.StoredTree;

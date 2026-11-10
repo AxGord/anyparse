@@ -80,7 +80,7 @@ final class FixtureCompileCache {
 	private static final MARK: String = '\x01';
 
 	/** A `--macro` naming one of these is a probe compile; nothing else is replayed. */
-	private static final PROBE_MACROS: Array<String> = ['anyparse.check.facts.TypedFactsMacro.run(', 'AnyparseReachDefinesProbe.'];
+	private static final PROBE_MACROS: Array<String> = ['anyparse.check.haxe.facts.TypedFactsMacro.run(', 'AnyparseReachDefinesProbe.'];
 
 	/** Environment variables the compiler reads. */
 	private static final HAXE_ENV: Array<String> = ['HAXE_STD_PATH', 'HAXEPATH', 'HAXELIB_PATH', 'HAXE_LIBRARY_PATH'];

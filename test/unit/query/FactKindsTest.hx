@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.check.facts.TypedFactsProbe;
+import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.query.CompilerFacts;
 import anyparse.query.FactKinds;
 import unit.cli.CliFixture;

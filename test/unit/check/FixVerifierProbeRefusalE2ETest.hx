@@ -4,7 +4,7 @@ import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;

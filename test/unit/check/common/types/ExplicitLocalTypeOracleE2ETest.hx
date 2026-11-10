@@ -4,8 +4,8 @@ package unit.check.common.types;
 import sys.io.File;
 #end
 import anyparse.check.common.types.ExplicitLocalType;
-import anyparse.check.oracle.CompilerDisplayOracle;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerDisplayOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;
@@ -96,7 +96,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-DISPLAY-SERVER-UNTETHERED')
-	@:access(anyparse.check.oracle.CompilerDisplayOracle)
+	@:access(anyparse.check.haxe.oracle.CompilerDisplayOracle)
 	@:access(anyparse.proc.PendingRuns)
 	public function testTheDisplayServerDiesWithItsDriver(): Void {
 		#if nodejs

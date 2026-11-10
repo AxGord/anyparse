@@ -3,7 +3,7 @@ package unit.check;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;

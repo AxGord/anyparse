@@ -130,4 +130,15 @@ final class GateLintTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-GATE-REBASE-MESSAGE-OLD')
+	public function testAMessageNamingAMovedModuleReadsItsNewName(): Void {
+		final report: String = '[{"file":"src/a/old/C.hx","message":"x.C belongs to a.old.C, a.old.CTest and a.old.C.Sub","rule":"r"}]';
+		final moves: Map<String, String> = ['src/a/old/C.hx' => 'src/a/new/C.hx'];
+		Assert.same(
+			['x.C belongs to a.new.C, a.old.CTest and a.new.C.Sub'],
+			JValueTools.items(JValueParser.parse(GateLint.rebased(report, moves))).map(JValueTools.stringAt.bind(_, 'message'))
+		);
+	}
+
 }

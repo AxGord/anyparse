@@ -1,8 +1,8 @@
 package dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.OracleCache;
-import anyparse.check.oracle.OracleCoverage;
+import anyparse.check.haxe.oracle.OracleCache;
+import anyparse.check.haxe.oracle.OracleCoverage;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import devkit.Cmd.cmd;
 import devkit.Lease;

@@ -1,7 +1,7 @@
 package unit.dev;
 
 import anyparse.check.LintConfig;
-import anyparse.check.oracle.OracleCache;
+import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import dev.Binaries;

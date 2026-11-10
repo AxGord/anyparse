@@ -5,7 +5,7 @@ import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
-import anyparse.check.oracle.CompilerOracle;
+import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.SymbolIndex;

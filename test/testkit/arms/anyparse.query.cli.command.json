@@ -994,7 +994,7 @@
 			"type": "anyparse.query.cli.command.OracleCommand",
 			"method": "recordOracleVerdicts",
 			"find": "= compiler.typecheckEachReading(ready, false);",
-			"replace": "= anyparse.check.oracle.CompilerOracle.typecheckEachReading(ready, false);",
+			"replace": "= anyparse.check.haxe.oracle.CompilerOracle.typecheckEachReading(ready, false);",
 			"note": "apq oracle on a grammar with no compiler runs the Haxe compiler and claims a verdict it cannot record"
 		},
 		{
