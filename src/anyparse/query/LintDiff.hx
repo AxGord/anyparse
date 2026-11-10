@@ -629,7 +629,11 @@ typedef LintDiffRow = {
 };
 
 /** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
-typedef FindingIdentity = { var family: String; var member: String; var subject: String; };
+typedef FindingIdentity = {
+	var family: String;
+	var member: String;
+	var subject: String;
+};
 
 /** One report folded into a multiset of normalized keys. */
 typedef LintDiffTally = {
@@ -655,7 +659,11 @@ typedef LintDiffTally = {
  * The occurrences of `tally` not yet spent (`LintDiff.pool`): the counts, and per identity key the messages its unspent
  * occurrences carried.
  */
-typedef LintDiffPool = { final tally: LintDiffTally; final counts: Map<String, Int>; final messages: Map<String, Array<String>>; };
+typedef LintDiffPool = {
+	final tally: LintDiffTally;
+	final counts: Map<String, Int>;
+	final messages: Map<String, Array<String>>;
+};
 
 /** A key that occurs more often on one side, with the surplus count. */
 typedef LintDiffEntry = {
@@ -674,7 +682,11 @@ typedef LintDiffEntry = {
 };
 
 /** Added/removed occurrence counts for one severity. */
-typedef LintDiffSeverityDelta = { var severity: String; var added: Int; var removed: Int; };
+typedef LintDiffSeverityDelta = {
+	var severity: String;
+	var added: Int;
+	var removed: Int;
+};
 
 /** Both snapshot totals and both surpluses for one rule — the per-rule half of the verdict. */
 typedef LintDiffRuleDelta = {
@@ -698,7 +710,11 @@ typedef LintDiffRuleDelta = {
  * A named type rather than an inline anonymous one because two callers read it and the
  * project's own `anon-type-dup` counts a structure written twice.
  */
-typedef LintDiffBuckets = { var names: Array<String>; var added: Map<String, Int>; var removed: Map<String, Int>; };
+typedef LintDiffBuckets = {
+	var names: Array<String>;
+	var added: Map<String, Int>;
+	var removed: Map<String, Int>;
+};
 
 /** The whole verdict: totals, both surplus lists and the severity breakdown. */
 typedef LintDiffResult = {

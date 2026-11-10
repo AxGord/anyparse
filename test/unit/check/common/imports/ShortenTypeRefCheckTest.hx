@@ -1092,4 +1092,7 @@ class ShortenTypeRefCheckTest extends Test {
 }
 
 /** A fix call's grouped edits and the findings it was handed, which carry the decline reasons it wrote. */
-private typedef AskedFix = { var edits: Array<GroupedEdit>; var findings: Array<Violation>; }
+private typedef AskedFix = {
+	var edits: Array<GroupedEdit>;
+	var findings: Array<Violation>;
+}

@@ -10,7 +10,11 @@ import anyparse.query.Refs;
  * One member pair whose CURRENT relative order the init phase fixes: `before` must keep running
  * before `after`, and `kind` names the dependency that says so.
  */
-typedef InitOrderConstraint = { var before: OrderedMember; var after: OrderedMember; var kind: InitConstraintKind; }
+typedef InitOrderConstraint = {
+	var before: OrderedMember;
+	var after: OrderedMember;
+	var kind: InitConstraintKind;
+}
 
 /**
  * The INITIALIZER-DEPENDENCY layer of `member-order`: the one reason a reorder of a type's

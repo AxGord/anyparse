@@ -610,7 +610,11 @@ private typedef Seams = {
  * One rung of a scanned chain: its condition (parens already stripped), its value, and whether
  * the rebuild emits that condition NEGATED — which is what an INVERTED rung is.
  */
-private typedef Rung = { var cond: QueryNode; var value: QueryNode; var invert: Bool; }
+private typedef Rung = {
+	var cond: QueryNode;
+	var value: QueryNode;
+	var invert: Bool;
+}
 
 /**
  * A chain read as a spine: its rungs, the terminal the last `else` holds, and how many of its
@@ -640,7 +644,11 @@ private typedef Chain = {
 /**
  * One rung as the rebuild EMITS it: the condition TEXT, the condition span it copies, and the value span.
  */
-private typedef Emitted = { var condText: String; var condSpan: Span; var value: Span; }
+private typedef Emitted = {
+	var condText: String;
+	var condSpan: Span;
+	var value: Span;
+}
 
 /**
  * The two services the walk carries — the root-plus-index pair the `prefer-switch-expression`
@@ -655,4 +663,8 @@ private typedef Lazy = {
 }
 
 /** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */
-private typedef Match = { var span: Span; var editSpan: Span; var text: String; }
+private typedef Match = {
+	var span: Span;
+	var editSpan: Span;
+	var text: String;
+}

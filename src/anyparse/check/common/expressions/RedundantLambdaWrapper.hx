@@ -674,7 +674,10 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 }
 
 /** The lambda's forwarded callee plus the parameter count it forwards — `forwarding`'s structural verdict. */
-private typedef Forward = { final callee: QueryNode; final arity: Int; };
+private typedef Forward = {
+	final callee: QueryNode;
+	final arity: Int;
+};
 
 /** How a forwarded callee may be reduced: not at all, as a plain method value, or as a std function the compiler oracle must confirm. */
 private enum Reduction {

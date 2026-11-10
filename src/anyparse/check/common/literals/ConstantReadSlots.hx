@@ -64,4 +64,8 @@ typedef ConstantSeams = {
 };
 
 /** One child of a node, as `ConstantReadSlots.of` classifies it. */
-typedef ChildSlot = { final declaration: Bool; final constant: Bool; final constantMembers: Bool; };
+typedef ChildSlot = {
+	final declaration: Bool;
+	final constant: Bool;
+	final constantMembers: Bool;
+};

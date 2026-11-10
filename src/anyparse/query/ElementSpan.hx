@@ -808,4 +808,7 @@ final class ElementSpan {
 }
 
 /** An element a sibling-element op acts on, with the container it sits in (null for the root). */
-typedef ElementHit = { node: QueryNode, parent: Null<QueryNode> };
+typedef ElementHit = {
+	node: QueryNode,
+	parent: Null<QueryNode>
+};

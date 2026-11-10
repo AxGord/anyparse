@@ -216,7 +216,18 @@ final class WriterBlankLowering {
 	 */
 	private static function rightOperandOptExpr(branch: ShapeNode): Null<Expr> {
 		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		return branch.fmtHasFlag('propagateArrowLambdaBody') ? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt) : rightOptBase;
+		final arrowBody: Null<Expr> = branch.fmtHasFlag('propagateArrowLambdaBody')
+			? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt)
+			: rightOptBase;
+		return typedefClearedOperandOpt(branch, arrowBody);
+	}
+
+	/**
+	 * `@:fmt(clearTypedefContext)` on an infix ctor: its operands are not a typedef body (a function type's parameter or
+	 * return type), so the context `propagateTypedefContext` set ends there; `base` is the operand's other fanout, or null.
+	 */
+	private static function typedefClearedOperandOpt(branch: ShapeNode, base: Null<Expr>): Null<Expr> {
+		return branch.fmtHasFlag('clearTypedefContext') ? macro _clearTypedefBody(${base ?? macro opt}, opt) : base;
 	}
 
 	/**

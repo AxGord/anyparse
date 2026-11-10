@@ -4,4 +4,7 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef EdgeReadingJson = { var files: Array<String>; var edges: Array<Array<String>>; };
+typedef EdgeReadingJson = {
+	var files: Array<String>;
+	var edges: Array<Array<String>>;
+};

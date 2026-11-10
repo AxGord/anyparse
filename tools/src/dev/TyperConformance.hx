@@ -1075,7 +1075,10 @@ private enum abstract UnknownRoot(String) to String {
 }
 
 /** The root of one UNKNOWN answer and what in the code led to it. */
-private typedef UnknownCause = { final root: UnknownRoot; final detail: String; }
+private typedef UnknownCause = {
+	final root: UnknownRoot;
+	final detail: String;
+}
 
 /** What one `facts` run read (`TyperConformance.probeRefusal`). */
 typedef FactsRun = {

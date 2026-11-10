@@ -19,14 +19,22 @@ typedef TryParts = {
 }
 
 /** One decomposed catch clause: its verbatim `catch (…)` header, that header's span, and the clause's value. */
-typedef TryCatchPart = { var header: String; var headerSpan: Span; var value: QueryNode; }
+typedef TryCatchPart = {
+	var header: String;
+	var headerSpan: Span;
+	var value: QueryNode;
+}
 
 /**
  * The kinds `TryExpressionShape` reads, bundled so both consumers pass one argument:
  * the catch-clause kind, the optional statement-block kind (unset -> only bare bodies are
  * recognised) and the `try` kinds a value must be parenthesised for (`operand`).
  */
-typedef TrySeams = { var catchKind: Null<String>; var blockStmtKind: Null<String>; var tryKinds: Array<String>; }
+typedef TrySeams = {
+	var catchKind: Null<String>;
+	var blockStmtKind: Null<String>;
+	var tryKinds: Array<String>;
+}
 
 /**
  * Machinery shared by the three try-expression rules -- `prefer-try-expression-assignment`,

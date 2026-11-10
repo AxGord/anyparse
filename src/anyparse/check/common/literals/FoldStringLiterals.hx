@@ -1429,12 +1429,19 @@ private typedef Chain = {
 };
 
 /** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */
-private typedef Plan = { final groups: Array<Int>; final budget: Int; };
+private typedef Plan = {
+	final groups: Array<Int>;
+	final budget: Int;
+};
 
 /**
  * One grouping rendered: the joined construct text and the width of its widest single group.
  */
-private typedef Rendered = { final text: String; final parts: Array<String>; final widest: Int; };
+private typedef Rendered = {
+	final text: String;
+	final parts: Array<String>;
+	final widest: Int;
+};
 
 /**
  * The widest line a candidate's render ADDED, paired with the widest line it
@@ -1443,7 +1450,11 @@ private typedef Rendered = { final text: String; final parts: Array<String>; fin
  * render left untouched is in neither, so an over-wide line the edit never reaches
  * cannot pin both sides equal.
  */
-private typedef WidthPair = { final written: Int; final original: Int; final added: Array<String>; };
+private typedef WidthPair = {
+	final written: Int;
+	final original: Int;
+	final added: Array<String>;
+};
 
 /**
  * What the back-off settled on: the final boundaries, their rendered text, and the

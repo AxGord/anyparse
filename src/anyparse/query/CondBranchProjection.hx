@@ -241,7 +241,10 @@ final class CondBranchProjection {
  * span that covers that construct's directives in full. The invariant is about where this
  * region's branch boundaries fall, not about the absence of `#` in the text.
  */
-typedef CondBranchRun = { final nodes: Array<QueryNode>; final span: Span; };
+typedef CondBranchRun = {
+	final nodes: Array<QueryNode>;
+	final span: Span;
+};
 
 /** The conditional / block seam kinds plus the file's comment tokens `CondBranchProjection.branchAwareTree` threads through its walk. */
 private typedef BranchSeams = {

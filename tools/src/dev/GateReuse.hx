@@ -215,4 +215,7 @@ typedef GateFacts = {
 }
 
 /** A record a battery was offered and the battery rows it stands for. */
-typedef GateOffer = { var gate: Null<GateRecord>; var rows: Array<String>; }
+typedef GateOffer = {
+	var gate: Null<GateRecord>;
+	var rows: Array<String>;
+}

@@ -12,7 +12,11 @@ enum abstract SkipMarkRole(Int) {
 }
 
 /** One conditional-compilation directive of the source `[from, to)` and what it does to the branch structure. */
-typedef SkipMark = { final from: Int; final to: Int; final role: SkipMarkRole; };
+typedef SkipMark = {
+	final from: Int;
+	final to: Int;
+	final role: SkipMarkRole;
+};
 
 /**
  * The DECLARATIONS-ONLY read of a parse: a generated star field marked `@:skimmable` (a function body's statements)

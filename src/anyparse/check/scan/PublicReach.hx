@@ -200,7 +200,11 @@ final class PublicReach {
 }
 
 /** One region of one file allowed to name a member - its own declaration, its type, a subtype. */
-typedef ReachRegion = { final file: String; final source: String; final span: Span; };
+typedef ReachRegion = {
+	final file: String;
+	final source: String;
+	final span: Span;
+};
 
 /** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
 typedef MemberRun = {

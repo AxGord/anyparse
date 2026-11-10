@@ -6,13 +6,20 @@ import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
 /** An integer sum of operands plus a constant: `len - k + 1` is `{len: 1, k: -1}` and `1`, each operand by its storage key. */
-typedef LinearTerm = { final terms: Map<String, Int>; final constant: Int; };
+typedef LinearTerm = {
+	final terms: Map<String, Int>;
+	final constant: Int;
+};
 
 /**
  * A term known `>= 0` throughout `region`, the code its condition guards. `cause` is the condition that proved it, which
  * runs between the comparison and the region, so a write or call there may change an operand too.
  */
-typedef Bound = { final term: LinearTerm; final region: Span; final cause: Null<Span>; };
+typedef Bound = {
+	final term: LinearTerm;
+	final region: Span;
+	final cause: Null<Span>;
+};
 
 /** One file's inputs to `OrderGuards.provesNonNegative`, built by `OrderGuards.contextOf`. */
 typedef OrderContext = {
@@ -41,7 +48,11 @@ typedef CallEffects = {
 };
 
 /** A call or construction, with the span of the innermost function literal or declaration holding it. */
-typedef CallSite = { final node: QueryNode; final span: Span; final within: Null<Span>; };
+typedef CallSite = {
+	final node: QueryNode;
+	final span: Span;
+	final within: Null<Span>;
+};
 
 /** The grammar kinds `OrderGuards` reads, gathered once per run by `seamsOf`. */
 typedef OrderSeams = {

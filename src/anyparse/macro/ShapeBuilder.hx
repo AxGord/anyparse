@@ -486,5 +486,8 @@ class ShapeBuilder {
  * Result of a shape-analysis pass: the root rule name and a map of all
  * named rules the worklist discovered.
  */
-typedef ShapeResult = { root: String, rules: Map<String, ShapeNode> };
+typedef ShapeResult = {
+	root: String,
+	rules: Map<String, ShapeNode>
+};
 #end

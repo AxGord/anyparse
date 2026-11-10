@@ -820,7 +820,10 @@ private enum abstract FindForm(Int) {
  * `Lambda.find(xs, …)` still reaches the module from this file. Both are built on first demand, so
  * a file holding no recovered loop builds neither a resolver nor a header read.
  */
-private typedef MemberProbe = { var shadows: (QueryNode) -> Bool; var qualified: () -> Bool; }
+private typedef MemberProbe = {
+	var shadows: (QueryNode) -> Bool;
+	var qualified: () -> Bool;
+}
 
 /** The `for (v in xs) if (cond) …` destructure all three forms start from, plus the call spelling the site takes. */
 private typedef Head = {

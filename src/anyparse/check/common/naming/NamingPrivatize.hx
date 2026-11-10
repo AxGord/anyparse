@@ -237,7 +237,10 @@ typedef PrivatizeCandidate = {
 };
 
 /** One proven privatization: the `public` keyword the edit replaces, and the type nothing outside of reads the member. */
-typedef Privatized = { final keywordSpan: Span; final owner: String; };
+typedef Privatized = {
+	final keywordSpan: Span;
+	final owner: String;
+};
 
 /** The whole-run reference evidence, gathered once where the entire file set is in hand. */
 private typedef Evidence = {
@@ -257,4 +260,7 @@ private typedef Evidence = {
 };
 
 /** A member found by `memberAt`: its modifier run and whether every build sees that run. */
-private typedef FoundMember = { final run: Array<QueryNode>; final certain: Bool; };
+private typedef FoundMember = {
+	final run: Array<QueryNode>;
+	final certain: Bool;
+};

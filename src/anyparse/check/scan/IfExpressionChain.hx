@@ -15,7 +15,10 @@ import anyparse.query.ShapeVocab;
  * `branches.length >= 2` for a real chain — a 2-branch `if`/`else` is not one, and is
  * left to the ternary rules), `terminal` is the final `else`'s statement.
  */
-typedef IfChain = { var branches: Array<{ cond: QueryNode, stmt: QueryNode }>; var terminal: QueryNode; }
+typedef IfChain = {
+	var branches: Array<{ cond: QueryNode, stmt: QueryNode }>;
+	var terminal: QueryNode;
+}
 
 /**
  * One branch's carry seat, as the rule that owns the rebuild sees it: where that branch's
@@ -25,7 +28,11 @@ typedef IfChain = { var branches: Array<{ cond: QueryNode, stmt: QueryNode }>; v
  * span — a nested `switch` / `if` construct in the assignment hoist — opens no seat, and its
  * comments keep failing the site closed.
  */
-typedef CarrySeat = { var condEnd: Int; var value: Span; var nextStart: Int; }
+typedef CarrySeat = {
+	var condEnd: Int;
+	var value: Span;
+	var nextStart: Int;
+}
 
 /**
  * A region between two verbatim-copied pieces whose comments the collapse CARRIES instead of
@@ -40,7 +47,10 @@ typedef CarryGap = {
 }
 
 /** Carried comment text per copied span (`IfExpressionChain.spanKey`), one map per slot. */
-typedef Carried = { var before: Map<String, String>; var after: Map<String, String>; }
+typedef Carried = {
+	var before: Map<String, String>;
+	var after: Map<String, String>;
+}
 
 /**
  * The two kind lists `IfExpressionChain.childShielded` reads, bundled into one argument.
@@ -631,4 +641,7 @@ final class IfExpressionChain {
  * `(condition, value)` rung per `?:` it held, in source order, and the value the spine ends on.
  * Empty `pairs` with `terminal` the input value means it was no ternary at all.
  */
-typedef TernaryTail = { var pairs: Array<{ cond: QueryNode, value: QueryNode }>; var terminal: QueryNode; }
+typedef TernaryTail = {
+	var pairs: Array<{ cond: QueryNode, value: QueryNode }>;
+	var terminal: QueryNode;
+}

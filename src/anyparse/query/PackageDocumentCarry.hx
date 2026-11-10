@@ -161,7 +161,10 @@ final class PackageDocumentCarry {
 }
 
 /** One document of a registry kept as a directory: its path and its text. */
-typedef RegistryDocument = { final file: String; final source: String; }
+typedef RegistryDocument = {
+	final file: String;
+	final source: String;
+}
 
 /** A document cut at one array: see `PackageDocumentCarry.cut`. */
 typedef RecordCut = {
@@ -172,10 +175,16 @@ typedef RecordCut = {
 }
 
 /** What `PackageDocumentCarry.carry` changed: the documents to write, and the ones left without a record that go. */
-typedef CarriedDocuments = { final written: Array<RegistryDocument>; final emptied: Array<String>; }
+typedef CarriedDocuments = {
+	final written: Array<RegistryDocument>;
+	final emptied: Array<String>;
+}
 
 /** One record: its source text and the type path it names. */
-private typedef Record = { final text: String; final type: String; }
+private typedef Record = {
+	final text: String;
+	final type: String;
+}
 
 /** A document cut into the text before its records, the records, and the text after. */
 private typedef ParsedDocument = {

@@ -13,7 +13,11 @@ import haxe.ds.Either;
 using Lambda;
 
 /** One member selected to pull up: its name, node, and cut span. */
-private typedef Moved = { var name: String; var node: QueryNode; var cut: Span; }
+private typedef Moved = {
+	var name: String;
+	var node: QueryNode;
+	var cut: Span;
+}
 
 /**
  * `extract-superclass` — generate a superclass, pull a chosen set of

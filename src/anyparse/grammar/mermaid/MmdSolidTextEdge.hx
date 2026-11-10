@@ -2,4 +2,8 @@ package anyparse.grammar.mermaid;
 
 /** A solid link with its label inline (`-- text -->`). */
 @:peg
-typedef MmdSolidTextEdge = { var open: MmdSolidOpenLit; var text: MmdSolidLabel; var close: MmdLinkLit; }
+typedef MmdSolidTextEdge = {
+	var open: MmdSolidOpenLit;
+	var text: MmdSolidLabel;
+	var close: MmdLinkLit;
+}

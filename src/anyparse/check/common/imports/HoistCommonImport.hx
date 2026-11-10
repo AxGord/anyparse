@@ -45,7 +45,10 @@ private typedef Hoistable = {
  * the statement itself. A plan carries a list of these because a hoist is one insertion and many
  * deletions, each of which a finding has to be able to point at.
  */
-private typedef Spelled = { final file: String; final span: Span; }
+private typedef Spelled = {
+	final file: String;
+	final span: Span;
+}
 
 /**
  * One decided hoist: `statement` moves into `site`, out of each `from` module. `holders` of
@@ -125,7 +128,10 @@ private typedef SinkPlan = {
 }
 
 /** Both directions of one run's decision, taken from one view of the directories so they cannot disagree. */
-private typedef Plans = { final hoists: Array<HoistPlan>; final sinks: Array<SinkPlan>; }
+private typedef Plans = {
+	final hoists: Array<HoistPlan>;
+	final sinks: Array<SinkPlan>;
+}
 
 /**
  * Flags an `import` (or an allow-listed `using`) that stands in at least a threshold share of the

@@ -47,10 +47,16 @@ typedef MemberTarget = {
  * first PROVEN access whose token could not be located. A non-null `error`
  * refuses the whole rename, so a rewrite is never half-applied.
  */
-typedef LocatedOffsets = { final offsets: Array<Int>; final error: Null<String>; };
+typedef LocatedOffsets = {
+	final offsets: Array<Int>;
+	final error: Null<String>;
+};
 
 /** The modifiers of one member's declaration group that `resolveMemberAtCursor` reads (`groupModifiers`). */
-private typedef GroupModifiers = { final saysStatic: Bool; final isOverride: Bool; };
+private typedef GroupModifiers = {
+	final saysStatic: Bool;
+	final isOverride: Bool;
+};
 
 /**
  * Everything one file's receiver / switch-subject proof needs, threaded as one value the way

@@ -8,7 +8,10 @@ using StringTools;
  * A list's items and per-gap separator flags after the line comments that close an item were moved past that item's
  * separator.
  */
-typedef PastSepItems = { final items: Array<Doc>; final sepBeforeFlags: Null<Array<Bool>>; }
+typedef PastSepItems = {
+	final items: Array<Doc>;
+	final sepBeforeFlags: Null<Array<Bool>>;
+}
 
 /**
  * The one answer to "where does a line comment that closes a list element sit relative to the separator after it":

@@ -1840,4 +1840,7 @@ typedef TokenProbe = {
  * than it is the cover for, and listing only the ones it OWNS is what keeps every projected kind
  * attributable to exactly one row.
  */
-typedef KindSource = { var kinds: Array<String>; var source: String; };
+typedef KindSource = {
+	var kinds: Array<String>;
+	var source: String;
+};

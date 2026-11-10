@@ -1124,7 +1124,11 @@ private enum abstract DocTailScan(Int) {
  * three, so it passes `null` and the walk allocates nothing at all.
  * Returning a struct from every node instead is slower over a whole format pass.
  */
-private typedef TailOut = { var nest: Int; var braceCloser: Bool; var closeWidth: Int; }
+private typedef TailOut = {
+	var nest: Int;
+	var braceCloser: Bool;
+	var closeWidth: Int;
+}
 
 /**
  * The lines a glued ternary `c ? a : b` leaves after its condition's head: `width` is the closing line of the condition

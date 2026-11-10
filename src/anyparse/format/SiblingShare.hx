@@ -24,9 +24,25 @@ final class SiblingShare {
 	private static inline final MEASURED_COMMENTED: Int = -0x10000004;
 	private static inline final FORCE_BREAK: Int = 0x0FFFFFF0;
 
+	/** The votes of a region branch's pads (`padSlot`): a band of their own, so a list sharing case bodies leaves them be. */
+	private static inline final PAD_MEASURED: Int = -0x20000001;
+
+	private static inline final PAD_LEADS: Int = -0x20000002;
+
 	/** A sibling already placed below its head by shape: `own` is both of its forms; `leads` says whether it spreads. */
 	public static inline function placedSlot(policy: SiblingPolicy, leads: Bool, own: Doc): Doc {
 		return policy == SiblingPolicy.Off ? own : Doc.IfIndentWidthExceeds(leads ? LEADS : MEASURED, 0, own, own);
+	}
+
+	/**
+	 * The pad between a region branch's marker and its body, as the sibling it is: `broken` puts the body on lines of its
+	 * own, `glued` keeps it on the marker's line, and `leads` says the branch takes `broken` by shape, which moves them all.
+	 */
+	public static inline function padSlot(policy: SiblingPolicy, leads: Bool, broken: Doc, glued: Doc): Doc {
+		return if (policy == SiblingPolicy.Off)
+			leads ? broken : glued
+		else
+			Doc.IfIndentWidthExceeds(leads ? PAD_LEADS : PAD_MEASURED, 0, broken, leads ? broken : glued);
 	}
 
 	/**
@@ -39,6 +55,16 @@ final class SiblingShare {
 		policy: SiblingPolicy, fitLine: Bool, own: Doc, count: Int, soleFlat: Bool, last: Null<Doc>, refuseGlue: Bool
 	): Doc {
 		return policy == SiblingPolicy.Off || !fitLine ? own : votedBody(policy, own, count, soleFlat, last, refuseGlue);
+	}
+
+	/** Resolves every slot of `list` to one verdict: below its head when one sibling leads or the widest does not fit. */
+	public static inline function decide(list: Doc, policy: SiblingPolicy, lineWidth: Int): Doc {
+		return share(list, policy, lineWidth, false);
+	}
+
+	/** `decide` over the pad slots of one `#if` region (`padSlot`); a case body's slot inside it is left to its switch. */
+	public static inline function decidePads(list: Doc, policy: SiblingPolicy, lineWidth: Int): Doc {
+		return share(list, policy, lineWidth, true);
 	}
 
 	/**
@@ -72,9 +98,14 @@ final class SiblingShare {
 		return Doc.IfIndentWidthExceeds(vote, lineWidth, BodyFit.breakLayout(cols, body), own);
 	}
 
-	/** Resolves every slot of `list` to one verdict: below its head when one sibling leads or the widest does not fit. */
-	public static function decide(list: Doc, policy: SiblingPolicy, lineWidth: Int): Doc {
+	/** Whether `width` is a vote of the band `pads` names: a pad's (`padSlot`) or any other sibling's. */
+	private static inline function isVote(width: Int, pads: Bool): Bool {
+		return pads ? width == PAD_MEASURED || width == PAD_LEADS : width <= MEASURED && width > PAD_MEASURED;
+	}
+
+	private static function share(list: Doc, policy: SiblingPolicy, lineWidth: Int, pads: Bool): Doc {
 		if (policy == SiblingPolicy.Off) return list;
+		final leads: Int = pads ? PAD_LEADS : LEADS;
 		final seen: DocIdentityMap<Bool> = new DocIdentityMap();
 		final holds: DocIdentityMap<Bool> = new DocIdentityMap();
 		var slots: Int = 0;
@@ -84,12 +115,12 @@ final class SiblingShare {
 			if (hit != null) return hit;
 			var found: Bool = false;
 			switch d {
-				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v)):
+				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v, pads)):
 					found = true;
 					if (seen.get(d) == null) {
 						seen.set(d, true);
 						slots++;
-						if (v == LEADS) force = true;
+						if (v == leads) force = true;
 					}
 				case _:
 					eachChild(d, c -> if (holdsSlot(c)) found = true);
@@ -97,8 +128,8 @@ final class SiblingShare {
 			holds.set(d, found);
 			return found;
 		}
-		if (!holdsSlot(list) || slots < 2) return resolved(list, -1, lineWidth, null);
-		if (force) return resolved(list, FORCE_BREAK, lineWidth, null);
+		if (!holdsSlot(list) || slots < 2) return resolved(list, -1, lineWidth, null, pads);
+		if (force) return resolved(list, FORCE_BREAK, lineWidth, null, pads);
 		var widest: Int = -1;
 		var second: Int = -1;
 		var widestDoc: Null<Doc> = null;
@@ -114,7 +145,7 @@ final class SiblingShare {
 		function measure(d: Doc): Void {
 			if (!holdsSlot(d)) return;
 			switch d {
-				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v)):
+				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v, pads)):
 					if (v == MEASURED_CONTROL_FLOW) force = true;
 					return;
 				case _:
@@ -126,13 +157,9 @@ final class SiblingShare {
 				consider(unit, WrapList.flatLength(unit));
 		}
 		measure(list);
-		if (force) return resolved(list, FORCE_BREAK, lineWidth, null);
+		if (force) return resolved(list, FORCE_BREAK, lineWidth, null, pads);
 		final top: Null<Doc> = widestDoc;
-		return resolved(list, widest, lineWidth, top != null && widest > second ? breakOffer(top, second) : null);
-	}
-
-	private static inline function isVote(width: Int): Bool {
-		return width <= MEASURED;
+		return resolved(list, widest, lineWidth, top != null && widest > second ? breakOffer(top, second, pads) : null, pads);
 	}
 
 	/** More than one statement, or one no shape lets beside the head, leads; one a comment held below keeps its glued form to measure. */
@@ -166,14 +193,14 @@ final class SiblingShare {
 	}
 
 	/** Every slot of `d` holding the verdict `width`, and the verdict `offer` when `offer`'s break is committed. */
-	private static function resolved(d: Doc, width: Int, lineWidth: Int, offer: Null<Offer>): Doc {
+	private static function resolved(d: Doc, width: Int, lineWidth: Int, offer: Null<Offer>, pads: Bool): Doc {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
 		function walk(n: Doc): Doc {
 			final hit: Null<Doc> = memo.get(n);
 			if (hit != null) return hit;
 			final out: Doc = switch n {
-				case Doc.IfIndentWidthExceeds(v, _, _, own) if (v == MEASURED_COMMENTED): offer == null ? own : walk(own);
-				case Doc.IfIndentWidthExceeds(v, _, brk, own) if (isVote(v)):
+				case Doc.IfIndentWidthExceeds(v, _, _, own) if (!pads && v == MEASURED_COMMENTED): offer == null ? own : walk(own);
+				case Doc.IfIndentWidthExceeds(v, _, brk, own) if (isVote(v, pads)):
 					final o: Doc = offer == null ? own : walk(own);
 					final b: Doc = offer == null ? brk : walk(brk);
 					final plain: Doc = width < 0 ? o : Doc.IfIndentWidthExceeds(width, lineWidth, b, o);
@@ -189,7 +216,7 @@ final class SiblingShare {
 	}
 
 	/** What the list measures once the one named break inside its widest unit is committed, as the next rewrite reads it. */
-	private static function breakOffer(widest: Doc, second: Int): Null<Offer> {
+	private static function breakOffer(widest: Doc, second: Int, pads: Bool): Null<Offer> {
 		final commits: Array<Doc> = BreakCommits.outermostPerToken(BreakCommits.nested(widest));
 		if (commits.length != 1) return null;
 		return switch commits[0] {
@@ -197,7 +224,7 @@ final class SiblingShare {
 				final committed: Int = WrapList.flatLength(BreakCommits.replaced(widest, commits[0], brk));
 				final width: Int = if (committed >= 0)
 					(committed > second ? committed : second)
-				else if (controlFlowSlot(widest))
+				else if (controlFlowSlot(widest, pads))
 					FORCE_BREAK
 				else
 					second;
@@ -206,11 +233,11 @@ final class SiblingShare {
 		};
 	}
 
-	private static function controlFlowSlot(d: Doc): Bool {
+	private static function controlFlowSlot(d: Doc, pads: Bool): Bool {
 		var found: Bool = false;
 		function walk(n: Doc): Void {
 			switch n {
-				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v)):
+				case Doc.IfIndentWidthExceeds(v, _, _, _) if (isVote(v, pads)):
 					found = found || v == MEASURED_CONTROL_FLOW;
 				case _:
 					eachChild(n, walk);
@@ -229,4 +256,8 @@ final class SiblingShare {
 
 }
 
-private typedef Offer = { final width: Int; final token: BreakToken; final alias: BreakToken; }
+private typedef Offer = {
+	final width: Int;
+	final token: BreakToken;
+	final alias: BreakToken;
+}

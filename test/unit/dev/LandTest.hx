@@ -1205,7 +1205,11 @@ private typedef Landing = {
 }
 
 /** The tree a landing's own battery ran over, its HEAD then, and the suite weights it found there. */
-private typedef Judged = { var tree: String; var head: String; var weights: String; }
+private typedef Judged = {
+	var tree: String;
+	var head: String;
+	var weights: String;
+}
 
 /** The battery a landing asks for: whether in full, and the landings the count already holds. */
 private typedef Battery = {
@@ -1235,7 +1239,10 @@ private typedef Battery = {
 }
 
 /** One file written whole. */
-private typedef Edit = { var path: String; var content: String; }
+private typedef Edit = {
+	var path: String;
+	var content: String;
+}
 
 /** What a scratch repository holds beside the one commit of the branch. */
 private typedef Setup = {

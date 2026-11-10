@@ -38,7 +38,8 @@ typedef HxConditionalCase = {
 	var cond: HxPpCondLit;
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var body: Array<HxSwitchCase>;
 	@:trivia
 	@:tryparse
@@ -48,6 +49,7 @@ typedef HxConditionalCase = {
 	@:kw('#else')
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var elseBody: Null<Array<HxSwitchCase>>;
 };

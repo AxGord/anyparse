@@ -584,7 +584,10 @@ final class RefHit {
  * "both or neither" contract structural instead of prose — the shape a `ScopeFrame` binding
  * already has, so the resolver hands its own record straight over.
  */
-typedef RefBinding = { final node: QueryNode; final span: Span; };
+typedef RefBinding = {
+	final node: QueryNode;
+	final span: Span;
+};
 
 /**
  * Reference classification per `docs/cli-query-tool.md` JSON schema.

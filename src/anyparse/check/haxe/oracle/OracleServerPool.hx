@@ -16,10 +16,17 @@ import anyparse.query.LintFixSafePass;
  * compile through it started (`null` for a path that could not be read), and the paths whose entry in `seen` was dropped
  * only so the next compile re-reads a module the server already holds (`positionsIn`).
  */
-typedef PoolServer = { var port: Int; var seen: Map<String, Null<String>>; var reread: Array<String>; }
+typedef PoolServer = {
+	var port: Int;
+	var seen: Map<String, Null<String>>;
+	var reread: Array<String>;
+}
 
 /** One question of `OracleServerPool.positionsIn`: the name at offset `at` of `content`. */
-typedef PositionAsk = { content: String, at: Int };
+typedef PositionAsk = {
+	content: String,
+	at: Int
+};
 
 /**
  * The run's own `haxe --wait` servers, one per configuration, for the plain typechecks a `--fix` run repeats over trees

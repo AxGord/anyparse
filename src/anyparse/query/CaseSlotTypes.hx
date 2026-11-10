@@ -279,4 +279,7 @@ typedef SlotType = {
 }
 
 /** The file and offset a written type reads from. */
-typedef SlotScope = { final file: FileInfo; final at: Int; }
+typedef SlotScope = {
+	final file: FileInfo;
+	final at: Int;
+}

@@ -76,7 +76,7 @@ class AddMemberSliceTest extends Test {
 	 */
 	public function testAppendToTypedefAnon(): Void {
 		final source: String = 'typedef T = {var x:Int;}\n';
-		final expected: String = 'typedef T = {var x:Int; var y:Int;}\n';
+		final expected: String = 'typedef T = {\n\tvar x:Int;\n\tvar y:Int;\n}\n';
 		assertAdd(source, 'T', 'var y:Int;', expected);
 	}
 

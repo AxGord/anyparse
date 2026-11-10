@@ -112,7 +112,10 @@ final class ArmRegistry {
 }
 
 /** One arm record: its `name` and its source text. */
-typedef ArmRecord = { var key: String; var text: String; }
+typedef ArmRecord = {
+	var key: String;
+	var text: String;
+}
 
 /**
  * A version that does not read as the registry: no `arms` array, a record without a string `name`, a name declared twice, or

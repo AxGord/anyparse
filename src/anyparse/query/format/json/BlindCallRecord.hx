@@ -4,4 +4,8 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef BlindCallRecord = { var name: String; var line: Int; var col: Int; };
+typedef BlindCallRecord = {
+	var name: String;
+	var line: Int;
+	var col: Int;
+};

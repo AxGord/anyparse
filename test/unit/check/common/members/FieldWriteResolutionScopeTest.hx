@@ -292,4 +292,7 @@ class FieldWriteResolutionScopeTest extends Test {
 }
 
 /** One source the scope holds — the shape every scope half in this file is an array of. */
-private typedef SourceFile = { var file: String; var source: String; };
+private typedef SourceFile = {
+	var file: String;
+	var source: String;
+};

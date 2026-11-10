@@ -76,7 +76,10 @@ typedef ArmTable = {
 };
 
 /** One document of the registry: where it was read from, and its text. */
-typedef ArmSource = { file: String, text: String };
+typedef ArmSource = {
+	file: String,
+	text: String
+};
 
 /**
  * `test/testkit/arms/*.json` read as data — the registry that makes a

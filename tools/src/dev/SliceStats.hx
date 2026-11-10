@@ -415,13 +415,22 @@ typedef Landing = {
 }
 
 /** The lines a slice added and deleted under one root. */
-typedef LineCount = { var added: Int; var deleted: Int; }
+typedef LineCount = {
+	var added: Int;
+	var deleted: Int;
+}
 
 /** The lines a slice added and deleted under `src/` and under `test/`. */
-typedef LineCounts = { var src: LineCount; var test: LineCount; }
+typedef LineCounts = {
+	var src: LineCount;
+	var test: LineCount;
+}
 
 /** The `.hx` modules a slice added, and those it edited. */
-typedef ModuleCounts = { var fresh: Int; var edited: Int; }
+typedef ModuleCounts = {
+	var fresh: Int;
+	var edited: Int;
+}
 
 /** The reading of one landed slice. */
 typedef SliceRow = {

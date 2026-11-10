@@ -37,6 +37,7 @@ typedef HxElseifMember = {
 	var cond: HxPpCondLit;
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var body: Array<HxMemberDecl>;
 };

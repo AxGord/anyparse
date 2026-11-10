@@ -448,7 +448,11 @@ final class CondQuery {
  * `branches` holds one entry per branch in source order — including the branches whose conditions
  * do not mention the queried define, since the region is the unit a reader has to see whole.
  */
-typedef CondRegion = { final span: Span; final depth: Int; final branches: Array<CondBranch>; };
+typedef CondRegion = {
+	final span: Span;
+	final depth: Int;
+	final branches: Array<CondBranch>;
+};
 
 /**
  * One DIRECTIVE-DELIMITED branch: the `keyword` as the grammar declares it, the verbatim
@@ -484,7 +488,11 @@ typedef CondRenderOptions = {
 };
 
 /** A region still being read: how many regions enclose it, its branch directives so far, and the bodies already closed. */
-private typedef OpenRegion = { final depth: Int; final heads: Array<CondDirective>; final bodies: Array<Span>; };
+private typedef OpenRegion = {
+	final depth: Int;
+	final heads: Array<CondDirective>;
+	final bodies: Array<Span>;
+};
 
 /**
  * The grammar's directive vocabulary plus the queried define, gathered once per

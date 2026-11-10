@@ -6,4 +6,8 @@ import anyparse.grammar.json.JValue;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef DoorRawPart = { var id: String; var raw: JValue; var tuples: Array<Array<JValue>>; }
+typedef DoorRawPart = {
+	var id: String;
+	var raw: JValue;
+	var tuples: Array<Array<JValue>>;
+}

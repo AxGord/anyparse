@@ -6,7 +6,11 @@ import haxe.Exception;
 using Lambda;
 
 /** One declared arm handed to `MutationSchema.compose`: its run id, its address and the whole file with its cut applied. */
-typedef SchemaArm = { id: Int, select: String, mutated: String };
+typedef SchemaArm = {
+	id: Int,
+	select: String,
+	mutated: String
+};
 
 /**
  * Where `compose` put one arm in the composed text, or why it left the arm out (`skip` non-null, the line fields 0, `owner` empty).
@@ -26,7 +30,10 @@ typedef SchemaPlacement = {
 };
 
 /** One composed file: its text, and one placement per arm. */
-typedef SchemaFile = { text: String, placements: Array<SchemaPlacement> };
+typedef SchemaFile = {
+	text: String,
+	placements: Array<SchemaPlacement>
+};
 
 /** One text insertion into the original source, owned by one arm. */
 private typedef SchemaInsert = {

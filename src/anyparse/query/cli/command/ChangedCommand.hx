@@ -22,7 +22,11 @@ private typedef ChangedOpts = {
 }
 
 /** One file's reading: what changed and the names a reader looks up, or why it could not be read. */
-private typedef FileReading = { final names: Array<String>; final ?delta: FileDelta; final ?failure: String; }
+private typedef FileReading = {
+	final names: Array<String>;
+	final ?delta: FileDelta;
+	final ?failure: String;
+}
 
 /**
  * `apq changed` — what each file changed against a git revision, by meaning: layout only, imports only, one consistent

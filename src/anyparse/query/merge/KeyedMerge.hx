@@ -28,7 +28,11 @@ typedef MergeChild = {
 }
 
 /** A place both sides changed differently: its key and what each side did there. */
-typedef MergeConflict = { final key: String; final ours: SideChange; final theirs: SideChange; }
+typedef MergeConflict = {
+	final key: String;
+	final ours: SideChange;
+	final theirs: SideChange;
+}
 
 /** What one side did to a place. */
 enum abstract SideChange(String) to String {

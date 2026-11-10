@@ -7,7 +7,10 @@ import haxe.macro.Expr;
  * Specification of one field on a `Build` node: the target field name
  * and the CoreIR subtree whose match result populates it.
  */
-typedef BuildField = { name: String, ir: CoreIR };
+typedef BuildField = {
+	name: String,
+	ir: CoreIR
+};
 
 /**
  * Binary primitive encoding kinds — the vocabulary the `Bin` strategy's slots are described in.

@@ -951,7 +951,13 @@ private typedef Located = {
  * Exactly one of the two carries the answer — a non-null `error` comes with an empty `ranges`
  * and discards the whole payload.
  */
-private typedef LocateResult = { ranges: Array<Located>, error: Null<String> };
+private typedef LocateResult = {
+	ranges: Array<Located>,
+	error: Null<String>
+};
 
 /** A locate over a slice that starts at `base` of the source. */
-private typedef LocatedFrom = { located: LocateResult, base: Int };
+private typedef LocatedFrom = {
+	located: LocateResult,
+	base: Int
+};

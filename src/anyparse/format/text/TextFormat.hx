@@ -24,14 +24,20 @@ typedef BlockCommentDelims = {
  * Spelling of a format's boolean literals. `null` on the containing
  * `TextFormat.boolLiterals` means the format has no boolean type.
  */
-typedef BoolLiterals = { trueLit: String, falseLit: String };
+typedef BoolLiterals = {
+	trueLit: String,
+	falseLit: String
+};
 
 /**
  * Result of `TextFormat.unescapeChar`. `char` is the decoded Unicode
  * code point; `consumed` is the number of input characters the escape
  * sequence occupied *after* the leading backslash.
  */
-typedef UnescapeResult = { char: Int, consumed: Int };
+typedef UnescapeResult = {
+	char: Int,
+	consumed: Int
+};
 
 /**
  * Structured-text format interface. Describes the literal vocabulary

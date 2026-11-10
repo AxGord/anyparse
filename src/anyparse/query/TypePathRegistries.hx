@@ -52,10 +52,17 @@ typedef MemberKeys = {
  * A string value of a registry record: the decoded text, the span between its quotes, and where each decoded code unit
  * starts in the document (one entry more than the text is long), so an edit of the decoded text lands on the raw bytes.
  */
-typedef StringSlot = { final value: String; final inner: Span; final offsets: Array<Int>; }
+typedef StringSlot = {
+	final value: String;
+	final inner: Span;
+	final offsets: Array<Int>;
+}
 
 /** One edit of a registry document, as `CanonicalEdit.applyEdits` takes it. */
-typedef RegistryEdit = { var span: Span; var text: String; }
+typedef RegistryEdit = {
+	var span: Span;
+	var text: String;
+}
 
 /** One record of a registry that names members, read through its `MemberKeys`. */
 typedef MemberRecord = {
@@ -69,7 +76,10 @@ typedef MemberRecord = {
 }
 
 /** A relocated type: its qualified path before and after. */
-typedef TypePathMove = { final oldPath: String; final newPath: String; }
+typedef TypePathMove = {
+	final oldPath: String;
+	final newPath: String;
+}
 
 /**
  * The declared-registry half of a module relocation. A registry value that spells a relocated path is rewritten by the

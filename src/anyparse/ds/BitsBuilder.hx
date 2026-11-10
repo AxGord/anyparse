@@ -8,7 +8,11 @@ import haxe.macro.Type;
 import haxe.macro.TypeTools;
 
 /** A fixed domain as the lowering needs it: the bit of every value, and the two conversions over `value` and `index`. */
-private typedef Domain = { final bits: Array<Int>; final bitOfValue: Expr; final valueAtIndex: Expr; };
+private typedef Domain = {
+	final bits: Array<Int>;
+	final bitOfValue: Expr;
+	final valueAtIndex: Expr;
+};
 /**
  * One of the two stores a set can sit on: its type, each bit operation as an expression over `this`, `bit` and `other`,
  * and the class that walks it.

@@ -255,4 +255,8 @@ final class UnusedCaseBinder extends RuleBase {
 }
 
 /** One unread binder name: the span reported, and the edit per occurrence that unbinds it. */
-private typedef Candidate = { final span: Span; final name: String; final edits: Array<{ span: Span, text: String }>; };
+private typedef Candidate = {
+	final span: Span;
+	final name: String;
+	final edits: Array<{ span: Span, text: String }>;
+};

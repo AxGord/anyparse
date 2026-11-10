@@ -1028,7 +1028,10 @@ typedef HostedMembers = {
 }
 
 /** One member declaration found in a type's closure, with the declaration of the type that declares it. */
-typedef DeclaredMember = { member: MemberInfo, host: ResolvedType };
+typedef DeclaredMember = {
+	member: MemberInfo,
+	host: ResolvedType
+};
 
 /** What a read of a member carries (`MemberLookup.memberRead`): its type, and the declaration writing the member. */
 typedef MemberReading = {

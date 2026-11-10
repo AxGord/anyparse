@@ -18,7 +18,10 @@ enum abstract ParamForm(Int) {
 }
 
 /** One parameter of a signature: the type it is written with (null for none) and how a call may leave it out. */
-typedef SignatureParam = { final type: Null<String>; final form: ParamForm; }
+typedef SignatureParam = {
+	final type: Null<String>;
+	final form: ParamForm;
+}
 
 /**
  * One signature a call to a function may select (`callUnification.ml`, `unify_field_call`): the function's own, or one an

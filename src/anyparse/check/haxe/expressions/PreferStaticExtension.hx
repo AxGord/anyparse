@@ -807,7 +807,11 @@ typedef Seams = {
 };
 
 /** One file's resolved `apq.json` options: the configured modules (full entry + simple name) and the `using`-insert toggle. */
-private typedef Options = { var modules: Array<String>; var simpleNames: Array<String>; var addUsing: Bool; };
+private typedef Options = {
+	var modules: Array<String>;
+	var simpleNames: Array<String>;
+	var addUsing: Bool;
+};
 
 /** A static-utility call site that cleared every structural + conflict gate, with its receiver verdict and message. */
 typedef Candidate = {

@@ -16,10 +16,17 @@ using Lambda;
  * contiguous run of its direct-child statements, and the byte range they
  * span. Internal to `ExtractMethod`.
  */
-private typedef StmtRange = { var stmts: Array<QueryNode>; var fromOffset: Int; var toOffset: Int; }
+private typedef StmtRange = {
+	var stmts: Array<QueryNode>;
+	var fromOffset: Int;
+	var toOffset: Int;
+}
 
 /** A local declaration in the range: its name and its binding `span.from`. */
-private typedef LocalDecl = { var name: String; var from: Int; }
+private typedef LocalDecl = {
+	var name: String;
+	var from: Int;
+}
 
 /**
  * A range-local returned from the extracted function: its name and whether
@@ -37,10 +44,18 @@ private typedef ReturnVar = {
 }
 
 /** A free local a member extraction passes in: its name, binding offset and the type its declaration writes. */
-private typedef MemberParam = { var name: String; var from: Int; var type: String; }
+private typedef MemberParam = {
+	var name: String;
+	var from: Int;
+	var type: String;
+}
 
 /** The member of a type that holds the range, its modifier run, and every member name the type declares. */
-private typedef MemberHost = { var node: QueryNode; var run: Array<QueryNode>; var names: Array<String>; }
+private typedef MemberHost = {
+	var node: QueryNode;
+	var run: Array<QueryNode>;
+	var names: Array<String>;
+}
 
 /**
  * Extract a run of statements into a local function (closure) — the

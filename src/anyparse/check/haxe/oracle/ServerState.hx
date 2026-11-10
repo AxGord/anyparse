@@ -9,4 +9,8 @@ package anyparse.check.haxe.oracle;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef ServerState = { var port: Int; var pid: Int; var compiledAt: Int; }
+typedef ServerState = {
+	var port: Int;
+	var pid: Int;
+	var compiledAt: Int;
+}

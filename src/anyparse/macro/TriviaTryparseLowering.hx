@@ -176,7 +176,12 @@ final class TriviaTryparseLowering {
 		?glueToPrevious: Array<String>,
 		?siblingSlot: Array<String>,
 		// `@:fmt(belowWrappedLabel)`: the `FitLine` body goes below a head that took more than one line.
-		belowWrappedLabel: Bool = false
+		belowWrappedLabel: Bool = false,
+		// `@:fmt(elementPerLine)`: a region body whose host list puts each element on a line of its own (statements,
+		// members, declarations, cases, enum constructors) does the same inside the region, whatever the source layout.
+		elementPerLine: Bool = false,
+		// `@:fmt(siblingPad(fn, knob))`: the leading and trailing pads are sibling slots the enclosing region decides.
+		?siblingPad: Array<String>
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -299,7 +304,9 @@ final class TriviaTryparseLowering {
 			elemCondFn: elemCondFnExpr,
 			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious),
 			siblingSlot: siblingSlot,
-			belowWrappedLabel: belowWrappedLabel
+			belowWrappedLabel: belowWrappedLabel,
+			elementPerLine: elementPerLine,
+			siblingPad: siblingPad
 		};
 		final baseExpr: Expr = listLayout != null ? triviaTryparseHeritageExpr(c, listLayout) : triviaTryparseMainExpr(c);
 		return fillItems ? triviaTryparseFillExpr(c, baseExpr) : baseExpr;
@@ -468,6 +475,10 @@ final class TriviaTryparseLowering {
 		final priorAfterTrailEmit: Expr = c.priorAfterTrailEmit;
 		final priorAfterTrailRaw: Expr = c.priorAfterTrailRaw;
 		final padLeadingSpaceDoc: Expr = c.padLeadingSpaceDoc;
+		// A first element led by a comment breaks before it on its own, so its pad has nothing to add on a broken verdict.
+		final leadPad: Expr = padSlotExpr(
+			c, macro _padHardline, macro (_arr[0].leadingComments.length > 0 && !_padHardline ? _de() : _dhl()), padLeadingSpaceDoc
+		);
 		final whileExpr: Expr = triviaTryparseWhileExpr(c);
 		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
 		final trailEndsLineDecl: Expr = triviaTryparseTrailEndsLineDecl();
@@ -492,7 +503,10 @@ final class TriviaTryparseLowering {
 			// the two are correlated. Empty arrays skip both pads.
 			final _padLeading: Bool = $padLeadingExpr;
 			final _padTrailing: Bool = $padTrailingExpr;
-			final _padHardline: Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
+			// A body of several elements whose host puts each on its own line opens and closes on a line of its own too.
+			final _padHardline: Bool = (_padLeading || _padTrailing)
+				&& _arr.length > 0
+				&& (_arr[0].newlineBefore || $v{c.elementPerLine} && _arr.length > 1);
 			$trailEndsLineDecl;
 			final _metaPolicy: Int = $metaPolicyExpr;
 			// ω-condcomp-empty-body-newline (Stage A): an EMPTY cond-comp body
@@ -537,7 +551,7 @@ final class TriviaTryparseLowering {
 				$cascadeInitPrev;
 				$cascadeHeadEmit;
 				$priorAfterTrailEmit;
-				if (_padLeading && _arr.length > 0) _docs.push(_padHardline ? _dhl() : $padLeadingSpaceDoc);
+				if (_padLeading && _arr.length > 0) _docs.push($leadPad);
 				// ω-blockended-trivia-tryparse (Session 3): see comment near
 				// tryparseBlockEndedSepEmit construction. Always declared so
 				// the splice site reads it safely; when sepText is null /
@@ -665,6 +679,7 @@ final class TriviaTryparseLowering {
 		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(forceInlineSep);
 		final glueExpr: Expr = c.glueToPreviousExpr;
+		final elementPerLine: Bool = c.elementPerLine;
 		return macro {
 			if ($glueExpr) {
 				// `@:fmt(glueToPrevious)`: no separator — the element continues the previous one's line.
@@ -711,7 +726,7 @@ final class TriviaTryparseLowering {
 				_docs.push(_dt(' '));
 			} else if ($forceInlineCond) {
 				_docs.push(_dt(' '));
-			} else if (_si > 0 && _t.newlineBefore) {
+			} else if (_si > 0 && (_t.newlineBefore || $v{elementPerLine})) {
 				// ω-cond-mod-newline: preserve a single source newline
 				// between try-parse Star elements. Without this, the
 				// default `sepExpr` (space) would collapse
@@ -820,6 +835,9 @@ final class TriviaTryparseLowering {
 		final tryparseBlockEndedTrailEmit: Expr = c.tryparseBlockEndedTrailEmit;
 		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
 		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
+		// Only the body's shape votes: a line comment that ends the body breaks before the marker without moving its siblings.
+		final condTrailPad: Expr = padSlotExpr(c, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : _dt(' ')));
+		final trailPad: Expr = padSlotExpr(c, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : $trailPadSpaceDoc));
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
 		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(c);
 		return macro {
@@ -838,10 +856,10 @@ final class TriviaTryparseLowering {
 			// (`#if a var q:Int; // t` + newline `#end`).
 			if (_condIncrease && _padTrailing && _arr.length > 0) {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
-				_condTrailPad = _lineTrailBroken ? _dhl() : _dt(' ');
+				_condTrailPad = $condTrailPad;
 			} else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0) {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
-				_docs.push(_lineTrailBroken ? _dhl() : $trailPadSpaceDoc);
+				_docs.push($trailPad);
 			} else if (_metaPolicy > 0 && _arr.length > 0) {
 				_lineTrailBroken = true;
 				_docs.push(_dhl());
@@ -1417,6 +1435,17 @@ final class TriviaTryparseLowering {
 			]),
 			pos: Context.currentPos()
 		};
+	}
+
+	/**
+	 * A region body's pad: `broken` when `leads` holds and `glued` otherwise, or, under `@:fmt(siblingPad(fn, knob))`, the
+	 * slot the enclosing region's `siblingShare` resolves with its sibling branches' pads.
+	 */
+	private static function padSlotExpr(c: WriterLowering.TryparseStarCtx, leads: Expr, broken: Expr, glued: Expr): Expr {
+		final pad: Null<Array<String>> = c.siblingPad;
+		return pad == null
+			? macro ($leads ? $broken : $glued)
+			: macro ${hookFn(pad[0])}(${optFieldAccess(pad[1])}, $leads, $broken, $glued);
 	}
 
 }

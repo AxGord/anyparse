@@ -4,4 +4,8 @@ package unit.query;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef ParaphraseBenchmark = { var top: Int; var atLeast: Int; var questions: Array<ParaphrasedQuestion>; };
+typedef ParaphraseBenchmark = {
+	var top: Int;
+	var atLeast: Int;
+	var questions: Array<ParaphrasedQuestion>;
+};

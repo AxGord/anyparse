@@ -943,10 +943,16 @@ final class MemberTouchScan {
  * without letting it go anywhere. Both empty for a value of any other type, whose every method call is a change and an
  * escape (`MemberTouchScan.classify`).
  */
-typedef OwnMethods = { final reads: Array<String>; final changes: Array<String>; }
+typedef OwnMethods = {
+	final reads: Array<String>;
+	final changes: Array<String>;
+}
 
 /** A site of a member occurrence. */
-typedef Occurrence = { var file: String; var span: Span; }
+typedef Occurrence = {
+	var file: String;
+	var span: Span;
+}
 
 /**
  * The scan's result: toucher node id -> its touch site, the escape sites,
@@ -976,7 +982,10 @@ typedef FreshContext = {
 
 }
 
-private typedef Verdict = { var touch: Bool; var escape: Bool; }
+private typedef Verdict = {
+	var touch: Bool;
+	var escape: Bool;
+}
 
 /** How the typed accesses of a member in a faceted function are read (`MemberTouchScan.nodeAccesses`). */
 private enum TypedTouches {

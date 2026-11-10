@@ -543,4 +543,8 @@ final class PathIndex {
 }
 
 /** One ref of a push: its local and remote names and the commits it publishes, or a null range when no remote holds a base. */
-typedef PushRange = { var local: String; var remote: String; var range: Null<String>; }
+typedef PushRange = {
+	var local: String;
+	var remote: String;
+	var range: Null<String>;
+}

@@ -4,4 +4,7 @@ package anyparse.check.haxe.oracle;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef ReachTypeRecord = { var name: String; var file: String; }
+typedef ReachTypeRecord = {
+	var name: String;
+	var file: String;
+}

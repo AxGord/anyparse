@@ -551,13 +551,25 @@ typedef ArmSelection = {
  * A source module the slice changed and the members of it that it did:
  * null when its report cannot name them, and then every member counts.
  */
-typedef ModuleTouch = { var module: String; var members: Null<Array<String>>; }
+typedef ModuleTouch = {
+	var module: String;
+	var members: Null<Array<String>>;
+}
 
 /** What the re-run at the base read: the arms that do not kill their pin there, or why it could not read them. */
-typedef RotReading = { var rot: Array<String>; var failure: Null<String>; }
+typedef RotReading = {
+	var rot: Array<String>;
+	var failure: Null<String>;
+}
 
 /** What the files touched since a commit changed: the members of each module, and the modules whose change is layout only. */
-private typedef Reading = { var touches: Array<ModuleTouch>; var layout: Array<String>; }
+private typedef Reading = {
+	var touches: Array<ModuleTouch>;
+	var layout: Array<String>;
+}
 
 /** What the runs of an arms row have read so far: each run's tally and the arm rows that did not hold. */
-private typedef ArmReading = { var notes: Array<String>; var rows: Array<ArmRow>; }
+private typedef ArmReading = {
+	var notes: Array<String>;
+	var rows: Array<ArmRow>;
+}

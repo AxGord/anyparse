@@ -184,4 +184,8 @@ private typedef Seams = {
 	final metaKinds: Array<String>;
 };
 
-private typedef Candidate = { var metaSpan: Span; var redundant: Bool; var declFrom: Int; };
+private typedef Candidate = {
+	var metaSpan: Span;
+	var redundant: Bool;
+	var declFrom: Int;
+};

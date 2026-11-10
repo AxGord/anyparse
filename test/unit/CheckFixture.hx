@@ -216,4 +216,7 @@ final class CheckFixture {
  * One `run` + `fix` pass over a fixture, both halves kept: a test reading the decline reasons the
  * fix wrote needs the very `Violation` objects the edits came from.
  */
-typedef FixRun = { final violations: Array<Violation>; final edits: Array<FixEdit>; };
+typedef FixRun = {
+	final violations: Array<Violation>;
+	final edits: Array<FixEdit>;
+};

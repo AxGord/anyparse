@@ -418,7 +418,15 @@ typedef LpadLadder = {
 }
 
 /** One branch value split into the text before the zeros, the zero run itself, and the text after the hole. */
-typedef LpadSegments = { final base: String; final zeros: Int; final suffix: String; }
+typedef LpadSegments = {
+	final base: String;
+	final zeros: Int;
+	final suffix: String;
+}
 
 /** One ladder in a file: where it is, what it says, and whether its range is proved (the fix gate). */
-typedef LpadSite = { final span: Span; final ladder: LpadLadder; final proven: Bool; }
+typedef LpadSite = {
+	final span: Span;
+	final ladder: LpadLadder;
+	final proven: Bool;
+}

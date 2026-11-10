@@ -9,7 +9,11 @@ import anyparse.runtime.Span;
  * Corpus-walk tallies for `apq self-status`: how many project files `parseable`, how many `skipParse`,
  * and the `skipLines` describing each skipped file. Rolled up into the self-status report.
  */
-typedef SelfStatusWalk = { var parseable: Int; var skipParse: Int; var skipLines: Array<String>; };
+typedef SelfStatusWalk = {
+	var parseable: Int;
+	var skipParse: Int;
+	var skipLines: Array<String>;
+};
 
 /**
  * Parsed options for `apq self-status` — `lang`, the `roots` (file / dir / glob specs) to walk, and `strict` /

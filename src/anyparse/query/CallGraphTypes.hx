@@ -392,4 +392,7 @@ final class CallGraphTypes {
 }
 
 /** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
-typedef HeldFile = { final index: SymbolIndex; final info: FileInfo; }
+typedef HeldFile = {
+	final index: SymbolIndex;
+	final info: FileInfo;
+}

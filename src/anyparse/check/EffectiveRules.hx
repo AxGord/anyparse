@@ -27,7 +27,11 @@ typedef RuleState = {
 }
 
 /** The files that resolve through one `apq.json` chain, and the state of every rule for them. */
-typedef RuleStateGroup = { var chain: Array<String>; var files: Array<String>; var rules: Array<RuleState>; }
+typedef RuleStateGroup = {
+	var chain: Array<String>;
+	var files: Array<String>;
+	var rules: Array<RuleState>;
+}
 
 /**
  * The rule set a lint of some files ACTUALLY runs, per file: the registry after the config chain,

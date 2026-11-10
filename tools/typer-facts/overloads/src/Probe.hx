@@ -1,5 +1,13 @@
-typedef Opts = { a: Float, ?b: Int }
-typedef Other = { a: Int, ?c: String }
+typedef Opts = {
+	a: Float,
+	?b: Int
+}
+
+typedef Other = {
+	a: Int,
+	?c: String
+}
+
 typedef Dy = { d: Dynamic }
 
 extern class Ext {

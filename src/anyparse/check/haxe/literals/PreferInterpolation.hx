@@ -571,4 +571,8 @@ private typedef ScanCtx = {
 };
 
 /** One flagged call: its span and the replacement text `fix` writes there. */
-private typedef ScanMatch = { final span: Span; final replacement: String; final message: String; };
+private typedef ScanMatch = {
+	final span: Span;
+	final replacement: String;
+	final message: String;
+};

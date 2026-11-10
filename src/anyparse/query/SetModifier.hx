@@ -416,4 +416,8 @@ private enum DeclarationSite {
 }
 
 /** A declaration `SetModifier` rewrites the modifiers of: `siblings[index]`, whose own text starts at `coreFrom`. */
-private typedef DeclarationAt = { final siblings: Array<QueryNode>; final index: Int; final coreFrom: Int; }
+private typedef DeclarationAt = {
+	final siblings: Array<QueryNode>;
+	final index: Int;
+	final coreFrom: Int;
+}

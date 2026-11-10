@@ -119,7 +119,14 @@ final class StableChain {
 }
 
 /** A stable chain: its key, and the binding offset of its root when that is a local (-1 for a member). */
-typedef StableRead = { final key: String; final binding: Int; }
+typedef StableRead = {
+	final key: String;
+	final binding: Int;
+}
 
 /** One link of a chain being read: its key, root binding and the type it reads in the file's spelling, when written. */
-private typedef Link = { final key: String; final binding: Int; final type: Null<String>; }
+private typedef Link = {
+	final key: String;
+	final binding: Int;
+	final type: Null<String>;
+}

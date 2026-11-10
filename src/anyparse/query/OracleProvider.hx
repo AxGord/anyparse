@@ -160,7 +160,10 @@ interface StartedProbe<T> {
  * The builds' compiles a run began ahead of its first question and has not read or dropped yet, and the run's read of its
  * facts when its facts compiles carry the builds' probe: the builds' first question waits on that read instead of compiling them again.
  */
-typedef AheadBuilds = { probe: Null<StartedProbe<ReachBuilds>>, ?facts: () -> Void };
+typedef AheadBuilds = {
+	probe: Null<StartedProbe<ReachBuilds>>,
+	?facts: () -> Void
+};
 
 /** What one configuration's compile reads, as far as an edit's verifiability goes. */
 @:nullSafety(Strict)
@@ -262,13 +265,20 @@ enum OracleOutcome {
  * this afresh over every configured build; in a lint run the configurations remember what the compiler
  * answered (`OracleRunMemo`), so a phase whose tree an earlier compile already judged pays no compile for it.
  */
-typedef OracleBaseline = { var judging: Array<OracleConfig>; var excluded: Array<OracleExclusion>; var verdict: OracleOutcome; }
+typedef OracleBaseline = {
+	var judging: Array<OracleConfig>;
+	var excluded: Array<OracleExclusion>;
+	var verdict: OracleOutcome;
+}
 
 /**
  * One configuration's verdict and every file its compile parsed, as the compiler printed the path — null when the
  * verdict came off a compile that did not print them, or none was asked.
  */
-typedef OracleReading = { var outcome: Null<OracleOutcome>; var parsed: Null<Array<String>>; }
+typedef OracleReading = {
+	var outcome: Null<OracleOutcome>;
+	var parsed: Null<Array<String>>;
+}
 
 /**
  * One configuration that judged nothing, and why: the configuration, the CLASS of the reason, and
@@ -276,7 +286,11 @@ typedef OracleReading = { var outcome: Null<OracleOutcome>; var parsed: Null<Arr
  * never once per sentence, since a red build's sentence quotes an error line whose number moves
  * when a fix edits the lines above it.
  */
-typedef OracleExclusion = { var config: OracleConfig; var cause: ExclusionCause; var sentence: String; }
+typedef OracleExclusion = {
+	var config: OracleConfig;
+	var cause: ExclusionCause;
+	var sentence: String;
+}
 
 /** Why a configuration judged nothing: its own baseline failed, or its compiled set is unknown. */
 enum abstract ExclusionCause(String) to String {
@@ -299,7 +313,10 @@ typedef OracleCoverageMemo = {
 }
 
 /** One compiled-set probe and the configuration it describes — never read apart. */
-typedef ConfigCoverage = { var config: OracleConfig; var coverage: CompiledSet; }
+typedef ConfigCoverage = {
+	var config: OracleConfig;
+	var coverage: CompiledSet;
+}
 
 /**
  * The configurations a phase may judge with once coverage is known — see `OracleCoverage.usable`.
@@ -318,4 +335,7 @@ typedef UsableCoverage = {
 }
 
 /** `OracleProvider.prepareBuilds`' answer: the configurations ready to use, and a line per command that ran. */
-typedef PreparedOracles = { var oracles: Array<OracleConfig>; var notes: Array<String>; }
+typedef PreparedOracles = {
+	var oracles: Array<OracleConfig>;
+	var notes: Array<String>;
+}

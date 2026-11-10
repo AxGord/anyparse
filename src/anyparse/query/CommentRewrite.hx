@@ -14,7 +14,10 @@ import haxe.Exception;
  * rather than two counts, because the decision and the line it names are different questions — the
  * count and the widest decide, and the multiset difference by text decides which line to quote.
  */
-private typedef WideLine = { var text: String; var cols: Int; }
+private typedef WideLine = {
+	var text: String;
+	var cols: Int;
+}
 
 /**
  * Text search-and-replace scoped to COMMENT bodies — the write-twin of `lit`

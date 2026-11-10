@@ -181,7 +181,10 @@ final class ConfigFinder {
  * from, which is what lets a caller resolve a config-relative setting against the
  * directory of the document that declared it.
  */
-typedef ConfigFile = { var content: String; var path: String; }
+typedef ConfigFile = {
+	var content: String;
+	var path: String;
+}
 
 /**
  * A whole walk-up: the readable documents nearest first, plus the paths of any that
@@ -189,4 +192,7 @@ typedef ConfigFile = { var content: String; var path: String; }
  * that silently drops a document the project wrote applies the ancestor's answer to a
  * question the project already answered, with nothing on stderr to say so.
  */
-typedef ConfigChain = { var documents: Array<ConfigFile>; var unreadable: Array<String>; }
+typedef ConfigChain = {
+	var documents: Array<ConfigFile>;
+	var unreadable: Array<String>;
+}

@@ -100,7 +100,11 @@ final class MacroIndex {
  * The receiver is carried because it is the caller's own statement of which TYPE it
  * means, and the gate's second refusal asks whether the index carries that type.
  */
-typedef CallRef = { final name: String; final receiver: Null<String>; final qualified: Bool; };
+typedef CallRef = {
+	final name: String;
+	final receiver: Null<String>;
+	final qualified: Bool;
+};
 
 /**
  * Which enclosing calls forbid re-segmenting their arguments. A `macro` function

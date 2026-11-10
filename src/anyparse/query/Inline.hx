@@ -374,7 +374,10 @@ private typedef InlineTarget = {
 };
 
 /** An identifier of an initializer that names a binding, with the span it is written at. */
-private typedef NamedIdent = { final name: String; final span: Span; };
+private typedef NamedIdent = {
+	final name: String;
+	final span: Span;
+};
 
 /** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */
 private enum InlinePrep {

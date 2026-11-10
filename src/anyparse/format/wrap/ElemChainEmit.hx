@@ -117,4 +117,7 @@ final class ElemChainEmit {
 
 }
 
-private typedef ElemParts = { final operands: Array<Doc>; final tail: Array<Doc>; };
+private typedef ElemParts = {
+	final operands: Array<Doc>;
+	final tail: Array<Doc>;
+};

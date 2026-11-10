@@ -160,7 +160,11 @@ class LintFixResidueTest extends Test {
 
 }
 
-private typedef ResidueRun = { final code: Int; final stderr: String; final after: String; };
+private typedef ResidueRun = {
+	final code: Int;
+	final stderr: String;
+	final after: String;
+};
 
 /** Reports each `FOO` and rewrites it to `BAR`: a fix whose output another check reads elsewhere in the file. */
 private class Rename implements Check {

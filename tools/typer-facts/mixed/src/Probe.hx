@@ -34,7 +34,11 @@ class Box<T> {
 
 class IntBox extends Box<Int> {}
 
-typedef Opts = { a: Float, ?b: Int, ?c: String }
+typedef Opts = {
+	a: Float,
+	?b: Int,
+	?c: String
+}
 
 abstract Money(Int) from Int to Int {
 

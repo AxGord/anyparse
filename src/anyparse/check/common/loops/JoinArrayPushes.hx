@@ -792,10 +792,17 @@ private typedef Ctx = {
 }
 
 /** A Path A array declaration: the bound name, the declaration statement's span and its empty literal's span. */
-private typedef LocalDecl = { var name: String; var span: Span; var literal: Span; }
+private typedef LocalDecl = {
+	var name: String;
+	var span: Span;
+	var literal: Span;
+}
 
 /** A Path B array field: its declaration span (what the finding reports) and its empty literal's span. */
-private typedef FieldDecl = { var span: Span; var literal: Span; }
+private typedef FieldDecl = {
+	var span: Span;
+	var literal: Span;
+}
 
 /**
  * One `<name>.push(e);` statement of a run: the receiver name, the statement's span (deleted by
@@ -812,4 +819,7 @@ private typedef Push = {
 }
 
 /** One foldable binding: the span the finding reports and the edits that fold it. */
-private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
+private typedef Match = {
+	var span: Span;
+	var edits: Array<{ span: Span, text: String }>;
+}

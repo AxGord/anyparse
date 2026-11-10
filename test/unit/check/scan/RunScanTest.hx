@@ -8,7 +8,10 @@ import anyparse.query.GrammarPlugin;
 import haxe.Exception;
 
 /** One report entry, as `Check.run` receives it. */
-private typedef Entry = { file: String, source: String };
+private typedef Entry = {
+	file: String,
+	source: String
+};
 
 /**
  * `RunScan`, the entry loops a check's `run` and `fix` share: every parseable file is visited

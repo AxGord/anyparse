@@ -1162,6 +1162,42 @@
 			"method": "containerItemWrapFromConfig",
 			"force": "base",
 			"note": "a configured containerItemWrap block is dropped and the built-in nested cascade stays, so a project cannot send simple literal arguments to their own line"
+		},
+		{
+			"name": "M-INTERSECTION-OPERAND-NOT-TYPEDEF-BODY",
+			"type": "anyparse.grammar.haxe.HxIntersectionClause",
+			"method": "HxIntersectionClause",
+			"kind": "TypedefDecl",
+			"find": ", captureAfterLead, propagateTypedefContext)",
+			"replace": ", captureAfterLead)",
+			"note": "an intersection operand of a typedef body is an ordinary anon type, so two fields of it stay on one line"
+		},
+		{
+			"name": "M-ARROW-TYPE-IN-TYPEDEF-BODY",
+			"type": "anyparse.grammar.haxe.HxType",
+			"method": "HxType",
+			"kind": "EnumDecl",
+			"find": "@:fmt(functionTypeHaxe3, clearTypedefContext)",
+			"replace": "@:fmt(functionTypeHaxe3)",
+			"note": "an anon parameter or return of an old-style function type under a typedef counts as the typedef body and goes one field per line"
+		},
+		{
+			"name": "M-ARROW-FN-TYPE-IN-TYPEDEF-BODY",
+			"type": "anyparse.grammar.haxe.HxType",
+			"method": "HxType",
+			"kind": "EnumDecl",
+			"find": "@:fmt(clearTypedefContext)",
+			"replace": "",
+			"note": "an anon parameter of a `(args) -> ret` function type under a typedef counts as the typedef body and goes one field per line"
+		},
+		{
+			"name": "M-SEMI-ELSEIF-PER-LINE",
+			"type": "anyparse.grammar.haxe.HxCondSemiElseif",
+			"method": "HxCondSemiElseif",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(padLeading, padTrailing, conditionalBodyIndent)",
+			"replace": "@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine)",
+			"note": "a value region's #elseif body takes one element per line, so it breaks between inline #if and #else branches"
 		}
 	]
 }

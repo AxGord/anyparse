@@ -4,4 +4,8 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef Profile = { var nodes: Array<ProfileNode>; var samples: Array<Int>; var timeDeltas: Array<Float>; };
+typedef Profile = {
+	var nodes: Array<ProfileNode>;
+	var samples: Array<Int>;
+	var timeDeltas: Array<Float>;
+};

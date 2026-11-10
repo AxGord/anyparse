@@ -117,7 +117,10 @@ typedef PermissiveCandidate = {
  * (count == 0, fixture doesn't contain the construct) distinctly from
  * STILL FAIL (count > 0 but post-strip parse still errors).
  */
-typedef StripResult = { var out: String; var count: Int; };
+typedef StripResult = {
+	var out: String;
+	var count: Int;
+};
 
 /**
  * `apq recon`'s PREDICTORS — the modes that answer "would this unblock it?".

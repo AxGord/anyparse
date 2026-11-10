@@ -314,7 +314,10 @@ final class DefiniteAssignmentGuard {
  * One local a fix would leave read with nothing to assign it: the name, and the READ's span
  * in whichever source the finding was taken from.
  */
-typedef UnassignedRead = { final name: String; final span: Null<Span>; }
+typedef UnassignedRead = {
+	final name: String;
+	final span: Null<Span>;
+}
 
 /**
  * The kind vocabulary `DefiniteAssignmentGuard` reads out of `RefShape` once per call, so the

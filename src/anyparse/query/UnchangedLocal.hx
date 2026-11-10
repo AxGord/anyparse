@@ -134,4 +134,7 @@ final class UnchangedLocal {
 }
 
 /** What a local identifier reads: its storage key (`WriteSites.accessPath`) and the offset of the declaration it binds. */
-private typedef LocalRead = { final key: String; final binding: Int; };
+private typedef LocalRead = {
+	final key: String;
+	final binding: Int;
+};

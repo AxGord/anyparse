@@ -360,7 +360,15 @@ typedef Seams = {
 }
 
 /** One collapsible run: the declaration span the finding is reported on, the region the edit replaces, and its text. */
-typedef Match = { var declSpan: Span; var editSpan: Span; var text: String; }
+typedef Match = {
+	var declSpan: Span;
+	var editSpan: Span;
+	var text: String;
+}
 
 /** One construct nested onto the run so far: the grown value, that construct's own leaf-write count, and its span. */
-typedef Grown = { var unit: UnitValue; var leafCount: Int; var span: Span; }
+typedef Grown = {
+	var unit: UnitValue;
+	var leafCount: Int;
+	var span: Span;
+}

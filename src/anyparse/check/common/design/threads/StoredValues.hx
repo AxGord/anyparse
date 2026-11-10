@@ -6,13 +6,25 @@ import anyparse.query.MemberKinds;
 import anyparse.query.TypeResolver;
 
 /** A `final` field a constructor stores a parameter into: the class declaring it, its file, and its name. */
-private typedef StoredField = { final type: String; final file: String; final name: String; }
+private typedef StoredField = {
+	final type: String;
+	final file: String;
+	final name: String;
+}
 
 /** A call of a stored field: the function making it, its file and its span. */
-private typedef FieldCall = { final from: String; final file: String; final span: Span; }
+private typedef FieldCall = {
+	final from: String;
+	final file: String;
+	final span: Span;
+}
 
 /** A node of a file's tree, the node holding it (null at the root), and the file. */
-private typedef Placed = { final node: QueryNode; final parent: Null<QueryNode>; final file: String; }
+private typedef Placed = {
+	final node: QueryNode;
+	final parent: Null<QueryNode>;
+	final file: String;
+}
 
 /**
  * Function values handed to a constructor that only STORES them. A value passed as an argument to a constructor whose

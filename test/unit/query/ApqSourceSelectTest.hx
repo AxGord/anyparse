@@ -294,4 +294,7 @@ class ApqSourceSelectTest extends Test {
 }
 
 /** A parsed source and the nodes one selector resolved against it. */
-private typedef AstSelection = { final tree: QueryNode; final matches: Array<QueryNode>; };
+private typedef AstSelection = {
+	final tree: QueryNode;
+	final matches: Array<QueryNode>;
+};

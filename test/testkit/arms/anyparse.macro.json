@@ -2548,6 +2548,46 @@
 			"method": "arrowValueIfValueWidthExpr",
 			"force": "macro false",
 			"note": "the value-width cap refuses every chain, so even a chain of narrow values keeps the expressionIf policy layout"
+		},
+		{
+			"name": "M-COND-BODY-SOURCE-SEP",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseSepCascadeExpr",
+			"find": "(_t.newlineBefore || $v{elementPerLine})",
+			"replace": "_t.newlineBefore",
+			"note": "two elements of a #if region body that the source wrote on one line stay on one line, unlike the same elements outside the region"
+		},
+		{
+			"name": "M-COND-BODY-PAD-SOURCE",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseMainExpr",
+			"find": "_arr[0].newlineBefore || $v{c.elementPerLine} && _arr.length > 1",
+			"replace": "_arr[0].newlineBefore",
+			"note": "a #if region body of several elements whose first one shares the #if line keeps it there, so the region opens and closes on the element lines"
+		},
+		{
+			"name": "M-TYPEDEF-BODY-ONE-PER-LINE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTrailExprs",
+			"find": "_arr.length > 1 && !opt._inNestedType || opt.anonTypeLeftCurly",
+			"replace": "opt.anonTypeLeftCurly",
+			"note": "a typedef body of two or more fields follows the anonType cascade again, so a short one goes on one line"
+		},
+		{
+			"name": "M-TYPEDEF-NESTED-ANON-FORCED",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTrailExprs",
+			"find": "_arr.length > 1 && !opt._inNestedType ||",
+			"replace": "_arr.length > 1 ||",
+			"note": "an anon type argument inside a typedef body is forced one field per line like the body itself"
+		},
+		{
+			"name": "M-COND-REGION-UNSHARED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "lowerKwRefBranch",
+			"find": "final shared: Null<Array<String>> = branch.fmtReadStringArgs('siblingShare');",
+			"replace": "final shared: Null<Array<String>> = null;",
+			"note": "the pad slots of a #if region's branches reach the renderer undecided, so each branch keeps the glued form and a broken branch sits beside one-line ones"
 		}
 	]
 }

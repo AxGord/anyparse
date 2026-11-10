@@ -560,4 +560,8 @@ private typedef BagOp = {
 };
 
 /** A bag's classified uses: the reflect operations to rewrite, the `setField` value expressions, and whether every use was a bag op. */
-private typedef BagUses = { var ops: Array<BagOp>; var writes: Array<QueryNode>; var ok: Bool; };
+private typedef BagUses = {
+	var ops: Array<BagOp>;
+	var writes: Array<QueryNode>;
+	var ok: Bool;
+};

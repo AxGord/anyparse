@@ -695,7 +695,10 @@ final class ValueEscapes {
 }
 
 /** What `ValueEscapes.memberFacts` reads off the index's members. */
-private typedef MemberFacts = { var operators: Array<String>; var functions: Map<String, Bool>; }
+private typedef MemberFacts = {
+	var operators: Array<String>;
+	var functions: Map<String, Bool>;
+}
 
 /** What `ValueEscapes` answers: the escaped types (null for any), whether a raw region decided it, and their typed ids. */
 private typedef EscapeAnswer = {

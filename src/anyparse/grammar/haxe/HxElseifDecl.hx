@@ -35,7 +35,8 @@ typedef HxElseifDecl = {
 	var cond: HxPpCondLit;
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportAliasInDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
 	))

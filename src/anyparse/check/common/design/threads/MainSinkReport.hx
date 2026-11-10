@@ -12,13 +12,21 @@ import anyparse.check.common.design.threads.MainRepeats.RepeatOwner;
 import anyparse.query.CallGraph;
 
 /** A repeating call's finding (a), with the short sinks below it it names and the main-thread path to it. */
-private typedef OwnedFinding = { final finding: Violation; var sinks: Array<String>; final path: Array<String>; }
+private typedef OwnedFinding = {
+	final finding: Violation;
+	var sinks: Array<String>;
+	final path: Array<String>;
+}
 
 /**
  * How the main thread repeats calls: where (`repetition`), which of its
  * states may run more than once (`main`), and the edges it runs (`runs`).
  */
-typedef MainRepetition = { final repetition: CallRepetition; final main: MainRepeats; final runs: (CallEdge) -> Bool; }
+typedef MainRepetition = {
+	final repetition: CallRepetition;
+	final main: MainRepeats;
+	final runs: (CallEdge) -> Bool;
+}
 
 /**
  * Finding (a) of `thread-safety`: a MAIN-context function directly calls a sink — one taking a lock only when that lock

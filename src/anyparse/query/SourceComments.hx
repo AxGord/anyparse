@@ -14,7 +14,11 @@ import anyparse.util.Strings;
  * One comment token collected by `collectCommentTokens`: its byte span and
  * whether it opened with a line comment or a block comment.
  */
-typedef CommentTok = { from: Int, to: Int, isLine: Bool };
+typedef CommentTok = {
+	from: Int,
+	to: Int,
+	isLine: Bool
+};
 
 /**
  * The COMMENT token model of one source: which lexical regions are comments, where a comment

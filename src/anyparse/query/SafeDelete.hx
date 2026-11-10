@@ -14,7 +14,11 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /** One scope file parsed once. */
-private typedef Parsed = { final file: String; final source: String; final tree: QueryNode; };
+private typedef Parsed = {
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+};
 
 /**
  * `safe-delete` — remove a member ONLY when it is provably unreferenced

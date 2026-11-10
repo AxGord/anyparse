@@ -492,7 +492,13 @@ private typedef Cell = {
 };
 
 /** The edits of one cell run, per rule. */
-private typedef CellRun = { final declEdits: Map<String, Array<Span>>; final reachEdits: Map<String, Int>; };
+private typedef CellRun = {
+	final declEdits: Map<String, Array<Span>>;
+	final reachEdits: Map<String, Int>;
+};
 
 /** One source a scope half holds. */
-private typedef SourceFile = { var file: String; var source: String; };
+private typedef SourceFile = {
+	var file: String;
+	var source: String;
+};

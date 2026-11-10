@@ -3,7 +3,11 @@ package anyparse.check.common.design.threads;
 import anyparse.query.CallGraph;
 
 /** A type's declaration node, the file holding it and that file's source. */
-typedef HeldDecl = { final node: QueryNode; final file: String; final source: String; }
+typedef HeldDecl = {
+	final node: QueryNode;
+	final file: String;
+	final source: String;
+}
 
 /**
  * The trees a call graph parsed its files into (`CallGraph.heldFiles`), read once, and the lookups made in them by

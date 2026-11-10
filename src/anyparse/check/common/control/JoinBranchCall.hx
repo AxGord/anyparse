@@ -441,7 +441,10 @@ final class JoinBranchCall extends RuleBase {
  * text owns its `;`. A statement chain owns its own terminator; an if-EXPRESSION does not --
  * the `final` / `return` / argument node it is a child of owns that `;`.
  */
-private typedef IfPosition = { var kinds: Array<String>; var statement: Bool; }
+private typedef IfPosition = {
+	var kinds: Array<String>;
+	var statement: Bool;
+}
 
 /** The `RefShape` kinds `JoinBranchCall` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {

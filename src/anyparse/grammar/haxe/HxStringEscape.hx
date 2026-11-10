@@ -10,7 +10,11 @@ using StringTools;
  * span. A codepoint above `0xFFFF` is reported as ONE entry carrying the full
  * code; no consumer here needs the surrogate pair it becomes at runtime.
  */
-typedef HxDecodedChar = { var code: Int; var from: Int; var to: Int; }
+typedef HxDecodedChar = {
+	var code: Int;
+	var from: Int;
+	var to: Int;
+}
 
 /**
  * The escape DECODER `HxStringLitSegment` and `HxDoubleStringLit` promise in

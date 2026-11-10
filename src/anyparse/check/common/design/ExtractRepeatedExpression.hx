@@ -488,7 +488,10 @@ private typedef Candidate = {
 }
 
 /** A repeated-expression group: the shared RENDERED text (`SpanRender`) and its occurrences (earliest first). */
-private typedef Group = { var render: String; var occ: Array<Candidate>; }
+private typedef Group = {
+	var render: String;
+	var occ: Array<Candidate>;
+}
 
 /** Per-file resolved constants threaded through the recursive walk. */
 private typedef Ctx = {

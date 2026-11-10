@@ -117,6 +117,10 @@ final class HxModuleWriteOptions {
 	public var tryBody: BodyPolicy = BodyPolicy.Next;
 	public var caseBody: BodyPolicy = BodyPolicy.FitLine;
 	public var caseSiblings: SiblingPolicy = SiblingPolicy.Off;
+
+	/** The branches of one `#if` region share their bodies' placement: one branch on lines of its own puts them all there. */
+	public var conditionalSiblings: SiblingPolicy = SiblingPolicy.AnyBreak;
+
 	public var expressionCase: BodyPolicy = BodyPolicy.FitLine;
 	public var functionBody: BodyPolicy = BodyPolicy.Next;
 	public var anonFunctionBody: BodyPolicy = BodyPolicy.Same;

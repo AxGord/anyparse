@@ -6,10 +6,16 @@ import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
 /** One relocated module: its module path before and after, dotted (`pkg.sub.Mod`). */
-typedef ModuleRename = { final oldPath: String; final newPath: String; }
+typedef ModuleRename = {
+	final oldPath: String;
+	final newPath: String;
+}
 
 /** One text edit: replace `span` with `text`. */
-typedef TextEdit = { final span: Span; final text: String; }
+typedef TextEdit = {
+	final span: Span;
+	final text: String;
+}
 
 /**
  * The lexical half of a module relocation: every spelling of a relocated module's path in a text — dotted (`pkg.sub.Mod`,

@@ -16,7 +16,10 @@ import anyparse.query.MemberRegistryRename.RegistryFollow;
 using Lambda;
 
 /** What a member rename does to the declared registries: the documents it rewrites and the records it names as not followed. */
-private typedef RegistryChanges = { final changes: Array<FileChange>; final notes: Array<String>; }
+private typedef RegistryChanges = {
+	final changes: Array<FileChange>;
+	final notes: Array<String>;
+}
 
 /**
  * `apq rename` — scope-correct, format-preserving symbol rename.

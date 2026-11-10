@@ -162,7 +162,7 @@ class ReplaceNodeSliceTest extends Test {
 	 */
 	public function testModuleTypedefReplaceKeepsNextDeclDoc(): Void {
 		final source: String = '/** typedef doc */\ntypedef T = {final a:Int;}\n\n/** class doc */\nclass C {}\n';
-		final expected: String = '/** typedef doc */\ntypedef T = {final a:Int; final b:Int;}\n\n/** class doc */\nclass C {}\n';
+		final expected: String = '/** typedef doc */\ntypedef T = {\n\tfinal a:Int;\n\tfinal b:Int;\n}\n\n/** class doc */\nclass C {}\n';
 		assertReplace(source, BySelector('TypedefDecl:T'), 'typedef T = {\n\tfinal a:Int;\n\tfinal b:Int;\n}', expected);
 	}
 

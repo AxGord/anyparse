@@ -255,7 +255,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		for (src in [
 			'abstract A(Bytes) from Bytes to Bytes #if doc_gen from Dynamic to Dynamic #end {}',
 			'abstract T(Dynamic) #if macro from Dynamic #else from A from B from C #end {}',
-			'typedef D = {var a:Int; #if x var b:Int; #else var ?b:String; #end}',
+			'typedef D = {\n\tvar a:Int;\n\t#if x var b:Int; #else var ?b:String; #end\n}',
 			'class T extends #if !flash DisplayObject #else Bitmap implements IDO #end implements ITC {}'
 		]) triviaRoundTrip('package p;\n\n$src');
 		triviaRoundTrip(

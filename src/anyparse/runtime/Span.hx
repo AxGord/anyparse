@@ -6,7 +6,10 @@ using StringTools;
  * Line-and-column position resolved from a `Span`'s byte offset.
  * Both fields are 1-indexed to match what editors and IDEs expect.
  */
-typedef Position = { line: Int, col: Int };
+typedef Position = {
+	line: Int,
+	col: Int
+};
 
 /**
  * Byte-offset range into the parser input, used for error reporting and

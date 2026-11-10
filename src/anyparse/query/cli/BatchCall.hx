@@ -4,4 +4,8 @@ package anyparse.query.cli;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef BatchCall = { var argv: Array<String>; var cwd: String; var ?stdin: Null<String>; }
+typedef BatchCall = {
+	var argv: Array<String>;
+	var cwd: String;
+	var ?stdin: Null<String>;
+}

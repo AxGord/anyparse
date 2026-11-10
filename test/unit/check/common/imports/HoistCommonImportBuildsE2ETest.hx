@@ -6,7 +6,10 @@ import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
 /** One lint run of the fixture: its hoists as `<module>:<statement>`, sorted and joined, and its stderr. */
-private typedef LintOutcome = { final hoisted: String; final err: String; }
+private typedef LintOutcome = {
+	final hoisted: String;
+	final err: String;
+}
 
 /**
  * `hoist-common-import` in a project that declares its build list complete, through the CLI: a run that compiles nothing

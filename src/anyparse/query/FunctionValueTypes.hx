@@ -1121,4 +1121,7 @@ final class FunctionValueTypes {
 }
 
 /** A file's text and its tree (`FunctionValueTypes.parsed`). */
-private typedef ParsedFile = { final source: String; final tree: QueryNode; }
+private typedef ParsedFile = {
+	final source: String;
+	final tree: QueryNode;
+}

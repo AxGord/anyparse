@@ -1,4 +1,8 @@
-typedef Pt = { x: Int, y: Int }
+typedef Pt = {
+	x: Int,
+	y: Int
+}
+
 typedef WP = { p: Pt }
 typedef WXs = { xs: Array<Float> }
 typedef WFn = { fn: Int -> Int }

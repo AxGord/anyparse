@@ -285,7 +285,10 @@ final class WriterKwRefLowering {
 			? altSlotAccess(branch, children.length, argNames, WrapOpenTrailing)
 			: null;
 		final wrapDoc: Null<Expr> = kwRefWrapShape(kw, c, parts, wrapOpenNewlineExpr, wrapOpenTrailingExpr);
-		return wrapDoc ?? kwRefFinalDoc(kw, c, parts);
+		final doc: Expr = wrapDoc ?? kwRefFinalDoc(kw, c, parts);
+		// `@:fmt(siblingShare(fn, knob))` on a region ctor: the slots of its branches take one decision over the whole region.
+		final shared: Null<Array<String>> = branch.fmtReadStringArgs('siblingShare');
+		return shared == null ? doc : macro ${hookFn(shared[0])}($doc, ${optFieldAccess(shared[1])}, opt.lineWidth);
 	}
 
 	/**
@@ -569,6 +572,8 @@ final class WriterKwRefLowering {
 		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
 		// `@:fmt(propagateNestedType)` on `HxType.Parens` / `ConditionalType` marks the inner type as nested.
 		if (branch.fmtHasFlag('propagateNestedType')) optExpr = macro _setNestedType($optExpr, opt);
+		// `@:fmt(clearTypedefContext)` on `HxType.ArrowFn`: a function type under a typedef is not the typedef body.
+		if (branch.fmtHasFlag('clearTypedefContext')) optExpr = macro _clearTypedefBody($optExpr, opt);
 		if (clearExpr) {
 			final operandAccess: Expr = macro $i{argNames[0]};
 			final operandIsBlock: Expr = AstPredLowering.predCallExpr(

@@ -14,7 +14,11 @@ private typedef JudgedBlock = {
 }
 
 /** One interior line of a block comment: its byte range in the source, and its text. */
-private typedef InteriorLine = { var from: Int; var to: Int; var text: String; }
+private typedef InteriorLine = {
+	var from: Int;
+	var to: Int;
+	var text: String;
+}
 
 /**
  * Flags an interior line of a block comment that breaks the continuation prefix its own block uses.

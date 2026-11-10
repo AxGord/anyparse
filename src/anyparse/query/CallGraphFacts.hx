@@ -786,4 +786,7 @@ final class CallGraphFacts {
 }
 
 /** What a node `CallGraphFacts.qualify` made reads: the graph node `node` as the member of the typed type `owner`. */
-typedef QualifiedRead = { final node: String; final owner: String; }
+typedef QualifiedRead = {
+	final node: String;
+	final owner: String;
+}

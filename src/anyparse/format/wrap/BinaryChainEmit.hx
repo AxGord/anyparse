@@ -1481,11 +1481,19 @@ final class BinaryChainEmit {
  * operator: it hugs its left operand (`a, b`) while the other gaps keep their spaces. `tail` is what follows the last
  * element's chain, `close` the list's closer.
  */
-typedef ChainList = { final sep: String; final tail: Array<Doc>; final close: String; };
+typedef ChainList = {
+	final sep: String;
+	final tail: Array<Doc>;
+	final close: String;
+};
 
 /**
  * The Keep shape's per-gap comment channels besides the after-operator one, parallel to `ops`: `own` the run of
  * own-line comments between an operator and its right operand, `above` an after-operator `//` comment as the line
  * `comments.trailingCommentOverflow: "above"` may move it to (null where it may not), `lineWidth` the overflow limit.
  */
-private typedef KeepGapComments = { final own: Null<Array<Null<Doc>>>; final above: Null<Array<Null<Doc>>>; final lineWidth: Int; }
+private typedef KeepGapComments = {
+	final own: Null<Array<Null<Doc>>>;
+	final above: Null<Array<Null<Doc>>>;
+	final lineWidth: Int;
+}

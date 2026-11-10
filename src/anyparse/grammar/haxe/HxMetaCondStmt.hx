@@ -33,4 +33,7 @@ package anyparse.grammar.haxe;
  * `@:trailOpt(';')` made the writer invent one (as on the `return` twin).
  */
 @:peg
-typedef HxMetaCondStmt = { var meta: HxMetadata; var region: HxCondSpliceClosedRegion; };
+typedef HxMetaCondStmt = {
+	var meta: HxMetadata;
+	var region: HxCondSpliceClosedRegion;
+};

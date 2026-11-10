@@ -17,7 +17,11 @@ import anyparse.query.TypeSyntax;
  * site is a `haxe.ds` map, but something at it (a shadowed `Map`, a missing type parameter, an
  * unpinned bare construction) makes the rewrite unavailable.
  */
-private typedef Candidate = { var span: Span; var message: String; var edits: Array<{ span: Span, text: String }>; }
+private typedef Candidate = {
+	var span: Span;
+	var message: String;
+	var edits: Array<{ span: Span, text: String }>;
+}
 
 /** The resolved per-file seams the candidate walk threads through, so no node visit re-derives them. */
 private typedef Seams = {

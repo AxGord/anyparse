@@ -26,7 +26,8 @@ typedef HxElseifStmt = {
 	var cond: HxPpCondLit;
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
 };

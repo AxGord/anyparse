@@ -140,10 +140,17 @@ final class WhitespaceInvariant {
 }
 
 /** Where two whitespace-stripped strings first disagree, with a window of each side for the report. */
-typedef Divergence = { final line: Int; final expected: String; final actual: String; };
+typedef Divergence = {
+	final line: Int;
+	final expected: String;
+	final actual: String;
+};
 
 /** A whitespace-stripped string plus the 1-based source line of each surviving character. */
-private typedef Stripped = { final text: String; final lines: Array<Int>; };
+private typedef Stripped = {
+	final text: String;
+	final lines: Array<Int>;
+};
 
 /**
  * A grammar's non-code regions, handed to `WhitespaceInvariant` so it stays grammar-agnostic.

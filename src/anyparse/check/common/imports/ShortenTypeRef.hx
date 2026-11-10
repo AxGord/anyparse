@@ -73,10 +73,16 @@ private typedef PathPlan = {
  * One file's plan: every path verdict, plus the printer that produced them — it carries the
  * pending-import set the add-import arm promised, which is what `fix` materialises.
  */
-private typedef FilePlan = { var printer: TypeRefPrinter; var plans: Array<PathPlan>; }
+private typedef FilePlan = {
+	var printer: TypeRefPrinter;
+	var plans: Array<PathPlan>;
+}
 
 /** The per-file `apq.json` options: the add-import threshold and whether value positions are rewritten at all. */
-private typedef RuleOptions = { var importMinUses: Int; var valuePositions: Bool; }
+private typedef RuleOptions = {
+	var importMinUses: Int;
+	var valuePositions: Bool;
+}
 
 /** The immutable inputs the occurrence scan reads, threaded through the recursion. */
 private typedef ScanContext = {

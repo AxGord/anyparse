@@ -106,7 +106,8 @@ final class PendingRuns {
 		final pid: Null<Int> = _pid;
 		if (pid != null) try js.Node.process.kill(pid, 'SIGTERM') catch (exception: Exception) { // noqa: swallowed-exception
 			// a driver already gone has nothing left to end
-		} forget();
+		}
+		forget();
 		#end
 		_answer = ProcessSpawn.unanswered(_jobs.length, 'cancelled — the batch was abandoned', '', true);
 	}

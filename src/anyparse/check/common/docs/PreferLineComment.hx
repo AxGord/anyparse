@@ -13,14 +13,21 @@ import anyparse.util.Strings;
  * REPLACE (the token plus any trailing whitespace up to the line end) and the line-comment
  * text that replaces it.
  */
-typedef LineCommentRewrite = { comment: Span, edit: Span, text: String };
+typedef LineCommentRewrite = {
+	comment: Span,
+	edit: Span,
+	text: String
+};
 
 /**
  * The node kinds a rewrite is decided against: `blocks` hold statements directly (the
  * statement-position gate), `localFns` declare a local function (a `/**` block above one
  * is a real doc and is left alone).
  */
-typedef LineCommentKinds = { blocks: Array<String>, localFns: Array<String> };
+typedef LineCommentKinds = {
+	blocks: Array<String>,
+	localFns: Array<String>
+};
 
 /**
  * Flags a block comment sitting in a STATEMENT position inside a function body — prose

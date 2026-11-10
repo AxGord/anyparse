@@ -108,7 +108,10 @@ typedef ChainLists = {
 }
 
 /** One step of a path toward a blocking call: the call taken, and the state it enters — none when the call itself blocks. */
-private typedef TaintStep = { final edge: CallEdge; final next: Null<String>; }
+private typedef TaintStep = {
+	final edge: CallEdge;
+	final next: Null<String>;
+}
 
 /**
  * One state of the walk toward a blocking call: its key, function, valuation and context, whether a call on the way
@@ -132,7 +135,11 @@ private typedef WalkState = {
 }
 
 /** What a walk state carries down to the next one: the lock held, whether a call on the way repeats, and the bounded way. */
-private typedef WalkFlags = { final held: Null<String>; final repeated: Bool; final way: BoundedWay; }
+private typedef WalkFlags = {
+	final held: Null<String>;
+	final repeated: Bool;
+	final way: BoundedWay;
+}
 
 /** What one call does from a walk state (`LockTaint.stepOf`): nothing there, block — repeating or not — or enter a state. */
 private enum WalkStep {

@@ -194,4 +194,8 @@ final class GrammarDiscovery {
 }
 
 /** One grammar plugin's claim on the CLI's dispatch: its module path, its `--lang` and its file extensions. */
-typedef PluginClaim = { final module: String; final lang: String; final extensions: Array<String>; }
+typedef PluginClaim = {
+	final module: String;
+	final lang: String;
+	final extensions: Array<String>;
+}

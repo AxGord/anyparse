@@ -53,7 +53,11 @@ typedef Overlap = {
 }
 
 /** A declared independent implementation: the declaration, the owner it may repeat (`*` for any), and why. */
-typedef Allowed = { final declaration: String; final owner: String; final reason: String; }
+typedef Allowed = {
+	final declaration: String;
+	final owner: String;
+	final reason: String;
+}
 
 /** What `census` asks the owner index with. */
 typedef OverlapConfig = {

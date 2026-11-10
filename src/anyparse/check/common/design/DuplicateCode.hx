@@ -731,7 +731,10 @@ typedef DupStmt = {
 }
 
 /** A (block-index, statement-index) coordinate into the per-file collected block list. */
-typedef DupPos = { var b: Int; var i: Int; }
+typedef DupPos = {
+	var b: Int;
+	var i: Int;
+}
 
 /**
  * A recorded clone occurrence: its span, statement count, and the original's line. For a
@@ -752,7 +755,11 @@ typedef DupFinding = {
  * One scoped file: its path, source, and the block statement sequences `run` collected once
  * (`collectBlocks`) for BOTH the same-file and the cross-file pass, so the tree is walked once.
  */
-typedef DupFile = { var file: String; var source: String; var blocks: Array<Array<DupStmt>>; }
+typedef DupFile = {
+	var file: String;
+	var source: String;
+	var blocks: Array<Array<DupStmt>>;
+}
 
 /**
  * What separates the two readings of one clone engine: the rule id its findings carry, whether a

@@ -16,7 +16,11 @@ using Lambda;
  * One selected public method: its name, sliced signature (no body / no
  * modifiers), and the group span for member-ordering.
  */
-private typedef IfaceMethod = { var name: String; var signature: String; var from: Int; }
+private typedef IfaceMethod = {
+	var name: String;
+	var signature: String;
+	var from: Int;
+}
 
 /**
  * `extract-interface` — generate an interface from a class's public

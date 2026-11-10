@@ -28,7 +28,11 @@ using Lambda;
  * it once per host, select `<kind>:<member>`, take the declaration's edit span. Only what
  * they then ASK of the site differs, which is the whole reason the shape is shared.
  */
-typedef ArmSite = { final source: String; final node: QueryNode; final group: Span; };
+typedef ArmSite = {
+	final source: String;
+	final node: QueryNode;
+	final group: Span;
+};
 
 /**
  * Every declared arm still ADDRESSES a live member — asked of the parser, of

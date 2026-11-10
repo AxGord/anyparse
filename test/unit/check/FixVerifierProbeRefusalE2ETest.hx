@@ -17,7 +17,10 @@ import sys.io.File;
 #end
 
 /** One edit the table-driven fake produces: the source text it replaces and the replacement. */
-private typedef FakeEdit = { var find: String; var text: String; }
+private typedef FakeEdit = {
+	var find: String;
+	var text: String;
+}
 
 /**
  * End-to-end coverage of the bisect probe that the WRITER refuses — the one arm of

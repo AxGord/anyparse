@@ -28,7 +28,7 @@ typedef HxCondSemiRegion = {
 	@:trivia
 	@:tryparse
 	@:fmt(elemSelfTrailsNewline)
-	var elseifs: Array<HxElseifStmt>;
+	var elseifs: Array<HxCondSemiElseif>;
 	// the Star before it ends with its own separator (`padTrailing`): `fillSeam` adds none, a gap comment still emitted
 	@:fmt(fillSeam)
 	var elseKw: HxCondElseLit;

@@ -742,7 +742,10 @@ class OperandTypingTest extends Test {
 }
 
 /** One operand position: a function body whose `@` the route's operand replaces. */
-private typedef Shape = { final name: String; final body: String; };
+private typedef Shape = {
+	final name: String;
+	final body: String;
+};
 
 /** What a rule answers about a shape, read the way its finding means it. */
 private enum Read {
@@ -762,4 +765,8 @@ private enum Read {
 }
 
 /** One rule asked about one shape. */
-private typedef Ask = { final check: Check; final shape: String; final read: Read; };
+private typedef Ask = {
+	final check: Check;
+	final shape: String;
+	final read: Read;
+};

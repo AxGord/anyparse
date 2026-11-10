@@ -834,7 +834,11 @@ private typedef ChainRung = {
  * range, which is rendered as `case _` — null for an else-less chain, which `render` closes with
  * an EMPTY `case _:` (gate 7).
  */
-private typedef ChainScan = { final discTexts: Array<String>; final rungs: Array<ChainRung>; final elseBody: Null<Span>; };
+private typedef ChainScan = {
+	final discTexts: Array<String>;
+	final rungs: Array<ChainRung>;
+	final elseBody: Null<Span>;
+};
 
 /**
  * The statement lists an else-less chain may stand in and still close with an empty `case _:`:
@@ -842,7 +846,10 @@ private typedef ChainScan = { final discTexts: Array<String>; final rungs: Array
  * `beforeAnother` one whose last statement may be (a nested block, a block expression), where the
  * chain must have a statement after it.
  */
-private typedef ElselessHosts = { final anywhere: Array<String>; final beforeAnother: Array<String>; };
+private typedef ElselessHosts = {
+	final anywhere: Array<String>;
+	final beforeAnother: Array<String>;
+};
 
 /**
  * The two per-FILE services a constant proof asks for: the file's own parsed `root`, against

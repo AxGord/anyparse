@@ -4,4 +4,7 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef BigCallRow = { var outTok: Int; var call: String; }
+typedef BigCallRow = {
+	var outTok: Int;
+	var call: String;
+}

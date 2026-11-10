@@ -20,7 +20,10 @@ import anyparse.util.Compare;
 using StringTools;
 
 /** A type as an argument or a parameter is written: its text, and the file writing it — null for a type no file spells. */
-typedef WrittenType = { final text: String; final file: Null<String>; }
+typedef WrittenType = {
+	final text: String;
+	final file: Null<String>;
+}
 
 /** Where `ArgumentTypes` types an argument: the file and tree it is written in, the type of the function writing it. */
 private typedef ArgumentScope = {

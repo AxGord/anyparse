@@ -8,7 +8,11 @@ import anyparse.util.Strings;
 /**
  * One reading found inside a comment: the bytes it covers, and the shape that identifies it.
  */
-private typedef Reading = { final at: Int; final to: Int; final shape: String; };
+private typedef Reading = {
+	final at: Int;
+	final to: Int;
+	final shape: String;
+};
 
 /**
  * Flags a comment carrying a READING of a tree rather than a contract — a number with a unit of

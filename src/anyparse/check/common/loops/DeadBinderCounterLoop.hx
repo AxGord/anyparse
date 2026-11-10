@@ -488,7 +488,10 @@ private typedef Seams = {
 }
 
 /** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */
-private typedef Bound = { var expr: String; var lambda: Bool; }
+private typedef Bound = {
+	var expr: String;
+	var lambda: Bool;
+}
 
 /**
  * One collected rewrite, whether its bound is the `count()` form, and the `<from>:<to>` key of the
@@ -498,7 +501,11 @@ private typedef Bound = { var expr: String; var lambda: Bool; }
  * `wanted` never matched, or whose edit the containment filter dropped, got no edit for its own
  * reason, and the `using` gate did not decide it.
  */
-private typedef CountEdit = { var edit: { span: Span, text: String }; var lambda: Bool; var key: String; }
+private typedef CountEdit = {
+	var edit: { span: Span, text: String };
+	var lambda: Bool;
+	var key: String;
+}
 
 /** One matched pair: the spans the rewrite splices, the counter it re-binds, and the bound that replaces the iteration. */
 private typedef Match = {

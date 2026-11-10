@@ -54,7 +54,8 @@
 		"do/E.hx": "class A {\n\tfunction f() {\n\t\tvar g = () -> do // c\n\t\t\tx() while (y);\n\t}\n}\n",
 		"do/N.hx": "class A {\n\tfunction f() {\n\t\tdo do // c\n\t\t\tx(); while (a); while (b);\n\t}\n}\n",
 		"cond5/C.hx": "class A {\n\tstatic function f() {\n\t\t#if ((((( a )))))\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n",
-		"condcomment/C.hx": "class A {\n\tstatic function f() {\n\t\t#if (!js /* don't */ && !nodejs)\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n"
+		"condcomment/C.hx": "class A {\n\tstatic function f() {\n\t\t#if (!js /* don't */ && !nodejs)\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n",
+		"cond/P.hx": "class C {\n\tfunction f() {\n\t\t#if a foo(); bar(); #end\n\t\t#if a foo(); #elseif b bar(); baz(); #else qux(); #end\n\t}\n\n\t#if a var p:Int; var q:Int; #end\n\n\t#if a var r:Int; #else var s:Int; var t:Int; #end\n}\n"
 	},
 	"invocations": [
 		{
@@ -429,7 +430,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "f0256f096ce27848",
+				"out": "9bbe058e4e5fa5e8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -600,6 +601,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "c52734b997c004ab",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "cond/P.hx",
+			"note": "a #if region body of two or more elements puts each on a line of its own, and every branch of that region opens and closes on lines of its own with it (one-line on the base)",
+			"fixpoint": "cond/P.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cond/P.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1905fa958f00fd1a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

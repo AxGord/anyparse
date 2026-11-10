@@ -355,7 +355,8 @@
 			"name": "M-SIBLING-DECIDE-OFF",
 			"type": "anyparse.format.SiblingShare",
 			"method": "decide",
-			"force": "list",
+			"find": "return share(list, policy, lineWidth, false);",
+			"replace": "return list;",
 			"note": "no list decides: every slot stays unresolved, each sibling renders its own form, so a switch keeps the mix under anyBreak"
 		},
 		{
@@ -370,8 +371,8 @@
 			"name": "M-SIBLING-VOTE-ANY-NEGATIVE",
 			"type": "anyparse.format.SiblingShare",
 			"method": "isVote",
-			"find": "return width <= MEASURED;",
-			"replace": "return width < 0;",
+			"find": "width <= MEASURED && width > PAD_MEASURED",
+			"replace": "width < 0",
 			"note": "any negative width reads as a vote, so a number another rule wrote is overwritten by the verdict"
 		},
 		{
@@ -646,6 +647,14 @@
 			"find": " || isSplice(inner))",
 			"replace": ")",
 			"note": "the braces around a lone splice are stripped, though the splice may be a declaration they scope"
+		},
+		{
+			"name": "M-PAD-SLOT-NEVER-LEADS",
+			"type": "anyparse.format.SiblingShare",
+			"method": "padSlot",
+			"find": "leads ? PAD_LEADS : PAD_MEASURED",
+			"replace": "PAD_MEASURED",
+			"note": "a region branch broken by shape no longer moves its siblings: a fitting region keeps its one-line branches beside the broken one"
 		}
 	]
 }

@@ -568,7 +568,11 @@ final class BodySlotGuard {
  * `editFrom` / `editEnd` are the source span of the edit whose REPLACEMENT text it fell inside —
  * both -1 when it fell in surviving source text.
  */
-private typedef Origin = { var pos: Int; var editFrom: Int; var editEnd: Int; };
+private typedef Origin = {
+	var pos: Int;
+	var editFrom: Int;
+	var editEnd: Int;
+};
 
 /**
  * Everything the result-side walk reads, in one value: the SOURCE tree and text with its comment

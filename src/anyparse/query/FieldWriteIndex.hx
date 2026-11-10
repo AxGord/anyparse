@@ -51,7 +51,11 @@ typedef UnresolvedWrite = {
 }
 
 /** A parsed nominal type source: the simple `name`, the written `path` it came from, and its type arguments as written. */
-private typedef NominalParts = { var name: String; var path: String; var args: Array<String>; }
+private typedef NominalParts = {
+	var name: String;
+	var path: String;
+	var args: Array<String>;
+}
 
 /**
  * The current type-body context threaded down the walk: the enclosing type's
@@ -61,7 +65,11 @@ private typedef NominalParts = { var name: String; var path: String; var args: A
  * write (`field = …`) can be told apart from a local/param write — it is a field
  * write only when its binding resolves to one of these.
  */
-typedef WriteTypeCtx = { var name: String; var kind: String; var memberFroms: Array<Int>; }
+typedef WriteTypeCtx = {
+	var name: String;
+	var kind: String;
+	var memberFroms: Array<Int>;
+}
 
 /**
  * Run-scoped invariants for the per-file write scan, bundled so the recursive

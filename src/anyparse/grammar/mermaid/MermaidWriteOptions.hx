@@ -14,4 +14,5 @@ typedef MermaidWriteOptions = WriteOptions & {
 	 * writer's per-element separator is declared through a `SameLinePolicy`.
 	 */
 	var statementBreak: SameLinePolicy;
+
 }

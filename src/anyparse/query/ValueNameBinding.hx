@@ -388,7 +388,14 @@ typedef ImportedStatics = {
  * module-level field), `decls` the declarations of it the index holds (none outside it, none for a module-level field
  * of a module without a main type), `member` the field.
  */
-typedef ImportedStatic = { final owner: String; final decls: Array<ResolvedType>; final member: String; }
+typedef ImportedStatic = {
+	final owner: String;
+	final decls: Array<ResolvedType>;
+	final member: String;
+}
 
 /** An alias statement binding a static under another name (`ValueNameBinding.fieldAliases`): no `target` when its path does not decode. */
-typedef FieldAlias = { final alias: String; final target: Null<ImportedStatic>; }
+typedef FieldAlias = {
+	final alias: String;
+	final target: Null<ImportedStatic>;
+}

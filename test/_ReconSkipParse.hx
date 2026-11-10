@@ -25,7 +25,11 @@ using StringTools;
  *   haxe recon.hxml
  *   ANYPARSE_HXFORMAT_FORK=<haxe-formatter checkout> node bin/recon.js
  */
-typedef ReconCluster = { var count: Int; var examples: Array<String>; var rawSample: String; };
+typedef ReconCluster = {
+	var count: Int;
+	var examples: Array<String>;
+	var rawSample: String;
+};
 
 /**
  * Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse

@@ -47,10 +47,17 @@ enum CallArgument {
 }
 
 /** One signature a call may select: the signature, the member writing it and the declaration it is declared on. */
-typedef CallCandidate = { final signature: CallSignature; final member: MemberInfo; final host: ResolvedType; }
+typedef CallCandidate = {
+	final signature: CallSignature;
+	final member: MemberInfo;
+	final host: ResolvedType;
+}
 
 /** The signatures a call to one member selects from, and how (`CallSelection.candidates`). */
-typedef CallCandidates = { final kind: OverloadKind; final candidates: Array<CallCandidate>; }
+typedef CallCandidates = {
+	final kind: OverloadKind;
+	final candidates: Array<CallCandidate>;
+}
 
 /**
  * The signature a call selects among those of the member it calls, and the type it returns (`docs/typing-service.md`, step

@@ -279,7 +279,10 @@ final class UnnecessarySwitch extends RuleBase {
 }
 
 /** One degenerate switch: the span reported (and keyed on), and the edit that unwraps it. */
-private typedef Candidate = { final span: Span; final edit: { span: Span, text: String }; };
+private typedef Candidate = {
+	final span: Span;
+	final edit: { span: Span, text: String };
+};
 
 /** The seams `UnnecessarySwitch` reads in both `run` and `fix`. */
 private typedef Seams = {

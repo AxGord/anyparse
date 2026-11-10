@@ -525,7 +525,10 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 }
 
 /** The declaration's two types, resolved and checked. */
-typedef EventTypes = { final base: ResolvedType; final abstractType: ResolvedType; }
+typedef EventTypes = {
+	final base: ResolvedType;
+	final abstractType: ResolvedType;
+}
 
 /** One linted file, parsed once for both walks. */
 private typedef Parsed = {

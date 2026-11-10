@@ -2203,7 +2203,7 @@
 			"note": "a block comment leading every field of a typedef body, the first included, stays before its field in one rewrite",
 			"expect": {
 				"exit": 0,
-				"out": "7cbecc5e905660b8",
+				"out": "5d52d1b3cd3f55fa",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -2221,7 +2221,7 @@
 			"note": "a block comment leading only the first typedef field stays before it in one rewrite",
 			"expect": {
 				"exit": 0,
-				"out": "7d53618418a8ee2f",
+				"out": "7d5dc84961bdc0cd",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

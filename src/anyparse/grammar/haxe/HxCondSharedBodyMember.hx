@@ -39,4 +39,7 @@ package anyparse.grammar.haxe;
  * After `Conditional`, every region that ctor can represent is already gone.
  */
 @:peg
-typedef HxCondSharedBodyMember = { var raw: HxCondSpliceRaw; var tail: HxFnBody; }
+typedef HxCondSharedBodyMember = {
+	var raw: HxCondSpliceRaw;
+	var tail: HxFnBody;
+}

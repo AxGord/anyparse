@@ -760,10 +760,16 @@ private final class ImpactGraph {
 }
 
 /** A source file of a tree: its path from the tree and its text. */
-typedef ImpactSource = { var path: String; var text: String; }
+typedef ImpactSource = {
+	var path: String;
+	var text: String;
+}
 
 /** The types each parsed source declares, by path, and the sources that do not parse, whose types are unknown. */
-typedef DeclaredTypes = { var types: Map<String, Array<String>>; var unparsed: Array<String>; }
+typedef DeclaredTypes = {
+	var types: Map<String, Array<String>>;
+	var unparsed: Array<String>;
+}
 
 /** The module a `.hx` under a root holds. */
 typedef ImpactModule = {
@@ -774,13 +780,23 @@ typedef ImpactModule = {
 }
 
 /** A module whose dependents a closure has yet to reach, and the file that holds it, `-1` for a removed one. */
-private typedef PendingModule = { var module: ImpactModule; var at: Int; }
+private typedef PendingModule = {
+	var module: ImpactModule;
+	var at: Int;
+}
 
 /** The main module a build runs and the file it writes. */
-typedef BuildEntry = { var main: String; var output: String; }
+typedef BuildEntry = {
+	var main: String;
+	var output: String;
+}
 
 /** What the arm census read: the pins an impact selection leaves out, and how many files it selected for. */
-typedef ArmReach = { var misses: Array<String>; var files: Int; var whole: Int; }
+typedef ArmReach = {
+	var misses: Array<String>;
+	var files: Int;
+	var whole: Int;
+}
 
 /** What a suite runs for a change. */
 enum SuiteScope {

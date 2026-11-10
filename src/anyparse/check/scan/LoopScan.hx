@@ -630,10 +630,17 @@ typedef LoopSeams = {
 typedef OpaqueSeams = { var opaqueKinds: Array<String>; }
 
 /** `OpaqueSeams` plus what `countWrites` reads: the write-parent kinds and the bare identifier kind. */
-typedef WriteScanSeams = { var opaqueKinds: Array<String>; var writeParentKinds: Array<String>; var identKind: String; }
+typedef WriteScanSeams = {
+	var opaqueKinds: Array<String>;
+	var writeParentKinds: Array<String>;
+	var identKind: String;
+}
 
 /** `OpaqueSeams` plus the local-declaration kinds `declares` reads. */
-typedef DeclScanSeams = { var opaqueKinds: Array<String>; var localDeclKinds: Array<String>; }
+typedef DeclScanSeams = {
+	var opaqueKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+}
 
 /**
  * `LoopSeams` plus the interval kind, for the rules that match an INDEXED header
@@ -641,7 +648,10 @@ typedef DeclScanSeams = { var opaqueKinds: Array<String>; var localDeclKinds: Ar
  * `LoopSeams` because the scans themselves never ask about an interval — a grammar that names
  * no range loop still answers everything they need.
  */
-typedef IntervalLoopSeams = { var core: LoopSeams; var intervalKind: String; }
+typedef IntervalLoopSeams = {
+	var core: LoopSeams;
+	var intervalKind: String;
+}
 
 /**
  * What `indexedHeaderOf` proved about a `for (i in 0...X.size)` header: the two names, the

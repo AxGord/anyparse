@@ -142,4 +142,7 @@ private typedef Follow = {
 }
 
 /** A lookahead body split at its head alternation. */
-typedef AheadBranches = { final branches: Array<ScanNode>; final tail: Array<ScanNode>; }
+typedef AheadBranches = {
+	final branches: Array<ScanNode>;
+	final tail: Array<ScanNode>;
+}

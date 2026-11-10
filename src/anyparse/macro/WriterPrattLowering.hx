@@ -321,9 +321,12 @@ final class WriterPrattLowering {
 		final rightChild: ShapeNode = children[1];
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
-		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		final rightOptExpr: Null<Expr> = typedefClearedOperandOpt(
+			branch, branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null
+		);
 		final leftCall: Expr = guardOpenLeft(
-			writeFnName, macro $i{argNames[0]}, leftCtx, prec, makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, null)
+			writeFnName, macro $i{argNames[0]}, leftCtx, prec,
+			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, typedefClearedOperandOpt(branch, null))
 		);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(pc.writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
@@ -660,7 +663,8 @@ final class WriterPrattLowering {
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = rightOperandOptExpr(branch);
 		final leftCall: Expr = guardOpenLeft(
-			writeFnName, macro $i{argNames[0]}, leftCtx, prec, makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx)
+			writeFnName, macro $i{argNames[0]}, leftCtx, prec,
+			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, typedefClearedOperandOpt(branch, null))
 		);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(pc.writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)

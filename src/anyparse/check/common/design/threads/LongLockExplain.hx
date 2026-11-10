@@ -63,7 +63,10 @@ typedef LongLock = {
 }
 
 /** A hold whose take a main-thread state runs — `quiet` when only through a `quietRoots` function. */
-typedef MainTake = { final take: LockAcquire; final quiet: Bool; }
+typedef MainTake = {
+	final take: LockAcquire;
+	final quiet: Bool;
+}
 
 /** A take of a lock on the main thread: the lock, where, the function taking it, and whether only a quiet path takes it. */
 typedef LockTakeSite = {

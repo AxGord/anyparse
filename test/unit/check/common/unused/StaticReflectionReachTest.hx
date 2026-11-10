@@ -309,4 +309,7 @@ class StaticReflectionReachTest extends Test {
 }
 
 /** One source of a cell's scope. */
-private typedef SourceFile = { var file: String; var source: String; };
+private typedef SourceFile = {
+	var file: String;
+	var source: String;
+};

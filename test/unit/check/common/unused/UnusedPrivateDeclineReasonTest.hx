@@ -242,10 +242,20 @@ class UnusedPrivateDeclineReasonTest extends Test {
 }
 
 /** One gate: the cell that drives it, and the fragment of its sentence that names it. */
-private typedef Gate = { final name: String; final fragment: String; final files: Array<SourceFile>; };
+private typedef Gate = {
+	final name: String;
+	final fragment: String;
+	final files: Array<SourceFile>;
+};
 
 /** One source of a cell's scope. */
-private typedef SourceFile = { var file: String; var source: String; };
+private typedef SourceFile = {
+	var file: String;
+	var source: String;
+};
 
 /** What a cell's `fix` call said: one sentence per declined finding, and how many edits it wrote. */
-private typedef Declines = { final reasons: Array<String>; final edits: Int; };
+private typedef Declines = {
+	final reasons: Array<String>;
+	final edits: Int;
+};

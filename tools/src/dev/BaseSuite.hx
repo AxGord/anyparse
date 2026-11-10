@@ -16,10 +16,18 @@ using Lambda;
 using StringTools;
 
 /** What the base commit's whole suite counted and, when a corpus ran, where its sweep snapshot is kept. */
-typedef BaseReading = { var tests: Int; var assertions: Int; var sweep: Null<String>; }
+typedef BaseReading = {
+	var tests: Int;
+	var assertions: Int;
+	var sweep: Null<String>;
+}
 
 /** One run of a base checkout's suite: its exit status, its totals when it counted any, and the transcript lines. */
-typedef BaseSuiteRun = { var status: Int; var totals: Null<Tally>; var lines: Array<String>; }
+typedef BaseSuiteRun = {
+	var status: Int;
+	var totals: Null<Tally>;
+	var lines: Array<String>;
+}
 
 /** A base suite reading, or why there is none. */
 enum BaseRead {

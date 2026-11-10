@@ -401,7 +401,8 @@ final class WriterTriviaStarEmitLowering {
 			tryparseBlockEnded, tryparseSepFaithful, listLayout, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,
 			refuseGlueOnControlFlow, tryparseFillItems, starNode.fmtReadStringArgs('glueToPrevious'),
-			starNode.fmtReadStringArgs('siblingSlot'), starNode.fmtHasFlag('belowWrappedLabel')
+			starNode.fmtReadStringArgs('siblingSlot'), starNode.fmtHasFlag('belowWrappedLabel'), starNode.fmtHasFlag('elementPerLine'),
+			starNode.fmtReadStringArgs('siblingPad')
 		));
 	}
 

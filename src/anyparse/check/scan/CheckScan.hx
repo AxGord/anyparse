@@ -955,7 +955,10 @@ final class CheckScan {
  * The result of `CheckScan.normalizeSpan`: the whitespace-collapsed text of a source
  * range (`norm`) and its non-whitespace character count (`nonWs`, the content-gate metric).
  */
-typedef NormalizedSpan = { final norm: String; final nonWs: Int; };
+typedef NormalizedSpan = {
+	final norm: String;
+	final nonWs: Int;
+};
 
 /** The condition / logical / block seam kinds `simplifyConditionFixes` reads from the grammar. */
 private typedef CondSimplifySeams = {

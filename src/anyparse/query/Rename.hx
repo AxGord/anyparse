@@ -26,14 +26,21 @@ enum RenameResult {
  * additionally captures (it was not in the rewrite); `extra == false` marks one
  * of the rewritten occurrences a shadowing binding took over.
  */
-typedef Capture = { var offset: Int; var extra: Bool; }
+typedef Capture = {
+	var offset: Int;
+	var extra: Bool;
+}
 
 /**
  * A `this.`-qualified rewrite: the source, the offsets (in the pre-qualification
  * rewrite's coordinates) a prefix was inserted at, and that prefix's length -
  * enough for the caller to predict where every occurrence ended up.
  */
-typedef Qualification = { var source: String; var insertions: Array<Int>; var prefixLength: Int; }
+typedef Qualification = {
+	var source: String;
+	var insertions: Array<Int>;
+	var prefixLength: Int;
+}
 
 /**
  * Scope-correct, format-preserving rename-symbol — the first real

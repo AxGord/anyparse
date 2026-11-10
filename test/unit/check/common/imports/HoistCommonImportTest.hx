@@ -20,7 +20,10 @@ using Lambda;
  * One file of a fixture tree: its tree-relative `name` and its `source`. Named because the fixtures,
  * the helpers that write them and the ones that read a fix back all pass the same pair.
  */
-private typedef TreeFile = { var name: String; var source: String; }
+private typedef TreeFile = {
+	var name: String;
+	var source: String;
+}
 
 /**
  * `hoist-common-import` — which statement earns a place in a directory's ambient source, which one

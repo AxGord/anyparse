@@ -356,10 +356,16 @@ private typedef Cut = {
 };
 
 /** A `[0]` or `.pop()` over a call: that call, and the utility function reading the same part. */
-private typedef SplitRead = { final split: QueryNode; final member: String; };
+private typedef SplitRead = {
+	final split: QueryNode;
+	final member: String;
+};
 
 /** The text utility a config chain names: its qualified path, or what is wrong with the option as written. */
-private typedef Tools = { final path: Null<String>; final problems: Array<String>; };
+private typedef Tools = {
+	final path: Null<String>;
+	final problems: Array<String>;
+};
 
 /** The resolved seams `PreferSplitPart` reads in both `run` and `fix`. */
 private typedef Seams = {

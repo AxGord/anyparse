@@ -807,7 +807,10 @@ final class TypeNameBinding {
 }
 
 /** An import path as the compiler reads it (`TypeNameBinding.splitPath`): its module, then what follows it — a type, then a field. */
-typedef ImportPath = { final module: String; final rest: Array<String>; }
+typedef ImportPath = {
+	final module: String;
+	final rest: Array<String>;
+}
 
 /** One type a name may bind to (`TypeNameBinding.bindingsOf`): declarations of the index, or the path of a type outside it. */
 enum NameTarget {
@@ -820,7 +823,11 @@ enum NameTarget {
  * null where nothing readable binds it; `guarded` on the builds a `#if`-guarded statement holds; `unlisted` where a
  * package wildcard the order cannot list may supply it.
  */
-typedef NameTargets = { var bound: Null<NameTarget>; final guarded: Array<NameTarget>; final unlisted: Array<NameTarget>; }
+typedef NameTargets = {
+	var bound: Null<NameTarget>;
+	final guarded: Array<NameTarget>;
+	final unlisted: Array<NameTarget>;
+}
 
 /**
  * The explicit statements and the package wildcards of a file and its ambient chain, each in the order the

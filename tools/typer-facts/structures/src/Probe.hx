@@ -1,5 +1,14 @@
-typedef Opts = { a: Float, ?b: Int, ?c: String }
-typedef Pt = { x: Int, y: Int }
+typedef Opts = {
+	a: Float,
+	?b: Int,
+	?c: String
+}
+
+typedef Pt = {
+	x: Int,
+	y: Int
+}
+
 typedef D = { m: Dynamic }
 
 typedef Many = {

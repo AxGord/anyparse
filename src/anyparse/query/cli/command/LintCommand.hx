@@ -52,7 +52,10 @@ typedef CheckPartition = {
 typedef LintRange = Array<LineWindow>;
 
 /** One `--range` span: a 1-based, inclusive pair of line numbers. */
-typedef LineWindow = { final from: Int; final to: Int; };
+typedef LineWindow = {
+	final from: Int;
+	final to: Int;
+};
 
 /**
  * Parsed options for `apq lint` — `lang`, `flat`, `includeInfo`, `fix`, the `failOn` severity, output `format`,

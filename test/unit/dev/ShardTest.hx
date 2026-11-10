@@ -307,4 +307,8 @@ process.exitCode = failed;
 }
 
 /** What one fake `dev shard` run returned and said. */
-private typedef Ran = { var status: Int; var printed: Array<String>; var warned: Array<String>; }
+private typedef Ran = {
+	var status: Int;
+	var printed: Array<String>;
+	var warned: Array<String>;
+}

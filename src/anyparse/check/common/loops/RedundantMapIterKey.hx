@@ -232,4 +232,8 @@ final class RedundantMapIterKey extends RuleBase {
 }
 
 /** The grammar seams `redundant-map-iter-key` reads: the loop kind it flags, and the kinds its VALUE binder projects as. */
-private typedef Seams = { var forStmtKind: String; var valueBinderKinds: Array<String>; var shape: RefShape; };
+private typedef Seams = {
+	var forStmtKind: String;
+	var valueBinderKinds: Array<String>;
+	var shape: RefShape;
+};

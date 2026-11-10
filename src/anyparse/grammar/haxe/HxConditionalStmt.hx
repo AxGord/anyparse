@@ -27,7 +27,9 @@ package anyparse.grammar.haxe;
  * `#if`/`#else`/`#end` boundary gaps that the default internal-only sep leaves glued. The
  * pads switch from a literal space to a hardline when the first body element's
  * `newlineBefore` slot is set (captured via `@:trivia`), reproducing the multi-line shape
- * `function f() {\n#if php\n\treturn 1;\n#end\n}`.
+ * `function f() {\n#if php\n\treturn 1;\n#end\n}`. `@:fmt(elementPerLine)` puts each statement of
+ * a body on a line of its own, as outside the region, so a body of two or more always takes
+ * that multi-line shape.
  *
  * `@:optional @:kw('#else') @:tryparse var elseBody:Null<Array<…>>` uses the kw-led optional
  * Star path (Lowering's `emitOptionalKwStarFieldSteps`): `#else` is the commit point, and a
@@ -42,7 +44,8 @@ typedef HxConditionalStmt = {
 	var cond: HxPpCondLit;
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
 	@:trivia
@@ -53,7 +56,8 @@ typedef HxConditionalStmt = {
 	@:kw('#else')
 	@:trivia
 	@:tryparse
-	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
+		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var elseBody: Null<Array<HxStatement>>;
 };

@@ -903,7 +903,13 @@ private typedef Seams = {
  * span carries a terminator that the strip must cut (true only for the control-flow arm —
  * the value arms emit a bare expression node's span verbatim).
  */
-private typedef Collapsible = { var node: QueryNode; var terminated: Bool; }
+private typedef Collapsible = {
+	var node: QueryNode;
+	var terminated: Bool;
+}
 
 /** A collapsible lambda body: the block's span (the finding key AND the replaced region) and the expression text. */
-private typedef Match = { var span: Span; var text: String; }
+private typedef Match = {
+	var span: Span;
+	var text: String;
+}

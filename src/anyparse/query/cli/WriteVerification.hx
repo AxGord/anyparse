@@ -11,7 +11,11 @@ import haxe.io.Path;
 using Lambda;
 
 /** One configured build's answer about the written tree: the build as compiled, its verdict, every file it parsed (canonical). */
-typedef BuildAnswer = { final oracle: OracleConfig; final outcome: Null<OracleOutcome>; final parsed: Array<String>; }
+typedef BuildAnswer = {
+	final oracle: OracleConfig;
+	final outcome: Null<OracleOutcome>;
+	final parsed: Array<String>;
+}
 
 /**
  * The typecheck after a write command — the one answer to "did this write keep every configured build compiling, and

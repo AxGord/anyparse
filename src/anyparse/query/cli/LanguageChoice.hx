@@ -199,4 +199,7 @@ final class LanguageChoice {
 }
 
 /** What `LanguageChoice.choose` answers: the argv of each run, one per grammar the call reads, and stdin if it was read to decide. */
-typedef LanguageChoiceResult = { final runs: Array<Array<String>>; final stdin: Null<String>; };
+typedef LanguageChoiceResult = {
+	final runs: Array<Array<String>>;
+	final stdin: Null<String>;
+};

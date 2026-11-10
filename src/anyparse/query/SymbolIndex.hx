@@ -70,7 +70,10 @@ typedef ImportInfo = {
  * outranks a farther one for a simple name both bind — and because a consumer that reports or
  * rewrites such a statement needs the file its `span` belongs to.
  */
-typedef AmbientImportGroup = { var file: String; var imports: Array<ImportInfo>; }
+typedef AmbientImportGroup = {
+	var file: String;
+	var imports: Array<ImportInfo>;
+}
 
 /**
  * One top-level type declaration. `kind` is the grammar's decl-node
@@ -661,7 +664,10 @@ typedef FileInfo = {
 }
 
 /** The names one type's reifications spell (`FileInfo.reifications`). */
-typedef Reification = { final typeName: String; final names: Array<String>; }
+typedef Reification = {
+	final typeName: String;
+	final names: Array<String>;
+}
 
 /** One module-level value declaration of a file (`FileInfo.moduleFields`): its name, and the span of the node declaring it. */
 typedef ModuleField = {
@@ -699,7 +705,10 @@ typedef OverrideFamilyMember = {
  * `MemberPathWalk`, `TypeTraits` — are separate modules, and a module-private typedef is invisible
  * to them.
  */
-typedef ResolvedType = { var file: FileInfo; var type: TypeDeclInfo; };
+typedef ResolvedType = {
+	var file: FileInfo;
+	var type: TypeDeclInfo;
+};
 
 /**
  * The project-wide symbol index: a collection of per-file `FileInfo` records answering cross-file

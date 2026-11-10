@@ -694,7 +694,10 @@ private typedef OversizedCfg = {
 };
 
 /** One member declaration of a type, with the node whose DIRECT child it is — the type, or a `#if` region in it. */
-private typedef MemberAt = { final node: QueryNode; final host: QueryNode; };
+private typedef MemberAt = {
+	final node: QueryNode;
+	final host: QueryNode;
+};
 
 /** What `OversizedType.isConstant` reads for one file — resolved once, on the first type that needs it. */
 private typedef ConstantKit = {
@@ -724,4 +727,7 @@ private typedef OversizedGrant = {
 };
 
 /** What `OversizedType.readGrants` made of one config's `grants`: the accepted grants and one line per refused entry. */
-private typedef GrantList = { final granted: Array<OversizedGrant>; final problems: Array<String>; };
+private typedef GrantList = {
+	final granted: Array<OversizedGrant>;
+	final problems: Array<String>;
+};

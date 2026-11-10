@@ -134,7 +134,7 @@ enum HxType {
 	@:fmt(spaceBeforeTrail, propagateNestedType)
 	ConditionalType(c: HxConditionalType);
 	@:infix('->', 0, 'Right')
-	@:fmt(functionTypeHaxe3)
+	@:fmt(functionTypeHaxe3, clearTypedefContext)
 	Arrow(left: HxType, right: HxType);
 
 	/**
@@ -147,12 +147,13 @@ enum HxType {
 	 * in the `@:sep`-Star force-multi branch — without touching inline
 	 * anon-type uses (`var x:{a:Int}`), which never carry the flag.
 	 *
-	 * A typedef RHS body follows the `anonType` cascade like an inline anon
-	 * type hint: its source line breaks are not a layout signal, so a simple
-	 * body goes on one line and a complex one wraps by rule.
-	 * `@:fmt(forceMultiInTypedef)` only clears the typedef context per field,
-	 * drops the cascade indent and forces one field per line under a `Next`
-	 * left curly.
+	 * A typedef RHS body (an intersection operand included) is never laid out
+	 * from its source line breaks: two or more fields go one per line; a
+	 * one-field body, and an anon inside a type argument or parentheses,
+	 * follow the `anonType` cascade like an inline type hint.
+	 * `@:fmt(forceMultiInTypedef)` holds that rule, clears the typedef context
+	 * per field, drops the cascade indent and forces one field per line under
+	 * a `Next` left curly.
 	 */
 	@:trivia
 	@:lead('{')
@@ -164,6 +165,7 @@ enum HxType {
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
 		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);
+	@:fmt(clearTypedefContext)
 	ArrowFn(fn: HxArrowFnType);
 	@:wrap('(', ')')
 	@:fmt(propagateNestedType)

@@ -1112,7 +1112,10 @@ private typedef Head = {
 }
 
 /** A loop body's condition (null for an unfiltered count) and its sink's literal (null for `count`). */
-private typedef BodyShape = { var cond: Null<QueryNode>; var value: Null<Bool>; }
+private typedef BodyShape = {
+	var cond: Null<QueryNode>;
+	var value: Null<Bool>;
+}
 
 /**
  * A recovered loop of any direction: the node the finding anchors on, its
@@ -1139,7 +1142,10 @@ private typedef Cand = {
 }
 
 /** The declaration a FLAG-form fold re-emits: the bound name and its written annotation, if any. */
-private typedef Flag = { var name: String; var annotation: Null<String>; }
+private typedef Flag = {
+	var name: String;
+	var annotation: Null<String>;
+}
 
 /** The FLAG sink's spelling, threaded into `forIfHead` so one destructure serves both sinks. */
 private typedef FlagSink = {
@@ -1208,4 +1214,7 @@ private typedef Probes = {
 }
 
 /** What a name-mention scan masks: comment spans (for the qualifier test) and every byte that can neither bind nor read a name. */
-private typedef Masks = { var comments: Array<Span>; var inert: Array<Span>; }
+private typedef Masks = {
+	var comments: Array<Span>;
+	var inert: Array<Span>;
+}

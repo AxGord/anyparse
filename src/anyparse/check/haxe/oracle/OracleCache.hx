@@ -17,13 +17,21 @@ import haxe.io.Path;
  * job, because a bare hxml-include line and a `-cp` entry both resolve against the
  * process CWD rather than the including file's directory.
  */
-typedef HxmlRefs = { var classPaths: Array<String>; var libs: Array<String>; var includes: Array<String>; }
+typedef HxmlRefs = {
+	var classPaths: Array<String>;
+	var libs: Array<String>;
+	var includes: Array<String>;
+}
 
 /**
  * What one fingerprint (`OracleCache.scanned`) read: the fingerprint, the directories it walked, and every source it
  * hashed, by its absolute path, with the hash.
  */
-typedef OracleScan = { var fingerprint: String; var roots: Array<String>; var hashed: Map<String, String>; }
+typedef OracleScan = {
+	var fingerprint: String;
+	var roots: Array<String>;
+	var hashed: Map<String, String>;
+}
 
 /**
  * What one `haxe -v … --interp` probe reported about the toolchain: the classpath
@@ -32,14 +40,22 @@ typedef OracleScan = { var fingerprint: String; var roots: Array<String>; var ha
  * line) — a failed probe is memoised exactly like a successful one, so a machine
  * without a compiler pays the spawn once per process instead of once per lookup.
  */
-private typedef CompilerProbe = { var ok: Bool; var dirs: Array<String>; var defines: String; }
+private typedef CompilerProbe = {
+	var ok: Bool;
+	var dirs: Array<String>;
+	var defines: String;
+}
 
 /**
  * The hxml include chain of one compile input: a manifest line per hxml visited (in
  * discovery order) plus the union of the classpath roots and library names the chain
  * declares. Roots are absolute and normalised; library names are bare.
  */
-private typedef HxmlChain = { var lines: Array<String>; var classPaths: Array<String>; var libs: Array<String>; }
+private typedef HxmlChain = {
+	var lines: Array<String>;
+	var classPaths: Array<String>;
+	var libs: Array<String>;
+}
 
 /**
  * A CONTENT-ADDRESSED verdict cache for the report-mode compiler oracle: one

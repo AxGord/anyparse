@@ -330,4 +330,8 @@ typedef AnonCtx = {
 };
 
 /** One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes. */
-private typedef Occurrence = { final file: String; final at: Span; final source: String; };
+private typedef Occurrence = {
+	final file: String;
+	final at: Span;
+	final source: String;
+};

@@ -9,10 +9,16 @@ import haxe.ds.Either;
 using Lambda;
 
 /** One part of a declared sorted list: the file and the address (`Address` selector) of its array literal. */
-typedef SortedListPart = { final file: String; final select: String; }
+typedef SortedListPart = {
+	final file: String;
+	final select: String;
+}
 
 /** One string element of a part: its literal as written and its content between the quotes. */
-private typedef ListEntry = { final literal: String; final content: String; }
+private typedef ListEntry = {
+	final literal: String;
+	final content: String;
+}
 
 /** One part read off a source: its array's span, its entries, and the separators that frame them. */
 private typedef ReadPart = {

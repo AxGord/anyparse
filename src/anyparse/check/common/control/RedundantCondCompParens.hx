@@ -137,4 +137,7 @@ final class RedundantCondCompParens extends RuleBase {
 }
 
 /** One flagged site: the condition span the fix replaces, and the bare flag it replaces it with. */
-private typedef FlagParens = { final condition: Span; final flag: String; };
+private typedef FlagParens = {
+	final condition: Span;
+	final flag: String;
+};

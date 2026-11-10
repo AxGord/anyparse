@@ -1762,7 +1762,11 @@ typedef WriterRule = {
  * keyword field's meta, which says nothing about what the body did. Null on
  * every path with no such knob.
  */
-typedef PrevBodyInfo = { access: Expr, typePath: String, ?headGlue: Null<Expr> };
+typedef PrevBodyInfo = {
+	access: Expr,
+	typePath: String,
+	?headGlue: Null<Expr>
+};
 /**
  * One struct field's per-iteration metadata, produced by `readFieldMeta` and
  * consumed by `lowerStruct`'s field-emit branches.
@@ -1789,7 +1793,11 @@ typedef FieldMeta = {
  * `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)` args in
  * `readCascadeInfosFromStar`.
  */
-typedef TransparentEntry = { final ctors: Array<String>; var tailAdapter: Null<String>; var headAdapter: Null<String>; };
+typedef TransparentEntry = {
+	final ctors: Array<String>;
+	var tailAdapter: Null<String>;
+	var headAdapter: Null<String>;
+};
 /**
  * Shared inputs for `sameLineSeparatorShapeAware` — the shape-aware
  * tail extracted from `sameLineSeparator`. Bundles the >5 scalars the
@@ -2095,7 +2103,11 @@ typedef StaticVarSubdivisionInfo = {
  * binding the single ctor arg; `bodyFieldName` is the trivia Star field on
  * that arg whose `[0].leadingComments` is scanned.
  */
-typedef CondLeadingDocLookThroughInfo = { classifierFieldName: String, condCasePattern: Expr, bodyFieldName: String };
+typedef CondLeadingDocLookThroughInfo = {
+	classifierFieldName: String,
+	condCasePattern: Expr,
+	bodyFieldName: String
+};
 
 /**
  * ω-after-package — resolved data for
@@ -2171,7 +2183,11 @@ typedef AfterCtorBlankInfo = {
  * first" are the same boundary at a Star's head, and the source-driven
  * binary blank-line slot does not apply at index 0 either way.
  */
-typedef HeadCtorBlankInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
+typedef HeadCtorBlankInfo = {
+	classifierFieldName: String,
+	classifyCases: Array<Case>,
+	optField: String
+};
 
 /**
  * ω-between-single-line-types — resolved data for
@@ -2205,7 +2221,11 @@ typedef HeadCtorBlankInfo = { classifierFieldName: String, classifyCases: Array<
  * still fires `betweenSingleLineTypes` even when an unrelated
  * before-ctor rule would otherwise apply.
  */
-typedef BetweenSameCtorIfNotInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
+typedef BetweenSameCtorIfNotInfo = {
+	classifierFieldName: String,
+	classifyCases: Array<Case>,
+	optField: String
+};
 /**
  * Shared parser-context locals bundled for the `lowerEnumBranch`
  * per-shape emission helpers (ternary / infix / prefix / postfix /
@@ -2421,12 +2441,19 @@ typedef SepStarKeepCurly = {
  * Output bundle of `triviaSepKeepCurlyOpenClose` — the open/close-side
  * Keep-mode curly-blank Expr fragments.
  */
-typedef SepStarKeepCurlyOC = { final keepCurlyBeginExpr: Expr; final keepCurlyEndExpr: Expr; };
+typedef SepStarKeepCurlyOC = {
+	final keepCurlyBeginExpr: Expr;
+	final keepCurlyEndExpr: Expr;
+};
 /**
  * Output bundle of `triviaSepTypedefBlankInserts` — the typedef-RHS forced
  * blank-insert Expr fragments (begin/end/between).
  */
-typedef SepStarTypedefInserts = { final typedefBeginExpr: Expr; final typedefEndExpr: Expr; final typedefBetweenExpr: Expr; };
+typedef SepStarTypedefInserts = {
+	final typedefBeginExpr: Expr;
+	final typedefEndExpr: Expr;
+	final typedefBetweenExpr: Expr;
+};
 /**
  * Input bundle for `triviaSepDispatchExpr` — the spliced Expr fragments +
  * compile-time flags the non-empty-list dispatch block needs to derive the
@@ -2500,7 +2527,10 @@ typedef SepStarNoTriviaCtx = {
  * because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the
  * lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
  */
-typedef SepStarMapWrap = { final field: String; final isMapLiteralExpr: Expr; };
+typedef SepStarMapWrap = {
+	final field: String;
+	final isMapLiteralExpr: Expr;
+};
 /**
  * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /
  * force-exceeds / force-mode / keep-matrix Expr fragments the sep-Star tail
@@ -2579,6 +2609,12 @@ typedef TryparseStarCtx = {
 	final regionSeams: Bool;
 	final siblingSlot: Null<Array<String>>;
 	final belowWrappedLabel: Bool;
+
+	/** The host list puts each element on a line of its own, so the body does too (`@:fmt(elementPerLine)`). */
+	final elementPerLine: Bool;
+
+	/** `@:fmt(siblingPad(fn, knob))`: the body's pads are slots its region's sibling branches decide together, or null. */
+	final siblingPad: Null<Array<String>>;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
 
@@ -2754,7 +2790,11 @@ typedef BetweenCtorBlankInfo = {
  * =true` → adapter-call case body filtered by per-info ctorNames.
  * Both `false` → kind=0/path='' (unmatched fallback).
  */
-typedef BetweenCtorPattern = { pattern: Expr, isMatch: Bool, isTransparent: Bool };
+typedef BetweenCtorPattern = {
+	pattern: Expr,
+	isMatch: Bool,
+	isTransparent: Bool
+};
 
 /**
  * ω-imports-using-transition — resolved data for
@@ -2804,14 +2844,20 @@ typedef TransitionAcrossInfo = {
  * `subset`: 1 = matched in subset A, 2 = matched in subset B, 3 =
  * transparent wrapper, 0 = unmatched.
  */
-typedef TransitionAcrossPattern = { pattern: Expr, subset: Int };
+typedef TransitionAcrossPattern = {
+	pattern: Expr,
+	subset: Int
+};
 
 /**
  * The two ctor subsets split out of the `@:fmt(blankLinesOnTransitionAcross)`
  * arg list (around the `"|"` separator) after pre-loop validation, returned
  * by `splitTransitionAcrossCtors`.
  */
-typedef TransitionAcrossSplit = { final ctorNamesA: Array<String>; final ctorNamesB: Array<String>; };
+typedef TransitionAcrossSplit = {
+	final ctorNamesA: Array<String>;
+	final ctorNamesB: Array<String>;
+};
 
 /**
  * Parameters for `buildTransitionAcrossPatterns` — the classifier enum
@@ -2846,7 +2892,11 @@ typedef TransitionAcrossPatterns = {
  * one helper keeps shape-validation messages and the classifier-lookup
  * path in sync between the two knobs.
  */
-typedef CtorBlankResolution = { fieldName: String, cases: Array<Case>, optField: String };
+typedef CtorBlankResolution = {
+	fieldName: String,
+	cases: Array<Case>,
+	optField: String
+};
 /**
  * Shared setup locals bundled for the `lowerEnumStar` emission helpers
  * (`lowerEnumStarTrivia` / `lowerEnumStarPlain`). Replaces a >5-scalar
@@ -3007,7 +3057,10 @@ typedef TriviaBlockInfos = {
  * `WriterLowering.buildTryparseSepOverrides`, bundled so the tryparse dispatch
  * takes one value instead of two separate locals.
  */
-typedef TryparseSepOverrides = { final firstSepOverride: Null<Expr>; final subsequentSepOverride: Null<Expr>; };
+typedef TryparseSepOverrides = {
+	final firstSepOverride: Null<Expr>;
+	final subsequentSepOverride: Null<Expr>;
+};
 
 /**
  * Synth-ctor positional-arg slot kind for `altSlotAccess`. Order MUST

@@ -6,7 +6,11 @@ import anyparse.query.SymbolIndex;
 import anyparse.util.Strings;
 
 /** One comment token as `RefactorSupport.collectCommentTokens` yields it: its span, and whether it is a `//` line comment. */
-private typedef CommentToken = { var from: Int; var to: Int; var isLine: Bool; }
+private typedef CommentToken = {
+	var from: Int;
+	var to: Int;
+	var isLine: Bool;
+}
 
 /**
  * Flags a content-free comment — a line comment with only whitespace after the

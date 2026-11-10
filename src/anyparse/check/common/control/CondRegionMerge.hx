@@ -358,7 +358,11 @@ final class CondRegionMerge extends RuleBase {
  * its `#end`. Indices rather than directives because a region is paired with its neighbour by
  * adjacency in that same array.
  */
-private typedef CondRegion = { final open: Int; final branches: Array<Int>; var close: Int; };
+private typedef CondRegion = {
+	final open: Int;
+	final branches: Array<Int>;
+	var close: Int;
+};
 
 /**
  * One mergeable boundary: `boundary` is the reported span (the `#end` through the following `#if`),

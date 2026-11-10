@@ -274,7 +274,10 @@ private typedef StaticImport = {
 }
 
 /** The use sites of a bare name: calls with the name as callee, and whether any other use exists. */
-private typedef Uses = { final calls: Array<QueryNode>; var other: Bool; }
+private typedef Uses = {
+	final calls: Array<QueryNode>;
+	var other: Bool;
+}
 
 /** One reported import: the reason it is report-only, or the full edit set (call rewrites plus the import's deletion). */
 private typedef Finding = {

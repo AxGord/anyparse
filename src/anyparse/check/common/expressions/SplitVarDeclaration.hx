@@ -294,4 +294,8 @@ private typedef Seams = {
 }
 
 /** A splittable declaration: the statement span (finding key and replaced range), its binding count, and the rebuilt text. */
-private typedef Match = { var span: Span; var count: Int; var text: String; }
+private typedef Match = {
+	var span: Span;
+	var count: Int;
+	var text: String;
+}

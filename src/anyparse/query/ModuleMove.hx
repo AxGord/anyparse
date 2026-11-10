@@ -28,13 +28,20 @@ import haxe.io.Path;
 using Lambda;
 
 /** One module to relocate: the file it is and the file it becomes (same name, another directory). */
-typedef ModuleRelocation = { final from: String; final to: String; }
+typedef ModuleRelocation = {
+	final from: String;
+	final to: String;
+}
 
 /**
  * A declared test layout: a module under `source` has its tests under `test` at the same relative directory, named
  * after the module plus one of `suffixes`. A relocated module's test relocates with it.
  */
-typedef TestMirror = { final source: String; final test: String; final suffixes: Array<String>; }
+typedef TestMirror = {
+	final source: String;
+	final test: String;
+	final suffixes: Array<String>;
+}
 
 /** Everything one relocation reads: the modules to move, the analysed modules, and the declared non-module texts. */
 typedef ModuleMoveRequest = {
@@ -84,7 +91,10 @@ private typedef PlannedMove = {
 }
 
 /** A module's `using` statements in Haxe's ranking order: its ambient chain's, outermost first, then its own. */
-private typedef UsingOrder = { final chain: Array<String>; final own: Array<String>; }
+private typedef UsingOrder = {
+	final chain: Array<String>;
+	final own: Array<String>;
+}
 
 /**
  * Relocate whole MODULES to another package — every type of the module, its module-private ones included, travels with

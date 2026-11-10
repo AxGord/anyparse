@@ -4,4 +4,8 @@ package anyparse.query.format.json;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef FactVarRecord = { final n: String; final t: String; final p: Array<Int>; }
+typedef FactVarRecord = {
+	final n: String;
+	final t: String;
+	final p: Array<Int>;
+}

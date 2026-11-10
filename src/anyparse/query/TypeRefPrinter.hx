@@ -17,7 +17,10 @@ using Lambda;
  * accumulates the `importPath`s it hands out and materialises them through
  * `pendingImportEdits`, so a caller never splices an import per reference.
  */
-typedef PrintedTypeRef = { var text: String; var importPath: Null<String>; }
+typedef PrintedTypeRef = {
+	var text: String;
+	var importPath: Null<String>;
+}
 
 /**
  * One pending `import <path>;` insert: the zero-width `span` to splice at, the statement `text`
@@ -26,7 +29,11 @@ typedef PrintedTypeRef = { var text: String; var importPath: Null<String>; }
  * single edit, so `paths` is what tells a caller which use sites the edit is inseparable from
  * (see `anyparse.check.Check.GroupedFix`); a caller that only splices the edit ignores it.
  */
-typedef PendingImportEdit = { var span: Span; var text: String; var paths: Array<String>; }
+typedef PendingImportEdit = {
+	var span: Span;
+	var text: String;
+	var paths: Array<String>;
+}
 
 @:access(anyparse.query.ModuleScan)
 @:nullSafety(Strict)

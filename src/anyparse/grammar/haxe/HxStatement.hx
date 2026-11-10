@@ -146,7 +146,7 @@ enum HxStatement {
 	ErrorStmt(message: HxErrorMsg);
 	@:kw('#if')
 	@:trail('#end')
-	@:fmt(sharpCondParensGap, conditionalMarkerDedent)
+	@:fmt(sharpCondParensGap, conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
 	Conditional(inner: HxConditionalStmt);
 
 	/**

@@ -858,4 +858,8 @@ private typedef AssignGuard = {
 }
 
 /** One type declaration's lexical extent: the span it covers, the node hosting its members, and whether `extern` marks it. */
-private typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern: Bool; }
+private typedef TypeScope = {
+	var span: Span;
+	var host: QueryNode;
+	var isExtern: Bool;
+}

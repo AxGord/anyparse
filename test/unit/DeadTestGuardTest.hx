@@ -176,4 +176,7 @@ class DeadTestGuardTest extends Test {
 }
 
 /** One conditional-compilation guard the running build cannot prove live: its 1-based line and its verbatim directive text. */
-private typedef UnprovenGuard = { final line: Int; final text: String; };
+private typedef UnprovenGuard = {
+	final line: Int;
+	final text: String;
+};

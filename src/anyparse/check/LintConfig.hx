@@ -22,17 +22,27 @@ using StringTools;
  * stays a raw `JValue` — the bag is rule-specific, so the typed accessors on
  * `LintConfig` narrow each one per read.
  */
-typedef RuleConfig = { var ?enabled: Bool; var ?severity: Severity; var props: Map<String, JValue>; }
+typedef RuleConfig = {
+	var ?enabled: Bool;
+	var ?severity: Severity;
+	var props: Map<String, JValue>;
+}
 
 /**
  * What ONE `apq.json` document says about enablement: its `rules` entries' switches by rule id and its
  * `categories` switches by category id. A config keeps one per document of its chain, nearest first, because the
  * nearest document that names a rule or its category decides it (`LintConfig.switchFor`).
  */
-typedef RuleSwitches = { var rules: Map<String, Bool>; var categories: Map<String, Bool>; }
+typedef RuleSwitches = {
+	var rules: Map<String, Bool>;
+	var categories: Map<String, Bool>;
+}
 
 /** A config's word on one rule: whether it runs, and whether a `categories` entry rather than the rule's own entry said so. */
-typedef RuleSwitch = { var on: Bool; var byCategory: Bool; }
+typedef RuleSwitch = {
+	var on: Bool;
+	var byCategory: Bool;
+}
 
 /**
  * ONE compiler-oracle configuration: the hxml to typecheck, the directory that compile runs
@@ -113,7 +123,10 @@ typedef OracleGenerate = {
  * A discovered config together with the `apq.json` documents it was folded from, nearest
  * first; `chain` is empty when no document applies and the config is the builtin defaults.
  */
-typedef DiscoveredConfig = { var config: LintConfig; var chain: Array<String>; }
+typedef DiscoveredConfig = {
+	var config: LintConfig;
+	var chain: Array<String>;
+}
 
 /**
  * Project-level lint configuration, read from an `apq.json` discovered by

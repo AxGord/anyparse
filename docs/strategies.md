@@ -110,11 +110,11 @@ breakAfterLeadOnOverflow(…), callArgChainNest, callParens, callParensInside, c
 capturePostfixOpSpace, captureRhsTrail, captureSource(…),
 captureSourceNewlineAfter, captureTernaryTrail, captureTrailComment, captureWrapOpenNewline,
 catchParensGap, catchParensInsideClose, chainNestSuppress,
-clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, compactUnlessNested, complexItems, condExprFitBreak,
+clearElseIfBranch, clearExprPosition, clearExprPositionNonTail, clearTypedefContext, compactUnlessNested, complexItems, condExprFitBreak,
 condExprFitGroup, conditionalBodyIndent, conditionalMarkerDedent, condParensInside(…),
 condSpliceCaseMarkerDedent, condSwitchOpenCasesNest, condWrap(…), condWrapEnd, constructFitBody,
 constructFitGroup(…), constructFitSep, ctorKwTrivia, cuddle, deferKwSpace, dropSingleStmtBraces, elemSelfTrailsNewline,
-elemChainOp(…), elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields(…),
+elemChainOp(…), elementPerLine, elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields(…),
 expressionParenHardFlatten, fillItems, fillParts, fillSeam, fitLineIfWithElse, flatChildOpt(…), forceInlineSep,
 forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3,
 gapRule(…), groupRestProbe, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
@@ -131,7 +131,7 @@ propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, pro
 propagateValueIfBranch, reflowCtorOnFitLine(…), reflowFrameThroughWrap(…), reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
 refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightCurlyAnonFnOverride(…), sameLine(…),
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
-sharpCondParensGap, sharpCondParensInside(…), siblingLead(…), siblingShare(…), siblingSlot(…),
+sharpCondParensGap, sharpCondParensInside(…), siblingLead(…), siblingPad(…), siblingShare(…), siblingSlot(…),
 softFill, space(…), spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
 staticVarSubdivision(…), suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
 switchCondParensInsideClose, switchPolicy, switchSubjectNoWrap,
@@ -166,9 +166,10 @@ The hooked shapes, and nothing else is hooked yet:
 | `listLayout('<fn>', '<knob>')` | `@:trivia @:tryparse` Stars (`TriviaTryparseLowering`) | the item Docs (never empty: the macro writes nothing for an empty list), the indent step, the `WrapRules` named by `<knob>`, the line width | the list's Doc | `anyparse.format.wrap.ClauseWrap.layout` |
 | `gapRule('<fn>', '<knob>')` | `@:trivia @:trail` block Stars (`WriterBlankLowering`) | the element Doc, the previous element's Doc, the count named by `<knob>`, the options | the number of blank lines to open | `anyparse.format.MemberGap.aroundMultiline` |
 | `belowWrappedLabel` | a tryparse Star (the body) under a `FitLine` policy | the struct records its first line (`anyparse.core.LineSpan`) | the body goes below a head that took more than one line | `sameLine.caseBody`, `sameLine.expressionCase` |
-| `siblingShare('<fn>', '<knob>')` | block Stars (the list) | the list's finished Doc, the value of `<knob>`, the line width | the Doc with one verdict in every sibling | `anyparse.format.SiblingShare.decide` for `sameLine.caseSiblings` |
+| `siblingShare('<fn>', '<knob>')` | block Stars (the list); a `#if` region's constructor (`WriterKwRefLowering`) | the list's finished Doc, the value of `<knob>`, the line width | the Doc with one verdict in every sibling | `anyparse.format.SiblingShare.decide` for `sameLine.caseSiblings` |
 | `siblingSlot('<placed fn>', '<fit fn>', '<knob>')` | tryparse Stars (the body) | `<placed fn>`, for a body below its head: the value of `<knob>`, whether the body's policy is `FitLine`, the body's Doc, the statement count, whether a sole statement could stand beside the head by shape, the last statement's Doc (or null), whether its glued form is refused. `<fit fn>`, for a `FitLine` body: the value of `<knob>`, the indent step, the body's Doc, whether a glued body nests, the line width, whether glue is refused, `belowWrappedLabel` | the body's slot | `anyparse.format.SiblingShare.bodySlot`, `fitLineSlot` |
 | `siblingLead('<fn>', '<knob>')` | tryparse Stars (a region that always leads) | the value of `<knob>`, `true`, the Star's Doc | the region's slot | `anyparse.format.SiblingShare.placedSlot` |
+| `siblingPad('<fn>', '<knob>')` | tryparse Stars (a `#if` region branch's body, its leading and trailing pad) | the value of `<knob>`, whether the pad is a line break by shape, its broken Doc, its glued Doc | the pad's slot | `anyparse.format.SiblingShare.padSlot` for `conditionalSiblings` |
 
 The sibling hooks take plain arguments, never a record, because they run per branch. `anyparse.macro.SiblingScope` reads the
 knob from the last argument and stops the build on a slot no sharing list holds. A wrong argument count has no named refusal: the

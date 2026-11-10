@@ -413,9 +413,16 @@ private typedef Cast = {
 }
 
 /** The casts of one group a function binds once (`homes`). */
-private typedef Home = { final unit: QueryNode; final occ: Array<Cast>; }
+private typedef Home = {
+	final unit: QueryNode;
+	final occ: Array<Cast>;
+}
 
-private typedef Finding = { final span: Span; final message: String; final edits: Array<FixEdit>; }
+private typedef Finding = {
+	final span: Span;
+	final message: String;
+	final edits: Array<FixEdit>;
+}
 
 private typedef Scan = {
 

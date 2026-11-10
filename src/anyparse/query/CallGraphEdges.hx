@@ -1580,12 +1580,26 @@ private typedef MethodRef = {
  * What a bare use of a name its module declares a value of may run, by the builds compiling it (`moduleBinding`): each
  * function, and why a build's is not one the graph holds — a value it calls, or an import the index cannot list.
  */
-private typedef ModuleBinding = { var targets: Array<String>; var unresolved: Null<UnresolvedReason>; }
+private typedef ModuleBinding = {
+	var targets: Array<String>;
+	var unresolved: Null<UnresolvedReason>;
+}
 
 /** What a call or `new` site resolved to: the target, and the receiver expression a call through a field access was made on. */
-private typedef CallSite = { var target: Null<String>; var receiver: Null<QueryNode>; }
+private typedef CallSite = {
+	var target: Null<String>;
+	var receiver: Null<QueryNode>;
+}
 
-private typedef Receiver = { var typeName: String; var isValue: Bool; var isDynamic: Bool; }
+private typedef Receiver = {
+	var typeName: String;
+	var isValue: Bool;
+	var isDynamic: Bool;
+}
 
 /** A call's resolved target, and the written type and type of the receiver it was made on (null for a bare call). */
-private typedef CallTarget = { var target: String; var receiverSource: Null<String>; var onType: Null<String>; }
+private typedef CallTarget = {
+	var target: String;
+	var receiverSource: Null<String>;
+	var onType: Null<String>;
+}

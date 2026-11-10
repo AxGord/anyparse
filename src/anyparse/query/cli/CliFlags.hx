@@ -196,10 +196,16 @@ final class CliFlags {
 }
 
 /** A flag whose next token is its value only when `accepts` says so; otherwise it stands alone. */
-typedef OptionalValueFlag = { var name: String; var accepts: String -> Bool; };
+typedef OptionalValueFlag = {
+	var name: String;
+	var accepts: String -> Bool;
+};
 
 /** A valued flag that takes the `count` tokens after it, not just the next one. */
-typedef MultiValueFlag = { var name: String; var count: Int; };
+typedef MultiValueFlag = {
+	var name: String;
+	var count: Int;
+};
 
 /** What a bare `--` in argv is to a command. */
 enum CliSeparator {
@@ -216,4 +222,8 @@ enum CliSeparator {
 }
 
 /** What `CliFlags.scan` read: every token it placed, the first undeclared `--word`, a valued flag argv ended on. */
-private typedef CliScan = { var args: Array<CliArg>; var unknown: Null<String>; var valueless: Null<String>; };
+private typedef CliScan = {
+	var args: Array<CliArg>;
+	var unknown: Null<String>;
+	var valueless: Null<String>;
+};

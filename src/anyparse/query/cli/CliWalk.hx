@@ -664,7 +664,11 @@ final class CliWalk {
  * searched-for content (warning critical) or far past it (can ignore)
  * without a follow-up `hxq ast <path>` probe.
  */
-typedef SkipEntry = { path: String, locus: String };
+typedef SkipEntry = {
+	path: String,
+	locus: String
+};
+
 /**
  * One walk's skip-parse entry together with the RAW SOURCE it came from — the pair
  * `skipsFor` needs to decide which queries of a batch may be told about it.
@@ -673,4 +677,7 @@ typedef SkipEntry = { path: String, locus: String };
  * re-reading a file to answer a diagnostic would make a 0-hit nudge cost a second
  * pass over the failures.
  */
-typedef QuerySkip = { var source: String; var entry: SkipEntry; };
+typedef QuerySkip = {
+	var source: String;
+	var entry: SkipEntry;
+};

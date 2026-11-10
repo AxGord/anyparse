@@ -1,13 +1,19 @@
 package anyparse.query;
 
 /** A line of the OLD text that is gone, and the index of the NEW line it sat before. */
-typedef DeletedLine = { final line: Int; final before: Int; };
+typedef DeletedLine = {
+	final line: Int;
+	final before: Int;
+};
 
 /**
  * The lines one text changed against another: every line of the NEW text that is not part of the
  * common subsequence, and every line of the OLD text that is gone, with the new line it sat before.
  */
-typedef LineEdits = { final inserted: Array<Int>; final deleted: Array<DeletedLine>; };
+typedef LineEdits = {
+	final inserted: Array<Int>;
+	final deleted: Array<DeletedLine>;
+};
 
 /**
  * A line-granular diff — Myers' shortest edit script over the lines between the common head and

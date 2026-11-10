@@ -802,4 +802,8 @@ private typedef LengthSource = {
 }
 
 /** A `static final` member's initializer, the source it lives in and its type's simple name — what a reference folds to. */
-private typedef Constant = { var value: QueryNode; var source: String; var owner: String; }
+private typedef Constant = {
+	var value: QueryNode;
+	var source: String;
+	var owner: String;
+}

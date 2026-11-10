@@ -15,7 +15,7 @@ import haxe.macro.Context;
  */
 final class SiblingScope {
 
-	private static final SLOT_FLAGS: Array<String> = ['siblingSlot', 'siblingLead'];
+	private static final SLOT_FLAGS: Array<String> = ['siblingSlot', 'siblingLead', 'siblingPad'];
 
 	/** Stops the build when a slot of any knob is reachable from the root outside a list sharing that knob. */
 	public static function requireShared(shape: ShapeBuilder.ShapeResult): Void {
@@ -54,7 +54,7 @@ final class SiblingScope {
 	private static function unsharedPath(
 		node: ShapeNode, knob: String, rules: Map<String, ShapeNode>, entered: Map<String, Bool>, path: Array<String>
 	): Null<Array<String>> {
-		if (node.kind == ShapeKind.Star && MetaInspect.hasMeta(node, ':trivia') && hookKnob(node, 'siblingShare') == knob) return null;
+		if (hookKnob(node, 'siblingShare') == knob && sharesSlots(node)) return null;
 		for (flag in SLOT_FLAGS) if (hookKnob(node, flag) == knob) return path;
 		for (child in node.children) {
 			final found: Null<Array<String>> = unsharedPath(child, knob, rules, entered, path.concat(step(child)));
@@ -81,6 +81,16 @@ final class SiblingScope {
 
 	private static function simpleName(typePath: String): String {
 		return typePath.substr(typePath.lastIndexOf('.') + 1);
+	}
+
+	/**
+	 * Whether a node's `siblingShare` is one the writer applies: a `@:trivia` Star's over its elements, or a one-Ref
+	 * constructor's over its region (`WriterKwRefLowering`); a constructor over a Star takes another emit path, which never does.
+	 */
+	private static function sharesSlots(node: ShapeNode): Bool {
+		return node.kind == ShapeKind.Star
+			? MetaInspect.hasMeta(node, ':trivia')
+			: node.children.length == 1 && node.children[0].kind == ShapeKind.Ref;
 	}
 
 }

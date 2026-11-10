@@ -1,5 +1,11 @@
 typedef Inner = { x: Int };
-typedef Outer = { a: Int, inner: Inner, ?list: Array<Int> };
+
+typedef Outer = {
+	a: Int,
+	inner: Inner,
+	?list: Array<Int>
+};
+
 typedef Alias = Outer;
 typedef WithFinal = { final a: Int; };
 

@@ -167,7 +167,7 @@ enum HxDecl {
 	 */
 	@:kw('#if')
 	@:trail('#end')
-	@:fmt(conditionalMarkerDedent)
+	@:fmt(conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
 	Conditional(inner: HxConditionalDecl);
 
 	/**

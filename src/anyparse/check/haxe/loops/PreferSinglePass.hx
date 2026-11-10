@@ -273,9 +273,17 @@ private typedef Chain = {
 }
 
 /** A lambda of one plain parameter and an expression body. */
-private typedef Arrow = { final binder: String; final body: QueryNode; final bodySpan: Span; }
+private typedef Arrow = {
+	final binder: String;
+	final body: QueryNode;
+	final bodySpan: Span;
+}
 
-private typedef Finding = { final span: Span; final message: String; final text: Null<String>; }
+private typedef Finding = {
+	final span: Span;
+	final message: String;
+	final text: Null<String>;
+}
 
 private typedef Seams = {
 	final callKind: String;

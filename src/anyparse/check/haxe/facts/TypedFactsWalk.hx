@@ -1300,9 +1300,21 @@ private enum FactUse {
  * A local a `var` declares: the node that declared it, the uses its reads made, as `useText`,
  * and the locals of that node a read of it was stored in, whose reads are uses of its value too.
  */
-private typedef Alias = { final owner: String; final uses: Array<String>; final links: Array<Int>; }
+private typedef Alias = {
+	final owner: String;
+	final uses: Array<String>;
+	final links: Array<Int>;
+}
 /** A field chain rooted at a native identifier (`TypedFactsWalk.nativeChain`): the identifier, its text, what a call through it hands. */
-private typedef NativeChain = { final root: TypedExpr; final text: String; final handed: Array<TypedExpr>; }
+private typedef NativeChain = {
+	final root: TypedExpr;
+	final text: String;
+	final handed: Array<TypedExpr>;
+}
 /** A call of a field as `TypedFactsWalk.fieldCall` records it: its fact, and the method `to` taking its arguments, called `via`. */
-private typedef FieldCall = { final fact: String; final to: Null<String>; final via: String; }
+private typedef FieldCall = {
+	final fact: String;
+	final to: Null<String>;
+	final via: String;
+}
 #end

@@ -319,7 +319,14 @@ private typedef Seams = {
 }
 
 /** One target of a matched site: its then-branch assignment, that assignment's literal, and which value it carries. */
-private typedef Pair = { var assign: QueryNode; var rhs: QueryNode; var positive: Bool; }
+private typedef Pair = {
+	var assign: QueryNode;
+	var rhs: QueryNode;
+	var positive: Bool;
+}
 
 /** A matched if/else: the condition, and one `Pair` per assigned target in branch order. */
-private typedef Match = { var condition: QueryNode; var pairs: Array<Pair>; }
+private typedef Match = {
+	var condition: QueryNode;
+	var pairs: Array<Pair>;
+}

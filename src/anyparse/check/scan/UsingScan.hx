@@ -590,7 +590,11 @@ enum abstract UsingScope(Int) {
 }
 
 /** A type a `using` brings, with the path it is imported by and the file declaring it. */
-private typedef UsedType = { final path: String; final type: TypeDeclInfo; final file: FileInfo; };
+private typedef UsedType = {
+	final path: String;
+	final type: TypeDeclInfo;
+	final file: FileInfo;
+};
 
 /** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
 enum abstract UsingConflict(Int) {

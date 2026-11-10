@@ -12,7 +12,10 @@ using Lambda;
  * before component search so it does not glue unrelated members into one
  * blob. `fanIn` is the number of DISTINCT member callers within the type.
  */
-typedef ClusterHub = { var id: String; var fanIn: Int; }
+typedef ClusterHub = {
+	var id: String;
+	var fanIn: Int;
+}
 
 /**
  * Aggregated member-level edge: all call sites of one `kind` from `from`

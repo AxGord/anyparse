@@ -1824,16 +1824,27 @@ final class FactsView {
 typedef FactsSource = (scope:ReachProject, configurations:Null<Array<ReachConfiguration>>) -> Null<FactsView>;
 
 /** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
-typedef TruthSites = { final natives: Array<NativeFact>; final reflection: Array<ReflectionFact>; }
+typedef TruthSites = {
+	final natives: Array<NativeFact>;
+	final reflection: Array<ReflectionFact>;
+}
 
 /**
  * What code hands the target code of extern members (`FactsView.externCalls`): the type of each value an argument hands
  * it, each call's receiver (null for none), and how many calls and constructions of them there are.
  */
-typedef ExternCalls = { final handed: Array<String>; final receivers: Array<Null<String>>; final count: Int; }
+typedef ExternCalls = {
+	final handed: Array<String>;
+	final receivers: Array<Null<String>>;
+	final count: Int;
+}
 
 /** The conditional compilation of a text: its directives, its top-level regions, and whether a region never closes. */
-private typedef ConditionalText = { final directives: Array<Span>; final regions: Array<Span>; final whole: Bool; }
+private typedef ConditionalText = {
+	final directives: Array<Span>;
+	final regions: Array<Span>;
+	final whole: Bool;
+}
 
 /** A typed type's declaration as the compile read it: its file (a table key), the text, its range, the index's reading. */
 private typedef TypeText = {
@@ -1847,7 +1858,11 @@ private typedef TypeText = {
  * A declaration of a type the index holds (`FactsView.declarationsNamed`): its package-qualified id as the index spells it,
  * its file's table key, and whether a build read that file.
  */
-private typedef IndexedDeclaration = { final id: String; final key: String; final read: Bool; }
+private typedef IndexedDeclaration = {
+	final id: String;
+	final key: String;
+	final read: Bool;
+}
 
 /**
  * The members an implicit call of one family runs (`FactsView.implicitUnheld`), as the facts spell them: the methods it calls

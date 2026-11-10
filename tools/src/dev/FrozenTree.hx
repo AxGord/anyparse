@@ -4,4 +4,7 @@ package dev;
 @:peg
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
-typedef FrozenTree = { var dir: String; var digest: String; }
+typedef FrozenTree = {
+	var dir: String;
+	var digest: String;
+}

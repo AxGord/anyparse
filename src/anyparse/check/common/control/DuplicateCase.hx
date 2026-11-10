@@ -131,4 +131,7 @@ final class DuplicateCase extends RuleBase {
 }
 
 /** The two kinds `duplicate-case` walks by: a case branch, and the conditional region whose branches are alternatives. */
-private typedef CaseSeams = { final caseBranchKind: String; final conditionalKind: Null<String>; };
+private typedef CaseSeams = {
+	final caseBranchKind: String;
+	final conditionalKind: Null<String>;
+};

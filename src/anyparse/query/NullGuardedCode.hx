@@ -781,7 +781,10 @@ final class NullGuardedCode {
 }
 
 /** A file's text and its tree (`NullGuardedCode.parsed`). */
-private typedef ParsedText = { final source: String; final tree: QueryNode; }
+private typedef ParsedText = {
+	final source: String;
+	final tree: QueryNode;
+}
 
 /** A parameter of a member method: the method's type's simple name and its own, the parameter's position and their count. */
 private typedef MemberParam = {

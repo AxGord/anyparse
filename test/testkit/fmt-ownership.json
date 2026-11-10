@@ -14,6 +14,7 @@
 	],
 	"SiblingScope": [
 		"siblingLead",
+		"siblingPad",
 		"siblingShare",
 		"siblingSlot"
 	],
@@ -62,6 +63,7 @@
 		"arrowValueIfReflow"
 	],
 	"WriterBlankLowering": [
+		"clearTypedefContext",
 		"propagateArrowLambdaBody",
 		"propagateExprPosition"
 	],
@@ -128,6 +130,7 @@
 		"bodyPolicySingleLine",
 		"captureSource",
 		"clearExprPosition",
+		"clearTypedefContext",
 		"condExprFitGroup",
 		"condSpliceCaseMarkerDedent",
 		"conditionalMarkerDedent",
@@ -143,6 +146,7 @@
 		"propagateNestedType",
 		"reflowFrameThroughWrap",
 		"sharpCondParensGap",
+		"siblingShare",
 		"spaceAfterLead",
 		"spaceBeforeLead",
 		"spaceBeforeTrail",
@@ -383,6 +387,7 @@
 		"conditionalBodyIndent",
 		"constructFitSep",
 		"elemSelfTrailsNewline",
+		"elementPerLine",
 		"fillItems",
 		"flatChildOpt",
 		"forceInlineSep",
@@ -399,6 +404,7 @@
 		"sameLine",
 		"sepBeforeOpt",
 		"siblingLead",
+		"siblingPad",
 		"siblingShare",
 		"siblingSlot"
 	]

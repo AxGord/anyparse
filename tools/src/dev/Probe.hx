@@ -486,7 +486,10 @@ final class Probe {
 }
 
 /** A kit: its invocations as `dev parity` runs them, and the case beside each. */
-typedef Kit = { var invocations: Array<Invocation>; var cases: Array<ProbeCase>; }
+typedef Kit = {
+	var invocations: Array<Invocation>;
+	var cases: Array<ProbeCase>;
+}
 
 /**
  * What a kit holds beside one invocation: how its fixture is compiled afterwards, what the recording engine answered, the defect

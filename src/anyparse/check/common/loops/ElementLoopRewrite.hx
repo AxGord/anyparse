@@ -311,4 +311,7 @@ typedef ReachGate = {
  * What `ElementLoopRewrite.binderFor` decided: the element binder's name, or null with the `refusal` a
  * report-only finding carries as its `declineReason`. Exactly one of the two is set.
  */
-typedef BinderChoice = { var name: Null<String>; var refusal: Null<String>; }
+typedef BinderChoice = {
+	var name: Null<String>;
+	var refusal: Null<String>;
+}

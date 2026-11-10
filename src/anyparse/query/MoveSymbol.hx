@@ -41,7 +41,10 @@ enum MoveResult {
  * decl, add / remove / rewrite an import), so a single count would be
  * meaningless; the CLI reports the file as "moved" / "updated" instead.
  */
-typedef MoveChange = { var file: String; var newSource: String; }
+typedef MoveChange = {
+	var file: String;
+	var newSource: String;
+}
 
 /**
  * The destination-file edits a carry list becomes, plus the `using` statements it found no seat for.

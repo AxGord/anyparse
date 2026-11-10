@@ -901,7 +901,10 @@ private typedef MacroSeams = {
  * `ExplicitType.typeUsableFrom` needs to tell an ambient top-level name from one that only
  * resolved because the DECLARING file imported it.
  */
-private typedef InheritedParam = { final text: String; final file: String; };
+private typedef InheritedParam = {
+	final text: String;
+	final file: String;
+};
 
 /**
  * The read-only context `ExplicitType.returnEdit` needs per finding: the `source` and `file`

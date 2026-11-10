@@ -578,4 +578,7 @@ class PreferValueLoopCheckTest extends Test {
 }
 
 /** One `run` over one fixture: the check instance and the findings it produced, kept together so a fix assertion re-uses both. */
-private typedef CheckRun = { var check: PreferValueLoop; var vs: Array<Violation>; }
+private typedef CheckRun = {
+	var check: PreferValueLoop;
+	var vs: Array<Violation>;
+}
