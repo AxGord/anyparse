@@ -260,16 +260,19 @@ final class WriterOptFanout {
 	 * re-establishes expression position one level deeper.
 	 */
 	private static function setExprPositionField(
-		optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool, clearsArrowValueIfBlocked: Bool
+		optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool, clearsArrowValueIfBlocked: Bool,
+		clearsArrowBodyLead: Bool
 	): Field {
 		var guard: Expr = macro o._inExprPosition;
 		if (clearsValueIfBranch) guard = macro $guard && o._literalReflow == anyparse.format.LiteralReflow.Off;
 		if (clearsArrowLambdaBody) guard = macro $guard && !o._inArrowLambdaBody;
 		if (clearsArrowValueIfBlocked) guard = macro $guard && !o._arrowValueIfBlocked;
+		if (clearsArrowBodyLead) guard = macro $guard && !o._arrowBodyLead;
 		final clears: Array<Expr> = [];
 		if (clearsValueIfBranch) clears.push(macro _c._literalReflow = anyparse.format.LiteralReflow.Off);
 		if (clearsArrowLambdaBody) clears.push(macro _c._inArrowLambdaBody = false);
 		if (clearsArrowValueIfBlocked) clears.push(macro _c._arrowValueIfBlocked = false);
+		if (clearsArrowBodyLead) clears.push(macro _c._arrowBodyLead = false);
 		final body: Expr = macro {
 			if ($guard) return o;
 			final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
@@ -396,7 +399,9 @@ final class WriterOptFanout {
 		};
 	}
 
-	private static function setArrowLambdaBodyField(optionsCT: ComplexType): Field {
+	private static function setArrowLambdaBodyField(optionsCT: ComplexType, withLead: Bool): Field {
+		final setLead: Expr = withLead ? macro _c._arrowBodyLead = true : macro {};
+		final leadSet: Expr = withLead ? macro o._arrowBodyLead : macro true;
 		return {
 			name: '_setArrowLambdaBody',
 			access: [APrivate, AStatic],
@@ -404,9 +409,10 @@ final class WriterOptFanout {
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
-					if (o._inArrowLambdaBody) return o;
+					if (o._inArrowLambdaBody && $leadSet) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = true;
+					$setLead;
 					return _c;
 				}
 			}),
@@ -414,7 +420,8 @@ final class WriterOptFanout {
 		};
 	}
 
-	private static function clearArrowLambdaBodyField(optionsCT: ComplexType): Field {
+	private static function clearArrowLambdaBodyField(optionsCT: ComplexType, withLead: Bool): Field {
+		final clearLead: Expr = withLead ? macro _c._arrowBodyLead = false : macro {};
 		return {
 			name: '_clearArrowLambdaBody',
 			access: [APrivate, AStatic],
@@ -425,9 +432,33 @@ final class WriterOptFanout {
 					if (!o._inArrowLambdaBody) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inArrowLambdaBody = false;
+					$clearLead;
 					return _c;
 				}
 			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The `_clearArrowBodyLead` shim a descent calls when its node is written after a token of its
+	 * parent, so the arrow-body lead reaches only the body's leftmost leaf. Emitted for every writer,
+	 * as the identity when the opt typedef declares no `_arrowBodyLead`, so a lowering site that
+	 * cannot see the opt typedef calls it without a per-grammar gate.
+	 */
+	private static function clearArrowBodyLeadField(optionsCT: ComplexType, present: Bool): Field {
+		final body: Expr = present
+			? macro {
+				if (!o._arrowBodyLead) return o;
+				final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+				_c._arrowBodyLead = false;
+				return _c;
+			}
+			: macro return o;
+		return {
+			name: '_clearArrowBodyLead',
+			access: [APrivate, AStatic],
+			kind: FFun({ args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)], ret: optionsCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -1211,8 +1242,10 @@ final class WriterOptFanout {
 		// `else`-descent carries no `propagateExprPosition` and therefore keeps
 		// it, which is exactly the reach the signal needs.
 		final hasArrowValueIfBlocked: Bool = optionsHasField(optionsTypePath, '_arrowValueIfBlocked');
+		final hasArrowBodyLead: Bool = optionsHasField(optionsTypePath, '_arrowBodyLead');
+		fields.push(clearArrowBodyLeadField(optionsCT, hasArrowBodyLead));
 		if (optionsHasInExprPosition(optionsTypePath)) {
-			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody, hasArrowValueIfBlocked));
+			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody, hasArrowValueIfBlocked, hasArrowBodyLead));
 			fields.push(clearExprPositionField(optionsCT));
 		}
 		if (hasArrowValueIfBlocked) fields.push(setArrowValueIfBlockedField(optionsCT));
@@ -1239,8 +1272,8 @@ final class WriterOptFanout {
 		// `_setValueIfBranch`/`_clearValueIfBranch`. Gated on
 		// `_inArrowLambdaBody:Bool` field presence on the opt typedef.
 		if (hasArrowLambdaBody) {
-			fields.push(setArrowLambdaBodyField(optionsCT));
-			fields.push(clearArrowLambdaBodyField(optionsCT));
+			fields.push(setArrowLambdaBodyField(optionsCT, hasArrowBodyLead));
+			fields.push(clearArrowLambdaBodyField(optionsCT, hasArrowBodyLead));
 		}
 		// ω-anonfunction-empty-curly: opt-fanout helper for
 		// `propagateAnonFnContext`. Returns the input opt unchanged when

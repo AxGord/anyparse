@@ -2627,6 +2627,78 @@
 			"method": "seqTargetOf",
 			"force": "null",
 			"note": "no node carries a @:queryTarget field, so an alias import projects only its alias and its path is lost"
+		},
+		{
+			"name": "M-ARROW-LEAD-TERNARY-THEN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerTernaryBranch",
+			"find": "macro $i{argNames[1]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt)",
+			"replace": "macro $i{argNames[1]}, hasPratt, -1, macro opt",
+			"note": "a ternary then-arm keeps the arrow-body lead, so its object literal loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-TERNARY-ELSE",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerTernaryBranch",
+			"find": "macro $i{argNames[2]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt)",
+			"replace": "macro $i{argNames[2]}, hasPratt, -1, macro opt",
+			"note": "a ternary else-arm keeps the arrow-body lead, so its object literal loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-CHAIN-LEAF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixChain",
+			"find": "_items.length == 0 ? opt : _clearArrowBodyLead(opt, opt)",
+			"replace": "opt",
+			"note": "every chain leaf keeps the arrow-body lead, so a literal after `??` loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-INFIX-RIGHT",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixBranch",
+			"find": ": macro _clearArrowBodyLead(opt, opt)",
+			"replace": ": null",
+			"note": "a plain infix right operand keeps the arrow-body lead, so a literal after `==` loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-PREFIX",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPrefixBranch",
+			"find": "c.precPostfix, macro _clearArrowBodyLead(opt, opt)",
+			"replace": "c.precPostfix",
+			"note": "a prefix operand keeps the arrow-body lead, so a literal after `!` loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-CLEAR-NONE",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "clearArrowBodyLeadField",
+			"find": "_c._arrowBodyLead = false;",
+			"replace": "_c._arrowBodyLead = true;",
+			"note": "the lead clear keeps the flag, so every non-leading literal of an arrow body loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-KW-OPERAND",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefCtorOptArg",
+			"find": "else if (afterToken)",
+			"replace": "else if (false)",
+			"note": "a keyword ctor operand keeps the arrow-body lead, so a literal after `cast` loses the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-KW-ALWAYS",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefCtorOptArg",
+			"find": "else if (afterToken)",
+			"replace": "else",
+			"note": "a keyword-less ctor drops the arrow-body lead too, so the literal right after `->` regains the open pad"
+		},
+		{
+			"name": "M-ARROW-LEAD-FIELD-AFTER-TOKEN",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "buildMandatoryRefWriteCall",
+			"find": "else if (afterToken)",
+			"replace": "else if (false)",
+			"note": "a later struct field keeps the arrow-body lead, so a metadata target literal loses the open pad"
 		}
 	]
 }

@@ -322,7 +322,7 @@ final class WriterPrattLowering {
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = typedefClearedOperandOpt(
-			branch, branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null
+			branch, branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : macro _clearArrowBodyLead(opt, opt)
 		);
 		final leftCall: Expr = guardOpenLeft(
 			writeFnName, macro $i{argNames[0]}, leftCtx, prec,
@@ -487,7 +487,11 @@ final class WriterPrattLowering {
 		// `f(a, b) + ...`). Suppress it so a chain operand wraps on its OWN
 		// overflow (plain Group); the chain absorbs the rest via its operator
 		// break / paren-open. Applies to every chain operand, `??` included.
-		final leafWrite: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec, macro _setSuppressCallRestProbe(opt, true));
+		// Every leaf but the first follows a chain operator, so only the first can be the arrow-body lead.
+		final leafWrite: Expr = makeWriteCall(
+			writeFnName, macro _e, hasPratt, prec,
+			macro _setSuppressCallRestProbe(_items.length == 0 ? opt : _clearArrowBodyLead(opt, opt), true)
+		);
 		// Every leaf but the last is followed by a chain operator; `_leafOpen` records which of them
 		// would run on into it bare (see `guardOpenLeft`), for the pass after the gather.
 		final openFn: String = openRightFnName(writeFnName);
@@ -1117,7 +1121,9 @@ final class WriterPrattLowering {
 	 */
 	private static function lowerPrefixBranch(c: WriterLowering.LowerBranchCtx): Expr {
 		final prefixOp: String = c.branch.annotations[AnnotationKeys.PREFIX_OP];
-		final operandCall: Expr = makeWriteCall(c.writeFnName, macro $i{c.argNames[0]}, c.hasPratt, c.precPostfix);
+		final operandCall: Expr = makeWriteCall(
+			c.writeFnName, macro $i{c.argNames[0]}, c.hasPratt, c.precPostfix, macro _clearArrowBodyLead(opt, opt)
+		);
 		return macro _dc([_dt($v{prefixOp}), $operandCall]);
 	}
 
@@ -1144,8 +1150,9 @@ final class WriterPrattLowering {
 			writeFnName, macro $i{argNames[0]}, tPrec + 1, tPrec,
 			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1, macro _setInTernaryCond(opt, true))
 		);
-		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
-		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
+		// Both arms follow a token of the ternary (`?` / `:`), so neither is the arrow-body lead.
+		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt));
+		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt));
 		// ω-ternary-wrap: dispatch to the chain-emit engine with a
 		// degenerate 3-item / 2-op chain (items = [cond, then, else],
 		// ops = [ternaryOp, sep]). `BinaryChainEmit.shapeNoWrap`

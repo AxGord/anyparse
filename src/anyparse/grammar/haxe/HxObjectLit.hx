@@ -36,7 +36,7 @@ package anyparse.grammar.haxe;
  * `if`/`else` branch), the sep-Star's Ignore-mode check drops element `newlineBefore`
  * signals so a source-multiline literal collapses to one line; the flag is cleared on each
  * expression-position descent. `@:fmt(arrowBodyOpenPadSuppress)` — when
- * `opt._inArrowLambdaBody` is set (the literal is the leftmost leaf of an arrow-lambda body),
+ * `opt._arrowBodyLead` is set (the literal is the leftmost leaf of an arrow-lambda body),
  * the open-side inner pad is dropped (`u -> {email: v }`), the fork's `case Arrow: return;`;
  * `objectLiteralBraces.arrowBodyOpenPad: true` keeps the pad, a deliberate divergence.
  */

@@ -816,7 +816,8 @@ final class WriterRefFieldLowering {
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
 		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;
 		final writeCall: Expr = buildMandatoryRefWriteCall(
-			ctx, child, effAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs, ssbSuppressCond
+			ctx, child, effAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs, followsToken(isFirstField, kwLead, leadText),
+			ssbSuppressCond
 		);
 		// bodyPolicy on a first field: the parent enum-branch Case 3 strips its
 		// kwLead trailing space so the separator here is the sole transition
@@ -1581,7 +1582,7 @@ final class WriterRefFieldLowering {
 	@:access(anyparse.macro.WriterArrowValueIfLowering)
 	private static function buildMandatoryRefWriteCall(
 		ctx: RefFieldCtx, child: ShapeNode, fieldAccess: Expr, typePath: String, writeFn: String, bodyPolicyFlag: Null<String>,
-		indentObjArgs: Null<Array<String>>, ?ssbSuppressCond: Expr
+		indentObjArgs: Null<Array<String>>, afterToken: Bool, ?ssbSuppressCond: Expr
 	): Expr {
 		// ω-issue-423-mech-a / ω-arrow-lambda-body-context /
 		// ω-typedef-anon-force-multi: opt-fanout flags wrapping the descendant
@@ -1631,7 +1632,12 @@ final class WriterRefFieldLowering {
 			macro _wo;
 		} else {
 			var e: Expr = macro opt;
-			if (propagateExpr) e = macro _setExprPosition($e, opt);
+			// A field written after a token of its struct (a keyword, a lead, an earlier field) is never the
+			// arrow-body lead; `propagateArrowLambdaBody` below sets it again for the arrow body itself.
+			if (propagateExpr)
+				e = macro _setExprPosition($e, opt);
+			else if (afterToken)
+				e = macro _clearArrowBodyLead($e, opt);
 			// ω-single-stmt-braces: dangling-else suppress frame — when the
 			// enclosing `if` has an `else` at runtime AND its then-body renders
 			// WITHOUT braces, the whole then-body write runs with `_ssbSuppress` so
@@ -1952,6 +1958,11 @@ final class WriterRefFieldLowering {
 		if (args.length < 3) return framed; // noqa: magic-number
 		final isWrapper: Expr = macro Type.enumConstructor($fieldAccess) == $v{args[2]};
 		return macro ($knob == anyparse.format.BodyPolicy.FitLine && $isWrapper ? _setReflowThroughWrap($e, opt) : $framed);
+	}
+
+	/** Whether a struct field is written after a token of its own struct: a keyword, a lead, or an earlier field. */
+	private static function followsToken(isFirstField: Bool, kwLead: Null<String>, leadText: Null<String>): Bool {
+		return !isFirstField || kwLead != null || leadText != null;
 	}
 
 }

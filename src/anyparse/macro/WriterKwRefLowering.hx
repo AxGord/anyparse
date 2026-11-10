@@ -567,7 +567,13 @@ final class WriterKwRefLowering {
 		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 		var optExpr: Expr = macro opt;
-		if (propagateExpr) optExpr = macro _setExprPosition($optExpr, opt);
+		// An operand written after the ctor's keyword or lead token is never the arrow-body lead.
+		final afterToken: Bool = branch.annotations[AnnotationKeys.KW_LEAD_TEXT] != null
+			|| branch.annotations[AnnotationKeys.LIT_LEAD_TEXT] != null;
+		if (propagateExpr)
+			optExpr = macro _setExprPosition($optExpr, opt);
+		else if (afterToken)
+			optExpr = macro _clearArrowBodyLead($optExpr, opt);
 		optExpr = reflowFrameThroughWrapOpt(branch, macro $i{argNames[0]}, optExpr);
 		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
 		// `@:fmt(propagateNestedType)` on `HxType.Parens` / `ConditionalType` marks the inner type as nested.

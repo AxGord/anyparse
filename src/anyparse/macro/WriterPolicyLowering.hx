@@ -387,7 +387,7 @@ final class WriterPolicyLowering {
 		if (flagName == null) return null;
 		final sw: Expr = policyInsideSpace(flagName, isClose);
 		// ω-arrow-body-objlit-pad: `@:fmt(arrowBodyOpenPadSuppress)` on the
-		// Star drops the OPEN-side inner pad when `opt._inArrowLambdaBody` is
+		// Star drops the OPEN-side inner pad when `opt._arrowBodyLead` is
 		// set — the fork's `MarkWhitespace.successiveParenthesis` compress
 		// branch never applies the opening-brace policy to a `{` whose
 		// previous token is `->` (`case Arrow: return;`). The close side has
@@ -397,7 +397,7 @@ final class WriterPolicyLowering {
 		// config-gated divergence keeping arrow-body literals padded like
 		// every other object literal (`u -> { email: v }`).
 		return !isClose && starNode.fmtHasFlag('arrowBodyOpenPadSuppress')
-			? macro opt._inArrowLambdaBody && !opt.objectLiteralArrowBodyOpenPad ? _de() : $sw
+			? macro opt._arrowBodyLead && !opt.objectLiteralArrowBodyOpenPad ? _de() : $sw
 			: sw;
 	}
 

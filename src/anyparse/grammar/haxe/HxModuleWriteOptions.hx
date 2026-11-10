@@ -871,20 +871,22 @@ final class HxModuleWriteOptions {
 	// literal comprehension body too, and `ThroughWrap` on a parenthesised one, which only that
 	// paren's descent reads: the paren clears the frame, so a parenthesised value-if branch keeps its lines.
 	public var _literalReflow: LiteralReflow = LiteralReflow.Off; // noqa: naming
-	// ω-arrow-body-objlit-pad — sister to `_literalReflow`, set ONLY on the
-	// immediate body of an arrow lambda (`HxExpr.ThinArrow` right operand /
-	// `HxThinParenLambda.body` carrying `@:fmt(propagateArrowLambdaBody)`).
-	// Read by `HxObjectLit.fields` (`@:fmt(arrowBodyOpenPadSuppress)`) to drop
-	// the `objectLiteralBracesOpen` inner pad — mirroring fork's
-	// `MarkWhitespace.successiveParenthesis` compress-mode `case Arrow:
-	// return;`, which never applies the opening-brace policy to a `{`/`(`/`[`
-	// whose previous token is `->` (so `u -> {email: v }`, not `u -> { email:
-	// v }`, under `objectLiteralBraces.openingPolicy: "after"`). Cleared by
-	// `_setExprPosition` on any descent into a fresh expression-position frame
-	// (call-arg / array-element / operand / paren inner), so only the
-	// LEFTMOST-LEAF object literal of the body — the one whose `{` sits right
-	// after the `->` token — sees the flag. Default `false`.
+	// ω-arrow-body-objlit-pad — sister to `_literalReflow`, set on the body of
+	// an arrow lambda (`HxExpr.ThinArrow` right operand / `HxThinParenLambda.body`
+	// carrying `@:fmt(propagateArrowLambdaBody)`) and cleared by
+	// `_setExprPosition` on any fresh expression-position frame (call-arg /
+	// array-element / assignment operand / paren inner). It survives the
+	// descents that pass `opt` unchanged (a ternary arm, a prefix keyword, a
+	// value-`if`), which is the reach the arrow-body reflow knobs read. The
+	// open-pad suppress reads the narrower `_arrowBodyLead`. Default `false`.
 	public var _inArrowLambdaBody: Bool = false; // noqa: naming
+	// Set together with `_inArrowLambdaBody` and cleared on every descent whose
+	// node is written AFTER a token of its parent (an infix right operand, a
+	// ternary arm, a prefix or keyword operand), so it reaches only the leftmost
+	// leaf of the arrow body: the node whose first token follows `->`. Read by
+	// `HxObjectLit.fields` (`@:fmt(arrowBodyOpenPadSuppress)`) to drop the open
+	// pad, the fork's `case Arrow: return;` on the previous token. Default `false`.
+	public var _arrowBodyLead: Bool = false; // noqa: naming
 	// omega-arrow-value-if-reflow - set on the branch writes of an `HxIfExpr`
 	// that REFUSED the arrow-body reflow (a comment anywhere on its
 	// `else`-spine), so every deeper member of the same chain refuses too and

@@ -211,13 +211,15 @@ final class WriterBlankLowering {
 	 * ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on the infix `->`
 	 * branch (HxExpr.ThinArrow) flags the RIGHT operand write. Composed outside
 	 * `_setExprPosition` so its descent clear does not wipe the just-set flag. Left
-	 * operand passes `opt` unchanged, so the flag survives leftmost descents —
-	 * replicating the fork's token-adjacency (`{` directly after `->`) for free.
+	 * operand passes `opt` unchanged, so the arrow-body lead survives leftmost descents,
+	 * while a right operand without its own frame drops it: it follows the operator token.
 	 */
 	private static function rightOperandOptExpr(branch: ShapeNode): Null<Expr> {
-		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		final rightOptBase: Expr = branch.fmtHasFlag('propagateExprPosition')
+			? macro _setExprPosition(opt)
+			: macro _clearArrowBodyLead(opt, opt);
 		final arrowBody: Null<Expr> = branch.fmtHasFlag('propagateArrowLambdaBody')
-			? macro _setArrowLambdaBody(${rightOptBase ?? macro opt}, opt)
+			? macro _setArrowLambdaBody($rightOptBase, opt)
 			: rightOptBase;
 		return typedefClearedOperandOpt(branch, arrowBody);
 	}

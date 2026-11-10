@@ -119,7 +119,7 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	private static final OBJECT_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n\t\t\t// pick '
 		+ 'first\n\t\t\t{ alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{ alpha: q.a, beta: q.b });\n\t}\n}';
 	private static final OBJECT_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n'
-		+ '\t\t\t// pick first\n\t\t\t{alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{alpha: q.a, beta: q.b });\n'
+		+ '\t\t\t// pick first\n\t\t\t{ alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{ alpha: q.a, beta: q.b });\n'
 		+ '\t}\n}';
 	private static final NO_ELSE_SRC: String =
 		'class C {\n\tfunction test() {\n\t\tfinal kept = items.map(p -> if (p.orderKeyVal > 0) p.orderKeyVal);\n\t}\n}';
@@ -234,7 +234,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	 * A refused chain must leave the SIBLING arrow knobs alone. The refusal
 	 * used to travel by clearing `_inArrowLambdaBody`, which also switched off
 	 * the object-literal arrow open-pad inside the refused branch; with its own
-	 * field the padding matches the knob-off output byte for byte.
+	 * field the padding matches the knob-off output byte for byte. A branch
+	 * literal follows the `if` head, not `->`, so both pads stay.
 	 */
 	public function testRefusedChainLeavesObjectLiteralPaddingAlone(): Void {
 		Assert.equals(OBJECT_CANON, write(OBJECT_SRC, CONFIG_OBJECT_ON));
