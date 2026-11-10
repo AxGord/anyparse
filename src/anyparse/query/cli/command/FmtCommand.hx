@@ -10,6 +10,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.query.cli.command.RegistryFollowCommand.WrittenSource;
 import anyparse.runtime.Span;
 
 /**
@@ -90,6 +91,10 @@ typedef FmtFileResult = {
 	 */
 	@:optional
 	var unwritable: Bool;
+
+	/** `--write` only: the path with the text the write replaced and the text it wrote. */
+	@:optional
+	var written: WrittenSource;
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
@@ -170,6 +175,7 @@ final class FmtCommand implements CliCommand {
 		var unwritable: Int = 0;
 		var diverged: Int = 0;
 		var unsettled: Int = 0;
+		final written: Array<WrittenSource> = [];
 		for (path in paths) {
 			// `o.list`, not `listMode`: the opaque-region notes are off for an EXPLICIT `--list`
 			// and on when list mode was merely implied, which is the difference between a gate
@@ -181,6 +187,8 @@ final class FmtCommand implements CliCommand {
 				return { exit: fatal, summary: '' };
 			}
 			if (r.changed) changed++;
+			final rewrite: Null<WrittenSource> = r.written;
+			if (rewrite != null) written.push(rewrite);
 			// Nested rather than a sibling `if`, because `unwritable` is a SUBSET of
 			// `failed` and the summary subtracts one from the other. A later return site
 			// marking a refused write without marking a failure would send `formatFailed`
@@ -195,6 +203,7 @@ final class FmtCommand implements CliCommand {
 			if (r.unsettled == true) unsettled++;
 		}
 
+		RegistryFollowCommand.followWrite('fmt', written, plugin);
 		final summary: String = fmtSummary(o, listMode, {
 			scanned: paths.length,
 			changed: changed,
@@ -667,6 +676,7 @@ final class FmtCommand implements CliCommand {
 					changed: true,
 					failed: false,
 					unsettled: unsettled,
+					written: { path: path, before: source, after: formatted },
 					fatalExit: null
 				};
 			}

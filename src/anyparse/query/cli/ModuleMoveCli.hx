@@ -13,6 +13,7 @@ import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.MoveCommand;
+import anyparse.query.cli.command.RegistryFollowCommand;
 import haxe.ds.Either;
 import haxe.io.Path;
 
@@ -193,6 +194,9 @@ final class ModuleMoveCli {
 		for (m in outcome.moves) originalOf[m.to] = originalOf[m.from] ?? '';
 		final canonical: Array<MoveChange> = outcome.changes.map(canonicalOf.bind(_, originalOf, plugin, ext));
 		write(canonical, outcome.removed);
+		RegistryFollowCommand.followWrite('move', [
+			for (c in canonical) if (c.file.endsWith(ext)) { path: c.file, before: originalOf[c.file] ?? c.newSource, after: c.newSource }
+		], plugin);
 		for (i in outcome.imports) CliIo.stderr('apq move: import added: $i\n');
 		CliIo.stderr('apq move: moved ${outcome.moves.length} module(s), wrote ${canonical.length} file(s)\n');
 		return EXIT_OK;

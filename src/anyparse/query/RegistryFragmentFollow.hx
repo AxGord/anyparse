@@ -182,9 +182,9 @@ final class RegistryFragmentFollow {
 		if (fit == null) return null;
 		final now: String = rewrite.now;
 		final maps: Array<Array<Int>> = rewrite.maps;
-		final starts: Array<Int> = boundaries(maps, from, now.length);
+		final starts: Array<Int> = cutBoundaries(maps, from, now.length, true);
 		starts.reverse();
-		for (newFrom in starts) for (newTo in boundaries(maps, from + written.length, now.length)) if (newTo > newFrom) {
+		for (newFrom in starts) for (newTo in cutBoundaries(maps, from + written.length, now.length, false)) if (newTo > newFrom) {
 			final newFind: String = now.substring(newFrom, newTo);
 			final located: Null<Span> = Patch.cutSpan(
 				rewrite.module.newSource, rewrite.module.newTree, rewrite.target, newFind, rewrite.plugin
@@ -230,6 +230,23 @@ final class RegistryFragmentFollow {
 		} catch (_: Exception) {
 			false;
 		};
+	}
+
+	/**
+	 * The positions a cut's own start (`isStart`) or end at `at` can land on. A boundary character of the cut that the rewrite
+	 * deleted was replaced in place, so its replacement belongs inside the cut: only the wide side of the boundary is kept.
+	 */
+	private static function cutBoundaries(maps: Array<Array<Int>>, at: Int, end: Int, isStart: Bool): Array<Int> {
+		final out: Array<Int> = [];
+		for (map in maps) {
+			final edge: Int = isStart ? at : at - 1;
+			final replaced: Bool = edge >= 0 && edge < map.length && map[edge] < 0;
+			final wide: Int = isStart ? endOf(map, at) : startOf(map, at, end);
+			final candidates: Array<Int> = replaced ? [wide] : [startOf(map, at, end), endOf(map, at)];
+			for (p in candidates) if (!out.contains(p)) out.push(p);
+		}
+		out.sort((a, b) -> a - b);
+		return out;
 	}
 
 }

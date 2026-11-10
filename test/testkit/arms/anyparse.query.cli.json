@@ -727,6 +727,14 @@
 			"find": "final n: Int = arg.intValue();",
 			"replace": "final n: Int = Std.parseInt(arg.value()) ?? -1;",
 			"note": "--limit reads its leading digits, so `--limit 1x` is a limit of 1 on every walker that takes one"
+		},
+		{
+			"name": "M-MOVE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "emit",
+			"find": "c.file.endsWith(ext)",
+			"replace": "false",
+			"note": "a module move no longer carries the registry fragments of the members it re-spelled"
 		}
 	]
 }

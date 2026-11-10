@@ -1383,10 +1383,16 @@ final class LintFixDriver {
 		// `--no-oracle` hands the fixer an EMPTY configuration list, which is the one spelling of
 		// "behave as if the project configured no compilerOracle" — the flag and the missing key
 		// then cannot drift apart by construction.
-		return applyLintFixes(
+		final before: Map<String, String> = sourceSnapshot(files);
+		final exit: Int = applyLintFixes(
 			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
 			new ImportReach(OracleProviders.of(plugin), oracles), resolution
 		);
+		// After every revert net has settled, so a fragment follows only the bytes the run kept.
+		RegistryFollowCommand.followWrite('lint', [
+			for (e in files) if (before.exists(e.file)) { path: e.file, before: before[e.file] ?? e.source, after: e.source }
+		], plugin);
+		return exit;
 	}
 
 	/** Add `edits` to `file`'s tally in `editsOf` — the per-file count a reverted file's edits are taken back by. */

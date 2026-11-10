@@ -8,10 +8,25 @@ import anyparse.query.TypePathRegistries.MemberKeys;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.GitRevision;
 
+using Lambda;
+
+/** One file a write op rewrote: the text it held before the op and the text the op wrote. */
+typedef WrittenSource = { final path: String; final before: String; final after: String; }
+
+/** A document of a registry that declares member records, with its text. */
+private typedef MemberDocument = { final members: MemberKeys; final path: String; final json: String; }
+
+/** What following the registries over rewritten modules produced: the documents to write, the fragments moved, the notes. */
+private typedef RegistriesFollowed = {
+	final writes: Array<{ path: String, content: String }>;
+	final count: Int;
+	final notes: Array<String>;
+}
+
 /**
- * `apq registry-follow` — after a mechanical rewrite of the working tree (`lint --fix`, `fmt`, a move), carry the
- * find/replace fragments of every `move.registries` record over it. It compares against a git revision rather than
- * hooking each writer, so every rewrite is covered by one path.
+ * `apq registry-follow` — carry the find/replace fragments of every `move.registries` record over a rewrite of the working
+ * tree, compared against a git revision. `lint --fix`, `fmt --write` and `move` carry their own write through
+ * `followWrite`; the command is for a rewrite none of them made, such as a hand edit of an arm's member.
  */
 @:nullSafety(Strict)
 final class RegistryFollowCommand implements CliCommand implements LanguageFree {
@@ -67,23 +82,12 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 				return ExitCode.EXIT_RUNTIME;
 			case Right(found): found;
 		};
-		final writes: Array<{ path: String, content: String }> = [];
-		final notes: Array<String> = [];
-		var count: Int = 0;
-		for (registry in declaration.registries) {
-			final members: Null<MemberKeys> = registry.members;
-			if (members != null) for (path in RegistryFiles.of(registry.file)) {
-				final followed: RegistryFollow = RegistryFragmentFollow.follow(members, CliIo.readFile(path), modules, plugin);
-				for (note in followed.notes) notes.push(note);
-				count += followed.count;
-				final text: Null<String> = followed.text;
-				if (text != null) writes.push({ path: path, content: text });
-			}
-		}
-		if (write) CliIo.writeFiles(writes);
-		for (note in notes) CliIo.stderr('apq registry-follow: $note\n');
-		CliIo.sysPrint('registry-follow: $count fragment(s) in ${writes.length} file(s)${write ? '' : ' (not written; pass --write)'}\n');
-		return notes.length == 0 ? ExitCode.EXIT_OK : ExitCode.EXIT_RUNTIME;
+		final followed: RegistriesFollowed = followDocuments(memberDocuments(declaration), modules, plugin);
+		if (write) CliIo.writeFiles(followed.writes);
+		for (note in followed.notes) CliIo.stderr('apq registry-follow: $note\n');
+		final tail: String = write ? '' : ' (not written; pass --write)';
+		CliIo.sysPrint('registry-follow: ${followed.count} fragment(s) in ${followed.writes.length} file(s)$tail\n');
+		return followed.notes.length == 0 ? ExitCode.EXIT_OK : ExitCode.EXIT_RUNTIME;
 	}
 
 	public function usage(): Void {
@@ -93,6 +97,58 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 			'<base-ref>. A moved file is followed once git reports the rename ('
 			+ 'its new path staged). Exit 1 names each fragment it could not carry.\n'
 		);
+	}
+
+	/**
+	 * Carry the registry fragments over what a write op (`lint --fix`, `fmt --write`, `move`) has just written, from the two
+	 * texts the op held rather than a git revision, and write the re-spelled documents. A fragment that cannot be carried is
+	 * named on stderr and the op's exit is left as it was: its own write stands either way.
+	 */
+	public static function followWrite(op: String, written: Array<WrittenSource>, plugin: GrammarPlugin): Void {
+		final changed: Array<WrittenSource> = written.filter(w -> w.before != w.after);
+		if (changed.length == 0) return;
+		final declaration: MoveDeclarationData = switch ModuleMoveCli.declarationFor(changed[0].path) {
+			case Left(message):
+				CliIo.stderr('apq $op: registry-follow: $message\n');
+				return;
+			case Right(found): found;
+		};
+		final documents: Array<MemberDocument> = memberDocuments(declaration);
+		final typesOf: Array<Array<String>> = [
+			for (d in documents)
+				[
+					for (record in TypePathRegistries.memberRecords(d.members, d.json)) if (record.finds.length > 0) record.type
+				]
+		];
+		final types: Array<String> = [for (list in typesOf) for (t in list) t];
+		final modules: Array<RewrittenModule> = [];
+		for (w in changed) {
+			final base: String = RefactorSupport.moduleNameOf(w.path);
+			if (!types.exists(t -> t == base || t.endsWith('.$base'))) continue;
+			try {
+				final newTree: QueryNode = plugin.parseFile(w.after);
+				final path: String = ModuleScan.moduleOf(newTree, w.path).path;
+				if (types.contains(path)) modules.push({
+					path: path,
+					source: w.before,
+					tree: plugin.parseFile(w.before),
+					newSource: w.after,
+					newTree: newTree
+				});
+			} catch (exception: Exception) {
+				CliIo.stderr('apq $op: registry-follow: ${w.path}: ${exception.message}\n');
+			}
+		}
+		if (modules.length == 0) return;
+		// Only a document holding a record of a rewritten module is followed: the rest cannot change.
+		final reached: Array<MemberDocument> = [
+			for (i in 0...documents.length) if (typesOf[i].exists(t -> modules.exists(m -> m.path == t))) documents[i]
+		];
+		final followed: RegistriesFollowed = followDocuments(reached, modules, plugin);
+		CliIo.writeFiles(followed.writes);
+		for (note in followed.notes) CliIo.stderr('apq $op: registry-follow: $note\n');
+		if (followed.count > 0)
+			CliIo.stderr('apq $op: registry-follow: ${followed.count} fragment(s) in ${followed.writes.length} file(s)\n');
 	}
 
 	private static inline function isRewritten(entry: ChangedPath, lang: String): Bool {
@@ -126,6 +182,36 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 			}
 		}
 		return modules;
+	}
+
+	/** Every document of a registry that declares member records, with its text. */
+	private static function memberDocuments(declaration: MoveDeclarationData): Array<MemberDocument> {
+		final out: Array<MemberDocument> = [];
+		for (registry in declaration.registries) {
+			final declared: Null<MemberKeys> = registry.members;
+			if (declared == null) continue;
+			// Re-bound: a narrowed local never reaches an anonymous-structure literal whose field is non-nullable.
+			final members: MemberKeys = declared;
+			for (path in RegistryFiles.of(registry.file)) out.push({ members: members, path: path, json: CliIo.readFile(path) });
+		}
+		return out;
+	}
+
+	/** The documents re-spelled over `modules`: what to write, how many fragments moved, and each one that could not be carried. */
+	private static function followDocuments(
+		documents: Array<MemberDocument>, modules: Array<RewrittenModule>, plugin: GrammarPlugin
+	): RegistriesFollowed {
+		final writes: Array<{ path: String, content: String }> = [];
+		final notes: Array<String> = [];
+		var count: Int = 0;
+		for (d in documents) {
+			final followed: RegistryFollow = RegistryFragmentFollow.follow(d.members, d.json, modules, plugin);
+			for (note in followed.notes) notes.push(note);
+			count += followed.count;
+			final text: Null<String> = followed.text;
+			if (text != null) writes.push({ path: d.path, content: text });
+		}
+		return { writes: writes, count: count, notes: notes };
 	}
 
 }

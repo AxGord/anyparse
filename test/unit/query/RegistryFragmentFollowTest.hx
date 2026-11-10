@@ -88,6 +88,12 @@ final class RegistryFragmentFollowTest extends Test {
 		Assert.equals(0, out.notes.length);
 	}
 
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-REPLACED-EDGE-INSIDE')
+	public function testACharacterReplacedAtEitherEdgeOfTheCutStaysInsideIt(): Void {
+		assertCarried('return Xy || Zw;', 'return xy || zw;', 'Xy || Zw', 'Xy && Zw', 'xy || zw', 'xy && zw');
+	}
+
 	private static function follow(find: String, replace: String): RegistryFollow {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor('haxe', 'C.hx');
 		final tree: QueryNode = plugin.parseFile(BEFORE);

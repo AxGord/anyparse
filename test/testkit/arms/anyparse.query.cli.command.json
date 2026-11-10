@@ -1251,6 +1251,38 @@
 			"find": "depth = arg.intValue();",
 			"replace": "depth = Std.parseInt(arg.value()) ?? 0;",
 			"note": "ast --depth reads its leading digits, so `--depth 1x` truncates the tree at 1 instead of being refused"
+		},
+		{
+			"name": "M-FMT-WRITE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.FmtCommand",
+			"method": "fmtRun",
+			"find": ", written, plugin);",
+			"replace": ", [], plugin);",
+			"note": "fmt --write no longer carries the registry fragments of the members it reformatted, so a sweep leaves the arms it staled for a remembered registry-follow run"
+		},
+		{
+			"name": "M-LINT-FIX-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "runLintFix",
+			"find": "before.exists(e.file)",
+			"replace": "false",
+			"note": "lint --fix no longer carries the registry fragments of the members its fixes rewrote"
+		},
+		{
+			"name": "M-FOLLOW-WRITE-NAMES-UNCARRIED",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "followWrite",
+			"find": "for (note in followed.notes) CliIo",
+			"replace": "for (note in new Array<String>()) CliIo",
+			"note": "a fragment a write op could not carry is no longer named, so the stale arm is found only by the next gate"
+		},
+		{
+			"name": "M-FOLLOW-WRITE-JOURNALED",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "followWrite",
+			"find": "CliIo.writeFiles(followed.writes);",
+			"replace": "for (w in followed.writes) sys.io.File.saveContent(w.path, w.content);",
+			"note": "the registry document a write op re-spells bypasses the write journal, so a run its typecheck puts back leaves the arm on the spelling the rollback undid"
 		}
 	]
 }

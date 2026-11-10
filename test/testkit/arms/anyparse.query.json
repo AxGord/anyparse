@@ -16019,8 +16019,8 @@
 			"name": "M-REGISTRY-FOLLOW-FIND-MAPS-TO-WRITTEN",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "carry",
-			"find": "boundaries(maps, from + written.length, now.length)",
-			"replace": "boundaries(maps, from + find.length, now.length)",
+			"find": "cutBoundaries(maps, from + written.length, now.length, false)",
+			"replace": "cutBoundaries(maps, from + find.length, now.length, false)",
 			"note": "the extent of an indent-tolerant cut is taken from the find, so a multi-line fragment ends short"
 		},
 		{
@@ -16370,6 +16370,14 @@
 			"find": "imp.kind == ImportKind.Using && !imp.guarded",
 			"replace": "imp.kind == ImportKind.Using",
 			"note": "a `using` the folder's import.hx guards with `#if` reads as covering every build, so a rewrite drops its own `using` and fails in the builds the region is compiled out of"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REPLACED-EDGE-INSIDE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "cutBoundaries",
+			"find": "replaced ? [wide] : [",
+			"replace": "[",
+			"note": "a character the rewrite replaced at the edge of a cut is left outside it, so a renamed first letter carries the find without it"
 		}
 	]
 }
