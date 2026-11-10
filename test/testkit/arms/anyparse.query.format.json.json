@@ -1,0 +1,46 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.query.format.json. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ARMRECORDS-ONE-CUT",
+			"type": "anyparse.query.format.json.ArmRecordText",
+			"method": "cutError",
+			"find": "force != null && find != null",
+			"replace": "false",
+			"note": "a record that cuts two ways is reported as a stray replace instead of as the two cuts it declares"
+		},
+		{
+			"name": "M-ARMRECORDS-UNKNOWN-KEY",
+			"type": "anyparse.query.format.json.ArmRecordText",
+			"method": "read",
+			"find": "!KEYS.contains(e.key)",
+			"replace": "false",
+			"note": "a misspelled key is written into the registry, where its record then cuts nothing"
+		},
+		{
+			"name": "M-ARMRECORDS-APPEND-LOST",
+			"type": "anyparse.query.format.json.ArmRecordText",
+			"method": "append",
+			"force": "Right(source)",
+			"note": "the document comes back as it was, so the record the pinned test names never reaches the registry"
+		},
+		{
+			"name": "M-ARMRECORDS-VALUE-KIND",
+			"type": "anyparse.query.format.json.ArmRecordText",
+			"method": "spell",
+			"find": "case _: null;",
+			"replace": "case _: 'null';",
+			"note": "a value that is not a string, or a list of them for a cut, is written into the registry as null"
+		},
+		{
+			"name": "M-ARMRECORDS-NAME-KIND",
+			"type": "anyparse.query.format.json.ArmRecordText",
+			"method": "read",
+			"find": "named != null && JValueTools.string(named) == null",
+			"replace": "false",
+			"note": "a name that is not a string is reported as a missing name, which sends the author to the wrong key"
+		}
+	]
+}

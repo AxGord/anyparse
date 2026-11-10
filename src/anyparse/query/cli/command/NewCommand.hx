@@ -4,6 +4,9 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
+import anyparse.query.PackageDocumentCarry.RegistryDocument;
+import anyparse.query.TypePathRegistries.TypePathRegistry;
+import haxe.ds.Either;
 import haxe.io.Path;
 
 using Lambda;
@@ -33,6 +36,8 @@ typedef NewOpts = {
 	var fromList: Array<String>;
 	var toList: Array<String>;
 	var fields: Array<String>;
+	var arms: Array<String>;
+	var armsDir: Null<String>;
 	var path: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
@@ -61,6 +66,9 @@ final class NewCommand implements CliCommand {
 	public function flags(): CliFlags {
 		// `--raw -` names stdin, the only source `--raw` reads; a bare `--raw` reads it too.
 		return new CliFlags(['--class', '--open', '--write'], [
+			'--arm',
+			'--arm-file',
+			'--arms-dir',
 			'--bodies',
 			'--extends',
 			'--field',
@@ -131,6 +139,8 @@ final class NewCommand implements CliCommand {
 			fromList: [],
 			toList: [],
 			fields: [],
+			arms: [],
+			armsDir: null,
 			path: null,
 			errExit: code
 		};
@@ -228,16 +238,22 @@ final class NewCommand implements CliCommand {
 	}
 
 	/** Shared tail for `apq new`: report stub warnings, then write the file or emit to stdout. */
-	private static function emitNew(filePath: String, result: EditResult, stubbed: Array<String>, write: Bool): Int {
+	private static function emitNew(
+		filePath: String, result: EditResult, stubbed: Array<String>, armDocuments: Array<RegistryDocument>, write: Bool
+	): Int {
 		switch result {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites('new', filePath, rewrites);
 				for (m in stubbed) CliIo.stderr('apq new: $m() left as a NotImplementedException stub\n');
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					CliIo.writeFiles(
+						[{ path: filePath, content: text }].concat(armDocuments.map(d -> { path: d.file, content: d.source }))
+					);
 					CliIo.stderr('apq new: wrote $filePath\n');
+					for (d in armDocuments) CliIo.stderr('apq new: wrote ${d.file}\n');
 				} else {
 					CliEdit.previewEdit('new', filePath, text);
+					for (d in armDocuments) CliIo.stderr('apq new: would write ${d.file}\n');
 				}
 				return EXIT_OK;
 			case Err(message):
@@ -249,7 +265,8 @@ final class NewCommand implements CliCommand {
 	private static function printNewUsage(): Void {
 		CliIo.sysPrint(
 			'Usage: apq new <path> (--class | --implements <iface> | --kind <k> | --raw -) [--extends <T>]... [--open] ['
-			+ '--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--write]\n'
+			+ '--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]... [--bodies -] [--arm <json> | --arm-file <f>]... ['
+			+ '--arms-dir <d>] [--write]\n'
 		);
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
@@ -269,6 +286,12 @@ final class NewCommand implements CliCommand {
 		CliIo.sysPrint('  --bodies -          Read @@ sections from stdin: @@ <method> bodies,\n');
 		CliIo.sysPrint('                      @@ members (a free-form member block), @@ imports, @@ doc;\n');
 		CliIo.sysPrint('                      an unfilled interface method gets a NotImplementedException stub\n');
+		CliIo.sysPrint('  --arm <json>        Add a mutation-arm record (repeatable) to the arm registry, beside the module: one\n');
+		CliIo.sysPrint('                      object {name,type,method,note + force | find,replace}, appended to the document of its\n');
+		CliIo.sysPrint('                      type\'s package (made when absent); a name already taken is refused. Written with the\n');
+		CliIo.sysPrint('                      module in one step, or neither is\n');
+		CliIo.sysPrint('  --arm-file <f>      Same, the record read from file <f>\n');
+		CliIo.sysPrint('  --arms-dir <d>      The registry directory (default: the byPackage "arms.type" registry of apq.json "move")\n');
 		CliIo.sysPrint('  --write             Write the new file (default: emit to stdout)\n');
 		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
@@ -295,6 +318,8 @@ final class NewCommand implements CliCommand {
 		final fromList: Array<String> = [];
 		final toList: Array<String> = [];
 		final fields: Array<String> = [];
+		final arms: Array<String> = [];
+		var armsDir: Null<String> = null;
 		var path: Null<String> = null;
 
 		for (arg in new NewCommand().flags().walk(args)) {
@@ -327,6 +352,17 @@ final class NewCommand implements CliCommand {
 					iface = arg.value();
 				case '--field':
 					fields.push(arg.value());
+				case '--arm':
+					arms.push(arg.value());
+				case '--arm-file':
+					final armPath: String = arg.value();
+					if (!FileSystem.exists(armPath)) {
+						CliIo.stderr('apq new: --arm-file $armPath does not exist\n');
+						return newParseExit(EXIT_USAGE);
+					}
+					arms.push(CliIo.readFile(armPath));
+				case '--arms-dir':
+					armsDir = arg.value();
 				case '--bodies':
 					bodiesArg = arg.value();
 				case '--from-file':
@@ -360,15 +396,25 @@ final class NewCommand implements CliCommand {
 			fromList: fromList,
 			toList: toList,
 			fields: fields,
+			arms: arms,
+			armsDir: armsDir,
 			path: path,
 			errExit: null
 		};
 	}
 
 	private static function executeNew(o: NewOpts, filePath: String, plugin: GrammarPlugin, optsJson: Null<String>): Int {
+		final armDocuments: Array<RegistryDocument> = switch armDocumentsOf(o, filePath) {
+			case Left(message):
+				CliIo.stderr('apq new: $message\n');
+				return EXIT_RUNTIME;
+			case Right(documents): documents;
+		}
 		if (o.raw) {
 			final content: Null<String> = CliArgs.resolveCodeArg('new', '-', null);
-			return content == null ? EXIT_RUNTIME : emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], o.write);
+			return content == null
+				? EXIT_RUNTIME
+				: emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], armDocuments, o.write);
 		}
 
 		var bodiesRaw: Null<String> = null;
@@ -417,7 +463,37 @@ final class NewCommand implements CliCommand {
 			bodiesRaw: bodiesRaw
 		};
 		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
-		return emitNew(filePath, res.result, res.stubbed, o.write);
+		return emitNew(filePath, res.result, res.stubbed, armDocuments, o.write);
+	}
+
+	/**
+	 * The arm-registry documents `--arm` / `--arm-file` add to: the directory is `--arms-dir`, else the project's
+	 * byPackage `arms.type` registry of the `move` section. Computed before anything is written, so a refused record
+	 * leaves the new module uncreated.
+	 */
+	private static function armDocumentsOf(o: NewOpts, filePath: String): Either<String, Array<RegistryDocument>> {
+		if (o.arms.length == 0) return Right([]);
+		final given: Null<String> = o.armsDir;
+		final directory: String = switch given == null ? registryDirectory(filePath) : Right(given) {
+			case Left(message): return Left(message);
+			case Right(found): found;
+		}
+		final existing: Array<RegistryDocument> = RegistryFiles.of(directory).map(file -> { file: file, source: CliIo.readFile(file) });
+		return ArmRecords.add(directory, existing, o.arms);
+	}
+
+	/** The directory of the project's byPackage arm registry: the `move.registries` entry keyed `arms.type`. */
+	private static function registryDirectory(filePath: String): Either<String, String> {
+		return switch ModuleMoveCli.declarationFor(filePath) {
+			case Left(message): Left(message);
+			case Right(declaration):
+				final registry: Null<TypePathRegistry> = declaration.registries.find(r ->
+					r.byPackage == true && r.keys.contains(ArmRecords.REGISTRY_KEY)
+				);
+				registry == null
+					? Left('no byPackage "${ArmRecords.REGISTRY_KEY}" registry in the "move" section of apq.json — pass --arms-dir <dir>')
+					: Right(registry.file);
+		}
 	}
 
 }

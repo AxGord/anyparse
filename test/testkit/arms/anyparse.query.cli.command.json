@@ -1123,6 +1123,46 @@
 			"find": "if (unmatched.length > 0) {",
 			"replace": "if (false) {",
 			"note": "a scope matching no file narrows the rename silently"
+		},
+		{
+			"name": "M-NEW-ARMS-WRITTEN-WITH-MODULE",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "emitNew",
+			"find": ".concat(armDocuments.map(d -> { path: d.file, content: d.source }))",
+			"replace": "",
+			"note": "the module is written and its arm record is not, so the pinned test names an arm the registry lacks"
+		},
+		{
+			"name": "M-NEW-ARMS-DEFAULT-DIRECTORY",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "registryDirectory",
+			"find": "r.byPackage == true && r.keys.contains(ArmRecords.REGISTRY_KEY)",
+			"replace": "false",
+			"note": "the registry the project declares is never found, so every --arm needs --arms-dir"
+		},
+		{
+			"name": "M-NEW-ARMS-DIR-OVERRIDE",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "armDocumentsOf",
+			"find": "given == null ? registryDirectory(filePath) : Right(given)",
+			"replace": "registryDirectory(filePath)",
+			"note": "--arms-dir is ignored, so a project that declares no registry cannot take a record"
+		},
+		{
+			"name": "M-NEW-ARM-FILE-READ",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "parseNewArgs",
+			"find": "arms.push(CliIo.readFile(armPath));",
+			"replace": "arms.push(armPath);",
+			"note": "--arm-file hands the record the path of the file instead of the file's text"
+		},
+		{
+			"name": "M-NEW-ARM-FILE-MISSING",
+			"type": "anyparse.query.cli.command.NewCommand",
+			"method": "parseNewArgs",
+			"find": "!FileSystem.exists(armPath)",
+			"replace": "false",
+			"note": "a missing --arm-file is not refused as a usage error, so the read throws instead of naming the file"
 		}
 	]
 }

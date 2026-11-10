@@ -100,6 +100,11 @@ final class PackageDocumentCarry {
 		};
 	}
 
+	/** How a document named `name` spells its package in its comment. */
+	public static function packageName(name: String): String {
+		return name == PackageDocuments.ROOT_DOCUMENT ? ROOT_NAME : Path.withoutExtension(name);
+	}
+
 	/** The file name of `doc`. */
 	private static inline function nameOf(doc: ParsedDocument): String {
 		return Path.withoutDirectory(doc.file);
@@ -108,11 +113,6 @@ final class PackageDocumentCarry {
 	/** The text of `doc` with its records replaced by `records`, joined by the gap the document already uses. */
 	private static function assemble(doc: ParsedDocument, records: Array<Record>, prefix: String): String {
 		return prefix + records.map(r -> r.text).join(doc.gap) + doc.suffix;
-	}
-
-	/** How a document named `name` spells its package in its comment. */
-	private static function packageName(name: String): String {
-		return name == PackageDocuments.ROOT_DOCUMENT ? ROOT_NAME : Path.withoutExtension(name);
 	}
 
 	/** The records of `document` in the array `arrayKey`, and the text around them. */

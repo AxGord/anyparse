@@ -194,6 +194,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/format/Json.hx',
 			'src/anyparse/query/format/LintFormat.hx',
 			'src/anyparse/query/format/Text.hx',
+			'src/anyparse/query/format/json/ArmRecordText.hx',
 			'src/anyparse/query/format/json/FactNodeRecord.hx',
 			'src/anyparse/query/format/json/FormatterDriverKeys.hx',
 			'src/anyparse/query/format/json/LongLockReasonRecord.hx',

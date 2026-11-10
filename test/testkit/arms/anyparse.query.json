@@ -16282,6 +16282,29 @@
 			"find": "statics.statics.length == 0",
 			"replace": "statics.statics.length >= 0",
 			"note": "an imported static of unknown type passes as a type path, so a read through it stays and the rename breaks the build"
+		},
+		{
+			"name": "M-ARMRECORDS-DUPLICATE-NAME",
+			"type": "anyparse.query.ArmRecords",
+			"method": "add",
+			"find": "taken.has(record.name)",
+			"replace": "false",
+			"note": "a name the registry already holds is added again, and the build then refuses the registry for a repeated name"
+		},
+		{
+			"name": "M-ARMRECORDS-DOCUMENT-OF-TYPE",
+			"type": "anyparse.query.ArmRecords",
+			"method": "add",
+			"find": "PackageDocuments.documentFor(record.type)",
+			"replace": "PackageDocuments.ROOT_DOCUMENT",
+			"note": "every record lands in the root document, which the directory reader refuses for a type that has a package"
+		},
+		{
+			"name": "M-ARMRECORDS-FRESH-DOCUMENT",
+			"type": "anyparse.query.ArmRecords",
+			"method": "empty",
+			"force": "''",
+			"note": "the document made for a package with none is empty text, so the record cannot be added to it"
 		}
 	]
 }
