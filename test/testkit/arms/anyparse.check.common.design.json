@@ -1276,6 +1276,14 @@
 			"find": "RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files",
 			"replace": "files",
 			"note": "the helpers come from the report files alone, so a lint of the copy without its home reports nothing"
+		},
+		{
+			"name": "M-OWNED-TYPE-GLOB-LITERAL",
+			"type": "anyparse.check.common.design.OwnedTypes",
+			"method": "typePathsOf",
+			"find": "if (!Glob.isGlob(path)) {",
+			"replace": "if (true) {",
+			"note": "a wildcard in a declared type path is read as a literal path, so a package glob owns nothing"
 		}
 	]
 }

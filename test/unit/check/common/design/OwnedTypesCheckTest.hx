@@ -113,6 +113,36 @@ class OwnedTypesCheckTest extends Test {
 		Assert.same(['own/deep/Deeper.hx', 'own/deep/Deeper.hx'], filesUnder('own/', deep, TYPE_CONFIG.replace('own.**', 'own.*')));
 	}
 
+	/** A wildcard in `types` owns every type it matches, each named by its own path; a same-named type elsewhere stays free. */
+	@:pin('control')
+	@:killer('M-OWNED-TYPE-GLOB-LITERAL')
+	public function testATypeGlobOwnsEveryTypeItMatches(): Void {
+		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\nimport other.Owned as Other;\n\nclass User {}\n';
+		final config: String = TYPE_CONFIG.replace('a.Owned', 'a.*');
+		Assert.same([3, 4], linesIn(user, config));
+		Assert.same(['a.Owned', 'a.Sub'], violationsOf(user, config).map(v -> v.message.split(' ')[0]));
+	}
+
+	/** `**` crosses packages and a sub-module type is matched under `module.Sub`, each finding naming its own path. */
+	@:pin('control')
+	@:killer('M-OWNED-TYPE-GLOB-LITERAL')
+	public function testATypeGlobOwnsSubTypesAcrossPackages(): Void {
+		final deep: FixtureFile = { file: 'a/deep/Deep.hx', source: 'package a.deep;\n\nclass Deep {}\n\ntypedef Shape = {x: Int};\n' };
+		final user: String = 'package b;\n\nimport a.deep.Deep;\nimport a.deep.Deep.Shape;\n\nclass User {\n\tvar s: Shape;\n}\n';
+		final vs: Array<Violation> = collected(
+			[{ file: 'b/User.hx', source: user }, deep], TYPE_CONFIG.replace('a.Owned', 'a.**')
+		).filter(v -> v.file == 'b/User.hx');
+		Assert.same(
+			['3 a.deep.Deep', '4 a.deep.Deep.Shape', '7 a.deep.Deep.Shape'],
+			vs.map(v -> '${lineOf(user, v.span?.from ?? 0)} ${v.message.split(' ')[0]}')
+		);
+	}
+
+	/** A type glob matching nothing declares nothing owned. */
+	public function testATypeGlobMatchingNothingOwnsNothing(): Void {
+		Assert.same([], linesIn('package b;\n\nimport a.Owned;\n\nclass User {}\n', TYPE_CONFIG.replace('a.Owned', 'nowhere.*')));
+	}
+
 	/** An owner naming a sub-type owns that type's body, not the module's main type beside it. */
 	@:pin('control')
 	@:killer('M-OWNED-ENCLOSING-TYPE')

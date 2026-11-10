@@ -181,6 +181,25 @@
 				"dev.TyperConformance"
 			],
 			"why": "the Haxe build of the compiler facts: a generic rule, gate or fix phase asks a FactsOracle through OracleProvider, and only the Haxe side of the checks names the class behind it"
+		},
+		{
+			"types": [
+				"anyparse.check.haxe.**"
+			],
+			"owners": [
+				"anyparse.check.haxe.**",
+				"import",
+				"anyparse.grammar.haxe.**",
+				"anyparse.check.Linter",
+				"unit.**",
+				"testkit.TestChild",
+				"dev.Binaries",
+				"dev.EdgeDiff",
+				"dev.JsonProf",
+				"dev.SlotServer",
+				"dev.TyperConformance"
+			],
+			"why": "the Haxe language's check layer is read by Haxe code only: generic code asks a grammar-agnostic seam (GrammarPlugin, OracleProvider) and never names a class behind it; the one ordered rule registry (Linter), the tests and the dev tools are its Haxe-specific consumers"
 		}
 	],
 	"move": {

@@ -10,7 +10,8 @@ using StringTools;
  * owns them, and why — what the `owned-types` rule reads.
  *
  *  - `types` — qualified type paths (`pkg.Module` for a module's main type, `pkg.Module.Sub` for a sub-type) whose
- *    every mention outside `owners` is reported.
+ *    every mention outside `owners` is reported. A path with a wildcard is a glob over qualified type paths
+ *    (`Glob.qualifiedNames`, as `owners`): it owns every non-private type it matches.
  *  - `members` — qualified `Type.member` paths (`pkg.Module.build`, `pkg.Module.new` for construction) whose every
  *    read or call outside `owners` is reported, while the type itself stays free to name.
  *  - `owners` — globs over qualified names, the syntax of `reflectiveClasses` (`Glob.qualifiedNames`): a mention is

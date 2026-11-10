@@ -503,6 +503,8 @@ member-lookup position — a local written with no type is typed by the construc
 supertypes (`ConfiguredTypes.memberOf`), so a subtype's receiver counts. `T.new` is construction: `new T(…)` of that
 type exactly.
 
+**A `types` path with a wildcard** is a glob over the qualified path of every non-private type of the index (`Glob.qualifiedNames`, the syntax below): each type it matches is its own subject, named by its own path in the finding, so one entry owns a whole package. A glob matching no type says so on stderr and owns nothing. An ambient `import.hx` has no package, so its module is `import`: an entry whose owners include `import` lets every ambient file import its types, while the uses in the files stay reported.
+
 **Owners** are globs over qualified names in the syntax of `reflectiveClasses` (`Glob.qualifiedNames`: `*` within a
 segment, `**` across segments). A mention is owned when one matches the MODULE it is written in or the qualified path
 of the type declaration enclosing it — naming a module's main type therefore owns the whole module, its sub-types

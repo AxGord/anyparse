@@ -254,7 +254,8 @@ paths declare different lists, or some none, takes such a read to obtain any met
 
 **`ownedTypes`** declares which layer of the project OWNS a type or a member, for the
 `owned-types` rule (inert without the key). Each entry names `types` (qualified type
-paths, `pkg.Module.Sub` for a sub-type) and/or `members` (`pkg.Module.build`,
+paths, `pkg.Module.Sub` for a sub-type; a path with a wildcard is a glob in the syntax of `owners`
+that owns every non-private type it matches, `pkg.**` a whole package) and/or `members` (`pkg.Module.build`,
 `pkg.Module.new` for construction), the `owners` that may reach them (globs over
 qualified names as in `reflectiveClasses`, matched against the module a mention is
 written in and the type declaration enclosing it; the declaring module always owns its

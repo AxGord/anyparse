@@ -115,6 +115,9 @@ typedef Denoted = { final decls: Array<ResolvedType>; final outside: Array<Strin
  * by the construction initialising it), its member looked up through the supertypes by `ConfiguredTypes.memberOf`; an untyped receiver
  * is not reported. `new T(…)` reaches `T.new`.
  *
+ * A `types` entry holding a wildcard is a glob of the same syntax over the qualified path of every non-private type
+ * of the index (`typePathsOf`): each type it matches is its own subject, so a whole package is owned in one entry.
+ *
  * Owners are globs over qualified names (`Glob.qualifiedNames`, the syntax of `reflectiveClasses`), matched against
  * the module a mention is written in and the qualified path of the type declaration enclosing it. The module declaring
  * an owned type always owns it.
@@ -314,7 +317,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	private static function subjectsOf(declarations: Array<TypeOwnership>, index: SymbolIndex): Array<OwnedSubject> {
 		final out: Array<OwnedSubject> = [];
 		for (d in declarations) {
-			for (path in d.types) {
+			for (path in typePathsOf(d.types, index)) {
 				final types: Array<ResolvedType> = resolvedOrSaid(path, index);
 				out.push({
 					label: path,
@@ -343,6 +346,28 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 					declaration: d
 				});
 			}
+		}
+		return out;
+	}
+
+	/**
+	 * The type paths `declared` names: an exact path as written, and a glob (`Glob.qualifiedNames`) as every non-private
+	 * type of the index whose path it matches — one said when it matches none.
+	 */
+	private static function typePathsOf(declared: Array<String>, index: SymbolIndex): Array<String> {
+		final out: Array<String> = [];
+		for (path in declared) {
+			if (!Glob.isGlob(path)) {
+				out.push(path);
+				continue;
+			}
+			final glob: EReg = Glob.qualifiedNames(path);
+			final before: Int = out.length;
+			for (info in index.allFiles()) for (t in info.types) {
+				final typePath: String = ModuleScan.pathOfDecl(info, t);
+				if (!t.isPrivate && glob.match(typePath) && !out.contains(typePath)) out.push(typePath);
+			}
+			if (out.length == before) ConfiguredTypes.warn(RULE_ID, '"$path" matches no type in the resolution scope');
 		}
 		return out;
 	}

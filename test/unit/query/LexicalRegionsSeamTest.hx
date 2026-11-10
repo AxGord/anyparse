@@ -28,7 +28,11 @@ using StringTools;
  */
 class LexicalRegionsSeamTest extends Test {
 
+	/** The language's own rule package: it may read its own grammar, and no other. */
 	private static final HAXE_RULES: String = 'src/anyparse/check/haxe/';
+
+	/** The only grammar package `HAXE_RULES` may name. */
+	private static final HAXE_GRAMMAR: String = 'anyparse.grammar.haxe.';
 
 	/** Comment, interpolating literal with a nested same-quote hole, and a regex holding an opener. */
 	private static final SOURCE: String = "// note\nvar s = '${c ? '// inner' : x}';\nvar r = ~/[\\/*]/;\n";
@@ -153,6 +157,17 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/check/config/OracleDeclarationReader.hx',
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
+			'src/anyparse/check/haxe/expressions/CompareFunctions.hx',
+			'src/anyparse/check/haxe/expressions/PreferSplitPart.hx',
+			'src/anyparse/check/haxe/facts/TypedFactsMacro.hx',
+			'src/anyparse/check/haxe/facts/TypedFactsProbe.hx',
+			'src/anyparse/check/haxe/facts/TypedFactsShapes.hx',
+			'src/anyparse/check/haxe/facts/TypedFactsTypeStrings.hx',
+			'src/anyparse/check/haxe/facts/TypedFactsWalk.hx',
+			'src/anyparse/check/haxe/oracle/CompilerServer.hx',
+			'src/anyparse/check/haxe/oracle/OracleCache.hx',
+			'src/anyparse/check/haxe/oracle/OracleGeneration.hx',
+			'src/anyparse/check/haxe/oracle/ReachDefinesProbe.hx',
 			'src/anyparse/proc/ProcessSpawn.hx',
 			'src/anyparse/proc/SpawnJob.hx',
 			'src/anyparse/query/FactNodeRecords.hx',
@@ -192,13 +207,13 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/proc',
 			'src/anyparse/query'
 		]) for (path in hxFilesUnder(dir)) {
-			// A language's own rule package is that language's by definition, and may read its grammar.
-			if (path.startsWith(HAXE_RULES)) continue;
 			final source: String = File.getContent(path);
+			final ownRules: Bool = path.startsWith(HAXE_RULES);
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			var at: Int = source.indexOf(GRAMMAR_PATH);
 			while (at >= 0) {
-				if (namesAGrammar(source, at, regions)) {
+				// A language's own rule package is that language's by definition, and may read its grammar.
+				if (!(ownRules && source.substr(at, HAXE_GRAMMAR.length) == HAXE_GRAMMAR) && namesAGrammar(source, at, regions)) {
 					found.push(path);
 					break;
 				}

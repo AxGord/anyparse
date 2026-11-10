@@ -86,6 +86,14 @@ final class Glob {
 		return root == '' ? '.' : root;
 	}
 
+	/**
+	 * Whether `spec` holds a wildcard character, so it describes a set of names and not one.
+	 */
+	public static function isGlob(spec: String): Bool {
+		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
+		return false;
+	}
+
 	private static inline function isGlobChar(c: String): Bool {
 		return c == '*' || c == '?' || c == '[';
 	}
@@ -159,11 +167,6 @@ final class Glob {
 		var norm: String = stripTrailingSlash(spec);
 		while (norm.startsWith('./')) norm = norm.substr(2);
 		return norm == '.' ? '' : norm;
-	}
-
-	private static function isGlob(spec: String): Bool {
-		for (i in 0...spec.length) if (isGlobChar(spec.charAt(i))) return true;
-		return false;
 	}
 
 	/**
