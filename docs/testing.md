@@ -951,6 +951,8 @@ two hooks' acceptance matrices). The Haxe tools live in `tools/src/dev` (package
 check. Data lives in `tools/data/`. The only shell left under `tools/` is the two hook entries in `tools/hooks/`, each a
 few lines that hand stdin to `node bin/dev.js`.
 
+`recon-facts <ID> <worktree> [--queue <file>] [--engine <apq.js>] [--holder <token>]` writes `<worktree>-logs/facts.md` for the recon of a queue line (the line, its touched paths' existence, its `owner:` through `hxq owner`, `hxq mentions` counts of the names its text backticks, the commits on main that touched its paths since its base, its `after:` commits, same-owner siblings) and prints it between two `route:` lines. The exit code is the route: 0 full (no previous `recon.md`), 10 update (the line text, touches or owner changed, or a commit touched its paths since the facts' recorded head, or the previous recon did not finish), 11 skip (`recon.md` stands; only the reason is printed, `facts.md` is left as it was), 12 refused (the line's lock `recon.lock` is younger than an hour, no `recon.md` was written after it, and its `--holder <token>` — the run the recon belongs to, e.g. the pipeline session id — is not the caller's; a run re-takes its own lock, so its retry is not refused), 2 unreadable. A full or update run takes the lock. The queue is read by `dev.QueueFile`, the one reader of the queue file's shape.
+
 ### Scratch directories: every tool's, and who removes them
 
 Six tools create a directory under `TMPDIR`, and every one removes it or leaves it claimed for the startup sweep — a directory kept forever is how a disk fills.

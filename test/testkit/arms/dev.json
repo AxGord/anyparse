@@ -2321,6 +2321,270 @@
 			"find": "GateTree.isEngineInput(file) || ",
 			"replace": "",
 			"note": "a slice that moves the typer does not reach the row, so it passes its gate and fails the land battery"
+		},
+		{
+			"name": "M-QUEUEFILE-LIST-ITEMS",
+			"type": "dev.QueueFile",
+			"method": "list",
+			"find": ".split(',')",
+			"replace": ".split(';')",
+			"note": "a flow list is read as one item, so a line with two touched paths has none of them"
+		},
+		{
+			"name": "M-QUEUEFILE-TEXT-UNINDENT",
+			"type": "dev.QueueFile",
+			"method": "unindent",
+			"find": "row.startsWith('      ') ? row.substr(6) : row.trim()",
+			"replace": "row.trim()",
+			"note": "a block text loses the relative indent of its lines"
+		},
+		{
+			"name": "M-QUEUEFILE-SCALARS",
+			"type": "dev.QueueFile",
+			"method": "entry",
+			"find": "status: fields['status'] ?? '',",
+			"replace": "status: '',",
+			"note": "a line reads without its status, so siblings are never found running"
+		},
+		{
+			"name": "M-QUEUEFILE-NOTE-QUOTES",
+			"type": "dev.QueueFile",
+			"method": "scalar",
+			"find": "JValueTools.string(JValueParser.parse(value)) ?? value;",
+			"replace": "value;",
+			"note": "a double-quoted note keeps its quotes and escapes"
+		},
+		{
+			"name": "M-QUEUEFILE-ENTRY-BOUNDARY",
+			"type": "dev.QueueFile",
+			"method": "read",
+			"find": "if (row.startsWith(ENTRY)) entries.push([]);",
+			"replace": "if (row.startsWith(ENTRY) && entries.length == 0) entries.push([]);",
+			"note": "every line after the first folds into it"
+		},
+		{
+			"name": "M-RECON-FULL-WITHOUT-RECON",
+			"type": "dev.ReconFacts",
+			"method": "previous",
+			"find": "if (!FileSystem.exists(recon)) return Full;",
+			"replace": "",
+			"note": "a line with no recon.md is not told to run a full recon"
+		},
+		{
+			"name": "M-RECON-VERDICT-AT-BOTH-ENDS",
+			"type": "dev.ReconFacts",
+			"method": "run",
+			"find": "rendered + verdictLine(route) }",
+			"replace": "rendered }",
+			"note": "the route line stays only at the head, so an exec that keeps the tail of a long output loses the verdict"
+		},
+		{
+			"name": "M-RECON-SKIP-WHEN-STILL-GOOD",
+			"type": "dev.ReconFacts",
+			"method": "previous",
+			"find": "return Skip('the previous recon.md stands: base $recorded, same line, no commit touched ${line.touches.join(', ')} since');",
+			"replace": "return Update('x');",
+			"note": "a recon that is still good is redone anyway, so the route saves nothing"
+		},
+		{
+			"name": "M-RECON-SKIP-AND-REFUSAL-LEAVE-FACTS",
+			"type": "dev.ReconFacts",
+			"method": "run",
+			"find": "case Skip(why), Refused(why):",
+			"replace": "case Refused(why):",
+			"note": "a skip rewrites facts.md and prints the whole facts, so the previous recon is compared against facts it did not read"
+		},
+		{
+			"name": "M-RECON-UPDATE-ON-TOUCHED-COMMIT",
+			"type": "dev.ReconFacts",
+			"method": "previous",
+			"find": "if (moved.length > 0)",
+			"replace": "if (false)",
+			"note": "a recon whose touched paths moved on main is called still good"
+		},
+		{
+			"name": "M-RECON-COMMITS-LIMITED-TO-TOUCHED",
+			"type": "dev.ReconFacts",
+			"method": "commitsOf",
+			"find": " -- $paths'",
+			"replace": "'",
+			"note": "every commit on main counts as moving the touched paths, so no recon is ever skipped"
+		},
+		{
+			"name": "M-RECON-LINE-HASH-IGNORES-TEXT",
+			"type": "dev.ReconFacts",
+			"method": "lineHash",
+			"find": "'${line.text}\\n${line.touches.join(',')}\\n${line.owner}'",
+			"replace": "'${line.touches.join(',')}\\n${line.owner}'",
+			"note": "a rewritten queue line text does not invalidate the previous recon"
+		},
+		{
+			"name": "M-RECON-NO-FACTS-FILE",
+			"type": "dev.ReconFacts",
+			"method": "previous",
+			"find": "return Update('recon.md has no recorded base (facts.md missing)');",
+			"replace": "return Skip('x');",
+			"note": "a recon.md with no recorded base is called still good"
+		},
+		{
+			"name": "M-RECON-OLDER-THAN-FACTS",
+			"type": "dev.ReconFacts",
+			"method": "previous",
+			"find": "if (FileSystem.stat(recon).mtime.getTime() < FileSystem.stat(facts).mtime.getTime())",
+			"replace": "if (false)",
+			"note": "a recon that did not finish after its facts were written is taken for current ones"
+		},
+		{
+			"name": "M-RECON-YOUNG-LOCK-REFUSES",
+			"type": "dev.ReconFacts",
+			"method": "lockHeld",
+			"find": "if (Date.now().getTime() - taken >= LOCK_TTL_MS) return null;",
+			"replace": "return null;",
+			"note": "a young lock of another holder never keeps a second recon out"
+		},
+		{
+			"name": "M-RECON-FINISHED-RELEASES-LOCK",
+			"type": "dev.ReconFacts",
+			"method": "lockHeld",
+			"find": "if (FileSystem.exists(recon) && FileSystem.stat(recon).mtime.getTime() >= taken) return null;",
+			"replace": "",
+			"note": "a recon that wrote its recon.md keeps its line locked"
+		},
+		{
+			"name": "M-RECON-TOUCH-EXISTENCE",
+			"type": "dev.ReconFacts",
+			"method": "body",
+			"find": "? 'exists' : 'MISSING'",
+			"replace": "? 'MISSING' : 'exists'",
+			"note": "a touched path is reported the wrong way round"
+		},
+		{
+			"name": "M-RECON-BASE-NOTE-DATE",
+			"type": "dev.ReconFacts",
+			"method": "body",
+			"find": "['main', '--since=$newest 00:00:00']",
+			"replace": "['main', '-n', '$MAX_COMMITS']",
+			"note": "a line without a recorded commit lists the newest commits instead of those since its newest note"
+		},
+		{
+			"name": "M-RECON-BASE-RECORDED-COMMIT",
+			"type": "dev.ReconFacts",
+			"method": "body",
+			"find": "['${line.base}..main']",
+			"replace": "['main']",
+			"note": "a recorded base commit does not bound the commits shown"
+		},
+		{
+			"name": "M-RECON-AFTER-SLICE-COMMIT",
+			"type": "dev.ReconFacts",
+			"method": "afterLine",
+			"find": "cmd('git -C $tree log main -n 1 $pattern $format').run()",
+			"replace": "cmd('git -C $tree log main -n 1 $format').run()",
+			"note": "an after: line quotes the newest commit on main instead of the commit of its slice"
+		},
+		{
+			"name": "M-RECON-AFTER-TRAILERS",
+			"type": "dev.ReconFacts",
+			"method": "afterLine",
+			"find": "!TRAILER.match(row) && ",
+			"replace": "",
+			"note": "the trailers of a commit are copied into the facts"
+		},
+		{
+			"name": "M-RECON-SIBLING-OWNER",
+			"type": "dev.ReconFacts",
+			"method": "siblings",
+			"find": "other.owner == line.owner",
+			"replace": "true",
+			"note": "lines of every owner are listed as siblings"
+		},
+		{
+			"name": "M-RECON-SIBLING-ENDED-BEFORE-BASE",
+			"type": "dev.ReconFacts",
+			"method": "siblings",
+			"find": "other.ended != '' && other.ended >= sinceDate",
+			"replace": "other.ended != ''",
+			"note": "a sibling that ended before the base is listed"
+		},
+		{
+			"name": "M-RECON-SIBLING-RUNNING",
+			"type": "dev.ReconFacts",
+			"method": "siblings",
+			"find": "other.status == 'running' || ",
+			"replace": "",
+			"note": "a running sibling is not listed"
+		},
+		{
+			"name": "M-RECON-MENTIONS-ONE-PER-POSITION",
+			"type": "dev.ReconFacts",
+			"method": "countMentions",
+			"find": "spot['$file${HIT_LINE.matched(1)}'] = file;",
+			"replace": "spot['$file'] = file;",
+			"note": "a position that uses, refs and lit all list is counted three times, or every hit of a file once"
+		},
+		{
+			"name": "M-RECON-NAMES-DEDUPED",
+			"type": "dev.ReconFacts",
+			"method": "backtickedNames",
+			"find": "if (name.length > 2 && !names.contains(name)) names.push(name);",
+			"replace": "if (name.length > 2) names.push(name);",
+			"note": "a name the line backticks twice is looked up twice"
+		},
+		{
+			"name": "M-RECON-SCOPE-FALLBACK",
+			"type": "dev.ReconFacts",
+			"method": "mentionScope",
+			"find": "touched.length > 0 ? touched : FALLBACK_SCOPE",
+			"replace": "touched",
+			"note": "a line naming no touched path gets no mention counts and no owner lookup, so its recon counts the names by hand"
+		},
+		{
+			"name": "M-RECON-LOCK-EXPIRES",
+			"type": "dev.ReconFacts",
+			"method": "lockHeld",
+			"find": "if (Date.now().getTime() - taken >= LOCK_TTL_MS) return null;",
+			"replace": "",
+			"note": "a lock of a recon that never wrote its recon.md refuses every later recon of the line for good"
+		},
+		{
+			"name": "M-RECON-SAME-HOLDER-REENTERS",
+			"type": "dev.ReconFacts",
+			"method": "lockHeld",
+			"find": "holder != null && owner == holder",
+			"replace": "false",
+			"note": "a retry of the same run is refused by the lock its own earlier recon took"
+		},
+		{
+			"name": "M-RECON-SINCE-START-OF-DAY",
+			"type": "dev.ReconFacts",
+			"method": "body",
+			"find": "--since=$newest 00:00:00",
+			"replace": "--since=$newest",
+			"note": "a commit made earlier on the newest note day than the tool runs is dropped from the facts"
+		},
+		{
+			"name": "M-RECON-CLI-HOLDER",
+			"type": "dev.ReconFacts",
+			"method": "main",
+			"find": "args.option('--holder')",
+			"replace": "null",
+			"note": "the --holder option of the command is read and dropped, so the run never sees it"
+		},
+		{
+			"name": "M-RECON-CLI-QUEUE",
+			"type": "dev.ReconFacts",
+			"method": "main",
+			"find": "args.option('--queue')",
+			"replace": "null",
+			"note": "the --queue option of the command is read and dropped, so the run never sees it"
+		},
+		{
+			"name": "M-RECON-CLI-ENGINE",
+			"type": "dev.ReconFacts",
+			"method": "main",
+			"find": "args.option('--engine')",
+			"replace": "null",
+			"note": "the --engine option of the command is read and dropped, so the run never sees it"
 		}
 	]
 }

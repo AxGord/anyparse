@@ -39,6 +39,7 @@ final class Dev {
 		{ name: 'probe', main: Probe.main, usage: Probe.USAGE },
 
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
+		{ name: 'recon-facts', main: ReconFacts.main, usage: ReconFacts.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
 		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },
