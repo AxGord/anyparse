@@ -154,54 +154,6 @@ final class StringsTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-UTIL-QUOTE-DQ')
-	public function testAQuoteInTheTextIsEscaped(): Void {
-		Assert.equals('"a\\"b"', Strings.quote('a"b'));
-		Assert.equals('""', Strings.quote(''));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-BS')
-	public function testABackslashInTheTextIsEscaped(): Void {
-		Assert.equals('"a\\\\b"', Strings.quote('a\\b'));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-NL')
-	public function testALineBreakIsWrittenAsAnEscape(): Void {
-		Assert.equals('"a\\nb\\rc\\td"', Strings.quote('a\nb\rc\td'));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-BACKSPACE')
-	public function testABackspaceIsWrittenAsAnEscape(): Void {
-		Assert.equals('"\\b"', Strings.quote('\x08'));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-FORMFEED')
-	public function testAFormFeedIsWrittenAsAnEscape(): Void {
-		Assert.equals('"\\f"', Strings.quote('\x0C'));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-CONTROL')
-	public function testAnotherControlCharacterIsWrittenAsALowerCaseUnicodeEscape(): Void {
-		Assert.equals('"\\u0001"', Strings.quote('\x01'));
-		Assert.equals('"\\u001f"', Strings.quote('\x1F'));
-	}
-
-	@:pin('control')
-	@:killer('M-UTIL-QUOTE-CONTROL')
-	public function testNoControlCharacterSurvivesRaw(): Void {
-		for (c in 0...32) {
-			final raw: String = String.fromCharCode(c);
-			Assert.equals(-1, Strings.quote('a${raw}b').indexOf(raw), 'code $c');
-		}
-		Assert.equals('"ж €"', Strings.quote('ж €'));
-	}
-
-	@:pin('control')
 	@:killer('M-UTIL-CHAR-COUNT')
 	public function testEveryOccurrenceOfACharacterIsCounted(): Void {
 		Assert.equals(2, Strings.charCount(LINES, '\n'.code));

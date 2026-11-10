@@ -83,37 +83,6 @@ final class Strings {
 		return true;
 	}
 
-	/** `text` as a double-quoted string literal that is also a valid JSON string; characters above ASCII are kept as they are. */
-	public static function quote(text: String): String {
-		final out: StringBuf = new StringBuf();
-		out.addChar('"'.code);
-		for (i in 0...text.length) {
-			final c: Int = text.fastCodeAt(i);
-			switch c {
-				case '"'.code:
-					out.add('\\"');
-				case '\\'.code:
-					out.add('\\\\');
-				case '\n'.code:
-					out.add('\\n');
-				case '\r'.code:
-					out.add('\\r');
-				case '\t'.code:
-					out.add('\\t');
-				case '\x08'.code:
-					out.add('\\b');
-				case '\x0C'.code:
-					out.add('\\f');
-				case _ if (c < ' '.code):
-					out.add('\\u00${c.hex(2).toLowerCase()}');
-				case _:
-					out.addChar(c);
-			}
-		}
-		out.addChar('"'.code);
-		return out.toString();
-	}
-
 	/** Number of characters `c` in `text`. */
 	public static function charCount(text: String, c: Int): Int {
 		var n: Int = 0;

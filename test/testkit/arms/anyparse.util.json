@@ -140,54 +140,6 @@
 			"note": "only the first character of an identifier is checked"
 		},
 		{
-			"name": "M-UTIL-QUOTE-DQ",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "out.add('\\\\\"')",
-			"replace": "out.add('\"')",
-			"note": "a double quote in the text is written unescaped"
-		},
-		{
-			"name": "M-UTIL-QUOTE-BS",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "out.add('\\\\\\\\')",
-			"replace": "out.add('\\\\')",
-			"note": "a backslash in the text is written once"
-		},
-		{
-			"name": "M-UTIL-QUOTE-NL",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "out.add('\\\\n')",
-			"replace": "out.add('\\\\r')",
-			"note": "a newline is written as the escape of a carriage return"
-		},
-		{
-			"name": "M-UTIL-QUOTE-BACKSPACE",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "case '\\x08'.code:",
-			"replace": "case '\\x07'.code:",
-			"note": "a backspace is no longer written as its short escape"
-		},
-		{
-			"name": "M-UTIL-QUOTE-FORMFEED",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "case '\\x0C'.code:",
-			"replace": "case '\\x0B'.code:",
-			"note": "a form feed is no longer written as its short escape"
-		},
-		{
-			"name": "M-UTIL-QUOTE-CONTROL",
-			"type": "anyparse.util.Strings",
-			"method": "quote",
-			"find": "c < ' '.code",
-			"replace": "c < 0",
-			"note": "a control character is written raw, which no JSON reader accepts"
-		},
-		{
 			"name": "M-UTIL-CHAR-COUNT",
 			"type": "anyparse.util.Strings",
 			"method": "charCount",
