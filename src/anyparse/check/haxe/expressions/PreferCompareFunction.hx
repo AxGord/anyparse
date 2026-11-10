@@ -50,6 +50,7 @@ using StringTools;
  *
  * On `null`, `Reflect.compare` answers `-1` in both argument orders where the chain answers `0`, so the fix is offered only where
  * both operands are proved non-null by `TypeResolver.isProvablyNonNull`; any other site is reported without a fix.
+ * A chain rewritten to the project's named function has no such caveat: the project names that function as its order, so it is fixed.
  *
  * ## Option
  *
@@ -296,7 +297,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			compare: compare,
 			operands: whole == null ? { left: left, right: right } : null,
 			message: 'this sort callback spells ${shortName(compare)}($left, $right) by hand',
-			noFix: called.nonNull ? null : MAY_BE_NULL,
+			noFix: called.nonNull || compare != null ? null : MAY_BE_NULL,
 			asReturn: chain.asReturn
 		};
 	}

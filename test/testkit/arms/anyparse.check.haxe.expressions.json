@@ -211,6 +211,14 @@
 			"note": "every chain is rewritten, so one that answers 0 for a null operand is rewritten into a call that answers -1"
 		},
 		{
+			"name": "M-RCMP-NAMED-TARGET-NULL",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "matched",
+			"find": "noFix: called.nonNull || compare != null ? null : MAY_BE_NULL",
+			"replace": "noFix: called.nonNull ? null : MAY_BE_NULL",
+			"note": "a chain whose target is the project's named function is reported without a fix on a null caveat that belongs to Reflect.compare"
+		},
+		{
 			"name": "M-RCMP-MIXED-OPERANDS",
 			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
