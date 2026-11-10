@@ -16305,6 +16305,38 @@
 			"method": "empty",
 			"force": "''",
 			"note": "the document made for a package with none is empty text, so the record cannot be added to it"
+		},
+		{
+			"name": "M-DOC-MENTION-NOT-REWRITTEN",
+			"type": "anyparse.query.MoveMember",
+			"method": "collectDocMentionEdits",
+			"find": "text: prep.destTypeName }",
+			"replace": "text: prep.srcTypeName }",
+			"note": "a backticked mention of a moved member keeps naming the source type, so a doc comment points at a member that is no longer there"
+		},
+		{
+			"name": "M-DOC-MENTION-PREFIX-NAME",
+			"type": "anyparse.query.DocMemberRefs",
+			"method": "typeSpans",
+			"find": "Strings.isIdentChar(source.fastCodeAt(end))",
+			"replace": "false",
+			"note": "a member whose name only starts with the moved one is taken for it, so its mention is repointed"
+		},
+		{
+			"name": "M-DOC-MENTION-UNTICKED",
+			"type": "anyparse.query.DocMemberRefs",
+			"method": "typeSpans",
+			"find": "final needle: String = '`$typeName.$member';",
+			"replace": "final needle: String = '$typeName.$member';",
+			"note": "prose without backticks is taken for a mention, so its type word is overwritten at the wrong offset"
+		},
+		{
+			"name": "M-DOC-MENTION-OTHER-TYPE",
+			"type": "anyparse.query.MoveMember",
+			"method": "collectDocMentionEdits",
+			"find": "!= Same) continue",
+			"replace": "== Unbound) continue",
+			"note": "a file whose A is another type has its mention repointed at the destination"
 		}
 	]
 }

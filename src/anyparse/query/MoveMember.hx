@@ -278,6 +278,7 @@ final class MoveMember {
 		for (m in prep.moved) if (m.isStatic)
 			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, editsByFile, movedTextEdits, callerFilesNeedingImport);
 		collectWildcardBareEdits(prep, editsByFile, callerFilesNeedingImport, outsideCallersOf);
+		for (m in prep.moved) collectDocMentionEdits(prep, m.name, plugin, editsByFile, movedTextEdits);
 
 		// Sibling scan first — its missing-dest-final-fields drive both the
 		// `new Dest(...)` wiring args and the destination scaffold.
@@ -635,6 +636,31 @@ final class MoveMember {
 			}
 		}
 		return outsideCallers;
+	}
+
+	/**
+	 * The prose counterpart of `collectQualifiedEdits`: a backticked `Src.member` in a comment of a file
+	 * that reads `Src` as the source type (`TypingService.bareBinding`) is repointed at the destination,
+	 * so a doc comment never names a member where it no longer lives. A mention inside a cut travels
+	 * with the moved text. No import follows: a comment binds nothing.
+	 */
+	private static function collectDocMentionEdits(
+		prep: MovePrep, memberName: String, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		movedTextEdits: Array<{ span: Span, text: String }>
+	): Void {
+		final canonical: String = RefactorSupport.rootQualifiedPath(prep.srcTypeName, prep.srcModule);
+		for (file => source in prep.sourceOf) if (source.indexOf('`${prep.srcTypeName}.$memberName') >= 0) {
+			final info: Null<FileInfo> = prep.index.fileInfo(file);
+			if (info == null || prep.index.typing.bareBinding(info, prep.srcTypeName, canonical) != Same) continue;
+			final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
+			for (at in DocMemberRefs.typeSpans(source, comments, prep.srcTypeName, memberName)) {
+				final edit: { span: Span, text: String } = { span: at, text: prep.destTypeName };
+				if (file == prep.srcFile && insideAnyCut(prep, at.from))
+					movedTextEdits.push(edit);
+				else
+					ScopeFiles.editsFor(editsByFile, file).push(edit);
+			}
+		}
 	}
 
 	/**

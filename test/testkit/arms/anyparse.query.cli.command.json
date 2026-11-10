@@ -1163,6 +1163,22 @@
 			"find": "!FileSystem.exists(armPath)",
 			"replace": "false",
 			"note": "a missing --arm-file is not refused as a usage error, so the read throws instead of naming the file"
+		},
+		{
+			"name": "M-MOVE-MEMBER-LAST-SCOPE-WINS",
+			"type": "anyparse.query.cli.command.MoveMemberCommand",
+			"method": "runMoveMember",
+			"find": "scopes.push(arg.value());",
+			"replace": "scopes.resize(0); scopes.push(arg.value());",
+			"note": "a repeated --scope keeps only the last one, so a caller under an earlier scope is left on the old type"
+		},
+		{
+			"name": "M-MOVE-MEMBER-UNMATCHED-SCOPE-NARROWS",
+			"type": "anyparse.query.cli.command.MoveMemberCommand",
+			"method": "runMoveMember",
+			"find": "if (unmatched.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a scope matching no file narrows the move to the rest in silence"
 		}
 	]
 }

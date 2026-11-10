@@ -38,7 +38,7 @@ final class MoveMemberCommand implements CliCommand {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
 		var destType: Null<String> = null;
-		var scopeDir: Null<String> = null;
+		final scopes: Array<String> = [];
 		var via: Null<String> = null;
 		var closure: Bool = false;
 		var scaffold: Bool = false;
@@ -57,7 +57,7 @@ final class MoveMemberCommand implements CliCommand {
 				case '--to':
 					destType = arg.value();
 				case '--scope':
-					scopeDir = arg.value();
+					scopes.push(arg.value());
 				case '--via':
 					via = arg.value();
 				case '--closure':
@@ -82,7 +82,7 @@ final class MoveMemberCommand implements CliCommand {
 					}
 			}
 		}
-		if (srcFile == null || memberArg == null || destType == null || scopeDir == null) {
+		if (srcFile == null || memberArg == null || destType == null || scopes.length == 0) {
 			CliIo.stderr('apq move-member: missing required arguments\n');
 			printMoveMemberUsage();
 			return EXIT_USAGE;
@@ -93,8 +93,14 @@ final class MoveMemberCommand implements CliCommand {
 		final destTypeName: String = destType;
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
+		// A scope that matches nothing would narrow the move silently to the rest, so it refuses instead.
+		final unmatched: Array<String> = CliArgs.expandFor(plugin.langName(), scopes).unmatched;
+		if (unmatched.length > 0) {
+			CliIo.stderr('apq move-member: ${CliArgs.noFilesMatched(plugin.langName(), unmatched)}\n');
+			return EXIT_RUNTIME;
+		}
 		final scopeFiles: Null<Array<{ file: String, source: String }>> = CliArgs.collectScopeFiles(
-			'move-member', plugin.langName(), scopeDir, [srcFileNN]
+			'move-member', plugin.langName(), scopes[0], [srcFileNN], scopes.slice(1)
 		);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
@@ -119,7 +125,8 @@ final class MoveMemberCommand implements CliCommand {
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
 		CliIo.sysPrint('  --to <Dest>    Destination type name (must exist under --scope)\n');
-		CliIo.sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included)\n');
+		CliIo.sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included); repeatable,\n');
+		CliIo.sysPrint('                 every scope counts (a scope matching no file refuses)\n');
 		CliIo.sysPrint('  --via <field>  Src instance field of type Dest routing remaining callers\n');
 		CliIo.sysPrint('  --closure      Auto-expand the set to instance methods it calls (transitive)\n');
 		CliIo.sysPrint('  --scaffold     Generate the dest final fields + ctor and the via field wiring\n');
