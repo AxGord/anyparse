@@ -1142,6 +1142,14 @@
 			"find": "!runKinds.contains(child.kind)",
 			"replace": "!MemberKinds.isModifierOrMetaKind(child.kind)",
 			"note": "prefer-inline ends a declaration's modifier run on the Haxe annotation table again, so a class annotation of a grammar that spells them otherwise never blocks its class"
+		},
+		{
+			"name": "M-INLINE-FORWARD-TO-MACRO",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "considerClass",
+			"find": "forwardsToMacro(candidate.fn, binderOfFile, shape)",
+			"replace": "false",
+			"note": "a thin forward to a macro callee is flagged again, so the safe fix inlines the call and copies the macro's expansion to every call site"
 		}
 	]
 }

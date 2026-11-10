@@ -7,6 +7,7 @@ import anyparse.query.ExpectedTypes;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.Refs.RefHit;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -174,6 +175,35 @@ final class OperandBinder {
 			case Bound(decls): decls;
 			case _: null;
 		};
+	}
+
+	/**
+	 * The members a call's CALLEE names, as the declarations of its owner declare them: `m` through an implicit `this`
+	 * (the enclosing type and its closure, unless this file binds the name), `recv.m` off the one type the receiver's
+	 * declarations resolve to (`declarationOf`, so an inherited member counts). Null where that is not proven — an
+	 * ambiguous or unresolved receiver, a name no declaration of the closure holds (a static import, a module-level
+	 * function, a library the index does not read).
+	 */
+	public function calleeMembers(callee: QueryNode): Null<Array<MemberInfo>> {
+		final name: Null<String> = callee.name;
+		final span: Null<Span> = callee.span;
+		if (name == null || span == null) return null;
+		final owners: Null<Array<ResolvedType>> = if (_identKinds.contains(callee.kind)) {
+			// Only a local, parameter or local function shadows the bare name: a binding to a MEMBER of the enclosing type is
+			// exactly what the call names.
+			final hit: Null<RefHit> = TypeResolver.resolveBindingHit(name, span, _tree, _shape);
+			final bound: Null<QueryNode> = hit?.bindingNode;
+			final shadowed: Bool = bound == null
+				? bindsHere(hit)
+				: ShapeVocab.localOrParamKinds(_shape).contains(bound.kind) || (_shape.localFunctionKinds ?? []).contains(bound.kind);
+			final enclosing: Null<ResolvedType> = shadowed ? null : enclosingDeclaration(span);
+			enclosing == null ? null : [enclosing];
+		} else if (callee.kind == _shape.fieldAccessKind && callee.children.length == 1) {
+			ownersOfReceiver(callee.children[0]);
+		} else {
+			null;
+		}
+		return owners == null || owners.length != 1 ? null : declarationOf(owners[0], name)?.members;
 	}
 
 	/**
@@ -482,6 +512,28 @@ final class OperandBinder {
 		return host == null
 			? writtenTier(written.text, written.at)
 			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
+	}
+
+	/**
+	 * The declarations `receiver` stands for: what `receiverDecls` proves, else — for a package-qualified type path
+	 * (`pkg.Type`) whose root no binding of this file claims — the type that path binds to.
+	 */
+	private function ownersOfReceiver(receiver: QueryNode): Null<Array<ResolvedType>> {
+		final named: Null<Array<ResolvedType>> = receiverDecls(receiver);
+		if (named != null) return named;
+		final fieldKind: Null<String> = _shape.fieldAccessKind;
+		final path: Null<Array<String>> = fieldKind == null ? null : NominalTypes.pathOf(receiver, _shape.identKind, fieldKind);
+		final fi: Null<FileInfo> = _index.fileInfo(_file);
+		var root: QueryNode = receiver;
+		while (root.kind != _shape.identKind && root.children.length == 1) root = root.children[0];
+		final rootSpan: Null<Span> = root.span;
+		final rootName: Null<String> = root.name;
+		if (path == null || path.length < 2 || fi == null || rootSpan == null || rootName == null) return null;
+		if (bindsHere(TypeResolver.resolveBindingHit(rootName, rootSpan, _tree, _shape))) return null;
+		return switch _index.refs.names.dottedTierOf(path.join('.'), fi, false, rootSpan.from) {
+			case Bound(decls): decls;
+			case _: null;
+		};
 	}
 
 	/**

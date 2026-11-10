@@ -5,6 +5,7 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.OperandBinder;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.Lit;
 import anyparse.query.MemberBranchScan;
@@ -84,6 +85,8 @@ import anyparse.query.SymbolIndex;
  *   (`ReflectionScan.scopeFiles`) — all skipped conservatively. That one IS soundness: under
  *   `--dce full` a method both statically called and read by `Reflect.field(o, 'm')` answers
  *   FOUND while plain and MISSING once marked `inline`, silently.
+ * - A thin forward whose callee is declared `macro` (`forwardsToMacro`): the expansion is substituted at every call
+ *   site, so inlining the forwarder duplicates it. A callee the index cannot resolve stays a candidate.
  * - A method whose single expression references itself (a bare `foo` / `this.foo`) — a
  *   potential recursive inline; a delegation to a same-named method on another receiver
  *   (`other.foo()`) is NOT a self-reference and stays a candidate.
@@ -299,8 +302,8 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			final metaBlocked: Array<QueryNode> = metaBlockedClasses(t.tree, t.branch, shape, metaKinds);
 			for (cls in CheckScan.classBodies(t.tree)) if (!metaBlocked.contains(cls))
 				considerClass(
-					out, cls, t.file, t.source, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming, contracts,
-					plugin
+					out, cls, t.file, t.source, t.tree, widest, valueBlocked, reflectNames, _oracleRelaxed, t.branch, retained, naming,
+					contracts, plugin
 				);
 		}
 		return out;
@@ -518,9 +521,9 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * time.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, file: String, source: String, widest: () -> SymbolIndex, valueBlocked: Array<String>,
-		reflectNames: () -> Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>, naming: Null<NamingSupport>,
-		contracts: Array<FrameworkContract>, plugin: GrammarPlugin
+		out: Array<Violation>, cls: QueryNode, file: String, source: String, tree: QueryNode, widest: () -> SymbolIndex,
+		valueBlocked: Array<String>, reflectNames: () -> Array<String>, relaxed: Bool, branch: MemberBranchSeams, retained: Null<String>,
+		naming: Null<NamingSupport>, contracts: Array<FrameworkContract>, plugin: GrammarPlugin
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
@@ -570,6 +573,15 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		if (index.traits.transitivelyCarriesBuildMacro(owner, file)) return;
 		final subtypeMembers: Array<String> = index.subtypes.hasSubtype(owner, file) ? index.subtypes.subtypeMemberNames(owner, file) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls, shape.implementsClauseKind);
+		var binder: Null<OperandBinder> = null;
+		var binderBuilt: Bool = false;
+		function binderOfFile(): Null<OperandBinder> {
+			if (!binderBuilt) {
+				binderBuilt = true;
+				binder = OperandBinder.forFile(plugin, file, source, tree, index);
+			}
+			return binder;
+		}
 		for (candidate in locals) {
 			final name: String = candidate.name;
 			if (subtypeMembers.contains(name)) continue;
@@ -580,6 +592,9 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			// the extends chain always was for this rule.
 			if (index.typing.members.supertypeDeclaresMember(owner, name, file)) continue;
 			if (interfaceRequires(index, ifaces, name, file)) continue;
+			// A forward to a MACRO is not thin: the callee expands at the call site, so inlining the forwarder copies
+			// the expansion to every caller. Only the callee's declaration can say, which is why it is asked here.
+			if (forwardsToMacro(candidate.fn, binderOfFile, shape)) continue;
 			// A method a FRAMEWORK reaches by name has ONE call site, the one that framework's own
 			// macro writes or its runtime dispatches, and it runs once — so the fold buys nothing
 			// and the rule's premise ("inlining BUYS something") is unmet. Asked through the shared
@@ -886,6 +901,17 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	/** Whether `node` is a `== null` / `!= null` comparison — a guard whose narrowing an inlined body loses. */
 	private static function isNullGuard(node: QueryNode, shape: RefShape): Bool {
 		return (node.kind == shape.eqKind || node.kind == shape.notEqKind) && node.children.exists(c -> c.kind == shape.nullLiteralKind);
+	}
+
+	/**
+	 * Whether `fn`'s body is a call whose callee is declared `macro`: the expansion is substituted at the call site, so
+	 * inlining the forwarder duplicates it into every caller. An unresolved callee answers false (today's behaviour).
+	 */
+	private static function forwardsToMacro(fn: QueryNode, binder: () -> Null<OperandBinder>, shape: RefShape): Bool {
+		final root: Null<QueryNode> = bodyRootExpr(fn, shape);
+		if (root == null || root.kind != shape.callKind || root.children.length == 0) return false;
+		final members: Null<Array<MemberInfo>> = binder()?.calleeMembers(root.children[0]);
+		return members != null && members.exists(m -> m.isMacro);
 	}
 
 }
