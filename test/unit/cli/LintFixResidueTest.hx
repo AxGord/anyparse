@@ -121,9 +121,10 @@ class LintFixResidueTest extends Test {
 	@:killer('M-FIX-RESIDUE-CARRIED')
 	public function testAFindingTheFileAlreadyHeldIsNotResidue(): Void {
 		#if (sys || nodejs)
-		final chain: String = 'package p;\n\nclass C {\n\tpublic function f(a:Bool, b:Bool):Int {\n\t\tif (a) return 1;\n'
-			+ '\t\telse if (b) return 2;\n\t\telse return 3;\n\t}\n}\n';
+		final chain: String = 'package p;\n\nclass C {\n\tpublic function f(a:Bool, b:Bool):Int {\n\t\tif (a)\n\t\t\treturn 1;\n'
+			+ '\t\telse if (b)\n\t\t\treturn 2;\n\t\telse\n\t\t\treturn 3;\n\t}\n}\n';
 		final run: ResidueRun = fix(chain, Linter.builtins(), '{}');
+		Assert.isTrue(run.after.contains('return if (a) 1 else if (b) 2 else 3;'));
 		Assert.equals(ExitCode.EXIT_OK, run.code);
 		Assert.isFalse(run.stderr.contains('on lines this run changed'));
 		#else
