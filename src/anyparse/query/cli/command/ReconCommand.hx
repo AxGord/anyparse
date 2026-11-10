@@ -532,8 +532,8 @@ final class ReconCommand implements CliCommand {
 				case '--lang':
 					lang = arg.value();
 				case '--top':
-					final v: Null<Int> = Std.parseInt(arg.value());
-					if (v == null || v <= 0) {
+					final v: Int = arg.intValue();
+					if (v <= 0) {
 						CliIo.stderr('apq recon: --top requires a positive integer\n');
 						return reconParseExit(EXIT_USAGE);
 					}

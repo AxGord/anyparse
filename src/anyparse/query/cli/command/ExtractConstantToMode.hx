@@ -46,7 +46,7 @@ final class ExtractConstantToMode {
 				case '--match':
 					matchPattern = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--name':
 					name = arg.value();
 				case '--to':

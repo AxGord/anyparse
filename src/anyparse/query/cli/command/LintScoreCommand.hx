@@ -93,10 +93,9 @@ final class LintScoreCommand implements CliCommand implements LanguageFree {
 					if (format != 'text' && format != 'json')
 						throw new UsageFailure('unknown --format value "$format" (expected text|json)');
 				case '--limit':
-					final value: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(value);
-					if (parsed == null || '$parsed' != value || parsed < -1)
-						throw new UsageFailure('--limit expects a count, or -1 for every unlabelled key — got "$value"');
+					final parsed: Int = arg.intValue();
+					if (parsed < -1)
+						throw new UsageFailure('--limit expects a count, or -1 for every unlabelled key — got "${arg.value()}"');
 					limit = parsed;
 				case '--lang':
 					// the hxq shim injects --lang haxe; a score reads two JSON files and needs no grammar

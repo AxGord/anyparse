@@ -199,7 +199,7 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 					scan.flat = true;
 				case '--limit':
 					try {
-						scan.limit = CliArgs.parseLimit(arg.value());
+						scan.limit = CliArgs.parseLimit(arg);
 					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return mentionsParseExit(EXIT_USAGE);

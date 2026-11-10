@@ -242,7 +242,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 				case '--match':
 					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--from-file':
 					fromFile = arg.value();
 				case '--write':

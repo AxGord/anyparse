@@ -78,7 +78,7 @@ final class StdlibDupCommand implements CliCommand {
 				case '--lang':
 					lang = arg.value();
 				case '--limit':
-					limit = Std.parseInt(arg.value()) ?? 0;
+					limit = arg.intValue();
 				case '--work':
 					work = arg.value();
 				case '--census':

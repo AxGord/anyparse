@@ -257,7 +257,7 @@ final class MetaCommand implements CliCommand implements LeadingQueryCount {
 					flat = true;
 				case '--limit':
 					try {
-						limit = CliArgs.parseLimit(arg.value());
+						limit = CliArgs.parseLimit(arg);
 					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return metaParseExit(EXIT_USAGE);

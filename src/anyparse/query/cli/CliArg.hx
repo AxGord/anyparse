@@ -48,4 +48,15 @@ final class CliArg {
 		return _values.length > 0 ? _values[0] : fallback;
 	}
 
+	/**
+	 * The value the flag took as an integer. Anything that is not a whole Int32 (`abc`, `1x`, `0x10`, `99999999999`) is a usage
+	 * failure naming the flag and the value, never a `null` a parser would mistake for an absent flag.
+	 */
+	public function intValue(): Int {
+		final v: String = value();
+		final n: Null<Int> = SourceText.parseStrictSignedInt(v);
+		if (n == null) throw new UsageFailure('$token expects an integer, got "$v"');
+		return n;
+	}
+
 }

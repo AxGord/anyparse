@@ -695,6 +695,38 @@
 			"find": "for (path in expanded.paths) if (!keys.contains(FileIdentity.realPath(path))) {",
 			"replace": "for (path in expanded.paths) {",
 			"note": "two scopes spelling one file differently index it twice"
+		},
+		{
+			"name": "M-INT-FLAG-NON-INT-READS-AS-ZERO",
+			"type": "anyparse.query.cli.CliArg",
+			"method": "intValue",
+			"find": "\t\tif (n == null) throw new UsageFailure('$token expects an integer, got \"$v\"');\n\t\treturn n;",
+			"replace": "\t\treturn n ?? 0;",
+			"note": "a non-integer flag value reads as zero instead of a usage failure, so a typo is acted on as a real count"
+		},
+		{
+			"name": "M-INT-FLAG-PREFIX-PARSE",
+			"type": "anyparse.query.cli.CliArg",
+			"method": "intValue",
+			"find": "SourceText.parseStrictSignedInt(v)",
+			"replace": "Std.parseInt(v)",
+			"note": "the value is read by its leading digits and without the Int32 guard, so `1x` is accepted as 1 and an over-Int32 count passes as a double typed Int"
+		},
+		{
+			"name": "M-INT-FLAG-VALUE-LOST",
+			"type": "anyparse.query.cli.CliArg",
+			"method": "intValue",
+			"find": "\t\treturn n;\n\t}",
+			"replace": "\t\treturn 0;\n\t}",
+			"note": "a well-formed integer flag value is dropped, so every command that reads one acts on zero"
+		},
+		{
+			"name": "M-LIMIT-PREFIX-PARSE",
+			"type": "anyparse.query.cli.CliArgs",
+			"method": "parseLimit",
+			"find": "final n: Int = arg.intValue();",
+			"replace": "final n: Int = Std.parseInt(arg.value()) ?? -1;",
+			"note": "--limit reads its leading digits, so `--limit 1x` is a limit of 1 on every walker that takes one"
 		}
 	]
 }

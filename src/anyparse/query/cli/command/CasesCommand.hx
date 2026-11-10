@@ -57,7 +57,7 @@ final class CasesCommand implements CliCommand implements LeadingQuery {
 					flat = true;
 				case '--limit':
 					try {
-						limit = CliArgs.parseLimit(arg.value());
+						limit = CliArgs.parseLimit(arg);
 					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;

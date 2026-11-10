@@ -183,7 +183,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 				case '--match':
 					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--kind':
 					kind = arg.value();
 				case '--with-doc':

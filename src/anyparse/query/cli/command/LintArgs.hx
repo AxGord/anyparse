@@ -321,15 +321,15 @@ final class LintArgs {
 				case '--no-oracle':
 					noOracle = true;
 				case '--fix-probes':
-					final count: Null<Int> = Std.parseInt(arg.value());
-					if (count == null || count < 0) {
+					final count: Int = arg.intValue();
+					if (count < 0) {
 						CliIo.stderr('apq lint: --fix-probes expects a count of typechecks, 0 or more\n');
 						return lintParseExit(EXIT_USAGE);
 					}
 					fixProbes = count;
 				case '--review-budget':
-					final lines: Null<Int> = SourceText.parseStrictInt(arg.value());
-					if (lines == null || lines < 1) {
+					final lines: Int = arg.intValue();
+					if (lines < 1) {
 						CliIo.stderr('apq lint: --review-budget expects a number of source lines, 1 or more\n');
 						return lintParseExit(EXIT_USAGE);
 					}

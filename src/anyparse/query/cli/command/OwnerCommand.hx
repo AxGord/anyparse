@@ -61,7 +61,7 @@ final class OwnerCommand implements CliCommand implements LeadingQueryCount {
 			case '--list':
 				list = true;
 			case '--limit':
-				limit = CliArgs.parseLimit(arg.value());
+				limit = CliArgs.parseLimit(arg);
 			case '-h', '--help':
 				printOwnerUsage();
 				return EXIT_OK;

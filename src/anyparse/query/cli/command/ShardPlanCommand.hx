@@ -54,7 +54,7 @@ final class ShardPlanCommand implements CliCommand {
 		var runner: Null<String> = null;
 		var classesPath: Null<String> = null;
 		var weightsPath: Null<String> = null;
-		var shardsText: Null<String> = null;
+		var shards: Null<Int> = null;
 		var format: String = 'lines';
 		var lang: String = 'haxe';
 		for (arg in new ShardPlanCommand().flags().walk(args)) {
@@ -67,7 +67,7 @@ final class ShardPlanCommand implements CliCommand {
 				case '--weights':
 					weightsPath = arg.value();
 				case '--shards':
-					shardsText = arg.value();
+					shards = arg.intValue();
 				case '--format':
 					format = arg.value();
 				case '--lang':
@@ -86,7 +86,7 @@ final class ShardPlanCommand implements CliCommand {
 			printShardPlanUsage();
 			return EXIT_USAGE;
 		}
-		if (shardsText == null) {
+		if (shards == null) {
 			CliIo.stderr('apq shard-plan: --shards <N> is required\n');
 			printShardPlanUsage();
 			return EXIT_USAGE;
@@ -95,12 +95,8 @@ final class ShardPlanCommand implements CliCommand {
 			CliIo.stderr('apq shard-plan: --format expects lines or filters, got "$format"\n');
 			return EXIT_USAGE;
 		}
-		// The regex, not Std.parseInt alone: parseInt reads a leading number out
-		// of "4x" and would silently plan four shards for a typo.
-		final shardsRaw: String = shardsText;
-		final shards: Null<Int> = new EReg('^[0-9]+$', '').match(shardsRaw) ? Std.parseInt(shardsRaw) : null;
-		if (shards == null || shards < 1) {
-			CliIo.stderr('apq shard-plan: --shards expects a positive integer, got "$shardsRaw"\n');
+		if (shards < 1) {
+			CliIo.stderr('apq shard-plan: --shards expects a positive integer, got "$shards"\n');
 			return EXIT_USAGE;
 		}
 		final shardCount: Int = shards;

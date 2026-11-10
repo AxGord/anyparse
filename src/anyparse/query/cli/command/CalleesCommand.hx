@@ -54,16 +54,15 @@ final class CalleesCommand implements CliCommand implements LeadingQuery {
 				case '--lang':
 					lang = arg.value();
 				case '--depth':
-					final raw: String = arg.value();
-					final parsedDepth: Null<Int> = Std.parseInt(raw);
-					if (parsedDepth == null || parsedDepth < 1) {
+					final parsedDepth: Int = arg.intValue();
+					if (parsedDepth < 1) {
 						CliIo.stderr('apq $cmd: --depth expects a positive integer\n');
 						return EXIT_USAGE;
 					}
 					depth = parsedDepth;
 				case '--limit':
 					try {
-						limit = CliArgs.parseLimit(arg.value());
+						limit = CliArgs.parseLimit(arg);
 					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;

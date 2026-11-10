@@ -171,6 +171,13 @@ final class SourceText {
 		return value > MAX_INT ? null : Std.int(value);
 	}
 
+	/** `parseStrictInt` with one optional leading `-`: the whole token is an integer in Int32 range, or null. */
+	public static function parseStrictSignedInt(s: String): Null<Int> {
+		final negative: Bool = s.length > 0 && s.fastCodeAt(0) == '-'.code;
+		final digits: Null<Int> = parseStrictInt(negative ? s.substring(1) : s);
+		return digits == null || !negative ? digits : -digits;
+	}
+
 	/**
 	 * The whitespace prefix of the line `from` sits on, or `''` when anything else precedes that
 	 * offset on the line. A multi-statement splice re-indents its continuation lines with this, so

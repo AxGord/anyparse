@@ -204,17 +204,17 @@ final class GraphCommand implements CliCommand {
 					kinds = arg.value();
 					scoping.push(a);
 				case '--min-weight':
-					minWeight = count(arg.value(), a, 1);
+					minWeight = count(arg, 1);
 					pruning.push(a);
 				case '--package-depth':
-					packageDepth = count(arg.value(), a, 1);
+					packageDepth = count(arg, 1);
 					pruning.push(a);
 				case '--focus':
 					focus.push(arg.value());
 					pruning.push(a);
 					centring.push(a);
 				case '--radius':
-					radius = count(arg.value(), a, 0);
+					radius = count(arg, 0);
 					pruning.push(a);
 					centring.push(a);
 				case '--mutual':
@@ -407,11 +407,10 @@ final class GraphCommand implements CliCommand {
 		};
 	}
 
-	/** `raw` as a count of at least `least`, the value of `flag`. */
-	private static function count(raw: String, flag: String, least: Int): Int {
-		final parsed: Null<Int> = Std.parseInt(raw);
-		if (parsed == null || parsed < least || '$parsed' != raw)
-			throw new UsageFailure('$flag expects an integer of at least $least, not "$raw"');
+	/** The value `arg` took as a count of at least `least`. */
+	private static function count(arg: CliArg, least: Int): Int {
+		final parsed: Int = arg.intValue();
+		if (parsed < least) throw new UsageFailure('${arg.token} expects an integer of at least $least, not "${arg.value()}"');
 		return parsed;
 	}
 

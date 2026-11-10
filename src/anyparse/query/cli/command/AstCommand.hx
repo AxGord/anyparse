@@ -7,6 +7,7 @@ import anyparse.query.format.Json;
 import anyparse.query.format.Text;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -330,12 +331,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 			for (c in n.children) walk(c);
 		}
 		walk(root);
-		seen.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		seen.sort(Compare.compareString);
 		return seen;
 	}
 
@@ -414,13 +410,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					// the root, no children" regardless of mode. The three
 					// `Engine.truncate` callsites below pass the right
 					// subtree-root in each branch.
-					final v: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null) {
-						CliIo.stderr('apq ast: --depth expects an integer, got "$v"\n');
-						return astParseExit(EXIT_USAGE);
-					}
-					depth = parsed;
+					depth = arg.intValue();
 				case '--select':
 					selectExpr = arg.value();
 				case '--at':
@@ -437,18 +427,16 @@ final class AstCommand implements CliCommand implements StdinDocument {
 				case '--diff':
 					writerDiff = true;
 				case '--min-children':
-					final v: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						CliIo.stderr('apq ast: --min-children expects a non-negative integer, got "$v"\n');
+					final parsed: Int = arg.intValue();
+					if (parsed < 0) {
+						CliIo.stderr('apq ast: --min-children expects a non-negative integer, got "${arg.value()}"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					minChildren = parsed;
 				case '--max-children':
-					final v: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						CliIo.stderr('apq ast: --max-children expects a non-negative integer, got "$v"\n');
+					final parsed: Int = arg.intValue();
+					if (parsed < 0) {
+						CliIo.stderr('apq ast: --max-children expects a non-negative integer, got "${arg.value()}"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					maxChildren = parsed;
@@ -458,10 +446,9 @@ final class AstCommand implements CliCommand implements StdinDocument {
 					// matches by arity, this one TRUNCATES the printed tree
 					// horizontally with an `(... N more)` sentinel). Composes
 					// with --depth N for "first N children up to depth M".
-					final v: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(v);
-					if (parsed == null || parsed < 0) {
-						CliIo.stderr('apq ast: --children-limit expects a non-negative integer, got "$v"\n');
+					final parsed: Int = arg.intValue();
+					if (parsed < 0) {
+						CliIo.stderr('apq ast: --children-limit expects a non-negative integer, got "${arg.value()}"\n');
 						return astParseExit(EXIT_USAGE);
 					}
 					childrenLimit = parsed;

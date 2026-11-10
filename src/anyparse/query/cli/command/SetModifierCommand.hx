@@ -65,7 +65,7 @@ final class SetModifierCommand implements CliCommand {
 				case '--match':
 					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--reformat':
 					reformat = true;
 				case '--write':

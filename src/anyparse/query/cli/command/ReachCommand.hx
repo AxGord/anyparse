@@ -57,9 +57,8 @@ final class ReachCommand implements CliCommand {
 				case '--to':
 					toPatterns.push(arg.value());
 				case '--max-paths':
-					final raw: String = arg.value();
-					final parsedMax: Null<Int> = Std.parseInt(raw);
-					if (parsedMax == null || parsedMax < 1) {
+					final parsedMax: Int = arg.intValue();
+					if (parsedMax < 1) {
 						CliIo.stderr('apq reach: --max-paths expects a positive integer\n');
 						return EXIT_USAGE;
 					}

@@ -38,7 +38,8 @@
 		"p/Build.hx": "package p;\n\ntypedef Ctx = {\n\tfinal flag: Bool;\n\tfinal other: Int;\n}\n\nclass Build {\n\tpublic static function make(): Ctx {\n\t\treturn {flag: true, other: 1};\n\t}\n\n\tpublic static function held(): Bool {\n\t\tfinal c: Ctx = {flag: false, other: 2};\n\t\treturn c.flag;\n\t}\n}\n",
 		"p/Reader.hx": "package p;\n\nimport p.Build.Ctx;\n\nclass Reader {\n\tpublic static function read(c: Ctx): Bool {\n\t\treturn c.flag;\n\t}\n}\n",
 		"reg/p.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"M-A\",\n\t\t\t\"type\": \"p.X\",\n\t\t\t\"method\": \"m\",\n\t\t\t\"force\": \"1\",\n\t\t\t\"note\": \"n\"\n\t\t}\n\t]\n}\n",
-		"comments/M.hx": "package a;\n\n/** The class that replaced Zq. */\nclass M {\n\n\t// plain note about Zq here\n\tpublic function new() {}\n\n\t/** Not Zqx, and not aZq either. */\n\t/* block note: Zq */\n\tpublic function f(): Void {\n\t\ttrace('Zq');\n\t}\n\n}\n"
+		"comments/M.hx": "package a;\n\n/** The class that replaced Zq. */\nclass M {\n\n\t// plain note about Zq here\n\tpublic function new() {}\n\n\t/** Not Zqx, and not aZq either. */\n\t/* block note: Zq */\n\tpublic function f(): Void {\n\t\ttrace('Zq');\n\t}\n\n}\n",
+		"one.json": "[{\"n\": 1}, {\"n\": 2}]\n"
 	},
 	"invocations": [
 		{
@@ -1023,7 +1024,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "5b55489b5062a062",
+				"err": "9a7dd22926c0ccd3",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1041,7 +1042,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "5b55489b5062a062",
+				"err": "9a7dd22926c0ccd3",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -8749,6 +8750,108 @@
 				"exit": 0,
 				"out": "4f81fb18f9522f19",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq get --where n=1 --nth abc one.json",
+			"argv": [
+				"apq",
+				"get",
+				"--where",
+				"n=1",
+				"--nth",
+				"abc",
+				"one.json"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6cc723e3e24fac96",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq get --where n=1 --nth abc one.json",
+			"argv": [
+				"hxq",
+				"get",
+				"--where",
+				"n=1",
+				"--nth",
+				"abc",
+				"one.json"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6cc723e3e24fac96",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq refs Foo pkg/Foo.hx --limit 1x",
+			"argv": [
+				"apq",
+				"refs",
+				"Foo",
+				"pkg/Foo.hx",
+				"--limit",
+				"1x"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "2bd500d927d2fbfd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq refs Foo pkg/Foo.hx --limit 1x",
+			"argv": [
+				"hxq",
+				"refs",
+				"Foo",
+				"pkg/Foo.hx",
+				"--limit",
+				"1x"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "2bd500d927d2fbfd",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --depth 1x",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--depth",
+				"1x"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6945d1c0a2cb3edb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --depth 1x",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--depth",
+				"1x"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "6945d1c0a2cb3edb",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

@@ -266,7 +266,7 @@ final class RefsCommand implements CliCommand implements LeadingQuery {
 				scan.flat = true;
 			case '--limit':
 				try {
-					scan.limit = CliArgs.parseLimit(arg.value());
+					scan.limit = CliArgs.parseLimit(arg);
 				} catch (exception: Exception) {
 					CliIo.stderr('${exception.message}\n');
 					return refsParseExit(EXIT_USAGE);

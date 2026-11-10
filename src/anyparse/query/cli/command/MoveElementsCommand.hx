@@ -128,7 +128,7 @@ final class MoveElementsCommand implements CliCommand {
 				case '--match':
 					matchPattern = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--range':
 					range = arg.value();
 				case '--into':

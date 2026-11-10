@@ -1033,8 +1033,8 @@
 			"name": "M-LINT-REVIEW-BUDGET-ZERO",
 			"type": "anyparse.query.cli.command.LintArgs",
 			"method": "parseLintArgs",
-			"find": "lines == null || lines < 1",
-			"replace": "lines == null",
+			"find": "lines < 1",
+			"replace": "lines < 0",
 			"note": "a budget of zero is accepted and declines every reorder of the run while the headline names it as a lift"
 		},
 		{
@@ -1243,6 +1243,14 @@
 			"find": "CliArgs.refuseDataGrammar(op, plugin)",
 			"replace": "false",
 			"note": "safe-delete never refuses a data grammar, so a data file falls through to a lookup that names it as the missing member"
+		},
+		{
+			"name": "M-AST-DEPTH-PREFIX-PARSE",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "parseAstArgs",
+			"find": "depth = arg.intValue();",
+			"replace": "depth = Std.parseInt(arg.value()) ?? 0;",
+			"note": "ast --depth reads its leading digits, so `--depth 1x` truncates the tree at 1 instead of being refused"
 		}
 	]
 }

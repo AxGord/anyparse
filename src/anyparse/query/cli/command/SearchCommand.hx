@@ -298,7 +298,7 @@ final class SearchCommand implements CliCommand implements LeadingQuery implemen
 				flat = true;
 			case '--limit':
 				try {
-					limit = CliArgs.parseLimit(arg.value());
+					limit = CliArgs.parseLimit(arg);
 				} catch (exception: Exception) {
 					CliIo.stderr('${exception.message}\n');
 					return searchParseExit(EXIT_USAGE);

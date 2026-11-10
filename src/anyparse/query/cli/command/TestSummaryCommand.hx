@@ -87,12 +87,7 @@ final class TestSummaryCommand implements CliCommand implements LanguageFree {
 					// Shim invariance — apq test-summary doesn't use a plugin.
 					arg.value();
 				case '--exit-status':
-					final rawStatus: String = arg.value();
-					exitStatus = Std.parseInt(rawStatus);
-					if (exitStatus == null) {
-						CliIo.stderr('apq test-summary: --exit-status wants an integer, got "$rawStatus"\n');
-						return EXIT_USAGE;
-					}
+					exitStatus = arg.intValue();
 				case null:
 					if (sourcePath != null) {
 						CliIo.stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');

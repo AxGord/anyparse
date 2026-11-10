@@ -291,9 +291,9 @@ final class CliArgs {
 	}
 
 	/** `--limit`'s value as a non-negative count; anything else throws a usage failure. */
-	public static function parseLimit(v: String): Int {
-		final n: Null<Int> = Std.parseInt(v);
-		if (n == null || n < 0) throw new UsageFailure('--limit expects a non-negative integer, got "$v"');
+	public static function parseLimit(arg: CliArg): Int {
+		final n: Int = arg.intValue();
+		if (n < 0) throw new UsageFailure('--limit expects a non-negative integer, got "${arg.value()}"');
 		return n;
 	}
 

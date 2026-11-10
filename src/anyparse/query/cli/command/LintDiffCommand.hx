@@ -77,7 +77,7 @@ final class LintDiffCommand implements CliCommand implements LanguageFree {
 				case '--label':
 					label = arg.value();
 				case '--limit':
-					limit = Std.parseInt(arg.value()) ?? LINT_DIFF_EXAMPLE_LIMIT;
+					limit = arg.intValue();
 				case '--lang':
 					// hxq shim auto-injects --lang haxe; harmless here (lint-diff
 					// reads two JSON reports, no grammar plugin needed). Accept +

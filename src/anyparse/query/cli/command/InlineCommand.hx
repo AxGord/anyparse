@@ -75,7 +75,7 @@ final class InlineCommand implements CliCommand {
 				case '--match':
 					matchExpr = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--write':
 					write = true;
 				case '-h', '--help':

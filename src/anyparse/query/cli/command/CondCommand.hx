@@ -73,16 +73,15 @@ final class CondCommand implements CliCommand implements LeadingQuery {
 					inactive = true;
 				case '--limit':
 					try {
-						limit = CliArgs.parseLimit(arg.value());
+						limit = CliArgs.parseLimit(arg);
 					} catch (exception: Exception) {
 						CliIo.stderr('${exception.message}\n');
 						return EXIT_USAGE;
 					}
 				case '--max-body':
-					final raw: String = arg.value();
-					final parsed: Null<Int> = SourceText.parseStrictInt(raw);
-					if (parsed == null || parsed < 0) {
-						CliIo.stderr('apq cond: --max-body expects a non-negative line budget, got "$raw"\n');
+					final parsed: Int = arg.intValue();
+					if (parsed < 0) {
+						CliIo.stderr('apq cond: --max-body expects a non-negative line budget, got "${arg.value()}"\n');
 						return EXIT_USAGE;
 					}
 					maxBody = parsed;

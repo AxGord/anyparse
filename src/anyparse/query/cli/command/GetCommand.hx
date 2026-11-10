@@ -156,7 +156,7 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 				case '--select':
 					select = arg.value();
 				case '--nth':
-					nth = Std.parseInt(arg.value());
+					nth = arg.intValue();
 				case '--where':
 					if (where != null) throw new UsageFailure('--where is given once');
 					where = parseWhere(arg.value());

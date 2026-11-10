@@ -50,9 +50,8 @@ final class ClustersCommand implements CliCommand {
 				case '--lang':
 					lang = arg.value();
 				case '--hubs':
-					final raw: String = arg.value();
-					final parsed: Null<Int> = Std.parseInt(raw);
-					if (parsed == null || parsed < 0) {
+					final parsed: Int = arg.intValue();
+					if (parsed < 0) {
 						CliIo.stderr('apq clusters: --hubs expects a non-negative integer (0 = no hub extraction)\n');
 						return EXIT_USAGE;
 					}
