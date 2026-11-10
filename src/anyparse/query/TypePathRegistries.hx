@@ -21,10 +21,12 @@ typedef TypePathRegistry = {
 	final keys: Array<String>;
 
 	/** The registry is a directory of documents named after the package of the types they hold (`PackageDocuments`). */
-	@:optional final byPackage: Bool;
+	@:optional
+	final byPackage: Bool;
 
 	/** The registry's records also name MEMBERS of those types (`MemberRegistryRename`). */
-	@:optional final members: MemberKeys;
+	@:optional
+	final members: MemberKeys;
 
 }
 

@@ -94,7 +94,8 @@ typedef FixVerifyResult = {
 	 * The findings that got no candidate because the source is not the writer's fixed point. Neither a decline
 	 * nor a tally row (see `SourceNotCanonical`), so without this list the run would end in an unexplained zero.
 	 */
-	@:optional var notCanonical: Array<{ file: String, rule: String, findings: Int }>;
+	@:optional
+	var notCanonical: Array<{ file: String, rule: String, findings: Int }>;
 
 }
 

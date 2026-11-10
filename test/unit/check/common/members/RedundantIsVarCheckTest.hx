@@ -11,7 +11,8 @@ import anyparse.query.cli.command.LintArgs;
  * `@:bypassAccessor`, initializer or reflective name can reach is dead, and the fix deletes it.
  * Each negative case is paired with the positive one it differs from by a single construct.
  */
-@:nullSafety(Strict) class RedundantIsVarCheckTest extends Test {
+@:nullSafety(Strict)
+class RedundantIsVarCheckTest extends Test {
 
 	/** A `(never, set)` property whose setter never spells the name — the base finding. */
 	private static inline final DEAD_SETTER: String =
@@ -44,7 +45,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-SLOTS-ANY')
+	@:pin('control')
+	@:killer('M-ISVAR-SLOTS-ANY')
 	public function testDefaultSlotNotFlagged(): Void {
 		Assert.equals(
 			0, violations('class C {\n\t@:isVar public var level(default, set):Int;\n\tfunction set_level(v:Int):Int return v;\n}').length
@@ -54,7 +56,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-NATIVE-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-NATIVE-BLIND')
 	public function testCppCodeOutsideAnAccessorNotFlagged(): Void {
 		// Target code is invisible to the Haxe typer: removing the metadata typechecks and the C++ build fails.
 		final src: String = 'class C {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n'
@@ -62,21 +65,24 @@ import anyparse.query.cli.command.LintArgs;
 		Assert.equals(0, violations(src).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-NATIVE-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-NATIVE-BLIND')
 	public function testJsSyntaxCodeOutsideAnAccessorNotFlagged(): Void {
 		final src: String = 'class C {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n'
 			+ '\tpublic function peek():Int return js.Syntax.code(\'this.level\');\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-NATIVE-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-NATIVE-BLIND')
 	public function testFunctionCodeMetaNotFlagged(): Void {
 		final src: String = 'class C {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n'
 			+ '\t@:functionCode(\'this->level = 1;\')\n\tpublic function reset():Void {}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-MEMBER-KEEP-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-MEMBER-KEEP-BLIND')
 	public function testKeptMemberNotFlagged(): Void {
 		Assert.equals(
 			0,
@@ -84,7 +90,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-EMPTY-CALL-UNFIXED')
+	@:pin('control')
+	@:killer('M-ISVAR-EMPTY-CALL-UNFIXED')
 	public function testEmptyArgumentListIsFixedAndArgumentsAreNotJudged(): Void {
 		final src: String = 'class C {\n\t@:isVar() public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n}';
 		Assert.equals(1, violations(src).length);
@@ -94,7 +101,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-INIT-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-INIT-BLIND')
 	public function testInitializerNotFlagged(): Void {
 		// `= 5` writes the field directly — it is what the metadata's storage is FOR here.
 		Assert.equals(
@@ -103,7 +111,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
 	public function testSetterWritingStorageNotFlagged(): Void {
 		Assert.equals(
 			0,
@@ -112,14 +121,16 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
 	public function testGetterReadingStorageNotFlagged(): Void {
 		final src: String = 'class C {\n\t@:isVar public var level(get, set):Int;\n\tfunction get_level():Int return this.level;\n'
 			+ '\tfunction set_level(v:Int):Int return v;\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
 	public function testSubclassOverrideWritingStorageNotFlagged(): Void {
 		// An override is still an accessor of the property, so its `level = v` reaches the field.
 		final writes: String =
@@ -129,7 +140,8 @@ import anyparse.query.cli.command.LintArgs;
 		Assert.equals(1, violationsOf([{ file: 'Base.hx', source: DEAD_BASE }, { file: 'Sub.hx', source: forwards }]).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-SCOPE-REPORT-ONLY')
+	@:pin('control')
+	@:killer('M-ISVAR-SCOPE-REPORT-ONLY')
 	public function testSubclassOverrideOutsideTheReportScopeNotFlagged(): Void {
 		// The override sits in the RESOLUTION scope only: a one-file lint of Base must still see it.
 		final writes: String =
@@ -142,25 +154,29 @@ import anyparse.query.cli.command.LintArgs;
 		Assert.equals(1, CheckFixture.violationsIn(check, report, scoped(report, [])).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-BYPASS-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-BYPASS-BLIND')
 	public function testBypassAccessorNotFlagged(): Void {
 		final src: String = 'class C {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n'
 			+ '\tpublic function reset():Void {\n\t\t@:bypassAccessor level = 0;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-REFLECTION-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-REFLECTION-BLIND')
 	public function testReflectionByNameNotFlagged(): Void {
 		final reflects: String = 'class R {\n\tpublic static function peek(o:Dynamic):Dynamic return Reflect.field(o, \'level\');\n}';
 		Assert.equals(0, violationsOf([{ file: 'C.hx', source: DEAD_SETTER }, { file: 'R.hx', source: reflects }]).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-RTTI-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-RTTI-BLIND')
 	public function testRttiOwnerNotFlagged(): Void {
 		Assert.equals(0, violations('@:rtti $DEAD_SETTER').length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-OPAQUE-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-OPAQUE-BLIND')
 	public function testOpaqueCondRegionMentioningTheNameNotFlagged(): Void {
 		// The `#if` region is captured raw, so nothing inside it projects and only its text can speak.
 		final opaque: String = 'class B {\n\tfunction f(c:Bool):Void {\n\t\t#if js if (c) { g(level); } else #end h();\n\t}\n}';
@@ -179,7 +195,8 @@ import anyparse.query.cli.command.LintArgs;
 		Assert.equals(1, violationsOf([{ file: 'C.hx', source: DEAD_SETTER }, { file: 'B.hx', source: inert }]).length);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-CHAIN-UNRESOLVED-ADMITTED')
+	@:pin('control')
+	@:killer('M-ISVAR-CHAIN-UNRESOLVED-ADMITTED')
 	public function testUnresolvedSupertypeNotFlagged(): Void {
 		final sub: String =
 			'class C extends Missing {\n\t@:isVar public var level(never, set):Int;\n\tfunction set_level(v:Int):Int return v;\n}';
@@ -193,7 +210,8 @@ import anyparse.query.cli.command.LintArgs;
 		);
 	}
 
-	@:pin('control') @:killer('M-ISVAR-MACRO-FIXED')
+	@:pin('control')
+	@:killer('M-ISVAR-MACRO-FIXED')
 	public function testMacroBuiltOwnerDeclinedWithoutTheOracle(): Void {
 		// A builder may generate an access the text does not hold; only a verified fix may remove the metadata.
 		final src: String = '@:build(M.f()) $DEAD_SETTER';
@@ -205,7 +223,8 @@ import anyparse.query.cli.command.LintArgs;
 		Assert.equals(src, applyFix(src));
 	}
 
-	@:pin('control') @:killer('M-ISVAR-MACRO-NEVER-ADMITTED')
+	@:pin('control')
+	@:killer('M-ISVAR-MACRO-NEVER-ADMITTED')
 	public function testMacroBuiltOwnerFixedUnderTheOracle(): Void {
 		final src: String = '@:build(M.f()) $DEAD_SETTER';
 		final check: Null<Check> = Linter.byId('redundant-isvar');

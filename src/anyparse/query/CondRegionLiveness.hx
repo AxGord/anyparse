@@ -33,7 +33,8 @@ typedef DefineFacts = {
 	 * comparison of such a value is decided as the compiler decides it (`CondValues`). A defined flag with no value here
 	 * is set to a value nobody knows: true, and of no known order.
 	 */
-	@:optional final values: Null<Map<String, String>>;
+	@:optional
+	final values: Null<Map<String, String>>;
 
 };
 

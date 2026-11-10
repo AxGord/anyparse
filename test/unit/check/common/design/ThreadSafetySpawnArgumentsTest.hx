@@ -17,7 +17,10 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 	private static inline final MEMBERS: String = 'static function decode(s:String):String { FileSystem.stat(s); return s; }'
 		+ ' static function done(s:String):Void FileSystem.stat(s);';
 
-	@:pin('control') @:killer('M-TS-SPAWN-MAIN-ARG') @:killer('M-TS-SPAWN-MAIN-CONTEXT') @:killer('M-TS-SPAWN-ARG-POSITION')
+	@:pin('control')
+	@:killer('M-TS-SPAWN-MAIN-ARG')
+	@:killer('M-TS-SPAWN-MAIN-CONTEXT')
+	@:killer('M-TS-SPAWN-ARG-POSITION')
 	public function testAMainArgumentRunsOnTheMainThread(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -60,7 +63,8 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 	 * `run(?tag, work, onDone)` called with two arguments: the language may skip `tag`, so the argument written second
 	 * may bind `onDone` — the position proves nothing, and the value runs on a worker as the plain entry says.
 	 */
-	@:pin('control') @:killer('M-TS-SPAWN-MAIN-SHIFT')
+	@:pin('control')
+	@:killer('M-TS-SPAWN-MAIN-SHIFT')
 	public function testAPositionAnOptionalMayShiftRunsAsThePlainEntry(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -82,7 +86,8 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 	}
 
 	/** A call two signatures may answer (`@:overload`) proves no position: the value runs as the plain entry says. */
-	@:pin('control') @:killer('M-TS-SPAWN-MAIN-SIGNATURE')
+	@:pin('control')
+	@:killer('M-TS-SPAWN-MAIN-SIGNATURE')
 	public function testAnOverloadedCallRunsAsThePlainEntry(): Void {
 		#if (sys || nodejs)
 		Assert.same([], ThreadSafetyRegistersTest.graded(ThreadSafetyCheckTest.violations(config('{"call":"Io.load","main":[2]}'), [
@@ -99,7 +104,8 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 	 * A value run on the main thread at a `main` position runs once per post, as a `marshals` call's value does: a
 	 * worker's loop of 1000 reads runs the short sink in `done` 1000 times on the main thread.
 	 */
-	@:pin('control') @:killer('M-TS-SPAWN-MAIN-REPEAT')
+	@:pin('control')
+	@:killer('M-TS-SPAWN-MAIN-REPEAT')
 	public function testAMainArgumentRepeatsPerPost(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -123,7 +129,8 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 	 * An object entry the read cannot keep whole is said: one naming its call stays a plain entry — what the call meant
 	 * before the form existed — and one naming none is dropped.
 	 */
-	@:pin('control') @:killer('M-TS-OPT-SPAWN-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-OPT-SPAWN-OBJECT')
 	public function testAMalformedObjectEntryIsSaid(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(

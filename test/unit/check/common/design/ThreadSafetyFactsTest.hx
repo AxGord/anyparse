@@ -27,7 +27,10 @@ class ThreadSafetyFactsTest extends Test {
 	private static inline final CONFIG: String =
 		'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"],"compilerFacts":true}}}';
 
-	@:pin('control') @:killer('M-TS-FACTS-IGNORED') @:killer('M-TS-FACTS-MADE-REF') @:killer('M-TS-FACTS-GATE')
+	@:pin('control')
+	@:killer('M-TS-FACTS-IGNORED')
+	@:killer('M-TS-FACTS-MADE-REF')
+	@:killer('M-TS-FACTS-GATE')
 	public function testCompilerFactsResolveWhatTheSyntaxCannot(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('ts_facts', [

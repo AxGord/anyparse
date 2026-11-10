@@ -374,7 +374,8 @@ class LintDiffTest extends Test {
 	}
 
 	/** The `--explain-long` envelope is a report: its `findings` are read and its other keys skipped; any other object is refused. */
-	@:pin('control') @:killer('M-LINTDIFF-ENVELOPE-REFUSED')
+	@:pin('control')
+	@:killer('M-LINTDIFF-ENVELOPE-REFUSED')
 	public function testParseReportReadsTheEnvelopeAndRefusesOtherObjects(): Void {
 		Assert.same([], LintDiff.parseReport('{"findings": []}'));
 		final envelope: String = '{"findings": [${record('src/A.hx', 'warning', 'r', 'm')}], "longLocks": {"long": [], "mainShort": []}}';
@@ -387,7 +388,8 @@ class LintDiffTest extends Test {
 	 * A record carrying `data` keys by its family, function and subject: a chain re-rendered through another path is no
 	 * movement, another subject is — and the same pair without `data` is keyed by its message, so it moves.
 	 */
-	@:pin('control') @:killer('M-LINTDIFF-DATA-IGNORED')
+	@:pin('control')
+	@:killer('M-LINTDIFF-DATA-IGNORED')
 	public function testDataKeyedFindingsIgnoreTheMessage(): Void {
 		final before: String = reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'reaches S.f: A.b -> S.f')]);
 		Assert.equals(0, diff(before, reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'reaches S.f: R.oot -> A.b -> S.f')]), '').addedTotal);
@@ -418,7 +420,8 @@ class LintDiffTest extends Test {
 	 * one side and by its identity on the other, pairs by message — no movement — while a finding whose message changed too
 	 * still moves.
 	 */
-	@:pin('control') @:killer('M-LINTDIFF-NO-PAIRING')
+	@:pin('control')
+	@:killer('M-LINTDIFF-NO-PAIRING')
 	public function testAnOldSnapshotPairsByMessage(): Void {
 		final old: String = reportOf([
 			record('src/A.hx', 'warning', 'thread-safety', 'm1'),
@@ -437,7 +440,8 @@ class LintDiffTest extends Test {
 	 * One identity key carrying several messages — one function reaching a sink by several chains — pairs every one of
 	 * them with the old snapshot's records, not only the first message seen under the key.
 	 */
-	@:pin('control') @:killer('M-LINTDIFF-FIRST-MESSAGE')
+	@:pin('control')
+	@:killer('M-LINTDIFF-FIRST-MESSAGE')
 	public function testAnOldSnapshotPairsEveryMessageOfOneKey(): Void {
 		final old: String = reportOf([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
 		final result: LintDiffResult = diff(old, reportOf([for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m)]), '');

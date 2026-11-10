@@ -25,6 +25,8 @@ package anyparse.format.wrap;
 typedef WrapRule = {
 	var conditions: Array<WrapCondition>;
 	var mode: WrapMode;
-	@:optional var location: WrappingLocation;
-	@:optional var additionalIndent: Int;
+	@:optional
+	var location: WrappingLocation;
+	@:optional
+	var additionalIndent: Int;
 };

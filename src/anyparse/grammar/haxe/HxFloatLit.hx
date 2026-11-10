@@ -35,7 +35,8 @@ using StringTools;
 @:rawString
 abstract HxFloatLit(String) from String to String {
 
-	@:to public inline function toFloat(): Float {
+	@:to
+	public inline function toFloat(): Float {
 		var s: String = this.replace('_', '');
 		if (s.endsWith('f32'))
 			s = s.substr(0, s.length - 3);

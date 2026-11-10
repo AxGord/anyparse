@@ -24,7 +24,8 @@ using Lambda;
 @:nullSafety(Strict)
 class LanguageBoundTest extends Test {
 
-	@:pin('control') @:killer('M-LANGUAGE-BOUND-RUNS-EVERYWHERE')
+	@:pin('control')
+	@:killer('M-LANGUAGE-BOUND-RUNS-EVERYWHERE')
 	public function testABoundCheckRunsOnlyOnTheGrammarsItNames(): Void {
 		final probe: LanguageBoundProbe = new LanguageBoundProbe(HaxeQueryPlugin.LANG);
 		final haxe: Array<{ file: String, source: String }> = [{ file: 'Probe.hx', source: 'class Probe {}\n' }];
@@ -34,7 +35,8 @@ class LanguageBoundTest extends Test {
 		Assert.isTrue(Linter.runsOn(new MagicNumber(), JsonQueryPlugin.LANG), 'an unbound check runs on every grammar');
 	}
 
-	@:pin('control') @:killer('M-FOREIGN-RULE-ANSWERED')
+	@:pin('control')
+	@:killer('M-FOREIGN-RULE-ANSWERED')
 	public function testAnExplicitRuleOfAnotherGrammarIsRefused(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.writeAs('languagebound', 'json', '{"a": 1}\n');
@@ -48,7 +50,8 @@ class LanguageBoundTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-FOREIGN-RULE-ALWAYS')
+	@:pin('control')
+	@:killer('M-FOREIGN-RULE-ALWAYS')
 	public function testADefaultSelectionOnAnotherGrammarIsNotRefused(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.writeAs('languagebound', 'json', '{"a": 1}\n');
@@ -62,7 +65,8 @@ class LanguageBoundTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-SCOPED-LISTING-UNFILTERED')
+	@:pin('control')
+	@:killer('M-SCOPED-LISTING-UNFILTERED')
 	public function testTheListingsLeaveOutOrMarkARuleOfAnotherGrammar(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.writeAs('languagebound', 'json', '{"a": 1}\n');
@@ -78,7 +82,8 @@ class LanguageBoundTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-LANGUAGE-COLUMN-ANY')
+	@:pin('control')
+	@:killer('M-LANGUAGE-COLUMN-ANY')
 	public function testEveryListingNamesTheGrammarsARuleRunsOn(): Void {
 		Assert.equals('haxe', RuleIndex.languageOf(new PreferLpad()));
 		Assert.equals('any', RuleIndex.languageOf(new MagicNumber()));

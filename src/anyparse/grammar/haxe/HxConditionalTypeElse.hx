@@ -33,7 +33,13 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalTypeElse = {
-	@:trailOpt(';') var type: HxType;
-	@:optional @:lead('=') var init: Null<HxExpr>;
-	@:trivia @:tryparse @:fmt(padLeading) var heritage: Array<HxHeritageClause>;
+	@:trailOpt(';')
+	var type: HxType;
+	@:optional
+	@:lead('=')
+	var init: Null<HxExpr>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading)
+	var heritage: Array<HxHeritageClause>;
 };

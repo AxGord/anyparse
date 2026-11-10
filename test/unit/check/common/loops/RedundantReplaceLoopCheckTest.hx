@@ -91,7 +91,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * joins spell a fresh `'  '`: on `--interp`,
 	 * `'a    b'.replace('  ', ' ')` is `'a  b'`, while the loop returns `'a b'`.
 	 */
-	@:pin('control') @:killer('M-SEAM-BLIND')
+	@:pin('control')
+	@:killer('M-SEAM-BLIND')
 	public function testSeamReformingLiteralPairNotFlagged(): Void {
 		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');')).length);
 	}
@@ -100,7 +101,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * The same pair through the FIX path — the half that did the damage. One assertion covering
 	 * the guard AND the body, so a partially applied collapse cannot satisfy it.
 	 */
-	@:pin('control') @:killer('M-SEAM-BLIND')
+	@:pin('control')
+	@:killer('M-SEAM-BLIND')
 	public function testSeamReformingLiteralPairSurvivesTheFix(): Void {
 		final src: String = wrapFn('while (now.indexOf(\'  \') != -1) now = now.replace(\'  \', \' \');');
 		final check: RedundantReplaceLoop = new RedundantReplaceLoop();
@@ -118,7 +120,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * `'aaxbb'.replace('axb', 'x')` is `'axb'`, since the pieces `'a'` and `'b'` close around
 	 * the inserted `'x'`.
 	 */
-	@:pin('control') @:killer('M-SEAM-BLIND')
+	@:pin('control')
+	@:killer('M-SEAM-BLIND')
 	public function testReplacementInsideSearchNotFlagged(): Void {
 		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'axb\') != -1) now = now.replace(\'axb\', \'x\');')).length);
 	}
@@ -128,7 +131,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * starts `'ab'`, so only the `endsWith` half decides this one —
 	 * `'aab'.replace('ab', 'bx')` is `'abx'`.
 	 */
-	@:pin('control') @:killer('M-SEAM-BLIND')
+	@:pin('control')
+	@:killer('M-SEAM-BLIND')
 	public function testSearchEndingWithTheReplacementHeadNotFlagged(): Void {
 		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'ab\') != -1) now = now.replace(\'ab\', \'bx\');')).length);
 	}
@@ -137,7 +141,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * An EMPTY `B` joins the pieces with nothing, so a two-character `S` re-forms across a bare
 	 * piece boundary: `'aabb'.replace('ab', '')` is `'ab'`, and the loop runs twice.
 	 */
-	@:pin('control') @:killer('M-SEAM-BLIND')
+	@:pin('control')
+	@:killer('M-SEAM-BLIND')
 	public function testMultiCharSearchWithEmptyReplacementNotFlagged(): Void {
 		Assert.equals(0, violations(wrapFn('while (now.indexOf(\'ab\') != -1) now = now.replace(\'ab\', \'\');')).length);
 	}
@@ -534,7 +539,8 @@ class RedundantReplaceLoopCheckTest extends Test {
 	 * and a longer `word` can re-form there — `'aabb'.replace('ab', '')` is `'ab'`, so the single
 	 * call the message names does NOT do the same work for every non-empty `word`.
 	 */
-	@:pin('control') @:killer('M-EMPTY-B-ANY-NONEMPTY')
+	@:pin('control')
+	@:killer('M-EMPTY-B-ANY-NONEMPTY')
 	public function testEmptyLiteralReplacementBoundsTheRedundancyToOneCharacter(): Void {
 		final vs: Array<Violation> = violations(stripWordSource());
 		Assert.equals(1, vs.length);

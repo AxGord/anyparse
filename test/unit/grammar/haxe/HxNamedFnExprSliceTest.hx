@@ -136,7 +136,9 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 	 * {a: 1}`) and otherwise still needs its `;` (`x = function n() return 1 trace(x());` is `Missing ;`).
 	 */
 	@:pin('control')
-	@:killer('M-NAMED-FN-STMT-NO-ARM') @:killer('M-NAMED-FN-NOT-BRACE-ENDED') @:killer('M-NAMED-FN-EXPR-BODY-RELAXED')
+	@:killer('M-NAMED-FN-STMT-NO-ARM')
+	@:killer('M-NAMED-FN-NOT-BRACE-ENDED')
+	@:killer('M-NAMED-FN-EXPR-BODY-RELAXED')
 	public function testNamedFnExprBlockBodyEndsItsStatement(): Void {
 		for (src in [
 			'class C { function f():Void { x = function n() { return 1; } trace(x()); } }',

@@ -37,7 +37,8 @@ class OperatorOverloadsTest extends Test {
 		+ '\t@:op(A - B) static function sub(a:RA, b:RA):Array<Int> return null;\n}\n';
 
 	/** `U - U` takes `sub` and yields `U`; `U - Int` casts the `Int` to `U` through `from Int`. */
-	@:pin('control') @:killer('M-OPS-LEFT-OFF')
+	@:pin('control')
+	@:killer('M-OPS-LEFT-OFF')
 	public function testTheLeftOperandsOverloadTypesTheOperation(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals('U', resultName(index, 'Sub', decl(index, 'U'), decl(index, 'U')));
@@ -50,7 +51,9 @@ class OperatorOverloadsTest extends Test {
 	 * (`String`) though `subF` takes them too; `X - X` passes `subI` over — its first parameter must EQUAL the left
 	 * operand's type, a cast is not enough — and takes `sub` (`X`).
 	 */
-	@:pin('control') @:killer('M-OPS-FIRST-TAKEN') @:killer('M-OPS-EXACT-EQUAL')
+	@:pin('control')
+	@:killer('M-OPS-FIRST-TAKEN')
+	@:killer('M-OPS-EXACT-EQUAL')
 	public function testTheFirstOverloadTakingTheOperandsBinds(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals('String', resultName(index, 'Sub', decl(index, 'S'), decl(index, 'S')));
@@ -61,7 +64,10 @@ class OperatorOverloadsTest extends Test {
 	 * With no overload on the left operand's type, the right one's abstract is asked: `Int - R` takes `rsub`; a
 	 * `@:commutative` overload takes the operands swapped (`Int * C`), one without the annotation does not (`Int * N`).
 	 */
-	@:pin('control') @:killer('M-OPS-RIGHT-OFF') @:killer('M-OPS-COMMUTATIVE-OFF') @:killer('M-SHAPE-COMMUTATIVE-UNSET')
+	@:pin('control')
+	@:killer('M-OPS-RIGHT-OFF')
+	@:killer('M-OPS-COMMUTATIVE-OFF')
+	@:killer('M-SHAPE-COMMUTATIVE-UNSET')
 	public function testTheRightOperandsOverloadAndACommutativeOne(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals('String', resultName(index, 'Sub', Core('Int'), decl(index, 'R')), 'the right abstract');
@@ -76,8 +82,14 @@ class OperatorOverloadsTest extends Test {
 	 * a return type it does not model, an operand whose cast another build decides (`Z - A0` takes `sub` where `Q`'s
 	 * `@:from` is, `subA` elsewhere), and an operand of a type it does not model in a swapped `@:commutative` overload.
 	 */
-	@:pin('control') @:killer('M-OPS-BRANCHES-AGREE') @:killer('M-OPS-GUARDED') @:killer('M-OPS-INSTANCE')
-	@:killer('M-CASTS-BRANCH-MEMBERS') @:killer('M-OPS-RETURN-OPEN') @:killer('M-OPS-MAYFIT') @:killer('M-OPS-OPEN-OPERAND')
+	@:pin('control')
+	@:killer('M-OPS-BRANCHES-AGREE')
+	@:killer('M-OPS-GUARDED')
+	@:killer('M-OPS-INSTANCE')
+	@:killer('M-CASTS-BRANCH-MEMBERS')
+	@:killer('M-OPS-RETURN-OPEN')
+	@:killer('M-OPS-MAYFIT')
+	@:killer('M-OPS-OPEN-OPERAND')
 	public function testAnOverloadNotDecidedInEveryBuildAnswersNothing(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.isNull(result(index, 'Sub', decl(index, 'D'), decl(index, 'D')), 'the branches disagree');

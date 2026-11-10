@@ -41,6 +41,9 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSpliceListTail = {
 	var cond: HxPpCondLit;
-	@:lead(',') @:fmt(spaceAfterLead) var operand: HxExpr;
-	@:fmt(inlineSep) var endKw: HxCondEndLit;
+	@:lead(',')
+	@:fmt(spaceAfterLead)
+	var operand: HxExpr;
+	@:fmt(inlineSep)
+	var endKw: HxCondEndLit;
 };

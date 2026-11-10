@@ -8,13 +8,15 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSemiAssign = {
 
-	@:fmt(atomOperand) var target: HxExpr;
+	@:fmt(atomOperand)
+	var target: HxExpr;
 	var value: HxCondSemiValue;
 
 	/**
 	 * No `;` after the `#end`: with every branch ending in its own `;` the next statement follows, and a `;` there is
 	 * where a region of bare values (`x = #if a 1 #else 2 #end;`) puts its terminator.
 	 */
-	@:fmt(fillSeam) var end: HxNoSemiAhead;
+	@:fmt(fillSeam)
+	var end: HxNoSemiAhead;
 
 };

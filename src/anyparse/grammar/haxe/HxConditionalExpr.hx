@@ -43,7 +43,14 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalExpr = {
 	var cond: HxPpCondLit;
-	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak) var expr: HxExpr;
-	@:trivia @:tryparse @:fmt(padTrailing, condExprFitBreak) var elseifs: Array<HxElseifExpr>;
-	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak) var elseExpr: Null<HxExpr>;
+	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak)
+	var expr: HxExpr;
+	@:trivia
+	@:tryparse
+	@:fmt(padTrailing, condExprFitBreak)
+	var elseifs: Array<HxElseifExpr>;
+	@:optional
+	@:kw('#else')
+	@:fmt(padTrailing, captureSourceNewlineAfter, nestBodyOnSourceNewline, condExprFitBreak)
+	var elseExpr: Null<HxExpr>;
 };

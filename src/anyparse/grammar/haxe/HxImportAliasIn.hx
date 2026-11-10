@@ -22,4 +22,8 @@ package anyparse.grammar.haxe;
  * `in` are mutually exclusive — and both are tried before the plain `ImportDecl` fallback.
  */
 @:peg
-typedef HxImportAliasIn = { var path: HxTypeName; @:kw('in') var name: HxIdentLit; }
+typedef HxImportAliasIn = {
+	var path: HxTypeName;
+	@:kw('in')
+	var name: HxIdentLit;
+}

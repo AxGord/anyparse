@@ -27,4 +27,9 @@ package anyparse.grammar.haxe;
  * the parent Star owns the trailing-pad boundary.
  */
 @:peg
-typedef HxElseifExpr = { @:kw('#elseif') var cond: HxPpCondLit; @:fmt(nestBodyOnSourceNewline) var expr: HxExpr; };
+typedef HxElseifExpr = {
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:fmt(nestBodyOnSourceNewline)
+	var expr: HxExpr;
+};

@@ -162,7 +162,8 @@ class SpanTypeInfoPinTest extends Test {
 	 * A type parameter's bounds are kept verbatim, in written order, under the declaration that declares it and the
 	 * parameter's name — the first bound and every `& Type` after it; an unbounded parameter has no entry.
 	 */
-	@:pin('control') @:killer('M-SPANINFO-BOUND-MORE')
+	@:pin('control')
+	@:killer('M-SPANINFO-BOUND-MORE')
 	public function testTypeParamConstraintsAreKeyedByDeclarationAndName(): Void {
 		final src: String = 'class Cell<D:A & B, K> {\n\tfunction f<U:Array<Int>, V>(x:U):Void {}\n}\nfinal class F<Z:pkg.Q<Int>> {}';
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);

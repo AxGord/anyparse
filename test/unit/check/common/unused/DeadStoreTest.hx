@@ -111,7 +111,8 @@ class DeadStoreTest extends Test {
 	 * method on a `String` binding and an effect-free `Date.now()` are droppable too. Its own walk borrowed
 	 * `PurityScan`'s `Math` / `Std` / `StringTools` list and refused both.
 	 */
-	@:pin('control') @:killer('M-DEADSTORE-OWN-PURITY')
+	@:pin('control')
+	@:killer('M-DEADSTORE-OWN-PURITY')
 	public function testFixStripsStringMethodAndClockInitializers(): Void {
 		assertFix(
 			'class C { function f(s:String):String { var x:String = s.toUpperCase(); x = s; return x; } }', 'var x:String;', 'toUpperCase'
@@ -120,7 +121,8 @@ class DeadStoreTest extends Test {
 	}
 
 	/** A project type named `Std` is not the std one: its `int` may do anything, so the store stays. */
-	@:pin('control') @:killer('M-STD-SHADOW-IGNORED')
+	@:pin('control')
+	@:killer('M-STD-SHADOW-IGNORED')
 	public function testFixRefusesAProjectShadowOfAStdType(): Void {
 		assertNoFix(
 			'class Std { public static function int(v:Float):Int return 0; } class C { function f(v:Float):Int {'

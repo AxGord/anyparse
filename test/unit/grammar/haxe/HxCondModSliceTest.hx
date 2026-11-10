@@ -248,8 +248,8 @@ class HxCondModSliceTest extends HxTestHelpers {
 		// body onto its own lines regardless of the guard.
 		for (src in [
 			'class C {\n\t#if (haxe_ver >= 4.2) extern #else @:extern #end\n\tpublic inline function f():Void {}\n}',
-			'class C {\n\t@:from #if (haxe_ver >= 4.2) extern #else @:extern #end\n\tpublic static inline function f():Void {}\n}',
-			'class C {\n\t@:op(A >> B) #if (haxe_ver >= 4.2) extern #else @:extern #end\n\tprivate inline function f():Void {}\n}',
+			'class C {\n\t@:from\n\t#if (haxe_ver >= 4.2) extern #else @:extern #end\n\tpublic static inline function f():Void {}\n}',
+			'class C {\n\t@:op(A >> B)\n\t#if (haxe_ver >= 4.2) extern #else @:extern #end\n\tprivate inline function f():Void {}\n}',
 			'class C {\n\tpublic static #if !macro macro #end function f():Void {}\n}'
 		]) triviaRoundTrip(src);
 	}

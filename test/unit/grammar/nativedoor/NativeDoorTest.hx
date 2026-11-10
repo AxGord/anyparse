@@ -28,7 +28,8 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A value of the wrong kind fails the shape check, and `parse` refuses it in the byte-level parser's words. */
-	@:pin('control') @:killer('M-NATIVE-STRING-UNCHECKED')
+	@:pin('control')
+	@:killer('M-NATIVE-STRING-UNCHECKED')
 	public function testAWrongKindRefuses(): Void {
 		final text: String = GOOD.replace('"name":"a"', '"name":1');
 		Assert.isNull(DoorRecordParser.parseNative(text));
@@ -36,7 +37,8 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A fraction where the schema says `Int` fails the check, as the byte-level parser refuses it. */
-	@:pin('control') @:killer('M-NATIVE-INT-UNCHECKED')
+	@:pin('control')
+	@:killer('M-NATIVE-INT-UNCHECKED')
 	public function testAFractionIsNoInt(): Void {
 		final text: String = GOOD.replace('"size":1', '"size":1.5');
 		Assert.isNull(DoorRecordParser.parseNative(text));
@@ -61,7 +63,8 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A field spelled with `@:key` reads from its key, under its Haxe name. */
-	@:pin('control') @:killer('M-NATIVE-KEY-UNRENAMED')
+	@:pin('control')
+	@:killer('M-NATIVE-KEY-UNRENAMED')
 	public function testAKeyedFieldReadsItsKey(): Void {
 		final read: Null<DoorRecord> = DoorRecordParser.parseNative(GOOD);
 		Assert.equals('f', read?.member);
@@ -75,7 +78,8 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A lone surrogate reads as the code unit it escapes and is written escaped again. */
-	@:pin('control') @:killer('M-NATIVE-COMPACT-NEVER')
+	@:pin('control')
+	@:killer('M-NATIVE-COMPACT-NEVER')
 	public function testALoneSurrogateKeepsItsEscape(): Void {
 		final text: String = GOOD.replace('"name":"a"', '"name":"\\ud800"');
 		final read: DoorRecord = DoorRecordParser.parse(text);

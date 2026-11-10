@@ -387,7 +387,8 @@ typedef GateOptions = {
 	var baseline: Bool;
 
 	/** The commit to measure against instead of the baseline's (null: the baseline's, else the merge-base with main). */
-	@:optional var base: Null<String>;
+	@:optional
+	var base: Null<String>;
 	var frozen: Array<String>;
 	var infra: Array<String>;
 	var arms: Array<String>;

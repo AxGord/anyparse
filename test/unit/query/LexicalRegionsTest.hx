@@ -115,7 +115,8 @@ class LexicalRegionsTest extends Test {
 	 * A comment opens in a range only when the lexer says so: a `//` or `/*` inside a string literal is text, a real
 	 * comment inside the range counts, and one that opens outside it does not.
 	 */
-	@:pin('control') @:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
 	public function testCommentOpensInIgnoresMarkersInsideStrings(): Void {
 		final source: String = "var s = 'a // b'; var t = 1; /* c */";
 		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
@@ -198,7 +199,8 @@ class LexicalRegionsTest extends Test {
 	 * literal stops on the slash instead of running to the end of a line the literal does not own, and a comment in
 	 * code is skipped whole.
 	 */
-	@:pin('control') @:killer('M-LEXREG-SKIPTRIVIA-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-LEXREG-SKIPTRIVIA-STRING-BLIND')
 	public function testSkipTriviaReadsASlashInsideAStringAsText(): Void {
 		final source: String = "'a // b\nc' /* d */ e";
 		final regions: Array<LexRegion> = HaxeLexicalRegions.scan(source);
@@ -209,7 +211,8 @@ class LexicalRegionsTest extends Test {
 	}
 
 	/** The regions are asked for only at a `/`: a path that meets no comment pays no lex. */
-	@:pin('control') @:killer('M-LEXREG-SKIPTRIVIA-ASKS-OFF-SLASH')
+	@:pin('control')
+	@:killer('M-LEXREG-SKIPTRIVIA-ASKS-OFF-SLASH')
 	public function testSkipTriviaLazyAsksForRegionsOnlyAtASlash(): Void {
 		var asked: Int = 0;
 		final regions: () -> Array<LexRegion> = () -> {

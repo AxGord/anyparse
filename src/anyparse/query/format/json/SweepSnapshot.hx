@@ -17,13 +17,22 @@ package anyparse.query.format.json;
  * contract, checked post-parse); the other three ints default to 0 when
  * absent, matching the pre-schema Reflect-based reader.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef SweepSnapshot = {
-	@:optional var pass: Int;
-	@:optional var fail: Int;
-	@:optional var skipParse: Int;
-	@:optional var skipWrite: Int;
-	@:optional var skipConfig: Int;
-	@:optional var skipMalformed: Int;
-	@:optional var fixtures: Array<SweepFixture>;
+	@:optional
+	var pass: Int;
+	@:optional
+	var fail: Int;
+	@:optional
+	var skipParse: Int;
+	@:optional
+	var skipWrite: Int;
+	@:optional
+	var skipConfig: Int;
+	@:optional
+	var skipMalformed: Int;
+	@:optional
+	var fixtures: Array<SweepFixture>;
 };

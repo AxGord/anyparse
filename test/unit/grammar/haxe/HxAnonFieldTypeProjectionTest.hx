@@ -69,7 +69,8 @@ class HxAnonFieldTypeProjectionTest extends Test {
 	}
 
 	/** A declared type the projection also publishes as a child prints once, as the child. */
-	@:pin('control') @:killer('M-AST-SLOT-DUPLICATED')
+	@:pin('control')
+	@:killer('M-AST-SLOT-DUPLICATED')
 	public function testATypeSlotThatIsAlsoAChildPrintsOnce(): Void {
 		Assert.equals('(module (TypedefDecl Ext (Anon (Required a (TypeRef Int)))))\n', ast('typedef Ext = {a:Int};'));
 		Assert.equals('(module (AbstractDecl A (Named Foo) (Named Bar)))\n', ast('abstract A<T:Foo>(Bar) {}'));

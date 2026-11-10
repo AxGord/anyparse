@@ -73,39 +73,45 @@ typedef CallEdge = {
 	var receiverField: Null<String>;
 
 	/** For an edge the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
-	@:optional var spliced: Null<SplicedSite>;
+	@:optional
+	var spliced: Null<SplicedSite>;
 
 	/**
 	 * For an edge the compiler facts record of a call or a method read as a value, the typed type they name as the
 	 * target's owner (`pack._Module.Name_Impl_` for an abstract's member): which of the types sharing the simple name
 	 * `to` is keyed by declares the code that runs (`CallGraphFacts.qualify`). Null on every other edge.
 	 */
-	@:optional var typed: Null<String>;
+	@:optional
+	var typed: Null<String>;
 
 	/**
 	 * For an edge the compiler facts record of a call they inlined at a known site, its body's facts filed in `from` as
 	 * the splice they made there (`CallGraphFacts.declaredCall`): what that body runs at the call is what `from`'s facts
 	 * say, at the types this call instantiated it at. Null on every other edge.
 	 */
-	@:optional var inlined: Null<Bool>;
+	@:optional
+	var inlined: Null<Bool>;
 
 	/**
 	 * For a `Ref` edge whose site is the right-hand side of an assignment to a `dynamic` method (`w.onDone = handler`), that
 	 * member's node: the value runs wherever the member is invoked, never at the assignment. Null on every other edge.
 	 */
-	@:optional var storedInto: Null<String>;
+	@:optional
+	var storedInto: Null<String>;
 
 	/**
 	 * For a `Ref` edge whose value is an argument of a call, the member name the call is written with (`removeEventListener`
 	 * in `x.removeEventListener(t, handler)`), set whether or not the graph resolves the call. Null on every other edge.
 	 */
-	@:optional var viaMember: Null<String>;
+	@:optional
+	var viaMember: Null<String>;
 
 	/**
 	 * For a `Ref` edge whose value is an argument of a call, where the call writes it (`ArgumentPosition`), set whether or
 	 * not the graph resolves the call; null on every other edge, and on one the compiler facts add or a stored value derives.
 	 */
-	@:optional var argument: Null<ArgumentPosition>;
+	@:optional
+	var argument: Null<ArgumentPosition>;
 
 }
 
@@ -159,19 +165,23 @@ typedef UnresolvedCall = {
 	 * For a call of a value the compiler facts typed (`FunctionValue`): the facts type of the value called, which says which
 	 * functions it may be (`FunctionValueTypes`).
 	 */
-	@:optional var called: Null<String>;
+	@:optional
+	var called: Null<String>;
 
 	/** With `called`: the range of the expression whose value is called, in the file of the facts (`CallFact.receiverAt`). */
-	@:optional var calledAt: Null<FactPos>;
+	@:optional
+	var calledAt: Null<FactPos>;
 
 	/**
 	 * For a call of a `dynamic` method the compiler facts name (`pack.Type.field`): the values stored into that field, which
 	 * the facts may say (`FunctionValueTypes.storedIn`), are what it may run beside its declared bodies.
 	 */
-	@:optional var stored: Null<String>;
+	@:optional
+	var stored: Null<String>;
 
 	/** For a site the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
-	@:optional var spliced: Null<SplicedSite>;
+	@:optional
+	var spliced: Null<SplicedSite>;
 
 }
 
@@ -191,7 +201,8 @@ typedef UnresolvedAccess = {
 	var dynamicReceiver: Bool;
 
 	/** For an access the compiler facts file off a body an inlined call spliced into `from`: where it runs (`SplicedSite`). */
-	@:optional var spliced: Null<SplicedSite>;
+	@:optional
+	var spliced: Null<SplicedSite>;
 
 }
 

@@ -18,9 +18,9 @@ class ProbeMetadataLineEndTest extends Test {
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SRC: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test\n\t@doc("b") function main() {}\n}\n';
 
-	public function testNonePreservesSource(): Void {
+	public function testNoneJoinsTheRunWithASpace(): Void {
 		final out: String = render(MetadataLineEndPolicy.None);
-		final expected: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test\n\t@doc("b") function main() {}\n}\n';
+		final expected: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test @doc("b") function main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 
@@ -31,9 +31,9 @@ class ProbeMetadataLineEndTest extends Test {
 		Assert.equals(expected, out);
 	}
 
-	public function testAfterLastPreservesInterButForcesTrailing(): Void {
+	public function testAfterLastJoinsTheRunAndForcesTrailing(): Void {
 		final out: String = render(MetadataLineEndPolicy.AfterLast);
-		final expected: String = 'class Main {\n\t@Test @doc("a")\n\tfunction main() {}\n\n\t@Test\n\t@doc("b")\n\tfunction main() {}\n}\n';
+		final expected: String = 'class Main {\n\t@Test @doc("a")\n\tfunction main() {}\n\n\t@Test @doc("b")\n\tfunction main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 

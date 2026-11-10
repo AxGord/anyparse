@@ -10,14 +10,16 @@ using Lambda;
  */
 class ModuleScanPathOfDeclTest extends Test {
 
-	@:pin('control') @:killer('M-MODULESCAN-SUBTYPE-PATH-BARE')
+	@:pin('control')
+	@:killer('M-MODULESCAN-SUBTYPE-PATH-BARE')
 	public function testSubModuleTypeCarriesItsName(): Void {
 		final fi: FileInfo = fixture();
 		final helper: TypeDeclInfo = fi.types.find(t -> t.name == 'Helper');
 		Assert.equals('pkg.Main.Helper', ModuleScan.pathOfDecl(fi, helper));
 	}
 
-	@:pin('control') @:killer('M-MODULESCAN-MAIN-PATH-QUALIFIED')
+	@:pin('control')
+	@:killer('M-MODULESCAN-MAIN-PATH-QUALIFIED')
 	public function testMainTypeIsTheModule(): Void {
 		final fi: FileInfo = fixture();
 		final main: TypeDeclInfo = fi.types.find(t -> t.name == 'Main');

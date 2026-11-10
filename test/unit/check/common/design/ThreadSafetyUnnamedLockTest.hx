@@ -10,7 +10,8 @@ class ThreadSafetyUnnamedLockTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Gate.close","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Gate.close/open"]}}}';
 
-	@:pin('control') @:killer('M-TS-UNNAMED-PAIR')
+	@:pin('control')
+	@:killer('M-TS-UNNAMED-PAIR')
 	public function testAnUnnamedLockNoMainThreadTakesStallsNoOne(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('')));
@@ -31,7 +32,8 @@ class ThreadSafetyUnnamedLockTest extends Test {
 	 * An unnamed lock may be any object of its class, whichever pair takes it: a worker's exclusive take and the main
 	 * thread's shared take of the same reader-writer lock wait for each other (review `c8`).
 	 */
-	@:pin('control') @:killer('M-TS-UNNAMED-BY-PAIR')
+	@:pin('control')
+	@:killer('M-TS-UNNAMED-BY-PAIR')
 	public function testAnotherPairOfTheSameClassStallsTheMainThread(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Rw.lock","Rw.lockShared","Sys.sleep"],'

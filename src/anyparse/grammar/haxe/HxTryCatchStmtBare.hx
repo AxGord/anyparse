@@ -38,7 +38,11 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(constructFitGroup('body', 'catches'))
 typedef HxTryCatchStmtBare = {
-	@:fmt(bareBodyBreaks('tryBody'), constructFitBody, tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt')) var body: HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep,
-		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt')) var catches: Array<HxCatchClauseStmtBare>;
+	@:fmt(bareBodyBreaks('tryBody'), constructFitBody, tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt'))
+	var body: HxExpr;
+	@:trivia
+	@:tryparse
+	@:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep,
+		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt'))
+	var catches: Array<HxCatchClauseStmtBare>;
 };

@@ -11,7 +11,8 @@ import anyparse.check.common.types.RedundantUpcast;
  */
 class RedundantUpcastTest extends Test {
 
-	@:pin('control') @:killer('M-ISSUBTYPE-FALSE')
+	@:pin('control')
+	@:killer('M-ISSUBTYPE-FALSE')
 	public function testUpcastFlagged(): Void {
 		Assert.equals(
 			1, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = cast(s, Base); } }').length
@@ -102,7 +103,8 @@ class RedundantUpcastTest extends Test {
 	 * declaration the cast names, resolved where it is written, makes the cast an upcast. The second assertion keeps the
 	 * namesake in the index, so the first cannot pass by the check going silent on every ambiguous name.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
+	@:pin('control')
+	@:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
 	public function testNamesakeSupertypeIsNotTheCastTarget(): Void {
 		Assert.equals(0, namesakeUpcasts('Base'), 'a subtype of another package\'s Base is not upcast to this one');
 		Assert.equals(1, namesakeUpcasts('pkg.Base'), 'a subtype of this Base still is');
@@ -112,7 +114,8 @@ class RedundantUpcastTest extends Test {
 	 * The operand's type is resolved where it is declared too: a `haxe.io.Eof` local is the std's, not the project's
 	 * `my.Eof` that extends `Base`, so `cast(s, Base)` can fail. The twin declaring the project's `Eof` is an upcast.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-START-SIMPLE-NAME')
+	@:pin('control')
+	@:killer('M-SUBTYPE-START-SIMPLE-NAME')
 	public function testAnOperandNamedLikeAProjectSubtypeIsNotUpcast(): Void {
 		Assert.equals(0, eofUpcasts('haxe.io.Eof'), 'the std Eof is no Base');
 		Assert.equals(1, eofUpcasts('Eof'), 'the project Eof is');

@@ -49,6 +49,9 @@ typedef HxCasePattern = {
 	// wrap perfectly well on its own. A pattern is a matching shape, not a
 	// value: it never owns the line's overflow, so the guard breaks instead.
 	// Also not applied to `guard`, for the same reason as above.
-	@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe) var expr: HxCasePatternBody;
-	@:optional @:kw('if') var guard: Null<HxExpr>;
+	@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)
+	var expr: HxCasePatternBody;
+	@:optional
+	@:kw('if')
+	var guard: Null<HxExpr>;
 };

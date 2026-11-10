@@ -206,7 +206,8 @@ class StructuralConformanceProofTest extends Test {
 	 * structure's), so `{final x:Base; var y:Int}` accepts a class declaring `var x:Sub` and pins its `y`, while an unrelated
 	 * `var x:Other` refutes the structure and leaves `y` free. `x` is no arm either way: the structure declares it `final`.
 	 */
-	@:pin('control') @:killer('M-STRUCT-READONLY-INVARIANT')
+	@:pin('control')
+	@:killer('M-STRUCT-READONLY-INVARIANT')
 	public function testAReadOnlyStructureFieldTakesASubtype(): Void {
 		final model: Array<SourceFile> = [
 			{ file: 'Base.hx', source: 'class Base {}' },
@@ -226,7 +227,8 @@ class StructuralConformanceProofTest extends Test {
 	 * A MUTABLE structure field asks for the same type, and two namesakes of two packages are two types: `{var x:a.T}`
 	 * rejects a class declaring `var x:b.T`, where comparing simple names read them as one.
 	 */
-	@:pin('control') @:killer('M-STRUCT-MUTABLE-SAME-DECL')
+	@:pin('control')
+	@:killer('M-STRUCT-MUTABLE-SAME-DECL')
 	public function testANamesakeOfAnotherPackageRefutes(): Void {
 		final model: Array<SourceFile> = [
 			{ file: 'a/T.hx', source: 'package a;\nclass T {}' },
@@ -245,7 +247,8 @@ class StructuralConformanceProofTest extends Test {
 	 * A read-only structure field takes an abstract whose `to` clause reaches its type (`tUnification.ml`, `unify_to`), and
 	 * an abstract with none refutes the structure: `{final x:Base}` against `var x:ToBase` pins `y`, against `var x:Bare` not.
 	 */
-	@:pin('control') @:killer('M-UNIFY-ABSTRACT-OFF')
+	@:pin('control')
+	@:killer('M-UNIFY-ABSTRACT-OFF')
 	public function testAReadOnlyStructureFieldTakesAnAbstractThroughItsClause(): Void {
 		final model: Array<SourceFile> = [
 			{ file: 'Base.hx', source: 'class Base {}' },

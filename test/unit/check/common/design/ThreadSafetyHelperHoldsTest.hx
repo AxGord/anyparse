@@ -20,7 +20,9 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * The probe of the brief (`recall/probe-helper`): the hold is the caller's, of both locks. The helper's own take of
 	 * `b` is judged over the helper's window, where the thread waits for `a` — long by the caller's sleep — holding `b`.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-B-OFF') @:killer('M-TS-HELPER-OWN-WINDOW')
+	@:pin('control')
+	@:killer('M-TS-HELPER-B-OFF')
+	@:killer('M-TS-HELPER-OWN-WINDOW')
 	public function testTheHelpersCallerHoldsBothLocks(): Void {
 		#if (sys || nodejs)
 		// both caller holds are long by the one `Sys.sleep`: one warning, the other folded onto it (`RootCauseFold`); the
@@ -35,7 +37,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/** The releasing twin's gives are its caller's releases: no lock is long for being given back by it, so no take of one blocks. */
-	@:pin('control') @:killer('M-TS-HELPER-CROSSING')
+	@:pin('control')
+	@:killer('M-TS-HELPER-CROSSING')
 	public function testTheTwinsGiveIsNoCrossingRelease(): Void {
 		#if (sys || nodejs)
 		Assert.same([], takes(run('takeBoth(); giveBoth();', '')));
@@ -45,7 +48,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	}
 
 	/** Nor does the twin's give break a dominance: `a` taken under `b` on the main thread stays brief. */
-	@:pin('control') @:killer('M-TS-HELPER-DOM-CROSSING')
+	@:pin('control')
+	@:killer('M-TS-HELPER-DOM-CROSSING')
 	public function testTheTwinsGiveLeavesDominanceStanding(): Void {
 		#if (sys || nodejs)
 		// a take of a long lock folds into the main thread's other take of it; a dominated one is short on its own
@@ -65,7 +69,10 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * Every lock the helper's call takes is held across the caller's calls: a take of a lock `b` dominates is brief
 	 * under `a`'s hold too — in a callee the main thread also calls bare, so no meet over its callers says so.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-SIBLINGS') @:killer('M-TS-SAME-LOCAL-ROOT') @:killer('M-TS-HELPER-GIVE-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-HELPER-SIBLINGS')
+	@:killer('M-TS-SAME-LOCAL-ROOT')
+	@:killer('M-TS-HELPER-GIVE-OBJECT')
 	public function testTheHelpersOtherLocksAreHeldToo(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -95,7 +102,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * A function doing work between its takes is no helper (review `c1`): its own takes hand their locks off, and the
 	 * sleep under the first one is judged where it runs.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-BODY-WORK')
+	@:pin('control')
+	@:killer('M-TS-HELPER-BODY-WORK')
 	public function testWorkInsideATakingHelperIsJudged(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = pair(
@@ -116,7 +124,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * Nor is a releasing function that works before its gives (review `c1b`): it runs under the locks its caller holds,
 	 * so the caller's hold spans the call into it.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-BODY-WORK')
+	@:pin('control')
+	@:killer('M-TS-HELPER-BODY-WORK')
 	public function testWorkInsideAGivingHelperIsHeldByItsCaller(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -135,7 +144,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * A call a give is made on (`me()._b.release()`) starts where the give does: it is work of the helper, not lock
 	 * traffic, and the helper's caller holds the lock across it (review round 2 `h3`).
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-SPAN-START')
+	@:pin('control')
+	@:killer('M-TS-HELPER-SPAN-START')
 	public function testACallAGiveIsMadeOnIsWorkOfTheHelper(): Void {
 		#if (sys || nodejs)
 		final lock: String = 'function lockBoth():Void { _a.acquire(); _b.acquire(); }';
@@ -159,7 +169,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * A helper reached through a dispatch is no helper (review `c4`): the call may run another override, taking nothing,
 	 * so the override's takes leak on their own.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-DISPATCH')
+	@:pin('control')
+	@:killer('M-TS-HELPER-DISPATCH')
 	public function testAHelperReachedByDispatchIsNone(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -182,7 +193,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * A hold a helper's call opens and its function hands off, giving it back nowhere, is long past its function's end
 	 * (review `c10`): the caller-side give check decides it as it does any other hold.
 	 */
-	@:pin('control') @:killer('M-TS-HELPER-HANDOFF')
+	@:pin('control')
+	@:killer('M-TS-HELPER-HANDOFF')
 	public function testAHelpersHoldHandedOffByItsCallerIsLong(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -201,7 +213,8 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * A hold its function hands off outlives the window of a hold around it (review `c9`): it is no inner hold of that
 	 * one, and stays a warning of its own.
 	 */
-	@:pin('control') @:killer('M-TS-NEST-HANDOFF')
+	@:pin('control')
+	@:killer('M-TS-NEST-HANDOFF')
 	public function testAHandedOffHoldIsNoInnerHold(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -224,7 +237,9 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * of `_stateLock`, across the same calls — here a wait for a lock given back elsewhere, which nothing folds. One
 	 * warning, on the lock the helper takes first; the other names it, taken after it by the same call.
 	 */
-	@:pin('control') @:killer('M-TS-PAIR-OFF') @:killer('M-TS-PAIR-ORDER')
+	@:pin('control')
+	@:killer('M-TS-PAIR-OFF')
+	@:killer('M-TS-PAIR-ORDER')
 	public function testAHelpersLaterTakeFoldsOntoItsFirst(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = crossed('b.acquire(); a.acquire();');
@@ -250,7 +265,10 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	 * stays a warning from the start, so the helper's wait folds onto it rather than staying in its place when the two
 	 * would cover each other round a cycle.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-HELPER-CROSSING') @:killer('M-TS-FOLD-STUCK-WAIT') @:killer('M-TS-FOLD-STUCK-MADE')
+	@:pin('control')
+	@:killer('M-TS-FOLD-HELPER-CROSSING')
+	@:killer('M-TS-FOLD-STUCK-WAIT')
+	@:killer('M-TS-FOLD-STUCK-MADE')
 	public function testTheHelpersWaitForItsSecondLockFoldsOntoItsHolders(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = crossed(

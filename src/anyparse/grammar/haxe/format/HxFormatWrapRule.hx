@@ -35,9 +35,14 @@ package anyparse.grammar.haxe.format;
  * Schema added in slice ω-peg-byname-array; `location` added in slice
  * ω-binop-location.
  */
-@:peg typedef HxFormatWrapRule = {
-	@:optional var type: String;
-	@:optional var location: String;
-	@:optional var additionalIndent: Int;
-	@:optional var conditions: Array<HxFormatWrapCondition>;
+@:peg
+typedef HxFormatWrapRule = {
+	@:optional
+	var type: String;
+	@:optional
+	var location: String;
+	@:optional
+	var additionalIndent: Int;
+	@:optional
+	var conditions: Array<HxFormatWrapCondition>;
 };

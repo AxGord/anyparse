@@ -7,14 +7,21 @@ package anyparse.query.format.json;
  * finding it duplicates (`dupOf`, for `dup-of` only), whether losing it must fail a scoring run (`recall`), the
  * evidence behind the verdict and a free note.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef LintTruthEntryJson = {
 	var family: String;
-	@:key('function') var member: String;
+	@:key('function')
+	var member: String;
 	var subject: String;
 	var verdict: String;
-	@:optional var dupOf: Null<String>;
-	@:optional var recall: Null<Bool>;
-	@:optional var evidence: Null<LintTruthEvidenceJson>;
-	@:optional var note: Null<String>;
+	@:optional
+	var dupOf: Null<String>;
+	@:optional
+	var recall: Null<Bool>;
+	@:optional
+	var evidence: Null<LintTruthEvidenceJson>;
+	@:optional
+	var note: Null<String>;
 };

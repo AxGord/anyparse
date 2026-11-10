@@ -10,14 +10,16 @@ using StringTools;
  * appends), and a NESTED BUILD whose outer body declares an empty inner array, fills it by a shape the
  * rule folds, and pushes it. Each refusal differs from its fold by one construct.
  */
-@:nullSafety(Strict) class PreferComprehensionIndexFillTest extends Test {
+@:nullSafety(Strict)
+class PreferComprehensionIndexFillTest extends Test {
 
 	/** The motivating nested build, as in the client's `Grid.get_gridData`. */
 	private static inline final NESTED: String = 'final out:Array<Array<P>> = [];\n\n\t\t// create empty array\n'
 		+ '\t\tfor (_ in 0...v + 1) {\n\t\t\tfinal arr:Array<P> = [];\n\t\t\tfor (j in 0...h + 1) arr[j] = { name: \'\', x: 0 };\n'
 		+ '\t\t\tout.push(arr);\n\t\t}';
 
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-NEVER')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-NEVER')
 	public function testAnIndexFillFolds(): Void {
 		Assert.equals(
 			fn('final out:Array<Int> = [for (j in 0...n) j * 2];'),
@@ -29,24 +31,28 @@ using StringTools;
 		);
 	}
 
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-VALUE-UNCHECKED')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-VALUE-UNCHECKED')
 	public function testAnIndexFillReadingTheArrayIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (j in 0...n) out[j] = out.length;')));
 	}
 
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-ANY-START')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-ANY-START')
 	public function testAnIndexFillFromANonZeroStartIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (j in 1...n) out[j] = j;')));
 	}
 
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-ANY-INDEX')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-ANY-INDEX')
 	public function testAnIndexOtherThanTheBinderIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (j in 0...n) out[k] = j;')));
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (j in 0...n) out[j + 1] = j;')));
 	}
 
 	/** A write into an array the gap already touched no longer appends from slot 0. */
-	@:pin('control') @:killer('M-COMPR-GAP-NAME-BLIND')
+	@:pin('control')
+	@:killer('M-COMPR-GAP-NAME-BLIND')
 	public function testAnArrayTouchedBeforeTheLoopIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tout.push(7);\n\t\tfor (j in 0...n) out[j] = j;')));
 	}
@@ -56,7 +62,8 @@ using StringTools;
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (x in xs) for (j in 0...n) out[j] = x;')));
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-NEVER')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-NEVER')
 	public function testANestedBuildFolds(): Void {
 		Assert.equals(
 			fn(
@@ -67,7 +74,8 @@ using StringTools;
 		);
 	}
 
-	@:pin('control') @:killer('M-COMPR-GAP-COMMENT-DROPPED')
+	@:pin('control')
+	@:killer('M-COMPR-GAP-COMMENT-DROPPED')
 	public function testAnOwnLineCommentBetweenTheDeclarationAndTheLoopIsHoisted(): Void {
 		Assert.equals(
 			fn('// doubled\n\t\tfinal out:Array<Int> = [for (x in xs) x * 2];'),
@@ -75,27 +83,32 @@ using StringTools;
 		);
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-ANY-LENGTH')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-ANY-LENGTH')
 	public function testAnExtraStatementInTheOuterBodyIsRefused(): Void {
 		assertOuterKept(applyFix(fn(NESTED.replace('out.push(arr);', 'out.push(arr);\n\t\t\ttrace(1);'))));
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-PUSH-ANY')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-PUSH-ANY')
 	public function testAnOuterPushOfSomethingElseIsRefused(): Void {
 		Assert.equals(0, count(fn(NESTED.replace('out.push(arr);', 'out.push(other);'))));
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-INNER-UNCHECKED')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-INNER-UNCHECKED')
 	public function testAnInnerFillReadingTheInnerArrayIsRefused(): Void {
 		Assert.equals(0, count(fn(NESTED.replace('{ name: \'\', x: 0 }', '{ name: \'\', x: arr.length }'))));
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-CHECKS-UNMERGED')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-CHECKS-UNMERGED')
 	public function testAnInnerFillReadingTheOuterArrayIsRefused(): Void {
 		assertOuterKept(applyFix(fn(NESTED.replace('{ name: \'\', x: 0 }', '{ name: \'\', x: out.length }'))));
 	}
 
-	@:pin('control') @:killer('M-COMPR-NESTED-ASCRIPTION-DROPPED')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-ASCRIPTION-DROPPED')
 	public function testAnInnerAnnotationTheOuterDoesNotRestateIsAscribed(): Void {
 		Assert.equals(
 			fn('final out:Array<Dynamic> = [for (x in xs) ([for (j in 0...x) j] : Array<Float>)];'),
@@ -107,7 +120,8 @@ using StringTools;
 	}
 
 	/** A `Map` index write is no append (the fold does not compile), and an `@:arrayAccess` setter would never run. */
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-ANY-CONTAINER')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-ANY-CONTAINER')
 	public function testAnIndexFillIntoANonArrayIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Map<Int, String> = [];\n\t\tfor (j in 0...n) out[j] = \'x\';')));
 		Assert.equals(0, count(fn('final out:Logged = [];\n\t\tfor (j in 0...n) out[j] = j;')));
@@ -115,13 +129,15 @@ using StringTools;
 		Assert.equals(0, count(fn(NESTED.replace('final arr:Array<P> = [];', 'final arr:Logged = [];'))));
 	}
 
-	@:pin('control') @:killer('M-COMPR-INDEXFILL-RANGE-UNCHECKED')
+	@:pin('control')
+	@:killer('M-COMPR-INDEXFILL-RANGE-UNCHECKED')
 	public function testAnIndexFillBoundedByTheArrayIsRefused(): Void {
 		Assert.equals(0, count(fn('final out:Array<Int> = [];\n\t\tfor (j in 0...out.length) out[j] = j;')));
 	}
 
 	/** Two comments code separated would be welded by the hoist, which the linter's guard answers by dropping the file's edits. */
-	@:pin('control') @:killer('M-COMPR-WELD-BLIND')
+	@:pin('control')
+	@:killer('M-COMPR-WELD-BLIND')
 	public function testAHoistThatWouldWeldTwoCommentsIsRefused(): Void {
 		Assert.equals(
 			0, count(fn('final out:Array<Int> = [];\n\t\t// gap\n\t\tfor (j in 0...n) {\n\t\t\t// inner\n\t\t\tout.push(j);\n\t\t}'))
@@ -148,7 +164,8 @@ using StringTools;
 	}
 
 	/** A comment inside the inner declaration would be stranded by dissolving it. */
-	@:pin('control') @:killer('M-COMPR-NESTED-DECL-COMMENT')
+	@:pin('control')
+	@:killer('M-COMPR-NESTED-DECL-COMMENT')
 	public function testACommentInsideTheInnerDeclarationRefusesTheNest(): Void {
 		final fixed: String = applyFix(fn(NESTED.replace('final arr:Array<P> = [];', 'final arr:Array<P> = /* seed */ [];')));
 		Assert.isTrue(fixed.indexOf('/* seed */') >= 0, fixed);

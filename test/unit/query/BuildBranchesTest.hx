@@ -53,7 +53,11 @@ class BuildBranchesTest extends Test {
 	 * Under a build that leaves `flash` and `js2` undefined only the first abstract of `T` is compiled: `T.LEFT` is of `T`,
 	 * and `T` casts to no `Float`.
 	 */
-	@:pin('control') @:killer('M-BUILDS-FILTER-OFF') @:killer('M-BUILDS-HOST-OFF') @:killer('M-CASTS-CLAUSES-LIVE') @:killer('M-CASTS-BRANCHES-LIVE')
+	@:pin('control')
+	@:killer('M-BUILDS-FILTER-OFF')
+	@:killer('M-BUILDS-HOST-OFF')
+	@:killer('M-CASTS-CLAUSES-LIVE')
+	@:killer('M-CASTS-BRANCHES-LIVE')
 	public function testABranchNoDeclaredBuildCompilesIsDropped(): Void {
 		final index: SymbolIndex = indexUnder([NATIVE]);
 		final t: ResolvedType = declared(index, 'T');
@@ -63,7 +67,10 @@ class BuildBranchesTest extends Test {
 	}
 
 	/** With no build known every branch is read: the `typedef` branch declares no value, and the casts stay open. */
-	@:pin('control') @:killer('M-BUILDS-NONE-KNOWN') @:killer('M-CASTS-CLAUSES-NULL') @:killer('M-INDEX-BRANCHES-ALTERNATE')
+	@:pin('control')
+	@:killer('M-BUILDS-NONE-KNOWN')
+	@:killer('M-CASTS-CLAUSES-NULL')
+	@:killer('M-INDEX-BRANCHES-ALTERNATE')
 	public function testEveryBranchIsReadWhenTheRunKnowsNoBuilds(): Void {
 		final index: SymbolIndex = indexUnder(null);
 		final t: ResolvedType = declared(index, 'T');
@@ -100,7 +107,8 @@ class BuildBranchesTest extends Test {
 	 * A conversion member only a branch no build compiles declares converts nothing: `V` takes no `String` under the native
 	 * build; with no build known the member may be the one compiled.
 	 */
-	@:pin('control') @:killer('M-CASTS-MEMBERS-LIVE')
+	@:pin('control')
+	@:killer('M-CASTS-MEMBERS-LIVE')
 	public function testADroppedBranchsMembersConvertNothing(): Void {
 		final v: TypeEnd = Declared(declared(indexUnder([NATIVE]), 'V'));
 		Assert.equals(Misfits, indexUnder([NATIVE]).typing.unification.casts(Core('String'), v));
@@ -112,7 +120,8 @@ class BuildBranchesTest extends Test {
 	 * A declaration no build compiles at all is read whole: `U` declares its value in one of two branches neither of which a
 	 * native build takes, so `U.A` is still no value of `U`.
 	 */
-	@:pin('control') @:killer('M-BUILDS-NONE-LIVE')
+	@:pin('control')
+	@:killer('M-BUILDS-NONE-LIVE')
 	public function testADeclarationNoBuildCompilesIsReadWhole(): Void {
 		final index: SymbolIndex = indexUnder([NATIVE]);
 		Assert.isFalse(index.typing.casts.holdsUntypedValue(declared(index, 'U'), 'A'));
@@ -122,7 +131,9 @@ class BuildBranchesTest extends Test {
 	 * The builds are asked for once per index, and only by a question about a declaration with more than one branch: `S`
 	 * has one, `T` three.
 	 */
-	@:pin('control') @:killer('M-BUILDS-ONE-BRANCH') @:killer('M-BUILDS-ASKED-ONCE')
+	@:pin('control')
+	@:killer('M-BUILDS-ONE-BRANCH')
+	@:killer('M-BUILDS-ASKED-ONCE')
 	public function testTheBuildsAreAskedOnceAndOnlyForSeveralBranches(): Void {
 		var reads: Int = 0;
 		final index: SymbolIndex = indexUnder([NATIVE], () -> reads++);

@@ -1,7 +1,9 @@
 package devkit;
 
 /** One step of a branch report, its outcome spelled as a label and a reason. */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef StepRecord = {
 
 	var name: String;
@@ -11,6 +13,7 @@ typedef StepRecord = {
 	var note: String;
 
 	/** The lines that decide the step; absent in a report an older tool left. */
-	@:optional var excerpt: Array<String>;
+	@:optional
+	var excerpt: Array<String>;
 
 };

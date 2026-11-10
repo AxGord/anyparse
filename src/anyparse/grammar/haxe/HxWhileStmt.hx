@@ -16,9 +16,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxWhileStmt = {
-	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside(
-		'whileCondParensInsideOpen', 'whileCondParensInsideClose'
-	)) var cond: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('whileBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody'))
+	@:lead('(')
+	@:trail(')')
+	@:fmt(condWrap('conditionWrap'), condParensInside('whileCondParensInsideOpen', 'whileCondParensInsideClose'))
+	var cond: HxExpr;
+	@:trailOpt(';')
+	@:fmt(bodyPolicy('whileBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody'))
 	var body: HxStatement;
 };

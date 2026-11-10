@@ -203,7 +203,8 @@ class ImportBlockOrderCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
+	@:pin('control')
+	@:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
 	public function testWildcardSplitsTheBlock(): Void {
 		Assert.equals(0, violations('package app;\n\nimport z.Zeta;\nimport other.*;\nimport a.Alpha;\n\nclass C {}\n').length);
 	}
@@ -219,7 +220,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * the block it sorts into. `tink.unit.Assert` declares one static, which no other line binds, so
 	 * the wildcard is a line like any other and the block is reported and sorted with it.
 	 */
-	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-RUN-GATE-NO-INDEX', 'M-FIX-GATE-NO-INDEX')
+	@:pin('control')
+	@:killer('M-WILDGATE-NEVER-JOINS', 'M-RUN-GATE-NO-INDEX', 'M-FIX-GATE-NO-INDEX')
 	public function testAFieldWildcardWithFreeNamesJoinsTheBlock(): Void {
 		final src: String = 'package tests.unit;\n\n#if !UNIT_TESTS\n#error "unit only"\n#end\nimport tink.unit.Assert.*;\n'
 			+ 'import fs.PathTools;\nimport haxe.io.Path;\nimport tink.testrunner.Assertion;\n\nusing tink.CoreApi;\n\nclass C {}\n';
@@ -233,7 +235,8 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals(0, violations(expected, null, WILD_LIBS).length, 'the fix converges in one pass');
 	}
 
-	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS')
+	@:pin('control')
+	@:killer('M-WILDGATE-NEVER-JOINS')
 	public function testAPackageWildcardJoinsTheBlock(): Void {
 		final src: String = module('import z.Zeta;\nimport q.*;\nimport a.Alpha;\n');
 		Assert.equals(1, violations(src, null, WILD_LIBS).length);
@@ -255,7 +258,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A package wildcard binds no value, so even an explicit member the index cannot see never blocks it. */
-	@:pin('control') @:killer('M-WILDGATE-PACKAGE-ASKS-EXPLICIT')
+	@:pin('control')
+	@:killer('M-WILDGATE-PACKAGE-ASKS-EXPLICIT')
 	public function testAnUnindexedExplicitImportNeverBlocksAPackageWildcard(): Void {
 		Assert.equals(1, violations(module('import z.Zeta;\nimport q.*;\nimport mystery.Box;\n'), null, WILD_LIBS).length);
 	}
@@ -266,25 +270,29 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** Only a STATIC is imported by a field wildcard: `p.C`'s instance `g` does not meet `q.D`'s static `g`. */
-	@:pin('control') @:killer('M-WILDGATE-INSTANCE-BOUND')
+	@:pin('control')
+	@:killer('M-WILDGATE-INSTANCE-BOUND')
 	public function testAnInstanceMemberIsNoNameTheWildcardBinds(): Void {
 		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.D.g;\n'), null, WILD_LIBS).length);
 	}
 
 	/** Two package wildcards binding one module name: the LAST wins, so their order is load-bearing and both stay boundaries. */
-	@:pin('control') @:killer('M-WILDGATE-PACKAGE-NAMES-IGNORED')
+	@:pin('control')
+	@:killer('M-WILDGATE-PACKAGE-NAMES-IGNORED')
 	public function testTwoPackageWildcardsSharingAModuleNameStayBoundaries(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport q.*;\nimport p.*;\n'), null, WILD_LIBS).length);
 	}
 
 	/** A field wildcard and an explicit FIELD import of one name: the LAST wins. */
-	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-FIELD-IMPORT-NO-NAME')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-FIELD-IMPORT-NO-NAME')
 	public function testAFieldWildcardSharingAStaticWithAFieldImportStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport q.D.f;\n'), null, WILD_LIBS).length);
 	}
 
 	/** Two field wildcards of one static name: the LAST wins — and `r.G`, sharing none with `p.C`, joins. */
-	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-RANK-IGNORED')
 	public function testTwoFieldWildcardsSharingAStaticStayBoundaries(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport r.E.*;\n'), null, WILD_LIBS).length);
 		final free: String = module('import z.Zeta;\nimport p.C.*;\nimport r.G.*;\n');
@@ -296,14 +304,16 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A module import brings the module's module-level FIELDS in, and against a field wildcard the LAST wins. */
-	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
 	public function testAModuleLevelFieldOfAnExplicitImportBlocksAFieldWildcard(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Fns;\n'), null, WILD_LIBS).length);
 		Assert.equals(1, violations(module('import z.Zeta;\nimport p.C.*;\nimport v.Plain;\n'), null, WILD_LIBS).length);
 	}
 
 	/** An enum's wildcard binds its constructors, which a static of the same name meets. */
-	@:pin('control') @:killer('M-WILDGATE-ENUM-STATICS-ONLY')
+	@:pin('control')
+	@:killer('M-WILDGATE-ENUM-STATICS-ONLY')
 	public function testAnEnumConstructorIsANameTheWildcardBinds(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport p.Col.*;\nimport q.D.Red;\n'), null, WILD_LIBS).length);
 	}
@@ -311,31 +321,36 @@ class ImportBlockOrderCheckTest extends Test {
 	// --- wildcard refusals: what the index cannot enumerate stays a boundary ---
 
 	/** An explicit member the index cannot see may bring module-level fields of any name in. */
-	@:pin('control') @:killer('M-WILDGATE-EXPLICIT-UNKNOWN-FREE')
+	@:pin('control')
+	@:killer('M-WILDGATE-EXPLICIT-UNKNOWN-FREE')
 	public function testAnUnindexedExplicitMemberKeepsAFieldWildcardABoundary(): Void {
 		Assert.equals(
 			0, violations(module('import tink.unit.Assert.*;\nimport fs.PathTools;\nimport mystery.Box;\n'), null, WILD_LIBS).length
 		);
 	}
 
-	@:pin('control') @:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
+	@:pin('control')
+	@:killer('M-WILDGATE-UNKNOWN-TYPE-JOINS')
 	public function testAWildcardOfAnUnindexedTypeStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport mystery.Thing.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
 	}
 
 	/** A supertype may carry an `@:autoBuild` that adds statics no index lists. */
-	@:pin('control') @:killer('M-WILDGATE-SUPERTYPE-READ')
+	@:pin('control')
+	@:killer('M-WILDGATE-SUPERTYPE-READ')
 	public function testAWildcardOfASubclassStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Sub.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
 	}
 
-	@:pin('control') @:killer('M-WILDGATE-BUILD-READ')
+	@:pin('control')
+	@:killer('M-WILDGATE-BUILD-READ')
 	public function testAWildcardOfABuiltTypeStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Built.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
 	}
 
 	/** A typedef's wildcard reads the statics of whatever it aliases. */
-	@:pin('control') @:killer('M-WILDGATE-TYPEDEF-READ')
+	@:pin('control')
+	@:killer('M-WILDGATE-TYPEDEF-READ')
 	public function testAWildcardOfATypedefStaysABoundary(): Void {
 		Assert.equals(0, violations(module('import z.Zeta;\nimport s.Alias.*;\nimport a.Alpha;\n'), null, WILD_LIBS).length);
 	}
@@ -346,7 +361,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * that do move up is free (the gate admitted it into their run). One ABOVE the `using` sorts into
 	 * the block like any line.
 	 */
-	@:pin('control') @:killer('M-WEDGE-WILDCARD-LIFTED')
+	@:pin('control')
+	@:killer('M-WEDGE-WILDCARD-LIFTED')
 	public function testAWildcardBelowAWedgedUsingStaysBelowIt(): Void {
 		final below: String = module('import a.Alpha;\nimport z.Zeta;\nusing ext.One;\nimport b.Bee;\nimport q.*;\n');
 		Assert.equals(1, violations(below, null, WILD_LIBS).length);
@@ -358,7 +374,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A wildcard BETWEEN two wedged `using` groups could stay below only by crossing the later one, so the merge is refused. */
-	@:pin('control') @:killer('M-WEDGE-WILDCARD-CROSSES-USING')
+	@:pin('control')
+	@:killer('M-WEDGE-WILDCARD-CROSSES-USING')
 	public function testAWildcardBetweenTwoWedgedUsingsRefusesTheMerge(): Void {
 		final src: String = module('import z.Zeta;\nusing ext.One;\nimport b.Bee;\nimport q.*;\nusing ext.Two;\nimport a.Alpha;\n');
 		Assert.equals(1, violations(src, null, WILD_LIBS).length);
@@ -366,7 +383,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** The insert seat reads the same runs: a fresh import lands BEFORE the member wildcard it sorts ahead of. */
-	@:pin('control') @:killer('M-SEAT-WILDCARD-BLIND')
+	@:pin('control')
+	@:killer('M-SEAT-WILDCARD-BLIND')
 	public function testTheInsertSeatSortsAroundAMemberWildcard(): Void {
 		final src: String = module('import a.Alpha;\nimport q.*;\nimport z.Zeta;\n');
 		final plugin: CachingGrammarPlugin = QueryTestHelpers.projectPlugin([{ file: 'app/C.hx', source: src }], WILD_LIBS);
@@ -382,7 +400,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * the same line, compiled and run on `--interp`; the refused pair is load-bearing — swapping the
 	 * two field wildcards that share `hello` by hand changes what it prints.
 	 */
-	@:pin('control') @:killer('M-WILDGATE-NEVER-JOINS', 'M-BIND-FIELD-RANK-IGNORED')
+	@:pin('control')
+	@:killer('M-WILDGATE-NEVER-JOINS', 'M-BIND-FIELD-RANK-IGNORED')
 	public function testAReorderedWildcardBlockRunsTheSame(): Void {
 		#if (sys || nodejs)
 		final main: String = 'import z.Zed;\nimport r.*;\nimport q.T;\nimport p.Tools.*;\nimport a.Alpha;\n\n'
@@ -438,7 +457,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * reported but not sorted — a name only the module's source spells, which the type names never showed.
 	 * A block whose module-level fields are disjoint still sorts.
 	 */
-	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
 	public function testTwoModulesDeclaringOneModuleLevelFieldAreNotReordered(): Void {
 		final src: String = module('import v.Fns2;\nimport v.Fns;\n');
 		final vs: Array<Violation> = violations(src, null, BIND_LIBS);
@@ -453,7 +473,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * LAST import, and the order the rule would have sorted it into prints the other one — so the
 	 * refusal is what keeps the program meaning what it says.
 	 */
-	@:pin('control') @:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-RANK-IGNORED', 'M-WILDGATE-MODULE-FIELDS-NONE')
 	public function testTwoModulesBindingOneModuleLevelFieldKeepTheirOrderWhenRun(): Void {
 		#if (sys || nodejs)
 		final main: String =
@@ -492,26 +513,30 @@ class ImportBlockOrderCheckTest extends Test {
 	 * Two TYPE imports sharing a constructor: the LAST binds it (an enum's and a SECONDARY
 	 * enum's alike — `import p.M;` binds `MSub.Red`), so neither block is sorted.
 	 */
-	@:pin('control') @:killer('M-BIND-TYPE-VALUE-RANK-IGNORED', 'M-BIND-TYPE-VALUES-NONE')
+	@:pin('control')
+	@:killer('M-BIND-TYPE-VALUE-RANK-IGNORED', 'M-BIND-TYPE-VALUES-NONE')
 	public function testTwoTypeImportsSharingAConstructorAreNotReordered(): Void {
 		Assert.equals(0, edits(module('import p.Col2;\nimport p.Col;\n'), null, BIND_LIBS).length);
 		Assert.equals(0, edits(module('import p.M;\nimport p.Col;\n'), null, BIND_LIBS).length, 'a secondary enum binds its constructors');
 	}
 
 	/** A constructor outranks a module-level field of the same name in EITHER order, so the two never block. */
-	@:pin('control') @:killer('M-BIND-RANKS-MERGED')
+	@:pin('control')
+	@:killer('M-BIND-RANKS-MERGED')
 	public function testAConstructorAndAModuleLevelFieldOfOneNameNeverBlock(): Void {
 		Assert.equals(module('import p.Col;\nimport v.Reds;\n'), fixed(module('import v.Reds;\nimport p.Col;\n'), null, BIND_LIBS));
 	}
 
 	/** A PRIVATE enum's constructors are not bound by its module's import, so they block nothing. */
-	@:pin('control') @:killer('M-BIND-PRIVATE-TYPE-VALUES')
+	@:pin('control')
+	@:killer('M-BIND-PRIVATE-TYPE-VALUES')
 	public function testAPrivateEnumConstructorIsNotBound(): Void {
 		Assert.equals(module('import p.Col;\nimport p.Pm;\n'), fixed(module('import p.Pm;\nimport p.Col;\n'), null, BIND_LIBS));
 	}
 
 	/** An enum abstract binds its VALUES, not its statics: `Ab3`'s static `Red` meets `Col.Red` nowhere. */
-	@:pin('control') @:killer('M-BIND-ABSTRACT-STATICS')
+	@:pin('control')
+	@:killer('M-BIND-ABSTRACT-STATICS')
 	public function testAnEnumAbstractStaticIsNotAValueItsImportBinds(): Void {
 		Assert.equals(module('import p.Ab3;\nimport p.Col;\n'), fixed(module('import p.Col;\nimport p.Ab3;\n'), null, BIND_LIBS));
 	}
@@ -520,14 +545,16 @@ class ImportBlockOrderCheckTest extends Test {
 	 * A typedef binds the constructors of what it aliases (through `Null<T>` too, the compiler
 	 * unwrapping it), so an alias of `Col2` meets `Col` on `Red`, plain or nullable.
 	 */
-	@:pin('control') @:killer('M-BIND-TYPEDEF-NOT-FOLLOWED')
+	@:pin('control')
+	@:killer('M-BIND-TYPEDEF-NOT-FOLLOWED')
 	public function testATypedefBindsTheConstructorsOfWhatItAliases(): Void {
 		Assert.equals(0, edits(module('import p.TAlias;\nimport p.Col;\n'), null, BIND_LIBS).length);
 		Assert.equals(0, edits(module('import p.TNull;\nimport p.Col;\n'), null, BIND_LIBS).length);
 	}
 
 	/** An enum carrying a build macro may hold constructors no source spells, so it refuses beside any other. */
-	@:pin('control') @:killer('M-BIND-ENUM-BUILD-LISTED')
+	@:pin('control')
+	@:killer('M-BIND-ENUM-BUILD-LISTED')
 	public function testAnEnumCarryingABuildMacroIsUnlisted(): Void {
 		Assert.equals(0, edits(module('import p.Col2;\nimport p.Built;\n'), null, BIND_LIBS).length);
 	}
@@ -537,7 +564,8 @@ class ImportBlockOrderCheckTest extends Test {
 	 * declares one. Two such modules are the documented residual: neither set can be listed, and they
 	 * sort as before.
 	 */
-	@:pin('control') @:killer('M-BIND-UNLISTED-FREE-LEFT')
+	@:pin('control')
+	@:killer('M-BIND-UNLISTED-FREE-LEFT')
 	public function testAnUnindexedModuleRefusesBesideAModuleLevelField(): Void {
 		final src: String = module('import z.Zeta;\nimport mystery.Box;\nimport v.Fns;\n');
 		Assert.equals(1, violations(src, null, BIND_LIBS).length);
@@ -549,7 +577,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** An explicit import of a MODULE-LEVEL field binds that field, and nothing the line beside it binds. */
-	@:pin('control') @:killer('M-BIND-FIELD-IMPORT-MODULE-FIELD')
+	@:pin('control')
+	@:killer('M-BIND-FIELD-IMPORT-MODULE-FIELD')
 	public function testAFieldImportOfAModuleLevelFieldIsListed(): Void {
 		Assert.equals(
 			module('import v.Fns.modfn;\nimport w.Other;\n'), fixed(module('import w.Other;\nimport v.Fns.modfn;\n'), null, BIND_LIBS)
@@ -565,7 +594,8 @@ class ImportBlockOrderCheckTest extends Test {
 	}
 
 	/** A `using` brings no module-level field, so it may overtake an import declaring the same one. */
-	@:pin('control') @:killer('M-BIND-USING-FIELDS')
+	@:pin('control')
+	@:killer('M-BIND-USING-FIELDS')
 	public function testAUsingBindsNoModuleLevelField(): Void {
 		Assert.equals(
 			module('import v.Fns;\nimport z.Zeta;\n\nusing v.Fns2;\n'),

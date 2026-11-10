@@ -12,7 +12,8 @@ import anyparse.query.CanonicalEdit;
  * most fixtures SHADOW the binder in the body, so the resolver alone would call it unread and only the
  * gate under test refuses.
  */
-@:nullSafety(Strict) class UnusedLoopBinderCheckTest extends Test {
+@:nullSafety(Strict)
+class UnusedLoopBinderCheckTest extends Test {
 
 	/** The parameter list every fixture's method declares. */
 	private static final PARAMS: String = 'xs:Array<Int>, m:Map<String, Int>, l:List<Int>';
@@ -42,7 +43,8 @@ import anyparse.query.CanonicalEdit;
 		Assert.equals(wrap('for (_ in xs) for (_ in xs) g();'), applyFix(wrap('for (a in xs) for (b in xs) g();')));
 	}
 
-	@:pin('control') @:killer('M-ULB-VALUE-ITERATION-NEVER')
+	@:pin('control')
+	@:killer('M-ULB-VALUE-ITERATION-NEVER')
 	public function testUnreadKeyOverArrayOrListDropped(): Void {
 		Assert.equals(wrap('for (v in xs) g(v);'), applyFix(wrap('for (k => v in xs) g(v);')));
 		Assert.equals(wrap('for (v in l) g(v);'), applyFix(wrap('for (k => v in l) g(v);')));
@@ -56,7 +58,8 @@ import anyparse.query.CanonicalEdit;
 	 * there and the stale value through `iterator()`, so the key is spelled `_`, never dropped. An
 	 * iterable of unknown type is the same refusal.
 	 */
-	@:pin('control') @:killer('M-ULB-VALUE-ITERATION-ALWAYS')
+	@:pin('control')
+	@:killer('M-ULB-VALUE-ITERATION-ALWAYS')
 	public function testUnreadKeyOverMapOrUnknownRenamed(): Void {
 		Assert.equals(wrap('for (_ => v in m) { m.remove(\'a\'); g(v); }'), applyFix(wrap('for (k => v in m) { m.remove(\'a\'); g(v); }')));
 		Assert.equals(wrap('for (_ => v in f()) g(v);'), applyFix(wrap('for (k => v in f()) g(v);')));
@@ -67,7 +70,8 @@ import anyparse.query.CanonicalEdit;
 	 * removes an entry keeps it as `_` — the key-value iterator would read that entry's `null` where `iterator()` yields
 	 * its stale value. The report says the drop is conditional.
 	 */
-	@:pin('control') @:killer('M-ULB-KEYED-UNPROVED-DROPPED')
+	@:pin('control')
+	@:killer('M-ULB-KEYED-UNPROVED-DROPPED')
 	public function testUnreadKeyOverALocalMapDroppedOnlyWhereTheLoopLeavesItUnchanged(): Void {
 		final decl: String = 'final mm:Map<String, Int> = [\'a\' => 1];\n\t\t';
 		Assert.equals(wrap('${decl}for (v in mm) g(v);'), applyFix(wrap('${decl}for (k => v in mm) g(v);')));
@@ -83,7 +87,8 @@ import anyparse.query.CanonicalEdit;
 			);
 	}
 
-	@:pin('control') @:killer('M-ULB-VALUE-ITERATION-SHADOW-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-VALUE-ITERATION-SHADOW-BLIND')
 	public function testProjectListShadowNotDropped(): Void {
 		final own: String =
 			'class List<T> {\n\tpublic function new() {}\n\tpublic function keyValueIterator():KeyValueIterator<Int, T> return null;\n}';
@@ -108,7 +113,8 @@ import anyparse.query.CanonicalEdit;
 		Assert.equals(wrap('for (_ /* k */ => v in xs) g(v);'), applyFix(wrap('for (k /* k */ => v in xs) g(v);')));
 	}
 
-	@:pin('control') @:killer('M-ULB-WILDCARD-KEY-ADMITTED')
+	@:pin('control')
+	@:killer('M-ULB-WILDCARD-KEY-ADMITTED')
 	public function testWildcardBinderNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('for (_ in xs) g();')).length);
 		// A discarded key belongs to `redundant-map-iter-key`; a read value leaves nothing for this rule.
@@ -116,7 +122,8 @@ import anyparse.query.CanonicalEdit;
 	}
 
 	/** A discarded key is `redundant-map-iter-key`'s, but its unread VALUE is this rule's — renamed, never dropped here. */
-	@:pin('control') @:killer('M-ULB-WILDCARD-KEY-VALUE-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-WILDCARD-KEY-VALUE-BLIND')
 	public function testWildcardKeyUnreadValueRenamed(): Void {
 		Assert.equals(wrap('for (_ => _ in m) g();'), applyFix(wrap('for (_ => v in m) g();')));
 		Assert.equals(
@@ -129,7 +136,8 @@ import anyparse.query.CanonicalEdit;
 	 * once: a reassignment in the body, or in a closure the body calls, makes the two diverge. A field
 	 * is read once into a temporary by both, so its key still goes.
 	 */
-	@:pin('control') @:killer('M-ULB-REASSIGNED-LOCAL-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-REASSIGNED-LOCAL-BLIND')
 	public function testReassignedLocalKeyRenamedNotDropped(): Void {
 		Assert.equals(wrap('for (_ => v in xs) { xs = [7, 8]; g(v); }'), applyFix(wrap('for (k => v in xs) { xs = [7, 8]; g(v); }')));
 		Assert.equals(
@@ -141,7 +149,8 @@ import anyparse.query.CanonicalEdit;
 	}
 
 	/** `import haxe.ds.StringMap as List;` makes `List` a map: the std-name proof must see through the file's imports. */
-	@:pin('control') @:killer('M-ULB-IMPORT-ALIAS-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-IMPORT-ALIAS-BLIND')
 	public function testImportAliasedListNotDropped(): Void {
 		for (alias in ['import haxe.ds.StringMap as List;', 'import haxe.ds.StringMap in List;']) {
 			final src: String = '$alias\n\n' + wrap('for (k => v in l) g(v);');
@@ -149,7 +158,8 @@ import anyparse.query.CanonicalEdit;
 		}
 	}
 
-	@:pin('control') @:killer('M-ULB-IMPORT-REBIND-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-IMPORT-REBIND-BLIND')
 	public function testImportOfAnotherListNotDropped(): Void {
 		Assert.equals(
 			'import other.List;\n\n' + wrap('for (_ => v in l) g(v);'),
@@ -161,7 +171,8 @@ import anyparse.query.CanonicalEdit;
 	}
 
 	/** An inherited field `_` is a read the resolver cannot bind; renaming a binder to `_` would capture it. */
-	@:pin('control') @:killer('M-ULB-UNBOUND-WILDCARD-ADMITTED')
+	@:pin('control')
+	@:killer('M-ULB-UNBOUND-WILDCARD-ADMITTED')
 	public function testUnboundOuterWildcardRefuses(): Void {
 		final src: String = 'class Base {\n\tpublic var _:Int = 7;\n}\n\nclass C extends Base {\n\tfunction f(xs:Array<Int>):Void {\n'
 			+ '\t\tfor (i in xs) trace(_);\n\t}\n}';
@@ -169,7 +180,8 @@ import anyparse.query.CanonicalEdit;
 	}
 
 	/** A `case _:` wildcard pattern is unbound too, but it reads nothing. */
-	@:pin('control') @:killer('M-ULB-PATTERN-WILDCARD-UNEXEMPT')
+	@:pin('control')
+	@:killer('M-ULB-PATTERN-WILDCARD-UNEXEMPT')
 	public function testCaseWildcardInBodyStillRenamed(): Void {
 		Assert.equals(
 			wrap('for (_ in xs) switch h() {\n\t\t\tcase 1: g();\n\t\t\tcase _:\n\t\t}'),
@@ -177,46 +189,54 @@ import anyparse.query.CanonicalEdit;
 		);
 	}
 
-	@:pin('control') @:killer('M-ULB-FIELD-NAME-AS-READ')
+	@:pin('control')
+	@:killer('M-ULB-FIELD-NAME-AS-READ')
 	public function testObjectLiteralFieldNameIsNoRead(): Void {
 		Assert.equals(wrap('for (_ in xs) g({ i: 1 });'), applyFix(wrap('for (i in xs) g({ i: 1 });')));
 	}
 
 	/** `_` is a readable binder: renaming `i` would make the inner `trace(_)` read the new binder. */
-	@:pin('control') @:killer('M-ULB-OUTER-WILDCARD-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-OUTER-WILDCARD-BLIND')
 	public function testOuterWildcardReadRefuses(): Void {
 		final vs: Array<Violation> = violations(wrap('for (_ in xs) for (i in xs) trace(_);'));
 		Assert.equals(0, vs.length);
 	}
 
-	@:pin('control') @:killer('M-ULB-SHADOW-COUNTED-AS-READ')
+	@:pin('control')
+	@:killer('M-ULB-SHADOW-COUNTED-AS-READ')
 	public function testShadowInBodyWithoutReadFlagged(): Void {
 		Assert.equals(wrap('for (_ in xs) { final i:Int = 3; g(i); }'), applyFix(wrap('for (i in xs) { final i:Int = 3; g(i); }')));
 		Assert.equals(wrap('for (_ in xs) for (i in xs) g(i);'), applyFix(wrap('for (i in xs) for (i in xs) g(i);')));
 	}
 
-	@:pin('control') @:killer('M-ULB-OUTER-BINDING-AS-SHADOW')
+	@:pin('control')
+	@:killer('M-ULB-OUTER-BINDING-AS-SHADOW')
 	public function testShadowAfterRealReadNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) { g(i); final i:Int = 3; g(i); }')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-INTERP-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-INTERP-BLIND')
 	public function testSimpleInterpolationRefuses(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) g(\'$$i\');')).length);
 		Assert.equals(0, violations(wrap('for (i in xs) { final i:Int = 3; g(\'$$i\'); }')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-INTERP-LITERAL-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-INTERP-LITERAL-BLIND')
 	public function testBracedInterpolationRefuses(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) { final i:Int = 3; g(\'$${i}\'); }')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-OPAQUE-COND-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-OPAQUE-COND-BLIND')
 	public function testOpaqueCondRegionRefuses(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) { #if js if (c) { g(i); } else #end h(); }')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-COVERAGE-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-COVERAGE-BLIND')
 	public function testMacroReificationRefuses(): Void {
 		// A splice re-opens ordinary code, so the resolver sees that read on its own.
 		Assert.equals(0, violations(wrap('for (i in xs) g(macro $$v{i});')).length);
@@ -224,26 +244,30 @@ import anyparse.query.CanonicalEdit;
 		Assert.equals(0, violations(wrap('for (i in xs) g(macro trace(i));')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-NATIVE-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-NATIVE-BLIND')
 	public function testNativeCodeRefuses(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) js.Syntax.code(\'console.log(i)\');')).length);
 		Assert.equals(0, violations(wrap('for (i in xs) untyped __js__(\'console.log(i)\');')).length);
 	}
 
-	@:pin('control') @:killer('M-ULB-UNTYPED-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-UNTYPED-BLIND')
 	public function testUntypedMentionRefuses(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) { final i:Int = 3; untyped g(i); }')).length);
 	}
 
 	/** A closure mentioning the name is a read, even one whose own parameter shadows the binder. */
-	@:pin('control') @:killer('M-ULB-CLOSURE-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-CLOSURE-BLIND')
 	public function testClosureMentionCountsAsRead(): Void {
 		Assert.equals(0, violations(wrap('for (i in xs) xs.map(i -> i + 1);')).length);
 		Assert.equals(0, violations(wrap('for (i in xs) h(() -> i);')).length);
 	}
 
 	/** `dead-binder-counter-loop` rewrites the counter and the dead binder together, so it owns the loop. */
-	@:pin('control') @:killer('M-ULB-COUNTER-CLAIM-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-COUNTER-CLAIM-BLIND')
 	public function testCounterLoopLeftToItsRule(): Void {
 		// A std-scoped whole-project run: `dead-binder-counter-loop` claims a loop only over a
 		// container it PROVES the std one, and a plain test index holds no std.

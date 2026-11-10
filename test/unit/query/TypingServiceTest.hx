@@ -13,7 +13,8 @@ import unit.CheckFixture;
 @:nullSafety(Strict)
 class TypingServiceTest extends Test {
 
-	@:pin('control') @:killer('M-TYPING-KEY-FILE')
+	@:pin('control')
+	@:killer('M-TYPING-KEY-FILE')
 	public function testNamesakesInTwoFilesKeepTheirOwnAnswers(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Base.hx' => 'package p;\n\nclass Base {\n\tpublic var m: Int = 0;\n}\n',
@@ -27,7 +28,8 @@ class TypingServiceTest extends Test {
 		Assert.isTrue(index.typing.members.declarationLacksMember(b, 'm'), 'b.X declares no m');
 	}
 
-	@:pin('control') @:killer('M-TYPING-KEY-OFFSET')
+	@:pin('control')
+	@:killer('M-TYPING-KEY-OFFSET')
 	public function testTwoTypesOfOneFileKeepTheirOwnAnswers(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Base.hx' => 'package p;\n\nclass Base {\n\tpublic var m: Int = 0;\n}\n',
@@ -39,7 +41,8 @@ class TypingServiceTest extends Test {
 		Assert.isTrue(index.typing.members.declarationLacksMember(plain, 'm'), 'Y, beside it, declares none');
 	}
 
-	@:pin('control') @:killer('M-TYPING-TYPE-KEY-FILE')
+	@:pin('control')
+	@:killer('M-TYPING-TYPE-KEY-FILE')
 	public function testATypeQuestionIsKeptPerDeclaration(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Ext.hx' => 'package p;\n\nclass Ext {\n\tpublic static function tag(y: Dynamic): Int return 0;\n}\n',
@@ -53,7 +56,8 @@ class TypingServiceTest extends Test {
 		Assert.isTrue(index.typing.members.declarationFreeOfExtensionTypes(b), 'b.Y brings none');
 	}
 
-	@:pin('control') @:killer('M-TYPING-ANSWER-FORGOTTEN')
+	@:pin('control')
+	@:killer('M-TYPING-ANSWER-FORGOTTEN')
 	public function testARememberedNullIsNotAskedAgain(): Void {
 		final index: SymbolIndex = indexOf(['p/A.hx' => 'package p;\n\nclass A {}\n']);
 		final key: DeclarationKey = DeclarationKey.ofMember(declOf(index, 'p/A.hx', 0), 'gone');
@@ -68,7 +72,8 @@ class TypingServiceTest extends Test {
 		Assert.equals(1, asked, 'the second asking is answered from the table');
 	}
 
-	@:pin('control') @:killer('M-MEMBER-READ-BRANCHES-FIRST')
+	@:pin('control')
+	@:killer('M-MEMBER-READ-BRANCHES-FIRST')
 	public function testAReadOfAMemberItsBranchesWriteDifferentlyIsUnknown(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\t#if js\n\tpublic var m: Int = 0;\n\t#else\n\tpublic var m: String = "";\n\t#end\n'

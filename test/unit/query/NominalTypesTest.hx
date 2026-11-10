@@ -59,7 +59,8 @@ class NominalTypesTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-NOMINAL-SOURCE-CALL') @:killer('M-NOMINAL-RETURN-TYPEPARAM')
+	@:killer('M-NOMINAL-SOURCE-CALL')
+	@:killer('M-NOMINAL-RETURN-TYPEPARAM')
 	public function testTheSourceModeKeepsTypeArguments(): Void {
 		Assert.equals('Map<String, Array<Int>>', source('probeMap'), 'an annotated field, arguments kept');
 		Assert.equals('Array<Item>', source('probeItems'), 'a method call, by the return its declaration writes');
@@ -77,7 +78,8 @@ class NominalTypesTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-ELEMENT-PEEL') @:killer('M-OUTER-PATH-PEEL')
+	@:killer('M-ELEMENT-PEEL')
+	@:killer('M-OUTER-PATH-PEEL')
 	public function testTheWrittenTypeReadersPeelTheirWrappers(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final params: Map<String, Int> = ['Array' => 0, 'Map' => 1];
@@ -128,7 +130,8 @@ class NominalTypesTest extends Test {
 	 * with or without a default, `?w: Null<Int>` as itself, a lambda's `?a: String` as `Null<String>`, and a parameter with a
 	 * default but no `?` as written.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-OPTIONAL-PARAM')
+	@:pin('control')
+	@:killer('M-NOMINAL-OPTIONAL-PARAM')
 	public function testAnOptionalParameterReadsAsNullable(): Void {
 		final text: String = 'package p;\n\nclass C {\n\tfunction probeOpt(?x: Int) return x;\n'
 			+ '\tfunction probeDefault(y: Int = 3) return y;\n\tfunction probeBoth(?z: Int = 4) return z;\n'
@@ -146,7 +149,9 @@ class NominalTypesTest extends Test {
 	 * `var ?b: T`, `@:optional var c: T`), while a required field and an interface's `@:optional` field read as written
 	 * (4.3.7: `i.e` of an `@:optional var e: Int` is `Int`).
 	 */
-	@:pin('control') @:killer('M-MEMBER-OPTIONAL-READ') @:killer('M-INDEX-OPTIONAL-FIELD')
+	@:pin('control')
+	@:killer('M-MEMBER-OPTIONAL-READ')
+	@:killer('M-INDEX-OPTIONAL-FIELD')
 	public function testAnOptionalStructureFieldReadsAsNullable(): Void {
 		final text: String = 'package p;\n\ntypedef S = {\n\t?a: Int,\n\tvar ?b: String;\n\t@:optional var c: Float;\n\tvar d: Int;\n}\n\n'
 			+ 'interface I {\n\t@:optional var e: Int;\n}\n\nclass C {\n\tvar s: S;\n\tvar i: I;\n'
@@ -164,7 +169,10 @@ class NominalTypesTest extends Test {
 	 * through `Mid<U> extends Base<Array<U>>` and `Leaf extends Mid<String>` is `Array<String>` — read bare, off `this`, off
 	 * a `Leaf` and off a `Mid<Int>`; inside a generic type its own parameter is the answer.
 	 */
-	@:pin('control') @:killer('M-ANCESTOR-ARGS-OFF') @:killer('M-MEMBER-READ-HOST-ARGS') @:killer('M-NOMINAL-SELF-PARAMS')
+	@:pin('control')
+	@:killer('M-ANCESTOR-ARGS-OFF')
+	@:killer('M-MEMBER-READ-HOST-ARGS')
+	@:killer('M-NOMINAL-SELF-PARAMS')
 	public function testAnInheritedMemberReadsThroughItsChainsArguments(): Void {
 		final text: String = 'package p;\n\nclass Base<T> {\n\tpublic var item: T;\n}\n\nclass Mid<U> extends Base<Array<U>> {}\n\n'
 			+ 'class Leaf extends Mid<String> {\n\tfunction probeBare() return item;\n\tfunction probeThis() return this.item;\n}\n\n'
@@ -185,7 +193,9 @@ class NominalTypesTest extends Test {
 	 * what each call binds, and the compiler's answer is that binding, never the parameter (`b.get()` of a `Box<Item>` is an
 	 * `Item`, `b.pick()` whatever `K` is inferred to). A written type the grammar does not read as one type is no answer either.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-RETURN-PARAM-NAME') @:killer('M-NOMINAL-UNREADABLE-WRITTEN')
+	@:pin('control')
+	@:killer('M-NOMINAL-RETURN-PARAM-NAME')
+	@:killer('M-NOMINAL-UNREADABLE-WRITTEN')
 	public function testATypeParameterReturnOrAnUnreadableTypeHasNoAnswer(): Void {
 		Assert.isNull(nominal('probeGet'), 'the type\'s parameter');
 		Assert.isNull(nominal('probePick'), 'the method\'s own parameter');
@@ -201,8 +211,13 @@ class NominalTypesTest extends Test {
 	 * link, and in a default that leaves its own arguments out): the binding, a member read through it, a member and a
 	 * return written so.
 	 */
-	@:pin('control') @:killer('M-ANCESTOR-DEFAULT-FILL') @:killer('M-ANCESTOR-COMPLETE-OFF') @:killer('M-ANCESTOR-LINK-DEFAULTS')
-	@:killer('M-MEMBER-READ-COMPLETE') @:killer('M-NOMINAL-BOUND-COMPLETE') @:killer('M-NOMINAL-RETURN-COMPLETE')
+	@:pin('control')
+	@:killer('M-ANCESTOR-DEFAULT-FILL')
+	@:killer('M-ANCESTOR-COMPLETE-OFF')
+	@:killer('M-ANCESTOR-LINK-DEFAULTS')
+	@:killer('M-MEMBER-READ-COMPLETE')
+	@:killer('M-NOMINAL-BOUND-COMPLETE')
+	@:killer('M-NOMINAL-RETURN-COMPLETE')
 	@:killer('M-INDEX-PARAM-DEFAULTS')
 	public function testAReferenceLeavingArgumentsOutNamesTheirDefaults(): Void {
 		final text: String = 'package p;\n\nclass Item {}\n\nclass Box<T = Item> {\n\tpublic var v: Null<T>;\n\tpublic var self: Box;\n'
@@ -229,8 +244,12 @@ class NominalTypesTest extends Test {
 	 * The dynamic type alone may be written bare, and a default the reading file sees the same is written in. A type two
 	 * `#if` branches declare has a default only where both write the same one.
 	 */
-	@:pin('control') @:killer('M-ANCESTOR-DEFAULT-MISSING') @:killer('M-ANCESTOR-BARE-TYPE') @:killer('M-ANCESTOR-SCOPE-OFF')
-	@:killer('M-ANCESTOR-DEFAULT-VISIBLE') @:killer('M-NOMINAL-BOUND-SCOPE')
+	@:pin('control')
+	@:killer('M-ANCESTOR-DEFAULT-MISSING')
+	@:killer('M-ANCESTOR-BARE-TYPE')
+	@:killer('M-ANCESTOR-SCOPE-OFF')
+	@:killer('M-ANCESTOR-DEFAULT-VISIBLE')
+	@:killer('M-NOMINAL-BOUND-SCOPE')
 	@:killer('M-INDEX-ALTERNATE-DEFAULTS')
 	public function testAReferenceItCannotCompleteHasNoAnswer(): Void {
 		final text: String = 'package p;\n\nclass Need<T> {}\n\nclass Rec<T = Rec> {}\n\nclass Item {}\n\nclass Box<T = Item> {}\n\n'
@@ -264,7 +283,8 @@ class NominalTypesTest extends Test {
 	 * A bare call `walk(1)` calls the member `walk` only where the name binds to that member: a local function of the
 	 * name shadows it, and its return type is not the member's (the nominal walk names none for it).
 	 */
-	@:pin('control') @:killer('M-NOMINAL-UNQUALIFIED-MEMBER')
+	@:pin('control')
+	@:killer('M-NOMINAL-UNQUALIFIED-MEMBER')
 	public function testABareCallOfALocalFunctionIsNotTheMembers(): Void {
 		final text: String = 'package p;\n\nclass Item {}\n\nclass C {\n\tfunction walk(n: Int): Item return null;\n'
 			+ '\tfunction probeMember() return walk(1);\n\tfunction probeLocal() {\n\t\tfunction walk(n: Int): Int return n;\n'
@@ -278,7 +298,8 @@ class NominalTypesTest extends Test {
 	 * back to the package-blind walk, which substitutes nothing: a member written with its type's parameter
 	 * (`data: Array<T>`) then has no answer, rather than the parameter the receiver's argument binds.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-BLIND-PARAMS')
+	@:pin('control')
+	@:killer('M-NOMINAL-BLIND-PARAMS')
 	public function testABlindMemberReadWrittenWithAParameterHasNoAnswer(): Void {
 		final others: Array<{ file: String, source: String }> = [
 			{ file: 'a/Pri.hx', source: 'package a;\n\nclass Pri<T> {\n\tpublic var data: Array<T>;\n\tpublic var size: Int;\n}\n' }
@@ -294,7 +315,10 @@ class NominalTypesTest extends Test {
 	 * currency types it as the code its text spells; an interpolation (`$v{n}`) re-opens the code inside it, and the
 	 * same read outside a reification is typed as ever.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-REIFIED') @:killer('M-NOMINAL-REIFIED-NOMINAL') @:killer('M-REIFIED-REOPEN')
+	@:pin('control')
+	@:killer('M-NOMINAL-REIFIED')
+	@:killer('M-NOMINAL-REIFIED-NOMINAL')
+	@:killer('M-REIFIED-REOPEN')
 	public function testAnExpressionInsideAReificationIsNotTypedAsCode(): Void {
 		final text: String =
 			'package p;\n\nclass C {\n\tvar n: Int;\n\tfunction f() {\n\t\tn;\n\t\t5;\n\t\treturn macro { n; 5; $$v{n}; };\n\t}\n}\n';
@@ -340,9 +364,16 @@ class NominalTypesTest extends Test {
 	 * candidate returning `Void` — is a `Void`. A static read through a `typedef` alias, `null` binding an optional `?s`, a
 	 * parameter typed where the file writes it, an instance member off a value: each decided alike. Both currencies.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-SELECTED-STATIC') @:killer('M-NOMINAL-OVERLOAD-REFUSED') @:killer('M-SOURCE-OVERLOAD-REFUSED')
-	@:killer('M-CALLS-FIRST-COMPILING') @:killer('M-CALLS-AGREED-RETURN') @:killer('M-SOURCE-SELECTED-STATIC')
-	@:killer('M-NOMINAL-STATIC-ALIAS') @:killer('M-NOMINAL-ARGUMENT-NULL') @:killer('M-NOMINAL-ARGUMENT-BOUND')
+	@:pin('control')
+	@:killer('M-NOMINAL-SELECTED-STATIC')
+	@:killer('M-NOMINAL-OVERLOAD-REFUSED')
+	@:killer('M-SOURCE-OVERLOAD-REFUSED')
+	@:killer('M-CALLS-FIRST-COMPILING')
+	@:killer('M-CALLS-AGREED-RETURN')
+	@:killer('M-SOURCE-SELECTED-STATIC')
+	@:killer('M-NOMINAL-STATIC-ALIAS')
+	@:killer('M-NOMINAL-ARGUMENT-NULL')
+	@:killer('M-NOMINAL-ARGUMENT-BOUND')
 	public function testAnOverloadedCallReturnsWhatTheSelectedSignatureReturns(): Void {
 		final text: String = 'package p;\n\nextern class O {\n\t@:overload(function(a:Int):Bool {})\n'
 			+ '\t@:overload(function(a:Float):String {})\n\tstatic function g(a:String):Int;\n\n'
@@ -373,7 +404,10 @@ class NominalTypesTest extends Test {
 	 * implements IE`, with `E<T>.on(): T` and `IE.on(): IE`, is an `S` — `E`'s parameter bound through the chain — never
 	 * the interface's `IE`, which the name walk used to take for a superclass return it could not name.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-DECLARING-SUPER-POISON') @:killer('M-NOMINAL-SELECTED-VALUE') @:killer('M-SOURCE-SELECTED-VALUE')
+	@:pin('control')
+	@:killer('M-NOMINAL-DECLARING-SUPER-POISON')
+	@:killer('M-NOMINAL-SELECTED-VALUE')
+	@:killer('M-SOURCE-SELECTED-VALUE')
 	public function testTheSuperclassChainDeclaresAMemberBeforeAnInterface(): Void {
 		final text: String = 'package p;\n\nclass E<T> {\n\tpublic function on(): T return null;\n}\n\ninterface IE {\n'
 			+ '\tfunction on(): IE;\n}\n\nclass S extends E<S> implements IE {}\n\nclass C {\n\tvar s: S;\n'
@@ -387,7 +421,9 @@ class NominalTypesTest extends Test {
 	 * resolves it: `go()` in `Sub extends Img` (`p.Img`, whose `PBase.go(): Int`), beside a namesake `q.Img` whose base
 	 * overloads `go` — the name walk, unioning both `Img`s, answers neither.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-SELECTED-BARE') @:killer('M-SOURCE-SELECTED-BARE')
+	@:pin('control')
+	@:killer('M-NOMINAL-SELECTED-BARE')
+	@:killer('M-SOURCE-SELECTED-BARE')
 	public function testABareCallIsTypedThroughTheEnclosingDeclarationsChain(): Void {
 		final text: String = 'package p;\n\nclass PBase {\n\tpublic function go(): Int return 0;\n}\n\nclass Img extends PBase {}\n\n'
 			+ 'class Sub extends Img {\n\tfunction probeGo() return go();\n}\n';
@@ -401,7 +437,8 @@ class NominalTypesTest extends Test {
 	 * A namesake of the receiver's type no signature of which the call compiles against is not its type (the code
 	 * compiles): `b.size(1)` on a `Buf` reads `p.Buf.size(a:Int): Int`, beside a `q.Buf` declaring only `size(): String`.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-NAMESAKE-EXCLUDED')
+	@:pin('control')
+	@:killer('M-NOMINAL-NAMESAKE-EXCLUDED')
 	public function testANamesakeNoSignatureOfWhichCompilesIsNotTheReceiver(): Void {
 		final text: String = 'package p;\n\nclass Buf {\n\t@:overload(function():Int {})\n\tpublic function size(a:Int): Int return 0;\n'
 			+ '}\n\nclass C {\n\tvar b: Buf;\n\tfunction probeSize() return b.size(1);\n}\n';
@@ -415,7 +452,8 @@ class NominalTypesTest extends Test {
 	 * either type for a walk by simple name, so it has no answer; `s.write('a', 1)` compiles against `p.Socket`'s alone, so
 	 * it is a `Bool`. A namesake reaching no such member at all (`q.Pipe`) is no candidate, and the one declaring it answers.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-RECEIVER-INHERITED', 'M-NOMINAL-RECEIVER-DECLARATIONS', 'M-SOURCE-RECEIVER-DECLARATIONS')
+	@:pin('control')
+	@:killer('M-NOMINAL-RECEIVER-INHERITED', 'M-NOMINAL-RECEIVER-DECLARATIONS', 'M-SOURCE-RECEIVER-DECLARATIONS')
 	public function testANamesakeDeclaringTheMemberDoesNotAnswerForOneInheritingIt(): Void {
 		final text: String = 'package p;\n\nextern class Duplex {\n\tfunction write(a:String, ?b:Int):Bool;\n}\n\n'
 			+ 'extern class Socket extends Duplex {}\n\nextern class Pipe {\n\tfunction write(a:String):Bool;\n}\n\n'
@@ -439,7 +477,10 @@ class NominalTypesTest extends Test {
 	 * `c('x')` — the own `<T:Int>(a:T)` refuses a `String`, the annotation `(a:String)` takes it — is a `Bool`. A function
 	 * written with no return type has none, though its bound `<T:Int>` writes a type beside it.
 	 */
-	@:pin('control') @:killer('M-CALLS-PARAM-INFER') @:killer('M-CALLS-PARAM-BOUND') @:killer('M-INDEX-RETURN-SOURCE-SPAN')
+	@:pin('control')
+	@:killer('M-CALLS-PARAM-INFER')
+	@:killer('M-CALLS-PARAM-BOUND')
+	@:killer('M-INDEX-RETURN-SOURCE-SPAN')
 	@:killer('M-CALLS-NULLABLE-UNBOUND')
 	public function testAMethodsTypeParameterIsBoundByTheArguments(): Void {
 		final text: String = 'package p;\n\nextern class O {\n\tstatic function id<T>(x:T):T;\n\n\t@:overload(function(a:String):Bool {})\n'
@@ -458,7 +499,10 @@ class NominalTypesTest extends Test {
 	 * `true` misfits `E2<String, Float>` (`from String`, `from Float`), so `k(true)` and `m(true)` take the annotation
 	 * `(x:Bool)` — through a `typedef` alias and as written —, and `g(1)` keeps its own signature (`Int` widens to `Float`).
 	 */
-	@:pin('control') @:killer('M-CASTS-APPLIED-ALIAS') @:killer('M-CASTS-APPLIED-WRITTEN') @:killer('M-CASTS-APPLIED-GRAPH-PARAM')
+	@:pin('control')
+	@:killer('M-CASTS-APPLIED-ALIAS')
+	@:killer('M-CASTS-APPLIED-WRITTEN')
+	@:killer('M-CASTS-APPLIED-GRAPH-PARAM')
 	public function testAGenericAbstractCastsThroughTheArgumentsItIsAppliedTo(): Void {
 		final text: String = 'package p;\n\nabstract E2<A, B>(Dynamic) from A to A from B to B {}\n\ntypedef Path = E2<String, Float>;\n\n'
 			+ 'extern class X {\n\t@:overload(function(x:Bool):Bool {})\n\tstatic function k(x:Path):String;\n\n'
@@ -475,7 +519,8 @@ class NominalTypesTest extends Test {
 	 * element type, not by a namesake the reading file declares: the field's written type reaches the reading file spelled by
 	 * the path of what it names where it is written (`TypeRefIndex.spelledIn`).
 	 */
-	@:pin('control') @:killer('M-MEMBER-READ-SPELLED-OFF')
+	@:pin('control')
+	@:killer('M-MEMBER-READ-SPELLED-OFF')
 	public function testAnElementOfAFieldDeclaredElsewhereKeepsItsDeclaringFilesType(): Void {
 		final others: Array<{ file: String, source: String }> = STD.concat([
 			{ file: 'lib/Item.hx', source: 'package lib;\n\nclass Item {\n\tpublic var tag: Int;\n}\n' },
@@ -507,7 +552,9 @@ class NominalTypesTest extends Test {
 	 * written with no argument is that type's nominal: the deep walk leaves such a construction untyped (its arguments are
 	 * monomorphs), so the construction the initializer chain ends in answers.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-LOCAL-CONSTRUCTION') @:killer('M-NOMINAL-INITIALIZER-ONE-STEP')
+	@:pin('control')
+	@:killer('M-NOMINAL-LOCAL-CONSTRUCTION')
+	@:killer('M-NOMINAL-INITIALIZER-ONE-STEP')
 	public function testALocalHoldingAGenericConstructionIsItsNominal(): Void {
 		final text: String = 'package p;\n\nclass Box<T> {\n\tpublic function new() {}\n}\n\nclass C {\n'
 			+ '\tfunction probeDirect() {\n\t\tfinal b = new Box();\n\t\treturn b;\n\t}\n\n'

@@ -57,37 +57,49 @@ enum HxExpr {
 	DoubleStringExpr(v: HxDoubleStringLit);
 	SingleStringExpr(v: HxInterpString);
 	RegexLit(v: HxRegexLit);
-	@:lead("${") @:trail('}')
+	@:lead("${")
+	@:trail('}')
 	DollarBlockExpr(expr: HxExpr);
-	@:lead("$") @:trail('}')
+	@:lead("$")
+	@:trail('}')
 	DollarReifExpr(v: HxDollarReif);
 	@:lead("$")
 	DollarIdentExpr(name: HxWordLit);
-	@:trivia @:lead('[') @:trail(']') @:sep(',') @:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable,
-		wrapRules('arrayLiteralWrap'), mapWrapRules('mapLiteralWrap'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap,
-		propagateExprPosition, uniformStmtBlanks, groupRestProbe, complexItems)
+	@:trivia
+	@:lead('[')
+	@:trail(']')
+	@:sep(',')
+	@:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable, wrapRules('arrayLiteralWrap'), mapWrapRules('mapLiteralWrap'),
+		reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition, uniformStmtBlanks, groupRestProbe, complexItems)
 	ArrayExpr(elems: Array<HxExpr>);
 	ObjectLit(lit: HxObjectLit);
 	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'),
 		rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail, uniformStmtBlanks, relocateTrailingComments)
-	@:lead('{') @:trail('}') @:trivia
+	@:lead('{')
+	@:trail('}')
+	@:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockExpr(stmts: Array<HxStatement>);
 	ThinParenLambdaExpr(lambda: HxThinParenLambda);
 	ECheckTypeExpr(info: HxECheckType);
-	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten, switchWrapSpace,
+	@:wrap('(', ')')
+	@:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten, switchWrapSpace,
 		reflowFrameThroughWrap('ObjectLit', 'ParenExpr'))
 	ParenExpr(inner: HxExpr);
 	ParenLambdaExpr(lambda: HxParenLambda);
 	@:kw('new')
 	NewExpr(expr: HxNewExpr);
-	@:kw('if') @:fmt(ifPolicy)
+	@:kw('if')
+	@:fmt(ifPolicy)
 	IfExpr(stmt: HxIfExpr);
-	@:kw('for') @:fmt(forPolicy)
+	@:kw('for')
+	@:fmt(forPolicy)
 	ForExpr(stmt: HxForExpr);
-	@:kw('for') @:fmt(forPolicy)
+	@:kw('for')
+	@:fmt(forPolicy)
 	ForReifExpr(inner: HxForReif);
-	@:kw('while') @:fmt(whilePolicy)
+	@:kw('while')
+	@:fmt(whilePolicy)
 	WhileExpr(stmt: HxWhileExpr);
 
 	/**
@@ -100,9 +112,11 @@ enum HxExpr {
 	 */
 	@:kw('do')
 	DoWhileExpr(stmt: HxDoWhileStmt);
-	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
+	@:kw('switch')
+	@:fmt(switchPolicy, propagateExprPosition)
 	SwitchExpr(stmt: HxSwitchStmt);
-	@:kw('switch') @:fmt(switchPolicy, propagateExprPosition)
+	@:kw('switch')
+	@:fmt(switchPolicy, propagateExprPosition)
 	SwitchExprBare(stmt: HxSwitchStmtBare);
 	@:kw('try')
 	TryExpr(stmt: HxTryCatchExpr);
@@ -115,22 +129,27 @@ enum HxExpr {
 	 * `macro : T`. The space before the colon is always written; the one after it follows
 	 * `typeHintColon` (`@:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))` = the policy's `add(Before)`).
 	 */
-	@:kw('macro') @:lead(':') @:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))
+	@:kw('macro')
+	@:lead(':')
+	@:fmt(spaceBeforeLead, space('typeHintColon', 'lead'))
 	MacroTypeExpr(t: HxType);
-	@:kw('macro') @:fmt(clearBracePolicy)
+	@:kw('macro')
+	@:fmt(clearBracePolicy)
 	MacroClassExpr(v: HxMacroClass);
 
 	/**
 	 * `macro e`. The space stays before any operand, a paren included: `macro` reads as a construct whose
 	 * operand can be anything, where `cast(e)` reads as a call.
 	 */
-	@:kw('macro') @:fmt(clearExprPosition, clearBracePolicy)
+	@:kw('macro')
+	@:fmt(clearExprPosition, clearBracePolicy)
 	MacroExpr(operand: HxExpr);
 	@:kw('var')
 	VarExpr(decl: HxVarDecl);
 	@:kw('final')
 	FinalExpr(decl: HxVarDecl);
-	@:kw('cast') @:fmt(tightKw)
+	@:kw('cast')
+	@:fmt(tightKw)
 	TypedCastExpr(info: HxTypedCast);
 
 	/**
@@ -147,7 +166,8 @@ enum HxExpr {
 	 * annotation diverges in what it BINDS TO (see `MetaExpr`); `RefShape.rightGreedyExprKinds`
 	 * covers both for `redundant-parens`.
 	 */
-	@:kw('cast') @:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
+	@:kw('cast')
+	@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))
 	CastExpr(operand: HxExpr);
 
 	/**
@@ -184,7 +204,8 @@ enum HxExpr {
 	 */
 	@:kw('return')
 	CondSpliceReturnExpr(inner: HxCondSpliceClosedRegion);
-	@:kw('return') @:fmt(propagateExprPosition)
+	@:kw('return')
+	@:fmt(propagateExprPosition)
 	ReturnExpr(value: HxExpr);
 	@:kw('return')
 	VoidReturnExpr;
@@ -198,11 +219,15 @@ enum HxExpr {
 	InlineExpr(operand: HxExpr);
 	@:kw('function')
 	NamedFnExpr(decl: HxNamedFnExpr);
-	@:kw('function') @:fmt(anonFuncParens)
+	@:kw('function')
+	@:fmt(anonFuncParens)
 	FnExpr(fn: HxFnExpr);
-	@:kw('#if') @:trail('#end') @:fmt(condExprFitGroup)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(condExprFitGroup)
 	ConditionalExpr(inner: HxConditionalExpr);
-	@:kw('#if') @:trail('#end')
+	@:kw('#if')
+	@:trail('#end')
 	ConditionalArgs(inner: HxConditionalArgs);
 
 	/**
@@ -219,7 +244,8 @@ enum HxExpr {
 	 * shared tail closes — see `HxCondSpliceCallOpen`. Dispatched BEFORE
 	 * `CondSpliceExpr`, whose tail has no slot for that `)`.
 	 */
-	@:kw('#if') @:trail(')')
+	@:kw('#if')
+	@:trail(')')
 	CondSpliceCallOpenExpr(inner: HxCondSpliceCallOpen);
 
 	/**
@@ -240,7 +266,8 @@ enum HxExpr {
 	 * branch fits — the verbatim raw capture the whole shape used to
 	 * take.
 	 */
-	@:postfix('#if') @:fmt(capturePostfixOpSpace)
+	@:postfix('#if')
+	@:fmt(capturePostfixOpSpace)
 	CondSpliceTail(operand: HxExpr, body: HxCondSpliceTailBody);
 
 	/**
@@ -265,84 +292,111 @@ enum HxExpr {
 	Not(operand: HxExpr);
 	@:prefix('~')
 	BitNot(operand: HxExpr);
-	@:prefix('...') @:fmt(tight)
+	@:prefix('...')
+	@:fmt(tight)
 	Spread(operand: HxExpr);
-	@:postfix('.') @:fmt(methodChain('methodChainWrap'), captureChainNewline)
+	@:postfix('.')
+	@:fmt(methodChain('methodChainWrap'), captureChainNewline)
 	FieldAccess(operand: HxExpr, field: HxFieldNameLit);
 	@:postfix('?.')
 	SafeFieldAccess(operand: HxExpr, field: HxFieldNameLit);
 	@:postfix('!.')
 	ForceFieldAccess(operand: HxExpr, field: HxFieldNameLit);
-	@:postfix('[', ']') @:fmt(accessBrackets)
+	@:postfix('[', ']')
+	@:fmt(accessBrackets)
 	IndexAccess(operand: HxExpr, index: HxExpr);
-	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, callParens, callParensInside,
-		wrapRules('callParameterWrap'), methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe,
-		arrowValueIfElemTrail, complexItems, relocateTrailingComments)
+	@:postfix('(', ')')
+	@:sep(',')
+	@:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, callParens, callParensInside, wrapRules('callParameterWrap'),
+		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe, arrowValueIfElemTrail, complexItems,
+		relocateTrailingComments)
 	Call(operand: HxExpr, args: Array<HxExpr>);
 	@:postfix('++')
 	PostIncr(operand: HxExpr);
 	@:postfix('--')
 	PostDecr(operand: HxExpr);
-	@:infix('*', 10) @:fmt(captureRhsTrail)
+	@:infix('*', 10)
+	@:fmt(captureRhsTrail)
 	Mul(left: HxExpr, right: HxExpr);
-	@:infix('/', 10) @:fmt(captureRhsTrail)
+	@:infix('/', 10)
+	@:fmt(captureRhsTrail)
 	Div(left: HxExpr, right: HxExpr);
 	// Prec 11, above `*` / `/` — Haxe binds `%` tighter than both
 	// (`2 * 7 % 4` is 6). Declared here to keep the arithmetic ctors
 	// adjacent; declaration order carries no meaning for the generated
 	// dispatch, which sorts by operator-literal length.
-	@:infix('%', 11) @:fmt(captureRhsTrail)
+	@:infix('%', 11)
+	@:fmt(captureRhsTrail)
 	Mod(left: HxExpr, right: HxExpr);
-	@:infix('+', 9) @:fmt(captureChainNewline, relocateTrailingComments)
+	@:infix('+', 9)
+	@:fmt(captureChainNewline, relocateTrailingComments)
 	Add(left: HxExpr, right: HxExpr);
-	@:infix('-', 9) @:fmt(captureChainNewline, relocateTrailingComments)
+	@:infix('-', 9)
+	@:fmt(captureChainNewline, relocateTrailingComments)
 	Sub(left: HxExpr, right: HxExpr);
-	@:infix('<<', 8) @:fmt(captureRhsTrail)
+	@:infix('<<', 8)
+	@:fmt(captureRhsTrail)
 	Shl(left: HxExpr, right: HxExpr);
-	@:infix('>>>', 8) @:fmt(captureRhsTrail)
+	@:infix('>>>', 8)
+	@:fmt(captureRhsTrail)
 	UShr(left: HxExpr, right: HxExpr);
-	@:infix('>>', 8) @:fmt(captureRhsTrail)
+	@:infix('>>', 8)
+	@:fmt(captureRhsTrail)
 	Shr(left: HxExpr, right: HxExpr);
-	@:infix('|', 7) @:fmt(captureRhsTrail)
+	@:infix('|', 7)
+	@:fmt(captureRhsTrail)
 	BitOr(left: HxExpr, right: HxExpr);
-	@:infix('&', 7) @:fmt(captureRhsTrail)
+	@:infix('&', 7)
+	@:fmt(captureRhsTrail)
 	BitAnd(left: HxExpr, right: HxExpr);
-	@:infix('^', 7) @:fmt(captureRhsTrail)
+	@:infix('^', 7)
+	@:fmt(captureRhsTrail)
 	BitXor(left: HxExpr, right: HxExpr);
 	// Prec 6, between the bitwise tier and the comparisons, left-associative — where Haxe 4.3
 	// puts `??` (probed on 4.3.7): `a ?? b == c` is `(a ?? b) == c`, `a ?? b | c` is
 	// `a ?? (b | c)`, and `a ?? b ?? c` is `(a ?? b) ?? c`.
-	@:infix('??', 6) @:fmt(captureChainNewline, relocateTrailingComments)
+	@:infix('??', 6)
+	@:fmt(captureChainNewline, relocateTrailingComments)
 	NullCoal(left: HxExpr, right: HxExpr);
-	@:infix('==', 5) @:fmt(captureRhsTrail)
+	@:infix('==', 5)
+	@:fmt(captureRhsTrail)
 	Eq(left: HxExpr, right: HxExpr);
-	@:infix('!=', 5) @:fmt(captureRhsTrail)
+	@:infix('!=', 5)
+	@:fmt(captureRhsTrail)
 	NotEq(left: HxExpr, right: HxExpr);
-	@:infix('<=', 5) @:fmt(captureRhsTrail)
+	@:infix('<=', 5)
+	@:fmt(captureRhsTrail)
 	LtEq(left: HxExpr, right: HxExpr);
-	@:infix('>=', 5) @:fmt(captureRhsTrail)
+	@:infix('>=', 5)
+	@:fmt(captureRhsTrail)
 	GtEq(left: HxExpr, right: HxExpr);
-	@:infix('<', 5) @:fmt(captureRhsTrail)
+	@:infix('<', 5)
+	@:fmt(captureRhsTrail)
 	Lt(left: HxExpr, right: HxExpr);
-	@:infix('>', 5) @:fmt(captureRhsTrail)
+	@:infix('>', 5)
+	@:fmt(captureRhsTrail)
 	Gt(left: HxExpr, right: HxExpr);
 	// Prec 4, one tier LOOSER than the comparisons and tighter than `&&` — Haxe 4.3's own slot
 	// (probed on 4.3.7): `a ... b == c` is `a ... (b == c)`, `a && b ... c` is `a && (b ... c)`.
-	@:infix('...', 4) @:fmt(intervalPolicy)
+	@:infix('...', 4)
+	@:fmt(intervalPolicy)
 	Interval(left: HxExpr, right: HxExpr);
 	// Prec 12, above every other binary operator but the asymmetric `in` / `->` — Haxe 4.3 binds
 	// `is` tighter than all of them (`a + b is T` is `a + (b is T)`, `a ?? b is T` is
 	// `a ?? (b is T)`), while a prefix operator still binds first (`-a is T` is `(-a) is T`).
-	@:infix('is', 12) @:fmt(captureRhsTrail)
+	@:infix('is', 12)
+	@:fmt(captureRhsTrail)
 	Is(left: HxExpr, right: HxType);
-	@:infix('&&', 3) @:fmt(captureChainNewline, relocateTrailingComments)
+	@:infix('&&', 3)
+	@:fmt(captureChainNewline, relocateTrailingComments)
 	And(left: HxExpr, right: HxExpr);
-	@:infix('||', 2) @:fmt(captureChainNewline, relocateTrailingComments)
+	@:infix('||', 2)
+	@:fmt(captureChainNewline, relocateTrailingComments)
 	Or(left: HxExpr, right: HxExpr);
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's
 	// multi-line block on the condition's line (`cond ? macro {`) while that line fits.
-	@:ternary('?', ':', 1) @:fmt(captureTernaryTrail,
-		multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'))
+	@:ternary('?', ':', 1)
+	@:fmt(captureTernaryTrail, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'))
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 	// ASYMMETRIC (probed on 4.3.7): Haxe's tightest binary operator on its LEFT — `a + b in c` is
 	// `a + (b in c)`, `a ?? b in c` is `a ?? (b in c)` — and right-associative with nothing binding
@@ -353,42 +407,59 @@ enum HxExpr {
 	// `a in (b ? c : d)` there.
 	@:infix('in', 13, 'Right', 0)
 	In(left: HxExpr, right: HxExpr);
-	@:infix('=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	Assign(left: HxExpr, right: HxExpr);
-	@:infix('+=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('+=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	AddAssign(left: HxExpr, right: HxExpr);
-	@:infix('-=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('-=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	SubAssign(left: HxExpr, right: HxExpr);
-	@:infix('*=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('*=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	MulAssign(left: HxExpr, right: HxExpr);
-	@:infix('/=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('/=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	DivAssign(left: HxExpr, right: HxExpr);
-	@:infix('%=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('%=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	ModAssign(left: HxExpr, right: HxExpr);
-	@:infix('<<=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('<<=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	ShlAssign(left: HxExpr, right: HxExpr);
-	@:infix('>>>=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('>>>=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	UShrAssign(left: HxExpr, right: HxExpr);
-	@:infix('>>=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('>>=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	ShrAssign(left: HxExpr, right: HxExpr);
-	@:infix('|=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('|=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	BitOrAssign(left: HxExpr, right: HxExpr);
-	@:infix('&=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('&=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	BitAndAssign(left: HxExpr, right: HxExpr);
-	@:infix('^=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('^=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	BitXorAssign(left: HxExpr, right: HxExpr);
-	@:infix('??=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('??=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	NullCoalAssign(left: HxExpr, right: HxExpr);
-	@:infix('&&=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('&&=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	BoolAndAssign(left: HxExpr, right: HxExpr);
-	@:infix('||=', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('||=', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	BoolOrAssign(left: HxExpr, right: HxExpr);
 	// The arrow lambda `x -> body`. ASYMMETRIC like `in`: the parameter binds tighter than any
 	// binary operator to its left — `a ?? x -> b` is `a ?? (x -> b)`, `a + x -> b` is
 	// `a + (x -> b)` — and the body is a whole expression (`x -> a ? b : c`, `x -> a = b`).
-	@:infix('->', 13, 'Right', 0) @:fmt(propagateExprPosition, propagateArrowLambdaBody, arrowBodyLineWrap)
+	@:infix('->', 13, 'Right', 0)
+	@:fmt(propagateExprPosition, propagateArrowLambdaBody, arrowBodyLineWrap)
 	ThinArrow(left: HxExpr, right: HxExpr);
-	@:infix('=>', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('=>', 0, 'Right')
+	@:fmt(propagateExprPosition)
 	Arrow(left: HxExpr, right: HxExpr);
 
 }

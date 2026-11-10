@@ -11,8 +11,14 @@ class ThreadSafetyOptionsTest extends Test {
 	private static inline final SOURCES: String = 'class Mutex { public function new() {} public function acquire():Void {}'
 		+ ' public function release():Void {} } class L { public static function main():Void { for (i in 0...3) Sys.sleep(1); } }';
 
-	@:pin('control') @:killer('M-TS-OPT-UNKNOWN') @:killer('M-TS-OPT-LIST-SHAPE') @:killer('M-TS-OPT-LIST-ITEM')
-	@:killer('M-TS-OPT-FLAG') @:killer('M-TS-OPT-BUDGET') @:killer('M-TS-OPT-BOUNDED-ENTRY') @:killer('M-TS-OPT-BOUNDED-SITE')
+	@:pin('control')
+	@:killer('M-TS-OPT-UNKNOWN')
+	@:killer('M-TS-OPT-LIST-SHAPE')
+	@:killer('M-TS-OPT-LIST-ITEM')
+	@:killer('M-TS-OPT-FLAG')
+	@:killer('M-TS-OPT-BUDGET')
+	@:killer('M-TS-OPT-BOUNDED-ENTRY')
+	@:killer('M-TS-OPT-BOUNDED-SITE')
 	public function testEveryMalformedOptionIsSaid(): Void {
 		#if (sys || nodejs)
 		Assert.same([
@@ -62,8 +68,12 @@ class ThreadSafetyOptionsTest extends Test {
 	 * `enabled` is a value of the wrong shape, not an unknown option (review round 2 `cfgA`–`cfgE`). A run no sink applies
 	 * to at all still says what its config lost.
 	 */
-	@:pin('control') @:killer('M-TS-OPT-SINKS-UNMATCHED') @:killer('M-TS-OPT-SKIP-DECLARED') @:killer('M-TS-OPT-NO-SINK-NOTICES')
-	@:killer('M-TS-OPT-LIFTED') @:killer('M-TS-OPT-SINKS-ENTRY-UNMATCHED')
+	@:pin('control')
+	@:killer('M-TS-OPT-SINKS-UNMATCHED')
+	@:killer('M-TS-OPT-SKIP-DECLARED')
+	@:killer('M-TS-OPT-NO-SINK-NOTICES')
+	@:killer('M-TS-OPT-LIFTED')
+	@:killer('M-TS-OPT-SINKS-ENTRY-UNMATCHED')
 	public function testALostSinksListIsSaid(): Void {
 		#if (sys || nodejs)
 		final none: String = 'option "sinks" lists no call — only the builtin sinks apply under this config';

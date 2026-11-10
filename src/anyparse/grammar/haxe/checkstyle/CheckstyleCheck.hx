@@ -15,4 +15,10 @@ package anyparse.grammar.haxe.checkstyle;
  * check with its defaults. Everything else checkstyle writes here
  * (`severity`, …) is dropped by the parser's inherited `UnknownPolicy.Skip`.
  */
-@:peg typedef CheckstyleCheck = { @:optional var type: String; @:optional var props: CheckstyleCheckProps; };
+@:peg
+typedef CheckstyleCheck = {
+	@:optional
+	var type: String;
+	@:optional
+	var props: CheckstyleCheckProps;
+};

@@ -15,7 +15,8 @@ class CallGraphBindingTest extends Test {
 	 * A supertype is the type the declaration's own file binds the name it writes to (task B3): `class Mine extends
 	 * sys.thread.Lock` beside a project `utils.Lock` extends the library's, so the project's `wait` is none of Mine's.
 	 */
-	@:pin('control') @:killer('M-SUPERS-BY-DECLARATION')
+	@:pin('control')
+	@:killer('M-SUPERS-BY-DECLARATION')
 	public function testASupertypeIsTheTypeItsDeclaringFileBinds(): Void {
 		final g: CallGraph = graphOf([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
@@ -31,7 +32,8 @@ class CallGraphBindingTest extends Test {
 	 * member `b<T:Foo>(x:T)` and the local function `g<T:Foo>(x:T)` both return a `Bar` (4.3.7: `g(f).run()` runs
 	 * `Bar.run`), so a call of either is never read as a `Foo`, the bound.
 	 */
-	@:pin('control') @:killer('M-GRAPH-RETURN-BOUND')
+	@:pin('control')
+	@:killer('M-GRAPH-RETURN-BOUND')
 	public function testATypeParametersBoundIsNoReturnType(): Void {
 		final g: CallGraph = graphOf([
 			'package app; class Foo { public function new() {} public function run():Void {} }',
@@ -56,7 +58,10 @@ class CallGraphBindingTest extends Test {
 	 * its declaring file's imports make it (`import lib.List;` there is no std list). A `Null<T>` parameter of a project
 	 * type in a package is keyed as that type.
 	 */
-	@:pin('control') @:killer('M-TS-STD-CONTAINER-DECLARED') @:killer('M-TS-STD-CONTAINER-WHERE') @:killer('M-TS-NULLABLE-PATH-KEY')
+	@:pin('control')
+	@:killer('M-TS-STD-CONTAINER-DECLARED')
+	@:killer('M-TS-STD-CONTAINER-WHERE')
+	@:killer('M-TS-NULLABLE-PATH-KEY')
 	public function testAContainerIsTheStdOneOnlyWhereItsWritingFileBindsIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -106,7 +111,9 @@ class CallGraphBindingTest extends Test {
 	 * imports' (Haxe 4.3.7: the main class's own static called bare there is `Unknown identifier`). A static an import binds,
 	 * read there as a value, is the import's too.
 	 */
-	@:pin('control') @:killer('M-TS-MODULE-FN-CLASS-CHAIN') @:killer('M-TS-MODULE-FN-IMPORTED-REF')
+	@:pin('control')
+	@:killer('M-TS-MODULE-FN-CLASS-CHAIN')
+	@:killer('M-TS-MODULE-FN-IMPORTED-REF')
 	public function testAModuleLevelFunctionSeesItsModuleAndImportsNoClassChain(): Void {
 		final g: CallGraph = graphOf([
 			'package app; class A { public static function go():Void {} public static function only():Void {} }',
@@ -125,7 +132,8 @@ class CallGraphBindingTest extends Test {
 	}
 
 	/** A class extending a typedef alias of a type is a subtype of that type: a call on the type dispatches to its override. */
-	@:pin('control') @:killer('M-TS-REACH-ALIAS-SUBTYPES')
+	@:pin('control')
+	@:killer('M-TS-REACH-ALIAS-SUBTYPES')
 	public function testAClassExtendingAnAliasIsASubtypeOfItsTarget(): Void {
 		final g: CallGraph = graphOf([
 			'package app; class T { public function new() {} public function m():Void {} }',
@@ -144,10 +152,18 @@ class CallGraphBindingTest extends Test {
 	 * nothing binds per build — an import naming the function, a query — runs every body.
 	 */
 	@:pin('control')
-	@:killer('M-GRAPH-BODY-SPLIT') @:killer('M-GRAPH-BODY-EXPAND') @:killer('M-GRAPH-BODY-EXACT') @:killer('M-GRAPH-BODY-TARGETS')
-	@:killer('M-GRAPH-BODY-COPY-IN') @:killer('M-GRAPH-BODY-PURGE') @:killer('M-GRAPH-MODULE-BINDING')
-	@:killer('M-GRAPH-MODULE-BINDING-MEMBER') @:killer('M-GRAPH-MODULE-BINDING-VALUE')
-	@:killer('M-GRAPH-MODULE-BINDING-IMPORTS') @:killer('M-GRAPH-MODULE-REF') @:killer('M-GRAPH-MODULE-IDENT')
+	@:killer('M-GRAPH-BODY-SPLIT')
+	@:killer('M-GRAPH-BODY-EXPAND')
+	@:killer('M-GRAPH-BODY-EXACT')
+	@:killer('M-GRAPH-BODY-TARGETS')
+	@:killer('M-GRAPH-BODY-COPY-IN')
+	@:killer('M-GRAPH-BODY-PURGE')
+	@:killer('M-GRAPH-MODULE-BINDING')
+	@:killer('M-GRAPH-MODULE-BINDING-MEMBER')
+	@:killer('M-GRAPH-MODULE-BINDING-VALUE')
+	@:killer('M-GRAPH-MODULE-BINDING-IMPORTS')
+	@:killer('M-GRAPH-MODULE-REF')
+	@:killer('M-GRAPH-MODULE-IDENT')
 	public function testEachBodyOfAModuleLevelFunctionUnderIfIsANodeOfItsOwn(): Void {
 		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([
 			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
@@ -206,7 +222,8 @@ class CallGraphBindingTest extends Test {
 	 * overrides, and an override whose file is taken out is no target any more — what was read while a batch's edges were
 	 * recorded is not kept past it.
 	 */
-	@:pin('control') @:killer('M-CG-DISPATCH-MEMO-LEAKS', 'M-CG-DISPATCH-MEMO-BY-TYPE')
+	@:pin('control')
+	@:killer('M-CG-DISPATCH-MEMO-LEAKS', 'M-CG-DISPATCH-MEMO-BY-TYPE')
 	public function testDispatchTargetsArePerMemberAndFollowTheGraph(): Void {
 		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules([
 			'class Base { public function new() {} public function m():Void {} public function n():Void {} }',

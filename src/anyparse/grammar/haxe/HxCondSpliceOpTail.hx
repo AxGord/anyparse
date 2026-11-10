@@ -39,7 +39,10 @@ package anyparse.grammar.haxe;
 @:fmt(fillParts)
 typedef HxCondSpliceOpTail = {
 	var cond: HxPpCondLit;
-	@:fmt(fillSeam) var op: HxCondSpliceOpLit;
-	@:fmt(fillSeam) var operand: HxExpr;
-	@:fmt(fillSeam) var endKw: HxCondEndLit;
+	@:fmt(fillSeam)
+	var op: HxCondSpliceOpLit;
+	@:fmt(fillSeam)
+	var operand: HxExpr;
+	@:fmt(fillSeam)
+	var endKw: HxCondEndLit;
 };

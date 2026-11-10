@@ -16,7 +16,9 @@ class ThreadSafetyQuietLocksTest extends Test {
 	 * the client's `HttpToken._refreshRwLock`: taken only with `lockShared`, so no take of it waits — neither the main
 	 * thread's take nor anyone behind the worker's hold.
 	 */
-	@:pin('control') @:killer('M-TS-SHARED-OFF') @:killer('M-TS-SHARED-HOLD')
+	@:pin('control')
+	@:killer('M-TS-SHARED-OFF')
+	@:killer('M-TS-SHARED-HOLD')
 	public function testALockOnlyTakenSharedNeverWaits(): Void {
 		#if (sys || nodejs)
 		Assert.same([], graded(run('')));
@@ -26,7 +28,8 @@ class ThreadSafetyQuietLocksTest extends Test {
 	}
 
 	/** One exclusive take of the same lock anywhere and the shared takes wait for it. */
-	@:pin('control') @:killer('M-TS-SHARED-ANY')
+	@:pin('control')
+	@:killer('M-TS-SHARED-ANY')
 	public function testAnExclusiveTakeMakesTheSharedOnesWait(): Void {
 		#if (sys || nodejs)
 		// the main thread's takes of one lock wait for the same holders: one warns, the other names it
@@ -41,7 +44,8 @@ class ThreadSafetyQuietLocksTest extends Test {
 	}
 
 	/** the client's `ShardStore.new`: a take of the instance's own lock in its constructor, before the object escapes, waits for no one. */
-	@:pin('control') @:killer('M-TS-CTOR-TAKE')
+	@:pin('control')
+	@:killer('M-TS-CTOR-TAKE')
 	public function testAConstructorsOwnTakeNeverWaits(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [

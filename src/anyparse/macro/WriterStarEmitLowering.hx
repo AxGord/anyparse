@@ -963,7 +963,13 @@ final class WriterStarEmitLowering {
 				}
 			}
 			: macro $prev && $fieldAccess.length > 0 ? _dt(' ') : _de();
-		return withPadTrailingDrop(prevPadTrailing, baseExpr);
+		if (prevPadTrailing == null || !ctx.ctx.trivia) return withPadTrailingDrop(prevPadTrailing, baseExpr);
+		// The previous field's trailing pad already broke the line: a kept source blank adds its second break.
+		final afterPad: Expr = macro {
+			final _next = $fieldAccess;
+			_next.length > 0 && _next[0].blankBefore && $blankGate ? _dhl() : _de();
+		};
+		return macro $prevPadTrailing ? $afterPad : $baseExpr;
 	}
 
 	/**

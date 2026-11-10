@@ -429,7 +429,8 @@ class OptionalParamShorthandCheckTest extends Test {
 	}
 
 	/** A comment inside the unwrapped `Null<…>` stays in the suggested spelling, exactly as written. */
-	@:pin('control') @:killer('M-OPTPARAM-COMMENT-DROPPED')
+	@:pin('control')
+	@:killer('M-OPTPARAM-COMMENT-DROPPED')
 	public function testCommentInsideTheWrapperIsKept(): Void {
 		final vs: Array<Violation> = violations(fn('z:Null</*c*/ Int> = null'));
 		Assert.equals(1, vs.length);

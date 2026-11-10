@@ -16,7 +16,9 @@ class ThreadSafetyExhaustiveTest extends Test {
 	private static inline final CLOSED: String = 'enum abstract V(Int) { final A; final B;'
 		+ ' @:from static function of(s:String):V return s == "a" ? A : B; }';
 
-	@:pin('control') @:killer('M-TS-EXH-OFF') @:killer('M-TS-EXH-OPAQUE')
+	@:pin('control')
+	@:killer('M-TS-EXH-OFF')
+	@:killer('M-TS-EXH-OPAQUE')
 	public function testACatchAllNoValueReachesIsNoPathInAValue(): Void {
 		#if (sys || nodejs)
 		Assert.same([], leaks(run(CLOSED, 'V', 'use(switch mode { case A: 1; case B: 2; case _: throw "x"; });')));
@@ -25,7 +27,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-EXH-STRUCT')
+	@:pin('control')
+	@:killer('M-TS-EXH-STRUCT')
 	public function testACatchAllNoValueReachesIsNoPathInAStatement(): Void {
 		#if (sys || nodejs)
 		Assert.same([], leaks(run(CLOSED, 'V', 'switch mode { case A: step(); case B: step(); case _: throw "x"; }')));
@@ -34,7 +37,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-EXH-ALL-NAMED')
+	@:pin('control')
+	@:killer('M-TS-EXH-ALL-NAMED')
 	public function testAValueNoCaseNamesReachesIt(): Void {
 		#if (sys || nodejs)
 		Assert.same(['S.work'], leaks(run(CLOSED, 'V', 'switch mode { case A: step(); case _: throw "x"; }')));
@@ -43,7 +47,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-EXH-FROM')
+	@:pin('control')
+	@:killer('M-TS-EXH-FROM')
 	public function testAFromClauseOpensTheAbstract(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -58,7 +63,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-EXH-FROMFN')
+	@:pin('control')
+	@:killer('M-TS-EXH-FROMFN')
 	public function testAFunctionBuildingAnyValueOpensTheAbstract(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -82,7 +88,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	}
 
 	/** A subject whose name a parameter or a local of the function binds is that binding, not the member (review r4 `e1`, `e2`). */
-	@:pin('control') @:killer('M-TS-EXH-SUBJECT-BOUND')
+	@:pin('control')
+	@:killer('M-TS-EXH-SUBJECT-BOUND')
 	public function testASubjectTheFunctionBindsIsNoMember(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -98,7 +105,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	}
 
 	/** A case with a guard matches only where the guard holds: it names no value for sure (review r4 `e5`). */
-	@:pin('control') @:killer('M-TS-EXH-GUARD')
+	@:pin('control')
+	@:killer('M-TS-EXH-GUARD')
 	public function testAGuardedCaseNamesNoValue(): Void {
 		#if (sys || nodejs)
 		Assert.same(['S.work'], leaks(run(CLOSED, 'V', 'switch mode { case A if (flag): step(); case B: step(); case _: throw "x"; }')));
@@ -112,7 +120,10 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * constructor, a function with no written return type handing back a value, a static field of it (review r4 `e3`,
 	 * `e4`, `e8`, `e9`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-FROM') @:killer('M-TS-EXH-CTOR') @:killer('M-TS-EXH-NORET')
+	@:pin('control')
+	@:killer('M-TS-EXH-FROM')
+	@:killer('M-TS-EXH-CTOR')
+	@:killer('M-TS-EXH-NORET')
 	public function testMembersBuildingOtherValuesOpenTheAbstract(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
@@ -144,7 +155,11 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * initializes (null); a counting abstract's uninitialized member is `0`, a value only when one is `0` (review r4 `e6`,
 	 * `e7`; the client's `ListPicker.viewType`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-WRITES') @:killer('M-TS-EXH-UNINIT') @:killer('M-TS-EXH-ZERO') @:killer('M-TS-EXH-OPTIONAL')
+	@:pin('control')
+	@:killer('M-TS-EXH-WRITES')
+	@:killer('M-TS-EXH-UNINIT')
+	@:killer('M-TS-EXH-ZERO')
+	@:killer('M-TS-EXH-OPTIONAL')
 	public function testTheMemberHoldsOnlyValues(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
@@ -170,7 +185,9 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * the client's `RowList.reload` over `ListPicker.viewType`: a getter reading another object's member, an optional
 	 * parameter defaulted through a getter whose call returns a type a `@:from` function takes, a setter's parameter.
 	 */
-	@:pin('control') @:killer('M-TS-EXH-CONVERT-OFF') @:killer('M-TS-EXH-CONVERT-ANY')
+	@:pin('control')
+	@:killer('M-TS-EXH-CONVERT-OFF')
+	@:killer('M-TS-EXH-CONVERT-ANY')
 	public function testValuesThroughAccessorsAndConversions(): Void {
 		#if (sys || nodejs)
 		final abstractDecl: String = 'enum abstract V(UInt) { final A; final B; @:to public inline function toString():String {'
@@ -196,7 +213,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	}
 
 	/** Two declarations of the abstract's name leave which one the member's type names to imports: neither is read (review r4 `e10`). */
-	@:pin('control') @:killer('M-TS-EXH-COLLISION')
+	@:pin('control')
+	@:killer('M-TS-EXH-COLLISION')
 	public function testAnAbstractNameDeclaredTwiceIsNotRead(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -215,7 +233,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * A getter returning the member's own stored field (`@:isVar`) holds what that field holds: a `Dynamic` written to it
 	 * reaches the catch-all (review round 2 `ex1-isvar-getter`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-ISVAR-SELF')
+	@:pin('control')
+	@:killer('M-TS-EXH-ISVAR-SELF')
 	public function testAGetterReturningItsOwnFieldHoldsWhatTheFieldHolds(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
@@ -231,7 +250,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * A run that may miss a write of the project reads no member as holding values: a project file the run leaves out may
 	 * write it, and so may any code where nothing declares `closedWorld` (review round 2 `ex3-partial`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-PARTIAL')
+	@:pin('control')
+	@:killer('M-TS-EXH-PARTIAL')
 	public function testARunThatMayMissAWriteReadsNoMemberAsHoldingValues(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
@@ -252,7 +272,9 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * argument does not, nor does a call the run cannot see, the function handed on as a value (review round 2
 	 * `ex2-param-dynamic`).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-PARAM-CALLERS') @:killer('M-TS-EXH-PARAM-REF')
+	@:pin('control')
+	@:killer('M-TS-EXH-PARAM-CALLERS')
+	@:killer('M-TS-EXH-PARAM-REF')
 	public function testAParameterHoldsValuesOnlyWhereEveryCallHandsOne(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';
@@ -282,7 +304,8 @@ class ThreadSafetyExhaustiveTest extends Test {
 	 * type declares; one on a `Dynamic` may be any object's (the client's `Form.get_data`, `result.setField(formGroup.field, …)` on a
 	 * fresh `{}`, kept `RowList.reload`'s catch-all over `ListPicker.viewType` a path).
 	 */
-	@:pin('control') @:killer('M-TS-EXH-WRITES-ANY')
+	@:pin('control')
+	@:killer('M-TS-EXH-WRITES-ANY')
 	public function testAWriteElsewhereWritesTheMemberOnlyWhereItMay(): Void {
 		#if (sys || nodejs)
 		final dead: String = 'switch mode { case A: step(); case B: step(); case _: throw "x"; }';

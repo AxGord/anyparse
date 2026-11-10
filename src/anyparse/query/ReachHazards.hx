@@ -313,12 +313,14 @@ typedef ReachHazard = {
 	 * the fact of it each build recorded, which says what the object it acts on is (`ReflectionFact.receiver`); absent
 	 * elsewhere.
 	 */
-	@:optional var receivers: Array<ReflectionFact>;
+	@:optional
+	var receivers: Array<ReflectionFact>;
 
 	/**
 	 * Of a native site read where the compiler facts are the truth (`ReachHazards.underTruth`), the fact of it: what its code
 	 * is handed and names (`NativeSiteReach`); absent elsewhere.
 	 */
-	@:optional var native: NativeFact;
+	@:optional
+	var native: NativeFact;
 
 }

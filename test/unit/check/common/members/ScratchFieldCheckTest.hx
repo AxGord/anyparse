@@ -24,7 +24,8 @@ class ScratchFieldCheckTest extends Test {
 		+ '\tpublic function go():Void {}\n}\n\nclass N {\n\tpublic var v:Int = 0;\n\n\tpublic function new() {\n\t\ttrace(v);\n\t}\n}';
 
 	/** A plain scratch value: the field goes, its first write declares the local, every use is renamed. */
-	@:pin('control') @:killer('M-SCRATCH-SILENT')
+	@:pin('control')
+	@:killer('M-SCRATCH-SILENT')
 	public function testAScratchFieldBecomesALocal(): Void {
 		final src: String = scratch(
 			'private var _point:P;',
@@ -45,7 +46,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** More than one write declares a `var`. */
-	@:pin('control') @:killer('M-SCRATCH-SILENT')
+	@:pin('control')
+	@:killer('M-SCRATCH-SILENT')
 	public function testSeveralWritesDeclareAVar(): Void {
 		final out: String = fixed(
 			scratch('private var _tmp:Int = 0;', 'function sum(n:Int):Int {\n\t\t_tmp = n;\n\t\t_tmp += 1;\n\t\treturn _tmp * 2;\n\t}')
@@ -55,7 +57,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A read in a loop body after the write of its own iteration is dominated; the local is declared per iteration. */
-	@:pin('control') @:killer('M-SCRATCH-SILENT')
+	@:pin('control')
+	@:killer('M-SCRATCH-SILENT')
 	public function testAReadAfterTheWriteOfItsIterationIsDominated(): Void {
 		final out: String = fixed(scratch(
 			'private var _step:Int;',
@@ -66,7 +69,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A construction whose constructor only assigns its own fields is an initializer nothing observes being dropped. */
-	@:pin('control') @:killer('M-SCRATCH-SILENT')
+	@:pin('control')
+	@:killer('M-SCRATCH-SILENT')
 	public function testATrivialConstructionInitializerIsDropped(): Void {
 		final out: String = fixed(
 			scratch('private var _q:P = new P(0);', 'function f(v:Float):Float {\n\t\t_q = new P(v);\n\t\treturn _q.x;\n\t}')
@@ -76,7 +80,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A value type may have its methods called: no lifetime hangs on the field. */
-	@:pin('control') @:killer('M-SCRATCH-VALUE-TYPES-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-VALUE-TYPES-OFF')
 	public function testAValueTypeMayBeCalledOn(): Void {
 		final out: String = fixed(
 			scratch('private var _s:String;', 'function f():String {\n\t\t_s = \'a\';\n\t\treturn _s.toUpperCase();\n\t}')
@@ -85,14 +90,16 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** The stripped name is taken when the method does not mention it; otherwise the field's own name is kept. */
-	@:pin('control') @:killer('M-SCRATCH-NAME-UNCHECKED')
+	@:pin('control')
+	@:killer('M-SCRATCH-NAME-UNCHECKED')
 	public function testATakenNameKeepsTheFieldName(): Void {
 		final out: String = fixed(scratch('private var _w:Int;', 'function f(w:Int):Int {\n\t\t_w = w + 1;\n\t\treturn _w;\n\t}'));
 		Assert.isTrue(out.indexOf('final _w:Int = w + 1;') >= 0, out);
 	}
 
 	/** A read the walk reaches before any write of the call sees the previous call's value: reported, fix declined. */
-	@:pin('control') @:killer('M-SCRATCH-DOMINANCE-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-DOMINANCE-OFF')
 	public function testAReadBeforeAnyWriteIsNotDominated(): Void {
 		final src: String = scratch('private var _acc:Int = 0;', 'function count():Int {\n\t\t_acc++;\n\t\treturn _acc;\n\t}');
 		final vs: Array<Violation> = violations(src);
@@ -103,7 +110,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A write in one arm of an `if` with no `else` does not dominate a read after it. */
-	@:pin('control') @:killer('M-SCRATCH-BRANCH-OPTIMISTIC')
+	@:pin('control')
+	@:killer('M-SCRATCH-BRANCH-OPTIMISTIC')
 	public function testAOneArmedWriteDoesNotDominate(): Void {
 		assertDeclinedAs(
 			scratch('private var _b:Int = 0;', 'function f(c:Bool):Int {\n\t\tif (c) _b = 1;\n\t\treturn _b;\n\t}'),
@@ -112,7 +120,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A write in a loop body does not dominate a read after the loop: the body may run zero times. */
-	@:pin('control') @:killer('M-SCRATCH-CONDITIONAL-KEEPS')
+	@:pin('control')
+	@:killer('M-SCRATCH-CONDITIONAL-KEEPS')
 	public function testALoopBodyWriteDoesNotDominateAfterTheLoop(): Void {
 		assertDeclinedAs(
 			scratch('private var _x:Int = 0;', 'function f(n:Int):Int {\n\t\tfor (i in 0...n) _x = i;\n\t\treturn _x;\n\t}'),
@@ -121,7 +130,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A write in a `try` body does not dominate a read after it: the body may throw first. */
-	@:pin('control') @:killer('M-SCRATCH-TRY-ALWAYS')
+	@:pin('control')
+	@:killer('M-SCRATCH-TRY-ALWAYS')
 	public function testATryBodyWriteDoesNotDominate(): Void {
 		assertDeclinedAs(
 			scratch(
@@ -134,7 +144,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** Both arms assign, so the reads are dominated — but no single statement can hold the declaration. */
-	@:pin('control') @:killer('M-SCRATCH-SLOT-ANYWHERE')
+	@:pin('control')
+	@:killer('M-SCRATCH-SLOT-ANYWHERE')
 	public function testWritesInBothArmsHaveNoDeclarationSlot(): Void {
 		assertDeclinedAs(
 			scratch(
@@ -146,13 +157,15 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** Without a declared type the local could infer another one from its first write. */
-	@:pin('control') @:killer('M-SCRATCH-UNTYPED')
+	@:pin('control')
+	@:killer('M-SCRATCH-UNTYPED')
 	public function testAnUntypedFieldDeclines(): Void {
 		assertDeclinedAs(scratch('private var _u = 0;', 'function f():Int {\n\t\t_u = 4;\n\t\treturn _u;\n\t}'), 'declares no type');
 	}
 
 	/** A method called on an object the field held may start work that outlives the call. */
-	@:pin('control') @:killer('M-SCRATCH-LIFETIME-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-LIFETIME-OFF')
 	public function testAMethodCalledOnTheValueDeclines(): Void {
 		assertDeclinedAs(
 			scratch('private var _l:P;', 'function f():Float {\n\t\t_l = new P(1);\n\t\t_l.go();\n\t\treturn _l.x;\n\t}'),
@@ -161,7 +174,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A method that names itself may recurse between a write and a read. */
-	@:pin('control') @:killer('M-SCRATCH-RECURSION-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-RECURSION-OFF')
 	public function testARecursiveMethodDeclines(): Void {
 		assertDeclinedAs(
 			scratch('private var _r:Int = 0;', 'function rec(n:Int):Int {\n\t\t_r = n;\n\t\tif (n > 0) rec(n - 1);\n\t\treturn _r;\n\t}'),
@@ -170,7 +184,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A constructor spelling `new` builds another object, whose field is not the one being made a local. */
-	@:pin('control') @:killer('M-SCRATCH-CTOR-RECURSES')
+	@:pin('control')
+	@:killer('M-SCRATCH-CTOR-RECURSES')
 	public function testAConstructorConstructingIsNoRecursion(): Void {
 		final src: String =
 			'class C {\n\tprivate var _bg:P;\n\n\tpublic function new() {\n\t\t_bg = new P(1);\n\t\ttrace(_bg.x);\n\t}\n}\n\n$SUPPORT';
@@ -178,7 +193,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** An initializer that calls something may be observed by its absence. */
-	@:pin('control') @:killer('M-SCRATCH-INIT-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-INIT-OFF')
 	public function testAnImpureInitializerDeclines(): Void {
 		assertDeclinedAs(
 			scratch(
@@ -190,7 +206,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A construction whose constructor does more than assign its own fields is not dropped. */
-	@:pin('control') @:killer('M-SCRATCH-TRIVIAL-CTOR-ANY')
+	@:pin('control')
+	@:killer('M-SCRATCH-TRIVIAL-CTOR-ANY')
 	public function testANonTrivialConstructionDeclines(): Void {
 		assertDeclinedAs(
 			scratch('private var _n:N = new N();', 'function f():Int {\n\t\t_n = new N();\n\t\treturn _n.v;\n\t}'), 'initializer'
@@ -198,7 +215,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A build macro may read the field list the fix changes: declined without an oracle, typechecked with one. */
-	@:pin('control') @:killer('M-SCRATCH-MACRO-IGNORED')
+	@:pin('control')
+	@:killer('M-SCRATCH-MACRO-IGNORED')
 	public function testABuildMacroDeclinesUnlessAnOracleVerifies(): Void {
 		final src: String = '@:build(M.b())\n' + scratch('private var _m:Int;', 'function f():Int {\n\t\t_m = 1;\n\t\treturn _m;\n\t}');
 		assertDeclinedAs(src, 'build macro');
@@ -208,7 +226,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** Used in two methods: the field carries a value between them. */
-	@:pin('control') @:killer('M-SCRATCH-ONE-METHOD')
+	@:pin('control')
+	@:killer('M-SCRATCH-ONE-METHOD')
 	public function testAFieldOfTwoMethodsIsNotReported(): Void {
 		Assert.equals(
 			0,
@@ -220,7 +239,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A closure may run after the call returns. */
-	@:pin('control') @:killer('M-SCRATCH-CLOSURE')
+	@:pin('control')
+	@:killer('M-SCRATCH-CLOSURE')
 	public function testAClosureOccurrenceIsNotReported(): Void {
 		Assert.equals(
 			0,
@@ -231,7 +251,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A string spelling the name may be a `Reflect.field` target. */
-	@:pin('control') @:killer('M-SCRATCH-REFLECTION-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-REFLECTION-OFF')
 	public function testANameInAStringIsNotReported(): Void {
 		Assert.equals(
 			0,
@@ -242,7 +263,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A public field, a static one or one carrying metadata is not a plain private scratch value. */
-	@:pin('control') @:killer('M-SCRATCH-MODIFIERS')
+	@:pin('control')
+	@:killer('M-SCRATCH-MODIFIERS')
 	public function testAModifiedFieldIsNotReported(): Void {
 		final body: String = 'function f():Int {\n\t\t_k = 1;\n\t\treturn _k;\n\t}';
 		Assert.equals(0, violations(scratch('public var _k:Int = 0;', body)).length);
@@ -250,7 +272,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A subtype mentioning the field may read it. */
-	@:pin('control') @:killer('M-SCRATCH-CONFINED-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-CONFINED-OFF')
 	public function testASubtypeMentioningTheFieldIsNotReported(): Void {
 		final src: String = scratch('private var _z:Int = 0;', 'function f():Int {\n\t\t_z = 1;\n\t\treturn _z;\n\t}');
 		final sub: String = 'class D extends C {\n\tfunction g():Int {\n\t\treturn _z;\n\t}\n}';
@@ -260,7 +283,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** Another object's member of that name is the field of another instance. */
-	@:pin('control') @:killer('M-SCRATCH-FOREIGN-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-FOREIGN-OFF')
 	public function testAnotherReceiversMemberIsNotReported(): Void {
 		Assert.equals(
 			0, violations(scratch('private var _y:Int = 0;', 'function f(o:C):Int {\n\t\t_y = 1;\n\t\treturn _y + o._y;\n\t}')).length
@@ -268,13 +292,15 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A field the method only writes is a dead store, not a scratch value. */
-	@:pin('control') @:killer('M-SCRATCH-WRITE-ONLY')
+	@:pin('control')
+	@:killer('M-SCRATCH-WRITE-ONLY')
 	public function testAWriteOnlyFieldIsNotReported(): Void {
 		Assert.equals(0, violations(scratch('private var _d:Int = 0;', 'function f():Void {\n\t\t_d = 1;\n\t}')).length);
 	}
 
 	/** A type carrying `@:rtti` keeps every field reachable by name. */
-	@:pin('control') @:killer('M-SCRATCH-RTTI-OFF')
+	@:pin('control')
+	@:killer('M-SCRATCH-RTTI-OFF')
 	public function testAnRttiTypeIsNotReported(): Void {
 		Assert.equals(
 			0, violations('@:rtti\n' + scratch('private var _e:Int;', 'function f():Int {\n\t\t_e = 1;\n\t\treturn _e;\n\t}')).length
@@ -353,7 +379,8 @@ class ScratchFieldCheckTest extends Test {
 	 * The set accessor of a property whose plain reads return its field, which it never stores: its scratch field is
 	 * most likely the value it forgot to store there, so the finding says so and the fix keeps the field.
 	 */
-	@:pin('control') @:killer('M-SCRATCH-UNSTORED-BLIND')
+	@:pin('control')
+	@:killer('M-SCRATCH-UNSTORED-BLIND')
 	public function testASetterThatNeverStoresItsPropertyKeepsItsField(): Void {
 		final src: String = scratch(
 			'public var label(default, set):String;\n\tprivate var _label:String;',
@@ -364,7 +391,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** A setter that stores its property is an ordinary method: its scratch field still becomes a local. */
-	@:pin('control') @:killer('M-PROPSTORE-MENTION-BLIND')
+	@:pin('control')
+	@:killer('M-PROPSTORE-MENTION-BLIND')
 	public function testASetterThatStoresItsPropertyStillFixes(): Void {
 		final out: String = fixed(scratch(
 			'public var label(default, set):String;\n\tprivate var _label:String;',
@@ -375,7 +403,8 @@ class ScratchFieldCheckTest extends Test {
 	}
 
 	/** The stripped name is not taken when a member of the type holds it, even unmentioned: the local would shadow it. */
-	@:pin('control') @:killer('M-SCRATCH-MEMBER-NAME-TAKEN')
+	@:pin('control')
+	@:killer('M-SCRATCH-MEMBER-NAME-TAKEN')
 	public function testAMemberNameIsNotTakenByTheLocal(): Void {
 		final out: String = fixed(scratch(
 			'public var size:Int = 0;\n\tprivate var _size:Int;', 'function f(n:Int):Int {\n\t\t_size = n * 2;\n\t\treturn _size;\n\t}'

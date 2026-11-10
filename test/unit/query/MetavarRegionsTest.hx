@@ -9,7 +9,8 @@ import anyparse.query.Pattern;
  */
 class MetavarRegionsTest extends Test {
 
-	@:pin('control') @:killer('M-METAVAR-REGIONS-OFF')
+	@:pin('control')
+	@:killer('M-METAVAR-REGIONS-OFF')
 	public function testAMetavarInsideAStringLiteralStaysText(): Void {
 		Assert.equals('y', onlyBound("f('$x', $y)"));
 		Assert.equals('y', onlyBound('f("$$x", $$y)'));
@@ -22,7 +23,8 @@ class MetavarRegionsTest extends Test {
 		Assert.equals('y', onlyBound("f(\n$y // $x\n)"));
 	}
 
-	@:pin('control') @:killer('M-METAVAR-REGIONS-OFF')
+	@:pin('control')
+	@:killer('M-METAVAR-REGIONS-OFF')
 	public function testAMetavarInsideARegexLiteralStaysText(): Void {
 		Assert.equals(1, matches('~/a$$x/', 'class X { function f() { var r = ~/a$$x/; } }').length);
 		final quoted: Array<Match> = matches("~/'/.match($y)", "class X { function f(y) { ~/'/.match(y); } }");

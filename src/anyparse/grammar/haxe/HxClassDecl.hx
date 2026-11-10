@@ -36,10 +36,18 @@ package anyparse.grammar.haxe;
 @:ws
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxClassDecl = {
-	@:kw('class') var name: HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
-		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
+	@:kw('class')
+	var name: HxIdentLit;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, lineLengthAwareSeps, listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap'))
+	var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('beginType', 'endType', '_classExtern', 'externClassBeginType', 'externClassEndType'),
 		afterFieldsWithDocComments, existingBetweenFields('existingBetweenFields', '_classExtern', 'externExistingBetweenFields'),
 		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
@@ -53,5 +61,8 @@ typedef HxClassDecl = {
 			'externClassBetweenFunctions'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
 		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
-	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	@:lead('{')
+	@:trail('}')
+	@:trivia
+	var members: Array<HxMemberDecl>;
 }

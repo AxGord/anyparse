@@ -25,5 +25,7 @@ package anyparse.grammar.haxe;
 typedef HxObjectFieldBody = {
 	var name: HxObjectKeyLit;
 	@:fmt(space('objectFieldColon', 'lead'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		propagateExprPosition) @:lead(':') var value: HxExpr;
+		propagateExprPosition)
+	@:lead(':')
+	var value: HxExpr;
 }

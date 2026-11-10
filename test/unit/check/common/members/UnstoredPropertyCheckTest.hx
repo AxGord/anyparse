@@ -23,7 +23,8 @@ using StringTools;
 class UnstoredPropertyCheckTest extends Test {
 
 	/** A setter that never stores a property something reads: every read sees the initial value. */
-	@:pin('control') @:killer('M-PROPSTORE-READS-BLIND')
+	@:pin('control')
+	@:killer('M-PROPSTORE-READS-BLIND')
 	public function testANeverStoredPropertyThatIsReadWarns(): Void {
 		final src: String = widget('', 'trace(w.label);');
 		final vs: Array<Violation> = violations(src);
@@ -40,7 +41,8 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** Read nowhere — only written, through the setter — the property's read access becomes `never`. */
-	@:pin('control') @:killer('M-PROPSTORE-WRITE-TARGETS-OFF')
+	@:pin('control')
+	@:killer('M-PROPSTORE-WRITE-TARGETS-OFF')
 	public function testAnUnreadPropertyLosesItsReadAccess(): Void {
 		final src: String = widget('', '');
 		final vs: Array<Violation> = violations(src);
@@ -53,7 +55,8 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** A compound assignment reads the property before it writes it. */
-	@:pin('control') @:killer('M-PROPSTORE-COMPOUND-AS-WRITE')
+	@:pin('control')
+	@:killer('M-PROPSTORE-COMPOUND-AS-WRITE')
 	public function testACompoundAssignmentIsARead(): Void {
 		final vs: Array<Violation> = violations(widget('', 'w.label += \'b\';'));
 		Assert.equals(1, vs.length);
@@ -70,19 +73,22 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** A declaration initializer stores the field. */
-	@:pin('control') @:killer('M-UNSTORED-INIT-BLIND')
+	@:pin('control')
+	@:killer('M-UNSTORED-INIT-BLIND')
 	public function testAnInitializerStoresTheField(): Void {
 		Assert.equals(0, violations(widget('', 'trace(w.label);', 'return value;', ' = \'x\'')).length);
 	}
 
 	/** A reflective string naming the property may write its field by name. */
-	@:pin('control') @:killer('M-UNSTORED-REFLECTION-BLIND')
+	@:pin('control')
+	@:killer('M-UNSTORED-REFLECTION-BLIND')
 	public function testAReflectiveNameMayStoreTheField(): Void {
 		Assert.equals(0, violations(widget('', 'Reflect.setField(w, \'label\', \'b\');')).length);
 	}
 
 	/** An override of the setter in a subtype may store the field: accessor bodies are read wherever they are. */
-	@:pin('control') @:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
+	@:pin('control')
+	@:killer('M-ISVAR-ACCESSOR-BODY-BLIND')
 	public function testAnOverridingSetterMayStoreTheField(): Void {
 		final sub: String =
 			'\n\nclass S extends W {\n\toverride function set_label(value:String):String {\n\t\treturn label = value;\n\t}\n}';
@@ -90,25 +96,29 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** Metadata on the property may reach its field: the finding stays, the fix is declined. */
-	@:pin('control') @:killer('M-UNSTORED-META-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-META-ADMITTED')
 	public function testMetadataDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('@:keep ', ''), 'the property carries metadata');
 	}
 
 	/** A kept owner may be reached by name: the fix is declined. */
-	@:pin('control') @:killer('M-UNSTORED-KEEP-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-KEEP-ADMITTED')
 	public function testAKeptOwnerDeclinesTheFix(): Void {
 		assertDeclinedAs('@:keep ' + widget('', ''), 'the owner is kept');
 	}
 
 	/** Runtime type information describes the property's access: the fix is declined. */
-	@:pin('control') @:killer('M-UNSTORED-RTTI-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-RTTI-ADMITTED')
 	public function testAnRttiOwnerDeclinesTheFix(): Void {
 		assertDeclinedAs('@:rtti ' + widget('', ''), 'runtime type information');
 	}
 
 	/** A supertype outside the scope may declare the property, whose access the subtype's must match. */
-	@:pin('control') @:killer('M-UNSTORED-CHAIN-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-CHAIN-ADMITTED')
 	public function testAnUnresolvedSupertypeDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', '').replace('class W {', 'class W extends Missing {'), 'a supertype outside the scope');
 	}
@@ -128,7 +138,8 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** An extern's field is stored on the native side, which no text here shows: no finding. */
-	@:pin('control') @:killer('M-UNSTORED-EXTERN-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-EXTERN-ADMITTED')
 	public function testAnExternOwnerIsSilent(): Void {
 		final ext: String = 'extern class E {\n\tpublic var label(default, set):String;\n\n'
 			+ '\tinline function set_label(value:String):String {\n\t\treturn value;\n\t}\n}';
@@ -137,7 +148,8 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** A setter declared without a body shows nothing of what it stores: no finding. */
-	@:pin('control') @:killer('M-PROPSTORE-BODILESS-ADMITTED')
+	@:pin('control')
+	@:killer('M-PROPSTORE-BODILESS-ADMITTED')
 	public function testABodilessSetterIsSilent(): Void {
 		Assert.equals(
 			0,
@@ -151,7 +163,8 @@ class UnstoredPropertyCheckTest extends Test {
 	 * A write through `Dynamic` lands in the field past the setter, so the field IS stored: no finding — and the program
 	 * keeps running as it did, where a `never` read access made that write fail at run time.
 	 */
-	@:pin('control') @:killer('M-UNSTORED-DYNAMIC-WRITE-BLIND')
+	@:pin('control')
+	@:killer('M-UNSTORED-DYNAMIC-WRITE-BLIND')
 	public function testADynamicWriteMayStoreTheField(): Void {
 		final main: String = 'class Main {\n\tpublic var label(default, set):String;\n\n\tpublic function new() {}\n\n'
 			+ '\tfunction set_label(value:String):String {\n\t\tSys.println(\'set \' + value);\n\t\treturn value;\n\t}\n\n'
@@ -162,25 +175,29 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** Code rendering an object sees whether it has the field: the fix is declined. */
-	@:pin('control') @:killer('M-UNSTORED-ENUMERATION-ADMITTED')
+	@:pin('control')
+	@:killer('M-UNSTORED-ENUMERATION-ADMITTED')
 	public function testAnEnumeratingScopeDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', 'trace(haxe.Json.stringify(w));'), 'list or render an object');
 	}
 
 	/** A printing call counts wherever it sits in the scope. */
-	@:pin('control') @:killer('M-REFLECT-ENUM-BLIND')
+	@:pin('control')
+	@:killer('M-REFLECT-ENUM-BLIND')
 	public function testAPrintingCallDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', 'trace(Std.string(w));'), 'list or render an object');
 	}
 
 	/** A member read by a name the call computes may be any member, this field included: the fix is declined. */
-	@:pin('control') @:killer('M-REFLECT-ENUM-COMPUTED-BLIND')
+	@:pin('control')
+	@:killer('M-REFLECT-ENUM-COMPUTED-BLIND')
 	public function testAComputedMemberNameDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', 'final k:String = \'other\';\n\t\ttrace(Reflect.field(w, k));'), 'list or render an object');
 	}
 
 	/** A member read by a literal naming another member enumerates nothing: the fix stands. */
-	@:pin('control') @:killer('M-REFLECT-ENUM-LITERAL-ENUMERATES')
+	@:pin('control')
+	@:killer('M-REFLECT-ENUM-LITERAL-ENUMERATES')
 	public function testALiteralMemberNameKeepsTheFix(): Void {
 		final out: String = fixed(widget('', 'trace(Reflect.field(w, \'other\'));'));
 		Assert.isTrue(out.indexOf('label(never, set)') >= 0, out);
@@ -190,7 +207,8 @@ class UnstoredPropertyCheckTest extends Test {
 	 * The std spells every enumerating call itself and enumerates only when the project calls one: an std file of the
 	 * scope declines nothing, while the same file DECLARED by the project — a root or a library it chose — does.
 	 */
-	@:pin('control') @:killer('M-REFLECT-ENUM-STD-INCLUDED')
+	@:pin('control')
+	@:killer('M-REFLECT-ENUM-STD-INCLUDED')
 	public function testTheStdDoesNotDeclineTheFix(): Void {
 		final src: String = widget('', '');
 		final std: ScopeFile = {
@@ -207,13 +225,15 @@ class UnstoredPropertyCheckTest extends Test {
 	}
 
 	/** The printer `Json.stringify` delegates to renders an object's fields when called directly too. */
-	@:pin('control') @:killer('M-HXSHAPE-JSONPRINTER-UNLISTED')
+	@:pin('control')
+	@:killer('M-HXSHAPE-JSONPRINTER-UNLISTED')
 	public function testTheJsonPrinterDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', 'trace(haxe.format.JsonPrinter.print(w));'), 'list or render an object');
 	}
 
 	/** A shallow copy carries over exactly the fields an object has. */
-	@:pin('control') @:killer('M-HXSHAPE-COPY-UNLISTED')
+	@:pin('control')
+	@:killer('M-HXSHAPE-COPY-UNLISTED')
 	public function testAReflectiveCopyDeclinesTheFix(): Void {
 		assertDeclinedAs(widget('', 'trace(Reflect.copy(w));'), 'list or render an object');
 	}

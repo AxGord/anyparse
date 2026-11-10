@@ -22,17 +22,20 @@ class JsonWriterBytesTest extends Test {
 		'42'
 	];
 
-	@:pin('control') @:killer('M-SEP-LIST-ALWAYS-SPACED')
+	@:pin('control')
+	@:killer('M-SEP-LIST-ALWAYS-SPACED')
 	public function testCompactIsTheNativePrinter(): Void {
 		assertNative(JsonFormat.instance.compactWriteOptions, null);
 	}
 
-	@:pin('control') @:killer('M-KEY-VALUE-LEAD-TIGHT')
+	@:pin('control')
+	@:killer('M-KEY-VALUE-LEAD-TIGHT')
 	public function testExpandedIsTheNativePrinter(): Void {
 		assertNative(JsonFormat.instance.expandedWriteOptions, '  ');
 	}
 
-	@:pin('control') @:killer('M-KEY-VALUE-LEAD-TIGHT')
+	@:pin('control')
+	@:killer('M-KEY-VALUE-LEAD-TIGHT')
 	public function testTabbedIsTheNativePrinter(): Void {
 		final tabbed: Null<WriteOptions> = Reflect.copy(JsonFormat.instance.expandedWriteOptions);
 		if (tabbed == null) throw 'Reflect.copy returned null';

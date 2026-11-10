@@ -63,7 +63,7 @@ class HxCondVarInitSliceTest extends HxTestHelpers {
 		for (member in [
 			'public static var current:MovieClip #if flash = flash.Lib.current #end;',
 			'private static var limitedProfile:Null<Bool> #if !desktop = true #end;',
-			'@:noCompletion private static var dispatcher:EventDispatcher #if !macro = new EventDispatcher() #end;',
+			'@:noCompletion\n\tprivate static var dispatcher:EventDispatcher #if !macro = new EventDispatcher() #end;',
 			'private static #if !js inline #end var __supportDOM:Bool #if !js = false #end;'
 		]) {
 			final src: String = 'class C {\n\t$member\n}';

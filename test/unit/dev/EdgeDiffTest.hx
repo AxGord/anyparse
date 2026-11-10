@@ -12,7 +12,8 @@ import utest.Test;
 final class EdgeDiffTest extends Test {
 
 	/** A library path that does not exist stays library when the project holds a different missing path. */
-	@:pin('control') @:killer('M-EDGEDIFF-LIBRARY-BARE-FULLPATH')
+	@:pin('control')
+	@:killer('M-EDGEDIFF-LIBRARY-BARE-FULLPATH')
 	public function testADifferentMissingPathIsNotTakenForAProjectFile(): Void {
 		final project: Array<{ file: String, source: String }> = [{ file: '/private/tmp/apq-no-such-dir/Held.hx', source: '' }];
 		final libs: Array<{ file: String, source: String }> = [

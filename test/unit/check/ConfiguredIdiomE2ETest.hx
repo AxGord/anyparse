@@ -135,7 +135,8 @@ final class ConfiguredIdiomE2ETest extends Test {
 	 * HELD's listener is a function a call returns, which only the compiler judges — it rejects the retype, the verifier
 	 * reverts that one edit and keeps CLOSE's, and a report run afterwards still carries both findings.
 	 */
-	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
+	@:pin('control')
+	@:killer('M-EVENT-NO-MISMATCH')
 	public function testTheOracleRevertsWhatTheRuleCannotProve(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('typedevent', [

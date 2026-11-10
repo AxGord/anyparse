@@ -28,7 +28,8 @@ class OwnerParaphraseTest extends Test {
 		'test/probes/owner-paraphrases-heldout-3.json'
 	];
 
-	@:pin('control') @:killer('M-OWNER-STANDING-FLAT')
+	@:pin('control')
+	@:killer('M-OWNER-STANDING-FLAT')
 	public function testEachBenchmarkFindsItsOwnersAmongTheFirstFew(): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.repoRoot();

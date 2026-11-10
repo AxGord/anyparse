@@ -24,17 +24,27 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxInterfaceDecl = {
-	@:kw('interface') var name: HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
-		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
+	@:kw('interface')
+	var name: HxIdentLit;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, lineLengthAwareSeps, listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap'))
+	var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('interfaceBeginType', 'interfaceEndType'), afterFieldsWithDocComments,
 		existingBetweenFields('interfaceExistingBetweenFields'), beforeDocCommentEmptyLines,
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
-		relocateTrailingComments, glueToPrevious(
-			'member', 'EmptySemiMember'
-		)) @:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+	@:lead('{')
+	@:trail('}')
+	@:trivia
+	var members: Array<HxMemberDecl>;
 }

@@ -50,7 +50,8 @@ class RedundantMapIterKeyCheckTest extends Test {
 	 * reads `null` where `iterator()` still yields the stale value: the drop is not behaviour-preserving
 	 * over a map, and neither over an iterable of unknown type. The finding stays, report-only, and says why.
 	 */
-	@:pin('control') @:killer('M-MAPITERKEY-UNPROVEN-DROPPED')
+	@:pin('control')
+	@:killer('M-MAPITERKEY-UNPROVEN-DROPPED')
 	public function testFixDeclinedOverMapAndUnknownIterable(): Void {
 		for (param in ['m:Map<String, Int>', 'm']) {
 			final src: String = 'class C {\n\tfunction f($param):Void {\n\t\tfor (_ => v in m) { m.remove("a"); g(v); }\n\t}\n}';
@@ -63,12 +64,14 @@ class RedundantMapIterKeyCheckTest extends Test {
 	}
 
 	/** The shared proof refuses a reassigned local and an aliased `List` here exactly as in `unused-loop-binder`. */
-	@:pin('control') @:killer('M-ULB-REASSIGNED-LOCAL-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-REASSIGNED-LOCAL-BLIND')
 	public function testFixDeclinedOverReassignedLocal(): Void {
 		assertDeclined('class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) { m = [7, 8]; g(v); }\n\t}\n}');
 	}
 
-	@:pin('control') @:killer('M-ULB-IMPORT-ALIAS-BLIND')
+	@:pin('control')
+	@:killer('M-ULB-IMPORT-ALIAS-BLIND')
 	public function testFixDeclinedOverAliasedList(): Void {
 		assertDeclined(
 			'import haxe.ds.StringMap as List;\n\nclass C {\n\tfunction f(m:List<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}'
@@ -80,7 +83,8 @@ class RedundantMapIterKeyCheckTest extends Test {
 	 * unsafe form — over an iterable of unknown type, and over a map, whose drop the report cannot prove (only the
 	 * fix asks the reach).
 	 */
-	@:pin('control') @:killer('M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN')
+	@:pin('control')
+	@:killer('M-MAPITERKEY-MESSAGE-ALWAYS-PROVEN')
 	public function testMessageRecommendsTheDropOnlyWhenProved(): Void {
 		final proved: Array<Violation> = violations('class C {\n\tfunction f(m:Array<Int>):Void {\n\t\tfor (_ => v in m) g(v);\n\t}\n}');
 		Assert.equals(1, proved.length);
@@ -97,7 +101,9 @@ class RedundantMapIterKeyCheckTest extends Test {
 	 * name, iterates the same values in the same order through `iterator()` (checked on `--interp`, js and hxcpp,
 	 * docs/decisions.md): `MemberReach` proves it unchanged and the key goes, a map literal and `new Map()` alike.
 	 */
-	@:pin('control') @:killer('M-MAPITER-KEYED-NEVER') @:killer('M-TOUCH-NEW-MAP-NOT-FRESH')
+	@:pin('control')
+	@:killer('M-MAPITER-KEYED-NEVER')
+	@:killer('M-TOUCH-NEW-MAP-NOT-FRESH')
 	public function testFixDropsKeyOverALocalMapTheLoopLeavesUnchanged(): Void {
 		for (init in ['[\'a\' => 1]', 'new Map()']) {
 			final src: String = localMap(init, 'g(v);');
@@ -110,7 +116,9 @@ class RedundantMapIterKeyCheckTest extends Test {
 	 * iterator read what the value iterator does not; one that empties the map through a function holding it changes it
 	 * through another name. Each keeps its key, and the finding says what the reach found.
 	 */
-	@:pin('control') @:killer('M-MAPITER-REACH-SKIPPED') @:killer('M-REACH-LOCAL-TOUCH-BLIND')
+	@:pin('control')
+	@:killer('M-MAPITER-REACH-SKIPPED')
+	@:killer('M-REACH-LOCAL-TOUCH-BLIND')
 	public function testFixDeclinedWhereTheBodyChangesALocalMap(): Void {
 		for (body in ['m.remove(\'a\'); g(v);', 'm[\'a\'] = 2; g(v);', 'm.set(\'a\', 2); g(v);'])
 			assertDeclined(localMap('[\'a\' => 1]', body));
@@ -129,7 +137,8 @@ class RedundantMapIterKeyCheckTest extends Test {
 	 * of its own rebinds the name, and a subclass of `IntMap` may override `iterator()` and reach a `Map`-typed value
 	 * through `@:from`. Either keeps the key.
 	 */
-	@:pin('control') @:killer('M-MAPITER-SUBTYPE-VETO-OFF')
+	@:pin('control')
+	@:killer('M-MAPITER-SUBTYPE-VETO-OFF')
 	public function testFixDeclinedOverANonStandardMap(): Void {
 		final own: String = 'class Map<K, V> {\n\tpublic function new() {}\n}';
 		final sub: String = 'import haxe.ds.IntMap;\n\nclass Sub<T> extends IntMap<T> {}';

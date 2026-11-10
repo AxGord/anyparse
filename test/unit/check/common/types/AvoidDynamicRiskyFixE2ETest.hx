@@ -124,7 +124,8 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 	 * The run's config resolver decides which files a `FileGated` risky check scans: a resolver excluding the
 	 * fixture's directory leaves the narrowing `testNarrowingAppliedWhenValid` applies unfound, whatever the disk says.
 	 */
-	@:pin('control') @:killer('M-FIXVERIFY-DISCOVERS-CONFIG')
+	@:pin('control')
+	@:killer('M-FIXVERIFY-DISCOVERS-CONFIG')
 	public function testTheRunResolverGatesTheScannedFiles(): Void {
 		#if (sys || nodejs)
 		if (!oracleWorks()) {
@@ -153,14 +154,15 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 	 * The run's config resolver also reaches the risky check's OWN options: the same narrowing is left alone under a
 	 * resolver whose `excludeMeta` names the member's metadata, and applied under one that names nothing.
 	 */
-	@:pin('control') @:killer('M-FIXVERIFY-CHECK-DISCOVERS-CONFIG')
+	@:pin('control')
+	@:killer('M-FIXVERIFY-CHECK-DISCOVERS-CONFIG')
 	public function testTheRunResolverReachesTheCheckOptions(): Void {
 		#if (sys || nodejs)
 		if (!oracleWorks()) {
 			Assert.pass('haxe unavailable — skipped');
 			return;
 		}
-		final kept: String = APPLIES.replace('\tstatic function main()', '\t@:keep static function main()');
+		final kept: String = APPLIES.replace('\tstatic function main()', '\t@:keep\n\tstatic function main()');
 		for (arm in [
 			{ config: '{"rules":{"avoid-dynamic":{"excludeMeta":["@:keep"]}}}', applied: 0 },
 			{ config: '{}', applied: 1 }
@@ -186,7 +188,8 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 	 * `--fix` writes nothing a file's own config switched off: `b/` disables a risky rule (`avoid-dynamic`) and a safe
 	 * one (`unused-import`), and keeps both findings while `a/` gets both fixes.
 	 */
-	@:pin('control') @:killer('M-COLLECT-NO-ENABLEMENT', 'M-FIXVERIFY-ENABLEMENT-DROPPED')
+	@:pin('control')
+	@:killer('M-COLLECT-NO-ENABLEMENT', 'M-FIXVERIFY-ENABLEMENT-DROPPED')
 	public function testAFixNeverLandsWhereItsRuleIsDisabled(): Void {
 		#if (sys || nodejs)
 		if (!oracleWorks()) {

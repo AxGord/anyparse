@@ -22,6 +22,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxECheckType = {
-	@:lead('(') var expr: HxExpr;
-	@:fmt(space('typeCheckColon', 'lead')) @:lead(':') @:trail(')') @:queryTypeSlot var type: HxType;
+	@:lead('(')
+	var expr: HxExpr;
+	@:fmt(space('typeCheckColon', 'lead'))
+	@:lead(':')
+	@:trail(')')
+	@:queryTypeSlot
+	var type: HxType;
 };

@@ -4,25 +4,32 @@ import haxe.DynamicAccess;
 
 abstract U(Int) from Int to Int {
 
-	@:op(A + B) static function add(a: U, b: U): U return (a: Int) + (b: Int);
+	@:op(A + B)
+	static function add(a: U, b: U): U return (a: Int) + (b: Int);
 
-	@:op(A * B) @:commutative static function mulInt(a: U, b: Int): Float return 1.5;
+	@:op(A * B)
+	@:commutative
+	static function mulInt(a: U, b: Int): Float return 1.5;
 
-	@:arrayAccess function get(i: Int): String return 'a';
+	@:arrayAccess
+	function get(i: Int): String return 'a';
 
 }
 
 abstract Two(Int) from Int {
 
-	@:arrayAccess function byInt(i: Int): Float return 1.0;
+	@:arrayAccess
+	function byInt(i: Int): Float return 1.0;
 
-	@:arrayAccess function byName(s: String): Bool return true;
+	@:arrayAccess
+	function byName(s: String): Bool return true;
 
 }
 
 abstract Gen<T>(Array<T>) from Array<T> {
 
-	@:arrayAccess function at(i: Int): Null<T> return this[i];
+	@:arrayAccess
+	function at(i: Int): Null<T> return this[i];
 
 }
 

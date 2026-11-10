@@ -16,4 +16,9 @@ package anyparse.grammar.mermaid;
 @:peg
 @:schema(anyparse.grammar.mermaid.MermaidFormat)
 @:ws
-typedef MmdFlowchart = { var first: MmdStatement; @:tryparse @:fmt(sameLine('statementBreak')) var rest: Array<MmdStatement>; }
+typedef MmdFlowchart = {
+	var first: MmdStatement;
+	@:tryparse
+	@:fmt(sameLine('statementBreak'))
+	var rest: Array<MmdStatement>;
+}

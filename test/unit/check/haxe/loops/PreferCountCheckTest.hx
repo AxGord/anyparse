@@ -27,7 +27,8 @@ class PreferCountCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('final n = xs.count(x -> x > 2)') != -1, vs[0].message);
 	}
 
-	@:pin('control') @:killer('M-SHADOWEXT-TRUE')
+	@:pin('control')
+	@:killer('M-SHADOWEXT-TRUE')
 	public function testFilteredFixFoldsDeclarationAndLoopAndInsertsUsing(): Void {
 		final out: String = fixResult(file('var n:Int = 0;\n\t\tfor (x in xs) if (x > 2) n++;\n\t\treturn n;', false));
 		Assert.isTrue(out.indexOf('final n:Int = xs.count(x -> x > 2);') != -1, out);

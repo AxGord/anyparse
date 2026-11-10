@@ -29,8 +29,12 @@ class ResolveTrapsTest extends Test {
 	/** The catalog, relative to the suite's working directory (the repository root). */
 	private static final CATALOG: String = 'test/traps/resolve.json';
 
-	@:pin('control') @:killer('M-RESOLVE-VALUE-FALLS-THROUGH') @:killer('M-RESOLVE-WILDCARDS-UNASKED')
-	@:killer('M-RESOLVE-HYBRID-OFF') @:killer('M-REF-MODULE-NEAREST-LOST') @:killer('M-RESOLVE-HEAD-MEMBER-BLIND')
+	@:pin('control')
+	@:killer('M-RESOLVE-VALUE-FALLS-THROUGH')
+	@:killer('M-RESOLVE-WILDCARDS-UNASKED')
+	@:killer('M-RESOLVE-HYBRID-OFF')
+	@:killer('M-REF-MODULE-NEAREST-LOST')
+	@:killer('M-RESOLVE-HEAD-MEMBER-BLIND')
 	public function testTheResolverAnswersTheCompilersDeclarationOrUnknown(): Void {
 		final wrong: Array<String> = [];
 		for (trap in catalog()) for (probe in trap.probes) {

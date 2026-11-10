@@ -42,13 +42,18 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxMacroClass = {
 	var head: HxMacroClassHead;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps,
-		listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap')) var heritage: Array<HxHeritageClause>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, lineLengthAwareSeps, listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap'))
+	var heritage: Array<HxHeritageClause>;
 	@:fmt(beginEndType('macroClassBeginType', 'macroClassEndType'), existingBetweenFields('macroClassExistingBetweenFields'),
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'macroClassBetweenVars', 'macroClassBetweenFunctions', 'macroClassAfterVars'
 		), staticVarSubdivision('modifiers', 'Static', 'macroClassAfterStaticVars', 'macroClassBetweenStaticFunctions'),
 		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
 		glueToPrevious('member', 'EmptySemiMember'))
-	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	@:lead('{')
+	@:trail('}')
+	@:trivia
+	var members: Array<HxMemberDecl>;
 }

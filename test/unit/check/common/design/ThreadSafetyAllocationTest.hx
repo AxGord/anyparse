@@ -15,7 +15,8 @@ class ThreadSafetyAllocationTest extends Test {
 		+ ' class Async extends Base { override function go():Void {} }';
 
 	/** A field only ever assigned `new Async()`: its `load` never runs `Blocking.go`. */
-	@:pin('control') @:killer('M-TS-ALLOC-OFF')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-OFF')
 	public function testASealedFieldRunsOnlyItsClassesOverrides(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('var loader:Base;', 'loader = new Async();', 'loader.load();')));
@@ -25,7 +26,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** One write of anything but a `new` and the field's classes are unknown: every override may run. */
-	@:pin('control') @:killer('M-TS-ALLOC-ANY-WRITE')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-ANY-WRITE')
 	public function testAnyOtherWriteMakesTheFieldUnknown(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -38,7 +40,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** A declared value counts as a write: `= new Blocking()` puts the blocking override back. */
-	@:pin('control') @:killer('M-TS-ALLOC-DECLARED')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-DECLARED')
 	public function testTheDeclaredValueCounts(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -50,7 +53,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** The object a `new` builds is of that class: its constructor's `load` dispatches on it alone. */
-	@:pin('control') @:killer('M-TS-ALLOC-NEW')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-NEW')
 	public function testAConstructionRunsOnItsOwnClass(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('', '', 'new Async(true);')));
@@ -60,7 +64,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** A library class the index does not hold never runs a project override (it cannot extend a project type). */
-	@:pin('control') @:killer('M-TS-ALLOC-LIBRARY')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-LIBRARY')
 	public function testALibraryClassRunsNoProjectOverride(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('var loader:Base;', 'loader = flag ? new Async() : new lib.Loader();', 'loader.load();')));
@@ -77,7 +82,8 @@ class ThreadSafetyAllocationTest extends Test {
 	 * A name the run declares nowhere is a library class only when the file writes it by a path or imports it: an import
 	 * alias (`as`, `in`) or a type parameter may name a project class, so it runs every override.
 	 */
-	@:pin('control') @:killer('M-TS-ALLOC-LIBRARY-PATH')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-LIBRARY-PATH')
 	public function testAnUndeclaredNameNoImportNamesRunsEveryOverride(): Void {
 		#if (sys || nodejs)
 		for (alias in ['import Blocking as Blk;', 'import Blocking in Blk;'])
@@ -98,7 +104,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** An alias spelled as a project class's name names whatever it aliases, not that class. */
-	@:pin('control') @:killer('M-TS-ALLOC-ALIAS')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-ALIAS')
 	public function testAnAliasNamedAsAProjectClassNamesWhatItAliases(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -111,7 +118,8 @@ class ThreadSafetyAllocationTest extends Test {
 	}
 
 	/** A run that leaves out a file of the project writing the field sees not every value of it: its classes are unknown. */
-	@:pin('control') @:killer('M-TS-ALLOC-COMPLETE')
+	@:pin('control')
+	@:killer('M-TS-ALLOC-COMPLETE')
 	public function testARunOverPartOfTheProjectSealsNoField(): Void {
 		#if (sys || nodejs)
 		final plugin: { name: String, source: String } = {
@@ -131,7 +139,10 @@ class ThreadSafetyAllocationTest extends Test {
 	 * any class when its target's type places it on none (`Dynamic`): the field's classes are unknown. One on a value of an
 	 * unrelated class leaves the field sealed.
 	 */
-	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-MAYWRITE') @:killer('M-TS-REFLECT-HANDED-CALLEE')
+	@:pin('control')
+	@:killer('M-TS-REFLECT-COMPUTED')
+	@:killer('M-TS-REFLECT-MAYWRITE')
+	@:killer('M-TS-REFLECT-HANDED-CALLEE')
 	public function testAComputedReflectiveWriteMakesTheFieldUnknown(): Void {
 		#if (sys || nodejs)
 		inline function poked(poke: String): Array<String> {
@@ -165,7 +176,10 @@ class ThreadSafetyAllocationTest extends Test {
 	 * `Reflect.setField` handed on as a value and called later, an index write into an `untyped` or a cast-to-`Dynamic`
 	 * value — any index write into a value not proven an array, a map or a buffer. An index write into an array is none.
 	 */
-	@:pin('control') @:killer('M-TS-REFLECT-DYNACC') @:killer('M-TS-REFLECT-HANDED') @:killer('M-TS-REFLECT-INDEX-ANY')
+	@:pin('control')
+	@:killer('M-TS-REFLECT-DYNACC')
+	@:killer('M-TS-REFLECT-HANDED')
+	@:killer('M-TS-REFLECT-INDEX-ANY')
 	@:killer('M-TS-REFLECT-INDEX-ELEMENT')
 	public function testEveryReflectiveEscapeMakesTheFieldUnknown(): Void {
 		#if (sys || nodejs)

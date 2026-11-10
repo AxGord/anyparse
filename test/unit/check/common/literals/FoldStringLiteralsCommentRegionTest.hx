@@ -6,14 +6,16 @@ package unit.check.common.literals;
  */
 class FoldStringLiteralsCommentRegionTest extends FoldStringLiteralsCheckTestBase {
 
-	@:pin('control') @:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
 	public function testLineCommentMarkerInsideAStringDoesNotRefuseTheChain(): Void {
 		final src: String = 'class C { function f() { final a = "http://x" + "/y"; } }';
 		Assert.equals(1, violations(src).length);
 		Assert.equals('"http://x/y"', foldOf(src));
 	}
 
-	@:pin('control') @:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-REGIONS-COMMENT-OPENS-STRING-BLIND')
 	public function testBlockCommentMarkerInsideAStringDoesNotRefuseTheChain(): Void {
 		final src: String = 'class C { function f(p:String) { final a = "a/*" + p + "b"; } }';
 		Assert.equals(1, violations(src).length);

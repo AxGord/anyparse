@@ -896,7 +896,8 @@ class RenameSliceTest extends Test {
 	 * as that function, verified on `--interp` 4.3.7), so a rename from its declaration sweeps the method, not only the
 	 * function's body: the escape-spelled hole there may read it.
 	 */
-	@:pin('control') @:killer('M-BINDER-NAMED-FN-NO-STEP-OUT')
+	@:pin('control')
+	@:killer('M-BINDER-NAMED-FN-NO-STEP-OUT')
 	public function testNameOfANamedFunctionExpressionSweepsTheEnclosingMethod(): Void {
 		final src: String =
 			'class C {\n\tfunction f():String {\n\t\tfinal g = function v():Int return 1;\n\t\treturn \'v \\x24{v}\';\n\t}\n}';

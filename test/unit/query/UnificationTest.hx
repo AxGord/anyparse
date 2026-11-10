@@ -30,7 +30,8 @@ class UnificationTest extends Test {
 		+ '#if x\nabstract Split(A) from B {}\n#else\nabstract Split(A) {}\n#end\n\n'
 		+ '#if x\nabstract Same(A) from B {}\n#else\nabstract Same(A) from B {}\n#end\n';
 
-	@:pin('control') @:killer('M-ANCESTOR-ARGS-OFF')
+	@:pin('control')
+	@:killer('M-ANCESTOR-ARGS-OFF')
 	public function testTheChainPassesItsArgumentsInTheStartsTerms(): Void {
 		final index: SymbolIndex = indexOf(CHAIN);
 		final table: AncestorTable = index.typing.ancestors;
@@ -40,13 +41,15 @@ class UnificationTest extends Test {
 		Assert.isNull(table.argumentsTo(decl(index, 'Base'), decl(index, 'Leaf')), 'not an ancestor');
 	}
 
-	@:pin('control') @:killer('M-ANCESTOR-SHORT-ARGS')
+	@:pin('control')
+	@:killer('M-ANCESTOR-SHORT-ARGS')
 	public function testALinkWritingTooFewArgumentsBindsNothing(): Void {
 		final index: SymbolIndex = indexOf(CHAIN);
 		Assert.isNull(index.typing.ancestors.argumentsTo(decl(index, 'Raw'), decl(index, 'Base')), '`extends Base` binds no T');
 	}
 
-	@:pin('control') @:killer('M-UNIFY-CHAIN-OPEN')
+	@:pin('control')
+	@:killer('M-UNIFY-CHAIN-OPEN')
 	public function testAClassUnifiesWithWhatItsChainReaches(): Void {
 		final index: SymbolIndex = indexOf(PLAIN);
 		Assert.equals(Fits, unifies(index, 'B', 'A'), 'a subclass');
@@ -56,7 +59,8 @@ class UnificationTest extends Test {
 		Assert.equals(MayFit, unifies(index, 'Out', 'A'), 'a superclass the index does not resolve');
 	}
 
-	@:pin('control') @:killer('M-UNIFY-CHAIN-OPEN')
+	@:pin('control')
+	@:killer('M-UNIFY-CHAIN-OPEN')
 	public function testAnEnumUnifiesWithItselfAlone(): Void {
 		final index: SymbolIndex = indexOf(PLAIN);
 		Assert.equals(Fits, unifies(index, 'E', 'E'), 'itself');
@@ -64,7 +68,8 @@ class UnificationTest extends Test {
 		Assert.equals(Misfits, unifies(index, 'A', 'E'), 'a class is no enum');
 	}
 
-	@:pin('control') @:killer('M-UNIFY-ALIAS-STOP', 'M-UNIFY-SELF-OPEN')
+	@:pin('control')
+	@:killer('M-UNIFY-ALIAS-STOP', 'M-UNIFY-SELF-OPEN')
 	public function testOnlyPlainTypesAreDecided(): Void {
 		final index: SymbolIndex = indexOf(PLAIN);
 		Assert.equals(Fits, unifies(index, 'B', 'TA'), 'an alias of a plain class is followed');
@@ -75,7 +80,8 @@ class UnificationTest extends Test {
 		Assert.equals(MayFit, unifies(index, 'A', 'G'), 'a wanted type with parameters');
 	}
 
-	@:pin('control') @:killer('M-UNIFY-GUARDED-PLAIN')
+	@:pin('control')
+	@:killer('M-UNIFY-GUARDED-PLAIN')
 	public function testADeclarationUnderIfIsNotPlain(): Void {
 		final index: SymbolIndex = indexOf('package p;\n\nclass A {}\n\n#if x\nclass P extends A {}\n#else\nclass P {}\n#end\n');
 		Assert.equals(MayFit, unifies(index, 'P', 'A'), 'its branches extend different types');
@@ -86,7 +92,8 @@ class UnificationTest extends Test {
 	 * A given type with type parameters against a plain wanted one is decided by its chain alone: `unify (TInst (c1, tl1))
 	 * (TInst (c2, []))` looks for `c2` up `c1`'s supertypes and has no argument to compare there (Haxe 4.3.7, FU14 probes).
 	 */
-	@:pin('control') @:killer('M-UNIFY-GENERIC-GIVEN')
+	@:pin('control')
+	@:killer('M-UNIFY-GENERIC-GIVEN')
 	public function testAGivenTypeWithParametersIsDecidedByItsChain(): Void {
 		final index: SymbolIndex = indexOf(
 			'package p;\n\ninterface I {}\n\nclass A implements I {}\n\nclass GA<T> extends A {}\n\nclass G<T> {}\n\nenum Opt<T> {\n'
@@ -103,7 +110,8 @@ class UnificationTest extends Test {
 	 * An abstract unifies through its header's clauses (`tUnification.ml`, Haxe 4.3.7: `unify_to` / `unify_from`): a type a
 	 * `to` clause writes that unifies with the wanted one, a `from` clause's type the given one unifies with.
 	 */
-	@:pin('control') @:killer('M-UNIFY-ABSTRACT-OFF')
+	@:pin('control')
+	@:killer('M-UNIFY-ABSTRACT-OFF')
 	public function testAnAbstractUnifiesThroughItsClauses(): Void {
 		final index: SymbolIndex = indexOf(CASTS);
 		Assert.equals(Fits, unifies(index, 'ToA', 'A'), 'a `to` clause');
@@ -118,7 +126,8 @@ class UnificationTest extends Test {
 	 * A cast through the clause of an abstract that is not transitive allows no second abstract cast (`get_abstract_context`):
 	 * `B` reaches `Top` only through `Mid`, an abstract of its own; `@:transitive` allows it.
 	 */
-	@:pin('control') @:killer('M-UNIFY-CAST-TRANSITIVE')
+	@:pin('control')
+	@:killer('M-UNIFY-CAST-TRANSITIVE')
 	public function testAPlainAbstractsClauseAllowsNoSecondCast(): Void {
 		final index: SymbolIndex = indexOf(CASTS);
 		Assert.equals(Misfits, unifies(index, 'B', 'Top'), 'through `Mid`, not transitive');
@@ -131,7 +140,10 @@ class UnificationTest extends Test {
 	 * abstract the graph does not model (type parameters, `@:multiType`) is not decided, nor is one whose `#if` branches
 	 * write different clauses; branches that agree decide it.
 	 */
-	@:pin('control') @:killer('M-CASTS-GRAPH-PARAMS') @:killer('M-CASTS-BRANCHES-AGREE') @:killer('M-CASTS-TYPE-SELECTED')
+	@:pin('control')
+	@:killer('M-CASTS-GRAPH-PARAMS')
+	@:killer('M-CASTS-BRANCHES-AGREE')
+	@:killer('M-CASTS-TYPE-SELECTED')
 	public function testAUnificationReadsTheClausesOfEveryBranchAndNoMember(): Void {
 		final index: SymbolIndex = indexOf(CASTS);
 		Assert.equals(Misfits, unifies(index, 'A', 'Conv'), 'a `@:from` member is no clause');
@@ -143,7 +155,8 @@ class UnificationTest extends Test {
 	}
 
 	/** The standard library's `Any` (`abstract Any(Dynamic) from Dynamic`) takes every value: its `from` reaches the dynamic type. */
-	@:pin('control') @:killer('M-CASTS-DYNAMIC-END')
+	@:pin('control')
+	@:killer('M-CASTS-DYNAMIC-END')
 	public function testAnyTakesEveryValue(): Void {
 		final index: SymbolIndex = CheckFixture.index([
 			{ file: 'p/M.hx', source: CASTS },
@@ -159,7 +172,9 @@ class UnificationTest extends Test {
 	 * An abstract the compiler unifies by a hand-written arm (`EnumValue` takes every enum value) is not decided by its
 	 * clauses, and neither is a cycle of transitive clauses (`abstract_cast_stack`).
 	 */
-	@:pin('control') @:killer('M-CASTS-HAND-UNIFIED') @:killer('M-UNIFY-CAST-STACK')
+	@:pin('control')
+	@:killer('M-CASTS-HAND-UNIFIED')
+	@:killer('M-UNIFY-CAST-STACK')
 	public function testAHandUnifiedOrCyclicAbstractIsNotDecided(): Void {
 		final index: SymbolIndex = CheckFixture.index([
 			{

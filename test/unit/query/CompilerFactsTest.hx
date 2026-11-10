@@ -9,7 +9,8 @@ class CompilerFactsTest extends Test {
 
 	private static final SOURCE: String = 'class A { function f() g(); }';
 
-	@:pin('control') @:killer('M-FACTS-INCOMPLETE')
+	@:pin('control')
+	@:killer('M-FACTS-INCOMPLETE')
 	public function testADumpWithoutItsClosingRecordContributesNothing(): Void {
 		// a compile that died while writing leaves a prefix that parses line by line: it must not read as the whole build
 		final node: String = '{"k":"node","id":"A.f","f":"A.hx","p":[10,27],"kind":"method","owner":"A","t":"()->Void",'
@@ -21,7 +22,8 @@ class CompilerFactsTest extends Test {
 		Assert.isNull(table(cut).node('A.f'));
 	}
 
-	@:pin('control') @:killer('M-FACTS-RECORD-KIND')
+	@:pin('control')
+	@:killer('M-FACTS-RECORD-KIND')
 	public function testADumpHoldingARecordNoReaderKnowsContributesNothing(): Void {
 		// the records a facts file holds are a closed list: one of a kind this reader does not know may say what a fact it
 		// does read leaves out, so the whole file is of another version and the configuration is dropped, saying why
@@ -39,7 +41,8 @@ class CompilerFactsTest extends Test {
 		], grown.dropped.map(d -> '${d.name}: ${d.reason}'));
 	}
 
-	@:pin('control') @:killer('M-FACTS-WITHIN-MARKER-UNKNOWN')
+	@:pin('control')
+	@:killer('M-FACTS-WITHIN-MARKER-UNKNOWN')
 	public function testARangeMeetingANodeWithAMarkerNoReaderKnowsIsUnknown(): Void {
 		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node runs where no
 		// position says, so a range question meeting the node is Unknown, as one meeting a fact lost with its file is
@@ -74,8 +77,12 @@ class CompilerFactsTest extends Test {
 		Assert.equals(6, at?.span.from);
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICE-SITES-MET') @:killer('M-FACTS-SPLICE-UNATTRIBUTED') @:killer('M-FACTS-SPLICE-HARMLESS')
-	@:killer('M-FACTS-SPLICE-INNERMOST') @:killer('M-FACTS-SPLICE-SECOND-SITE')
+	@:pin('control')
+	@:killer('M-FACTS-SPLICE-SITES-MET')
+	@:killer('M-FACTS-SPLICE-UNATTRIBUTED')
+	@:killer('M-FACTS-SPLICE-HARMLESS')
+	@:killer('M-FACTS-SPLICE-INNERMOST')
+	@:killer('M-FACTS-SPLICE-SECOND-SITE')
 	public function testASplicedFactRunsAtTheSitesOfTheCallThatSplicedItIn(): Void {
 		// `f` inlines `B.i` at `g();` and at `h();`, and `B.j`, whose declared range lies in `B.i`'s, at `k();`: code of `B.j`'s
 		// body is `B.j`'s, run at `k();` alone. A fact no declared range holds may run anywhere in `f`, and one a method that

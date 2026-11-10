@@ -30,7 +30,9 @@ class HelperCopyCheckTest extends Test {
 		+ '\t\tfor (k in 0...s.length) {\n\t\t\tfinal ch: Int = s.charCodeAt(k);\n'
 		+ '\t\t\tif (ch != 32 && (ch < 9 || ch > 13)) return false;\n\t\t}\n\t\treturn true;\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-HELPER-COPY-NO-KEY') @:killer('M-HELPER-COPY-NO-RENAMING')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-NO-KEY')
+	@:killer('M-HELPER-COPY-NO-RENAMING')
 	public function testACopyUnderOtherNamesIsReported(): Void {
 		final vs: Array<Violation> = violationsOf(COPY, 'src/Own.hx');
 		Assert.equals(1, vs.length, messages(vs));
@@ -53,13 +55,15 @@ class HelperCopyCheckTest extends Test {
 		Assert.equals(0, violationsOf(other, 'src/Own.hx').length);
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-NO-FLOOR')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-NO-FLOOR')
 	public function testAShortFunctionIsNotCompared(): Void {
 		final tiny: String = 'package own;\n\nclass Own {\n\tprivate static function inc(y: Int): Int {\n\t\treturn y + 1;\n\t}\n}\n';
 		Assert.equals(0, violationsOf(tiny, 'src/Own.hx').length);
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-HOME-BY-SUBSTRING')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-HOME-BY-SUBSTRING')
 	public function testAHomeBeginsAtAPathSegment(): Void {
 		final vs: Array<Violation> = violationsOf(COPY, 'src/myutil/Own.hx');
 		Assert.equals(1, vs.length, messages(vs));
@@ -80,7 +84,8 @@ class HelperCopyCheckTest extends Test {
 		Assert.isTrue(rule.noAutofixReason().indexOf('judgement') >= 0, rule.noAutofixReason());
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-PARAMETERS-UNORDERED')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-PARAMETERS-UNORDERED')
 	public function testSwappedParametersAreNotACopy(): Void {
 		final swapped: String = 'package own;\n\nclass Own {\n\tprivate static function cut(mark: String, text: String): String {\n'
 			+ '\t\tfinal at: Int = text.indexOf(mark);\n\t\treturn at < 0 ? text : text.substring(0, at);\n\t}\n}\n';
@@ -89,7 +94,8 @@ class HelperCopyCheckTest extends Test {
 		Assert.equals(1, violationsOf(same, 'src/Own.hx').length);
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-LITERAL-COLLAPSED')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-LITERAL-COLLAPSED')
 	public function testADefaultsLiteralComparesExactly(): Void {
 		final home: SourceEntry = {
 			file: 'src/util/Pad.hx',
@@ -105,7 +111,8 @@ class HelperCopyCheckTest extends Test {
 		Assert.equals(0, found(copy.replace('"a b"', '"ab"')));
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-EVERY-FILE-CANDIDATE')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-EVERY-FILE-CANDIDATE')
 	public function testAFileWhoseConfigNamesNoHomesIsNotACandidate(): Void {
 		final named: LintConfig = LintConfig.parse(CONFIG);
 		final bare: LintConfig = LintConfig.parse('{}');
@@ -119,7 +126,8 @@ class HelperCopyCheckTest extends Test {
 		Assert.equals(0, found('bare'));
 	}
 
-	@:pin('control') @:killer('M-HELPER-COPY-REPORT-SCOPE-ONLY')
+	@:pin('control')
+	@:killer('M-HELPER-COPY-REPORT-SCOPE-ONLY')
 	public function testALintOfTheCopyAloneFindsTheHomeBeyondTheReportScope(): Void {
 		#if (sys || nodejs)
 		final tree: String = CliFixture.writeTree('helpercopyscope', [

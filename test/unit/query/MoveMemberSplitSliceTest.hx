@@ -82,7 +82,8 @@ class MoveMemberSplitSliceTest extends Test {
 	 * main class of its module (`import pkg.Mod.*;` brings in `Mod`'s statics, not `B`'s).
 	 */
 	@:pin('control')
-	@:killer('M-KEEP-BARE-CLASH-BLIND') @:killer('M-KEEP-BARE-NOT-MAIN')
+	@:killer('M-KEEP-BARE-CLASH-BLIND')
+	@:killer('M-KEEP-BARE-NOT-MAIN')
 	public function testKeepBareRefusesWhatTheWildcardCouldRebind(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int {\n\t\tfinal hello:Int = 1;\n'
 			+ '\t\treturn util(hello);\n\t}\n\n\tpublic static function util(x:Int):Int return x * 2;\n}';
@@ -126,7 +127,9 @@ class MoveMemberSplitSliceTest extends Test {
 	 * whose accessors would stay behind.
 	 */
 	@:pin('control')
-	@:killer('M-OWNED-FIELD-ANY-READER') @:killer('M-OWNED-FIELD-ACCESS-BLIND') @:killer('M-OWNED-FIELD-PROPERTY')
+	@:killer('M-OWNED-FIELD-ANY-READER')
+	@:killer('M-OWNED-FIELD-ACCESS-BLIND')
+	@:killer('M-OWNED-FIELD-PROPERTY')
 	@:killer('M-OWNED-READERS-UNNAMED')
 	public function testAFieldSomethingElseReachesStaysAndRefuses(): Void {
 		final read: String = errMessage(
@@ -177,7 +180,9 @@ class MoveMemberSplitSliceTest extends Test {
 	 * unrelated type declaring a member of the same name is left alone, so that move goes through.
 	 */
 	@:pin('control')
-	@:killer('M-RECEIVER-UNKNOWN-ROUTED') @:killer('M-RECEIVER-UNRELATED-ROUTED') @:killer('M-VIA-PRIVATE-REACHED')
+	@:killer('M-RECEIVER-UNKNOWN-ROUTED')
+	@:killer('M-RECEIVER-UNRELATED-ROUTED')
+	@:killer('M-VIA-PRIVATE-REACHED')
 	public function testAReceiverTheOpCannotProveRefusesTheMove(): Void {
 		final catchAll: String = errMessage(move(
 			'p/G.hx', 'G', 'isPure', 'Lib', holderScope('public', '\n\tpublic static function any(d:Dynamic):Bool return d.isPure(5);\n')
@@ -252,7 +257,9 @@ class MoveMemberSplitSliceTest extends Test {
 	 * isPure is declared 'override' but doesn't override any field`; `Field isPure needed by p.I is missing`).
 	 */
 	@:pin('control')
-	@:killer('M-MOVE-OVERRIDE-MEMBER') @:killer('M-MOVE-IMPLEMENTATION') @:killer('M-MOVE-OVERRIDDEN-MEMBER')
+	@:killer('M-MOVE-OVERRIDE-MEMBER')
+	@:killer('M-MOVE-IMPLEMENTATION')
+	@:killer('M-MOVE-OVERRIDDEN-MEMBER')
 	@:killer('M-MOVE-UNRESOLVED-INTERFACE')
 	public function testAMemberOfAnInheritanceFamilyRefusesTheMove(): Void {
 		final lib: { file: String, source: String } = {
@@ -319,7 +326,9 @@ class MoveMemberSplitSliceTest extends Test {
 	 * whose extensions cannot be listed still is. Compile-proved on 4.3.7: both results print 4.
 	 */
 	@:pin('control')
-	@:killer('M-CARRY-ORDER-MET') @:killer('M-CARRY-USING-UNUSED') @:killer('M-CARRY-IMPORTLESS-BELOW')
+	@:killer('M-CARRY-ORDER-MET')
+	@:killer('M-CARRY-USING-UNUSED')
+	@:killer('M-CARRY-IMPORTLESS-BELOW')
 	@:killer('M-CARRY-USING-ORDER-MET')
 	public function testCarriedStatementsLandImportsFirstAndOnlyUsedUsings(): Void {
 		final scope: (String) -> Array<{ file: String, source: String }> = dest -> [

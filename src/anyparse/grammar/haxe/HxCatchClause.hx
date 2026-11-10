@@ -40,8 +40,14 @@ package anyparse.grammar.haxe;
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClause = {
-	@:kw('catch') @:lead('(') @:trail(')')
+	@:kw('catch')
+	@:lead('(')
+	@:trail(')')
 	@:fmt(catchParensGap, space('catchParensInsideOpen', 'lead'), catchParensInsideClose)
 	var param: HxCatchParam;
-	@:optional @:absentOn('}') @:trailOpt(';') @:fmt(bodyPolicy('catchBody'), constructFitBody, bareRefSepWhenPresent) var body: Null<HxStatement>;
+	@:optional
+	@:absentOn('}')
+	@:trailOpt(';')
+	@:fmt(bodyPolicy('catchBody'), constructFitBody, bareRefSepWhenPresent)
+	var body: Null<HxStatement>;
 };

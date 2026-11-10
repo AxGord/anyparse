@@ -17,7 +17,8 @@ class ThreadSafetyFoldingTest extends Test {
 		+ ' public function fetchDeep():Void deep(); function deep():Void _done.wait(); }';
 
 	/** the client's `GateLock.lock` / `BlockingUrlReader.go`: the wait a sink's own body makes is the sink's finding. */
-	@:pin('control') @:killer('M-TS-INSIDE-SINK-OFF')
+	@:pin('control')
+	@:killer('M-TS-INSIDE-SINK-OFF')
 	public function testAWaitInsideASinksBodyIsTheSinks(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -33,7 +34,8 @@ class ThreadSafetyFoldingTest extends Test {
 	}
 
 	/** A function only a sink's body calls is that sink's machinery too. */
-	@:pin('control') @:killer('M-TS-INSIDE-SINK-DIRECT-ONLY')
+	@:pin('control')
+	@:killer('M-TS-INSIDE-SINK-DIRECT-ONLY')
 	public function testAFunctionOnlyASinkCallsIsTheSinks(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -57,7 +59,9 @@ class ThreadSafetyFoldingTest extends Test {
 	 * the client's `_batchLock`: every main-thread take of one long lock waits for the same holders — one warning, at the take
 	 * inside the lock's wrapper when there is one, else the first by member.
 	 */
-	@:pin('control') @:killer('M-TS-ONE-TAKE-OFF') @:killer('M-TS-ONE-TAKE-NO-WRAPPER')
+	@:pin('control')
+	@:killer('M-TS-ONE-TAKE-OFF')
+	@:killer('M-TS-ONE-TAKE-NO-WRAPPER')
 	public function testMainTakesOfOneLockWarnOnce(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class S { final _m:Mutex = new Mutex(); public function new() {}'
@@ -89,7 +93,8 @@ class ThreadSafetyFoldingTest extends Test {
 	}
 
 	/** the client's `getText`: the tree lock taken inside the hold of `_stateLock` is that hold's finding. */
-	@:pin('control') @:killer('M-TS-NEST-OFF')
+	@:pin('control')
+	@:killer('M-TS-NEST-OFF')
 	public function testAHoldInsideAnotherIsItsFinding(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run([

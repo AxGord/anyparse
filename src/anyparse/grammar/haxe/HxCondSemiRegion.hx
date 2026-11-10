@@ -17,14 +17,24 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCondSemiRegion = {
-	@:kw('#if') @:fmt(sharpCondParensInside('sharpCondParensInsideOpen', 'sharpCondParensInsideClose')) var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:kw('#if')
+	@:fmt(sharpCondParensInside('sharpCondParensInsideOpen', 'sharpCondParensInsideClose'))
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
-	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifStmt>;
+	@:trivia
+	@:tryparse
+	@:fmt(elemSelfTrailsNewline)
+	var elseifs: Array<HxElseifStmt>;
 	// the Star before it ends with its own separator (`padTrailing`): `fillSeam` adds none, a gap comment still emitted
-	@:fmt(fillSeam) var elseKw: HxCondElseLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(fillSeam)
+	var elseKw: HxCondElseLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var elseBody: Array<HxStatement>;
 };

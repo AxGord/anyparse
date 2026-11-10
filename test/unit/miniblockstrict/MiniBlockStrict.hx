@@ -25,7 +25,10 @@ package unit.miniblockstrict;
 @:ws
 enum MiniBlockStrict {
 	Atom(s: MiniAtomLitStrict);
-	@:lit(';') EmptyAtom;
-	@:lead('{') @:trail('}') @:sep(';', tailRelax, blockEnded('endsImplicitly', sepStartsElement))
+	@:lit(';')
+	EmptyAtom;
+	@:lead('{')
+	@:trail('}')
+	@:sep(';', tailRelax, blockEnded('endsImplicitly', sepStartsElement))
 	Block(items: Array<MiniBlockStrict>);
 }

@@ -14,6 +14,7 @@ package unit.minilex;
 enum MiniLexDoc {
 	Word(s: MiniLexAtom);
 	Text(s: MiniLexStringLit);
-	@:lead('(') @:trail(')')
+	@:lead('(')
+	@:trail(')')
 	List(items: Array<MiniLexDoc>);
 }

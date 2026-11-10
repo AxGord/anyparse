@@ -83,7 +83,8 @@ class WriteOptionsTest extends Test {
 	}
 
 	/** A lead the format declares tight stays tight under `keyValueSpace`, though it is the format's key-value separator. */
-	@:pin('control') @:killer('M-KEY-VALUE-LEAD-IGNORES-TIGHT')
+	@:pin('control')
+	@:killer('M-KEY-VALUE-LEAD-IGNORES-TIGHT')
 	public function testADeclaredTightLeadIgnoresKeyValueSpace(): Void {
 		final options: HxModuleWriteOptions = new HxModuleWriteOptions();
 		options.keyValueSpace = true;

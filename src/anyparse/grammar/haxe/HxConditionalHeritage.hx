@@ -39,7 +39,18 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalHeritage = {
 	var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxHeritageClause>;
-	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifHeritage>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxHeritageClause>>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxHeritageClause>;
+	@:trivia
+	@:tryparse
+	@:fmt(elemSelfTrailsNewline)
+	var elseifs: Array<HxElseifHeritage>;
+	@:optional
+	@:kw('#else')
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var elseBody: Null<Array<HxHeritageClause>>;
 };

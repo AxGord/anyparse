@@ -178,7 +178,8 @@ class AvoidDynamicCheckTest extends Test {
 	}
 
 	/** A `Dynamic` inside an intersection argument or a conditional-type branch is a type argument like any other. */
-	@:pin('control') @:killer('M-AVOIDDYN-COMPOSITE-SKIPPED')
+	@:pin('control')
+	@:killer('M-AVOIDDYN-COMPOSITE-SKIPPED')
 	public function testDynamicInsideIntersectionOrConditionalArgumentFlagged(): Void {
 		final src: String = 'class C {\n\tpublic var m3:Array<A & Dynamic>;\n\tpublic var m6:Array<#if js Dynamic #else Int #end>;\n}';
 		final vs: Array<Violation> = violations(src);

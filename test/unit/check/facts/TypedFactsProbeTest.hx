@@ -20,7 +20,8 @@ class TypedFactsProbeTest extends Test {
 	/** The build every fixture compiles: a js target, so `js.Syntax` resolves. */
 	private static inline final BUILD: String = '-cp .\n-main Main\n--js out.js\n';
 
-	@:pin('control') @:killer('M-FACTS-CALL-TARGET')
+	@:pin('control')
+	@:killer('M-FACTS-CALL-TARGET')
 	public function testAbstractOperatorsConversionsAndAccessorsAreCallsOfTheirImplementations(): Void {
 		// `@:op`, `@:from`, `@:to` and a property are no syntax of their own in the typed tree: each is a static call on the
 		// abstract's implementation class, or a call of the accessor
@@ -50,7 +51,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-INLINE-POSITIONS') @:killer('M-FACTS-SAME-FILE-INLINE')
+	@:pin('control')
+	@:killer('M-FACTS-INLINE-POSITIONS')
+	@:killer('M-FACTS-SAME-FILE-INLINE')
 	public function testAnInlineCallIsNoCallSiteAndItsBodyKeepsTheCalleesPositions(): Void {
 		// the compiler inlines before the hook runs: the call is gone from the caller, whose facts now hold the body — at
 		// the callee's own ranges, so none of them reads as the type of the call site; the callee keeps a node of its own
@@ -77,7 +80,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-ABSTRACT-THIS')
+	@:pin('control')
+	@:killer('M-FACTS-ABSTRACT-THIS')
 	public function testARangeMeetingTheBodyIsItsOwnCode(): Void {
 		// in the std `CallStack.subtract` an operand shares one range with the inlined `length` getter beside it, a range
 		// that starts outside the method's body and ends inside it: the body's own code, not a macro expansion
@@ -90,7 +94,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-CALL-SITE-INLINE')
+	@:pin('control')
+	@:killer('M-FACTS-CALL-SITE-INLINE')
 	public function testACallSiteInlineIsASpliceOfItsMethodNotAMacro(): Void {
 		// `inline f()` splices a method that is not `inline` itself: it is the method's body, named, not an expansion
 		final scratch: Scratch = compile([
@@ -105,7 +110,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-SUPER') @:killer('M-FACTS-INITIALIZER')
+	@:pin('control')
+	@:killer('M-FACTS-SUPER')
+	@:killer('M-FACTS-INITIALIZER')
 	public function testAnImplicitConstructorCallsSuperAndAnInitializerIsANode(): Void {
 		// a class that declares no constructor still gets one, calling its super's; a field initializer is typed as the
 		// field's own expression, not folded into the constructor
@@ -126,7 +133,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-ITER') @:killer('M-FACTS-STRING-OPERAND') @:killer('M-FACTS-TYPE-TEXT')
+	@:pin('control')
+	@:killer('M-FACTS-ITER')
+	@:killer('M-FACTS-STRING-OPERAND')
+	@:killer('M-FACTS-TYPE-TEXT')
 	public function testLoopsAndStringConversions(): Void {
 		// an Iterable loop stays a `for`; an Array loop is lowered to a `while` and leaves none. A non-String operand of
 		// `+` is recorded with its type — a basic one stays an operand, a class instance goes through `Std.string`
@@ -150,7 +160,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-LOCAL-CALL') @:killer('M-FACTS-FIELD-WRITE')
+	@:pin('control')
+	@:killer('M-FACTS-LOCAL-CALL')
+	@:killer('M-FACTS-FIELD-WRITE')
 	public function testEveryCallAndFieldAccessKind(): Void {
 		final scratch: Scratch = compile([
 			'Main.hx' => 'enum E { A; B(x:Int); }\nclass P { public function new() {} public var v:Int = 0;\n\tpublic dynamic function '
@@ -183,7 +195,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-REFLECT-NAME') @:killer('M-FACTS-NATIVE')
+	@:pin('control')
+	@:killer('M-FACTS-REFLECT-NAME')
+	@:killer('M-FACTS-NATIVE')
 	public function testReflectionAndNativeSites(): Void {
 		// `untyped` leaves no mark in the typed tree: an untyped field access is a Dynamic one
 		final scratch: Scratch = compile([
@@ -203,7 +217,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
+	@:pin('control')
+	@:killer('M-FACTS-REFL-MEMBER-NAME')
+	@:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
 	@:killer('M-FACTS-REFL-MEMBER-NAME-TABLE')
 	public function testAReflectiveCallRecordsTheLiteralItsNameArgumentHolds(): Void {
 		// the member a call names is the literal at its name argument: not a value `setField` stores, not an argument of a
@@ -232,7 +248,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-FLOW-CAST') @:killer('M-FACTS-TYPE-PARAMETER')
+	@:pin('control')
+	@:killer('M-FACTS-FLOW-CAST')
+	@:killer('M-FACTS-TYPE-PARAMETER')
 	public function testFlowsIntoOtherTypes(): Void {
 		final scratch: Scratch = compile([
 			'Main.hx' => 'class Box<T> { public var v:T; public function new(v:T) this.v = v; }\n'
@@ -259,7 +277,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-CODEPOINT-NATIVE') @:killer('M-FACTS-READS') @:killer('M-FACTS-READ-EMIT-NAME')
+	@:pin('control')
+	@:killer('M-CODEPOINT-NATIVE')
+	@:killer('M-FACTS-READS')
+	@:killer('M-FACTS-READ-EMIT-NAME')
 	public function testPositionsAreSpanUnitsPastNonAsciiText(): Void {
 		// the compiler counts codepoints, a Span counts the target's string units: an emoji before a site is two units
 		final source: String = 'class Main {\n\t// Привет 😀😀 мир\n\tstatic var s = "ёж😀";\n'
@@ -279,7 +300,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-UNION')
+	@:pin('control')
+	@:killer('M-FACTS-UNION')
 	public function testTheTableIsTheUnionOfTheConfigurations(): Void {
 		// a member and a call only one configuration compiles are in the table; a site both type differently keeps both
 		final scratch: Scratch = compile([
@@ -295,7 +317,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-ABSENT')
+	@:pin('control')
+	@:killer('M-FACTS-ABSENT')
 	public function testCodeNoConfigurationCompiledIsAbsent(): Void {
 		// absence is "no facts": a file the build never reached, and a branch every configuration left out, both answer
 		// nothing — while the code is there
@@ -316,7 +339,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-HIERARCHY')
+	@:pin('control')
+	@:killer('M-FACTS-HIERARCHY')
 	public function testHierarchyIsPackageQualifiedOverTheWholeTypedSet(): Void {
 		final scratch: Scratch = compile([
 			'a/Base.hx' => 'package a;\nclass Base { public function new() {} }\n',
@@ -339,8 +363,13 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-BRANCH-LEAVES') @:killer('M-FACTS-MONO-SINK') @:killer('M-FACTS-CAST-ALWAYS')
-	@:killer('M-FACTS-THROW') @:killer('M-FACTS-UNTYPED-ARGS') @:killer('M-FACTS-REST')
+	@:pin('control')
+	@:killer('M-FACTS-BRANCH-LEAVES')
+	@:killer('M-FACTS-MONO-SINK')
+	@:killer('M-FACTS-CAST-ALWAYS')
+	@:killer('M-FACTS-THROW')
+	@:killer('M-FACTS-UNTYPED-ARGS')
+	@:killer('M-FACTS-REST')
 	public function testEveryValueChannelIntoAnotherTypeIsAFlow(): Void {
 		// a branch's value reaches the place at the branch's own type, not at what the branches unify to; a place of no type
 		// is Dynamic; an unchecked cast always names its source; a thrown value, a native call's argument and each rest
@@ -378,9 +407,17 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-GENERIC') @:killer('M-FACTS-INIT') @:killer('M-FACTS-REASSIGNED-LOCAL')
-	@:killer('M-FACTS-FIELD-VALUE') @:killer('M-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-REFLECT-VALUE')
-	@:killer('M-FACTS-UNTYPED-DECLARED') @:killer('M-FACTS-IDENT-READ') @:killer('M-FACTS-GENERIC-RANGES') @:killer('M-FACTS-BUILDS')
+	@:pin('control')
+	@:killer('M-FACTS-GENERIC')
+	@:killer('M-FACTS-INIT')
+	@:killer('M-FACTS-REASSIGNED-LOCAL')
+	@:killer('M-FACTS-FIELD-VALUE')
+	@:killer('M-FACTS-REFLECTION-INLINED')
+	@:killer('M-FACTS-REFLECT-VALUE')
+	@:killer('M-FACTS-UNTYPED-DECLARED')
+	@:killer('M-FACTS-IDENT-READ')
+	@:killer('M-FACTS-GENERIC-RANGES')
+	@:killer('M-FACTS-BUILDS')
 	public function testGenericInstancesInitAndCallsThatNameNoFixedBody(): Void {
 		// a `@:generic` instance and `__init__` are code of their own; a local assigned again, a function-typed field and a
 		// dynamic method call whatever they hold; an inlined `Reflect` call leaves only a mark, a reflection member or class
@@ -417,7 +454,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-OVERLOADS')
+	@:pin('control')
+	@:killer('M-FACTS-OVERLOADS')
 	public function testEveryOverloadIsANodeAndACallNamesTheOneItChose(): Void {
 		// an overload body compiles on a target that has them: each is a node, and a call names the signature it chose
 		final source: String = 'class Main {\n\toverload static function ov(i:Int):Void {}\n'
@@ -432,8 +470,13 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-INLINED-CALL') @:killer('M-FACTS-INLINED-CHILD') @:killer('M-FACTS-GENERATED')
-	@:killer('M-FACTS-SITE-UNKNOWN') @:killer('M-FACTS-MACRO-EXPANSION') @:killer('M-FACTS-SPLICE-OWN-ARGUMENTS')
+	@:pin('control')
+	@:killer('M-FACTS-INLINED-CALL')
+	@:killer('M-FACTS-INLINED-CHILD')
+	@:killer('M-FACTS-GENERATED')
+	@:killer('M-FACTS-SITE-UNKNOWN')
+	@:killer('M-FACTS-MACRO-EXPANSION')
+	@:killer('M-FACTS-SPLICE-OWN-ARGUMENTS')
 	public function testSplicedCodeIsTheCallersAndItsSiteIsUnknown(): Void {
 		// an inlined body — from another file or this one — is a call of its inline function and the caller's facts, but the
 		// compiler keeps no range for the site it replaced: a range query short of the whole caller is Unknown. A function
@@ -477,7 +520,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-SITE-INNERMOST') @:killer('M-FACTS-SPLICE-BODY')
+	@:pin('control')
+	@:killer('M-FACTS-SPLICE-SITE')
+	@:killer('M-FACTS-SPLICE-SITE-INNERMOST')
+	@:killer('M-FACTS-SPLICE-BODY')
 	@:killer('M-FACTS-NESTED-SPLICE')
 	public function testAnInlinedCallCarriesWhereItRanAndTheBodyItSplicedIn(): Void {
 		// the compiler keeps no range for the call it replaced: the call carries the range of the caller's innermost expression
@@ -509,7 +555,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-STALE-SOURCE') @:killer('M-FACTS-INVALIDATE') @:killer('M-FACTS-VARIANT-RANGES')
+	@:pin('control')
+	@:killer('M-FACTS-STALE-SOURCE')
+	@:killer('M-FACTS-INVALIDATE')
+	@:killer('M-FACTS-VARIANT-RANGES')
 	public function testFactsOfAnotherTextAreAbsent(): Void {
 		// facts describe the text the compile read: a file changed since, or one the run rewrote, has none; and two `#if`
 		// variants of one member are each found at their own range
@@ -537,7 +586,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-STALE-FOREIGN') @:killer('M-FACTS-REFLECTION-PATH')
+	@:pin('control')
+	@:killer('M-FACTS-STALE-FOREIGN')
+	@:killer('M-FACTS-REFLECTION-PATH')
 	public function testALostSplicedFactMarksItsNodeAndOnlyTheStdIsReflection(): Void {
 		// the caller's file is unchanged, but facts spliced in from a file the table dropped are lost to it: the node says so,
 		// and its range queries are Unknown. A project's own `Type.hx` inlined into it is no reflection
@@ -558,7 +609,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-WRITTEN-DURING') @:killer('M-FACTS-CHANGED-STALE')
+	@:pin('control')
+	@:killer('M-FACTS-WRITTEN-DURING')
+	@:killer('M-FACTS-CHANGED-STALE')
 	public function testAFileWrittenWhileTheCompileRanIsStale(): Void {
 		// a build macro rewrites its own file, same bytes, while the facts compile types it: the hash then names a text
 		// the positions need not come from, so the file has no facts
@@ -577,7 +630,8 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-DROPPED')
+	@:pin('control')
+	@:killer('M-FACTS-DROPPED')
 	public function testAConfigurationThatFailsContributesNothing(): Void {
 		final dir: String = CliFixture.writeTree('typed_facts', [
 			{ name: 'Main.hx', source: 'class Main { static function main() { #if APQ_BROKEN nope(); #end } }\n' },
@@ -604,7 +658,8 @@ class TypedFactsProbeTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
-	@:pin('control') @:killer('M-FACTS-ELEMENT-WRITE')
+	@:pin('control')
+	@:killer('M-FACTS-ELEMENT-WRITE')
 	public function testAnElementWriteIsAWriteThroughTheArrayAtItsOwnRead(): Void {
 		// an element write names no field: it is a write through the array, found at the array's own read — a field's, a
 		// local's, a call's — as a push is found at its receiver. A compound one is made through a local of the compiler's
@@ -635,7 +690,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-USE') @:killer('M-FACTS-HELD') @:killer('M-FACTS-CAPTURE')
+	@:pin('control')
+	@:killer('M-FACTS-USE')
+	@:killer('M-FACTS-HELD')
+	@:killer('M-FACTS-CAPTURE')
 	public function testAFieldReadSaysHowItsValueIsUsed(): Void {
 		// a value handed on as itself — an argument, a capture — is used as a `value`; a lowered loop reads its array
 		// through a local of the compiler's, whose reads are the field's uses
@@ -671,7 +729,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-INLINED-RECEIVER') @:killer('M-FACTS-RECEIVER-BLOCK') @:killer('M-FACTS-RECEIVER-PARAM')
+	@:pin('control')
+	@:killer('M-FACTS-INLINED-RECEIVER')
+	@:killer('M-FACTS-RECEIVER-BLOCK')
+	@:killer('M-FACTS-RECEIVER-PARAM')
 	public function testAFieldReadAnInlinedMethodTakesAsItsReceiverIsTheCallsReceiver(): Void {
 		// the compiler binds the receiver of an inlined `items.keyValueIterator()` — a key-value loop — to a local of its
 		// own at the spliced body's range; a local the method's code names so, or a parameter so named, holds an argument
@@ -703,7 +764,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-FRESH') @:killer('M-FACTS-FRESH-DISCARDED')
+	@:pin('control')
+	@:killer('M-FACTS-FRESH')
+	@:killer('M-FACTS-FRESH-DISCARDED')
 	public function testAWriteOfAValueBuiltThereAndHandedNowhereIsFresh(): Void {
 		final source: String = 'class Main {\n\tvar items:Null<Array<Int>> = [];\n\tvar copy:Array<Int> = [];\n\tfunction new() {}\n'
 			+ '\tfunction reset(c:Bool) {\n\t\titems = [1]; items = new Array<Int>(); items = null; items = c ? [] : null;\n'
@@ -727,7 +790,9 @@ class TypedFactsProbeTest extends Test {
 	}
 
 	/** A compile of `files` (paths under one scratch directory) under each define set of `configurations`, by `build`. */
-	@:pin('control') @:killer('M-FACTS-HANDS') @:killer('M-FACTS-GENS')
+	@:pin('control')
+	@:killer('M-FACTS-HANDS')
+	@:killer('M-FACTS-GENS')
 	public function testWhatExternCodeIsHandedAndWhatAGenericMethodIsInstantiatedAt(): Void {
 		// an argument of an extern's field is handed to target code at the type the field declares, its own type parameters
 		// unapplied, a same-type one too; a generic method's call and its read as a value name the instantiation chosen
@@ -754,7 +819,10 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-FACTS-THROW-EXCEPTION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:pin('control')
+	@:killer('M-FACTS-STRING-EXACT')
+	@:killer('M-FACTS-THROW-EXCEPTION')
+	@:killer('M-FACTS-EXACT-WRITTEN')
 	@:killer('M-FACTS-FLOW-EXACT')
 	public function testAConvertedObjectOfExactlyItsClassAndAThrownException(): Void {
 		// a construction, and a local initialized with one of its own type never written again, are objects of exactly their
@@ -782,7 +850,9 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-ALIAS-TYPEDEF') @:killer('M-FACTS-STATICS-TYPEDEF')
+	@:pin('control')
+	@:killer('M-FACTS-ALIAS-TYPEDEF')
+	@:killer('M-FACTS-STATICS-TYPEDEF')
 	public function testAnImportAliasIsATypedefAndTheStaticsOfAnEnumReadAsAType(): Void {
 		// an import alias is a typedef no module lists: it gets a record of its own; the statics of an enum read as a value
 		// print as `Enum<…>` alone, which the type grammar reads
@@ -799,10 +869,18 @@ class TypedFactsProbeTest extends Test {
 		scratch.remove();
 	}
 
-	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-FACTS-ASSIGNED-NO-USE') @:killer('M-FACTS-ASSIGNED-TARGET')
-	@:killer('M-FACTS-ALIAS-LINK') @:killer('M-FACTS-HELD-LOCAL') @:killer('M-FACTS-SUBSTITUTED-RECEIVER')
-	@:killer('M-FACTS-SUBSTITUTED-ARITY') @:killer('M-FACTS-SUBSTITUTED-OWNER') @:killer('M-FACTS-ASSIGN-STATEMENT')
-	@:killer('M-FACTS-ASSIGN-OWNER') @:killer('M-FACTS-HELD-FLAG')
+	@:pin('control')
+	@:killer('M-FACTS-ASSIGN-HELD')
+	@:killer('M-FACTS-ASSIGNED-NO-USE')
+	@:killer('M-FACTS-ASSIGNED-TARGET')
+	@:killer('M-FACTS-ALIAS-LINK')
+	@:killer('M-FACTS-HELD-LOCAL')
+	@:killer('M-FACTS-SUBSTITUTED-RECEIVER')
+	@:killer('M-FACTS-SUBSTITUTED-ARITY')
+	@:killer('M-FACTS-SUBSTITUTED-OWNER')
+	@:killer('M-FACTS-ASSIGN-STATEMENT')
+	@:killer('M-FACTS-ASSIGN-OWNER')
+	@:killer('M-FACTS-HELD-FLAG')
 	public function testAFieldValueStoredInALocalIsUsedAsTheLocalsReads(): Void {
 		// a value an assignment statement stores in a local of the node, in any branch and beside other values, is used as
 		// every read of that local and of the locals a read of it is stored in: the receiver of a key-value loop's inlined

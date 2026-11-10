@@ -19,9 +19,14 @@ package anyparse.grammar.haxe.format;
  * Combined `openingPolicy: "onlyAfter"` + `closingPolicy: "before"`
  * produces `[ 1 ]`. Defaults (absent keys) keep the tight `[1]` form.
  */
-@:peg typedef HxFormatBracketConfigSection = {
-	@:optional var accessBrackets: HxFormatParenPolicySection;
-	@:optional var arrayLiteralBrackets: HxFormatParenPolicySection;
-	@:optional var mapLiteralBrackets: HxFormatParenPolicySection;
-	@:optional var comprehensionBrackets: HxFormatParenPolicySection;
+@:peg
+typedef HxFormatBracketConfigSection = {
+	@:optional
+	var accessBrackets: HxFormatParenPolicySection;
+	@:optional
+	var arrayLiteralBrackets: HxFormatParenPolicySection;
+	@:optional
+	var mapLiteralBrackets: HxFormatParenPolicySection;
+	@:optional
+	var comprehensionBrackets: HxFormatParenPolicySection;
 };

@@ -12,7 +12,8 @@ import anyparse.query.ShapeVocab;
 class ShapeVocabTest extends Test {
 
 	/** A kind that two seams both name is answered once, where it first appears. */
-	@:pin('control') @:killer('M-VOCAB-UNION-DUPLICATES')
+	@:pin('control')
+	@:killer('M-VOCAB-UNION-DUPLICATES')
 	public function testAKindTwoSeamsNameIsAnsweredOnce(): Void {
 		final shape: RefShape = bare();
 		shape.loopStatementKinds = ['ForStmt', 'WhileStmt'];
@@ -22,7 +23,8 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** A single seam the grammar leaves unset adds nothing — not a null, not an empty name. */
-	@:pin('control') @:killer('M-VOCAB-UNSET-SEAM-ADDED')
+	@:pin('control')
+	@:killer('M-VOCAB-UNSET-SEAM-ADDED')
 	public function testAnUnsetSeamAddsNothing(): Void {
 		final shape: RefShape = bare();
 		shape.ifStatementKinds = ['IfStmt'];
@@ -32,7 +34,8 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** A condition loop is a statement loop no iteration binding names: `while` and `do … while`, never `for`. */
-	@:pin('control') @:killer('M-VOCAB-CONDITION-LOOP-KEEPS-FOR')
+	@:pin('control')
+	@:killer('M-VOCAB-CONDITION-LOOP-KEEPS-FOR')
 	public function testConditionLoopsDropTheIteratingOnes(): Void {
 		Assert.same(['WhileStmt', 'DoWhileStmt', 'DoWhileExpr'], ShapeVocab.conditionLoopKinds(new HaxeQueryPlugin().refShape()));
 		final shape: RefShape = bare();
@@ -41,7 +44,9 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** The Haxe grammar's loops and functions, each union spelled out. */
-	@:pin('control') @:killer('M-VOCAB-NESTED-NO-NAMED-FN') @:killer('M-VOCAB-DOWHILE-EXPR-NOT-LOOP')
+	@:pin('control')
+	@:killer('M-VOCAB-NESTED-NO-NAMED-FN')
+	@:killer('M-VOCAB-DOWHILE-EXPR-NOT-LOOP')
 	public function testHaxeLoopAndFunctionVocabulary(): Void {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		Assert.same(['ForStmt', 'WhileStmt', 'DoWhileStmt', 'DoWhileExpr', 'ForExpr', 'WhileExpr'], ShapeVocab.loopKinds(shape));
@@ -95,7 +100,9 @@ class ShapeVocabTest extends Test {
 	}
 
 	/** The short-circuit, statement-block, method and single-parameter sets, read off a second grammar's own spellings. */
-	@:pin('control') @:killer('M-VOCAB-SHORT-CIRCUIT-NO-COALESCE') @:killer('M-VOCAB-METHODS-KEEP-FIELDS')
+	@:pin('control')
+	@:killer('M-VOCAB-SHORT-CIRCUIT-NO-COALESCE')
+	@:killer('M-VOCAB-METHODS-KEEP-FIELDS')
 	public function testDerivedSetsTakeTheGrammarsOwnSpellings(): Void {
 		final shape: RefShape = bare();
 		shape.logicalAndKind = 'AndAlso';

@@ -54,27 +54,33 @@ abstract Set<K>(Store<K>) {
 	}
 
 	#if js
-	@:to private static inline function toJsStringSet<K:String>(store: Store<K>): js.lib.Set<K> {
+	@:to
+	private static inline function toJsStringSet<K:String>(store: Store<K>): js.lib.Set<K> {
 		return new js.lib.Set<K>();
 	}
 
-	@:to private static inline function toJsIntSet<K:Int>(store: Store<K>): js.lib.Set<K> {
+	@:to
+	private static inline function toJsIntSet<K:Int>(store: Store<K>): js.lib.Set<K> {
 		return new js.lib.Set<K>();
 	}
 
-	@:to private static inline function toJsObjectSet<K:{}>(store: Store<K>): js.lib.Set<K> {
+	@:to
+	private static inline function toJsObjectSet<K:{}>(store: Store<K>): js.lib.Set<K> {
 		return new js.lib.Set<K>();
 	}
 	#else
-	@:to private static inline function toStringSet<K:String>(store: Store<K>): haxe.ds.StringMap<Bool> {
+	@:to
+	private static inline function toStringSet<K:String>(store: Store<K>): haxe.ds.StringMap<Bool> {
 		return new haxe.ds.StringMap<Bool>();
 	}
 
-	@:to private static inline function toIntSet<K:Int>(store: Store<K>): haxe.ds.IntMap<Bool> {
+	@:to
+	private static inline function toIntSet<K:Int>(store: Store<K>): haxe.ds.IntMap<Bool> {
 		return new haxe.ds.IntMap<Bool>();
 	}
 
-	@:to private static inline function toObjectSet<K:{}>(store: Store<K>): haxe.ds.ObjectMap<K, Bool> {
+	@:to
+	private static inline function toObjectSet<K:{}>(store: Store<K>): haxe.ds.ObjectMap<K, Bool> {
 		return new haxe.ds.ObjectMap<K, Bool>();
 	}
 	#end

@@ -31,7 +31,7 @@ class MetadataLineEndSitesTest extends Test {
 
 	public function testAfterLastAndForceAfterLastOnAType(): Void {
 		final src: String = '@:a @:b\n@:c class C {}\n';
-		Assert.equals('@:a @:b\n@:c\nclass C {}\n', trivia(src, o -> o.metadataTypeLineEnd = MetadataLineEndPolicy.AfterLast));
+		Assert.equals('@:a @:b @:c\nclass C {}\n', trivia(src, o -> o.metadataTypeLineEnd = MetadataLineEndPolicy.AfterLast));
 		Assert.equals('@:a @:b @:c\nclass C {}\n', trivia(src, o -> o.metadataTypeLineEnd = MetadataLineEndPolicy.ForceAfterLast));
 	}
 
@@ -90,6 +90,7 @@ class MetadataLineEndSitesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-META-CHAIN-UNWIRED')
+	@:killer('M-META-CHAIN-NO-SOURCE')
 	public function testTheVarKnobGovernsALocalVarAndLeavesOtherStatements(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t@:a\n\t\t@:b\n\t\tvar x = 1;\n\t\t@:c trace(1);\n\t}\n}\n',
@@ -99,6 +100,7 @@ class MetadataLineEndSitesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-META-CHAIN-NO-PEEL')
+	@:killer('M-META-CHAIN-NO-SOURCE')
 	public function testAChainSharesThePolicyOfItsTail(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t@:a @:b\n\t\tvar x = 1;\n\t\t@:c trace(1);\n\t}\n}\n',
@@ -109,7 +111,7 @@ class MetadataLineEndSitesTest extends Test {
 			trivia(LOCAL_SRC, o -> o.metadataVarLineEnd = MetadataLineEndPolicy.After)
 		);
 		Assert.equals(
-			'class C {\n\tfunction f() {\n\t\t@:a\n\t\t@:b\n\t\tvar x = 1;\n\t}\n}\n',
+			'class C {\n\tfunction f() {\n\t\t@:a @:b\n\t\tvar x = 1;\n\t}\n}\n',
 			trivia(
 				'class C {\n\tfunction f() {\n\t\t@:a\n\t\t@:b var x = 1;\n\t}\n}\n',
 				o -> o.metadataVarLineEnd = MetadataLineEndPolicy.AfterLast
@@ -166,21 +168,58 @@ class MetadataLineEndSitesTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-META-COLLAPSE-IGNORED')
-	public function testNoneDropsABlankBetweenMemberMetadata(): Void {
-		Assert.equals('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', trivia('class C {\n\t@:a\n\n\t@:b\n\tvar x:Int;\n}\n', o -> {}));
+	@:killer('M-META-AFTER-SOURCE-SEP')
+	public function testTheDefaultDropsABlankBetweenMetadata(): Void {
+		Assert.equals('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', defaults('class C {\n\t@:a\n\n\t@:b\n\tvar x:Int;\n}\n'));
+		Assert.equals('@:a\n@:b\nclass C {}\n', defaults('@:a\n\n@:b\nclass C {}\n'));
 	}
 
 	@:pin('control')
-	@:killer('M-META-COLLAPSE-FOR-ALL')
-	public function testNoneKeepsABlankBetweenTypeMetadata(): Void {
-		Assert.equals('@:a\n\n@:b\nclass C {}\n', trivia('@:a\n\n@:b\nclass C {}\n', o -> {}));
+	@:killer('M-META-SOURCE-SEP-BACK')
+	public function testNoneJoinsMetadataWithASpaceWhateverTheSource(): Void {
+		Assert.equals('@:a @:b\nclass C {}\n', trivia('@:a\n\n@:b\nclass C {}\n', o -> {}));
+		Assert.equals('class C {\n\t@:a @:b\n\tvar x:Int;\n}\n', trivia('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', o -> {}));
 	}
 
-	public function testDefaultsKeepEverySiteAsWritten(): Void {
+	@:pin('control')
+	@:killer('M-META-ORPHAN-PADS')
+	public function testARegionThatAnnotatesNothingOwesNoBreak(): Void {
+		for (src in [
+			'enum E {\n\t#if sys\n\t#end\n}\n',
+			'typedef T = {\n\t#if sys\n\t#end\n}\n',
+			'class C {}\n\n#if sys\n#else\n#end\n'
+		]) Assert.equals(src, defaults(src));
+	}
+
+	@:pin('control')
+	@:killer('M-META-PAD-DROPS-GAP-COMMENT')
+	public function testTheGapAfterTheLastMetadataKeepsItsCommentsAndBlank(): Void {
+		for (src in [
+			'@:a\n// c\nclass K {}\n',
+			'#if sys\n#end\n\n/** doc */\nclass K {}\n',
+			'class C {\n\t#if sys\n\t#end\n\n\tpublic var x:Int;\n}\n'
+		]) Assert.equals(src, defaults(src));
+	}
+
+	@:pin('control')
+	@:killer('M-META-CHAIN-NO-SOURCE')
+	public function testAnAnnotationOnAnExpressionKeepsItsSourceLine(): Void {
+		for (src in [
+			'class C {\n\tfunction f() {\n\t\tg([\n\t\t\t@doc("c")\n\t\t\t1 => 2\n\t\t]);\n\t}\n}\n',
+			'class C {\n\tfunction f() {\n\t\tg([@doc("c") 1 => 2]);\n\t}\n}\n'
+		]) Assert.equals(src, defaults(src));
+	}
+
+	@:pin('control')
+	@:killer('M-META-DEFAULT-NONE')
+	public function testTheDefaultPutsEveryMetadataOnItsOwnLine(): Void {
 		final src: String =
 			'@:a @:b class C {\n\t@:c var x:Int;\n\n\t@:d function f() {\n\t\t@:e var y = 1;\n\t}\n}\n\nenum E {\n\t@:f A;\n}\n';
-		Assert.equals(src, trivia(src, o -> {}));
+		Assert.equals(
+			'@:a\n@:b\nclass C {\n\t@:c\n\tvar x:Int;\n\n\t@:d\n\tfunction f() {\n\t\t@:e\n\t\tvar y = 1;\n\t}\n}\n\nenum E {\n\t@:f\n'
+			+ '\tA;\n}\n',
+			defaults(src)
+		);
 	}
 
 	@:pin('control')
@@ -193,29 +232,41 @@ class MetadataLineEndSitesTest extends Test {
 	@:pin('control')
 	@:killer('M-META-CONFIG-TYPE')
 	public function testTheConfigKeyMetadataTypeReachesItsOption(): Void {
-		Assert.equals(MetadataLineEndPolicy.After, configured('metadataType').metadataTypeLineEnd);
+		Assert.equals(MetadataLineEndPolicy.ForceAfterLast, configured('metadataType').metadataTypeLineEnd);
 	}
 
 	@:pin('control')
 	@:killer('M-META-CONFIG-VAR')
 	public function testTheConfigKeyMetadataVarReachesItsOption(): Void {
-		Assert.equals(MetadataLineEndPolicy.After, configured('metadataVar').metadataVarLineEnd);
+		Assert.equals(MetadataLineEndPolicy.ForceAfterLast, configured('metadataVar').metadataVarLineEnd);
 	}
 
 	@:pin('control')
 	@:killer('M-META-CONFIG-OTHER')
 	public function testTheConfigKeyMetadataOtherReachesItsOption(): Void {
-		Assert.equals(MetadataLineEndPolicy.After, configured('metadataOther').metadataOtherLineEnd);
+		Assert.equals(MetadataLineEndPolicy.ForceAfterLast, configured('metadataOther').metadataOtherLineEnd);
 	}
 
+	/** A config naming `forceAfterLast` for `key`: a value no default holds, so a dropped key shows. */
 	private static function configured(key: String): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"$key": "after"}}');
+		return HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"$key": "forceAfterLast"}}');
 	}
 
+	/** The trivia writer with every metadata knob at `None` before `configure`, so one site moves alone. */
 	private static function trivia(src: String, configure: HxModuleWriteOptions -> Void): String {
 		final opt: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);
+		opt.metadataFunctionLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataTypeLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataVarLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataOtherLineEnd = MetadataLineEndPolicy.None;
 		configure(opt);
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opt);
+	}
+
+	private static function defaults(src: String): String {
+		return HaxeModuleTriviaWriter.write(
+			HaxeModuleTriviaParser.parse(src), new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)
+		);
 	}
 
 	private static function plain(src: String, configure: HxModuleWriteOptions -> Void): String {

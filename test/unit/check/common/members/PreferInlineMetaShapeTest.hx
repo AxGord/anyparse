@@ -15,12 +15,14 @@ class PreferInlineMetaShapeTest extends Test {
 		Assert.equals(1, findings('class C {\n\tfunction one():Int return 1;\n}', new RenamedAnnotationPlugin()));
 	}
 
-	@:pin('control') @:killer('M-METAKINDS-PREFER-INLINE')
+	@:pin('control')
+	@:killer('M-METAKINDS-PREFER-INLINE')
 	public function testRenamedKeepAnnotationPinsTheMethod(): Void {
 		Assert.equals(0, findings('class C {\n\t@:keep function one():Int return 1;\n}', new RenamedAnnotationPlugin()));
 	}
 
-	@:pin('control') @:killer('M-METAKINDS-PREFER-INLINE-CLASS-RUN')
+	@:pin('control')
+	@:killer('M-METAKINDS-PREFER-INLINE-CLASS-RUN')
 	public function testRenamedClassAnnotationBlocksTheClass(): Void {
 		Assert.equals(0, findings('@:nativeGen class C {\n\tfunction one():Int return 1;\n}', new RenamedAnnotationPlugin()));
 	}

@@ -27,7 +27,8 @@ class JsonQuoteTest extends Test {
 		Assert.equals('"é😀\x7f/"', JsonFormat.instance.quote('é😀\x7f/'));
 	}
 
-	@:pin('control') @:killer('M-JSON-QUOTE-LONE-SURROGATE')
+	@:pin('control')
+	@:killer('M-JSON-QUOTE-LONE-SURROGATE')
 	public function testALoneSurrogateKeepsItsEscape(): Void {
 		final high: String = String.fromCharCode(0xD83D);
 		final low: String = String.fromCharCode(0xDE00);

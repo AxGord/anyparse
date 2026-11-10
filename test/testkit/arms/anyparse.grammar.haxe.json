@@ -528,8 +528,8 @@
 			"type": "anyparse.grammar.haxe.HxConditionalParam",
 			"method": "HxConditionalParam",
 			"kind": "TypedefDecl",
-			"find": "@:optional @:kw('#else') @:trivia @:sep(',', sepFaithful)",
-			"replace": "@:optional @:kw('#else') @:sep(',', sepFaithful)",
+			"find": "@:optional\n\t@:kw('#else')\n\t@:trivia\n\t@:sep(',', sepFaithful)",
+			"replace": "@:optional\n\t@:kw('#else')\n\t@:sep(',', sepFaithful)",
 			"note": "the `#else` arm of a parameter region captures no per-element separator, so the comma it writes before `#end` is lost and that arm compiles two parameters with nothing between them"
 		},
 		{
@@ -537,7 +537,7 @@
 			"type": "anyparse.grammar.haxe.HxElseifParam",
 			"method": "HxElseifParam",
 			"kind": "TypedefDecl",
-			"find": "@:trivia @:sep(',', sepFaithful)",
+			"find": "@:trivia\n\t@:sep(',', sepFaithful)",
 			"replace": "@:sep(',')",
 			"note": "an `#elseif` arm of a parameter region captures no per-element separator, so the comma it writes before the next directive is lost"
 		},
@@ -546,8 +546,8 @@
 			"type": "anyparse.grammar.haxe.HxEnumCtorDecl",
 			"method": "HxEnumCtorDecl",
 			"kind": "TypedefDecl",
-			"find": "@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
-			"replace": "@:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"find": "@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"replace": "@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
 			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
 		},
 		{
@@ -709,8 +709,8 @@
 			"type": "anyparse.grammar.haxe.HxTypeArg",
 			"method": "HxTypeArg",
 			"kind": "TypedefDecl",
-			"find": "@:queryType @:fmt(propagateNestedType) var type",
-			"replace": "@:queryType var type",
+			"find": "@:queryType\n\t@:fmt(propagateNestedType)\n\tvar type",
+			"replace": "@:queryType\n\tvar type",
 			"note": "a type argument is no longer marked nested, so a function type inside `Array<…>` or `Null<…>` loses the additional unit and continues one unit past its line"
 		},
 		{
@@ -718,7 +718,7 @@
 			"type": "anyparse.grammar.haxe.HxType",
 			"method": "Parens",
 			"kind": "ParamCtor",
-			"find": "@:wrap('(', ')') @:fmt(propagateNestedType)",
+			"find": "@:wrap('(', ')')\n\t@:fmt(propagateNestedType)",
 			"replace": "@:wrap('(', ')')",
 			"note": "a parenthesised function type is no longer marked nested, so it continues one unit past its line instead of two"
 		},
@@ -736,8 +736,8 @@
 			"type": "anyparse.grammar.haxe.HxNewExpr",
 			"method": "HxNewExpr",
 			"kind": "TypedefDecl",
-			"find": "groupRestProbe, propagateNestedType) var params",
-			"replace": "groupRestProbe) var params",
+			"find": "groupRestProbe, propagateNestedType)\n\tvar params",
+			"replace": "groupRestProbe)\n\tvar params",
 			"note": "the type arguments of a `new` expression are no longer marked nested, so a function type among them continues one unit past its line instead of two"
 		},
 		{
@@ -1024,7 +1024,7 @@
 			"type": "anyparse.grammar.haxe.HxEnumMember",
 			"method": "HxEnumMember",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta",
+			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
 			"replace": "var meta",
 			"note": "an enum constructor names no knob, so metadataOther does not reach it"
 		},
@@ -1033,7 +1033,7 @@
 			"type": "anyparse.grammar.haxe.HxVarDecl",
 			"method": "HxVarDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta",
+			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
 			"replace": "var meta",
 			"note": "metadata after a var keyword names no knob, so metadataOther does not reach it"
 		},
@@ -1051,7 +1051,7 @@
 			"type": "anyparse.grammar.haxe.HxMemberDecl",
 			"method": "HxMemberDecl",
 			"kind": "TypedefDecl",
-			"find": "metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'),",
+			"find": "metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember')",
 			"replace": "",
 			"note": "a function member has no arm of its own, so metadataFunction stops reaching it"
 		},
@@ -1114,6 +1114,15 @@
 			"find": "opt.metadataOtherLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataOther);",
 			"replace": "{}",
 			"note": "lineEnds.metadataOther is read and dropped"
+		},
+		{
+			"name": "M-META-DEFAULT-NONE",
+			"type": "anyparse.grammar.haxe.HxModuleWriteOptions",
+			"method": "metadataTypeLineEnd",
+			"kind": "VarMember",
+			"find": "MetadataLineEndPolicy.After",
+			"replace": "MetadataLineEndPolicy.None",
+			"note": "a type's metadata defaults to None again, so it joins its declaration on one line"
 		},
 		{
 			"name": "M-META-TOP-VAR-ARM-OFF",

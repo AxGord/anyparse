@@ -35,7 +35,8 @@ enum abstract ConditionalIndentationPolicy(Int) {
 	final AlignedIncrease = 5;
 	final AlignedDecrease = 6;
 
-	@:from private static function resolve(name: String): Null<ConditionalIndentationPolicy> {
+	@:from
+	private static function resolve(name: String): Null<ConditionalIndentationPolicy> {
 		return switch name {
 			case 'fixedZero': FixedZero;
 			case 'fixedZeroIncrease': FixedZeroIncrease;

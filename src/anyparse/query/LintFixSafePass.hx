@@ -684,7 +684,8 @@ typedef SafePassOutcome = {
 	 * The files of `revertedFiles` the net only SPLIT, each with how many of the round's edits it KEPT there — the edits
 	 * of the rules the compiler accepted. Absent when the net split nothing.
 	 */
-	@:optional final partialKept: Map<String, Int>;
+	@:optional
+	final partialKept: Map<String, Int>;
 	final tail: String;
 	final notice: String;
 

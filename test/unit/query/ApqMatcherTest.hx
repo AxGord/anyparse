@@ -637,7 +637,8 @@ class Y {
 	 * slot follows.
 	 */
 	@:pin('control')
-	@:killer('M-MATCH-ONE-FLAT-RUN') @:killer('M-WALK-TYPE-ARGS-UNCOUNTED')
+	@:killer('M-MATCH-ONE-FLAT-RUN')
+	@:killer('M-WALK-TYPE-ARGS-UNCOUNTED')
 	public function testTypeArgumentsAndValueArgumentsAreSeparateRuns(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(

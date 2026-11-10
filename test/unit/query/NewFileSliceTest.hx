@@ -256,14 +256,14 @@ class NewFileSliceTest extends Test {
 			kind: 'typedef',
 			fields: ['@:optional var x: Int;', 'final y: Int;']
 		}));
-		Assert.isTrue(keyword.contains('@:optional var x:Int;\n\tfinal y:Int;\n}'));
+		Assert.isTrue(keyword.contains('@:optional\n\tvar x:Int;\n\tfinal y:Int;\n}'));
 		final mixed: String = okText(create({
 			className: 'M',
 			pkg: 'p',
 			kind: 'typedef',
 			fields: ['a: Int', '?b: Int', 'final c: Int;']
 		}));
-		Assert.isTrue(mixed.contains('var a:Int;\n\t@:optional var b:Int;\n\tfinal c:Int;\n}'));
+		Assert.isTrue(mixed.contains('var a:Int;\n\t@:optional\n\tvar b:Int;\n\tfinal c:Int;\n}'));
 		final docAlone: String = okText(create({
 			className: 'D',
 			pkg: 'p',
@@ -277,7 +277,7 @@ class NewFileSliceTest extends Test {
 			kind: 'typedef',
 			fields: ['/** d */ @:optional var x: Int', 'b: Int']
 		}));
-		Assert.isTrue(docBeside.contains('/** d */ @:optional var x:Int;\n\tvar b:Int;\n}'));
+		Assert.isTrue(docBeside.contains('/** d */ @:optional\n\tvar x:Int;\n\tvar b:Int;\n}'));
 		final docBare: String = okText(create({
 			className: 'D3',
 			pkg: 'p',
@@ -285,7 +285,7 @@ class NewFileSliceTest extends Test {
 			fields: ['/** d */ b: Int', '/** e */ ?c: Int', 'final x: Int']
 		}));
 		Assert.isTrue(docBare.contains('/** d */ var b:Int;'));
-		Assert.isTrue(docBare.contains('/** e */ @:optional var c:Int;'));
+		Assert.isTrue(docBare.contains('/** e */ @:optional\n\tvar c:Int;'));
 	}
 
 	/** A comma inside a field type is not a field separator: function, nested-struct and generic types stay whole. */

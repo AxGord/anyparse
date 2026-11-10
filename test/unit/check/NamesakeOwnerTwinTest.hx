@@ -17,7 +17,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * The supertype that vetoes a member as an abstract implementation belongs to the owner's own declaration: another
 	 * package's `Foo` extending a base that declares the member hides nothing on `pkg.Foo`.
 	 */
-	@:pin('control') @:killer('M-SUPERTYPE-DECLARES-UNION')
+	@:pin('control')
+	@:killer('M-SUPERTYPE-DECLARES-UNION')
 	public function testNamesakesSupertypeDoesNotVetoAnUnusedPrivate(): Void {
 		Assert.equals(1, helperFindings(new UnusedPrivate(), 'Foo', 'Base', false), 'another package\'s Foo vetoes nothing');
 		Assert.equals(1, helperFindings(new UnusedPrivate(), 'Bar', 'Base', false), 'the twin without the namesake reports');
@@ -27,7 +28,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * The same supertype veto as `prefer-inline` asks it: a namesake's base declaring the method does not make
 	 * `pkg.Foo`'s method fill a base slot.
 	 */
-	@:pin('control') @:killer('M-SUPERTYPE-DECLARES-UNION')
+	@:pin('control')
+	@:killer('M-SUPERTYPE-DECLARES-UNION')
 	public function testNamesakesSupertypeDoesNotVetoAnInlineCandidate(): Void {
 		Assert.equals(1, helperFindings(new PreferInline(), 'Foo', 'Base', false), 'another package\'s Foo vetoes nothing');
 		Assert.equals(1, helperFindings(new PreferInline(), 'Bar', 'Base', false), 'the twin without the namesake reports');
@@ -38,7 +40,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * package's `Foo` neither reaches this member nor shields it. That subtype names the member itself, so the
 	 * project-wide fallback fails and the confinement verdict alone decides.
 	 */
-	@:pin('control') @:killer('M-CONFINED-NO-OWNER-FILE')
+	@:pin('control')
+	@:killer('M-CONFINED-NO-OWNER-FILE')
 	public function testNamesakesSubtypeDoesNotUnconfineAPrivateMember(): Void {
 		Assert.equals(1, helperFindings(new UnusedPrivate(), 'Foo', '', true), 'a subtype of another package\'s Foo confines nothing');
 		Assert.equals(1, helperFindings(new UnusedPrivate(), 'Bar', '', true), 'the twin without the namesake reports');
@@ -49,7 +52,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * container itself is refused by the plan and its header admits no supertype, so a namesake was the only way the
 	 * refusal could fire.
 	 */
-	@:pin('control') @:killer('M-RTTI-HOMONYM-REFUSES')
+	@:pin('control')
+	@:killer('M-RTTI-HOMONYM-REFUSES')
 	public function testNamesakesRttiDoesNotRefuseTheConversion(): Void {
 		Assert.equals(
 			7, alignFixEdits([{ file: 'other/Align.hx', source: 'package other;\n\n@:rtti\nclass Align {}\n' }]),
@@ -65,7 +69,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * A subtype named like its supertype in another package is a subtype like any other: its override keeps the base method
 	 * physical. Only the owner's own declaration leaves the walk, and the twin without the subtype reports.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-MEMBERS-SKIP-NAMESAKE')
+	@:pin('control')
+	@:killer('M-SUBTYPE-MEMBERS-SKIP-NAMESAKE')
 	public function testSubtypeSharingTheOwnersNameKeepsItsOverride(): Void {
 		final base: { file: String, source: String } = {
 			file: 'a/Client.hx',
@@ -86,7 +91,8 @@ class NamesakeOwnerTwinTest extends Test {
 	 * Metadata inside a `#if` region above the type is metadata on it in every build that keeps the region: `@:rtti` there
 	 * still makes the type reflected, and `@:keep` still keeps it, so neither converts. The twin without the region does.
 	 */
-	@:pin('control') @:killer('M-PLAN-GUARDED-META-ALLOWED')
+	@:pin('control')
+	@:killer('M-PLAN-GUARDED-META-ALLOWED')
 	public function testMetadataInsideAConditionalRefusesTheConversion(): Void {
 		Assert.equals(0, alignFixEdits([], '#if !nothing @:rtti #end\n'), 'a guarded @:rtti refuses the conversion');
 		Assert.equals(0, alignFixEdits([], '#if !nothing @:keep #end\n'), 'a guarded @:keep refuses it too');

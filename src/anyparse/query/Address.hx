@@ -25,13 +25,18 @@ enum AddressResult {
  */
 typedef AddressSpec = {
 
-	@:optional var at: String;
-	@:optional var select: String;
-	@:optional var match: String;
-	@:optional var nth: Null<Int>;
+	@:optional
+	var at: String;
+	@:optional
+	var select: String;
+	@:optional
+	var match: String;
+	@:optional
+	var nth: Null<Int>;
 
 	/** A bare line may resolve to a node enclosing its first character — the caller lifts by `--kind`. */
-	@:optional var widen: Bool;
+	@:optional
+	var widen: Bool;
 
 }
 

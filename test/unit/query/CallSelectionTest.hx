@@ -31,8 +31,13 @@ class CallSelectionTest extends Test {
 	 * (`?b` optional, `c = 1.5` defaulted, `...rest`), their return types — a type parameter's bound, which the query tree
 	 * flattens beside them, never read as one — their type parameters and where their types are written.
 	 */
-	@:pin('control') @:killer('M-INDEX-SIGNATURES-META') @:killer('M-SIGNATURE-FORM-OPTIONAL') @:killer('M-SIGNATURE-FORM-DEFAULTED')
-	@:killer('M-SIGNATURE-RETURN-SOURCE') @:killer('M-SPANINFO-RETURN-SOURCES') @:killer('M-SIGNATURE-RETURN-TRIM')
+	@:pin('control')
+	@:killer('M-INDEX-SIGNATURES-META')
+	@:killer('M-SIGNATURE-FORM-OPTIONAL')
+	@:killer('M-SIGNATURE-FORM-DEFAULTED')
+	@:killer('M-SIGNATURE-RETURN-SOURCE')
+	@:killer('M-SPANINFO-RETURN-SOURCES')
+	@:killer('M-SIGNATURE-RETURN-TRIM')
 	public function testAFunctionsSignaturesAreItsOwnThenEachAnnotations(): Void {
 		final f: MemberInfo = member('f')[0];
 		Assert.equals(3, f.signatures.length);
@@ -53,7 +58,8 @@ class CallSelectionTest extends Test {
 	}
 
 	/** An annotation that writes no one function (a bare `@:overload`) leaves the candidates unknown. */
-	@:pin('control') @:killer('M-INDEX-SIGNATURES-BARE')
+	@:pin('control')
+	@:killer('M-INDEX-SIGNATURES-BARE')
 	public function testAnAnnotationWritingNoFunctionLeavesNoSignatures(): Void {
 		Assert.same([], member('bare')[0].signatures);
 		Assert.isNull(index().typing.calls.candidates(hosted('bare'), true));
@@ -65,7 +71,10 @@ class CallSelectionTest extends Test {
 	 * bound; it does not when no way binds; it may otherwise, and it may when that way skips a parameter whose type is not
 	 * nullable (Flash refuses that skip).
 	 */
-	@:pin('control') @:killer('M-SLOTS-COMPILES-DECIDED') @:killer('M-SLOTS-COMPILES-NONE') @:killer('M-SLOTS-COMPILES-UNSAFE-SKIP')
+	@:pin('control')
+	@:killer('M-SLOTS-COMPILES-DECIDED')
+	@:killer('M-SLOTS-COMPILES-NONE')
+	@:killer('M-SLOTS-COMPILES-UNSAFE-SKIP')
 	@:killer('M-SLOTS-COMPILES-MAYFIT')
 	public function testWhetherACallCompilesAgainstASignature(): Void {
 		final optional: SlotParam = { optional: true, rest: false };
@@ -85,7 +94,10 @@ class CallSelectionTest extends Test {
 	 * The candidate a call binds: for `@:overload` the first one that may compile, when it surely does or none after it
 	 * may; for `overload` the only one that may compile.
 	 */
-	@:pin('control') @:killer('M-CALLS-CHOSEN-FIRST') @:killer('M-CALLS-CHOSEN-LAST-OPEN') @:killer('M-CALLS-CHOSEN-PROPER')
+	@:pin('control')
+	@:killer('M-CALLS-CHOSEN-FIRST')
+	@:killer('M-CALLS-CHOSEN-LAST-OPEN')
+	@:killer('M-CALLS-CHOSEN-PROPER')
 	public function testTheCandidateACallBinds(): Void {
 		Assert.equals(1, CallSelection.chosen(Meta, [Misfits, Fits, Fits]), 'the first compiling');
 		Assert.equals(1, CallSelection.chosen(Meta, [Misfits, MayFit, Misfits]), 'the only one left');
@@ -100,7 +112,10 @@ class CallSelectionTest extends Test {
 	 * `(a:Float)`, written before `(a:Int)`; an `overload` static takes the one member compiling; an untyped argument leaves
 	 * `h`'s three open, their returns disagreeing.
 	 */
-	@:pin('control') @:killer('M-CALLS-FIT-CAST') @:killer('M-CALLS-PROPER-STATIC') @:killer('M-CALLS-RETURN-AGREE')
+	@:pin('control')
+	@:killer('M-CALLS-FIT-CAST')
+	@:killer('M-CALLS-PROPER-STATIC')
+	@:killer('M-CALLS-RETURN-AGREE')
 	public function testTheSelectionOverTypedArguments(): Void {
 		final idx: SymbolIndex = index();
 		final calls: CallSelection = idx.typing.calls;
@@ -125,7 +140,10 @@ class CallSelectionTest extends Test {
 	 * the call's return names the type the arguments bind it to, spelled by its module path; two arguments binding it to two
 	 * types leave the call undecided.
 	 */
-	@:pin('control') @:killer('M-CALLS-PARAM-FREE') @:killer('M-CALLS-PARAM-AGREE') @:killer('M-CALLS-PARAM-SPELLED')
+	@:pin('control')
+	@:killer('M-CALLS-PARAM-FREE')
+	@:killer('M-CALLS-PARAM-AGREE')
+	@:killer('M-CALLS-PARAM-SPELLED')
 	@:killer('M-SIGNATURE-PARAM-BOUNDS')
 	public function testATypeParameterTheArgumentsBindIsTheirType(): Void {
 		final source: String = 'package p;\n\nextern class T2 {\n\tstatic function id<T>(x:T):T;\n\n'
@@ -157,7 +175,8 @@ class CallSelectionTest extends Test {
 	 * An applied generic abstract unifies with itself applied alike and, its type parameters invariant, not with itself
 	 * applied otherwise: `Box<String>` and `Box<Int>` of an `abstract Box<T>(Int)` writing no clause (4.3.7).
 	 */
-	@:pin('control') @:killer('M-CASTS-APPLIED-SAME')
+	@:pin('control')
+	@:killer('M-CASTS-APPLIED-SAME')
 	public function testAnAppliedAbstractIsItselfAppliedAlike(): Void {
 		final idx: SymbolIndex = CheckFixture.index(
 			[{ file: 'p/Box.hx', source: 'package p;\n\nabstract Box<T>(Int) {}\n' }], new HaxeQueryPlugin()

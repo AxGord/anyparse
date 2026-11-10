@@ -422,11 +422,7 @@ final class HaxeFormatConfigLoader {
 		}
 		applyLineEndsCurlySubKeys(section, opt);
 		applyLineEndsCascades(section, opt);
-		// ω-metadata-line-end-function: `lineEnds.metadataFunction` →
-		// `opt.metadataFunctionLineEnd`. Default `None` preserves source-
-		// driven inter-meta separator; `After` / `AfterLast` /
-		// `ForceAfterLast` force a hardline after the last function meta
-		// (and override inter-element sep for `After` / `ForceAfterLast`).
+		// `lineEnds.metadata*` → `opt.metadata*LineEnd`; the policy values are on `MetadataLineEndPolicy`.
 		if (section.metadataFunction != null)
 			opt.metadataFunctionLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataFunction);
 		if (section.metadataType != null) opt.metadataTypeLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataType);

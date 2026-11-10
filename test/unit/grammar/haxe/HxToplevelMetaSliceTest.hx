@@ -149,17 +149,17 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 
 	public function testWriterEmitsSingleMeta(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:enum class M {}'));
-		Assert.equals('@:enum class M {}\n', out);
+		Assert.equals('@:enum\nclass M {}\n', out);
 	}
 
 	public function testWriterEmitsTwoMetas(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:allow(pack.Base) @test("foo") class Main {}'));
-		Assert.equals('@:allow(pack.Base) @test("foo") class Main {}\n', out);
+		Assert.equals('@:allow(pack.Base)\n@test("foo")\nclass Main {}\n', out);
 	}
 
 	public function testWriterEmitsMetaWithModifier(): Void {
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('@:keep private class M {}'));
-		Assert.equals('@:keep private class M {}\n', out);
+		Assert.equals('@:keep\nprivate class M {}\n', out);
 	}
 
 }

@@ -35,7 +35,8 @@ using StringTools;
 @:rawString
 abstract HxIntLit(String) from String to String {
 
-	@:to public function toInt(): Int {
+	@:to
+	public function toInt(): Int {
 		final s: String = this.replace('_', '');
 		var i: Int = s.length;
 		while (i > 0) {

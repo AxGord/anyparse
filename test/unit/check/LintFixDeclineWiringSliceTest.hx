@@ -605,7 +605,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * hand-off sentence stood beside the arm's own. Now the hand-offs are taken back out and the arm's answer — one
 	 * named refusal, one silent — replaces them.
 	 */
-	@:pin('control') @:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
+	@:pin('control')
+	@:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
 	public function testARiskyArmRuleCountsEachFindingOnceWhenTheArmDeclines(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = armPassOne();
@@ -632,7 +633,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * A `RiskyArm` rule whose arm LANDED: the hand-offs it fixed are no declines at all, and only the safe arm's own
 	 * declines are left. Before the fix the two fixed findings were declined by the safe arm AND reported again by the arm.
 	 */
-	@:pin('control') @:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
+	@:pin('control')
+	@:killer('M-ARM-LEDGER-REPORTED-TWICE', 'M-ARM-LEDGER-HANDOFF-KEPT')
 	public function testARiskyArmRuleThatLandedDeclinesOnlyWhatItLeft(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = armPassOne();
@@ -657,7 +659,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * The hand-offs stay declines while the risky phase never answers for them — a run with no oracle, or one whose
 	 * phase did not run, fixed nothing for those findings, and the safe arm's sentence is the only word on them.
 	 */
-	@:pin('control') @:killer('M-ARM-LEDGER-HANDOFF-UNRECORDED', 'M-ARM-LEDGER-ARM-BLIND')
+	@:pin('control')
+	@:killer('M-ARM-LEDGER-HANDOFF-UNRECORDED', 'M-ARM-LEDGER-ARM-BLIND')
 	public function testHandOffsStayDeclinedWithoutTheRiskyPhase(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = armPassOne();
@@ -680,7 +683,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	 * used to name every risky check of a run whose risky phase did not run, the arm rule included — beside its own row —
 	 * and the census counted it among the rules "never asked".
 	 */
-	@:pin('control') @:killer('M-LEDGER-ARM-LISTED-ABSENT')
+	@:pin('control')
+	@:killer('M-LEDGER-ARM-LISTED-ABSENT')
 	public function testARiskyArmRuleIsNeverListedAsAbsent(): Void {
 		#if (sys || nodejs)
 		final arm: ArmCheck = new ArmCheck();
@@ -1053,7 +1057,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 	}
 
 	/** An arm rule's findings entered `reported` in the safe loop, so a drifted file must not count them again. */
-	@:pin('control') @:killer('M-RISKY-NOT-CANONICAL-ARM-COUNTED-TWICE')
+	@:pin('control')
+	@:killer('M-RISKY-NOT-CANONICAL-ARM-COUNTED-TWICE')
 	public function testADriftedFileDoesNotRecountAnArmRulesFindings(): Void {
 		final ledger: Map<String, RuleFixOutcome> = armPassOne();
 		final result: FixVerifyResult = armResult(0, []);

@@ -40,7 +40,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		+ ' public function slow():Void { batch.acquire(); mutex.acquire(); Sys.sleep(1); mutex.release(); batch.release(); } }';
 
 	/** the client's `RemoteStoreBase.dropFileBlocked`: `_batchLock` held, `_remoteDb.getFileByRemoteId` takes `_mutex`. */
-	@:pin('control') @:killer('M-TS-CARRY-OFF')
+	@:pin('control')
+	@:killer('M-TS-CARRY-OFF')
 	public function testADominatedTakeInACalleeOnTheHeldObjectIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch'], work(own('_db.batchLock(); _db.lookup(); _db.batchUnlock();')));
@@ -50,7 +51,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A re-take of the held re-entrant lock on its object, in a callee, waits for nothing. */
-	@:pin('control') @:killer('M-TS-CARRY-RETAKE')
+	@:pin('control')
+	@:killer('M-TS-CARRY-RETAKE')
 	public function testARetakeInACalleeIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch'], work(own('_db.batchLock(); _db.nested(); _db.batchUnlock();')));
@@ -73,7 +75,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A take on ANOTHER object's lock is no take under the hold — another field's, or the running object's own. */
-	@:pin('control') @:killer('M-TS-CARRY-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-CARRY-OBJECT')
 	public function testATakeOnAnotherObjectIsNotUnderTheHold(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -93,7 +96,9 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * the client's `StoreBase`: `fileSystem.remoteDb.batchLock()` — a `var` assigned only in the constructor, and a
 	 * `final` field of it, name one object for good, carried into `fileSystem.remoteDb.lookup()`.
 	 */
-	@:pin('control') @:killer('M-TS-PATH-TWO-LINK') @:killer('M-TS-PATH-CTOR')
+	@:pin('control')
+	@:killer('M-TS-PATH-TWO-LINK')
+	@:killer('M-TS-PATH-CTOR')
 	public function testAPathOfStableFieldsNamesTheHeldObject(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch'], work(path('')));
@@ -107,7 +112,9 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * and a constant-named `Reflect.setField` / `setProperty` writes the field so named — either one names no object
 	 * through the path (review round 2 `o1`, `o3`).
 	 */
-	@:pin('control') @:killer('M-TS-PATH-INTERFACE') @:killer('M-TS-PATH-REFLECT')
+	@:pin('control')
+	@:killer('M-TS-PATH-INTERFACE')
+	@:killer('M-TS-PATH-REFLECT')
 	public function testAnImplementersOrAReflectiveWriteNamesNoObject(): Void {
 		#if (sys || nodejs)
 		inline function graded(fsDecl: String, fsType: String, swap: String): Array<String> {
@@ -138,9 +145,16 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * parameter, even one named like a class) it may write any field at all; a value of an unrelated class leaves the path
 	 * named.
 	 */
-	@:pin('control') @:killer('M-TS-REFLECT-COMPUTED') @:killer('M-TS-REFLECT-EXTENSION') @:killer('M-TS-REFLECT-INDEX')
-	@:killer('M-TS-REFLECT-REACH') @:killer('M-TS-REFLECT-SUBTYPES') @:killer('M-TS-REFLECT-SUPERTYPES') @:killer('M-TS-REFLECT-MAYWRITE')
-	@:killer('M-TS-REFLECT-FINAL') @:killer('M-TS-REFLECT-ANY')
+	@:pin('control')
+	@:killer('M-TS-REFLECT-COMPUTED')
+	@:killer('M-TS-REFLECT-EXTENSION')
+	@:killer('M-TS-REFLECT-INDEX')
+	@:killer('M-TS-REFLECT-REACH')
+	@:killer('M-TS-REFLECT-SUBTYPES')
+	@:killer('M-TS-REFLECT-SUPERTYPES')
+	@:killer('M-TS-REFLECT-MAYWRITE')
+	@:killer('M-TS-REFLECT-FINAL')
+	@:killer('M-TS-REFLECT-ANY')
 	public function testAComputedReflectiveWriteNamesNoObject(): Void {
 		#if (sys || nodejs)
 		final plain: String = 'class Fs { public var db:Db; public function new(a:Db, b:Db) { db = a; } }';
@@ -192,7 +206,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * A `var` written in a lambda or a local function the constructor makes is written whenever that function runs: it
 	 * names no object.
 	 */
-	@:pin('control') @:killer('M-TS-PATH-CTOR-LAMBDA')
+	@:pin('control')
+	@:killer('M-TS-PATH-CTOR-LAMBDA')
 	public function testAWriteInAFunctionTheConstructorMakesIsNoConstructorWrite(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', ' Runner.create(() -> holder = new Holder(other));')));
@@ -203,7 +218,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A constructor writing the field of ANOTHER object changes that object's after its construction. */
-	@:pin('control') @:killer('M-TS-PATH-OWN')
+	@:pin('control')
+	@:killer('M-TS-PATH-OWN')
 	public function testAConstructorWritingAnotherObjectsFieldNamesNoObject(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', ' if (peer != null) peer.holder = new Holder(other);')));
@@ -213,7 +229,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A `static var` the instance constructor assigns is assigned again by every construction. */
-	@:pin('control') @:killer('M-TS-PATH-STATIC')
+	@:pin('control')
+	@:killer('M-TS-PATH-STATIC')
 	public function testAStaticVarWrittenInTheConstructorNamesNoObject(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('', '', 'static var holder:Holder;')));
@@ -226,7 +243,10 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * A run that leaves out a file of the project sees not every write of it, whatever `closedWorld` declares: the `var`
 	 * names no object, and the run says why it reads the chain as open.
 	 */
-	@:pin('control') @:killer('M-TS-PATH-COMPLETE') @:killer('M-TS-COVER-WALK') @:killer('M-TS-COVER-NOTE')
+	@:pin('control')
+	@:killer('M-TS-PATH-COMPLETE')
+	@:killer('M-TS-COVER-WALK')
+	@:killer('M-TS-COVER-NOTE')
 	public function testARunOverPartOfTheProjectSeesNotEveryWrite(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(path(''), [{ name: 'Plugin.hx', source: PLUGIN }]);
@@ -241,7 +261,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * A file of the run that fails to parse holds no call and no write the graph sees: the run covers the project no more
 	 * than one leaving it out (review round 2 `o2`).
 	 */
-	@:pin('control') @:killer('M-TS-COVER-PARSED')
+	@:pin('control')
+	@:killer('M-TS-COVER-PARSED')
 	public function testAFileTheRunCannotParseLeavesTheProjectUncovered(): Void {
 		#if (sys || nodejs)
 		final broken: String = 'class Plugin { public static function install(fs:Fs, h:Holder):Void fs.holder = h;'
@@ -264,7 +285,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	 * document's, and a run over the nested directory alone leaves the outer one's `plugins/` out — the notice names
 	 * that project (review round 2 `pc`).
 	 */
-	@:pin('control') @:killer('M-TS-COVER-OUTERMOST')
+	@:pin('control')
+	@:killer('M-TS-COVER-OUTERMOST')
 	public function testANestedRestatementClosesNoProjectOfItsOwn(): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeDir('threadsafetynested', [{ name: 'apq.json', source: CONFIG }]);
@@ -287,7 +309,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** A file `exclude` names is no part of the project: leaving it out of the run leaves the project covered. */
-	@:pin('control') @:killer('M-TS-COVER-EXCLUDE')
+	@:pin('control')
+	@:killer('M-TS-COVER-EXCLUDE')
 	public function testAnExcludedFileIsNoPartOfTheProject(): Void {
 		#if (sys || nodejs)
 		final config: String = CONFIG.replace('"closedWorld":true', '"closedWorld":true,"exclude":["Plugin.hx"]');
@@ -300,7 +323,8 @@ class ThreadSafetyCarriedHoldTest extends Test {
 	}
 
 	/** The same `var` written outside the constructor names no object. */
-	@:pin('control') @:killer('M-TS-PATH-STABLE-ANY')
+	@:pin('control')
+	@:killer('M-TS-PATH-STABLE-ANY')
 	public function testAFieldWrittenOutsideTheConstructorNamesNoObject(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B Fs.work | Db.batch (folded)'], work(path('public function swap(h:Holder):Void holder = h;')));

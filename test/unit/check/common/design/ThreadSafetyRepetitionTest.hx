@@ -13,7 +13,8 @@ using Lambda;
 class ThreadSafetyRepetitionTest extends Test {
 
 	/** the client's shape of a user helper looping over a callback (`each(xs, f)`): no `iterates` entry, so it repeats. */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-ITERATES')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-ITERATES')
 	public function testAValueHandedToAnUnlistedCallRepeats(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -60,7 +61,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** A call `runsOnce` lists runs the value it is handed at most once: the short call below it stays info. */
-	@:pin('control') @:killer('M-TS-RUNS-ONCE-OFF')
+	@:pin('control')
+	@:killer('M-TS-RUNS-ONCE-OFF')
 	public function testARunsOnceCallRepeatsNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -80,7 +82,9 @@ class ThreadSafetyRepetitionTest extends Test {
 	 * per item, and does here (review round 2 `cr1-runsonce-project`). A `Type.member` entry is the project's word on
 	 * that member.
 	 */
-	@:pin('control') @:killer('M-TS-RUNS-ONCE-PROJECT') @:killer('M-TS-RUNS-ONCE-UNRESOLVED')
+	@:pin('control')
+	@:killer('M-TS-RUNS-ONCE-PROJECT')
+	@:killer('M-TS-RUNS-ONCE-UNRESOLVED')
 	public function testABareRunsOnceNameSaysNothingOfProjectCode(): Void {
 		#if (sys || nodejs)
 		final batch: String = 'class Batch { final items:Array<String>; public function new(items:Array<String>) this.items = items;'
@@ -102,7 +106,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	 * A registration into project code is kept by that code and run from a call the graph cannot follow — here per item
 	 * of a dispatch loop: the registration owns the warning.
 	 */
-	@:pin('control') @:killer('M-TS-REGISTER-PROJECT')
+	@:pin('control')
+	@:killer('M-TS-REGISTER-PROJECT')
 	public function testARegistrationIntoProjectCodeRepeats(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -120,7 +125,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** A registration with the runtime runs once per event, and the info note says so instead of claiming the entry point. */
-	@:pin('control') @:killer('M-TS-SHORT-REGISTERED-NOTE')
+	@:pin('control')
+	@:killer('M-TS-SHORT-REGISTERED-NOTE')
 	public function testARuntimeRegistrationIsOncePerEvent(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(
@@ -149,7 +155,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** the client's `TaskPool`: a background loop posts a task per item, and the main thread runs every pending task in one frame. */
-	@:pin('control') @:killer('M-TS-MARSHAL-OWNER-OFF')
+	@:pin('control')
+	@:killer('M-TS-MARSHAL-OWNER-OFF')
 	public function testAMarshalledValueRepeats(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -167,7 +174,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** A loop over `Dynamic` handlers runs `run` through no call the graph resolves: its repetition is unknown, a warning. */
-	@:pin('control') @:killer('M-TS-ASSUMED-OFF')
+	@:pin('control')
+	@:killer('M-TS-ASSUMED-OFF')
 	public function testAFunctionNoResolvedCallRunsWarns(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(
@@ -198,7 +206,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** A static initializer runs once per program, like the entry point: its short call stays info. */
-	@:pin('control') @:killer('M-TS-ASSUMED-STATIC')
+	@:pin('control')
+	@:killer('M-TS-ASSUMED-STATIC')
 	public function testAStaticInitializerRunsOnce(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -214,7 +223,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** Two loops one call away from a short call each repeat it: each warns, whatever comment sits between them. */
-	@:pin('control') @:killer('M-TS-OWNER-FIRST-ONLY')
+	@:pin('control')
+	@:killer('M-TS-OWNER-FIRST-ONLY')
 	public function testEquallyNearOwnersEachWarn(): Void {
 		#if (sys || nodejs)
 		Assert.same([
@@ -231,7 +241,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	 * Owners of one distance are ordered by file, then offset as a number: `p` at a two-digit
 	 * offset stays ahead of `q` past a thousand-character comment, which text order would put first.
 	 */
-	@:pin('control') @:killer('M-TS-OWNER-OFFSET-TEXT')
+	@:pin('control')
+	@:killer('M-TS-OWNER-OFFSET-TEXT')
 	public function testOwnersAreOrderedByOffsetAsANumber(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(owners(' // ' + ''.lpad('x', 1000) + '\n'));
@@ -242,7 +253,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	}
 
 	/** A loop's warning is keyed by the loop's header: a short call added earlier in the loop renames nothing. */
-	@:pin('control') @:killer('M-TS-LOOP-SUBJECT')
+	@:pin('control')
+	@:killer('M-TS-LOOP-SUBJECT')
 	public function testALoopWarningIsKeyedByItsHeader(): Void {
 		#if (sys || nodejs)
 		final before: Array<String> = graded(run(loop('')));
@@ -258,7 +270,8 @@ class ThreadSafetyRepetitionTest extends Test {
 	 * the client's `LocalStore.dropItemInternal#6`: a warning owned by a value handed to an iterating call is keyed by
 	 * that call, never by the lambda's number in its file, which an unrelated lambda shifts.
 	 */
-	@:pin('control') @:killer('M-TS-HAND-SUBJECT')
+	@:pin('control')
+	@:killer('M-TS-HAND-SUBJECT')
 	public function testAHandedValueIsKeyedByTheCall(): Void {
 		#if (sys || nodejs)
 		for (extra in ['', 'static final unrelated:()->Int = () -> 1; '])

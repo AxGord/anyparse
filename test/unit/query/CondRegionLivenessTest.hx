@@ -140,7 +140,9 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.evaluate('X && other', []));
 	}
 
-	@:pin('control') @:killer('M-COND-VALUES-NUMBER') @:killer('M-COND-VALUES-READ')
+	@:pin('control')
+	@:killer('M-COND-VALUES-NUMBER')
+	@:killer('M-COND-VALUES-READ')
 	public function testAVersionDefineComparesAsANumber(): Void {
 		// `haxe_ver` is a number the compiler compares with a number literal: the string is read as one first
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(v >= 4.2)', VALUED));
@@ -150,7 +152,8 @@ final class CondRegionLivenessTest extends Test {
 		Assert.equals(false, CondRegionLiveness.evaluateFacts('0', VALUED));
 	}
 
-	@:pin('control') @:killer('M-COND-VALUES-TEXT')
+	@:pin('control')
+	@:killer('M-COND-VALUES-TEXT')
 	public function testTwoStringsCompareByTheirCharacters(): Void {
 		// `lime >= "8.0.0"` is a string comparison, so 10.0.0 sorts before 8.0.0 — what the compiler does, not what a reader means
 		Assert.equals(false, CondRegionLiveness.evaluateFacts('(lime >= "8.0.0")', VALUED));
@@ -158,14 +161,16 @@ final class CondRegionLivenessTest extends Test {
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('("")', VALUED));
 	}
 
-	@:pin('control') @:killer('M-COND-VALUES-UNDEFINED')
+	@:pin('control')
+	@:killer('M-COND-VALUES-UNDEFINED')
 	public function testAnUndefinedDefineMakesAComparisonFalseAndItsNegationTrue(): Void {
 		Assert.equals(false, CondRegionLiveness.evaluateFacts('(undefinedx == "a")', VALUED));
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(undefinedx != "a")', VALUED));
 		Assert.equals(false, CondRegionLiveness.evaluateFacts('((v >= 4.2) == true)', VALUED));
 	}
 
-	@:pin('control') @:killer('M-COND-VALUES-SEMVER')
+	@:pin('control')
+	@:killer('M-COND-VALUES-SEMVER')
 	public function testVersionsCompareBySemVerPrecedence(): Void {
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.2.3") > version("1.2.3-rc.1"))', VALUED));
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(semv > version("1.0.0"))', VALUED));
@@ -363,7 +368,8 @@ final class CondRegionLivenessTest extends Test {
 		Assert.isNull(CondRegionLiveness.unproven(BRANCHED, SHAPE, [], [], new HaxeQueryPlugin().lexicalRegions(BRANCHED)));
 	}
 
-	@:pin('control') @:killer('M-LIVENESS-DEAD')
+	@:pin('control')
+	@:killer('M-LIVENESS-DEAD')
 	public function testDeadSpansAreWhatNoConfigurationCompiles(): Void {
 		// Under a build that defines `nodejs`, the `#else` is dead and the `#if` branch live; a second build defining
 		// nothing it can decide keeps both live, since `nodejs` is unknown there. A build that provably leaves `nodejs`

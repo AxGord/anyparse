@@ -105,7 +105,8 @@ final class HxReservedNameSliceTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-RESERVED-IDENT-NAME') @:killer('M-RESERVED-FN-NAME')
+	@:killer('M-RESERVED-IDENT-NAME')
+	@:killer('M-RESERVED-FN-NAME')
 	public function testAReservedWordIsNoFunctionParameterOrBinderName(): Void {
 		for (k in RESERVED) {
 			if (k != 'new') refused('class C { function $k() {} }', 'method `$k`');

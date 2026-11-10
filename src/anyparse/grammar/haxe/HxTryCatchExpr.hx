@@ -43,8 +43,13 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(constructFitGroup('body', 'catches', 'expressionTryOverflow'), constructFitExpr)
 typedef HxTryCatchExpr = {
-	@:trailOpt(';') @:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow'),
-		tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt')) var body: HxExpr;
-	@:trivia @:tryparse @:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch'), constructFitSep,
-		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt')) var catches: Array<HxCatchClauseExpr>;
+	@:trailOpt(';')
+	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow'),
+		tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt'))
+	var body: HxExpr;
+	@:trivia
+	@:tryparse
+	@:fmt(sameLine('expressionTry'), blockBodyKeepsInline('sameLineCatch'), constructFitSep,
+		tryCatchBraceSymmetry('body', 'BlockExpr', 'ExprStmt'))
+	var catches: Array<HxCatchClauseExpr>;
 };

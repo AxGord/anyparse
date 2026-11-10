@@ -30,7 +30,8 @@ typedef Trivial<T> = {
 	 * emits a separator-level blank from it when preserving source grouping.
 	 */
 	var blankBefore: Bool;
-	@:optional var blankBefore2: Int;
+	@:optional
+	var blankBefore2: Int;
 
 	/**
 	 * At least one blank source line sat between the last captured leading comment and the node; always `false`
@@ -67,7 +68,8 @@ typedef Trivial<T> = {
 	 * (`g(a, b /* x *\/, /* c *\/)`); null otherwise. Only a call's last argument carries one, since a comment after any
 	 * other separator leads the next argument.
 	 */
-	@:optional var afterSepComment: Null<String>;
+	@:optional
+	var afterSepComment: Null<String>;
 
 	/**
 	 * Source had a separator (e.g. `,`) immediately AFTER this element, before the next element's
@@ -85,7 +87,8 @@ typedef Trivial<T> = {
 	 * of force-breaking after it. A line-style `//` leading comment always ends its source line and
 	 * is never glued.
 	 */
-	@:optional var leadingCommentsGlued: Bool;
+	@:optional
+	var leadingCommentsGlued: Bool;
 	var node: T;
 
 }

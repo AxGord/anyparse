@@ -346,7 +346,8 @@ class LintConfigTest extends Test {
 		Assert.isNull(oracle.dir, 'and claims no compile dir');
 	}
 
-	@:pin('control') @:killer('M-REACH-CONFIGS-COMPLETE')
+	@:pin('control')
+	@:killer('M-REACH-CONFIGS-COMPLETE')
 	public function testReachSkipsBranchesOnlyUnderADeclaredCompleteOracleList(): Void {
 		// A build the `compilerOracle` list cannot typecheck — another OS, an app-store variant — still ships the branches its
 		// defines take, so the reach analysis sees the list's builds only when the project declares the list complete.
@@ -369,7 +370,9 @@ class LintConfigTest extends Test {
 		Assert.notNull(LintOracleRun.withReachConfigurations(new HaxeQueryPlugin(), scope, oracles, false, true, { probe: null })?.builds);
 	}
 
-	@:pin('control') @:killer('M-REFLECTIVE-AGREE') @:killer('M-HOLDERS-PARSE')
+	@:pin('control')
+	@:killer('M-REFLECTIVE-AGREE')
+	@:killer('M-HOLDERS-PARSE')
 	public function testTheReflectiveClassesAreTheRunsOnlyWhenEveryPathDeclaresThemAlike(): Void {
 		// absent, a computed class name may name any class, and a computed member name obtain any method; a run whose paths
 		// declare different globs, or some none, may create a class — or obtain a method of one — one of them leaves out
@@ -395,7 +398,8 @@ class LintConfigTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-REACH-CONFIGS-AGREE')
+	@:pin('control')
+	@:killer('M-REACH-CONFIGS-AGREE')
 	public function testReachTakesTheBuildsAsCompleteOnlyWhenEveryPathAgrees(): Void {
 		// The run probes the first path's oracle list; a second path whose config names another list, or does not declare
 		// the flag, may ship a build that list does not name.

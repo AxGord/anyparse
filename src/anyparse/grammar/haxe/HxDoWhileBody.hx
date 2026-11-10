@@ -27,10 +27,14 @@ package anyparse.grammar.haxe;
 enum HxDoWhileBody {
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
 		uniformStmtBlanks)
-	@:lead('{') @:trail('}') @:trivia
+	@:lead('{')
+	@:trail('}')
+	@:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockBody(stmts: Array<HxStatement>);
-	@:kw('do') InnerDoWhile(inner: HxDoWhileStmt);
-	@:trailOpt(';') @:fmt(trailOptParseOnly)
+	@:kw('do')
+	InnerDoWhile(inner: HxDoWhileStmt);
+	@:trailOpt(';')
+	@:fmt(trailOptParseOnly)
 	ExprBody(expr: HxExpr);
 }

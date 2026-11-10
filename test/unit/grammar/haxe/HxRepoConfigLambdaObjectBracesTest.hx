@@ -19,13 +19,15 @@ final class HxRepoConfigLambdaObjectBracesTest extends Test {
 		super();
 	}
 
-	@:pin('control') @:killer('M-ARROW-BODY-PAD-KEY-OFF')
+	@:pin('control')
+	@:killer('M-ARROW-BODY-PAD-KEY-OFF')
 	public function testLambdaBodyLiteralIsSymmetric(): Void {
 		final src: String = inMethod('final entries = users.map(e -> { a: e.a, b: e.b });');
 		Assert.equals(src, repoWrite(src));
 	}
 
-	@:pin('control') @:killer('M-ARROW-BODY-PAD-KEY-OFF')
+	@:pin('control')
+	@:killer('M-ARROW-BODY-PAD-KEY-OFF')
 	public function testLambdaBodyLiteralWithoutPadsGainsBoth(): Void {
 		final src: String = inMethod('final entries = users.map(e -> {a: e.a, b: e.b});');
 		Assert.equals(inMethod('final entries = users.map(e -> { a: e.a, b: e.b });'), repoWrite(src));

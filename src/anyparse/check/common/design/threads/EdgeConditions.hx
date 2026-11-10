@@ -19,7 +19,8 @@ private typedef SiteFact = {
 	final param: Int;
 	final value: Bool;
 	final nullTest: Bool;
-	@:optional final test: AffixTest;
+	@:optional
+	final test: AffixTest;
 }
 
 /**

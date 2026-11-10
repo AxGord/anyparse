@@ -78,7 +78,8 @@ class ExtractRepeatedExpressionTest extends Test {
 	 * `StringTools` list took every member but `random`, so it hoisted the iterator; the one stdlib table
 	 * (`TypeResolver`) keeps both out of the transparent set.
 	 */
-	@:pin('control') @:killer('M-STD-EFFECT-FREE-AS-TRANSPARENT')
+	@:pin('control')
+	@:killer('M-STD-EFFECT-FREE-AS-TRANSPARENT')
 	public function testEffectFreeButNotTransparentCallExcluded(): Void {
 		Assert.equals(
 			0,
@@ -95,7 +96,8 @@ class ExtractRepeatedExpressionTest extends Test {
 	 * now sees them through the same table the deletion predicates read — its own list knew neither. `split` answers a
 	 * fresh mutable array, so it is not hoisted.
 	 */
-	@:pin('control') @:killer('M-STD-SPLIT-TRANSPARENT', 'M-PURE-STRING-METHOD-OFF')
+	@:pin('control')
+	@:killer('M-STD-SPLIT-TRANSPARENT', 'M-PURE-STRING-METHOD-OFF')
 	public function testStringMethodAndPathStaticAreTransparent(): Void {
 		final upper: Array<Violation> =
 			violations('class C { function m(s:String) { k(s.toUpperCase()); k(s.toUpperCase()); k(s.toUpperCase()); } }');
@@ -111,7 +113,8 @@ class ExtractRepeatedExpressionTest extends Test {
 	}
 
 	/** A project type named like the std one is not the std one: its `int` may do anything. */
-	@:pin('control') @:killer('M-STD-SHADOW-IGNORED')
+	@:pin('control')
+	@:killer('M-STD-SHADOW-IGNORED')
 	public function testProjectShadowOfAStdTypeExcluded(): Void {
 		Assert.equals(
 			0,

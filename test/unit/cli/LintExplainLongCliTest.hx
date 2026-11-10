@@ -38,7 +38,8 @@ class LintExplainLongCliTest extends Test {
 	#end
 
 	/** The json envelope carries the findings, `data` included, beside the long locks. */
-	@:pin('control') @:killer('M-LINT-EXPLAIN-UNSET')
+	@:pin('control')
+	@:killer('M-LINT-EXPLAIN-UNSET')
 	public function testJsonEnvelopeCarriesFindingsAndLongLocks(): Void {
 		#if nodejs
 		final out: String = lint(SOURCE, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out;
@@ -93,7 +94,8 @@ class LintExplainLongCliTest extends Test {
 	}
 
 	/** Each lock others dominate, in json (`dominated: [{lock, by}]`) and in text. */
-	@:pin('control') @:killer('M-LINT-FORMAT-DOMINATED')
+	@:pin('control')
+	@:killer('M-LINT-FORMAT-DOMINATED')
 	public function testDominatedLocksAreNamed(): Void {
 		#if nodejs
 		final source: String = 'class Runner { public static function create(fn:()->Void):Void {} }'
@@ -117,7 +119,8 @@ class LintExplainLongCliTest extends Test {
 	}
 
 	/** A reason that blocks only through a `catch` names that catch, as `errorPath` in json and in text. */
-	@:pin('control') @:killer('M-LINT-FORMAT-ERRORPATH')
+	@:pin('control')
+	@:killer('M-LINT-FORMAT-ERRORPATH')
 	public function testAnErrorPathReasonNamesItsCatch(): Void {
 		#if nodejs
 		final source: String = 'class Runner { public static function create(fn:()->Void):Void {} }'
@@ -142,7 +145,8 @@ class LintExplainLongCliTest extends Test {
 	}
 
 	/** A finding naming no file (an option the rule could not read) closes the report, in text and in json. */
-	@:pin('control') @:killer('M-LINT-NOFILE-DROPPED')
+	@:pin('control')
+	@:killer('M-LINT-NOFILE-DROPPED')
 	public function testAFindingNamingNoFileIsPrinted(): Void {
 		#if nodejs
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"],'
@@ -179,7 +183,8 @@ class LintExplainLongCliTest extends Test {
 	}
 
 	/** Nothing to explain still answers an envelope, with a note: the rule not in the run, or a run whose every sink is waived. */
-	@:pin('control') @:killer('M-LINT-EXPLAIN-NO-ENVELOPE')
+	@:pin('control')
+	@:killer('M-LINT-EXPLAIN-NO-ENVELOPE')
 	public function testNothingToExplainIsSaid(): Void {
 		#if nodejs
 		final notInRules: LintOutput = lint(

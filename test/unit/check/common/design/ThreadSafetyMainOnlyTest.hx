@@ -12,7 +12,8 @@ class ThreadSafetyMainOnlyTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep","Disk.stat"],'
 		+ '"shortSinks":["Disk.stat"],"lockPairs":["Mutex.acquire/release"]}}}';
 
-	@:pin('control') @:killer('M-TS-MAINONLY-ELSEWHERE-OFF')
+	@:pin('control')
+	@:killer('M-TS-MAINONLY-ELSEWHERE-OFF')
 	public function testWorkReportedAtACalleeLeavesTheHoldInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B M.ui | M._m'], holds(run('work();')));
@@ -21,7 +22,8 @@ class ThreadSafetyMainOnlyTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-MAINONLY-ELSEWHERE-OFF')
+	@:pin('control')
+	@:killer('M-TS-MAINONLY-ELSEWHERE-OFF')
 	public function testWorkReportedAtTheHolderLeavesTheHoldInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B M.ui | M._m'], holds(run('Sys.sleep(1);')));
@@ -30,7 +32,8 @@ class ThreadSafetyMainOnlyTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-MAINONLY-MOVED')
+	@:pin('control')
+	@:killer('M-TS-MAINONLY-MOVED')
 	public function testWorkOwnedByARepeatingCalleeLeavesTheHoldInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B M.ui | M._m'], holds(run('many();')));
@@ -40,7 +43,8 @@ class ThreadSafetyMainOnlyTest extends Test {
 	}
 
 	/** A finding (a) a directive silences reports nothing: the hold over that work keeps its warning (review round 4 `f2`). */
-	@:pin('control') @:killer('M-TS-REPORTED-SUPPRESSED')
+	@:pin('control')
+	@:killer('M-TS-REPORTED-SUPPRESSED')
 	public function testWorkReportedOnlyBySilencedFindingsKeepsTheHold(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning B M.ui | M._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [

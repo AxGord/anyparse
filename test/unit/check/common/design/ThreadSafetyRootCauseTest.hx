@@ -16,7 +16,8 @@ class ThreadSafetyRootCauseTest extends Test {
 		+ '"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/** the client's `LocalStore.saveDoc`: under the mutation lock it waits for the tree lock `refreshInternal` holds long. */
-	@:pin('control') @:killer('M-TS-FOLD-OFF')
+	@:pin('control')
+	@:killer('M-TS-FOLD-OFF')
 	public function testAHoldLongOnlyByWaitingForAWarnedHolderIsInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B S.save | S._x', 'warning B S.scan | S._t'], holds(waits('')));
@@ -26,7 +27,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/** the client's `saveDoc`, whose `catch` reports over HTTP: a call only a `catch` runs is no reason the warning warns. */
-	@:pin('control') @:killer('M-TS-FOLD-NORMAL')
+	@:pin('control')
+	@:killer('M-TS-FOLD-NORMAL')
 	public function testACallOnlyACatchRunsLeavesTheFoldStanding(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -39,7 +41,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/** A lock long also by a release in another function is long by what no hold names: the waiter keeps its warning. */
-	@:pin('control') @:killer('M-TS-FOLD-CROSSING')
+	@:pin('control')
+	@:killer('M-TS-FOLD-CROSSING')
 	public function testALockReleasedElsewhereLeavesTheWaiterWarned(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -57,7 +60,10 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * the call's. Two holds in one function covering each other keep the one nearest the work. A hold elsewhere across its
 	 * own call to the same sink, of the same lock or another, is a stall of its own.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SITE') @:killer('M-TS-FOLD-DEPTH') @:killer('M-TS-FOLD-SITE-LOCK')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SITE')
+	@:killer('M-TS-FOLD-DEPTH')
+	@:killer('M-TS-FOLD-SITE-LOCK')
 	public function testHoldsLongByOneCallMakeOneWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B A.a | A._x', 'warning B A.z | A._y'], holds(oneCall('_y', 'z()')), 'through a hold of another lock');
@@ -81,7 +87,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * `addRemoteActionChecked` reaching that stat through `addRemoteAction2`; `LocalStore.loadDocContent` on the
 	 * I/O worker against `getText` on the sync worker): narrowing one hold frees nothing of the other, so neither covers.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SITE-LOCK')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SITE-LOCK')
 	public function testHoldsOfOneLockInTwoFunctionsAreTwoStalls(): Void {
 		#if (sys || nodejs)
 		final two: Array<String> = ['warning B A.a | A._x', 'warning B A.z | A._x'];
@@ -99,7 +106,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * pair's take member: two holds one after the other in one function, each across the same work, stall on their own
 	 * (review round 2 `u2p`).
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-UNNAMED-SAME')
+	@:pin('control')
+	@:killer('M-TS-FOLD-UNNAMED-SAME')
 	public function testUnnamedLocksNeverCoverEachOther(): Void {
 		#if (sys || nodejs)
 		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
@@ -121,7 +129,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * direct one does: the walk repeats its sink and is not covered by a hold reaching it once; a value the runtime only
 	 * registers runs per event, closing no cycle under the lock (review round 2 `r1`).
 	 */
-	@:pin('control') @:killer('M-TS-CYCLE-REGISTERED')
+	@:pin('control')
+	@:killer('M-TS-CYCLE-REGISTERED')
 	public function testARecursionThroughACallbackRepeatsUnderTheLock(): Void {
 		#if (sys || nodejs)
 		final walk: String = 'class S { final _m:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);'
@@ -160,7 +169,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * Two holds of different locks one after the other in one function are two stalls: one does not cover the other
 	 * for sharing the work's sink (review round 2 `s1`). One taken inside the other does.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-NEST-LOCK')
+	@:pin('control')
+	@:killer('M-TS-FOLD-NEST-LOCK')
 	public function testHoldsOfTwoLocksOneAfterTheOtherAreTwoStalls(): Void {
 		#if (sys || nodejs)
 		final s: String = 'class S { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
@@ -178,7 +188,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/** the client's `PathTools.deleteRecursive`: the sink calls one main-thread way into a function runs make one warning. */
-	@:pin('control') @:killer('M-TS-WAY-OFF')
+	@:pin('control')
+	@:killer('M-TS-WAY-OFF')
 	public function testSinkCallsOfOneWayMakeOneWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A F.f | Sys.sleep', 'warning A F.f | Disk.read'], mains(ThreadSafetyCheckTest.violations(CONFIG, [
@@ -191,7 +202,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	}
 
 	/** the client's `repairShareFlag`: the calls one loop repeats make one warning, keyed by the first. */
-	@:pin('control') @:killer('M-TS-LOOP-KEY')
+	@:pin('control')
+	@:killer('M-TS-LOOP-KEY')
 	public function testTheCallsOfOneLoopMakeOneWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -215,7 +227,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * Two takes of one lock whose holds name the same calls share one finding (review `c5`, `c5b`): one warned hold,
 	 * which never covers itself — the warning stays.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SELF')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SELF')
 	public function testTwoTakesSharingAFindingDoNotCoverEachOther(): Void {
 		#if (sys || nodejs)
 		final branches: String =
@@ -243,7 +256,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * one stat against `refreshInternal`'s walk over the tree): the repeating hold keeps the warning, and the one-call
 	 * hold folds onto it.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SITE-ONCE')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SITE-ONCE')
 	public function testAHoldReachingACallOnceCoversNoRepeatingOne(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
@@ -262,7 +276,9 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * A call reached through a function a cycle of calls re-enters repeats however the trail found it (the client's
 	 * `TreeWatcher.refreshInternal`, whose `checkNode` walks the tree recursively): no hold reaching it once covers it.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SITE-CYCLE') @:killer('M-TS-CYCLE-REF')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SITE-CYCLE')
+	@:killer('M-TS-CYCLE-REF')
 	public function testACallUnderARecursiveWalkRepeats(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
@@ -296,8 +312,12 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * the walk finds first, and the first folds onto it; without the sleep the two cover each other and the one nearest its
 	 * work stays.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-EVERY-END') @:killer('M-TS-FOLD-ENDS-WALK') @:killer('M-TS-FOLD-PASSES-PATH')
-	@:killer('M-TS-FOLD-NAMED-ONLY') @:killer('M-TS-FOLD-UNNAMED-NOTE')
+	@:pin('control')
+	@:killer('M-TS-FOLD-EVERY-END')
+	@:killer('M-TS-FOLD-ENDS-WALK')
+	@:killer('M-TS-FOLD-PASSES-PATH')
+	@:killer('M-TS-FOLD-NAMED-ONLY')
+	@:killer('M-TS-FOLD-UNNAMED-NOTE')
 	public function testACallIsCoveredOnlyWhenEveryBlockingCallItReachesIs(): Void {
 		#if (sys || nodejs)
 		final both: Array<Violation> = twoWays('shared(); deep();');
@@ -337,7 +357,9 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * the second by the first's, in whichever order they were written. With the take of a lock no sink, `p`'s first way
 	 * ends at the sleep too, as the client's `Mutex.acquire` (a `lockPairs` take, not a sink) does.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SAME-WAY') @:killer('M-TS-FOLD-PARTS-ONCE')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SAME-WAY')
+	@:killer('M-TS-FOLD-PARTS-ONCE')
 	public function testTwoCallsReachingOneSinkAreTwoWays(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning B S.p | S._y', 'warning B S.x | S._x'], holds(acrossCalls('p(); io();')), 'the covered way first');
@@ -360,8 +382,12 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * `A.a` holds it across too, and `A.a`'s warning carries `noqa`. `A.b` used to fold onto it, leaving the stall named only
 	 * by an info finding.
 	 */
-	@:pin('control') @:killer('M-TS-FOLD-SUPPRESSED') @:killer('M-TS-FOLD-SUPPRESSED-WAIT') @:killer('M-TS-NEST-SUPPRESSED')
-	@:killer('M-TS-WAY-SUPPRESSED') @:killer('M-TS-ONE-TAKE-SUPPRESSED')
+	@:pin('control')
+	@:killer('M-TS-FOLD-SUPPRESSED')
+	@:killer('M-TS-FOLD-SUPPRESSED-WAIT')
+	@:killer('M-TS-NEST-SUPPRESSED')
+	@:killer('M-TS-WAY-SUPPRESSED')
+	@:killer('M-TS-ONE-TAKE-SUPPRESSED')
 	public function testASuppressedWarningCoversNothing(): Void {
 		#if (sys || nodejs)
 		final s: String = 'class A { final _x:Mutex = new Mutex(); public function new() {} function io():Void Sys.sleep(1);\n'
@@ -418,7 +444,8 @@ class ThreadSafetyRootCauseTest extends Test {
 	 * holds `_z` across it, so it folds onto `S.c`'s. The `_y` hold's message names a finding that warns nowhere, and says
 	 * where its work is reported.
 	 */
-	@:pin('control') @:killer('M-TS-COVER-INFO-NOTE')
+	@:pin('control')
+	@:killer('M-TS-COVER-INFO-NOTE')
 	public function testAHoldTurnedOntoAnInfoFindingSaysSo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [

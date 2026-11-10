@@ -21,4 +21,8 @@ package anyparse.grammar.haxe;
  * the `HxHeritageClause` / `HxDecl` philosophy.
  */
 @:peg
-typedef HxAccessClause = { @:sep(',') @:trail(')') var ids: Array<HxWordLit>; };
+typedef HxAccessClause = {
+	@:sep(',')
+	@:trail(')')
+	var ids: Array<HxWordLit>;
+};

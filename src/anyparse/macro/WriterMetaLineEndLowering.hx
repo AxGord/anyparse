@@ -21,6 +21,7 @@ final class WriterMetaLineEndLowering {
 	/**
 	 * The runtime policy of a metadata run, or `null` when the field names no knob. `subject`
 	 * replaces the sibling's own value for a chain, whose annotated value is known only at the tail.
+	 * With no knob of its own, a value no arm names answers `-1`: no metadata site.
 	 */
 	public static function policyExpr(
 		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, ?subject: Expr
@@ -28,7 +29,7 @@ final class WriterMetaLineEndLowering {
 		final own: Null<String> = MetaInspect.fmtReadString(field, 'metaLineEndPolicy');
 		final arms: Array<Array<String>> = MetaInspect.fmtReadStringArgsAll(field, 'metaLineEndIfCtor');
 		if (own == null && arms.length == 0) return null;
-		final fallback: Expr = own == null ? (macro 0) : WriterLoweringSupport.optFieldAccess(own);
+		final fallback: Expr = own == null ? (macro -1) : WriterLoweringSupport.optFieldAccess(own);
 		if (arms.length == 0) return fallback;
 		final pos: Position = Context.currentPos();
 		final sibling: String = arms[0][0];
@@ -49,8 +50,9 @@ final class WriterMetaLineEndLowering {
 	/**
 	 * The separator after one annotation of a chain, or `null` when the field is no chain. Every
 	 * annotation of a chain shares the policy of the value at its tail: `After` breaks after each,
-	 * `ForceAfterLast` keeps the inner ones on one line, and the last one always breaks unless the
-	 * policy is `None`, where `sourceSep` — today's source-driven separator — stands.
+	 * every other policy keeps the inner ones on one line, and the last one breaks unless the policy
+	 * is `None`; no separator of a chain follows the source. A chain whose tail no arm names is no
+	 * metadata site: `sourceSep` stands.
 	 */
 	public static function chainSepExpr(
 		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, sourceSep: Expr
@@ -75,15 +77,48 @@ final class WriterMetaLineEndLowering {
 			var _tail = $fieldAccess;
 			while (true) $peel;
 			final _policy: anyparse.format.MetadataLineEndPolicy = $policy;
-			if (_policy == anyparse.format.MetadataLineEndPolicy.None)
+			if ((_policy: Int) < 0)
 				$sourceSep;
-			else if (!$fieldAccess.match($chainPat) || _policy == anyparse.format.MetadataLineEndPolicy.After)
+			else if (
+				_policy != anyparse.format.MetadataLineEndPolicy.None
+				&& (!$fieldAccess.match($chainPat) || _policy == anyparse.format.MetadataLineEndPolicy.After)
+			)
 				_dhl();
-			else if (_policy == anyparse.format.MetadataLineEndPolicy.ForceAfterLast)
-				_dt(' ');
 			else
-				$sourceSep;
+				_dt(' ');
 		};
+	}
+
+	/**
+	 * Whether the run in `field` annotates anything: `null` when a required field follows it in the
+	 * struct `typePath`, else the runtime test that one of the optional fields after it is present.
+	 * A run that annotates nothing (a region before `}` or the end of the file) owes no break.
+	 */
+	public static function annotatesExpr(
+		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr
+	): Null<Expr> {
+		final rule: Null<ShapeNode> = ctx.shape.rules[typePath];
+		final owner: Null<Expr> = switch fieldAccess.expr {
+			case EField(o, _): o;
+			case _: null;
+		};
+		if (rule == null || owner == null) return null;
+		final at: Int = rule.children.indexOf(field);
+		if (at < 0) return null;
+		var test: Null<Expr> = null;
+		for (i in at + 1...rule.children.length) {
+			final next: ShapeNode = rule.children[i];
+			final name: String = next.annotations[AnnotationKeys.BASE_FIELD_NAME];
+			final access: Expr = { expr: EField(owner, name), pos: fieldAccess.pos };
+			final present: Expr = if (next.kind == Star)
+				macro $access.length > 0;
+			else if (next.annotations[AnnotationKeys.BASE_OPTIONAL] == true)
+				macro $access != null;
+			else
+				return null;
+			test = test == null ? present : macro $test || $present;
+		}
+		return test ?? macro false;
 	}
 
 	/** The referenced rule of a named field of the struct `typePath`. */

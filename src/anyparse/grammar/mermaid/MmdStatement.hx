@@ -34,11 +34,15 @@ enum MmdStatement {
 	LinkStyle(style: MmdLinkStyle);
 	@:kw('click')
 	Click(click: MmdClick);
-	@:kw('accTitle') @:lead(':')
+	@:kw('accTitle')
+	@:lead(':')
 	AccTitle(text: MmdLineTextLit);
-	@:kw('accDescr') @:lead(':')
+	@:kw('accDescr')
+	@:lead(':')
 	AccDescr(text: MmdLineTextLit);
-	@:kw('accDescr') @:lead('{') @:trail('}')
+	@:kw('accDescr')
+	@:lead('{')
+	@:trail('}')
 	AccDescrBlock(text: MmdBlockTextLit);
 
 	/** Nodes and the links between them: `A[Start] --> B & C -->|yes| D`. */

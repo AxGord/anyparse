@@ -41,15 +41,29 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(multiVarWrap('multiVarWrap', 'more'))
 typedef HxVarDecl = {
-	@:trivia @:tryparse @:fmt(metaLineEndPolicy('metadataOtherLineEnd')) var meta: Array<HxMetadata>;
+	@:trivia
+	@:tryparse
+	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))
+	var meta: Array<HxMetadata>;
 	var name: HxVarNameLit;
-	@:optional @:fmt(tightLead) @:lead('(') var access: Null<HxAccessClause>;
-	@:optional @:fmt(space('typeHintColon', 'lead'), indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
-	@:lead(':') @:queryTypeSlot var type: Null<HxType>;
-	@:optional @:kw('#if') var condInit: Null<HxVarInitRegion>;
+	@:optional
+	@:fmt(tightLead)
+	@:lead('(')
+	var access: Null<HxAccessClause>;
+	@:optional
+	@:fmt(space('typeHintColon', 'lead'), indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
+	@:lead(':')
+	@:queryTypeSlot
+	var type: Null<HxType>;
+	@:optional
+	@:kw('#if')
+	var condInit: Null<HxVarInitRegion>;
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadOnOverflow('type'), propagateExprPosition)
-	@:lead('=') var init: Null<HxExpr>;
-	@:trivia @:tryparse var more: Array<HxVarMore>;
+	@:lead('=')
+	var init: Null<HxExpr>;
+	@:trivia
+	@:tryparse
+	var more: Array<HxVarMore>;
 }

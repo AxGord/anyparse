@@ -41,7 +41,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * the client's correlated `if (!batch) acquire … if (!batch) release`: the parameter is a fixed flag (`FixedFlags`), so the
 	 * window is traced once per value and no run takes without giving back — no leak. A take nothing gives back is one.
 	 */
-	@:pin('control') @:killer('M-TS-FLAGS-OFF')
+	@:pin('control')
+	@:killer('M-TS-FLAGS-OFF')
 	public function testCorrelatedConditionalTakeIsNoLeak(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture('db.add(false);', 'fs.save();');
@@ -57,7 +58,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/** A flag the function writes is no fixed flag: the correlated take and give still read as a leak. */
-	@:pin('control') @:killer('M-TS-FLAGS-WRITTEN')
+	@:pin('control')
+	@:killer('M-TS-FLAGS-WRITTEN')
 	public function testAWrittenFlagIsNoFixedFlag(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
@@ -85,7 +87,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/** A hold across a blocking call: the reason names the call and the path to the sink, and no lock it waits for. */
-	@:pin('control') @:killer('M-TS-LONG-NEVER-GROWS')
+	@:pin('control')
+	@:killer('M-TS-LONG-NEVER-GROWS')
 	public function testSpansBlockingNamesTheCallAndThePath(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
@@ -102,7 +105,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/** Every blocking call every hold spans is listed — not only the one the solve met first. */
-	@:pin('control') @:killer('M-TS-SPANS-FIRST-ONLY')
+	@:pin('control')
+	@:killer('M-TS-SPANS-FIRST-ONLY')
 	public function testEverySpansBlockingCallIsListed(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _l:Mutex = new Mutex(); public function new() {}'
@@ -122,7 +126,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * A virtual call dispatching to several targets is a reason per target, in `reasons` and `aside` alike — one
 	 * normaliser, so the two lists compare: here `_w` is long by a leak, and its hold across `upd` blocks through each override.
 	 */
-	@:pin('control') @:killer('M-TS-REASONS-DEDUP-BY-SITE')
+	@:pin('control')
+	@:killer('M-TS-REASONS-DEDUP-BY-SITE')
 	public function testAVirtualCallIsAReasonPerTarget(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = [
@@ -145,7 +150,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * A hold waiting for the lock ITSELF — a re-take on another object, a call that takes it again — blocks only once the
 	 * lock is long already: such reasons are circular, left out of `reasons` and `aside`, and counted.
 	 */
-	@:pin('control') @:killer('M-TS-CIRCULAR-COUNTED')
+	@:pin('control')
+	@:killer('M-TS-CIRCULAR-COUNTED')
 	public function testACircularReTakeIsCountedApart(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
@@ -190,7 +196,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * A lock long by a leak alone is short once the leak is set aside; one that also spans a blocking call is long by
 	 * it — what fixing the leak would and would not buy.
 	 */
-	@:pin('control') @:killer('M-TS-ASIDE-KEEPS-SEEDS')
+	@:pin('control')
+	@:killer('M-TS-ASIDE-KEEPS-SEEDS')
 	public function testAsideSetsTheLocksOwnReasonsAside(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {}'
@@ -218,7 +225,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * The cascade: `_l` is long by a crossing release, and its hold takes `_m`, long by a leak. Set aside, `_l` is still
 	 * long — by spanning the take of `_m`, which the reason names as the lock it waits for.
 	 */
-	@:pin('control') @:killer('M-TS-VIA-DROPPED')
+	@:pin('control')
+	@:killer('M-TS-VIA-DROPPED')
 	public function testAsideNamesTheLongLockAHoldWaitsFor(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _l:Mutex = new Mutex(); final _m:Mutex = new Mutex(); public function new() {}'
@@ -234,7 +242,8 @@ class ThreadSafetyLongLocksTest extends Test {
 	}
 
 	/** A lock the main thread takes and nothing makes long is listed apart, at its take; a quiet root's take is marked quiet. */
-	@:pin('control') @:killer('M-TS-MAINSHORT-LOUD-ONLY')
+	@:pin('control')
+	@:killer('M-TS-MAINSHORT-LOUD-ONLY')
 	public function testMainThreadTakesOfAShortLock(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
@@ -280,7 +289,9 @@ class ThreadSafetyLongLocksTest extends Test {
 	 * A flag whose name something else in the function declares is no fixed flag: an `if` reading the name past that
 	 * declaration reads the other binding, so the correlated take and give still read as a leak (review r4 `L2`, `L2d`).
 	 */
-	@:pin('control') @:killer('M-TS-FLAGS-SHADOW') @:killer('M-TS-FLAGS-WRITTEN')
+	@:pin('control')
+	@:killer('M-TS-FLAGS-SHADOW')
+	@:killer('M-TS-FLAGS-WRITTEN')
 	public function testAShadowedFlagIsNoFixedFlag(): Void {
 		#if (sys || nodejs)
 		for (shadow in ['var b:Bool = c();', 'final b:Bool = b && c();']) {

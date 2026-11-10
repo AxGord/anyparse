@@ -13,7 +13,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"nonThrowing":["Disk.stat"]}}}';
 
 	/** The catch behind a `nonThrowing` call never runs: the hold spans no blocking call. */
-	@:pin('control') @:killer('M-TS-DEADCATCH-OFF')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-OFF')
 	public function testACatchAroundANonThrowingCallIsNoPath(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('Disk.stat(p).mtime')));
@@ -27,7 +28,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	/** Any other call in the `try` may throw, and the catch is a path. */
-	@:pin('control') @:killer('M-TS-DEADCATCH-ANY-CALL')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-ANY-CALL')
 	public function testAnotherCallMakesTheCatchAPath(): Void {
 		#if (sys || nodejs)
 		// a path, but only an error one: info (γ1)
@@ -38,7 +40,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	/** A field read off anything but a `nonThrowing` call's value may fault on a null. */
-	@:pin('control') @:killer('M-TS-DEADCATCH-FIELD')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-FIELD')
 	public function testAFieldReadOffAValueMakesTheCatchAPath(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B S.work | S._m'], holds(run('last.mtime')));
@@ -48,7 +51,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	/** The `try` body itself still runs: a `nonThrowing` sink there blocks as ever. */
-	@:pin('control') @:killer('M-TS-DEADCATCH-BODY')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-BODY')
 	public function testTheTryBodyStillRuns(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -60,7 +64,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	/** A string interpolating a call or a field read runs it: the `catch` around it is a path (review r4 `d1`, `d2`). */
-	@:pin('control') @:killer('M-TS-DEADCATCH-INTERP')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-INTERP')
 	public function testAnInterpolatedStringRunsWhatItInterpolates(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B S.work | S._m'], holds(run("Disk.stat('${risky()}').mtime")), 'a call');
@@ -75,7 +80,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	 * A `nonThrowing` method called off a value runs what builds the value, which may throw or be null: the `catch` around
 	 * it is a path (review r4 `d3`, `d5`). Off a type's name it is not.
 	 */
-	@:pin('control') @:killer('M-TS-DEADCATCH-RECEIVER')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-RECEIVER')
 	public function testACallOffAValueMayThrow(): Void {
 		#if (sys || nodejs)
 		final config: String = CONFIG.replace('"nonThrowing":["Disk.stat"]', '"nonThrowing":["Disk.stat","Disk.istat"]');
@@ -88,7 +94,9 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	/** A bare name read as a property runs its getter, which may throw (review r4 `d4`); a parameter does not. */
-	@:pin('control') @:killer('M-TS-DEADCATCH-PROPERTY') @:killer('M-TS-DEADCATCH-BINDING')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-PROPERTY')
+	@:killer('M-TS-DEADCATCH-BINDING')
 	public function testAPropertyReadRunsItsGetter(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B S.work | S._m'], holds(run('Disk.stat(p).mtime == limit')), 'a property');
@@ -103,7 +111,8 @@ class ThreadSafetyDeadCatchTest extends Test {
 	 * it reads the property, whose getter may throw (review round 2 `dc1-prop-shadowed-elsewhere`). A local declared
 	 * before it in its block does.
 	 */
-	@:pin('control') @:killer('M-TS-DEADCATCH-BINDING-SCOPE')
+	@:pin('control')
+	@:killer('M-TS-DEADCATCH-BINDING-SCOPE')
 	public function testABindingElsewhereInTheFunctionDoesNotBindTheRead(): Void {
 		#if (sys || nodejs)
 		final read: String = 'Disk.stat(p).mtime == limit';

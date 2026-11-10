@@ -21,7 +21,9 @@ package anyparse.query.format.json;
  * failure is the right answer — a silently-null `rule` or `message` would
  * collapse unrelated findings onto one key and report a clean diff.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef LintFindingJson = {
 
 	var file: String;
@@ -30,6 +32,7 @@ typedef LintFindingJson = {
 	var message: String;
 
 	/** The finding's structured identity (`Check.FindingData`), present only on a rule that attaches one. */
-	@:optional var data: Null<LintFindingDataJson>;
+	@:optional
+	var data: Null<LintFindingDataJson>;
 
 };

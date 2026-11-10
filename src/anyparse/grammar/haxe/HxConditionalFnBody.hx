@@ -42,8 +42,16 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalFnBody = {
-	@:kw('#if') var cond: HxPpCondLit;
-	@:fmt(padTrailing, captureSourceNewlineAfter) var body: HxFnBody;
-	@:trivia @:tryparse @:fmt(padTrailing) var elseifs: Array<HxElseifFnBody>;
-	@:optional @:kw('#else') @:fmt(padTrailing, captureSourceNewlineAfter) var elseBody: Null<HxFnBody>;
+	@:kw('#if')
+	var cond: HxPpCondLit;
+	@:fmt(padTrailing, captureSourceNewlineAfter)
+	var body: HxFnBody;
+	@:trivia
+	@:tryparse
+	@:fmt(padTrailing)
+	var elseifs: Array<HxElseifFnBody>;
+	@:optional
+	@:kw('#else')
+	@:fmt(padTrailing, captureSourceNewlineAfter)
+	var elseBody: Null<HxFnBody>;
 };

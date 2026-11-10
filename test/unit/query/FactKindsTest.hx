@@ -63,7 +63,9 @@ class FactKindsTest extends Test {
 		if (macroDir != null) CliFixture.removeDir(macroDir);
 	}
 
-	@:pin('control') @:killer('M-FACTKINDS-TYPE-INTERFACE') @:killer('M-FACTKINDS-TYPE-IMPL')
+	@:pin('control')
+	@:killer('M-FACTKINDS-TYPE-INTERFACE')
+	@:killer('M-FACTKINDS-TYPE-IMPL')
 	public function testTheTypeKindsAreTheOnesTheReadersCompare(): Void {
 		// the producer's kind for each declaration form is a constant, and the readers' groups hold exactly those
 		Assert.equals(FactKinds.CLASS, kindOf('Circle'));
@@ -81,7 +83,9 @@ class FactKindsTest extends Test {
 		Assert.isFalse(FactKinds.CODE_KINDS.contains(kindOf('Shape')));
 	}
 
-	@:pin('control') @:killer('M-FACTKINDS-NODE-METHOD') @:killer('M-FACTKINDS-NODE-NESTED')
+	@:pin('control')
+	@:killer('M-FACTKINDS-NODE-METHOD')
+	@:killer('M-FACTKINDS-NODE-NESTED')
 	public function testTheNodeKindsAreTheOnesTheReadersCompare(): Void {
 		Assert.equals(FactKinds.CTOR, nodeKind('Circle.new'));
 		Assert.equals(FactKinds.METHOD, nodeKind('Circle.area'));
@@ -101,7 +105,8 @@ class FactKindsTest extends Test {
 		Assert.isFalse(FactKinds.FUNCTION_KINDS.contains(nodeKind('Circle.__init__')));
 	}
 
-	@:pin('control') @:killer('M-FACTKINDS-FIELD-DYNAMIC')
+	@:pin('control')
+	@:killer('M-FACTKINDS-FIELD-DYNAMIC')
 	public function testTheFieldKindsAreTheOnesTheReadersCompare(): Void {
 		final fields: Array<FieldDeclFact> = _facts?.type('Circle')?.fields ?? [];
 		Assert.equals(FactKinds.METHOD, fieldKind(fields, 'area'));
@@ -115,7 +120,10 @@ class FactKindsTest extends Test {
 		Assert.isFalse(FactKinds.FIXED_METHOD_KINDS.contains(fieldKind(fields, 'shrink')));
 	}
 
-	@:pin('control') @:killer('M-FACTKINDS-ID-NESTED') @:killer('M-FACTKINDS-ID-OVERLOAD') @:killer('M-FACTKINDS-ID-UNIQUE')
+	@:pin('control')
+	@:killer('M-FACTKINDS-ID-NESTED')
+	@:killer('M-FACTKINDS-ID-OVERLOAD')
+	@:killer('M-FACTKINDS-ID-UNIQUE')
 	public function testTheIdSeparatorsAreTheOnesTheReadersSplitOn(): Void {
 		final nested: Array<String> = _facts?.node('Circle.run')?.fns ?? [];
 		Assert.isTrue(nested.length > 0 && nested.foreach(id -> id.startsWith('Circle.run${FactKinds.NESTED_ID}')), 'nested: $nested');
@@ -127,7 +135,8 @@ class FactKindsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTKINDS-REFLECTION-TYPE')
+	@:pin('control')
+	@:killer('M-FACTKINDS-REFLECTION-TYPE')
 	public function testTheReflectionClassesAreTheOnesTheProbeMarks(): Void {
 		final targets: Array<String> = [for (r in _facts?.node('Main.main')?.reflection ?? []) r.target];
 		for (cls in FactKinds.REFLECTION_CLASSES)

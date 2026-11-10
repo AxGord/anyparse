@@ -19,7 +19,8 @@ class RedundantImportCheckTest extends Test {
 
 	// --- reported ---
 
-	@:pin('control') @:killer('M-MAY-DENOTE-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-MAY-DENOTE-NO-WIDENING')
 	public function testSubTypeImportBesideItsModuleImportIsRedundant(): Void {
 		final src: String = 'package app;\n\nimport pkg.deep.Mod;\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tvar s:Sub;\n\n}\n';
 		final vs: Array<Violation> = violations(src);
@@ -145,7 +146,8 @@ class RedundantImportCheckTest extends Test {
 	 * between the module import and this one, deleting `import p.M.MSub;` hands the bare `Red` to `p.Col`
 	 * — so it stays. Without the rival the same import is redundant.
 	 */
-	@:pin('control') @:killer('M-REDUNDANT-VALUES-BLIND')
+	@:pin('control')
+	@:killer('M-REDUNDANT-VALUES-BLIND')
 	public function testAThirdLineBindingOneOfItsConstructorsKeepsIt(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'p/M.hx', source: 'package p;\n\nclass M {}\n\nenum MSub {\n\tRed;\n\tPink;\n}\n' },

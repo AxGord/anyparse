@@ -127,6 +127,7 @@ typedef NativeHands = {
 	 * Whether it is handed a value that may be an object carrying the member, whose field the target code may then write by
 	 * its name (`MemberReach.externSite`); absent for none.
 	 */
-	@:optional var blind: Bool;
+	@:optional
+	var blind: Bool;
 
 }

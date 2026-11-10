@@ -110,7 +110,8 @@ class CachingGrammarPluginTest extends Test {
 	 * run memoised every text it ever parsed — every superseded version of a file and every speculative text a guard
 	 * spliced to judge one check's edits — for the rest of the run.
 	 */
-	@:pin('control') @:killer('M-RETAIN-SOURCES-KEEPS-ALL', 'M-RETAIN-SOURCES-DROPS-LIVE')
+	@:pin('control')
+	@:killer('M-RETAIN-SOURCES-KEEPS-ALL', 'M-RETAIN-SOURCES-DROPS-LIVE')
 	public function testRetainSourcesDropsOnlyTheSupersededTexts(): Void {
 		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final current: String = 'class RetainProbeA {\n\tvar x: Int;\n}';

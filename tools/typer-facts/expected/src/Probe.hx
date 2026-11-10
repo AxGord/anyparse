@@ -3,7 +3,8 @@ typedef Outer = { a: Int, inner: Inner, ?list: Array<Int> };
 typedef Alias = Outer;
 typedef WithFinal = { final a: Int; };
 
-@:structInit class SI {
+@:structInit
+class SI {
 
 	public var a: Int;
 

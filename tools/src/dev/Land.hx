@@ -625,16 +625,20 @@ typedef LandOptions = {
 	var message: Null<String>;
 
 	/** The trailers the commit carries beside `Slice` (`metricTrailers`); none when absent. */
-	@:optional var trailers: Array<String>;
+	@:optional
+	var trailers: Array<String>;
 
 	/** The places settled for the merge driver, each `<path>#<key>=<choice>` (`Land.choiceLine`); none when absent. */
-	@:optional var resolve: Array<String>;
+	@:optional
+	var resolve: Array<String>;
 
 	/** The queue file a merge brief quotes; the repository's `.claude/batch/wave-D.md` when absent. */
-	@:optional var queue: String;
+	@:optional
+	var queue: String;
 
 	/** The directory of skill documents the `prose-refs` row also reads; none when absent. */
-	@:optional var skills: Null<String>;
+	@:optional
+	var skills: Null<String>;
 
 	/** The battery to run; null runs none. */
 	var battery: Null<BatteryRequest>;
@@ -644,13 +648,16 @@ typedef LandOptions = {
 	var format: FormatTools;
 
 	/** Which test classes the merge needs against the commit before it (`SuiteImpact.ofTree`); absent runs the whole suite. */
-	@:optional var impact: Null<ImpactScope>;
+	@:optional
+	var impact: Null<ImpactScope>;
 
 	/** Starts the whole suite of the landed commit beside the next land (`PostLand.start`); absent starts none. */
-	@:optional var postLand: Null<PostLandStart>;
+	@:optional
+	var postLand: Null<PostLandStart>;
 
 	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
-	@:optional var warm: Null<WarmStart>;
+	@:optional
+	var warm: Null<WarmStart>;
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;

@@ -61,7 +61,8 @@ class RedundantNullCoalescingCheckTest extends Test {
 	}
 
 	/** `x ?? null` is `x` whatever `x` is: the result takes the left operand's type, and a null left yields the same null. */
-	@:pin('control') @:killer('M-REDUNDANT-COAL-NULL-RIGHT')
+	@:pin('control')
+	@:killer('M-REDUNDANT-COAL-NULL-RIGHT')
 	public function testNullRightOperandUnwraps(): Void {
 		final src: String = '@:nullSafety class C { function f(?x:Foo) { var a = x ?? null; } }';
 		final vs: Array<Violation> = violations(src);

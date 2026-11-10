@@ -29,7 +29,8 @@ class CallGraphTest extends Test {
 	 * A lambda's first parameter starts where the lambda does: a read of it passed on (`x -> f(x)`) is a value, never a
 	 * reference to the lambda — the binder must NAME a local function to be one.
 	 */
-	@:pin('control') @:killer('M-GRAPH-LAMBDA-PARAM-SELF')
+	@:pin('control')
+	@:killer('M-GRAPH-LAMBDA-PARAM-SELF')
 	public function testALambdaParameterIsNoReferenceToItsLambda(): Void {
 		final g: CallGraph = graphOf([
 			'class A { static function take(f:String->Void):Void {} static function f(s:String):Void {}'
@@ -43,7 +44,8 @@ class CallGraphTest extends Test {
 	 * A call's receiver names the lock OBJECT only when it is a member read directly — a bare field, `this.f`, a static
 	 * `T.f`; a parameter of the same name is a value some other binding may alias, and names none.
 	 */
-	@:pin('control') @:killer('M-GRAPH-RECEIVER-LOCAL-FIELD')
+	@:pin('control')
+	@:killer('M-GRAPH-RECEIVER-LOCAL-FIELD')
 	public function testReceiverFieldNamesOnlyAMemberReadDirectly(): Void {
 		final g: CallGraph = graphOf([
 			'class A { var m:M; static var s:M; function f(m:M):Void { m.go(); this.m.go(); A.s.go(); s.go(); } }',
@@ -53,7 +55,8 @@ class CallGraphTest extends Test {
 	}
 
 	/** A member read off ANOTHER value of a type the graph recovers names that member too: `o.m` is `A.m`. */
-	@:pin('control') @:killer('M-GRAPH-RECEIVER-TYPED-BASE')
+	@:pin('control')
+	@:killer('M-GRAPH-RECEIVER-TYPED-BASE')
 	public function testReceiverFieldNamesAMemberReadOffATypedValue(): Void {
 		final g: CallGraph = graphOf([
 			'class A { public var m:M; static function f(o:A):Void o.m.go(); }',
@@ -63,7 +66,8 @@ class CallGraphTest extends Test {
 	}
 
 	/** A property with a getter hands back whatever the getter returns, so it names no one stored object. */
-	@:pin('control') @:killer('M-GRAPH-RECEIVER-PROPERTY')
+	@:pin('control')
+	@:killer('M-GRAPH-RECEIVER-PROPERTY')
 	public function testReceiverFieldSkipsAPropertyWithAGetter(): Void {
 		final g: CallGraph = graphOf([
 			'class A { var p(get, never):M; var q:M; function get_p():M return q; function f():Void p.go(); }',
@@ -193,7 +197,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'Base.drive', 'Sub.hook', Virtual).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-STATIC-NO-VIRTUAL')
+	@:pin('control')
+	@:killer('M-GRAPH-STATIC-NO-VIRTUAL')
 	public function testBareStaticCallGetsNoVirtualEdge(): Void {
 		// Haxe does not inherit or override statics, so a same-named static on a subtype is a
 		// DIFFERENT function - a virtual edge there would be fabricated.
@@ -258,7 +263,8 @@ class CallGraphTest extends Test {
 		Assert.equals(0, g.outEdges('A.a').length);
 	}
 
-	@:pin('control') @:killer('M-TS-DOTTED-TARGET')
+	@:pin('control')
+	@:killer('M-TS-DOTTED-TARGET')
 	public function testResolveTargetBareAndQualified(): Void {
 		final g: CallGraph = graphOf([
 			'package pkg.sub; class A { function run():Void {} }',
@@ -276,8 +282,14 @@ class CallGraphTest extends Test {
 	 * searched last import first and after the file's own explicit imports; a package neither holds, or a guarded import or
 	 * wildcard, may supply it, so a call or a `new` on it dispatches to every candidate.
 	 */
-	@:pin('control') @:killer('M-TS-WILD-EXPLICIT-NO-MAYBE') @:killer('M-TS-WILD-MAYBE') @:killer('M-TS-WILD-GUARDED')
-	@:killer('M-TS-WILD-PROJECT') @:killer('M-TS-WILD-ORDER') @:killer('M-TS-STD-PACKAGES') @:killer('M-TS-ALTERNATE-SAME')
+	@:pin('control')
+	@:killer('M-TS-WILD-EXPLICIT-NO-MAYBE')
+	@:killer('M-TS-WILD-MAYBE')
+	@:killer('M-TS-WILD-GUARDED')
+	@:killer('M-TS-WILD-PROJECT')
+	@:killer('M-TS-WILD-ORDER')
+	@:killer('M-TS-STD-PACKAGES')
+	@:killer('M-TS-ALTERNATE-SAME')
 	@:killer('M-TS-ALTERNATE-NEW')
 	public function testAWildcardOrGuardedNameDispatchesToEveryTypeItMayBe(): Void {
 		#if (sys || nodejs)
@@ -364,7 +376,9 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'A.m', 'A.work', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-DYNAMIC-RECEIVER') @:killer('M-GRAPH-FIELD-FUNCTION-VALUE')
+	@:pin('control')
+	@:killer('M-GRAPH-DYNAMIC-RECEIVER')
+	@:killer('M-GRAPH-FIELD-FUNCTION-VALUE')
 	public function testUnresolvedCallsCarryTheirReasonAndCaller(): Void {
 		// A reachability walk admits different functions per reason, so the reasons must stay apart.
 		final g: CallGraph = graphOf([
@@ -377,8 +391,12 @@ class CallGraphTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SETTER-EDGE') @:killer('M-GRAPH-GETTER-EDGE') @:killer('M-GRAPH-ELEMENT-RECEIVER')
-	@:killer('M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER') @:killer('M-GRAPH-SETTER-READ-DIRECT')
+	@:pin('control')
+	@:killer('M-GRAPH-SETTER-EDGE')
+	@:killer('M-GRAPH-GETTER-EDGE')
+	@:killer('M-GRAPH-ELEMENT-RECEIVER')
+	@:killer('M-GRAPH-OWN-ACCESSOR-ANY-RECEIVER')
+	@:killer('M-GRAPH-SETTER-READ-DIRECT')
 	public function testPropertyAccessRunsItsAccessor(): Void {
 		// A compound write reads AND writes.
 		final g: CallGraph = graphOf([
@@ -395,7 +413,10 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'P.set_x', 'P.set_x', Accessor).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-INIT-WIRING') @:killer('M-GRAPH-CTOR-OWN-INIT') @:killer('M-GRAPH-STATIC-INIT')
+	@:pin('control')
+	@:killer('M-GRAPH-INIT-WIRING')
+	@:killer('M-GRAPH-CTOR-OWN-INIT')
+	@:killer('M-GRAPH-STATIC-INIT')
 	public function testConstructionRunsTheInstanceInitializersOnly(): Void {
 		// `Sub` declares no constructor, so `new Sub()` runs its initializers and then `Base.new`, which runs
 		// `Base`'s; a STATIC initializer belongs to no constructor.
@@ -412,7 +433,9 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'Base.<init>', 'Base.st', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-VALUE-USE') @:killer('M-GRAPH-VALUE-USE-LAMBDA')
+	@:pin('control')
+	@:killer('M-GRAPH-VALUE-USE')
+	@:killer('M-GRAPH-VALUE-USE-LAMBDA')
 	public function testEveryValueUseOfAFunctionIsARef(): Void {
 		final g: CallGraph = graphOf([
 			'class A { var f:() -> Void; function a():Void f = h; function b():() -> Void return h; '
@@ -422,7 +445,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, [for (e in g.outEdges('A.c')) if (e.kind == Ref && e.to.indexOf('#') >= 0) e].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FIELD-PATH-RECEIVER')
+	@:pin('control')
+	@:killer('M-GRAPH-FIELD-PATH-RECEIVER')
 	public function testReceiverTypedThroughDeclaredMemberTypes(): Void {
 		final g: CallGraph = graphOf([
 			'class A extends Base { var w:Holder; function a():Void { w.worker.run(); inherited.run(); } }',
@@ -433,7 +457,8 @@ class CallGraphTest extends Test {
 		Assert.equals(2, edges(g, 'A.a', 'Worker.run', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-UPGRADE-EXTERNAL')
+	@:pin('control')
+	@:killer('M-GRAPH-UPGRADE-EXTERNAL')
 	public function testAddFilesUpgradesTheExternalPlaceholder(): Void {
 		final a: { file: String, source: String } = { file: 'A.hx', source: 'class A { var w:Worker; function a():Void w.run(); }' };
 		final w: { file: String, source: String } = {
@@ -449,7 +474,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'A.a', 'Worker.run', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-DYNAMIC-METHOD')
+	@:pin('control')
+	@:killer('M-GRAPH-DYNAMIC-METHOD')
 	public function testDynamicMethodCallIsAlsoAFunctionValueCall(): Void {
 		// The body is the default; a reassignment runs another function, so both are recorded.
 		final g: CallGraph = graphOf(['class A { dynamic function d():Void {} function a():Void d(); }']);
@@ -459,7 +485,8 @@ class CallGraphTest extends Test {
 		].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-ABSTRACT-THIS')
+	@:pin('control')
+	@:killer('M-GRAPH-ABSTRACT-THIS')
 	public function testThisInsideAnAbstractIsTheUnderlyingValue(): Void {
 		// `this.foo()` in `abstract Wrap(Under)` calls `Under.foo`; a bare `foo()` there is the abstract's own.
 		final g: CallGraph = graphOf([
@@ -472,7 +499,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'Wrap.bare', 'Wrap.foo', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-ABSTRACT-THIS-ALIAS')
+	@:pin('control')
+	@:killer('M-GRAPH-ABSTRACT-THIS-ALIAS')
 	public function testThisInsideAnAbstractOverAnAliasIsTheAliasedType(): Void {
 		// `abstract Rest<T>(NativeRest<T>)` over `typedef NativeRest<T> = Array<T>`: `this.copy()` calls the aliased type's
 		// member — the std shape whose unresolved `this` calls made every conversion of it look like it could run anything.
@@ -484,7 +512,8 @@ class CallGraphTest extends Test {
 		Assert.equals(0, [for (u in g.unresolved) if (u.from == 'Wrap.callsUnder') u].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SUPERCLASS')
+	@:pin('control')
+	@:killer('M-GRAPH-SUPERCLASS')
 	public function testSuperIsTheSuperclassWhateverTheHeaderOrder(): Void {
 		// `implements I extends A`: `super()` runs `A.new`, never the interface.
 		final g: CallGraph = graphOf([
@@ -496,7 +525,8 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('I.new'));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SUPER-CTOR-RUN')
+	@:pin('control')
+	@:killer('M-GRAPH-SUPER-CTOR-RUN')
 	public function testSuperCallRunsTheGeneratedConstructorsInitializers(): Void {
 		// `B` declares no constructor, so `super()` in `C` runs `B`'s initializers and then `A.new`.
 		final g: CallGraph = graphOf([
@@ -507,7 +537,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'C.new', 'B.<init>', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-WIRED-ONCE')
+	@:pin('control')
+	@:killer('M-GRAPH-WIRED-ONCE')
 	public function testGrowingTheGraphAddsNoConstructorEdgeTwice(): Void {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final a: { file: String, source: String } = {
@@ -520,7 +551,8 @@ class CallGraphTest extends Test {
 		Assert.equals(before, g.edges.length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SAFE-METHOD-VALUE')
+	@:pin('control')
+	@:killer('M-GRAPH-SAFE-METHOD-VALUE')
 	public function testMethodValueThroughNullSafeAccessIsARef(): Void {
 		final g: CallGraph = graphOf([
 			'class Base { public function run():Void {} }',
@@ -529,7 +561,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'Holder.safeArg', 'Base.run', Ref).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-NEW-ARGS')
+	@:pin('control')
+	@:killer('M-GRAPH-NEW-ARGS')
 	public function testConstructorArgumentsHandOnEveryFunctionValue(): Void {
 		// A ternary hands BOTH arms, and a `.bind` hands the bound method, to the constructor.
 		final g: CallGraph = graphOf([
@@ -543,7 +576,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'Holder.bound', 'Base.run', Ref).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-REF-OVERRIDES')
+	@:pin('control')
+	@:killer('M-GRAPH-REF-OVERRIDES')
 	public function testMethodValueReachesTheOverrides(): Void {
 		// `reg(b.run)` hands over whatever `run` the value's run-time class has.
 		final g: CallGraph = graphOf([
@@ -555,7 +589,8 @@ class CallGraphTest extends Test {
 		Assert.equals('Base', edges(g, 'Holder.plain', 'Base.run', Ref)[0]?.dispatchType);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-UNLOADED-METHOD-VALUE')
+	@:pin('control')
+	@:killer('M-GRAPH-UNLOADED-METHOD-VALUE')
 	public function testMethodValueOfATypeNotLoadedYetIsKept(): Void {
 		// `f = L.handler` before `L`'s file arrives: a Ref to its placeholder, upgraded when it does.
 		final a: { file: String, source: String } = {
@@ -570,9 +605,16 @@ class CallGraphTest extends Test {
 		Assert.isTrue(g.node('L.handler')?.isExternal == false);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-CONSTRUCTION-LITERAL') @:killer('M-GRAPH-LITERAL-ARGUMENT') @:killer('M-GRAPH-LITERAL-ELEMENT')
-	@:killer('M-GRAPH-LITERAL-RETURN') @:killer('M-GRAPH-LITERAL-ARMS') @:killer('M-GRAPH-LITERAL-REST') @:killer('M-GRAPH-LITERAL-LAMBDA')
-	@:killer('M-GRAPH-LITERAL-MAP') @:killer('M-GRAPH-LITERAL-FIELD')
+	@:pin('control')
+	@:killer('M-GRAPH-CONSTRUCTION-LITERAL')
+	@:killer('M-GRAPH-LITERAL-ARGUMENT')
+	@:killer('M-GRAPH-LITERAL-ELEMENT')
+	@:killer('M-GRAPH-LITERAL-RETURN')
+	@:killer('M-GRAPH-LITERAL-ARMS')
+	@:killer('M-GRAPH-LITERAL-REST')
+	@:killer('M-GRAPH-LITERAL-LAMBDA')
+	@:killer('M-GRAPH-LITERAL-MAP')
+	@:killer('M-GRAPH-LITERAL-FIELD')
 	public function testLiteralTypedAsAConstructedClassIsANew(): Void {
 		// Wherever the written type says the literal is an `S` — a declaration, an argument, a return, an assignment,
 		// an array element, a nullable, a field initializer — it runs `S`'s constructor.
@@ -600,7 +642,8 @@ class CallGraphTest extends Test {
 		for (fn in ['M.sw', 'M.ifE', 'M.restF']) Assert.equals(2, edges(g, fn, 'S.new', New).length, fn);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-CTOR-PLACEHOLDER')
+	@:pin('control')
+	@:killer('M-GRAPH-CTOR-PLACEHOLDER')
 	public function testConstructorNotLoadedYetIsTheOneTheChainDeclares(): Void {
 		// `K` and `M` declare no constructor, `L` does: before any of them is loaded `new K()` already names `L.new`,
 		// never a `K.new` nothing declares — and growing the graph in any order ends where building it at once does.
@@ -631,7 +674,8 @@ class CallGraphTest extends Test {
 		Assert.equals(built.join(','), grown.join(','));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SUPER-AMBIGUOUS')
+	@:pin('control')
+	@:killer('M-GRAPH-SUPER-AMBIGUOUS')
 	public function testSuperOfAnAmbiguousNameIsUnresolved(): Void {
 		// Two types named `P`: which constructor `super()` runs is not provable by simple name.
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
@@ -645,8 +689,13 @@ class CallGraphTest extends Test {
 		Assert.equals(1, [for (u in g.unresolved) if (u.from == 'C.new') u].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TYPE-ARGUMENT') @:killer('M-GRAPH-UNSUBSTITUTED-PARAM') @:killer('M-GRAPH-RETURN-PARAM')
-	@:killer('M-GRAPH-FN-RETURN-PARAM') @:killer('M-GRAPH-INHERITED-ARGS') @:killer('M-GRAPH-CALL-ELEMENT')
+	@:pin('control')
+	@:killer('M-GRAPH-TYPE-ARGUMENT')
+	@:killer('M-GRAPH-UNSUBSTITUTED-PARAM')
+	@:killer('M-GRAPH-RETURN-PARAM')
+	@:killer('M-GRAPH-FN-RETURN-PARAM')
+	@:killer('M-GRAPH-INHERITED-ARGS')
+	@:killer('M-GRAPH-CALL-ELEMENT')
 	public function testTypeParametersInsideWrittenTypesAreSubstituted(): Void {
 		// A class that happens to be named `T` is never what a member written with the parameter `T` holds: `Array<T>`,
 		// `Null<T>` and a return `T` take the receiver's argument or the one `extends Box<W>` passes, and where there
@@ -666,7 +715,9 @@ class CallGraphTest extends Test {
 			Assert.equals(0, edges(g, fn, 'T.w', Call).length, fn);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TYPE-ARGUMENT') @:killer('M-GRAPH-TYPE-PARAM')
+	@:pin('control')
+	@:killer('M-GRAPH-TYPE-ARGUMENT')
+	@:killer('M-GRAPH-TYPE-PARAM')
 	public function testTypeParametersResolveThroughTheirArguments(): Void {
 		// `box.item` is declared `T` on `Box<T>`: through `Box<W>` it is a `W`; a bare `x:T` names no type at all.
 		final g: CallGraph = graphOf([
@@ -681,7 +732,8 @@ class CallGraphTest extends Test {
 		].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FN-TYPE-PARAM')
+	@:pin('control')
+	@:killer('M-GRAPH-FN-TYPE-PARAM')
 	public function testFunctionTypeParameterNamesNoType(): Void {
 		final g: CallGraph = graphOf([
 			'class W { public function w():Void {} }',
@@ -696,7 +748,10 @@ class CallGraphTest extends Test {
 	 * through a field or a parameter, a `final class`'s, a function's own; of several bounds, the one declaring the member.
 	 * An unbounded parameter and an anonymous-structure bound still name no type.
 	 */
-	@:pin('control') @:killer('M-GRAPH-CLASS-BOUND') @:killer('M-GRAPH-FINAL-CLASS-BOUND') @:killer('M-GRAPH-FN-BOUND')
+	@:pin('control')
+	@:killer('M-GRAPH-CLASS-BOUND')
+	@:killer('M-GRAPH-FINAL-CLASS-BOUND')
+	@:killer('M-GRAPH-FN-BOUND')
 	@:killer('M-GRAPH-BOUND-DECLARING')
 	public function testTypeParameterReceiverResolvesThroughItsBound(): Void {
 		final g: CallGraph = graphOf([
@@ -723,7 +778,9 @@ class CallGraphTest extends Test {
 	 * parameter declared `T` hold the CLASS `T` even inside a method or a local function declaring a `T` of its own,
 	 * while that function's own parameter holds its own `T`.
 	 */
-	@:pin('control') @:killer('M-GRAPH-BOUND-DECL-SCOPE') @:killer('M-GRAPH-BOUND-LOCAL-SCOPE')
+	@:pin('control')
+	@:killer('M-GRAPH-BOUND-DECL-SCOPE')
+	@:killer('M-GRAPH-BOUND-LOCAL-SCOPE')
 	public function testTypeParameterIsLookedUpWhereTheReceiverTypeWasWritten(): Void {
 		final g: CallGraph = graphOf([
 			'class A { public function m():Void {} }',
@@ -745,7 +802,9 @@ class CallGraphTest extends Test {
 	 * `this` inside an abstract is its UNDERLYING value, read from the declaration's type slot — never a bound its type
 	 * parameters project among the children; an abstract over one of its own parameters is a value of that bound.
 	 */
-	@:pin('control') @:killer('M-GRAPH-ABSTRACT-UNDER-SLOT') @:killer('M-GRAPH-ABSTRACT-PARAM-BOUND')
+	@:pin('control')
+	@:killer('M-GRAPH-ABSTRACT-UNDER-SLOT')
+	@:killer('M-GRAPH-ABSTRACT-PARAM-BOUND')
 	public function testThisInsideAnAbstractIsItsUnderlyingNotAParameterBound(): Void {
 		final g: CallGraph = graphOf([
 			'class Foo { public function m():Void {} }',
@@ -762,7 +821,8 @@ class CallGraphTest extends Test {
 	}
 
 	/** Two types sharing a simple name keep their own bounds: `p1.Gen<T:A>` is not read with `p2.Gen<T:B>`'s. */
-	@:pin('control') @:killer('M-GRAPH-BOUNDS-BY-FILE')
+	@:pin('control')
+	@:killer('M-GRAPH-BOUNDS-BY-FILE')
 	public function testTypeParameterBoundsOfSameNamedTypesStayApart(): Void {
 		final g: CallGraph = CallGraph.build([
 			{ file: 'A.hx', source: 'class A { public function m():Void {} }' },
@@ -776,7 +836,8 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'Gen.h', 'A.m', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TYPEDEF-ALIAS')
+	@:pin('control')
+	@:killer('M-GRAPH-TYPEDEF-ALIAS')
 	public function testTypedefAliasIsSeenThrough(): Void {
 		final g: CallGraph = graphOf([
 			'class Under { public function foo():Void {} }',
@@ -786,7 +847,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'G.f', 'Under.foo', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-USING-ALL')
+	@:pin('control')
+	@:killer('M-GRAPH-USING-ALL')
 	public function testEveryUsingThatDeclaresTheExtensionIsATarget(): Void {
 		// Which `ext` runs depends on the `using` order — the LAST one wins — so both are targets.
 		final g: CallGraph = graphOf([
@@ -799,7 +861,9 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'G.f', 'ExtB.ext', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-IMPORT-UNLISTED') @:killer('M-GRAPH-UNLISTED-WILDCARD')
+	@:pin('control')
+	@:killer('M-GRAPH-IMPORT-UNLISTED')
+	@:killer('M-GRAPH-UNLISTED-WILDCARD')
 	public function testBareCallSomethingElseMaySupplyIsNeverAConstructor(): Void {
 		// An enum constructor `Load` / `grow` exists, but an explicit static import binds `Load` to a type the index does
 		// not hold, and a wildcard import of a type under a build macro may bring `grow` in.
@@ -818,7 +882,9 @@ class CallGraphTest extends Test {
 		Assert.equals('UnboundName(grow)', [for (u in built.unresolved) if (u.from == 'B.b') Std.string(u.reason)].join(','));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-PLACEHOLDER-DISPATCH') @:killer('M-GRAPH-PLACEHOLDER-DECLARING')
+	@:pin('control')
+	@:killer('M-GRAPH-PLACEHOLDER-DISPATCH')
+	@:killer('M-GRAPH-PLACEHOLDER-DECLARING')
 	public function testCallToAMemberOfAnUnloadedSupertypeKeepsItsDispatch(): Void {
 		// Before `Y` loads, `y()` / `this.y()` name `Y.y` — the declaring type's node its file upgrades — and dispatch on `X`,
 		// so the override `Sub` declares is reached once it loads.
@@ -832,13 +898,15 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('X.y'));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SELF-ALIAS-COUNT')
+	@:pin('control')
+	@:killer('M-GRAPH-SELF-ALIAS-COUNT')
 	public function testTypedefReExportIsNotASecondDeclaration(): Void {
 		final g: CallGraph = graphOf(['package p; interface IMap { function get():Int; }', 'typedef IMap = p.IMap;']);
 		Assert.equals(1, g.types.declarationCount('IMap'));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-STATIC-FIELD-TYPE')
+	@:pin('control')
+	@:killer('M-GRAPH-STATIC-FIELD-TYPE')
 	public function testStaticFieldReadOffItsTypeIsTyped(): Void {
 		final g: CallGraph = graphOf([
 			'class W { public function w():Void {} }',
@@ -848,7 +916,9 @@ class CallGraphTest extends Test {
 		Assert.equals(1, edges(g, 'G.f', 'W.w', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FORWARD') @:killer('M-GRAPH-FORWARD-ONLY')
+	@:pin('control')
+	@:killer('M-GRAPH-FORWARD')
+	@:killer('M-GRAPH-FORWARD-ONLY')
 	public function testForwardAbstractRoutesToTheUnderlying(): Void {
 		final g: CallGraph = graphOf([
 			'class Under { public function foo():Void {} public function bar():Void {} }',
@@ -862,7 +932,9 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'G.sel', 'Under.foo', Call).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-PATH-SPELLING') @:killer('M-GRAPH-INHERITED-PLACEHOLDER')
+	@:pin('control')
+	@:killer('M-GRAPH-PATH-SPELLING')
+	@:killer('M-GRAPH-INHERITED-PLACEHOLDER')
 	public function testOneFileUnderTwoSpellingsIsOneFile(): Void {
 		// `./src/Y.hx` is `src/Y.hx`; and a bare call to a method a supertype not loaded yet declares names its placeholder.
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
@@ -879,7 +951,8 @@ class CallGraphTest extends Test {
 		Assert.isTrue(g.node('Y.y')?.isExternal == false);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-USING-EXTENSION')
+	@:pin('control')
+	@:killer('M-GRAPH-USING-EXTENSION')
 	public function testStaticExtensionResolvesThroughTheUsing(): Void {
 		final g: CallGraph = graphOf([
 			'class Under { public function foo():Void {} }',
@@ -890,7 +963,8 @@ class CallGraphTest extends Test {
 		Assert.isNull(g.node('Under.ext'));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SUPERS-UNION')
+	@:pin('control')
+	@:killer('M-GRAPH-SUPERS-UNION')
 	public function testSupertypesOfASharedNameAreUnioned(): Void {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = [
@@ -902,7 +976,9 @@ class CallGraphTest extends Test {
 		Assert.equals(2, types.declarationCount('X'));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-INTERFACE-PROPERTY') @:killer('M-GRAPH-BODYLESS-FLAG')
+	@:pin('control')
+	@:killer('M-GRAPH-INTERFACE-PROPERTY')
+	@:killer('M-GRAPH-BODYLESS-FLAG')
 	public function testInterfacePropertyRunsOnlyItsImplementations(): Void {
 		// The interface declares no accessor body: the edge names a body-less declaration that dispatch goes through,
 		// kept even while no implementation is loaded.
@@ -923,7 +999,9 @@ class CallGraphTest extends Test {
 		Assert.equals('IP', edges(alone, 'U.f', 'IP.get_ip', Accessor)[0]?.dispatchType);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-ACCESS-RECORDED') @:killer('M-GRAPH-ACCESS-COUNTED')
+	@:pin('control')
+	@:killer('M-GRAPH-ACCESS-RECORDED')
+	@:killer('M-GRAPH-ACCESS-COUNTED')
 	public function testUntypedPropertyAccessIsRecordedAgainstItsAccessor(): Void {
 		// `p.x` on an unannotated `p` may run `get_x`; a `callers` of `get_x` must count it as a blind site.
 		final g: CallGraph = graphOf([
@@ -935,7 +1013,8 @@ class CallGraphTest extends Test {
 		if (getter != null) Assert.equals(1, g.unresolvedAccessesRunning([getter]).length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-DISPATCH-TYPE')
+	@:pin('control')
+	@:killer('M-GRAPH-DISPATCH-TYPE')
 	public function testInstanceCallRecordsTheTypeItDispatchesOn(): Void {
 		final g: CallGraph = graphOf([
 			'class Base { public function run():Void {} }',
@@ -944,7 +1023,8 @@ class CallGraphTest extends Test {
 		Assert.equals('Base', edges(g, 'H.f', 'Base.run', Call)[0]?.dispatchType);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-UNBOUND-CAPITAL')
+	@:pin('control')
+	@:killer('M-GRAPH-UNBOUND-CAPITAL')
 	public function testUnboundCapitalizedCallIsUnresolvedUnlessAnEnumConstructor(): Void {
 		// `Imported()` may be a static function brought in by an import the graph does not follow; `Some(1)` builds a value
 		// — the language finds the constructor by the expected type, imported or not.
@@ -956,7 +1036,8 @@ class CallGraphTest extends Test {
 		Assert.equals('UnboundName(Imported)', names.join(','));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-ENUM-VS-STATIC')
+	@:pin('control')
+	@:killer('M-GRAPH-ENUM-VS-STATIC')
 	public function testEnumConstructorSharingAStaticFunctionNameIsUnresolved(): Void {
 		final g: CallGraph = graphOf([
 			'enum E { Load; } class A { function a():Void Load(); }',
@@ -965,7 +1046,8 @@ class CallGraphTest extends Test {
 		Assert.equals(1, [for (u in g.unresolved) if (u.from == 'A.a') u].length);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-IMPORTED-STATIC')
+	@:pin('control')
+	@:killer('M-GRAPH-IMPORTED-STATIC')
 	public function testImportedStaticIsResolved(): Void {
 		// `import u.Util.Load;`, `import u.Util.*;` and an alias bring statics in by simple name.
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
@@ -992,7 +1074,10 @@ class CallGraphTest extends Test {
 	 * namesake. A guarded or maybe-wildcard name of the declaring file dispatches to every type it may be there.
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-MEMBER-FILE') @:killer('M-TS-DECL-RETURN-FILE') @:killer('M-TS-DECL-READ-FROM') @:killer('M-TS-DECL-BOUND')
+	@:killer('M-TS-DECL-MEMBER-FILE')
+	@:killer('M-TS-DECL-RETURN-FILE')
+	@:killer('M-TS-DECL-READ-FROM')
+	@:killer('M-TS-DECL-BOUND')
 	@:killer('M-TS-PATH-NULLABLE-KEYED')
 	public function testADeclaredTypeIsReadInTheFileThatWroteIt(): Void {
 		#if (sys || nodejs)
@@ -1046,7 +1131,10 @@ class CallGraphTest extends Test {
 	 * the project `Mutex` — through a field or a return type, and a parameter of the type's own method is
 	 * no import either (review R4 F5).
 	 */
-	@:pin('control') @:killer('M-TS-KEY-TYPE-PARAM') @:killer('M-TS-KEY-MEMBER-PARAMS') @:killer('M-TS-KEY-SCOPE-PARAMS')
+	@:pin('control')
+	@:killer('M-TS-KEY-TYPE-PARAM')
+	@:killer('M-TS-KEY-MEMBER-PARAMS')
+	@:killer('M-TS-KEY-SCOPE-PARAMS')
 	@:killer('M-TS-KEY-RETURN-PARAMS')
 	public function testATypeParameterIsNeverKeyedThroughAnImport(): Void {
 		#if (sys || nodejs)
@@ -1119,7 +1207,9 @@ class CallGraphTest extends Test {
 	 * passed anywhere, and a field typed `T` on a subclass that passes the std `Lock` to `T`, or an abstract over it, waits.
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-SUPER-ARGS') @:killer('M-TS-DECL-PARAM-FILE') @:killer('M-TS-DECL-UNDERLYING')
+	@:killer('M-TS-DECL-SUPER-ARGS')
+	@:killer('M-TS-DECL-PARAM-FILE')
+	@:killer('M-TS-DECL-UNDERLYING')
 	public function testATypeAnAliasASupertypeOrAnAbstractWritesIsReadWhereItIsWritten(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1150,7 +1240,9 @@ class CallGraphTest extends Test {
 	 * needs ONE type (`keyedInFiles`) still has none.
 	 */
 	@:pin('control')
-	@:killer('M-TS-KEY-APART') @:killer('M-TS-KEY-APART-FIRST') @:killer('M-TS-DECL-FILES-AGREE')
+	@:killer('M-TS-KEY-APART')
+	@:killer('M-TS-KEY-APART-FIRST')
+	@:killer('M-TS-DECL-FILES-AGREE')
 	public function testTwoDeclarationsKeyingAMemberApartDispatchOnBoth(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1195,8 +1287,13 @@ class CallGraphTest extends Test {
 	 * parameter lists do; one declaration of several offering them is enough. A library function the graph holds no file
 	 * for, marked so in the index, types no parameter either.
 	 */
-	@:pin('control') @:killer('M-TS-OVERLOAD-RETURN') @:killer('M-TS-OVERLOAD-RETURN-EACH') @:killer('M-TS-OVERLOAD-PARAMS') @:killer('M-TS-OVERLOAD-AGREE')
-	@:killer('M-TS-OVERLOAD-EXTERNAL') @:killer('M-TS-OVERLOAD-OWN-PARAMS')
+	@:pin('control')
+	@:killer('M-TS-OVERLOAD-RETURN')
+	@:killer('M-TS-OVERLOAD-RETURN-EACH')
+	@:killer('M-TS-OVERLOAD-PARAMS')
+	@:killer('M-TS-OVERLOAD-AGREE')
+	@:killer('M-TS-OVERLOAD-EXTERNAL')
+	@:killer('M-TS-OVERLOAD-OWN-PARAMS')
 	public function testAFunctionOfferingOtherSignaturesIsTypedWhereTheyAgree(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1265,8 +1362,13 @@ class CallGraphTest extends Test {
 	 * `Unknown identifier`), so a bare name there is the static an import brings in — read or called; the type's own static
 	 * still comes first.
 	 */
-	@:pin('control') @:killer('M-TS-SUPER-STATIC-IMPORT') @:killer('M-TS-SUPER-STATIC-READ') @:killer('M-TS-SUPER-STATIC-CALL')
-	@:killer('M-TS-SUPER-STATIC-HIDDEN') @:killer('M-TS-SUPER-STATIC-MODULE') @:killer('M-TS-SUPER-STATIC-MODULE-IMPORT')
+	@:pin('control')
+	@:killer('M-TS-SUPER-STATIC-IMPORT')
+	@:killer('M-TS-SUPER-STATIC-READ')
+	@:killer('M-TS-SUPER-STATIC-CALL')
+	@:killer('M-TS-SUPER-STATIC-HIDDEN')
+	@:killer('M-TS-SUPER-STATIC-MODULE')
+	@:killer('M-TS-SUPER-STATIC-MODULE-IMPORT')
 	public function testASupertypeStaticIsNotInScopeBare(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1333,7 +1435,9 @@ class CallGraphTest extends Test {
 	 * Review R5 F4 (`h/stat-modvar(-rev)`): a field the reading file's own module declares at module level — plain, `final`,
 	 * inside a conditional region — is what a bare name means there, before any static an import brings in under it.
 	 */
-	@:pin('control') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	@:pin('control')
+	@:killer('M-TS-MODULE-NAME-NESTED')
+	@:killer('M-TS-MODULE-NAME-ALIAS')
 	public function testAModuleLevelFieldComesBeforeAnImportedStatic(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1367,9 +1471,15 @@ class CallGraphTest extends Test {
 	 * the value of another branch, or the imported static — and a call on it dispatches on every type it may be.
 	 */
 	@:pin('control')
-	@:killer('M-GRAPH-MODULE-VALUE-TYPED') @:killer('M-GRAPH-MODULE-VALUE-MEMBER-FIRST') @:killer('M-GRAPH-MODULE-RECEIVERS')
-	@:killer('M-GRAPH-MODULE-RECEIVERS-IMPORTS') @:killer('M-GRAPH-MODULE-RECEIVERS-MEMBER') @:killer('M-GRAPH-MODULE-RECEIVERS-UNTYPED')
-	@:killer('M-GRAPH-IMPORTED-POSITION') @:killer('M-TS-MODULE-NAME') @:killer('M-GRAPH-MODULE-CALL-UNSEEN')
+	@:killer('M-GRAPH-MODULE-VALUE-TYPED')
+	@:killer('M-GRAPH-MODULE-VALUE-MEMBER-FIRST')
+	@:killer('M-GRAPH-MODULE-RECEIVERS')
+	@:killer('M-GRAPH-MODULE-RECEIVERS-IMPORTS')
+	@:killer('M-GRAPH-MODULE-RECEIVERS-MEMBER')
+	@:killer('M-GRAPH-MODULE-RECEIVERS-UNTYPED')
+	@:killer('M-GRAPH-IMPORTED-POSITION')
+	@:killer('M-TS-MODULE-NAME')
+	@:killer('M-GRAPH-MODULE-CALL-UNSEEN')
 	public function testAModuleLevelValueUnderIfBindsInTheBuildsThatCompileIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1430,8 +1540,11 @@ class CallGraphTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-TS-IMPORT-STATIC-FIELD') @:killer('M-TS-IMPORT-STATIC-CALL') @:killer('M-TS-IMPORT-STATIC-OWN')
-	@:killer('M-TS-IMPORT-STATIC-ONE') @:killer('M-TS-IMPORT-STATIC-INDEXED')
+	@:killer('M-TS-IMPORT-STATIC-FIELD')
+	@:killer('M-TS-IMPORT-STATIC-CALL')
+	@:killer('M-TS-IMPORT-STATIC-OWN')
+	@:killer('M-TS-IMPORT-STATIC-ONE')
+	@:killer('M-TS-IMPORT-STATIC-INDEXED')
 	public function testAnImportedStaticIsTypedWhereItIsDeclared(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1469,7 +1582,9 @@ class CallGraphTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-TS-FORWARD-KEYED') @:killer('M-TS-FORWARD-PARAM') @:killer('M-TS-FORWARD-ALIAS')
+	@:killer('M-TS-FORWARD-KEYED')
+	@:killer('M-TS-FORWARD-PARAM')
+	@:killer('M-TS-FORWARD-ALIAS')
 	public function testAForwardedCallRunsTheUnderlyingTheAbstractsFileNames(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1498,7 +1613,9 @@ class CallGraphTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-TS-CALLED-VALUE') @:killer('M-TS-CALLED-RECEIVER') @:killer('M-TS-CALLED-NULL')
+	@:killer('M-TS-CALLED-VALUE')
+	@:killer('M-TS-CALLED-RECEIVER')
+	@:killer('M-TS-CALLED-NULL')
 	public function testACalledFunctionValueReturnsWhatItsFunctionTypeSays(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1530,8 +1647,14 @@ class CallGraphTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-TS-LOOP-ELEMENT') @:killer('M-TS-LOOP-KEY-BINDER') @:killer('M-TS-LOOP-KV-LISTED') @:killer('M-TS-LOOP-ITERATOR')
-	@:killer('M-TS-LOOP-NEXT') @:killer('M-TS-LOOP-AGREE') @:killer('M-TS-LOOP-OWN-PARAMS') @:killer('M-TS-LOOP-THROUGH')
+	@:killer('M-TS-LOOP-ELEMENT')
+	@:killer('M-TS-LOOP-KEY-BINDER')
+	@:killer('M-TS-LOOP-KV-LISTED')
+	@:killer('M-TS-LOOP-ITERATOR')
+	@:killer('M-TS-LOOP-NEXT')
+	@:killer('M-TS-LOOP-AGREE')
+	@:killer('M-TS-LOOP-OWN-PARAMS')
+	@:killer('M-TS-LOOP-THROUGH')
 	public function testALoopBindsWhatItsIterableYields(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1582,8 +1705,11 @@ class CallGraphTest extends Test {
 	 * name spells only where it is that one — a project `List<T>` an import or the module itself binds is another type, whose
 	 * element its own `iterator()` says, and a project `Vector<T>` indexed is no std vector; the std types stay typed.
 	 */
-	@:pin('control') @:killer('M-TS-STD-CONTAINER') @:killer('M-TS-STD-CONTAINER-WHERE')
-	@:killer('M-TS-STD-CONTAINER-GUARDED') @:killer('M-TS-STD-CONTAINER-STD-OWN')
+	@:pin('control')
+	@:killer('M-TS-STD-CONTAINER')
+	@:killer('M-TS-STD-CONTAINER-WHERE')
+	@:killer('M-TS-STD-CONTAINER-GUARDED')
+	@:killer('M-TS-STD-CONTAINER-STD-OWN')
 	public function testAContainerIsTheStandardOneOnlyWhereItsNameMeansIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1651,7 +1777,10 @@ class CallGraphTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-TS-LAMBDA-PARAMS') @:killer('M-TS-LAMBDA-ARITY') @:killer('M-TS-LAMBDA-ANNOTATED') @:killer('M-TS-LAMBDA-NULL')
+	@:killer('M-TS-LAMBDA-PARAMS')
+	@:killer('M-TS-LAMBDA-ARITY')
+	@:killer('M-TS-LAMBDA-ANNOTATED')
+	@:killer('M-TS-LAMBDA-NULL')
 	public function testALambdaParameterIsTypedByTheFunctionTypeItIsExpectedToBe(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1695,7 +1824,10 @@ class CallGraphTest extends Test {
 	 * parameter — `?a` or one with a default value — so an argument at or after one binds the parameter its position names
 	 * only when the call passes them all; and a `new` naming its type's arguments (`new Box<Int>(…)`) counts only its own.
 	 */
-	@:pin('control') @:killer('M-TS-SKIP-SHIFT') @:killer('M-TS-SKIP-DEFAULT') @:killer('M-TS-SKIP-NEW-ARGS')
+	@:pin('control')
+	@:killer('M-TS-SKIP-SHIFT')
+	@:killer('M-TS-SKIP-DEFAULT')
+	@:killer('M-TS-SKIP-NEW-ARGS')
 	public function testAnArgumentAfterASkippableParameterBindsNoKnownParameter(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -1753,228 +1885,6 @@ class CallGraphTest extends Test {
 		Assert.same(['Maker.make', 'sys.thread.Lock.wait'], targets('C.made'), 'a call on a value a `new` makes');
 		Assert.same(['Lock.wait'], targets('C.direct'), 'the type a `new` names by its path');
 		Assert.same(['Box.get'], targets('C.generic'), 'a type argument the language infers is no type the graph names');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * A typedef aliases the type its OWN file binds the target name to, wherever the alias is used: an alias another module
-	 * declares importing the std `Lock` — imported by its module or by name — and one beside its use wait on the std lock,
-	 * whatever the reader imports; an alias of the project type stays it; two declarations keying the alias apart keep the
-	 * simple target, as before (review R4 F7).
-	 */
-	@:pin('control')
-	@:killer('M-TS-ALIAS-KEYED') @:killer('M-TS-ALIAS-AGREE')
-	public function testATypedefAliasesWhatItsOwnFileBindsTheTargetTo(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final g: CallGraph = CallGraph.build([
-			{
-				file: 'utils/Lock.hx',
-				source: 'package utils; class Lock { public function new() {} public function wait():Bool return true; }'
-			},
-			{ file: 'pkg/Alias.hx', source: 'package pkg; import sys.thread.Lock; typedef MyLock = Lock;' },
-			{ file: 'pkg/Sub.hx', source: 'package pkg; import sys.thread.Lock; typedef SubLock = Lock; class Sub {}' },
-			{ file: 'pkg/Own.hx', source: 'package pkg; import utils.Lock; typedef OwnLock = Lock;' },
-			{ file: 'one/Two.hx', source: 'package one; import sys.thread.Lock; typedef TwoLock = Lock;' },
-			{ file: 'two/Two.hx', source: 'package two; import utils.Lock; typedef TwoLock = Lock;' },
-			{
-				file: 'app/A.hx',
-				source: 'package app; import pkg.Alias; import pkg.Sub.SubLock; import pkg.Own; import utils.Lock; class A {'
-				+ ' static function module(l:MyLock):Void l.wait(); static function sub(l:SubLock):Void l.wait();'
-				+ ' static function own(l:OwnLock):Void l.wait(); static function two(l:TwoLock):Void l.wait(); }'
-			},
-			{
-				file: 'app/Here.hx',
-				source: 'package app; import sys.thread.Lock; typedef HereLock = Lock; class Here { static function here(l:HereLock):Void l.wait(); }'
-			}
-		], new HaxeQueryPlugin());
-		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		Assert.same(['sys.thread.Lock.wait'], targets('A.module'), 'an alias of another module, imported by its module');
-		Assert.same(['sys.thread.Lock.wait'], targets('A.sub'), 'an alias of another module, imported by name');
-		Assert.same(['sys.thread.Lock.wait'], targets('Here.here'), 'an alias beside its use');
-		Assert.same(['Lock.wait'], targets('A.own'), 'an alias of the project type');
-		Assert.same(['Lock.wait'], targets('A.two'), 'two declarations keying the alias apart: the simple target');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * A name no import binds is looked up in the file's own package, then in each package enclosing it, as the language does:
-	 * a project file in the std's `sys.thread` (or a package under it) means the std `Lock` beside a project namesake, unless
-	 * a wildcard import supplies the name first or the project declares it in a package searched first (review R4 F7).
-	 */
-	@:pin('control')
-	@:killer('M-TS-PACKAGE-LOOKUP') @:killer('M-TS-PACKAGE-ENCLOSING') @:killer('M-TS-PACKAGE-PROJECT-FIRST')
-	public function testANameNoImportBindsIsLookedUpInTheFilesPackages(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final g: CallGraph = graphOf([
-			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package sys.thread; class A { public static var lock:Lock = null; public static function make():Lock return null; }',
-			'package sys.thread.deep; class B { public static var lock:Lock = null; }',
-			'package sys.thread; import utils.*; class W { public static var lock:Lock = null; }',
-			'package utils.inner; class U { public static var lock:Lock = null; }',
-			'package sys.thread.mine; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package sys.thread.mine; class M { public static var lock:Lock = null; }',
-			'package app; class C { static function own():Void A.lock.wait(); static function ret():Void A.make().wait();'
-			+ ' static function deep():Void B.lock.wait(); static function wild():Void W.lock.wait();'
-			+ ' static function proj():Void U.lock.wait(); static function mine():Void M.lock.wait(); }'
-		]);
-		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		Assert.same(['sys.thread.Lock.wait'], targets('C.own'), 'a std type of the file\'s own package');
-		Assert.same(['A.make', 'sys.thread.Lock.wait'], targets('C.ret'), 'a return type');
-		Assert.same(['sys.thread.Lock.wait'], targets('C.deep'), 'a std type of an enclosing package');
-		Assert.same(['Lock.wait'], targets('C.wild'), 'a wildcard import comes first');
-		Assert.same(['Lock.wait'], targets('C.proj'), 'a project type of an enclosing package');
-		Assert.same(['Lock.wait'], targets('C.mine'), 'a project type of the own package before a std one of an enclosing package');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * A type parameter a function declares itself is what the arguments bind it to, as the language infers it — never the type
-	 * an import of its name names: `id<Lock>(x:Lock):Lock` in a file importing the project `Lock`, called with the std lock,
-	 * returns the std lock, read off the call or through a local; arguments that disagree, a parameter that only nests the type
-	 * parameter, one shadowing a type parameter of the function's type, and an argument a skipped optional
-	 * parameter may shift onto another parameter (review L3 G3) leave the result unknown (review R4 F7).
-	 */
-	@:pin('control')
-	@:killer('M-GRAPH-FN-RETURN-PARAM') @:killer('M-TS-INFER-AGREE') @:killer('M-TS-INFER-REST') @:killer('M-TS-INFER-SHADOW')
-	@:killer('M-TS-INFER-BARE') @:killer('M-TS-INFER-SHIFT')
-	public function testAFunctionsOwnTypeParameterIsWhatItsArgumentsBind(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final g: CallGraph = graphOf([
-			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package app; import utils.Lock; class A { public static function id<Lock>(x:Lock):Lock return x;'
-			+ ' public static function two<Lock>(a:Lock, b:Lock):Lock return a; public static function pick<Lock>(...xs:Lock):Lock return '
-			+ 'xs[0]; public static function head<Lock>(xs:Array<Lock>):Lock return xs[0];'
-			+ ' public static function skip<Lock>(?n:Int, x:Lock, ?y:utils.Lock):Lock return x; }',
-			'package app; class Box<T> { public function new() {} public function get<T>(x:T):T return x; }',
-			'package app; class C { static function id(s:sys.thread.Lock):Void A.id(s).wait();'
-			+ ' static function local(s:sys.thread.Lock):Void { final l = A.id(s); l.wait(); } static function same(s:sys.thread.Lock, '
-			+ 't:sys.thread.Lock):Void A.two(s, t).wait(); static function apart(s:sys.thread.Lock, u:utils.Lock):Void A.two(s, u).wait();'
-			+ ' static function rest(s:sys.thread.Lock, u:utils.Lock):Void A.pick(s, u).wait();'
-			+ ' static function nested(xs:Array<sys.thread.Lock>):Void A.head(xs).wait(); static function shadow(b:Box<utils.Lock>, '
-			+ 's:sys.thread.Lock):Void b.get(s).wait(); static function shifted(s:sys.thread.Lock, u:utils.Lock):Void A.skip(s, u).wait();'
-			+ ' static function placed(s:sys.thread.Lock, u:utils.Lock):Void A.skip(0, s, u).wait(); }'
-		]);
-		function waits(from: String): Array<String> {
-			final out: Array<String> = [
-				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
-			];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		final std: Array<String> = ['sys.thread.Lock.wait'];
-		Assert.same(std, waits('C.id'), 'the argument binds the parameter');
-		Assert.same(std, waits('C.local'), 'through a local');
-		Assert.same(std, waits('C.same'), 'arguments that agree');
-		Assert.same([], waits('C.apart'), 'arguments that disagree');
-		Assert.same([], waits('C.rest'), 'rest arguments that disagree');
-		Assert.same([], waits('C.nested'), 'a parameter nesting the type parameter');
-		Assert.same([], waits('C.shadow'), 'a function type parameter shadowing its type\'s');
-		Assert.same([], waits('C.shifted'), 'an argument a skipped optional parameter shifts (review L3 G3)');
-		Assert.same(std, waits('C.placed'), 'every argument at its position');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * Declarations that WRITE a member's type or a function's return type differently — one per branch of a conditional
-	 * region — dispatch a call on the value on every type they write, as two files keying one written type apart do, never
-	 * on none: the field, the result of a call, a return whose types differ in name. One branch writing no type, or types
-	 * that do not line up (`Lock` and `Array<Lock>`), leave the value unknown (review R4 F7, the F6 remainder).
-	 */
-	@:pin('control')
-	@:killer('M-TS-DECL-EACH-MEMBER') @:killer('M-TS-DECL-EACH-RETURN')
-	@:killer('M-TS-DECL-EACH-UNTYPED') @:killer('M-TS-KEY-LINED')
-	public function testDeclarationsWritingATypeDifferentlyDispatchOnEach(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final g: CallGraph = graphOf([
-			'package utils; class Lock { public function new() {} public function wait():Bool return true; }',
-			'package utils; class Gate { public function new() {} public function wait():Bool return true; }',
-			'package app; class A {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n'
-			+ 'public static function make():sys.thread.Lock return null;\npublic static function gate():sys.thread.Lock return null;\n'
-			+ '#else\npublic static var lock:utils.Lock = null;\npublic static function make():utils.Lock return null;\n'
-			+ 'public static function gate():utils.Gate return null;\n#end\n}',
-			'package app; class B {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\n'
-			+ 'public static var lock:Array<utils.Lock> = null;\n#end\n}',
-			'package app; class D {\n#if sys\npublic static var lock:sys.thread.Lock = null;\n#else\npublic static var lock = null;\n'
-			+ '#end\n}',
-			'package app; class C { static function field():Void A.lock.wait(); static function call():Void A.make().wait();'
-			+ ' static function named():Void A.gate().wait(); static function apart():Void B.lock.wait();'
-			+ ' static function noType():Void D.lock.wait(); }'
-		]);
-		function waits(from: String): Array<String> {
-			final out: Array<String> = [
-				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
-			];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.field'), 'a field');
-		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
-		Assert.same(['Gate.wait', 'sys.thread.Lock.wait'], waits('C.named'), 'a return whose types differ in name');
-		Assert.same([], waits('C.apart'), 'types that do not line up');
-		Assert.same([], waits('C.noType'), 'a branch writing no type');
-		#else
-		Assert.pass('non-sys target');
-		#end
-	}
-
-	/**
-	 * A call receiver whose callee DECLARES a nullable or dynamic return names no dispatchable type, but one returning a type
-	 * parameter the call binds to `Null<X>` is an `X` for a member lookup: the refusal reads the declared return, before its
-	 * parameters are bound (`round8/h/tp-null`).
-	 */
-	@:pin('control')
-	@:killer('M-TS-RETURN-WRAPPER-BOUND')
-	public function testACallReceiverBoundToANullableTypeDispatchesOnIt(): Void {
-		#if (sys || nodejs)
-		if (anyparse.query.StdResolver.stdDir() == null) {
-			Assert.pass('no std on this machine');
-			return;
-		}
-		final g: CallGraph = graphOf([
-			'package app; class A { public static function id<T>(x:T):T return x;'
-			+ ' public static function maybe():Null<sys.thread.Lock> return null; }',
-			'package app; class C { static function bound():Void { final s:Null<sys.thread.Lock> = null; A.id(s).wait(); }'
-			+ ' static function declared():Void A.maybe().wait(); }'
-		]);
-		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
-			out.sort(Reflect.compare);
-			return out;
-		}
-		Assert.same(['A.id', 'Lock.wait'], targets('C.bound'), 'a type parameter bound to a nullable type');
-		Assert.same(['A.maybe'], targets('C.declared'), 'a nullable return the declaration writes');
 		#else
 		Assert.pass('non-sys target');
 		#end

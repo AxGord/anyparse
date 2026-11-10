@@ -264,13 +264,15 @@ final class BitsBuilder {
 		final set: TypeDefinition = macro class $name {
 			public inline function new() this = $empty;
 
-			@:from public static inline function ofValue(value: $valueType): $self {
+			@:from
+			public static inline function ofValue(value: $valueType): $self {
 				var bits: $self = new $selfPath();
 				bits.add(value);
 				return bits;
 			}
 
-			@:from public static inline function ofArray(values: Array<$valueType>): $self {
+			@:from
+			public static inline function ofArray(values: Array<$valueType>): $self {
 				var bits: $self = new $selfPath();
 				for (value in values) bits.add(value);
 				return bits;
@@ -301,15 +303,20 @@ final class BitsBuilder {
 
 			public inline function copy(): $self return cast this;
 
-			@:op(A | B) public inline function union(other: $self): $self return cast $union;
+			@:op(A | B)
+			public inline function union(other: $self): $self return cast $union;
 
-			@:op(A & B) public inline function intersect(other: $self): $self return cast $intersect;
+			@:op(A & B)
+			public inline function intersect(other: $self): $self return cast $intersect;
 
-			@:op(~A) public inline function complement(): $self return cast $complement;
+			@:op(~A)
+			public inline function complement(): $self return cast $complement;
 
-			@:op(A == B) public inline function equals(other: $self): Bool return $same;
+			@:op(A == B)
+			public inline function equals(other: $self): Bool return $same;
 
-			@:op(A != B) public inline function differs(other: $self): Bool return !$same;
+			@:op(A != B)
+			public inline function differs(other: $self): Bool return !$same;
 
 			public inline function iterator(): $cursor return new $cursorPath(this);
 		};

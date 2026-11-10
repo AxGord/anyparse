@@ -7,5 +7,7 @@ package anyparse.check.oracle;
  * Every field is OPTIONAL so that `@:nullSafety(Strict)` types it `Null<String>`
  * honestly — a record written by hand, or by another engine, may carry any part of it.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef OracleVerdictRecord = { var ?fingerprint: String; var ?verdict: String; var ?errors: String; }

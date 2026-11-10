@@ -32,8 +32,21 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxEnumCtorDecl = {
 	var name: HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),
-		bodyAwareCompactIndent, groupRestProbe, ignoreSourceNewlinesForWrap) var params: Array<HxParam>;
-	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:trivia
+	@:lead('(')
+	@:trail(')')
+	@:sep(',')
+	@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'), bodyAwareCompactIndent, groupRestProbe,
+		ignoreSourceNewlinesForWrap)
+	var params: Array<HxParam>;
+	@:optional
+	@:fmt(space('typeHintColon', 'lead'))
+	@:lead(':')
+	var returnType: Null<HxType>;
 };

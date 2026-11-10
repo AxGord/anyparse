@@ -20,41 +20,47 @@ class MoveBoundNamesTest extends Test {
 	private static final KEPT: String = 'import p.Mod;';
 	private static final REPOINTED: String = 'import q.Mod;';
 
-	@:pin('control') @:killer('M-BOUND-BESIDES-NO-FIELDS')
+	@:pin('control')
+	@:killer('M-BOUND-BESIDES-NO-FIELDS')
 	public function testAModuleStatementStaysForAFieldItsFileReads(): Void {
 		final user: String = movedUser('trace(helper());');
 		Assert.isTrue(user.contains(KEPT), user);
 		Assert.isTrue(user.contains(REPOINTED), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BESIDES-NO-VALUES')
+	@:pin('control')
+	@:killer('M-BOUND-BESIDES-NO-VALUES')
 	public function testAModuleStatementStaysForAValueItsFileReads(): Void {
 		final user: String = movedUser('trace(First);');
 		Assert.isTrue(user.contains(KEPT), user);
 		Assert.isTrue(user.contains(REPOINTED), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BESIDES-THE-MOVED')
+	@:pin('control')
+	@:killer('M-BOUND-BESIDES-THE-MOVED')
 	public function testAModuleStatementGoesWhenItsFileReadsOnlyTheMovedType(): Void {
 		final user: String = movedUser('trace(new Mod());');
 		Assert.isFalse(user.contains(KEPT), user);
 		Assert.isTrue(user.contains(REPOINTED), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BESIDES-PRIVATE')
+	@:pin('control')
+	@:killer('M-BOUND-BESIDES-PRIVATE')
 	public function testAPrivateTypeKeepsNoStatement(): Void {
 		final user: String = movedUser('final own: Hidden = new Mod();\n\t\ttrace(own);');
 		Assert.isFalse(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BESIDES-NO-FIELDS')
+	@:pin('control')
+	@:killer('M-BOUND-BESIDES-NO-FIELDS')
 	public function testTheDestinationKeepsAStatementForAFieldItReads(): Void {
 		final dest: String = 'package q;\n\nimport p.Mod;\n\nclass Host {\n\tstatic function go(): Int {\n\t\treturn helper();\n\t}\n}\n';
 		final moved: String = changed('q/Mod.hx', [{ file: 'q/Mod.hx', source: dest }]);
 		Assert.isTrue(moved.contains(KEPT), moved);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BY-TYPE-NO-VALUES')
+	@:pin('control')
+	@:killer('M-BOUND-BY-TYPE-NO-VALUES')
 	public function testAValueOfTheMovedEnumAbstractEarnsAStatement(): Void {
 		final user: String = movedSecondary(11, 15, 'q/Kind.hx', 'trace(First);');
 		Assert.isTrue(user.contains('import q.Kind;'), user);
@@ -66,55 +72,64 @@ class MoveBoundNamesTest extends Test {
 		Assert.isFalse(user.contains('import q.Plain;'), user);
 	}
 
-	@:pin('control') @:killer('M-MODULE-FIELD-PRIVATE-BOUND', 'M-MODULE-FIELD-NEVER-PRIVATE')
+	@:pin('control')
+	@:killer('M-MODULE-FIELD-PRIVATE-BOUND', 'M-MODULE-FIELD-NEVER-PRIVATE')
 	public function testAPrivateFieldKeepsNoStatement(): Void {
 		final user: String = movedUser('final secret: Int = 1;\n\t\ttrace(secret);');
 		Assert.isFalse(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-MODULE-FIELD-PRIVATE-STICKS')
+	@:pin('control')
+	@:killer('M-MODULE-FIELD-PRIVATE-STICKS')
 	public function testAFieldAfterAPrivateOneKeepsItsStatement(): Void {
 		final user: String = movedUser('trace(after());');
 		Assert.isTrue(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
+	@:pin('control')
+	@:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
 	public function testAValueNameAnotherStatementBindsEarnsNoImportOfTheMovedEnumAbstract(): Void {
 		final reader: String = movedOutOfP('package p;\n\nenum abstract Kind(String) to String {\n\tvar First = "kind";\n}\n');
 		Assert.isFalse(reader.contains('import q.Kind;'), reader);
 	}
 
-	@:pin('control') @:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
+	@:pin('control')
+	@:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
 	public function testAConstructorNameAnotherStatementBindsEarnsNoImportOfTheMovedEnum(): Void {
 		final reader: String = movedOutOfP('package p;\n\nenum Kind {\n\tFirst;\n}\n');
 		Assert.isFalse(reader.contains('import q.Kind;'), reader);
 	}
 
-	@:pin('control') @:killer('M-ENUM-ABSTRACT-LEGACY-META')
+	@:pin('control')
+	@:killer('M-ENUM-ABSTRACT-LEGACY-META')
 	public function testAValueOfTheMovedLegacyEnumAbstractEarnsAStatement(): Void {
 		final user: String = movedSecondary(33, 17, 'q/Legacy.hx', 'trace(Old);');
 		Assert.isTrue(user.contains('import q.Legacy;'), user);
 	}
 
-	@:pin('control') @:killer('M-MODULE-FIELD-WRAPPED-PRIVATE')
+	@:pin('control')
+	@:killer('M-MODULE-FIELD-WRAPPED-PRIVATE')
 	public function testAFieldAfterAnInactivePrivateKeepsItsStatement(): Void {
 		final user: String = movedUser('trace(conditional());');
 		Assert.isTrue(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-BOUND-BY-TYPE-EVERY-ABSTRACT')
+	@:pin('control')
+	@:killer('M-BOUND-BY-TYPE-EVERY-ABSTRACT')
 	public function testAVarOfARemainingPlainAbstractKeepsNoStatement(): Void {
 		final user: String = movedUser('final span: Int = 1;\n\t\ttrace(new Mod(), span);');
 		Assert.isFalse(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-ENUM-ABSTRACT-PREFIX-KEYWORD', 'M-ENUM-PREFIX-NOT-CARRIED')
+	@:pin('control')
+	@:killer('M-ENUM-ABSTRACT-PREFIX-KEYWORD', 'M-ENUM-PREFIX-NOT-CARRIED')
 	public function testAValueOfAGuardedPrefixEnumAbstractKeepsItsStatement(): Void {
 		final user: String = movedUser('trace(Gv);');
 		Assert.isTrue(user.contains(KEPT), user);
 	}
 
-	@:pin('control') @:killer('M-MODULE-FIELD-NEVER-PRIVATE')
+	@:pin('control')
+	@:killer('M-MODULE-FIELD-NEVER-PRIVATE')
 	public function testAPrivateFieldInItsOwnRegionKeepsNoStatement(): Void {
 		final user: String = movedUser('final inner: Int = 1;\n\t\ttrace(inner);');
 		Assert.isFalse(user.contains(KEPT), user);

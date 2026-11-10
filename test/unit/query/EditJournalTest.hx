@@ -9,7 +9,8 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 class EditJournalTest extends Test {
 
-	@:pin('control') @:killer('M-JOURNAL-SHIFT')
+	@:pin('control')
+	@:killer('M-JOURNAL-SHIFT')
 	public function testUntouchedTextMapsByTheShiftOfTheEditsBefore(): Void {
 		final before: String = 'head\nkeep\n';
 		final after: String = 'new line\nhead\nkeep\n';
@@ -17,7 +18,8 @@ class EditJournalTest extends Test {
 		Assert.same(Mapped(new Span(5, 9)), journal.back(before, after, spanOf(after, 'keep')));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-INTERIOR')
+	@:pin('control')
+	@:killer('M-JOURNAL-INTERIOR')
 	public function testAMovedMemberHasNoCounterpart(): Void {
 		// a reorder deletes a member where it was and inserts it elsewhere: nothing inside it maps, the rest does
 		final before: String = 'a {x}\nb {y}\n';
@@ -31,7 +33,8 @@ class EditJournalTest extends Test {
 		Assert.same(Mapped(new Span(6, 11)), journal.back(before, after, spanOf(after, 'b {y}')));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-INTERIOR')
+	@:pin('control')
+	@:killer('M-JOURNAL-INTERIOR')
 	public function testSwappedIdenticalBodiesKeepTheirOwnIdentity(): Void {
 		// two members with the same body swapped: the text alone cannot tell them apart, the edits do
 		final before: String = 'a {r}\nb {r}\n';
@@ -45,7 +48,8 @@ class EditJournalTest extends Test {
 		Assert.same(Unmapped(EditJournal.UNMAPPED_REWRITTEN), journal.back(before, after, new Span(9, 10)));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-SHIFT')
+	@:pin('control')
+	@:killer('M-JOURNAL-SHIFT')
 	public function testManyEditsStillMapExactly(): Void {
 		// no diff to give up on: six hundred edits shift the last line by exactly their sum
 		final lines: Array<String> = [for (i in 0...600) 'x$i'];
@@ -62,7 +66,8 @@ class EditJournalTest extends Test {
 		Assert.same(Unmapped(EditJournal.UNMAPPED_REWRITTEN), journal.back(before, after, spanOf(after, 'yy599')));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-AGREE')
+	@:pin('control')
+	@:killer('M-JOURNAL-AGREE')
 	public function testHistoriesThatPlaceASpanApartDecline(): Void {
 		final journal: EditJournal = new EditJournal();
 		journal.record('aa', [{ span: new Span(0, 1), text: '' }], 'a');
@@ -70,7 +75,8 @@ class EditJournalTest extends Test {
 		Assert.same(Unmapped(EditJournal.UNMAPPED_AMBIGUOUS), journal.back('aa', 'a', new Span(0, 1)));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-OPAQUE')
+	@:pin('control')
+	@:killer('M-JOURNAL-OPAQUE')
 	public function testASettleBeyondWhitespaceMapsNothing(): Void {
 		final journal: EditJournal = new EditJournal();
 		journal.record('f(x)\nk\n', [{ span: new Span(3, 3), text: ':Int' }], 'f(x : Int)\nk\n');
@@ -79,14 +85,16 @@ class EditJournalTest extends Test {
 		Assert.same(Unmapped(EditJournal.UNMAPPED_REWRITTEN), journal.back('g\nk\n', 'i\nk\n', new Span(2, 3)));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-RECORD-PATH')
+	@:pin('control')
+	@:killer('M-JOURNAL-RECORD-PATH')
 	public function testNoRecordedHistoryMapsNothing(): Void {
 		final journal: EditJournal = journalOf('a\n', [{ span: new Span(0, 0), text: 'b' }], 'ba\n');
 		Assert.same(Unmapped(EditJournal.UNMAPPED_NO_HISTORY), journal.back('a\n', 'ca\n', new Span(1, 2)));
 		Assert.same(Mapped(new Span(0, 1)), journal.back('a\n', 'ba\n', new Span(1, 2)));
 	}
 
-	@:pin('control') @:killer('M-JOURNAL-RECORD')
+	@:pin('control')
+	@:killer('M-JOURNAL-RECORD')
 	public function testTheCanonicalizerRecordsWhatItSettled(): Void {
 		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final raw: String = 'class C {\n\tfunction a() {}\n\n\tfunction b() {\n\t\tvar v = 1;\n\t}\n}\n';

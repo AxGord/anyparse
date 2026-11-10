@@ -25,7 +25,8 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * The matched rule's `beforeLast` wins over `defaultLocation: afterLast` and over a later located rule that does not match.
 	 */
-	@:pin('control') @:killer('M-RULE-MATCH-IGNORED')
+	@:pin('control')
+	@:killer('M-RULE-MATCH-IGNORED')
 	public function testTheMatchedRuleLocationWins(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\t\t\t&& '
@@ -46,7 +47,8 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * A located rule that does not match leaves the placement to `defaultLocation`, inside the condition as outside.
 	 */
-	@:pin('control') @:killer('M-RULE-CONDITIONS-IGNORED')
+	@:pin('control')
+	@:killer('M-RULE-CONDITIONS-IGNORED')
 	public function testAnUnmatchedLocatedRuleLeavesTheDefaultLocation(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa &&\n'
@@ -66,7 +68,8 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * A matched rule that names no location is `afterLast`, even when an earlier rule that does not match names one.
 	 */
-	@:pin('control') @:killer('M-RULE-CONDITIONS-IGNORED')
+	@:pin('control')
+	@:killer('M-RULE-CONDITIONS-IGNORED')
 	public function testAMatchedRuleWithoutALocationIsAfterLast(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa &&\n'
@@ -86,7 +89,8 @@ class HxCondWrapChainLocationTest extends Test {
 	/**
 	 * A matched rule that names no location is `afterLast` whatever `defaultLocation` says, outside a condition too.
 	 */
-	@:pin('control') @:killer('M-RULE-LOCATION-FALLS-TO-DEFAULT')
+	@:pin('control')
+	@:killer('M-RULE-LOCATION-FALLS-TO-DEFAULT')
 	public function testAMatchedRuleWithoutALocationIgnoresTheDefaultLocation(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaa &&\n'

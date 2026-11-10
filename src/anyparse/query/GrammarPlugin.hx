@@ -3815,20 +3815,23 @@ typedef CoreValueTypes = {
 	final real: String;
 
 	/** The truth-value type a comparison or a logical operator yields (`RefShape.booleanOperatorKinds`, Haxe `Bool`). */
-	@:optional final boolean: String;
+	@:optional
+	final boolean: String;
 
 	/**
 	 * The largest DECIMAL literal of the `integer` type, spelled (Haxe `2147483647`): 4.3.7 types a decimal literal past it
 	 * as the `real` type, so no such literal is typed as `integer`. Optional; unset bounds none.
 	 */
-	@:optional final integerMax: String;
+	@:optional
+	final integerMax: String;
 
 	/**
 	 * The prefix of a hexadecimal integer literal (Haxe `0x`). An integer literal is typed as the `integer` type only when its
 	 * text, `_` separators dropped, is decimal digits or this prefix and hex digits — anything else carries a suffix the
 	 * compiler types otherwise (`1i64` is a `haxe.Int64`, `1u32` a `UInt`). Optional; unset admits decimal digits only.
 	 */
-	@:optional final hexLiteralPrefix: String;
+	@:optional
+	final hexLiteralPrefix: String;
 
 	/**
 	 * The `names` the language declares as classes (Haxe `String`); every other one is an abstract the compiler represents
@@ -3846,28 +3849,32 @@ typedef ExecutionShape = {
 	 * The static function NAMES the language runs while a type initialises, before any static field's own initializer
 	 * (Haxe `__init__`): such a function reads a field its statics have not yet assigned. Optional; unset means none.
 	 */
-	@:optional var staticInitFunctionNames: Array<String>;
+	@:optional
+	var staticInitFunctionNames: Array<String>;
 
 	/**
 	 * The callee names (a bare intrinsic or the last segment of a qualified call) whose FIRST argument the compiler pastes
 	 * into the output as target code and so requires as a compile-time constant (Haxe `__js__`, `js.Syntax.code`).
 	 * Optional; unset means none.
 	 */
-	@:optional var targetCodeCallNames: Array<String>;
+	@:optional
+	var targetCodeCallNames: Array<String>;
 
 	/**
 	 * The ABSTRACT types a value can have although no code writes their name, by the node kind whose syntax builds one:
 	 * a rest parameter (Haxe `haxe.Rest`), a map literal's key-value pair (Haxe `Map`). `MemberReach` counts their
 	 * implicitly-called members as visible to code holding such a node. Optional; unset means the language has none.
 	 */
-	@:optional var literalAbstractTypes: Map<String, String>;
+	@:optional
+	var literalAbstractTypes: Map<String, String>;
 
 	/**
 	 * The type the compiler CONSTRUCTS where the text writes a literal of the node kind, by that kind: a regex literal
 	 * (Haxe `RegexLit` -> `EReg`), an array literal a map is expected of (`ArrayExpr` -> `Map`). Whether a build compiled
 	 * a type as its text reads such a construction at the literal as the text's own. Optional; unset makes none.
 	 */
-	@:optional var literalConstructions: Map<String, String>;
+	@:optional
+	var literalConstructions: Map<String, String>;
 
 	/**
 	 * The call the compiler makes for each element a comprehension yields, by the kind of the literal holding one — a
@@ -3875,26 +3882,30 @@ typedef ExecutionShape = {
 	 * positioned at the element, its receiver at the literal. Whether a build compiled a type as its text reads such a
 	 * call as the literal's own. Optional; unset makes none.
 	 */
-	@:optional var comprehensionCalls: Map<String, String>;
+	@:optional
+	var comprehensionCalls: Map<String, String>;
 
 	/**
 	 * The simple name of the language's CLASS-VALUE type (Haxe `Class`): a member returning or taking one may produce
 	 * an instance of a class no code names (`Type.resolveClass`, `Type.createInstance`). `MemberReach` reads the
 	 * producers off the declarations with it. Optional; unset means no class may be instantiated from a value.
 	 */
-	@:optional var classValueTypeName: String;
+	@:optional
+	var classValueTypeName: String;
 
 	/**
 	 * The operator kinds that may CONVERT an operand to a string (Haxe `+` and `+=`, which concatenate when either side
 	 * is a string): a site where an operand's string-conversion method may run. Optional; unset means no operator does.
 	 */
-	@:optional var concatenationKinds: Array<String>;
+	@:optional
+	var concatenationKinds: Array<String>;
 
 	/**
 	 * The implicitly-called method names (`implicitCallNames`) the language runs to convert a value to a string (Haxe
 	 * `toString`); the others it runs to iterate one. Optional; unset means every implicitly-called name iterates.
 	 */
-	@:optional var stringConversionMethodNames: Array<String>;
+	@:optional
+	var stringConversionMethodNames: Array<String>;
 
 	/**
 	 * Qualified `Type.function` calls that convert their argument to a string the way the language's own conversion does
@@ -3902,37 +3913,43 @@ typedef ExecutionShape = {
 	 * concatenated object operand as such a call, so a reach walk over compiler facts reads one as a conversion site of its
 	 * argument rather than as a call into library code. Optional; unset means none does.
 	 */
-	@:optional var stringConversionCalls: Array<String>;
+	@:optional
+	var stringConversionCalls: Array<String>;
 
 	/**
 	 * Type annotations that bring static extensions in wherever a value of the type is (Haxe `@:using`): a call no member
 	 * of the type declares may run one no import names. Optional; unset means none does.
 	 */
-	@:optional var extensionTypeMetaNames: Array<String>;
+	@:optional
+	var extensionTypeMetaNames: Array<String>;
 
 	/**
 	 * Member annotations that keep a static function out of the extension channel (Haxe `@:noUsing`): calling it on a
 	 * receiver does not compile, whatever `using` is in scope. Optional; unset means none does.
 	 */
-	@:optional var extensionExcludingMetaNames: Array<String>;
+	@:optional
+	var extensionExcludingMetaNames: Array<String>;
 
 	/**
 	 * The implicit-call annotation (`implicitCallMetaNames`) under which the language runs a member for an INDEX
 	 * access on its type (Haxe `@:arrayAccess`). Optional; unset means such a member runs from any site.
 	 */
-	@:optional var indexAccessMetaName: String;
+	@:optional
+	var indexAccessMetaName: String;
 
 	/**
 	 * The node kind an operator-overload annotation's INDEX form projects as (Haxe `@:op([])`, an array-literal kind):
 	 * such a member runs at an index access, like one under `indexAccessMetaName`. Optional; unset means there is none.
 	 */
-	@:optional var indexOperatorOverloadKind: String;
+	@:optional
+	var indexOperatorOverloadKind: String;
 
 	/**
 	 * Compound-assignment kind -> the binary operator kind it applies (Haxe `AddAssign` -> `Add`): an overload of the
 	 * binary operator runs at the compound form too. Optional; unset means a compound form runs only its own overloads.
 	 */
-	@:optional var compoundAssignOperators: Map<String, String>;
+	@:optional
+	var compoundAssignOperators: Map<String, String>;
 
 	/**
 	 * Maps a qualified `Type.method` REFLECTIVE member accessor to the index of the argument that
@@ -3941,14 +3958,16 @@ typedef ExecutionShape = {
 	 * literal name is a touch it can attribute, a computed one is a blind spot it must admit.
 	 * Optional; unset leaves reflection invisible to `MemberReach`'s name channel.
 	 */
-	@:optional var reflectiveNameCalls: Map<String, Int>;
+	@:optional
+	var reflectiveNameCalls: Map<String, Int>;
 
 	/**
 	 * Qualified `Type.method` calls that CONSTRUCT an instance of a class value chosen at run time
 	 * (Haxe `Type.createInstance`) — a constructor reached without any `new` naming it. Optional;
 	 * unset leaves such a call an ordinary external leaf.
 	 */
-	@:optional var reflectiveInstantiationCalls: Array<String>;
+	@:optional
+	var reflectiveInstantiationCalls: Array<String>;
 
 	/**
 	 * The methods of the grammar's built-in array type (`arrayTypeNames`) that READ it and hand
@@ -3957,10 +3976,12 @@ typedef ExecutionShape = {
 	 * itself, so an analysis that follows aliases treats it as the array escaping. Optional; unset
 	 * makes every method call on an array a change and an escape.
 	 */
-	@:optional var nonMutatingArrayMethods: Array<String>;
+	@:optional
+	var nonMutatingArrayMethods: Array<String>;
 
 	/** See `nonMutatingArrayMethods`. */
-	@:optional var mutatingArrayMethods: Array<String>;
+	@:optional
+	var mutatingArrayMethods: Array<String>;
 
 	/**
 	 * The fully qualified paths of the grammar's FIXED-LENGTH array types (Haxe `haxe.ds.Vector`): a
@@ -3969,7 +3990,8 @@ typedef ExecutionShape = {
 	 * `openfl.Vector` grows on `push` and on a write one past its end. Optional; unset makes no
 	 * construction's length known.
 	 */
-	@:optional var fixedLengthArrayTypes: Array<String>;
+	@:optional
+	var fixedLengthArrayTypes: Array<String>;
 
 	/**
 	 * The integer arithmetic a binary node kind performs, by kind, as one of `add`, `subtract`,
@@ -3977,14 +3999,16 @@ typedef ExecutionShape = {
 	 * the operator: the value is a meaning, and a punctuation token here would be a token slot no parse
 	 * captures. Optional; unset folds literals alone.
 	 */
-	@:optional var integerFoldOperators: Map<String, String>;
+	@:optional
+	var integerFoldOperators: Map<String, String>;
 
 	/**
 	 * The ordered comparison a binary node kind performs, by kind, as one of `lt`, `le`, `gt`, `ge` — what a check
 	 * reading the integer bound a condition proves (`n > k ? s.substr(n - k) : s`) evaluates. Named like
 	 * `integerFoldOperators`, for the same reason. Optional; unset makes no condition a bound.
 	 */
-	@:optional var orderedComparisonOperators: Map<String, String>;
+	@:optional
+	var orderedComparisonOperators: Map<String, String>;
 
 	/**
 	 * The SIMPLE names of the grammar's built-in map types (Haxe `Map`, `IntMap`, …), whose own methods
@@ -3992,13 +4016,16 @@ typedef ExecutionShape = {
 	 * a method in neither may be a static extension handed the map itself. Optional; unset makes every
 	 * method call on a map a change and an escape.
 	 */
-	@:optional var mapTypeNames: Array<String>;
+	@:optional
+	var mapTypeNames: Array<String>;
 
 	/** See `mapTypeNames`. */
-	@:optional var nonMutatingMapMethods: Array<String>;
+	@:optional
+	var nonMutatingMapMethods: Array<String>;
 
 	/** See `mapTypeNames`. */
-	@:optional var mutatingMapMethods: Array<String>;
+	@:optional
+	var mutatingMapMethods: Array<String>;
 
 	/**
 	 * The metadata that makes a function one the language calls IMPLICITLY — through an operator, an index
@@ -4007,7 +4034,8 @@ typedef ExecutionShape = {
 	 * code, since the site cannot be told apart from plain arithmetic without a typer. Optional; unset
 	 * marks none.
 	 */
-	@:optional var implicitCallMetaNames: Array<String>;
+	@:optional
+	var implicitCallMetaNames: Array<String>;
 
 	/**
 	 * Method NAMES the language calls implicitly on a value whatever metadata they carry: string conversion
@@ -4015,7 +4043,8 @@ typedef ExecutionShape = {
 	 * (`iterator`, `hasNext`, `next`, `keyValueIterator`, run by a `for` over anything but an interval). A
 	 * reachability analysis admits every such function from any code. Optional; unset admits none.
 	 */
-	@:optional var implicitCallNames: Array<String>;
+	@:optional
+	var implicitCallNames: Array<String>;
 
 	/**
 	 * Method NAMES library code calls on a value it reaches through reflection, whatever the member's visibility (Haxe
@@ -4024,28 +4053,32 @@ typedef ExecutionShape = {
 	 * runs, so an analysis that follows a stored value to the occurrences of its field's name cannot see it. Optional;
 	 * unset names none.
 	 */
-	@:optional var reflectivelyCalledNames: Array<String>;
+	@:optional
+	var reflectivelyCalledNames: Array<String>;
 
 	/**
 	 * The iteration names among `implicitCallNames` a loop calls on the value it iterates for the iterator it then calls the
 	 * others on (Haxe `iterator`, `keyValueIterator`): only what these return is iterated in turn — what `next` returns is
 	 * an element, which the loop runs nothing on. Optional; unset means what any of them returns may be iterated.
 	 */
-	@:optional var iterableMethodNames: Array<String>;
+	@:optional
+	var iterableMethodNames: Array<String>;
 
 	/**
 	 * Type metadata under which the language CONSTRUCTS an instance without a `new` naming it (Haxe
 	 * `@:structInit`: an object literal typed as the class runs its constructor and field initializers).
 	 * Optional; unset leaves such construction unmodelled.
 	 */
-	@:optional var implicitConstructionTypeMetaNames: Array<String>;
+	@:optional
+	var implicitConstructionTypeMetaNames: Array<String>;
 
 	/**
 	 * The member kinds an enum CONSTRUCTOR projects as (Haxe `SimpleCtor`, `ParamCtor`): a bare call to one
 	 * builds a value and runs no code, while a bare call to any other name the graph cannot bind may be a
 	 * function it did not see. Optional; unset makes every unbound bare call unresolved.
 	 */
-	@:optional var enumConstructorKinds: Array<String>;
+	@:optional
+	var enumConstructorKinds: Array<String>;
 
 	/**
 	 * Every node kind whose run-time effect a reachability analysis MODELS: a kind it knows runs no code of
@@ -4054,7 +4087,8 @@ typedef ExecutionShape = {
 	 * so a kind a later grammar revision adds fails closed until someone decides what it runs. Optional;
 	 * unset makes every reached body a blind spot.
 	 */
-	@:optional var modelledKinds: Array<String>;
+	@:optional
+	var modelledKinds: Array<String>;
 
 	/**
 	 * Qualified `Type.method` calls into LIBRARY code — an extern, a target intrinsic, or a
@@ -4065,10 +4099,12 @@ typedef ExecutionShape = {
 	 * declaration actually declares, so a static extension spelled like one is never taken for it. Optional;
 	 * unset lists none, and every library call is then followed or refused.
 	 */
-	@:optional var pureLibraryCalls: Array<String>;
+	@:optional
+	var pureLibraryCalls: Array<String>;
 
 	/** Library types EVERY member of which qualifies as a `pureLibraryCalls` entry (Haxe `Math`, `String`, `StringTools`). */
-	@:optional var pureLibraryTypes: Array<String>;
+	@:optional
+	var pureLibraryTypes: Array<String>;
 
 	/**
 	 * Of the `pureLibraryCalls` / `pureLibraryTypes` members, those that read or advance state no field holds — a random
@@ -4077,7 +4113,8 @@ typedef ExecutionShape = {
 	 * nothing it did not build (`MemberReach.freshOnlyReads`) admits the other pure calls only. Optional; unset admits none
 	 * of them — every library call is then followed or refused there.
 	 */
-	@:optional var statefulLibraryCalls: Array<String>;
+	@:optional
+	var statefulLibraryCalls: Array<String>;
 
 	/**
 	 * Per built-in type (the array type, the string type), the methods that type declares as returning a NEW
@@ -4086,7 +4123,8 @@ typedef ExecutionShape = {
 	 * type matters — a method of that name on another type is a `using` extension, which may return anything.
 	 * Optional; unset makes only literals fresh.
 	 */
-	@:optional var freshReturningMethods: Map<String, Array<String>>;
+	@:optional
+	var freshReturningMethods: Map<String, Array<String>>;
 
 	/**
 	 * The ANNOTATION name a MEMBER carries to declare an IMPLICIT CONVERSION into its
@@ -4099,14 +4137,16 @@ typedef ExecutionShape = {
 	 * this — it declares a structural relation and generates no code — so only members count.
 	 * Unset makes every abstract read as carrying no conversion.
 	 */
-	@:optional var implicitConversionMetaName: String;
+	@:optional
+	var implicitConversionMetaName: String;
 
 	/**
 	 * The ANNOTATION name a MEMBER carries to declare an implicit conversion OUT of its enclosing abstract into the type
 	 * it returns (Haxe `@:to`) — the outward half of the cast graph's members (`AbstractCasts`), which an argument's
 	 * implicit cast takes (`abstractCast.ml`) and a unification does not. Unset makes no member such a conversion.
 	 */
-	@:optional var implicitOutwardConversionMetaName: String;
+	@:optional
+	var implicitOutwardConversionMetaName: String;
 
 	/**
 	 * Qualified `pkg.Type.method` calls into the language's RUNTIME LIBRARY that block the calling thread on the world
@@ -4115,35 +4155,41 @@ typedef ExecutionShape = {
 	 * wherever it runs, beside what the project's own configuration lists. Matched by the last two segments, on a target
 	 * the run holds no body for. Optional; unset lists none.
 	 */
-	@:optional var blockingLibraryCalls: Array<String>;
+	@:optional
+	var blockingLibraryCalls: Array<String>;
 
 	/** Library types EVERY member of which qualifies as a `blockingLibraryCalls` entry (Haxe `sys.io.FileInput`). */
-	@:optional var blockingLibraryTypes: Array<String>;
+	@:optional
+	var blockingLibraryTypes: Array<String>;
 
 	/**
 	 * Member annotations under which a function declared in the PROJECT runs target code, not its body (Haxe `@:native`,
 	 * `@:hlNative`, `@:functionCode`): a call of one runs code no analysis can read. Optional; unset marks none.
 	 */
-	@:optional var nativeCodeMetaNames: Array<String>;
+	@:optional
+	var nativeCodeMetaNames: Array<String>;
 
 	/**
 	 * Qualified `Type.method` calls handing back a function of the target loaded at run time (Haxe `cpp.Lib.load`,
 	 * `cpp.Prime.load`, `lime.system.CFFI.load`): a member whose initializer makes one holds a native function, and a
 	 * call of that member runs target code. Optional; unset makes none.
 	 */
-	@:optional var nativeLoaderCalls: Array<String>;
+	@:optional
+	var nativeLoaderCalls: Array<String>;
 
 	/**
 	 * Qualified `Type.method` calls whose argument IS target code the call splices in (Haxe `cpp.Syntax.code`): the
 	 * project's own native code, written as a library call. Optional; unset makes none.
 	 */
-	@:optional var nativeCodeCalls: Array<String>;
+	@:optional
+	var nativeCodeCalls: Array<String>;
 
 	/**
 	 * The affix a bare name starts and ends with when it names the TARGET's own code (Haxe `__cpp__`, `__global__`, read
 	 * under `untyped`): a call of such a name, or of a member read off one, runs target code. Optional; unset makes none.
 	 */
-	@:optional var targetCodeNameAffix: String;
+	@:optional
+	var targetCodeNameAffix: String;
 
 }
 
@@ -4239,22 +4285,28 @@ typedef PrecedenceDivergence = { var hosts: Array<String>; var operands: Array<S
 typedef CheckOverrides = {
 
 	/** `magic-number` exempt values (checkstyle `MagicNumber.ignoreNumbers`). */
-	@:optional var magicNumberIgnore: Array<Float>;
+	@:optional
+	var magicNumberIgnore: Array<Float>;
 
 	/** `unused-import` never-flag module list (checkstyle `UnusedImport.ignoreModules`). */
-	@:optional var unusedImportIgnoreModules: Array<String>;
+	@:optional
+	var unusedImportIgnoreModules: Array<String>;
 
 	/** `modifier-order` canonical order, as RefShape modifier kinds (checkstyle `ModifierOrder.modifiers`). */
-	@:optional var modifierOrder: Array<String>;
+	@:optional
+	var modifierOrder: Array<String>;
 
 	/** `prefer-single-quotes` active — false when checkstyle `StringLiteral.policy` prefers double quotes. */
-	@:optional var preferSingleQuotesEnabled: Bool;
+	@:optional
+	var preferSingleQuotesEnabled: Bool;
 
 	/** `explicit-type` exempts enum-abstract values (checkstyle `Type.ignoreEnumAbstractValues`). */
-	@:optional var explicitTypeIgnoreEnumAbstract: Bool;
+	@:optional
+	var explicitTypeIgnoreEnumAbstract: Bool;
 
 	/** `empty-block` active — false when checkstyle `EmptyBlock.option` allows empty blocks. */
-	@:optional var emptyBlockEnabled: Bool;
+	@:optional
+	var emptyBlockEnabled: Bool;
 
 };
 

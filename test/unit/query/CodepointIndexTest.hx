@@ -6,7 +6,9 @@ import anyparse.query.CodepointIndex;
 @:nullSafety(Strict)
 class CodepointIndexTest extends Test {
 
-	@:pin('control') @:killer('M-CODEPOINT-NATIVE') @:killer('M-CODEPOINT-BACK')
+	@:pin('control')
+	@:killer('M-CODEPOINT-NATIVE')
+	@:killer('M-CODEPOINT-BACK')
 	public function testAWideCodepointCountsTwoNativeUnits(): Void {
 		// Cyrillic is one unit on every target; an emoji is a surrogate pair where strings count UTF-16 units
 		final source: String = 'ab ёж 😀x😀 y';

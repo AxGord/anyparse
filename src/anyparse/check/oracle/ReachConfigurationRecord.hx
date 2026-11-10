@@ -1,7 +1,9 @@
 package anyparse.check.oracle;
 
 /** One configuration's build, as `ReachBuildsCache` keeps it. */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef ReachConfigurationRecord = {
 	var name: String;
 	var defined: Array<String>;

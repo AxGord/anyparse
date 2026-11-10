@@ -1,7 +1,9 @@
 package anyparse.query.format.json;
 
 /** A reflective call a facts file's node record holds. */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef FactReflRecord = {
 	final t: String;
 	final ?n: String;

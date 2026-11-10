@@ -38,12 +38,22 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxConditionalStmt = {
-	@:fmt(sharpCondParensInside('sharpCondParensInsideOpen', 'sharpCondParensInsideClose')) var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:fmt(sharpCondParensInside('sharpCondParensInsideOpen', 'sharpCondParensInsideClose'))
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
-	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifStmt>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:trivia
+	@:tryparse
+	@:fmt(elemSelfTrailsNewline)
+	var elseifs: Array<HxElseifStmt>;
+	@:optional
+	@:kw('#else')
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var elseBody: Null<Array<HxStatement>>;
 };

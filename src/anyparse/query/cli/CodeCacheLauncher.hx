@@ -335,4 +335,8 @@ extern class CachedScript {
 /**
  * The options of `CachedScript`: `cachedData` is left out, never null, when there is no cache to offer.
  */
-typedef CachedScriptOptions = { var filename: String; @:optional var cachedData: Buffer; };
+typedef CachedScriptOptions = {
+	var filename: String;
+	@:optional
+	var cachedData: Buffer;
+};

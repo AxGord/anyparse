@@ -9,7 +9,8 @@ using Lambda;
  */
 class ThreadSafetyBoundedRepeatsTest extends Test {
 
-	@:pin('control') @:killer('M-TS-BOUND-OFF')
+	@:pin('control')
+	@:killer('M-TS-BOUND-OFF')
 	public function testABoundedLoopRunsAsOnce(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A L.a | Disk.stat'], mains(loop('{"site": "L.main", "max": 3, "costMs": 1}')));
@@ -18,7 +19,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-BOUND-BUDGET')
+	@:pin('control')
+	@:killer('M-TS-BOUND-BUDGET')
 	public function testABoundOverTheBudgetStillRepeats(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -29,7 +31,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-BOUND-CALL')
+	@:pin('control')
+	@:killer('M-TS-BOUND-CALL')
 	public function testAnEntryForAnotherCallLeavesTheLoopRepeating(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -52,7 +55,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-BOUND-UNDER')
+	@:pin('control')
+	@:killer('M-TS-BOUND-UNDER')
 	public function testABoundedLoopUnderALockIsBrief(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "H.work", "max": 3, "costMs": 1}', true), [
@@ -70,7 +74,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	}
 
 	/** An entry binds ONE repetition: over a member with nested loops it binds none, says why, and both loops repeat. */
-	@:pin('control') @:killer('M-TS-BOUND-ONE')
+	@:pin('control')
+	@:killer('M-TS-BOUND-ONE')
 	public function testAnEntryOverNestedLoopsBindsNone(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = nested('{"site": "N.run", "max": 3, "costMs": 1}');
@@ -122,7 +127,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	}
 
 	/** A `call` that is no string drops the whole entry — never widened to the member. */
-	@:pin('control') @:killer('M-TS-BOUND-CALL-SHAPE')
+	@:pin('control')
+	@:killer('M-TS-BOUND-CALL-SHAPE')
 	public function testAMalformedCallDropsTheEntry(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = twoLoops('{"site": "N.run", "call": ["N.a"], "max": 3, "costMs": 1}');
@@ -152,7 +158,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	}
 
 	/** A turn costing nothing would bound any number of turns: `costMs` must be positive, or the entry is dropped. */
-	@:pin('control') @:killer('M-TS-BOUND-COST-ZERO')
+	@:pin('control')
+	@:killer('M-TS-BOUND-COST-ZERO')
 	public function testAZeroCostDropsTheEntry(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = loop('{"site": "L.main", "max": 1000000000000, "costMs": 0}');
@@ -164,7 +171,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	}
 
 	/** `site` names one member, never a pattern — even one that happens to match a single member. */
-	@:pin('control') @:killer('M-TS-BOUND-SITE-PATTERN')
+	@:pin('control')
+	@:killer('M-TS-BOUND-SITE-PATTERN')
 	public function testASitePatternDropsTheEntry(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "R.*", "max": 3, "costMs": 1}', true), [
@@ -183,7 +191,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	 * Two bound loops, one inside the other, run the PRODUCT of their bounds,
 	 * which passes the threshold neither bound passes alone.
 	 */
-	@:pin('control') @:killer('M-TS-BOUND-PRODUCT')
+	@:pin('control')
+	@:killer('M-TS-BOUND-PRODUCT')
 	public function testNestedBoundsMultiply(): Void {
 		#if (sys || nodejs)
 		Assert.isTrue(
@@ -202,7 +211,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	 * the same header would otherwise take the bound its first was given (review round 2 `br1-a`, `br1-b`). The rank
 	 * names one.
 	 */
-	@:pin('control') @:killer('M-TS-BOUND-LABEL-SEVERAL')
+	@:pin('control')
+	@:killer('M-TS-BOUND-LABEL-SEVERAL')
 	public function testALabelNamingSeveralLoopsBindsNone(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = sameHeaders('{"site": "N.run", "loop": "for (i in 0...n)", "max": 3, "costMs": 1}');
@@ -227,7 +237,8 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	 * A loop's rank counts only the loops of its header that repeat a call which may block: one added beside it that
 	 * blocks nothing leaves its label, and the key of the finding it names, as they were (review round 2 `ks2-a`, `ks2-b`).
 	 */
-	@:pin('control') @:killer('M-TS-LABEL-RANK-SINK')
+	@:pin('control')
+	@:killer('M-TS-LABEL-RANK-SINK')
 	public function testALoopThatBlocksNothingTakesNoRank(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(config('{"site": "Z.none", "max": 1, "costMs": 1}', true), [
@@ -246,7 +257,10 @@ class ThreadSafetyBoundedRepeatsTest extends Test {
 	 * 1600 turns, over the budget though each bound alone is under it — on the main thread and under a lock alike
 	 * (review round 2 `br2-nested-entries`). A short call run as once by bounds alone names them.
 	 */
-	@:pin('control') @:killer('M-TS-BOUND-ACROSS') @:killer('M-TS-BOUND-ACROSS-HOLD') @:killer('M-TS-BOUND-NOTE')
+	@:pin('control')
+	@:killer('M-TS-BOUND-ACROSS')
+	@:killer('M-TS-BOUND-ACROSS-HOLD')
+	@:killer('M-TS-BOUND-NOTE')
 	public function testBoundsMultiplyAlongTheWay(): Void {
 		#if (sys || nodejs)
 		final entries: String = '{"site": "N.run", "max": 40, "costMs": 1}, {"site": "N.each", "max": 40, "costMs": 1}';

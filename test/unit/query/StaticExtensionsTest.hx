@@ -18,7 +18,9 @@ import unit.cli.CliFixture;
 @:nullSafety(Strict)
 class StaticExtensionsTest extends Test {
 
-	@:pin('control') @:killer('M-BINDER-EXTENSION-LAST-USING') @:killer('M-BINDER-EXTENSION-FIRST-PARAM')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-LAST-USING')
+	@:killer('M-BINDER-EXTENSION-FIRST-PARAM')
 	public function testTheLastUsingBindsAndARejectingOnePassesOver(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function f(s:Str):Int return 0;\n\n'
@@ -36,7 +38,9 @@ class StaticExtensionsTest extends Test {
 	 * (`mayBindThrough`): a module whose candidate rejects the receiver, or declares none, offers nothing; one the last
 	 * `using` outranks offers the access but takes no part in it.
 	 */
-	@:pin('control') @:killer('M-USING-OFFER-OPEN') @:killer('M-USING-BOUND-ELSEWHERE')
+	@:pin('control')
+	@:killer('M-USING-OFFER-OPEN')
+	@:killer('M-USING-BOUND-ELSEWHERE')
 	public function testWhatOneUsingOffersAndWhetherAnAccessMayBindThroughIt(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function f(s:Str):Int return 0;\n}\n',
@@ -58,7 +62,9 @@ class StaticExtensionsTest extends Test {
 		Assert.isTrue(extensions.mayBindThrough(main, str, 'f', 'p.B'));
 	}
 
-	@:pin('control') @:killer('M-EXT-DECL-TWO-HOSTS') @:killer('M-EXT-MODULE-FIELDS-OPEN')
+	@:pin('control')
+	@:killer('M-EXT-DECL-TWO-HOSTS')
+	@:killer('M-EXT-MODULE-FIELDS-OPEN')
 	public function testAModuleBringsItsLastDeclaredTypeFirstAndItsFunctionsLast(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/M1.hx' => 'package p;\n\nclass X {\n\tpublic static function f(s:Str):Int return 0;\n}\n\n'
@@ -73,7 +79,9 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('-', binding(index, 'p/Main.hx', 'Str', 'h'), 'a module-level function the index cannot type, ahead of `M1.h`');
 	}
 
-	@:pin('control') @:killer('M-BINDER-EXTENSION-ATUSING') @:killer('M-EXT-TYPE-USING-FORWARD')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-ATUSING')
+	@:killer('M-EXT-TYPE-USING-FORWARD')
 	public function testTheTypesOwnUsingBindsBeforeTheFilesAndPassesOverIntoThem(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/C.hx' => 'package p;\n\n@:using(p.E1, p.E2) class C {}\n',
@@ -89,7 +97,8 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('F.h', binding(index, 'p/Main.hx', 'C3', 'h'), 'a rejecting `@:using` candidate passes over into the file');
 	}
 
-	@:pin('control') @:killer('M-EXT-INTERFACES-FIRST')
+	@:pin('control')
+	@:killer('M-EXT-INTERFACES-FIRST')
 	public function testAnInheritedUsingComesSuperclassFirst(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/T.hx' => 'package p;\n\n@:using(p.T.EP) class P {}\n\n@:using(p.T.EI) interface I {}\n\n@:using(p.T.EG) class G {}\n\n'
@@ -107,7 +116,8 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('EM.y', binding(index, 'p/Main.hx', 'D3', 'y'), 'the nearer superclass first');
 	}
 
-	@:pin('control') @:killer('M-EXT-ALIAS-STOP')
+	@:pin('control')
+	@:killer('M-EXT-ALIAS-STOP')
 	public function testATypedefBringsItsOwnThenTheAliasedTypes(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/C.hx' => 'package p;\n\n@:using(p.EC) class C {}\n\n@:using(p.ET) typedef TD = C;\n\ntypedef TD2 = C;\n',
@@ -121,7 +131,8 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('EC.g', binding(index, 'p/Main.hx', 'TD', 'g'), 'then the aliased type\'s');
 	}
 
-	@:pin('control') @:killer('M-USING-HOSTS-ALIAS')
+	@:pin('control')
+	@:killer('M-USING-HOSTS-ALIAS')
 	public function testAnAliasInAUsedModuleBringsTheClassItNames(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Impl.hx' => 'package p;\n\nclass Impl {\n\tpublic static function f(s:Str):Int return 0;\n}\n',
@@ -132,7 +143,10 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('Impl.f', binding(index, 'p/Main.hx', 'Str', 'f'), 'the alias, declared last, brings `Impl`');
 	}
 
-	@:pin('control') @:killer('M-EXT-NULL-PARAM-OPEN') @:killer('M-EXT-DYNAMIC-PARAM-OPEN') @:killer('M-UNIFY-GENERIC-GIVEN')
+	@:pin('control')
+	@:killer('M-EXT-NULL-PARAM-OPEN')
+	@:killer('M-EXT-DYNAMIC-PARAM-OPEN')
+	@:killer('M-UNIFY-GENERIC-GIVEN')
 	public function testWhatAFirstParameterAccepts(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function n(s:Null<Str>):Int return 0;\n\n'
@@ -148,7 +162,10 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('A.sup', binding(index, 'p/Main.hx', 'Gen', 'sup'), 'a generic subclass, by its chain');
 	}
 
-	@:pin('control') @:killer('M-EXT-FIELD-FIRST') @:killer('M-EXT-PRIVATE-OPEN') @:killer('M-BINDER-EXTENSION-GUARDED-USING')
+	@:pin('control')
+	@:killer('M-EXT-FIELD-FIRST')
+	@:killer('M-EXT-PRIVATE-OPEN')
+	@:killer('M-BINDER-EXTENSION-GUARDED-USING')
 	public function testWhatTheWalkDoesNotProve(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function f(c:Own):Int return 0;\n\n'
@@ -167,7 +184,8 @@ class StaticExtensionsTest extends Test {
 	 * Two things the index cannot order: which file of a module it holds twice the compiler loads (the class path's first),
 	 * and which branch of a type under `#if` a build compiles. Each is decided only when every alternative passes.
 	 */
-	@:pin('control') @:killer('M-EXT-AMBIGUOUS-MODULE', 'M-EXT-GUARDED-LINKS')
+	@:pin('control')
+	@:killer('M-EXT-AMBIGUOUS-MODULE', 'M-EXT-GUARDED-LINKS')
 	public function testAlternativesTheIndexCannotOrderMustAllPass(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/A.hx' => 'package p;\n\nclass A {\n\tpublic static function f(s:Str):Int return 0;\n\n'
@@ -184,7 +202,8 @@ class StaticExtensionsTest extends Test {
 		Assert.equals('-', binding(index, 'p/Main.hx', 'G', 'h'), 'a supertype of one branch brings it');
 	}
 
-	@:pin('control') @:killer('M-EXT-AMBIENT-FIRST')
+	@:pin('control')
+	@:killer('M-EXT-AMBIENT-FIRST')
 	public function testTheFilesOwnUsingsComeBeforeTheAmbientOnes(): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('apq_static_extensions', [
@@ -216,7 +235,9 @@ class StaticExtensionsTest extends Test {
 	 * on Haxe 4.3.7): an abstract taking a `Str` only through an `@:from` member rejects it and is passed over, while the
 	 * standard library's `Any` (`from Dynamic`) takes every receiver.
 	 */
-	@:pin('control') @:killer('M-UNIFY-ABSTRACT-OFF') @:killer('M-CASTS-DYNAMIC-END')
+	@:pin('control')
+	@:killer('M-UNIFY-ABSTRACT-OFF')
+	@:killer('M-CASTS-DYNAMIC-END')
 	public function testAnAbstractParameterTakesWhatItsClausesTake(): Void {
 		final index: SymbolIndex = indexOf([
 			'Any.hx' => 'abstract Any(Dynamic) from Dynamic {}\n',

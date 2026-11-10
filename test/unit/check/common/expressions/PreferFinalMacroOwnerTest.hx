@@ -11,7 +11,8 @@ using StringTools;
  * gets its finding, with the edit declined without a compiler oracle and admitted, through
  * typecheck-and-revert, under one. Every other owner keeps the ordinary fix.
  */
-@:nullSafety(Strict) class PreferFinalMacroOwnerTest extends Test {
+@:nullSafety(Strict)
+class PreferFinalMacroOwnerTest extends Test {
 
 	/** A private field assigned only at its declaration, in a class a `@:build` macro reaches. */
 	private static inline final PRIVATE_BUILT: String =
@@ -23,36 +24,42 @@ using StringTools;
 	private static inline final PRIVATE_RULE: String = 'prefer-final-field';
 	private static inline final PUBLIC_RULE: String = 'prefer-final-public-field';
 
-	@:pin('control') @:killer('M-PFF-MACRO-SILENT')
+	@:pin('control')
+	@:killer('M-PFF-MACRO-SILENT')
 	public function testAPrivateFieldOfAMacroBuiltOwnerIsReportedAndDeclined(): Void {
 		final vs: Array<Violation> = violations(PRIVATE_RULE, PRIVATE_BUILT);
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.notNull(vs[0].declineReason);
 	}
 
-	@:pin('control') @:killer('M-PFF-MACRO-FIXED')
+	@:pin('control')
+	@:killer('M-PFF-MACRO-FIXED')
 	public function testAPrivateFieldOfAMacroBuiltOwnerIsNotFixedWithoutTheOracle(): Void {
 		Assert.equals(PRIVATE_BUILT, fixed(PRIVATE_RULE, PRIVATE_BUILT, false));
 	}
 
-	@:pin('control') @:killer('M-PFF-MACRO-NEVER-ADMITTED')
+	@:pin('control')
+	@:killer('M-PFF-MACRO-NEVER-ADMITTED')
 	public function testAPrivateFieldOfAMacroBuiltOwnerIsFixedUnderTheOracle(): Void {
 		Assert.equals(PRIVATE_BUILT.replace('private var', 'private final'), fixed(PRIVATE_RULE, PRIVATE_BUILT, true));
 	}
 
-	@:pin('control') @:killer('M-PFPF-MACRO-SILENT')
+	@:pin('control')
+	@:killer('M-PFPF-MACRO-SILENT')
 	public function testAPublicFieldOfAMacroBuiltOwnerIsReportedAndDeclined(): Void {
 		final vs: Array<Violation> = violations(PUBLIC_RULE, PUBLIC_BUILT);
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.notNull(vs[0].declineReason);
 	}
 
-	@:pin('control') @:killer('M-PFPF-MACRO-FIXED')
+	@:pin('control')
+	@:killer('M-PFPF-MACRO-FIXED')
 	public function testAPublicFieldOfAMacroBuiltOwnerIsNotFixedWithoutTheOracle(): Void {
 		Assert.equals(PUBLIC_BUILT, fixed(PUBLIC_RULE, PUBLIC_BUILT, false));
 	}
 
-	@:pin('control') @:killer('M-PFPF-MACRO-NEVER-ADMITTED')
+	@:pin('control')
+	@:killer('M-PFPF-MACRO-NEVER-ADMITTED')
 	public function testAPublicFieldOfAMacroBuiltOwnerIsFixedUnderTheOracle(): Void {
 		Assert.equals(PUBLIC_BUILT.replace('public var', 'public final'), fixed(PUBLIC_RULE, PUBLIC_BUILT, true));
 	}
@@ -73,7 +80,8 @@ using StringTools;
 	 * `(default, null)` property into a plain field (a builder listing `FProp` fields then sees none) and
 	 * moves the default after whatever the builder prepends to the constructor — both compile.
 	 */
-	@:pin('control') @:killer('M-FINAL-MACRO-FOLD-ADMITTED')
+	@:pin('control')
+	@:killer('M-FINAL-MACRO-FOLD-ADMITTED')
 	public function testTheFoldIsNeverAdmittedOnAMacroBuiltOwner(): Void {
 		final prop: String = '@:build(B.build()) class C {\n\tpublic var x(default, null):Int = 1;\n\n'
 			+ '\tpublic function new(?p:Int) {\n\t\tif (p != null) x = p;\n\t}\n}';
@@ -90,7 +98,8 @@ using StringTools;
 	}
 
 	/** A builder whose module reads field finality can generate something else for `final`, which the oracle cannot see. */
-	@:pin('control') @:killer('M-FINAL-MACRO-FINALITY-BLIND')
+	@:pin('control')
+	@:killer('M-FINAL-MACRO-FINALITY-BLIND')
 	public function testABuilderReadingFinalityDeclinesEvenUnderTheOracle(): Void {
 		final owner: { file: String, source: String } = { file: 'C.hx', source: PUBLIC_BUILT };
 		final reads: String = 'class M {\n\tpublic static function f():Array<haxe.macro.Expr.Field> {\n'

@@ -100,7 +100,8 @@ class GraphDiffCliTest extends Test {
 	 * relatively: both sides of the cwd-relative path are one file identity, so the linked spelling is no path outside the
 	 * repository.
 	 */
-	@:pin('control') @:killer('M-GIT-REVISION-SPEC-UNRESOLVED')
+	@:pin('control')
+	@:killer('M-GIT-REVISION-SPEC-UNRESOLVED')
 	public function testALinkedAbsoluteScopeGoneFromTheDiskReadsAsItsRelativeSpelling(): Void {
 		#if nodejs
 		final root: String = CliFixture.writeTree('apq_graphdifflink', [{ name: 'repo/p/A.hx', source: GraphFixture.DIFF_BEFORE }]);

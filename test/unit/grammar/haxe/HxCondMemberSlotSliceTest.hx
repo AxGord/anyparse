@@ -147,7 +147,7 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	 * doc inside `ofInt`'s body and left `toInt` private.
 	 */
 	public function testCondFnBodyKeepsFollowingMemberDocAndVisibility(): Void {
-		final src: String = 'class C {\n\t@:from public static inline function ofInt(x:Int):Int64'
+		final src: String = 'class C {\n\t@:from\n\tpublic static inline function ofInt(x:Int):Int64'
 			+ ' #if lua return mk(x, 1); #else return mk(x, 2); #end\n\n\t/**\n\t\tDoc of the next member.\n\t**/\n'
 			+ '\tpublic static inline function toInt(x:Int64):Int {\n\t\treturn x.low;\n\t}\n}';
 		expectTwoMembersLedByCondBody(src);

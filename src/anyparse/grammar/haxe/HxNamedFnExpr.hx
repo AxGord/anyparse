@@ -24,11 +24,23 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldShape('body'))
 typedef HxNamedFnExpr = {
 	var name: HxFnNameLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:trivia @:lead('(') @:trail(')') @:sep(',') @:fmt(trailingComma('trailingCommaParams'), funcParamParens,
-		wrapRules('functionSignatureWrap'), bodyAwareCompactIndent('body', 'fnExprBodyEmpty'), groupRestProbe,
-		ignoreSourceNewlinesForWrap) var params: Array<HxParam>;
-	@:optional @:fmt(space('typeHintColon', 'lead')) @:lead(':') var returnType: Null<HxType>;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:trivia
+	@:lead('(')
+	@:trail(')')
+	@:sep(',')
+	@:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'),
+		bodyAwareCompactIndent('body', 'fnExprBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap)
+	var params: Array<HxParam>;
+	@:optional
+	@:fmt(space('typeHintColon', 'lead'))
+	@:lead(':')
+	var returnType: Null<HxType>;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnExprBody;
 }

@@ -102,7 +102,8 @@ class JsonTypedParserTest extends Test {
 	}
 
 	/** A field's `@:key` is the key the parser matches, and the error for a missing one names that key. */
-	@:pin('control') @:killer('M-JSON-KEY-PARSE')
+	@:pin('control')
+	@:killer('M-JSON-KEY-PARSE')
 	public function testDeclaredKeyIsTheParsedKey(): Void {
 		final keyed: TestKeyed = TestKeyedParser.parse('{"function":"A.b","content-type":"text/plain"}');
 		Assert.equals('A.b', keyed.member);
@@ -118,7 +119,8 @@ class JsonTypedParserTest extends Test {
 	}
 
 	/** The writer spells a field with its `@:key`, so what it writes the parser reads back. */
-	@:pin('control') @:killer('M-JSON-KEY-WRITE')
+	@:pin('control')
+	@:killer('M-JSON-KEY-WRITE')
 	public function testDeclaredKeyIsTheWrittenKey(): Void {
 		final written: String = TestKeyedWriter.write({ member: 'A.b', contentType: 'x' }, JsonFormat.instance.defaultWriteOptions);
 		Assert.stringContains('"function":', written);
@@ -131,7 +133,8 @@ class JsonTypedParserTest extends Test {
 	 * The format's null literal as a value reads as the key being absent: an optional field stays
 	 * `null` whatever its type, and a required one fails as missing, naming its key.
 	 */
-	@:pin('control') @:killer('M-BYNAME-NULL-ABSENT')
+	@:pin('control')
+	@:killer('M-BYNAME-NULL-ABSENT')
 	public function testNullValueReadsAsAnAbsentKey(): Void {
 		final src: String =
 			'{"name":"a","count":1,"policy":"first","nested":{"kind":"k","count":null},"tag":null,"ratio":null,"enabled":null}';

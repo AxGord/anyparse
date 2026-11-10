@@ -35,20 +35,23 @@ typedef Violation = {
 	 * checkstyle records are built field by field from the other fields, so a rule that adopts
 	 * this one changes no reported byte.
 	 */
-	@:optional var declineReason: Null<String>;
+	@:optional
+	var declineReason: Null<String>;
 
 	/**
 	 * The finding's identity as structured data, or null: what a message spells in prose, in fields a tool can key on
 	 * without parsing it. Only the json record carries it (as `data`); the text report and checkstyle are unchanged.
 	 */
-	@:optional var data: Null<FindingData>;
+	@:optional
+	var data: Null<FindingData>;
 
 	/**
 	 * The module a finding's remedy names that the file must resolve, or null when the remedy names none the file's builds could
 	 * lack — set by a rule whose advice is a project-configured helper. `ImportReach.reportable` withholds the finding in a file
 	 * whose build cannot see the module; no reported byte changes, as for `declineReason`.
 	 */
-	@:optional var remedy: Null<String>;
+	@:optional
+	var remedy: Null<String>;
 
 }
 
@@ -69,7 +72,8 @@ typedef FindingData = {
 	 * The repeating calls that run the finding's call more than once, when the rule says so (`thread-safety`: a long
 	 * sink a loop up the main thread's way repeats) — what ranks a per-item stall above a one-off one; not identity.
 	 */
-	@:optional var repeatedBy: Null<Array<RepeatSite>>;
+	@:optional
+	var repeatedBy: Null<Array<RepeatSite>>;
 
 }
 
@@ -497,7 +501,8 @@ typedef CrossFileEdits = {
 	 * create is refused when it is present, and the commit owes a created file a DELETE on revert
 	 * that no edit list can express. `edits` must be empty beside it.
 	 */
-	@:optional final create: Null<String>;
+	@:optional
+	final create: Null<String>;
 
 	/**
 	 * True when this slice DELETES the file — one the run already holds. `edits` must be empty beside it,
@@ -506,7 +511,8 @@ typedef CrossFileEdits = {
 	 * Its own member for the reason `create` is one: a delete is refused where the file is not held, and
 	 * its revert RESTORES the bytes the run started from, which no edit list can express.
 	 */
-	@:optional final remove: Null<Bool>;
+	@:optional
+	final remove: Null<Bool>;
 
 };
 

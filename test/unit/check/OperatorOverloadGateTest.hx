@@ -164,7 +164,8 @@ class OperatorOverloadGateTest extends Test {
 	}
 
 	/** The ternary swap is the same complement, so it asks the same question. */
-	@:pin('control') @:killer('M-NEGCOND-OVERLOAD-BLIND')
+	@:pin('control')
+	@:killer('M-NEGCOND-OVERLOAD-BLIND')
 	public function testInvertTernarySkipsOverloadedNot(): Void {
 		Assert.isFalse(reports(new InvertNegatedIfElse(), NEGATION_OVERLOAD, NEGATED_VALUE_USE, '!f ?'));
 	}
@@ -177,7 +178,8 @@ class OperatorOverloadGateTest extends Test {
 	 * A ternary BUILT from a negated guard is oriented positive only for the built-in `!`, and the
 	 * fix decides it with the overload declared in ANOTHER module — the report index it is handed.
 	 */
-	@:pin('control') @:killer('M-NEGCOND-OVERLOAD-BLIND', 'M-OPSEL-REPORT-DROPPED')
+	@:pin('control')
+	@:killer('M-NEGCOND-OVERLOAD-BLIND', 'M-OPSEL-REPORT-DROPPED')
 	public function testTernaryReturnKeepsOverloadedNot(): Void {
 		Assert.equals('return !f ? x : -x;', ternaryReturnFix(NEGATION_OVERLOAD));
 	}
@@ -194,7 +196,8 @@ class OperatorOverloadGateTest extends Test {
 	 * RED under M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND (no operator asked) and M-NEGCOND-DEFAULT-LAST-EQ-UNASKED
 	 * (only the not asked).
 	 */
-	@:pin('control') @:killer('M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND', 'M-NEGCOND-DEFAULT-LAST-EQ-UNASKED')
+	@:pin('control')
+	@:killer('M-NEGCOND-DEFAULT-LAST-OVERLOAD-BLIND', 'M-NEGCOND-DEFAULT-LAST-EQ-UNASKED')
 	public function testDefaultLastAsksTheOperatorItWrites(): Void {
 		final eqOnly: String = 'abstract Flag(Bool) from Bool to Bool {\n\n'
 			+ '\t@:op(A == B) public inline function eq(b: Flag): Bool return this == cast b;\n\n}\n';

@@ -38,7 +38,8 @@ class OwnerIndexTest extends Test {
 		Assert.equals('No stop at all', OwnerIndex.firstSentence('No stop at all'));
 	}
 
-	@:pin('control') @:killer('M-OWNER-QUESTION-UNREAD')
+	@:pin('control')
+	@:killer('M-OWNER-QUESTION-UNREAD')
 	public function testTheOwnedQuestionIsTheQuotedTextAfterThePhrase(): Void {
 		Assert.equals('which file is this path?', OwnerIndex.ownedQuestion('The one answer to "which file is this path?": all ask.'));
 		Assert.isNull(OwnerIndex.ownedQuestion('The one answer to `which`, unquoted.'));
@@ -46,7 +47,8 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** `owned` lists every declaration whose doc states its question, ordered by the question. */
-	@:pin('control') @:killer('M-OWNER-QUESTION-UNREAD')
+	@:pin('control')
+	@:killer('M-OWNER-QUESTION-UNREAD')
 	public function testOwnedListsTheStatedQuestionsInOrder(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{ file: 'src/a/Z.hx', source: 'package a;\n\n/** The one answer to "which zone is this?". */\nclass Z {}\n' },
@@ -61,7 +63,8 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** A declaration whose NAME shares no word with the question is still found by what its doc says, with its line. */
-	@:pin('control') @:killer('M-OWNER-DOC-BLIND')
+	@:pin('control')
+	@:killer('M-OWNER-DOC-BLIND')
 	public function testTheDocAloneFindsADeclaration(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{
@@ -80,7 +83,8 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** A word few declarations carry outranks a common one, so the rare `identity` beats the everywhere `node`. */
-	@:pin('control') @:killer('M-OWNER-RARITY-BLIND')
+	@:pin('control')
+	@:killer('M-OWNER-RARITY-BLIND')
 	public function testARareWordOutranksACommonOne(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{ file: 'src/a/A.hx', source: 'package a;\n\nclass NodeHolder {}\n' },
@@ -94,7 +98,9 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** Of two equal matches, the type other files name in their code ranks first; a name in a comment counts for nothing. */
-	@:pin('control') @:killer('M-OWNER-MENTIONS-UNCOUNTED') @:killer('M-OWNER-MENTIONS-IN-COMMENTS')
+	@:pin('control')
+	@:killer('M-OWNER-MENTIONS-UNCOUNTED')
+	@:killer('M-OWNER-MENTIONS-IN-COMMENTS')
 	public function testATypeOtherFilesNameOutranksAnEqualMatch(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{ file: 'src/a/A.hx', source: 'package a;\n\nclass PathAlpha {}\n' },
@@ -109,7 +115,8 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** Of two equal matches, the declaration whose doc states the question it owns ranks first. */
-	@:pin('control') @:killer('M-OWNER-OWNED-UNBONUSED')
+	@:pin('control')
+	@:killer('M-OWNER-OWNED-UNBONUSED')
 	public function testAnOwnedQuestionOutranksAnEqualMatch(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{ file: 'src/a/A.hx', source: 'package a;\n\nclass ZoneBeta {}\n' },
@@ -122,7 +129,8 @@ class OwnerIndexTest extends Test {
 	 * Each question a review found answered twice — a copy written beside the component that owned it — finds that owner,
 	 * the type or one of its members, among the first few declarations the project's `src` ranks.
 	 */
-	@:pin('control') @:killer('M-OWNER-TERMS-EMPTY')
+	@:pin('control')
+	@:killer('M-OWNER-TERMS-EMPTY')
 	public function testEachDuplicatedQuestionFindsItsOwnerOnThisTree(): Void {
 		#if (sys || nodejs)
 		final io: ResolvedInputs = CliArgs.resolveInputPaths('haxe', ['${CliFixture.repoRoot()}/src']);
@@ -138,7 +146,8 @@ class OwnerIndexTest extends Test {
 	}
 
 	/** A word few declarations carry tells more than one most of them carry. */
-	@:pin('control') @:killer('M-OWNER-RARITY-BLIND')
+	@:pin('control')
+	@:killer('M-OWNER-RARITY-BLIND')
 	public function testARareWordTellsMoreThanACommonOne(): Void {
 		final owners: OwnerIndex = ownersOf([
 			{ file: 'src/a/A.hx', source: 'package a;\n\n/** Holds a zebra value. */\nclass A {}\n' },

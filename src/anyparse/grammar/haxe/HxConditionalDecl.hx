@@ -41,7 +41,9 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalDecl = {
 	var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportAliasInDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
 	))
@@ -60,9 +62,18 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
-	@:trivia @:tryparse @:fmt(padTrailing) var trailingMeta: Array<HxMetadata>;
-	@:trivia @:tryparse var elseifs: Array<HxElseifDecl>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:trivia
+	@:tryparse
+	@:fmt(padTrailing)
+	var trailingMeta: Array<HxMetadata>;
+	@:trivia
+	@:tryparse
+	var elseifs: Array<HxElseifDecl>;
+	@:optional
+	@:kw('#else')
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportAliasInDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
 	))
@@ -81,5 +92,8 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var elseBody: Null<Array<HxTopLevelDecl>>;
-	@:trivia @:tryparse @:fmt(padTrailing) var elseTrailingMeta: Array<HxMetadata>;
+	@:trivia
+	@:tryparse
+	@:fmt(padTrailing)
+	var elseTrailingMeta: Array<HxMetadata>;
 };

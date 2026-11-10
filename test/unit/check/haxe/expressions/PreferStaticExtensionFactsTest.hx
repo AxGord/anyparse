@@ -219,35 +219,41 @@ class PreferStaticExtensionFactsTest extends Test {
 		''
 	].join('\n');
 
-	@:pin('control') @:killer('M-PSE-FACTS-OFF') @:killer('M-PSE-FACTS-NULL')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-OFF')
+	@:killer('M-PSE-FACTS-NULL')
 	public function testAReceiverOnlyTheFactsTypeIsRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
 		for (site in ['proven', 'std', 'configs']) Assert.equals('fix', seen[site], '$site: $seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-SHADOW')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-SHADOW')
 	public function testAMemberOfASupertypeOrAnInterfaceDropsTheSite(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
 		for (site in ['super', 'iface']) Assert.equals('drop', seen[site], '$site: $seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-HOSTS')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-HOSTS')
 	public function testAForwardingAbstractIsNoMemberHost(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
 		Assert.equals('report', seen['forward'], '$seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-USING')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-USING')
 	public function testATypeWithItsOwnUsingIsNotRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
 		Assert.equals('report', seen['using'], '$seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-PARAM')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-PARAM')
 	public function testAnAbstractParameterIsNotRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
@@ -258,7 +264,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * An overloaded extern static: the facts field records only its first signature, whose parameter takes the receiver,
 	 * so only the overload count keeps the site from being judged by a signature the call may not have chosen.
 	 */
-	@:pin('control') @:killer('M-PSE-FACTS-OVERLOAD')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-OVERLOAD')
 	public function testAnOverloadIsNotRewritten(): Void {
 		final source: String = 'class Base {\n\tpublic function new() {}\n}\n@:native("Ext") extern class Ext {\n'
 			+ '\toverload static function o(x:Base):String;\n\n\toverload static function o(x:Int):String;\n}\nclass Main {\n'
@@ -271,7 +278,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		Assert.equals('report', seen['overload'], '$seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-DYNAMIC')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-DYNAMIC')
 	public function testADynamicReceiverIsDropped(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
@@ -282,7 +290,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * `mo` has no annotation, so its type is the one `Util.d(mo)` bound: at `mo.d()` it is not bound yet, the call is a
 	 * dynamic field call, and the program fails at run time — while still compiling.
 	 */
-	@:pin('control') @:killer('M-PSE-FACTS-INFERRED')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-INFERRED')
 	public function testAReceiverWhoseTypeTheCallMayHaveInferredIsNotRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]]);
 		if (seen == null) return;
@@ -294,7 +303,10 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * call whose signature's result is closed — is asked of the facts though nothing writes its type (N24). A constructor of
 	 * the same name taking no argument is not one the pattern can be of (`arity`).
 	 */
-	@:pin('control') @:killer('M-FACTS-FIXED-CAPTURE') @:killer('M-FACTS-FIXED-LOOP') @:killer('M-FACTS-CTOR-ARITY')
+	@:pin('control')
+	@:killer('M-FACTS-FIXED-CAPTURE')
+	@:killer('M-FACTS-FIXED-LOOP')
+	@:killer('M-FACTS-CTOR-ARITY')
 	public function testABinderTheCompilerTypedWhenItBoundItIsRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]], BINDER_MAIN, BINDER_MAIN);
 		if (seen == null) return;
@@ -307,7 +319,10 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * shares, as the name alone does not say which enum the pattern is of. Rewritten, `generic` and `mono` no longer compile
 	 * (Haxe 4.3.7: `String should be { trim : () -> Unknown<0> }`).
 	 */
-	@:pin('control') @:killer('M-FACTS-CLOSED-PARAMETER') @:killer('M-FACTS-FIXED-ANY-BINDER') @:killer('M-FACTS-FIXED-LOOP-ANY')
+	@:pin('control')
+	@:killer('M-FACTS-CLOSED-PARAMETER')
+	@:killer('M-FACTS-FIXED-ANY-BINDER')
+	@:killer('M-FACTS-FIXED-LOOP-ANY')
 	@:killer('M-FACTS-CTOR-EVERY')
 	public function testABinderALaterCallMayHaveTypedIsNotRewritten(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]], BINDER_MAIN, BINDER_MAIN);
@@ -324,7 +339,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		Assert.equals('fix', seen['proven'], '$seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FACTS-TEXT')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-TEXT')
 	public function testFactsOfAnotherTextProveNothing(): Void {
 		// the run's journal places the receiver in the edited text, but the table is asked by range: only the text it read
 		final edited: String = '$MAIN// edited since the compile\n';
@@ -337,7 +353,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		Assert.equals('report', seen['proven'], '$seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-FIRST-PARAM')
+	@:pin('control')
+	@:killer('M-PSE-FIRST-PARAM')
 	public function testTheFirstParameterOfAFactsSignature(): Void {
 		Assert.equals('Iterable<$$map.A>', StaticExtensionFacts.firstParamOf('(Iterable<$$map.A>,($$map.A)->$$map.B)->Array<$$map.B>'));
 		Assert.equals('($$a.A)->Bool', StaticExtensionFacts.firstParamOf('(($$a.A)->Bool,Int)->Int'));
@@ -351,7 +368,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * `import Other as Util` rebinds the configured module's name: `Util.f(b)` calls `Other.f`, while the rewrite's
 	 * `using Util` binds the configured module's `f` — both inline, so no call fact at the site names either.
 	 */
-	@:pin('control') @:killer('M-PSE-CHANNEL-ALIAS')
+	@:pin('control')
+	@:killer('M-PSE-CHANNEL-ALIAS')
 	public function testAnImportAliasOfTheModuleNameDropsTheSite(): Void {
 		// the conflict gate drops the plain alias too: the inserted `using Util` would bring `Other` and its `f`. With `Other.f`
 		// out of `using` it sees no rival, and only what the written name binds to drops the site
@@ -371,7 +389,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/** A `using` in a conditional region binds in the builds that compile it: `Other.f` there, not the configured `Util.f`. */
-	@:pin('control') @:killer('M-PSE-CHANNEL-REGION-USING')
+	@:pin('control')
+	@:killer('M-PSE-CHANNEL-REGION-USING')
 	public function testAConditionalUsingProvidingTheMethodDropsTheSite(): Void {
 		final source: String = '#if !nope\nusing Main.Other;\n#end\n\n$TWIN_MODULES$BASE_MAKER';
 		final seen: Null<Map<String, String>> = verdicts([[]], source, source);
@@ -380,7 +399,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/** `@:noUsing` keeps `Util.f` out of `using`: the rewrite would not compile. */
-	@:pin('control') @:killer('M-PSE-CHANNEL-NO-USING')
+	@:pin('control')
+	@:killer('M-PSE-CHANNEL-NO-USING')
 	public function testANoUsingFunctionDropsTheSite(): Void {
 		final source: String = 'class Util {\n\t@:noUsing public static function f(x:Base):String\n\t\treturn "Util.f";\n}\n\n$BASE_MAKER';
 		final seen: Null<Map<String, String>> = verdicts([[]], source, source);
@@ -392,7 +412,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * `using Zeta` brings the statics of every type `Zeta.hx` declares: `Extra.f` there binds `b.f()` (`Util.f` before), so
 	 * the site is dropped — whether the `using` is the file's or an ambient `import.hx`'s.
 	 */
-	@:pin('control') @:killer('M-PSE-USING-MODULE-WIDE')
+	@:pin('control')
+	@:killer('M-PSE-USING-MODULE-WIDE')
 	public function testAUsingOfAModuleWeighsEveryTypeItDeclares(): Void {
 		for (ambient in [false, true]) {
 			final main: String = (ambient ? '' : 'using Zeta;\n\n') + SUBTYPE_MAIN;
@@ -405,7 +426,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/** A `typedef` of a class in the used module brings that class's statics too (`using tink.CoreApi` works that way). */
-	@:pin('control') @:killer('M-PSE-USING-ALIAS-HOST')
+	@:pin('control')
+	@:killer('M-PSE-USING-ALIAS-HOST')
 	public function testAUsingOfAModuleFollowsItsTypedefs(): Void {
 		final main: String = 'using Zeta;\n\n$SUBTYPE_MAIN';
 		final extra: Map<String, String> = subtypeModules();
@@ -417,7 +439,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/** The facts half of the same gate: `Extra.f` in the facts of `Zeta.hx`'s module drops the site on its own. */
-	@:pin('control') @:killer('M-PSE-FACTS-USING-MODULE-WIDE')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-USING-MODULE-WIDE')
 	public function testTheFactsWeighEveryTypeAUsedModuleDeclares(): Void {
 		#if (sys || nodejs)
 		final main: String = 'using Zeta;\n\n$SUBTYPE_MAIN';
@@ -449,7 +472,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * The `using Util` the rewrite inserts brings every type of `Util.hx`: `Extra.f` there binds `b.f()` instead of
 	 * `Util.f`, so the configured module's own neighbours drop the site.
 	 */
-	@:pin('control') @:killer('M-PSE-USING-SELF-MODULE')
+	@:pin('control')
+	@:killer('M-PSE-USING-SELF-MODULE')
 	public function testTheConfiguredModulesOwnNeighboursDropTheSite(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]], SUBTYPE_MAIN, SUBTYPE_MAIN, BUILD, UTIL_CONFIG, selfModules());
 		if (seen == null) return;
@@ -457,7 +481,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	}
 
 	/** The facts half: with no `using` in the file, the inserted one's neighbours alone drop the site. */
-	@:pin('control') @:killer('M-PSE-FACTS-USING-SELF-MODULE')
+	@:pin('control')
+	@:killer('M-PSE-FACTS-USING-SELF-MODULE')
 	public function testTheFactsWeighTheConfiguredModulesNeighbours(): Void {
 		#if (sys || nodejs)
 		final entries: Array<{ name: String, source: String }> = [{
@@ -491,7 +516,8 @@ class PreferStaticExtensionFactsTest extends Test {
 	 * A receiver type's `@:using` binds before the file's `using` — on the type itself, on a superclass and on an
 	 * interface alike; the structural path and the facts path each keep such a site report-only.
 	 */
-	@:pin('control') @:killer('M-PSE-CLOSURE-USING')
+	@:pin('control')
+	@:killer('M-PSE-CLOSURE-USING')
 	public function testAUsingOnTheReceiverTypeKeepsTheSiteReportOnly(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]], USING_MAIN, USING_MAIN);
 		if (seen == null) return;
@@ -499,7 +525,8 @@ class PreferStaticExtensionFactsTest extends Test {
 		for (site in ['super facts', 'iface facts']) Assert.equals('report', seen[site], '$site: $seen');
 	}
 
-	@:pin('control') @:killer('M-PSE-CLOSURE-USING-SUPER')
+	@:pin('control')
+	@:killer('M-PSE-CLOSURE-USING-SUPER')
 	public function testAUsingOnASupertypeKeepsTheSiteReportOnly(): Void {
 		final seen: Null<Map<String, String>> = verdicts([[]], USING_MAIN, USING_MAIN);
 		if (seen == null) return;

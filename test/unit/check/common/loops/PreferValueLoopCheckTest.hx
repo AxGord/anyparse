@@ -91,7 +91,8 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('for (i in 0...items.length) {\n\t\t\tuse(items[i]);\n\t\t\ti = 0;\n\t\t}')).length);
 	}
 
-	@:pin('control') @:killer('M-VALUE-LOOP-INDEX-TEXT-BLIND')
+	@:pin('control')
+	@:killer('M-VALUE-LOOP-INDEX-TEXT-BLIND')
 	public function testMacroIndexReadNotFlagged(): Void {
 		// A `macro` quotation is an `opaqueKinds` subtree, so every node walk answers "the index is
 		// absent" where the honest answer is "unknown" — and this rewrite DELETES the index on that
@@ -241,7 +242,8 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('for (i in 0...items.length) tick();')).length);
 	}
 
-	@:pin('control') @:killer('M-VALUE-LOOP-READS-UNSPLICED')
+	@:pin('control')
+	@:killer('M-VALUE-LOOP-READS-UNSPLICED')
 	public function testFixRewritesBlockBody(): Void {
 		assertFixCanonical(
 			owned('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.log(items[i]);\n\t\t}'), ['for (item in items)'],
@@ -295,7 +297,9 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'prefer-value-loop is opt-in');
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-CLOSURE') @:killer('M-VALUE-LOOP-BODY-GATES')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-CLOSURE')
+	@:killer('M-VALUE-LOOP-BODY-GATES')
 	public function testClosureReadNotFlagged(): Void {
 		// A closure pushed in the loop reads `items[i]` when it RUNS; after a slot is replaced post-loop
 		// it sees the new element, while a value binder would still hold the one of its iteration.
@@ -306,7 +310,8 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrap('items:Array<Item>, fns:Array<() -> Item>', local)).length);
 	}
 
-	@:pin('control') @:killer('M-VALUE-LOOP-SELF-CALL')
+	@:pin('control')
+	@:killer('M-VALUE-LOOP-SELF-CALL')
 	public function testBodyThatMayChangeTheCollectionIsReportOnly(): Void {
 		// A callee that grows the FIELD is reached through the instance; a PARAMETER may be the caller's own
 		// array, so any code the body runs could change it. The decline says which.
@@ -361,7 +366,8 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(ElementLoopRewrite.COMMENT_DECLINE, declineOf(owned('for (i in 0...items.length) sink.use(items[i /* x */]);')));
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-NESTED-BINDER')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-NESTED-BINDER')
 	public function testNestedLoopsDerivingOneBinderAreReportOnly(): Void {
 		// Both loops would be fixed in one pass: `for (val in vals) for (val in vals)` and the inner
 		// binder shadows the outer one.
@@ -375,7 +381,9 @@ class PreferValueLoopCheckTest extends Test {
 		for (v in vs) Assert.equals('an enclosing or nested indexed loop derives the same element name `val`', v.declineReason);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-TYPE-CALLEE') @:killer('M-ELEMENT-LOOP-NEW-EXPR')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-TYPE-CALLEE')
+	@:killer('M-ELEMENT-LOOP-NEW-EXPR')
 	public function testStaticAndConstructorCallsThatGrowTheCollectionAreReportOnly(): Void {
 		// `Main.grow()` and `new Grower()` both push onto the static collection the loop walks.
 		for (call in ['Main.grow()', 'new Grower()']) {
@@ -388,13 +396,15 @@ class PreferValueLoopCheckTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-REBIND')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-REBIND')
 	public function testThisQualifiedCollectionNotFlagged(): Void {
 		final push: String = 'for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tthis.items.push(null);\n\t\t}';
 		Assert.equals(0, violations(wrap('items:Array<Item>, sink:Sink', push)).length);
 	}
 
-	@:pin('control') @:killer('M-REACH-ESCAPE-ARGUMENT')
+	@:pin('control')
+	@:killer('M-REACH-ESCAPE-ARGUMENT')
 	public function testMethodOfAnotherObjectHoldingTheCollectionIsReportOnly(): Void {
 		// `sink` was handed the very array, so `sink.use` changes it without ever naming `items`.
 		final shared: String = owned('sink.held = items;\n\t\tfor (i in 0...items.length) sink.use(items[i].clone());');
@@ -404,7 +414,9 @@ class PreferValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-SINGULAR-INNER-WORD') @:killer('M-SINGULAR-WORD-END-ANYWHERE')
+	@:pin('control')
+	@:killer('M-SINGULAR-INNER-WORD')
+	@:killer('M-SINGULAR-WORD-END-ANYWHERE')
 	public function testSingularOfReadsTheLastPluralWord(): Void {
 		// The whole-name answers, unchanged: a plural at the end is still read as it always was.
 		final cases: Array<Array<Null<String>>> = [
@@ -447,7 +459,8 @@ class PreferValueLoopCheckTest extends Test {
 		for (c in cases) Assert.equals(c[1], ElementLoopRewrite.singularOf(c[0] ?? ''), 'singularOf(${c[0]})');
 	}
 
-	@:pin('control') @:killer('M-SINGULAR-INNER-WORD')
+	@:pin('control')
+	@:killer('M-SINGULAR-INNER-WORD')
 	public function testInnerPluralWordNamesTheBinder(): Void {
 		final src: String = 'class C {\n\tfinal gridLinesVertical:Array<Line> = [];\n\n\tfunction f():Void {\n'
 			+ '\t\tfor (i in 0...gridLinesVertical.length) gridLinesVertical[i].redraw();\n\t}\n}\n\n'
@@ -456,7 +469,8 @@ class PreferValueLoopCheckTest extends Test {
 		assertFixCanonical(src, ['for (gridLineVertical in gridLinesVertical) gridLineVertical.redraw();'], ['[i]']);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-UNDERSCORE')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-UNDERSCORE')
 	public function testPrivateFieldCollectionDropsItsUnderscore(): Void {
 		// The derivation `prefer-keyvalue-loop` uses, so `_points` names its element `point` under both rules.
 		final src: String = 'class C {\n\tfinal _points:Array<Item> = [];\n\n\tfinal sink:Sink = new Sink();\n\n'

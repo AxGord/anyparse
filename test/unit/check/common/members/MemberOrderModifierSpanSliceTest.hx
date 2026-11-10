@@ -90,7 +90,8 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final fixed: String = canonicalizedFix(src);
 		Assert.isTrue(fixed.indexOf('function f0') > fixed.indexOf('isEvent'), 'the private static helper sorted below: $fixed');
 		Assert.isTrue(
-			lineAfter(fixed, '@:from #if (haxe_ver >= 4.2) extern #else @:extern #end').startsWith('private static inline function f0'),
+			lineAfter(fixed, '#if (haxe_ver >= 4.2) extern #else @:extern #end').startsWith('private static inline function f0')
+			&& lineAfter(fixed, '@:from').startsWith('#if (haxe_ver >= 4.2)'),
 			'the guarded `@:from` prefix still leads `f0`: $fixed'
 		);
 	}

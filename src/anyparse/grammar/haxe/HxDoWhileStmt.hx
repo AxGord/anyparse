@@ -32,9 +32,12 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxDoWhileStmt = {
-	@:trailOpt(';') @:fmt(bodyPolicy('doBody'), dropSingleStmtBraces,
-		loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody')) var body: HxDoWhileBody;
-	@:kw('while') @:lead('(') @:trail(')')
+	@:trailOpt(';')
+	@:fmt(bodyPolicy('doBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfExpr', 'elseBranch', 'ExprBody'))
+	var body: HxDoWhileBody;
+	@:kw('while')
+	@:lead('(')
+	@:trail(')')
 	@:fmt(sameLine('sameLineDoWhile'), whilePolicy, space('whileCondParensInsideOpen', 'lead'), whileCondParensInsideClose)
 	var cond: HxExpr;
 };

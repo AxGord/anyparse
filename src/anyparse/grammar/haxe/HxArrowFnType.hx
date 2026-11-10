@@ -39,6 +39,12 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxArrowFnType = {
-	@:lead('(') @:trail(')') @:sep(',') @:fmt(wrapRules('functionSignatureWrap'), compactUnlessNested, groupRestProbe) var args: Array<HxArrowParam>;
-	@:fmt(space('functionTypeHaxe4', 'lead')) @:lead('->') var ret: HxType;
+	@:lead('(')
+	@:trail(')')
+	@:sep(',')
+	@:fmt(wrapRules('functionSignatureWrap'), compactUnlessNested, groupRestProbe)
+	var args: Array<HxArrowParam>;
+	@:fmt(space('functionTypeHaxe4', 'lead'))
+	@:lead('->')
+	var ret: HxType;
 }

@@ -20,6 +20,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifAnonField = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxAnonMember>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxAnonMember>;
 };

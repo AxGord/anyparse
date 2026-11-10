@@ -16,7 +16,8 @@ class RedundantImportVisibleTest extends Test {
 
 	private static final HELPER: String = 'package app;\n\nclass Helper {}\n';
 
-	@:pin('control') @:killer('M-KEPTWITHOUT-NULL')
+	@:pin('control')
+	@:killer('M-KEPTWITHOUT-NULL')
 	public function testOwnPackageImportIsRedundant(): Void {
 		final vs: Array<Violation> = violations([
 			{ file: 'app/C.hx', source: 'package app;\n\nimport app.Helper;\n\nclass C {\n\n\tvar h:Helper;\n\n}\n' },
@@ -69,7 +70,8 @@ class RedundantImportVisibleTest extends Test {
 	// --- kept ---
 
 	/** A nearer package declaring a module of the same name is what the name binds once the statement goes. */
-	@:pin('control') @:killer('M-KEPTWITHOUT-STATEMENT-KEPT')
+	@:pin('control')
+	@:killer('M-KEPTWITHOUT-STATEMENT-KEPT')
 	public function testNearerPackageModuleOfTheNameKeepsIt(): Void {
 		Assert.equals(
 			0,
@@ -186,7 +188,8 @@ class RedundantImportVisibleTest extends Test {
 	}
 
 	/** A run that did not index a nearer same-named module on disk cannot tell what the name binds without the statement. */
-	@:pin('control') @:killer('M-KEPTWITHOUT-NO-DISK')
+	@:pin('control')
+	@:killer('M-KEPTWITHOUT-NO-DISK')
 	public function testUnindexedNearerModuleOnDiskKeepsIt(): Void {
 		Assert.equals('', onDisk([
 			{ name: 'src/app/Helper.hx', source: HELPER },

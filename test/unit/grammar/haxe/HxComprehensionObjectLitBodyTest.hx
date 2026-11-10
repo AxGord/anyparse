@@ -54,7 +54,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The literal glues whichever line the source put its `{` on. */
-	@:pin('control') @:killer('M-OBJLIT-GLUE-FORBODY-OFF')
+	@:pin('control')
+	@:killer('M-OBJLIT-GLUE-FORBODY-OFF')
 	public function testForBodyFitLineGluesTheLiteral(): Void {
 		Assert.equals(GLUED, write(cuddledSource(), CFG_FOR_BODY_SAME));
 		Assert.equals(GLUED, write(allmanSource(), CFG_FOR_BODY_SAME));
@@ -62,7 +63,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** An absent key defers to `forBody` exactly as the spelled-out `same` does: a literal broken by width glues under both. */
-	@:pin('control') @:killer('M-OBJLIT-GLUE-ABSENT-KEY')
+	@:pin('control')
+	@:killer('M-OBJLIT-GLUE-ABSENT-KEY')
 	public function testAbsentComprehensionForDefersToForBody(): Void {
 		final expected: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
 		Assert.equals(expected, write(WIDE_FLAT, CFG_FOR_BODY));
@@ -70,7 +72,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** A wide literal the source wrote flat breaks in place behind the glued `{` rather than moving to Allman. */
-	@:pin('control') @:killer('M-ALLMAN-GLUE-IGNORED')
+	@:pin('control')
+	@:killer('M-ALLMAN-GLUE-IGNORED')
 	public function testForBodyFitLineGluesALiteralBrokenByWidth(): Void {
 		final expected: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
 		Assert.equals(expected, write(WIDE_FLAT, CFG_FOR_BODY));
@@ -78,13 +81,15 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** A `next` comprehension places its body itself, whatever `forBody` says. */
-	@:pin('control') @:killer('M-OBJLIT-GLUE-EVERY-VALUE')
+	@:pin('control')
+	@:killer('M-OBJLIT-GLUE-EVERY-VALUE')
 	public function testAnExplicitComprehensionPlacementOutranksForBody(): Void {
 		Assert.equals(ALLMAN, write(cuddledSource(), CFG_FOR_BODY_NEXT));
 	}
 
 	/** Without a `fitLine` placement the literal stays in Allman position and keeps the lines the source gave it. */
-	@:pin('control') @:killer('M-REFLOW-ANY-POLICY')
+	@:pin('control')
+	@:killer('M-REFLOW-ANY-POLICY')
 	public function testSameKeepsAllman(): Void {
 		Assert.equals(ALLMAN, write(cuddledSource(), CFG_SAME));
 	}
@@ -99,14 +104,16 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	 * The glue is about the literal: another body under the same knob keeps the placement its policy gave it, so one too
 	 * wide for the head line stays below it.
 	 */
-	@:pin('control') @:killer('M-ALLMAN-GLUE-ANY-CTOR')
+	@:pin('control')
+	@:killer('M-ALLMAN-GLUE-ANY-CTOR')
 	public function testGlueLeavesAnotherBodyAlone(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t$NAME_A${NAME_B.substr(0, 36)}\n\t\t];');
 		Assert.equals(source, write(source, CFG_FOR_BODY));
 	}
 
 	/** Under `comprehensionFor: fitLine` a source-multi-line literal that fits collapses, and its source lines count for nothing. */
-	@:pin('control') @:killer('M-REFLOW-OFF')
+	@:pin('control')
+	@:killer('M-REFLOW-OFF')
 	public function testComprehensionFitLineCollapsesALiteralThatFits(): Void {
 		final expected: String = wrap('var x = [ for (i in xs) {a: i, b: i} ];');
 		Assert.equals(expected, write(cuddledSource(), CFG_COMPREHENSION));
@@ -124,7 +131,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** Both knobs: a literal that fits collapses, a wide one glues. */
-	@:pin('control') @:killer('M-PAREN-FRAME-ANY-BODY')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-ANY-BODY')
 	public function testBothKnobs(): Void {
 		Assert.equals(wrap('var x = [ for (i in xs) {a: i, b: i} ];'), write(allmanSource(), CFG_BOTH));
 		final wide: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
@@ -148,7 +156,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The glue yields to a comment between the head and the `{`: it goes to the next line with the comment kept, in all three forms. */
-	@:pin('control') @:killer('M-ALLMAN-GLUE-NO-COMMENT-WRAP')
+	@:pin('control')
+	@:killer('M-ALLMAN-GLUE-NO-COMMENT-WRAP')
 	public function testGlueKeepsAHeadGapComment(): Void {
 		assertHeadGapCommentsKept(CFG_FOR_BODY);
 		assertHeadGapCommentsKept(CFG_BOTH);
@@ -191,7 +200,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** A parenthesised literal body takes the frame a bare one takes: its source lines count for nothing. */
-	@:pin('control') @:killer('M-PAREN-FRAME-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-OFF')
 	public function testParenthesisedLiteralCollapses(): Void {
 		final expected: String = wrap('var x = [ for (i in xs) ({a: i, b: i}) ];');
 		assertLandsOn(expected, multiLine('({', '})'), CFG_COMPREHENSION);
@@ -206,7 +216,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The frame crosses a nested paren too, so a redundant pair changes nothing. */
-	@:pin('control') @:killer('M-PAREN-FRAME-STOPS-AT-NESTED')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-STOPS-AT-NESTED')
 	public function testDoubleParenthesisedLiteralCollapses(): Void {
 		final expected: String = wrap('var x = [ for (i in xs) (({a: i, b: i})) ];');
 		assertLandsOn(expected, multiLine('(({', '}))'), CFG_COMPREHENSION);
@@ -223,7 +234,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The literal must be the paren's whole content: as a receiver in it, the literal is not the body. */
-	@:pin('control') @:killer('M-PAREN-FRAME-ANY-INNER')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-ANY-INNER')
 	public function testAReceiverLiteralInAParenKeepsItsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a)\n\t\t];');
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
@@ -232,7 +244,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	/**
 	 * Only a literal that IS the body enters the frame: a leftmost operand inherits its parent's opt.
 	 */
-	@:pin('control') @:killer('M-REFLOW-ANY-CTOR')
+	@:pin('control')
+	@:killer('M-REFLOW-ANY-CTOR')
 	public function testAReceiverLiteralBodyKeepsItsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a\n\t\t];');
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
@@ -241,14 +254,16 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	/**
 	 * The frame crosses a paren only from the comprehension body: a parenthesised value-if branch inside it keeps its lines.
 	 */
-	@:pin('control') @:killer('M-PAREN-FRAME-ANY-STATE')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-ANY-STATE')
 	public function testAParenthesisedValueIfBranchKeepsItsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) if (c) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t}) else 2\n\t\t];');
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
 	/** Without a `fitLine` placement a parenthesised literal keeps the lines the source gave it. */
-	@:pin('control') @:killer('M-PAREN-FRAME-ANY-POLICY')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-ANY-POLICY')
 	public function testSameKeepsAParenthesisedLiteralsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t})\n\t\t];');
 		Assert.equals(source, write(source, CFG_SAME));
@@ -263,7 +278,8 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The frame crosses only a paren directly around the next one: a paren below a receiver is not the body. */
-	@:pin('control') @:killer('M-PAREN-FRAME-ANY-WRAPPED')
+	@:pin('control')
+	@:killer('M-PAREN-FRAME-ANY-WRAPPED')
 	public function testAParenthesisedReceiverInAParenKeepsItsLines(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}).a)\n\t\t];');
 		Assert.equals(source, write(source, CFG_COMPREHENSION));

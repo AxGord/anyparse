@@ -44,7 +44,8 @@ class LoopShapeOwnerGuardTest extends Test {
 		'ONE_ARG_CALL_'
 	];
 
-	@:pin('control') @:killer('M-LOOP-SHAPE-COUNT-REDECLARED')
+	@:pin('control')
+	@:killer('M-LOOP-SHAPE-COUNT-REDECLARED')
 	public function testNoRuleDeclaresItsOwnBranchOrLoopSlotConstant(): Void {
 		Assert.equals(
 			'', redeclared(isSlotConstant, OWNERS), 'ask BranchChain / LoopScan which child is the condition, branch, body or head'
@@ -64,7 +65,9 @@ class LoopShapeOwnerGuardTest extends Test {
 		Assert.same(['BINARY_CHILD_COUNT'], declaredConstants(tree, isOperandCount));
 	}
 
-	@:pin('control') @:killer('M-OPERAND-SHAPE-COUNT-REDECLARED') @:killer('M-OPERAND-SHAPE-COUNT-REDECLARED-IN-OWNER')
+	@:pin('control')
+	@:killer('M-OPERAND-SHAPE-COUNT-REDECLARED')
+	@:killer('M-OPERAND-SHAPE-COUNT-REDECLARED-IN-OWNER')
 	public function testNoRuleDeclaresItsOwnOperandShapeCount(): Void {
 		Assert.equals(
 			'', redeclared(isOperandCount, []),

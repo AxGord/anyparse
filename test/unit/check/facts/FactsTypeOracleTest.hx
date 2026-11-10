@@ -18,20 +18,25 @@ class FactsTypeOracleTest extends Test {
 	private static final PLUGIN: HaxeQueryPlugin = new HaxeQueryPlugin();
 	private static final SRC: String = 'class A<T> {\n\tvar fld = g();\n\n\tfunction f(p) {\n\t\tvar v = g();\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-FACTS-ORACLE-AGREE') @:killer('M-FACTS-UNION')
+	@:pin('control')
+	@:killer('M-FACTS-ORACLE-AGREE')
+	@:killer('M-FACTS-UNION')
 	public function testConfigurationsThatDisagreeDecline(): Void {
 		Assert.same(Typed('Int'), local(table([dump('Int'), dump('Int')])));
 		final split: OracleType = local(table([dump('Null<pack.X>'), dump('pack.X')]));
 		Assert.isTrue(declinedWith(split, 'the oracle configurations type it differently'), 'got $split');
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPELL-UNKNOWN') @:killer('M-FACTS-TREE-OPTIONAL')
+	@:pin('control')
+	@:killer('M-FACTS-SPELL-UNKNOWN')
+	@:killer('M-FACTS-TREE-OPTIONAL')
 	public function testAnUnknownDeclines(): Void {
 		Assert.same(Declined(FactsDecline.Unbound), local(table([dump('Array<?>')])));
 		Assert.same(Declined(FactsDecline.Unbound), FactsTypeSpelling.spell('(?)->Void', { owner: null, method: null }));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPELL-SCOPE')
+	@:pin('control')
+	@:killer('M-FACTS-SPELL-SCOPE')
 	public function testATypeParameterOutOfScopeDeclines(): Void {
 		Assert.same(Typed('Array<A.T>'), local(table([dump('Array<$$A.T>')])));
 		Assert.same(Typed('f.U'), local(table([dump('$$f.U')])));
@@ -39,7 +44,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.isTrue(declinedWith(foreign, 'its type names the type parameter `pack.B.T`'), 'got $foreign');
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPELL-IMPL')
+	@:pin('control')
+	@:killer('M-FACTS-SPELL-IMPL')
 	public function testTypesNoSourceCanSpellDecline(): Void {
 		final scope: TypeScope = { owner: 'A', method: null };
 		Assert.same(Declined(FactsDecline.Unspellable), FactsTypeSpelling.spell('Abstract<pack.M>', scope));
@@ -48,7 +54,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Typed('{a:Int, ?b:() -> Void}'), FactsTypeSpelling.spell('{a:Int,?b:()->Void}', scope));
 	}
 
-	@:pin('control') @:killer('M-FACTS-ABSENT')
+	@:pin('control')
+	@:killer('M-FACTS-ABSENT')
 	public function testCodeNoConfigurationCompiledDeclines(): Void {
 		final facts: CompilerFacts = table([dump('Int')]);
 		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> SRC, null, PLUGIN);
@@ -57,7 +64,9 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Declined(FactsDecline.CodeNotCompiled), oracle.localType('A.hx', declOf(SRC), 'w', SRC.indexOf('var v') + 5));
 	}
 
-	@:pin('control') @:killer('M-FACTS-ORACLE-ORIGINAL') @:killer('M-JOURNAL-SHIFT')
+	@:pin('control')
+	@:killer('M-FACTS-ORACLE-ORIGINAL')
+	@:killer('M-JOURNAL-SHIFT')
 	public function testARewrittenFileIsReadAtTheTextTheCompileRead(): Void {
 		// an edit in ANOTHER member: the local below it is placed by the offset the edit shifted it by
 		final facts: CompilerFacts = table([dump('Int')]);
@@ -74,7 +83,8 @@ class FactsTypeOracleTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ORACLE-WHOLE-MEMBER')
+	@:pin('control')
+	@:killer('M-ORACLE-WHOLE-MEMBER')
 	public function testAnEditAnywhereInTheMemberDeclines(): Void {
 		// the local's own text is untouched, but its member's signature changed: what the compiler inferred rests on it
 		final facts: CompilerFacts = table([dump('Int')]);
@@ -87,7 +97,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Declined(EditJournal.UNMAPPED_REWRITTEN), oracle.localType('A.hx', declOf(now), 'v', now.indexOf('var v') + 5));
 	}
 
-	@:pin('control') @:killer('M-ORACLE-HOME-GUARD')
+	@:pin('control')
+	@:killer('M-ORACLE-HOME-GUARD')
 	public function testFactsOfAnotherMemberDecline(): Void {
 		// same length, same place, another member: the facts name `f`, the file holds `h`
 		final renamed: String = SRC.replace('function f', 'function h');
@@ -98,7 +109,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Declined(FactsDecline.Elsewhere), oracle.localType('A.hx', declOf(renamed), 'v', renamed.indexOf('var v') + 5));
 	}
 
-	@:pin('control') @:killer('M-ORACLE-HOME-MODIFIED-TYPE')
+	@:pin('control')
+	@:killer('M-ORACLE-HOME-MODIFIED-TYPE')
 	public function testAFinalClassIsItsOwnHome(): Void {
 		// `final class` projects as a wrapper around the named class form; the wrapper names nothing itself
 		final modified: String = '@:x final $SRC';
@@ -109,7 +121,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Typed('Int'), oracle.localType('A.hx', declOf(modified), 'v', modified.indexOf('var v') + 5));
 	}
 
-	@:pin('control') @:killer('M-FACTS-INVALIDATE-FOREIGN')
+	@:pin('control')
+	@:killer('M-FACTS-INVALIDATE-FOREIGN')
 	public function testFactsOfAnotherTextThanTheOriginalAreStale(): Void {
 		// the run waits for the facts compiles before it writes: facts of a text other than the run-start one name nothing
 		final hash: Array<String> = FactText.contentHash(SRC).split(':');
@@ -128,7 +141,9 @@ class FactsTypeOracleTest extends Test {
 		Assert.isNull(other.asCompiled().sourceOf('A.hx'), 'a text the compile never read was kept as the original');
 	}
 
-	@:pin('control') @:killer('M-FACTS-MADE-FROM-ALL') @:killer('M-FACTS-MADE-FROM-NONE')
+	@:pin('control')
+	@:killer('M-FACTS-MADE-FROM-ALL')
+	@:killer('M-FACTS-MADE-FROM-NONE')
 	public function testARewriteDropsOnlyTheNodesThatReadIt(): Void {
 		// a `--fix` pass rewrites a few files: a node placed in another file's text is the one made before, a node placed in
 		// the rewritten one is made again — and, its text no longer the compiled one, has no facts
@@ -141,7 +156,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.isNull(facts.node('A.f'), 'a rewrite of the file the node lies in kept its facts');
 	}
 
-	@:pin('control') @:killer('M-CODEPOINT-NATIVE')
+	@:pin('control')
+	@:killer('M-CODEPOINT-NATIVE')
 	public function testASiteAfterNonAsciiTextIsFound(): Void {
 		// the compiler counts each emoji as one position, a Span as two: read unconverted, the offsets of a site past a dozen of
 		// them land wholly before the declaration that holds it, where one emoji would leave them inside it
@@ -158,7 +174,8 @@ class FactsTypeOracleTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-FIELD-TYPES')
+	@:pin('control')
+	@:killer('M-FACTS-FIELD-TYPES')
 	public function testAFieldTheConfigurationsTypeApartDeclines(): Void {
 		final field: Span = new Span(SRC.indexOf('var fld'), SRC.indexOf('g();') + 4);
 		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC, null, PLUGIN);
@@ -169,7 +186,8 @@ class FactsTypeOracleTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-SIGNATURE-VARIANTS')
+	@:pin('control')
+	@:killer('M-FACTS-SIGNATURE-VARIANTS')
 	public function testASignatureTheConfigurationsTypeApartDeclines(): Void {
 		final fn: Span = new Span(SRC.indexOf('function f'), SRC.indexOf('\t}\n}') + 2);
 		final same: FactsTypeOracle = new FactsTypeOracle(table([dump('Int'), dump('Int')]), file -> SRC, null, PLUGIN);
@@ -187,7 +205,8 @@ class FactsTypeOracleTest extends Test {
 		Assert.same(Declined(FactsDecline.ParamMismatch), same.paramType('A.hx', fn, 'f', 0, 'q', SRC.indexOf('(p)') + 2));
 	}
 
-	@:pin('control') @:killer('M-EXPLICIT-TYPE-STRUCTURAL-DECLINE')
+	@:pin('control')
+	@:killer('M-EXPLICIT-TYPE-STRUCTURAL-DECLINE')
 	public function testExplicitTypeSaysWhyItsStructuralFixDeclined(): Void {
 		final source: String = 'class C {\n\tvar y = g();\n\n\tfunction f(x) {\n\t\treturn x;\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -204,7 +223,9 @@ class FactsTypeOracleTest extends Test {
 	 * of it there (`CompilerFacts.valueTypesAt`). A flow of another type is a disagreement, which `expressionType` and
 	 * `factsTypeAt` decline and `valueType` — the expression's own type alone — does not see.
 	 */
-	@:pin('control') @:killer('M-FACTS-VALUE-FLOWS') @:killer('M-FACTS-ORACLE-RAW-AGREE')
+	@:pin('control')
+	@:killer('M-FACTS-VALUE-FLOWS')
+	@:killer('M-FACTS-ORACLE-RAW-AGREE')
 	public function testAValueIsTypedByTheFlowsAtItsRange(): Void {
 		final call: Span = new Span(SRC.indexOf('g();\n\t}'), SRC.indexOf('g();\n\t}') + 3);
 		final alike: FactsTypeOracle = new FactsTypeOracle(
@@ -228,9 +249,17 @@ class FactsTypeOracleTest extends Test {
 	 * compiler declares at the range (a `?.` / `??` temporary, an inlined call's parameter) types it beside a site of the
 	 * text's own, never alone.
 	 */
-	@:pin('control') @:killer('M-FACTS-READ-RECORD-NAME') @:killer('M-FACTS-READ-NAME') @:killer('M-FACTS-RECEIVER-CALL')
-	@:killer('M-FACTS-SPELLED-CALL') @:killer('M-FACTS-FOREIGN-SITE') @:killer('M-FACTS-TEMP-LOCAL') @:killer('M-FACTS-TEMP-ALONE')
-	@:killer('M-FACTS-VALUE-CALLEE') @:killer('M-FACTTEXT-EMPTY-MENTION') @:killer('M-FACTTEXT-EMPTY-CALL')
+	@:pin('control')
+	@:killer('M-FACTS-READ-RECORD-NAME')
+	@:killer('M-FACTS-READ-NAME')
+	@:killer('M-FACTS-RECEIVER-CALL')
+	@:killer('M-FACTS-SPELLED-CALL')
+	@:killer('M-FACTS-FOREIGN-SITE')
+	@:killer('M-FACTS-TEMP-LOCAL')
+	@:killer('M-FACTS-TEMP-ALONE')
+	@:killer('M-FACTS-VALUE-CALLEE')
+	@:killer('M-FACTTEXT-EMPTY-MENTION')
+	@:killer('M-FACTTEXT-EMPTY-CALL')
 	public function testARangeHoldingCodeTheTextDoesNotSpellHasNoType(): Void {
 		final source: String = 'class A {\n\tfunction f() {\n\t\tvar v = b.c();\n\t\tvar w = x;\n\t\tcb(1);\n\t}\n}\n';
 		// the first `length` characters of the first occurrence of `text`

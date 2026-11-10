@@ -416,11 +416,14 @@ final class WriterFieldSepLowering {
 			// cannot distinguish from a single break — and only when the gate says
 			// the whole prefix is a `#if … #end` region.
 			final blankBreak: Expr = dcCall([macro _dhl(), macro _dhl()]);
-			final nlSep: Expr = keepBlankGate == null ? macro $nlAccess ? _dhl() : _dt(' ') : {
+			final blankKept: Null<Expr> = keepBlankGate == null ? null : {
 				final gate: Expr = keepBlankGate;
 				final blankAccess: Expr = beforeBlankAccess(fieldName);
-				macro $blankAccess && $gate ? $blankBreak : $nlAccess ? _dhl() : _dt(' ');
+				macro $blankAccess && $gate;
 			};
+			final nlSep: Expr = blankKept == null
+				? macro $nlAccess ? _dhl() : _dt(' ')
+				: macro $blankKept ? $blankBreak : $nlAccess ? _dhl() : _dt(' ');
 			final triviaSepExpr: Expr = if (fillSeam)
 				macro _de();
 			else if (inlineSep)
@@ -431,9 +434,12 @@ final class WriterFieldSepLowering {
 			} else {
 				nlSep;
 			};
-			// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
-			final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
-			return withPadTrailingDrop(prevPadTrailing, sepWithLeading);
+			// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep. A
+			// trailing pad of the previous field already broke the line: it replaces the separator,
+			// and only a kept source blank adds its second break; the comments stay.
+			final afterPad: Expr = blankKept == null ? macro _de() : macro $blankKept ? _dhl() : _de();
+			final sep: Expr = prevPadTrailing == null ? triviaSepExpr : macro $prevPadTrailing ? $afterPad : $triviaSepExpr;
+			return buildBeforeLeadingSep(child, fieldName, sep);
 		}
 		if (prevAnyStarNonEmpty == null) return withPadTrailingDrop(prevPadTrailing, macro _dt(' '));
 		final prev: Expr = prevAnyStarNonEmpty;

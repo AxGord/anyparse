@@ -36,7 +36,8 @@ class Dflt<T = String> {
 
 }
 
-@:generic class Gen<T> {
+@:generic
+class Gen<T> {
 
 	public function new() {}
 
@@ -66,7 +67,8 @@ abstract Op(Array<Int>) {
 
 	public function new() this = [];
 
-	@:op([]) public function get(i: Int): Float return 1.0;
+	@:op([])
+	public function get(i: Int): Float return 1.0;
 
 }
 
@@ -74,7 +76,8 @@ abstract SLook(Array<Int>) {
 
 	public function new() this = [];
 
-	@:arrayAccess public static function sget(a: SLook, i: Int): String return "s";
+	@:arrayAccess
+	public static function sget(a: SLook, i: Int): String return "s";
 
 }
 
@@ -82,9 +85,11 @@ abstract ILook(Array<Int>) {
 
 	public function new() this = [];
 
-	@:arrayAccess public inline function get(i: Float): Bool return true;
+	@:arrayAccess
+	public inline function get(i: Float): Bool return true;
 
-	@:arrayAccess public function geti(i: Int): String return "s";
+	@:arrayAccess
+	public function geti(i: Int): String return "s";
 
 }
 

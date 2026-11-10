@@ -6,7 +6,8 @@ import anyparse.runtime.ByteOrderMark;
 class ByteOrderMarkTest extends Test {
 
 	/** A source that opened with the mark hands it to text that lost it. */
-	@:pin('control') @:killer('M-BOM-NOT-CARRIED')
+	@:pin('control')
+	@:killer('M-BOM-NOT-CARRIED')
 	public function testTheMarkIsCarriedOver(): Void {
 		final mark: String = String.fromCharCode(ByteOrderMark.CODE);
 		Assert.equals('${mark}class A {}\n', ByteOrderMark.carry('${mark}class A{}', 'class A {}\n'));

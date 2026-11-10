@@ -12,7 +12,8 @@ import anyparse.query.CachingGrammarPlugin;
  * modifier run and doc comment) only when the absence is proven and the name has zero direct call
  * references.
  */
-@:nullSafety(Strict) class OrphanAccessorCheckTest extends Test {
+@:nullSafety(Strict)
+class OrphanAccessorCheckTest extends Test {
 
 	/** A class whose `get_data` serves no property of its own — the owner every unreadable-file arm starts from. */
 	private static inline final BARE_GETTER: String = 'class C {\n\tpublic function get_data():Int return 0;\n}';

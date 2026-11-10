@@ -2185,7 +2185,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "3ce440d48c6d3690",
+				"out": "3bdcf4bab0d40834",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

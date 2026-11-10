@@ -77,7 +77,7 @@ class HxCondDeclPrefixSliceTest extends HxTestHelpers {
 	public function testConditionalPrefixWritesVerbatim(): Void {
 		final src: String = '#if (haxe_ver >= 4.0) enum #else @:enum #end abstract E(Int) {}';
 		Assert.isTrue(
-			HxModuleWriter.write(HaxeModuleParser.parse(src)).indexOf('#if (haxe_ver >= 4.0) enum #else @:enum #end abstract E(Int)') != -1
+			HxModuleWriter.write(HaxeModuleParser.parse(src)).indexOf('#if (haxe_ver >= 4.0) enum #else @:enum #end\nabstract E(Int)') != -1
 		);
 		roundTrip(src, 'conditional decl prefix');
 	}

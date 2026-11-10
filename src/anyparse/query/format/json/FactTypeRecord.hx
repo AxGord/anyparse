@@ -1,7 +1,9 @@
 package anyparse.query.format.json;
 
 /** A type a facts file records (`{"k":"type",…}`). */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef FactTypeRecord = {
 	final id: String;
 	final f: String;

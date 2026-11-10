@@ -11,7 +11,8 @@ import utest.Test;
 class JsonKeyMetaCompileTest extends Test {
 
 	/** A `@:key` that is not exactly one string literal is refused, naming the field. */
-	@:pin('control') @:killer('M-JSON-KEY-UNCHECKED')
+	@:pin('control')
+	@:killer('M-JSON-KEY-UNCHECKED')
 	public function testAKeyMustBeOneString(): Void {
 		#if nodejs
 		Assert.stringContains('@:key on field "a" takes exactly one string', compileError('@:key(1) var a: String;'));
@@ -22,7 +23,8 @@ class JsonKeyMetaCompileTest extends Test {
 	}
 
 	/** A key holding a quote, a backslash or a control character is refused: the writer emits a key as written. */
-	@:pin('control') @:killer('M-JSON-KEY-UNWRITABLE')
+	@:pin('control')
+	@:killer('M-JSON-KEY-UNWRITABLE')
 	public function testAKeyMustBeWritableAsIs(): Void {
 		#if nodejs
 		Assert.stringContains('holds a quote, a backslash or a control character', compileError("@:key('a\"b') var a: String;"));
@@ -33,7 +35,8 @@ class JsonKeyMetaCompileTest extends Test {
 	}
 
 	/** Two fields spelled with one key are refused — the declared key and a field's own name alike — at the second field. */
-	@:pin('control') @:killer('M-JSON-KEY-DUPLICATES', 'M-JSON-KEY-DUP-AT-FIELD')
+	@:pin('control')
+	@:killer('M-JSON-KEY-DUPLICATES', 'M-JSON-KEY-DUP-AT-FIELD')
 	public function testTwoFieldsCannotShareAKey(): Void {
 		#if nodejs
 		final error: String = compileError("var a: String;\n@:key('a') var b: String;");

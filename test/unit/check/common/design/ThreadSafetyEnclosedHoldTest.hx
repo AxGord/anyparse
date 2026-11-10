@@ -10,7 +10,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"],"reentrantLocks":["Mutex.acquire"],"closedWorld":true}}}';
 
-	@:pin('control') @:killer('M-TS-ENCLOSED-OFF')
+	@:pin('control')
+	@:killer('M-TS-ENCLOSED-OFF')
 	public function testAHoldEveryCallerEnclosesIsTheirs(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B S.inner | S._m', 'warning B S.outer | S._m'], holds(run('')));
@@ -19,7 +20,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-ENCLOSED-ANY-STATE')
+	@:pin('control')
+	@:killer('M-TS-ENCLOSED-ANY-STATE')
 	public function testOneCallerOutsideTheLockKeepsItsOwn(): Void {
 		#if (sys || nodejs)
 		// not enclosed, the outer hold still folds onto the inner one: both are long by the same `Sys.sleep` (`RootCauseFold`)
@@ -33,7 +35,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 	 * The enclosed hold's note says what the enclosing warning does name: the call into its function — with no re-entrant
 	 * take, the re-take there, not the sleep (review `enclosed-False`).
 	 */
-	@:pin('control') @:killer('M-TS-ENCLOSED-NOTE')
+	@:pin('control')
+	@:killer('M-TS-ENCLOSED-NOTE')
 	public function testTheNoteNamesTheEnclosingWarning(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"spawns":["Runner.create"],'
@@ -63,7 +66,9 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 	 * it hands on to run (`U.now(drop)`), or a call on an unresolved call's result (`self().dropAll()`) — the enclosed hold
 	 * keeps its own warning (reviews `give-release-in-callback-now`, `chain-chained-unresolved`).
 	 */
-	@:pin('control') @:killer('M-TS-RELEASE-CALLBACK') @:killer('M-TS-BLIND-START')
+	@:pin('control')
+	@:killer('M-TS-RELEASE-CALLBACK')
+	@:killer('M-TS-BLIND-START')
 	public function testAGiveOnTheCallersWayBreaksTheEnclosure(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info B D.inner | D._l', 'warning B D.outer | D._l'], holds(giving('', '')), 'control');
@@ -82,7 +87,8 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 	}
 
 	/** A hold whose warning a directive silences encloses nothing: the hold inside it keeps its own warning (review round 4 `f2`). */
-	@:pin('control') @:killer('M-TS-ENCLOSED-SUPPRESSED')
+	@:pin('control')
+	@:killer('M-TS-ENCLOSED-SUPPRESSED')
 	public function testASilencedHoldEnclosesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning B S.inner | S._m'], holds(ThreadSafetyCheckTest.violations(CONFIG, [

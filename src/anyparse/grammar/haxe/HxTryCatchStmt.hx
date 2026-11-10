@@ -43,8 +43,13 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(constructFitGroup('body', 'catches'))
 typedef HxTryCatchStmt = {
-	@:trailOpt(';') @:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'),
-		beforeNewlineSlotFirst, constructFitBody, tryBraceSymmetry('catches', 'BlockStmt'), tryDeBrace) var body: HxStatement;
-	@:trivia @:tryparse @:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep,
-		tryCatchBraceSymmetry('body', 'BlockStmt'), tryDeBrace) var catches: Array<HxCatchClause>;
+	@:trailOpt(';')
+	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'), beforeNewlineSlotFirst,
+		constructFitBody, tryBraceSymmetry('catches', 'BlockStmt'), tryDeBrace)
+	var body: HxStatement;
+	@:trivia
+	@:tryparse
+	@:fmt(sameLine('sameLineCatch'), bareBodyBreaks('tryBody', 'catchBody'), constructFitSep, tryCatchBraceSymmetry('body', 'BlockStmt'),
+		tryDeBrace)
+	var catches: Array<HxCatchClause>;
 };

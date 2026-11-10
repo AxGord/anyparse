@@ -2,9 +2,11 @@ abstract W(Int) from Int to Int {
 
 	public function new(v: Int) this = v;
 	#if !nothing_defined
-	@:op(A * B) static function mulA(a: W, b: W): W return new W((a: Int) * (b: Int));
+	@:op(A * B)
+	static function mulA(a: W, b: W): W return new W((a: Int) * (b: Int));
 	#end
-	@:op(A * B) static function mulB(a: W, b: Float): Float return 1.0;
+	@:op(A * B)
+	static function mulB(a: W, b: Float): Float return 1.0;
 
 }
 
@@ -12,9 +14,11 @@ abstract V(Array<Int>) {
 
 	public function new() this = [];
 	#if !nothing_defined
-	@:arrayAccess function geta(i: Int): String return "a";
+	@:arrayAccess
+	function geta(i: Int): String return "a";
 	#end
-	@:arrayAccess function getb(i: Float): Bool return true;
+	@:arrayAccess
+	function getb(i: Float): Bool return true;
 
 }
 

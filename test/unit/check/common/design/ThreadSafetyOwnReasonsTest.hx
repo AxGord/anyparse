@@ -16,7 +16,9 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	 * the client's `BlobFile._mutex`: its only reason to be long was a `trace` under the hold — client routes `trace` to its log
 	 * writer, and the call resolves to nothing. A bare `shortSinks` name run once under the hold is brief.
 	 */
-	@:pin('control') @:killer('M-TS-BLIND-BRIEF-OFF') @:killer('M-TS-DOM-BRIEF-NAMES-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-BLIND-BRIEF-OFF')
+	@:killer('M-TS-DOM-BRIEF-NAMES-IGNORED')
 	public function testABriefUnresolvedCallOnceLeavesTheLockShort(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A S.ui | Mutex.acquire'], takes(run('trace("x");')));
@@ -26,7 +28,8 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	}
 
 	/** The same call in a loop under the hold, or a call no `shortSinks` name names, keeps the lock long. */
-	@:pin('control') @:killer('M-TS-DOM-BRIEF-REPEATED')
+	@:pin('control')
+	@:killer('M-TS-DOM-BRIEF-REPEATED')
 	public function testARepeatedOrUnknownUnresolvedCallKeepsTheLockLong(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A S.ui | Mutex.acquire'], takes(run('for (i in 0...3) trace("x");')), 'repeated');
@@ -37,7 +40,8 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	}
 
 	/** An unresolved call only a `catch` runs makes the lock long only on an error path. */
-	@:pin('control') @:killer('M-TS-BLIND-CATCH-OFF')
+	@:pin('control')
+	@:killer('M-TS-BLIND-CATCH-OFF')
 	public function testAnUnresolvedCallInACatchIsAnErrorPath(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run('try { step(); } catch (e:Dynamic) { final d:Dynamic = null; d.poke(); }');
@@ -53,7 +57,9 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	 * lasts past its end, however brief the calls its own window spans. (The second lock keeps it from being a lock
 	 * wrapper, whose take is its caller's hold.)
 	 */
-	@:pin('control') @:killer('M-TS-HANDOFF-OFF') @:killer('M-TS-HANDOFF-GIVES')
+	@:pin('control')
+	@:killer('M-TS-HANDOFF-OFF')
+	@:killer('M-TS-HANDOFF-GIVES')
 	public function testAHoldItsFunctionNeverGivesBackIsLong(): Void {
 		#if (sys || nodejs)
 		final handed: Array<Violation> = run(
@@ -75,7 +81,8 @@ class ThreadSafetyOwnReasonsTest extends Test {
 	}
 
 	/** A function whose window spans a call into a function that releases the lock without taking it gives it back. */
-	@:pin('control') @:killer('M-TS-HANDOFF-CROSSING')
+	@:pin('control')
+	@:killer('M-TS-HANDOFF-CROSSING')
 	public function testACallOfAReleaserGivesTheLockBack(): Void {
 		#if (sys || nodejs)
 		Assert.same(

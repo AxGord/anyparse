@@ -141,7 +141,8 @@ final class CliAtomicWriteSliceTest extends Test {
 	 * RED at base: each one died on `ENOENT … <path>.apq-tmp` and wrote nothing (N42 met it on `hxq new` of a fresh
 	 * package directory).
 	 */
-	@:pin('control') @:killer('M-WRITE-DIR-UNCREATED')
+	@:pin('control')
+	@:killer('M-WRITE-DIR-UNCREATED')
 	public function testAWriteIntoAMissingDirectoryCreatesIt(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class C {\n\n\tpublic function new() {}\n\n\tpublic function f():Int {\n\t\treturn 1;\n\t}\n\n}\n';
@@ -164,7 +165,8 @@ final class CliAtomicWriteSliceTest extends Test {
 	 * GREEN AT BASE BY CONSTRUCTION — the base never created a directory, it failed on the first member instead. Proved by
 	 * MUTATION: dropping the directory cleanup from the staging failure path leaves `n1` behind and flips this test.
 	 */
-	@:pin('control') @:killer('M-WRITE-DIR-KEPT')
+	@:pin('control')
+	@:killer('M-WRITE-DIR-KEPT')
 	public function testAFailedChangeSetRemovesTheDirectoriesItCreated(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('apq_stage_mkdir_undo', [{ name: 'D.hx', source: DRIFTED }]);
@@ -286,7 +288,8 @@ final class CliAtomicWriteSliceTest extends Test {
 	 *
 	 * A refusal that came late would show as the first member's text already on disk.
 	 */
-	@:pin('control') @:killer('M-WRITE-SAME-TARGET-BY-SPELLING')
+	@:pin('control')
+	@:killer('M-WRITE-SAME-TARGET-BY-SPELLING')
 	public function testAChangeSetNamingOneFileTwiceIsRefusedBeforeAnythingIsWritten(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('apq_stage_twice', [{ name: 'D.hx', source: DRIFTED }, { name: 'E.hx', source: DRIFTED }]);
@@ -328,7 +331,8 @@ final class CliAtomicWriteSliceTest extends Test {
 	 * one staging temporary and the second content replaced the first before the second rename failed. Skipped where the
 	 * fixture's volume tells the two spellings apart.
 	 */
-	@:pin('control') @:killer('M-FILE-IDENTITY-PLAIN-REALPATH')
+	@:pin('control')
+	@:killer('M-FILE-IDENTITY-PLAIN-REALPATH')
 	public function testACaseSpellingOfAnExistingFileIsTheSameMember(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('apq_stage_case', [{ name: 'D.hx', source: DRIFTED }]);

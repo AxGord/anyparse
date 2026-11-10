@@ -20,7 +20,8 @@ typedef GateRecord = {
 	 * The node version the suite and the kits ran under (`GateReuse.nodeVersion`); a record without it is an older one, which no
 	 * land takes rows from.
 	 */
-	@:optional var node: Null<String>;
+	@:optional
+	var node: Null<String>;
 
 	/** The corpus fork's state (`GateReuse.forkState`), empty when none was set. */
 	var fork: String;
@@ -34,9 +35,11 @@ typedef GateRecord = {
 	var assertions: Int;
 
 	/** How many test classes an impact-selected suite ran, or null when the suite ran every class. */
-	@:optional var impact: Null<Int>;
+	@:optional
+	var impact: Null<Int>;
 
 	/** The corpus snapshot the gate's suite left, copied into the gate's logs, or null when the suite ran no corpus. */
-	@:optional var sweep: Null<String>;
+	@:optional
+	var sweep: Null<String>;
 
 }

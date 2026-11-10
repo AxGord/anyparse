@@ -31,8 +31,22 @@ package anyparse.grammar.haxe;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef HxAbstractDeclHead = {
-	@:kw('abstract') var name: HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:optional @:lead('(') @:trail(')') @:fmt(tightLead, propagateNestedType) @:queryTypeSlot var underlyingType: Null<HxType>;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
+	@:kw('abstract')
+	var name: HxIdentLit;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:optional
+	@:lead('(')
+	@:trail(')')
+	@:fmt(tightLead, propagateNestedType)
+	@:queryTypeSlot
+	var underlyingType: Null<HxType>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, lineLengthAwareSeps)
+	var clauses: Array<HxAbstractClause>;
 }

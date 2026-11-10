@@ -1002,7 +1002,8 @@ typedef ResolutionSources = {
 	 * The read-only sources the project DECLARED — its `resolutionRoots` and `resolutionLibs` — without the std that joins
 	 * the library by itself: the code the project wrote or chose, as opposed to the std it calls into. Absent reads as none.
 	 */
-	@:optional final declaredLibrary: LibrarySources;
+	@:optional
+	final declaredLibrary: LibrarySources;
 
 	/**
 	 * Whether the declared `resolutionRoots` MATCHED at least one `.hx`, report files included. Not
@@ -1010,13 +1011,15 @@ typedef ResolutionSources = {
 	 * it EMPTY for a project whose roots matched, exactly as for one declaring none or roots matching
 	 * nothing. Absent reads as false.
 	 */
-	@:optional final rootsMatched: Bool;
+	@:optional
+	final rootsMatched: Bool;
 
 	/**
 	 * Whether EVERY declared root matched at least one `.hx` — a root that
 	 * matched nothing may be where project files live. Absent reads as false.
 	 */
-	@:optional final rootsAllMatched: Bool;
+	@:optional
+	final rootsAllMatched: Bool;
 
 };
 
@@ -1068,44 +1071,51 @@ typedef ResolutionScope = {
 	 * The builds the run's compiler oracles describe, read on first demand and once per run (`ReachBuilds`); absent
 	 * when the run configured no oracle, declined it, or did not declare its oracle list complete.
 	 */
-	@:optional final builds: () -> Null<ReachBuilds>;
+	@:optional
+	final builds: () -> Null<ReachBuilds>;
 
 	/**
 	 * Start `builds`' compiles in the background when they have not run: a run that is about to wait on its facts and then
 	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
 	 */
-	@:optional final buildsAhead: () -> Void;
+	@:optional
+	final buildsAhead: () -> Void;
 
 	/**
 	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
 	 * Present exactly when a linted path declared its oracle list complete — also when the paths disagree on the list and
 	 * the run reads no `builds` at all.
 	 */
-	@:optional final buildsHeld: (String) -> Void;
+	@:optional
+	final buildsHeld: (String) -> Void;
 
 	/**
 	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the
 	 * run configured no oracle or declined it. Unlike `builds` it needs no complete oracle list: code no configuration
 	 * compiled simply has no facts.
 	 */
-	@:optional final facts: () -> Null<CompilerFacts>;
+	@:optional
+	final facts: () -> Null<CompilerFacts>;
 
 	/**
 	 * Record that the run rewrote a file, with the text it had when the run started when known: its facts are dropped now,
 	 * or once `facts` builds them (`CompilerFacts.invalidate`).
 	 */
-	@:optional final factsEdited: (String, Null<String>) -> Void;
+	@:optional
+	final factsEdited: (String, Null<String>) -> Void;
 
 	/**
 	 * Wait for the facts compiles the run started ahead, when it did: called before the run's first write, so no compile
 	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
 	 */
-	@:optional final factsSettled: () -> Void;
+	@:optional
+	final factsSettled: () -> Void;
 
 	/**
 	 * The run is about to write: drop the builds' compiles `buildsAhead` began and nobody has read, so `builds` compiles
 	 * the tree as it is when first asked, as it always did. Absent with `builds`.
 	 */
-	@:optional final buildsSettled: () -> Void;
+	@:optional
+	final buildsSettled: () -> Void;
 
 };

@@ -32,19 +32,22 @@ class UsingSitesTest extends Test {
 	 * Where the access binds through no file `using` the typing service can name — the one that would is `#if`-guarded —
 	 * a module whose every candidate rejects the receiver still takes no part in it.
 	 */
-	@:pin('control') @:killer('M-USING-OFFER-OPEN')
+	@:pin('control')
+	@:killer('M-USING-OFFER-OPEN')
 	public function testAModuleWhoseCandidatesRejectTheReceiverIsUnused(): Void {
 		Assert.equals('p.ZapZqqw', unusedIn('using p.ZapZqqw;\n#if !zqqoff\nusing p.ZapWqqw;\n#end\n', 'f(w:Wqqw):Int return w.zqqap();'));
 	}
 
 	/** Two modules both accepting the receiver: the LAST `using` binds, and the one it outranks takes no part. */
-	@:pin('control') @:killer('M-USING-BOUND-ELSEWHERE')
+	@:pin('control')
+	@:killer('M-USING-BOUND-ELSEWHERE')
 	public function testAModuleARivalOutranksIsUnused(): Void {
 		Assert.equals('p.ZapWqqw', unusedIn('using p.ZapWqqw;\nusing p.ZapWqqwTwo;\n', 'f(w:Wqqw):Int return w.zqqap();'));
 	}
 
 	/** `Type.name` on a type expression binds the type's own static before any extension — even one taking `Dynamic`. */
-	@:pin('control') @:killer('M-USING-STATIC-RECEIVER')
+	@:pin('control')
+	@:killer('M-USING-STATIC-RECEIVER')
 	public function testAStaticOfATypeExpressionIsNoUse(): Void {
 		Assert.equals('p.ZapAnyqqw', unusedIn('using p.ZapAnyqqw;\n', 'f():Int return Kqqw.zqqap(1);'));
 	}
@@ -54,7 +57,8 @@ class UsingSitesTest extends Test {
 	 * `Kqqw.zqqap()` reads the field's value and binds the extension (without the statement 4.3.7 reads `p.Wqqw has no field
 	 * zqqap`).
 	 */
-	@:pin('control') @:killer('M-USING-STATIC-SHADOW')
+	@:pin('control')
+	@:killer('M-USING-STATIC-SHADOW')
 	public function testAFieldSpelledLikeATypeIsNoTypeExpression(): Void {
 		final scope: Array<{ file: String, source: String }> = TYPES.concat([
 			{
@@ -74,7 +78,8 @@ class UsingSitesTest extends Test {
 	 * without the statement 4.3.7 reads `p.Fwdqqw has no field zqqap`. Neither the abstract nor a `typedef` of it decides the
 	 * candidate, so the access stays a use.
 	 */
-	@:pin('control') @:killer('M-USING-FORWARD-DECIDED')
+	@:pin('control')
+	@:killer('M-USING-FORWARD-DECIDED')
 	public function testAForwardAbstractReceiverKeepsTheModule(): Void {
 		final forward: Array<{ file: String, source: String }> = [
 			{ file: 'p/Fwdqqw.hx', source: 'package p;\n\n@:forward abstract Fwdqqw(Wqqw) from Wqqw {}\n' },
@@ -89,7 +94,8 @@ class UsingSitesTest extends Test {
 	 * wildcard, an imported enum's constructor. `Kqqw.zqqap()` then reads that value and binds the extension — each form,
 	 * without the statement, fails to compile on 4.3.7.
 	 */
-	@:pin('control') @:killer('M-USING-STATIC-SHADOW')
+	@:pin('control')
+	@:killer('M-USING-STATIC-SHADOW')
 	public function testAValueSpelledLikeATypeIsNoTypeExpression(): Void {
 		final values: Array<{ file: String, source: String }> = [
 			{ file: 'p/Holdqqw.hx', source: 'package p;\n\nclass Holdqqw {\n\tpublic static var Kqqw:Wqqw = new Wqqw();\n}\n' },
@@ -140,7 +146,9 @@ class UsingSitesTest extends Test {
 	 * Two `using` statements contest an access only where both may offer it: a rival whose candidate rejects the receiver
 	 * leaves the access where it was, one accepting it — or a receiver the run cannot type — contests it.
 	 */
-	@:pin('control') @:killer('M-USING-OFFER-OPEN') @:killer('M-USING-CONTEST-ANY')
+	@:pin('control')
+	@:killer('M-USING-OFFER-OPEN')
+	@:killer('M-USING-CONTEST-ANY')
 	public function testARivalContestsOnlyAnAccessBothMayOffer(): Void {
 		Assert.isFalse(contested('f(w:Wqqw):Int return w.zqqap();', 'p.ZapWqqw', 'p.ZapZqqw'));
 		Assert.isTrue(contested('f(w:Wqqw):Int return w.zqqap();', 'p.ZapWqqw', 'p.ZapWqqwTwo'));

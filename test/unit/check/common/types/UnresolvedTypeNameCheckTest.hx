@@ -11,7 +11,8 @@ import unit.cli.CliFixture;
  */
 class UnresolvedTypeNameCheckTest extends Test {
 
-	@:pin('control') @:killer('M-UNRESOLVED-NEVER-NOTHING')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-NEVER-NOTHING')
 	public function testUndeclaredTypeFlagged(): Void {
 		final found: Array<Violation> = violations('package a; class C { var x: Missing; }');
 		Assert.equals(1, found.length);
@@ -53,19 +54,22 @@ class UnresolvedTypeNameCheckTest extends Test {
 		Assert.equals(0, violations('package a; class C { var x: Inner; } typedef Inner = { var y: Int; }').length);
 	}
 
-	@:pin('control') @:killer('M-UNRESOLVED-TOPLEVEL-STD-UNBOUND')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-TOPLEVEL-STD-UNBOUND')
 	public function testStdToplevelNotFlagged(): Void {
 		Assert.equals(
 			0, violations('package a; class C { var s: String; var a: Array<Int>; var m: Map<Int, Date>; var d: Dynamic; }').length
 		);
 	}
 
-	@:pin('control') @:killer('M-UNRESOLVED-IMPORTED-STD-UNBOUND')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-IMPORTED-STD-UNBOUND')
 	public function testImportedStdModuleNotFlagged(): Void {
 		Assert.equals(0, violations('package a; import haxe.io.Bytes; class C { var b: Bytes; }').length);
 	}
 
-	@:pin('control') @:killer('M-UNRESOLVED-STD-PACKAGE-UNBOUND')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-STD-PACKAGE-UNBOUND')
 	public function testStdModuleOfOwnPackageNotFlagged(): Void {
 		final found: Array<Violation> = violationsIn([{ file: 'js/html/X.hx', source: 'package js.html; class X { var e: Element; }' }]);
 		Assert.equals(0, found.length);
@@ -75,12 +79,14 @@ class UnresolvedTypeNameCheckTest extends Test {
 		Assert.equals(0, violations('package a; import lib.Widget; class C { var w: Widget; }').length);
 	}
 
-	@:pin('control') @:killer('M-UNRESOLVED-TYPEPARAM-FLAGGED')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-TYPEPARAM-FLAGGED')
 	public function testTypeParameterNotFlagged(): Void {
 		Assert.equals(0, violations('package a; class C<T:String> { var x: T; function f<U>(u: U): T { return null; } }').length);
 	}
 
-	@:pin('control') @:killer('M-UNRESOLVED-DOTTED-FLAGGED')
+	@:pin('control')
+	@:killer('M-UNRESOLVED-DOTTED-FLAGGED')
 	public function testDottedPathNotFlagged(): Void {
 		Assert.equals(0, violations('package a; class C { var x: Missing.Inner; var y: pkg.sub.Missing; }').length);
 	}

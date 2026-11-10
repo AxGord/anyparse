@@ -38,7 +38,8 @@ class UnreachableCatchTest extends Test {
 		Assert.equals(1, violations('class E {} class C { function f() { try { g(); } catch (e:E) {} catch (e:E) {} } }').length);
 	}
 
-	@:pin('control') @:killer('M-ISSUBTYPE-FALSE')
+	@:pin('control')
+	@:killer('M-ISSUBTYPE-FALSE')
 	public function testSubtypeAfterSupertypeFlagged(): Void {
 		// catch Base then Sub — Sub<:Base, so Base already caught it.
 		Assert.equals(
@@ -146,7 +147,8 @@ class UnreachableCatchTest extends Test {
 	 * names: another package's namesake in the later type's chain leaves the clause reachable, and deleting it would drop
 	 * the handler that runs. The second assertion keeps the namesake in the index beside a real subtype.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
+	@:pin('control')
+	@:killer('M-SUBTYPE-TARGET-SIMPLE-NAME')
 	public function testNamesakeSupertypeDoesNotCoverTheLaterClause(): Void {
 		Assert.equals(0, namesakeCovered('Base'), 'a subtype of another package\'s Base still reaches its own clause');
 		Assert.equals(1, namesakeCovered('pkg.Base'), 'a subtype of this Base is caught by the earlier clause');
@@ -157,7 +159,8 @@ class UnreachableCatchTest extends Test {
 	 * `my.Eof` that extends `Base`, so the earlier `Base` clause never catches it. The twin naming the project's `Eof` is
 	 * covered.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-START-SIMPLE-NAME')
+	@:pin('control')
+	@:killer('M-SUBTYPE-START-SIMPLE-NAME')
 	public function testALaterTypeNamedLikeAProjectSubtypeIsNotCovered(): Void {
 		Assert.equals(0, laterEofCovered('haxe.io.Eof'), 'the std Eof is no Base');
 		Assert.equals(1, laterEofCovered('Eof'), 'the project Eof is');

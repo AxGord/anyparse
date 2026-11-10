@@ -17,7 +17,8 @@ class LintQuotationAwareCliTest extends Test {
 	/** The fixture: one quoted delimited pair, the only redundant pair of the file. */
 	private static final QUOTED: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = macro g((x));\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-PARENS-QUOTED-DROPPED')
+	@:pin('control')
+	@:killer('M-PARENS-QUOTED-DROPPED')
 	public function testAQuotedRedundantParensFindingReports(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.write('lintquotationaware', QUOTED);
@@ -29,7 +30,8 @@ class LintQuotationAwareCliTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-PARENS-QUOTED-DROPPED')
+	@:pin('control')
+	@:killer('M-PARENS-QUOTED-DROPPED')
 	public function testAQuotedRedundantParensFindingIsFixed(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.write('lintquotationaware', QUOTED);

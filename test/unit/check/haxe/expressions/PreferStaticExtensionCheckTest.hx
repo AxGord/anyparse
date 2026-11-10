@@ -95,7 +95,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * the guarded `using` is not in scope for this call in the builds the region is compiled out of,
 	 * so counting it would leave the rewritten call binding nothing.
 	 */
-	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	@:pin('control')
+	@:killer('M-GUARDED-USING-ABSENT')
 	public function testGuardedImportRunGetsNoSecondUsing(): Void {
 		final files: Array<{ file: String, source: String }> = guardedImportRunFiles();
 		Assert.equals(1, violationsOf(files).length);
@@ -106,7 +107,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * The refusal says which region decided it — a `fix` that returns nothing and
 	 * says nothing reads to the ledger as a rule withholding an edit for no reason.
 	 */
-	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	@:pin('control')
+	@:killer('M-GUARDED-USING-ABSENT')
 	public function testGuardedImportRunRefusalNamesTheRegion(): Void {
 		final violations: Array<Violation> = fixRunOf(guardedImportRunFiles()).violations;
 		Assert.equals(1, violations.length);
@@ -131,7 +133,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * `guardedImportScopes` runs the region through `singleBranchRegion` and reports a
 	 * multi-branch one as covering nothing.
 	 */
-	@:pin('control') @:killer('M-COND-BRANCH-SPAN-SHARED')
+	@:pin('control')
+	@:killer('M-COND-BRANCH-SPAN-SHARED')
 	public function testUsingInAnotherBranchDoesNotCoverTheCall(): Void {
 		final files: Array<{ file: String, source: String }> = branchedUsingFiles();
 		Assert.equals(1, violationsOf(files).length);
@@ -801,7 +804,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * only a fixture holding both can see it. `CheckScan.normalizeSpan`, which this used to route
 	 * the message through, collapses whitespace INSIDE a literal.
 	 */
-	@:pin('control') @:killer('M-RENDER-SPAN-TOKENS')
+	@:pin('control')
+	@:killer('M-RENDER-SPAN-TOKENS')
 	public function testMessageQuotesLiteralWhitespaceExactlyAsTheFixWritesIt(): Void {
 		final body: String = 'Ext.tag(w, \'  a\tb  \');';
 		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', body)));
@@ -816,7 +820,8 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * A two-space literal is the smallest form the old normalizer destroyed, and the one a reader
 	 * has no way to recover: `' '` and `'  '` are both plausible source. The fix writes two.
 	 */
-	@:pin('control') @:killer('M-RENDER-SPAN-TOKENS')
+	@:pin('control')
+	@:killer('M-RENDER-SPAN-TOKENS')
 	public function testMessageKeepsATwoSpaceLiteral(): Void {
 		final body: String = 'Ext.tag(w, \'  \');';
 		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', body)));

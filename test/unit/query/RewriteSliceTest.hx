@@ -156,7 +156,9 @@ class RewriteSliceTest extends Test {
 	 * (`new $C<$T>($a)`) rewrites it.
 	 */
 	@:pin('control')
-	@:killer('M-MATCH-ONE-FLAT-RUN') @:killer('M-MATCH-UNWRITTEN-DROPPED') @:killer('M-REWRITE-UNWRITTEN-IGNORED')
+	@:killer('M-MATCH-ONE-FLAT-RUN')
+	@:killer('M-MATCH-UNWRITTEN-DROPPED')
+	@:killer('M-REWRITE-UNWRITTEN-IGNORED')
 	public function testAValueCaptureNeverTakesATypeArgument(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar m = new Map<String, Int>();\n\t\tvar p = new Pair(1, 2);\n\t}\n}';
 		final swapped: String = okText(Rewrite.rewrite(src, "new $C($a, $b)", "new $C($b, $a)", true, new HaxeQueryPlugin()));
@@ -174,7 +176,8 @@ class RewriteSliceTest extends Test {
 	 * an unannotated declaration is still rewritten, and writing the type in the pattern (`final $x:$T = $v`) carries it.
 	 */
 	@:pin('control')
-	@:killer('M-MATCH-TYPE-SLOT-UNRECORDED') @:killer('M-REWRITE-UNWRITTEN-IGNORED')
+	@:killer('M-MATCH-TYPE-SLOT-UNRECORDED')
+	@:killer('M-REWRITE-UNWRITTEN-IGNORED')
 	public function testAnUnwrittenTypeAnnotationIsNeverDropped(): Void {
 		final typed: String = 'class C {\n\tfunction f() {\n\t\tfinal f:Float = 1;\n\t\ttrace(f);\n\t}\n}';
 		Assert.isTrue(isErr(Rewrite.rewrite(typed, "final $x = $v", "var $x = $v", true, new HaxeQueryPlugin())));

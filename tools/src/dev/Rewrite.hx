@@ -6,7 +6,8 @@ package dev;
 @:ws
 typedef Rewrite = {
 	var agent: String;
-	@:optional var slice: Null<String>;
+	@:optional
+	var slice: Null<String>;
 	var model: String;
 	var tokens: Int;
 	var context: Int;

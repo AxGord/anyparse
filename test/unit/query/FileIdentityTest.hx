@@ -15,7 +15,8 @@ class FileIdentityTest extends Test {
 	 * A file named through a symlinked directory keys like the same file named through its target, and a relative
 	 * spelling like its absolute one.
 	 */
-	@:pin('control') @:killer('M-FILE-IDENTITY-SYMLINK')
+	@:pin('control')
+	@:killer('M-FILE-IDENTITY-SYMLINK')
 	public function testTwoSpellingsOfOneFileAreOneIdentity(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeTree('fileidentity', [{ name: 'real/A.hx', source: 'class A {}\n' }]);
@@ -36,7 +37,8 @@ class FileIdentityTest extends Test {
 	}
 
 	/** A file that does not exist yet resolves its nearest existing ancestor, so it keys like the file it will become. */
-	@:pin('control') @:killer('M-FILE-IDENTITY-ANCESTOR')
+	@:pin('control')
+	@:killer('M-FILE-IDENTITY-ANCESTOR')
 	public function testAMissingFileKeysThroughItsNearestExistingAncestor(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeTree('fileidentitymissing', [{ name: 'real/A.hx', source: 'class A {}\n' }]);

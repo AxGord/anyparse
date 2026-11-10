@@ -441,7 +441,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * The decl arm: a declaration whose initializer is the missing `else` of the chain right after it
 	 * folds into one initialized declaration, keyed on the declaration (client `Grid.hx:698`'s shape).
 	 */
-	@:pin('control') @:killer('M-DECLCHAIN-OWNED-BY-TERNARY')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-OWNED-BY-TERNARY')
 	public function testDeclElseLessChainFolded(): Void {
 		final src: String = wrap(
 			'var lineArray:Array<Int> = null;\n\t\tif (a == 1)\n\t\t\tlineArray = p;\n\t\telse if (a == 2)\n\t\t\tlineArray = q;'
@@ -471,7 +472,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * but `var x = c ? (1:UInt) : 1;` is `UInt`, and a subclass in the first branch makes the
 	 * collapsed form fail to compile at all.
 	 */
-	@:pin('control') @:killer('M-DECLCHAIN-UNTYPED')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-UNTYPED')
 	public function testDeclChainUntypedNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var x = null;\n\t\tif (a) x = p;\n\t\telse if (b) x = q;')).length);
 		Assert.equals(1, violations(wrap('var x:A = null;\n\t\tif (a) x = p;\n\t\telse if (b) x = q;')).length);
@@ -482,14 +484,16 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * read and do nothing: a call, a field or local read a condition could change, an allocation, an
 	 * interpolating string are all refused.
 	 */
-	@:pin('control') @:killer('M-DECLCHAIN-INIT-ANY')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-INIT-ANY')
 	public function testDeclChainImpureInitNotFlagged(): Void {
 		for (init in ['g()', 'this.count', 'other', 'new A()', '[]', "'$v'"])
 			Assert.equals(0, violations(wrap('var x:T = $init;\n\t\tif (a) x = 1;\n\t\telse if (b) x = 2;')).length, init);
 	}
 
 	/** After the fold the chain IS the initializer: any read of the target in it names a variable not declared yet. */
-	@:pin('control') @:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
 	public function testDeclChainTargetReadNotFlagged(): Void {
 		for (chain in [
 			'if (x > 0) x = 1;\n\t\telse if (b) x = 2;',
@@ -500,7 +504,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	}
 
 	/** A nested WRITE is no read, but it still uses a variable the fold has not declared yet. */
-	@:pin('control') @:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-OCCURRENCE-COUNT')
 	public function testDeclChainNestedWriteNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = go(() -> x = 5);\n\t\telse if (b) x = 2;')).length);
 	}
@@ -509,20 +514,24 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	 * Every leaf assigns ANOTHER target here, and the declared one is written exactly once per leaf
 	 * inside the value — the occurrence count alone cannot tell, the hoisted l-value has to.
 	 */
-	@:pin('control') @:killer('M-DECLCHAIN-LVALUE')
+	@:pin('control')
+	@:killer('M-DECLCHAIN-LVALUE')
 	public function testDeclChainOtherTargetNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) y = (x = 5);\n\t\telse if (b) y = (x = 6);')).length);
 	}
 
 	/** Only the IMMEDIATELY following statement pairs: a statement, a `#if` region or a comment between them refuses. */
-	@:pin('control') @:killer('M-DECLIF-CARRY')
+	@:pin('control')
+	@:killer('M-DECLIF-CARRY')
 	public function testDeclChainNotAdjacentNotFlagged(): Void {
 		for (between in ['trace(1);\n\t\t', '#if foo trace(1); #end\n\t\t', '// why\n\t\t'])
 			Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\t${between}if (a) x = 1;\n\t\telse if (b) x = 2;')).length, between);
 	}
 
 	/** A comment inside the copied declaration prefix rides along; one ENDING it would swallow the value. */
-	@:pin('control') @:killer('M-DECLIF-PREFIX-KEPT') @:killer('M-DECLCHAIN-PREFIX-DANGLING')
+	@:pin('control')
+	@:killer('M-DECLIF-PREFIX-KEPT')
+	@:killer('M-DECLCHAIN-PREFIX-DANGLING')
 	public function testDeclChainPrefixComments(): Void {
 		Assert.equals(
 			'var x /* kept */:Int = if (a) 1 else if (b) 2 else 0;',
@@ -567,7 +576,8 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 	}
 
 	/** A `while` after the `else` is no `else if`: its condition is not a branch condition. */
-	@:pin('control') @:killer('M-ELSELESS-FINAL-ELSE')
+	@:pin('control')
+	@:killer('M-ELSELESS-FINAL-ELSE')
 	public function testDeclChainElseWhileNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tif (a) x = 1;\n\t\telse while (b) x = 3;')).length);
 	}

@@ -14,4 +14,10 @@ package anyparse.grammar.haxe;
  * metas; `stmt` recurses into the full statement grammar, so the wrapped statement owns its terminator exactly as it would unprefixed.
  */
 @:peg
-typedef HxMetaStmt = { var first: HxMetadata; @:trivia @:tryparse var rest: Array<HxMetadata>; var stmt: HxStatement; }
+typedef HxMetaStmt = {
+	var first: HxMetadata;
+	@:trivia
+	@:tryparse
+	var rest: Array<HxMetadata>;
+	var stmt: HxStatement;
+}

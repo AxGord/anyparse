@@ -14,8 +14,12 @@ package anyparse.grammar.haxe.format;
  * two-value `"keep"` / `"remove"` policy: `"remove"` drops the braces around a single-statement `if` / `else` / `for` / `while`
  * / `do-while` body (maps onto the runtime `dropSingleStmtBraces` boolean). Default `"keep"` — braces preserved, byte-inert.
  */
-@:peg typedef HxFormatBracesConfigSection = {
-	@:optional var anonTypeBraces: HxFormatParenPolicySection;
-	@:optional var objectLiteralBraces: HxFormatParenPolicySection;
-	@:optional var singleStatementBraces: HxFormatSingleStatementBracesPolicy;
+@:peg
+typedef HxFormatBracesConfigSection = {
+	@:optional
+	var anonTypeBraces: HxFormatParenPolicySection;
+	@:optional
+	var objectLiteralBraces: HxFormatParenPolicySection;
+	@:optional
+	var singleStatementBraces: HxFormatSingleStatementBracesPolicy;
 };

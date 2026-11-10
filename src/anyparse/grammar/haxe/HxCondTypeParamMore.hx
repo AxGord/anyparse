@@ -32,4 +32,8 @@ package anyparse.grammar.haxe;
  * `HxParam.Conditional`.
  */
 @:peg
-typedef HxCondTypeParamMore = { @:lead(',') @:fmt(spaceAfterLead) var param: HxParam; };
+typedef HxCondTypeParamMore = {
+	@:lead(',')
+	@:fmt(spaceAfterLead)
+	var param: HxParam;
+};

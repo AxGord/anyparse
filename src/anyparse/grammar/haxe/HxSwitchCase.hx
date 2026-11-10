@@ -28,7 +28,8 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxSwitchCase {
 
-	@:kw('case') @:fmt(forwardNewlineForBody, deferKwSpace)
+	@:kw('case')
+	@:fmt(forwardNewlineForBody, deferKwSpace)
 	CaseBranch(branch: HxCaseBranch);
 	@:kw('default')
 	DefaultBranch(branch: HxDefaultBranch);
@@ -43,7 +44,8 @@ enum HxSwitchCase {
 	 * guard that hands every ordinary whole-clause region back to
 	 * `Conditional` via `tryBranch` rollback.
 	 */
-	@:kw('#if') @:fmt(conditionalMarkerDedent)
+	@:kw('#if')
+	@:fmt(conditionalMarkerDedent)
 	CondSpliceCase(inner: HxCondSpliceCase);
 
 	/**
@@ -51,7 +53,9 @@ enum HxSwitchCase {
 	 * `HxConditionalCase` for the shape and the dispatch-order
 	 * interplay with statement-scope conditionals inside case bodies.
 	 */
-	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalCase);
 
 }

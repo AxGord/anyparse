@@ -33,7 +33,8 @@ class HxAnonSepStrictTest extends Test {
 		super();
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-PLAIN-OPTIONAL')
+	@:pin('control')
+	@:killer('M-ANON-SEP-PLAIN-OPTIONAL')
 	public function testPlainRefusesAdjacentFields(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse(ADJACENT_SHORT), Exception);
 		Assert.raises(() -> HaxeModuleParser.parse(ADJACENT_SHORT_LINES), Exception);
@@ -42,7 +43,8 @@ class HxAnonSepStrictTest extends Test {
 		Assert.raises(() -> HaxeModuleParser.parse(VAR_ENDED_BY_GENERIC), Exception);
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-TRIVIA-OPTIONAL')
+	@:pin('control')
+	@:killer('M-ANON-SEP-TRIVIA-OPTIONAL')
 	public function testTriviaRefusesAdjacentFields(): Void {
 		Assert.raises(() -> HaxeModuleTriviaParser.parse(ADJACENT_SHORT), Exception);
 		Assert.raises(() -> HaxeModuleTriviaParser.parse(ADJACENT_SHORT_LINES), Exception);
@@ -52,42 +54,49 @@ class HxAnonSepStrictTest extends Test {
 	}
 
 	/** Haxe's class notation takes a field's closing `}` for its `;`. */
-	@:pin('control') @:killer('M-ANON-SEP-VAR-BRACE-NOT-SELF-ENDED')
+	@:pin('control')
+	@:killer('M-ANON-SEP-VAR-BRACE-NOT-SELF-ENDED')
 	public function testClassNotationFieldEndedByBraceNeedsNoSeparator(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(VAR_ENDED_BY_ANON).decls.length);
 		Assert.notNull(HaxeModuleTriviaParser.parse(VAR_ENDED_BY_ANON));
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-ARROW-NOT-BRACE-ENDED')
+	@:pin('control')
+	@:killer('M-ANON-SEP-ARROW-NOT-BRACE-ENDED')
 	public function testFunctionTypeEndedByBraceNeedsNoSeparator(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(VAR_ENDED_BY_ARROW).decls.length);
 		Assert.notNull(HaxeModuleTriviaParser.parse(VAR_ENDED_BY_ARROW));
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-ARROW-FN-NOT-BRACE-ENDED')
+	@:pin('control')
+	@:killer('M-ANON-SEP-ARROW-FN-NOT-BRACE-ENDED')
 	public function testArrowFunctionTypeEndedByBraceNeedsNoSeparator(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(VAR_ENDED_BY_ARROW_FN).decls.length);
 		Assert.notNull(HaxeModuleTriviaParser.parse(VAR_ENDED_BY_ARROW_FN));
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-PLAIN-NO-BYTE-WAIVER')
+	@:pin('control')
+	@:killer('M-ANON-SEP-PLAIN-NO-BYTE-WAIVER')
 	public function testPlainAcceptsSelfTerminatedFields(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(SELF_TERMINATED).decls.length);
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-TRIVIA-NO-BYTE-WAIVER')
+	@:pin('control')
+	@:killer('M-ANON-SEP-TRIVIA-NO-BYTE-WAIVER')
 	public function testTriviaRoundTripsSelfTerminatedFields(): Void {
 		Assert.equals(SELF_TERMINATED, HxWriteFixture.triviaWrite(SELF_TERMINATED, '{}'));
 	}
 
-	@:pin('control') @:killer('M-ANON-SEP-COND-NOT-SELF-ENDED')
+	@:pin('control')
+	@:killer('M-ANON-SEP-COND-NOT-SELF-ENDED')
 	public function testRegionNeedsNoSeparatorAfterIt(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(REGION).decls.length);
 		Assert.equals(REGION, HxWriteFixture.triviaWrite(REGION, '{}'));
 	}
 
 	/** A `function` field ends only with its own `;`: Haxe refuses a body on it. */
-	@:pin('control') @:killer('M-ANON-SEP-FN-NOT-SELF-ENDED')
+	@:pin('control')
+	@:killer('M-ANON-SEP-FN-NOT-SELF-ENDED')
 	public function testFunctionFieldNeedsItsOwnSemicolon(): Void {
 		Assert.equals(1, HaxeModuleParser.parse(FN_TERMINATED).decls.length);
 		Assert.notNull(HaxeModuleTriviaParser.parse(FN_TERMINATED));

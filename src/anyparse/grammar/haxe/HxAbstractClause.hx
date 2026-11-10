@@ -32,6 +32,7 @@ enum HxAbstractClause {
 	FromClause(type: HxType);
 	@:kw('to')
 	ToClause(type: HxType);
-	@:kw('#if') @:trail('#end')
+	@:kw('#if')
+	@:trail('#end')
 	Conditional(inner: HxConditionalAbstractClause);
 }

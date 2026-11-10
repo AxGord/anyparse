@@ -6,7 +6,9 @@ import anyparse.core.FileHash;
  * The persisted record of a successful generation. Every field is optional: a record of another scheme comes off disk
  * too, and it may carry any part of this one.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef GenerationRecord = {
 
 	/** The record scheme it was written under (`FORMAT_TAG`): a record of another scheme is never current. */

@@ -21,7 +21,10 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * Review fixture `ep1b-iter-in-caller`: a method value, a lambda and a sink itself, each handed to `Lambda.iter` under the
 	 * hold, and a value handed on inside a call the hold makes.
 	 */
-	@:pin('control') @:killer('M-TS-HANDED-RUNS-HERE') @:killer('M-TS-HANDED-WINDOW-OFF') @:killer('M-TS-HANDED-REACH-OFF')
+	@:pin('control')
+	@:killer('M-TS-HANDED-RUNS-HERE')
+	@:killer('M-TS-HANDED-WINDOW-OFF')
+	@:killer('M-TS-HANDED-REACH-OFF')
 	@:killer('M-TS-HANDED-SINK-OFF')
 	public function testAHoldTaintsAValueHandedToACallThatRunsIt(): Void {
 		#if (sys || nodejs)
@@ -38,7 +41,9 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * The value repeats with the call it is handed to: a short sink once per element of `Lambda.iter` keeps the lock long,
 	 * once under a `runsOnce` call it does not; a sink only a `catch` runs counts on the normal paths when the value repeats.
 	 */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-ITERATES') @:killer('M-TS-RUNS-ONCE-OFF')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-ITERATES')
+	@:killer('M-TS-RUNS-ONCE-OFF')
 	public function testAHandedValueRepeatsWithTheCallItIsHandedTo(): Void {
 		#if (sys || nodejs)
 		Assert.same(['S.work | S._m'], holds(run('Lambda.iter(paths, p -> Disk.peek(p));')), 'per element');
@@ -50,7 +55,9 @@ class ThreadSafetyHandedValueTest extends Test {
 	}
 
 	/** A value a call runs on another thread, once per event or never, taints nothing under the hold around the call. */
-	@:pin('control') @:killer('M-TS-HANDED-ELSEWHERE') @:killer('M-TS-CYCLE-REGISTERED')
+	@:pin('control')
+	@:killer('M-TS-HANDED-ELSEWHERE')
+	@:killer('M-TS-CYCLE-REGISTERED')
 	public function testAValueRunElsewhereTaintsNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same([], holds(run('Runner.create(() -> Disk.stat("x"));')), 'spawned');
@@ -63,7 +70,8 @@ class ThreadSafetyHandedValueTest extends Test {
 	}
 
 	/** The main thread reaches a sink handed as a value to a call that runs it, as it reaches one it calls. */
-	@:pin('control') @:killer('M-TS-HANDED-SINK-OFF')
+	@:pin('control')
+	@:killer('M-TS-HANDED-SINK-OFF')
 	public function testAMainSinkHandedAsAValueIsReported(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A S.main | Disk.stat'], mains(ThreadSafetyCheckTest.violations(CONFIG, [
@@ -84,7 +92,8 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * A method value of ANOTHER object that takes the held re-entrant lock on its own object waits for that object's
 	 * lock: handed to a call that runs it, it re-takes nothing of the holder's.
 	 */
-	@:pin('control') @:killer('M-TS-HANDED-RETAKE')
+	@:pin('control')
+	@:killer('M-TS-HANDED-RETAKE')
 	public function testAMethodValueOfAnotherObjectWaitsForItsLock(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -111,8 +120,13 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * the take of `_b` was made under no hold and the pair went unreported. A value run on another thread, or kept to run
 	 * per event, takes `_b` under no hold of `_a`.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-HANDED') @:killer('M-TS-ORDER-HANDED-ANYWHERE') @:killer('M-TS-ORDER-FOLLOWS-REFS')
-	@:killer('M-TS-ORDER-HANDED-RANK') @:killer('M-TS-ORDER-HANDED-CLIMB') @:killer('M-TS-ORDER-HANDED-VIA')
+	@:pin('control')
+	@:killer('M-TS-ORDER-HANDED')
+	@:killer('M-TS-ORDER-HANDED-ANYWHERE')
+	@:killer('M-TS-ORDER-FOLLOWS-REFS')
+	@:killer('M-TS-ORDER-HANDED-RANK')
+	@:killer('M-TS-ORDER-HANDED-CLIMB')
+	@:killer('M-TS-ORDER-HANDED-VIA')
 	public function testALockTakenInAHandedValueOrdersUnderTheHold(): Void {
 		#if (sys || nodejs)
 		final pair: Array<String> = ['S.main | S._a / S._b'];
@@ -136,7 +150,9 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * `C.f` calls itself, though the stat is written first. Of the nearest repeating calls up a short call's ways, a loop
 	 * around a direct call comes before a value handed to an iterating call at the same distance.
 	 */
-	@:pin('control') @:killer('M-TS-WAY-HANDED-RANK') @:killer('M-TS-OWNER-HANDED-RANK')
+	@:pin('control')
+	@:killer('M-TS-WAY-HANDED-RANK')
+	@:killer('M-TS-OWNER-HANDED-RANK')
 	public function testADirectCallOutranksAHandedValue(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Disk.stat","Disk.peek","Sys.sleep"],"shortSinks":["Disk.peek"],'
@@ -172,9 +188,16 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * local shadowing the field, a string literal spelling the field's name, a project not closed, or one that does not
 	 * declare which classes a read of a computed name may obtain members of.
 	 */
-	@:pin('control') @:killer('M-TS-CTOR-STORE-INERT') @:killer('M-TS-CTOR-STORE-DERIVE') @:killer('M-TS-CTOR-STORE-FINAL')
-	@:killer('M-TS-CTOR-STORE-READS') @:killer('M-TS-CTOR-STORE-FORWARD') @:killer('M-TS-CTOR-STORE-CLOSED')
-	@:killer('M-TS-CTOR-STORE-SPELLED') @:killer('M-TS-CTOR-STORE-STATEMENT') @:killer('M-TS-CTOR-STORE-USE')
+	@:pin('control')
+	@:killer('M-TS-CTOR-STORE-INERT')
+	@:killer('M-TS-CTOR-STORE-DERIVE')
+	@:killer('M-TS-CTOR-STORE-FINAL')
+	@:killer('M-TS-CTOR-STORE-READS')
+	@:killer('M-TS-CTOR-STORE-FORWARD')
+	@:killer('M-TS-CTOR-STORE-CLOSED')
+	@:killer('M-TS-CTOR-STORE-SPELLED')
+	@:killer('M-TS-CTOR-STORE-STATEMENT')
+	@:killer('M-TS-CTOR-STORE-USE')
 	public function testAValueAConstructorOnlyStoresRunsWhereTheFieldIsCalled(): Void {
 		#if (sys || nodejs)
 		final warns: Array<String> = ['S.work | S._m'];
@@ -203,7 +226,9 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * field of a structure it is handed. Such a stored value runs where no occurrence shows it, so a field named so, or a
 	 * public one, keeps the value running where it is handed.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-IMPLICIT-NAME') @:killer('M-TS-STORED-PUBLIC')
+	@:pin('control')
+	@:killer('M-TS-STORED-IMPLICIT-NAME')
+	@:killer('M-TS-STORED-PUBLIC')
 	public function testAFieldTheLanguageCallsByNameIsNotOnlyStored(): Void {
 		#if (sys || nodejs)
 		final warns: Array<String> = ['S.work | S._m'];
@@ -223,7 +248,8 @@ class ThreadSafetyHandedValueTest extends Test {
 	 * Review L3 G1 (`f1x`): what exposes a field is written on its TYPE DECLARATION — `@:publicFields`, on a `final` wrapper
 	 * too — whatever holds the field: a member under `#if` is held by the region, not by the type.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-HOLDER-NOT-DECLARATION')
+	@:pin('control')
+	@:killer('M-TS-STORED-HOLDER-NOT-DECLARATION')
 	public function testAFieldItsTypeDeclarationExposesIsNotOnlyStored(): Void {
 		#if (sys || nodejs)
 		final warns: Array<String> = ['S.work | S._m'];

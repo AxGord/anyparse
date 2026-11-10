@@ -1206,7 +1206,8 @@ typedef ChainTypeContext = {
 	 * The written target type of each ascription and typed cast of the file (`TypeInfoProvider.castTargetSources`), read when
 	 * first asked; unset, the deep mode types no ascription.
 	 */
-	@:optional final castTargetSources: () -> Map<Int, String>;
+	@:optional
+	final castTargetSources: () -> Map<Int, String>;
 
 	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
 	final typeSyntax: TypeSyntaxReader;

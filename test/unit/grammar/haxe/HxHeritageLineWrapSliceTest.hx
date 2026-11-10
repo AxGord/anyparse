@@ -28,7 +28,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordWhenLineExceedsMax(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},'
+		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
 			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		final input: String = '@:nullSafety final class GenericContainerXYZ extends FetchHelper<GenericContainerEntityXYZ, '
@@ -43,7 +43,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordBraceBoundary(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},'
+		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
 			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		final input: String = '@:nullSafety final class Languages extends NetSmartEntity<Array<Language>, Array<Language>, '

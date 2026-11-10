@@ -14,6 +14,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifHeritage = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxHeritageClause>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxHeritageClause>;
 };

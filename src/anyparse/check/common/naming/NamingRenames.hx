@@ -1419,7 +1419,12 @@ final class NamingRenames {
  * declaration: a parameter named after an imported type (`Event` beside `Event.ACTIVATE`) needs it
  * just as much as a field does.
  */
-typedef RenameContext = { final index: SymbolIndex; final file: String; @:optional final ownerName: String; };
+typedef RenameContext = {
+	final index: SymbolIndex;
+	final file: String;
+	@:optional
+	final ownerName: String;
+};
 
 /**
  * A resolved cross-file rename candidate: the parsed declaring file, the flagged binding's cursor

@@ -80,8 +80,13 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	 * the library to the native; a value the library hands to a `spawns` call runs elsewhere; a builtin sink stays the
 	 * runtime's, with no library chain; the run says how many library calls block.
 	 */
-	@:pin('control') @:killer('M-TS-LIB-OFF') @:killer('M-TS-LIB-NOT-SINKS') @:killer('M-TS-LIB-CHAIN-OFF') @:killer('M-TS-LIB-NOTICE')
-	@:killer('M-TS-LIB-KNOWN') @:killer('M-TS-LIB-AWAY-OFF')
+	@:pin('control')
+	@:killer('M-TS-LIB-OFF')
+	@:killer('M-TS-LIB-NOT-SINKS')
+	@:killer('M-TS-LIB-CHAIN-OFF')
+	@:killer('M-TS-LIB-NOTICE')
+	@:killer('M-TS-LIB-KNOWN')
+	@:killer('M-TS-LIB-AWAY-OFF')
 	public function testALibraryCallThatBlocksInsideIsASink(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(OPTIONS);
@@ -103,9 +108,15 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	 * never compiles: another target's package (`php/Db.hx`) or file (`Quiet.php.hx`), and a plain file its target's own
 	 * copy stands in for (`Hold.hx` beside `Hold.cpp.hx`).
 	 */
-	@:pin('control') @:killer('M-TS-LIB-DEFINES-OFF') @:killer('M-TS-LIB-DASH') @:killer('M-TS-LIB-ORACLE-DEFINES')
-	@:killer('M-TS-LIB-TARGET-DEFINES') @:killer('M-TS-LIB-VERSION-DEFINES') @:killer('M-TS-LIB-OTHER-TARGET-FILE')
-	@:killer('M-TS-LIB-SHADOWED') @:killer('M-TS-LIB-TARGET-PACKAGE')
+	@:pin('control')
+	@:killer('M-TS-LIB-DEFINES-OFF')
+	@:killer('M-TS-LIB-DASH')
+	@:killer('M-TS-LIB-ORACLE-DEFINES')
+	@:killer('M-TS-LIB-TARGET-DEFINES')
+	@:killer('M-TS-LIB-VERSION-DEFINES')
+	@:killer('M-TS-LIB-OTHER-TARGET-FILE')
+	@:killer('M-TS-LIB-SHADOWED')
+	@:killer('M-TS-LIB-TARGET-PACKAGE')
 	public function testTheLibrariesAreReadAsTheBuildCompilesThem(): Void {
 		#if (sys || nodejs)
 		Assert.same(WALKED, graded(run(OPTIONS)));
@@ -119,7 +130,10 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	 * type runs its nearest library superclass's member and no library override, whatever library type shares its name
 	 * (`Mine` beside the library's `other.Mine`).
 	 */
-	@:pin('control') @:killer('M-TS-LIB-VIRTUAL-OFF') @:killer('M-TS-LIB-PROJECT-OVERRIDES') @:killer('M-TS-LIB-PROJECT-TYPE')
+	@:pin('control')
+	@:killer('M-TS-LIB-VIRTUAL-OFF')
+	@:killer('M-TS-LIB-PROJECT-OVERRIDES')
+	@:killer('M-TS-LIB-PROJECT-TYPE')
 	public function testAProjectTypeRunsNoLibraryOverride(): Void {
 		#if (sys || nodejs)
 		Assert.same(WALKED, graded(run(OPTIONS)));
@@ -138,7 +152,9 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	}
 
 	/** `nonBlocking` waives a native the library declares, on evidence, and is not said to waive nothing. */
-	@:pin('control') @:killer('M-TS-LIB-WAIVE-OFF') @:killer('M-TS-LIB-WAIVE-SAID')
+	@:pin('control')
+	@:killer('M-TS-LIB-WAIVE-OFF')
+	@:killer('M-TS-LIB-WAIVE-SAID')
 	public function testNonBlockingWaivesALibraryNative(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run('$OPTIONS,"nonBlocking":["Loader.prim the fixture prim answers at once"]');
@@ -150,7 +166,8 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	}
 
 	/** An entry naming no `compilerOracle` hxml walks nothing and says so. */
-	@:pin('control') @:killer('M-TS-LIB-UNKNOWN-SAID')
+	@:pin('control')
+	@:killer('M-TS-LIB-UNKNOWN-SAID')
 	public function testAnUnknownBuildIsSaid(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run('"libraryBodies":["nope.hxml"],"spawns":["Thread.create"]');
@@ -162,7 +179,9 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 	}
 
 	/** A library or a classpath the build names that the run cannot find is said by name: nothing under it is walked. */
-	@:pin('control') @:killer('M-TS-LIB-LOST-LIB-SAID') @:killer('M-TS-LIB-LOST-CP-SAID')
+	@:pin('control')
+	@:killer('M-TS-LIB-LOST-LIB-SAID')
+	@:killer('M-TS-LIB-LOST-CP-SAID')
 	public function testALibraryTheBuildCannotFindIsSaid(): Void {
 		#if (sys || nodejs)
 		final config: String =

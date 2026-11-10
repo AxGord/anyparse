@@ -43,16 +43,22 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxStatement {
 
-	@:kw('static') @:lead('var') @:trailOpt(';')
+	@:kw('static')
+	@:lead('var')
+	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticVarStmt(decl: HxVarDecl);
-	@:kw('static') @:lead('final') @:trailOpt(';')
+	@:kw('static')
+	@:lead('final')
+	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticFinalStmt(decl: HxVarDecl);
-	@:kw('var') @:trailOpt(';')
+	@:kw('var')
+	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	VarStmt(decl: HxVarDecl);
-	@:kw('final') @:trailOpt(';')
+	@:kw('final')
+	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	FinalStmt(decl: HxVarDecl);
 
@@ -76,7 +82,8 @@ enum HxStatement {
 	 */
 	@:kw('return')
 	CondSpliceReturnStmt(inner: HxCondSpliceClosedRegion);
-	@:kw('return') @:trailOpt(';')
+	@:kw('return')
+	@:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
 		bodyPolicySingleLine(
 			'returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'
@@ -84,29 +91,43 @@ enum HxStatement {
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace'), widthAware,
 		propagateExprPosition)
 	ReturnStmt(value: HxExpr);
-	@:kw('return') @:trail(';')
+	@:kw('return')
+	@:trail(';')
 	VoidReturnStmt;
-	@:kw('if') @:fmt(ifPolicy)
+	@:kw('if')
+	@:fmt(ifPolicy)
 	IfStmt(stmt: HxIfStmt);
-	@:kw('while') @:fmt(whilePolicy)
+	@:kw('while')
+	@:fmt(whilePolicy)
 	WhileStmt(stmt: HxWhileStmt);
-	@:kw('for') @:fmt(forPolicy)
+	@:kw('for')
+	@:fmt(forPolicy)
 	ForStmt(stmt: HxForStmt);
-	@:kw('switch') @:fmt(switchPolicy)
+	@:kw('switch')
+	@:fmt(switchPolicy)
 	SwitchStmt(stmt: HxSwitchStmt);
-	@:kw('switch') @:fmt(switchPolicy)
+	@:kw('switch')
+	@:fmt(switchPolicy)
 	SwitchStmtBare(stmt: HxSwitchStmtBare);
-	@:kw('throw') @:trail(';') @:fmt(bodyPolicy('throwBody'))
+	@:kw('throw')
+	@:trail(';')
+	@:fmt(bodyPolicy('throwBody'))
 	ThrowStmt(expr: HxExpr);
-	@:kw('do') @:trail(';')
+	@:kw('do')
+	@:trail(';')
 	DoWhileStmt(stmt: HxDoWhileStmt);
-	@:kw('break') @:trail(';')
+	@:kw('break')
+	@:trail(';')
 	BreakStmt;
-	@:kw('continue') @:trail(';')
+	@:kw('continue')
+	@:trail(';')
 	ContinueStmt;
-	@:kw('try') @:rejectFollowKw('catch') @:fmt(tryPolicy, forwardNewlineForBody)
+	@:kw('try')
+	@:rejectFollowKw('catch')
+	@:fmt(tryPolicy, forwardNewlineForBody)
 	TryCatchStmt(stmt: HxTryCatchStmt);
-	@:kw('try') @:trail(';')
+	@:kw('try')
+	@:trail(';')
 	TryCatchStmtBare(stmt: HxTryCatchStmtBare);
 	@:fmt(blockShape)
 	UntypedBlockStmt(body: HxUntypedFnBody);
@@ -122,7 +143,9 @@ enum HxStatement {
 	 */
 	@:kw('#error')
 	ErrorStmt(message: HxErrorMsg);
-	@:kw('#if') @:trail('#end') @:fmt(sharpCondParensGap, conditionalMarkerDedent)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(sharpCondParensGap, conditionalMarkerDedent)
 	Conditional(inner: HxConditionalStmt);
 
 	/**
@@ -186,7 +209,8 @@ enum HxStatement {
 	 * `case` / `#else` / `#end` markers; a dangling-else splice is left at
 	 * the statement indent.
 	 */
-	@:kw('#if') @:fmt(condSpliceCaseMarkerDedent)
+	@:kw('#if')
+	@:fmt(condSpliceCaseMarkerDedent)
 	CondSpliceStmt(inner: HxCondSpliceStmt);
 
 	/**
@@ -236,11 +260,14 @@ enum HxStatement {
 	OrphanElseStmt(stmt: HxStatement);
 	@:kw('function')
 	LocalFnStmt(decl: HxFnDecl);
-	@:kw('inline') @:lead('function')
+	@:kw('inline')
+	@:lead('function')
 	LocalInlineFnStmt(decl: HxFnDecl);
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
 		clearExprPositionNonTail, uniformStmtBlanks, relocateTrailingComments)
-	@:lead('{') @:trail('}') @:trivia
+	@:lead('{')
+	@:trail('}')
+	@:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockStmt(stmts: Array<HxStatement>);
 	@:lit(';')
@@ -295,7 +322,8 @@ enum HxStatement {
 	 * (a brace-symmetry wrap) may omit its `;`: only a `}`-ended value, as the compiler reads it. The
 	 * parse gate is wider — it also lets `]` and identifier tails stand unterminated — and is no answer here.
 	 */
-	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'), liftNoSemi('endsWithCloseBrace'))
+	@:trailOpt(';')
+	@:fmt(trailOptParseGate('stmtExprNoSemi'), liftNoSemi('endsWithCloseBrace'))
 	ExprStmt(expr: HxExpr);
 
 	/**

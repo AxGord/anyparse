@@ -216,7 +216,9 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-UNDERSCORE') @:killer('M-VALUE-LOOP-READS-UNSPLICED')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-UNDERSCORE')
+	@:killer('M-VALUE-LOOP-READS-UNSPLICED')
 	public function testNoOpenerFieldLoopRewritten(): Void {
 		// No `final p = X[i];` to consume and the index feeds a second array, so neither the opener arm
 		// nor prefer-value-loop claims it; every `_points[i]` becomes the binder, `value[i]` stays.
@@ -226,7 +228,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.isTrue(text.indexOf('_points[i]') == -1, text);
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SETTER-EDGE')
+	@:pin('control')
+	@:killer('M-GRAPH-SETTER-EDGE')
 	public function testSetterRunByTheBodyIsFollowed(): Void {
 		// `_points[i].pos = …` RUNS `set_pos`, and this one grows `_points`: the property write is a call the
 		// key-value iterator would see the effect of, so the fix is withheld and the decline names the setter.
@@ -248,7 +251,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, CheckFixture.violations(new PreferValueLoop(), fieldSource()).length);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-INDEX-ONLY')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-INDEX-ONLY')
 	public function testIndexOnlyLoopLeftToValueLoop(): Void {
 		// Every read of `i` is an `items[i]`: prefer-value-loop's loop, so this rule stays silent on it.
 		final src: String = wrapSink('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.use(items[i]);\n\t\t}');
@@ -256,7 +260,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(1, CheckFixture.violations(new PreferValueLoop(), src).length);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-OPENER-CLAIM')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-OPENER-CLAIM')
 	public function testOpenerWithSecondReadStaysUnclaimed(): Void {
 		// The opener arm owns a body that opens by binding `items[i]`, and declines this one for its
 		// second read; the no-opener arm must not pick it up and rename the opener's own initializer.
@@ -264,7 +269,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapSink(body)).length);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-UNSTABLE')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-UNSTABLE')
 	public function testNoOpenerSlotWriteNotFlagged(): Void {
 		// `items[i]` as a write target: the binder is a copy, so the write would land nowhere.
 		Assert.equals(0, violations(wrapSink('for (i in 0...items.length) {\n\t\t\titems[i] = sink.make(i);\n\t\t}')).length);
@@ -272,7 +278,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapSink('for (i in 0...items.length) {\n\t\t\titems[i]++;\n\t\t\tsink.use(i);\n\t\t}')).length);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-UNSTABLE')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-UNSTABLE')
 	public function testNoOpenerLengthChangeNotFlagged(): Void {
 		// The key-value iterator re-reads the length every step; the range bound was read once.
 		Assert.equals(
@@ -280,12 +287,14 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-INDEX-WRITE')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-INDEX-WRITE')
 	public function testNoOpenerIndexWriteNotFlagged(): Void {
 		Assert.equals(0, violations(wrapSink('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\ti = 0;\n\t\t}')).length);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-REBIND')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-REBIND')
 	public function testNoOpenerShadowedIndexNotFlagged(): Void {
 		// The inner loop's `i` is a different binding, so the `items[i]` under it is not this loop's element.
 		final body: String =
@@ -296,7 +305,9 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapSink(rebound)).length);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-CLOSURE') @:killer('M-KV-NOOPENER-BODY-GATES')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-CLOSURE')
+	@:killer('M-KV-NOOPENER-BODY-GATES')
 	public function testNoOpenerClosureReadNotFlagged(): Void {
 		// A closure reads `items[i]` when it RUNS, the binder holds the element of the iteration that made
 		// it: a slot written after the loop is seen by the one and not the other.
@@ -307,7 +318,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapSink(local)).length);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-SELF-CALL')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-SELF-CALL')
 	public function testNoOpenerSelfCallIsReportOnly(): Void {
 		// A callee reached through the instance can replace `items[i]` after the binder was read, or grow
 		// a field collection the key-value iterator would then follow.
@@ -322,7 +334,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.isTrue(text.indexOf('for (i => item in items) sink.use(item, i);') >= 0, text);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-NON-ARRAY')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-NON-ARRAY')
 	public function testNoOpenerNonArrayNotFlagged(): Void {
 		final src: String =
 			'class C {\n\tfunction f(items:Vector<Item>, sink:Sink):Void {\n\t\tfor (i in 0...items.length) sink.use(items[i], i);\n\t}\n}';
@@ -336,7 +349,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-TAKEN-SCOPE')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-TAKEN-SCOPE')
 	public function testNoOpenerBinderTakenInFunctionIsReportOnly(): Void {
 		// The body never mentions `item`, but the parameter does: the binder would shadow it for the loop.
 		final src: String = 'class C {\n\tfunction f(items:Array<Item>, item:Item, sink:Sink):Void {\n'
@@ -346,7 +360,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, CheckFixture.fixOf(r.check, src, r.vs, project(src)).length);
 	}
 
-	@:pin('control') @:killer('M-KV-NOOPENER-TAKEN-MEMBER')
+	@:pin('control')
+	@:killer('M-KV-NOOPENER-TAKEN-MEMBER')
 	public function testNoOpenerBinderTakenByFieldIsReportOnly(): Void {
 		// Every call the body makes is followed and harmless, so the field `item` is the only thing refusing the rewrite —
 		// the same loop without it is fixed.
@@ -425,7 +440,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-NESTED-BINDER')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-NESTED-BINDER')
 	public function testNestedLoopsDerivingOneBinderAreReportOnly(): Void {
 		// Each loop's checks read the original source, so both would be fixed in one pass and the inner
 		// `val` would shadow the outer one: `for (i => val in vals) for (j => val in vals)`.
@@ -436,7 +452,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.same([nestedDecline('val'), nestedDecline('val')], declines(withVals(underscored)));
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-NESTED-BINDER')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-NESTED-BINDER')
 	public function testNestedBinderClashAcrossTheTwoRules(): Void {
 		// The outer loop is this rule's (`i` read on its own), the inner one prefer-value-loop's; both derive `key`.
 		final src: String = withVals('for (i in 0...keys.length) for (j in 0...keys.length) sink.use(i, keys[i], keys[j]);');
@@ -448,7 +465,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(nestedDecline('key'), vs[0].declineReason);
 	}
 
-	@:pin('control') @:killer('M-REACH-UNDECLARED-BUILTIN')
+	@:pin('control')
+	@:killer('M-REACH-UNDECLARED-BUILTIN')
 	public function testASiblingLoopsBinderIsNoClash(): Void {
 		// `item` is bound by the loop after it, which the loop being fixed cannot see: nothing is shadowed
 		final text: String = fixedAll(
@@ -466,7 +484,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-TYPE-CALLEE')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-TYPE-CALLEE')
 	public function testStaticCallOnATypeIsReportOnly(): Void {
 		// `Main.grow()` pushes onto the static collection the key-value iterator would then follow.
 		for (call in ['Main.grow()', 'pkg.Main.grow()']) {
@@ -475,13 +494,15 @@ class PreferKeyValueLoopCheckTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-NEW-EXPR')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-NEW-EXPR')
 	public function testConstructorCallIsReportOnly(): Void {
 		final decline: String = declineOf(staticSource('sink.use(i, items[i]);\n\t\t\tnew Grower();')) ?? '';
 		Assert.isTrue(decline.startsWith(ElementLoopRewrite.SELF_CALL_DECLINE) && decline.indexOf('Main.grow') >= 0, decline);
 	}
 
-	@:pin('control') @:killer('M-KV-OPENER-SELF-CALL')
+	@:pin('control')
+	@:killer('M-KV-OPENER-SELF-CALL')
 	public function testOpenerSelfCallIsReportOnly(): Void {
 		// The binder is read where the declaration was, but `refresh()` can still extend the collection,
 		// which the key-value iterator follows and the once-read range bound does not.
@@ -491,7 +512,8 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.isTrue(StringTools.startsWith(declineOf(src) ?? '', ElementLoopRewrite.SELF_CALL_DECLINE));
 	}
 
-	@:pin('control') @:killer('M-ELEMENT-LOOP-REBIND')
+	@:pin('control')
+	@:killer('M-ELEMENT-LOOP-REBIND')
 	public function testThisQualifiedCollectionNotFlagged(): Void {
 		// `this.items[i] = …` writes the collection through a path the stable-collection scan does not
 		// follow; the name-slot gate refuses it, which is what keeps a `this.X` body out of both rewrites.

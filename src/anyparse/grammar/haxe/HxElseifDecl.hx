@@ -31,8 +31,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifDecl = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportAliasInDecl', 'ImportWildDecl', '|', 'UsingDecl', 'UsingWildDecl', 'beforeUsing'
 	))
@@ -51,5 +54,8 @@ typedef HxElseifDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
-	@:trivia @:tryparse @:fmt(padTrailing) var trailingMeta: Array<HxMetadata>;
+	@:trivia
+	@:tryparse
+	@:fmt(padTrailing)
+	var trailingMeta: Array<HxMetadata>;
 };

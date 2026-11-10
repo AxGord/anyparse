@@ -9,4 +9,8 @@ package anyparse.grammar.haxe;
  * invisible to `refs` and refused by the renaming ops.
  */
 @:peg
-typedef HxCondSpliceCallOpen = { var raw: HxCondSpliceCallOpenRaw; @:fmt(chainNestSuppress) var tail: HxExpr; }
+typedef HxCondSpliceCallOpen = {
+	var raw: HxCondSpliceCallOpenRaw;
+	@:fmt(chainNestSuppress)
+	var tail: HxExpr;
+}

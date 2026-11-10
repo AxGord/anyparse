@@ -14,7 +14,8 @@ typedef AuditReport = {
 	var roles: Array<RoleToolRow>;
 	var models: Array<ModelRow>;
 	var slices: Array<SliceCost>;
-	@:optional var landed: Null<LandedSummary>;
+	@:optional
+	var landed: Null<LandedSummary>;
 	var rewrites: RewriteSummary;
 	var bypass: BypassSummary;
 	var assumptions: Array<String>;

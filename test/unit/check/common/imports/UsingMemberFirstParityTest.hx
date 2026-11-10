@@ -35,7 +35,8 @@ class UsingMemberFirstParityTest extends Test {
 	private static final DEST: String = 'package p;\n\nclass Dest {}\n';
 
 	/** `Array.concat` under `using Lambda`, the N42 shape — needs the std, which declares both. */
-	@:pin('control') @:killer('M-USING-MEMBER-FIRST-OFF')
+	@:pin('control')
+	@:killer('M-USING-MEMBER-FIRST-OFF')
 	public function testAStdMemberCallNeedsNoUsing(): Void {
 		if (StdResolver.stdDir() == null) {
 			Assert.pass('no std discovered');
@@ -45,7 +46,10 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A member the receiver's own type declares. */
-	@:pin('control') @:killer('M-USING-MEMBER-FIRST-OFF') @:killer('M-UNUSED-USING-NO-DOOR') @:killer('M-CARRY-USING-DOOR-OFFSET')
+	@:pin('control')
+	@:killer('M-USING-MEMBER-FIRST-OFF')
+	@:killer('M-UNUSED-USING-NO-DOOR')
+	@:killer('M-CARRY-USING-DOOR-OFFSET')
 	public function testAnOwnMemberCallNeedsNoUsing(): Void {
 		agree(
 			'p.Ext', 'class D {\n\tpublic function new() {}\n\n\tpublic function tag():Int return 1;\n}', 'f(d:D):Int return d.tag();',
@@ -54,7 +58,8 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A member the receiver's type inherits. */
-	@:pin('control') @:killer('M-USING-MEMBER-FIRST-OFF')
+	@:pin('control')
+	@:killer('M-USING-MEMBER-FIRST-OFF')
 	public function testAnInheritedMemberCallNeedsNoUsing(): Void {
 		agree(
 			'p.Ext', 'class Base {\n\tpublic function new() {}\n\n\tpublic function tag():Int return 1;\n}\n\nclass D extends Base {}',
@@ -63,7 +68,8 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A STATIC of the name does not shadow the extension: the call is the extension, the statement stays. */
-	@:pin('control') @:killer('M-MEMBER-BINDS-STATIC')
+	@:pin('control')
+	@:killer('M-MEMBER-BINDS-STATIC')
 	public function testAStaticOfTheNameKeepsTheUsing(): Void {
 		agree(
 			'p.Ext', 'class D {\n\tpublic function new() {}\n\n\tpublic static function tag():Int return 1;\n}',
@@ -77,7 +83,8 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A member under `#if` binds in some builds only, and the extension in the rest. */
-	@:pin('control') @:killer('M-MEMBER-BINDS-GUARDED')
+	@:pin('control')
+	@:killer('M-MEMBER-BINDS-GUARDED')
 	public function testAGuardedMemberKeepsTheUsing(): Void {
 		agree(
 			'p.Ext', 'class D {\n\tpublic function new() {}\n\n\t#if never\n\tpublic function tag():Int return 1;\n\t#end\n}',
@@ -86,7 +93,8 @@ class UsingMemberFirstParityTest extends Test {
 	}
 
 	/** A receiver type declared in two `#if` branches, only one of them declaring the member. */
-	@:pin('control') @:killer('M-MEMBER-BINDS-HOST-GUARDED')
+	@:pin('control')
+	@:killer('M-MEMBER-BINDS-HOST-GUARDED')
 	public function testATypeDeclaredPerBranchKeepsTheUsing(): Void {
 		agree(
 			'p.Ext',
@@ -114,7 +122,8 @@ class UsingMemberFirstParityTest extends Test {
 	 * A project type sharing the std name the receiver's type spells keeps the statement: the std listing answers only
 	 * for a name no project type takes (`NominalTypes.shadowedByNonStdType`), since the typer's nominal is a simple name.
 	 */
-	@:pin('control') @:killer('M-MEMBER-DOOR-SHADOW')
+	@:pin('control')
+	@:killer('M-MEMBER-DOOR-SHADOW')
 	public function testAProjectTypeSharingTheStdNameKeepsTheUsing(): Void {
 		if (StdResolver.stdDir() == null) {
 			Assert.pass('no std discovered');
@@ -133,7 +142,10 @@ class UsingMemberFirstParityTest extends Test {
 	 * binds in some builds only; and `Http` names both `sys.Http`, which declares `fileTransfer`, and `haxe.Http`, a
 	 * typedef per target that reaches nothing the listing can follow.
 	 */
-	@:pin('control') @:killer('M-STD-MEMBER-STATIC') @:killer('M-STD-MEMBER-VIA-GUARD') @:killer('M-STD-MEMBER-ANY-CANDIDATE')
+	@:pin('control')
+	@:killer('M-STD-MEMBER-STATIC')
+	@:killer('M-STD-MEMBER-VIA-GUARD')
+	@:killer('M-STD-MEMBER-ANY-CANDIDATE')
 	public function testTheStdListingProvesOnlyAnUnguardedInstanceMember(): Void {
 		if (StdResolver.stdDir() == null) {
 			Assert.pass('no std discovered');

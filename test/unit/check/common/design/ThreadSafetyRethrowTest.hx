@@ -13,7 +13,8 @@ class ThreadSafetyRethrowTest extends Test {
 		+ '"throwers":["Disk.make"],"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
 	/** The probe of the brief (`recall/probe-rethrow`): the client's `TreeWatcher.update`, `catch (e) { release; throw e; }`. */
-	@:pin('control') @:killer('M-TS-RETHROW-OFF')
+	@:pin('control')
+	@:killer('M-TS-RETHROW-OFF')
 	public function testACatchThatRethrowsRaises(): Void {
 		#if (sys || nodejs)
 		Assert.same(['W.holdsAcross'], leaks(run('catch (exception:Dynamic) { inner.release(); throw exception; }')));
@@ -27,7 +28,8 @@ class ThreadSafetyRethrowTest extends Test {
 	 * value, the value in parentheses, an alias of it, another value (review r4 `R1`, `R2`, `R4`). One throwing nothing
 	 * keeps it.
 	 */
-	@:pin('control') @:killer('M-TS-RETHROW-ANY-NAME')
+	@:pin('control')
+	@:killer('M-TS-RETHROW-ANY-NAME')
 	public function testACatchThrowingAnyValueRaises(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -47,7 +49,8 @@ class ThreadSafetyRethrowTest extends Test {
 	}
 
 	/** A rethrow inside a function the `catch` only builds runs later, if ever, and raises nothing there. */
-	@:pin('control') @:killer('M-TS-RETHROW-NESTED')
+	@:pin('control')
+	@:killer('M-TS-RETHROW-NESTED')
 	public function testARethrowInANestedFunctionKeepsIt(): Void {
 		#if (sys || nodejs)
 		Assert.same([], leaks(run('catch (exception:Dynamic) { inner.release(); later(() -> throw exception); }')));
@@ -73,7 +76,9 @@ class ThreadSafetyRethrowTest extends Test {
 	 * What a `throwers` call raises is of no known type: a typed `catch` lets it through (review r4 `R5`), a catch-all
 	 * keeps it.
 	 */
-	@:pin('control') @:killer('M-TS-THROW-TYPED-INTERCEPTS') @:killer('M-TS-CATCH-ANY-TYPE')
+	@:pin('control')
+	@:killer('M-TS-THROW-TYPED-INTERCEPTS')
+	@:killer('M-TS-CATCH-ANY-TYPE')
 	public function testATypedCatchLetsAThrowersExceptionThrough(): Void {
 		#if (sys || nodejs)
 		Assert.same(['W.holdsAcross', 'W.rethrows'], leaks(run('catch (exception:haxe.io.Eof) { inner.release(); }'), true));

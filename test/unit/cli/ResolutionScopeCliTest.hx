@@ -433,7 +433,8 @@ class ResolutionScopeCliTest extends Test {
 	 * The scope keeps what the project DECLARED apart from the std that joins it by itself: the declared half holds the
 	 * root alone, while the whole library holds the std as well.
 	 */
-	@:pin('control') @:killer('M-LINT-STD-IN-DECLARED')
+	@:pin('control')
+	@:killer('M-LINT-STD-IN-DECLARED')
 	public function testTheDeclaredLibraryLeavesTheStdOut(): Void {
 		#if (sys || nodejs)
 		if (StdResolver.stdDir() == null) {

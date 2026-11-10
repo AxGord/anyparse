@@ -12,7 +12,9 @@ package anyparse.proc;
  * opposite places. `out` / `err` are the PARTIAL streams in the overflow case, which is
  * what lets a caller still quote a failing build's errors.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef ProcessRun = {
 
 	var ?status: Null<Int>;

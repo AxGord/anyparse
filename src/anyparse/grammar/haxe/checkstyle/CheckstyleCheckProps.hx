@@ -12,10 +12,12 @@ package anyparse.grammar.haxe.checkstyle;
  * Every field is `@:optional`: a check may be configured with an empty
  * `props`, in which case the loader applies checkstyle's own default.
  */
-@:peg typedef CheckstyleCheckProps = {
+@:peg
+typedef CheckstyleCheckProps = {
 
 	/** Naming-family checks (`TypeName`, `MemberName`, …): the identifier regex. */
-	@:optional var format: String;
+	@:optional
+	var format: String;
 
 	/**
 	 * Naming-family checks: the checkstyle tokens narrowing WHERE `format` applies
@@ -23,7 +25,8 @@ package anyparse.grammar.haxe.checkstyle;
 	 * An empty or absent list means every token, which is checkstyle's own
 	 * `NameCheckBase.hasToken` reading and not "no narrowing at all" by accident.
 	 */
-	@:optional var tokens: Array<String>;
+	@:optional
+	var tokens: Array<String>;
 
 	/**
 	 * Naming-family checks that extend checkstyle's `NameCheckBase` (every one but
@@ -32,27 +35,35 @@ package anyparse.grammar.haxe.checkstyle;
 	 * which is why dropping this key made the adapter STRICTER than every config that says
 	 * nothing about it.
 	 */
-	@:optional var ignoreExtern: Bool;
+	@:optional
+	var ignoreExtern: Bool;
 
 	/** `CyclomaticComplexity`: the severity/onset pairs the warning threshold is read from. */
-	@:optional var thresholds: Array<CheckstyleThreshold>;
+	@:optional
+	var thresholds: Array<CheckstyleThreshold>;
 
 	/** `MagicNumber`: literal values the check never flags. */
-	@:optional var ignoreNumbers: Array<Float>;
+	@:optional
+	var ignoreNumbers: Array<Float>;
 
 	/** `UnusedImport`: module paths the check never flags. */
-	@:optional var ignoreModules: Array<String>;
+	@:optional
+	var ignoreModules: Array<String>;
 
 	/** `ModifierOrder`: the canonical modifier order, as checkstyle UPPER_SNAKE tokens. */
-	@:optional var modifiers: Array<String>;
+	@:optional
+	var modifiers: Array<String>;
 
 	/** `StringLiteral`: which quote style the config enforces (`onlySingle`, `doubleAndInterpolation`, …). */
-	@:optional var policy: String;
+	@:optional
+	var policy: String;
 
 	/** `EmptyBlock`: what an empty block must contain (`empty`, `text`, `stmt`). */
-	@:optional var option: String;
+	@:optional
+	var option: String;
 
 	/** `Type`: whether enum-abstract values are exempt from the explicit-type requirement. */
-	@:optional var ignoreEnumAbstractValues: Bool;
+	@:optional
+	var ignoreEnumAbstractValues: Bool;
 
 };

@@ -54,14 +54,16 @@ class TriviaScanSliceTest extends Test {
 	}
 
 	/** The same `(` written INSIDE a comment is no parameter list. */
-	@:pin('control') @:killer('M-RETSLOT-COMMENT-OPAQUE')
+	@:pin('control')
+	@:killer('M-RETSLOT-COMMENT-OPAQUE')
 	public function testIsReturnTypeSlotIgnoresAParenthesisInsideAComment(): Void {
 		final src: String = 'function f(): Int /* (n) */ return 0;';
 		Assert.isTrue(RefactorSupport.isReturnTypeSlot(src, src.indexOf('Int') + 3, src.indexOf('return'), regionsOf(src)));
 	}
 
 	/** A block comment that never closes leaves the slot unproven — fail closed. */
-	@:pin('control') @:killer('M-RETSLOT-OPEN-COMMENT-NOT-CLOSED')
+	@:pin('control')
+	@:killer('M-RETSLOT-OPEN-COMMENT-NOT-CLOSED')
 	public function testIsReturnTypeSlotRefusesAnUnterminatedBlockComment(): Void {
 		final src: String = 'function f(): Int /* n\nreturn 0;';
 		Assert.isFalse(RefactorSupport.isReturnTypeSlot(src, src.indexOf('Int') + 3, src.indexOf('return'), regionsOf(src)));
@@ -74,7 +76,8 @@ class TriviaScanSliceTest extends Test {
 	}
 
 	/** A `{` written in a header comment is not the body brace. */
-	@:pin('control') @:killer('M-HEADERSCAN-COMMENT-REGION')
+	@:pin('control')
+	@:killer('M-HEADERSCAN-COMMENT-REGION')
 	public function testTypeBodyBraceOffsetIgnoresABraceInAHeaderComment(): Void {
 		final src: String = 'class X /* { */ {\n}\n';
 		final decl: Null<TypeDeclMatch> = declOf(src);
@@ -103,7 +106,8 @@ class TriviaScanSliceTest extends Test {
 	}
 
 	/** A header comment holds no tokens, so the insert offset stays right after the type name. */
-	@:pin('control') @:killer('M-HEADERSCAN-COMMENT-NOT-A-TOKEN')
+	@:pin('control')
+	@:killer('M-HEADERSCAN-COMMENT-NOT-A-TOKEN')
 	public function testTypeHeaderInsertOffsetStopsBeforeAHeaderComment(): Void {
 		final src: String = 'class X /* implements Q */ {\n}\n';
 		final decl: Null<TypeDeclMatch> = declOf(src);
@@ -131,7 +135,8 @@ class TriviaScanSliceTest extends Test {
 	}
 
 	/** A body starting at the source end is itself unknown, and a comment that swallows the rest leaves the slot unproven. */
-	@:pin('control') @:killer('M-RETSLOT-BODY-AT-SOURCE-END')
+	@:pin('control')
+	@:killer('M-RETSLOT-BODY-AT-SOURCE-END')
 	public function testIsReturnTypeSlotRefusesAnUnterminatedBlockCommentRunningToTheSourceEnd(): Void {
 		final src: String = 'function f(): Int /* n';
 		Assert.isFalse(RefactorSupport.isReturnTypeSlot(src, src.indexOf('Int') + 3, src.length, regionsOf(src)));

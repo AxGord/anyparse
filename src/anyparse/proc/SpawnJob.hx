@@ -6,7 +6,9 @@ import anyparse.grammar.json.JValue;
  * One process `ProcessSpawn.runAll` runs: `haxe <args>`, or the `shell` command line when set, in `cwd` (the process cwd
  * when null), killed after `timeout` ms when that is positive.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef SpawnJob = {
 
 	var args: Array<String>;

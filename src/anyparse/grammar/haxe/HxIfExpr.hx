@@ -61,18 +61,22 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(arrowValueIfReflow('expressionIfArrowBodyReflow', 'elseBranch', 'IfExpr', 'expressionIfFit'))
 typedef HxIfExpr = {
-	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
-		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
-		inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch,
-		arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'),
+	@:lead('(')
+	@:trail(')')
+	@:fmt(condWrap('conditionWrap'))
+	var cond: HxExpr;
+	@:trailOpt(';')
+	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
+		noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'),
+		propagateValueIfBranch, arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'),
 		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'),
 		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
-	@:optional @:kw('else') @:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
+	@:optional
+	@:kw('else')
+	@:fmt(bodyPolicy('elseBody', 'expressionElseBody'), sameLine('sameLineExpressionElse'), shapeAware, elseIf,
 		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'), inlineBlockBodyIfFlag('expressionIfWithBlocks'),
 		bracketBodyGlueIfFlag('expressionIfWithBrackets'), propagateValueIfBranch, arrowValueIfReflowSite,
-		valueBraceSymmetry(
-			'thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'
-		)) var elseBranch: Null<HxExpr>;
+		valueBraceSymmetry('thenBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
+	var elseBranch: Null<HxExpr>;
 };

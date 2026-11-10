@@ -35,7 +35,8 @@ class MemberReachTest extends Test {
 	private static inline final REGION_OPEN: String = '/*<*/';
 	private static inline final REGION_CLOSE: String = '/*>*/';
 
-	@:pin('control') @:killer('M-REACH-OUT-OF-SCOPE')
+	@:pin('control')
+	@:killer('M-REACH-OUT-OF-SCOPE')
 	public function testFieldWithoutTheWholeProjectIsUnknown(): Void {
 		// A toucher, or an implicitly-called function, may live in a file the run did not read — even a
 		// region of plain reads can run one.
@@ -46,21 +47,24 @@ class MemberReachTest extends Test {
 		assertMatch(ask([calls], null, false), r -> r.match(Unknown(OutOfScope(_))));
 	}
 
-	@:pin('control') @:killer('M-REACH-WALK-UNKNOWN')
+	@:pin('control')
+	@:killer('M-REACH-WALK-UNKNOWN')
 	public function testPureCalleeIsProven(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function new() items.push(1); '
 			+ 'function f():Void { /*<*/ helper(items[0]); /*>*/ } function helper(v:Int):Void { trace(v); } }';
 		assertMatch(ask([src]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-TOUCHER-FOUND')
+	@:pin('control')
+	@:killer('M-REACH-TOUCHER-FOUND')
 	public function testTwoHopMutatorIsReached(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ outer(); /*>*/ } '
 			+ 'function outer():Void inner(); function inner():Void items.push(1); }';
 		assertReachedAt(ask([src]), 'C.inner');
 	}
 
-	@:pin('control') @:killer('M-REACH-METHOD-TOUCH')
+	@:pin('control')
+	@:killer('M-REACH-METHOD-TOUCH')
 	public function testMutatingMethodIsATouchAndAReaderIsNot(): Void {
 		final pushes: String =
 			'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void items.pop(); }';
@@ -70,13 +74,15 @@ class MemberReachTest extends Test {
 		assertMatch(ask([reads]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SLOT-WRITE')
+	@:pin('control')
+	@:killer('M-REACH-SLOT-WRITE')
 	public function testSlotWriteIsATouch(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void items[0] = 2; }';
 		assertReachedAt(ask([src]), 'C.g');
 	}
 
-	@:pin('control') @:killer('M-REACH-ESCAPE-ARGUMENT')
+	@:pin('control')
+	@:killer('M-REACH-ESCAPE-ARGUMENT')
 	public function testValueHandedOutIsAnEscape(): Void {
 		// `keep` may store the array and a later callee change it through that alias without naming `items`.
 		final src: String = 'class C { var items:Array<Int> = []; function new() Keeper.keep(items); '
@@ -84,7 +90,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src, 'class Keeper { public static function keep(a:Array<Int>):Void {} }']), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-FRESH-ASSIGN')
+	@:pin('control')
+	@:killer('M-REACH-FRESH-ASSIGN')
 	public function testStoringASharedValueIsAnEscape(): Void {
 		final shared: String = 'class C { var items:Array<Int> = []; public function set(a:Array<Int>):Void items = a; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
@@ -94,14 +101,16 @@ class MemberReachTest extends Test {
 		assertMatch(ask([fresh]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SHARED-INITIALIZER')
+	@:pin('control')
+	@:killer('M-REACH-SHARED-INITIALIZER')
 	public function testSharedInitializerIsAnEscape(): Void {
 		final src: String = 'class C { static final SHARED:Array<Int> = []; var items:Array<Int> = SHARED; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
 		assertMatch(ask([src]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-SETTER-EDGE')
+	@:pin('control')
+	@:killer('M-GRAPH-SETTER-EDGE')
 	public function testSetterWriteInTheRegionIsAnEntry(): Void {
 		// `objs[0].x = 1` runs `set_x`, which grows `items`: the property write IS a call.
 		final src: String =
@@ -111,14 +120,16 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src, p]), 'P.set_x');
 	}
 
-	@:pin('control') @:killer('M-GRAPH-GETTER-EDGE')
+	@:pin('control')
+	@:killer('M-GRAPH-GETTER-EDGE')
 	public function testGetterReadInTheRegionIsAnEntry(): Void {
 		final src: String = 'class C { public var items:Array<Int> = []; var p:P; function f():Void { /*<*/ trace(p.x); /*>*/ } }';
 		final p: String = 'class P { public var x(get, never):Int; var owner:C; function get_x():Int { owner.items.push(1); return 1; } }';
 		assertReachedAt(ask([src, p]), 'P.get_x');
 	}
 
-	@:pin('control') @:killer('M-REACH-VALUE-CHANNEL')
+	@:pin('control')
+	@:killer('M-REACH-VALUE-CHANNEL')
 	public function testFunctionValueCallAdmitsAValueUsedMutator(): Void {
 		// `cb()` runs whatever was stored; `grow` was stored, and it can reach `items`.
 		final src: String = 'class C { var items:Array<Int> = []; var cb:() -> Void; public function register():Void cb = grow; '
@@ -126,7 +137,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src]), 'C.grow');
 	}
 
-	@:pin('control') @:killer('M-REACH-WALK-UNKNOWN')
+	@:pin('control')
+	@:killer('M-REACH-WALK-UNKNOWN')
 	public function testFunctionValueCallWithNoValueUsedMutatorIsProven(): Void {
 		// A function used as a value that can NOT reach the member is not admitted as a path to it.
 		final src: String = 'class C { var items:Array<Int> = []; var cb:() -> Void; public function register():Void cb = quiet; '
@@ -134,7 +146,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS') @:killer('M-REACH-IMPORT-ALIAS-SELF')
+	@:pin('control')
+	@:killer('M-REACH-IMPORT-ALIAS')
+	@:killer('M-REACH-IMPORT-ALIAS-SELF')
 	public function testAStaticImportedUnderAnotherNameIsTouchedThroughTheAlias(): Void {
 		// `stuff` is `C.items` wherever the file holding `import F0.C.items as stuff;` spells it: no text of `D.go` spells `items`
 		final region: String = 'class C { public static var items:Array<Int> = []; static function f():Void { /*<*/ D.go(); /*>*/ } }';
@@ -160,7 +174,9 @@ class MemberReachTest extends Test {
 			assertReachedAt(ask([region, '$imported\nclass D { public static function go():Void items.push(1); }']), 'D.go');
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS-OTHER-TYPE') @:killer('M-REACH-IMPORT-ALIAS-LOCAL')
+	@:pin('control')
+	@:killer('M-REACH-IMPORT-ALIAS-OTHER-TYPE')
+	@:killer('M-REACH-IMPORT-ALIAS-LOCAL')
 	@:killer('M-REACH-IMPORT-ALIAS-MEMBER')
 	public function testANameAnImportDoesNotBindToTheMemberIsNoTouch(): Void {
 		final region: String = 'class C { public static var items:Array<Int> = []; function new() items.push(1); '
@@ -178,7 +194,8 @@ class MemberReachTest extends Test {
 		proven(ask([region, member]), 'a member `stuff`');
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS-OPAQUE')
+	@:pin('control')
+	@:killer('M-REACH-IMPORT-ALIAS-OPAQUE')
 	public function testARawRegionSpellingOnlyTheAliasIsABlindSpot(): Void {
 		// the region runs nothing: what the raw region of `D.other` holds is code no reading sees
 		final region: String = 'class C { public static var items:Array<Int> = []; static function f():Void { /*<*/ D.calm(); /*>*/ } }';
@@ -187,7 +204,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([region, raw]), r -> r.match(Unknown(OpaqueCond(_, _))));
 	}
 
-	@:pin('control') @:killer('M-CALLGRAPH-ALIAS-VALUE') @:killer('M-CALLGRAPH-IMPORTED-VALUE')
+	@:pin('control')
+	@:killer('M-CALLGRAPH-ALIAS-VALUE')
+	@:killer('M-CALLGRAPH-IMPORTED-VALUE')
 	public function testAnImportedFunctionReadAsAValueIsAdmittedAtAValueCall(): Void {
 		// `cb()` may run whatever was stored in it: `D.grow`, read as a value through an import of it into another type
 		final region: String = 'class C { public static var items:Array<Int> = []; public static var cb:() -> Void; '
@@ -202,48 +221,56 @@ class MemberReachTest extends Test {
 		]) assertReachedAt(ask([region, grower, stored]), 'D.grow');
 	}
 
-	@:pin('control') @:killer('M-REACH-NAME-CHANNEL')
+	@:pin('control')
+	@:killer('M-REACH-NAME-CHANNEL')
 	public function testDynamicReceiverAdmitsBySameName(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f(d:Dynamic):Void { /*<*/ d.grow(); /*>*/ } '
 			+ 'public function grow():Void items.push(1); }';
 		assertReachedAt(ask([src]), 'C.grow');
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-LITERAL')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-LITERAL')
 	public function testReflectionByLiteralNameIsATouch(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } '
 			+ "function g():Void Reflect.setField(this, 'items', []); }";
 		assertReachedAt(ask([src]), 'C.g');
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-COMPUTED')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-COMPUTED')
 	public function testReflectionByComputedNameIsUnknown(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; var key:String; function f():Void { /*<*/ g(); /*>*/ } '
 			+ 'function g():Void Reflect.setField(this, key, []); }';
 		assertMatch(ask([src]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-NATIVE')
+	@:pin('control')
+	@:killer('M-REACH-NATIVE')
 	public function testNativeCodeIsUnknown(): Void {
 		final src: String =
 			'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void js.Syntax.code(\'run()\'); }';
 		assertMatch(ask([src]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-UNTYPED')
+	@:pin('control')
+	@:killer('M-REACH-UNTYPED')
 	public function testUntypedCodeIsUnknown(): Void {
 		final src: String =
 			'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void untyped run(); }';
 		assertMatch(ask([src]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-SKIP-PARSE')
+	@:pin('control')
+	@:killer('M-REACH-SKIP-PARSE')
 	public function testUnparsedProjectFileNamingTheMemberIsUnknown(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
 		assertMatch(ask([src, 'class Broken { function b() { c.items.push(1); ']), r -> r.match(Unknown(SkipParse('F1.hx'))));
 	}
 
-	@:pin('control') @:killer('M-REACH-SKIP-PARSE-ANY') @:killer('M-REACH-SKIP-PARSE-LOCAL')
+	@:pin('control')
+	@:killer('M-REACH-SKIP-PARSE-ANY')
+	@:killer('M-REACH-SKIP-PARSE-LOCAL')
 	public function testUnparsedProjectFileSpellingNothingIsStillUnknown(): Void {
 		// `Sub` does not parse and never spells `items`, yet it overrides `go` with a call to the grower: the dispatch the
 		// region makes may land there. A shared parameter's region is refused for the same reason — the file may hold a
@@ -262,7 +289,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-LIB-SKIP-OVERRIDE')
+	@:pin('control')
+	@:killer('M-REACH-LIB-SKIP-OVERRIDE')
 	public function testUnparsedLibraryFileSpellingTheDispatchIsUnknown(): Void {
 		// The library's `LibSub` does not parse, so the index lists no override of `Base.go` there — yet it spells both.
 		final src: String = 'class C { public static var items:Array<Int> = []; var b:Base; function f():Void { /*<*/ b.go(); /*>*/ } }';
@@ -273,7 +301,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], [base]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LIB-REFLECT-TOUCH') @:killer('M-REACH-LIB-REFLECT-UNSURE')
+	@:pin('control')
+	@:killer('M-REACH-LIB-REFLECT-TOUCH')
+	@:killer('M-REACH-LIB-REFLECT-UNSURE')
 	@:killer('M-REACH-LIB-REFLECT-UNRELATED')
 	public function testReflectiveReadOfTheMemberInLibraryCodeIsATouch(): Void {
 		// A library override reads `items` by name: through a receiver of the owner's type it is the member itself, through
@@ -294,7 +324,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask2('Other.one'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-CARRY-SUBTYPE-MEET')
+	@:pin('control')
+	@:killer('M-CARRY-SUBTYPE-MEET')
 	public function testAValueOfAnInterfaceOnlyASubtypeSharesCarriesTheMember(): Void {
 		// `J` and `C` are unrelated, but `Sub extends C implements J`: a `J` may be a `Sub`, which carries `C.items`.
 		final src: String =
@@ -309,7 +340,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], lib), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-RECEIVER-OWNER') @:killer('M-CARRY-SUBTYPE-MEET')
+	@:pin('control')
+	@:killer('M-REACH-RECEIVER-OWNER')
+	@:killer('M-CARRY-SUBTYPE-MEET')
 	public function testAnAccessThroughAnInterfaceTheOwnerImplementsIsATouch(): Void {
 		// `j.items` names `J`'s declaration, yet a `J` may be the `C` whose `items` the loop walks — as may a structure
 		// or a typedef of one, so the read lets `items` escape; a receiver typed by a class unrelated to `C` reaches another field.
@@ -326,7 +359,8 @@ class MemberReachTest extends Test {
 		]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LIB-ACCESS')
+	@:pin('control')
+	@:killer('M-REACH-LIB-ACCESS')
 	public function testALibraryReadOfTheMemberByItsNameIsATouch(): Void {
 		// Library code reads `items` off a `J` a subtype of `C` implements — typed, through `Dynamic`, through a cast.
 		final src: String = 'class C implements J { public var items:Array<Int> = []; public var me:J; '
@@ -347,9 +381,20 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-CARRY-ESCAPES') @:killer('M-ESCAPE-STORE') @:killer('M-ESCAPE-CAST') @:killer('M-ESCAPE-DECL')
-	@:killer('M-ESCAPE-PARAM') @:killer('M-ESCAPE-RETURN') @:killer('M-ESCAPE-LAMBDA') @:killer('M-ESCAPE-THROW')
-	@:killer('M-ESCAPE-METHOD-VALUE') @:killer('M-ESCAPE-HELD') @:killer('M-ESCAPE-LIBRARY-SUPER') @:killer('M-ESCAPE-NATIVE') @:killer('M-ESCAPE-ANY')
+	@:pin('control')
+	@:killer('M-CARRY-ESCAPES')
+	@:killer('M-ESCAPE-STORE')
+	@:killer('M-ESCAPE-CAST')
+	@:killer('M-ESCAPE-DECL')
+	@:killer('M-ESCAPE-PARAM')
+	@:killer('M-ESCAPE-RETURN')
+	@:killer('M-ESCAPE-LAMBDA')
+	@:killer('M-ESCAPE-THROW')
+	@:killer('M-ESCAPE-METHOD-VALUE')
+	@:killer('M-ESCAPE-HELD')
+	@:killer('M-ESCAPE-LIBRARY-SUPER')
+	@:killer('M-ESCAPE-NATIVE')
+	@:killer('M-ESCAPE-ANY')
 	public function testAnInstanceThatLeftTheTypeSystemMayBeAnyType(): Void {
 		// `Poker.poke` changes `o.items` of an `Other`. A `C` never IS an `Other` by its static type, but once one leaves the
 		// type system — stored in a `Dynamic`, cast unchecked, handed to code that types it as nothing, inherited by library
@@ -386,14 +431,39 @@ class MemberReachTest extends Test {
 		refused(run(source('Dynamic', 'super();', 'extends LibBase'), [base]), 'a library superclass');
 	}
 
-	@:pin('control') @:killer('M-ESCAPE-P-STORE') @:killer('M-ESCAPE-P-CAST') @:killer('M-ESCAPE-P-THROW') @:killer('M-ESCAPE-P-DECL')
-	@:killer('M-ESCAPE-P-PARAM') @:killer('M-ESCAPE-P-RETURN') @:killer('M-ESCAPE-P-LAMBDA') @:killer('M-ESCAPE-P-METHOD-VALUE')
-	@:killer('M-ESCAPE-P-HELD') @:killer('M-ESCAPE-P-LIBRARY-SUPER') @:killer('M-ESCAPE-P-NATIVE') @:killer('M-ESCAPE-P-TYPED-ARGS') @:killer('M-ESCAPE-DECLARED-SOURCE')
-	@:killer('M-ESCAPE-LOCAL-INIT') @:killer('M-ESCAPE-PRIMITIVE-PARAM') @:killer('M-ESCAPE-ASSIGN-VALUE')
-	@:killer('M-ESCAPE-IF-VALUE') @:killer('M-ESCAPE-BLOCK-VALUE') @:killer('M-ESCAPE-MACRO-MEMBER') @:killer('M-ESCAPE-MACRO-HAZARD') @:killer('M-ESCAPE-REIFICATION')
-	@:killer('M-ESCAPE-THROW') @:killer('M-ESCAPE-DECL') @:killer('M-ESCAPE-PARAM') @:killer('M-ESCAPE-LAMBDA')
-	@:killer('M-ESCAPE-STORE') @:killer('M-ESCAPE-CAST') @:killer('M-ESCAPE-METHOD-VALUE') @:killer('M-ESCAPE-HELD')
-	@:killer('M-ESCAPE-LIBRARY-SUPER') @:killer('M-ESCAPE-NATIVE') @:killer('M-ESCAPE-NEW-TYPE')
+	@:pin('control')
+	@:killer('M-ESCAPE-P-STORE')
+	@:killer('M-ESCAPE-P-CAST')
+	@:killer('M-ESCAPE-P-THROW')
+	@:killer('M-ESCAPE-P-DECL')
+	@:killer('M-ESCAPE-P-PARAM')
+	@:killer('M-ESCAPE-P-RETURN')
+	@:killer('M-ESCAPE-P-LAMBDA')
+	@:killer('M-ESCAPE-P-METHOD-VALUE')
+	@:killer('M-ESCAPE-P-HELD')
+	@:killer('M-ESCAPE-P-LIBRARY-SUPER')
+	@:killer('M-ESCAPE-P-NATIVE')
+	@:killer('M-ESCAPE-P-TYPED-ARGS')
+	@:killer('M-ESCAPE-DECLARED-SOURCE')
+	@:killer('M-ESCAPE-LOCAL-INIT')
+	@:killer('M-ESCAPE-PRIMITIVE-PARAM')
+	@:killer('M-ESCAPE-ASSIGN-VALUE')
+	@:killer('M-ESCAPE-IF-VALUE')
+	@:killer('M-ESCAPE-BLOCK-VALUE')
+	@:killer('M-ESCAPE-MACRO-MEMBER')
+	@:killer('M-ESCAPE-MACRO-HAZARD')
+	@:killer('M-ESCAPE-REIFICATION')
+	@:killer('M-ESCAPE-THROW')
+	@:killer('M-ESCAPE-DECL')
+	@:killer('M-ESCAPE-PARAM')
+	@:killer('M-ESCAPE-LAMBDA')
+	@:killer('M-ESCAPE-STORE')
+	@:killer('M-ESCAPE-CAST')
+	@:killer('M-ESCAPE-METHOD-VALUE')
+	@:killer('M-ESCAPE-HELD')
+	@:killer('M-ESCAPE-LIBRARY-SUPER')
+	@:killer('M-ESCAPE-NATIVE')
+	@:killer('M-ESCAPE-NEW-TYPE')
 	public function testEveryEscapeRuleLetsItsSoundTwinThrough(): Void {
 		// Each exit a `C` may take out of the type system beside a twin that keeps it typed: the escaped one lets a `Dynamic`
 		// handed to `poke` be the `C`, the sound one does not, so `poke`'s `o.items` of an `Other` cannot touch `C.items`.
@@ -480,7 +550,9 @@ class MemberReachTest extends Test {
 		refused(run(source('untyped 0;')), 'target code in the project');
 	}
 
-	@:pin('control') @:killer('M-CARRY-TYPED-ARGS') @:killer('M-CARRY-TYPED-ARITY')
+	@:pin('control')
+	@:killer('M-CARRY-TYPED-ARGS')
+	@:killer('M-CARRY-TYPED-ARITY')
 	@:killer('M-ESCAPE-UNWRITTEN-ARGS')
 	public function testAPositionTypedOnlyOnTheOutsideHoldsAnything(): Void {
 		// `Array<Dynamic>` keeps nothing typed: a `C` put in one — literally, by variance from an `Array<C>`, through a
@@ -504,7 +576,8 @@ class MemberReachTest extends Test {
 		refused(run(source('Keep.put(mine());', 'function mine():Array<C> return [this];')), 'a container whose arguments nothing says');
 	}
 
-	@:pin('control') @:killer('M-TS-NEW-RECEIVER')
+	@:pin('control')
+	@:killer('M-TS-NEW-RECEIVER')
 	public function testAConstructedReceiverIsItsOwnType(): Void {
 		// `new C().loop()` is the commonest entry: the value is a `C`, whose `loop` takes nothing untyped. Handing the new object
 		// itself to untyped code is an exit.
@@ -520,7 +593,9 @@ class MemberReachTest extends Test {
 		refused(ask([source('Keep.put(new C());'), other, poker, keep]), 'a new object handed to untyped code');
 	}
 
-	@:pin('control') @:killer('M-REACH-BASE-CLASSPATH') @:killer('M-REACH-TYPES-HELD')
+	@:pin('control')
+	@:killer('M-REACH-BASE-CLASSPATH')
+	@:killer('M-REACH-TYPES-HELD')
 	public function testOnlyTheBuildsVouchForTheClasspath(): Void {
 		// `poke` changes an `Other`'s `items`, and a field typed `Other` never holds a `C` — provided no subtype of `C`
 		// that is also an `Other` exists outside the index. Only builds whose oracle list is declared complete can say so,
@@ -572,7 +647,8 @@ class MemberReachTest extends Test {
 		assertMatch(run(made), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPE-NAMED-CLASS')
+	@:pin('control')
+	@:killer('M-ESCAPE-NAMED-CLASS')
 	public function testAClassNamedToTheClassValueProducerMayBeInstantiatedUntyped(): Void {
 		// `Type.resolveClass` hands back a class by the name it is given: a literal naming `C`, or a computed name, lets a `C`
 		// be built untyped and reach `poke`; a literal naming another class does not.
@@ -590,7 +666,9 @@ class MemberReachTest extends Test {
 		assertMatch(run('n'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CLASSPATH-DISPATCH') @:killer('M-CARRY-CLASSPATH')
+	@:pin('control')
+	@:killer('M-REACH-CLASSPATH-DISPATCH')
+	@:killer('M-CARRY-CLASSPATH')
 	public function testAClasspathTheIndexDoesNotHoldMayDeclareAnOverrideOrASubtype(): Void {
 		// With the builds' classpath not known to be inside the index, a dispatch on a library type may land in an
 		// override the index never read, and a receiver of an unrelated class may be a subtype of the owner declared there.
@@ -614,35 +692,40 @@ class MemberReachTest extends Test {
 		assertMatch(run(true, [other], []), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-BUILD-MACRO')
+	@:pin('control')
+	@:killer('M-REACH-BUILD-MACRO')
 	public function testBuildMacroOnTheOwnerIsUnknown(): Void {
 		final src: String = '@:build(Gen.make()) class C { var items:Array<Int> = []; function f():Void { /*<*/ helper(); /*>*/ } '
 			+ 'function helper():Void {} }';
 		assertMatch(ask([src]), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-PROPERTY')
+	@:pin('control')
+	@:killer('M-REACH-PROPERTY')
 	public function testPropertyMemberIsUnknown(): Void {
 		final src: String = 'class C { var items(get, never):Array<Int>; function get_items():Array<Int> return []; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
 		assertMatch(ask([src]), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-RECEIVER-OWNER')
+	@:pin('control')
+	@:killer('M-REACH-RECEIVER-OWNER')
 	public function testSameNamedMemberOfAnotherTypeIsNotATouch(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; var other:Other; function f():Void { /*<*/ g(); /*>*/ } '
 			+ 'function g():Void other.items.push(1); }';
 		assertMatch(ask([src, 'class Other { public var items:Array<Int> = []; }']), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-SHADOW')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-SHADOW')
 	public function testSameNamedLocalIsNotATouch(): Void {
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } '
 			+ 'function g():Void { final items:Array<Int> = []; items.push(1); } }';
 		assertMatch(ask([src]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-INIT-WIRING')
+	@:pin('control')
+	@:killer('M-GRAPH-INIT-WIRING')
 	public function testConstructorRunsTheFieldInitializers(): Void {
 		// `new Maker()` runs `Maker`'s field initializers, and one of them grows the static collection.
 		final src: String = 'class C { static var items:Array<Int> = []; public static function fill():Int { items.push(1); return 1; } '
@@ -650,7 +733,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src, 'class Maker { var x:Int = C.fill(); }']), 'C.fill');
 	}
 
-	@:pin('control') @:killer('M-REACH-LIBRARY-GROWTH')
+	@:pin('control')
+	@:killer('M-REACH-LIBRARY-GROWTH')
 	public function testLibraryBodyIsReadOnDemand(): Void {
 		// `Lib.run`'s body is clean, so the project's value-used mutator is never admitted — but only a
 		// walk that READS that body can tell: an unread library member is an extern leaf that admits it.
@@ -662,7 +746,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src], [calling]), 'C.grow');
 	}
 
-	@:pin('control') @:killer('M-REACH-CTOR-NOT-DISPATCHED')
+	@:pin('control')
+	@:killer('M-REACH-CTOR-NOT-DISPATCHED')
 	public function testConstructorOfALibrarySubclassIsNotADispatchTarget(): Void {
 		// Library code reaches a subclass through its overrides, never through its constructor.
 		final src: String = 'class C extends Lib { var items:Array<Int> = []; var lib:Lib; public function new() {'
@@ -671,7 +756,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], [lib]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-FRESH-OBJECT')
+	@:pin('control')
+	@:killer('M-REACH-FRESH-OBJECT')
 	public function testConstructingAnotherInstanceIsNotATouch(): Void {
 		// A constructor that grows `items` on its own `this` builds a different object than the one `f` runs on;
 		// one that grows ANOTHER object's `items` may be handed this one.
@@ -683,7 +769,9 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([other]), 'C.new');
 	}
 
-	@:pin('control') @:killer('M-GRAPH-OPERATOR-KIND') @:killer('M-REACH-IMPLICIT-ADMIT')
+	@:pin('control')
+	@:killer('M-GRAPH-OPERATOR-KIND')
+	@:killer('M-REACH-IMPLICIT-ADMIT')
 	public function testImplicitOperatorIsRunFromArithmetic(): Void {
 		// `a + b` names no call, yet it runs `Deg.add`, which grows `items`.
 		final src: String = 'class C { public var items:Array<Int> = []; public static var inst:C; '
@@ -692,7 +780,9 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src, deg]), 'Deg.add');
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-ARRAY-CHANGE') @:killer('M-REACH-ARRAY-CHANGE-SITE')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-ARRAY-CHANGE')
+	@:killer('M-REACH-ARRAY-CHANGE-SITE')
 	public function testParameterRegionOfArithmeticDependsOnWhatImplicitFunctionsChange(): Void {
 		// No visible call, but an implicitly-called function may run from `+` on a `Deg`: one that writes an array element
 		// could change the caller's; one that changes none cannot.
@@ -709,19 +799,22 @@ class MemberReachTest extends Test {
 		assertMatch(reachOf([src, pure], null, true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), region), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-FRESH')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-FRESH')
 	public function testFreshUnsharedLocalIsProvenWhateverTheBodyCalls(): Void {
 		final src: String = 'class C { function f():Void { final xs:Array<Int> = [1, 2]; xs.push(3); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-ESCAPE')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-ESCAPE')
 	public function testLocalHandedOutIsAnEscape(): Void {
 		final src: String = 'class C { function f():Void { final xs:Array<Int> = []; keep(xs); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-CAPTURE')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-CAPTURE')
 	public function testLocalCapturedByAClosureIsAnEscape(): Void {
 		final src: String =
 			'class C { function f():Void { final xs:Array<Int> = []; final g = () -> xs.length; /*<*/ anything(g, xs[0]); /*>*/ } }';
@@ -783,7 +876,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocalIn([src, built], 'xs'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-PARAM')
+	@:pin('control')
+	@:killer('M-REACH-PARAM')
 	public function testParameterIsProvenOnlyWhenTheRegionRunsNothing(): Void {
 		// The caller may hold the same array, so any code the region runs could change it.
 		final calls: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ anything(); var y:Int = xs[0]; /*>*/ } }';
@@ -792,7 +886,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(quiet, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXPLAIN-PATH')
+	@:pin('control')
+	@:killer('M-REACH-EXPLAIN-PATH')
 	public function testExplainNamesThePath(): Void {
 		final src: String =
 			'class C { var items:Array<Int> = []; function f():Void { /*<*/ g(); /*>*/ } function g():Void items.push(1); }';
@@ -802,7 +897,8 @@ class MemberReachTest extends Test {
 		Assert.isTrue(text.indexOf('F0.hx:1') >= 0, text);
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-RUNS-CODE')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-RUNS-CODE')
 	public function testImplicitlyCalledMethodsAreRunFromStringsAndIteration(): Void {
 		// `'' + this` runs `toString`, and a `for` over an object runs its `iterator` — neither is a call node.
 		final concat: String = 'class C { var items:Array<Int> = []; public function toString():String { items.push(0); return ""; } '
@@ -814,7 +910,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([iterate, bag]), 'Bag.iterator');
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-CONSTRUCTION')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-CONSTRUCTION')
 	public function testLiteralTypedAsAConstructedClassRunsItsConstructor(): Void {
 		// A literal typed as a `@:structInit` class runs its constructor, wherever the type annotation sits.
 		final src: String = 'class C { public static var items:Array<Int> = []; function f():Void { /*<*/ use({x: 1}); /*>*/ } '
@@ -827,7 +924,9 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([viaValue, pt]), 'Pt.new');
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-HANDS') @:killer('M-EXTERN-BLIND-SYNTAX-LITERAL')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-HANDS')
+	@:killer('M-EXTERN-BLIND-SYNTAX-LITERAL')
 	public function testBodylessLibraryCallAdmitsImplicitlyCalledMethods(): Void {
 		// `Std.string(this)` has no body the graph holds, and it calls `toString` on its argument — an implicitly-called method
 		// the walk admits from any code.
@@ -845,7 +944,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([later, abs], [std, 'extern class Ext { public static function run(v:Dynamic):Void; }']), 'Abs.toString');
 	}
 
-	@:pin('control') @:killer('M-REACH-UNMODELLED')
+	@:pin('control')
+	@:killer('M-REACH-UNMODELLED')
 	public function testConstructNobodyClassifiedIsUnknown(): Void {
 		// An untyped BLOCK is a kind the whitelist does not carry: the walk refuses rather than guess.
 		final src: String =
@@ -853,7 +953,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src]), r -> r.match(Unknown(Unmodelled(_, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-ESCAPE-GATE')
+	@:pin('control')
+	@:killer('M-REACH-ESCAPE-GATE')
 	public function testAliasWrittenInTheRegionItselfIsRefused(): Void {
 		// The region runs no call, but `alias` IS `items`: the element write grows the field behind the loop.
 		final src: String = 'class C { static var alias:Array<Int>; var items:Array<Int> = []; public function new() alias = items; '
@@ -861,7 +962,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REGION-ARRAY-CHANGE')
+	@:pin('control')
+	@:killer('M-REACH-REGION-ARRAY-CHANGE')
 	public function testParameterRegionWritingAnyOtherArrayIsRefused(): Void {
 		// `alias` may be the caller's array; only a fresh local of the function is provably another one.
 		final src: String = 'class C { static var alias:Array<Int>; function f(xs:Array<Int>):Void { final mine:Array<Int> = []; '
@@ -872,7 +974,9 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(fresh, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLEE-WALK') @:killer('M-REACH-CALLEE-REFUSED')
+	@:pin('control')
+	@:killer('M-REACH-CALLEE-WALK')
+	@:killer('M-REACH-CALLEE-REFUSED')
 	public function testParameterRegionCallingProjectCodeDependsOnWhatItChanges(): Void {
 		// The caller may hold the same array, so a callee that changes ANY array other than a fresh local of its own may
 		// change it; a callee that changes none cannot.
@@ -884,7 +988,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(pure, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLEE-BENIGN-EDGE')
+	@:pin('control')
+	@:killer('M-REACH-CALLEE-BENIGN-EDGE')
 	public function testCalleeChangingOnlyAFreshLocalOfItsOwnIsProven(): Void {
 		final src: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = dup(xs[0]); /*>*/ } '
 			+ 'static function dup(v:Int):Int { final out:Array<Int> = []; out.push(v); return out.length; } }';
@@ -895,7 +1000,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(shared, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-COMPOUND-WRITE-ALIAS')
+	@:pin('control')
+	@:killer('M-REACH-COMPOUND-WRITE-ALIAS')
 	public function testLocalGivenASharedValueByAnyWriteIsNotFresh(): Void {
 		// `x ??= all` stores the shared array in a local that started fresh: its push changes `all`, which may be the
 		// caller's, whether the region or a callee does it
@@ -911,7 +1017,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(fresh, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ASSIGNMENT-VALUE-ALIAS')
+	@:pin('control')
+	@:killer('M-REACH-ASSIGNMENT-VALUE-ALIAS')
 	public function testAssignmentUsedAsAValueSharesWhatItStores(): Void {
 		// `all = xs = [1]` stores the fresh array in `xs` AND hands it to `all`, which `grow` pushes onto
 		final src: String = 'class C { static var all:Array<Int> = []; static function grow():Void all.push(9); '
@@ -922,7 +1029,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(statement, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-LAST-STATEMENT-VALUE')
+	@:pin('control')
+	@:killer('M-REACH-LAST-STATEMENT-VALUE')
 	public function testFreshWriteEndingAValueBlockSharesWhatItStores(): Void {
 		// the last statement of a block, `if`, `switch` or `try` in value position is that construct's value: `all` gets `xs`
 		final forms: Array<String> = [
@@ -938,7 +1046,9 @@ class MemberReachTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-REACH-DISCARDED-BODY') @:killer('M-REACH-DISCARDED-STATEMENT-BRANCH')
+	@:pin('control')
+	@:killer('M-REACH-DISCARDED-BODY')
+	@:killer('M-REACH-DISCARDED-STATEMENT-BRANCH')
 	public function testFreshWriteEndingAStatementBodyKeepsTheLocalUnshared(): Void {
 		// the last statement of a function or loop body, or of a statement `if` / `switch` branch, yields nothing
 		final forms: Array<String> = [
@@ -967,7 +1077,9 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLEE-REWRITTEN') @:killer('M-REACH-CALLEE-AMBIGUOUS')
+	@:pin('control')
+	@:killer('M-REACH-CALLEE-REWRITTEN')
+	@:killer('M-REACH-CALLEE-AMBIGUOUS')
 	public function testCalleeWhoseBodyIsNotItsSourceIsRefused(): Void {
 		// A build macro may rewrite the callee's body; a second type of its name leaves which body runs unknown.
 		final region: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = H.id(xs[0]); /*>*/ } }';
@@ -978,7 +1090,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocalIn([region, plain], 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLEE-OVERRIDES')
+	@:pin('control')
+	@:killer('M-REACH-CALLEE-OVERRIDES')
 	public function testCalleeDispatchOnALibraryTypeReachesItsLibraryOverrides(): Void {
 		// `b.go()` runs `LBase.go` as declared, and `LSub.go` — declared in library code the graph has not read — for an `LSub`.
 		final region: String = 'class C { function f(xs:Array<Int>, b:LBase):Void { /*<*/ var y:Int = xs[0]; b.go(); /*>*/ } }';
@@ -989,7 +1102,8 @@ class MemberReachTest extends Test {
 		assertMatch(mutatesNamed(reach, region, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-ENTRY-HAZARDS')
+	@:pin('control')
+	@:killer('M-REACH-ENTRY-HAZARDS')
 	public function testHazardInTheRegionItselfIsUnknown(): Void {
 		final computed: String =
 			'class C { var items:Array<Int> = []; var key:String; function f():Void { /*<*/ Reflect.setField(this, key, []); /*>*/ } }';
@@ -999,7 +1113,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([native]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-ACCESSOR')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-ACCESSOR')
 	public function testReflectivePropertyWriteRunsTheSetter(): Void {
 		// `Reflect.setProperty(p, 'x', …)` runs `set_x`, which grows `items`.
 		final src: String =
@@ -1009,7 +1124,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src, prop]), 'P.set_x');
 	}
 
-	@:pin('control') @:killer('M-REACH-DYNAMIC-VALUE')
+	@:pin('control')
+	@:killer('M-REACH-DYNAMIC-VALUE')
 	public function testMethodReadOffAnUntypedReceiverIsAdmitted(): Void {
 		// `d.grow` is read as a value off a Dynamic and run by `Reflect.callMethod`.
 		final src: String = 'class C { var items:Array<Int> = []; function grow():Void items.push(0); '
@@ -1017,7 +1133,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src]), 'C.grow');
 	}
 
-	@:pin('control') @:killer('M-REACH-LIBRARY-BUDGET')
+	@:pin('control')
+	@:killer('M-REACH-LIBRARY-BUDGET')
 	public function testLibraryGrowthPastTheCapIsUnknown(): Void {
 		// A dispatch on a library type must load every library override; past the cap that is a blind spot.
 		final src: String = 'class C { var items:Array<Int> = []; var b:Base; function f():Void { /*<*/ b.run(); /*>*/ } }';
@@ -1034,7 +1151,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-VISITED-BUDGET')
+	@:pin('control')
+	@:killer('M-REACH-VISITED-BUDGET')
 	public function testWalkPastTheVisitCapIsUnknown(): Void {
 		final src: String =
 			'class C { var items:Array<Int> = []; function f():Void { /*<*/ a(); /*>*/ } function a():Void b(); function b():Void {} }';
@@ -1048,7 +1166,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-RERUN-END')
+	@:pin('control')
+	@:killer('M-REACH-RERUN-END')
 	public function testEscapeLaterInAnEnclosingLoopPrecedesTheNextRun(): Void {
 		// `sink = xs` runs after the inner loop, but the outer loop runs the inner one again with `xs` shared.
 		final src: String = 'class C { static var sink:Array<Int>; static function grow():Void sink.push(9); static function f():Void {'
@@ -1056,14 +1175,16 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-HAZARDS')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-HAZARDS')
 	public function testTargetCodeCanNameAFreshLocal(): Void {
 		final src: String =
 			"class C { function f():Void { final xs:Array<Int> = [1]; /*<*/ js.Syntax.code('xs.push(0)'); var y:Int = xs[0]; /*>*/ } }";
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-AMBIGUOUS')
+	@:pin('control')
+	@:killer('M-REACH-AMBIGUOUS')
 	public function testTypeSharingItsSimpleNameIsUnknown(): Void {
 		// Two `Helper`s in two packages merge into one graph node, which reads both declarations of `tick`: the second one's
 		// touch is found, whichever `Helper` `h` holds.
@@ -1080,7 +1201,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([grows, a, foreign]), r -> r.match(Unknown(Ambiguous('Helper'))));
 	}
 
-	@:pin('control') @:killer('M-REACH-FOLDED-BODIES') @:killer('M-GRAPH-FOLDED-DECLARATIONS')
+	@:pin('control')
+	@:killer('M-REACH-FOLDED-BODIES')
+	@:killer('M-GRAPH-FOLDED-DECLARATIONS')
 	public function testEveryDeclarationOfAMemberInEachBranchIsRead(): Void {
 		// `g` is declared once per branch of a region: the graph folds both into one node, and each is code a build runs —
 		// its untyped read, its touch, the conversion it makes are the node's, though its first declaration holds none
@@ -1098,7 +1221,9 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(local, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-EAGER-INIT') @:killer('M-REACH-INIT-BRANCHES')
+	@:pin('control')
+	@:killer('M-GRAPH-EAGER-INIT')
+	@:killer('M-REACH-INIT-BRANCHES')
 	public function testAFieldInitializerRunsWhatItHoldsThoughItCallsNothing(): Void {
 		// `new D()` runs `D`'s field initializers: an element write, a string conversion and untyped code call nothing, yet
 		// each is code the construction runs — in every branch of a region that declares the field
@@ -1118,7 +1243,10 @@ class MemberReachTest extends Test {
 		]), 'O.toString');
 	}
 
-	@:pin('control') @:killer('M-GRAPH-JOINED-MEMBER') @:killer('M-REACH-SHARED-INIT-BRANCHES') @:killer('M-GRAPH-FOLDED-DYNAMIC')
+	@:pin('control')
+	@:killer('M-GRAPH-JOINED-MEMBER')
+	@:killer('M-REACH-SHARED-INIT-BRANCHES')
+	@:killer('M-GRAPH-FOLDED-DYNAMIC')
 	public function testAMemberDeclaredInEachBranchIsWhatEveryDeclarationSays(): Void {
 		// one index record stands for both declarations of a member: an accessor either declares runs, a return type or a
 		// field type they spell differently types nothing, and a shared initializer in either branch shares the value; one
@@ -1150,7 +1278,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([shared]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-LOCAL-SCOPE')
+	@:pin('control')
+	@:killer('M-REACH-LOCAL-SCOPE')
 	public function testSharedParameterWithoutTheWholeProjectIsUnknown(): Void {
 		final src: String = 'class C { function f(xs:Array<Int>):Void { /*<*/ var y:Int = xs[0] + 1; /*>*/ } }';
 		final reach: MemberReach = reachOf([src], null, false);
@@ -1158,7 +1287,8 @@ class MemberReachTest extends Test {
 		assertMatch(reach.mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src)), r -> r.match(Unknown(OutOfScope(_))));
 	}
 
-	@:pin('control') @:killer('M-REACH-NOT-A-MEMBER')
+	@:pin('control')
+	@:killer('M-REACH-NOT-A-MEMBER')
 	public function testNameTheEnclosingTypeDoesNotDeclareIsUnknown(): Void {
 		// `import Store.items;` makes the bare name another type's static: not a member of `C` this can follow.
 		final src: String = 'import Store.items; class C { function f():Void { /*<*/ Store.add(); var y:Int = items[0]; /*>*/ } }';
@@ -1168,13 +1298,15 @@ class MemberReachTest extends Test {
 		assertMatch(reach.mayMutateNamed('F0.hx', 'items', new Span(at, at + 5), regionOf(src)), r -> r.match(Unknown(OutOfScope(_))));
 	}
 
-	@:pin('control') @:killer('M-REACH-FRESH-METHOD')
+	@:pin('control')
+	@:killer('M-REACH-FRESH-METHOD')
 	public function testCopyOfAnArrayIsFresh(): Void {
 		final src: String = 'class C { function f(ys:Array<Int>):Void { final xs:Array<Int> = ys.copy(); /*<*/ anything(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-BENIGN-CALL')
+	@:pin('control')
+	@:killer('M-REACH-BENIGN-CALL')
 	public function testParameterRegionCallingOnlyArrayReadersIsProven(): Void {
 		// `kinds.contains` reads an array; `out.push` changes only a fresh local — neither can reach the caller's.
 		final src: String = 'class C { function f(xs:Array<Int>, kinds:Array<Int>):Void { final out:Array<Int> = []; '
@@ -1184,14 +1316,16 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(copyInto, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-UNTYPED-FRESH-LOCAL')
+	@:pin('control')
+	@:killer('M-REACH-UNTYPED-FRESH-LOCAL')
 	public function testUnannotatedFreshLocalArrayIsNotACulprit(): Void {
 		// `final out = [];` carries no annotation, so `out.push` is an unresolved call — on a new array nobody else holds.
 		final src: String = 'class C { function f(xs:Array<Int>):Void { final out = []; /*<*/ out.push(xs[0]); /*>*/ } }';
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLS-ENTRY')
+	@:pin('control')
+	@:killer('M-REACH-CALLS-ENTRY')
 	public function testCallsEntryStartsAtTheSitesOnly(): Void {
 		// Only the named call runs: `grow()` beside it is not part of the entry.
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { quiet(); grow(); } function quiet():Void {} '
@@ -1209,7 +1343,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(reach.mayReach(Calls('F0.hx', grow), { owner: 'C', name: 'items' }, Mutate), 'C.grow');
 	}
 
-	@:pin('control') @:killer('M-HOST-ROOTS-ALL')
+	@:pin('control')
+	@:killer('M-HOST-ROOTS-ALL')
 	public function testRunWithAnUnmatchedRootDoesNotKnowTheProject(): Void {
 		// A root that matched nothing may be where the toucher lives, so the run's files are not the project.
 		final src: String = 'class C { var items:Array<Int> = []; function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
@@ -1223,7 +1358,9 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-BODYLESS') @:killer('M-REACH-CALLS-ARGUMENT')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-BODYLESS')
+	@:killer('M-REACH-CALLS-ARGUMENT')
 	public function testCallbackArrayMethodRunsTheFunctionItIsHanded(): Void {
 		// The lambda is made before the region, so nothing in the region names it — `map` and `sort` run it.
 		final mapped: String = 'class C { var items:Array<Int> = []; function f(o:Array<Int>):Void { '
@@ -1234,7 +1371,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([sorted]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-BODYLESS') @:killer('M-REACH-EXTERN-CLOSED')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-BODYLESS')
+	@:killer('M-REACH-EXTERN-CLOSED')
 	public function testExternMethodRunsTheFunctionItIsHanded(): Void {
 		// A body-less extern member runs target code, which may call the function value it is handed.
 		final src: String = 'class C { var items:Array<Int> = []; var lib:Lib; function f():Void { '
@@ -1244,7 +1383,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src, lib]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-BENIGN-CALLBACK') @:killer('M-REACH-CALLS-ARGUMENT')
+	@:pin('control')
+	@:killer('M-REACH-BENIGN-CALLBACK')
+	@:killer('M-REACH-CALLS-ARGUMENT')
 	public function testParameterRegionCallingACallbackMethodIsRefused(): Void {
 		// `filter` runs `g`, and `g` grows the array the caller may have passed in as `xs`.
 		final src: String = 'class C { static var alias:Array<Int> = []; function f(xs:Array<Int>, o:Array<Int>):Void { '
@@ -1252,7 +1393,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REGION-REF')
+	@:pin('control')
+	@:killer('M-REACH-REGION-REF')
 	public function testParameterRegionHandingOnAFunctionValueIsRefused(): Void {
 		// The region hands `grow` on; whatever receives a function value may run it.
 		final src: String = 'class C { static var alias:Array<Int> = []; static function grow(v:Int):Int { alias.push(0); return v; } '
@@ -1260,7 +1402,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(src, 'xs'), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-CALLBACK-PURE')
+	@:pin('control')
+	@:killer('M-REACH-CALLBACK-PURE')
 	public function testImplicitFunctionCallingACallbackMethodMayChangeArrays(): Void {
 		// `d + d` may run `Deg.add`, whose `map` runs whatever function `Store.cb` holds.
 		final src: String = 'class C { function f(xs:Array<Int>, d:Deg):Void { /*<*/ var y:Int = xs[0]; var z:Deg = d + d; /*>*/ } }';
@@ -1273,7 +1416,9 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-BODYLESS') @:killer('M-REACH-FORWARDING-OP')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-BODYLESS')
+	@:killer('M-REACH-FORWARDING-OP')
 	public function testImplicitFunctionCallingAnExternMayChangeArrays(): Void {
 		// An abstract's body-less operator forwards to its underlying value; an extern member runs target code.
 		final forwarding: String = 'enum abstract K(Int) { var A = 1; @:op(A < B) static function lt(a:K, b:K):Bool; }';
@@ -1294,7 +1439,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-INTERFACE-DISPATCH')
+	@:pin('control')
+	@:killer('M-REACH-INTERFACE-DISPATCH')
 	public function testInterfaceCallDispatchesToTheImplementationOnly(): Void {
 		// The interface declaration runs nothing; its implementation, reached by dispatch, grows `items`.
 		// The lambda is used as a value: an extern could run it, a dispatch through the interface cannot.
@@ -1306,7 +1452,8 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src, ip, impl]), 'Impl.m');
 	}
 
-	@:pin('control') @:killer('M-REACH-QUESTION-BUDGET')
+	@:pin('control')
+	@:killer('M-REACH-QUESTION-BUDGET')
 	public function testLibraryBudgetIsPerQuestion(): Void {
 		// The same question asked after another one that loaded library files gets the same answer as when asked first.
 		final src: String = 'class C { var items:Array<Int> = []; var a:LA; var b:LB; function f():Void { /*<*/ a.run(); /*>*/ } '
@@ -1325,7 +1472,8 @@ class MemberReachTest extends Test {
 		assertMatch(reach.mayReach(Region('F0.hx', g), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFRESH-FOLDED')
+	@:pin('control')
+	@:killer('M-REACH-REFRESH-FOLDED')
 	public function testAnEditToAFileOfANodeFoldedAcrossFilesRebuildsTheGraph(): Void {
 		// `H` is declared in two files and the graph folds both `run`s into one node: taking the first file out and back in
 		// would drop the node with the edge the second declaration's body records, so the edit is not taken in place
@@ -1343,7 +1491,9 @@ class MemberReachTest extends Test {
 		Assert.isTrue(grows(MemberReach.forRun(plugin, 'F0.hx', src).graph()), 'an edit to the first file lost the second\'s edge');
 	}
 
-	@:pin('control') @:killer('M-REACH-MEMO-EVERY-SOURCE') @:killer('M-REACH-INCREMENTAL-PURGE')
+	@:pin('control')
+	@:killer('M-REACH-MEMO-EVERY-SOURCE')
+	@:killer('M-REACH-INCREMENTAL-PURGE')
 	public function testMemoIsDroppedWhenAnyProjectFileChanged(): Void {
 		// An edit earlier in the pass to ANOTHER project file leaves the memoised graph describing code that is gone.
 		final src: String = 'class C { var items:Array<Int> = []; var h:H; public function grow():Void items.push(0); '
@@ -1368,7 +1518,10 @@ class MemberReachTest extends Test {
 		assertMatch(refreshed.mayReach(Region('F0.hx', regionOf(src)), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLIT-FRESH') @:killer('M-REACH-FRESH-CHAIN') @:killer('M-NOMINAL-LOCAL-INIT')
+	@:pin('control')
+	@:killer('M-REACH-SPLIT-FRESH')
+	@:killer('M-REACH-FRESH-CHAIN')
+	@:killer('M-NOMINAL-LOCAL-INIT')
 	public function testSplitOfAStringAndAChainedResultAreFresh(): Void {
 		final split: String =
 			'class C { function f(text:String):Void { final xs:Array<String> = text.split(","); /*<*/ anything(xs[0]); /*>*/ } }';
@@ -1382,7 +1535,8 @@ class MemberReachTest extends Test {
 		assertMatch(askLocal(viaLocal, 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-STRINGBUF-PURE')
+	@:pin('control')
+	@:killer('M-REACH-STRINGBUF-PURE')
 	public function testParameterRegionWritingAStringBufferIsProven(): Void {
 		// `add(x:T)` converts what it is handed, as the std one does — so its body may run the `toString` of any value, and
 		// `Obj`'s changes an array — but a string literal runs nothing.
@@ -1396,7 +1550,8 @@ class MemberReachTest extends Test {
 		assertMatch(reach.mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src)), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-STORED-FIELD')
+	@:pin('control')
+	@:killer('M-GRAPH-STORED-FIELD')
 	public function testFieldOfAnAnonymousStructureIsNotAMethodRead(): Void {
 		// `parts[i].cond` reads a stored `Null<Sp>`, never a method, whatever function elsewhere is called `cond`.
 		final src: String = 'class Sp { public function new() {} } class C { static function cond():Void {} '
@@ -1405,7 +1560,10 @@ class MemberReachTest extends Test {
 		assertMatch(reachOf([src], null, true).mayMutateNamed('F0.hx', 'parts', new Span(at, at + 5), regionOf(src)), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-PLACEHOLDER') @:killer('M-REACH-CLOSURE-CHANNELS') @:killer('M-REACH-CLOSURE-LIBRARY')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-PLACEHOLDER')
+	@:killer('M-REACH-CLOSURE-CHANNELS')
+	@:killer('M-REACH-CLOSURE-LIBRARY')
 	public function testImplicitMethodAnywhereMayRunAFunctionValue(): Void {
 		// `'' + o` runs `o.toString`, which calls whatever `cb` holds — a lambda growing `items`. The toString is found
 		// through the index even when its library file was never read, and it reaches the lambda through a call it cannot
@@ -1418,7 +1576,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src, lib]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-PURE-PARAMS')
+	@:pin('control')
+	@:killer('M-REACH-PURE-PARAMS')
 	public function testLibraryCallHandedAnObjectIsNotPure(): Void {
 		// `add(x:T)` converts what it is handed: a literal runs nothing, an object may run its `toString`, whose code the
 		// region then runs.
@@ -1434,7 +1593,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-FRESH-TYPED')
+	@:pin('control')
+	@:killer('M-REACH-FRESH-TYPED')
 	public function testFreshMethodMustBeTheReceiverTypesOwn(): Void {
 		// `'k'.copy()` and `seed.split(",")` on an array are `using` extensions — String has no `copy`, Array no `split` —
 		// which may return a shared array.
@@ -1457,7 +1617,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-INSTANCE')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-INSTANCE')
 	public function testExternHandedOnlyInertValuesRunsNoProgramCode(): Void {
 		// An extern whose every member takes and returns numbers, strings or itself — the std `Date` shape — can hold no
 		// array or function value of the program, so its `toString` changes nothing the region shares.
@@ -1473,7 +1634,9 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-IMPLICIT-WRITTEN') @:killer('M-REACH-EXTERN-IMPLICIT-QUIET')
+	@:pin('control')
+	@:killer('M-REACH-IMPLICIT-WRITTEN')
+	@:killer('M-REACH-EXTERN-IMPLICIT-QUIET')
 	public function testImplicitMembersOnlyOfTypesInPlayCount(): Void {
 		// A library toString that grows an array runs only on an instance of its class — no code the run reads names
 		// `Loud`, so none is in play. An extern's own conversion runs target code that calls back only through a value
@@ -1497,7 +1660,9 @@ class MemberReachTest extends Test {
 	 * (`ReachGraph.loadHomes`, `ReachGraph.oneTypeEverywhere`). It read none, and refused as code the run did not read.
 	 */
 	@:pin('control')
-	@:killer('M-REACH-HOMES-RECORDED') @:killer('M-REACH-LIBRARY-HOMES') @:killer('M-REACH-SHARED-ONE-TYPE')
+	@:killer('M-REACH-HOMES-RECORDED')
+	@:killer('M-REACH-LIBRARY-HOMES')
+	@:killer('M-REACH-SHARED-ONE-TYPE')
 	public function testAConversionReadsEveryCopyOfOneLibraryType(): Void {
 		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
 		final std: String = 'package sys.net; extern class Host { public function toString():String; }';
@@ -1540,7 +1705,8 @@ class MemberReachTest extends Test {
 	 * declaration of the node is, and an extern copy's target code may dispatch to an override below it.
 	 */
 	@:pin('control')
-	@:killer('M-REACH-ONE-TYPE-FOLDED') @:killer('M-REACH-ONE-TYPE-EXTERN')
+	@:killer('M-REACH-ONE-TYPE-FOLDED')
+	@:killer('M-REACH-ONE-TYPE-EXTERN')
 	public function testACopyWhoseCodeTheNodeDoesNotHoldStaysShared(): Void {
 		final src: String = 'class C { function f(xs:Array<Int>, v:Dynamic):Void { /*<*/ var s:String = "" + v + xs[0]; /*>*/ } }';
 		final own: String =
@@ -1584,7 +1750,8 @@ class MemberReachTest extends Test {
 		Assert.stringContains('library code `Host.toString` the walk cannot read', reach.explain(result));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-INERT')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-INERT')
 	public function testExternClosedOverInertValuesAdmitsNoFunctionValue(): Void {
 		// Target code behind an extern that takes and returns only numbers, strings and itself was handed no function
 		// value — so calling it cannot run the lambda that grows `items`.
@@ -1594,7 +1761,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], [stamp]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CONSTRUCTIBLE') @:killer('M-REACH-INDEX-IMPLICIT')
+	@:pin('control')
+	@:killer('M-REACH-CONSTRUCTIBLE')
+	@:killer('M-REACH-INDEX-IMPLICIT')
 	public function testLibraryInstanceMadeOutOfSightRunsItsMembers(): Void {
 		// A library factory hands out a `Hidden` no project code names — as `Dynamic`, as its superclass, as an
 		// `Iterable` — and the string conversion or loop runs `Hidden.toString` / `HiddenBag.iterator`, which call the
@@ -1613,7 +1782,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['${head}function f():Void { /*<*/ for (e in it) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-QUESTION-ENTERED')
+	@:pin('control')
+	@:killer('M-REACH-QUESTION-ENTERED')
 	public function testAnAnswerDoesNotDependOnTheQuestionsBeforeIt(): Void {
 		// Asked fresh, and asked after a question whose walk loaded the factory's file and entered code spelling the
 		// abstract `Loud`: the same answer. Nothing an earlier question read may widen what a later one admits.
@@ -1637,7 +1807,8 @@ class MemberReachTest extends Test {
 		assertMatch(reachOf([src], lib, true).mayReach(Region('F0.hx', regions[1]), member, Mutate), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-OBJECT')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-OBJECT')
 	public function testExternHandedAnObjectRunsItsMembersByName(): Void {
 		// `JSON.stringify(this)` calls `toJSON` BY NAME in target code: every member of what the extern is handed is a
 		// reflective access. An object whose type declares no toucher admits nothing.
@@ -1651,7 +1822,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([other, otherType], [nj]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-NESTED')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-NESTED')
 	public function testExternHandedAnObjectRunsWhatItsFieldsHoldByName(): Void {
 		// `JSON.stringify(h)` walks `h`'s fields as it walks `h`: the `toJSON` of the `Child` a field holds runs too.
 		final nj: String = "@:native('JSON') extern class NJ { public static function stringify(v:Dynamic):String; }";
@@ -1670,7 +1842,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([call], [nj, lib]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-ENUM-ARGS') @:killer('M-REACH-EXTERN-ENUM-CTOR')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-ENUM-ARGS')
+	@:killer('M-REACH-EXTERN-ENUM-CTOR')
 	public function testExternHandedAnEnumValueRunsWhatItsArgumentsHoldByName(): Void {
 		// `h.e` holds `Box(new Child())`: `JSON.stringify(h)` walks the constructor's argument and runs `Child.toJSON`. An
 		// enum whose constructors hold only numbers hands nothing that runs code.
@@ -1698,7 +1872,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask([call], [nj, lib, '@:coreType abstract Int {}']), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTERN-RECEIVER')
+	@:pin('control')
+	@:killer('M-REACH-EXTERN-RECEIVER')
 	public function testExternMethodRunsItsReceiversMembersByName(): Void {
 		// The native `Date.prototype.toJSON` calls `this.toISOString()` by name: a program subclass's override-free
 		// method runs from a bare call of the extern member.
@@ -1708,7 +1883,9 @@ class MemberReachTest extends Test {
 		assertReachedAt(ask([src], [jdate]), 'C.toISOString');
 	}
 
-	@:pin('control') @:killer('M-REACH-JOIN-CONVERTS') @:killer('M-REACH-JOIN-CULPRIT')
+	@:pin('control')
+	@:killer('M-REACH-JOIN-CONVERTS')
+	@:killer('M-REACH-JOIN-CULPRIT')
 	public function testJoinConvertsTheElementsToStrings(): Void {
 		// `os.join(",")` runs each element's `toString` in target code — no `+` anywhere in the region.
 		final obj: String = 'class Obj { public function new() {} public function toString():String { C.items.push(0); return ""; } }';
@@ -1724,7 +1901,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-MEMO-DYNAMIC')
+	@:pin('control')
+	@:killer('M-REACH-MEMO-DYNAMIC')
 	public function testMemoIsRebuiltWhenAMethodBecomesDynamic(): Void {
 		// Another file's call to `b.m()` was resolved as a plain call; once `m` is `dynamic` it runs whatever function
 		// value the member holds — the lambda growing `items` — and only a rebuild re-reads that call.
@@ -1746,7 +1924,8 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-FAMILY-MATCH')
+	@:pin('control')
+	@:killer('M-REACH-FAMILY-MATCH')
 	public function testIterationRunsOnlyFromALoopOverAValue(): Void {
 		// `Bag.iterator` runs only where a `for … in` iterates a value: an index access is another family's site.
 		final lib: Array<String> = [
@@ -1758,7 +1937,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['${head}function f():Void { /*<*/ for (e in d) trace(e); /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-TYPED-SITE')
+	@:pin('control')
+	@:killer('M-REACH-TYPED-SITE')
 	public function testAConversionOfATypedOperandRunsOnlyItsTypesMethod(): Void {
 		// `"" + q` with `q:Quiet` runs `Quiet.toString` or an override — never `Loud.toString`, which only a value whose
 		// type is not known may reach.
@@ -1773,7 +1953,10 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = "" + d; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-ABSTRACT-VISIBLE') @:killer('M-REACH-MEMBER-READ') @:killer('M-REACH-INFERRED-MEMBER')
+	@:pin('control')
+	@:killer('M-REACH-ABSTRACT-VISIBLE')
+	@:killer('M-REACH-MEMBER-READ')
+	@:killer('M-REACH-INFERRED-MEMBER')
 	@:killer('M-GRAPH-IMPLICIT-META')
 	public function testAnAbstractsMemberRunsOnlyWhereItsTypeIsInReach(): Void {
 		// `Loud`'s conversion is a static call the compiler puts where a value's STATIC type is `Loud`: the region must be
@@ -1789,7 +1972,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['${head}function f():Void { /*<*/ var s:String = Keeper.guess; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-INFERRED-ANON-METHOD')
+	@:pin('control')
+	@:killer('M-REACH-INFERRED-ANON-METHOD')
 	public function testAStructureFunctionFieldBringsOnlyWhatItsTextSpells(): Void {
 		// `Steps.next` is a structure's `function` field, which the signature words send to the field's own text for its
 		// type: read there, it spells `Int` — the region holding a `Steps` holds no `Loud`, so the conversion that changes
@@ -1805,7 +1989,8 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['$head function f():Void { /*<*/ var s:LoudSteps = null; /*>*/ } }'], lib), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-INDEX-OPERATOR')
+	@:pin('control')
+	@:killer('M-REACH-INDEX-OPERATOR')
 	public function testIndexOperatorOverloadRunsFromAnIndexAccess(): Void {
 		// `@:op([])` overloads the index access, though its annotation projects as an array literal: `l[0]` runs it.
 		final lst: String =
@@ -1815,7 +2000,10 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], [lst]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXTENSION-READ') @:killer('M-REACH-GENERATED-READ') @:killer('M-REACH-FILE-IMPORTS')
+	@:pin('control')
+	@:killer('M-REACH-EXTENSION-READ')
+	@:killer('M-REACH-GENERATED-READ')
+	@:killer('M-REACH-FILE-IMPORTS')
 	@:killer('M-GRAPH-READ-DECLARED')
 	public function testAReadNoReceiverTypeDeclaresReachesWhatItMayBe(): Void {
 		// `b.loudOf()` is a static extension, declared on `Ext`, not on the receiver's type `Box`, and only the file's
@@ -1838,7 +2026,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask(['${head}function f():Void { /*<*/ var y:Int = n; /*>*/ } }', loud], lib), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-COMPOUND-OPERATOR') @:killer('M-REACH-UNDECLARED-PRIMITIVE')
+	@:pin('control')
+	@:killer('M-REACH-COMPOUND-OPERATOR')
+	@:killer('M-REACH-UNDECLARED-PRIMITIVE')
 	public function testCompoundAssignmentRunsTheBinaryOperatorOverload(): Void {
 		// `acc += 1` runs an `@:op(A + B)` overload: no `+` node is written.
 		final acc: String =
@@ -1848,7 +2038,9 @@ class MemberReachTest extends Test {
 		assertMatch(ask([src], [acc]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-LIVE-HAZARDS') @:killer('M-REACH-LIVE-EDGES')
+	@:pin('control')
+	@:killer('M-REACH-LIVE-HAZARDS')
+	@:killer('M-REACH-LIVE-EDGES')
 	public function testBranchNoConfiguredBuildCompilesIsNotWalked(): Void {
 		// `#if js` target code and a `#if js` call to a function that changes `items`: under builds that provably leave
 		// `js` undefined neither runs; one build that defines it — or none known at all — keeps both.
@@ -1879,7 +2071,8 @@ class MemberReachTest extends Test {
 		assertMatch(configuredAsk([call], null, [cpp, js]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-LIVE-VALUES')
+	@:pin('control')
+	@:killer('M-REACH-LIVE-VALUES')
 	public function testAVersionComparisonIsDecidedByTheValueEveryBuildGivesIt(): Void {
 		// `#if (haxe_ver >= 4.2)` keeps the safe branch under a build that proved `haxe_ver` 4.307, so the `#else` calling a
 		// function that changes `items` runs in none; under one that proved 4.1 the `#else` runs, and under one that names
@@ -1904,7 +2097,10 @@ class MemberReachTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-REACH-COMPILED-ONLY') @:killer('M-REACH-ESCALATE-NEVER') @:killer('M-REACH-ESCALATE-ALWAYS')
+	@:pin('control')
+	@:killer('M-REACH-COMPILED-ONLY')
+	@:killer('M-REACH-ESCALATE-NEVER')
+	@:killer('M-REACH-ESCALATE-ALWAYS')
 	@:killer('M-REACH-ESCALATE-INCOMPLETE')
 	public function testLibraryFileNoConfiguredBuildParsesIsNotInPlay(): Void {
 		// `Loud` lives in a library file none of the configured builds parses: its `toString` runs in none of them. The
@@ -1959,7 +2155,9 @@ class MemberReachTest extends Test {
 		assertMatch(reach(true).mayReach(Region('F0.hx', regionOf(src)), member, Mutate), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-ESCALATE-TRUTH-NEVER') @:killer('M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS')
+	@:pin('control')
+	@:killer('M-REACH-ESCALATE-TRUTH-NEVER')
+	@:killer('M-REACH-ESCALATE-TRUTH-WITHOUT-FACTS')
 	@:killer('M-REACH-ESCALATE-TRUTH-DROPPED')
 	public function testCompilerFactsSendEveryUnprovedQuestionToTheBuilds(): Void {
 		// `h` changes `items` in plain sight: no raw region, no classpath question. With compiler facts the builds may make
@@ -2102,7 +2300,8 @@ class MemberReachTest extends Test {
 	 * can be reached another way (a library placeholder carries the canonical path of its type), which is what let an
 	 * arm cutting the fallback survive.
 	 */
-	@:pin('control') @:killer('M-REACH-SITE-SELF-ALIAS')
+	@:pin('control')
+	@:killer('M-REACH-SITE-SELF-ALIAS')
 	public function testATypeReExportedUnderItsOwnNameStillHasOneDeclarationSite(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'q/Quiet.hx', source: 'package q; class Quiet { public function new() {} }' },

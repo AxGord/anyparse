@@ -177,4 +177,9 @@ final class LandProseTest extends Test {
 private typedef Reading = { var note: String; var passed: Bool; var logged: String; }
 
 /** The oddities a scratch repository can be given: a log that cannot be written, more prose than the row names. */
-private typedef Odd = { @:optional var nowhere: Bool; @:optional var many: Bool; }
+private typedef Odd = {
+	@:optional
+	var nowhere: Bool;
+	@:optional
+	var many: Bool;
+}

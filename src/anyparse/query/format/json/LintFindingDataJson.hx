@@ -5,10 +5,14 @@ package anyparse.query.format.json;
  * attaches to its findings (`Check.FindingData`). `function` is a Haxe keyword, so the field is `member` and its key is
  * declared with `@:key`. `chain` is evidence, never a key: a re-rendered chain is not a moved finding.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef LintFindingDataJson = {
 	var family: String;
-	@:key('function') var member: String;
+	@:key('function')
+	var member: String;
 	var subject: String;
-	@:optional var chain: Null<Array<String>>;
+	@:optional
+	var chain: Null<Array<String>>;
 };

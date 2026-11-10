@@ -21,8 +21,10 @@ typedef WrapRules = {
 
 	var rules: Array<WrapRule>;
 	var defaultMode: WrapMode;
-	@:optional var defaultLocation: WrappingLocation;
-	@:optional var defaultAdditionalIndent: Int;
+	@:optional
+	var defaultLocation: WrappingLocation;
+	@:optional
+	var defaultAdditionalIndent: Int;
 
 	/**
 	 * Does this cascade count a `.` as a chain item only when it follows a `)`?
@@ -36,6 +38,7 @@ typedef WrapRules = {
 	 * every-segment semantic. Absent or `false` is the every-segment behaviour
 	 * everywhere.
 	 */
-	@:optional var chainItemsAfterCloseParenOnly: Bool;
+	@:optional
+	var chainItemsAfterCloseParenOnly: Bool;
 
 };

@@ -49,8 +49,10 @@ class SetModifierSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
 	public function testPrivateOnAFinalClassPrecedesTheFinal(): Void {
-		final text: String = okText(SetModifier.setModifier('@:keep final class X {}\n', 1, 20, ['private'], false, new HaxeQueryPlugin()));
-		Assert.equals('@:keep private final class X {}\n', text);
+		final text: String = okText(
+			SetModifier.setModifier('@:keep\nfinal class X {}\n', 2, 13, ['private'], false, new HaxeQueryPlugin())
+		);
+		Assert.equals('@:keep\nprivate final class X {}\n', text);
 	}
 
 	/** A boolean modifier is removed. */

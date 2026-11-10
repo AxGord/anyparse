@@ -30,8 +30,12 @@ package anyparse.grammar.haxe.format;
  * because the trailing newline after `}` is contributed by the
  * surrounding sibling sep, not by `blockBody`.
  */
-@:peg typedef HxFormatCurlyLineEndPolicy = {
-	@:optional var leftCurly: HxFormatLeftCurlyPolicy;
-	@:optional var emptyCurly: HxFormatEmptyCurlyPolicy;
-	@:optional var rightCurly: HxFormatRightCurlyPolicy;
+@:peg
+typedef HxFormatCurlyLineEndPolicy = {
+	@:optional
+	var leftCurly: HxFormatLeftCurlyPolicy;
+	@:optional
+	var emptyCurly: HxFormatEmptyCurlyPolicy;
+	@:optional
+	var rightCurly: HxFormatRightCurlyPolicy;
 };

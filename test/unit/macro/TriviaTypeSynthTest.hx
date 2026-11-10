@@ -48,7 +48,8 @@ class TriviaTypeSynthTest extends Test {
 	";
 
 	/** Both grammars compile beside each other and each round-trips its comments. */
-	@:pin('control') @:killer('M-TRIVIA-SYNTH-ONCE-PER-COMPILATION')
+	@:pin('control')
+	@:killer('M-TRIVIA-SYNTH-ONCE-PER-COMPILATION')
 	public function testTwoTriviaGrammarsBuildAndRoundTripInOneCompilation(): Void {
 		#if nodejs
 		Assert.equals('$SOURCE|$SOURCE', roundTrips(['ga', 'gb']));

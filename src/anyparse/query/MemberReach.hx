@@ -161,7 +161,12 @@ typedef SharedRead = { final owner: String; final name: String; final inert: Boo
  * file, by which the compiler facts may name which of several types sharing that simple name declares it
  * (`FactsView.pinnedOwner`).
  */
-typedef MemberRef = { var owner: String; var name: String; @:optional var site: Null<Span>; }
+typedef MemberRef = {
+	var owner: String;
+	var name: String;
+	@:optional
+	var site: Null<Span>;
+}
 
 /**
  * "May the code this entry runs read / write / mutate member M?" — one analysis with three answers, for
@@ -3258,31 +3263,38 @@ private typedef AdmissionSite = {
 	var implicit: Array<ImplicitSite>;
 
 	/** Every function the admission closure holds: code that reaches members by a name it computes. */
-	@:optional var all: Bool;
+	@:optional
+	var all: Bool;
 
 	/** These functions: the members of an object handed to code that reaches them by name. */
-	@:optional var ids: Array<String>;
+	@:optional
+	var ids: Array<String>;
 
 	/** These functions, each the member of the typed type it names: the methods of an object reflection reaches by name. */
-	@:optional var owned: Array<OwnedId>;
+	@:optional
+	var owned: Array<OwnedId>;
 
 	/**
 	 * The facts type of the value an unresolved call calls, where the facts give it: of the functions used as values
 	 * (`values`), only those a value of it may be (`FunctionValueTypes`).
 	 */
-	@:optional var called: Null<String>;
+	@:optional
+	var called: Null<String>;
 
 	/** With `called`, for a site the facts place in its function's own code: the range of the expression whose value is called. */
-	@:optional var calledAt: Null<FactPos>;
+	@:optional
+	var calledAt: Null<FactPos>;
 
 	/**
 	 * For a call of a `dynamic` method the facts name (`pack.Type.field`): of the functions used as values (`values`), only
 	 * those stored into it, where the facts say which (`FunctionValueTypes.storedIn`).
 	 */
-	@:optional var stored: Null<String>;
+	@:optional
+	var stored: Null<String>;
 
 	/** Whether the target code admitted may write the member by its name: a blind spot (`MemberReach.externSite`). */
-	@:optional var blind: Bool;
+	@:optional
+	var blind: Bool;
 
 }
 

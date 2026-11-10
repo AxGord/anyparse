@@ -521,7 +521,8 @@ class MemberReachFactsTest extends Test {
 		+ 'forEachChild(callback:(child:Fs)->Void):Void {\n\t\tif (!folder) return;\n\t\tfinal children:Null<Array<Fs>> = children;\n'
 		+ '\t\tif (children != null) for (child in children) callback(child);\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-FACTS-REACH-EDGES')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-EDGES')
 	public function testTheCompilerResolvesACallTheSyntaxCannot(): Void {
 		// `pick()` declares no return type, so the syntax cannot tell which `grow` runs and admits every one so named; the
 		// facts name `Safe.grow`
@@ -533,7 +534,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, false), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-CONDITIONAL') @:killer('M-FACTS-TRUTH-CONDITIONAL-ALWAYS')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-CONDITIONAL')
+	@:killer('M-FACTS-TRUTH-CONDITIONAL-ALWAYS')
 	public function testABodyHoldingADirectiveIsReadFromTheFactsOfTheListedBuilds(): Void {
 		// `main` holds a directive: a build the list does not name may type it otherwise, so only under the whole list of builds
 		// do the facts, the union of every branch a build takes, name `Safe.grow` for it
@@ -545,7 +548,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], [[], ['other']]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE')
+	@:pin('control')
+	@:killer('M-GRAPH-TRUTH-MUTE')
 	public function testUnderTheWholeListTheSyntaxsEdgeAtASiteTheFactsTypeIsDropped(): Void {
 		// the syntax reads both `using`s and names `Loud.go` for `w.go()` as well as `Quiet.go`, which the compiler picks —
 		// `Loud.go` takes a `String`: `main` is read through its facts either way, but only under the whole list of builds does
@@ -557,7 +561,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-BIND')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-BIND')
 	public function testABoundMethodRunsWheneverItsClosureIsCalled(): Void {
 		// `g.grow.bind(1)` is a closure the compiler makes and the graph holds no node for: calling it runs `Grower.grow`,
 		// which the syntax cannot name — `mk()` declares no return type
@@ -567,14 +572,17 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-ALIKE') @:killer('M-FACTS-TRUTH-CONTEXT-ALWAYS')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-ALIKE')
+	@:killer('M-FACTS-TRUTH-CONTEXT-ALWAYS')
 	public function testACalleeTypedDifferentlyInAnotherBuildKeepsTheSyntax(): Void {
 		// `pick` returns a `Safe` in the build compiled here and a `Grower` in one the list does not name: the facts'
 		// `Safe.grow` answers for this build alone, and the syntax, which cannot type `s`, admits every `grow`
 		assertMatch(ask(['Main.hx' => CALLEE_PER_BUILD]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-CONTEXT')
 	public function testACalleeEveryListedBuildTypesIsReadFromTheirFacts(): Void {
 		// under the whole list of builds no other build exists: the facts of the listed ones name `Safe.grow` alone, and
 		// `Grower.grow` too once one of them defines `other`
@@ -584,14 +592,16 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-GUARDED-NAME')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-GUARDED-NAME')
 	public function testAMemberAnotherBuildDeclaresShadowsAnExtension(): Void {
 		// in a build defining `other`, `W` declares `grow` itself, and `w.grow()` runs it instead of the extension; the syntax,
 		// which cannot type `w`, admits every `grow`
 		assertMatch(ask(['Main.hx' => MEMBER_PER_BUILD]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-CONTEXT')
 	public function testAMemberOnlyAListedBuildDeclaresShadowsAnExtensionThere(): Void {
 		// the extension runs in every listed build, until one of them defines `other` and declares `W.grow` — where no listed
 		// build takes that branch, it is dead code whatever the facts say
@@ -608,7 +618,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => elsewhere], [[], ['other']]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-OVERRIDES')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-OVERRIDES')
 	public function testTheCompilersHierarchyReachesAnOverride(): Void {
 		// `Mutator` extends `Worker` through an alias the name-based hierarchy does not see through: only the facts know the
 		// override a dispatch on `Worker` reaches. The alias is declared once per `#if` branch — a plain `typedef W = Worker`
@@ -620,7 +631,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-VALUE')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-VALUE')
 	public function testACallOfAValueAdmitsTheValueChannel(): Void {
 		// `hook` holds whatever function was stored in it: the call is no edge, but any function used as a value may run
 		final main: String = '$LOOP_HEAD\tstatic var hook:() -> Void = () -> {};\n\tstatic function main() {\n'
@@ -628,14 +640,18 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-SPLICE') @:killer('M-FACTS-TRUTH-SPLICE-ALWAYS')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-SPLICE')
+	@:killer('M-FACTS-TRUTH-SPLICE-ALWAYS')
 	public function testAnInlinedCallKeepsItsBodysSyntax(): Void {
 		// the compiler splices `grow` into `main` at `grow`'s own range: no fact places it in the loop, so `main` is read by
 		// its syntax, which admits every `grow`
 		assertMatch(ask(['Main.hx' => INLINED_GROW]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-TRUTH-SPLICED-SEEDS') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	@:pin('control')
+	@:killer('M-REACH-TRUTH-SPLICED-SEEDS')
+	@:killer('M-GRAPH-FACTS-SPLICED-SITE')
 	public function testUnderTheTruthAnInlinedCallIsReachedThroughItsEdge(): Void {
 		// under the whole list of builds `main` is read through its facts, the splice of `grow` among them: they place its
 		// `inlined` call at `grow`, not in the loop, so it is `main`'s wherever the region lies in it — the edge to `grow`,
@@ -643,7 +659,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => INLINED_GROW]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-SPLICE') @:killer('M-FACTS-SPLICED-WITHIN') @:killer('M-FACTS-TRUTH-SITES-SPLICED')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-SPLICE')
+	@:killer('M-FACTS-SPLICED-WITHIN')
+	@:killer('M-FACTS-TRUTH-SITES-SPLICED')
 	public function testUnderTheTruthAnInlineConversionIsItsEdgeAlone(): Void {
 		// the `inline` `@:from` of `Quiet` is spliced into `main`, which its syntax alone does not spell: read by its syntax,
 		// `main` admits every conversion in play, `Loud`'s that changes `items` among them. Under the whole list of builds its
@@ -653,14 +672,17 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-TRUTH-SPLICED-SEEDS') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	@:pin('control')
+	@:killer('M-REACH-TRUTH-SPLICED-SEEDS')
+	@:killer('M-GRAPH-FACTS-SPLICED-SITE')
 	public function testUnderTheTruthAnInlineConversionThatChangesTheMemberIsReached(): Void {
 		// the facts place the spliced conversion at `Quiet.of`, not in the region: the region runs it all the same
 		final main: String = inlineConversion('{\n\t\tMain.items.push(1);\n\t\treturn cast s;\n\t}');
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	@:pin('control')
+	@:killer('M-GRAPH-FACTS-SPLICED-SITE')
 	public function testUnderTheTruthAnEdgeSplicedFromAnotherFileIsNoSiteOfItsCaller(): Void {
 		// `Helper.grow` is spliced into `run` at `Helper.hx`'s ranges, which in `Main.hx` fall in a branch no build compiles: an
 		// edge filed under `Main.hx` at such a range would be read as dead code there, and `run` as running nothing
@@ -673,7 +695,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main, 'Helper.hx' => helper]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FACTS-SPLICED-SITE') @:killer('M-GRAPH-FACTS-SPLICED-FILE') @:killer('M-FACTS-TRUTH-SPLICE')
+	@:pin('control')
+	@:killer('M-GRAPH-FACTS-SPLICED-SITE')
+	@:killer('M-GRAPH-FACTS-SPLICED-FILE')
+	@:killer('M-FACTS-TRUTH-SPLICE')
 	@:access(anyparse.query.MemberReach)
 	public function testAFunctionSplicedFromAnotherFileIsTheNodeItsCalleeDeclares(): Void {
 		// `Lib.wrap` is spliced into `run`, lambda and all, at `Lib.hx`'s ranges: the edges carry no site of `Main.hx`, and the
@@ -701,7 +726,10 @@ class MemberReachFactsTest extends Test {
 		Assert.isTrue(edges.exists(e -> e.to != 'Lib.wrap' && e.file == 'Lib.hx' && e.kind == 'ref' && !e.placed), 'no lambda: $edges');
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-SPLICE') @:killer('M-FACTS-TRUTH-HAZARDS-SPLICED') @:killer('M-FACTS-SPLICED-WITHIN')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-SPLICE')
+	@:killer('M-FACTS-TRUTH-HAZARDS-SPLICED')
+	@:killer('M-FACTS-SPLICED-WITHIN')
 	public function testUnderTheTruthUntypedCodeBesideAnInlinedCallIsReadThroughTheFacts(): Void {
 		// `h` is spliced into `f` at `h`'s own range: under the whole list of builds `f` is read through its facts all the same,
 		// which record the untyped field read beside it
@@ -711,7 +739,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICED-WITHIN-UNPLACED') @:killer('M-FACTS-TRUTH-SITES-SPLICED') @:killer('M-FACTS-SPLICED-WITHIN')
+	@:pin('control')
+	@:killer('M-FACTS-SPLICED-WITHIN-UNPLACED')
+	@:killer('M-FACTS-TRUTH-SITES-SPLICED')
+	@:killer('M-FACTS-SPLICED-WITHIN')
 	public function testUnderTheTruthASplicedStringConversionIsTheRegions(): Void {
 		// `b.add(o)` splices `StringBuf.add`, whose `+=` converts `o` to a string: the facts place that conversion in
 		// `StringBuf.hx`, and the region runs it — `Obj.toString` changes `items`
@@ -721,7 +752,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION-INLINED') @:killer('M-FACTS-SPLICED-REFLECTION-NAMED')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-REFLECTION-INLINED')
+	@:killer('M-FACTS-SPLICED-REFLECTION-NAMED')
 	public function testUnderTheTruthAnInlinedReflectiveCallIsADynamicName(): Void {
 		// `sf` is `Reflect.setField`, `inline` on js: its splice leaves no reflective call among the facts, and the syntax
 		// does not see one under another name
@@ -730,8 +763,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICE-HARMLESS') @:killer('M-GRAPH-FACTS-SPLICE-HARMLESS')
-	@:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-BODY')
+	@:pin('control')
+	@:killer('M-FACTS-SPLICE-HARMLESS')
+	@:killer('M-GRAPH-FACTS-SPLICE-HARMLESS')
+	@:killer('M-FACTS-SPLICE-SITE')
+	@:killer('M-FACTS-SPLICE-BODY')
 	public function testUnderTheTruthWhatAPureLibraryCallSplicedInIsNoneOfTheRegions(): Void {
 		// `Std.parseFloat` is `inline` on js, its body a `js.Syntax.code`, and so is `StringTools.fastCodeAt`, its body a call
 		// of `charCodeAt` off a structure: each splice is a call of a function that runs no project code, whose edge answers
@@ -750,8 +786,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => named], null, true, member, false, null, null, null, true, STD_STD), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLICED-SITES') @:killer('M-GRAPH-FACTS-SPLICE-TAG') @:killer('M-GRAPH-FACTS-INLINED-SITE')
-	@:killer('M-FACTS-SPLICE-SITE') @:killer('M-FACTS-SPLICE-SITE-INNERMOST') @:killer('M-FACTS-SPLICE-BODY')
+	@:pin('control')
+	@:killer('M-REACH-SPLICED-SITES')
+	@:killer('M-GRAPH-FACTS-SPLICE-TAG')
+	@:killer('M-GRAPH-FACTS-INLINED-SITE')
+	@:killer('M-FACTS-SPLICE-SITE')
+	@:killer('M-FACTS-SPLICE-SITE-INNERMOST')
+	@:killer('M-FACTS-SPLICE-BODY')
 	public function testUnderTheTruthASpliceElsewhereInTheFunctionIsNoneOfTheRegions(): Void {
 		// the `inline` `@:from` of `Quiet` that changes `items` is spliced into `main` before the loop: it runs where its call
 		// stood, which the region does not hold. Read by its syntax, `main` admits every conversion in play
@@ -762,7 +803,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLICED-BENIGN') @:killer('M-REACH-SPLICED-CULPRIT') @:killer('M-REACH-WHERE-WRITTEN-RANGE')
+	@:pin('control')
+	@:killer('M-REACH-SPLICED-BENIGN')
+	@:killer('M-REACH-SPLICED-CULPRIT')
+	@:killer('M-REACH-WHERE-WRITTEN-RANGE')
 	@:killer('M-GRAPH-FACTS-SPLICE-TAG')
 	public function testUnderTheTruthASplicedPushOnAFreshLocalOfItsMethodChangesNothingShared(): Void {
 		// `Helper.count` is spliced into the region, and into `tally`, which the region calls: the array its body pushes to is
@@ -778,21 +822,24 @@ class MemberReachFactsTest extends Test {
 		assertMatch(askLocal(['Main.hx' => run('tally(xs[i])')], 'xs'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-LOCAL-INLINE')
+	@:pin('control')
+	@:killer('M-GRAPH-LOCAL-INLINE')
 	public function testALocalInlineFunctionKeepsItsBodysSyntax(): Void {
 		// a local `inline function` is spliced at its own declaration inside the same body, where no marker says so: its
 		// syntax is a function of its own, though the grammar gives it a kind apart from a local one, and the call is its edge
 		assertMatch(ask(['Main.hx' => LOCAL_INLINE]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE-UNTYPED')
+	@:pin('control')
+	@:killer('M-GRAPH-TRUTH-MUTE-UNTYPED')
 	public function testUnderTheWholeListTheCallOfALocalInlineFunctionKeepsItsEdge(): Void {
 		// `main` is read through its facts, and the compiler types nothing at `helper()`, whose body it splices where it is
 		// declared: the syntax's edge there is the only thing that says the call runs it
 		assertMatch(ask(['Main.hx' => LOCAL_INLINE], null, true, null, false, null, null, null, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-NESTED-OWNER')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-NESTED-OWNER')
 	public function testAFunctionWithoutFactsOfItsOwnIsNotReadThroughANestedOnes(): Void {
 		// the compiler types a local `inline function` into its caller: the only function body inside its text is the
 		// lambda it hands on, whose facts say nothing of the `g.grow()` beside it, which the syntax admits by name
@@ -803,7 +850,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-ESCAPE-TYPED')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-ESCAPE-TYPED')
 	public function testAnEscapeTheCompilerTypesCostsOnlyItsOwnFamily(): Void {
 		// `mk()` returns an `Other` into a `Dynamic`: the syntax cannot type it and so lets any instance anywhere, the facts
 		// say an `Other` escaped — which a `C` never is, so `poke` reaches no `C`'s `items`
@@ -830,8 +878,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, c, true, null, null, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-TRUTH-FACTS')
-	@:killer('M-ESCAPES-FACTS-REFLECTION-INLINED') @:killer('M-FACTS-ALIAS-TYPEDEF') @:killer('M-FACTS-IMPLICIT-EXTERN') @:killer('M-REACH-TEXT-EXTERN-INLINE')
+	@:pin('control')
+	@:killer('M-ESCAPES-TRUTH-FACTS')
+	@:killer('M-ESCAPES-FACTS-REFLECTION-INLINED')
+	@:killer('M-FACTS-ALIAS-TYPEDEF')
+	@:killer('M-FACTS-IMPLICIT-EXTERN')
+	@:killer('M-REACH-TEXT-EXTERN-INLINE')
 	public function testEscapesReadOffEveryBuildsFactsLetAThrownValueRunOnlyItsOwnToString(): Void {
 		// `lib.Text.fail` throws a `Plain` it holds, whose conversion runs the `toString` of what a `Plain` may be: a
 		// `Plain`, or an instance that left the type system. `Obj` never did: `Text.keep` is library code the facts read,
@@ -840,12 +892,15 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(escapingObj(''), null, true, null, true, null, plainText('throw last;')), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-FLOW')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-FLOW')
 	public function testAValueFlowingIntoACatchAllEscapesUnderTheTruth(): Void {
 		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw last;'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-INSTANCES') @:killer('M-ESCAPES-FACTS-PARAMETER')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-INSTANCES')
+	@:killer('M-ESCAPES-FACTS-PARAMETER')
 	public function testAValueAGenericClassLetsGoEscapesUnderTheTruth(): Void {
 		// `Box<Obj>` binds `Box.T` to `Obj`, whose values `show` hands to a catch-all
 		final box: String = 'class Box<T> {\n\tvar v:T;\n\n\tpublic function new(v:T) this.v = v;\n\n'
@@ -853,32 +908,39 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('new Box<Obj>(o).show();', 'throw last;', ['Box.hx' => box]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-GENERIC-METHOD') @:killer('M-FACTS-GENS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-GENERIC-METHOD')
+	@:killer('M-FACTS-GENS')
 	public function testAValueAGenericMethodLetsGoEscapesUnderTheTruth(): Void {
 		// the call binds `keep`'s `A` to `Obj`, whose value its body hands to a catch-all
 		final pick: String = 'class Pick {\n\tpublic static function keep<A>(x:A):Void {\n\t\tvar d:Dynamic = x;\n\t}\n}\n';
 		assertMatch(truthLibAsk('Pick.keep(o);', 'throw last;', ['Pick.hx' => pick]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-HANDED') @:killer('M-FACTS-HANDS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-HANDED')
+	@:killer('M-FACTS-HANDS')
 	public function testAValueHandedToAnExternEscapesUnderTheTruth(): Void {
 		// target code, which no fact describes, may keep what it is handed and give it back untyped
 		final ext: String = '@:native("Object") extern class Ext {\n\tstatic function keep(o:Main.Obj):Void;\n}\n';
 		assertMatch(truthLibAsk('Ext.keep(o);', 'throw last;', ['Ext.hx' => ext]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-CLOSURE')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-CLOSURE')
 	public function testTheReceiverOfAMethodReadAsAValueEscapesUnderTheTruth(): Void {
 		assertMatch(truthLibAsk('var f:() -> String = o.toString;', 'throw last;'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-DYNAMIC-RECEIVER')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-DYNAMIC-RECEIVER')
 	public function testTheReceiverOfAFieldReachedByNameEscapesUnderTheTruth(): Void {
 		// untyped code reads a field of `o` by a name no declaration resolves: any of its fields may be what it reads
 		assertMatch(truthLibAsk('var u:Dynamic = untyped o.zz;', 'throw last;'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-PRODUCED')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-PRODUCED')
 	public function testAClassAProducerNamesEscapesUnderTheTruth(): Void {
 		// `js_enums_as_arrays` keeps `Type.resolveClass` a call (its default is inlined, which loses the name): the class a literal
 		// name names escapes, and only that one
@@ -890,7 +952,9 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-ANY') @:killer('M-ESCAPES-FACTS-DECLARED-NONE')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-DECLARED-ANY')
+	@:killer('M-ESCAPES-FACTS-DECLARED-NONE')
 	@:killer('M-ESCAPES-FACTS-DECLARED-PRODUCED')
 	public function testAClassAComputedNameMakesIsOneTheProjectDeclaresUnderTheTruth(): Void {
 		// a name computed at run time makes a class value of any class, unless the project declares which ones it may be
@@ -904,7 +968,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('Type.resolveClass("Obj");', 'throw last;', null, build, ['lib.*']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-PRODUCED') @:killer('M-ESCAPES-FACTS-DECLARED-READER')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-DECLARED-PRODUCED')
+	@:killer('M-ESCAPES-FACTS-DECLARED-READER')
 	public function testAProducerReadAsAValueMakesOnlyADeclaredClassUnderTheTruth(): Void {
 		// a producer read as a value, or the class declaring one, is handed names the facts cannot read
 		final build: String = '$BUILD-D js_enums_as_arrays\n';
@@ -916,7 +982,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk(reader, 'throw last;', null, build, ['lib.*']), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-DECLARED-SUBTYPES') @:killer('M-GLOB-QUALIFIED-SEGMENT')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-DECLARED-SUBTYPES')
+	@:killer('M-GLOB-QUALIFIED-SEGMENT')
 	public function testADeclaredGlobMatchesTheClassItselfByItsQualifiedNameUnderTheTruth(): Void {
 		// `lib.Base` declared lets no subtype of it be made by a computed name: `Holder`, which holds `o`, is matched by its
 		// own name; a star stays within one segment, so `lib.deep.*` matches no `lib.deep.inner.Keeper`, and a double star does
@@ -933,7 +1001,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk(computed, 'throw last;', more, build, ['lib.deep.**']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLICE-ONLY') @:killer('M-FACTS-INLINED-EDGE')
+	@:pin('control')
+	@:killer('M-REACH-SPLICE-ONLY')
+	@:killer('M-FACTS-INLINED-EDGE')
 	public function testAnInlinedGenericBodyConvertsOnlyWhatEachCallHandsItUnderTheTruth(): Void {
 		// `Buf.put` converts its `T`, which may be any escaped object; spliced into `Text.fail` it converts what that call hands
 		// it: a string converts nothing, an `Obj` runs its `toString`
@@ -951,7 +1021,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk(escaped, 'new Buf().put("y");\n\t\t\tLater.run();', later), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-SPLICE-EXTERNAL')
+	@:pin('control')
+	@:killer('M-REACH-SPLICE-EXTERNAL')
 	@:access(anyparse.query.MemberReach)
 	public function testAnInlinedLibraryBodyReadOnDemandStaysSplicedInUnderTheTruth(): Void {
 		// `lib.Buf` is library code the walk reads only once a call reaches it: the declaration it reads then is the body the
@@ -966,21 +1037,26 @@ class MemberReachFactsTest extends Test {
 		assertMatch(result, r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-REFUSED')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-REFUSED')
 	public function testTargetCodeNamingNoValueLetsNothingEscapeUnderTheTruth(): Void {
 		// target code reaches only what it is handed: project code holding some leaves the escapes known
 		assertMatch(truthLibAsk('js.Syntax.code("console.log(1)");', 'throw last;'), r -> r.match(Proven));
 		assertMatch(truthLibAsk('js.Syntax.code("console.log({0})", 1);', 'throw last;'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-LOCALS') @:killer('M-FACTS-NATIVE-CODE')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-LOCALS')
+	@:killer('M-FACTS-NATIVE-CODE')
 	public function testTargetCodeHandedAValueLetsItEscapeUnderTheTruth(): Void {
 		// an argument the code's placeholder takes, and a local its text names
 		assertMatch(truthLibAsk('js.Syntax.code("console.log({0})", o);', 'throw last;'), r -> !r.match(Proven));
 		assertMatch(truthLibAsk('var kept:Obj = o;\n\t\tjs.Syntax.code("console.log(kept)");', 'throw last;'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-THIS') @:killer('M-ESCAPES-FACTS-NATIVE-MEMBERS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-THIS')
+	@:killer('M-ESCAPES-FACTS-NATIVE-MEMBERS')
 	@:killer('M-ESCAPES-FACTS-NATIVE-THIS-ALWAYS')
 	public function testTargetCodeNamingThisLetsItsObjectEscapeUnderTheTruth(): Void {
 		// a `Holder` holds `o`: code in its method naming `this`, or a member hxcpp reaches unqualified, hands it; code naming
@@ -996,7 +1072,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('console.log(1)')), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-STATICS') @:killer('M-ESCAPES-FACTS-NATIVE-OWN-STATICS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-STATICS')
+	@:killer('M-ESCAPES-FACTS-NATIVE-OWN-STATICS')
 	@:killer('M-ESCAPES-FACTS-NATIVE-STATIC-CLASS')
 	public function testTargetCodeNamingAStaticLetsWhatItHoldsEscapeUnderTheTruth(): Void {
 		// a static is named by its name beside its class's, or alone in its own class's code
@@ -1013,7 +1091,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('Store.kept = o;\n\t\tjs.Syntax.code("console.log(kept)");', 'throw last;', quiet), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-CODE-META') @:killer('M-FACTS-CODE-META') @:killer('M-ESCAPES-FACTS-NATIVE-COMPUTED')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-CODE-META')
+	@:killer('M-FACTS-CODE-META')
+	@:killer('M-ESCAPES-FACTS-NATIVE-COMPUTED')
 	public function testTargetCodeAMetadataPastesIsReadLikeACallsUnderTheTruth(): Void {
 		// `@:functionCode` pastes its text around the method's body: naming `this` hands it, and a text no literal gives may
 		// name anything
@@ -1028,7 +1109,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('new Holder(o).show();', 'throw last;', holder('"1"')), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-LOCALS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-LOCALS')
 	@:access(anyparse.query.MemberReach)
 	public function testLibraryTargetCodeIsReadLikeTheProjectsUnderTheTruth(): Void {
 		// `keep`'s code names its parameter, which the call binds to an `Obj`: one assumption for the libraries and the project
@@ -1044,13 +1126,16 @@ class MemberReachFactsTest extends Test {
 		assertMatch(result, r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-NATIVE-REFUSED') @:killer('M-ESCAPES-TRUTH-FACTS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-NATIVE-REFUSED')
+	@:killer('M-ESCAPES-TRUTH-FACTS')
 	public function testATraceTheTargetLowersLetsOnlyWhatItIsHandedEscapeUnderTheTruth(): Void {
 		// js lowers `trace` to a native identifier, which makes nothing: the escapes stay known
 		assertMatch(truthLibAsk('trace(1);', 'throw last;'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-EXTENDS-EXTERN')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-EXTENDS-EXTERN')
 	public function testAnInstanceOfAClassExtendingAnExternEscapesUnderTheTruth(): Void {
 		// the extern's target code runs with a `Kid` as its own `this`
 		final kid: String = '@:native("Object") extern class ExtBase {\n\tfunction new();\n}\n\nclass Kid extends ExtBase {\n'
@@ -1058,8 +1143,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('var k:Kid = new Kid();', 'throw last;', ['Kid.hx' => kid]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-FIELDS') @:killer('M-ESCAPES-FACTS-ENUM') @:killer('M-ESCAPES-FACTS-STRUCTURE')
-	@:killer('M-ESCAPES-FACTS-PLACE-ARGS') @:killer('M-ESCAPES-FACTS-TYPE-ARGS')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-FIELDS')
+	@:killer('M-ESCAPES-FACTS-ENUM')
+	@:killer('M-ESCAPES-FACTS-STRUCTURE')
+	@:killer('M-ESCAPES-FACTS-PLACE-ARGS')
+	@:killer('M-ESCAPES-FACTS-TYPE-ARGS')
 	public function testWhatAnEscapedValueHoldsEscapesWithItUnderTheTruth(): Void {
 		// code holding an object without a type reaches what it holds by name: a variable, an enum value's argument, a
 		// structure's field, an element of an array handed on as one of catch-alls, the value of a box handed on as a box of
@@ -1078,7 +1167,8 @@ class MemberReachFactsTest extends Test {
 		]) assertMatch(truthLibAsk(escape, 'throw last;', held), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-SUBTYPES')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-SUBTYPES')
 	public function testAnEscapedValueMayBeAnyOfItsSubtypesUnderTheTruth(): Void {
 		// a `Base` escaped, which a `Kid` may be
 		final kid: Map<String, String> = [
@@ -1089,7 +1179,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('var b:Base = new Kid();\n\t\tvar d:Dynamic = b;', 'throw last;', kid), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-ABSTRACT-REFUSED')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-ABSTRACT-REFUSED')
 	public function testACoreTypeAsAValueHoldsNothingUnderTheTruth(): Void {
 		// the interpreter hands `Int` itself to `Std.isOfType`, typed `Abstract<Int>`: a core type with no implementation class
 		// holds no static, so the escapes stay known
@@ -1097,8 +1188,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk(isInt, 'throw last;', null, INTERP_BUILD), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-STRING-EXACT') @:killer('M-FACTS-VIEW-EXACT')
-	@:killer('M-FACTS-VIEW-EXACT-CONVERSION') @:killer('M-FACTS-EXACT-WRITTEN')
+	@:pin('control')
+	@:killer('M-FACTS-STRING-EXACT')
+	@:killer('M-FACTS-VIEW-EXACT')
+	@:killer('M-FACTS-VIEW-EXACT-CONVERSION')
+	@:killer('M-FACTS-EXACT-WRITTEN')
 	@:killer('M-FACTS-CALL-OPERAND-EXACT')
 	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderTheTruth(): Void {
 		// `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is — thrown from a local holding
@@ -1109,7 +1203,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('var d:Dynamic = o;', 'throw "" + (failing ? new Plain() : last);'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-EXACT-SITE')
+	@:pin('control')
+	@:killer('M-REACH-EXACT-SITE')
 	public function testAFreshObjectConvertedRunsOnlyItsOwnClassToStringUnderFactsThatAreNotTheTruth(): Void {
 		// with no whole list of builds the facts are no truth, so the site they keep reads no typed owner: its operands' types
 		// answer. `Obj` escaped, so a `Plain` read from a place may be one; a `Plain` just built never is
@@ -1125,7 +1220,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('var p:Plain = new Plain();\n\t\tp = last;\n\t\tthrow p;'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-THROW-EXCEPTION')
+	@:pin('control')
+	@:killer('M-FACTS-THROW-EXCEPTION')
 	public function testAThrownExceptionIsConvertedToNoString(): Void {
 		// the exception wrapping throws an instance of a class extending `haxe.Exception` as it is: `Err.toString` never runs
 		final err: String = 'class Err extends haxe.Exception {\n\toverride public function toString():String {\n'
@@ -1133,7 +1229,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthLibAsk('', 'var e:Err = new Err("x");\n\t\tthrow e;', ['Err.hx' => err]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-TOUCH-TYPED')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-TOUCH-TYPED')
 	public function testATouchThroughAnInferredReceiverIsTypedByTheCompiler(): Void {
 		// `o` declares no type: the syntax cannot tell whose `items` `poke` grows, the facts say an `Other`'s
 		final main: String = 'class Main {\n\tstatic function main() {\n\t\tnew C().loop();\n\t}\n}\n'
@@ -1145,7 +1242,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, c, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-MACRO')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-MACRO')
 	public function testAMacroExpansionIsUnknown(): Void {
 		// the expansion of `Mac.gen()` grows `items` in code no fact and no syntax names
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Mac.gen(); /*>*/ }\n\t}\n}\n';
@@ -1153,7 +1251,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main, 'Mac.hx' => mac]), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-EXPANSION-CODE') @:killer('M-FACTS-WITHIN-EXPANSION-NULL')
+	@:pin('control')
+	@:killer('M-TOUCH-EXPANSION-CODE')
+	@:killer('M-FACTS-WITHIN-EXPANSION-NULL')
 	public function testAMacroExpansionRunsItsTypedCodeAtItsCallUnderTheTruth(): Void {
 		// every build compiled what `Mac.gen()` expanded to: its facts, at `Mac.hx`'s positions, run where the call was — in
 		// `Util.f`, which the region calls, and in the region itself; so does the conversion of `Main.obj` `Mac.show()` builds
@@ -1166,7 +1266,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => shown, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => WORDS]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-EXPANSION-PLACED') @:killer('M-FACTS-EXPANSION-BLIND')
+	@:pin('control')
+	@:killer('M-FACTS-EXPANSION-PLACED')
+	@:killer('M-FACTS-EXPANSION-BLIND')
 	@:killer('M-GRAPH-FACTS-EXPANSION-CALL')
 	public function testAMacroExpansionIsAnsweredFromItsFactsUnderTheTruth(): Void {
 		// the client's `t('…')`: the expansion calls `Words.tr`, which changes nothing — and, in the twin, `Loud.tr`, which does
@@ -1181,8 +1283,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => quiet, 'Mac.hx' => EXPRESSION_MACROS, 'Words.hx' => loud]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-WITHIN-EXPANSION')
-	@:killer('M-GRAPH-FACTS-EXPANSION-SITE') @:killer('M-FACTS-EXPANSION-SPLICE-SITES') @:killer('M-TOUCH-EXPANSION-RUNS')
+	@:pin('control')
+	@:killer('M-FACTS-WITHIN-EXPANSION')
+	@:killer('M-GRAPH-FACTS-EXPANSION-SITE')
+	@:killer('M-FACTS-EXPANSION-SPLICE-SITES')
+	@:killer('M-TOUCH-EXPANSION-RUNS')
 	@:killer('M-FACTS-WALK-BLOCK-GAP')
 	public function testAMacroExpansionRunsWhereItsCallIsUnderTheTruth(): Void {
 		// each expansion lies before the loop, in `main`'s own code or in the code of the inlined `Shown.mask`: what it does —
@@ -1201,7 +1306,9 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FACTS-VALUE-CALLED') @:killer('M-REACH-VALUE-CALLED')
+	@:pin('control')
+	@:killer('M-GRAPH-FACTS-VALUE-CALLED')
+	@:killer('M-REACH-VALUE-CALLED')
 	public function testACallOfAParameterRunsOnlyTheFunctionsItsInvocationsHandItUnderTheTruth(): Void {
 		// `Rx.map` calls its parameter `f`, which its one invocation hands `x -> "a"`: the stored `(Rx)->String` that grows
 		// `items` is never `f` — although a computed name reads a member off a value of no class, which an `Rx` never is
@@ -1209,8 +1316,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => matching(read)]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-ARG-WRITTEN') @:killer('M-VALUE-ARG-ESCAPED') @:killer('M-VALUE-ARG-SUPERTYPES')
-	@:killer('M-VALUE-ARG-COUNT') @:killer('M-VALUE-ARG-LAMBDA')
+	@:pin('control')
+	@:killer('M-VALUE-ARG-WRITTEN')
+	@:killer('M-VALUE-ARG-ESCAPED')
+	@:killer('M-VALUE-ARG-SUPERTYPES')
+	@:killer('M-VALUE-ARG-COUNT')
+	@:killer('M-VALUE-ARG-LAMBDA')
 	public function testACallOfAParameterOfAMethodInvokedOtherwiseRunsWhatItsTypeAdmits(): Void {
 		// the stored `(Rx)->String` may be `f` once an `Rx` that left the type system has `map` called by its name with it, once
 		// `map` is read as a value, once an invocation — of `map`, or of the `Base.map` it overrides — hands `f` something else,
@@ -1233,8 +1344,12 @@ class MemberReachFactsTest extends Test {
 		for (main in reached) assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-ARG-ESCAPED') @:killer('M-VALUE-UNTYPED-VALUE-READ') @:killer('M-VALUE-UNTYPED-CALLS')
-	@:killer('M-VALUE-UNTYPED-ACCESS-UNKNOWN') @:killer('M-VALUE-UNTYPED-NATIVE')
+	@:pin('control')
+	@:killer('M-VALUE-ARG-ESCAPED')
+	@:killer('M-VALUE-UNTYPED-VALUE-READ')
+	@:killer('M-VALUE-UNTYPED-CALLS')
+	@:killer('M-VALUE-UNTYPED-ACCESS-UNKNOWN')
+	@:killer('M-VALUE-UNTYPED-NATIVE')
 	public function testAParameterOfAMethodOfAnEscapedObjectHoldsWhatItsCallsByNameHandItUnderTheTruth(): Void {
 		// `Rx.rework` calls its parameter `f`: an `Rx` left the type system, so `rework` may be called by its name too — off a
 		// value of no class, a structure, by target code naming it — but no such call is written, or the one there hands `f` a
@@ -1279,8 +1394,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => fixture(escaped)]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-VALUE-STORED') @:killer('M-GRAPH-FACTS-VALUE-STORED') @:killer('M-VALUE-CTOR-ARITY')
-	@:killer('M-VALUE-STORED-COMPUTED') @:killer('M-VALUE-ESCAPED-ONLY') @:killer('M-VALUE-CTOR-REFLECTIVE-CLASS')
+	@:pin('control')
+	@:killer('M-REACH-VALUE-STORED')
+	@:killer('M-GRAPH-FACTS-VALUE-STORED')
+	@:killer('M-VALUE-CTOR-ARITY')
+	@:killer('M-VALUE-STORED-COMPUTED')
+	@:killer('M-VALUE-ESCAPED-ONLY')
+	@:killer('M-VALUE-CTOR-REFLECTIVE-CLASS')
 	public function testACallOfADynamicMethodRunsOnlyTheValuesStoredIntoItUnderTheTruth(): Void {
 		// `Pool.release` calls its `dynamic` `clean`, which only `Pool`'s constructor stores into, from its parameter: every
 		// construction hands it nothing, a function expression, or one of an arity no `(Int)->Void` has (`make`'s), so
@@ -1311,9 +1431,17 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => poolFixture('null, x -> {}', '')]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-VALUE-STORED-UNTYPED') @:killer('M-VALUE-STORED-NATIVE') @:killer('M-VALUE-CTOR-REFLECTIVE')
-	@:killer('M-VALUE-ESCAPED-SENTINEL') @:killer('M-VALUE-STORED-WRITES') @:killer('M-VALUE-STORED-OWN') @:killer('M-VALUE-CTOR-SUBTYPES')
-	@:killer('M-VALUE-CTOR-ARGUMENT') @:killer('M-VALUE-CTOR-SKIPPED') @:killer('M-VALUE-CTOR-REFLECTIVE-ARGS')
+	@:pin('control')
+	@:killer('M-VALUE-STORED-UNTYPED')
+	@:killer('M-VALUE-STORED-NATIVE')
+	@:killer('M-VALUE-CTOR-REFLECTIVE')
+	@:killer('M-VALUE-ESCAPED-SENTINEL')
+	@:killer('M-VALUE-STORED-WRITES')
+	@:killer('M-VALUE-STORED-OWN')
+	@:killer('M-VALUE-CTOR-SUBTYPES')
+	@:killer('M-VALUE-CTOR-ARGUMENT')
+	@:killer('M-VALUE-CTOR-SKIPPED')
+	@:killer('M-VALUE-CTOR-REFLECTIVE-ARGS')
 	public function testACallOfADynamicMethodRunsAnyValueWhenAStoreIsNotKnown(): Void {
 		// `grow` may be `clean` once it is stored into it directly, through a `Dynamic`, by reflection — by a literal name or a
 		// computed one —, by a construction, reflective or through a subclass's `super`, or by `set` spliced in at a call that
@@ -1347,7 +1475,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => other], [[], ['other']], true, null, false, null, null, null, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-CTOR-ROUTE')
+	@:pin('control')
+	@:killer('M-VALUE-CTOR-ROUTE')
 	public function testACallOfAConstructorParameterRunsWhatItsConstructionsHandIt(): Void {
 		// `Runner`'s constructor calls its parameter `f`, which the region's construction hands `keep`, holding `grow`: a
 		// constructor is invoked by a `new`, which no call fact records — and once the one construction hands it a function
@@ -1360,7 +1489,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => quiet]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FUNCTION-FLOW-TYPED')
+	@:pin('control')
+	@:killer('M-ESCAPES-FUNCTION-FLOW-TYPED')
 	public function testACallOfAFunctionValueRunsOnlyTheFunctionsItsTypeAdmitsUnderTheTruth(): Void {
 		// `h`, a local `(Rx)->String`, holds what `map` is handed: the stored callback that grows `items` cannot be it — it
 		// returns nothing, takes a `String`, which an `Rx` is not, takes two arguments, or is a `(Base)->Void` stored where a
@@ -1374,7 +1504,8 @@ class MemberReachFactsTest extends Test {
 		for (main in proven) assertMatch(interpAsk(['Main.hx' => main]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-TYPE-FLOWS')
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-FLOWS')
 	public function testACallOfAFunctionValueRunsAFunctionOfAMatchingType(): Void {
 		// the stored callback is a `(Rx)->String` itself, which any place of that type may hold — `h` among them — or one taking
 		// what an `Rx` is, which the region hands `map`
@@ -1385,7 +1516,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => wider]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-VALUE-TYPE-GENERIC') @:killer('M-VALUE-TYPE-BIND')
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-GENERIC')
+	@:killer('M-VALUE-TYPE-BIND')
 	public function testACallOfAFunctionValueRunsWhatAnInitializerABindOrAGenericBodyHandsIt(): Void {
 		// a field's initializer stores `Grower.put`, a `(Grower)->Void`, in
 		// a `Dynamic`; `Grower.grow.bind(1)` is a `(Rx)->String` that runs
@@ -1406,7 +1539,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => generic]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-TYPE-ESCAPED') @:killer('M-ESCAPES-FUNCTION-RECORDED')
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-ESCAPED')
+	@:killer('M-ESCAPES-FUNCTION-RECORDED')
 	public function testACallOfAFunctionValueRunsAFunctionValueThatEscaped(): Void {
 		// the `(String)->Void` callback is put in a `Dynamic`, or held by a `Holder` that is: from there it may be handed
 		// anywhere, `h` included
@@ -1423,7 +1558,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => held]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-HOLD-CLASSLESS')
+	@:pin('control')
+	@:killer('M-METHODS-HOLD-CLASSLESS')
 	public function testAMethodOfAnObjectThatNeverEscapedIsNoValueAComputedNameReads(): Void {
 		// a name computed at run time reads a member off a value of no class: `Quiet.grow` is none of its, a `Quiet` never
 		// leaving the type system — and once one does, it may be, and `h` may run it
@@ -1435,7 +1571,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => left]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-TYPE-UNTYPED') @:killer('M-ADMIT-OBTAINED') @:killer('M-REACH-READ-BY-NAME')
+	@:pin('control')
+	@:killer('M-VALUE-TYPE-UNTYPED')
+	@:killer('M-ADMIT-OBTAINED')
+	@:killer('M-REACH-READ-BY-NAME')
 	public function testACallOfAFunctionValueRunsAMethodReadByAName(): Void {
 		// `Grower.grow`, a `(String)->Void`, is read by its name off a value of no type and stored as the `(Rx)->String` the
 		// region hands `Rx.map`: `h` is that method
@@ -1448,7 +1587,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-HOLDERS-DECLARED') @:killer('M-METHODS-HOLDERS-OBTAINED')
+	@:pin('control')
+	@:killer('M-METHODS-HOLDERS-DECLARED')
+	@:killer('M-METHODS-HOLDERS-OBTAINED')
 	@:killer('M-HOLDERS-GRAPH')
 	public function testAMethodAComputedNameReadsIsOneOfAClassTheProjectDeclaresUnderTheTruth(): Void {
 		// `Grower.grow` read off a value of no type by a name computed at run time may be any method of any escaped object,
@@ -1469,7 +1610,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => named], null, ['Rx']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-HOLDERS-OWN-NAME')
+	@:pin('control')
+	@:killer('M-METHODS-HOLDERS-OWN-NAME')
 	public function testADeclaredMethodHolderIsMatchedByTheClassOfTheObjectItselfUnderTheTruth(): Void {
 		// the object read is exactly a `Grower`: declaring its subclass `Sub`, which inherits `grow`, declares no `Grower` —
 		// each class is declared by its own name
@@ -1481,7 +1623,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => main], null, ['Grower']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-HOLDERS-VALUE')
+	@:pin('control')
+	@:killer('M-METHODS-HOLDERS-VALUE')
 	public function testAReflectiveMemberReadAsAValueObtainsOnlyADeclaredClassesMethodsUnderTheTruth(): Void {
 		// `f` is `Reflect.field`: whatever calls it hands it a name computed there, so it may obtain any method — or one of a
 		// class the project declares
@@ -1494,7 +1637,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => main], null, ['Grower']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-HOLDERS-SELF') @:killer('M-METHODS-HOLDERS-REBIND')
+	@:pin('control')
+	@:killer('M-METHODS-HOLDERS-SELF')
+	@:killer('M-METHODS-HOLDERS-REBIND')
 	public function testAThisNoDeclaredClassLetsAComputedNameObtainIsBoundByItsDispatchUnderTheTruth(): Void {
 		// on js `Type.createEnum` rebinds a function's `this`, and `dump` reads its own object by the name it is handed: that
 		// may obtain `dump` itself, so `this` may be any object — unless `Other` is no class the project declares; on the
@@ -1511,7 +1656,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => rebinding], true, ['Other']), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-METHODS-MEMBERLESS-RESULT')
+	@:pin('control')
+	@:killer('M-METHODS-MEMBERLESS-RESULT')
 	public function testAReflectiveMemberWhoseResultHoldsNoMemberValueObtainsNoMethodUnderTheTruth(): Void {
 		// hxcpp's `Type.enumEq` and `Type.enumIndex` call `nativeEnumEq` and `getEnumValueIndex`, private externs of `Type` the
 		// portable API does not declare, in every build's std: each returns a `Bool` or an `Int`, so handing one an escaped
@@ -1530,7 +1676,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => compared('Reflect.field(a, Std.string(a)) != null')]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SPLICED-REFLECTION-READ') @:killer('M-FACTS-SPLICED-REFLECTION-FROM')
+	@:pin('control')
+	@:killer('M-FACTS-SPLICED-REFLECTION-READ')
+	@:killer('M-FACTS-SPLICED-REFLECTION-FROM')
 	@:killer('M-FACTS-SPLICED-REFLECTION-MEMBERLESS')
 	public function testUnderTheTruthASplicedReflectiveBodyThatReachesNoMemberLeavesItsFunctionReadable(): Void {
 		// hxcpp splices `Type.enumIndex` into `main`: the facts name the member, which names none and reads no member's value,
@@ -1545,7 +1693,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => fixture('inline Reflect.copy({ a: 1 })')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-HOLDERS-FIELDS-UNBOUNDED') @:killer('M-GRAPH-REFLECT-SUPERTYPES')
+	@:pin('control')
+	@:killer('M-HOLDERS-FIELDS-UNBOUNDED')
+	@:killer('M-GRAPH-REFLECT-SUPERTYPES')
 	public function testAComputedNameStillReadsAVariableOfAnyClassWhateverTheProjectDeclaresUnderTheTruth(): Void {
 		// the declaration bounds the methods such a name obtains, not the variables it reads: an `Other` extending `Main`
 		// carries `items`, which `dump` may read
@@ -1556,7 +1706,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => sub], false, ['nothing.*']), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REFLECTED-HOLDERS-METHODS') @:killer('M-REFLECTED-HOLDERS-ACCESSORS')
+	@:pin('control')
+	@:killer('M-REFLECTED-HOLDERS-METHODS')
+	@:killer('M-REFLECTED-HOLDERS-ACCESSORS')
 	@:killer('M-REFLECTED-HOLDERS-INHERITED')
 	public function testAComputedNameRunsOnlyAMethodOfAClassTheProjectDeclaresUnderTheTruth(): Void {
 		// `dump` reads its own `Other` by the name it is handed: that may run any method of `Other`, `grow` among them — unless
@@ -1582,7 +1734,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => inherited], true, ['Other']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-DROPPED')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-DROPPED')
 	public function testAConfigurationWithoutFactsLeavesTheSyntax(): Void {
 		// one configuration fails to compile: the table holds less than the builds do, so nothing is read through it — not
 		// even `main`, which every configuration typed alike
@@ -1594,7 +1747,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], [[], ['APQ_BROKEN']]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-REFLECT-VALUE')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-REFLECT-VALUE')
 	public function testAReflectiveMemberReadAsAValueIsUnknown(): Void {
 		// `f` is `Reflect.field`: whatever calls it reaches a member by a name nothing here sees
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tvar o:Dynamic = {};\n'
@@ -1602,7 +1756,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-BUILDS') @:killer('M-REACH-REWRITTEN-UNTRUE')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-BUILDS')
+	@:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testABuildMacroOnlyTheCompilerSawIsUnknown(): Void {
 		// a global `addGlobalMetadata` puts a `@:build` on `Main` its text never spells
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ helper(); /*>*/ }\n\t}\n'
@@ -1612,7 +1768,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main, 'Mac.hx' => mac], null, true, null, false, build), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-GENERIC')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-GENERIC')
 	public function testAGenericInstanceIsItsGenericClass(): Void {
 		// the compiler builds `Box_Int` for `Box<Int>`: its call is `Box`'s method, which the syntax cannot name — `mk()`
 		// declares no return type
@@ -1622,7 +1779,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-NATIVE-IDENT')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-NATIVE-IDENT')
 	public function testANativeIdentifierAdmitsWhatItMayCall(): Void {
 		// `trace` is the compiler's own identifier: it runs `haxe.Log.trace`, which the program may replace
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\thaxe.Log.trace = (v, ?p) -> { items.push(1); };\n'
@@ -1630,7 +1788,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-CONSTRUCTION')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-CONSTRUCTION')
 	public function testAConstructionRunsTheInitializersOfItsGeneratedConstructor(): Void {
 		// `Kid` declares no constructor: `new K()` runs its initializers, one of which grows `items` — through an alias the
 		// syntax does not construct through
@@ -1640,7 +1799,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-SYNTAX-UNION') @:killer('M-GRAPH-TRUTH-MUTE-ALWAYS')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-SYNTAX-UNION')
+	@:killer('M-GRAPH-TRUTH-MUTE-ALWAYS')
 	public function testAnExtensionAnotherBuildBringsInIsKeptFromTheSyntax(): Void {
 		// a build defining `other` brings in `Loud` last, and `w.go()` runs its `go`: the facts of `Runner.run`, which name
 		// no type of this file, say `Quiet.go`; the syntax reads both `using`s and records the edge the facts may not take away
@@ -1648,7 +1809,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(EXTENSION_PER_BUILD, null, true, store), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-TRUTH-MUTE')
+	@:pin('control')
+	@:killer('M-GRAPH-TRUTH-MUTE')
 	public function testAnExtensionOnlyAListedBuildBringsInIsReadFromItsFacts(): Void {
 		// `Runner.run` is read through its facts either way; under the whole list of builds the syntax's edge to `Loud.go`,
 		// which only a build defining `other` brings in, is its reading of a site every build typed, and is dropped
@@ -1657,7 +1819,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(EXTENSION_PER_BUILD, [[], ['other']], true, store, false, null, null, null, true), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-GUARDED-IMPORT')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-GUARDED-IMPORT')
 	public function testATypeInAFileImportingUnderAConditionKeepsTheSyntax(): Void {
 		// `R.f` takes the `T` its file imports: `b.T` here, and in a build defining `other` `a.T`, whose `@:from` runs on the
 		// argument and grows `items` — no edge names that conversion, and the facts of this build hold none
@@ -1672,7 +1835,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(IMPORT_PER_BUILD, [[], ['other']], true, null, false, null, null, null, true), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-LIBRARY-DYNAMIC')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-LIBRARY-DYNAMIC')
 	public function testALibraryDynamicMethodNotReadYetIsFollowed(): Void {
 		// `LibObj.grow` is a `dynamic` method of a library file the graph has not read: the call is a read of the field, and
 		// its body — the value it holds until replaced — grows `items`; the syntax, which cannot type `o`, names no `grow`
@@ -1682,7 +1846,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['LibObj.hx' => lib]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ABSTRACT-TEXT-ANY')
+	@:pin('control')
+	@:killer('M-REACH-ABSTRACT-TEXT-ANY')
 	public function testAConversionOfAnAbstractRunsWhatItsOwnConversionDoes(): Void {
 		// the library abstract `Wrap`'s own `toString` converts the value it wraps, as `Any`'s does, and the walk never enters
 		// it: it reaches no toucher by an edge; `a.string()` is `Std.string(a)`, which the syntax does not name
@@ -1693,7 +1858,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['Wrap.hx' => wrap]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-SPELLED')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-SPELLED')
 	public function testAMacroBuiltTypeAnswersFromItsTextOnlyWhenItsFactsAreItsText(): Void {
 		// `Line` inherits an `@:autoBuild`: the text of `all` answers for the local it initialises only when the compiled body
 		// is that text. A macro keeping the fields leaves it so; one replacing the body with `return Main.kept` does not
@@ -1775,7 +1941,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => withSub], null, true, null, false, null, library, hidden, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-VALUE')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-UNREAD-VALUE')
 	public function testAStoredFunctionValueMayConvertWhatItIsHanded(): Void {
 		// `fmt` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `Std.string` runs `toString`
 		final main: String = '$LOOP_HEAD\tstatic var fmt:Dynamic -> String = v -> Std.string(v);\n\tstatic function main() {\n'
@@ -1785,14 +1952,18 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-USING-META') @:killer('M-GRAPH-USING-META') @:killer('M-INDEX-GUARDED-META-LIFT')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-USING-META')
+	@:killer('M-GRAPH-USING-META')
+	@:killer('M-INDEX-GUARDED-META-LIFT')
 	public function testATypeBringingExtensionsInUnderAConditionIsUnknown(): Void {
 		// a build defining `other` puts `@:using(Main.Loud)` on `W`, and `w.go()` runs `Loud.go`: neither the facts nor the
 		// `using` the file spells name it
 		assertMatch(ask(['Main.hx' => USING_PER_BUILD]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-CONTEXT')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-CONTEXT')
 	public function testATypeBringingExtensionsInUnderAConditionIsReadFromTheListedBuilds(): Void {
 		// `Quiet.go` runs in every listed build, until one of them defines `other` and puts `@:using(Main.Loud)` on `W`
 		assertMatch(ask(['Main.hx' => USING_PER_BUILD], [[]], true, null, false, null, null, null, true), r -> r.match(Proven));
@@ -1801,7 +1972,8 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-REACH-UNREAD-IMPLICIT')
+	@:pin('control')
+	@:killer('M-FACTS-REACH-UNREAD-IMPLICIT')
 	public function testAStoredFunctionValueMayRunAnOperatorOverload(): Void {
 		// `f` holds a lambda the walk never enters — it reaches no toucher by an edge — whose `==` runs `AE.eq`
 		final main: String = '$LOOP_HEAD\tstatic var f:AE -> Bool = a -> a == a;\n\tstatic function main() {\n'
@@ -1831,7 +2003,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-TYPED-IMPLICIT-ITER')
+	@:pin('control')
+	@:killer('M-REACH-TYPED-IMPLICIT-ITER')
 	public function testAStoredFunctionValueMayIterateWhatItHoldsUnderTheTruth(): Void {
 		// the lambda `f` holds iterates `held`, a `Walker` the call hands it nothing of: the walk never enters the lambda — it
 		// reaches no toucher by an edge — so only the iterations its facts keep as sites run `Walker.next`
@@ -1848,7 +2021,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FIELD') @:killer('M-REACH-UNREAD-NARROWED')
+	@:pin('control')
+	@:killer('M-ADMIT-SYNTAX-READ-FIELD')
+	@:killer('M-REACH-UNREAD-NARROWED')
 	@:killer('M-FACTS-ABSTRACT-CTOR-NAME')
 	public function testCodeReadThroughItsFactsRunsNoOperatorOverloadItNamesNoCallOfUnderTheTruth(): Void {
 		// the lambda `f` holds compares nothing: code read by its syntax might run `AE.eq` with no call the graph holds, code
@@ -1859,8 +2034,14 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-RUN-EDGES') @:killer('M-REACH-RUN-LOAD') @:killer('M-REACH-RUN-VALUE-FILES')
-	@:killer('M-REACH-RUN-SITES') @:killer('M-REACH-RUN-ALWAYS') @:killer('M-REACH-RUN-IDS') @:killer('M-REACH-RUN-UNREAD')
+	@:pin('control')
+	@:killer('M-REACH-RUN-EDGES')
+	@:killer('M-REACH-RUN-LOAD')
+	@:killer('M-REACH-RUN-VALUE-FILES')
+	@:killer('M-REACH-RUN-SITES')
+	@:killer('M-REACH-RUN-ALWAYS')
+	@:killer('M-REACH-RUN-IDS')
+	@:killer('M-REACH-RUN-UNREAD')
 	public function testACallOfAValueRunsOnlyTheImplicitCallsOfTheCodeItRunsUnderTheTruth(): Void {
 		// `Runner.apply` calls its parameter `f`, handed `x -> x + 1` here and what `lib.Caller.go` hands it, read through their
 		// facts: neither converts anything or iterates anything, so neither `Obj.toString` nor the conversion `Conv.fromString`,
@@ -1918,7 +2099,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => fixture('x -> x + 1')], null, true, null, false, null, library), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-SHAPE-PURE-GETENV') @:killer('M-REACH-RUN-QUIET')
+	@:pin('control')
+	@:killer('M-SHAPE-PURE-GETENV')
+	@:killer('M-REACH-RUN-QUIET')
 	public function testAnEnvironmentReadRunsNoProjectCodeUnderTheTruth(): Void {
 		// `Sys.getEnv` reads the process environment, no callback on any target: the function `Runner.apply` is handed runs no
 		// conversion of an `Obj`, whose `toString` replaces `items` — as it may once it hands one to `Sys.println`
@@ -1938,7 +2121,8 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNTRUE')
+	@:pin('control')
+	@:killer('M-ADMIT-SYNTAX-READ-UNTRUE')
 	public function testFactsThatAreNotTheTruthNarrowNothingCodeTheWalkNeverEntersRuns(): Void {
 		// the lambda `f` holds is read through facts that hold for every build either way; only under a list of builds declared
 		// whole does the walk take them for all that code it never enters runs
@@ -1948,7 +2132,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-FACETED')
+	@:pin('control')
+	@:killer('M-ADMIT-SYNTAX-READ-FACETED')
 	public function testAFunctionValueReadByItsSyntaxMayRunAnyOperatorOverloadUnderTheTruth(): Void {
 		// the lambda `f` holds is an expression macro's expansion, read through its facts like any code.
 		// `Twin.k` folds the declarations of two types sharing a simple name, which no one type's facts read: a function value
@@ -1966,7 +2151,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => folded, 'other/Twin.hx' => twin]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-ADMIT-SYNTAX-READ-UNSEEN') @:killer('M-REACH-UNREAD-RECHECK')
+	@:pin('control')
+	@:killer('M-ADMIT-SYNTAX-READ-UNSEEN')
+	@:killer('M-REACH-UNREAD-RECHECK')
 	@:killer('M-REACH-TYPED-IMPLICIT-TEXT')
 	public function testLibraryCodeNotReadYetMayRunAnyOperatorOverloadUnderTheTruth(): Void {
 		// the string conversions the facts leave implicit may run the library `Thing.toString`, whose file the walk has not
@@ -1978,7 +2165,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, ['lib/Thing.hx' => thing], null, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-THROW-TEXT') @:killer('M-SITES-THROW-TEXT')
+	@:pin('control')
+	@:killer('M-FACTS-THROW-TEXT')
+	@:killer('M-SITES-THROW-TEXT')
 	public function testAThrownValueIsConvertedToAString(): Void {
 		// the exception wrapping the compiler adds after typing hands `o` to `Std.string`, which runs `Obj.toString`
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tvar o:Obj = new Obj();\n'
@@ -1988,14 +2177,16 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-ITER')
+	@:pin('control')
+	@:killer('M-FACTS-ITER')
 	public function testALoopOverAProjectIteratorRunsItsNextUnderTheTruth(): Void {
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tvar w:Walker = new Walker();\n'
 			+ '\t\tfor (i in 0...items.length) { /*<*/ for (x in w) {} /*>*/ }\n\t}\n}\n$CLEARING_WALKER';
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-DECLARED')
+	@:pin('control')
+	@:killer('M-FACTS-SOLE-MEMBER-DECLARED')
 	@:access(anyparse.query.MemberReach)
 	public function testAMemberAnotherTypeOfItsNameMayDeclareKeepsTheNameShared(): Void {
 		// a declaration of `splice` no build typed may still run under another name (`@:genericBuild`): it leaves `Vec.splice`
@@ -2013,7 +2204,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, dead, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SOLE-MEMBER-NONE')
+	@:pin('control')
+	@:killer('M-FACTS-SOLE-MEMBER-NONE')
 	public function testALibraryMemberOnlyOneTypeOfItsNameDeclaresIsReadThroughItsFacts(): Void {
 		// `lib.Vec` and `other.Vec` share a simple name, but only `lib.Vec` declares `splice`, whose loop the syntax cannot
 		// type — so it may run any `next`, `Walker`'s among them — and the facts type as `VecIter`'s (openfl's `Vector.splice`
@@ -2024,7 +2216,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => SHARED_NAME_MAIN], null, true, null, false, null, sharedNameLibrary()), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ITERABLE-RETURNS')
+	@:pin('control')
+	@:killer('M-REACH-ITERABLE-RETURNS')
 	public function testWhatAnIteratorReturnsIsNotIteratedInTurnUnderTheTruth(): Void {
 		// the loop iterates a `FeedAlias`, a typedef naming `Feed`: no typed class owns the site, so the types of the iterated
 		// value answer, and `Feed`'s `next` returns a `Walker` — an element, which the loop runs nothing on. Without the truth
@@ -2037,7 +2230,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-WIRED') @:killer('M-FACTS-SOURCE-UNLISTED')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-WIRED')
+	@:killer('M-FACTS-SOURCE-UNLISTED')
 	@:access(anyparse.query.MemberReach)
 	public function testTheFactsAreTheTruthOnlyUnderTheWholeListOfTheirBuilds(): Void {
 		// the facts of every build of a list declared whole, none dropped, are what every build the project ships resolves;
@@ -2054,8 +2249,10 @@ class MemberReachFactsTest extends Test {
 		Assert.isNull(truth([[], ['APQ_BROKEN']], true), 'a table missing a configuration made a view');
 	}
 
-	@:pin('control') @:killer('M-REACH-PROVEN-TRUTH')
-	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
+	@:pin('control')
+	@:killer('M-REACH-PROVEN-TRUTH')
+	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.FactsView)
 	public function testAProofTheTruthContradictsIsAskedAgainUnderTheTruth(): Void {
 		// `Mac.loop` replaces `Main.f`, the region's function, by a push onto `Store.items`. The reading a run asks first — the
 		// compiler facts with no whole list of builds — proves the region, whose text runs nothing; under the truth the region's
@@ -2085,7 +2282,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(answers[1], r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-UNLISTED') @:killer('M-FACTS-TRUTH-COUNT') @:killer('M-FACTS-TRUTH-NAMES')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-UNLISTED')
+	@:killer('M-FACTS-TRUTH-COUNT')
+	@:killer('M-FACTS-TRUTH-NAMES')
 	@:killer('M-FACTS-TRUTH-ORDER')
 	@:access(anyparse.query.FactsView)
 	public function testTheTruthNeedsTheFactsToNameExactlyTheListedBuilds(): Void {
@@ -2114,7 +2314,9 @@ class MemberReachFactsTest extends Test {
 		Assert.isFalse(FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D z'])), 'facts of other builds were the truth');
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-HAZARDS') @:killer('M-FACTS-TRUTH-HAZARDS-UNLISTED')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-HAZARDS')
+	@:killer('M-FACTS-TRUTH-HAZARDS-UNLISTED')
 	@:killer('M-FACTS-TRUTH-UNTYPED-KEPT')
 	public function testUntypedCodeTheFactsRecordIsReadThroughThemUnderTheTruth(): Void {
 		// `untyped this.zz` reads a field the class lacks: the compiler types it as a Dynamic field read, a fact like any
@@ -2136,7 +2338,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main, 'Mac.hx' => mac]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID')
+	@:pin('control')
+	@:killer('M-FACTS-FOLDED-BY-ID')
 	public function testAMemberDeclaredInEachBranchIsReadByIdUnderTheTruth(): Void {
 		// `g` is declared twice, one declaration per branch: the graph folds the two into one node, whose facts are those of
 		// `Main.g` over every build — under the whole list of them, only the first branch is compiled, and its untyped read is a
@@ -2147,7 +2350,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-FOLDED-BODIES')
+	@:pin('control')
+	@:killer('M-REACH-FOLDED-BODIES')
 	public function testTheSecondDeclarationOfAFoldedMemberIsReadByItsText(): Void {
 		// the branch holding the untyped read is the second declaration of `g`: read by its text wherever the facts do not
 		// replace the syntax — with no facts, and with facts the list of builds is not the whole of — and under the whole list
@@ -2159,7 +2363,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-FOLDED-ACCESSES')
+	@:pin('control')
+	@:killer('M-TOUCH-FOLDED-ACCESSES')
 	public function testATouchOnlyTheFactsSeeInASecondDeclarationIsFoundUnderTheTruth(): Void {
 		// `stuff` is `Main.items` imported under another name, pushed to by the declaration of `go` the build compiles — the
 		// second of the two the graph folds: the facts of that declaration are the node's, though its first holds none. The
@@ -2175,7 +2380,8 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-FACTS-FIELD-KINDS')
+	@:pin('control')
+	@:killer('M-FACTS-FIELD-KINDS')
 	public function testAPropertyOneBuildReadsThroughAGetterIsNotReadStraight(): Void {
 		// the build defining `other` declares `items` with a getter, the other one without: a reader of `items` there sees
 		// what the getter hands out, so the builds together do not read it straight from its storage
@@ -2197,7 +2403,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(write(fixture('get, set')), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-UNTYPED-ALL') @:killer('M-FACTS-TRUTH-UNTYPED-SHAPE')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-UNTYPED-ALL')
+	@:killer('M-FACTS-TRUTH-UNTYPED-SHAPE')
 	public function testAnUntypedIndexAccessKeepsItsHazardUnderTheTruth(): Void {
 		// on js `this["items"]` IS the field: no fact names it — the compiler records an index read and a Dynamic `push`
 		final main: String =
@@ -2205,7 +2413,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Untyped(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-NATIVES') @:killer('M-FACTS-TRUTH-NATIVE-CALLS-KEPT')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-NATIVES')
+	@:killer('M-FACTS-TRUTH-NATIVE-CALLS-KEPT')
 	@:killer('M-FACTS-TRUTH-NATIVE-METAS-DROPPED')
 	public function testTheFactsNameTheNativeCallsUnderTheTruth(): Void {
 		// the facts name `js.Syntax.code` whatever spells it; a class of the project merely named `Syntax` is no native code,
@@ -2220,9 +2430,15 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('@:functionCode("0") g();')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-NATIVE-SITE-BLIND') @:killer('M-NATIVE-SITE-NAMES') @:killer('M-NATIVE-SITE-ESCAPED')
-	@:killer('M-NATIVE-SITE-VALUES') @:killer('M-FACTS-NATIVE-HANDED')
-	@:killer('M-FACTS-NATIVE-CHAIN') @:killer('M-ESCAPES-FACTS-NATIVE-HANDED') @:killer('M-NATIVE-LITERAL-CODE')
+	@:pin('control')
+	@:killer('M-NATIVE-SITE-BLIND')
+	@:killer('M-NATIVE-SITE-NAMES')
+	@:killer('M-NATIVE-SITE-ESCAPED')
+	@:killer('M-NATIVE-SITE-VALUES')
+	@:killer('M-FACTS-NATIVE-HANDED')
+	@:killer('M-FACTS-NATIVE-CHAIN')
+	@:killer('M-ESCAPES-FACTS-NATIVE-HANDED')
+	@:killer('M-NATIVE-LITERAL-CODE')
 	@:killer('M-NATIVE-LITERAL-CHAIN')
 	public function testTargetCodeReachesTheMemberOnlyThroughWhatItIsHandedUnderTheTruth(): Void {
 		// target code reaches only what it is handed and what its text names: naming nothing, it reaches no `Main`; naming
@@ -2248,8 +2464,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => region('js.Syntax.code("0");')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-NATIVE-SITE-CORE-TYPE') @:killer('M-UNCHECKED-TARGET')
-	@:killer('M-UNCHECKED-BOXED') @:killer('M-NATIVE-SITE-COMPUTED')
+	@:pin('control')
+	@:killer('M-NATIVE-SITE-CORE-TYPE')
+	@:killer('M-UNCHECKED-TARGET')
+	@:killer('M-UNCHECKED-BOXED')
+	@:killer('M-NATIVE-SITE-COMPUTED')
 	public function testTargetCodeHandedOnlyValuesReachesNoObjectUnderTheTruth(): Void {
 		// a `Main` left the type system through `leak`, so a value handed to target code may be one wherever the build keeps
 		// what lands at the place the value is held. hxcpp converts into an `Int` and a `Tiny` (a type the compiler represents
@@ -2272,8 +2491,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('js.Syntax.code("{0}", 1);')]), r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-EXTERN-HANDED-FACTS') @:killer('M-EXTERN-HANDED-RECEIVER') @:killer('M-EXTERN-CALLERS')
-	@:killer('M-EXTERN-REVISIT') @:killer('M-NATIVE-SITE-TAKEN-VALUES') @:killer('M-NATIVE-SITE-ARRAY-ELEMENTS')
+	@:pin('control')
+	@:killer('M-EXTERN-HANDED-FACTS')
+	@:killer('M-EXTERN-HANDED-RECEIVER')
+	@:killer('M-EXTERN-CALLERS')
+	@:killer('M-EXTERN-REVISIT')
+	@:killer('M-NATIVE-SITE-TAKEN-VALUES')
+	@:killer('M-NATIVE-SITE-ARRAY-ELEMENTS')
 	public function testAnExternRunsOnlyWhatTheValuesItsCallersHandItLetItRunUnderTheTruth(): Void {
 		// target code reaches only what it is handed: an `Int`, an `Array<Int>` (the built-in array's own methods run no code
 		// of the program's, its elements are no object — after a `Main` left the type system too) and nothing let it run
@@ -2299,7 +2523,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => targetFixture('Native.dyn(1);')], null, true, null, false, CPP_BUILD), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-NATIVE-CLASSES-NAMED')
+	@:pin('control')
+	@:killer('M-NATIVE-CLASSES-NAMED')
 	public function testTargetCodeNamingAClassRunsWhatTheClassHoldsUnderTheTruth(): Void {
 		// code that names a class reaches its statics and its constructor as Haxe code naming it does — not an extern's, whose
 		// members are target code themselves; handed an `Array<Int>` it reaches no object, handed `cb` it may run `g`
@@ -2314,7 +2539,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(cpp('untyped __cpp__("{0}()", cb);'), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-NATIVE-CLASSES-EXTERN')
+	@:pin('control')
+	@:killer('M-NATIVE-CLASSES-EXTERN')
 	public function testAStringBufHandsItsTargetCodeNoObjectUnderTheTruth(): Void {
 		// hxcpp's `StringBuf.flush` hands `cpp.Pointer.nativeArrayElem` its `Array<cpp.Char>` through two inline splices, and
 		// `__global__.String` a `cpp.Star<cpp.Char>` and an `Int`: target code handed only characters runs nothing, so not `g`,
@@ -2337,7 +2563,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, CPP_BUILD, null, null, false, declared), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-CLOSED-EXTERN-OVERRIDE')
+	@:pin('control')
+	@:killer('M-REACH-CLOSED-EXTERN-OVERRIDE')
 	public function testAClosedExternRunsWhatAProgramSubclassOverridesUnderTheTruth(): Void {
 		// `Peer`'s target code takes and gives only integers, but it runs on its receiver: `poke` may call `other` as a virtual
 		// dispatch does, and on a `Sub` that runs the override, which grows `items`. A `Sub` overriding nothing runs nothing
@@ -2353,8 +2580,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => closed('public function grow():Void$grow')]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-EXTERN-BLIND-HANDED') @:killer('M-EXTERN-BLIND-NAMES-NO-MEMBER') @:killer('M-EXTERN-BLIND-DECLARED')
-	@:killer('M-EXTERN-BLIND-SYNTAX') @:killer('M-EXTERN-BLIND-REPORT')
+	@:pin('control')
+	@:killer('M-EXTERN-BLIND-HANDED')
+	@:killer('M-EXTERN-BLIND-NAMES-NO-MEMBER')
+	@:killer('M-EXTERN-BLIND-DECLARED')
+	@:killer('M-EXTERN-BLIND-SYNTAX')
+	@:killer('M-EXTERN-BLIND-REPORT')
 	public function testAnExternHandedAnObjectCarryingTheMemberMayWriteItByNameUnderTheTruth(): Void {
 		// target code handed a `Main` may write its `items` by the name, as code handed one may: a blind spot — handed the
 		// object itself, which leaves the type system there, or, where nothing else let a `Main` leave it (the interpreter's
@@ -2376,7 +2607,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(syntax, r -> r.match(Unknown(NativeCode(_, _))));
 	}
 
-	@:pin('control') @:killer('M-EXTERN-EVERY-CALLER-SYNTAX') @:killer('M-EXTERN-EVERY-CALL-SYNTAX')
+	@:pin('control')
+	@:killer('M-EXTERN-EVERY-CALLER-SYNTAX')
+	@:killer('M-EXTERN-EVERY-CALL-SYNTAX')
 	public function testAnExternReadsEveryCallOfItWithoutTheTruth(): Void {
 		// read by its syntax, the extern's admission reads each call of it, of each caller: `h1` hands an `Int`, `h2` an `Other`,
 		// whose `run` grows `items` and which target code may call by its name; `h` hands both
@@ -2392,7 +2625,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => calling('h();')], null, true, null, false, CPP_BUILD), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-VALUE-INVOKED-FOREIGN') @:killer('M-VALUE-INVOKED-SUBTYPE-SUPERS') @:killer('M-UNCHECKED-HOLDS')
+	@:pin('control')
+	@:killer('M-VALUE-INVOKED-FOREIGN')
+	@:killer('M-VALUE-INVOKED-SUBTYPE-SUPERS')
+	@:killer('M-UNCHECKED-HOLDS')
 	public function testATypedCallOfAnotherClassMayRunTheMethodOfAnObjectPutThereUnderTheTruth(): Void {
 		// `r.visitRx` calls what the invocations of `visitRx` hand it. A call through `I`, which only `Sub` implements, is one;
 		// so is a call naming `Other` once an `Rx` was cast to one: the interpreter keeps the object a cast puts there, where
@@ -2414,7 +2650,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(['Main.hx' => fixture(through)]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-VALUE-STORED-FOREIGN')
+	@:pin('control')
+	@:killer('M-VALUE-STORED-FOREIGN')
 	public function testATypedWriteOfAnotherClassMayReplaceTheMethodOfAnObjectPutThereUnderTheTruth(): Void {
 		// the interpreter keeps a `Hook` cast to an `Other` with its own `run`, so `o.run = keep` replaces it with `grow`, which
 		// `fire` then calls; hxcpp's checked conversion would leave null there (`UncheckedConversionsTest`)
@@ -2425,7 +2662,9 @@ class MemberReachFactsTest extends Test {
 		]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-SKIP') @:killer('M-GRAPH-FACTS-NATIVE-CHAIN-ANY')
+	@:pin('control')
+	@:killer('M-GRAPH-FACTS-NATIVE-CHAIN-SKIP')
+	@:killer('M-GRAPH-FACTS-NATIVE-CHAIN-ANY')
 	public function testACallAChainOfTargetNamesMakesIsItsTargetCodesUnderTheTruth(): Void {
 		// `console.log()` is target code handed nothing: no dynamic call by a name that may run a function value, so `g`, which
 		// `cb` holds and which changes `items`, does not run there — as it may at a call by name off a value of no class
@@ -2439,7 +2678,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => region('untyped console.log(1);')]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TRUTH-REFLECTION') @:killer('M-FACTS-TRUTH-REFLECTION-TWIN')
+	@:pin('control')
+	@:killer('M-FACTS-TRUTH-REFLECTION')
+	@:killer('M-FACTS-TRUTH-REFLECTION-TWIN')
 	public function testAReflectiveCallTheSyntaxDoesNotSeeNamesNothingUnderTheTruth(): Void {
 		// `rf` is `Reflect.field` under another name: the facts see the call, and a name computed at run time names nothing; a
 		// call the syntax sees keeps the literal name it reads, and is read once: where one build computes its name and the
@@ -2458,9 +2699,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => split], true, null, true, [[], ['other']]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-REFL-MEMBER-NAME') @:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
-	@:killer('M-HAZARDS-TRUTH-LITERAL-NAME') @:killer('M-HAZARDS-TRUTH-LITERAL-FIRST-STRING')
-	@:killer('M-EXTERN-BLIND-REFLECTIVE') @:killer('M-EXTERN-BLIND-TARGET-ADMISSION')
+	@:pin('control')
+	@:killer('M-FACTS-REFL-MEMBER-NAME')
+	@:killer('M-FACTS-REFL-MEMBER-NAME-ANY')
+	@:killer('M-HAZARDS-TRUTH-LITERAL-NAME')
+	@:killer('M-HAZARDS-TRUTH-LITERAL-FIRST-STRING')
+	@:killer('M-EXTERN-BLIND-REFLECTIVE')
+	@:killer('M-EXTERN-BLIND-TARGET-ADMISSION')
 	public function testAReflectiveAccessSplicedInNamesTheLiteralItsNameArgumentHoldsUnderTheTruth(): Void {
 		// `Peek.has` splices `Reflect.hasField(this, name)` into the region, where the typed tree hands it `o` and the literal
 		// `"other"`: one member, not `items`. `o` may be any object that left the type system, a `Main` among them, so a name
@@ -2483,7 +2728,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(region('o.has("other");'), true, null, false), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-HAZARDS-TRUTH-LITERAL-SEEN') @:killer('M-HAZARDS-TRUTH-LITERAL-AGREE')
+	@:pin('control')
+	@:killer('M-HAZARDS-TRUTH-LITERAL-SEEN')
+	@:killer('M-HAZARDS-TRUTH-LITERAL-AGREE')
 	public function testAReflectiveAccessTheSyntaxReadsAsComputedNamesTheLiteralTheTypedTreeHandsItUnderTheTruth(): Void {
 		// `NAME` is an inline constant: the syntax reads an identifier, the typed tree the literal `"other"` it stands for; `n`
 		// is a name computed at run time in both. Where a build defining `other` declares `NAME` a variable, that build reads a
@@ -2502,8 +2749,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => region(named)], true, null, false), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-BOUND-NONE') @:killer('M-HAZARDS-REFLECT-RECEIVERS')
-	@:killer('M-HAZARDS-REFLECT-RECEIVERS-ADDED') @:killer('M-FACTS-REFL-RECEIVER') @:killer('M-REACH-REFLECT-BODY') @:killer('M-REACH-REFLECT-EXTERN')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-BOUND-NONE')
+	@:killer('M-HAZARDS-REFLECT-RECEIVERS')
+	@:killer('M-HAZARDS-REFLECT-RECEIVERS-ADDED')
+	@:killer('M-FACTS-REFL-RECEIVER')
+	@:killer('M-REACH-REFLECT-BODY')
+	@:killer('M-REACH-REFLECT-EXTERN')
 	public function testAReflectiveAccessOnAnObjectOfAnUnrelatedClassReachesNoneOfTheMemberUnderTheTruth(): Void {
 		// `Other.dump` reads a property of its own object by a name it is handed: under the truth that object is an `Other`,
 		// which carries no `items`; without it the name may be any member's
@@ -2516,7 +2768,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => 'using Reflect;\n$main' + reflectingOther('this.getProperty(n)')]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-RELATED') @:killer('M-GRAPH-REFLECT-SUBTYPES')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-RELATED')
+	@:killer('M-GRAPH-REFLECT-SUBTYPES')
 	public function testAReflectiveAccessOnAnObjectThatMayCarryTheMemberIsADynamicNameUnderTheTruth(): Void {
 		// an `Other` extending `Main` carries `items` itself; `this` of `Base` may be a `Main`, which extends it
 		final sub: String = '$MEMBER_HEAD\tfunction f(n:String):Void {\n\t\tvar o:Other = new Other();\n'
@@ -2533,7 +2787,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => base], true), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-REFLECT-UNTYPED')
+	@:pin('control')
+	@:killer('M-GRAPH-REFLECT-UNTYPED')
 	public function testAReflectiveAccessOnAValueOfNoClassIsADynamicNameOnceTheClassEscapedUnderTheTruth(): Void {
 		// a `Dynamic` value, or a structure's, may be any object that left the type system: a `Main` handed to `Dynamic` is
 		// one, and `items` is then a member a computed name may reach on either
@@ -2546,7 +2801,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => region('Reflect.setProperty(s, n, 1);')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-REFLECT-ESCAPES') @:killer('M-GRAPH-REFLECT-SELF-ESCAPES') @:killer('M-FACTS-REFL-SELF')
+	@:pin('control')
+	@:killer('M-GRAPH-REFLECT-ESCAPES')
+	@:killer('M-GRAPH-REFLECT-SELF-ESCAPES')
+	@:killer('M-FACTS-REFL-SELF')
 	public function testAReflectedObjectOtherThanThisMayBeAnyEscapedInstanceUnderTheTruth(): Void {
 		// a `Main` handed to `Dynamic` may come back typed as anything, an `Other` included; `this` of `Other` is an `Other` where
 		// no call rebinds a method (`INTERP_BUILD`) — on js `Type.createEnum` does, and `dump` reads itself by the name it is handed
@@ -2563,7 +2821,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => fixture(' sink(new Main()); ', 'o.dump(n);')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-REFLECT-EXACT') @:killer('M-FACTS-REFL-EXACT')
+	@:pin('control')
+	@:killer('M-GRAPH-REFLECT-EXACT')
+	@:killer('M-FACTS-REFL-EXACT')
 	public function testAReflectedObjectOfExactlyItsClassIsNoSubclassUnderTheTruth(): Void {
 		// `Main` extends `Other`: an `Other` handed in may be a `Main`, one built here is an `Other`
 		function fixture(code: String): String {
@@ -2575,7 +2835,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => fixture('Reflect.getProperty(o, n);')]), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REFLECT-ADMIT')
+	@:pin('control')
+	@:killer('M-REACH-REFLECT-ADMIT')
 	public function testAReflectiveAccessRunsTheAccessorsOfTheTypeItReachesUnderTheTruth(): Void {
 		// a property read by a name it computes may run `Other.get_v`, which changes `items` of a `Main` it holds; `this` is an
 		// `Other` where no call rebinds a method (`INTERP_BUILD`)
@@ -2586,7 +2847,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-METHODS-SELF-BOUND') @:killer('M-METHODS-CLOSURE-READ') @:killer('M-FACTS-REFL-HOLDER') @:killer('M-METHODS-RECEIVER-BOUND')
+	@:pin('control')
+	@:killer('M-METHODS-SELF-BOUND')
+	@:killer('M-METHODS-CLOSURE-READ')
+	@:killer('M-FACTS-REFL-HOLDER')
+	@:killer('M-METHODS-RECEIVER-BOUND')
 	public function testThisOfAMethodACallMayRebindIsAnyEscapedInstanceUnderTheTruth(): Void {
 		// `Reflect.callMethod` runs the function it is handed with the `Main` it is handed as `this`: once `Other.dump` is read
 		// as a value, its `this` may be the escaped `Main`, whose `items` the property write by name replaces. A method no code
@@ -2614,7 +2879,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(fixture('new Third().calm')), r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-METHODS-NATIVE-REFUSED')
+	@:pin('control')
+	@:killer('M-METHODS-NATIVE-REFUSED')
 	public function testProjectTargetCodeKeepsThisBoundUnderTheTruth(): Void {
 		// target code obtains a method's value only through the reflection the facts record: project code holding some still
 		// answers that `Other.dump`, which no code reads as a value, runs on an `Other`
@@ -2628,7 +2894,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(['Main.hx' => main], true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-METHODS-REBINDS') @:killer('M-METHODS-METHOD-ONLY')
+	@:pin('control')
+	@:killer('M-METHODS-REBINDS')
+	@:killer('M-METHODS-METHOD-ONLY')
 	public function testThisOfAConstructorIsAnyEscapedInstanceOnceACallMayRebindUnderTheTruth(): Void {
 		// a constructor runs with `this` bound by a class value, which a rebinding call may be handed too; with no rebinding
 		// call in the program, `this` is what built it
@@ -2647,7 +2915,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(reflectAsk(fixture('new Third().calm();'), true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-CONVERSION-FLOWS') @:killer('M-FACTS-CONVERSION-TARGET') @:killer('M-FACTS-CONVERSION-ANY-TARGET')
+	@:pin('control')
+	@:killer('M-FACTS-CONVERSION-FLOWS')
+	@:killer('M-FACTS-CONVERSION-TARGET')
+	@:killer('M-FACTS-CONVERSION-ANY-TARGET')
 	@:killer('M-UNCHECKED-STRING-ELEMENTS')
 	public function testAValuePutAtAStringPlaceRunsItsToStringOnHxcppUnderTheTruth(): Void {
 		// hxcpp converts a value put at a `String` place by its `toString` (`String::String(const Dynamic &)`), an array copied
@@ -2672,7 +2943,9 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-FACTS-CONVERSION-WRITES') @:killer('M-FACTS-CONVERSION-FIELD-WRITES')
+	@:pin('control')
+	@:killer('M-FACTS-CONVERSION-WRITES')
+	@:killer('M-FACTS-CONVERSION-FIELD-WRITES')
 	public function testAFieldSetByItsNameConvertsTheValueOnHxcppUnderTheTruth(): Void {
 		// `H.s` is a `String`: hxcpp's `__SetField` converts what a reflective write or a write through a catch-all puts there, so
 		// `Obj.toString`, which replaces `items`, runs; the interpreter keeps the value
@@ -2687,7 +2960,10 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-REACH-SYNTAX-CONVERSION') @:killer('M-SITES-LANDING-KEEPING-PLACE') @:killer('M-SITES-LANDING-CLASS-PLACE')
+	@:pin('control')
+	@:killer('M-REACH-SYNTAX-CONVERSION')
+	@:killer('M-SITES-LANDING-KEEPING-PLACE')
+	@:killer('M-SITES-LANDING-CLASS-PLACE')
 	@:killer('M-SITES-LANDING-TYPED-VALUE')
 	public function testCodeReadByItsSyntaxConvertsAValueThatLeftTheTypeSystem(): Void {
 		// a C++ build converts a value put at a `String` place by its `toString`, and the syntax does not type `d`: only a value
@@ -2705,7 +2981,8 @@ class MemberReachFactsTest extends Test {
 			assertMatch(ask(['Main.hx' => region(code)], null, false), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-HANDED-CONVERTED')
+	@:pin('control')
+	@:killer('M-REACH-HANDED-CONVERTED')
 	public function testJoiningAFieldOfStringsConvertsNothingOnHxcppUnderTheTruth(): Void {
 		// `Buf.b` is an `Array<String>`, which on hxcpp holds strings alone: converted where they landed. Its `join` converts
 		// them, which runs no `toString` — though `Obj`'s, which replaces `items`, is in play, and the syntax reads `b` as an
@@ -2719,7 +2996,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => main()]), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-OWN-HANDS')
+	@:pin('control')
+	@:killer('M-REACH-ARRAY-OWN-HANDS')
 	public function testJoiningAnArrayRunsItsElementsToStringAloneUnderTheTruth(): Void {
 		// the built-in array's `join` converts each element of `a`, a `Calm`: its `toString` runs, and no other member of it by its
 		// name — `grow`, which replaces `items`, never does
@@ -2731,7 +3009,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-VALUES')
+	@:pin('control')
+	@:killer('M-REACH-ARRAY-VALUES')
 	public function testTheArraysOwnMethodReachesItsElementsOnlyByConvertingThemUnderTheTruth(): Void {
 		// `a.join` is the built-in array's own method: it converts each element of `a`, which the compiler types `Array<String>`
 		// though the syntax cannot, and reaches no member by name — so neither `Obj.toString`, which changes `items`, nor any
@@ -2748,7 +3027,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(interpAsk(['Main.hx' => region('var a = s.split(",");')], STD_STRING), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ARRAY-CTOR') @:killer('M-REACH-ARRAY-OWN') @:killer('M-FACTS-UNHELD-STAND-IN')
+	@:pin('control')
+	@:killer('M-REACH-ARRAY-CTOR')
+	@:killer('M-REACH-ARRAY-OWN')
+	@:killer('M-FACTS-UNHELD-STAND-IN')
 	public function testAConstructionOfTheBuiltInArrayIsHandedNothingUnderTheTruth(): Void {
 		// `new Array()` names a type and hands its target code no argument, no receiver and no function value: neither
 		// `Obj.toString` nor `Clear.run`, read as a value, runs — though both change `items`. The compiler's reading of what an
@@ -2790,7 +3072,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files(true)), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-INIT-RECORD') @:killer('M-FACTS-VIEW-INIT-FACETED')
+	@:pin('control')
+	@:killer('M-GRAPH-INIT-RECORD')
+	@:killer('M-FACTS-VIEW-INIT-FACETED')
 	public function testAFieldInitializerIsReadThroughItsFactsUnderTheTruth(): Void {
 		// `Holder`'s initializers run when it is built: `0` runs nothing — read by its syntax it would admit every implicitly
 		// called member, `Obj.toString` and the `@:from` of `Loud` `main` runs among them — and the `@:from` of `Loud` the
@@ -2804,7 +3088,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => region('var l:Loud = 1;')]), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-DEAD-FILE-SEEDS') @:killer('M-FACTS-DEAD-FILE-NEVER')
+	@:pin('control')
+	@:killer('M-REACH-DEAD-FILE-SEEDS')
+	@:killer('M-FACTS-DEAD-FILE-NEVER')
 	@:killer('M-FACTS-DEAD-FILE-UNTRUE')
 	public function testAProjectFileNoBuildCompilesRunsNothing(): Void {
 		// no build compiles `Dead.hx` — nothing imports it — so under the whole list of builds its touch runs nowhere and its
@@ -2822,8 +3108,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(broken), r -> r.match(Unknown(SkipParse(_))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-DEAD-FILE-REWRITTEN')
-	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
+	@:pin('control')
+	@:killer('M-FACTS-DEAD-FILE-REWRITTEN')
+	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.FactsView)
 	public function testAFileTheRunWroteMayBeCompiled(): Void {
 		// a file the run wrote after the compiles — one a fix created, say — holds text no build read: it may be compiled
 		final broken: String = 'class Broken {\n\tfunction f() { ( }\n}\n';
@@ -2854,7 +3142,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, null, true, null, null, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-DEAD-FILE-ENTRY') @:killer('M-REACH-DEAD-FILE-LOCAL-ENTRY')
+	@:pin('control')
+	@:killer('M-REACH-DEAD-FILE-ENTRY')
+	@:killer('M-REACH-DEAD-FILE-LOCAL-ENTRY')
 	public function testCodeNoBuildCompilesHasNoAnswerUnderTheTruth(): Void {
 		// the graph holds nothing of `Dead.hx`, so no call from it is walked: an answer would read "proven" off nothing
 		final main: String = '$MEMBER_HEAD\tpublic static function grow(xs:Array<Int>):Void {\n\t\txs.push(1);\n\t}\n'
@@ -2875,7 +3165,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(false, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-IDLE-INDEX')
+	@:pin('control')
+	@:killer('M-FACTS-IDLE-INDEX')
 	public function testATypeNoBuildCompilesIsNoSecondDeclarationOfItsNameUnderTheTruth(): Void {
 		// nothing imports `dead/Main.hx` or `dead/Grid.hx`, so no build compiles the second `Main` or the second `Grid`: under
 		// the whole list of builds each name is the one type they typed, the member's owner and the type the walk enters
@@ -2896,7 +3187,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(entered), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
-	@:pin('control') @:killer('M-REACH-AMBIGUOUS-SOLE-ANY') @:killer('M-FACTS-SOLE-TYPED-ONLY') @:killer('M-FACTS-SOLE-STANDS-ANY')
+	@:pin('control')
+	@:killer('M-REACH-AMBIGUOUS-SOLE-ANY')
+	@:killer('M-FACTS-SOLE-TYPED-ONLY')
+	@:killer('M-FACTS-SOLE-STANDS-ANY')
 	public function testTwoTypesUnderOneNameStayAmbiguousUnderTheTruth(): Void {
 		// the graph knows a type by its simple name: `a.Grid` and `b.Grid` are two types the builds compile, whose members it
 		// cannot tell apart; a `Grid` of a file a build compiles that no build typed (`#if never`) may still be one, under
@@ -2926,7 +3220,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(unheld, r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
-	@:pin('control') @:killer('M-REACH-PINNED-NONE') @:killer('M-FACTS-PINNED-UNTRUE') @:killer('M-REACH-ENTRY-OWN-NONE')
+	@:pin('control')
+	@:killer('M-REACH-PINNED-NONE')
+	@:killer('M-FACTS-PINNED-UNTRUE')
+	@:killer('M-REACH-ENTRY-OWN-NONE')
 	@:killer('M-REACH-PINNED-REWRITTEN-SIMPLE')
 	public function testTheOwnerTheFactsPinAtTheLoopIsOneOfTwoTypesUnderOneNameUnderTheTruth(): Void {
 		// `a.Grid` and `b.Grid` share a simple name; `a.Grid.f` loops over its own `items`, and the compiler resolved that read
@@ -2945,7 +3242,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(true, 'rewrite'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-PINNED-NONE') @:killer('M-REACH-PINNED-REWRITTEN-SIMPLE') @:killer('M-REACH-PINNED-REWRITTEN-NONE')
+	@:pin('control')
+	@:killer('M-REACH-PINNED-NONE')
+	@:killer('M-REACH-PINNED-REWRITTEN-SIMPLE')
+	@:killer('M-REACH-PINNED-REWRITTEN-NONE')
 	@:killer('M-FACTS-PINNED-OWNER-FILES')
 	public function testAPinnedOwnerAsksItsOwnBuildMacroAndNoOtherUnderTheTruth(): Void {
 		// `Main` reads `g.items` of an `a.Grid`, whose compiler fact pins `a.Grid` among the two `Grid`s: a build macro of
@@ -2969,7 +3269,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(null, null, base), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-PROVENANCE-SIMPLE') @:killer('M-FACTS-PROVENANCE-UNTRUE') @:killer('M-FACTS-TEXT-PROVENANCE-SIMPLE')
+	@:pin('control')
+	@:killer('M-FACTS-PROVENANCE-SIMPLE')
+	@:killer('M-FACTS-PROVENANCE-UNTRUE')
+	@:killer('M-FACTS-TEXT-PROVENANCE-SIMPLE')
 	public function testTheOneDeclarationOfANameAsksItsOwnBuildMacroUnderTheTruth(): Void {
 		// the region runs `a.Endian.calm`, of an enum abstract the index declares once; `b.Endian`, a class the builds compile
 		// and the index does not hold, shares the simple name (lime's `Endian` beside openfl's) and carries a build macro.
@@ -3001,7 +3304,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(null, 'rewrite', false), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-UNHELD-CALL') @:killer('M-FACTS-UNHELD-UNTRUE')
+	@:pin('control')
+	@:killer('M-FACTS-UNHELD-CALL')
+	@:killer('M-FACTS-UNHELD-UNTRUE')
 	public function testACallOfATypeTheIndexDoesNotHoldIsNoCallOfItsNamesakeUnderTheTruth(): Void {
 		// the region calls `Endian.calm()`, which the builds type as the root package's `Endian` — rewritten to push onto
 		// `Main.items`. The index's one `Endian` is another: declared in `#if never` of a file the builds compile, or
@@ -3031,7 +3336,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(never, false, 'rewrite', false), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-RAW-REGION') @:killer('M-FACTS-RAW-REGION-NAMES')
+	@:pin('control')
+	@:killer('M-FACTS-RAW-REGION')
+	@:killer('M-FACTS-RAW-REGION-NAMES')
 	public function testARawConditionalRegionOfAFacetedFunctionIsItsFactsUnderTheTruth(): Void {
 		// `lib.Stack.str` returns through an expression-level conditional the syntax does not parse (tink's `Stack.toString`):
 		// a raw region. Under the truth the facts of `str`, read in its syntax's place, hold what each build compiled there,
@@ -3058,7 +3365,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('{ Main.items = []; "b"; }'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SUBTYPES-PROVENANCE')
+	@:pin('control')
+	@:killer('M-FACTS-SUBTYPES-PROVENANCE')
 	public function testTheSubtypesOfTheOneDeclarationOfANameAreItsOwnUnderTheTruth(): Void {
 		// `xs` is what `a.Line.all` returns, a fresh array, so the region changes nothing it holds — when no subtype overrides
 		// `all`. `b.Line`, which the builds compile and the index does not hold, shares the simple name and has a subtype the
@@ -3083,9 +3391,15 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('a.Line'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-UNHELD-SUPER') @:killer('M-FACTS-UNHELD-NEW') @:killer('M-FACTS-UNHELD-VALUE')
-	@:killer('M-FACTS-UNHELD-OVERRIDE') @:killer('M-REACH-UNHELD-IMPLICIT') @:killer('M-REACH-UNHELD-REFLECTED')
-	@:killer('M-FACTS-UNHELD-HOMES') @:killer('M-FACTS-UNHELD-NAMED')
+	@:pin('control')
+	@:killer('M-FACTS-UNHELD-SUPER')
+	@:killer('M-FACTS-UNHELD-NEW')
+	@:killer('M-FACTS-UNHELD-VALUE')
+	@:killer('M-FACTS-UNHELD-OVERRIDE')
+	@:killer('M-REACH-UNHELD-IMPLICIT')
+	@:killer('M-REACH-UNHELD-REFLECTED')
+	@:killer('M-FACTS-UNHELD-HOMES')
+	@:killer('M-FACTS-UNHELD-NAMED')
 	public function testNoReadOfATypeTheIndexDoesNotHoldIsOneOfItsNamesakeUnderTheTruth(): Void {
 		// the root package's `Endian` and `Sub`, which the builds compile, push onto `Main.items` wherever they run; the index
 		// holds neither, only a calm twin of each in `#if never` of `a/Endian.hx`, a file the builds compile. A construction, a
@@ -3130,9 +3444,15 @@ class MemberReachFactsTest extends Test {
 		each('Reflect.field(e, "c" + i);', made);
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXTLESS') @:killer('M-FACTS-IMPLICIT-MEMBERS') @:killer('M-FACTS-IMPLICIT-STATIC')
-	@:killer('M-REACH-UNHELD-OWNED') @:killer('M-REACH-UNHELD-ANYWHERE') @:killer('M-REACH-TEXTLESS-IN-PLAY')
-	@:killer('M-REACH-UNDECLARED-OPERAND') @:killer('M-REACH-REFLECT-TEXTLESS')
+	@:pin('control')
+	@:killer('M-FACTS-TEXTLESS')
+	@:killer('M-FACTS-IMPLICIT-MEMBERS')
+	@:killer('M-FACTS-IMPLICIT-STATIC')
+	@:killer('M-REACH-UNHELD-OWNED')
+	@:killer('M-REACH-UNHELD-ANYWHERE')
+	@:killer('M-REACH-TEXTLESS-IN-PLAY')
+	@:killer('M-REACH-UNDECLARED-OPERAND')
+	@:killer('M-REACH-REFLECT-TEXTLESS')
 	@:killer('M-FACTS-IMPLICIT-INTERFACE')
 	public function testATypeTheIndexDeclaresNowhereRunsWhatItsMembersRun(): Void {
 		// the root package's `Endian`, which the builds compile, pushes onto `Main.items` from its `toString` and `calm`; the
@@ -3188,8 +3508,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => implementing], null, true, null, false, null, null, shown, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-INDEX-GUARDED-PRIVATE') @:killer('M-INDEX-MODULE-PLATFORM') @:killer('M-FACTS-IMPLEMENTED-TYPED')
-	@:access(anyparse.query.MemberReach) @:access(anyparse.query.FactsView)
+	@:pin('control')
+	@:killer('M-INDEX-GUARDED-PRIVATE')
+	@:killer('M-INDEX-MODULE-PLATFORM')
+	@:killer('M-FACTS-IMPLEMENTED-TYPED')
+	@:access(anyparse.query.MemberReach)
+	@:access(anyparse.query.FactsView)
 	public function testTheIndexSpellsEachDeclarationAsTheBuildsTypeIt(): Void {
 		// a private type in a conditional region (the client's `RwLockSync.hx`), a private type of a platform variant of a module
 		// (`Sqlite.cpp.hx` is the module `Sqlite`) and a private abstract, whose implementation class keeps its module: the
@@ -3217,7 +3541,8 @@ class MemberReachFactsTest extends Test {
 		});
 	}
 
-	@:pin('control') @:killer('M-REACH-UNREAD-TEXTLESS')
+	@:pin('control')
+	@:killer('M-REACH-UNREAD-TEXTLESS')
 	public function testCodeTheWalkDoesNotReadMayRunTheImplicitMembersOfATypeTheIndexDeclaresNowhere(): Void {
 		// `fmt`'s lambda converts what it is handed, a site the facts keep in code the walk never enters: the `toString` of
 		// every type in play may run there — `Obj`'s, which the builds compile and the index declares nowhere, among them.
@@ -3241,7 +3566,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(false, ''), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-UNREAD-READ-FAMILIES') @:killer('M-REACH-TYPED-IMPLICIT-TEXT')
+	@:pin('control')
+	@:killer('M-REACH-UNREAD-READ-FAMILIES')
+	@:killer('M-REACH-TYPED-IMPLICIT-TEXT')
 	public function testLibraryCodeNotReadYetMayRunTheOperatorOverloadOfATypeTheIndexDeclaresNowhere(): Void {
 		// the walk has not read the library `Thing`, so code it cannot see may run any implicitly-called member: `AE`'s `==`,
 		// which the builds compile and the index declares nowhere, among them
@@ -3261,7 +3588,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-ALWAYS-TEXTLESS') @:killer('M-REACH-MENTIONS-TYPED')
+	@:pin('control')
+	@:killer('M-REACH-ALWAYS-TEXTLESS')
+	@:killer('M-REACH-MENTIONS-TYPED')
 	public function testCodeReadByItsSyntaxMayRunTheConversionsOfATypeTheIndexDeclaresNowhere(): Void {
 		// `run` is a local inline function the compiler types into its caller, so its body is read by its syntax, where a
 		// conversion of any value in play may run — `Wrap`'s, which the builds compile and the index declares nowhere, among
@@ -3283,7 +3612,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(true, false), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-FOLDED-BY-ID') @:killer('M-FACTS-SOLE-NEVER') @:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
+	@:pin('control')
+	@:killer('M-FACTS-FOLDED-BY-ID')
+	@:killer('M-FACTS-SOLE-NEVER')
+	@:killer('M-REACH-AMBIGUOUS-SOLE-NONE')
 	public function testATypeDeclaredOncePerBuildIsOneTypeUnderTheTruth(): Void {
 		// `Grid` is declared once per build — in each branch of a region, or in a file of each build's own classpath — and each
 		// build types its own: all are `Grid`, one type. Under the whole list of builds the graph node folding the declarations
@@ -3317,7 +3649,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, both, true, member, false, PER_BUILD_CLASSPATH, null, picker), r -> r.match(Unknown(Ambiguous('Grid'))));
 	}
 
-	@:pin('control') @:killer('M-REACH-QUALIFIED-NONE') @:killer('M-FACTS-QUALIFIED-HAZARDS') @:killer('M-GRAPH-FACTS-TYPED-NONE')
+	@:pin('control')
+	@:killer('M-REACH-QUALIFIED-NONE')
+	@:killer('M-FACTS-QUALIFIED-HAZARDS')
+	@:killer('M-GRAPH-FACTS-TYPED-NONE')
 	public function testALibraryMemberAFactCallsIsItsOwnTypesUnderTheTruth(): Void {
 		// `lib.Vec` and `other.Vec` share a simple name and both declare `get_length` (openfl's `Vector` beside
 		// `haxe.ds.Vector`), so the graph folds both into one node; `Label.size` reads `length` of a `lib.Vec`, and the fact of
@@ -3344,8 +3679,12 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, false, null, library(inlined, '')), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-QUALIFIED-NONE') @:killer('M-REACH-QUALIFIED-SIMPLE-TOUCH') @:killer('M-TOUCH-SCAN-NODE-UNRECORDED')
-	@:killer('M-FACTS-QUALIFIED-ANY-DECLARATION') @:killer('M-REACH-QUALIFIED-ESCAPE')
+	@:pin('control')
+	@:killer('M-REACH-QUALIFIED-NONE')
+	@:killer('M-REACH-QUALIFIED-SIMPLE-TOUCH')
+	@:killer('M-TOUCH-SCAN-NODE-UNRECORDED')
+	@:killer('M-FACTS-QUALIFIED-ANY-DECLARATION')
+	@:killer('M-REACH-QUALIFIED-ESCAPE')
 	public function testOnlyTheProjectTypeAFactCallsTouchesUnderTheTruth(): Void {
 		// `a.Grid.run` changes `Main.items`, `b.Grid.run` does not; the graph folds both into `Grid.run`. Under the whole list
 		// of builds the call's fact names which one runs, so only that one's touch counts; with no such list either may. A
@@ -3374,7 +3713,10 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-NESTED-OWNER-NONE') @:killer('M-FACTS-NESTED-BODIES-NONE') @:killer('M-REACH-OWN-TYPES-NONE')
+	@:pin('control')
+	@:killer('M-FACTS-NESTED-OWNER-NONE')
+	@:killer('M-FACTS-NESTED-BODIES-NONE')
+	@:killer('M-REACH-OWN-TYPES-NONE')
 	@:killer('M-REACH-REWRITTEN-OWN-SIMPLE')
 	public function testAFunctionNestedInATypeOfASharedNameIsItsFilesTypesCodeUnderTheTruth(): Void {
 		// `Runner.run` calls a function value of `Int->Void`, which may be the lambda `b.Grid.make` stores: the walk enters it by
@@ -3414,7 +3756,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(calm, true, false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-OWN-TYPES-INIT-NONE') @:killer('M-FACTS-INIT-OWNERS-SOLE')
+	@:pin('control')
+	@:killer('M-REACH-OWN-TYPES-INIT-NONE')
+	@:killer('M-FACTS-INIT-OWNERS-SOLE')
 	@:killer('M-FACTS-QUALIFY-SITELESS')
 	public function testTheInitializersOfATypeOfASharedNameAreEachTypedTypesUnderTheTruth(): Void {
 		// `new b.Grid()` runs `Grid.<init>`, the field initializers of a `Grid`, which the graph knows by the simple name `a.Grid`
@@ -3454,7 +3798,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('0', false, true, false, 'Hook.main.grow()'), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-FACTS-OWNERS-VARIABLES') @:killer('M-FACTS-OWNERS-ROOTS-OWN')
+	@:pin('control')
+	@:killer('M-FACTS-OWNERS-VARIABLES')
+	@:killer('M-FACTS-OWNERS-ROOTS-OWN')
 	public function testAMemberAdmittedByItsNameIsNoVariableOfAnotherTypeOfTheNameUnderTheTruth(): Void {
 		// the region reads `send` off a `Dynamic`, which admits every function named `send`: `b.Grid.send`, a method, and no
 		// code of `a.Grid`, whose `send` is a variable — a value read off it runs nothing, a call of it runs what it holds,
@@ -3478,7 +3824,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('public var send:Int = 0;', false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-QUALIFIED-UNNAMED') @:killer('M-REACH-SHARED-OWNERS')
+	@:pin('control')
+	@:killer('M-REACH-QUALIFIED-UNNAMED')
+	@:killer('M-REACH-SHARED-OWNERS')
 	public function testANameTwoTypesShareReachedByItsSyntaxRunsAsEachOfThemUnderTheTruth(): Void {
 		// the region lies in `a.Grid.go`, which `b.Grid` declares too: the node folding both is read by its syntax, whose call
 		// of `run` names the folded `Grid.run` and no owner, so either `run` may be the one that runs — each read as its own
@@ -3507,7 +3855,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question(['run']), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-CALL-OPERAND-LEAF')
+	@:pin('control')
+	@:killer('M-FACTS-CALL-OPERAND-LEAF')
 	public function testAConvertedValueOfTheParametersOwnTypeMayBeAnyObjectUnderTheTruth(): Void {
 		// `d` is `Dynamic`, `Std.string`'s parameter type, so handing it on records no flow: the flow of the other branch is one
 		// leaf of the argument, not the value converted, which may be an `Obj`, whose `toString` replaces `Main.items`
@@ -3522,7 +3871,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(converting('new Plain()'), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-CALL-OPERAND')
+	@:pin('control')
+	@:killer('M-FACTS-CALL-OPERAND')
 	public function testAConversionAnInlinedBodySplicedFromAnotherFileConvertsItsOwnArgumentUnderTheTruth(): Void {
 		// `Buf.add` (cpp's `StringBuf.add`) converts what it is handed; inlined into `main`, the conversion lies in `Buf.hx`,
 		// whose text the facts of `main` do not hold, and the region hands it a `String`, whose conversion runs nothing —
@@ -3544,8 +3894,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(question('inline b.show(o);'), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FACTS-INTERFACE-PLACEHOLDER') @:killer('M-GRAPH-VIRTUAL-OWN-ONLY')
-	@:killer('M-GRAPH-ABSTRACT-THIS-STORAGE') @:killer('M-REACH-OVERRIDES-INHERITED-UNLOADED')
+	@:pin('control')
+	@:killer('M-GRAPH-FACTS-INTERFACE-PLACEHOLDER')
+	@:killer('M-GRAPH-VIRTUAL-OWN-ONLY')
+	@:killer('M-GRAPH-ABSTRACT-THIS-STORAGE')
+	@:killer('M-REACH-OVERRIDES-INHERITED-UNLOADED')
 	public function testAnInterfacePropertyReadThroughAnInlinedAbstractRunsItsImplementations(): Void {
 		// openfl's `Vector` shape: the inlined `Vec.get_length` reads `length` of the interface `IVec`, whose accessor only the
 		// property implies — no text declares `IVec.get_length`. The read runs the implementations: `IntVec`'s own, and the one
@@ -3588,7 +3941,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(syntax(touch, false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-INDEX-ALTERNATE-DROPPED') @:killer('M-INDEX-ALTERNATE-MEMBERS')
+	@:pin('control')
+	@:killer('M-INDEX-ALTERNATE-DROPPED')
+	@:killer('M-INDEX-ALTERNATE-MEMBERS')
 	public function testAPropertyOnlyAnotherBranchsDeclarationOfATypeGivesRunsItsAccessor(): Void {
 		// the first branch declares `Box.size` a plain field, the branch the build compiles a property whose getter changes
 		// `Main.items`: the index lists one `Box`, which must hold both readings. A type only the second branch declares,
@@ -3607,7 +3962,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(read('Crate', crate), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-REWRITTEN-SOLE-SIMPLE')
+	@:pin('control')
+	@:killer('M-REACH-REWRITTEN-SOLE-SIMPLE')
 	public function testAMemberOnlyOneTypeOfItsNameDeclaresAsksThatTypesBuildMacroUnderTheTruth(): Void {
 		// `lib.Vec` and `other.Vec` share a simple name, and only `lib.Vec` declares `splice`, so the walk reads `Vec.splice`
 		// as `lib.Vec`'s without qualifying it (openfl's `Vector.splice` beside `haxe.ds.Vector`); `lib.Vec`'s build macro hands
@@ -3622,7 +3978,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-COPY-UNION') @:killer('M-FACTS-COPY-HOMED-UNION') @:killer('M-FACTS-COPY-TYPE-HOMES') @:killer('M-GRAPH-REFACET-FURTHER')
+	@:pin('control')
+	@:killer('M-FACTS-COPY-UNION')
+	@:killer('M-FACTS-COPY-HOMED-UNION')
+	@:killer('M-FACTS-COPY-TYPE-HOMES')
+	@:killer('M-GRAPH-REFACET-FURTHER')
 	@:killer('M-GRAPH-REFACET-RETRACT')
 	public function testATypeEachBuildReadsFromItsOwnCopyIsItsTextUnderTheTruth(): Void {
 		// each build reads `Gen` from its own directory, the copies differing in a value and so in every position after it —
@@ -3635,7 +3995,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(copiesAsk(copies, false), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-COPY-LINE-HOME') @:killer('M-FACTS-COPY-NESTED-UNION')
+	@:pin('control')
+	@:killer('M-FACTS-COPY-LINE-HOME')
+	@:killer('M-FACTS-COPY-NESTED-UNION')
 	public function testACopyEachBuildReadsFromItsOwnDirectoryIsItsTextUnderTheTruth(): Void {
 		// each build runs in its copy's directory, so its facts name `Gen.hx` alike, at alike positions: the same line of
 		// two builds names two files, each build's own copy
@@ -3643,7 +4005,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(copiesAsk(copies, true, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-COPY-UNVOUCHED')
+	@:pin('control')
+	@:killer('M-FACTS-COPY-UNVOUCHED')
 	public function testACopyOfATypeNoBuildReadsIsNoProofUnderTheTruth(): Void {
 		// `gen/c` declares `Gen` too, and no build reads it: the graph folds its text into the type's, and no build's facts
 		// say what a build macro made of it
@@ -3657,7 +4020,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(copiesAsk(copies, true), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-COPY-UNHELD')
+	@:pin('control')
+	@:killer('M-FACTS-COPY-UNHELD')
 	public function testARegionOfATypeABuildReadsFromACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth(): Void {
 		// build `b` reads `Main` from `gen/b`, which no index holds and whose loop grows `items`: the region's text is one copy
 		// of the type, and what a build macro made of the other no text the analysis reads says
@@ -3677,7 +4041,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(result, r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-COPY-ELSEWHERE')
+	@:pin('control')
+	@:killer('M-REACH-COPY-ELSEWHERE')
 	public function testACopyTheIndexDoesNotHoldIsNoProofUnderTheTruth(): Void {
 		// build `b` reads a copy of `Gen` no index holds, whose `calm` pushes onto `items`: no declaration of the graph holds
 		// the code that build runs, whether a build macro ran over it or not
@@ -3686,7 +4051,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(copiesAsk(copies, true, false, false, ['b']), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-DEAD-NODE-ENTERED') @:killer('M-LIVE-FRAGMENTED')
+	@:pin('control')
+	@:killer('M-REACH-DEAD-NODE-ENTERED')
+	@:killer('M-LIVE-FRAGMENTED')
 	public function testCodeNoBuildCompilesRunsNothingUnderTheTruth(): Void {
 		// the builds' define values decide `haxe_ver >= 4.2`, so its `#else` — the call of `Dead.go` — is no edge of any build.
 		// A call no build compiles is none either when a directive nested in it splits its range (openfl's
@@ -3708,8 +4075,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => named]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SITE-OWNERS-NONE') @:killer('M-FACTS-SITE-CONVERSION-OWNERS-NONE')
-	@:killer('M-REACH-OWNED-TYPES-NONE') @:killer('M-REACH-OWNED-UNTYPED')
+	@:pin('control')
+	@:killer('M-FACTS-SITE-OWNERS-NONE')
+	@:killer('M-FACTS-SITE-CONVERSION-OWNERS-NONE')
+	@:killer('M-REACH-OWNED-TYPES-NONE')
+	@:killer('M-REACH-OWNED-UNTYPED')
 	@:killer('M-REACH-OWNED-ESCAPES-KEPT')
 	public function testAnAdmittedConversionOfANameTwoTypesShareIsTheOperandsTypesUnderTheTruth(): Void {
 		// `a.Color` and `b.Color` share a simple name, so the graph folds both `toString`s into one node. The region converts a
@@ -3738,7 +4108,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files(concatenated, clearing, '', '\t\td = other;\n')), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-NEVER') @:killer('M-TOUCH-TYPED-SHAPE-NONE') @:killer('M-TOUCH-TYPED-CALL')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-NEVER')
+	@:killer('M-TOUCH-TYPED-SHAPE-NONE')
+	@:killer('M-TOUCH-TYPED-CALL')
 	@:killer('M-TOUCH-TYPED-OWNER')
 	public function testATouchOnlyTheFactsSeeIsFoundUnderTheTruth(): Void {
 		// `stuff` is `Main.items` imported under another name: no text of `Other.grow` spells `items`, the facts name the
@@ -3758,7 +4131,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files('calm'), null, true, null, true, null, null, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-VALUE') @:killer('M-TOUCH-TYPED-UNTRUE')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-VALUE')
+	@:killer('M-TOUCH-TYPED-UNTRUE')
 	public function testAMethodClosureOfTheMemberEscapesUnderTheTruth(): Void {
 		// `items.push` read as a value holds `items` for whoever calls it later: the facts use the read as a value, where the
 		// syntax sees a harmless field read. With no list of builds the syntax answers, as it did
@@ -3769,7 +4144,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-FACTS-SUBSTITUTED-RECEIVER') @:killer('M-FACTS-ALIAS-LINK')
+	@:pin('control')
+	@:killer('M-FACTS-ASSIGN-HELD')
+	@:killer('M-FACTS-SUBSTITUTED-RECEIVER')
+	@:killer('M-FACTS-ALIAS-LINK')
 	@:killer('M-FACTS-CAPTURE')
 	public function testALocalTheMemberIsStoredInIsFollowedThroughItsReadsUnderTheTruth(): Void {
 		// `walk` stores `items` — or another array — in `l`, in either branch, and in `copy` after it, and only iterates and
@@ -3798,7 +4176,9 @@ class MemberReachFactsTest extends Test {
 			assertMatch(compiledTruthAsk(files(use)), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-HELD-REGION') @:killer('M-FACTS-HELD-FLAG')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-HELD-REGION')
+	@:killer('M-FACTS-HELD-FLAG')
 	public function testAPushThroughALocalHoldingTheMemberInsideTheRegionReachesItUnderTheTruth(): Void {
 		// the store lies before the loop and the push through the local inside it: the touch the facts record at the store is
 		// one of a local read anywhere in the function, the region's included
@@ -3811,8 +4191,13 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-FACTS-HELD-THROUGH-IF') @:killer('M-FACTS-HELD-THROUGH-SWITCH') @:killer('M-FACTS-HELD-THROUGH-PAREN')
-	@:killer('M-FACTS-HELD-THROUGH-BLOCK') @:killer('M-FACTS-HELD-THROUGH-TRY') @:killer('M-FACTS-ASSIGN-HELD-THROUGH')
+	@:pin('control')
+	@:killer('M-FACTS-HELD-THROUGH-IF')
+	@:killer('M-FACTS-HELD-THROUGH-SWITCH')
+	@:killer('M-FACTS-HELD-THROUGH-PAREN')
+	@:killer('M-FACTS-HELD-THROUGH-BLOCK')
+	@:killer('M-FACTS-HELD-THROUGH-TRY')
+	@:killer('M-FACTS-ASSIGN-HELD-THROUGH')
 	public function testALocalHoldingTheMemberThroughAValueConstructIsFollowedUnderTheTruth(): Void {
 		// what `prefer-if-expression-assignment` writes for `var l = null; if (c) l = items;`: the field is a BRANCH VALUE of
 		// an if-expression, a ternary, a switch, parentheses or a try — declared or stored — that the local holds just as a
@@ -3844,8 +4229,13 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-FACTS-ARGUMENT-USE') @:killer('M-FACTS-PARAM-ALIAS') @:killer('M-ARGUMENT-USES-ONWARD')
-	@:killer('M-ARGUMENT-USES-OVERRIDES') @:killer('M-TOUCH-ARGUMENT-USES') @:killer('M-TOUCH-ARGUMENT-LEAVES')
+	@:pin('control')
+	@:killer('M-FACTS-ARGUMENT-USE')
+	@:killer('M-FACTS-PARAM-ALIAS')
+	@:killer('M-ARGUMENT-USES-ONWARD')
+	@:killer('M-ARGUMENT-USES-OVERRIDES')
+	@:killer('M-TOUCH-ARGUMENT-USES')
+	@:killer('M-TOUCH-ARGUMENT-LEAVES')
 	public function testAnArgumentAMethodKeepsNothingOfLetsNothingEscapeUnderTheTruth(): Void {
 		// `sum` only iterates, indexes and measures what it is handed, `relay` hands it on to `sum`, `down` to itself, `Lambda.count`
 		// (by `using`) only iterates it, and `Plain.read` — no override — measures it: under the truth none keeps the member's
@@ -3893,7 +4283,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(compiledTruthAsk(files('', 'grow(items);')), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-USE-UNKNOWN') @:killer('M-TOUCH-USE-KNOWN-READS')
+	@:pin('control')
+	@:killer('M-TOUCH-USE-UNKNOWN')
+	@:killer('M-TOUCH-USE-KNOWN-READS')
 	@:access(anyparse.query.MemberTouchScan)
 	public function testAUseTheFactsReaderDoesNotKnowIsAnEscapeUnderTheTruth(): Void {
 		// the uses a read of a value may carry are a closed list (`FieldFact.use`): one this reader does not name — a code a
@@ -3950,7 +4342,8 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-UNPLACED-UNKNOWN')
+	@:pin('control')
+	@:killer('M-FACTS-UNPLACED-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth(): Void {
 		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node lost its place, so
 		// `other` keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
@@ -3961,7 +4354,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(rewritten(marking('Main.other'), () -> compiledTruthAsk(['Main.hx' => main])), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-BLIND-UNKNOWN')
+	@:pin('control')
+	@:killer('M-FACTS-BLIND-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowIsABlindSpotUnderTheTruth(): Void {
 		// a node meeting the region whose marker no reader names may stand for code no text holds, as a macro's expansion does:
 		// its syntax, which changes nothing, answers for nothing
@@ -3973,7 +4367,8 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-MARKER-UNKNOWN')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-MARKER-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowLetsWhatItsNodeIsHandedEscapeUnderTheTruth(): Void {
 		// `lib.Text.keep` lets nothing it is handed go anywhere — until it carries a marker no reader names, which may say a fact
 		// of what it does was lost
@@ -3981,7 +4376,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(rewritten(marking('lib.Text.keep'), () -> truthLibAsk('', 'throw last;')), r -> !r.match(Proven)); // noqa: prefer-bind
 	}
 
-	@:pin('control') @:killer('M-ESCAPES-FACTS-CTOR-SHAPE')
+	@:pin('control')
+	@:killer('M-ESCAPES-FACTS-CTOR-SHAPE')
 	public function testAConstructorTypedAsNoFunctionAndNoEnumHoldsAnythingUnderTheTruth(): Void {
 		// an escaped `Mark` holds what its constructors' arguments hold: `Plain`, typed as a `Mark`, holds nothing — typed as
 		// anything else, here a type the facts could not print, it may hold anything
@@ -3994,7 +4390,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(rewritten(unread, () -> truthLibAsk(escape, 'throw last;', mark)), r -> !r.match(Proven)); // noqa: prefer-bind
 	}
 
-	@:pin('control') @:killer('M-METHODS-MARKER-UNKNOWN')
+	@:pin('control')
+	@:killer('M-METHODS-MARKER-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowLeavesTheMethodValuesUnknownUnderTheTruth(): Void {
 		// no code reads `Other.dump` as a value, so it runs on an `Other` — while every function the builds typed says which
 		// method values it reads: one carrying a marker no reader names may read any
@@ -4009,7 +4406,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(rewritten(marking('Third.calm'), () -> reflectAsk(['Main.hx' => main], true)), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-VALUE-STORED-MARKER-UNKNOWN') @:killer('M-VALUE-CTOR-MARKER-UNKNOWN')
+	@:pin('control')
+	@:killer('M-VALUE-STORED-MARKER-UNKNOWN')
+	@:killer('M-VALUE-CTOR-MARKER-UNKNOWN')
 	@:access(anyparse.query.MemberReach)
 	@:access(anyparse.query.FunctionValueTypes)
 	public function testAMarkerTheFactsReaderDoesNotKnowLeavesWhatAFunctionFieldHoldsUnknownUnderTheTruth(): Void {
@@ -4045,7 +4444,8 @@ class MemberReachFactsTest extends Test {
 		Assert.isTrue(values(pool, true, escaped), 'a function carrying an unknown marker constructed nothing by reflection');
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-MARKER-UNKNOWN')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-MARKER-UNKNOWN')
 	public function testAMarkerTheFactsReaderDoesNotKnowIsNoTextUnderTheTruth(): Void {
 		// `Util.other`'s facts are its text — until it carries a marker no reader names, which may say a fact of it was lost
 		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
@@ -4053,7 +4453,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(rewritten(marking('Util.other'), () -> hubAsk(files)), r -> !r.match(Proven)); // noqa: prefer-bind
 	}
 
-	@:pin('control') @:killer('M-GRAPH-FIELD-ACCESS-UNKNOWN')
+	@:pin('control')
+	@:killer('M-GRAPH-FIELD-ACCESS-UNKNOWN')
 	public function testAFieldAccessTheFactsReaderDoesNotKnowIsUnresolvedUnderTheTruth(): Void {
 		// a field fact's access is a closed list (`FieldFact.access`): through one this reader does not name, any accessor of
 		// the name may run, so the graph records the read as an unresolved access, as one off a dynamic receiver
@@ -4071,7 +4472,8 @@ class MemberReachFactsTest extends Test {
 		Assert.isTrue(unresolved('FFuture'), 'a read through an access no reader knows was resolved');
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-CALLED')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-CALLED')
 	public function testAFieldTheCompilerCallsLeavesItsFunctionToTheSyntaxUnderTheTruth(): Void {
 		// `d.items(1)` calls whatever a dynamic receiver's `items` holds: the facts record a call and no field read, so `poke`
 		// is read by its syntax, where the receiver may be the one holding the member and its value is handed to a call
@@ -4080,7 +4482,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-FRESH') @:killer('M-TOUCH-TYPED-SYNTAX-TOO')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-FRESH')
+	@:killer('M-TOUCH-TYPED-SYNTAX-TOO')
 	public function testAWriteTheCompilerSeesStoringOnlyFreshValuesLetsNothingEscape(): Void {
 		// every value `reset` stores is built right there, which the syntax cannot see through the conditional
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
@@ -4090,7 +4494,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-TYPED-SELF')
+	@:pin('control')
+	@:killer('M-TOUCH-TYPED-SELF')
 	public function testAConstructorTouchingItsOwnObjectIsExcusedUnderTheTruth(): Void {
 		// the object `new Main()` builds is not the one the loop runs on: its constructor writes its own `items`
 		final main: String = 'class Main {\n\tpublic var items:Array<Int> = [];\n\tpublic function new() {\n\t\tthis.items = [];\n'
@@ -4100,7 +4505,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, true, null, true, null, null, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-TYPED-ARRAY-NEVER') @:killer('M-REACH-TYPED-ARRAY-ANY')
+	@:pin('control')
+	@:killer('M-REACH-TYPED-ARRAY-NEVER')
+	@:killer('M-REACH-TYPED-ARRAY-ANY')
 	public function testAnUnannotatedArrayMemberIsAnArrayUnderTheTruth(): Void {
 		// `items` declares no type, so the index cannot say `items.indexOf` is the array's own reader and not a method that
 		// changes it; the facts type it `Array<Int>`. A `Bag` with an `indexOf` of its own is no array
@@ -4117,7 +4524,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(fixture('new Bag()')), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-REACH-PROPERTY-STRAIGHT') @:killer('M-REACH-PROPERTY-GETTER')
+	@:pin('control')
+	@:killer('M-REACH-PROPERTY-STRAIGHT')
+	@:killer('M-REACH-PROPERTY-GETTER')
 	@:killer('M-REACH-FACTS-FIELDS-UNTRUE')
 	public function testAPropertyReadStraightFromItsStorageIsAnsweredUnderTheTruth(): Void {
 		// a write of `items` runs `set_items`, a call the facts name, whose body writes the storage by a field access, and a
@@ -4136,7 +4545,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(askAs(fixture('get, set', 'h();'), Write, true), r -> r.match(Unknown(UnresolvedDispatch(_, _, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH') @:killer('M-REACH-REWRITTEN-UNTRUE')
+	@:pin('control')
+	@:killer('M-REACH-REWRITTEN-TRUTH')
+	@:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testCodeABuildMacroLeftAsItsTextIsAnsweredUnderTheTruth(): Void {
 		// `Main` inherits `Base`'s `@:autoBuild`, whose macro hands the fields back as they are: the facts, the code every build
 		// compiled, are `Main`'s text, so no touch of `items` hides in code the text does not show. Without the whole list of
@@ -4156,7 +4567,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(helperBuiltBy('keep', 'h.calm();')), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-OWNER-IDS') @:killer('M-GRAPH-ADOPT-NONE') @:killer('M-GRAPH-ADOPT-UNRECORDED')
+	@:pin('control')
+	@:killer('M-FACTS-OWNER-IDS')
+	@:killer('M-GRAPH-ADOPT-NONE')
+	@:killer('M-GRAPH-ADOPT-UNRECORDED')
 	@:killer('M-TOUCH-ADOPTED-SYNTAX')
 	public function testACalleeABuildMacroRewroteToTouchTheMemberReachesItUnderTheTruth(): Void {
 		// `Mac.rewrite` makes `Helper.calm` push onto `items`, which its text never names: the facts, read by the node's id
@@ -4165,21 +4579,27 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(helperBuiltBy('rewrite', 'h.calm();')), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-GRAPH-ADOPT-NONE') @:killer('M-TOUCH-ADOPTED-SYNTAX')
+	@:pin('control')
+	@:killer('M-GRAPH-ADOPT-NONE')
+	@:killer('M-TOUCH-ADOPTED-SYNTAX')
 	public function testAMethodABuildMacroAddedTouchingTheMemberReachesItUnderTheTruth(): Void {
 		// `Mac.add` gives `Helper` an `added` that pushes onto `items`: no text declares it, the region calls it. Its facts make
 		// it a node of the graph, which the call the facts name reaches
 		assertMatch(truthAsk(helperBuiltBy('add', 'h.added();')), r -> r.match(Reached(_)));
 	}
 
-	@:pin('control') @:killer('M-TOUCH-ADOPTED-UNREAD')
+	@:pin('control')
+	@:killer('M-TOUCH-ADOPTED-UNREAD')
 	public function testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth(): Void {
 		// `Mac.dyn`'s `added` calls what a dynamic value's `items` holds, a call the facts do not read as an access of the
 		// member, and no text holds the body to read instead: it touches the member and lets its value go
 		assertMatch(truthAsk(helperBuiltBy('dyn', 'h.added();')), r -> r.match(Unknown(Escape(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-ENTRY-REWRITTEN') @:killer('M-REACH-ENTRY-MEMBER') @:killer('M-REACH-TEXTUAL-ALWAYS')
+	@:pin('control')
+	@:killer('M-REACH-ENTRY-REWRITTEN')
+	@:killer('M-REACH-ENTRY-MEMBER')
+	@:killer('M-REACH-TEXTUAL-ALWAYS')
 	public function testARegionOfABodyABuildMacroReplacedIsNoProofUnderTheTruth(): Void {
 		// `Mac.loop` replaces `Main.f`, the region's function, by a push onto `Store.items`: the region's text is none of what
 		// runs, whatever the owner of the member
@@ -4195,7 +4615,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, store, false, null, null, null, true), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REACH-ENTRY-REWRITTEN') @:killer('M-REACH-ENTRY-LOCAL')
+	@:pin('control')
+	@:killer('M-REACH-ENTRY-REWRITTEN')
+	@:killer('M-REACH-ENTRY-LOCAL')
 	public function testALocalOfABodyABuildMacroReplacedIsNoProofUnderTheTruth(): Void {
 		// `Mac.loop` replaces `Main.f`, where the region and the local are, by a push onto `Store.items`: the text declaring the
 		// local is none of what runs
@@ -4211,7 +4633,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(askLocal(files, 'xs'), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-FIELDS-ANY')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-FIELDS-ANY')
 	public function testAVariableABuildMacroMadeAPropertyKeepsItsOwnerUnknownUnderTheTruth(): Void {
 		// `Mac.prop` makes `items` a property its text never declares: a read of it runs `get_items`, which hands out `shared`,
 		// the array `calm` pushes onto. The text's plain variable is not what every build compiled
@@ -4227,7 +4650,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-CALLS-ANY')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-CALLS-ANY')
 	public function testALocalACalleeRebuiltInPlaceHandsOutIsNoProofUnderTheTruth(): Void {
 		// `Mac.recall` gives `Line.all` the body `return Main.make()` at the old body's range: every fact of it is in place, but no
 		// text there spells `make`, whose `kept` the region changes. The text of `all` would hand out a fresh array
@@ -4244,7 +4668,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(askLocal(files, 'xs'), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-SPLICED')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-EXPANSION')
+	@:killer('M-FACTS-TEXT-EXPANSION-SPLICED')
 	@:killer('M-FACTS-EXPANSION-NESTED')
 	public function testAnExpressionMacroAnInlinedMethodCallsLeavesItsCallerItsTextUnderTheTruth(): Void {
 		// the client's `GridTools.saveGridJSON`: the inlined `Shown.mask` calls the expression macro `Mac.t`, whose expansion lies in
@@ -4257,8 +4683,11 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, null, false, HUB_BUILD), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION') @:killer('M-FACTS-TEXT-EXPANSION-BODY')
-	@:killer('M-FACTS-EXPANSION-RECORDED') @:killer('M-FACTS-MACRO-CALLEE')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-EXPANSION')
+	@:killer('M-FACTS-TEXT-EXPANSION-BODY')
+	@:killer('M-FACTS-EXPANSION-RECORDED')
+	@:killer('M-FACTS-MACRO-CALLEE')
 	public function testAnExpressionMacroTheTextCallsLeavesItsTypeItsTextUnderTheTruth(): Void {
 		// `Util.other` calls the expression macro `Mac.t` itself (the client's `t(...)` everywhere): the code its expansion holds is
 		// the text's, although no range of `Util` holds it
@@ -4282,7 +4711,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-LITERAL')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-LITERAL')
 	public function testAConstructionALiteralWritesIsItsTextUnderTheTruth(): Void {
 		// the compiler constructs an `EReg` at a regex literal and a `Map` at an array literal a map is expected of (the client's
 		// `GridTools.loadGridJSON`, openfl's `TextField.set_htmlText`)
@@ -4293,7 +4723,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-LITERAL-FLAGS')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-LITERAL-FLAGS')
 	public function testARegexLiteralWithFlagsIsItsTextUnderTheTruth(): Void {
 		// the compiler's position of the `EReg` it constructs leaves the literal's flags out (openfl's
 		// `TextField.set_htmlText`: `~/\s+/g`)
@@ -4301,14 +4732,17 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-ABSTRACT-NEW')
 	public function testAConstructionOfAnAbstractIsItsTextUnderTheTruth(): Void {
 		// `new Map()` is a construction of `Map`'s implementation class (openfl's `DisplayObject.__broadcastEvents`)
 		final files: Map<String, String> = utilWith('public static function other():Map<String, Int> return new Map<String, Int>();');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-GENERIC-BUILD') @:killer('M-FACTS-GENERIC-RECORDED')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-GENERIC-BUILD')
+	@:killer('M-FACTS-GENERIC-RECORDED')
 	public function testAConstructionOfAGenericBuildIsItsTextUnderTheTruth(): Void {
 		// lime's and openfl's `Preloader`: `new Event<Void->Void>()` constructs the class `Event`'s `@:genericBuild` defined
 		// for `Void->Void`, whose name no text spells — imported and qualified alike
@@ -4320,7 +4754,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, null, false, HUB_BUILD), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-GENERIC-BUILT') @:killer('M-FACTS-ROUNDS')
+	@:pin('control')
+	@:killer('M-FACTS-GENERIC-BUILT')
+	@:killer('M-FACTS-ROUNDS')
 	public function testAConstructionABuildMacroSwappedForAnotherGenericBuildIsNoTextUnderTheTruth(): Void {
 		// `Gen.swap` constructs `Ev<String>` where the text writes `Ev<Int>`: what the text names builds another class
 		final files: Map<String, String> = genericFixture(
@@ -4338,21 +4774,24 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> !r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-PURE-CALL')
 	public function testATypeCheckTheCompilerCallsIsItsTextUnderTheTruth(): Void {
 		// `o is Util` is a call of `Std.isOfType`, which runs no project code (openfl's `DisplayObject.dispatchEvent`)
 		final files: Map<String, String> = utilWith('public static function other(o:Dynamic):Bool return o is Util;');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-CONVERSION-CALL')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-CONVERSION-CALL')
 	public function testAConversionTheCompilerCallsIsItsTextUnderTheTruth(): Void {
 		// a concatenated array is converted by a call of `Std.string`, which the truth reads as a conversion site
 		final files: Map<String, String> = utilWith('public static function other(a:Array<Int>):String return \'a\' + a;');
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-ACCESSOR-NAME')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-ACCESSOR-NAME')
 	public function testAnAccessorCalledByItsOwnNameIsItsTextUnderTheTruth(): Void {
 		// `set_v(2)` calls the setter by its own name, not through the property (openfl's `TextField.set_text`)
 		final files: Map<String, String> = utilWith(
@@ -4362,7 +4801,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-SPLICES')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-JOINED-SPLICES')
 	public function testAFieldTheCompilerPlacesAcrossTwoInlinedGettersIsItsTextUnderTheTruth(): Void {
 		// `a.nn` inlines `get_nn`, whose `base` inlines `get_base`: the compiler places the read of `n` from the one's code to
 		// the other's (the client's `StoreItemData.filePath`)
@@ -4375,7 +4815,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-ACCESS')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-JOINED-ACCESS')
 	public function testAMemberOfWhatAnInlinedGetterReturnsIsItsTextUnderTheTruth(): Void {
 		// `Mgr.instance` inlines `get_instance`: the compiler places the call of `get_q` from that code in `Mgr.hx` to the end of
 		// `.q` in `Util.hx` (the client's `PopupManager.instance.notification`, openfl's `textFormatRanges[i].end`)
@@ -4391,7 +4832,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-CONVERSION') @:killer('M-FACTS-TEXT-JOINED-PLACED')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-JOINED-CONVERSION')
+	@:killer('M-FACTS-TEXT-JOINED-PLACED')
 	public function testAConversionOfAFieldOfWhatAnInlinedIndexReturnsIsItsTextUnderTheTruth(): Void {
 		// `${m[k].e}` inlines `Map.get`: the compiler places the conversion of `.e`, as the read of it, from that code in
 		// `Map.hx` to the end of `.e` in `Util.hx` (the client's `domain.Node.parse`)
@@ -4408,7 +4851,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-PURE-CALL') @:killer('M-FACTS-TEXT-ABSTRACT-NEW')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-PURE-CALL')
+	@:killer('M-FACTS-TEXT-ABSTRACT-NEW')
 	public function testALibraryClassTheWalkEntersIsItsTextUnderTheTruth(): Void {
 		// openfl's `DisplayObject`, rebuilt from its own fields by a global macro: the walk enters `Disp.calm`, of a class whose
 		// `check` tests a type and whose `made` constructs a `Map`
@@ -4421,7 +4866,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, null, false, HUB_BUILD, ['Disp.hx' => disp], null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-DECLARATION-RUN')
+	@:pin('control')
+	@:killer('M-FACTS-DECLARATION-RUN')
 	public function testAnAbstractsInlineConstructorIsItsTextUnderTheTruth(): Void {
 		// haxe's `Rest` and a client abstract alike: `inline function new(a) this = a;` is lowered into the
 		// implementation class's `_new`, which the compiler places at the declaration's first modifier, before the function
@@ -4430,7 +4876,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(hubFixture('Wrap.make(1);', ['Wrap.hx' => wrap])), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-VIEW-DECLARATION-RUN')
+	@:pin('control')
+	@:killer('M-FACTS-VIEW-DECLARATION-RUN')
 	public function testAnAbstractsInlineConstructorIsReadFromItsFactsUnderTheTruth(): Void {
 		// the walk enters `Wrap.new` through the inlined `_new`: read by its syntax, it would admit every conversion of any
 		// code — `Loud.of`, which changes `items` — but its facts, placed at the first modifier, are its code
@@ -4445,7 +4892,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-MADE-FORWARDS')
+	@:pin('control')
+	@:killer('M-FACTS-MADE-FORWARDS')
 	public function testAConstructorTheCompilerMadeHandingItsParametersOnIsItsTextUnderTheTruth(): Void {
 		// a class the text gives no constructor gets its super's, which hands the parameters on (the client's `HttpEntityBase`, `Col`)
 		final files: Map<String, String> = hubFixture('new Made(1).poke();', [
@@ -4455,7 +4903,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-BINDING')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-BINDING')
 	public function testALocalTheCompilerBindsAValueTheTextWritesToIsItsTextUnderTheTruth(): Void {
 		// `n ?? 3` reads `n` once into a `tmp` the compiler declares at `n` (the client's `Typography`, `ShapeBase`)
 		assertMatch(hubAsk(utilWith('public static function other(n:Null<Int>):Int return n ?? 3;')), r -> r.match(Proven));
@@ -4472,7 +4921,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(compound), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-BINDING-TRIMMED')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-BINDING-TRIMMED')
 	public function testABindingOfAnOperandWrittenBeforeAnotherOperatorIsItsTextUnderTheTruth(): Void {
 		// `a + b + c` with `c` an abstract whose commutative `+` takes it first: to keep the order of evaluation the compiler
 		// binds `lhs` to `a + b`, whose node runs on to the space before the next `+` (the client's `RowEntrySet`:
@@ -4485,7 +4935,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-DECLARES')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-DECLARES')
 	public function testALocalPlacedAtItsDeclarationsKeywordIsItsTextUnderTheTruth(): Void {
 		// under `@:privateAccess` the compiler places `final q` at `final` alone (the client's `ProgressCurtain`)
 		final files: Map<String, String> =
@@ -4493,7 +4944,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-READ-AT-VALUE') @:killer('M-FACTS-TEXT-BINDING')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-READ-AT-VALUE')
+	@:killer('M-FACTS-TEXT-BINDING')
 	public function testTheFunctionAPartialApplicationMakesIsItsTextUnderTheTruth(): Void {
 		// `add.bind(1)` binds `x` at `1` and makes a function reading it and `y` at `add.bind` (the client's `Editor`, `StoreBase`)
 		final files: Map<String, String> = utilWith(
@@ -4502,7 +4955,10 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-READ-AT-VALUE') @:killer('M-FACTS-TEXT-INTERPOLATED-VALUE') @:killer('M-FACTS-TEXT-LITERAL-END')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-READ-AT-VALUE')
+	@:killer('M-FACTS-TEXT-INTERPOLATED-VALUE')
+	@:killer('M-FACTS-TEXT-LITERAL-END')
 	public function testAReadOfAnInlinedArgumentAtTheValueTheTextWritesIsItsTextUnderTheTruth(): Void {
 		// a local inline function's parameter, read in an interpolation, is read at the argument the text writes — an
 		// interpolated string's value, up to its last part, spaces and all, or an empty string (the client's
@@ -4515,13 +4971,15 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-COMPREHENSION')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-COMPREHENSION')
 	public function testThePushesOfAComprehensionAreItsTextUnderTheTruth(): Void {
 		// the compiler builds `[for (…) e]` by pushing each `e`, positioned at `e` (the client's `Grid.get_gridData`, `Editor`)
 		assertMatch(hubAsk(utilWith('public static function other():Array<Int> return [for (i in 0...3) i * 2];')), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-INTERPOLATION')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-INTERPOLATION')
 	public function testCodeInAnInterpolatedStringPastAnEscapeIsItsTextUnderTheTruth(): Void {
 		// the compiler counts `\t` as one character, so `h.n` past it sits one short (the client's `ErrorManager`, `FileIO`)
 		final files: Map<String, String> = utilWith(
@@ -4536,7 +4994,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(arrow), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-CONVERTS')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-CONVERTS')
 	public function testAnAbstractsConversionAnInterpolationCallsIsItsTextUnderTheTruth(): Void {
 		// `${c}` of an abstract calls its `toString` statically, at the value
 		final cs: String = 'abstract Cs(Int) from Int {\n\tpublic function toString():String return \'c\';\n}\n';
@@ -4545,7 +5004,8 @@ class MemberReachFactsTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-TYPEDEF-NEW')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-TYPEDEF-NEW')
 	public function testAConstructionThroughAnImportAliasIsItsTextUnderTheTruth(): Void {
 		// `import sys.ssl.Socket as SslSocket; new SslSocket()` (the client's `UrlReaderQueue`): the compiler types the alias as a
 		// typedef
@@ -4560,7 +5020,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-TYPEDEF-NEW')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-TYPEDEF-NEW')
 	public function testAConstructionThroughATypedefIsItsTextUnderTheTruth(): Void {
 		// a typedef each platform points at its own class (a client shape)
 		final files: Map<String, String> = utilWith(
@@ -4569,14 +5030,16 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-ABSTRACT-CTOR-CALL')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-ABSTRACT-CTOR-CALL')
 	public function testACallOfAnAbstractsConstructorIsItsTextUnderTheTruth(): Void {
 		// `new URLVariables()` of a constructor that is not inline is a call of its implementation's `_new` (the client's `MakeDoc`)
 		final box: String = 'abstract Box(Array<Int>) {\n\tpublic function new() this = [];\n}\n';
 		assertMatch(hubAsk(utilWith('public static function other():Box return new Box();', ['Box.hx' => box])), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-INLINED-WHOLE')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-INLINED-WHOLE')
 	public function testAnInitializerThatIsWhollyAnInlinedCallIsItsTextUnderTheTruth(): Void {
 		// the compiler types `twice(3)` as `twice`'s body, at its positions, and records no call (the client's `DialogShade`, `UInt`)
 		final files: Map<String, String> =
@@ -4584,14 +5047,16 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-INLINED-CONSTRUCTION')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-INLINED-CONSTRUCTION')
 	public function testAnInitializerThatIsWhollyAnInlinedConstructorIsItsTextUnderTheTruth(): Void {
 		// `new ByteArray()` of an abstract whose constructor is inline is its body (the client's `MakeDoc.pdfByteArray`)
 		final box: String = 'abstract Box(Array<Int>) {\n\tpublic inline function new() this = [];\n}\n';
 		assertMatch(hubAsk(utilWith('static var B:Box = new Box();', ['Box.hx' => box])), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-SITE')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-EXPANSION-SITE')
 	public function testAnExpressionMacroInAnInlinedCallsArgumentIsItsTextUnderTheTruth(): Void {
 		// `Words.rep(Mac.t('x'), …)`: the expansion stands for `s` in `rep`'s code, the call of the macro at `rep`'s site
 		// (the client's `StringUtil.replace(t(…), …)`)
@@ -4601,7 +5066,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-SITE-HOLDS-OWN-CODE')
+	@:pin('control')
+	@:killer('M-FACTS-SITE-HOLDS-OWN-CODE')
 	public function testAnExpressionMacroInAnInlinedCallBesideACapturedThisIsItsTextUnderTheTruth(): Void {
 		// a method's one statement `Shown.run(() -> self(), Mac.t('x'))`: the closure among the inlined call's arguments
 		// captures `this`, which the compiler binds ahead of the splice at the whole block (the client's `Editor.saveAs`)
@@ -4613,7 +5079,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-SIBLING')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-EXPANSION-SIBLING')
 	public function testAnExpressionMacroAnInlinedSetterIsHandedIsItsTextUnderTheTruth(): Void {
 		// the inline `apply` assigns `Mac.t(…)` to a property whose inline setter the expansion stands in for: the call of the
 		// macro is in `apply`'s code, spliced at the setter's site (the client's `TextRowBase.applyTextLanguage`)
@@ -4625,7 +5092,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-EXPANSION-OUTER')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-EXPANSION-OUTER')
 	public function testAnExpressionMacroInAWhollyInlinedInitializerIsItsTextUnderTheTruth(): Void {
 		// `var label = Shown.label(Mac.t('Move'))` is wholly `label`'s body, where the expansion stands for its parameter
 		// (the client's `PickerOperations._moveButton`)
@@ -4636,7 +5104,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-SITE')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-JOINED-SITE')
 	public function testAWriteOfAFieldOfAnInlinedIndexAccessIsItsTextUnderTheTruth(): Void {
 		// `v[0 + j].x += (2.0 * j)`: the compiler joins the written field's range from the text's value to the inlined `get`
 		// (openfl's `TextEngine.setTextAlignment`: `layoutGroups[i + j].offsetX += …`)
@@ -4656,7 +5125,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-WALK-JOINED-START')
+	@:pin('control')
+	@:killer('M-FACTS-WALK-JOINED-START')
 	public function testAFieldReadJoinedAcrossTwoGettersInACallbackIsItsTextUnderTheTruth(): Void {
 		// in the callback, the inline `isFolderWithChild` reads `folder`, whose getter reads it off what the inline `base`
 		// returns: the compiler joins the read from one getter's code to the other's, and no method's range holds it whole
@@ -4668,7 +5138,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-JOINED-OTHER-SPLICE')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-JOINED-OTHER-SPLICE')
 	public function testAFieldReadJoinedFromAnIndexAccessToTheAccessAnotherInlinedMethodWritesIsItsTextUnderTheTruth(): Void {
 		// the inline `Pa.frameOf` reads `a[0].frame` through the inline `get` of an abstract in another file: the compiler
 		// joins the read from `get`'s code to `.frame` in `frameOf`'s, keeping `get`'s file for both offsets — whichever
@@ -4692,7 +5163,8 @@ class MemberReachFactsTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-FACTS-WALK-WRITTEN-CONSTANT')
+	@:pin('control')
+	@:killer('M-FACTS-WALK-WRITTEN-CONSTANT')
 	public function testAnInlinedMethodWhoseBodyIsAnInlinedCallOfConstantsIsItsTextUnderTheTruth(): Void {
 		// `percentLimit(v)` is `limit(v, 0, 1)`: of `percentLimit` the compiler keeps the constants alone, in `limit`'s code
 		// (the client's `ScrollContainer.set_percent`)
@@ -4704,7 +5176,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TEXT-ALIAS-TYPEDEF')
+	@:pin('control')
+	@:killer('M-FACTS-TEXT-ALIAS-TYPEDEF')
 	public function testATypedefAliasingTheTypeElsewhereIsNoneOfItsCodeUnderTheTruth(): Void {
 		// tink's `typedef Any = std.Any` in another file: a typed type the name stands for, declaring no code
 		final alias: String = 'package other;\n\ntypedef Holder = std.Holder;\n';
@@ -4721,7 +5194,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(hubAsk(files), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH')
+	@:pin('control')
+	@:killer('M-REACH-REWRITTEN-TRUTH')
 	public function testABuildMacroOnlyTheCompilerSawChangingNothingIsNoneUnderTheTruth(): Void {
 		// the listed twin of `testABuildMacroOnlyTheCompilerSawIsUnknown`: the `@:build` a global `addGlobalMetadata` puts on
 		// `Main` hands back no fields, so what every build compiled is `Main`'s text
@@ -4732,7 +5206,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main, 'Mac.hx' => mac], null, true, null, false, build, null, null, true), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-REACH-REWRITTEN-TRUTH') @:killer('M-REACH-REWRITTEN-UNTRUE')
+	@:pin('control')
+	@:killer('M-REACH-REWRITTEN-TRUTH')
+	@:killer('M-REACH-REWRITTEN-UNTRUE')
 	public function testAnArrayMemberOfASubclassUnderAnAncestorsAutoBuildIsAnsweredUnderTheTruth(): Void {
 		// the client's `ScalerView extends Sprite`: an ancestor's `@:autoBuild` that changes nothing but a class carrying `@:bind`, and a
 		// global build rebuilding every class from its own fields, over a subclass looping over its own private array
@@ -4751,7 +5227,8 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(files, null, true, points, false, build), r -> r.match(Unknown(Reification(_, _))));
 	}
 
-	@:pin('control') @:killer('M-FACTS-INLINED-RECEIVER')
+	@:pin('control')
+	@:killer('M-FACTS-INLINED-RECEIVER')
 	public function testAKeyValueLoopOverTheMemberLetsNothingEscapeUnderTheTruth(): Void {
 		// the client's `ScalerView`: `for (i => p in _points)` is the inlined `_points.keyValueIterator()`, whose receiver the compiler
 		// binds to a local of its own and hands to `new ArrayKeyValueIterator(_this)` — a read the facts took for a value
@@ -4769,7 +5246,9 @@ class MemberReachFactsTest extends Test {
 		assertMatch(ask(['Main.hx' => main], null, false, points), r -> r.match(Proven));
 	}
 
-	@:pin('control') @:killer('M-FACTS-RECEIVER-BLOCK') @:killer('M-FACTS-RECEIVER-PARAM')
+	@:pin('control')
+	@:killer('M-FACTS-RECEIVER-BLOCK')
+	@:killer('M-FACTS-RECEIVER-PARAM')
 	public function testAMemberAnInlinedMethodTakesAsAnArgumentStillEscapesUnderTheTruth(): Void {
 		// `Keeper.push` and `Keeper.pop` bear the array's own method names, and each keeps the array it is handed: `push`
 		// through a local of its own named as the compiler names a receiver, `pop` through a parameter so named, which the
@@ -5046,8 +5525,14 @@ class MemberReachFactsTest extends Test {
 		Assert.isTrue(expected(result), 'got $result', pos);
 	}
 
-	@:pin('control') @:killer('M-REFLECTED-CLASSLESS') @:killer('M-REFLECTED-CLASSLESS-ESCAPES') @:killer('M-CLASSLESS-STRUCTURE')
-	@:killer('M-CLASSLESS-CATCH-ALL') @:killer('M-CLASSLESS-NULLABLE') @:killer('M-CLASSLESS-TYPEDEF') @:killer('M-REFLECTED-CLASSLESS-PLAIN')
+	@:pin('control')
+	@:killer('M-REFLECTED-CLASSLESS')
+	@:killer('M-REFLECTED-CLASSLESS-ESCAPES')
+	@:killer('M-CLASSLESS-STRUCTURE')
+	@:killer('M-CLASSLESS-CATCH-ALL')
+	@:killer('M-CLASSLESS-NULLABLE')
+	@:killer('M-CLASSLESS-TYPEDEF')
+	@:killer('M-REFLECTED-CLASSLESS-PLAIN')
 	public function testAComputedNameOnAnObjectOfNoClassReachesOnlyAnEscapedClassUnderTheTruth(): Void {
 		// `o` is typed by no class, and no literal here: a structure, whose
 		// fields no class declares, or an instance that left the type system —
@@ -5089,8 +5574,13 @@ class MemberReachFactsTest extends Test {
 		assertMatch(unlisted, r -> r.match(Unknown(DynamicName(_, _))));
 	}
 
-	@:pin('control') @:killer('M-REFLECTED-FRESH') @:killer('M-REFLECTED-FRESH-PLAIN') @:killer('M-FACTS-REFL-FRESH')
-	@:killer('M-FACTS-REFL-FRESH-LOCAL') @:killer('M-FACTS-REFL-FRESH-WRITTEN') @:killer('M-FACTS-REFL-FRESH-ANY')
+	@:pin('control')
+	@:killer('M-REFLECTED-FRESH')
+	@:killer('M-REFLECTED-FRESH-PLAIN')
+	@:killer('M-FACTS-REFL-FRESH')
+	@:killer('M-FACTS-REFL-FRESH-LOCAL')
+	@:killer('M-FACTS-REFL-FRESH-WRITTEN')
+	@:killer('M-FACTS-REFL-FRESH-ANY')
 	public function testAComputedNameOnAStructureTheCodeBuiltReachesNoClassUnderTheTruth(): Void {
 		// a `Main` escaped, so a value of no class may be one — but an object literal, or a local holding one and never written
 		// again, is that structure: a name computed at run time reaches its own fields alone (lime's `ApplicationMain.create`
@@ -5171,8 +5661,12 @@ class MemberReachFactsTest extends Test {
 		Assert.isTrue(proven ? result.match(Proven) : result.match(Unknown(DynamicName(_, _))), 'got $result', pos);
 	}
 
-	@:pin('control') @:killer('M-FACTS-FRESH-MAP') @:killer('M-GUARDED-AND') @:killer('M-GUARDED-ELSE')
-	@:killer('M-GUARDED-HOP') @:killer('M-GUARDED-ASSUMED')
+	@:pin('control')
+	@:killer('M-FACTS-FRESH-MAP')
+	@:killer('M-GUARDED-AND')
+	@:killer('M-GUARDED-ELSE')
+	@:killer('M-GUARDED-HOP')
+	@:killer('M-GUARDED-ASSUMED')
 	public function testANullGuardOfAParameterOnlyEverHandedNullKeepsItsBranchFromRunningUnderTheTruth(): Void {
 		// every invocation of `create` hands `config` null: the call, and the value stored where no code reads it again — so
 		// the reflection behind `config != null` never runs (lime's `ApplicationMain.create`, registered as an entry point)
@@ -5197,10 +5691,18 @@ class MemberReachFactsTest extends Test {
 		assertGuarded(guardedFixture(), false, null, false);
 	}
 
-	@:pin('control') @:killer('M-GUARDED-NEVER-CALLED') @:killer('M-GUARDED-OVERRIDES')
-	@:killer('M-GUARDED-PLAIN-CALLS') @:killer('M-GUARDED-PLAIN-READS') @:killer('M-GUARDED-CONTAINER')
-	@:killer('M-GUARDED-CONTAINER-FRESH') @:killer('M-GUARDED-CONTAINER-READS') @:killer('M-GUARDED-REFLECTED')
-	@:killer('M-GUARDED-TARGET-CODE') @:killer('M-GUARDED-OBTAINED') @:killer('M-GUARDED-MEMBER-NAME')
+	@:pin('control')
+	@:killer('M-GUARDED-NEVER-CALLED')
+	@:killer('M-GUARDED-OVERRIDES')
+	@:killer('M-GUARDED-PLAIN-CALLS')
+	@:killer('M-GUARDED-PLAIN-READS')
+	@:killer('M-GUARDED-CONTAINER')
+	@:killer('M-GUARDED-CONTAINER-FRESH')
+	@:killer('M-GUARDED-CONTAINER-READS')
+	@:killer('M-GUARDED-REFLECTED')
+	@:killer('M-GUARDED-TARGET-CODE')
+	@:killer('M-GUARDED-OBTAINED')
+	@:killer('M-GUARDED-MEMBER-NAME')
 	public function testAMethodValueSomeCodeMayCallLeavesItsParameterUnknownUnderTheTruth(): Void {
 		// the stored value is read and called, with an object `Main` escaped into
 		final fire: String = '\tpublic static function fire():Void entries["app"]({ items: [] });\n';
@@ -5250,8 +5752,13 @@ class MemberReachFactsTest extends Test {
 		assertGuarded(guardedFixture('Boot.boot(); trace(Reflect.field(Boot, "create"));'), false);
 	}
 
-	@:pin('control') @:killer('M-GUARDED-HANDS-NULL') @:killer('M-GUARDED-KEPT') @:killer('M-FACTS-KEPT-DEFAULT') @:killer('M-FACTS-KEPT-WRITTEN')
-	@:killer('M-FACTS-KEPT-BUILDS') @:killer('M-GUARDED-EQUALITY')
+	@:pin('control')
+	@:killer('M-GUARDED-HANDS-NULL')
+	@:killer('M-GUARDED-KEPT')
+	@:killer('M-FACTS-KEPT-DEFAULT')
+	@:killer('M-FACTS-KEPT-WRITTEN')
+	@:killer('M-FACTS-KEPT-BUILDS')
+	@:killer('M-GUARDED-EQUALITY')
 	public function testAParameterAnotherValueMayReachKeepsItsGuardLiveUnderTheTruth(): Void {
 		// a call handing it an object, an assignment, a default value replacing a null, a local of the same name
 		assertGuarded(guardedFixture('Boot.boot(); Boot.create({ items: [] });'), false);

@@ -18,7 +18,8 @@ import anyparse.query.cli.command.LintFixDriver;
  */
 class LintFixFactsSettleTest extends Test {
 
-	@:pin('control') @:killer('M-FIX-FACTS-SETTLED')
+	@:pin('control')
+	@:killer('M-FIX-FACTS-SETTLED')
 	public function testTheFactsSettleBeforeTheFirstWrite(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('factssettle', [

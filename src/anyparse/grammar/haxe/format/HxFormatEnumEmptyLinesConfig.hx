@@ -30,12 +30,20 @@ package anyparse.grammar.haxe.format;
  *    constructor. Feeds `opt.enumAfterFieldsWithDocComments`; absent keeps the
  *    source blank.
  */
-@:peg typedef HxFormatEnumEmptyLinesConfig = {
-	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-	@:optional var betweenFields: Int;
-	@:optional var beginType: Int;
-	@:optional var endType: Int;
-	@:optional var beginTypeIfDocComments: Int;
-	@:optional var endTypeIfDocComments: Int;
-	@:optional var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+@:peg
+typedef HxFormatEnumEmptyLinesConfig = {
+	@:optional
+	var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
+	@:optional
+	var betweenFields: Int;
+	@:optional
+	var beginType: Int;
+	@:optional
+	var endType: Int;
+	@:optional
+	var beginTypeIfDocComments: Int;
+	@:optional
+	var endTypeIfDocComments: Int;
+	@:optional
+	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 };

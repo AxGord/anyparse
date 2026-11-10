@@ -21,7 +21,8 @@ import unit.cli.CliFixture;
 @:nullSafety(Strict)
 class LintCategoryConfigTest extends Test {
 
-	@:pin('control') @:killer('M-CATEGORY-OUTRANKS-RULE')
+	@:pin('control')
+	@:killer('M-CATEGORY-OUTRANKS-RULE')
 	public function testARuleEntryOutranksItsCategory(): Void {
 		final config: LintConfig = LintConfig.parse(
 			'{"categories": {"docs": false}, "rules": {"empty-comment": true, "doc-length": true}}'
@@ -33,7 +34,8 @@ class LintCategoryConfigTest extends Test {
 		Assert.isFalse(Linter.enabledBy(off, new DocLength()), 'a rule entry false wins over its category true');
 	}
 
-	@:pin('control') @:killer('M-CATEGORY-IGNORED')
+	@:pin('control')
+	@:killer('M-CATEGORY-IGNORED')
 	public function testACategorySwitchesEveryMemberDefaultOffOnesIncluded(): Void {
 		Assert.isFalse(Linter.enabledBy(LintConfig.parse('{}'), new DocLength()), 'doc-length is default-off');
 		final on: LintConfig = LintConfig.parse('{"categories": {"docs": true}}');
@@ -44,14 +46,16 @@ class LintCategoryConfigTest extends Test {
 		Assert.isTrue(Linter.enabledBy(off, new MagicNumber()), 'a rule of another category keeps its default');
 	}
 
-	@:pin('control') @:killer('M-RULE-SHORTHAND-DROPPED')
+	@:pin('control')
+	@:killer('M-RULE-SHORTHAND-DROPPED')
 	public function testABooleanRuleEntryIsTheEnabledShorthand(): Void {
 		final config: LintConfig = LintConfig.parse('{"rules": {"doc-length": true, "magic-number": false}}');
 		Assert.isTrue(Linter.enabledBy(config, new DocLength()), 'true enables a default-off rule');
 		Assert.isFalse(Linter.enabledBy(config, new MagicNumber()), 'false disables a default-on rule');
 	}
 
-	@:pin('control') @:killer('M-OPTIONS-OBJECT-INERT')
+	@:pin('control')
+	@:killer('M-OPTIONS-OBJECT-INERT')
 	public function testAnObjectOfOptionsEnablesItsRule(): Void {
 		final config: LintConfig = LintConfig.parse('{"rules": {"doc-length": {"max": 5}}}');
 		Assert.isTrue(Linter.enabledBy(config, new DocLength()), 'an object of options enables a default-off rule');
@@ -60,7 +64,8 @@ class LintCategoryConfigTest extends Test {
 		Assert.isFalse(Linter.enabledBy(stated, new DocLength()), 'a stated enabled false still wins');
 	}
 
-	@:pin('control') @:killer('M-UNKNOWN-CATEGORY-SILENT')
+	@:pin('control')
+	@:killer('M-UNKNOWN-CATEGORY-SILENT')
 	public function testAnUnknownCategoryOrAValueOfTheWrongShapeIsNamedAndIgnored(): Void {
 		final doc: Null<LintDocument> =
 			LintDocuments.parseDocument('{"categories": {"style": true, "docs": "on", "loops": false}, "rules": {"naming": "error"}}');
@@ -77,7 +82,8 @@ class LintCategoryConfigTest extends Test {
 		Assert.isTrue(Linter.enabledBy(config, new EmptyComment()), 'the ignored docs value switches nothing');
 	}
 
-	@:pin('control') @:killer('M-CATEGORIES-NOT-INHERITED')
+	@:pin('control')
+	@:killer('M-CATEGORIES-NOT-INHERITED')
 	public function testANestedDocumentInheritsBothSectionsKeyByKey(): Void {
 		#if (sys || nodejs)
 		final root: String = CliFixture.writeTree('lintcategory', [
@@ -100,7 +106,8 @@ class LintCategoryConfigTest extends Test {
 	 * an outer config's entry for one of its rules, either way, and an outer exception is not carried into a nested
 	 * document that restates the category.
 	 */
-	@:pin('control') @:killer('M-CHAIN-WIDE-RULE-ENTRY')
+	@:pin('control')
+	@:killer('M-CHAIN-WIDE-RULE-ENTRY')
 	public function testTheNearestDocumentNamingTheRuleOrItsCategoryDecides(): Void {
 		#if (sys || nodejs)
 		final cases: Array<{

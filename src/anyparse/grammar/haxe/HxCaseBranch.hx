@@ -42,11 +42,17 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCaseBranch = {
-	@:trivia @:sep(',') @:trail(':') @:fmt(wrapRules('casePatternWrap'), elemChainOp('|'), beforeNewlineSlotFirst, captureTrailComment,
-		inlineElemTrivia) var patterns: Array<HxCasePattern>;
-	@:trivia @:tryparse @:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
+	@:trivia
+	@:sep(',')
+	@:trail(':')
+	@:fmt(wrapRules('casePatternWrap'), elemChainOp('|'), beforeNewlineSlotFirst, captureTrailComment, inlineElemTrivia)
+	var patterns: Array<HxCasePattern>;
+	@:trivia
+	@:tryparse
+	@:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
 		siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'),
-		belowWrappedLabel) var body: Array<HxStatement>;
+		belowWrappedLabel)
+	var body: Array<HxStatement>;
 };

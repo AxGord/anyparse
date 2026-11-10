@@ -40,7 +40,8 @@ class ThreadSafetyDominanceTest extends Test {
 	 * The main thread's own take of `_inner` while it must-holds `_outer` (every caller holds it) is brief too — under
 	 * `closedWorld`, where every caller is in the run.
 	 */
-	@:pin('control') @:killer('M-TS-DOM-OFF')
+	@:pin('control')
+	@:killer('M-TS-DOM-OFF')
 	public function testAMainTakeUnderTheOuterLockIsBrief(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info'], mainTakesOfInner(CLOSED));
@@ -53,7 +54,8 @@ class ThreadSafetyDominanceTest extends Test {
 	 * Without `closedWorld`, code outside the run may call `takeInner` holding nothing (`hxq lint core` over a project
 	 * whose `plugins/` calls it): its callers in the run say nothing of what it holds on entry, and its take stays long.
 	 */
-	@:pin('control') @:killer('M-TS-MEET-OUTSIDE')
+	@:pin('control')
+	@:killer('M-TS-MEET-OUTSIDE')
 	public function testAnOpenWorldCalleeHoldsNothingOnEntry(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning'], mainTakesOfInner(CONFIG));
@@ -67,7 +69,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * thread's take of `_inner` under `_outer` stays long — the review's give-detection holes, one probe each, beside the
 	 * control where nothing gives it back early.
 	 */
-	@:pin('control') @:killer('M-TS-LEAVES-CAUGHT-THROW') @:killer('M-TS-COVER-RETAKE')
+	@:pin('control')
+	@:killer('M-TS-LEAVES-CAUGHT-THROW')
+	@:killer('M-TS-COVER-RETAKE')
 	public function testAGiveOnTheWayToTheLongCallBreaksDominance(): Void {
 		#if (sys || nodejs)
 		Assert.same([1], [
@@ -118,7 +122,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * A function that takes the lock gives back what it took only where the take ran first, on the same object
 	 * (reviews `close-take-in-other-branch`, `handoff-handoff-other-object`).
 	 */
-	@:pin('control') @:killer('M-TS-GIVE-PATH') @:killer('M-TS-GIVE-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-GIVE-PATH')
+	@:killer('M-TS-GIVE-OBJECT')
 	public function testAGiveOfWhatTheFunctionDidNotTakeBreaksDominance(): Void {
 		#if (sys || nodejs)
 		Assert.same([0], [
@@ -149,7 +155,8 @@ class ThreadSafetyDominanceTest extends Test {
 	 * A give a loop repeats after one take gives back more than it took: every turn after the first releases a hold
 	 * begun elsewhere, and the lock dominates nothing (review round 2 `k1`; `k2` writes the second give out).
 	 */
-	@:pin('control') @:killer('M-TS-GIVE-REPEATED')
+	@:pin('control')
+	@:killer('M-TS-GIVE-REPEATED')
 	public function testAGiveRepeatedAfterOneTakeBreaksDominance(): Void {
 		#if (sys || nodejs)
 		final rest: String = '_inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release();';
@@ -189,7 +196,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * A lock some thread gives back without having taken it excludes no one for sure, nor does one only ever taken shared
 	 * or taken through two pairs of one class (reviews `kick-untaken-release-elsewhere`, `dom-sharedonly`, `dom-shared-False`).
 	 */
-	@:pin('control') @:killer('M-TS-DOM-OWNERLESS') @:killer('M-TS-DOM-SHARED')
+	@:pin('control')
+	@:killer('M-TS-DOM-OWNERLESS')
+	@:killer('M-TS-DOM-SHARED')
 	public function testOnlyAnOwnedExclusiveLockDominates(): Void {
 		#if (sys || nodejs)
 		Assert.same([0], [
@@ -219,7 +228,8 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/** One long hold of `_inner` without `_outer` and nothing dominates it: `quick` may wait for that one. */
-	@:pin('control') @:killer('M-TS-DOM-ANY-HOLD')
+	@:pin('control')
+	@:killer('M-TS-DOM-ANY-HOLD')
 	public function testALongHoldOutsideTheOuterLockBreaksDominance(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -236,7 +246,8 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/** `_outer` given back before the long call: the long part of the hold of `_inner` holds nothing. */
-	@:pin('control') @:killer('M-TS-DOM-RELEASE-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-DOM-RELEASE-IGNORED')
 	public function testAGiveOfTheOuterLockBeforeTheLongCallBreaksDominance(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -252,7 +263,8 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/** A give of `_outer` on a path that returns at once reaches no call after it: the long call still holds it. */
-	@:pin('control') @:killer('M-TS-DOM-EXITS-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-DOM-EXITS-IGNORED')
 	public function testAGiveOnAnExitingPathKeepsTheOuterLockHeld(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -272,7 +284,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * the client's `if (!batch) _batchLock.acquire()`: taken where the caller hands `batch = false`, held by the caller where it
 	 * hands `true` — under every valuation the long hold of `_inner` holds `_outer` — the caller's part known only under `closedWorld`.
 	 */
-	@:pin('control') @:killer('M-TS-DOM-UNDECIDED') @:killer('M-TS-DOM-ENTRY-NONE')
+	@:pin('control')
+	@:killer('M-TS-DOM-UNDECIDED')
+	@:killer('M-TS-DOM-ENTRY-NONE')
 	public function testAConditionalTakeTheValuationDecidesCounts(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -289,7 +303,8 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/** Dominance is per object: `_outer` of this object says nothing of another object's `_inner`. */
-	@:pin('control') @:killer('M-TS-DOM-ANY-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-DOM-ANY-OBJECT')
 	public function testAnotherObjectsLockIsNotDominated(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -306,7 +321,8 @@ class ThreadSafetyDominanceTest extends Test {
 	}
 
 	/** `--explain-long` names each dominated lock with the locks dominating it. */
-	@:pin('control') @:killer('M-TS-DOM-EXPLAIN-DROPPED')
+	@:pin('control')
+	@:killer('M-TS-DOM-EXPLAIN-DROPPED')
 	public function testExplainLongNamesTheDominatedLock(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('threadsafetydominance', [{ name: 'apq.json', source: CONFIG }]);
@@ -332,7 +348,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * A hold dominates its own take: in the window of a hold of `_outer`, `_outer` is held, whatever a valuation can prove
 	 * of the conditional take that opened it.
 	 */
-	@:pin('control') @:killer('M-TS-DOM-UNDER-HOLD-OFF') @:killer('M-TS-RUNS-AS-IS')
+	@:pin('control')
+	@:killer('M-TS-DOM-UNDER-HOLD-OFF')
+	@:killer('M-TS-RUNS-AS-IS')
 	public function testAHoldDominatesItsOwnTake(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -353,7 +371,9 @@ class ThreadSafetyDominanceTest extends Test {
 	 * the client's `getFileCount`: a hold of `_inner` outside `_outer` whose only unresolved call is a `trace` the config names a
 	 * short sink, run once: brief, so it leaves the dominance standing; in a loop it is long and breaks it.
 	 */
-	@:pin('control') @:killer('M-TS-DOM-BRIEF-NAMES-IGNORED') @:killer('M-TS-DOM-BRIEF-REPEATED')
+	@:pin('control')
+	@:killer('M-TS-DOM-BRIEF-NAMES-IGNORED')
+	@:killer('M-TS-DOM-BRIEF-REPEATED')
 	public function testABriefUnresolvedCallLeavesDominanceStanding(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"shortSinks":["trace"],'

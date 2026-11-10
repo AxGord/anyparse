@@ -32,7 +32,18 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxConditionalMeta = {
 	var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxCondDeclPrefix>;
-	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifMeta>;
-	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxCondDeclPrefix>>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxCondDeclPrefix>;
+	@:trivia
+	@:tryparse
+	@:fmt(elemSelfTrailsNewline)
+	var elseifs: Array<HxElseifMeta>;
+	@:optional
+	@:kw('#else')
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var elseBody: Null<Array<HxCondDeclPrefix>>;
 };

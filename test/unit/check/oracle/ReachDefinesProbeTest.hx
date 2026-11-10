@@ -26,7 +26,8 @@ using Lambda;
 @:nullSafety(Strict)
 class ReachDefinesProbeTest extends Test {
 
-	@:pin('control') @:killer('M-DEFINES-ONE-ARM')
+	@:pin('control')
+	@:killer('M-DEFINES-ONE-ARM')
 	public function testOnlyAOneArmTranscriptWithBothSetsAnswers(): Void {
 		final one: String = 'Defines: js;true\nParsed src/Main.hx\nAPQ-REACH-EARLY-DEFINES js;nodejs\nAPQ-REACH-FINAL-DEFINES '
 			+ 'js;nodejs;late\nAPQ-REACH-TYPE Main src/Main.hx\nAPQ-REACH-TYPE Sub src/Main.hx\nParsed src/Main.hx\n';
@@ -43,7 +44,8 @@ class ReachDefinesProbeTest extends Test {
 		Assert.isNull(ReachDefinesProbe.parse('no-final.hxml', 'Defines: js\nAPQ-REACH-EARLY-DEFINES js\n'));
 	}
 
-	@:pin('control') @:killer('M-DEFINES-VALUES-STABLE')
+	@:pin('control')
+	@:killer('M-DEFINES-VALUES-STABLE')
 	public function testAValueIsTheDefinesWhereTheFirstAndLastSetsAgree(): Void {
 		// `v` holds `4.307` from the first initialization macro to the end of typing; `w` changed in between, so which value a
 		// file saw depends on when it was parsed; `late` was not defined for every file at all
@@ -56,7 +58,8 @@ class ReachDefinesProbeTest extends Test {
 		Assert.isNull(ReachDefinesProbe.parse('broken.hxml', '${transcript}APQ-REACH-FINAL-VALUE ["v"]\n'));
 	}
 
-	@:pin('control') @:killer('M-DEFINES-VALUES-MACRO')
+	@:pin('control')
+	@:killer('M-DEFINES-VALUES-MACRO')
 	public function testTheProbeReadsTheValueEachDefineCarries(): Void {
 		// the compiler's own `haxe_ver`, a command-line value, and one an initialization macro changes, which has none
 		final dir: String = scratchDir();
@@ -74,7 +77,8 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-	@:pin('control') @:killer('M-DEFINES-PARSED-DROPPED')
+	@:pin('control')
+	@:killer('M-DEFINES-PARSED-DROPPED')
 	public function testTheProbeNamesEveryFileTheBuildParses(): Void {
 		// `Shape.hx` declares only a typedef: the build reads it, and no type it typed is declared there
 		final dir: String = scratchDir();
@@ -92,7 +96,8 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-	@:pin('control') @:killer('M-DEFINES-EARLY')
+	@:pin('control')
+	@:killer('M-DEFINES-EARLY')
 	public function testADefineAnInitializationMacroSetsIsNotDefinedForEveryFile(): Void {
 		// `first` types `B` before `second` defines `APQ_LATE`, so `B`'s `#if !APQ_LATE` IS compiled; a callback `first`
 		// registers types and then defines as well. Neither name is defined for every file — both are ever defined.
@@ -117,7 +122,8 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-	@:pin('control') @:killer('M-SPAWN-ORDER')
+	@:pin('control')
+	@:killer('M-SPAWN-ORDER')
 	public function testOverlappingProbesAnswerInTheOraclesOrder(): Void {
 		// The probes of several configurations run at once; each answer still belongs to the configuration it probed.
 		final dir: String = scratchDir();
@@ -157,7 +163,9 @@ class ReachDefinesProbeTest extends Test {
 		remove(dir);
 	}
 
-	@:pin('control') @:killer('M-DEFINES-TYPES') @:killer('M-DEFINES-IMPL')
+	@:pin('control')
+	@:killer('M-DEFINES-TYPES')
+	@:killer('M-DEFINES-IMPL')
 	public function testEveryTypedTypeIsReportedWithItsFile(): Void {
 		// A macro defines a subtype of `Base` no source file declares: the build types it, so the probe names it — the
 		// index then cannot declare it, and the classpath is not complete. An abstract's implementation class is not listed.
@@ -193,7 +201,9 @@ class ReachDefinesProbeTest extends Test {
 	 * and the builds are probed on demand, reading the tree the write left, as they always were. The flag file stands for
 	 * the write: a macro defines a name when it exists.
 	 */
-	@:pin('control') @:killer('M-AHEAD-NEVER-READ') @:killer('M-AHEAD-READ-AFTER-WRITE')
+	@:pin('control')
+	@:killer('M-AHEAD-NEVER-READ')
+	@:killer('M-AHEAD-READ-AFTER-WRITE')
 	public function testBuildsStartedAheadAnswerOnlyAQuestionBeforeTheFirstWrite(): Void {
 		final dir: String = scratchDir();
 		final flag: String = Path.join([dir, 'flag.txt']);
@@ -254,7 +264,8 @@ class ReachDefinesProbeTest extends Test {
 	 * on the facts, so its first reach question does not wait on them alone; a run that asks for the facts on demand leaves
 	 * the builds to that question.
 	 */
-	@:pin('control') @:killer('M-BUILDS-WITH-FACTS')
+	@:pin('control')
+	@:killer('M-BUILDS-WITH-FACTS')
 	public function testTheBuildsStartBesideFactsStartedEarly(): Void {
 		final dir: String = scratchDir();
 		write(dir, 'src/Main.hx', 'class Main { static function main() {} }');

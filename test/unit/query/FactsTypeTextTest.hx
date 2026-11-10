@@ -7,7 +7,8 @@ import anyparse.query.FactsTypeText;
 class FactsTypeTextTest extends Test {
 
 	/** Only a `Null<…>` enclosing the whole text is peeled: a function type between two of them keeps both. */
-	@:pin('control') @:killer('M-FACTS-NULL-PEEL-UNMATCHED')
+	@:pin('control')
+	@:killer('M-FACTS-NULL-PEEL-UNMATCHED')
 	public function testOnlyAWrapperEnclosingTheWholeTypeIsPeeled(): Void {
 		Assert.equals('Null<A>->Null<B>', FactsTypeText.unwrapNull('Null<A>->Null<B>'));
 		Assert.equals('Map<A,B>', FactsTypeText.unwrapNull('Null<Null<Map<A,B>>>'));

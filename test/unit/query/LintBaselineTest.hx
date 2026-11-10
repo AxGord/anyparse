@@ -98,7 +98,8 @@ class LintBaselineTest extends Test {
 	 * writer and read back, and a live finding whose chain re-rendered (another message) is not new, while one with
 	 * another subject is.
 	 */
-	@:pin('control') @:killer('M-BASELINE-DATA-IGNORED', 'M-LINTDIFF-DATA-IGNORED', 'M-LINTFORMAT-NO-DATA')
+	@:pin('control')
+	@:killer('M-BASELINE-DATA-IGNORED', 'M-LINTDIFF-DATA-IGNORED', 'M-LINTFORMAT-NO-DATA')
 	public function testAFindingWithDataKeysByItsIdentity(): Void {
 		final recorded: Violation = withData(
 			violation('src/A.hx', Severity.Warning, 'thread-safety', 'main thread reaches "S.f": A.b -> S.f'), 'S.f'
@@ -118,7 +119,8 @@ class LintBaselineTest extends Test {
 	 * A snapshot written before the rule carried `data` keys the finding by its message; the live finding, carrying an
 	 * identity now, spends that count instead of coming back as new — once per recorded occurrence.
 	 */
-	@:pin('control') @:killer('M-BASELINE-NO-MESSAGE-FALLBACK')
+	@:pin('control')
+	@:killer('M-BASELINE-NO-MESSAGE-FALLBACK')
 	public function testAnOldSnapshotIsSpentByMessage(): Void {
 		final message: String = 'main thread reaches "S.f": A.b -> S.f';
 		final before: LintDiffTally = snapshot([record('src/A.hx', 'warning', 'thread-safety', message)]);
@@ -137,7 +139,8 @@ class LintBaselineTest extends Test {
 	 * The baseline spends exactly as `lint-diff` does: one identity carrying several messages is spent message by message,
 	 * and every finding spends its own key before any spends across `data`, so the run's order changes nothing.
 	 */
-	@:pin('control') @:killer('M-BASELINE-ONE-PASS')
+	@:pin('control')
+	@:killer('M-BASELINE-ONE-PASS')
 	public function testTheBaselineSpendsLikeTheDiffInAnyOrder(): Void {
 		final old: LintDiffTally = snapshot([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
 		Assert.equals(

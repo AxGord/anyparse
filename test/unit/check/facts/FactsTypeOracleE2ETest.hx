@@ -24,7 +24,7 @@ class FactsTypeOracleE2ETest extends Test {
 
 	#if (sys || nodejs)
 	private static final MAIN: String = 'import haxe.Json;\n\ntypedef Doc = {name:String};\n\n'
-		+ 'abstract Meters(Float) from Float to Float {\n\t@:from static function fromInt(i:Int):Meters\n'
+		+ 'abstract Meters(Float) from Float to Float {\n\t@:from\n\tstatic function fromInt(i:Int):Meters\n'
 		+ '\t\treturn new Meters(i * 100.0);\n\n\tinline function new(f:Float)\n\t\tthis = f;\n}\n\n'
 		+ 'class Box<T> {\n\tpublic var v:T;\n\tpublic var count = Box.size();\n\n\tpublic function '
 		+ 'new(v:T) {\n\t\tthis.v = v;\n\t}\n\n\tpublic function get() {\n\t\tfinal x = v;\n\t\treturn x;\n'
@@ -45,7 +45,7 @@ class FactsTypeOracleE2ETest extends Test {
 		+ '"resolutionRoots":["."],"rules":{"explicit-local-type":{"enabled":true}}}';
 	private static inline final BUFFER: Int = 1 << 20;
 	private static final RACED: String = 'abstract Meters(Float) to Float {\n\tpublic function new(f:Float)\n\t\tthis = f;\n\n'
-		+ '\t@:from static function fromInt(i:Int):Meters\n\t\treturn new Meters(i * 100.0);\n}\n\n@:build(Slow.build())\n'
+		+ '\t@:from\n\tstatic function fromInt(i:Int):Meters\n\t\treturn new Meters(i * 100.0);\n}\n\n@:build(Slow.build())\n'
 		+ 'class Main {\n\tpublic static function big():Int\n\t\treturn 7;\n\n\tpublic static function main() {\n'
 		+ '\t\tvar r = new Meters(1.5 + [\n\t\t\t(0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), '
 		+ '(0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),\n\t\t\t(0), (0), (0)\n\t\t].length);\n'
@@ -56,19 +56,15 @@ class FactsTypeOracleE2ETest extends Test {
 		+ '\t\t\tsys.io.File.saveContent(haxe.io.Path.join([haxe.io.Path.directory(sys.FileSystem.fullPath(file)), '
 		+ '\'typed.log\']), Std.string(Sys.time()));\n\t\t}\n\t\treturn null;\n\t}\n}\n';
 	private static final MOVED: String = 'abstract Meters(Float) to Float {\n\tpublic function new(f:Float)\n\t\tthis = f;\n\n'
-		+ '\t@:from static function fromInt(i:Int):Meters\n\t\treturn new Meters(i * 100.0);\n}\n\nclass P1 {\n'
+		+ '\t@:from\n\tstatic function fromInt(i:Int):Meters\n\t\treturn new Meters(i * 100.0);\n}\n\nclass P1 {\n'
 		+ '\tpublic static function big():Int\n\t\treturn 7;\n\n\tstatic function a() {\n\t\tvar r = new Meters(1.5);\n\t\tSys.println((r '
 		+ ': Float));\n\t}\n\n\tpublic static function run() {\n\t\tvar r = big();\n\t\tSys.println((r : Float));\n\t\ta();\n\t}\n}\n';
-	private static final SWAPPED: String = 'abstract Feet(Float) to Float {\n\tpublic function new(f:Float)\n\t\tthis = f;\n\n'
-		+ '\t@:to function toInt():Int\n\t\treturn Std.int(this);\n\n'
-		+ '\t@:from static function fromInt(i:Int):Feet\n\t\treturn new Feet(i * 100.0);\n}\n\nclass P2 {\n'
-		+ '\tpublic static function id<T>(x:T):T\n\t\treturn x;\n\n\tpublic static function run() {\n\t\tb(7);\n'
-		+ '\t\ta(new Feet(1.5));\n\t}\n\n\tstatic function a(v:Feet) {\n\t\tvar r = id(v);\n'
-		+ '\t\tSys.println((r : Float));\n\t}\n\n\tpublic static function b(v:Int) {\n'
-		+ '\t\tvar r = id(v);\n'
-		+ '\t\tSys.println((r : Float));\n'
-		+ '\t}\n'
-		+ '}\n';
+	private static final SWAPPED: String = 'abstract Feet(Float) to Float {\n\tpublic function new(f:Float)\n\t\tthis = f;\n\n\t@:to\n'
+		+ '\tfunction toInt():Int\n\t\treturn Std.int(this);\n\n\t@:from\n\tstatic function fromInt(i:Int):Feet\n'
+		+ '\t\treturn new Feet(i * 100.0);\n}\n\nclass P2 {\n\tpublic static function id<T>(x:T):T\n\t\treturn x;\n\n'
+		+ '\tpublic static function run() {\n\t\tb(7);\n\t\ta(new Feet(1.5));\n\t}\n\n\tstatic function a(v:Feet) {\n'
+		+ '\t\tvar r = id(v);\n\t\tSys.println((r : Float));\n\t}\n\n\tpublic static function b(v:Int) {\n'
+		+ '\t\tvar r = id(v);\n\t\tSys.println((r : Float));\n\t}\n}\n';
 	private static final UNTOUCHED: String = 'class Ctl {\n\tpublic static function run():Void {\n'
 		+ '\t\tfinal lens = [\'ab\', \'c\'].map(s -> s.length);\n\t\tSys.println(lens);\n\t}\n\n'
 		+ '\tpublic static function shout():String {\n\t\treturn \'lou\' + \'d\';\n'
@@ -80,8 +76,12 @@ class FactsTypeOracleE2ETest extends Test {
 		+ '"rules":{"explicit-local-type":{"enabled":true},"member-order":{"enabled":true}}}';
 	#end
 
-	@:pin('control') @:killer('M-ASSISTED-FACTS-FIRST') @:killer('M-ASSISTED-DECLINE-CENSUS') @:killer('M-EXPLICIT-TYPE-ORACLE-PARAMS')
-	@:killer('M-EXPLICIT-TYPE-ORACLE-FIELDS') @:killer('M-FACTS-DYNAMIC-SOURCE')
+	@:pin('control')
+	@:killer('M-ASSISTED-FACTS-FIRST')
+	@:killer('M-ASSISTED-DECLINE-CENSUS')
+	@:killer('M-EXPLICIT-TYPE-ORACLE-PARAMS')
+	@:killer('M-EXPLICIT-TYPE-ORACLE-FIELDS')
+	@:killer('M-FACTS-DYNAMIC-SOURCE')
 	public function testTheFactsTypeEveryDeclarationKindAndKeepTheProgram(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('factsoracle', [

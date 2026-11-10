@@ -109,7 +109,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** The `==` family over an `Int` operand and a `Num` one, the operand held by an unannotated local. */
-	@:pin('control') @:killer('M-BINDER-INITIALIZER-CUT')
+	@:pin('control')
+	@:killer('M-BINDER-INITIALIZER-CUT')
 	public function testEveryEqualityUserAnswersTheSameOnTheSameOperand(): Void {
 		final shapes: Array<Shape> = [
 			{ name: 'negated', body: 'final k = @;\n\t\tfinal b:Bool = !(k == 1);\n\t\treturn x;' },
@@ -126,7 +127,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** The `+` family over a `String` operand and a `Dir` one: the fold merges, the join fuses the appends. */
-	@:pin('control') @:killer('M-BINDER-INITIALIZER-CUT', 'M-BINDER-EXTENSION-CUT', 'M-BINDER-RESOLVE-CUT')
+	@:pin('control')
+	@:killer('M-BINDER-INITIALIZER-CUT', 'M-BINDER-EXTENSION-CUT', 'M-BINDER-RESOLVE-CUT')
 	public function testEveryConcatenationUserAnswersTheSameOnTheSameOperand(): Void {
 		final shapes: Array<Shape> = [
 			{ name: 'fold', body: 'final s2:String = @ + \'a\' + \'b\';\n\t\treturn x;' },
@@ -143,7 +145,8 @@ class OperandTypingTest extends Test {
 	 * A supertype's static is not in scope bare: `flag` read in a subclass of `Base` (which declares `static var flag:Bool`)
 	 * is the `Flag` that `import Other.flag` names — 4.3.7 picks the import.
 	 */
-	@:pin('control') @:killer('M-BINDER-INHERITED-STATIC')
+	@:pin('control')
+	@:killer('M-BINDER-INHERITED-STATIC')
 	public function testASupertypeStaticReadBareIsNotTheSupertypes(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'Base.hx', source: 'class Base {\n\tpublic static var flag:Bool = true;\n\n\tpublic function new() {}\n}\n' },
@@ -158,7 +161,8 @@ class OperandTypingTest extends Test {
 	 * An inherited member is read only up a closure every link of which resolves: past `far.Mid`, which the index does not
 	 * hold, a covariant override of `ok` may sit, and it is the declaration the compiler types `ok()` by.
 	 */
-	@:pin('control') @:killer('M-BINDER-CLOSURE-UNRESOLVED')
+	@:pin('control')
+	@:killer('M-BINDER-CLOSURE-UNRESOLVED')
 	public function testAnInheritedMemberPastAnUnreadSupertypeIsUnproven(): Void {
 		final ok: { file: String, source: String } = { file: 'Ok.hx', source: 'interface Ok {\n\tfunction ok():Bool;\n}\n' };
 		// written qualified, with no import: an unindexed import would leave every simple name of the file unproven itself
@@ -167,7 +171,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** A receiver type's own `@:using` binds ahead of every `using` of the file (4.3.7): `s.ext()` is `FlagTools.ext`. */
-	@:pin('control') @:killer('M-BINDER-EXTENSION-ATUSING')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-ATUSING')
 	public function testTheReceiversOwnUsingOutranksTheFiles(): Void {
 		final str: { file: String, source: String } = {
 			file: 'Str.hx',
@@ -178,7 +183,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** Of two `using`s declaring the extension, the LAST one binds it (4.3.7). */
-	@:pin('control') @:killer('M-BINDER-EXTENSION-LAST-USING')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-LAST-USING')
 	public function testTheLastUsingDeclaringTheExtensionWins(): Void {
 		Assert.isTrue(inverts([TOOLS, FLAG_TOOLS, use('using FlagTools;\nusing Tools;\n\n', '', '!s.ext()')]));
 		Assert.isFalse(inverts([TOOLS, FLAG_TOOLS, use('using Tools;\nusing FlagTools;\n\n', '', '!s.ext()')]));
@@ -188,7 +194,8 @@ class OperandTypingTest extends Test {
 	 * The last `using` declares an `ext` of ANOTHER first parameter: the compiler passes it over for the earlier
 	 * `FlagTools.ext`, and a first parameter that is not the receiver's own declaration proves nothing either way.
 	 */
-	@:pin('control') @:killer('M-BINDER-EXTENSION-FIRST-PARAM')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-FIRST-PARAM')
 	public function testAnExtensionOfAnotherFirstParameterIsUnproven(): Void {
 		final others: { file: String, source: String } = {
 			file: 'OtherTools.hx',
@@ -205,7 +212,8 @@ class OperandTypingTest extends Test {
 	 * A later `using` the index does not hold may declare the extension: nothing earlier is read past it. The receiver type
 	 * is written qualified (`p.Box`), which an unindexed module cannot rebind, so it is the `using` alone that refuses.
 	 */
-	@:pin('control') @:killer('M-BINDER-EXTENSION-UNINDEXED')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-UNINDEXED')
 	public function testAnUnreadLaterUsingLeavesTheExtensionUnproven(): Void {
 		final box: { file: String, source: String } = {
 			file: 'p/Box.hx',
@@ -225,7 +233,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** `using Mod` brings the statics of every type of the module (4.3.7), not only of `Mod` itself. */
-	@:pin('control') @:killer('M-USING-HOSTS-MODULE')
+	@:pin('control')
+	@:killer('M-USING-HOSTS-MODULE')
 	public function testEveryTypeOfAUsedModuleBringsItsExtensions(): Void {
 		final mod: { file: String, source: String } = {
 			file: 'Mod.hx',
@@ -235,7 +244,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** `using` an alias brings the statics of the type it names (4.3.7: `typedef AliasTools = FlagTools` binds `FlagTools.ext`). */
-	@:pin('control') @:killer('M-USING-HOSTS-ALIAS')
+	@:pin('control')
+	@:killer('M-USING-HOSTS-ALIAS')
 	public function testAUsedAliasLeavesTheExtensionUnproven(): Void {
 		final alias: { file: String, source: String } = { file: 'AliasTools.hx', source: 'typedef AliasTools = FlagTools;\n' };
 		Assert.isFalse(inverts([
@@ -247,7 +257,8 @@ class OperandTypingTest extends Test {
 	}
 
 	/** A `#if`-guarded `using` declaring the extension binds it in the builds that define the flag (4.3.7). */
-	@:pin('control') @:killer('M-BINDER-EXTENSION-GUARDED-USING')
+	@:pin('control')
+	@:killer('M-BINDER-EXTENSION-GUARDED-USING')
 	public function testAGuardedUsingLeavesTheExtensionUnproven(): Void {
 		Assert.isFalse(inverts([
 			TOOLS,
@@ -261,7 +272,8 @@ class OperandTypingTest extends Test {
 	 * A static extension of the field's name binds ahead of the abstract's `@:op(a.b)` (4.3.7: `r.foo` under `using Ext` is
 	 * the extension even beside a resolver), from the file's own `using` and from the ambient `import.hx` alike.
 	 */
-	@:pin('control') @:killer('M-BINDER-RESOLVE-USING-SHADOW', 'M-USING-DECLS-AMBIENT')
+	@:pin('control')
+	@:killer('M-BINDER-RESOLVE-USING-SHADOW', 'M-USING-DECLS-AMBIENT')
 	public function testAStaticOfTheFieldsNameOutranksTheResolver(): Void {
 		final has: { file: String, source: String } = {
 			file: 'Has.hx',
@@ -292,7 +304,8 @@ class OperandTypingTest extends Test {
 	 * although its own file declares no overload, and the chain rule rewrites the ternary chain over `Num` that the switch
 	 * rule refuses, in `fix` as in `run`.
 	 */
-	@:pin('control') @:killer('M-FOLD-FIX-REPORT-INDEX', 'M-PIEC-FIX-REPORT-INDEX', 'M-PIEC-RUN-SELECTION')
+	@:pin('control')
+	@:killer('M-FOLD-FIX-REPORT-INDEX', 'M-PIEC-FIX-REPORT-INDEX', 'M-PIEC-RUN-SELECTION')
 	public function testAFixAsksTheRunsOperatorTable(): Void {
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final fold: FixRun = CheckFixture.fixRun(
@@ -311,7 +324,8 @@ class OperandTypingTest extends Test {
 	 * the client's `forEachChild(child -> … !child.folder …)` shape — an abstract's member taking `(child:Use)->Void`, called bare,
 	 * and a property read through an inline getter. `Bool` inverts, `Flag` does not; 4.3.7 types `child` as `Use`.
 	 */
-	@:pin('control') @:killer('M-BINDER-LAMBDA-PARAM-CUT', 'M-WALK-LAMBDA-PARAM-CUT', 'M-BINDER-ARGUMENT-CUT')
+	@:pin('control')
+	@:killer('M-BINDER-LAMBDA-PARAM-CUT', 'M-WALK-LAMBDA-PARAM-CUT', 'M-BINDER-ARGUMENT-CUT')
 	public function testAnUntypedLambdaParameterTakesTheCalleesParameterType(): Void {
 		final ab: String = 'abstract Use(Holder) {\n\tpublic var on(get, never):Bool;\n\n\tpublic var flag(get, never):Flag;\n\n'
 			+ '\tinline function get_on():Bool\n\t\treturn true;\n\n\tinline function get_flag():Flag\n\t\treturn true;\n\n'
@@ -367,7 +381,8 @@ class OperandTypingTest extends Test {
 	 * types `mk`'s lambda `(c : { on : Bool }) -> Int`, so `c` is no `Use`, and the local `loc<T:Use>(x:T)` returns the
 	 * structure it builds, so `loc(this)` is none either.
 	 */
-	@:pin('control') @:killer('M-BINDER-RETURN-ANNOTATION', 'M-BINDER-LOCAL-CALL-ANNOTATION')
+	@:pin('control')
+	@:killer('M-BINDER-RETURN-ANNOTATION', 'M-BINDER-LOCAL-CALL-ANNOTATION')
 	public function testATypeParametersBoundIsNoReturnType(): Void {
 		final members: String = '\tfunction mk<T:(c:Use)->Int>() {\n\t\treturn c -> !c.on ? 1 : 2;\n\t}\n\n';
 		Assert.isFalse(inverts([lambdaUse(members, '')]), 'a bound beside no return type');
@@ -387,7 +402,8 @@ class OperandTypingTest extends Test {
 	 * `Use`, then binds it to `cb` as `FlagOn`, whose `on` is the overloading `Flag`. Unproven; a required one before it is not
 	 * skipped.
 	 */
-	@:pin('control') @:killer('M-BINDER-ARGUMENT-SKIPPABLE', 'M-TS-SKIP-DEFAULT')
+	@:pin('control')
+	@:killer('M-BINDER-ARGUMENT-SKIPPABLE', 'M-TS-SKIP-DEFAULT')
 	public function testALambdaAfterASkippableParameterIsUnproven(): Void {
 		final opt: String = '\tfunction opt(?a:(c:Use)->Int, cb:(c:FlagOn)->Void):Void {}\n\n';
 		Assert.isFalse(inverts([FLAG_ON, lambdaUse(opt, 'opt(c -> trace(!c.on ? 1 : 2));')]));
@@ -403,7 +419,8 @@ class OperandTypingTest extends Test {
 	 * against the next signature when the first fails — `Foo has no field m`, then `Bar`), and a name a `#if` declares twice,
 	 * each build its own signature.
 	 */
-	@:pin('control') @:killer('M-BINDER-ARGUMENT-OVERLOAD', 'M-BINDER-ARGUMENT-TWIN')
+	@:pin('control')
+	@:killer('M-BINDER-ARGUMENT-OVERLOAD', 'M-BINDER-ARGUMENT-TWIN')
 	public function testACalleeWhoseSignatureTheCallMayNotSelectIsUnproven(): Void {
 		final overloaded: String = '\t@:overload(function(cb:(c:FlagOn)->Void):Void {})\n\tfunction one(cb:(c:Use)->Int):Void {}\n\n';
 		Assert.isFalse(inverts([FLAG_ON, lambdaUse(overloaded, 'one(c -> trace(!c.on ? 1 : 2));')]));
@@ -422,7 +439,10 @@ class OperandTypingTest extends Test {
 	 * -> Void)` — the own `(cb:(c:FlagOn) -> Void)` takes one argument — so `c` is `Use`; `three(c -> …)` takes the own one,
 	 * where `c.on` is the overloading `Flag`. Off another file's value alike (`b.over(1, c -> …)`).
 	 */
-	@:pin('control') @:killer('M-BINDER-OVERLOAD-SELECTED') @:killer('M-BINDER-OVERLOAD-OWN-BARE') @:killer('M-BINDER-CALLEE-OVERLOAD')
+	@:pin('control')
+	@:killer('M-BINDER-OVERLOAD-SELECTED')
+	@:killer('M-BINDER-OVERLOAD-OWN-BARE')
+	@:killer('M-BINDER-CALLEE-OVERLOAD')
 	public function testAnOverloadTheArgumentCountSelectsTypesTheLambda(): Void {
 		final three: String = '\t@:overload(function(a:Int, cb:(c:Use)->Void):Void {})\n\tfunction three(cb:(c:FlagOn)->Void):Void {}\n\n';
 		Assert.isTrue(inverts([FLAG_ON, lambdaUse(three, 'three(1, c -> trace(!c.on ? 1 : 2));')]), 'the annotation');
@@ -443,7 +463,8 @@ class OperandTypingTest extends Test {
 	 * A callee's type parameter types no lambda: `gen(new FlagOn(), c -> …)` binds `T` to `FlagOn` (4.3.7), whose `on` is the
 	 * overloading `Flag` — never the class `T` the module also declares. A `Dynamic` parameter is no function type.
 	 */
-	@:pin('control') @:killer('M-BINDER-ARGUMENT-SCOPE')
+	@:pin('control')
+	@:killer('M-BINDER-ARGUMENT-SCOPE')
 	public function testACalleesTypeParameterTypesNoLambda(): Void {
 		final t: { file: String, source: String } = {
 			file: 'T.hx',
@@ -650,7 +671,8 @@ class OperandTypingTest extends Test {
 	 * What the call does not bind stays unproven: a type parameter the method declares itself, shadowing the type's (4.3.7:
 	 * `Unknown<0>`), a receiver written with no type arguments, a member `@:overload` offers another signature of.
 	 */
-	@:pin('control') @:killer('M-BINDER-METHOD-SHADOWS-OFF', 'M-BINDER-ARGUMENT-OVERLOAD')
+	@:pin('control')
+	@:killer('M-BINDER-METHOD-SHADOWS-OFF', 'M-BINDER-ARGUMENT-OVERLOAD')
 	public function testWhatTheCallDoesNotBindStaysUnproven(): Void {
 		final box: { file: String, source: String } = {
 			file: 'Box.hx',
@@ -677,7 +699,8 @@ class OperandTypingTest extends Test {
 	 * receiver of `using Lambda`'s `xs.iter(…)`, the argument of `Lambda.iter(xs, …)` (4.3.7: `c` is `Use` for an `Array`,
 	 * a `List`, an `Iterable` and the value of a `Map`; a `haxe.ds.Vector` is no `Iterable`).
 	 */
-	@:pin('control') @:killer('M-BINDER-ITERABLE-OFF', 'M-BINDER-ITERABLE-ANY-TYPE')
+	@:pin('control')
+	@:killer('M-BINDER-ITERABLE-OFF', 'M-BINDER-ITERABLE-ANY-TYPE')
 	public function testAStdIterableBindsTheElementOfWhatIsHandedToIt(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {

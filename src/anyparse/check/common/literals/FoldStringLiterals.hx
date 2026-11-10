@@ -1836,7 +1836,8 @@ private enum abstract BoundaryClass(Int) {
 	final TokenSplit = 5;
 
 	/** Ordered comparison, which an `enum abstract` does not forward on its own. */
-	@:op(A < B) private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
+	@:op(A < B)
+	private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
 
 }
 

@@ -27,17 +27,16 @@ using StringTools;
 class FactsFixGateE2ETest extends Test {
 
 	#if (sys || nodejs)
-	private static final FOLD_MAIN: String = 'abstract Dir(String) from String to String {\n'
-		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n'
-		+ '}\n\nclass Main {\n\tstatic function name():String {\n\t\treturn \'n\';\n\t}\n\n'
-		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n\t\tfinal xs:Array<Int> = ['
-		+ '1, 2];\n\t\tfor (i in xs) {\n\t\t\tout.push(\'h\' + (i - 1) + \'_p1\');\n\t\t\tout.push(i + 1 '
-		+ '+ \' \' + (i * 2));\n\t\t}\n\t\tout.push((name() : Dir) + \'x\' + \'y\');\n'
+	private static final FOLD_MAIN: String = 'abstract Dir(String) from String to String {\n\t@:op(A + B)\n\tstatic function add(a:Dir, '
+		+ 'b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n}\n\nclass Main {\n\tstatic function name():String '
+		+ '{\n\t\treturn \'n\';\n\t}\n\n\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
+		+ '\t\tfinal xs:Array<Int> = [1, 2];\n\t\tfor (i in xs) {\n\t\t\tout.push(\'h\' + (i - 1) + \'_p1\');\n'
+		+ '\t\t\tout.push(i + 1 + \' \' + (i * 2));\n\t\t}\n\t\tout.push((name() : Dir) + \'x\' + \'y\');\n'
 		+ '\t\tSys.println(out.join(\',\'));\n'
 		+ '\t}\n'
 		+ '}\n';
 	private static final NEGATED_MAIN: String = 'import haxe.xml.Access;\n\nusing StringTools;\n\nabstract Flag(Bool) from Bool to Bool {\n'
-		+ '\t@:op(!A) public inline function inv():Bool\n\t\treturn this;\n}\n\nclass Item {\n\tpublic final folder:Bool;\n'
+		+ '\t@:op(!A)\n\tpublic inline function inv():Bool\n\t\treturn this;\n}\n\nclass Item {\n\tpublic final folder:Bool;\n'
 		+ '\tpublic final name:String;\n\n\tpublic function new(folder:Bool, name:String) {\n\t\tthis.folder = folder;\n'
 		+ '\t\tthis.name = name;\n\t}\n}\n\nclass Main {\n\tstatic function each(items:Array<Item>, f:(Item) -> Void):Void {\n'
 		+ '\t\tfor (i in items) f(i);\n\t}\n\n\tstatic function thumb(xml:String):String {\n\t\tfinal model:Access = new '
@@ -71,7 +70,7 @@ class FactsFixGateE2ETest extends Test {
 		+ '\t\tSys.println(\'\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t\\t$${d.toString()}$${[n].map(d '
 		+ '-> d.label)}\'.length);\n\t}\n}\n\nclass Named {\n\tpublic final label:String = \'l\';\n\n\tpublic function new() {}\n}\n';
 	private static final FAR_MAIN: String = 'import far.Path2;\n\nabstract Dir(String) from String to String {\n'
-		+ '\t@:op(A + B) static function add(a:Dir, b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n'
+		+ '\t@:op(A + B)\n\tstatic function add(a:Dir, b:String):Dir\n\t\treturn (a : String) + \'/\' + b;\n'
 		+ '}\n\nclass Holder {\n\tpublic final fp:Path2 = \'r\';\n\n\tpublic function new() {}\n}\n\n'
 		+ 'class Main {\n\tstatic function pick<T>(v:T):T {\n\t\treturn v;\n\t}\n\n'
 		+ '\tstatic function main() {\n\t\tfinal out:Array<String> = [];\n'
@@ -79,7 +78,7 @@ class FactsFixGateE2ETest extends Test {
 		+ 'Holder();\n\t\tfinal hs:Array<Holder> = [h];\n\t\tout.push((c ? fp : fp) + \'x\' + \'y\');\n'
 		+ '\t\tout.push(hs[0].fp + \'x\' + \'y\');\n\t\tout.push(pick(h).fp + \'x\' + \'y\');\n'
 		+ '\t\tout.push(hs.copy()[0].fp + \'x\' + \'y\');\n\t\tSys.println(out.join(\',\'));\n\t}\n}\n';
-	private static final FAR_PATH: String = 'package far;\n\nabstract Path2(String) from String to String {\n\t@:op(A + B) '
+	private static final FAR_PATH: String = 'package far;\n\nabstract Path2(String) from String to String {\n\t@:op(A + B)\n\t'
 		+ 'static function add(a:Path2, b:String):Path2\n\t\treturn (a : String) + \'/\' + b;\n}\n';
 	private static final NEAR_PATH: String = 'package other;\n\nclass Path2 {\n\tpublic function new() {}\n}\n';
 	private static final SPLIT_MAIN: String = 'import far.Buf;\nimport far.Tag;\n\n@:nullSafety(Strict)\nclass Holder {\n'
@@ -91,7 +90,7 @@ class FactsFixGateE2ETest extends Test {
 		+ '\tpublic function toString():String {\n\t\treturn \'r\';\n\t}\n}\n#else\nabstract Tag(String) {\n'
 		+ '\tpublic function new() {\n\t\tthis = \'r\';\n\t}\n'
 		+ '\n'
-		+ '\t@:op(A + B) static function add(a:Tag, b:String):String\n'
+		+ '\t@:op(A + B)\n\tstatic function add(a:Tag, b:String):String\n'
 		+ '\t\treturn (cast a : String) + \'/\' + b;\n'
 		+ '}\n'
 		+ '#end\n';
@@ -212,7 +211,9 @@ class FactsFixGateE2ETest extends Test {
 	 * whose value flows in as a `String` but IS a `Dir`, the type that overloads `+` — stays: the facts answer the type of
 	 * the expression itself, never the source type of a conversion at its range.
 	 */
-	@:pin('control') @:killer('M-FOLD-FACTS-OPERAND') @:killer('M-FACTS-VALUE-TYPE-FLOWS')
+	@:pin('control')
+	@:killer('M-FOLD-FACTS-OPERAND')
+	@:killer('M-FACTS-VALUE-TYPE-FLOWS')
 	public function testAnOperandTheFactsTypeLetsTheMergeThrough(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('foldfacts', [{ name: 'Main.hx', source: FOLD_MAIN }], HXML);
@@ -239,7 +240,8 @@ class FactsFixGateE2ETest extends Test {
 	 * spells) and a static extension's result by the shared walk's binding host. The operand that IS the overloading
 	 * abstract stays negated, and the program prints what it printed.
 	 */
-	@:pin('control') @:killer('M-FOLD-FACTS-OPERAND')
+	@:pin('control')
+	@:killer('M-FOLD-FACTS-OPERAND')
 	public function testANegationOnlyTheFactsTypeIsInverted(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('negfacts', [{ name: 'Main.hx', source: NEGATED_MAIN }], HXML);
@@ -266,7 +268,8 @@ class FactsFixGateE2ETest extends Test {
 	 * stays, though the scope's own `Path2` is a plain class: the overload table judges a simple name, so the facts name
 	 * only a type no operator can be declared on.
 	 */
-	@:pin('control') @:killer('M-FOLD-FACTS-PLAIN-KINDS')
+	@:pin('control')
+	@:killer('M-FOLD-FACTS-PLAIN-KINDS')
 	public function testAnAbstractTheFactsTypeIsNeverJudgedByAnotherDeclarationOfItsName(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('foldfar', [
@@ -289,7 +292,9 @@ class FactsFixGateE2ETest extends Test {
 	 * A private member of a class whose supertypes live outside the resolution scope goes once the facts show no supertype
 	 * declares it; one an abstract supertype declares stays, and so does one of a class under a supertype's `@:autoBuild`.
 	 */
-	@:pin('control') @:killer('M-UNUSED-PRIVATE-CHAIN-FACTS') @:killer('M-UNUSED-PRIVATE-CHAIN-DECLARED')
+	@:pin('control')
+	@:killer('M-UNUSED-PRIVATE-CHAIN-FACTS')
+	@:killer('M-UNUSED-PRIVATE-CHAIN-DECLARED')
 	@:killer('M-UNUSED-PRIVATE-CHAIN-AUTOBUILD')
 	public function testAPrivateMemberNoSupertypeDeclaresIsDeleted(): Void {
 		#if (sys || nodejs)
@@ -320,7 +325,10 @@ class FactsFixGateE2ETest extends Test {
 	 * the site only the extern gate decides: `Date.now()` is not provably non-null while the unindexed `haxe.io.Path`
 	 * import may declare a `Date` of its own, and the escaped read is declined before its type is asked.
 	 */
-	@:pin('control') @:killer('M-TOSTRING-FACTS-CLASS') @:killer('M-TOSTRING-FACTS-EXTERN') @:killer('M-FACTS-ESCAPE-SHIFT')
+	@:pin('control')
+	@:killer('M-TOSTRING-FACTS-CLASS')
+	@:killer('M-TOSTRING-FACTS-EXTERN')
+	@:killer('M-FACTS-ESCAPE-SHIFT')
 	public function testAReceiverTheFactsTypeAsANonExternClassLosesItsToString(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('tostringfacts', [{ name: 'Main.hx', source: TOSTRING_MAIN }], HXML);
@@ -347,7 +355,10 @@ class FactsFixGateE2ETest extends Test {
 	 * only the agreement flag and the metadata union stand between it and a fix that changes the js build. The `Tag`
 	 * operand is parenthesized: unwrapped, the compiler's inserted `Std.string` puts its receiver at the operand's range.
 	 */
-	@:pin('control') @:killer('M-FACTS-ALIKE-FOLD') @:killer('M-FACTS-ALIKE-TOSTRING') @:killer('M-FACTS-META-UNION')
+	@:pin('control')
+	@:killer('M-FACTS-ALIKE-FOLD')
+	@:killer('M-FACTS-ALIKE-TOSTRING')
+	@:killer('M-FACTS-META-UNION')
 	public function testWhatTheConfigurationsRecordDifferentlyKeepsEveryFixOff(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('splitfacts', [
@@ -387,7 +398,10 @@ class FactsFixGateE2ETest extends Test {
 	 * which holds no `Obj` — and the loop is rewritten, while a declaration naming `Obj` keeps it. A glob matching no
 	 * class the builds typed is reported.
 	 */
-	@:pin('control') @:killer('M-REFLECTIVE-BUILDS') @:killer('M-REFLECTIVE-REACH') @:killer('M-REFLECTIVE-WARN')
+	@:pin('control')
+	@:killer('M-REFLECTIVE-BUILDS')
+	@:killer('M-REFLECTIVE-REACH')
+	@:killer('M-REFLECTIVE-WARN')
 	@:killer('M-ESCAPES-FACTS-UNMATCHED')
 	public function testAComputedClassNameTheProjectBoundsLetsTheLoopRewrite(): Void {
 		#if (sys || nodejs)
@@ -424,7 +438,11 @@ class FactsFixGateE2ETest extends Test {
 	 * bound it — `Plain`, whose `look` the name makes — and the loop is rewritten, while a declaration naming `Grower` keeps
 	 * it. A glob matching no class the builds typed is reported.
 	 */
-	@:pin('control') @:killer('M-HOLDERS-BUILDS') @:killer('M-HOLDERS-REACH') @:killer('M-HOLDERS-WARN') @:killer('M-HOLDERS-READ')
+	@:pin('control')
+	@:killer('M-HOLDERS-BUILDS')
+	@:killer('M-HOLDERS-REACH')
+	@:killer('M-HOLDERS-WARN')
+	@:killer('M-HOLDERS-READ')
 	public function testAComputedMemberNameTheProjectBoundsLetsTheLoopRewrite(): Void {
 		#if (sys || nodejs)
 		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true';
@@ -480,7 +498,9 @@ class FactsFixGateE2ETest extends Test {
 	 * spelling it or in an `import.hx` beside it — as the member: the `go` the loop calls replaces it, so the loop, whose
 	 * element iterator would keep walking the old one, stays (rewritten, the program printed 3 instead of 21).
 	 */
-	@:pin('control') @:killer('M-REACH-IMPORT-ALIAS') @:killer('M-REACH-IMPORT-ALIAS-WORDS')
+	@:pin('control')
+	@:killer('M-REACH-IMPORT-ALIAS')
+	@:killer('M-REACH-IMPORT-ALIAS-WORDS')
 	public function testAStaticImportedUnderAnotherNameKeepsTheLoopWithoutTheTruth(): Void {
 		#if (sys || nodejs)
 		final apqlint: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}';
@@ -511,7 +531,9 @@ class FactsFixGateE2ETest extends Test {
 	 * loop, and so does a push through the local inside the loop, whose store lies before it: each would make the rewritten
 	 * loop see an element it did not see.
 	 */
-	@:pin('control') @:killer('M-FACTS-ASSIGN-HELD') @:killer('M-TOUCH-TYPED-HELD-REGION')
+	@:pin('control')
+	@:killer('M-FACTS-ASSIGN-HELD')
+	@:killer('M-TOUCH-TYPED-HELD-REGION')
 	public function testAValueStoredInALocalOnlyIteratedLetsTheLoopRewrite(): Void {
 		#if (sys || nodejs)
 		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}';
@@ -539,7 +561,9 @@ class FactsFixGateE2ETest extends Test {
 	 * each would read through the key what the value iterator does not (rewritten, the program prints `3,2,1` / `3,20` /
 	 * `2,1` where it printed `3,20,1` / `3,null` / `2,20`).
 	 */
-	@:pin('control') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN') @:killer('M-REACH-LOCAL-MAP-ALIAS-PROVEN')
+	@:pin('control')
+	@:killer('M-TOUCH-MAP-METHODS-UNKNOWN')
+	@:killer('M-REACH-LOCAL-MAP-ALIAS-PROVEN')
 	public function testAMapTheLoopLeavesUnchangedLosesItsKeyUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		mapKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}');
@@ -549,7 +573,8 @@ class FactsFixGateE2ETest extends Test {
 	}
 
 	/** The same proofs and refusals read from the syntax alone, with no compiler facts. */
-	@:pin('control') @:killer('M-TOUCH-MAP-METHODS-UNKNOWN')
+	@:pin('control')
+	@:killer('M-TOUCH-MAP-METHODS-UNKNOWN')
 	public function testAMapTheLoopLeavesUnchangedLosesItsKeyFromItsSyntax(): Void {
 		#if (sys || nodejs)
 		mapKeysDropped('{"resolutionRoots":["."]}');
@@ -564,8 +589,13 @@ class FactsFixGateE2ETest extends Test {
 	 * map handed to `Holder.keep`, which stores it where `Holder.poke` replaces a value inside the loop, keeps its key — the
 	 * value iterator would print `3,2,1` where it printed `3,20,1`.
 	 */
-	@:pin('control') @:killer('M-FACTS-ARGUMENT-USE') @:killer('M-FACTS-ARGUMENT-CAST') @:killer('M-FACTS-ABSTRACT-WRAPPED-CAST')
-	@:killer('M-FACTS-IDENTITY-CAST-VALUE') @:killer('M-TOUCH-ARGUMENT-USES') @:killer('M-GRAPH-MAP-USER-CODE')
+	@:pin('control')
+	@:killer('M-FACTS-ARGUMENT-USE')
+	@:killer('M-FACTS-ARGUMENT-CAST')
+	@:killer('M-FACTS-ABSTRACT-WRAPPED-CAST')
+	@:killer('M-FACTS-IDENTITY-CAST-VALUE')
+	@:killer('M-TOUCH-ARGUMENT-USES')
+	@:killer('M-GRAPH-MAP-USER-CODE')
 	public function testAMapHandedToMethodsThatKeepNothingLosesItsKeyUnderTheTruth(): Void {
 		#if (sys || nodejs)
 		argumentKeysDropped('{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."],"reachConfigurationsComplete":true}', true);

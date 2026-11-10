@@ -122,6 +122,7 @@ typedef Ask = {
 	 * The pool priority the lease queues at, or null for the caller's own (`WF_PRIORITY`). A priority given here is no longer
 	 * re-ranked with the caller's level.
 	 */
-	@:optional var priority: Int;
+	@:optional
+	var priority: Int;
 
 }

@@ -62,7 +62,8 @@ typedef FmtFileResult = {
 	 * could not be formatted at all (a parse failure, a comment-loss refusal) —
 	 * reporting those as invariant breaches would name the wrong defect.
 	 */
-	@:optional var diverged: Bool;
+	@:optional
+	var diverged: Bool;
 
 	/**
 	 * `--one-pass` only: the writer needed more than one rewrite to settle this
@@ -70,7 +71,8 @@ typedef FmtFileResult = {
 	 * and, under `--write`, still written to that fixed point. What did not hold
 	 * is the ONE-PASS property, which is a statement about the WRITER.
 	 */
-	@:optional var unsettled: Bool;
+	@:optional
+	var unsettled: Bool;
 
 	/**
 	 * `--write` only: the formatted bytes were correct and the host refused the write
@@ -86,7 +88,8 @@ typedef FmtFileResult = {
 	 * write side is the one that produced the vacuous arm, and a second word wants
 	 * its own fixture rather than a widened claim here.
 	 */
-	@:optional var unwritable: Bool;
+	@:optional
+	var unwritable: Bool;
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;

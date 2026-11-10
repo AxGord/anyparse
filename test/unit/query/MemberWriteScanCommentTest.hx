@@ -8,12 +8,14 @@ import anyparse.query.MemberWriteScan;
  */
 class MemberWriteScanCommentTest extends Test {
 
-	@:pin('control') @:killer('M-WRITESCAN-BLOCK-COMMENT-BLIND')
+	@:pin('control')
+	@:killer('M-WRITESCAN-BLOCK-COMMENT-BLIND')
 	public function testBlockCommentBetweenIncrementAndNameStillReadsAsAWrite(): Void {
 		Assert.isTrue(written('class C { function f(y:Int) { y = ++ /* c */ cnt; } }'));
 	}
 
-	@:pin('control') @:killer('M-WRITESCAN-BLOCK-COMMENT-BLIND')
+	@:pin('control')
+	@:killer('M-WRITESCAN-BLOCK-COMMENT-BLIND')
 	public function testOpenerInsideTheCommentDoesNotEndTheSkipEarly(): Void {
 		Assert.isTrue(written('class C { function f(y:Int) { y = ++ /* a /* b */ cnt; } }'));
 	}
@@ -23,12 +25,14 @@ class MemberWriteScanCommentTest extends Test {
 		Assert.isFalse(written('class C { function f(y:Int) { y = y + /* c */ cnt; } }'));
 	}
 
-	@:pin('control') @:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
+	@:pin('control')
+	@:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
 	public function testLineCommentBetweenIncrementAndNameStillReadsAsAWrite(): Void {
 		Assert.isTrue(written('class C { function f(y:Int) { y = ++ // c\n cnt; } }'));
 	}
 
-	@:pin('control') @:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
+	@:pin('control')
+	@:killer('M-WRITESCAN-LINE-COMMENT-BLIND')
 	public function testIncrementWrittenInsideALineCommentIsNoWrite(): Void {
 		Assert.isFalse(written('class C { function f(y:Int) { y = 1; // ++\n cnt; } }'));
 	}

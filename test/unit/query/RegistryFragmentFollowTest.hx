@@ -27,7 +27,8 @@ final class RegistryFragmentFollowTest extends Test {
 	private static final AFTER: String =
 		'package p;\n\nclass C {\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\treturn (a && b) || c;\n\t}\n}\n';
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-REPLACE-SHARES-FIND')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-REPLACE-SHARES-FIND')
 	public function testAFragmentThroughANewParenCarriesItIntoFindAndReplace(): Void {
 		final out: RegistryFollow = follow('b || c', 'b && c');
 		Assert.equals(2, out.count);
@@ -36,7 +37,8 @@ final class RegistryFragmentFollowTest extends Test {
 		Assert.isTrue(out.text.indexOf('"replace":"b) && c"') >= 0);
 	}
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-SPLICE-CHECKED')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-SPLICE-CHECKED')
 	public function testAReplaceThatWouldUnbalanceTheSpliceIsNamedNotWritten(): Void {
 		final out: RegistryFollow = follow('b || c', 'false');
 		Assert.isNull(out.text);
@@ -49,7 +51,8 @@ final class RegistryFragmentFollowTest extends Test {
 		Assert.equals(0, out.notes.length);
 	}
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-FIND-MAPS-TO-WRITTEN')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-FIND-MAPS-TO-WRITTEN')
 	public function testAMultiLineFindKeepsItsWholeExtentThroughAnIndentTolerantCut(): Void {
 		final out: RegistryFollow = followIn(
 			'if (a) return b;\n\t\treturn c;', 'if (a) return (b);\n\t\treturn c;', 'if (a) return b;\nreturn c;',
@@ -61,12 +64,14 @@ final class RegistryFragmentFollowTest extends Test {
 		Assert.isTrue(text.indexOf('return (b);\\n\\t\\treturn x;"') >= 0, text);
 	}
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-BOUNDARY-TAKES-INSERTED')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-BOUNDARY-TAKES-INSERTED')
 	public function testAClosingParenInsertedAtTheCutsEndJoinsItsPartner(): Void {
 		assertCarried('return x || a && b;', 'return x || (a && b);', ' || a && b', '', ' || (a && b)', '');
 	}
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-KEEPS-UNCHANGED-REPLACE')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-KEEPS-UNCHANGED-REPLACE')
 	public function testAReplaceDroppingANewGroupStaysAsWritten(): Void {
 		assertCarried(
 			'if (x || a && b) return a;\n\t\treturn b;', 'if (x || (a && b)) return a;\n\t\treturn b;', '(x || a && b)', '(x)',
@@ -75,7 +80,8 @@ final class RegistryFragmentFollowTest extends Test {
 		assertCarried('return x && a || c;', 'return (x && a) || c;', 'x && a || c', 'x || c', '(x && a) || c', 'x || c');
 	}
 
-	@:pin('control') @:killer('M-REGISTRY-FOLLOW-AS-WRITTEN-FIRST')
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-AS-WRITTEN-FIRST')
 	public function testAFindThatStillAppliesIsLeftAlone(): Void {
 		final out: RegistryFollow = followIn('return x && (a) || c;', 'return (x && (a)) || c;', '(a)', '(b)');
 		Assert.isNull(out.text);

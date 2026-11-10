@@ -41,16 +41,27 @@ package anyparse.grammar.haxe;
  */
 @:peg
 enum HxMemberModifier {
-	@:kw('public') Public;
-	@:kw('private') Private;
-	@:kw('static') Static;
-	@:kw('inline') Inline;
-	@:kw('override') Override;
-	@:kw('dynamic') Dynamic;
-	@:kw('extern') Extern;
-	@:kw('macro') Macro;
-	@:kw('abstract') Abstract;
-	@:kw('overload') Overload;
-	@:kw('#if') @:trail('#end')
+	@:kw('public')
+	Public;
+	@:kw('private')
+	Private;
+	@:kw('static')
+	Static;
+	@:kw('inline')
+	Inline;
+	@:kw('override')
+	Override;
+	@:kw('dynamic')
+	Dynamic;
+	@:kw('extern')
+	Extern;
+	@:kw('macro')
+	Macro;
+	@:kw('abstract')
+	Abstract;
+	@:kw('overload')
+	Overload;
+	@:kw('#if')
+	@:trail('#end')
 	Conditional(inner: HxConditionalMod);
 }

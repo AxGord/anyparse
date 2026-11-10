@@ -341,12 +341,14 @@ class HoistCommonBranchHeadTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PURITY-UNRESOLVED-RECEIVER')
+	@:pin('control')
+	@:killer('M-PURITY-UNRESOLVED-RECEIVER')
 	public function testUntypedReceiverIsNotPure(): Void {
 		Assert.equals(0, violations(receiverRead('u', 'u.x')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-UNRESOLVED-RECEIVER-FLIP')
+	@:pin('control')
+	@:killer('M-PURITY-UNRESOLVED-RECEIVER-FLIP')
 	public function testTypedPlainFieldReadStaysPure(): Void {
 		Assert.equals(1, violations(TYPES + receiverRead('u:P', 'u.x')).length);
 		Assert.equals(
@@ -356,35 +358,41 @@ class HoistCommonBranchHeadTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PURITY-GETTER-OFF')
+	@:pin('control')
+	@:killer('M-PURITY-GETTER-OFF')
 	public function testGetterFieldIsNotPure(): Void {
 		Assert.equals(0, violations(TYPES + receiverRead('u:P', 'u.g')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-OVERLOAD-OFF')
+	@:pin('control')
+	@:killer('M-PURITY-OVERLOAD-OFF')
 	public function testAbstractWithAccessOverloadIsNotPure(): Void {
 		Assert.equals(0, violations(TYPES + receiverRead('u:A', 'u[0]')).length);
 		Assert.equals(0, violations(TYPES + receiverRead('u:O', 'u.x')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-UNKNOWN-MEMBER')
+	@:pin('control')
+	@:killer('M-PURITY-UNKNOWN-MEMBER')
 	public function testUndeclaredReceiverTypeIsNotPure(): Void {
 		Assert.equals(0, violations(receiverRead('u:Foreign', 'u.x')).length);
 		Assert.equals(0, violations(receiverRead('u:ext.Foreign', 'u.x')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-UNKNOWN-MEMBER')
+	@:pin('control')
+	@:killer('M-PURITY-UNKNOWN-MEMBER')
 	public function testTypedefAliasReceiverIsNotPure(): Void {
 		Assert.equals(0, violations('${TYPES}typedef Al = P; ' + receiverRead('u:Al', 'u.g')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-UNKNOWN-INDEX')
+	@:pin('control')
+	@:killer('M-PURITY-UNKNOWN-INDEX')
 	public function testIndexReadOnUndeclaredTypeIsNotPure(): Void {
 		Assert.equals(0, violations(receiverRead('u:Foreign', 'u[0]')).length);
 		Assert.equals(1, violations('${TYPES}class Plain {} ' + receiverRead('u:Plain', 'u[0]')).length);
 	}
 
-	@:pin('control') @:killer('M-PURITY-ALIAS-OVERLOAD')
+	@:pin('control')
+	@:killer('M-PURITY-ALIAS-OVERLOAD')
 	public function testIndexReadThroughAliasOfOverloadingAbstractIsNotPure(): Void {
 		Assert.equals(0, violations('${TYPES}typedef Al = A; ' + receiverRead('u:Al', 'u[0]')).length);
 	}

@@ -22,7 +22,9 @@ package anyparse.grammar.haxe;
 @:fmt(multilineWhenFieldShape('body'))
 typedef HxCondSigFnDecl = {
 	var name: HxFnNameLit;
-	@:lead('(') var signature: HxCondSigRaw;
+	@:lead('(')
+	var signature: HxCondSigRaw;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
-		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr')) var body: HxFnBody;
+		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
+	var body: HxFnBody;
 }

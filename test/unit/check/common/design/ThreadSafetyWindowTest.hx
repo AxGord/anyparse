@@ -11,7 +11,8 @@ class ThreadSafetyWindowTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],'
 		+ '"spawns":["Runner.create"],"lockPairs":["Mutex.acquire/release"]}}}';
 
-	@:pin('control') @:killer('M-TS-WIN-DECL')
+	@:pin('control')
+	@:killer('M-TS-WIN-DECL')
 	public function testATryInADeclarationReleasingBeforeItRethrowsLeavesNothingHeld(): Void {
 		#if (sys || nodejs)
 		Assert.same([], takes(run('final v:Int = try { f(); } catch (e:Dynamic) { _m.release(); throw e; };')));
@@ -20,7 +21,8 @@ class ThreadSafetyWindowTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-WIN-JUMP')
+	@:pin('control')
+	@:killer('M-TS-WIN-JUMP')
 	public function testAContinueStaysInTheLoop(): Void {
 		#if (sys || nodejs)
 		Assert.same([], takes(run('for (i in 0...3) { if (i == 1) continue; f(); }')));
@@ -29,7 +31,9 @@ class ThreadSafetyWindowTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-WIN-ARRAY') @:killer('M-TS-WIN-FOREXPR')
+	@:pin('control')
+	@:killer('M-TS-WIN-ARRAY')
+	@:killer('M-TS-WIN-FOREXPR')
 	public function testAComprehensionIsWalkedAsALoop(): Void {
 		#if (sys || nodejs)
 		Assert.same([], takes(run('final xs:Array<Int> = [for (i in 0...3) { if (i == 1) continue; f(); }];')));
@@ -38,7 +42,8 @@ class ThreadSafetyWindowTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-WIN-CAUGHT-THROW')
+	@:pin('control')
+	@:killer('M-TS-WIN-CAUGHT-THROW')
 	public function testAThrowACatchInterceptsStaysInTheFunction(): Void {
 		#if (sys || nodejs)
 		Assert.same([], takes(run('try { if (f() == 2) throw "x"; } catch (e:Dynamic) { _m.release(); throw e; }')));
@@ -59,7 +64,10 @@ class ThreadSafetyWindowTest extends Test {
 	 * A throw only a `catch` that provably catches it stops: a typed one catches a value of its type (or a subtype),
 	 * a catch-all catches everything, and anything else leaves the function holding the lock (review r4 `L1`, `L1e`).
 	 */
-	@:pin('control') @:killer('M-TS-CATCH-ANY-TYPE') @:killer('M-TS-CATCH-SUPERTYPE') @:killer('M-TS-CATCH-EXCEPTION-TYPE')
+	@:pin('control')
+	@:killer('M-TS-CATCH-ANY-TYPE')
+	@:killer('M-TS-CATCH-SUPERTYPE')
+	@:killer('M-TS-CATCH-EXCEPTION-TYPE')
 	public function testATypedCatchLetsAnotherThrowThrough(): Void {
 		#if (sys || nodejs)
 		Assert.same(['M.main'], takes(run('try { if (f() == 2) throw "x"; } catch (e:haxe.io.Eof) {}')), 'another type');

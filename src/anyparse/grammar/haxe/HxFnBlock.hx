@@ -38,7 +38,10 @@ package anyparse.grammar.haxe;
 typedef HxFnBlock = {
 	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail,
 		uniformStmtBlanks, relocateTrailingComments)
-	@:lead('{') @:trail('}') @:trivia @:skimmable
+	@:lead('{')
+	@:trail('}')
+	@:trivia
+	@:skimmable
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var stmts: Array<HxStatement>;
 }

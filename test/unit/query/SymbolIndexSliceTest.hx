@@ -181,7 +181,8 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/** `declaringFiles` reports 0 / 1 / many declarers of a type name. */
-	@:pin('control') @:killer('M-TYPEREF-NAMED-FIRST-TYPE')
+	@:pin('control')
+	@:killer('M-TYPEREF-NAMED-FIRST-TYPE')
 	public function testDeclaringFilesCount(): Void {
 		final index: SymbolIndex = SymbolIndex.build([
 			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}' },
@@ -612,7 +613,9 @@ class SymbolIndexSliceTest extends Test {
 	 * `extern` between them, as `extern` is. One SPLIT from its declaration marks it in some builds only and is dropped; a
 	 * guarded `private` with no declaration after it in its region marks nothing that follows.
 	 */
-	@:pin('control') @:killer('M-INDEX-GUARDED-PRIVATE-SPLIT') @:killer('M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS')
+	@:pin('control')
+	@:killer('M-INDEX-GUARDED-PRIVATE-SPLIT')
+	@:killer('M-INDEX-GUARDED-PRIVATE-PAST-MODIFIERS')
 	public function testIsPrivateGuardedTypeIsPrivate(): Void {
 		final source: String = 'package pkg;\n#if cpp\nprivate extern class P {}\nprivate class Q {}\n#end\n'
 			+ '#if js\nprivate\n#end\nclass Split {}\n#if cpp\nprivate\n#end\nclass Open {}\nclass M {}\n';
@@ -634,7 +637,9 @@ class SymbolIndexSliceTest extends Test {
 	 * targets cpp — declares the module before its first dot: its private types are `pkg._Sqlite.T`, its type of the
 	 * module's name is the main one.
 	 */
-	@:pin('control') @:killer('M-MODULE-PLATFORM') @:killer('M-MODULE-SCAN-PLATFORM')
+	@:pin('control')
+	@:killer('M-MODULE-PLATFORM')
+	@:killer('M-MODULE-SCAN-PLATFORM')
 	public function testPlatformFileDeclaresTheModuleBeforeItsDot(): Void {
 		final source: String = 'package pkg;\nclass Sqlite {}\nprivate class Row {}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Sqlite.cpp.hx', source: source }], plugin());

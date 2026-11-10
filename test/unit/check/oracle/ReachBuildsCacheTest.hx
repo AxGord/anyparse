@@ -47,7 +47,9 @@ class ReachBuildsCacheTest extends Test {
 	 * A tree no oracle run has seen knows no build, so the alias branch is read and the sleep is reached; the oracle run
 	 * knows the build and reaches nothing, and a `--no-oracle` run after it answers the same from what it stored.
 	 */
-	@:pin('control') @:killer('M-REACH-STORED-UNREAD') @:killer('M-REACH-STORE-OFF')
+	@:pin('control')
+	@:killer('M-REACH-STORED-UNREAD')
+	@:killer('M-REACH-STORE-OFF')
 	public function testANoOracleRunReadsTheBuildsAnOracleRunStored(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('stored', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
@@ -66,7 +68,8 @@ class ReachBuildsCacheTest extends Test {
 	 * stored builds are not read and the run knows no build. The source restored still misses on its
 	 * modification time; once an oracle run stores it again, only the fingerprint tells an edited hxml apart.
 	 */
-	@:pin('control') @:killer('M-REACH-KEY-UNCHECKED')
+	@:pin('control')
+	@:killer('M-REACH-KEY-UNCHECKED')
 	public function testAnEditedInputIsNotReadFromTheStore(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('edited', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
@@ -94,7 +97,8 @@ class ReachBuildsCacheTest extends Test {
 	 * A generated hxml whose declared input changed is not current, whatever the hxml holds: the oracle run would
 	 * generate it again, so the builds stored for the old generation are not read.
 	 */
-	@:pin('control') @:killer('M-REACH-GENERATION-UNCHECKED')
+	@:pin('control')
+	@:killer('M-REACH-GENERATION-UNCHECKED')
 	public function testAGenerationNoLongerCurrentIsNotReadFromTheStore(): Void {
 		#if nodejs
 		final generated: String =
@@ -116,7 +120,9 @@ class ReachBuildsCacheTest extends Test {
 	 * A build that parsed a file outside the directories the fingerprint walked is not stored, since that file can change
 	 * with no fingerprint changing; and a stored library source that no longer hashes as it did is not read.
 	 */
-	@:pin('control') @:killer('M-REACH-HASHED-UNCHECKED') @:killer('M-REACH-LIBRARY-UNCHECKED')
+	@:pin('control')
+	@:killer('M-REACH-HASHED-UNCHECKED')
+	@:killer('M-REACH-LIBRARY-UNCHECKED')
 	public function testAReadTheFingerprintCannotSeeIsNeitherStoredNorRead(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('roots', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
@@ -149,7 +155,8 @@ class ReachBuildsCacheTest extends Test {
 	 * `--macro addClassPath` reaches, or nested past the walk's depth — can change with no fingerprint changing: the builds
 	 * of a compile that read one are not stored, so an edit to it is never answered by the builds of the old one.
 	 */
-	@:pin('control') @:killer('M-REACH-HASHED-UNCHECKED')
+	@:pin('control')
+	@:killer('M-REACH-HASHED-UNCHECKED')
 	public function testABuildThatReadAnUnhashedFileIsNotStored(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('dotdir', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}', GEN_HXML, [GEN]);
@@ -167,7 +174,8 @@ class ReachBuildsCacheTest extends Test {
 	 * The oracle verdict cache is keyed on the same fingerprint: a verdict whose compile read a file it does not hash is not
 	 * stored, so the next oracle run compiles again; a tree whose every read is hashed reuses it.
 	 */
-	@:pin('control') @:killer('M-ORACLE-VERDICT-READS-UNCHECKED')
+	@:pin('control')
+	@:killer('M-ORACLE-VERDICT-READS-UNCHECKED')
 	public function testAVerdictWhoseCompileReadAnUnhashedFileIsNotStored(): Void {
 		#if nodejs
 		final complete: String = '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}';
@@ -189,7 +197,8 @@ class ReachBuildsCacheTest extends Test {
 	}
 
 	/** A record under the right key whose shape is not the one written — a value pair that is no pair — is a miss, not a crash. */
-	@:pin('control') @:killer('M-NATIVE-STRING-UNCHECKED')
+	@:pin('control')
+	@:killer('M-NATIVE-STRING-UNCHECKED')
 	public function testAMisshapenRecordIsAMiss(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('shape', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');
@@ -215,7 +224,9 @@ class ReachBuildsCacheTest extends Test {
 	}
 
 	/** A run's builds are stored under the input they read, from compiles started ahead or on the spot. */
-	@:pin('control') @:killer('M-BUILDS-RUN-UNSTORED') @:killer('M-BUILDS-NOW-UNSTORED')
+	@:pin('control')
+	@:killer('M-BUILDS-RUN-UNSTORED')
+	@:killer('M-BUILDS-NOW-UNSTORED')
 	public function testARunStoresTheBuildsItProbes(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('runstores', '{"compilerOracle":[{"hxml":"check.hxml"}],$RULES}');

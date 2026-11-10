@@ -13,7 +13,8 @@ import anyparse.check.common.unused.UnusedPublicMember;
  * member. The autofix deletes the method with its modifier run and doc comment, unless an
  * interpolation fragment could name it at runtime. `DefaultOff`.
  */
-@:nullSafety(Strict) class UnusedPublicMemberCheckTest extends Test {
+@:nullSafety(Strict)
+class UnusedPublicMemberCheckTest extends Test {
 
 	/** The check's id, asserted on every finding. */
 	private static inline final RULE: String = 'unused-public-member';
@@ -81,7 +82,8 @@ import anyparse.check.common.unused.UnusedPublicMember;
 		Assert.equals(0, withUser('Reflect.field(c, \'orphaned\');').length);
 	}
 
-	@:pin('control') @:killer('M-NAMEOUTSIDE-TRUE')
+	@:pin('control')
+	@:killer('M-NAMEOUTSIDE-TRUE')
 	public function testInterpolationEscapeKeepsTheMember(): Void {
 		// `'\x24zqxwvEscaped'` DECODES to `'$zqxwvEscaped'`, a real read. The token map cannot see
 		// it — a word-boundary scan reads `x24zqxwvEscaped` as ONE token — so this is the whole of

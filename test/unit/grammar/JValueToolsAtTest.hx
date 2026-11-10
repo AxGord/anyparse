@@ -33,7 +33,8 @@ class JValueToolsAtTest extends Test {
 		Assert.isNull(JValueTools.at(null, 'a'));
 	}
 
-	@:pin('control') @:killer('M-JVALUE-AT-LOOSE-INDEX')
+	@:pin('control')
+	@:killer('M-JVALUE-AT-LOOSE-INDEX')
 	public function testAnIndexIsTheWholeSegment(): Void {
 		Assert.isNull(JValueTools.at(JValueParser.parse('[1, 2]'), '1x'), 'a segment a number only starts is no index');
 		Assert.isNull(JValueTools.at(JValueParser.parse('[1, 2]'), '01'), 'nor one spelled with a leading zero');

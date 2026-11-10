@@ -185,7 +185,8 @@ class AnonTypeDupCheckTest extends Test {
 	/**
 	 * Two config chains: each file's shapes are held to its own `minOccurrences`, whichever file the run lists first.
 	 */
-	@:pin('control') @:killer('M-ANON-FIRST-FILE-CONFIG')
+	@:pin('control')
+	@:killer('M-ANON-FIRST-FILE-CONFIG')
 	public function testEachFileHeldToItsOwnChainThreshold(): Void {
 		final low: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":2,"minFields":2}}}');
 		final high: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":50,"minFields":2}}}');
@@ -208,7 +209,8 @@ class AnonTypeDupCheckTest extends Test {
 	 * A group whose earliest occurrence sits in a file that disables the rule is anchored at the first file that keeps
 	 * it, so the finding survives in either file order.
 	 */
-	@:pin('control') @:killer('M-ANON-ANCHOR-UNGATED')
+	@:pin('control')
+	@:killer('M-ANON-ANCHOR-UNGATED')
 	public function testAGroupIsAnchoredWhereTheRuleIsEnabled(): Void {
 		final on: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":true,"minOccurrences":3}}}');
 		final off: LintConfig = LintConfig.parse('{"rules":{"anon-type-dup":{"enabled":false,"minOccurrences":3}}}');

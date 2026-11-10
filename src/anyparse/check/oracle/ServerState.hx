@@ -6,5 +6,7 @@ package anyparse.check.oracle;
  * wall-clock SECOND at which the last typecheck through it began — the watermark the
  * staleness rule is written against.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef ServerState = { var port: Int; var pid: Int; var compiledAt: Int; }

@@ -328,7 +328,9 @@ class FieldInitAcrossSuperE2ETest extends Test {
 	 * what it printed; the init reading the static the base constructor bumps stays, in the pass that moves the others and in
 	 * the next one, where its file no longer has the facts the compile recorded.
 	 */
-	@:pin('control') @:killer('M-FIAD-PROVEN-NEVER') @:killer('M-FRESH-ONLY-ENTRY-FACETED')
+	@:pin('control')
+	@:killer('M-FIAD-PROVEN-NEVER')
+	@:killer('M-FRESH-ONLY-ENTRY-FACETED')
 	public function testAProvenInitCrossesSuperAndThePrefix(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('fiadproven', ACCEPT_MAIN, COMPLETE);
@@ -348,8 +350,12 @@ class FieldInitAcrossSuperE2ETest extends Test {
 	}
 
 	/** Every class whose move would change the output keeps its constructor init, and the program is untouched. */
-	@:pin('control') @:killer('M-FIAD-PROVEN-ALWAYS') @:killer('M-FIAD-PROVEN-NO-READER') @:killer('M-FIAD-PROVEN-NO-COMMUTE')
-	@:killer('M-FIAD-PROVEN-EXPOSED') @:killer('M-FRESH-ONLY-WRITES-ADMITTED')
+	@:pin('control')
+	@:killer('M-FIAD-PROVEN-ALWAYS')
+	@:killer('M-FIAD-PROVEN-NO-READER')
+	@:killer('M-FIAD-PROVEN-NO-COMMUTE')
+	@:killer('M-FIAD-PROVEN-EXPOSED')
+	@:killer('M-FRESH-ONLY-WRITES-ADMITTED')
 	@:killer('M-FRESH-ONLY-STATEFUL-LIBRARY')
 	public function testAnObservableCrossingKeepsTheInit(): Void {
 		#if (sys || nodejs)
@@ -364,7 +370,8 @@ class FieldInitAcrossSuperE2ETest extends Test {
 	}
 
 	/** Without the list of builds declared complete the facts are not the truth, and the proven crossing stays off. */
-	@:pin('control') @:killer('M-FIAD-PROVEN-ALWAYS')
+	@:pin('control')
+	@:killer('M-FIAD-PROVEN-ALWAYS')
 	public function testWithoutTheTruthTheInitStays(): Void {
 		#if (sys || nodejs)
 		final dir: Null<String> = tree('fiadnotruth', ACCEPT_MAIN, '{"compilerOracle":[{"hxml":"check.hxml"}],"resolutionRoots":["."]}');

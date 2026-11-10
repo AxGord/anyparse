@@ -513,7 +513,9 @@ enum abstract MemberRank(Int) {
 	final StaticPublicMethod = 16;
 	final StaticPrivateMethod = 17;
 
-	@:op(A < B) static function lt(a: MemberRank, b: MemberRank): Bool;
+	@:op(A < B)
+	static function lt(a: MemberRank, b: MemberRank): Bool;
 
-	@:op(A - B) static function sub(a: MemberRank, b: MemberRank): Int;
+	@:op(A - B)
+	static function sub(a: MemberRank, b: MemberRank): Int;
 }

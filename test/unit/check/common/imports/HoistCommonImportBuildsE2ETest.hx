@@ -21,7 +21,10 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	private static final HELD_NOTE: String = 'hoist-common-import held what only the builds can vouch for';
 	#end
 
-	@:pin('control') @:killer('M-HOIST-UNKNOWN-BUILDS-GUESSED') @:killer('M-REACH-STORED-UNREAD') @:killer('M-HOIST-HELD-UNSAID')
+	@:pin('control')
+	@:killer('M-HOIST-UNKNOWN-BUILDS-GUESSED')
+	@:killer('M-REACH-STORED-UNREAD')
+	@:killer('M-HOIST-HELD-UNSAID')
 	public function testANoOracleRunHoistsWhatTheStoredBuildsVouchForAndHoldsWithoutThem(): Void {
 		#if nodejs
 		final dir: Null<String> = tree();
@@ -45,7 +48,8 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	 * A run over paths whose configs name different oracle lists reads no list as complete; one of them declared its list
 	 * complete, so the evidence a project with no declared list falls back on vouches for nothing a build of it reads.
 	 */
-	@:pin('control') @:killer('M-HOIST-MIXED-LISTS-GUESSED')
+	@:pin('control')
+	@:killer('M-HOIST-MIXED-LISTS-GUESSED')
 	public function testARunOverPathsWithDifferentOracleListsHolds(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('{"hxml":"check.hxml"}', [
@@ -64,7 +68,9 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	}
 
 	/** A declared build the reach probe cannot read (a `--next` hxml) leaves the run with no builds: it holds and says so. */
-	@:pin('control') @:killer('M-HELD-NOTE-LOST-WITH-FACTS') @:killer('M-HOIST-HELD-UNSAID')
+	@:pin('control')
+	@:killer('M-HELD-NOTE-LOST-WITH-FACTS')
+	@:killer('M-HOIST-HELD-UNSAID')
 	public function testALiveBuildThatDoesNotAnswerHoldsAndSaysSo(): Void {
 		#if nodejs
 		final dir: Null<String> = tree('{"hxml":"check.hxml"},{"hxml":"next.hxml"}', [

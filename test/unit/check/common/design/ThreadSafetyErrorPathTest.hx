@@ -21,7 +21,10 @@ class ThreadSafetyErrorPathTest extends Test {
 	 * the client's `TreeWatcher.setTimestamp`: the hold spans a call whose only blocking leg is `catch` → `Error.reportError` →
 	 * a blocking PUT, so the hold and the main thread's take are long only on an error path.
 	 */
-	@:pin('control') @:killer('M-TS-ERROR-REACH-OFF') @:killer('M-TS-ERROR-HOLD-OFF') @:killer('M-TS-ERROR-TAKE-OFF')
+	@:pin('control')
+	@:killer('M-TS-ERROR-REACH-OFF')
+	@:killer('M-TS-ERROR-HOLD-OFF')
+	@:killer('M-TS-ERROR-TAKE-OFF')
 	public function testABlockOnlyInACalleesCatchIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run('function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }', 'save();');
@@ -37,7 +40,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/** A call in the hold's own window inside a `catch` runs only there. */
-	@:pin('control') @:killer('M-TS-ERROR-WINDOW-OFF')
+	@:pin('control')
+	@:killer('M-TS-ERROR-WINDOW-OFF')
 	public function testABlockInTheHoldsOwnCatchIsInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -50,7 +54,9 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/** The same block outside the catch too: a long reason not inside a catch keeps both warnings. */
-	@:pin('control') @:killer('M-TS-ERROR-ANY') @:killer('M-TS-ERROR-TAKE-ANY')
+	@:pin('control')
+	@:killer('M-TS-ERROR-ANY')
+	@:killer('M-TS-ERROR-TAKE-ANY')
 	public function testABlockAlsoOutsideTheCatchWarns(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -63,7 +69,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/** A main-thread sink call inside a `catch` runs only on an error path. */
-	@:pin('control') @:killer('M-TS-ERROR-CAUGHT-OFF')
+	@:pin('control')
+	@:killer('M-TS-ERROR-CAUGHT-OFF')
 	public function testAMainSinkCallInACatchIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [
@@ -77,7 +84,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/** `--explain-long` marks a reason that blocks only through a catch with that catch. */
-	@:pin('control') @:killer('M-TS-ERROR-EXPLAIN-OFF')
+	@:pin('control')
+	@:killer('M-TS-ERROR-EXPLAIN-OFF')
 	public function testExplainLongMarksTheErrorPath(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('threadsafetyerrorpath', [{ name: 'apq.json', source: CONFIG }]);
@@ -94,7 +102,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	}
 
 	/** A `catch` inside a loop runs once per failing turn, on the normal run: both findings keep their warning (review r4 `P1`). */
-	@:pin('control') @:killer('M-TS-ERROR-LOOP')
+	@:pin('control')
+	@:killer('M-TS-ERROR-LOOP')
 	public function testACatchInALoopIsNoErrorPath(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -115,7 +124,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	 * A `catch` whose function a repeating call under the hold runs — a loop up the way, a recursion — runs once per
 	 * failing turn, on the normal run: the hold, and the main thread's take, warn (review round 2 `ep1-loop-in-caller`).
 	 */
-	@:pin('control') @:killer('M-TS-ERROR-REPEATED-WAY')
+	@:pin('control')
+	@:killer('M-TS-ERROR-REPEATED-WAY')
 	public function testACatchARepeatingCallerRunsIsNoErrorPath(): Void {
 		#if (sys || nodejs)
 		final save: String =
@@ -139,7 +149,8 @@ class ThreadSafetyErrorPathTest extends Test {
 	 * A main-thread sink call in a `catch` whose function a repeating call up the main thread's way runs — a loop, a
 	 * value handed on to a call that may repeat it — warns (review round 2 `ep1b-iter-in-caller`).
 	 */
-	@:pin('control') @:killer('M-TS-ERROR-CAUGHT-REPEATED')
+	@:pin('control')
+	@:killer('M-TS-ERROR-CAUGHT-REPEATED')
 	public function testAMainSinkCallInACatchARepeatingCallerRunsWarns(): Void {
 		#if (sys || nodejs)
 		final load: String =
@@ -163,7 +174,9 @@ class ThreadSafetyErrorPathTest extends Test {
 	 * A lambda a `catch` stores runs wherever it is called, not inside the catch (review r4 `P2`); a local function the
 	 * catch calls runs only there.
 	 */
-	@:pin('control') @:killer('M-TS-ERROR-NESTED-REF') @:killer('M-TS-ERROR-CALLED-LOCAL')
+	@:pin('control')
+	@:killer('M-TS-ERROR-NESTED-REF')
+	@:killer('M-TS-ERROR-CALLED-LOCAL')
 	public function testALambdaACatchStoresRunsAnywhere(): Void {
 		#if (sys || nodejs)
 		final stored: Array<Violation> = ThreadSafetyCheckTest.violations(CONFIG, [

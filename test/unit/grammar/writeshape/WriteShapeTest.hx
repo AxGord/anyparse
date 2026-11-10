@@ -33,7 +33,8 @@ class WriteShapeTest extends Test {
 	};
 
 	/** A held null of a `@:writeNull` field is written under its key; one of a plain optional field is left out. */
-	@:pin('control') @:killer('M-WRITE-NULL-IGNORED')
+	@:pin('control')
+	@:killer('M-WRITE-NULL-IGNORED')
 	public function testAWriteNullFieldKeepsItsKey(): Void {
 		Assert.equals(
 			'{"name":"a","note":null,"ratio":1,"whole":null,"items":[{"n":2,"tags":["x","y"]}],"empty":[],"inner":null}', compact(HELD)
@@ -45,7 +46,8 @@ class WriteShapeTest extends Test {
 	}
 
 	/** The expanded layout: two spaces of indent, a space after each colon, every non-empty container broken. */
-	@:pin('control') @:killer('M-KEY-VALUE-SPACE-IGNORED')
+	@:pin('control')
+	@:killer('M-KEY-VALUE-SPACE-IGNORED')
 	public function testTheExpandedLayout(): Void {
 		Assert.equals(
 			'{\n  "name": "a",\n  "note": null,\n  "ratio": 1,\n  "whole": null,\n  "items": [\n    {\n      "n": 2,\n'
@@ -55,7 +57,8 @@ class WriteShapeTest extends Test {
 	}
 
 	/** A `@:bare` struct is its one field's value alone, in every layout. */
-	@:pin('control') @:killer('M-BARE-IGNORED')
+	@:pin('control')
+	@:killer('M-BARE-IGNORED')
 	public function testABareStructIsItsFieldsValue(): Void {
 		final list: WriteShapeList = { items: [{ n: 1, tags: [] }] };
 		Assert.equals('[{"n":1,"tags":[]}]', WriteShapeListWriter.write(list, JsonFormat.instance.compactWriteOptions));
@@ -67,7 +70,8 @@ class WriteShapeTest extends Test {
 	}
 
 	/** A `Float` is spelled as the target prints it — a whole number gains no `.0` — by the Doc writer as by the compact one. */
-	@:pin('control') @:killer('M-FLOAT-POINT-FORCED')
+	@:pin('control')
+	@:killer('M-FLOAT-POINT-FORCED')
 	public function testAFloatKeepsTheTargetSpelling(): Void {
 		Assert.equals(
 			'{"name":"b","note":"n","skip":3,"ratio":0.5,"whole":2,"items":[],"empty":[],"inner":{"n":1,"tags":[]}}', compact(FULL)

@@ -18,7 +18,9 @@ class ThreadSafetyWaiterTest extends Test {
 	 * hold makes long, once per item — the main thread waits for `_b` (finding (a) at the take), and no thread it
 	 * stalls waits for `_a`: however often it is repeated, a wait for another lock is no work of the holder's own.
 	 */
-	@:pin('control') @:killer('M-TS-B-MAIN-ONLY-KEPT') @:killer('M-TS-OWN-WORK-TAKES')
+	@:pin('control')
+	@:killer('M-TS-B-MAIN-ONLY-KEPT')
+	@:killer('M-TS-OWN-WORK-TAKES')
 	public function testAHoldOnlyTheMainThreadRunsIsNoStall(): Void {
 		#if (sys || nodejs)
 		final held: Array<String> = holds(
@@ -31,7 +33,8 @@ class ThreadSafetyWaiterTest extends Test {
 	}
 
 	/** the client's `ListMoveItems.moveItems`: the main thread's own per-item loop under the lock is the stall, and stays reported. */
-	@:pin('control') @:killer('M-TS-OWN-WORK-DROPPED')
+	@:pin('control')
+	@:killer('M-TS-OWN-WORK-DROPPED')
 	public function testAMainOnlyHoldOverItsOwnLongWorkStays(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(
@@ -46,7 +49,8 @@ class ThreadSafetyWaiterTest extends Test {
 	}
 
 	/** A holder nothing in the graph calls runs on a thread the analysis only assumes: its finding stays. */
-	@:pin('control') @:killer('M-TS-B-ASSUMED-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-B-ASSUMED-IGNORED')
 	public function testAHolderOfUnknownThreadKeepsItsFinding(): Void {
 		#if (sys || nodejs)
 		Assert.same(

@@ -16,6 +16,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifMod = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxCondModPrefix>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxCondModPrefix>;
 };

@@ -27,7 +27,8 @@ class DeadNullCoalescingTest extends Test {
 	}
 
 	/** A loop binder shadows the outer proof: `(x ?? d).bar` on the binder is a live fallback, not a dead one. */
-	@:pin('control') @:killer('M-NULLFLOW-BINDER-BLIND')
+	@:pin('control')
+	@:killer('M-NULLFLOW-BINDER-BLIND')
 	public function testLoopBinderShadowsTheOuterProof(): Void {
 		Assert.equals(
 			0,
@@ -106,7 +107,8 @@ class DeadNullCoalescingTest extends Test {
 	 * `return node ?? other` rewritten to `return node` fails with `Cannot return nullable value of Null<String> as String`
 	 * (probed). It was a SAFE fix with no net at all — the one rewrite in this family that broke a build outright.
 	 */
-	@:pin('control') @:killer('M-DNC-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNC-DECLINED-FIXED')
+	@:pin('control')
+	@:killer('M-DNC-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNC-DECLINED-FIXED')
 	public function testBoolLocalProofKeepsNoFixUnderNullSafety(): Void {
 		final src: String = '@:nullSafety(Strict) class C { static function f(node: Null<String>, other: String): String {'
 			+ ' final ok: Bool = node != null; if (ok) return node ?? other; return other; } }';
@@ -118,7 +120,8 @@ class DeadNullCoalescingTest extends Test {
 	}
 
 	/** The control: a direct guard is a narrowing the compiler performs, so the fallback still goes under null-safety. */
-	@:pin('control') @:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
+	@:pin('control')
+	@:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
 	public function testDirectGuardKeepsTheFixUnderNullSafety(): Void {
 		final src: String = '@:nullSafety(Strict) class C { static function f(node: Null<String>, other: String): String {'
 			+ ' if (node != null) return node ?? other; return other; } }';

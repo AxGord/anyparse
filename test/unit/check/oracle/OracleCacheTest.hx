@@ -352,7 +352,8 @@ final class OracleCacheTest extends Test {
 	 * Configurations fingerprinted together share one walk of each directory (`OracleRunMemo.fingerprints`) and still
 	 * fingerprint exactly as each does alone: a nested `-cp` and one outside the compile root included, in either order.
 	 */
-	@:pin('control') @:killer('M-ORACLE-CACHE-WALK-FIRST-ONLY')
+	@:pin('control')
+	@:killer('M-ORACLE-CACHE-WALK-FIRST-ONLY')
 	public function testFingerprintsSharingOneWalkEqualTheirOwn(): Void {
 		#if (sys || nodejs)
 		final ext: String = CliFixture.writeTree('oraclecacheext', [{ name: 'Ext.hx', source: 'class Ext {}\n' }]);

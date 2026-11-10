@@ -6,6 +6,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifCase = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxSwitchCase>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	var body: Array<HxSwitchCase>;
 };

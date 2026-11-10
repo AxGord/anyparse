@@ -692,7 +692,8 @@ class GuardContinueCheckTest extends Test {
 	 * deferral asks the same loop set. Before it did, a `do … while` was the one loop both rules read differently:
 	 * `loop-guard` skipped it and this check kept the cascade it would have lifted.
 	 */
-	@:pin('control') @:killer('M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY')
+	@:pin('control')
+	@:killer('M-GUARD-CONTINUE-DEFERS-STATEMENT-BLOCK-ONLY')
 	public function testDefersADoWhileLoopGuardLifts(): Void {
 		final body: String = '{\n\t\t\tif (a != null) continue;\n\t\t\tpre();\n\t\t\tif (b != null) {\n\t\t\t\tbody(b);\n\t\t\t}\n\t\t}';
 		for (loop in [wrap('do $body while (ok);'), wrap('for (x in xs) $body')]) {

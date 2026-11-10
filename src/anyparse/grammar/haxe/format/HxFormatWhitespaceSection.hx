@@ -35,10 +35,13 @@ package anyparse.grammar.haxe.format;
  * (`true` by default) glues a call-arg `(` to a following object-literal `{`. `formatStringInterpolation` and
  * `optionalSemicolon` are documented on their `HxModuleWriteOptions` fields.
  */
-@:peg typedef HxFormatWhitespaceSection = {
+@:peg
+typedef HxFormatWhitespaceSection = {
 
-	@:optional var objectFieldColonPolicy: HxFormatWhitespacePolicy;
-	@:optional var typeHintColonPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var objectFieldColonPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var typeHintColonPolicy: HxFormatWhitespacePolicy;
 
 	/**
 	 * Accepted so a config shared with haxe-formatter loads without an unknown-key report; hxq reads no knob from it.
@@ -46,26 +49,46 @@ package anyparse.grammar.haxe.format;
 	 * parameter is the known case), while hxq spaces every type-hint colon, that one included, by `typeHintColonPolicy`.
 	 * `HaxeFormatConfigDiagnostics` reports a config whose two differ; state both to the same value for one output.
 	 */
-	@:optional var colonPolicy: HxFormatWhitespacePolicy;
-	@:optional var typeCheckColonPolicy: HxFormatWhitespacePolicy;
-	@:optional var typeParamOpenPolicy: HxFormatWhitespacePolicy;
-	@:optional var typeParamClosePolicy: HxFormatWhitespacePolicy;
-	@:optional var binopPolicy: HxFormatWhitespacePolicy;
-	@:optional var conditionalCompilationBinop: Bool;
-	@:optional var intervalPolicy: HxFormatWhitespacePolicy;
-	@:optional var functionTypeHaxe4Policy: HxFormatWhitespacePolicy;
-	@:optional var functionTypeHaxe3Policy: HxFormatWhitespacePolicy;
-	@:optional var arrowFunctionsPolicy: HxFormatWhitespacePolicy;
-	@:optional var ifPolicy: HxFormatWhitespacePolicy;
-	@:optional var forPolicy: HxFormatWhitespacePolicy;
-	@:optional var whilePolicy: HxFormatWhitespacePolicy;
-	@:optional var switchPolicy: HxFormatWhitespacePolicy;
-	@:optional var tryPolicy: HxFormatWhitespacePolicy;
-	@:optional var addLineCommentSpace: Bool;
-	@:optional var normalizeLineCommentIndent: Bool;
-	@:optional var compressSuccessiveParenthesis: Bool;
-	@:optional var formatStringInterpolation: Bool;
-	@:optional var optionalSemicolon: HxFormatOptionalSemicolonPolicy;
+	@:optional
+	var colonPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var typeCheckColonPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var typeParamOpenPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var typeParamClosePolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var binopPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var conditionalCompilationBinop: Bool;
+	@:optional
+	var intervalPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var functionTypeHaxe4Policy: HxFormatWhitespacePolicy;
+	@:optional
+	var functionTypeHaxe3Policy: HxFormatWhitespacePolicy;
+	@:optional
+	var arrowFunctionsPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var ifPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var forPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var whilePolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var switchPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var tryPolicy: HxFormatWhitespacePolicy;
+	@:optional
+	var addLineCommentSpace: Bool;
+	@:optional
+	var normalizeLineCommentIndent: Bool;
+	@:optional
+	var compressSuccessiveParenthesis: Bool;
+	@:optional
+	var formatStringInterpolation: Bool;
+	@:optional
+	var optionalSemicolon: HxFormatOptionalSemicolonPolicy;
 
 	/**
 	 * The optional `;` between a value-`if`'s then-branch and its `else`
@@ -76,9 +99,13 @@ package anyparse.grammar.haxe.format;
 	 * can belong to the enclosing statement, so every value keeps source
 	 * presence in that shape. Feeds `opt.semicolonBeforeElse`.
 	 */
-	@:optional var semicolonBeforeElse: HxFormatOptionalSemicolonPolicy;
-	@:optional var parenConfig: HxFormatParenConfigSection;
-	@:optional var bracesConfig: HxFormatBracesConfigSection;
-	@:optional var bracketConfig: HxFormatBracketConfigSection;
+	@:optional
+	var semicolonBeforeElse: HxFormatOptionalSemicolonPolicy;
+	@:optional
+	var parenConfig: HxFormatParenConfigSection;
+	@:optional
+	var bracesConfig: HxFormatBracesConfigSection;
+	@:optional
+	var bracketConfig: HxFormatBracketConfigSection;
 
 };

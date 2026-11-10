@@ -66,7 +66,8 @@ class ImportOutsideGuardCheckTest extends Test {
 	 * after the move (the LAST statement wins), so the move is refused. A `using` binding nothing
 	 * the guarded import binds still moves.
 	 */
-	@:pin('control') @:killer('M-GUARD-REBIND-BLIND')
+	@:pin('control')
+	@:killer('M-GUARD-REBIND-BLIND')
 	public function testAMoveThatRebindsAConstructorIsRefused(): Void {
 		final libs: Array<{ file: String, source: String }> = [
 			{ file: 'p/Col.hx', source: 'package p;\n\nenum Col {\n\tRed;\n}\n' },

@@ -305,7 +305,10 @@ class TypeNameBindingTest extends Test {
 	 * What an `Unknown` may be when every candidate is read (`unknownCandidates`): both builds' bindings of a guarded import
 	 * against another; none to offer when the other build's binding is unread, nor for a name a module declares itself.
 	 */
-	@:pin('control') @:killer('M-BINDING-EITHER-DROPS-REST') @:killer('M-BINDING-EITHER-DROPS-GUARDED') @:killer('M-BINDING-EITHER-OPEN-READ')
+	@:pin('control')
+	@:killer('M-BINDING-EITHER-DROPS-REST')
+	@:killer('M-BINDING-EITHER-DROPS-GUARDED')
+	@:killer('M-BINDING-EITHER-OPEN-READ')
 	@:killer('M-BINDING-CANDIDATES-OWN-TYPE')
 	public function testAnUnknownCarriesTheCandidatesItReads(): Void {
 		final index: SymbolIndex = indexOf([
@@ -370,7 +373,10 @@ class TypeNameBindingTest extends Test {
 	 * binds only the type its import names, never every name written beside it.
 	 */
 	@:pin('control')
-	@:killer('M-TS-GUARDED-IMPORT') @:killer('M-TS-WILD-MAYBE') @:killer('M-BINDINGS-UNREADABLE-SUBTYPE') @:killer('M-TS-WILD-GUARDED')
+	@:killer('M-TS-GUARDED-IMPORT')
+	@:killer('M-TS-WILD-MAYBE')
+	@:killer('M-BINDINGS-UNREADABLE-SUBTYPE')
+	@:killer('M-TS-WILD-GUARDED')
 	public function testBindingsListEveryBuildsType(): Void {
 		final index: SymbolIndex = indexOf([
 			'a/X.hx' => 'package a;\n\nclass X {}\n',
@@ -393,7 +399,8 @@ class TypeNameBindingTest extends Test {
 	 * The package tier of `bindingsOf` reads the std core's modules beside the index's, package by package, nearest first
 	 * (4.3.7: a project file in `sys.thread` sees the std `Lock`, before a project `Lock` of an enclosing package).
 	 */
-	@:pin('control') @:killer('M-TS-PACKAGE-PROJECT-FIRST')
+	@:pin('control')
+	@:killer('M-TS-PACKAGE-PROJECT-FIRST')
 	public function testThePackageTierReadsTheStdCoresModulesPackageByPackage(): Void {
 		if (StdResolver.stdDir() == null) {
 			Assert.pass('no std on this machine');
@@ -415,7 +422,9 @@ class TypeNameBindingTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-BINDINGS-DECLS-AT-SUBTYPE') @:killer('M-CANONICAL-SUBTYPE')
+	@:pin('control')
+	@:killer('M-BINDINGS-DECLS-AT-SUBTYPE')
+	@:killer('M-CANONICAL-SUBTYPE')
 	public function testADeclarationIsAtItsCanonicalPath(): Void {
 		final index: SymbolIndex = indexOf(['p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n']);
 		function at(path: String): String {

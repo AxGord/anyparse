@@ -181,7 +181,8 @@ class FixtureCompileCacheTest extends Test {
 	 * never recorded: a replay rewrites whole files, so the other writer's lines would be lost (`OracleRunMemoTest` counts
 	 * compiles through exactly such a log, and read 1 where two compiles ran).
 	 */
-	@:pin('control') @:killer('M-FIXTURE-CACHE-CWD-WRITE')
+	@:pin('control')
+	@:killer('M-FIXTURE-CACHE-CWD-WRITE')
 	public function testACompileWritingIntoItsCwdIsNotRecorded(): Void {
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
 		final writer: String = 'class AnyparseReachDefinesProbe {\n\tpublic static function run(out:String):Void {\n'

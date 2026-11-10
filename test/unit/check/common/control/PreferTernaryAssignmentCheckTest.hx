@@ -236,7 +236,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** The ordinary arm's narrowing refusal: a bool-literal collapse would hand the guard to a flattening that loses it. */
-	@:pin('control') @:killer('M-DECLTERN-NARROWING')
+	@:pin('control')
+	@:killer('M-DECLTERN-NARROWING')
 	public function testDeclNullNarrowingBoolNotFlagged(): Void {
 		Assert.equals(
 			0, violations('class C {\n\tfunction f() {\n\t\tvar b:Bool = false;\n\t\tif (o != null && o.f) b = true;\n\t}\n}').length
@@ -244,7 +245,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** A comment in a region the rebuild drops (the `if` header, the target) refuses the site. */
-	@:pin('control') @:killer('M-DECLTERN-COMMENT')
+	@:pin('control')
+	@:killer('M-DECLTERN-COMMENT')
 	public function testDeclDroppedCommentNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar k:Int = 0;\n\t\tif (a) /* why */ k = 5;\n\t}\n}').length);
 	}
@@ -253,7 +255,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	 * A decl arm whose ternary would only pass a nullable value through writes the value: the shape
 	 * `LanguageManager.t` had, which the ternary-then-`??` cascade turned into `strKey ?? null`.
 	 */
-	@:pin('control') @:killer('M-PASSTHROUGH-TERNARY')
+	@:pin('control')
+	@:killer('M-PASSTHROUGH-TERNARY')
 	public function testDeclNullPassThroughWritesTheValue(): Void {
 		final es: Array<{ span: Span, text: String }> = edits(
 			'class C {\n\tfunction t(?strKey:String, ?intKey:Int) {\n\t\tvar key:String = null;\n\t\tif (strKey != null) key = strKey;\n'
@@ -264,7 +267,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** The ordinary arm too, in both comparison spellings. */
-	@:pin('control') @:killer('M-PASSTHROUGH-TERNARY')
+	@:pin('control')
+	@:killer('M-PASSTHROUGH-TERNARY')
 	public function testNullPassThroughAssignmentWritesTheValue(): Void {
 		final notEq: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f() {\n\t\tif (x != null) y = x;\n\t\telse y = null;\n\t}\n}');
@@ -277,7 +281,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** A guarded value that calls is evaluated twice by the ternary, so it keeps the ternary. */
-	@:pin('control') @:killer('M-NULLPASS-MUTATES')
+	@:pin('control')
+	@:killer('M-NULLPASS-MUTATES')
 	public function testMutatingPassThroughKeepsTheTernary(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f() {\n\t\tvar k:String = null;\n\t\tif (g() != null) k = g();\n\t}\n}');
@@ -294,7 +299,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** A negated condition collapses to the POSITIVE ternary, the two r-values swapped. */
-	@:pin('control') @:killer('M-PTA-NO-ORIENT', 'M-NEGCOND-SWAP-OFF')
+	@:pin('control')
+	@:killer('M-PTA-NO-ORIENT', 'M-NEGCOND-SWAP-OFF')
 	public function testNegatedConditionEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f() {\n\t\tif (!a) x = 1;\n\t\telse x = 2;\n\t}\n}');
 		Assert.equals(1, es.length);
@@ -302,7 +308,8 @@ class PreferTernaryAssignmentCheckTest extends Test {
 	}
 
 	/** The decl arm too: the initializer becomes the `?` value. */
-	@:pin('control') @:killer('M-PTA-NO-ORIENT')
+	@:pin('control')
+	@:killer('M-PTA-NO-ORIENT')
 	public function testDeclNegatedConditionEmitsPositiveTernary(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f() {\n\t\tvar k:Int = -1;\n\t\tif (!(id == 1)) k = 5;\n\t}\n}');

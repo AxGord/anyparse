@@ -30,16 +30,19 @@ package anyparse.grammar.haxe.format;
  * collapses back to the one-line form when it fits `wrapping.maxLineLength`
  * at its indent. See `CommentStyle` for the full contract.
  */
-@:peg typedef HxFormatCommentsSection = {
+@:peg
+typedef HxFormatCommentsSection = {
 
-	@:optional var blockCommentStyle: String;
+	@:optional
+	var blockCommentStyle: String;
 
 	/**
 	 * Accepted so a config shared with haxe-formatter loads without an unknown-key report; hxq reads no knob from it.
 	 * The fork's `"reindent"` (its default) shifts the body of a non-star `/* *\/` comment by one indent, `"verbatim"`
 	 * keeps it; hxq always keeps the body, so `"verbatim"` is the value that gives one output from both tools.
 	 */
-	@:optional var blockCommentBodyIndent: String;
+	@:optional
+	var blockCommentBodyIndent: String;
 
 	/**
 	 * FU12: `"above"` moves a same-line `//` comment that alone carries its line past `wrapping.maxLineLength`
@@ -47,6 +50,7 @@ package anyparse.grammar.haxe.format;
 	 * and any unknown token leave every trailing comment where it was. The fork has no such key: it counts a
 	 * trailing comment into the line and wraps the CODE to make room.
 	 */
-	@:optional var trailingCommentOverflow: String;
+	@:optional
+	var trailingCommentOverflow: String;
 
 };

@@ -172,7 +172,8 @@ final class MutationSlotTest extends Test {
 	}
 
 	/** A narrow build compiles the classes a track's expectations name, a `<class>.<method>` by its class, each once. */
-	@:pin('control') @:killer('M-NARROW-CLASSES-NONE')
+	@:pin('control')
+	@:killer('M-NARROW-CLASSES-NONE')
 	public function testANarrowBuildTakesTheClassesItsExpectationsName(): Void {
 		final isClass: String -> Bool = name -> ['unit.b.B', 'unit.a.A'].contains(name);
 		Assert.same(['unit.a.A', 'unit.b.B'], MutationSlot.narrowClasses(' unit.b.B.testX, unit.a.A.testY ,unit.b.B.testZ', isClass));
@@ -180,7 +181,8 @@ final class MutationSlotTest extends Test {
 	}
 
 	/** An expectation naming no test class leaves the whole track to the full build: a narrow build would not run it. */
-	@:pin('control') @:killer('M-NARROW-CLASSES-SKIPS-UNKNOWN')
+	@:pin('control')
+	@:killer('M-NARROW-CLASSES-SKIPS-UNKNOWN')
 	public function testAnExpectationNamingNoClassLeavesTheTrackToTheFullBuild(): Void {
 		final isClass: String -> Bool = name -> name == 'unit.a.A';
 		Assert.isNull(MutationSlot.narrowClasses('unit.a.A.testX,unit.gone.G.testY', isClass));
@@ -190,7 +192,8 @@ final class MutationSlotTest extends Test {
 	}
 
 	/** A narrow kill settles a track only over a base where the same classes all pass, alone, on the unmutated tree. */
-	@:pin('control') @:killer('M-NARROW-KILL-UNGUARDED')
+	@:pin('control')
+	@:killer('M-NARROW-KILL-UNGUARDED')
 	public function testANarrowKillIsTakenOnlyOverAPassingBase(): Void {
 		final killed: Classified = reading('KILLED', '1 tests failed / 2 assertions: a.T.x');
 		Assert.isTrue(MutationSlot.takesNarrowKill(killed, 'a.T.x', 'SURVIVED'));
@@ -201,7 +204,8 @@ final class MutationSlotTest extends Test {
 	}
 
 	/** A narrow build is tried only under killer-first: never in a build-only run, which asks whether the whole tree compiles. */
-	@:pin('control') @:killer('M-NARROW-IN-BUILD-ONLY')
+	@:pin('control')
+	@:killer('M-NARROW-IN-BUILD-ONLY')
 	public function testANarrowBuildIsTriedOnlyUnderKillerFirstAndNeverBuildOnly(): Void {
 		Assert.isTrue(MutationSlot.narrows(true, false, null));
 		Assert.isTrue(MutationSlot.narrows(true, false, ''), 'an empty off-switch is unset');

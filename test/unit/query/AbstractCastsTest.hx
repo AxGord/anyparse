@@ -22,7 +22,8 @@ class AbstractCastsTest extends Test {
 		+ '@:transitive abstract St(String) from Sb {}\n\nabstract U(Int) from Int to Int {}\n\nabstract H(Int) {\n#if js\n'
 		+ '\t@:from static function fromA(a:A):H return null;\n#end\n}\n\n@:build(p.M.b()) abstract K(Int) {}\n';
 
-	@:pin('control') @:killer('M-CASTS-MEMBERS-OFF')
+	@:pin('control')
+	@:killer('M-CASTS-MEMBERS-OFF')
 	public function testAnArgumentCastsThroughAConversionMember(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals(Fits, casts(index, decl(index, 'A'), decl(index, 'Conv')), '`@:from`');
@@ -37,7 +38,10 @@ class AbstractCastsTest extends Test {
 	 * `Ab from Bs from Dz` takes a `String` through `Bs.fromS` but not a `Bool` through `Dz.fromB`, and `Ad from Dz from Bs`
 	 * neither — a `Bool` is an abstract itself, so its cast tries the members alone (`TAbstract, TAbstract`).
 	 */
-	@:pin('control') @:killer('M-CASTS-FIRST-FROM') @:killer('M-CASTS-FIRST-ONLY') @:killer('M-CASTS-CORE-ABSTRACT')
+	@:pin('control')
+	@:killer('M-CASTS-FIRST-FROM')
+	@:killer('M-CASTS-FIRST-ONLY')
+	@:killer('M-CASTS-CORE-ABSTRACT')
 	public function testTheFirstUnequalFromAloneIsCastTo(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals(Fits, casts(index, Core('String'), decl(index, 'Ab')), 'the first clause, `Bs`');
@@ -50,7 +54,8 @@ class AbstractCastsTest extends Test {
 	 * A header clause is no cast path of its own (`find_from` answers a unification by `Not_found`): `String` reaches `Sa`
 	 * only through `Sb`'s clause, a second abstract cast a plain abstract does not allow, and a transitive one does.
 	 */
-	@:pin('control') @:killer('M-UNIFY-CAST-TRANSITIVE')
+	@:pin('control')
+	@:killer('M-UNIFY-CAST-TRANSITIVE')
 	public function testAHeaderClauseChainsOnlyThroughATransitiveAbstract(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals(Misfits, casts(index, Core('String'), decl(index, 'Sa')), 'not transitive');
@@ -59,7 +64,8 @@ class AbstractCastsTest extends Test {
 	}
 
 	/** A core number cast through a clause meets the widening of core numbers: `UInt`'s `to Int` takes it to `Float`. */
-	@:pin('control') @:killer('M-UNIFY-CORE-WIDENS')
+	@:pin('control')
+	@:killer('M-UNIFY-CORE-WIDENS')
 	public function testACoreClauseWidens(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals(Fits, casts(index, decl(index, 'U'), Core('Float')), '`to Int`, and `Int` widens');
@@ -69,7 +75,9 @@ class AbstractCastsTest extends Test {
 	}
 
 	/** A member under `#if`, and a build macro that may add one, may cast in another build: not decided. */
-	@:pin('control') @:killer('M-CASTS-MEMBER-CERTAIN') @:killer('M-CASTS-BUILD-OPEN')
+	@:pin('control')
+	@:killer('M-CASTS-MEMBER-CERTAIN')
+	@:killer('M-CASTS-BUILD-OPEN')
 	public function testAMemberNotInEveryBuildIsNotDecided(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.equals(MayFit, casts(index, decl(index, 'A'), decl(index, 'H')), 'a `@:from` under `#if`');

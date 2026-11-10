@@ -69,7 +69,8 @@ class LintLanguageVersionGateTest extends Test {
 	 * An explicit rule selection lifts `enabled:false` but never the version floor: the finding stays out of the
 	 * report, and `--fix --rule` writes no `?.` into a 4.0 project while a 4.3 one still gets it.
 	 */
-	@:pin('control') @:killer('M-VERSION-LIFTED-BY-RULE')
+	@:pin('control')
+	@:killer('M-VERSION-LIFTED-BY-RULE')
 	public function testAnExplicitRuleSelectionKeepsTheVersionFloor(): Void {
 		final config: LintConfig = new LintConfig([], null, null, null, null, null, '4.0');
 		final found: Array<Violation> = Linter.run([{ file: 'V.hx', source: SOURCE }], new HaxeQueryPlugin(), null, _ -> config, false);

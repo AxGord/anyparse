@@ -374,7 +374,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 	 * A clone whose copy sits in a file that disables the rule is still reported in the file that keeps it, whichever
 	 * file sorts first: the disabled copy takes the anchor, the finding lands on the other.
 	 */
-	@:pin('control') @:killer('M-DUP-ANCHOR-UNGATED')
+	@:pin('control')
+	@:killer('M-DUP-ANCHOR-UNGATED')
 	public function testADisabledCopyTakesTheAnchor(): Void {
 		final on: LintConfig = LintConfig.parse('{}');
 		final off: LintConfig = LintConfig.parse('{"rules":{"duplicate-code":{"enabled":false}}}');

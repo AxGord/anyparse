@@ -30,37 +30,67 @@ package anyparse.grammar.haxe.format;
  * on `HxIfStmt`); the reflow knobs refuse as a WHOLE whenever a captured comment sits where the glued layout
  * would misplace it, and keep the fork's layout.
  */
-@:peg typedef HxFormatSameLineSection = {
+@:peg
+typedef HxFormatSameLineSection = {
 
-	@:optional var ifElse: HxFormatSameLinePolicy;
-	@:optional var tryCatch: HxFormatSameLinePolicy;
-	@:optional var doWhile: HxFormatSameLinePolicy;
-	@:optional var ifBody: HxFormatBodyPolicy;
-	@:optional var elseBody: HxFormatBodyPolicy;
-	@:optional var forBody: HxFormatBodyPolicy;
-	@:optional var whileBody: HxFormatBodyPolicy;
-	@:optional var doWhileBody: HxFormatBodyPolicy;
-	@:optional var elseIf: HxFormatKeywordPlacement;
-	@:optional var elseSwitch: HxFormatKeywordPlacement;
-	@:optional var fitLineIfWithElse: Bool;
-	@:optional var fitLineBodyGlue: Bool;
-	@:optional var loopBodyIfElseNext: Bool;
-	@:optional var conditionalExprFit: Bool;
-	@:optional var ifElseSemicolonNextLine: Bool;
-	@:optional var expressionTry: HxFormatSameLinePolicy;
-	@:optional var expressionTryOverflow: HxFormatSameLinePolicy;
-	@:optional var returnBody: HxFormatBodyPolicy;
-	@:optional var returnBodySingleLine: HxFormatBodyPolicy;
-	@:optional var catchBody: HxFormatBodyPolicy;
-	@:optional var tryBody: HxFormatBodyPolicy;
-	@:optional var caseBody: HxFormatBodyPolicy;
-	@:optional var expressionCase: HxFormatBodyPolicy;
-	@:optional var caseSiblings: HxFormatSiblingPolicy;
-	@:optional var functionBody: HxFormatBodyPolicy;
-	@:optional var anonFunctionBody: HxFormatBodyPolicy;
-	@:optional var untypedBody: HxFormatBodyPolicy;
-	@:optional var expressionIf: HxFormatBodyPolicy;
-	@:optional var expressionIfWithBlocks: Bool;
+	@:optional
+	var ifElse: HxFormatSameLinePolicy;
+	@:optional
+	var tryCatch: HxFormatSameLinePolicy;
+	@:optional
+	var doWhile: HxFormatSameLinePolicy;
+	@:optional
+	var ifBody: HxFormatBodyPolicy;
+	@:optional
+	var elseBody: HxFormatBodyPolicy;
+	@:optional
+	var forBody: HxFormatBodyPolicy;
+	@:optional
+	var whileBody: HxFormatBodyPolicy;
+	@:optional
+	var doWhileBody: HxFormatBodyPolicy;
+	@:optional
+	var elseIf: HxFormatKeywordPlacement;
+	@:optional
+	var elseSwitch: HxFormatKeywordPlacement;
+	@:optional
+	var fitLineIfWithElse: Bool;
+	@:optional
+	var fitLineBodyGlue: Bool;
+	@:optional
+	var loopBodyIfElseNext: Bool;
+	@:optional
+	var conditionalExprFit: Bool;
+	@:optional
+	var ifElseSemicolonNextLine: Bool;
+	@:optional
+	var expressionTry: HxFormatSameLinePolicy;
+	@:optional
+	var expressionTryOverflow: HxFormatSameLinePolicy;
+	@:optional
+	var returnBody: HxFormatBodyPolicy;
+	@:optional
+	var returnBodySingleLine: HxFormatBodyPolicy;
+	@:optional
+	var catchBody: HxFormatBodyPolicy;
+	@:optional
+	var tryBody: HxFormatBodyPolicy;
+	@:optional
+	var caseBody: HxFormatBodyPolicy;
+	@:optional
+	var expressionCase: HxFormatBodyPolicy;
+	@:optional
+	var caseSiblings: HxFormatSiblingPolicy;
+	@:optional
+	var functionBody: HxFormatBodyPolicy;
+	@:optional
+	var anonFunctionBody: HxFormatBodyPolicy;
+	@:optional
+	var untypedBody: HxFormatBodyPolicy;
+	@:optional
+	var expressionIf: HxFormatBodyPolicy;
+	@:optional
+	var expressionIfWithBlocks: Bool;
 
 	/**
 	 * omega-bracket-body-glue: the `[` sibling of `expressionIfWithBlocks`.
@@ -88,23 +118,28 @@ package anyparse.grammar.haxe.format;
 	 * so `same` / `next` emit ONE byte-identical result under the knob while every
 	 * knob-off cell keeps the bytes it had.
 	 */
-	@:optional var expressionIfWithBrackets: Bool;
-	@:optional var expressionIfArrowBodyReflow: Bool;
+	@:optional
+	var expressionIfWithBrackets: Bool;
+	@:optional
+	var expressionIfArrowBodyReflow: Bool;
 
 	/**
 	 * omega-value-if-fit: fit-decides EVERY value-`if`, not only an arrow body -- flat on one line
 	 * when it fits, otherwise the exact layout `expressionIf` gives it. Sibling of
 	 * `expressionIfArrowBodyReflow`, which wins in an arrow body. Default `false`.
 	 */
-	@:optional var expressionIfFit: Bool;
+	@:optional
+	var expressionIfFit: Bool;
 
 	/**
 	 * Largest number of value branches an `expressionIfFit` chain may hold and still collapse onto
 	 * one line -- `if (c) a else b` is 2, `if (c) a else if (d) b else e` is 3. `0` (default) is no
 	 * cap. Inert while `expressionIfFit` is off.
 	 */
-	@:optional var expressionIfFitMaxBranches: Int;
-	@:optional var elseIfCommentReflow: Bool;
+	@:optional
+	var expressionIfFitMaxBranches: Int;
+	@:optional
+	var elseIfCommentReflow: Bool;
 
 	/**
 	 * Body placement for an expression-position `for` — the array-comprehension
@@ -132,6 +167,7 @@ package anyparse.grammar.haxe.format;
 	 * Under `forBody: fitLine` an object-literal body stays on the `for` line unless this key says `next`
 	 * (`HaxeFormatConfigLoader.applyComprehensionForPadding`).
 	 */
-	@:optional var comprehensionFor: HxFormatBodyPolicy;
+	@:optional
+	var comprehensionFor: HxFormatBodyPolicy;
 
 };

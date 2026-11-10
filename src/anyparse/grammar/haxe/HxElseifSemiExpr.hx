@@ -28,4 +28,9 @@ package anyparse.grammar.haxe;
  * ```
  */
 @:peg
-typedef HxElseifSemiExpr = { @:kw('#elseif') var cond: HxPpCondLit; @:trail(';') var expr: HxExpr; };
+typedef HxElseifSemiExpr = {
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trail(';')
+	var expr: HxExpr;
+};

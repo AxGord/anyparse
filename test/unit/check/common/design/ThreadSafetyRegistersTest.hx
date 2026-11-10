@@ -21,7 +21,8 @@ class ThreadSafetyRegistersTest extends Test {
 	 * the client's `ListOperations.listenRows`: one rename handler registered on every list item renames once per event,
 	 * not once per item.
 	 */
-	@:pin('control') @:killer('M-TS-REGISTER-OWNER')
+	@:pin('control')
+	@:killer('M-TS-REGISTER-OWNER')
 	public function testARegistrationInALoopRepeatsNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -53,7 +54,8 @@ class ThreadSafetyRegistersTest extends Test {
 	}
 
 	/** A registering function a loop calls repeats the registration, never the callback. */
-	@:pin('control') @:killer('M-TS-REGISTER-OWNER')
+	@:pin('control')
+	@:killer('M-TS-REGISTER-OWNER')
 	public function testALoopAboveTheRegistrarRepeatsNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -69,7 +71,8 @@ class ThreadSafetyRegistersTest extends Test {
 	}
 
 	/** The repeating caller that owns a short call is found on the ways that run it, never up its registration. */
-	@:pin('control') @:killer('M-TS-REGISTER-OWNER')
+	@:pin('control')
+	@:killer('M-TS-REGISTER-OWNER')
 	public function testTheOwnerIsNeverUpARegistration(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -90,7 +93,8 @@ class ThreadSafetyRegistersTest extends Test {
 	 * member, as a `runsOnce` one is: a loop around the registration repeats nothing (N46 E1). A bare name speaks for the
 	 * runtime's registrations only, and a project member it names stays a call that may run its value per item.
 	 */
-	@:pin('control') @:killer('M-TS-REGISTER-MEMBER')
+	@:pin('control')
+	@:killer('M-TS-REGISTER-MEMBER')
 	public function testAProjectMemberEntryRegisters(): Void {
 		#if (sys || nodejs)
 		final members: String =

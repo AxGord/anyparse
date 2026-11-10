@@ -1,7 +1,9 @@
 package anyparse.query.format.json;
 
 /** A field access a facts file's node record holds, with how its value is used (`FactUseRecord`). */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef FactFieldRecord = {
 	var ?o: String;
 	var f: String;

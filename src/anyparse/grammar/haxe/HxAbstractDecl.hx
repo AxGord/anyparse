@@ -41,10 +41,24 @@ package anyparse.grammar.haxe;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxAbstractDecl = {
-	@:kw('abstract') var name: HxIdentLit;
-	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:optional @:lead('(') @:trail(')') @:fmt(tightLead, propagateNestedType) @:queryTypeSlot var underlyingType: Null<HxType>;
-	@:trivia @:tryparse @:fmt(padLeading, lineLengthAwareSeps) var clauses: Array<HxAbstractClause>;
+	@:kw('abstract')
+	var name: HxIdentLit;
+	@:optional
+	@:lead('<')
+	@:trail('>')
+	@:sep(',')
+	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
+	var typeParams: Null<Array<HxTypeParamDecl>>;
+	@:optional
+	@:lead('(')
+	@:trail(')')
+	@:fmt(tightLead, propagateNestedType)
+	@:queryTypeSlot
+	var underlyingType: Null<HxType>;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, lineLengthAwareSeps)
+	var clauses: Array<HxAbstractClause>;
 	@:fmt(leftCurly, emptyCurlyBreak,
 		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
 		beginEndTypeIfDoc('', '', '_inEnumAbstract', 'enumAbstractBeginTypeIfDocComments', 'enumAbstractEndTypeIfDocComments'),
@@ -61,5 +75,8 @@ typedef HxAbstractDecl = {
 			'enumAbstractBetweenVars', 'enumAbstractBetweenFunctions'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
 		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
-	@:lead('{') @:trail('}') @:trivia var members: Array<HxMemberDecl>;
+	@:lead('{')
+	@:trail('}')
+	@:trivia
+	var members: Array<HxMemberDecl>;
 }

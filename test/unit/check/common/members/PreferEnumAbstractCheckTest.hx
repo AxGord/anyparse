@@ -444,7 +444,8 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.equals(0, CheckFixture.fixIn(new PreferEnumAbstract(), files, vs, plugin).length);
 	}
 
-	@:pin('control') @:killer('M-HASSUBTYPE-FALSE')
+	@:pin('control')
+	@:killer('M-HASSUBTYPE-FALSE')
 	public function testFixRefusesSubtypedContainer(): Void {
 		// An abstract cannot host a subtype. The index knows; the oracle would too, as a compile
 		// error, but refusing here saves the spawn and names the reason.

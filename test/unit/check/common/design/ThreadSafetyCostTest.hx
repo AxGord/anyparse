@@ -18,7 +18,8 @@ class ThreadSafetyCostTest extends Test {
 	private static final RUNNER: String = 'class Runner { public static function create(fn:()->Void):Void {} }';
 
 	/** the client's `ShardStore.getFilePathCall`: one indexed SQL lookup on the main thread waits well under a frame. */
-	@:pin('control') @:killer('M-TS-SHORT-SINKS-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-SHORT-SINKS-IGNORED')
 	public function testAShortSinkCalledOnceIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(['class A { public static function main():Void FileSystem.stat("a"); }']);
@@ -41,7 +42,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** the client's `moveRemoteFolderSubItems2`: a short call once per row is as long as the folder is big. */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-LOOPS')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-LOOPS')
 	public function testAShortSinkInALoopWarns(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A A.scan | FileSystem.stat'], graded(run([
@@ -66,7 +68,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** The iterable of a `for` is read once, before the first turn: only the body repeats. */
-	@:pin('control') @:killer('M-TS-REPEAT-ITERABLE')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-ITERABLE')
 	public function testTheIterableOfAForRunsOnce(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.list | FileSystem.readDirectory'], graded(run([
@@ -82,7 +85,9 @@ class ThreadSafetyCostTest extends Test {
 	 * the client's folder icon: `getRemoteIcon` asks the database once, but the file list builds an icon per visible item — a
 	 * caller anywhere up the main thread's way repeats the short call.
 	 */
-	@:pin('control') @:killer('M-TS-REPEAT-UPWARD-NONE') @:killer('M-TS-OWNER-OFF')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-UPWARD-NONE')
+	@:killer('M-TS-OWNER-OFF')
 	public function testAShortSinkBelowARepeatingCallerWarns(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run([
@@ -98,7 +103,9 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** the client's `PathTools.deleteRecursive`: a function calling itself runs its short call once per level. */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-RECURSION') @:killer('M-TS-OWNER-SELF-MOVED')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-RECURSION')
+	@:killer('M-TS-OWNER-SELF-MOVED')
 	public function testRecursionRepeatsAShortSink(): Void {
 		#if (sys || nodejs)
 		Assert.same(['warning A A.walk | FileSystem.stat'], graded(run([
@@ -111,7 +118,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** A callback handed to an `iterates` call runs once per element; one handed to any other call runs where that call runs it. */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-ITERATES')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-ITERATES')
 	public function testAnIteratesCallbackRepeats(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.once | FileSystem.stat', 'warning A A.each | FileSystem.stat'], graded(run([
@@ -129,7 +137,9 @@ class ThreadSafetyCostTest extends Test {
 	 * A function written inside a loop runs where it is invoked: a callback stored into a `dynamic` member on every turn
 	 * of a loop, and invoked once, calls its short sink once.
 	 */
-	@:pin('control') @:killer('M-TS-REPEAT-NO-BOUNDARY') @:killer('M-TS-UPWARD-INERT')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-NO-BOUNDARY')
+	@:killer('M-TS-UPWARD-INERT')
 	public function testAFunctionAroundTheSiteStartsTheCountAfresh(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.setup | FileSystem.stat'], graded(run([
@@ -145,7 +155,8 @@ class ThreadSafetyCostTest extends Test {
 	 * the client's `ShardStore._mutex` as a single lookup holds it: a background hold over one short call, and the main
 	 * thread's take of that lock, both brief.
 	 */
-	@:pin('control') @:killer('M-TS-LONG-BY-ANY-SPAN')
+	@:pin('control')
+	@:killer('M-TS-LONG-BY-ANY-SPAN')
 	public function testAHoldOverAShortSinkOnceIsInfo(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run(holdFixture('FileSystem.stat(ps[0]);'));
@@ -168,7 +179,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** A loop around the whole hold repeats the hold, not the call inside it: each hold stays brief. */
-	@:pin('control') @:killer('M-TS-REPEAT-UNDER-OUTER')
+	@:pin('control')
+	@:killer('M-TS-REPEAT-UNDER-OUTER')
 	public function testALoopAroundTheWholeHoldIsShort(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A S.read | Mutex.acquire', 'info B S.scan | S._m'], graded(run([
@@ -182,7 +194,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** A warning names only the calls that block long: the short one beside them is no reason. */
-	@:pin('control') @:killer('M-TS-EVIDENCE-PLAIN')
+	@:pin('control')
+	@:killer('M-TS-EVIDENCE-PLAIN')
 	public function testAWarningNamesOnlyTheLongCalls(): Void {
 		#if (sys || nodejs)
 		final held: Array<Violation> = run(holdFixture('FileSystem.stat(ps[0]); Sys.sleep(1);')).filter(v -> v.data?.family == 'B');
@@ -198,7 +211,10 @@ class ThreadSafetyCostTest extends Test {
 	 * the client's `ListMoveItems.moveItems`: one repeated call reaches four short sinks, which made four warnings at one
 	 * line. The site owns ONE warning, keyed by the call it repeats, naming every short sink below it.
 	 */
-	@:pin('control') @:killer('M-TS-SITE-PER-SINK') @:killer('M-TS-SITE-GROW') @:killer('M-TS-SITE-SUBJECT')
+	@:pin('control')
+	@:killer('M-TS-SITE-PER-SINK')
+	@:killer('M-TS-SITE-GROW')
+	@:killer('M-TS-SITE-SUBJECT')
 	public function testARepeatingSiteOwnsOneWarning(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = run([
@@ -238,7 +254,8 @@ class ThreadSafetyCostTest extends Test {
 	}
 
 	/** Of several loops above a short call on different ways to it, the nearest owns the warning: one per call site, never one per loop. */
-	@:pin('control') @:killer('M-TS-OWNER-FARTHEST')
+	@:pin('control')
+	@:killer('M-TS-OWNER-FARTHEST')
 	public function testTheNearestRepeatingCallerOwnsTheWarning(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A A.icon | FileSystem.stat', 'warning A A.row | for (j in 0...10)'], graded(run([

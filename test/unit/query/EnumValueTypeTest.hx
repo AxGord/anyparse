@@ -21,7 +21,9 @@ class EnumValueTypeTest extends Test {
 	 * `var` and `final` values written with no type are values of `E`, and of the deprecated `@:enum abstract L`; an
 	 * annotated value carries its annotation instead (`MemberLookup.memberRead`), and a static is no value.
 	 */
-	@:pin('control') @:killer('M-ENUM-VALUE-UNTYPED') @:killer('M-ENUM-VALUE-STATIC')
+	@:pin('control')
+	@:killer('M-ENUM-VALUE-UNTYPED')
+	@:killer('M-ENUM-VALUE-STATIC')
 	public function testAValueWrittenWithNoTypeIsOfItsEnumAbstract(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.isTrue(untypedValue(index, 'E', 'A'));
@@ -35,7 +37,10 @@ class EnumValueTypeTest extends Test {
 	 * Every branch must declare the value: `F.A` is one in both builds; `J.A` exists in one, a `typedef` branch of `G` is
 	 * another type's, and `H.A` is under `#if` — none is.
 	 */
-	@:pin('control') @:killer('M-ENUM-VALUE-EVERY-BRANCH') @:killer('M-ENUM-VALUE-UNREAD-BRANCHES') @:killer('M-ENUM-VALUE-GUARDED')
+	@:pin('control')
+	@:killer('M-ENUM-VALUE-EVERY-BRANCH')
+	@:killer('M-ENUM-VALUE-UNREAD-BRANCHES')
+	@:killer('M-ENUM-VALUE-GUARDED')
 	public function testEveryBranchMustDeclareTheValue(): Void {
 		final index: SymbolIndex = indexOf();
 		Assert.isTrue(untypedValue(index, 'F', 'A'));

@@ -34,7 +34,8 @@ final class RiskyFixOracleZeroTest extends Test {
 		+ '    static function run(xs:Array<Int>):Array<Int> {\n        return xs.filter(x -> x > 1).map(x -> x * 2);\n    }\n}\n';
 	#end
 
-	@:pin('control') @:killer('M-RISKY-ORACLE-READ-NOT-APPLIED')
+	@:pin('control')
+	@:killer('M-RISKY-ORACLE-READ-NOT-APPLIED')
 	public function testAFileTheOracleReadsTakesTheRiskyFix(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture(MAIN);
@@ -47,7 +48,8 @@ final class RiskyFixOracleZeroTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-RISKY-ORACLE-UNREAD-NOT-NAMED')
+	@:pin('control')
+	@:killer('M-RISKY-ORACLE-UNREAD-NOT-NAMED')
 	public function testAFileTheOracleDoesNotReadIsNamed(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture(MAIN);
@@ -61,7 +63,8 @@ final class RiskyFixOracleZeroTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-RISKY-NOT-CANONICAL-SILENT')
+	@:pin('control')
+	@:killer('M-RISKY-NOT-CANONICAL-SILENT')
 	public function testADriftedFileIsNamedNotASilentZero(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture(DRIFTED);
@@ -75,7 +78,8 @@ final class RiskyFixOracleZeroTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-RISKY-NOT-CANONICAL-NOT-REPORTED')
+	@:pin('control')
+	@:killer('M-RISKY-NOT-CANONICAL-NOT-REPORTED')
 	public function testADriftedFilesFindingsCountAsReportedNotDeclined(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture(DRIFTED);
@@ -96,7 +100,8 @@ final class RiskyFixOracleZeroTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-RISKY-NOT-CANONICAL-COUNTS-ROWS')
+	@:pin('control')
+	@:killer('M-RISKY-NOT-CANONICAL-COUNTS-ROWS')
 	public function testTwoRulesOnOneDriftedFileCountOneFile(): Void {
 		#if (sys || nodejs)
 		final dir: String = fixture(DRIFTED_TWO_RULES);

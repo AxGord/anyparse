@@ -36,13 +36,20 @@ package anyparse.query.format.json;
  * key when null, so default `apq ast --json` output stays
  * byte-identical and the recursive child shape is unchanged.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef AstNodeJson = {
 	var kind: String;
-	@:optional var name: String;
+	@:optional
+	var name: String;
 	var children: Array<AstNodeJson>;
-	@:optional var span: AstSearchSpan;
-	@:optional var type: AstNodeJson;
-	@:optional var doc: String;
-	@:optional var source: String;
+	@:optional
+	var span: AstSearchSpan;
+	@:optional
+	var type: AstNodeJson;
+	@:optional
+	var doc: String;
+	@:optional
+	var source: String;
 };

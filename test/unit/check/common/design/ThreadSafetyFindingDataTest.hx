@@ -10,7 +10,8 @@ using StringTools;
 class ThreadSafetyFindingDataTest extends Test {
 
 	/** Finding (a) names the main-thread function, the sink, and every hop from the root, past the text's cap. */
-	@:pin('control') @:killer('M-TS-DATA-CHAIN-CAPPED')
+	@:pin('control')
+	@:killer('M-TS-DATA-CHAIN-CAPPED')
 	public function testMainSinkDataCarriesTheWholeChain(): Void {
 		#if (sys || nodejs)
 		final hops: Int = 12;
@@ -35,7 +36,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** A sink called from a lambda is the lambda's enclosing member's finding: a lambda's id moves with every lambda added before it. */
-	@:pin('control') @:killer('M-TS-DATA-MEMBER-LAMBDA')
+	@:pin('control')
+	@:killer('M-TS-DATA-MEMBER-LAMBDA')
 	public function testLambdaFindingNamesItsEnclosingMember(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
@@ -49,7 +51,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** A dispatch reaching several sinks names them all, sorted, in the subject and at the chain's end. */
-	@:pin('control') @:killer('M-TS-DATA-SUBJECT-UNSORTED')
+	@:pin('control')
+	@:killer('M-TS-DATA-SUBJECT-UNSORTED')
 	public function testSeveralSinksAreOneSortedSubject(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Zed.m","Ann.m"]}}}', [
@@ -70,7 +73,9 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * no key of its own added, and its message and data say what repeats it — a loop up the main thread's way, or one
 	 * around the call itself — which ranks a per-item stall above a one-off one.
 	 */
-	@:pin('control') @:killer('M-TS-REPEATED-BY-OFF') @:killer('M-TS-REPEATED-BY-SELF')
+	@:pin('control')
+	@:killer('M-TS-REPEATED-BY-OFF')
+	@:killer('M-TS-REPEATED-BY-SELF')
 	public function testALongCallALoopRepeatsSaysWhichLoop(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [
@@ -97,7 +102,9 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * which another file may rewrite or rank anew — those stay in `data.repeatedBy` (review round 2 `ks1-two-iters`,
 	 * `rb1`).
 	 */
-	@:pin('control') @:killer('M-TS-HAND-RANK') @:killer('M-TS-REPEATED-BY-HEADER')
+	@:pin('control')
+	@:killer('M-TS-HAND-RANK')
+	@:killer('M-TS-REPEATED-BY-HEADER')
 	public function testKeysAndMessagesDoNotDependOnOtherCode(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Db.request","Disk.stat","Net.get"],'
@@ -127,7 +134,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** The warning one main-thread way's sink calls fold into carries what repeats each of them (the client's `closeFileSystems` waits). */
-	@:pin('control') @:killer('M-TS-REPEATED-BY-MERGE')
+	@:pin('control')
+	@:killer('M-TS-REPEATED-BY-MERGE')
 	public function testTheWayWarningCarriesWhatRepeatsItsFoldedCalls(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> =
@@ -148,7 +156,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * The warning every main-thread take of one lock folds into carries what repeats each folded take (review round 4: the client's
 	 * `Store.get` stopped naming `Main.reboot`, which repeats `Store.remove`'s take of the same lock).
 	 */
-	@:pin('control') @:killer('M-TS-ONE-TAKE-MERGE')
+	@:pin('control')
+	@:killer('M-TS-ONE-TAKE-MERGE')
 	public function testTheLockWarningCarriesWhatRepeatsItsFoldedTakes(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> =
@@ -226,7 +235,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** Finding (d) names the main-side holder, the two locks sorted, and the main side's chain. */
-	@:pin('control') @:killer('M-TS-DATA-SUBJECT-UNSORTED')
+	@:pin('control')
+	@:killer('M-TS-DATA-SUBJECT-UNSORTED')
 	public function testLockOrderData(): Void {
 		#if (sys || nodejs)
 		// `Db` renamed past `Fs`: the walk meets the background step's pair (`Zd._batch`, then `Fs._mutation`) first
@@ -253,7 +263,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * Two main-thread holders make the same inversion: which one the finding names — its member, its anchor — must not
 	 * depend on which the walk met first, so calling them in either order gives one finding.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-ONE-ARRIVAL')
+	@:pin('control')
+	@:killer('M-TS-ORDER-ONE-ARRIVAL')
 	public function testLockOrderKeyIgnoresWalkOrder(): Void {
 		#if (sys || nodejs)
 		final keys: Array<Array<String>> = [
@@ -283,7 +294,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * nearer the root, yet the finding names the least holder, `save` — the step kept is the one that precedes, not the
 	 * first one seen.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-MAIN-FIRST-SEEN')
+	@:pin('control')
+	@:killer('M-TS-ORDER-MAIN-FIRST-SEEN')
 	public function testLockOrderNamesTheLeastHolder(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = ThreadSafetyCheckTest.storeFixture(
@@ -310,7 +322,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	 * least over every way into that state, so renaming a function outside
 	 * the key (`p0` to `q0`), or swapping the two calls, does not move it.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-CLIMB-FIRST', 'M-TS-ORDER-ONE-ARRIVAL')
+	@:pin('control')
+	@:killer('M-TS-ORDER-CLIMB-FIRST', 'M-TS-ORDER-ONE-ARRIVAL')
 	public function testLockOrderKeySurvivesARenameOutsideIt(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class Fs { final _a:Mutex = new Mutex(); final _b:Mutex = new Mutex(); public function new() {}'
@@ -334,7 +347,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** A throw raised by a callee names the raising call's chain after the holder. */
-	@:pin('control') @:killer('M-TS-DATA-RAISER-CHAIN')
+	@:pin('control')
+	@:killer('M-TS-DATA-RAISER-CHAIN')
 	public function testThrowHeldDataFollowsTheRaiser(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
@@ -350,7 +364,8 @@ class ThreadSafetyFindingDataTest extends Test {
 	}
 
 	/** A sink a field initializer runs, directly or in a lambda it holds, is the initializer's (`Type.<init>`). */
-	@:pin('control') @:killer('M-TS-DATA-INIT-LAMBDA')
+	@:pin('control')
+	@:killer('M-TS-DATA-INIT-LAMBDA')
 	public function testInitializerFindingsNameTheInitializer(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', [

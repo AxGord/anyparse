@@ -15,7 +15,8 @@ using StringTools;
  * when a class value of its owner — or of a subtype, or an alias — can reach reflection
  * (`StaticReflectionReach`). Each keep-cell differs from the delete-control by one construct.
  */
-@:nullSafety(Strict) class StaticReflectionReachTest extends Test {
+@:nullSafety(Strict)
+class StaticReflectionReachTest extends Test {
 
 	/** The owner: one unused private static, nothing else that could keep it. */
 	private static inline final OWNER: String = 'class C {\n\tprivate static final SIZE: Float = 4;\n\n\tpublic function new() {}\n}\n';
@@ -24,29 +25,34 @@ using StringTools;
 	private static inline final TABLE: String =
 		'class T {\n\tpublic static final ROWS: Array<Dynamic> = [{ Key: \'63\', Value: \'SIZE\' }];\n}\n';
 
-	@:pin('control') @:killer('M-STATICREACH-NEVER')
+	@:pin('control')
+	@:killer('M-STATICREACH-NEVER')
 	public function testAStaticNoClassValueReachesIsDeleted(): Void {
 		Assert.equals(1, deletions(OWNER, []));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-INSTANCE')
+	@:pin('control')
+	@:killer('M-STATICREACH-INSTANCE')
 	public function testAnInstanceFieldKeepsTheStringGate(): Void {
 		Assert.equals(0, deletions('class C {\n\tprivate var SIZE: Float = 4;\n\n\tpublic function new() {}\n}\n', []));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-VALUE-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-VALUE-BLIND')
 	public function testTheClassNameAsAValueKeepsTheGate(): Void {
 		Assert.equals(0, deletions(OWNER, [user('public static function k(): Dynamic {\n\t\treturn C;\n\t}')]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-CONSUMER-NONE')
+	@:pin('control')
+	@:killer('M-STATICREACH-CONSUMER-NONE')
 	public function testAWhitelistedConsumerOfTheClassNameDeletes(): Void {
 		Assert.equals(1, deletions(OWNER, [
 			user('public static function k(x: Dynamic): String {\n\t\treturn Type.getClassName(C) + Std.isOfType(x, C);\n\t}')
 		]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-CONSUMER-NONE')
+	@:pin('control')
+	@:killer('M-STATICREACH-CONSUMER-NONE')
 	public function testAConsumedGetClassDeletes(): Void {
 		Assert.equals(1, deletions(OWNER, [
 			user('public static function k(x: Dynamic): String {\n\t\treturn Type.getClassName(Type.getClass(x));\n\t}'),
@@ -58,7 +64,8 @@ using StringTools;
 		]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-SOURCE-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-SOURCE-BLIND')
 	public function testAnUnconsumedGetClassKeepsTheGate(): Void {
 		Assert.equals(0, deletions(OWNER, [
 			user('public static function k(x: Dynamic): Dynamic {\n\t\treturn Type.getClass(x);\n\t}')
@@ -71,13 +78,15 @@ using StringTools;
 		]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-THIS-UNBOUNDED')
+	@:pin('control')
+	@:killer('M-STATICREACH-THIS-UNBOUNDED')
 	public function testGetClassOfThisInAnUnrelatedClassDeletes(): Void {
 		Assert.equals(1, deletions(OWNER, [user('public function k(): Dynamic {\n\t\treturn Type.getClass(this);\n\t}')]));
 	}
 
 	/** `this` in a SUPERCLASS of the owner can be an instance of the owner, so its class value is the owner's. */
-	@:pin('control') @:killer('M-STATICREACH-THIS-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-THIS-BLIND')
 	public function testGetClassOfThisOnTheOwnersChainKeepsTheGate(): Void {
 		final files: Array<SourceFile> = [
 			{ file: 'C.hx', source: OWNER.replace('class C', 'class C extends K') },
@@ -88,7 +97,8 @@ using StringTools;
 	}
 
 	/** A SUBCLASS's class value exposes the inherited static on eval and ES6 js. */
-	@:pin('control') @:killer('M-STATICREACH-SUBTYPE-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-SUBTYPE-BLIND')
 	public function testASubclassAsAValueKeepsTheGate(): Void {
 		final sub: SourceFile = {
 			file: 'E.hx',
@@ -97,7 +107,8 @@ using StringTools;
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, sub]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-ALIAS-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-ALIAS-BLIND')
 	public function testAnAliasAsAValueKeepsTheGate(): Void {
 		final files: Array<SourceFile> = [
 			{ file: 'C.hx', source: OWNER },
@@ -110,13 +121,15 @@ using StringTools;
 		]));
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-TYPEPATH-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-TYPEPATH-BLIND')
 	public function testALiteralNamingTheOwnerKeepsTheGate(): Void {
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, user('public static final N: String = \'C\';')]));
 		Assert.isFalse(reachable([{ file: 'C.hx', source: OWNER }, user('public static final N: String = \'D\';')]), 'the control');
 	}
 
-	@:pin('control') @:killer('M-STATICREACH-JS-HANDLE-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-JS-HANDLE-BLIND')
 	public function testAJsClassHandleKeepsTheGate(): Void {
 		Assert.isTrue(reachable([
 			{ file: 'C.hx', source: OWNER },
@@ -129,7 +142,8 @@ using StringTools;
 	}
 
 	/** `C.field('SIZE')` under `using Reflect` hands the CLASS to an extension; `C.k()` names a real member. */
-	@:pin('control') @:killer('M-STATICREACH-RECEIVER-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-RECEIVER-BLIND')
 	public function testAnExtensionOnTheClassKeepsTheGate(): Void {
 		final owner: String = OWNER.replace('public function new() {}', 'public static function k(): Int {\n\t\treturn 1;\n\t}');
 		Assert.isTrue(reachable([
@@ -143,7 +157,8 @@ using StringTools;
 	}
 
 	/** A macro can reify a string into an identifier, so its strings are never vouched for. */
-	@:pin('control') @:killer('M-STATICREACH-MACRO-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-MACRO-BLIND')
 	public function testAStringInAMacroFileKeepsTheGate(): Void {
 		Assert.isTrue(reachable([
 			{ file: 'C.hx', source: OWNER },
@@ -152,7 +167,8 @@ using StringTools;
 	}
 
 	/** Target code pasted as a string names the static directly, with no class value in between. */
-	@:pin('control') @:killer('M-STATICREACH-CARRIER-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-CARRIER-BLIND')
 	public function testAStringInANativeCarrierKeepsTheGate(): Void {
 		Assert.isTrue(reachable([
 			{ file: 'C.hx', source: OWNER },
@@ -161,20 +177,23 @@ using StringTools;
 	}
 
 	/** An unparsed `#if` region is bytes: a class source spelled there opens every class. */
-	@:pin('control') @:killer('M-STATICREACH-OPAQUE-SOURCE-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-OPAQUE-SOURCE-BLIND')
 	public function testAClassSourceInAnOpaqueRegionKeepsTheGate(): Void {
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, opaque('k(Type.getClass(x));')]));
 		Assert.isFalse(reachable([{ file: 'C.hx', source: OWNER }, opaque('k(1);')]), 'the control');
 	}
 
 	/** …and the owner's name spelled there may be the class value handed to reflection. */
-	@:pin('control') @:killer('M-STATICREACH-OPAQUE-CHAIN-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-OPAQUE-CHAIN-BLIND')
 	public function testTheOwnerInAnOpaqueRegionKeepsTheGate(): Void {
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, opaque('k(C);')]));
 	}
 
 	/** A project `@:autoBuild` macro reifying the class it builds hands its class value to code no text here holds. */
-	@:pin('control') @:killer('M-STATICREACH-REIFY-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-REIFY-BLIND')
 	public function testAClassReifyingBuildMacroKeepsTheGate(): Void {
 		final reg: String = 'import haxe.macro.Context;\n\nclass Reg {\n'
 			+ '\tpublic static macro function build(): Array<haxe.macro.Expr.Field> {\n\t\tfinal cls = '
@@ -189,7 +208,8 @@ using StringTools;
 	}
 
 	/** Inside a macro module `this` is reified into the CALLER, so `getClass(this)` there says nothing about the module's own class. */
-	@:pin('control') @:killer('M-STATICREACH-MACRO-THIS')
+	@:pin('control')
+	@:killer('M-STATICREACH-MACRO-THIS')
 	public function testGetClassOfThisInAMacroModuleKeepsTheGate(): Void {
 		final tools: SourceFile = {
 			file: 'Tools.hx',
@@ -200,7 +220,8 @@ using StringTools;
 	}
 
 	/** A library wrapper of `resolveClass` handed a computed name is a class source like `resolveClass` itself. */
-	@:pin('control') @:killer('M-STATICREACH-DEFINITION-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-DEFINITION-BLIND')
 	public function testADefinitionLookupByAComputedNameKeepsTheGate(): Void {
 		Assert.isTrue(reachable([
 			{ file: 'C.hx', source: OWNER },
@@ -209,7 +230,8 @@ using StringTools;
 	}
 
 	/** `Reflect.field(Type, 'getClass')` calls the class source reflectively, with no call the walk can see. */
-	@:pin('control') @:killer('M-STATICREACH-SOURCE-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-STATICREACH-SOURCE-STRING-BLIND')
 	public function testAStringNamingAClassSourceKeepsTheGate(): Void {
 		Assert.isTrue(reachable([
 			{ file: 'C.hx', source: OWNER },
@@ -218,7 +240,8 @@ using StringTools;
 	}
 
 	/** `x.isOfType(C)` is `Std.isOfType` only under a `using Std` — otherwise it is some method handed the class. */
-	@:pin('control') @:killer('M-STATICREACH-USING-STD-ASSUMED')
+	@:pin('control')
+	@:killer('M-STATICREACH-USING-STD-ASSUMED')
 	public function testAReceiverlessIsOfTypeNeedsUsingStd(): Void {
 		final call: String = 'class U {\n\tpublic static function k(x: Dynamic): Bool {\n\t\treturn x.isOfType(C);\n\t}\n}\n';
 		Assert.isTrue(reachable([{ file: 'C.hx', source: OWNER }, { file: 'U.hx', source: call }]));
@@ -229,7 +252,8 @@ using StringTools;
 	 * The same fold through the CLI, where the std joins the scope: a one-letter owner is always kept
 	 * there (the std's strings spell `C`), so the owner carries a distinctive name.
 	 */
-	@:pin('control') @:killer('M-STATICREACH-NEVER')
+	@:pin('control')
+	@:killer('M-STATICREACH-NEVER')
 	public function testTheCliDeletesADistinctiveStaticOnlyATableSpells(): Void {
 		#if (sys || nodejs)
 		final owner: String = 'package p;\n\nclass QzGridLine {\n\tprivate static final SIZE:Float = 4;\n\n\tpublic function new() {}\n}\n';

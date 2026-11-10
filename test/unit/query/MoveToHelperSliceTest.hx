@@ -404,7 +404,8 @@ class MoveToHelperSliceTest extends Test {
 	 * statically imported `Util.helperFn`. Refused with and without a namesake `Mid` in another package; rewriting it as
 	 * `src.helperFn()` does not compile (`a.Src has no field helperFn`).
 	 */
-	@:pin('control') @:killer('M-HELPER-MAYBE-ANCESTOR-REWRITES')
+	@:pin('control')
+	@:killer('M-HELPER-MAYBE-ANCESTOR-REWRITES')
 	public function testANameOnlyAMaybeSupertypeDeclaresIsRefused(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{
@@ -431,7 +432,8 @@ class MoveToHelperSliceTest extends Test {
 	 * A STATIC a proven supertype declares is not inherited: Haxe never resolves it as a bare name in the subtype, so the
 	 * bare `helperFn()` binds to the statically imported `Util.helperFn` and must not become `src.helperFn()`.
 	 */
-	@:pin('control') @:killer('M-HELPER-ANCESTOR-STATIC-INHERITED')
+	@:pin('control')
+	@:killer('M-HELPER-ANCESTOR-STATIC-INHERITED')
 	public function testAStaticOfAProvenSupertypeIsNotInherited(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{

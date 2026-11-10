@@ -31,7 +31,10 @@ import unit.cli.CliFixture;
 @:nullSafety(Strict)
 class LintConfigInheritanceTest extends Test {
 
-	@:pin('control') @:killer('M-REFLECTIVE-MERGE') @:killer('M-HOLDERS-MERGE') @:killer('M-OWNED-MERGE')
+	@:pin('control')
+	@:killer('M-REFLECTIVE-MERGE')
+	@:killer('M-HOLDERS-MERGE')
+	@:killer('M-OWNED-MERGE')
 	public function testAnUnnamedKeyFallsThroughToTheAncestor(): Void {
 		#if (sys || nodejs)
 		final root: String = tree(
@@ -74,7 +77,8 @@ class LintConfigInheritanceTest extends Test {
 	 * `reachConfigurationsComplete` is a claim about ONE `compilerOracle` list: a nested document naming a list of its own
 	 * claims nothing about it until it says so, while one that names no list keeps the claim along with the list it inherits.
 	 */
-	@:pin('control') @:killer('M-REACH-COMPLETE-FOLLOWS-LIST')
+	@:pin('control')
+	@:killer('M-REACH-COMPLETE-FOLLOWS-LIST')
 	public function testCompletenessStaysWithTheListItWasDeclaredFor(): Void {
 		#if (sys || nodejs)
 		final complete: String = '{"compilerOracle": "a.hxml", "reachConfigurationsComplete": true}';

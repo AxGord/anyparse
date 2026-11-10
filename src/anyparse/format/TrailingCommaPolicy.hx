@@ -42,7 +42,8 @@ enum abstract TrailingCommaPolicy(Int) from Int to Int {
 	 * `wrapping.trailingComma`) into a policy value. Unknown strings
 	 * return `null` so callers fall back to the runtime default.
 	 */
-	@:from public static function resolve(name: String): Null<TrailingCommaPolicy> {
+	@:from
+	public static function resolve(name: String): Null<TrailingCommaPolicy> {
 		return switch name {
 			case 'keep': Keep;
 			case 'remove': Remove;

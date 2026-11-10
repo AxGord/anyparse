@@ -17,7 +17,9 @@ import unit.CheckFixture;
 class ValueNameBindingTest extends Test {
 
 	@:pin('control')
-	@:killer('M-TS-MODULE-NAME') @:killer('M-TS-MODULE-NAME-NESTED') @:killer('M-TS-MODULE-NAME-ALIAS')
+	@:killer('M-TS-MODULE-NAME')
+	@:killer('M-TS-MODULE-NAME-NESTED')
+	@:killer('M-TS-MODULE-NAME-ALIAS')
 	public function testAModuleFieldComesBeforeAnyImport(): Void {
 		final index: SymbolIndex = indexOf([
 			'a/A.hx' => 'package a;\n\nclass A {\n\tpublic static var x:Int = 0;\n\tpublic static function f():Void {}\n'
@@ -40,7 +42,9 @@ class ValueNameBindingTest extends Test {
 	 * other use may bind it or, in the builds without it, what the imports bind.
 	 */
 	@:pin('control')
-	@:killer('M-VALUES-MODULE-WITHIN') @:killer('M-VALUES-MODULE-ALTERNATIVE') @:killer('M-VALUES-IMPORTS-WITHIN')
+	@:killer('M-VALUES-MODULE-WITHIN')
+	@:killer('M-VALUES-MODULE-ALTERNATIVE')
+	@:killer('M-VALUES-IMPORTS-WITHIN')
 	@:killer('M-VALUES-IMPORTS-POSITION')
 	public function testAModuleValueUnderIfBindsInTheBuildsCompilingIt(): Void {
 		final source: String = 'import a.A.*;\n\n#if foo\nfinal x:Int = 1;\n#else\nvar x:String = "";\n#end\nfinal y:Int = 2;\n\n'
@@ -74,7 +78,8 @@ class ValueNameBindingTest extends Test {
 	 * A chain whose conditions differ there, or one a condition spelling `|` cannot be split back into, still may bind it.
 	 */
 	@:pin('control')
-	@:killer('M-COND-ALTERNATIVE-REGIONS') @:killer('M-COND-ALTERNATIVE-SPLIT')
+	@:killer('M-COND-ALTERNATIVE-REGIONS')
+	@:killer('M-COND-ALTERNATIVE-SPLIT')
 	public function testAnotherRegionOfTheSameConditionIsAnAlternative(): Void {
 		final source: String = 'import a.A.*;\n\n#if foo\nfinal w:Int = 1;\n#end\n#if foo\nclass WFoo {}\n#else\nclass WElse {}\n#end\n'
 			+ '#if foo\nclass Wf {}\n#elseif bar\nclass WBar {}\n#end\n#if bar\nclass VBar {}\n#elseif foo\nclass VFoo {}\n#end\n'
@@ -92,7 +97,9 @@ class ValueNameBindingTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-VALUES-SUBTYPE-IMPORT') @:killer('M-VALUES-ENUM-CTOR') @:killer('M-GRAPH-IMPORT-UNLISTED')
+	@:killer('M-VALUES-SUBTYPE-IMPORT')
+	@:killer('M-VALUES-ENUM-CTOR')
+	@:killer('M-GRAPH-IMPORT-UNLISTED')
 	public function testAnExplicitImportBindsTheStaticItsPathNames(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/T.hx' => 'package p;\n\nclass T {\n\tpublic static function f():Void {}\n}\n\nclass Sub {\n'
@@ -114,7 +121,10 @@ class ValueNameBindingTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-GRAPH-UNLISTED-WILDCARD') @:killer('M-VALUES-OWNER-BY-NAME') @:killer('M-VALUES-EXTERN') @:killer('M-VALUES-BUILT-ABOVE')
+	@:killer('M-GRAPH-UNLISTED-WILDCARD')
+	@:killer('M-VALUES-OWNER-BY-NAME')
+	@:killer('M-VALUES-EXTERN')
+	@:killer('M-VALUES-BUILT-ABOVE')
 	public function testAWildcardBringsTheTypesStaticsOnly(): Void {
 		final index: SymbolIndex = indexOf([
 			'a/T.hx' => 'package a;\n\nclass T {\n\tpublic static function f():Void {}\n\tpublic function inst():Void {}\n}\n',
@@ -149,7 +159,8 @@ class ValueNameBindingTest extends Test {
 	}
 
 	/** A `using` of a module brings the extensions of every type it declares, its sub-types' too (Haxe 4.3.7, `hx/us`). */
-	@:pin('control') @:killer('M-USING-MODULE-TYPES')
+	@:pin('control')
+	@:killer('M-USING-MODULE-TYPES')
 	public function testAUsingBringsEveryTypeOfItsModule(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Mod.hx' => 'package p;\n\nclass Mod {}\n\nclass Sub {}\n\nprivate class Hidden {}\n',
@@ -170,8 +181,11 @@ class ValueNameBindingTest extends Test {
 	 * static-field import only the field it names, a package wildcard no value.
 	 */
 	@:pin('control')
-	@:killer('M-VALUES-IMPORTED-CTOR') @:killer('M-VALUES-WILDCARD-CTOR') @:killer('M-VALUES-ALIAS-WHOLE-MODULE')
-	@:killer('M-VALUES-FIELD-IMPORT-TYPES') @:killer('M-SCOPE-MODULE-IMPORT-BLIND')
+	@:killer('M-VALUES-IMPORTED-CTOR')
+	@:killer('M-VALUES-WILDCARD-CTOR')
+	@:killer('M-VALUES-ALIAS-WHOLE-MODULE')
+	@:killer('M-VALUES-FIELD-IMPORT-TYPES')
+	@:killer('M-SCOPE-MODULE-IMPORT-BLIND')
 	public function testAnImportBringsTheValuesOfTheTypesItPutsInScope(): Void {
 		final index: SymbolIndex = indexOf([
 			'pk/Mod.hx' => 'package pk;\n\nfinal modval = 1;\n\nenum Sub {\n\tlowctor;\n}\n\nclass Mod {}\n',
@@ -216,7 +230,8 @@ class ValueNameBindingTest extends Test {
 	 * none. On a value receiver only a `using` is asked.
 	 */
 	@:pin('control')
-	@:killer('M-MACRO-VALUE-UNLISTED') @:killer('M-MACRO-EXTENSIONS-ONLY')
+	@:killer('M-MACRO-VALUE-UNLISTED')
+	@:killer('M-MACRO-EXTENSIONS-ONLY')
 	public function testAnUnlistedImportIsTheOneACallMayBeRoutedThrough(): Void {
 		final index: SymbolIndex = indexOf([
 			'pk/Mod.hx' => 'package pk;\n\nclass Mod {\n\tpublic static function t():Void {}\n}\n',

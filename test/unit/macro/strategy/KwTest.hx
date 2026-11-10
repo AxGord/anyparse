@@ -9,7 +9,8 @@ import unit.cli.CliFixture;
 class KwTest extends Test {
 
 	/** Two `@:kw` on one ctor are refused at the second. */
-	@:pin('control') @:killer('M-KW-SECOND-OVERWRITES')
+	@:pin('control')
+	@:killer('M-KW-SECOND-OVERWRITES')
 	public function testASecondKwOnOneNodeIsRefused(): Void {
 		#if nodejs
 		final error: String = compileError("@:kw('for')\n\t@:kw('each')\n\tLoop(w: W);");

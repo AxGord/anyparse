@@ -725,7 +725,8 @@ class DeadNullGuardTest extends Test {
 	 * did not compile, and only the oracle's revert stopped it. Then a plain Bool local, an alias copy, a lone surviving
 	 * `if` arm and a `try` body.
 	 */
-	@:pin('control') @:killer('M-DNG-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNG-DECLINED-FIXED')
+	@:pin('control')
+	@:killer('M-DNG-UNSEEN-DROPPED', 'M-NSG-GATE-NEVER', 'M-DNG-DECLINED-FIXED')
 	public function testEveryUnseenProofKeepsNoFixUnderNullSafety(): Void {
 		assertUnseenDeclined(
 			nullSafeString('final reads: Bool = node != null && node.length > 1; return reads && node != null ? node : other;')
@@ -745,14 +746,16 @@ class DeadNullGuardTest extends Test {
 	}
 
 	/** The controls: a nested guard and an early exit are narrowings the compiler performs too, so the guard still goes. */
-	@:pin('control') @:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
+	@:pin('control')
+	@:killer('M-DSN-UNSEEN-ALL', 'M-NSG-VISIBLE-IGNORED')
 	public function testVisibleProofKeepsTheFixUnderNullSafety(): Void {
 		assertVisibleFixed(nullSafeString('if (node != null) return other.length > 1 && node != null ? node : other; return other;'));
 		assertVisibleFixed(nullSafeString('if (node == null) return other; return other.length > 1 && node != null ? node : other;'));
 	}
 
 	/** Without null-safety — no `@:nullSafety`, a project with no oracle build — nothing typechecks the narrowing: the fix stays. */
-	@:pin('control') @:killer('M-DSN-NULLSAFE-ALWAYS')
+	@:pin('control')
+	@:killer('M-DSN-NULLSAFE-ALWAYS')
 	public function testBoolAliasProofKeepsTheFixWithoutNullSafety(): Void {
 		#if (sys || nodejs)
 		final src: String = 'class C { function f(node:Null<String>, other:String):String {'

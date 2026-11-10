@@ -533,8 +533,10 @@ final class OperandBinder {
 typedef Located = {
 	final text: String;
 	final at: Int;
-	@:optional final host: WrittenHost;
-	@:optional final bindings: Map<String, Located>;
+	@:optional
+	final host: WrittenHost;
+	@:optional
+	final bindings: Map<String, Located>;
 }
 
 /** The file of the index a type is written in, and the type parameters in scope where it is. */

@@ -802,7 +802,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 	 * The fork's own `--default-config` writes `null` for the keys it leaves to a fallback; such a
 	 * config loads exactly as one that omits them, the sibling keys still applied.
 	 */
-	@:pin('control') @:killer('M-BYNAME-NULL-ABSENT')
+	@:pin('control')
+	@:killer('M-BYNAME-NULL-ABSENT')
 	public function testANullKeyLoadsAsAnAbsentOne(): Void {
 		final withNulls: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"lineEnds": {"leftCurly": "both", "blockCurly": null}, "whitespace": {"parenConfig": {"catchParens": null, "callParens": {'

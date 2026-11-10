@@ -12,7 +12,8 @@ import utest.Test;
 class HaxeQueryPluginByteOrderMarkTest extends Test {
 
 	/** A file that opens with the mark is written back with it, comments and layout as without it. */
-	@:pin('control') @:killer('M-BOM-HAXE-SEAT')
+	@:pin('control')
+	@:killer('M-BOM-HAXE-SEAT')
 	public function testWriteRoundTripKeepsTheMark(): Void {
 		final mark: String = String.fromCharCode(ByteOrderMark.CODE);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();

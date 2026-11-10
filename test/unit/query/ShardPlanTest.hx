@@ -282,7 +282,9 @@ class ShardPlanTest extends Test {
 	 * A class heavier than a shard's share is dealt as slices, one per shard it needs, each placed once — the shape
 	 * that took `MemberReachFactsTest`, the heaviest class, off a single shard. Every lighter class stays whole.
 	 */
-	@:pin('control') @:killer('M-SHARD-SPLIT-NEVER') @:killer('M-SHARD-SPLIT-SLICE-WEIGHT')
+	@:pin('control')
+	@:killer('M-SHARD-SPLIT-NEVER')
+	@:killer('M-SHARD-SPLIT-SLICE-WEIGHT')
 	public function testAClassHeavierThanAShardIsDealtAsSlices(): Void {
 		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.HeavyTest']).concat(generated(12).map(n -> 'unit.$n'));
 		final measured: Map<String, ClassWeight> = ['unit.HeavyTest' => { ms: 3000, tests: 40 }];
@@ -302,7 +304,9 @@ class ShardPlanTest extends Test {
 	}
 
 	/** A slice must hold a test, so a heavy class is cut into no more slices than it has tests, and one of unknown count stays whole. */
-	@:pin('control') @:killer('M-SHARD-SPLIT-NO-TEST-CAP') @:killer('M-SHARD-SPLIT-UNKNOWN-COUNT')
+	@:pin('control')
+	@:killer('M-SHARD-SPLIT-NO-TEST-CAP')
+	@:killer('M-SHARD-SPLIT-UNKNOWN-COUNT')
 	public function testSlicesAreBoundedByTheTestCount(): Void {
 		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(['unit.PairTest', 'unit.BlindTest'])
 			.concat(generated(12).map(n -> 'unit.$n'));
@@ -316,7 +320,8 @@ class ShardPlanTest extends Test {
 	}
 
 	/** A pinned class shares a temp file with its group, so it is never sliced however heavy it is measured. */
-	@:pin('control') @:killer('M-SHARD-SPLIT-STICKY')
+	@:pin('control')
+	@:killer('M-SHARD-SPLIT-STICKY')
 	public function testAPinnedClassIsNeverSliced(): Void {
 		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(generated(12).map(n -> 'unit.$n'));
 		final measured: Map<String, ClassWeight> = [for (s in ShardPlan.STICKY_CLASSES) s => { ms: 9000, tests: 20 }];
@@ -325,7 +330,9 @@ class ShardPlanTest extends Test {
 	}
 
 	/** The `k` slice tokens of a class select every test name exactly once between them, whatever order the names come in. */
-	@:pin('control') @:killer('M-SHARD-FILTER-SLICE-ALL') @:killer('M-SHARD-FILTER-SLICE-UNSORTED')
+	@:pin('control')
+	@:killer('M-SHARD-FILTER-SLICE-ALL')
+	@:killer('M-SHARD-FILTER-SLICE-UNSORTED')
 	public function testTheSlicesOfAClassCoverItsTestsExactlyOnce(): Void {
 		final names: Array<String> = ['testE', 'testA', 'testD', 'testB', 'testC', 'testF', 'testG'];
 		final reversed: Array<String> = names.copy();
@@ -350,7 +357,8 @@ class ShardPlanTest extends Test {
 	}
 
 	/** A whole-class token runs every test (null), and a token naming another class selects nothing. */
-	@:pin('control') @:killer('M-SHARD-FILTER-WHOLE-AS-SLICE')
+	@:pin('control')
+	@:killer('M-SHARD-FILTER-WHOLE-AS-SLICE')
 	public function testAWholeTokenSelectsEveryTest(): Void {
 		final names: Array<String> = ['testA', 'testB'];
 		Assert.isNull(ShardFilter.selected('unit.SomeTest', names, [ShardFilter.parse('SomeTest#0/2'), ShardFilter.parse('SomeTest')]));
@@ -370,7 +378,8 @@ class ShardPlanTest extends Test {
 	}
 
 	/** A slice that is not `#<i>/<k>` with `0 <= i < k` is refused loudly, never read as a class substring matching nothing. */
-	@:pin('control') @:killer('M-SHARD-FILTER-PARSE-RANGE')
+	@:pin('control')
+	@:killer('M-SHARD-FILTER-PARSE-RANGE')
 	public function testAMalformedSliceTokenIsRefused(): Void {
 		for (bad in ['A#3/3', 'A#1', 'A#x/2', 'A#0/0', 'A#-1/2']) Assert.raises(() -> ShardFilter.parse(bad), String, bad);
 		final ok: ShardToken = ShardFilter.parse('unit.A#2/3');
@@ -378,7 +387,8 @@ class ShardPlanTest extends Test {
 	}
 
 	/** A class run as slices on several shards has a row per slice in the merged timings, summed into one weight. */
-	@:pin('control') @:killer('M-SHARD-WEIGHTS-LAST-ROW')
+	@:pin('control')
+	@:killer('M-SHARD-WEIGHTS-LAST-ROW')
 	public function testTimingRowsOfOneClassAreSummed(): Void {
 		final weights: Map<String, ClassWeight> = ShardPlan.parseWeights('100\t3\tunit.A\n250\t4\tunit.A\nbad row\n7\t1\tunit.B\n');
 		final a: Null<ClassWeight> = weights['unit.A'];

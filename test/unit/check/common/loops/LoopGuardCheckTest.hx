@@ -407,7 +407,9 @@ class LoopGuardCheckTest extends Test {
 	 * inverted `if` does (verified on `haxe --interp` 4.3.7). Its body is the loop's FIRST child, not
 	 * its last, and `do if (…) { … } while (…);` is the lifted form.
 	 */
-	@:pin('control') @:killer('M-LOOPGUARD-DO-WHILE-BODY-LAST') @:killer('M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY')
+	@:pin('control')
+	@:killer('M-LOOPGUARD-DO-WHILE-BODY-LAST')
+	@:killer('M-LOOPGUARD-BODY-STATEMENT-BLOCK-ONLY')
 	public function testDoWhileLoopFlaggedAndFixed(): Void {
 		final src: String = wrap('do {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t} while (more());');
 		Assert.equals(1, violations(src).length);
@@ -415,7 +417,9 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	/** The MERGE arm on a `do … while` whose body is already a lifted header `if (c) { … }`. */
-	@:pin('control') @:killer('M-LOOPGUARD-EXPR-BODY-KEPT') @:killer('M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY')
+	@:pin('control')
+	@:killer('M-LOOPGUARD-EXPR-BODY-KEPT')
+	@:killer('M-LOOPGUARD-HEADER-STATEMENT-IF-ONLY')
 	@:killer('M-LOOPGUARD-BRANCH-STATEMENT-BLOCK-ONLY')
 	public function testDoWhileMergeArmJoinsTheHeader(): Void {
 		final src: String = wrapPositioned('do if (c) {\n\t\t\tif (g) continue;\n\t\t\ttrace(1);\n\t\t} while (ok);');
@@ -424,13 +428,15 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	/** A comment trailing the `continue;` line would land after the lifted header's `{`, describing the inverted condition. */
-	@:pin('control') @:killer('M-LOOPGUARD-TRAILING-COMMENT-LIFTED')
+	@:pin('control')
+	@:killer('M-LOOPGUARD-TRAILING-COMMENT-LIFTED')
 	public function testCommentAfterGuardNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (x == 0) continue; // not a run head\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
 
 	/** An own-line comment after the guard stays above the kept statements inside the new block, where it reads true. */
-	@:pin('control') @:killer('M-LOOPGUARD-OWN-LINE-COMMENT-DECLINED')
+	@:pin('control')
+	@:killer('M-LOOPGUARD-OWN-LINE-COMMENT-DECLINED')
 	public function testOwnLineCommentAfterGuardStillFlagged(): Void {
 		Assert.equals(
 			1,

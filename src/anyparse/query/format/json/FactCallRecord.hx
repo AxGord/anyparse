@@ -1,7 +1,9 @@
 package anyparse.query.format.json;
 
 /** A call a facts file's node record holds. */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef FactCallRecord = {
 	final ?t: String;
 	final a: String;

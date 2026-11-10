@@ -30,14 +30,24 @@ package anyparse.grammar.haxe.format;
  * block, so unlike its siblings this section is an additive extension
  * rather than a modelled subset of the fork's schema.
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef HxFormatConfig = {
-	@:optional var indentation: HxFormatIndentationSection;
-	@:optional var wrapping: HxFormatWrappingSection;
-	@:optional var sameLine: HxFormatSameLineSection;
-	@:optional var trailingCommas: HxFormatTrailingCommasSection;
-	@:optional var lineEnds: HxFormatLineEndsSection;
-	@:optional var whitespace: HxFormatWhitespaceSection;
-	@:optional var emptyLines: HxFormatEmptyLinesSection;
-	@:optional var comments: HxFormatCommentsSection;
+	@:optional
+	var indentation: HxFormatIndentationSection;
+	@:optional
+	var wrapping: HxFormatWrappingSection;
+	@:optional
+	var sameLine: HxFormatSameLineSection;
+	@:optional
+	var trailingCommas: HxFormatTrailingCommasSection;
+	@:optional
+	var lineEnds: HxFormatLineEndsSection;
+	@:optional
+	var whitespace: HxFormatWhitespaceSection;
+	@:optional
+	var emptyLines: HxFormatEmptyLinesSection;
+	@:optional
+	var comments: HxFormatCommentsSection;
 };

@@ -13,7 +13,8 @@ import anyparse.runtime.Span;
  */
 class ImpossibleCastTest extends Test {
 
-	@:pin('control') @:killer('M-UNRELATED-FALSE')
+	@:pin('control')
+	@:killer('M-UNRELATED-FALSE')
 	public function testUnrelatedClassesFlagged(): Void {
 		Assert.equals(1, violations('class A {} class B {} class C { function f(a:A) { var b = cast(a, B); } }').length);
 	}

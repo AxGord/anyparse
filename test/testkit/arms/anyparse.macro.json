@@ -2386,20 +2386,44 @@
 			"note": "a chain head reads its policy from the next annotation instead of the tail, so only the last one of a chain sees the var"
 		},
 		{
-			"name": "M-META-COLLAPSE-IGNORED",
+			"name": "M-META-AFTER-SOURCE-SEP",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseStarExpr",
-			"find": "metaCollapseBlanks || forceInlineSep",
-			"replace": "forceInlineSep",
-			"note": "a blank between member metadata survives instead of collapsing"
+			"method": "triviaTryparseSepCascadeExpr",
+			"find": "} else if (_si > 0 && _metaPolicy == 1) {",
+			"replace": "} else if (false) {",
+			"note": "the After policy no longer breaks between metadata, so a run joins on one line and a source blank between metadata reaches the output"
 		},
 		{
-			"name": "M-META-COLLAPSE-FOR-ALL",
+			"name": "M-META-SOURCE-SEP-BACK",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseStarExpr",
-			"find": "metaCollapseBlanks || forceInlineSep",
-			"replace": "metaLineEndPolicy != null || forceInlineSep",
-			"note": "every wired site collapses the blanks between its metadata, so a type keeps fewer blanks than it does today"
+			"method": "triviaTryparseSepCascadeExpr",
+			"find": "} else if (_si > 0 && _metaPolicy >= 0) {",
+			"replace": "} else if (false) {",
+			"note": "a metadata run under a non-After policy follows the source newlines between its metadata again"
+		},
+		{
+			"name": "M-META-ORPHAN-PADS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "annotatesExpr",
+			"find": "return test ?? macro false;",
+			"replace": "return null;",
+			"note": "a metadata run that annotates nothing still breaks after its last element, so an empty region before } or the end of the file gains a blank line"
+		},
+		{
+			"name": "M-META-PAD-DROPS-GAP-COMMENT",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "buildBareRefLeadingSep",
+			"find": "final sep: Expr = prevPadTrailing == null ? triviaSepExpr : macro $prevPadTrailing ? $afterPad : $triviaSepExpr;\n\t\t\treturn buildBeforeLeadingSep(child, fieldName, sep);",
+			"replace": "return withPadTrailingDrop(prevPadTrailing, buildBeforeLeadingSep(child, fieldName, triviaSepExpr));",
+			"note": "the break after the last metadata drops the whole gap before the declaration, its comments with it"
+		},
+		{
+			"name": "M-META-CHAIN-NO-SOURCE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainSepExpr",
+			"find": "if ((_policy: Int) < 0)\n\t\t\t\t$sourceSep;\n\t\t\telse if (",
+			"replace": "if (",
+			"note": "an annotation chain whose tail is no var takes the None policy, so an own-line @doc before an array element joins its element"
 		},
 		{
 			"name": "M-META-PLAIN-NO-BREAK",

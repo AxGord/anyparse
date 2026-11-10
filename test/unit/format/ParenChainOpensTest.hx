@@ -28,7 +28,8 @@ final class ParenChainOpensTest extends Test {
 		super();
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-OPEN-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-OPEN-OFF')
 	public function testAddSubChainOpensUnderTheDefaults(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction add() {\n\t\treturn 1 * (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc + dddddddddddd);\n\t}\n}',
@@ -37,7 +38,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-ADD-COINDENT-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-ADD-COINDENT-OFF')
 	public function testAddSubContinuationCoIndentsWithItsFirstOperand(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction add() {\n\t\tvar x = (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc + dddddddddddd);\n\t}\n}',
@@ -54,7 +56,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-LIST-BOUNDARY-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-LIST-BOUNDARY-OFF')
 	public function testChainInANoWrapArrayElementOpens(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction add() {\n\t\tvar x = [(aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1];\n\t}\n}',
@@ -68,7 +71,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-LIST-BOUNDARY-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-LIST-BOUNDARY-OFF')
 	public function testChainInANoWrapMapValueOpens(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction add() {\n\t\tvar x = [1 => (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 2 => 3];\n\t}\n}',
@@ -82,7 +86,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-CONDITION-BOUNDARY-ON')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-CONDITION-BOUNDARY-ON')
 	public function testAConditionOpensBeforeItsParen(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction cond() {\n\t\tif (!(aaaaaaaaaaaaa || bbbbbbbb || cc)) y();\n\t}\n}',
@@ -92,7 +97,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-CONDITION-ELEMENT-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-CONDITION-ELEMENT-OFF')
 	public function testChainInAWrappingConditionElementOpens(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction cond() {\n\t\tif (f([(aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1])) g();\n\t}\n}',
@@ -102,7 +108,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-NATURAL-HEADER-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-NATURAL-HEADER-OFF')
 	public function testMapValueInAWrappingConditionKeepsItsHeaderGlued(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction cond() {\n\t\tif (f([1 => (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 2 => 3])) g();\n\t}\n}',
@@ -112,7 +119,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-OWN-WIDTH-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-OWN-WIDTH-OFF')
 	public function testChainThatStaysOnOneLineKeepsItsParenGlued(): Void {
 		for (stmt in [
 			'var a = [(aa + bb), "a long string that overflows the line"];',
@@ -124,7 +132,8 @@ final class ParenChainOpensTest extends Test {
 		}
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-OWN-WIDTH-TRAIL-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-OWN-WIDTH-TRAIL-OFF')
 	public function testChainEndingAtTheLimitStaysGlued(): Void {
 		final atLimit: String = 'class C {\n\tfunction f() {\n\t\tvar a = [(aaaaaaaaaa + bbbbbbbbb), 1];\n\t}\n}';
 		assertLaidOut(atLimit, atLimit);
@@ -134,7 +143,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-PENDING-SPACE-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-PENDING-SPACE-OFF')
 	public function testMapValueCountsTheSpaceBeforeItsParen(): Void {
 		final atLimit: String = 'class C {\n\tfunction f() {\n\t\tvar a = [1 => (aaaaaaa + bbbbbbb), 2 => 3];\n\t}\n}';
 		assertLaidOut(atLimit, atLimit);
@@ -144,7 +154,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-NOWRAP-OVERRIDE-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-NOWRAP-OVERRIDE-OFF')
 	public function testChainParenUnderANoWrapOverrideStaysAsItWas(): Void {
 		final chain: String = '(aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc)';
 		final src: String = 'class C {\n\tfunction f() {\n\t\tvar i = \'x$${[$chain, 1]}y\';\n\t\tvar j = \'x$${$chain}y\';\n\t\tswitch (['
@@ -154,7 +165,8 @@ final class ParenChainOpensTest extends Test {
 		assertLaidOut(src, expected);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-ELEMENT-CONDITION-CLEAR-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-ELEMENT-CONDITION-CLEAR-OFF')
 	public function testConditionUnderAnElementKeepsItsOwnOpen(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n'
@@ -165,7 +177,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-ELEMENT-CONDITION-EARLY-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-ELEMENT-CONDITION-EARLY-OFF')
 	public function testConditionWithTheSameModeUnderAnElementKeepsItsOwnOpen(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n'
@@ -176,7 +189,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-ELEMENT-ONLY-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-ELEMENT-ONLY-OFF')
 	public function testChainInANoWrapObjectFieldStaysAsItWas(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n\t\tvar o = {a: (aaaaaaaaaaaa && bbbbbbbbbbbb && cccccccccccc), b: 1};\n\t}\n}',
@@ -185,7 +199,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-MARK-OBJECT-CLEAR-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-MARK-OBJECT-CLEAR-OFF')
 	public function testNoWrapObjectInAnElementStaysGlued(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n\t\tvar o = [{a: (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), b: 1}, 2];\n\t}\n}',
@@ -200,7 +215,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-MARK-CALL-CLEAR-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-MARK-CALL-CLEAR-OFF')
 	public function testNoWrapCallArgumentInAnElementStaysGlued(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n\t\tvar c = [g((aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1), 2];\n\t}\n}',
@@ -216,7 +232,8 @@ final class ParenChainOpensTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-PAREN-CHAIN-MARK-NEW-CLEAR-OFF')
+	@:pin('control')
+	@:killer('M-PAREN-CHAIN-MARK-NEW-CLEAR-OFF')
 	public function testNoWrapNewArgumentInAnElementStaysGlued(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n\t\tvar n = [new G((aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), 1), 2];\n\t}\n}',

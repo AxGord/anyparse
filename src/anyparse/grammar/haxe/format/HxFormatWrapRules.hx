@@ -19,12 +19,17 @@ package anyparse.grammar.haxe.format;
  * (e.g. `lineLength >= n`) so the cascade falls through cleanly to
  * the next rule.
  */
-@:peg typedef HxFormatWrapRules = {
+@:peg
+typedef HxFormatWrapRules = {
 
-	@:optional var defaultWrap: String;
-	@:optional var defaultLocation: String;
-	@:optional var defaultAdditionalIndent: Int;
-	@:optional var rules: Array<HxFormatWrapRule>;
+	@:optional
+	var defaultWrap: String;
+	@:optional
+	var defaultLocation: String;
+	@:optional
+	var defaultAdditionalIndent: Int;
+	@:optional
+	var rules: Array<HxFormatWrapRule>;
 
 	/**
 	 * F3 ω-methodchain-config-key — opt into fork's `isDotAfterPClose`
@@ -43,6 +48,7 @@ package anyparse.grammar.haxe.format;
 	 * a project that wants the Haxe layout policy alongside a configured
 	 * cascade names it.
 	 */
-	@:optional var itemsAfterCloseParenOnly: Bool;
+	@:optional
+	var itemsAfterCloseParenOnly: Bool;
 
 };

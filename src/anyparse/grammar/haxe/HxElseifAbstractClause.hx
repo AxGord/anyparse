@@ -20,6 +20,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifAbstractClause = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxAbstractClause>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing)
+	var body: Array<HxAbstractClause>;
 };

@@ -64,7 +64,7 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 	@:killer('M-ANON-MULTILINE-ONE-PER-LINE')
 	public function testACommentOnAnAnonFieldKeepsEachFieldOnItsLine(): Void {
 		final leading: String = 'class C {\n\tvar t:{\n\t\t// doc\n\t\tc:Int\n\t};\n}';
-		final between: String = 'class C {\n\tvar t:{\n\t\t@:optional var c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}';
+		final between: String = 'class C {\n\tvar t:{\n\t\t@:optional\n\t\tvar c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}';
 		Assert.equals(leading, write(leading));
 		Assert.equals(between, write(between));
 	}

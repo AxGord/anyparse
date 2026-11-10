@@ -182,7 +182,8 @@ class PreferFindCheckTest extends Test {
 	 * unguarded `using Lambda;` would change what the region's own calls resolve to. The whole edit
 	 * set goes rather than either.
 	 */
-	@:pin('control') @:killer('M-GUARDED-USING-ABSENT')
+	@:pin('control')
+	@:killer('M-GUARDED-USING-ABSENT')
 	public function testFixRefusedWhenTheOnlyUsingIsGuarded(): Void {
 		final source: String = 'package p;\n\n#if FLAG\nusing Lambda;\n#end\n\nclass C {\n'
 			+ '\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';

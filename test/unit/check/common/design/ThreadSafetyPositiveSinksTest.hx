@@ -32,7 +32,10 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * A chain writing no `sinks` reports the runtime's blocking calls, a wait for another thread among them; a project
 	 * function named like one is read through its body.
 	 */
-	@:pin('control') @:killer('M-TS-REPORT-NEEDS-SINKS') @:killer('M-TS-BUILTIN-OFF') @:killer('M-TS-BUILTIN-ANY-NODE')
+	@:pin('control')
+	@:killer('M-TS-REPORT-NEEDS-SINKS')
+	@:killer('M-TS-BUILTIN-OFF')
+	@:killer('M-TS-BUILTIN-ANY-NODE')
 	public function testTheBuiltinAppliesWithNoSinks(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -79,7 +82,10 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * A `nonBlocking` entry waives a builtin sink or a native on the evidence it gives; one giving none is dropped and
 	 * said, one waiving nothing is said, and a call `sinks` lists stays a sink.
 	 */
-	@:pin('control') @:killer('M-TS-WAIVE-OFF') @:killer('M-TS-WAIVE-SAYS-NOTHING') @:killer('M-TS-WAIVE-SINKS-WIN')
+	@:pin('control')
+	@:killer('M-TS-WAIVE-OFF')
+	@:killer('M-TS-WAIVE-SAYS-NOTHING')
+	@:killer('M-TS-WAIVE-SINKS-WIN')
 	@:killer('M-TS-OPT-NONBLOCKING-EVIDENCE')
 	public function testNonBlockingWaivesOnEvidence(): Void {
 		#if (sys || nodejs)
@@ -108,9 +114,15 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * member whatever its body, a member a native loader initialised, `untyped __cpp__`, `untyped __global__.f`,
 	 * `cpp.Syntax.code` — and blocks; an interface member dispatches and is none. `nonBlocking` waives one.
 	 */
-	@:pin('control') @:killer('M-TS-NATIVE-EXTERN') @:killer('M-TS-NATIVE-EXTERN-ANY-BODYLESS') @:killer('M-TS-NATIVE-META')
-	@:killer('M-TS-NATIVE-LOADER') @:killer('M-TS-NATIVE-AFFIX') @:killer('M-TS-NATIVE-CALLEE-SPAN')
-	@:killer('M-TS-NATIVE-CODE-CALLS') @:killer('M-TS-NATIVE-LOADED-MEMBER')
+	@:pin('control')
+	@:killer('M-TS-NATIVE-EXTERN')
+	@:killer('M-TS-NATIVE-EXTERN-ANY-BODYLESS')
+	@:killer('M-TS-NATIVE-META')
+	@:killer('M-TS-NATIVE-LOADER')
+	@:killer('M-TS-NATIVE-AFFIX')
+	@:killer('M-TS-NATIVE-CALLEE-SPAN')
+	@:killer('M-TS-NATIVE-CODE-CALLS')
+	@:killer('M-TS-NATIVE-LOADED-MEMBER')
 	public function testProjectNativesBlock(): Void {
 		#if (sys || nodejs)
 		final config: String = '{"rules":{"thread-safety":{"closedWorld":false}}}';
@@ -135,7 +147,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	}
 
 	/** A reporting run says once which builtin sinks applied: how many the runtime has, how many it calls, and its natives. */
-	@:pin('control') @:killer('M-TS-BUILTIN-NOTICE-OFF')
+	@:pin('control')
+	@:killer('M-TS-BUILTIN-NOTICE-OFF')
 	public function testTheRunSaysWhichBuiltinsApplied(): Void {
 		#if (sys || nodejs)
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{"closedWorld":false}}}', [
@@ -161,9 +174,14 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * native shares the name `Lock` (keyed by its path), and a waiver of that native keeps it — the library call may still
 	 * reach it where nothing says which `Lock` a value holds.
 	 */
-	@:pin('control') @:killer('M-TS-PATH-FOREIGN') @:killer('M-TS-PATH-RECEIVER-STATIC')
-	@:killer('M-TS-PATH-NEW') @:killer('M-TS-PATH-MATCH') @:killer('M-TS-SHADOWING-KEPT')
-	@:killer('M-TS-PATH-NOMINAL') @:killer('M-TS-ALIAS-TYPE')
+	@:pin('control')
+	@:killer('M-TS-PATH-FOREIGN')
+	@:killer('M-TS-PATH-RECEIVER-STATIC')
+	@:killer('M-TS-PATH-NEW')
+	@:killer('M-TS-PATH-MATCH')
+	@:killer('M-TS-SHADOWING-KEPT')
+	@:killer('M-TS-PATH-NOMINAL')
+	@:killer('M-TS-ALIAS-TYPE')
 	public function testALibraryTypeIsNotItsProjectNamesake(): Void {
 		#if (sys || nodejs)
 		final native: String = 'package utils; extern class Lock { public function new():Void; public function wait():Bool; }'
@@ -218,8 +236,13 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * may be either type, so a call of it runs both members. Before, both resolved to the project's `Lock`, whose `wait`
 	 * never blocks: the runtime's wait went silent.
 	 */
-	@:pin('control') @:killer('M-TS-WILD-PACKAGES') @:killer('M-TS-WILD-OWN-MODULE') @:killer('M-TS-WILD-EXPLICIT-FIRST')
-	@:killer('M-TS-WILD-STD') @:killer('M-TS-GUARDED-IMPORT') @:killer('M-TS-ALTERNATE-CALL')
+	@:pin('control')
+	@:killer('M-TS-WILD-PACKAGES')
+	@:killer('M-TS-WILD-OWN-MODULE')
+	@:killer('M-TS-WILD-EXPLICIT-FIRST')
+	@:killer('M-TS-WILD-STD')
+	@:killer('M-TS-GUARDED-IMPORT')
+	@:killer('M-TS-ALTERNATE-CALL')
 	public function testAWildcardOrGuardedImportOfALibraryTypeIsNotItsProjectNamesake(): Void {
 		#if (sys || nodejs)
 		if (StdResolver.stdDir() == null) {
@@ -252,7 +275,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * A `nonBlocking` pattern written with a package names the type declared at that path only: `sys.thread.Lock.*` waives
 	 * nothing of a project native `utils.Lock`, and says so. Before, a dotted pattern matched every type of its simple name.
 	 */
-	@:pin('control') @:killer('M-TS-DOTTED-WILDCARD')
+	@:pin('control')
+	@:killer('M-TS-DOTTED-WILDCARD')
 	public function testADottedWaiverNamesOnlyTheTypeAtThatPath(): Void {
 		#if (sys || nodejs)
 		final native: String = 'package utils; extern class Lock { public function new():Void; public function spin():Void; }';
@@ -279,7 +303,9 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * std function's return type (`Sys.stdin()`), a project function's declared one, a field's, another
 	 * such local's (`NominalTypes.localInitializer`). Before, only a call's was read, and before that none.
 	 */
-	@:pin('control') @:killer('M-NOMINAL-LOCAL-INIT') @:killer('M-TS-LOCAL-CALL-READ')
+	@:pin('control')
+	@:killer('M-NOMINAL-LOCAL-INIT')
+	@:killer('M-TS-LOCAL-CALL-READ')
 	public function testALocalOfACallResultIsTypedByWhatTheCallReturns(): Void {
 		#if (sys || nodejs)
 		if (StdResolver.stdDir() == null) {
@@ -307,9 +333,17 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * not a project type declares a property of that name: each reaches a blocking library call, among them the event loop,
 	 * a datagram read and a result set's `length`.
 	 */
-	@:pin('control') @:killer('M-TS-STD-RETURN') @:killer('M-TS-STD-FIELD') @:killer('M-TS-STD-GETTER') @:killer('M-TS-STD-GETTER-LOCAL')
-	@:killer('M-TS-STD-GETTER-TYPED') @:killer('M-TS-NEW-RECEIVER') @:killer('M-TS-ALIAS-TYPE') @:killer('M-TS-STD-PLACEHOLDER')
-	@:killer('M-TS-BUILTIN-EVENTS') @:killer('M-TS-PATH-IMPORT')
+	@:pin('control')
+	@:killer('M-TS-STD-RETURN')
+	@:killer('M-TS-STD-FIELD')
+	@:killer('M-TS-STD-GETTER')
+	@:killer('M-TS-STD-GETTER-LOCAL')
+	@:killer('M-TS-STD-GETTER-TYPED')
+	@:killer('M-TS-NEW-RECEIVER')
+	@:killer('M-TS-ALIAS-TYPE')
+	@:killer('M-TS-STD-PLACEHOLDER')
+	@:killer('M-TS-BUILTIN-EVENTS')
+	@:killer('M-TS-PATH-IMPORT')
 	public function testStdResultsTypeTheirReceivers(): Void {
 		#if (sys || nodejs)
 		if (anyparse.query.StdResolver.stdDir() == null) {
@@ -351,7 +385,10 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * A std member stands only where every std type of its name that declares it agrees, through supertypes, its type
 	 * resolved in the module that writes it (`StdTypes`); one with a getter says so even when its type does not resolve.
 	 */
-	@:pin('control') @:killer('M-TS-STD-AGREE') @:killer('M-TS-STD-SUPER') @:killer('M-TS-STD-SIBLING')
+	@:pin('control')
+	@:killer('M-TS-STD-AGREE')
+	@:killer('M-TS-STD-SUPER')
+	@:killer('M-TS-STD-SIBLING')
 	public function testAStdMemberStandsWhereEveryNamesakeAgrees(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeTree('stdtypes', [
@@ -388,7 +425,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	}
 
 	/** The notice counts what the run's `nonBlocking` entries removed: the sinks, and the entries that removed one. */
-	@:pin('control') @:killer('M-TS-NOTICE-WAIVED')
+	@:pin('control')
+	@:killer('M-TS-NOTICE-WAIVED')
 	public function testTheNoticeCountsWhatNonBlockingRemoved(): Void {
 		#if (sys || nodejs)
 		final source: String = 'import sys.thread.Mutex; class A { static function main():Void { Sys.sleep(1); final m:Mutex = null;'
@@ -411,7 +449,8 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	 * the namesake declared the member as a method.
 	 */
 	@:pin('control')
-	@:killer('M-TS-DECL-MEMBER-FILE') @:killer('M-TS-ALTERNATE-WHOLE-CALL')
+	@:killer('M-TS-DECL-MEMBER-FILE')
+	@:killer('M-TS-ALTERNATE-WHOLE-CALL')
 	public function testAStdLockWrittenInADeclarationWaitsWhereverItIsRead(): Void {
 		#if (sys || nodejs)
 		if (StdResolver.stdDir() == null) {

@@ -42,7 +42,9 @@ class FactsOracleDoorsTest extends Test {
 
 	/** The assisted door reads a file of its list as it is now; any other file the run compiled goes to the fallback. */
 	@:pin('control')
-	@:killer('M-HAXE-FACTS-FOR-FILES') @:killer('M-FACTS-FILES-CURRENT') @:killer('M-FACTS-FILES-FALLBACK')
+	@:killer('M-HAXE-FACTS-FOR-FILES')
+	@:killer('M-FACTS-FILES-CURRENT')
+	@:killer('M-FACTS-FILES-FALLBACK')
 	public function testTheAssistedDoorReadsItsFilesAndFallsBackForAnyOther(): Void {
 		final plugin: CachingGrammarPlugin = hostWith(completeFacts());
 		final provider: OracleProvider = OracleProviders.of(plugin);

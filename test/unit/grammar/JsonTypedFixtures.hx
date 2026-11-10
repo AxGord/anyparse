@@ -18,7 +18,12 @@ enum abstract TestPolicy(String) from String to String {
 }
 
 /** Nested section to test recursive ByName parsing. */
-@:peg typedef TestNested = { var kind: String; @:optional var count: Int; };
+@:peg
+typedef TestNested = {
+	var kind: String;
+	@:optional
+	var count: Int;
+};
 
 /**
  * Root config grammar — covers every ByName field shape τ₄ needs:
@@ -26,16 +31,22 @@ enum abstract TestPolicy(String) from String to String {
  * `ratio`, `enabled`), a required enum-abstract string (`policy`),
  * and a required nested struct (`nested`).
  */
-@:peg @:schema(anyparse.grammar.json.JsonFormat) @:ws
+@:peg
+@:schema(anyparse.grammar.json.JsonFormat)
+@:ws
 typedef TestConfig = {
 	var name: String;
 	var count: Int;
 	var policy: TestPolicy;
 	var nested: TestNested;
-	@:optional var tag: String;
-	@:optional var ratio: Float;
-	@:optional var enabled: Bool;
-	@:optional var extra: anyparse.grammar.json.JValue;
+	@:optional
+	var tag: String;
+	@:optional
+	var ratio: Float;
+	@:optional
+	var enabled: Bool;
+	@:optional
+	var extra: anyparse.grammar.json.JValue;
 };
 
 @:build(anyparse.macro.Build.buildParser(unit.grammar.JsonTypedFixtures.TestConfig))

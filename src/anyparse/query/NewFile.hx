@@ -547,16 +547,26 @@ typedef NewFileSpec = {
 	var className: String;
 	var pkg: String;
 	var fields: Array<String>;
-	@:optional var kind: String;
-	@:optional var isFinal: Bool;
-	@:optional var extendsList: Array<String>;
-	@:optional var underlying: String;
-	@:optional var fromList: Array<String>;
-	@:optional var toList: Array<String>;
-	@:optional var ifaceSimple: String;
-	@:optional var ifaceModule: String;
-	@:optional var ifaceSource: String;
-	@:optional var bodiesRaw: String;
+	@:optional
+	var kind: String;
+	@:optional
+	var isFinal: Bool;
+	@:optional
+	var extendsList: Array<String>;
+	@:optional
+	var underlying: String;
+	@:optional
+	var fromList: Array<String>;
+	@:optional
+	var toList: Array<String>;
+	@:optional
+	var ifaceSimple: String;
+	@:optional
+	var ifaceModule: String;
+	@:optional
+	var ifaceSource: String;
+	@:optional
+	var bodiesRaw: String;
 }
 
 /** `create` outcome: the edit (Ok canonical source / Err) plus the interface methods left as stubs. */

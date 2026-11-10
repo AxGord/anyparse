@@ -408,7 +408,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "3562406fd7e303b7",
+				"out": "cca45d892da4508d",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

@@ -30,10 +30,20 @@ class UncheckedConversionsTest extends Test {
 	private static final INERT: Array<String> = ['Int', 'Float', 'Bool', 'String', 'Void'];
 	private static final ARRAYS: Array<String> = ['Array'];
 
-	@:pin('control') @:killer('M-UNCHECKED-TARGET') @:killer('M-UNCHECKED-ESCAPED') @:killer('M-UNCHECKED-BOXED')
-	@:killer('M-UNCHECKED-STRING') @:killer('M-UNCHECKED-ARRAY') @:killer('M-UNCHECKED-POINTER') @:killer('M-UNCHECKED-ALIAS')
-	@:killer('M-UNCHECKED-ALIAS-PLACE') @:killer('M-UNCHECKED-BOXED-ALIAS') @:killer('M-NATIVE-SITE-INERT') @:killer('M-NATIVE-SITE-CORE-TYPE')
-	@:killer('M-NATIVE-SITE-ALIAS') @:killer('M-NATIVE-SITE-ARRAY-ELEMENTS')
+	@:pin('control')
+	@:killer('M-UNCHECKED-TARGET')
+	@:killer('M-UNCHECKED-ESCAPED')
+	@:killer('M-UNCHECKED-BOXED')
+	@:killer('M-UNCHECKED-STRING')
+	@:killer('M-UNCHECKED-ARRAY')
+	@:killer('M-UNCHECKED-POINTER')
+	@:killer('M-UNCHECKED-ALIAS')
+	@:killer('M-UNCHECKED-ALIAS-PLACE')
+	@:killer('M-UNCHECKED-BOXED-ALIAS')
+	@:killer('M-NATIVE-SITE-INERT')
+	@:killer('M-NATIVE-SITE-CORE-TYPE')
+	@:killer('M-NATIVE-SITE-ALIAS')
+	@:killer('M-NATIVE-SITE-ARRAY-ELEMENTS')
 	public function testAValueThatLeftTheTypeSystemSitsOnlyWhereSomeBuildKeepsIt(): Void {
 		// hxcpp converts into a scalar, a string, an array, a C pointer to scalars and an alias of one: no object sits there,
 		// whatever escaped. A nullable scalar is boxed — directly or behind an alias — and so is an array of them: once any object
@@ -60,7 +70,9 @@ class UncheckedConversionsTest extends Test {
 		Assert.isFalse(conversions([null]).none(read('Int'), true));
 	}
 
-	@:pin('control') @:killer('M-UNCHECKED-CLASS-EXTERN') @:killer('M-UNCHECKED-ALIKE')
+	@:pin('control')
+	@:killer('M-UNCHECKED-CLASS-EXTERN')
+	@:killer('M-UNCHECKED-ALIKE')
 	public function testAnInstanceOfAnotherClassSitsOnlyWhereSomeBuildKeepsIt(): Void {
 		// hxcpp checks a conversion into a program class, and nulls an instance of another: an alias of one too. An interface,
 		// an extern class and a non-core abstract keep what they are handed, as every place of another target does, and so does
@@ -83,7 +95,8 @@ class UncheckedConversionsTest extends Test {
 		Assert.isTrue(unalike.holdsForeign('Foo'));
 	}
 
-	@:pin('control') @:killer('M-FACTS-TARGET-RECORD')
+	@:pin('control')
+	@:killer('M-FACTS-TARGET-RECORD')
 	public function testAFactsFileSaysTheTargetItsBuildGeneratesCodeFor(): Void {
 		// the record the producer writes second, read per configuration; a file without one says nothing
 		final table: CompilerFacts = CompilerFacts.build([

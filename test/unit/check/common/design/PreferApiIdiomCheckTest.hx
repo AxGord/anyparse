@@ -77,31 +77,36 @@ class PreferApiIdiomCheckTest extends Test {
 	}
 
 	/** A getter hop reads code once per statement today and once in the call. */
-	@:pin('control') @:killer('M-IDIOM-GETTER-HOP')
+	@:pin('control')
+	@:killer('M-IDIOM-GETTER-HOP')
 	public function testAGetterHopInTheReceiverRefuses(): Void {
 		Assert.equals(0, violationsOf(user('h.pt2.x = 1;\n\t\th.pt2.y = 2;')).length);
 	}
 
 	/** A call may reach the written fields through an alias, and the call form evaluates every argument first. */
-	@:pin('control') @:killer('M-IDIOM-NO-PURITY')
+	@:pin('control')
+	@:killer('M-IDIOM-NO-PURITY')
 	public function testAnImpureRightHandSideRefuses(): Void {
 		Assert.equals(0, violationsOf(user('p.x = next();\n\t\tp.y = 2;')).length);
 	}
 
 	/** `p.y = p.x` reads the NEW `x` today and the old one in `setTo(1, p.x)`. */
-	@:pin('control') @:killer('M-IDIOM-NO-EARLIER-READ-GATE')
+	@:pin('control')
+	@:killer('M-IDIOM-NO-EARLIER-READ-GATE')
 	public function testReadingAFieldWrittenAboveRefuses(): Void {
 		Assert.equals(0, violationsOf(user('p.x = 1;\n\t\tp.y = p.x;')).length);
 	}
 
 	/** `q` may alias `p`, so ANY receiver's read of a field written above refuses. */
-	@:pin('control') @:killer('M-IDIOM-NO-EARLIER-READ-GATE')
+	@:pin('control')
+	@:killer('M-IDIOM-NO-EARLIER-READ-GATE')
 	public function testReadingThatFieldThroughAnotherReceiverRefuses(): Void {
 		Assert.equals(0, violationsOf(user('p.x = 1;\n\t\tp.y = q.x;')).length);
 	}
 
 	/** A subclass may override the method with one that is no longer the declared equivalence. */
-	@:pin('control') @:killer('M-IDIOM-SUBTYPES-ALWAYS')
+	@:pin('control')
+	@:killer('M-IDIOM-SUBTYPES-ALWAYS')
 	public function testASubclassReceiverRefusesUnlessDeclared(): Void {
 		Assert.equals(0, violationsOf(user('s.x = 1;\n\t\ts.y = 2;')).length);
 		Assert.equals('s.setTo(1, 2);', onlyEditText(user('s.x = 1;\n\t\ts.y = 2;'), SUBTYPES_CONFIG));
@@ -118,7 +123,8 @@ class PreferApiIdiomCheckTest extends Test {
 	}
 
 	/** The comment would be deleted with the statements, or end up describing the whole call. */
-	@:pin('control') @:killer('M-IDIOM-NO-COMMENT-GATE')
+	@:pin('control')
+	@:killer('M-IDIOM-NO-COMMENT-GATE')
 	public function testACommentInTheWindowRefuses(): Void {
 		Assert.equals(0, violationsOf(user('p.x = 1; // one\n\t\tp.y = 2;')).length);
 		Assert.equals(0, violationsOf(user('p.x = 1;\n\t\tp.y = 2; // two')).length);
@@ -133,7 +139,8 @@ class PreferApiIdiomCheckTest extends Test {
 	}
 
 	/** `setTo`'s own body writes `this.x` then `this.y`: rewriting it into `this.setTo(xa, ya)` would recurse forever. */
-	@:pin('control') @:killer('M-IDIOM-NO-SELF-TYPE-GATE')
+	@:pin('control')
+	@:killer('M-IDIOM-NO-SELF-TYPE-GATE')
 	public function testTheTypesOwnBodyIsNeverRewritten(): Void {
 		final vs: Array<Violation> = violationsOf(user('p.x = 1;\n\t\tp.y = 2;'));
 		Assert.equals(0, vs.filter(v -> v.file == 'geom/Point.hx').length, vs.map(v -> '${v.file} ${v.message}').join('\n'));
@@ -146,7 +153,8 @@ class PreferApiIdiomCheckTest extends Test {
 		Assert.isNull(new PreferApiIdiom().skipReason('app/User.hx', LintConfig.parse(CONFIG)));
 	}
 
-	@:pin('control') @:killer('M-IDIOM-READER-LENIENT')
+	@:pin('control')
+	@:killer('M-IDIOM-READER-LENIENT')
 	public function testTheReaderNamesEveryDroppedEntry(): Void {
 		final problems: Array<String> = [];
 		final specs: Array<IdiomSpec> = RuleDeclaration.idioms(
@@ -176,7 +184,8 @@ class PreferApiIdiomCheckTest extends Test {
 		Assert.same(['"idioms" is not an array — ignored'], notArray);
 	}
 
-	@:pin('control') @:killer('M-IDIOM-VALIDATE-TRUSTS')
+	@:pin('control')
+	@:killer('M-IDIOM-VALIDATE-TRUSTS')
 	public function testTheIndexRefutesADeclarationThatCannotBeTrue(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final index: SymbolIndex = CheckFixture.index(user('p.x = 1;'), plugin);

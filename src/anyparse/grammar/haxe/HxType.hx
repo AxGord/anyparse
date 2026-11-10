@@ -124,11 +124,17 @@ enum HxType {
 	 * (no corpus fixture exercises the empty form; structural
 	 * completeness leftover).
 	 */
-	@:trivia @:lead('[') @:trail(']') @:sep(',')
+	@:trivia
+	@:lead('[')
+	@:trail(']')
+	@:sep(',')
 	BracketExprListType(elems: Array<HxExpr>);
-	@:kw('#if') @:trail('#end') @:fmt(spaceBeforeTrail, propagateNestedType)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(spaceBeforeTrail, propagateNestedType)
 	ConditionalType(c: HxConditionalType);
-	@:infix('->', 0, 'Right') @:fmt(functionTypeHaxe3)
+	@:infix('->', 0, 'Right')
+	@:fmt(functionTypeHaxe3)
 	Arrow(left: HxType, right: HxType);
 
 	/**
@@ -148,13 +154,19 @@ enum HxType {
 	 * drops the cascade indent and forces one field per line under a `Next`
 	 * left curly.
 	 */
-	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';', selfEnded('anonMemberNoSep')) @:fmt(anonTypeBracesOpen,
-		anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'),
-		beforeDocCommentEmptyLines, afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'),
-		forceMultiInTypedef, keepCurlyBlanks, typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
+	@:trivia
+	@:lead('{')
+	@:trail('}')
+	@:sep(',')
+	@:sepAlt(';', selfEnded('anonMemberNoSep'))
+	@:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'),
+		rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
+		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
+		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);
 	ArrowFn(fn: HxArrowFnType);
-	@:wrap('(', ')') @:fmt(propagateNestedType)
+	@:wrap('(', ')')
+	@:fmt(propagateNestedType)
 	Parens(inner: HxType);
 
 }

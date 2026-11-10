@@ -64,7 +64,8 @@ class TypedEventConstantCheckTest extends Test {
 	}
 
 	/** The listener is handed a `ModalEvent` it declares to be a `MouseEv`: reported at the use, the constant left alone. */
-	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
+	@:pin('control')
+	@:killer('M-EVENT-NO-MISMATCH')
 	public function testALambdaListenerOfAnotherEventClassIsALatentBug(): Void {
 		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.OPEN, (e:MouseEv) -> {});');
 		final vs: Array<Violation> = violationsOf(files);
@@ -76,14 +77,16 @@ class TypedEventConstantCheckTest extends Test {
 		Assert.same([], editTexts(files, 'app/ModalEvent.hx'));
 	}
 
-	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
+	@:pin('control')
+	@:killer('M-EVENT-NO-MISMATCH')
 	public function testAMethodListenerOfASubclassIsALatentBug(): Void {
 		final vs: Array<Violation> = violationsOf(project('d.addEventListener(ModalEvent.OPEN, this.onSub);'));
 		Assert.equals(1, vs.length, messages(vs));
 		Assert.equals('listener this.onSub of ModalEvent.OPEN expects SubPopup, the event is ModalEvent', vs[0].message);
 	}
 
-	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
+	@:pin('control')
+	@:killer('M-EVENT-NO-MISMATCH')
 	public function testAFunctionTypedLocalListenerIsALatentBug(): Void {
 		final vs: Array<Violation> =
 			violationsOf(project('final held:MouseEv->Void = e -> {};\n\t\td.addEventListener(ModalEvent.OPEN, held);'));
@@ -91,7 +94,8 @@ class TypedEventConstantCheckTest extends Test {
 		Assert.equals('listener held of ModalEvent.OPEN expects MouseEv, the event is ModalEvent', vs[0].message);
 	}
 
-	@:pin('control') @:killer('M-EVENT-NO-MISMATCH')
+	@:pin('control')
+	@:killer('M-EVENT-NO-MISMATCH')
 	public function testAnEventDispatchedAsAnotherClassIsALatentBug(): Void {
 		final vs: Array<Violation> = violationsOf(project('d.dispatchEvent(new Event(ModalEvent.CLOSE));'));
 		Assert.equals(1, vs.length, messages(vs));
@@ -105,23 +109,28 @@ class TypedEventConstantCheckTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	@:pin('control') @:killer('M-EVENT-NO-USE-GATE')
+	@:pin('control')
+	@:killer('M-EVENT-NO-USE-GATE')
 	public function testAConstantNeverUsedAsAnEventTypeIsNotReported(): Void {
 		Assert.equals(0, violationsOf(project('trace(ModalEvent.UNUSED);')).length);
 	}
 
 	/** A string handed to the constructor of a class that is no event is not an event type, and no dispatch to judge. */
-	@:pin('control') @:killer('M-EVENT-ANY-NEW-IS-A-USE') @:killer('M-EVENT-NO-USE-GATE')
+	@:pin('control')
+	@:killer('M-EVENT-ANY-NEW-IS-A-USE')
+	@:killer('M-EVENT-NO-USE-GATE')
 	public function testAConstructorOfANonEventClassIsNoUse(): Void {
 		Assert.equals(0, violationsOf(project('trace(new NotEvent(ModalEvent.UNUSED));')).length);
 	}
 
-	@:pin('control') @:killer('M-EVENT-STATIC-VAR')
+	@:pin('control')
+	@:killer('M-EVENT-STATIC-VAR')
 	public function testAStaticVarIsNoConstant(): Void {
 		Assert.equals(0, violationsOf(project('d.addEventListener(ModalEvent.MUT, onEvent);')).length);
 	}
 
-	@:pin('control') @:killer('M-EVENT-NO-BASE-GATE')
+	@:pin('control')
+	@:killer('M-EVENT-NO-BASE-GATE')
 	public function testAConstantOfAClassThatIsNoEventIsNotReported(): Void {
 		Assert.equals(0, violationsOf(project('d.addEventListener(NotEvent.CLOSE, onEvent);')).length);
 	}
@@ -133,7 +142,8 @@ class TypedEventConstantCheckTest extends Test {
 	}
 
 	/** Without `to String` every comparison or String use of a retyped constant stops compiling. */
-	@:pin('control') @:killer('M-EVENT-ABSTRACT-TRUSTED')
+	@:pin('control')
+	@:killer('M-EVENT-ABSTRACT-TRUSTED')
 	public function testAnAbstractWithoutBothStringConversionsMakesTheRuleInert(): Void {
 		final config: String = CONFIG.replace('ev.EventType', 'ev.OneWay');
 		final files: Array<{ file: String, source: String }> = project('d.addEventListener(ModalEvent.CLOSE, onEvent);');

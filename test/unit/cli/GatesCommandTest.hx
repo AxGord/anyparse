@@ -8,12 +8,14 @@ import anyparse.query.cli.command.GatesCommand;
  */
 class GatesCommandTest extends Test {
 
-	@:pin('control') @:killer('M-GATES-QUOTE-BLIND')
+	@:pin('control')
+	@:killer('M-GATES-QUOTE-BLIND')
 	public function testCommaInsideASingleQuotedPredicateStaysInIt(): Void {
 		Assert.equals('a,b', GatesCommand.extractGate("trailOptShapeGate('a,b', 'init')")?.predicate);
 	}
 
-	@:pin('control') @:killer('M-GATES-QUOTE-BLIND')
+	@:pin('control')
+	@:killer('M-GATES-QUOTE-BLIND')
 	public function testCommaInsideADoubleQuotedPredicateStaysInIt(): Void {
 		Assert.equals('a,b', GatesCommand.extractGate('trailOptParseGate("a,b")')?.predicate);
 	}

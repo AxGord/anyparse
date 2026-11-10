@@ -971,7 +971,8 @@ typedef FreshContext = {
 	var source: String;
 
 	/** Whether a call node of `tree` returns an object nothing else holds; absent, no call but a built-in one is fresh. */
-	@:optional var call: Null<QueryNode -> Bool>;
+	@:optional
+	var call: Null<QueryNode -> Bool>;
 
 }
 

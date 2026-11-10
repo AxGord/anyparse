@@ -43,8 +43,8 @@ class PatchSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-DECLSPAN-FINAL-WRAPPER-BLIND')
 	public function testFinalClassHeaderIsInTheSearchRegion(): Void {
-		final source: String = 'final class X {}\n\n@:keep final class Z {}\n\nextern final class W {}\n';
-		for (header in ['final class X', '@:keep final class Z', 'extern final class W']) {
+		final source: String = 'final class X {}\n\n@:keep\nfinal class Z {}\n\nextern final class W {}\n';
+		for (header in ['final class X', '@:keep\nfinal class Z', 'extern final class W']) {
 			final name: String = header.charAt(header.length - 1);
 			assertPatch(
 				source, BySelector('ClassDecl:$name'), '$header {}', '$header implements I {}',

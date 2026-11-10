@@ -13,7 +13,8 @@ class LintCategoryCliTest extends Test {
 
 	private static final SOURCE: String = 'package p;\n\n/** C. */\nclass C {\n\t//\n\tpublic static final S:String = "a";\n}\n';
 
-	@:pin('control') @:killer('M-CATEGORY-FILTER-IGNORED')
+	@:pin('control')
+	@:killer('M-CATEGORY-FILTER-IGNORED')
 	public function testACategoryNarrowsTheRunToItsRules(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('lintcategory', [{ name: 'C.hx', source: SOURCE }]);
@@ -32,7 +33,8 @@ class LintCategoryCliTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-CATEGORY-FORCES-RULES')
+	@:pin('control')
+	@:killer('M-CATEGORY-FORCES-RULES')
 	public function testACategoryNeverEnablesWhatTheConfigDisables(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('lintcategory', [

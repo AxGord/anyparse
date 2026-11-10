@@ -33,7 +33,8 @@ class StdResolverTest extends Test {
 	 * A `HAXE_STD_PATH` listing several directories answers the one holding the std, wherever it stands in the list — the
 	 * whole value is no directory at all.
 	 */
-	@:pin('control') @:killer('M-STD-ENV-ENTRIES')
+	@:pin('control')
+	@:killer('M-STD-ENV-ENTRIES')
 	public function testMultiEntryEnvAnswersTheStdEntry(): Void {
 		Assert.equals('/h/std', StdResolver.stdEntryOf('/x/lib:/h/std', ':', p -> p == '/h/std'));
 		Assert.equals('/h/std', StdResolver.stdEntryOf('/h/std;/x/lib', ';', p -> p == '/h/std'));
@@ -284,7 +285,8 @@ class StdResolverTest extends Test {
 	}
 	#end
 
-	@:pin('control') @:killer('M-STD-SIBLING-HOMEBREW')
+	@:pin('control')
+	@:killer('M-STD-SIBLING-HOMEBREW')
 	public function testTheStdBesideTheCompilerIsFoundInEitherLayout(): Void {
 		// Homebrew ships std at `lib/haxe/std` beside `bin/haxe`; the known locations list another install first, whose
 		// std the compiler on PATH never reads.
@@ -299,7 +301,8 @@ class StdResolverTest extends Test {
 	 * `haxe`, the compiler the wrapper hands the build to — never a known location, which on a machine carrying a second
 	 * install under `/usr/local` named that one.
 	 */
-	@:pin('control') @:killer('M-STD-FIRST-HAXE-ONLY')
+	@:pin('control')
+	@:killer('M-STD-FIRST-HAXE-ONLY')
 	public function testAWrapperFirstOnPathYieldsToTheCompilerAfterIt(): Void {
 		final resolve: String -> String = bin -> bin == '/brew/bin/haxe' ? '/brew/Cellar/haxe/4/bin/haxe' : bin;
 		final exists: String -> Bool = path -> path == '/brew/Cellar/haxe/4/lib/haxe/std';
@@ -313,7 +316,8 @@ class StdResolverTest extends Test {
 	 * Where the resolved link has no std beside it, the places the compiler searches from its own spelling answer: an
 	 * installer's `/usr/local/bin/haxe` -> `/usr/local/lib/haxe/haxe`, and a `share/haxe/std` layout.
 	 */
-	@:pin('control') @:killer('M-STD-COMPILER-SEARCH-NONE')
+	@:pin('control')
+	@:killer('M-STD-COMPILER-SEARCH-NONE')
 	public function testTheCompilersOwnSearchAnswersBesideAnUnresolvedLink(): Void {
 		final installer: String -> String = bin -> '/usr/local/lib/haxe/haxe';
 		Assert.equals(

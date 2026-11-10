@@ -28,7 +28,9 @@ enum SValue {
 	// `@:fmt(cuddle)` — Lisp convention: first item cuddles to `(` and
 	// last to `)` even on break. Sister knob to JSON arrays which keep
 	// the default `[\n  items\n]` layout.
-	@:lead('(') @:trail(')') @:sep('')
+	@:lead('(')
+	@:trail(')')
+	@:sep('')
 	@:fmt(cuddle)
 	SList(items: Array<SValue>);
 }

@@ -28,7 +28,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * a capture of a `Map` parameter is an element write, not a reflective one, and a constructor
 	 * name two enums declare types the capture by the enum its subject is declared of.
 	 */
-	@:pin('control') @:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE') @:killer('M-TS-BINDER-TYPE')
+	@:pin('control')
+	@:killer('M-TS-SEAL-REFLECT-UNPLACED')
+	@:killer('M-TS-SEAL-UNPLACED-NOTICE')
+	@:killer('M-TS-BINDER-TYPE')
 	@:killer('M-TS-STORED-COMPLETE')
 	public function testAValueTheRunCannotPlaceUnsealsEveryLock(): Void {
 		#if (sys || nodejs)
@@ -59,7 +62,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * `new Other()` into an `Other`: neither class declares `_l`, which stays sealed, and the run says which exclusion
 	 * held. A fresh `D` declares it; a `var` may be bound again.
 	 */
-	@:pin('control') @:killer('M-TS-PLACE-FRESH-STRUCT') @:killer('M-TS-PLACE-FRESH-NEW') @:killer('M-TS-PLACE-FRESH-MUTABLE')
+	@:pin('control')
+	@:killer('M-TS-PLACE-FRESH-STRUCT')
+	@:killer('M-TS-PLACE-FRESH-NEW')
+	@:killer('M-TS-PLACE-FRESH-MUTABLE')
 	public function testAFreshObjectReceiverKeepsTheLockNames(): Void {
 		#if (sys || nodejs)
 		Assert.equals(0, quickTakes('final y:Dynamic = {}; Reflect.setField(y, k, _m);'), 'a fresh structure');
@@ -85,11 +91,22 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * sub-type of another module by its runtime path, its package and its name. A method's own type parameter is bounded by
 	 * its constraint alone.
 	 */
-	@:pin('control') @:killer('M-TS-PLACE-INSTANTIATIONS') @:killer('M-TS-PLACE-COMPLETE') @:killer('M-TS-PLACE-RAW-LINK')
-	@:killer('M-TS-PLACE-FREE-SUB') @:killer('M-TS-PLACE-NEVER-MADE') @:killer('M-TS-PLACE-UNDECLARED')
-	@:killer('M-TS-PLACE-GLOB-MATCH') @:killer('M-TS-PLACE-MAKES-NEW') @:killer('M-TS-PLACE-MAKES-VALUE')
-	@:killer('M-TS-PLACE-MAKES-RECEIVER') @:killer('M-TS-PLACE-VOID') @:killer('M-TS-PLACE-FORWARDED-BOUND')
-	@:killer('M-TS-PLACE-PARAM-CONSTRAINT') @:killer('M-TS-PLACE-PARAM-OWNER') @:killer('M-TS-FINAL-SUPERS-WRITTEN')
+	@:pin('control')
+	@:killer('M-TS-PLACE-INSTANTIATIONS')
+	@:killer('M-TS-PLACE-COMPLETE')
+	@:killer('M-TS-PLACE-RAW-LINK')
+	@:killer('M-TS-PLACE-FREE-SUB')
+	@:killer('M-TS-PLACE-NEVER-MADE')
+	@:killer('M-TS-PLACE-UNDECLARED')
+	@:killer('M-TS-PLACE-GLOB-MATCH')
+	@:killer('M-TS-PLACE-MAKES-NEW')
+	@:killer('M-TS-PLACE-MAKES-VALUE')
+	@:killer('M-TS-PLACE-MAKES-RECEIVER')
+	@:killer('M-TS-PLACE-VOID')
+	@:killer('M-TS-PLACE-FORWARDED-BOUND')
+	@:killer('M-TS-PLACE-PARAM-CONSTRAINT')
+	@:killer('M-TS-PLACE-PARAM-OWNER')
+	@:killer('M-TS-FINAL-SUPERS-WRITTEN')
 	@:killer('M-TS-PATH-DECLARED-PACKAGE')
 	public function testATypeParameterReceiverIsBoundedByItsInstantiations(): Void {
 		#if (sys || nodejs)
@@ -138,8 +155,12 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * such a hold or take says which member lost its name and which writers unsealed it, and the run says how many holds
 	 * lost their lock name and which precondition of the instantiation bound the run fails.
 	 */
-	@:pin('control') @:killer('M-TS-UNSEALED-NOTE') @:killer('M-TS-UNSEALED-HOLDS') @:killer('M-TS-UNSEALED-PRECONDITIONS')
-	@:killer('M-TS-UNSEALED-TAKE') @:killer('M-TS-UNSEALED-THROW')
+	@:pin('control')
+	@:killer('M-TS-UNSEALED-NOTE')
+	@:killer('M-TS-UNSEALED-HOLDS')
+	@:killer('M-TS-UNSEALED-PRECONDITIONS')
+	@:killer('M-TS-UNSEALED-TAKE')
+	@:killer('M-TS-UNSEALED-THROW')
 	public function testALockAReflectiveWriteUnsealsSaysWhoUnsealedIt(): Void {
 		#if (sys || nodejs)
 		final note: String = 'its lock member _l names no lock: a reflective write may store any lock in it (D.alias)';
@@ -171,7 +192,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * of a library `Option` or `Either` whose constructor's name a project enum declares too stays untyped, and the run
 	 * says which capture an enum constructor typed.
 	 */
-	@:pin('control') @:killer('M-TS-BINDER-SUBJECT') @:killer('M-TS-BINDER-PLACED-BY') @:killer('M-TS-BINDER-TOP')
+	@:pin('control')
+	@:killer('M-TS-BINDER-SUBJECT')
+	@:killer('M-TS-BINDER-PLACED-BY')
+	@:killer('M-TS-BINDER-TOP')
 	@:killer('M-TS-BINDER-OWN-PARAMS')
 	public function testACaptureIsTypedThroughItsSubject(): Void {
 		#if (sys || nodejs)
@@ -214,9 +238,16 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * `Type.resolveClass`. A made name that resolves to no type may be an alias of it too; a std type, a class the run
 	 * declares, a literal naming another class do not make one.
 	 */
-	@:pin('control') @:killer('M-TS-MAKES-RESOLVED') @:killer('M-TS-MAKES-LITERAL') @:killer('M-TS-MAKES-UNKNOWN')
-	@:killer('M-TS-MAKES-STD') @:killer('M-TS-MAKES-ALIAS-NOTHING') @:killer('M-TS-MAKES-ALIAS-STD')
-	@:killer('M-TS-MAKES-WILD') @:killer('M-TS-MAKES-BOUND') @:killer('M-TS-MAKES-USING')
+	@:pin('control')
+	@:killer('M-TS-MAKES-RESOLVED')
+	@:killer('M-TS-MAKES-LITERAL')
+	@:killer('M-TS-MAKES-UNKNOWN')
+	@:killer('M-TS-MAKES-STD')
+	@:killer('M-TS-MAKES-ALIAS-NOTHING')
+	@:killer('M-TS-MAKES-ALIAS-STD')
+	@:killer('M-TS-MAKES-WILD')
+	@:killer('M-TS-MAKES-BOUND')
+	@:killer('M-TS-MAKES-USING')
 	public function testEveryNameThatMakesTheClassMakesIt(): Void {
 		#if (sys || nodejs)
 		final use: String = 'n.targetObject = d; n.toTarget("_l", d._m);';
@@ -274,9 +305,17 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * included) — `_l` keeps its name, so the main thread's take of it waits for no worker, and the run names the writer
 	 * with what it stores.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-NOTHING') @:killer('M-TS-STORED-LITERAL') @:killer('M-TS-STORED-NULL')
-	@:killer('M-TS-STORED-TYPED') @:killer('M-TS-STORED-UNRELATED') @:killer('M-TS-STORED-PARAMETER')
-	@:killer('M-TS-STORED-KEPT-NOTICE') @:killer('M-TS-STORED-COUNTS') @:killer('M-TS-STORED-ENUM') @:killer('M-TS-STORED-BASIC')
+	@:pin('control')
+	@:killer('M-TS-STORED-NOTHING')
+	@:killer('M-TS-STORED-LITERAL')
+	@:killer('M-TS-STORED-NULL')
+	@:killer('M-TS-STORED-TYPED')
+	@:killer('M-TS-STORED-UNRELATED')
+	@:killer('M-TS-STORED-PARAMETER')
+	@:killer('M-TS-STORED-KEPT-NOTICE')
+	@:killer('M-TS-STORED-COUNTS')
+	@:killer('M-TS-STORED-ENUM')
+	@:killer('M-TS-STORED-BASIC')
 	@:killer('M-TS-STORED-CATCH-ALL')
 	public function testAWriteThatStoresNoLockKeepsTheLockNames(): Void {
 		#if (sys || nodejs)
@@ -308,7 +347,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * field, an `Array<Dynamic>`, a structure, a `Map<String, Dynamic>`, handed to a `Dynamic` parameter, cast, returned as
 	 * `Any` — or be one, declared so: each unseals `_l` as before, named in the run's notice.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-ANY') @:killer('M-TS-STORED-RELATED') @:killer('M-TS-STORED-ARGUMENTS')
+	@:pin('control')
+	@:killer('M-TS-STORED-ANY')
+	@:killer('M-TS-STORED-RELATED')
+	@:killer('M-TS-STORED-ARGUMENTS')
 	public function testAWriteThatMayStoreALockUnsealsAsBefore(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(SEALED, '', 'final m:Mutex = new Mutex(); Help.assign(d, "x", m);'), 'a lock');
@@ -346,8 +388,13 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * name the graph does not resolve, or spelled by a literal a reflective read may obtain it by. An optional parameter
 	 * before it lets an argument move along.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-CALLERS') @:killer('M-TS-STORED-HOLDERS')
-	@:killer('M-TS-STORED-SPELLED') @:killer('M-TS-STORED-GLOB') @:killer('M-TS-STORED-SKIPPED') @:killer('M-TS-STORED-REF')
+	@:pin('control')
+	@:killer('M-TS-STORED-CALLERS')
+	@:killer('M-TS-STORED-HOLDERS')
+	@:killer('M-TS-STORED-SPELLED')
+	@:killer('M-TS-STORED-GLOB')
+	@:killer('M-TS-STORED-SKIPPED')
+	@:killer('M-TS-STORED-REF')
 	public function testAParameterIsFollowedOnlyWhereEveryCallIsSeen(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(CLOSED, '', ''), 'no reflectiveMethodHolders');
@@ -371,7 +418,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * What a write stores costs only the lock members of a type it may be a lock of: a `Gate` stored unseals `_g`, never
 	 * the `Mutex` member `_l`; a `Mutex` stored, never `_g`.
 	 */
-	@:pin('control') @:killer('M-TS-STORED-MEMBER-TYPE') @:killer('M-TS-STORED-MARKED') @:killer('M-TS-STORED-TYPED-NOTICE')
+	@:pin('control')
+	@:killer('M-TS-STORED-MEMBER-TYPE')
+	@:killer('M-TS-STORED-MARKED')
+	@:killer('M-TS-STORED-TYPED-NOTICE')
 	public function testWhatAWriteStoresUnsealsOnlyTheLocksOfItsType(): Void {
 		#if (sys || nodejs)
 		final gate: Array<String> = gateFindings('Help.assign(d, "x", new Gate());');
@@ -394,7 +444,8 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * none, extending another — so a value typed by one may be the lock, stored directly, handed to a parameter, or held by a
 	 * parameter declared of it (review R4 F2).
 	 */
-	@:pin('control') @:killer('M-TS-ENUM-KIND')
+	@:pin('control')
+	@:killer('M-TS-ENUM-KIND')
 	public function testAStructureTypedefMayHoldALock(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(SEALED, '', 'final x:Lockable = new Mutex(); Help.assign(d, "x", x);'), 'a structure typedef');
@@ -421,7 +472,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * adds its right side — in a closure too, and filling an optional parameter left out — while a write by an operator
 	 * stores a value of the parameter's own type, a number for a `Dynamic` one (review R4 F1).
 	 */
-	@:pin('control') @:killer('M-TS-STORED-WRITTEN') @:killer('M-TS-STORED-WRITE-VALUE') @:killer('M-TS-STORED-WRITE-OPERATOR')
+	@:pin('control')
+	@:killer('M-TS-STORED-WRITTEN')
+	@:killer('M-TS-STORED-WRITE-VALUE')
+	@:killer('M-TS-STORED-WRITE-OPERATOR')
 	@:killer('M-TS-STORED-WRITE-OTHER')
 	public function testAParameterItsFunctionWritesHoldsWhatEveryWriteStores(): Void {
 		#if (sys || nodejs)
@@ -456,7 +510,10 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * A type parameter named like a class is none of it: a value declared of the type's or the function's parameter `Other`
 	 * may be whatever the type is instantiated with, a lock included (review R4 F3).
 	 */
-	@:pin('control') @:killer('M-TS-STORED-TYPE-PARAM') @:killer('M-TS-SCOPE-TYPE-PARAMS') @:killer('M-TS-SCOPE-FUNCTION-PARAMS')
+	@:pin('control')
+	@:killer('M-TS-STORED-TYPE-PARAM')
+	@:killer('M-TS-SCOPE-TYPE-PARAMS')
+	@:killer('M-TS-SCOPE-FUNCTION-PARAMS')
 	public function testATypeParameterNamedLikeAClassIsNoneOfIt(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(SEALED, '', 'new Box<Mutex>(new Mutex()).put(d, "x");', [
@@ -481,8 +538,12 @@ class ThreadSafetyReflectiveSealTest extends Test {
 	 * local or a field it initialises or writes may hold any object, a lock included; a checked `cast(e, T)` is trusted
 	 * (review R4 F4).
 	 */
-	@:pin('control') @:killer('M-TS-STORED-CAST-LOCAL') @:killer('M-TS-STORED-CAST-FIELD') @:killer('M-TS-STORED-CAST-KINDS')
-	@:killer('M-TS-STORED-CAST-DYNAMIC') @:killer('M-TS-STORED-CAST-WRITES')
+	@:pin('control')
+	@:killer('M-TS-STORED-CAST-LOCAL')
+	@:killer('M-TS-STORED-CAST-FIELD')
+	@:killer('M-TS-STORED-CAST-KINDS')
+	@:killer('M-TS-STORED-CAST-DYNAMIC')
+	@:killer('M-TS-STORED-CAST-WRITES')
 	public function testAnUncheckedCastIsNoDeclaredType(): Void {
 		#if (sys || nodejs)
 		Assert.equals(1, helperTakes(SEALED, '', 'final x:Other = cast new Mutex(); Help.assign(d, "x", x);'), 'a cast initialiser');

@@ -61,7 +61,8 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	}
 
 	/** A MODULE-LEVEL field is bound by the module's import (Haxe 4.2): `modfn()` needs `import v.Fns;` though `Fns` is never named. */
-	@:pin('control') @:killer('M-UNUSED-VALUES-BLIND', 'M-WILDGATE-MODULE-FIELDS-NONE')
+	@:pin('control')
+	@:killer('M-UNUSED-VALUES-BLIND', 'M-WILDGATE-MODULE-FIELDS-NONE')
 	public function testModuleLevelFieldUseKeepsModuleImport(): Void {
 		final mod: String = 'package v;\n\nfunction modfn(): Void {}\n\nclass Fns {}\n';
 		final use: String = 'package pkg;\n\nimport v.Fns;\n\nclass C {\n\tfunction f(): Void {\n\t\tmodfn();\n\t}\n}\n';
@@ -76,7 +77,8 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	 * Two modules each declaring `modfn`: a bare call runs the LAST import's, so that import is in use even
 	 * though nothing names its type — deleting it would silently hand the call to the other module.
 	 */
-	@:pin('control') @:killer('M-UNUSED-VALUES-BLIND')
+	@:pin('control')
+	@:killer('M-UNUSED-VALUES-BLIND')
 	public function testTheLastBinderOfAModuleLevelFieldIsKept(): Void {
 		final use: String =
 			'package pkg;\n\nimport v.Fns;\nimport v.Fns2;\n\nclass C {\n\tfunction f(): Void {\n\t\tnew Fns();\n\t\tmodfn();\n\t}\n}\n';
@@ -92,7 +94,8 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	}
 
 	/** A module whose enum carries a build macro may bind constructors no source spells, so it stays advisory. */
-	@:pin('control') @:killer('M-UNUSED-VALUES-UNLISTED-DELETED')
+	@:pin('control')
+	@:killer('M-UNUSED-VALUES-UNLISTED-DELETED')
 	public function testAModuleWhoseConstructorsCannotBeListedStaysAdvisory(): Void {
 		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
 			{ file: 'p/Built.hx', source: 'package p;\n\n@:build(p.Macro.build())\nenum Built {\n\tTeal;\n}\n' },

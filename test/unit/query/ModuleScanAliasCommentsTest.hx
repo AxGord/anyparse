@@ -8,22 +8,26 @@ import anyparse.query.ModuleScan;
  */
 class ModuleScanAliasCommentsTest extends Test {
 
-	@:pin('control') @:killer('M-MODULESCAN-COMMENTS-KEPT')
+	@:pin('control')
+	@:killer('M-MODULESCAN-COMMENTS-KEPT')
 	public function testBlockCommentBeforeTheKeywordIsNotDecoded(): Void {
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C /* z.W as */ as D;'));
 	}
 
-	@:pin('control') @:killer('M-MODULESCAN-COMMENTS-KEPT')
+	@:pin('control')
+	@:killer('M-MODULESCAN-COMMENTS-KEPT')
 	public function testLineCommentBeforeTheKeywordIsNotDecoded(): Void {
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C // z.W as\n as D;'));
 	}
 
-	@:pin('control') @:killer('M-MODULESCAN-COMMENTS-KEPT')
+	@:pin('control')
+	@:killer('M-MODULESCAN-COMMENTS-KEPT')
 	public function testUnterminatedBlockCommentRunsToTheEnd(): Void {
 		Assert.equals('', ModuleScan.aliasTargetOf('import a.b.C /* z.W as'));
 	}
 
-	@:pin('control') @:killer('M-MODULESCAN-STRINGS-KEPT')
+	@:pin('control')
+	@:killer('M-MODULESCAN-STRINGS-KEPT')
 	public function testWordsInsideAStringLiteralAreNotDecoded(): Void {
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C "z.W as" as D;'));
 		Assert.equals('as', ModuleScan.aliasKeywordOf('import a.b.C \'z.W in\' as D;'));
@@ -35,7 +39,8 @@ class ModuleScanAliasCommentsTest extends Test {
 		Assert.equals('', ModuleScan.aliasTargetOf('import a.b.C;'));
 	}
 
-	@:pin('control') @:killer('M-FRAGMENT-REGIONS-STRING-BLIND')
+	@:pin('control')
+	@:killer('M-FRAGMENT-REGIONS-STRING-BLIND')
 	public function testSlashesInsideAStringLiteralAreNotAComment(): Void {
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C "//" as D;'));
 		Assert.equals('a.b.C', ModuleScan.aliasTargetOf('import a.b.C \'/*\' as D;'));

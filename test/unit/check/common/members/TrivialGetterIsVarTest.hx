@@ -105,9 +105,9 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 	/** Only the `@:isVar` token goes; a sibling metadata annotation on the same line survives. */
 	public function testIsVarDropsOnlyItsOwnMeta(): Void {
 		final fixed: String = fixedText(
-			cls('@:isVar @:noCompletion public var angle(get, null):Float;\n\tfunction get_angle():Float return angle;')
+			cls('@:isVar\n\t@:noCompletion\n\tpublic var angle(get, null):Float;\n\tfunction get_angle():Float return angle;')
 		);
-		Assert.isTrue(fixed.indexOf('@:noCompletion public var angle(default, null):Float;') >= 0);
+		Assert.isTrue(fixed.indexOf('@:noCompletion\n\tpublic var angle(default, null):Float;') >= 0);
 		Assert.equals(-1, fixed.indexOf('@:isVar'));
 	}
 

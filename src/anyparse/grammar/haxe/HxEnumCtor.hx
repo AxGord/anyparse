@@ -28,7 +28,9 @@ enum HxEnumCtor {
 	SimpleCtor(decl: HxEnumSimpleCtorDecl);
 
 	/** A `#if` region of whole constructors; see `HxConditionalEnumMember`. */
-	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalEnumMember);
 
 }

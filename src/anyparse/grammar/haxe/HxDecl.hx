@@ -39,21 +39,29 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxDecl {
 
-	@:kw('package') @:trail(';')
+	@:kw('package')
+	@:trail(';')
 	PackageDecl(path: HxTypeName);
-	@:kw('package') @:trail(';')
+	@:kw('package')
+	@:trail(';')
 	PackageEmpty;
-	@:kw('import') @:trail(';')
+	@:kw('import')
+	@:trail(';')
 	ImportWildDecl(path: HxWildPath);
-	@:kw('using') @:trail(';')
+	@:kw('using')
+	@:trail(';')
 	UsingWildDecl(path: HxWildPath);
-	@:kw('import') @:trail(';')
+	@:kw('import')
+	@:trail(';')
 	ImportAliasDecl(decl: HxImportAlias);
-	@:kw('import') @:trail(';')
+	@:kw('import')
+	@:trail(';')
 	ImportAliasInDecl(decl: HxImportAliasIn);
-	@:kw('import') @:trail(';')
+	@:kw('import')
+	@:trail(';')
 	ImportDecl(path: HxTypeName);
-	@:kw('using') @:trail(';')
+	@:kw('using')
+	@:trail(';')
 	UsingDecl(path: HxTypeName);
 	ClassDecl(decl: HxClassDecl);
 	@:trailOpt(';')
@@ -80,7 +88,8 @@ enum HxDecl {
 	 * `@:enum` tag rides the `HxTopLevelDecl.meta` Star and reaches the
 	 * plain `AbstractDecl` branch.
 	 */
-	@:kw('enum') @:fmt(propagateEnumAbstractContext)
+	@:kw('enum')
+	@:fmt(propagateEnumAbstractContext)
 	EnumAbstractDecl(decl: HxAbstractDecl);
 	EnumDecl(decl: HxEnumDecl);
 	InterfaceDecl(decl: HxInterfaceDecl);
@@ -102,7 +111,8 @@ enum HxDecl {
 	@:kw('abstract')
 	AbstractClassDecl(decl: HxClassDecl);
 	AbstractDecl(decl: HxAbstractDecl);
-	@:kw('var') @:trailOpt(';')
+	@:kw('var')
+	@:trailOpt(';')
 	VarDecl(decl: HxVarDecl);
 
 	/**
@@ -117,7 +127,8 @@ enum HxDecl {
 	 * after `VarDecl`, before `FnDecl`, mirroring the `HxClassMember`
 	 * `VarMember`/`FinalMember`/`FnMember` ordering.
 	 */
-	@:kw('final') @:trailOpt(';')
+	@:kw('final')
+	@:trailOpt(';')
 	FinalDecl(decl: HxFinalDecl);
 	@:kw('function')
 	FnDecl(decl: HxFnDecl);
@@ -154,7 +165,9 @@ enum HxDecl {
 	 * matter for `#if` because no other `HxDecl` ctor's keyword starts
 	 * with `#`.
 	 */
-	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
+	@:kw('#if')
+	@:trail('#end')
+	@:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalDecl);
 
 	/**

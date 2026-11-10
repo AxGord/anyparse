@@ -172,9 +172,9 @@ class NamingCheckHoistFixTest extends NamingCheckTestBase {
 	/** Haxe rejects a static field on a `@:generic` class outright, so the receiving type must allow one. */
 	public function testRenamesLocalInGenericClass(): Void {
 		final src: String =
-			'package pkg;\n\n@:generic class C<T> {\n\tpublic function f():Void {\n\t\tfinal PAD:Int = 40;\n\t\ttrace(PAD);\n\t}\n}';
+			'package pkg;\n\n@:generic\nclass C<T> {\n\tpublic function f():Void {\n\t\tfinal PAD:Int = 40;\n\t\ttrace(PAD);\n\t}\n}';
 		assertRenamedIn(
-			'pkg/C.hx', src, '@:generic class C<T> {\n\tpublic function f():Void {\n\t\tfinal pad:Int = 40;', 'static inline final PAD'
+			'pkg/C.hx', src, '@:generic\nclass C<T> {\n\tpublic function f():Void {\n\t\tfinal pad:Int = 40;', 'static inline final PAD'
 		);
 	}
 

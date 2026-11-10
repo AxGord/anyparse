@@ -46,31 +46,36 @@ class WrittenNameDeclarationsTest extends Test {
 		{ file: 't/T.hx', source: 'package t;\n\n#if a\nclass T {}\n#else\nclass T {}\n#end\n' }
 	];
 
-	@:pin('control') @:killer('M-MAY-DENOTE-NEVER-BOUND')
+	@:pin('control')
+	@:killer('M-MAY-DENOTE-NEVER-BOUND')
 	public function testANameItsFileBindsMeansThatDeclarationAlone(): Void {
 		Assert.equals('p/Base.hx', denoted('Base', 'r/Imported.hx'), 'the import, not the other package\'s namesake');
 		Assert.equals('p/Base.hx', denoted('p.Base', 'r/Free.hx'), 'the path it writes');
 	}
 
-	@:pin('control') @:killer('M-MAY-DENOTE-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-MAY-DENOTE-NO-WIDENING')
 	public function testANameItsFileBindsToNothingMayMeanEveryDeclaration(): Void {
 		Assert.equals(BOTH, denoted('Base', 'r/Free.hx'), 'a bare name nothing in the file binds');
 		Assert.equals(BOTH, denoted('Base', null), 'no file to read it in');
 		Assert.equals('', denoted('Missing', 'r/Free.hx'), 'a name no declaration carries');
 	}
 
-	@:pin('control') @:killer('M-MAY-DENOTE-WHOLE-SPELLING')
+	@:pin('control')
+	@:killer('M-MAY-DENOTE-WHOLE-SPELLING')
 	public function testAPathNothingHoldsWidensByItsSimpleName(): Void {
 		Assert.equals(BOTH, denoted('x.y.Base', 'r/Free.hx'));
 	}
 
-	@:pin('control') @:killer('M-MAY-DENOTE-ONE-BOUND-ONLY')
+	@:pin('control')
+	@:killer('M-MAY-DENOTE-ONE-BOUND-ONLY')
 	public function testTwoCopiesTheFileBindsAreThoseTwoNeverAnotherPackagesNamesake(): Void {
 		final index: SymbolIndex = indexOf(COPIES);
 		Assert.equals('a/s/Dup.hx,b/s/Dup.hx', filesOf(index.refs.mayDenote('Dup', index.fileInfo('r/User.hx'))));
 	}
 
-	@:pin('control') @:killer('M-HOPS-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-HOPS-NO-WIDENING')
 	public function testASupertypeLinkNothingResolvesWidensForTheVeto(): Void {
 		final index: SymbolIndex = indexOf(BASES);
 		Assert.equals('p/Base.hx', hopsOf(index, 'r/Imported.hx', 'Imported'), 'a resolved link');
@@ -79,14 +84,16 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.equals(BOTH, hopsOf(index, 'r/Generic.hx', 'Generic'), 'a link with type arguments');
 	}
 
-	@:pin('control') @:killer('M-VERDICT-UNDECLARED-MAYBE', 'M-VERDICT-DECLARED-FALSE')
+	@:pin('control')
+	@:killer('M-VERDICT-UNDECLARED-MAYBE', 'M-VERDICT-DECLARED-FALSE')
 	public function testASubtypeStartReadsTheCensusOfItsName(): Void {
 		final index: SymbolIndex = indexOf(BASES);
 		Assert.equals(false, SupertypeWalk.verdict(index.refs, 'Missing', 'Free'), 'a name no declaration carries');
 		Assert.isNull(SupertypeWalk.verdict(index.refs, 'Base', 'Free'), 'a name two declarations carry');
 	}
 
-	@:pin('control') @:killer('M-WRITTEN-DECL-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-WRITTEN-DECL-NO-WIDENING')
 	public function testAWrittenDeclarationIsTheOneBoundElseEveryOne(): Void {
 		final index: SymbolIndex = indexOf(BASES);
 		final at: QueryNode = new HaxeQueryPlugin().parseFile(BASES[0].source);
@@ -95,31 +102,36 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.equals(BOTH, filesOf(CallReturns.writtenDeclaration('Base', at, index, 'absent.hx')), 'no such file');
 	}
 
-	@:pin('control') @:killer('M-WRITTEN-DECL-TWO-COPIES-WIDEN')
+	@:pin('control')
+	@:killer('M-WRITTEN-DECL-TWO-COPIES-WIDEN')
 	public function testAWrittenDeclarationOfTwoBoundCopiesIsThoseTwo(): Void {
 		final index: SymbolIndex = indexOf(COPIES);
 		final at: QueryNode = new HaxeQueryPlugin().parseFile(COPIES[0].source);
 		Assert.equals('a/s/Dup.hx,b/s/Dup.hx', filesOf(CallReturns.writtenDeclaration('Dup', at, index, 'r/User.hx')));
 	}
 
-	@:pin('control') @:killer('M-INDEX-ELEMENT-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-INDEX-ELEMENT-NO-WIDENING')
 	public function testAnElementReadOfATypeTheFileDoesNotBindReadsItsDeclaration(): Void {
 		Assert.equals('String', typed('IndexAccess', 'u[0]'));
 	}
 
-	@:pin('control') @:killer('M-OPERAND-END-NO-WIDENING')
+	@:pin('control')
+	@:killer('M-OPERAND-END-NO-WIDENING')
 	public function testAnOperandOfATypeTheFileDoesNotBindReadsItsOneDeclaration(): Void {
 		Assert.equals('U', typed('Add', 'u + u'));
 	}
 
-	@:pin('control') @:killer('M-DECLARES-NAME-FALSE', 'M-DECLARES-NAME-TRUE')
+	@:pin('control')
+	@:killer('M-DECLARES-NAME-FALSE', 'M-DECLARES-NAME-TRUE')
 	public function testTheCensusAsksTheWholeIndexAndNoFile(): Void {
 		final index: SymbolIndex = indexOf(BASES);
 		Assert.isTrue(index.refs.declaresName('Base'));
 		Assert.isFalse(index.refs.declaresName('Missing'));
 	}
 
-	@:pin('control') @:killer('M-DECLARED-OUTSIDE-STD-FALSE', 'M-DECLARED-OUTSIDE-STD-TRUE')
+	@:pin('control')
+	@:killer('M-DECLARED-OUTSIDE-STD-FALSE', 'M-DECLARED-OUTSIDE-STD-TRUE')
 	public function testOnlyAFileOutsideTheStdShadowsAName(): Void {
 		final std: Null<String> = StdResolver.stdDir();
 		if (std == null) {
@@ -136,7 +148,8 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.isFalse(index.refs.declaredOutsideStd('ZzMissing'), 'nothing declares it');
 	}
 
-	@:pin('control') @:killer('M-MEMBER-IMPORT-NONE')
+	@:pin('control')
+	@:killer('M-MEMBER-IMPORT-NONE')
 	public function testAMemberImportIsNamedByItsStatement(): Void {
 		final index: SymbolIndex = indexOf([
 			{ file: 'p/Base.hx', source: 'package p;\n\nclass Base {\n\tpublic static function make() {}\n}\n' },
@@ -149,23 +162,27 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.isNull(TypeRefIndex.memberImportOf(user, 'Other', ['make']), 'another type');
 	}
 
-	@:pin('control') @:killer('M-MAY-ANSWER-WIDENS-A-PATH')
+	@:pin('control')
+	@:killer('M-MAY-ANSWER-WIDENS-A-PATH')
 	public function testAnElementReadOfAPathNothingHoldsAnswersNothing(): Void {
 		Assert.isNull(typedAs('x.U', 'IndexAccess', 'u[0]'));
 	}
 
-	@:pin('control') @:killer('M-MAY-ANSWER-WIDENS-A-PATH')
+	@:pin('control')
+	@:killer('M-MAY-ANSWER-WIDENS-A-PATH')
 	public function testAnOperandOfAPathNothingHoldsAnswersNothing(): Void {
 		Assert.isNull(typedAs('x.U', 'Add', 'u + u'));
 	}
 
-	@:pin('control') @:killer('M-MAY-ANSWER-NEVER-BOUND')
+	@:pin('control')
+	@:killer('M-MAY-ANSWER-NEVER-BOUND')
 	public function testAPathTheIndexHoldsStillAnswers(): Void {
 		Assert.equals('String', typedAs('b.U', 'IndexAccess', 'u[0]'));
 		Assert.equals('U', typedAs('b.U', 'Add', 'u + u'));
 	}
 
-	@:pin('control') @:killer('M-ONLY-DECLARATION-FIRST', 'M-ONLY-DECLARATION-NONE')
+	@:pin('control')
+	@:killer('M-ONLY-DECLARATION-FIRST', 'M-ONLY-DECLARATION-NONE')
 	public function testAnOnlyDeclarationIsTheOneOfItsName(): Void {
 		final index: SymbolIndex = indexOf(BASES);
 		Assert.equals('r/Free.hx', index.refs.onlyDeclaration('Free')?.file.file);
@@ -174,7 +191,8 @@ class WrittenNameDeclarationsTest extends Test {
 		Assert.equals('t/T.hx', indexOf(TWINS).refs.onlyDeclaration('T')?.file.file);
 	}
 
-	@:pin('control') @:killer('M-DECLARING-PATHS-EMPTY', 'M-DECLARINGFILES-EMPTY')
+	@:pin('control')
+	@:killer('M-DECLARING-PATHS-EMPTY', 'M-DECLARINGFILES-EMPTY')
 	public function testARefusalNamesEveryDeclaringFile(): Void {
 		final found: Array<String> = indexOf(BASES).refs.declaringPaths('Base');
 		found.sort(Compare.compareString);

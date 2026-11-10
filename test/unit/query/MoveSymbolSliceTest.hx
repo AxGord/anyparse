@@ -2232,7 +2232,8 @@ class MoveSymbolSliceTest extends Test {
 	 * Compile-proved on 4.3.7: the moved `use()` returns `Sib.go()` from `p.Host` as it did from `p.Mover`.
 	 */
 	@:pin('control')
-	@:killer('M-CARRY-OWN-SUB-UNCARRIED') @:killer('M-CARRY-OWN-SUB-PRIVATE')
+	@:killer('M-CARRY-OWN-SUB-UNCARRIED')
+	@:killer('M-CARRY-OWN-SUB-PRIVATE')
 	public function testAStaticReceiverOnASiblingSubTypeIsCarried(): Void {
 		inline function scope(sib: String): Array<{ file: String, source: String }> {
 			return [
@@ -2749,7 +2750,8 @@ class MoveSymbolSliceTest extends Test {
 	 * the pattern resolves it from the subject's type, which the move leaves alone, and an import written
 	 * for it could re-resolve another statement's same-named constructor. The file naming the type is repaired.
 	 */
-	@:pin('control') @:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
+	@:pin('control')
+	@:killer('M-STATEMENTLESS-SCANS-BOUND-NAMES')
 	public function testAStatementlessFileReadingAMovedEnumsConstructorOnlyThroughACasePatternGetsNoImport(): Void {
 		final changes: Array<MoveChange> = okChanges('p/Colour.hx', 3, 6, 'p/Dest.hx', [
 			{ file: 'p/Colour.hx', source: 'package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}' },

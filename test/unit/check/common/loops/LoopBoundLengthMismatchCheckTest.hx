@@ -22,7 +22,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	private static final CONSTANTS: String = '\n\nclass G {\n\tpublic static inline final N:Int = 4;\n}';
 
 	/** A field filled in the constructor to a parameter, read by a loop running to a constant: the motivating shape. */
-	@:pin('control') @:killer('M-LOOPBOUND-SILENT')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SILENT')
 	public function testAFieldFilledInTheConstructorIsReportedAgainstAnUnrelatedBound(): Void {
 		final vs: Array<Violation> = violations(GRID);
 		Assert.equals(1, vs.length);
@@ -32,7 +33,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A local filled by a loop of its own block; the loop that runs to the same bound is not reported. */
-	@:pin('control') @:killer('M-LOOPBOUND-SILENT')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SILENT')
 	public function testALocalFilledByALoopIsReported(): Void {
 		final vs: Array<Violation> = violations(fn(
 			'final xs:Array<Int> = [];\n\t\tfor (k in 0...n) xs.push(k);\n'
@@ -43,7 +45,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A literal's length is its element count. */
-	@:pin('control') @:killer('M-LOOPBOUND-SILENT')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SILENT')
 	public function testALiteralIsItsElementCount(): Void {
 		final vs: Array<Violation> = violations(
 			'class C {\n\tstatic final DIRS:Array<Int> = [1, 2, 3, 4];\n\n\tfunction f():Void {\n\t\tfor (i in 0...4) trace(DIRS[i]);\n'
@@ -54,7 +57,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A fixed-length construction is a length, and an index WRITE does not resize it. */
-	@:pin('control') @:killer('M-LOOPBOUND-SILENT', 'M-LOOPBOUND-FIXED-WRITE')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SILENT', 'M-LOOPBOUND-FIXED-WRITE')
 	public function testAFixedLengthConstructionIsItsArgument(): Void {
 		final vs: Array<Violation> = violations(
 			fn('final v:haxe.ds.Vector<Int> = new haxe.ds.Vector(3);\n\t\tv[0] = 1;\n\t\tfor (i in 0...n) trace(v[i]);')
@@ -64,7 +68,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** The simple name counts when the file imports exactly the fixed-length type's path. */
-	@:pin('control') @:killer('M-LOOPBOUND-SILENT')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SILENT')
 	public function testAnImportedSimpleNameIsTheFixedLengthType(): Void {
 		Assert.equals(
 			1,
@@ -73,13 +78,15 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** Without that import `Vector` may be a growable one (OpenFL's), so its length is not known. */
-	@:pin('control') @:killer('M-LOOPBOUND-VECTOR-IMPORT')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-VECTOR-IMPORT')
 	public function testAnUnimportedVectorIsNoFixedLengthType(): Void {
 		Assert.equals(0, violations(fn('final v:Vector<Int> = new Vector(3);\n\t\tfor (i in 0...n) trace(v[i]);')).length);
 	}
 
 	/** Constants fold: `4 + 1` is `5`. */
-	@:pin('control') @:killer('M-LOOPBOUND-FOLD-OFF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-FOLD-OFF')
 	public function testFoldedConstantsCompareByValue(): Void {
 		Assert.equals(
 			0,
@@ -90,13 +97,15 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A bound that names the array itself is related to its length by construction. */
-	@:pin('control') @:killer('M-LOOPBOUND-RELATED-OFF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-RELATED-OFF')
 	public function testABoundNamingTheArrayIsRelated(): Void {
 		Assert.equals(0, violations(fn(fill('xs') + '\t\tfor (i in 0...xs.length - 1) trace(xs[i]);')).length);
 	}
 
 	/** Arrays appended in one loop share its bound, so one's `length` bounds the other. */
-	@:pin('control') @:killer('M-LOOPBOUND-RELATED-OFF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-RELATED-OFF')
 	public function testParallelArraysShareTheirBound(): Void {
 		Assert.equals(
 			0,
@@ -108,7 +117,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A read of `xs[i + 1]` moves the loop's reach one past its bound. */
-	@:pin('control') @:killer('M-LOOPBOUND-REACH-IGNORED')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-REACH-IGNORED')
 	public function testAReadPastTheIndexMovesTheReach(): Void {
 		final vs: Array<Violation> = violations(
 			'class C {\n\tstatic final F:Array<Int> = [1, 2, 3, 4, 5];\n\n\tfunction f():Void {\n'
@@ -121,31 +131,36 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** An array handed to a call may be resized there. */
-	@:pin('control') @:killer('M-LOOPBOUND-ADMIT-ALL')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-ADMIT-ALL')
 	public function testAnArrayHandedOutHasNoKnownLength(): Void {
 		Assert.equals(0, violations(fn(fill('xs') + '\t\tconsume(xs);\n\t\tfor (i in 0...n + 1) trace(xs[i]);')).length);
 	}
 
 	/** An append outside the fill loop changes the length. */
-	@:pin('control') @:killer('M-LOOPBOUND-ADMIT-ALL')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-ADMIT-ALL')
 	public function testAnAppendOutsideTheFillLoopRefuses(): Void {
 		Assert.equals(0, violations(GRID.replace('function f():Void {', 'function f():Void {\n\t\tpoints.push(9);')).length);
 	}
 
 	/** An index write extends an array. */
-	@:pin('control') @:killer('M-LOOPBOUND-ARRAY-WRITE')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-ARRAY-WRITE')
 	public function testAnIndexWriteExtendsAnArray(): Void {
 		Assert.equals(0, violations(fn(fill('xs') + '\t\txs[n] = 1;\n\t\tfor (i in 0...n + 1) trace(xs[i]);')).length);
 	}
 
 	/** A public field may be changed from another file. */
-	@:pin('control') @:killer('M-LOOPBOUND-PUBLIC')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-PUBLIC')
 	public function testAPublicFieldIsNotConfined(): Void {
 		Assert.equals(0, violations(GRID.replace('\tvar points', '\tpublic var points')).length);
 	}
 
 	/** A subtype that mentions the field may change it. */
-	@:pin('control') @:killer('M-LOOPBOUND-CONFINED-OFF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-CONFINED-OFF')
 	public function testASubtypeMentioningTheFieldRefuses(): Void {
 		final sub: String = 'class H extends G {\n\tfunction g():Void {\n\t\tpoints.push(1);\n\t}\n}';
 		Assert.equals(
@@ -157,7 +172,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A fill loop that may leave an iteration early appends fewer elements than its bound. */
-	@:pin('control') @:killer('M-LOOPBOUND-EXITS')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-EXITS')
 	public function testAFillLoopThatMayJumpRefuses(): Void {
 		Assert.equals(
 			0,
@@ -180,13 +196,15 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A loop that only writes the array reads nothing past its end. */
-	@:pin('control') @:killer('M-LOOPBOUND-WRITE-READ')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-WRITE-READ')
 	public function testALoopThatOnlyWritesIsNotReported(): Void {
 		Assert.equals(0, violations(fn('final v:haxe.ds.Vector<Int> = new haxe.ds.Vector(3);\n\t\tfor (i in 0...n) v[i] = 0;')).length);
 	}
 
 	/** A loop inside the fill loop reads an array still being filled, which is not the length this check compares. */
-	@:pin('control') @:killer('M-LOOPBOUND-NESTED-FILL')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-NESTED-FILL')
 	public function testALoopInsideTheFillLoopIsNotChecked(): Void {
 		Assert.equals(
 			0,
@@ -197,13 +215,15 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A binder taking the field's name makes its bare occurrences ambiguous. */
-	@:pin('control') @:killer('M-LOOPBOUND-SHADOW')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SHADOW')
 	public function testABinderTakingTheNameRefuses(): Void {
 		Assert.equals(0, violations(GRID.replace('function f():Void {', 'function h(points:Int):Void {}\n\n\tfunction f():Void {')).length);
 	}
 
 	/** A local's name spelled ahead of its declaration belongs to another binding, so the local's length is not proven there. */
-	@:pin('control') @:killer('M-LOOPBOUND-AHEAD')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-AHEAD')
 	public function testANameAheadOfTheLocalRefuses(): Void {
 		Assert.equals(
 			0,
@@ -215,7 +235,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A literal holding a comprehension has no fixed element count. */
-	@:pin('control') @:killer('M-LOOPBOUND-UNSIZED')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-UNSIZED')
 	public function testAComprehensionLiteralIsNoLength(): Void {
 		Assert.equals(
 			0,
@@ -227,7 +248,8 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** A static field is filled once per construction, so its length grows with every instance. */
-	@:pin('control') @:killer('M-LOOPBOUND-STATIC-FILL')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-STATIC-FILL')
 	public function testAStaticFieldFilledInTheConstructorRefuses(): Void {
 		Assert.equals(
 			0,
@@ -239,13 +261,15 @@ class LoopBoundLengthMismatchCheckTest extends Test {
 	}
 
 	/** `this.points` is an occurrence of the field like the bare name. */
-	@:pin('control') @:killer('M-LOOPBOUND-SELF-REF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-SELF-REF')
 	public function testASelfQualifiedReadIsAnOccurrence(): Void {
 		Assert.equals(1, violations(GRID.replace('trace(points[i])', 'trace(this.points[i])')).length);
 	}
 
 	/** A declared type that is not the array type the source builds refuses. */
-	@:pin('control') @:killer('M-LOOPBOUND-TYPE-OFF')
+	@:pin('control')
+	@:killer('M-LOOPBOUND-TYPE-OFF')
 	public function testADeclaredTypeOtherThanTheBuiltOneRefuses(): Void {
 		Assert.equals(
 			0,

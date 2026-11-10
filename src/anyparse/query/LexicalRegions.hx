@@ -26,7 +26,8 @@ typedef LexRegion = {
 	 * The code holes of an interpolating literal, in source order; absent on every other region. The bytes
 	 * between the holes are the literal's text.
 	 */
-	@:optional final holes: Null<Array<LexHole>>;
+	@:optional
+	final holes: Null<Array<LexHole>>;
 
 };
 

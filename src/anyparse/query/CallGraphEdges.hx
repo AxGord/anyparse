@@ -1571,7 +1571,8 @@ private typedef MethodRef = {
 	var dispatch: Null<String>;
 
 	/** For a module-level function's use bound per build, every function it may run (`moduleBinding`), `id` first; else null. */
-	@:optional var bodies: Null<Array<String>>;
+	@:optional
+	var bodies: Null<Array<String>>;
 
 }
 

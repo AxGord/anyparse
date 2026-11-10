@@ -20,7 +20,8 @@ class JValueToolsFieldTest extends Test {
 		Assert.isNull(JValueTools.field(null, 'a'));
 	}
 
-	@:pin('control') @:killer('M-JVALUE-FIELD-NULL-HELD')
+	@:pin('control')
+	@:killer('M-JVALUE-FIELD-NULL-HELD')
 	public function testAKeyHoldingNullIsAbsent(): Void {
 		Assert.isNull(JValueTools.field(JValueParser.parse('{"a": null}'), 'a'));
 	}

@@ -26,7 +26,8 @@ final class JValueDocumentTest extends Test {
 		);
 	}
 
-	@:pin('control') @:killer('M-TABBED-OPTIONS-SPACES')
+	@:pin('control')
+	@:killer('M-TABBED-OPTIONS-SPACES')
 	public function testATabbedDocumentIndentsEachLevelByOneTab(): Void {
 		final value: JValue = JValueParser.parse('{"e":{"a":[1]},"o":{}}');
 		Assert.equals(

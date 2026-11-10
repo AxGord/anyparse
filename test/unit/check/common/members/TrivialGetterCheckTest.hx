@@ -21,7 +21,8 @@ import anyparse.query.SymbolIndex;
  */
 class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 
-	@:pin('control') @:killer('M-SUBOVERRIDE-TRUE')
+	@:pin('control')
+	@:killer('M-SUBOVERRIDE-TRUE')
 	public function testBasicBlockBodyFlagged(): Void {
 		final vs: Array<Violation> = violations(cls(
 			'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'

@@ -30,7 +30,11 @@ class EnumCtorRenameTest extends Test {
 	 * importing the enum, the constructor's own import and the bare call it licenses, and a dotted pattern beside a bare
 	 * one under a subject typed as the enum — every spelling renames, nothing else moves.
 	 */
-	@:pin('control') @:killer('M-CTOR-NOT-A-MEMBER') @:killer('M-CTOR-BARE-KEPT') @:killer('M-CTOR-IMPORT-KEPT') @:killer('M-CTOR-RETURN-CALL-UNPROVEN')
+	@:pin('control')
+	@:killer('M-CTOR-NOT-A-MEMBER')
+	@:killer('M-CTOR-BARE-KEPT')
+	@:killer('M-CTOR-IMPORT-KEPT')
+	@:killer('M-CTOR-RETURN-CALL-UNPROVEN')
 	public function testEveryReferenceOfAConstructorRenames(): Void {
 		final changes: Array<FileChange> = ok(run(scope([])));
 		Assert.equals(ENUM.replace('A(', 'Alpha('), source(changes, 'pkg/E.hx'));
@@ -40,7 +44,8 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** A receiver naming the enum under another name — an import alias, a typedef — reaches the constructor too. */
-	@:pin('control') @:killer('M-CTOR-ALIAS-RECEIVER-KEPT')
+	@:pin('control')
+	@:killer('M-CTOR-ALIAS-RECEIVER-KEPT')
 	public function testAnAliasOrATypedefOfTheEnumReachesItsConstructor(): Void {
 		final alias: String =
 			'package other;\n\nimport pkg.E as F;\n\nclass Alias {\n\tpublic static function make(): F {\n\t\treturn F.A(5);\n\t}\n}\n';
@@ -64,7 +69,8 @@ class EnumCtorRenameTest extends Test {
 	 * A bare spelling under a subject whose type nothing proves — Haxe resolves it from the expected type, which the op
 	 * cannot read — refuses the whole rename instead of leaving that pattern on the old name.
 	 */
-	@:pin('control') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	@:pin('control')
+	@:killer('M-CTOR-UNPROVEN-RENAMED')
 	public function testAnUnprovableBareSpellingRefusesTheRename(): Void {
 		final blind: String = 'package other;\n\nclass Blind {\n\tpublic static function value(): Int {\n'
 			+ '\t\treturn switch pkg.E.Use.make() {\n\t\t\tcase A(x): x;\n\t\t\tcase _: 0;\n\t\t}\n\t}\n}\n';
@@ -72,14 +78,17 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** Another enum hosting either name makes a bare spelling mean either, so the rename is refused. */
-	@:pin('control') @:killer('M-CTOR-RIVAL-IGNORED') @:killer('M-CTOR-TAKEN-IGNORED')
+	@:pin('control')
+	@:killer('M-CTOR-RIVAL-IGNORED')
+	@:killer('M-CTOR-TAKEN-IGNORED')
 	public function testAValueOfEitherNameOnAnotherEnumRefuses(): Void {
 		refused(run(scope([{ file: 'other/F.hx', source: 'package other;\n\nenum F {\n\tA;\n}\n' }])), '"F" also hosts');
 		refused(run(scope([{ file: 'other/G.hx', source: 'package other;\n\nenum G {\n\tAlpha;\n}\n' }])), '"G" already hosts');
 	}
 
 	/** A local holding the new name would capture the renamed call. */
-	@:pin('control') @:killer('M-CTOR-CAPTURE-UNCHECKED')
+	@:pin('control')
+	@:killer('M-CTOR-CAPTURE-UNCHECKED')
 	public function testANewNameALocalHoldsRefuses(): Void {
 		final local: String = 'package other;\n\nimport pkg.E;\n\nclass Local {\n\tpublic static function make(): E {\n'
 			+ '\t\tfinal Alpha: Int = 1;\n\t\treturn A(Alpha);\n\t}\n}\n';
@@ -87,7 +96,8 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** An inherited member holding the new name would bind the renamed call, and the reference index cannot see it. */
-	@:pin('control') @:killer('M-CTOR-NEW-NAME-OUTRANKED')
+	@:pin('control')
+	@:killer('M-CTOR-NEW-NAME-OUTRANKED')
 	public function testANewNameAnInheritedMemberHoldsRefuses(): Void {
 		final base: String = 'package other;\n\nclass Base {\n\tpublic var Alpha: Int = 1;\n\n\tpublic function new() {}\n}\n';
 		final member: String =
@@ -102,7 +112,8 @@ class EnumCtorRenameTest extends Test {
 	 * A bare spelling of the new name that already means something — here a statically imported function — would be taken
 	 * over by the renamed constructor, which 4.3.7 resolves first whatever the import order.
 	 */
-	@:pin('control') @:killer('M-CTOR-NEW-NAME-TAKEN-OVER')
+	@:pin('control')
+	@:killer('M-CTOR-NEW-NAME-TAKEN-OVER')
 	public function testANewNameAnImportedStaticSpellsRefuses(): Void {
 		final stat: String = 'package other;\n\nimport pkg.E;\nimport other.Fn.Alpha;\n\nclass Stat {\n'
 			+ '\tpublic static function make(): Int {\n\t\treturn Alpha(1);\n\t}\n}\n';
@@ -117,7 +128,8 @@ class EnumCtorRenameTest extends Test {
 	 * A pattern variable spelling the new name in a file that does NOT import the enum: Haxe reads a pattern identifier
 	 * against the subject's enum first, so the capture would turn into the renamed constructor (`2,2` became `3,2`).
 	 */
-	@:pin('control') @:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
+	@:pin('control')
+	@:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
 	public function testANewNameAPatternCapturesWithoutTheImportRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA(x: Int);\n\tB;\n\tC;\n}\n';
 		final user: String = 'package q;\n\nclass U {\n\tpublic static function f(e: p.E): Int {\n\t\treturn switch e {\n'
@@ -132,7 +144,8 @@ class EnumCtorRenameTest extends Test {
 	 * An imported static spelling the new name at a position expecting the enum, in a file that does not import it: the
 	 * expected enum's constructor wins over the import, so `B` became `Alpha` silently.
 	 */
-	@:pin('control') @:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
+	@:pin('control')
+	@:killer('M-CTOR-NEW-NAME-ONLY-WHERE-VISIBLE')
 	public function testANewNameAnImportedStaticAtAnExpectedEnumRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
 		final util: String = 'package q;\n\nclass Util {\n\tpublic static var Alpha: p.E = p.E.B;\n}\n';
@@ -149,7 +162,8 @@ class EnumCtorRenameTest extends Test {
 	 * An import of a module the scope does not hold (`haxe.ds.Option`) may bring a constructor of the old name, and the later
 	 * import wins: the bare `None` was Option's, and renaming it made it the enum's.
 	 */
-	@:pin('control') @:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
+	@:pin('control')
+	@:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
 	public function testAnOldNameAnUnlistedImportMayBringRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
 		final user: String = 'package p;\n\nimport p.E;\nimport haxe.ds.Option;\n\nclass U {\n\tpublic static function f(): String {\n'
@@ -158,7 +172,8 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** The reverse: the renamed spelling takes the name of an unlisted import's constructor, which the later import makes win. */
-	@:pin('control') @:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
+	@:pin('control')
+	@:killer('M-CTOR-UNLISTED-IMPORT-IGNORED')
 	public function testANewNameAnUnlistedImportMayBringRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
 		final user: String = 'package p;\n\nimport p.E;\nimport haxe.ds.Option;\n\nclass U {\n\tpublic static function f(): String {\n'
@@ -167,7 +182,8 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** A name every module reads without an import (`trace`) is refused as a new name: the constructor would take it over. */
-	@:pin('control') @:killer('M-CTOR-IMPLICIT-NAME-TAKEN')
+	@:pin('control')
+	@:killer('M-CTOR-IMPLICIT-NAME-TAKEN')
 	public function testAnImplicitNameRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
 		refused(runAt([{ file: 'p/E.hx', source: enumSource }], 4, 2, 'trace'), '"trace" is a name every module');
@@ -178,7 +194,9 @@ class EnumCtorRenameTest extends Test {
 	 * the pattern is that enum's constructor (`Type.typeof(v)`'s `TNull`), and renaming it turned `nulltrueotherfalse`
 	 * into `othertruenullfalse`.
 	 */
-	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	@:pin('control')
+	@:killer('M-CTOR-SUBJECT-UNPROVEN')
+	@:killer('M-CTOR-UNPROVEN-RENAMED')
 	public function testABareSpellingUnderAnUnprovenSubjectRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tTNull;\n\tB;\n}\n';
 		final user: String = 'package p;\n\nimport p.E;\n\nclass U {\n\tpublic static function f(v: Dynamic, e: E): String {\n\t\treturn ('
@@ -187,7 +205,9 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** The subject's declared type names another enum fully qualified (`haxe.ds.Option<Int>`), so its `None` is not this one. */
-	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	@:pin('control')
+	@:killer('M-CTOR-SUBJECT-UNPROVEN')
+	@:killer('M-CTOR-UNPROVEN-RENAMED')
 	public function testABareSpellingUnderASubjectOfAnotherDeclaredEnumRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
 		final user: String = 'package p;\n\nimport p.E;\n\nclass U {\n\tpublic static function f(o: haxe.ds.Option<Int>, e: E): String {\n'
@@ -196,7 +216,9 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** The subject is a call whose declared return type is another enum (`Lib.get(): Option<Int>`), never proven this one. */
-	@:pin('control') @:killer('M-CTOR-SUBJECT-UNPROVEN') @:killer('M-CTOR-UNPROVEN-RENAMED')
+	@:pin('control')
+	@:killer('M-CTOR-SUBJECT-UNPROVEN')
+	@:killer('M-CTOR-UNPROVEN-RENAMED')
 	public function testABareSpellingUnderACallSubjectRefuses(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tNone;\n\tB;\n}\n';
 		final lib: String =
@@ -211,7 +233,8 @@ class EnumCtorRenameTest extends Test {
 	}
 
 	/** The right operand of `==` / `!=` whose left operand is declared the enum reads its constructor, import or not. */
-	@:pin('control') @:killer('M-CTOR-EQUALITY-UNPROVEN')
+	@:pin('control')
+	@:killer('M-CTOR-EQUALITY-UNPROVEN')
 	public function testTheRightOperandOfAComparisonWithTheEnumRenames(): Void {
 		final enumSource: String = 'package p;\n\nenum E {\n\tA;\n\tB;\n}\n';
 		final user: String =

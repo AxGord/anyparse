@@ -98,7 +98,8 @@ typedef NamingRule = {
 	 * about one spelling (a listener named `onX`) can sit ahead of the general rule for its category without
 	 * governing every other declaration of it.
 	 */
-	@:optional var appliesTo: EReg;
+	@:optional
+	var appliesTo: EReg;
 
 	/**
 	 * Optional mechanical name normalizer for the autofix: maps a violating
@@ -107,7 +108,8 @@ typedef NamingRule = {
 	 * none (report-only); the built-in default attaches one to the rename-safe
 	 * categories.
 	 */
-	@:optional var normalize: String -> Null<String>;
+	@:optional
+	var normalize: String -> Null<String>;
 
 	/**
 	 * Optional SECOND mechanical spelling, asked for only when the one `normalize` produced cannot
@@ -121,7 +123,8 @@ typedef NamingRule = {
 	 * so a rule carrying one produces exactly the same names it did before on every site that had
 	 * no collision.
 	 */
-	@:optional var normalizeAlt: String -> Null<String>;
+	@:optional
+	var normalizeAlt: String -> Null<String>;
 
 }
 
@@ -170,7 +173,8 @@ typedef NamedDecl = {
 	 * the mechanism rather than answering `true`. Absent for non-members. Set by the grammar's
 	 * projection, as the reachability rules are language-specific.
 	 */
-	@:optional var implicitReach: Null<ImplicitReach>;
+	@:optional
+	var implicitReach: Null<ImplicitReach>;
 
 	/**
 	 * True when the autofix must not mechanically rename this declaration even
@@ -184,7 +188,8 @@ typedef NamedDecl = {
 	 * The warning still fires; only `fix` skips it. Absent
 	 * (false) for ordinary declarations.
 	 */
-	@:optional var renameUnsafe: Bool;
+	@:optional
+	var renameUnsafe: Bool;
 
 	/**
 	 * True when the identifier is a language / framework idiom rather than a
@@ -198,7 +203,8 @@ typedef NamedDecl = {
 	 * `renameUnsafe`, this suppresses the WARNING too: the name is correct as
 	 * written. Absent (false) for ordinary declarations.
 	 */
-	@:optional var reservedName: Bool;
+	@:optional
+	var reservedName: Bool;
 
 	/**
 	 * True when the identifier is part of an EXTERNAL contract rather than a name the project
@@ -210,7 +216,8 @@ typedef NamedDecl = {
 	 * cannot rewrite safely (an accessor-backed property, an `@:rtti` member) and therefore
 	 * still deserves a report. Absent (false) for ordinary declarations.
 	 */
-	@:optional var contractName: Bool;
+	@:optional
+	var contractName: Bool;
 
 }
 

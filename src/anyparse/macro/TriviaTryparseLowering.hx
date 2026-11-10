@@ -81,9 +81,8 @@ final class TriviaTryparseLowering {
 		propagateExprPosition: Bool = false, refuseFlatOnComplex: Bool = false, ?afterCtorInfos: Array<WriterLowering.AfterCtorBlankInfo>,
 		?beforeCtorInfos: Array<WriterLowering.BeforeCtorBlankInfo>, ?betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo>,
 		?transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo>, ?headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo>,
-		?metaLineEndPolicy: Expr, metaCollapseBlanks: Bool = false,
-		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, lineLengthAwareSeps: Bool = false,
-		?priorAfterTrailExpr: Expr, forceInlineSep: Bool = false,
+		?metaLineEndPolicy: Expr, ?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>,
+		lineLengthAwareSeps: Bool = false, ?priorAfterTrailExpr: Expr, forceInlineSep: Bool = false,
 		// ω-blockended-trivia-tryparse (Session 3): when the tryparse
 		// Star carries `@:sep('text', tailRelax, blockEnded)`, the
 		// per-iteration emit inserts `;` (or other sepText) between two
@@ -203,10 +202,8 @@ final class TriviaTryparseLowering {
 		final cascadeInitCurr: Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute: Expr = cascadeEmit.currCompute;
 		final cascadeTrackPrev: Expr = cascadeEmit.trackPrev;
-		// ω-meta-strip-blanks: a `metaCollapseBlanks` Star caps the inter-element
-		// separator at a single hardline; ω-slice-45: forceInlineSep Stars short-
-		// circuit cascade blanks too. Both ⇒ macro 0; else the cascade count.
-		final cascadeBlanksCount: Expr = metaCollapseBlanks || forceInlineSep ? macro 0 : cascadeEmit.blanksCount;
+		// ω-slice-45: forceInlineSep Stars short-circuit cascade blanks ⇒ macro 0; else the cascade count.
+		final cascadeBlanksCount: Expr = forceInlineSep ? macro 0 : cascadeEmit.blanksCount;
 		// ω-before-package — head-of-Star override; `macro {}` when no
 		// `blankLinesAtHeadIfCtor` meta on this inner Star (byte-identical).
 		final cascadeHeadEmit: Expr = cascadeEmit.headEmit;
@@ -255,7 +252,7 @@ final class TriviaTryparseLowering {
 		final lastTrailTerminatorEmit: Expr = macro {};
 		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` from
 		// the site's knob (0 = None default, byte-identical).
-		final metaPolicyExpr: Expr = metaLineEndPolicy ?? macro 0;
+		final metaPolicyExpr: Expr = metaLineEndPolicy ?? macro -1;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
 		final glueRefusalExpr: Expr = triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow);
 		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);
@@ -708,11 +705,9 @@ final class TriviaTryparseLowering {
 				// separators between metas aren't a fork-supported shape
 				// for the After policy.
 				_docs.push(_dhl());
-			} else if (_si > 0 && _metaPolicy == 3) { // noqa: magic-number
-				// ω-metadata-line-end-function: ForceAfterLast collapses
-				// any source newline between consecutive metas to a
-				// single space, producing the canonical `@A @B @C`
-				// inline shape ahead of the trailing hardline.
+			} else if (_si > 0 && _metaPolicy >= 0) {
+				// Every policy but After joins a metadata run with a space: its layout never follows a
+				// source newline between metas.
 				_docs.push(_dt(' '));
 			} else if ($forceInlineCond) {
 				_docs.push(_dt(' '));
@@ -847,7 +842,7 @@ final class TriviaTryparseLowering {
 			} else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0) {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
 				_docs.push(_lineTrailBroken ? _dhl() : $trailPadSpaceDoc);
-			} else if (_metaPolicy != 0 && _arr.length > 0) {
+			} else if (_metaPolicy > 0 && _arr.length > 0) {
 				_lineTrailBroken = true;
 				_docs.push(_dhl());
 			}

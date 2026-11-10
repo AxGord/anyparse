@@ -15,7 +15,8 @@ import unit.CheckFixture;
 @:nullSafety(Strict)
 class DeclarationQueriesTest extends Test {
 
-	@:pin('control') @:killer('M-ALIAS-SINGLE-DECL')
+	@:pin('control')
+	@:killer('M-ALIAS-SINGLE-DECL')
 	public function testAnAliasIsFollowedThroughOneDeclarationAHop(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Real.hx' => 'package p;\n\nclass Real {}\n',
@@ -47,7 +48,10 @@ class DeclarationQueriesTest extends Test {
 	 * link's arguments as written, a longer chain's substituted through each type it climbs, nothing when the supertype is
 	 * not on the chain or a link fills fewer parameters than it has.
 	 */
-	@:pin('control') @:killer('M-SUBTYPE-ARGS-SUBSTITUTED') @:killer('M-SUBTYPE-ARGS-ARITY') @:killer('M-GRAPH-INHERITED-ARGS')
+	@:pin('control')
+	@:killer('M-SUBTYPE-ARGS-SUBSTITUTED')
+	@:killer('M-SUBTYPE-ARGS-ARITY')
+	@:killer('M-GRAPH-INHERITED-ARGS')
 	public function testASubtypeChainPassesItsArgumentsInItsOwnTerms(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Box.hx' => 'package p;\n\nclass Box<T> {}\n',
@@ -71,7 +75,9 @@ class DeclarationQueriesTest extends Test {
 	 * declaration of a member with its file (`MemberLookup.memberDeclarationsOf`), and the paths a declaration is named by
 	 * (`TypeNameBinding.namingPaths`).
 	 */
-	@:pin('control') @:killer('M-MEMBER-KIND-IGNORED') @:killer('M-TS-PATH-DECLARED-PACKAGE')
+	@:pin('control')
+	@:killer('M-MEMBER-KIND-IGNORED')
+	@:killer('M-TS-PATH-DECLARED-PACKAGE')
 	public function testTheGraphsDeclarationQuestionsAreTheIndexs(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Colour.hx' => 'package p;\n\nenum Colour {\n\tRed;\n\tGreen;\n}\n\nclass Paint {\n\tpublic var tone:Int = 0;\n}\n',
@@ -97,7 +103,8 @@ class DeclarationQueriesTest extends Test {
 		Assert.same(['p.Colour.Paint', 'p.Paint'], sub, 'a sub-type: its module and its name, its package and its name');
 	}
 
-	@:pin('control') @:killer('M-HOST-UNIQUE')
+	@:pin('control')
+	@:killer('M-HOST-UNIQUE')
 	public function testAMemberIsHostedWhereItsDeclarationIs(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Base.hx' => 'package p;\n\nclass Base {\n\tpublic var lock:Int = 0;\n}\n',
@@ -111,7 +118,10 @@ class DeclarationQueriesTest extends Test {
 		Assert.isNull(index.typing.members.declaringHost('Twin', 'lock'), 'a name declared twice hosts nothing provable');
 	}
 
-	@:pin('control') @:killer('M-SEAL-AMBIGUOUS') @:killer('M-SEAL-UNRESOLVED-IFACE') @:killer('M-SEAL-DECLARING-SUPER')
+	@:pin('control')
+	@:killer('M-SEAL-AMBIGUOUS')
+	@:killer('M-SEAL-UNRESOLVED-IFACE')
+	@:killer('M-SEAL-DECLARING-SUPER')
 	public function testASupertypeThatMayDeclareTheMemberIsNamed(): Void {
 		final index: SymbolIndex = indexOf([
 			'p/Plain.hx' => 'package p;\n\nclass Plain extends lib.Unseen {\n\tfunction run():Void {}\n}\n',

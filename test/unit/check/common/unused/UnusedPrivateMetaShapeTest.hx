@@ -19,7 +19,8 @@ class UnusedPrivateMetaShapeTest extends Test {
 		Assert.equals(1, constructorFindings(new HaxeQueryPlugin()));
 	}
 
-	@:pin('control') @:killer('M-METAKINDS-UNUSED-PRIVATE-CTOR')
+	@:pin('control')
+	@:killer('M-METAKINDS-UNUSED-PRIVATE-CTOR')
 	public function testRenamedAnnotationKindsStillFindThePrivateConstructor(): Void {
 		Assert.equals(1, constructorFindings(new RenamedAnnotationPlugin()));
 	}

@@ -11,7 +11,8 @@ import anyparse.query.TypeTerm;
 @:nullSafety(Strict)
 class MonomorphsTest extends Test {
 
-	@:pin('control') @:killer('M-MONO-LAST-BINDING-WINS')
+	@:pin('control')
+	@:killer('M-MONO-LAST-BINDING-WINS')
 	public function testTheFirstBindingWinsAndAnotherTypePoisons(): Void {
 		final monos: Monomorphs = new Monomorphs();
 		final kept: Int = monos.fresh();
@@ -29,7 +30,8 @@ class MonomorphsTest extends Test {
 		Assert.isNull(monos.resolved(monos.fresh()));
 	}
 
-	@:pin('control') @:killer('M-MONO-DYNAMIC-BINDS')
+	@:pin('control')
+	@:killer('M-MONO-DYNAMIC-BINDS')
 	public function testTheDynamicTypeLeavesACellFree(): Void {
 		final monos: Monomorphs = new Monomorphs();
 		final cell: Int = monos.fresh();
@@ -51,7 +53,8 @@ class MonomorphsTest extends Test {
 		Assert.isNull(monos.resolved(b), 'a type naming the cell itself poisons it');
 	}
 
-	@:pin('control') @:killer('M-MONO-UNIFY-ARGUMENTS-SKIPPED')
+	@:pin('control')
+	@:killer('M-MONO-UNIFY-ARGUMENTS-SKIPPED')
 	public function testAUnificationBindsTheCellsTheWantedTypeNames(): Void {
 		final monos: Monomorphs = new Monomorphs();
 		final element: Int = monos.fresh();

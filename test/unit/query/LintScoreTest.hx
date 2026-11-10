@@ -22,7 +22,8 @@ using StringTools;
 class LintScoreTest extends Test {
 
 	/** Three findings of one key are one key and two duplicates; each verdict counts its keys, a key no entry labels is unlabelled. */
-	@:pin('control') @:killer('M-SCORE-DUPLICATES-AS-KEYS')
+	@:pin('control')
+	@:killer('M-SCORE-DUPLICATES-AS-KEYS')
 	public function testFindingsMeetEntriesByKey(): Void {
 		final result: LintScoreResult = score([entry('A', 'A.b', 'S.f', 'real-long'), entry('B', 'C.d', 'C._m', 'false')], [
 			finding('A', 'A.b', 'S.f'),
@@ -47,7 +48,8 @@ class LintScoreTest extends Test {
 	 * Precision is real-long keys over the keys with a known verdict: an `unknown` key and an unlabelled one count for
 	 * nothing, a `dup-of` key counts against it.
 	 */
-	@:pin('control') @:killer('M-SCORE-PRECISION-COUNTS-UNKNOWN')
+	@:pin('control')
+	@:killer('M-SCORE-PRECISION-COUNTS-UNKNOWN')
 	public function testPrecisionLeavesUnknownAndUnlabelledOut(): Void {
 		final result: LintScoreResult = score(
 			[
@@ -68,7 +70,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** Recall counts every real-long entry and any other marked `recall: true`; the ones no finding matches are lost. */
-	@:pin('control') @:killer('M-SCORE-RECALL-REAL-LONG-ONLY')
+	@:pin('control')
+	@:killer('M-SCORE-RECALL-REAL-LONG-ONLY')
 	public function testRecallCountsMarkedEntries(): Void {
 		final marked: String = entry('A', 'A.c', 'S.f', 'rare', ', "recall": true');
 		final result: LintScoreResult = score(
@@ -100,7 +103,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** The default minimum scores warnings and errors; a lower one scores more, and a higher one leaves the rest out, counted. */
-	@:pin('control') @:killer('M-SCORE-SEVERITY-EXACT')
+	@:pin('control')
+	@:killer('M-SCORE-SEVERITY-EXACT')
 	public function testSeverityIsAMinimum(): Void {
 		final truth: LintTruthJson = LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'real-long')]));
 		final report: String = '['
@@ -118,7 +122,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** Nothing left to score is no score: a misspelt rule, an empty report, a minimum above every finding — each one says which. */
-	@:pin('control') @:killer('M-SCORE-NOTHING-SCORED')
+	@:pin('control')
+	@:killer('M-SCORE-NOTHING-SCORED')
 	public function testNothingToScoreIsRefused(): Void {
 		final truth: LintTruthJson = LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'real-long')]));
 		Assert.stringContains(
@@ -138,7 +143,8 @@ class LintScoreTest extends Test {
 	 * A truth file the schema accepts is still refused for: empty provenance, an unknown verdict, a dup-of naming nothing,
 	 * itself or no entry, a `recall: false` real-long entry, an unknown evidence kind, a negative `ms`, a key labelled twice.
 	 */
-	@:pin('control') @:killer('M-SCORE-VERDICT-UNCHECKED', 'M-SCORE-DUPOF-DANGLING', 'M-SCORE-RECALL-FALSE-REAL-LONG')
+	@:pin('control')
+	@:killer('M-SCORE-VERDICT-UNCHECKED', 'M-SCORE-DUPOF-DANGLING', 'M-SCORE-RECALL-FALSE-REAL-LONG')
 	public function testValidationRefusesWhatTheSchemaCannot(): Void {
 		Assert.stringContains('"commit" must be non-empty', refusal(() -> LintScore.parseTruth(truthOf([], '""'))));
 		Assert.stringContains('unknown verdict "maybe"', refusal(() -> LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'maybe')]))));
@@ -176,7 +182,8 @@ class LintScoreTest extends Test {
 	 * A `|` inside a key part is no collision — `{A, "x|y", "z"}` and `{A, "x", "y|z"}` are two keys — but a `dupOf` that
 	 * spells both is ambiguous, and refused.
 	 */
-	@:pin('control') @:killer('M-SCORE-UNIQUE-JOINED', 'M-SCORE-DUPOF-AMBIGUOUS')
+	@:pin('control')
+	@:killer('M-SCORE-UNIQUE-JOINED', 'M-SCORE-DUPOF-AMBIGUOUS')
 	public function testAPipeInsideAPartIsNoCollision(): Void {
 		final twoKeys: Array<String> = [entry('A', 'x|y', 'z', 'real-long'), entry('A', 'x', 'y|z', 'false')];
 		Assert.equals(2, LintScore.parseTruth(truthOf(twoKeys)).entries.length);
@@ -187,7 +194,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** A finding of a severity outside the order is refused, never scored as below the minimum. */
-	@:pin('control') @:killer('M-SCORE-SEVERITY-UNKNOWN')
+	@:pin('control')
+	@:killer('M-SCORE-SEVERITY-UNKNOWN')
 	public function testAnUnknownSeverityIsRefused(): Void {
 		final truth: LintTruthJson = LintScore.parseTruth(truthOf([entry('A', 'A.b', 'S.f', 'real-long')]));
 		Assert.stringContains(
@@ -210,7 +218,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** The text table and the json document carry the same numbers, ratios to two decimals and `-` for none. */
-	@:pin('control') @:killer('M-SCORE-JSON-EXCLUDED')
+	@:pin('control')
+	@:killer('M-SCORE-JSON-EXCLUDED')
 	public function testRenderAndJson(): Void {
 		final result: LintScoreResult = score(
 			[
@@ -251,7 +260,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** The command exits 1 when a recall entry is lost, 0 when none is, 2 when the truth is refused or nothing is scored. */
-	@:pin('control') @:killer('M-SCORE-LOST-EXIT')
+	@:pin('control')
+	@:killer('M-SCORE-LOST-EXIT')
 	public function testExitStatusIsTheLostRecall(): Void {
 		#if (sys || nodejs)
 		Assert.same([0, 1, 2, 2], [
@@ -288,7 +298,8 @@ class LintScoreTest extends Test {
 	}
 
 	/** The json score's verdict counts are keyed by `VERDICTS`, in its order, each counting its own verdict's keys. */
-	@:pin('control') @:killer('M-SCORE-JSON-VERDICT-COUNT')
+	@:pin('control')
+	@:killer('M-SCORE-JSON-VERDICT-COUNT')
 	public function testTheJsonVerdictCountsAreTheVerdicts(): Void {
 		final entries: Array<String> = [
 			for (i => v in LintScore.VERDICTS) entry('A', 'A.m$i', 'S.f', v, v == 'dup-of' ? ', "dupOf": "A|A.m0|S.f"' : '')

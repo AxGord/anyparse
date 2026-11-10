@@ -28,4 +28,9 @@ package anyparse.grammar.haxe;
  * compilation scope's elseifs/elseBody pair).
  */
 @:peg
-typedef HxElseifType = { @:kw('#elseif') var cond: HxPpCondLit; @:trailOpt(';') var type: HxType; };
+typedef HxElseifType = {
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trailOpt(';')
+	var type: HxType;
+};

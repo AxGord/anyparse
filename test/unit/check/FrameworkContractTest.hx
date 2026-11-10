@@ -32,7 +32,8 @@ import anyparse.runtime.Span;
  * for a reason that has nothing to do with the framework, which is exactly the luck this seam
  * replaces.
  */
-@:nullSafety(Strict) class FrameworkContractTest extends Test {
+@:nullSafety(Strict)
+class FrameworkContractTest extends Test {
 
 	/** A driver whose lifecycle callback the engine calls by that exact name, and whose spelling the built-in normalizer CAN correct. */
 	private static inline final DRIVER_SRC: String = 'class Player extends Node {\n\n\tprivate var _hp:Int = 100;\n\n'

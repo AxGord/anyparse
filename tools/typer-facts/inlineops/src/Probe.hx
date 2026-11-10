@@ -1,12 +1,16 @@
 abstract D(Float) from Float to Float {
 
-	@:op(A + B) static inline function add(a: D, b: D): D return (a: Float) + (b: Float);
+	@:op(A + B)
+	static inline function add(a: D, b: D): D return (a: Float) + (b: Float);
 
-	@:op(A > B) extern static inline function gt(a: D, b: D): Bool return (a: Float) > (b: Float);
+	@:op(A > B)
+	extern static inline function gt(a: D, b: D): Bool return (a: Float) > (b: Float);
 
-	@:op(A - B) static function sub(a: D, b: D): D return (a: Float) - (b: Float);
+	@:op(A - B)
+	static function sub(a: D, b: D): D return (a: Float) - (b: Float);
 
-	@:op(A == B) static inline function eqF(a: D, b: Float): Bool return (a: Float) == b;
+	@:op(A == B)
+	static inline function eqF(a: D, b: Float): Bool return (a: Float) == b;
 
 }
 

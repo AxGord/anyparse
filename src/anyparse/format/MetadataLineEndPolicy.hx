@@ -5,22 +5,17 @@ package anyparse.format;
  * inter-element separator and the gap between the LAST metadata and
  * the next sibling field (modifier / member keyword).
  *
- * `None` (default) — source-driven separator from per-element
- * `newlineBefore` trivia; no forced gap after the last element.
- * Byte-identical to the pre-slice engine.
+ * No policy reads the source layout: the output is a function of the
+ * AST and the knob.
+ *
+ * `None` — every inter-element separator is a single space; no forced
+ * gap after the last element.
  *
  * `After` — every inter-element separator becomes a hardline AND a
- * hardline fires after the last element. Source layout is collapsed
- * to one-metadata-per-line regardless of how the metas were written.
+ * hardline fires after the last element: one metadata per line.
  *
- * `AfterLast` — inter-element separator stays source-driven, but a
- * hardline ALWAYS fires after the last element. Preserves the
- * author's inline grouping (`@A @B`) while guaranteeing the final
- * metadata sits on its own line.
- *
- * `ForceAfterLast` — inter-element separator is forced to a single
- * space (collapses any source newlines between metas) AND a
- * hardline fires after the last element. Produces a canonical
+ * `AfterLast` / `ForceAfterLast` — inter-element separator is a single
+ * space AND a hardline fires after the last element: the
  * `@A @B @C\nfunction main()` shape.
  *
  * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` and its

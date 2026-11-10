@@ -826,7 +826,9 @@ private enum abstract Precedence(Int) {
 	final PREC_TERNARY = 10;
 	final PREC_ASSIGN = 5;
 
-	@:op(A < B) static function lt(a: Precedence, b: Precedence): Bool;
+	@:op(A < B)
+	static function lt(a: Precedence, b: Precedence): Bool;
 
-	@:op(A >= B) static function gte(a: Precedence, b: Precedence): Bool;
+	@:op(A >= B)
+	static function gte(a: Precedence, b: Precedence): Bool;
 }

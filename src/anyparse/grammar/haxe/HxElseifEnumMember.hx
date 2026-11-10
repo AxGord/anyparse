@@ -7,6 +7,10 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifEnumMember = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxEnumMember>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	var body: Array<HxEnumMember>;
 };

@@ -17,17 +17,30 @@ package anyparse.grammar.haxe.format;
  * from the surrounding sibling sep) and `"after"` / `"none"` to `Inline`; anonymous-type
  * braces honour it in the trivia branch only.
  */
-@:peg typedef HxFormatLineEndsSection = {
-	@:optional var leftCurly: HxFormatLeftCurlyPolicy;
-	@:optional var rightCurly: HxFormatRightCurlyPolicy;
-	@:optional var emptyCurly: HxFormatEmptyCurlyPolicy;
-	@:optional var objectLiteralCurly: HxFormatCurlyLineEndPolicy;
-	@:optional var anonFunctionCurly: HxFormatCurlyLineEndPolicy;
-	@:optional var anonTypeCurly: HxFormatCurlyLineEndPolicy;
-	@:optional var blockCurly: HxFormatCurlyLineEndPolicy;
-	@:optional var metadataFunction: HxFormatMetadataLineEndPolicy;
-	@:optional var metadataType: HxFormatMetadataLineEndPolicy;
-	@:optional var metadataVar: HxFormatMetadataLineEndPolicy;
-	@:optional var metadataOther: HxFormatMetadataLineEndPolicy;
-	@:optional var lineEndCharacter: HxFormatLineEndCharacter;
+@:peg
+typedef HxFormatLineEndsSection = {
+	@:optional
+	var leftCurly: HxFormatLeftCurlyPolicy;
+	@:optional
+	var rightCurly: HxFormatRightCurlyPolicy;
+	@:optional
+	var emptyCurly: HxFormatEmptyCurlyPolicy;
+	@:optional
+	var objectLiteralCurly: HxFormatCurlyLineEndPolicy;
+	@:optional
+	var anonFunctionCurly: HxFormatCurlyLineEndPolicy;
+	@:optional
+	var anonTypeCurly: HxFormatCurlyLineEndPolicy;
+	@:optional
+	var blockCurly: HxFormatCurlyLineEndPolicy;
+	@:optional
+	var metadataFunction: HxFormatMetadataLineEndPolicy;
+	@:optional
+	var metadataType: HxFormatMetadataLineEndPolicy;
+	@:optional
+	var metadataVar: HxFormatMetadataLineEndPolicy;
+	@:optional
+	var metadataOther: HxFormatMetadataLineEndPolicy;
+	@:optional
+	var lineEndCharacter: HxFormatLineEndCharacter;
 };

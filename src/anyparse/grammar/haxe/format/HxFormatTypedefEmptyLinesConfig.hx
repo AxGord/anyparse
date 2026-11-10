@@ -34,12 +34,20 @@ package anyparse.grammar.haxe.format;
  *    field. Routes to `opt.typedefAfterFieldsWithDocComments`; absent keeps the
  *    source blank.
  */
-@:peg typedef HxFormatTypedefEmptyLinesConfig = {
-	@:optional var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
-	@:optional var betweenFields: Int;
-	@:optional var beginType: Int;
-	@:optional var endType: Int;
-	@:optional var beginTypeIfDocComments: Int;
-	@:optional var endTypeIfDocComments: Int;
-	@:optional var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+@:peg
+typedef HxFormatTypedefEmptyLinesConfig = {
+	@:optional
+	var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
+	@:optional
+	var betweenFields: Int;
+	@:optional
+	var beginType: Int;
+	@:optional
+	var endType: Int;
+	@:optional
+	var beginTypeIfDocComments: Int;
+	@:optional
+	var endTypeIfDocComments: Int;
+	@:optional
+	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 };

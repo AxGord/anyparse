@@ -25,7 +25,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * A method assigned to a `dynamic` member runs where the member runs — here only in `W.run`, which a spawned thread
 	 * calls — and never at the assignment in `A`'s constructor, so the main thread reaches no sleep.
 	 */
-	@:pin('control') @:killer('M-TS-STORE-INERT')
+	@:pin('control')
+	@:killer('M-TS-STORE-INERT')
 	public function testAValueStoredInADynamicMemberRunsWhereTheMemberRuns(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -39,7 +40,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** The member invoked on the main thread runs the stored value there, and the chain names the invocation, not the assignment. */
-	@:pin('control') @:killer('M-TS-STORE-UNMIRRORED')
+	@:pin('control')
+	@:killer('M-TS-STORE-UNMIRRORED')
 	public function testAStoredValueInvokedOnTheMainThreadIsReachedThroughTheInvoker(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -57,7 +59,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A call of the member's name the graph cannot resolve may run the stored value anywhere: the assignment keeps its context. */
-	@:pin('control') @:killer('M-TS-STORE-SEALED-BLIND')
+	@:pin('control')
+	@:killer('M-TS-STORE-SEALED-BLIND')
 	public function testAStoredValueAnUnresolvedCallMayRunKeepsTheAssignersContext(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -78,7 +81,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A handler handed to a `neverInvokes` target (`Disp.removeEventListener`) runs from no call there: `dispose` reaches nothing. */
-	@:pin('control') @:killer('M-TS-NEVER-INVOKES-BY-TARGET')
+	@:pin('control')
+	@:killer('M-TS-NEVER-INVOKES-BY-TARGET')
 	public function testAHandlerHandedToANeverInvokesTargetRunsNowhereFromThere(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"neverInvokes":["Disp.removeEventListener"]', [
@@ -94,7 +98,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A bare `neverInvokes` name matches the call as written, even one the graph resolves to nothing (a library supertype's method). */
-	@:pin('control') @:killer('M-TS-NEVER-INVOKES-BY-NAME')
+	@:pin('control')
+	@:killer('M-TS-NEVER-INVOKES-BY-NAME')
 	public function testABareNeverInvokesNameMatchesAnUnresolvedCall(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"neverInvokes":["removeEventListener"]', [
@@ -107,7 +112,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** The branch a `mainThreadChecks` call says runs off the main thread reaches nothing on it (`HttpEntity.get`'s shape). */
-	@:pin('control') @:killer('M-TS-MAIN-CHECK-IGNORED', 'M-TS-SITE-MEMO-BY-CALLER')
+	@:pin('control')
+	@:killer('M-TS-MAIN-CHECK-IGNORED', 'M-TS-SITE-MEMO-BY-CALLER')
 	public function testTheOffMainBranchOfAMainThreadCheckIsNoMainStall(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
@@ -122,7 +128,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A check written as a property is read through its getter, the call the graph records at the read. */
-	@:pin('control') @:killer('M-TS-MAIN-CHECK-NO-GETTER')
+	@:pin('control')
+	@:killer('M-TS-MAIN-CHECK-NO-GETTER')
 	public function testAMainThreadCheckPropertyIsReadThroughItsGetter(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
@@ -139,7 +146,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `final done = check ? null : new Lock()` then `done != null && done.wait()`: the wait runs only off the main thread
 	 * (`LogWriter.truncate`).
 	 */
-	@:pin('control') @:killer('M-TS-NULL-LOCAL-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-NULL-LOCAL-UNREAD')
 	public function testANullTestOfALocalTheCheckChoseIsTheChecksAnswer(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
@@ -155,7 +163,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** What follows `if (T.isMain()) return;` in its block runs off the main thread only. */
-	@:pin('control') @:killer('M-TS-EARLY-EXIT-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-EARLY-EXIT-UNREAD')
 	public function testCodeAfterAnEarlyExitOnTheCheckRunsOnTheOtherThreads(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"mainThreadChecks":["T.isMain"]', [
@@ -169,7 +178,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** `work(false)` from the main thread never runs `if (sleep) Sys.sleep(1)`; only the spawned `work(true)` does. */
-	@:pin('control') @:killer('M-TS-ARG-UNBOUND', 'M-TS-STATES-UNCONDITIONED')
+	@:pin('control')
+	@:killer('M-TS-ARG-UNBOUND', 'M-TS-STATES-UNCONDITIONED')
 	public function testABoolLiteralArgumentDecidesTheCalleesBranch(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -182,7 +192,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** An omitted argument takes the callee's `Bool` literal default. */
-	@:pin('control') @:killer('M-TS-DEFAULT-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-DEFAULT-UNREAD')
 	public function testAnOmittedArgumentTakesItsBoolDefault(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -195,7 +206,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A parameter handed on bare carries the value its own caller gave it (`getItemDataByItemPath(path, load)`). */
-	@:pin('control') @:killer('M-TS-ARG-PARAM-UNREAD', 'M-TS-STATES-UNBOUND')
+	@:pin('control')
+	@:killer('M-TS-ARG-PARAM-UNREAD', 'M-TS-STATES-UNBOUND')
 	public function testAParameterHandedOnCarriesItsValue(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -209,7 +221,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A `?fs` left out is null, so `if (fs != null) fs.save()` never runs (`ProjectDoc.checkSharedRemoteId`). */
-	@:pin('control') @:killer('M-TS-NULL-PARAM-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-NULL-PARAM-UNREAD')
 	public function testAnOmittedOptionalParameterIsNull(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -226,7 +239,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `work(true)` with `?n:Int` first: Haxe skips `n` and hands `true` to `sleep`, so position alone does not bind it —
 	 * an argument whose written type is not the optional parameter's keeps every value unknown.
 	 */
-	@:pin('control') @:killer('M-TS-SKIP-UNCHECKED')
+	@:pin('control')
+	@:killer('M-TS-SKIP-UNCHECKED')
 	public function testAnArgumentHaxeMaySkipAnOptionalParameterForBindsNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.work -> Sys.sleep'], sleepFindings('', [
@@ -244,7 +258,9 @@ class ThreadSafetyConditionsTest extends Test {
 	 * refuses a `Foo` — so the body's `x` is null there and `if (x == null)` runs; the own parameters' slots bind nothing.
 	 * A call its own signature takes (`W.go(new Bar())`: the annotation wants two arguments at least) binds them as written.
 	 */
-	@:pin('control') @:killer('M-TS-OVERLOAD-OWN-SELECTED') @:killer('M-TS-OVERLOAD-VERDICTS')
+	@:pin('control')
+	@:killer('M-TS-OVERLOAD-OWN-SELECTED')
+	@:killer('M-TS-OVERLOAD-VERDICTS')
 	public function testACallAnOverloadTakesBindsNoneOfTheBodysParameters(): Void {
 		#if (sys || nodejs)
 		final types: Array<String> = [
@@ -268,7 +284,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A parameter the body writes holds what the write gave it, not the argument: the branch stays reachable. */
-	@:pin('control') @:killer('M-TS-PARAM-WRITE-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-PARAM-WRITE-IGNORED')
 	public function testAWrittenParameterIsNotTracked(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.work -> Sys.sleep'], sleepFindings('', [
@@ -284,7 +301,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `db.add(true)` under `_mutation` never takes `_batch` (`if (!batch)`): the main thread orders nothing backwards. The
 	 * spawned `add(false)` takes it holding nothing, so the take is no dead one.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-UNCONDITIONED')
+	@:pin('control')
+	@:killer('M-TS-ORDER-UNCONDITIONED')
 	public function testATakeABoolArgumentRulesOutOrdersNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -303,7 +321,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * A hold whose take a Bool argument rules out holds nothing: the spawned `op(true)` touches the tree with `_batch` free.
 	 * The main thread's `op(false)` takes both in the other order, one thread against itself.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-HOLD-UNCONDITIONED')
+	@:pin('control')
+	@:killer('M-TS-ORDER-HOLD-UNCONDITIONED')
 	public function testAHoldABoolArgumentRulesOutHoldsNothingInOrder(): Void {
 		#if (sys || nodejs)
 		Assert.same([], ThreadSafetyCheckTest.orderFindings([
@@ -320,7 +339,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A hold on the main thread across a call that blocks only off it (`if (!T.isMain()) Sys.sleep(1)`) blocks nothing. */
-	@:pin('control') @:killer('M-TS-TAINT-UNCONDITIONED')
+	@:pin('control')
+	@:killer('M-TS-TAINT-UNCONDITIONED')
 	public function testAHoldAcrossACallBlockingOnlyOnAnotherThreadIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], [
@@ -337,7 +357,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** Under `closedWorld`, a method nothing in the run calls runs on no thread: its sleep is no main stall. */
-	@:pin('control') @:killer('M-TS-CLOSED-WORLD-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-CLOSED-WORLD-UNREAD')
 	public function testUnderAClosedWorldAnUncalledMethodRunsNowhere(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"closedWorld":true', [
@@ -349,7 +370,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A constructor nothing constructs is still an entry point under `closedWorld`: the runtime may make the object. */
-	@:pin('control') @:killer('M-TS-SEAL-CTOR')
+	@:pin('control')
+	@:killer('M-TS-SEAL-CTOR')
 	public function testUnderAClosedWorldAConstructorStaysARoot(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -362,7 +384,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** An `override` of a library supertype's method is the library's to call: it stays a root under `closedWorld`. */
-	@:pin('control') @:killer('M-TS-SEAL-OVERRIDE')
+	@:pin('control')
+	@:killer('M-TS-SEAL-OVERRIDE')
 	public function testUnderAClosedWorldAnOverrideStaysARoot(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
@@ -374,7 +397,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A method an interface the index does not hold may declare is reached through it: it stays a root under `closedWorld`. */
-	@:pin('control') @:killer('M-TS-SEAL-SUPERTYPE')
+	@:pin('control')
+	@:killer('M-TS-SEAL-SUPERTYPE')
 	public function testUnderAClosedWorldAnUnindexedInterfacesMemberStaysARoot(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
@@ -386,7 +410,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A method an unresolved call may name (`x.tick()` on a `Dynamic`) may run from there: it stays a root under `closedWorld`. */
-	@:pin('control') @:killer('M-TS-SEAL-UNRESOLVED')
+	@:pin('control')
+	@:killer('M-TS-SEAL-UNRESOLVED')
 	public function testUnderAClosedWorldAMethodAnUnresolvedCallMayNameStaysARoot(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.tick -> Sys.sleep'], sleepFindings('"closedWorld":true', [
@@ -399,7 +424,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A hold in a method no thread runs holds nothing: no finding for `dead`, whose throw under `_m` never happens. */
-	@:pin('control') @:killer('M-TS-DEAD-HOLDS-KEPT')
+	@:pin('control')
+	@:killer('M-TS-DEAD-HOLDS-KEPT')
 	public function testUnderAClosedWorldAHoldNoThreadRunsIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('"closedWorld":true,"lockPairs":["Mutex.acquire/release"]', [
@@ -417,7 +443,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * A `final` local bound to a condition decides a read of its name only where that read means it: in its block, after
 	 * it. A read outside the block or outside the lambda that declares it means the member (review r4 `A1`, `A2`).
 	 */
-	@:pin('control') @:killer('M-TS-COND-LOCAL-ANY-BLOCK')
+	@:pin('control')
+	@:killer('M-TS-COND-LOCAL-ANY-BLOCK')
 	public function testAFinalLocalDecidesOnlyTheReadsItBinds(): Void {
 		#if (sys || nodejs)
 		final reached: Array<String> = [
@@ -436,7 +463,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A `Bool` handed to a constructor decides its branches as one handed to a method does (`new W(false)`). */
-	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	@:pin('control')
+	@:killer('M-TS-NEW-UNBOUND')
 	public function testAConstructionArgumentDecidesTheConstructorsBranch(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -449,7 +477,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A type declaring no constructor is built by its supertype's, with the arguments `new` hands it. */
-	@:pin('control') @:killer('M-TS-NEW-UNBOUND')
+	@:pin('control')
+	@:killer('M-TS-NEW-UNBOUND')
 	public function testAnInheritedConstructorTakesTheArgumentsOfItsSupertypes(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -463,7 +492,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A `null` handed to a parameter with a default leaves it the default (4.3.7: `f(s:String = 'x')` called `f(null)`). */
-	@:pin('control') @:killer('M-TS-NULL-DEFAULT-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-NULL-DEFAULT-UNREAD')
 	public function testANullArgumentToAParameterWithADefaultLeavesTheDefault(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.save -> Sys.sleep'], sleepFindings('', [
@@ -479,7 +509,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * An argument the shared walk types — arithmetic over a static constant of another type and a local — binds the
 	 * parameter of its own type, so the optional `String` after it stays out.
 	 */
-	@:pin('control') @:killer('M-WALK-ARITHMETIC-OFF', 'M-ARGTYPE-STATIC-OFF')
+	@:pin('control')
+	@:killer('M-WALK-ARITHMETIC-OFF', 'M-ARGTYPE-STATIC-OFF')
 	public function testAnArgumentTypedByArithmeticBindsItsOwnParameter(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -493,7 +524,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** The string a call hands a parameter its callee's affix guard tests decides that guard: `.svg` ends with `.svg`. */
-	@:pin('control') @:killer('M-TS-AFFIX-UNREAD', 'M-TS-STRING-ATOM-OFF')
+	@:pin('control')
+	@:killer('M-TS-AFFIX-UNREAD', 'M-TS-STRING-ATOM-OFF')
 	public function testAStringTheCalleesAffixGuardTestsDecidesIt(): Void {
 		#if (sys || nodejs)
 		final callee: String = 'using StringTools;\nclass W { public static function show(?hint:String):Void '
@@ -512,7 +544,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A later `using` that may bind the affix method itself leaves the guard undecided. */
-	@:pin('control') @:killer('M-TS-AFFIX-USINGS-UNCHECKED')
+	@:pin('control')
+	@:killer('M-TS-AFFIX-USINGS-UNCHECKED')
 	public function testAStringAffixGuardAnotherUsingMayBindDecidesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.show -> Sys.sleep'], sleepFindings('', [
@@ -531,7 +564,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * binds `align`), the `String` after it stays `null` and the branch a `null` takes runs. An abstract the cast graph does
 	 * not model (one with a type parameter) may bind it or skip it: both bindings are followed, and the branch runs too.
 	 */
-	@:pin('control') @:killer('M-ARGFIT-UNKNOWN-MISFITS')
+	@:pin('control')
+	@:killer('M-ARGFIT-UNKNOWN-MISFITS')
 	public function testAnArgumentAnAbstractMayTakeLeavesBothBindings(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.main -> W.make -> Sys.sleep'], sleepFindings('', [
@@ -554,7 +588,9 @@ class ThreadSafetyConditionsTest extends Test {
 	 * reaches it), so the compiler skips the optional parameter of that class and binds the next (4.3.7): `W.make(v)` with `v: X` leaves
 	 * `y` null and hands `v` to `?x: X`, and the branch on a non-null `y` never runs. A `Y`, or a subclass of it, binds `y` and may run it.
 	 */
-	@:pin('control') @:killer('M-ARGFIT-PLAIN-OFF') @:killer('M-UNIFY-CHAIN-OPEN')
+	@:pin('control')
+	@:killer('M-ARGFIT-PLAIN-OFF')
+	@:killer('M-UNIFY-CHAIN-OPEN')
 	public function testAPlainClassArgumentSkipsAnOptionalParameterOfAnUnrelatedClass(): Void {
 		#if (sys || nodejs)
 		final model: Array<String> = [
@@ -579,7 +615,10 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `u: U` and `abstract U(Int) to Float` binds `?w:Float`, so `hint` stays null and the branch never runs; an abstract
 	 * with an `@:to String` member skips `w` and binds `hint`.
 	 */
-	@:pin('control') @:killer('M-ARGFIT-CAST-OFF') @:killer('M-UNIFY-ABSTRACT-OFF') @:killer('M-ARGTYPE-HELD-GRAPH')
+	@:pin('control')
+	@:killer('M-ARGFIT-CAST-OFF')
+	@:killer('M-UNIFY-ABSTRACT-OFF')
+	@:killer('M-ARGTYPE-HELD-GRAPH')
 	public function testAnAbstractArgumentBindsTheParameterItCastsTo(): Void {
 		#if (sys || nodejs)
 		final model: Array<String> = [
@@ -603,7 +642,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `String` (an `.svg`), and neither way runs the branch. The abstract's `@:from String` sits under `#if`, so whether the
 	 * literal casts to it is another build's question: both ways are followed.
 	 */
-	@:pin('control') @:killer('M-TS-ARG-SETS-UNKNOWN')
+	@:pin('control')
+	@:killer('M-TS-ARG-SETS-UNKNOWN')
 	public function testEveryWayACallMayBindDecidesTogether(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -618,7 +658,8 @@ class ThreadSafetyConditionsTest extends Test {
 	}
 
 	/** A construction in a field's initializer binds its arguments too, though no function the tree holds runs it. */
-	@:pin('control') @:killer('M-TS-INIT-SITE-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-INIT-SITE-UNREAD')
 	public function testAFieldInitializersConstructionBindsItsArguments(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -635,7 +676,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `if (blocking)` runs nothing under `blocking = false`, at the FIRST ask as at every later one — the site's facts were
 	 * read once and cached, and the first ask answered none.
 	 */
-	@:pin('control') @:killer('M-TS-LAMBDA-SITE-UNGUARDED')
+	@:pin('control')
+	@:killer('M-TS-LAMBDA-SITE-UNGUARDED')
 	public function testAFunctionValueWrittenUnderAGuardIsHandedOnOnlyWhereItHolds(): Void {
 		#if (sys || nodejs)
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -659,7 +701,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `W.run` a `true` on the main thread and a `false` on the spawned one, so only the main thread sleeps — the answer of
 	 * one valuation never stands in for another's.
 	 */
-	@:pin('control') @:killer('M-TS-BIND-MEMO-ONE-VALUATION')
+	@:pin('control')
+	@:killer('M-TS-BIND-MEMO-ONE-VALUATION')
 	public function testOneCallBindsAnewUnderEachValuationOfItsCaller(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -682,7 +725,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * resolved there: `u: U` with a library `abstract U(Int) from Int to Float` binds `?w:Float` (4.3.7), so `hint` stays null;
 	 * a `V ... to String` skips `w` and binds `hint`.
 	 */
-	@:pin('control') @:killer('M-ARGTYPE-RESOLUTION-OFF')
+	@:pin('control')
+	@:killer('M-ARGTYPE-RESOLUTION-OFF')
 	public function testAnArgumentOfALibraryTypeResolvesInTheResolutionScope(): Void {
 		#if (sys || nodejs)
 		final library: Array<String> = [
@@ -708,7 +752,9 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `U` returns `U`, which binds `?w:Float`; over `S` the overload declared FIRST takes the operands and returns `String`,
 	 * which binds `hint`.
 	 */
-	@:pin('control') @:killer('M-ARGTYPE-OVERLOAD-OFF') @:killer('M-OPS-FIRST-TAKEN')
+	@:pin('control')
+	@:killer('M-ARGTYPE-OVERLOAD-OFF')
+	@:killer('M-OPS-FIRST-TAKEN')
 	public function testArithmeticOverAnAbstractIsTypedByItsOperatorOverload(): Void {
 		#if (sys || nodejs)
 		final model: Array<String> = [
@@ -732,7 +778,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * An enum-abstract value written with no type is of its enum abstract (4.3.7): `E.X` binds `?e:E`, so `hint` stays null.
 	 * Which declarations qualify, branch by branch, is `EnumValueTypeTest`'s.
 	 */
-	@:pin('control') @:killer('M-ENUM-VALUE-OFF')
+	@:pin('control')
+	@:killer('M-ENUM-VALUE-OFF')
 	public function testAnEnumAbstractValueIsOfItsAbstract(): Void {
 		#if (sys || nodejs)
 		Assert.same([], sleepFindings('', [
@@ -751,7 +798,8 @@ class ThreadSafetyConditionsTest extends Test {
 	 * `E` and binds `?e:E` (`hint` stays null); with no build known, or one defining `flash`, the value may be of the target
 	 * type, so it may bind `hint`.
 	 */
-	@:pin('control') @:killer('M-BUILDS-FILTER-OFF')
+	@:pin('control')
+	@:killer('M-BUILDS-FILTER-OFF')
 	public function testAnEnumAbstractValueIsOfItsAbstractInEveryDeclaredBuild(): Void {
 		#if (sys || nodejs)
 		final library: Array<String> = [
@@ -790,7 +838,9 @@ class ThreadSafetyConditionsTest extends Test {
 	 * A field read bare — inherited — and a static read off a type name carry the type their declaration writes, resolved in
 	 * the declaration's file: `width: U` of `Base` and `K.WIDTH: U` both bind `?w:Float`.
 	 */
-	@:pin('control') @:killer('M-ARGTYPE-FIELD-FILE') @:killer('M-ARGTYPE-STATIC-FILE')
+	@:pin('control')
+	@:killer('M-ARGTYPE-FIELD-FILE')
+	@:killer('M-ARGTYPE-STATIC-FILE')
 	public function testAFieldsTypeResolvesWhereItsDeclarationWritesIt(): Void {
 		#if (sys || nodejs)
 		final model: Array<String> = [

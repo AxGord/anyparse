@@ -51,7 +51,9 @@ class OwnedTypesCheckTest extends Test {
 		Assert.equals('a.Owned belongs to own.** — the a layer owns it', vs[0].message);
 	}
 
-	@:pin('control') @:killer('M-OWNED-IMPORTS-IGNORED') @:killer('M-OWNED-ALIAS-IGNORED')
+	@:pin('control')
+	@:killer('M-OWNED-IMPORTS-IGNORED')
+	@:killer('M-OWNED-ALIAS-IGNORED')
 	public function testAnImportAndAnAliasAreMentions(): Void {
 		final user: String = 'package b;\n\nimport a.Owned as Alias;\n\nclass User {\n\tvar f: Alias;\n}\n';
 		Assert.same([3, 6], linesIn(user, TYPE_CONFIG));
@@ -62,13 +64,15 @@ class OwnedTypesCheckTest extends Test {
 		Assert.same([3], linesIn('package b;\n\nimport a.Owned.make;\n\nclass User {}\n', TYPE_CONFIG));
 	}
 
-	@:pin('control') @:killer('M-OWNED-QUALIFIED-EXPR-IGNORED')
+	@:pin('control')
+	@:killer('M-OWNED-QUALIFIED-EXPR-IGNORED')
 	public function testAQualifiedExpressionIsAMention(): Void {
 		final user: String = 'package b;\n\nclass User {\n\tfunction m(): Void {\n\t\ta.Owned.make();\n\t}\n}\n';
 		Assert.same([5], linesIn(user, TYPE_CONFIG));
 	}
 
-	@:pin('control') @:killer('M-OWNED-BOUND-BY-NAME')
+	@:pin('control')
+	@:killer('M-OWNED-BOUND-BY-NAME')
 	public function testASameNamedTypeOfAnotherPackageIsNotReported(): Void {
 		final user: String = 'package b;\n\nimport other.Owned;\n\nclass User {\n\tvar f: Owned;\n\n'
 			+ '\tfunction m(o: Owned): Void {\n\t\tOwned.make();\n\t\tnew Owned();\n\t\to.run();\n\t}\n}\n';
@@ -76,26 +80,30 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** An import of a module the index does not hold may bind the name: both the import and the use are reported. */
-	@:pin('control') @:killer('M-OWNED-UNKNOWN-SILENT')
+	@:pin('control')
+	@:killer('M-OWNED-UNKNOWN-SILENT')
 	public function testAnUnresolvableMentionIsReported(): Void {
 		final user: String = 'package b;\n\nimport gone.Owned;\n\nclass User {\n\tvar f: Owned;\n}\n';
 		Assert.same([3, 6], linesIn(user, TYPE_CONFIG));
 	}
 
 	/** No resolution tier binds the name, so only a built-in could: it is not the owned type. */
-	@:pin('control') @:killer('M-OWNED-FREE-REPORTED')
+	@:pin('control')
+	@:killer('M-OWNED-FREE-REPORTED')
 	public function testANameNoTierBindsIsNotReported(): Void {
 		Assert.same([], linesIn('package b;\n\nclass User {\n\tvar f: Owned;\n}\n', TYPE_CONFIG));
 	}
 
-	@:pin('control') @:killer('M-OWNED-VALUE-IS-TYPE')
+	@:pin('control')
+	@:killer('M-OWNED-VALUE-IS-TYPE')
 	public function testAValueNamedLikeTheTypeIsNotReported(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\n\nclass User {\n\tfunction m(Owned: Int): Void {\n\t\ttrace(Owned);\n\t}\n}\n';
 		Assert.same([3], linesIn(user, TYPE_CONFIG));
 	}
 
 	/** `own.**` reaches every package under `own`; `own.*` only its direct modules. */
-	@:pin('control') @:killer('M-OWNED-OWNERS-IGNORED')
+	@:pin('control')
+	@:killer('M-OWNED-OWNERS-IGNORED')
 	public function testOwnersArePackageGlobs(): Void {
 		final deep: Array<{ file: String, source: String }> = [
 			{ file: 'own/Insider.hx', source: INSIDER },
@@ -106,13 +114,15 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** An owner naming a sub-type owns that type's body, not the module's main type beside it. */
-	@:pin('control') @:killer('M-OWNED-ENCLOSING-TYPE')
+	@:pin('control')
+	@:killer('M-OWNED-ENCLOSING-TYPE')
 	public function testAnOwnerTypeOwnsItsOwnBody(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\n\nclass User {\n\tvar f: Owned;\n}\n\nclass Inner {\n\tvar g: Owned;\n}\n';
 		Assert.same([3, 6], linesIn(user, TYPE_CONFIG.replace('own.**', 'b.User.Inner')));
 	}
 
-	@:pin('control') @:killer('M-OWNED-DECLARING-MODULE')
+	@:pin('control')
+	@:killer('M-OWNED-DECLARING-MODULE')
 	public function testTheDeclaringModuleOwnsItsType(): Void {
 		Assert.same([], filesUnder('a/Owned', [], ALL_CONFIG));
 	}
@@ -124,7 +134,8 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** A static is reached through its own type, plain or qualified — never through a value, nor a subtype, which Haxe rejects. */
-	@:pin('control') @:killer('M-OWNED-STATIC-THROUGH-SUBTYPE')
+	@:pin('control')
+	@:killer('M-OWNED-STATIC-THROUGH-SUBTYPE')
 	public function testAStaticMemberIsReachedThroughItsType(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\n\nclass User {\n\tfunction m(o: Owned): Void {\n'
 			+ '\t\tOwned.make();\n\t\ta.Owned.make();\n\t\to.make();\n\t\tSub.make();\n\t}\n}\n';
@@ -132,7 +143,8 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** An instance member is reached through a receiver the shared typer types — a subtype included — and only there. */
-	@:pin('control') @:killer('M-OWNED-NO-SUPERTYPE-WALK')
+	@:pin('control')
+	@:killer('M-OWNED-NO-SUPERTYPE-WALK')
 	public function testAnInstanceMemberIsReachedThroughATypedReceiver(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\nimport a.Sub;\n\nclass User {\n'
 			+ '\tfunction m(o: Owned, s: Sub, d: Dynamic): Void {\n\t\to.run();\n\t\ts.run();\n\t\td.run();\n\t}\n}\n';
@@ -140,14 +152,18 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** A receiver whose meaning is unknown reaches a static by name; an instance member is never matched by name alone. */
-	@:pin('control') @:killer('M-OWNED-STATIC-UNKNOWN-SILENT') @:killer('M-OWNED-UNKNOWN-SILENT') @:killer('M-OWNED-INSTANCE-BY-NAME')
+	@:pin('control')
+	@:killer('M-OWNED-STATIC-UNKNOWN-SILENT')
+	@:killer('M-OWNED-UNKNOWN-SILENT')
+	@:killer('M-OWNED-INSTANCE-BY-NAME')
 	public function testAnUnknownReceiverIsReportedForAStaticOnly(): Void {
 		final user: String =
 			'package b;\n\nimport gone.Thing;\n\nclass User {\n\tfunction m(): Void {\n\t\tThing.make();\n\t\tThing.run();\n\t}\n}\n';
 		Assert.same([7], linesIn(user, memberConfig('a.Owned.make", "a.Owned.run')));
 	}
 
-	@:pin('control') @:killer('M-OWNED-CTOR-ANY-TYPE')
+	@:pin('control')
+	@:killer('M-OWNED-CTOR-ANY-TYPE')
 	public function testConstructionIsTheNewMember(): Void {
 		final user: String = 'package b;\n\nimport a.Owned;\n\nclass User {\n\tfunction m(): Void {\n\t\tnew Owned();\n'
 			+ '\t\tnew other.Owned();\n\t\tnew a.Owned();\n\t}\n}\n';
@@ -159,7 +175,9 @@ class OwnedTypesCheckTest extends Test {
 	 * holding the import compile: the receiver is that type, not an unknown one, so a same-named static of the owned type
 	 * is not reached. An import of a module outside the index written after it may still bind the name, and is reported.
 	 */
-	@:pin('control') @:killer('M-OWNED-TIER-NO-USE-SITE') @:killer('M-OWNED-MEMO-IGNORES-SITE')
+	@:pin('control')
+	@:killer('M-OWNED-TIER-NO-USE-SITE')
+	@:killer('M-OWNED-MEMO-IGNORES-SITE')
 	public function testAGuardedImportBindsAUseInItsOwnBranch(): Void {
 		final user: String = 'package b;\n\n#if sys\nimport c.Tool;\n#end\n\nclass User {\n\tfunction m(): Void {\n\t\t#if sys\n'
 			+ '\t\tTool.make();\n\t\t#end\n\t}\n}\n';
@@ -175,7 +193,9 @@ class OwnedTypesCheckTest extends Test {
 	 * A use outside a guarded import's branch binds one type on the builds holding the import and another on the rest: the
 	 * receiver is unknown, and reported only when the owned type is among the types it may be.
 	 */
-	@:pin('control') @:killer('M-OWNED-CANDIDATES-IGNORED') @:killer('M-BINDING-EITHER-DROPS-GUARDED')
+	@:pin('control')
+	@:killer('M-OWNED-CANDIDATES-IGNORED')
+	@:killer('M-BINDING-EITHER-DROPS-GUARDED')
 	public function testAnUnknownReceiverIsReportedOnlyWhenACandidateIsOwned(): Void {
 		final user: String =
 			'package b;\n\n#if sys\nimport c.Tool;\n#end\n\nclass User {\n\tfunction m(): Void {\n\t\tTool.make();\n\t}\n}\n';
@@ -185,7 +205,8 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** A candidate outside the index — a std type the alias of a guarded import names — is the owned type by its path. */
-	@:pin('control') @:killer('M-OWNED-OUTSIDE-CANDIDATE-IGNORED')
+	@:pin('control')
+	@:killer('M-OWNED-OUTSIDE-CANDIDATE-IGNORED')
 	public function testAnOutsideCandidateIsMatchedByItsPath(): Void {
 		if (StdResolver.stdDir() == null) {
 			Assert.pass('no std discovered');
@@ -205,7 +226,8 @@ class OwnedTypesCheckTest extends Test {
 		Assert.same([9, 11], linesIn(user, memberConfig('a.Owned.run')));
 	}
 
-	@:pin('control') @:killer('M-OWNED-SKIP-REASON-NULL')
+	@:pin('control')
+	@:killer('M-OWNED-SKIP-REASON-NULL')
 	public function testNoDeclarationIsInert(): Void {
 		Assert.same([], linesIn('package b;\n\nimport a.Owned;\n\nclass User {}\n', '{}'));
 		Assert.equals('needs-config', new OwnedTypes().skipReason('b/User.hx', LintConfig.parse('{}')));
@@ -213,7 +235,9 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 	/** Every entry the reader cannot keep, and every value it ignores, says so. */
-	@:pin('control') @:killer('M-OWNED-READER-NO-OWNERS') @:killer('M-OWNED-PARSE')
+	@:pin('control')
+	@:killer('M-OWNED-READER-NO-OWNERS')
+	@:killer('M-OWNED-PARSE')
 	public function testTheReaderNamesEveryDrop(): Void {
 		final config: LintConfig = LintConfig.parse(
 			'{"ownedTypes":[1,{"types":["a.T"],"why":"w"},{"owners":["o"],"why":"w"},{"types":["a.T"],"owners":["o"]},'

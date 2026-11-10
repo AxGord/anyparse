@@ -10,7 +10,8 @@ class ThreadSafetyMainStatesTest extends Test {
 	private static inline final CONFIG: String = '{"rules":{"thread-safety":{"sinks":["Db.count"],"shortSinks":["Db.count"]}}}';
 
 	/** The loop's callee rules the short call out under the constant it is handed: nothing repeats it there. */
-	@:pin('control') @:killer('M-TS-STATES-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-STATES-IGNORED')
 	public function testAConstantArgumentRulesTheRepeatedCallOut(): Void {
 		#if (sys || nodejs)
 		Assert.same(['info A L.load | Db.count'], graded(run('load(p, false);')));
@@ -23,7 +24,8 @@ class ThreadSafetyMainStatesTest extends Test {
 	 * The owner is found on the ways that run the call: another loop handing an unknown flag owns it, never the loop
 	 * whose constant rules it out, however near its site.
 	 */
-	@:pin('control') @:killer('M-TS-STATES-OWNER-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-STATES-OWNER-IGNORED')
 	public function testTheOwnerIsOnAWayThatRunsTheCall(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -41,7 +43,10 @@ class ThreadSafetyMainStatesTest extends Test {
 	 * the client's `Token.blockedPost` → `heldRequestInternal`: an object literal handed down is never null, and a `final`
 	 * local bound to `data == null` is that test — the cache read under it never runs from the loop.
 	 */
-	@:pin('control') @:killer('M-TS-COND-FINAL-LOCAL') @:killer('M-TS-ARG-LITERAL-NONNULL') @:killer('M-TS-ARG-FINAL-LOCAL-READ')
+	@:pin('control')
+	@:killer('M-TS-COND-FINAL-LOCAL')
+	@:killer('M-TS-ARG-LITERAL-NONNULL')
+	@:killer('M-TS-ARG-FINAL-LOCAL-READ')
 	public function testALiteralArgumentDecidesAFinalLocalCondition(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> = graded(run(

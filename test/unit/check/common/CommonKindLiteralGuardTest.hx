@@ -53,7 +53,8 @@ class CommonKindLiteralGuardTest extends Test {
 	 * is still there. A literal is read off its raw span, so an interpolated fragment that merely starts with a kind's
 	 * spelling is prose, not a kind.
 	 */
-	@:pin('control') @:killer('M-COMMON-RULE-SPELLS-IF-KIND')
+	@:pin('control')
+	@:killer('M-COMMON-RULE-SPELLS-IF-KIND')
 	public function testNoUnaccountedHaxeKindLiteralInTheCommonRules(): Void {
 		final root: String = CliFixture.repoRoot();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
@@ -82,7 +83,8 @@ class CommonKindLiteralGuardTest extends Test {
 	 * `isModifierOrMetaKind`): which nodes are annotations is `MetaShape.metaKinds`, and a read of
 	 * the Haxe list (`MemberKinds`, `NullFlow`) welds the rule to one grammar where the literal guard above cannot see it.
 	 */
-	@:pin('control') @:killer('M-METAKINDS-COMMON-TABLE-READ')
+	@:pin('control')
+	@:killer('M-METAKINDS-COMMON-TABLE-READ')
 	public function testNoCommonRuleReadsAnAnnotationKindTable(): Void {
 		final root: String = CliFixture.repoRoot();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();

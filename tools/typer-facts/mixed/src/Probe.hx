@@ -38,11 +38,15 @@ typedef Opts = { a: Float, ?b: Int, ?c: String }
 
 abstract Money(Int) from Int to Int {
 
-	@:op(A + B) public function add(o: Money): Money return new Money(this + (o: Int));
+	@:op(A + B)
+	public function add(o: Money): Money return new Money(this + (o: Int));
 
-	@:op(A < B) public function lt(o: Money): String return "x";
+	@:op(A < B)
+	public function lt(o: Money): String return "x";
 
-	@:op(A * B) @:commutative public static function scale(a: Money, f: Float): Float return 1.0;
+	@:op(A * B)
+	@:commutative
+	public static function scale(a: Money, f: Float): Float return 1.0;
 
 	public function new(v: Int) this = v;
 
@@ -52,9 +56,11 @@ abstract Lookup(Array<String>) {
 
 	public function new() this = [];
 
-	@:arrayAccess public function byIndex(i: Int): String return this[i];
+	@:arrayAccess
+	public function byIndex(i: Int): String return this[i];
 
-	@:arrayAccess public function byName(s: String): Int return 0;
+	@:arrayAccess
+	public function byName(s: String): Int return 0;
 
 }
 

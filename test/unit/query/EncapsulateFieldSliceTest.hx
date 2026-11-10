@@ -17,7 +17,7 @@ class EncapsulateFieldSliceTest extends Test {
 	public function testBasicEncapsulate(): Void {
 		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n}';
 		final text: String = okEncap(src, 'Model', 'count');
-		Assert.isTrue(text.contains('@:isVar public var count(get, set):Int'), 'field becomes a property');
+		Assert.isTrue(text.contains('@:isVar\n\tpublic var count(get, set):Int'), 'field becomes a property');
 		Assert.isTrue(text.contains('function get_count():Int'), 'getter added');
 		Assert.isTrue(text.contains('function set_count(value:Int):Int'), 'setter added');
 		Assert.isTrue(text.contains('return count = value'), 'setter assigns the field');

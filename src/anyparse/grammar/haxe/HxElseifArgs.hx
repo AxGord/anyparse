@@ -9,6 +9,11 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxElseifArgs = {
-	@:kw('#elseif') var cond: HxPpCondLit;
-	@:trivia @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxExpr>;
+	@:kw('#elseif')
+	var cond: HxPpCondLit;
+	@:trivia
+	@:sep(',', sepFaithful)
+	@:tryparse
+	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
+	var body: Array<HxExpr>;
 };

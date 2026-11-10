@@ -49,7 +49,8 @@ class StructuralMembershipTest extends Test {
 	 * cannot prove the receiver matches — proving the receiver is iterable is not the same as
 	 * proving its element type binds the signature's type parameter.
 	 */
-	@:pin('control') @:killer('M-EXT-ITERABLE-ELEMENT')
+	@:pin('control')
+	@:killer('M-EXT-ITERABLE-ELEMENT')
 	public function testStructuralParameterAcceptGate(): Void {
 		final index: SymbolIndex = CheckFixture.index(iterableFiles(), new HaxeQueryPlugin());
 
@@ -123,7 +124,8 @@ class StructuralMembershipTest extends Test {
 	 * with the receiver type — so re-pointing the FIELD, rather than adding one beside it, would
 	 * have broken both silently.
 	 */
-	@:pin('control') @:killer('M-ALIAS-TARGET-SIMPLE-NAME')
+	@:pin('control')
+	@:killer('M-ALIAS-TARGET-SIMPLE-NAME')
 	public function testAliasTargetPairAgrees(): Void {
 		final index: SymbolIndex = CheckFixture.index(aliasFiles(), new HaxeQueryPlugin());
 

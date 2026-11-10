@@ -617,7 +617,8 @@ class TrivialGetterShapeCollapseTest extends TrivialGetterCheckTestBase {
 	 * both are the right-hand operand of a short-circuiting `||` whose left operand every
 	 * existing fixture already satisfied.
 	 */
-	@:pin('control') @:killer('M-SUPERDECLARES-FALSE')
+	@:pin('control')
+	@:killer('M-SUPERDECLARES-FALSE')
 	public function testForeignHierarchyBackingNameStaysAccountedFor(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{

@@ -43,7 +43,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A field typed by the class's `T` reached inside a method that declares a `T` of its own still runs the CLASS
 	 * bound's member: here only on the spawned thread, so `A.m` is not main-reached and `B.m`, which nothing calls, is.
 	 */
-	@:pin('control') @:killer('M-GRAPH-BOUND-DECL-SCOPE')
+	@:pin('control')
+	@:killer('M-GRAPH-BOUND-DECL-SCOPE')
 	public function testShadowedTypeParameterKeepsTheFieldsBound(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [
@@ -170,7 +171,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A lock sink the main thread calls is no stall when nothing ever holds that lock across a blocking call. */
-	@:pin('control') @:killer('M-TS-LOCK-ALWAYS-BLOCKS')
+	@:pin('control')
+	@:killer('M-TS-LOCK-ALWAYS-BLOCKS')
 	public function testAShortLockTakenOnMainIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], lockFindings([
@@ -183,7 +185,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** One function holding the lock across a sleep makes it long, and taking it on the main thread anywhere a stall. */
-	@:pin('control') @:killer('M-TS-LONG-NEVER-GROWS')
+	@:pin('control')
+	@:killer('M-TS-LONG-NEVER-GROWS')
 	public function testALockHeldAcrossASleepStallsItsMainThreadTaker(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> Mutex.acquire', lockFindings([
@@ -200,7 +203,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A member read as a value may be the lock another name takes — here `B.use` holds it across a sleep as `x` — so it
 	 * names no lock, and a lock nothing names is long: the main-thread acquire stays reported.
 	 */
-	@:pin('control') @:killer('M-TS-UNSEALED-TRUSTED')
+	@:pin('control')
+	@:killer('M-TS-UNSEALED-TRUSTED')
 	public function testALockMemberThatEscapesStaysReported(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> Mutex.acquire', lockFindings([
@@ -218,7 +222,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * `A.m` handed to `Sub`'s constructor, forwarded through `super(...)` into `B._l`: one lock, named after `A.m`, and
 	 * long for `A.tick` because `B.work` holds it across a sleep.
 	 */
-	@:pin('control') @:killer('M-TS-ALIAS-UNNAMED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-UNNAMED')
 	public function testALockHandedToAConstructorKeepsItsName(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> = lockFindings(aliasFixture('public function make():B return new Sub(m);', 'p', '_l = p;'));
@@ -230,7 +235,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A construction passing anything but the member leaves the parameter's member an unknown lock. */
-	@:pin('control') @:killer('M-TS-ALIAS-FOREIGN-VALUE')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-FOREIGN-VALUE')
 	public function testALockHandedAnotherValueStaysUnknown(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -248,7 +254,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A parameter the constructor writes before storing it may hold another lock by then. */
-	@:pin('control') @:killer('M-TS-ALIAS-PARAM-REUSED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-PARAM-REUSED')
 	public function testAReassignedParameterAliasesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -261,7 +268,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A type handed to code as a value — a library factory the graph holds no body of — may be constructed with anything. */
-	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-REFLECTED')
 	public function testAReflectedTypeAliasesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -284,7 +292,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A construction by reflection of a class chosen by name may pass any lock at the parameter. */
-	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-ANY-ARGS')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-REFLECTED-ANY-ARGS')
 	public function testAReflectiveConstructionAliasesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -304,7 +313,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A reflective construction whose argument list stops before the parameter leaves it null: the alias stands. */
-	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-SHORT-REFUSED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-REFLECTED-SHORT-REFUSED')
 	public function testAReflectiveConstructionTooShortToReachTheParameterKeepsTheAlias(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -324,7 +334,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A reflective construction of a class value written to be of an unrelated type builds nothing the alias rests on. */
-	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-UNTYPED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-REFLECTED-UNTYPED')
 	public function testAReflectiveConstructionOfAnUnrelatedClassKeepsTheAlias(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -346,7 +357,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A class value written to be of the aliased type's own family may be any constructor of it. */
-	@:pin('control') @:killer('M-TS-ALIAS-REFLECTED-FAMILY')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-REFLECTED-FAMILY')
 	public function testAReflectiveConstructionOfTheFamilyAliasesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -369,7 +381,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A static member handed over and written again later: `_l` may still hold the old lock, so taking the member's
 	 * lock under a hold of `_l` waits for another object, re-entrant or not.
 	 */
-	@:pin('control') @:killer('M-TS-ALIAS-STATIC-REWRITTEN')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-STATIC-REWRITTEN')
 	public function testARewrittenStaticSourceIsNoRetake(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> =
@@ -394,7 +407,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** The member handed over, read as a value anywhere else, may alias a third lock: both stay unknown. */
-	@:pin('control') @:killer('M-TS-ALIAS-SOURCE-UNSEALED')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-SOURCE-UNSEALED')
 	public function testAnEscapingSourceAliasesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -415,7 +429,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * `B` extends `A`, so a `B` holds its own `A.m` and, in `_l`, the `A.m` of whoever made it: taking `_l` under a hold
 	 * of `m` waits for another object's lock, re-entrant or not.
 	 */
-	@:pin('control') @:killer('M-TS-ALIAS-SELF-REENTRANT')
+	@:pin('control')
+	@:killer('M-TS-ALIAS-SELF-REENTRANT')
 	public function testAnAliasIsNeverARetakeOfTheHoldersOwnLock(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> =
@@ -439,7 +454,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A release on an early-return path closes the window on THAT path only: the sleep after the `if` is still held. */
-	@:pin('control') @:killer('M-TS-WINDOW-IF-RELEASES')
+	@:pin('control')
+	@:killer('M-TS-WINDOW-IF-RELEASES')
 	public function testAReleaseOnAnEarlyReturnKeepsTheRestOfTheWindow(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
@@ -452,7 +468,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold only a background thread ever takes the lock around stalls no main-thread code: nothing is reported. */
-	@:pin('control') @:killer('M-TS-HELD-ANY-THREAD')
+	@:pin('control')
+	@:killer('M-TS-HELD-ANY-THREAD')
 	public function testAHoldOnlyABackgroundThreadTakesIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], lockFindings([
@@ -466,7 +483,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A function releasing a lock it never took holds it across a function boundary: the lock is long. */
-	@:pin('control') @:killer('M-TS-CROSSING-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-CROSSING-IGNORED')
 	public function testAReleaseWithoutATakeMakesTheLockLong(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> Mutex.acquire', lockFindings([
@@ -479,7 +497,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** The owner's constructor holds its own fresh lock before the object reaches anyone: that hold blocks no one. */
-	@:pin('control') @:killer('M-TS-CTOR-CONTENDED')
+	@:pin('control')
+	@:killer('M-TS-CTOR-CONTENDED')
 	public function testAHoldInTheOwnersConstructorBlocksNoOne(): Void {
 		#if (sys || nodejs)
 		Assert.same(['main thread reaches blocking "Sys.sleep": A.new -> Sys.sleep'], lockFindings([
@@ -492,7 +511,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold across a call the graph resolves to nothing — here a callback stored in a field — may block: the lock is long. */
-	@:pin('control') @:killer('M-TS-BLIND-CALL-SHORT')
+	@:pin('control')
+	@:killer('M-TS-BLIND-CALL-SHORT')
 	public function testAHoldAcrossAnUnresolvedCallMakesTheLockLong(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> A.work -> Mutex.acquire', lockFindings([
@@ -507,7 +527,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A constructor that hands `this` out BEFORE its hold is no private constructor: the hold across a sleep counts. */
-	@:pin('control') @:killer('M-TS-CTOR-ESCAPE-BLIND')
+	@:pin('control')
+	@:killer('M-TS-CTOR-ESCAPE-BLIND')
 	public function testAConstructorPublishingItselfFirstHoldsAContendedLock(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.new" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
@@ -520,7 +541,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A loop body is walked until its state settles: a lock taken on one pass is held across the sleep of the next. */
-	@:pin('control') @:killer('M-TS-LOOP-ONE-PASS')
+	@:pin('control')
+	@:killer('M-TS-LOOP-ONE-PASS')
 	public function testALockTakenInALoopIsHeldOnTheNextPass(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
@@ -536,7 +558,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A lock call through a receiver the graph cannot type (`Dynamic`, a cast, a type parameter) may reach ANY object's
 	 * member of that name, so the member is no longer sealed: its main-thread take stays reported.
 	 */
-	@:pin('control') @:killer('M-TS-UNNAMED-RECEIVER-SEALED')
+	@:pin('control')
+	@:killer('M-TS-UNNAMED-RECEIVER-SEALED')
 	public function testALockCallThroughAnUntypedReceiverUnsealsTheMember(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> = lockFindings([
@@ -555,8 +578,12 @@ class ThreadSafetyCheckTest extends Test {
 	 * stays reported (review F3). One on a class declaring no such member leaves it sealed; a computed name on a value of
 	 * no known class unseals every lock member at once, the sound default (review N2), and the run names the writer.
 	 */
-	@:pin('control') @:killer('M-TS-SEAL-REFLECT') @:killer('M-TS-SEAL-REFLECT-REACH') @:killer('M-TS-SEAL-REFLECT-LITERAL-ANY')
-	@:killer('M-TS-SEAL-REFLECT-UNPLACED') @:killer('M-TS-SEAL-UNPLACED-NOTICE')
+	@:pin('control')
+	@:killer('M-TS-SEAL-REFLECT')
+	@:killer('M-TS-SEAL-REFLECT-REACH')
+	@:killer('M-TS-SEAL-REFLECT-LITERAL-ANY')
+	@:killer('M-TS-SEAL-REFLECT-UNPLACED')
+	@:killer('M-TS-SEAL-UNPLACED-NOTICE')
 	public function testAReflectiveWriteUnsealsTheMember(): Void {
 		#if (sys || nodejs)
 		inline function found(alias: String): Array<String> {
@@ -591,7 +618,8 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	@:pin('control') @:killer('M-TS-ACCESSOR-TAINT')
+	@:pin('control')
+	@:killer('M-TS-ACCESSOR-TAINT')
 	public function testLockHeldAcrossABlockingGetterFlagged(): Void {
 		// Reading `_p.v` runs `get_v`, and that getter sleeps: the property read is a call like any other.
 		#if (sys || nodejs)
@@ -673,7 +701,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * Two config chains naming different sinks, one graph: each call site is judged by the chain of its own
 	 * file, whichever file the run lists first, and the main-thread chain still crosses from one chain into the other.
 	 */
-	@:pin('control') @:killer('M-TS-FIRST-FILE-LISTS')
+	@:pin('control')
+	@:killer('M-TS-FIRST-FILE-LISTS')
 	public function testEachCallSiteJudgedByItsOwnChain(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -701,7 +730,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A node one chain names a sink is a plain function in a chain that does not: there it is tainted by the sink it
 	 * calls, so a lock held across a call to it is reported, whichever file the run lists first.
 	 */
-	@:pin('control') @:killer('M-TS-TAINT-UNION-SINK')
+	@:pin('control')
+	@:killer('M-TS-TAINT-UNION-SINK')
 	public function testASinkOfOneChainIsAPlainCallInAnother(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -729,7 +759,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A file whose chain names no sinks reports nothing but stays in the graph: its `spawns` registration still sends
 	 * the callback to a background thread, so the sink call inside it is not a main-thread finding.
 	 */
-	@:pin('control') @:killer('M-TS-GRAPH-CUT')
+	@:pin('control')
+	@:killer('M-TS-GRAPH-CUT')
 	public function testAFileWithoutSinksStillShapesTheGraph(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -765,7 +796,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * the one `x` reports. The report gate has ONE owner, `Linter.runGated` (`GraphScoped`) — the rule's own copy of it
 	 * was unobservable in production and is gone (B8b).
 	 */
-	@:pin('control') @:killer('M-TS-REPORT-UNGATED')
+	@:pin('control')
+	@:killer('M-TS-REPORT-UNGATED')
 	public function testNoFindingInAFileWhoseChainWritesNoOption(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -793,7 +825,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A malformed `lockPairs` entry of a chain that names no sinks is said too: a chain writing any option
 	 * reports, the builtin sinks applying, and is a config to report on (review round 2 `cfgA`–`cfgE`).
 	 */
-	@:pin('control') @:killer('M-TS-BUILTIN-NEEDS-SINKS')
+	@:pin('control')
+	@:killer('M-TS-BUILTIN-NEEDS-SINKS')
 	public function testAMalformedOptionOfANonReportingChainIsSaid(): Void {
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = [
@@ -812,7 +845,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A call of a function whose whole lock traffic is one take is that take: the caller holds the lock from the call on. */
-	@:pin('control') @:killer('M-TS-WRAPPER-NONE')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-NONE')
 	public function testAHoldTakenThroughAWrapperIsTheCallersHold(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
@@ -825,7 +859,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A wrapper's own take outlives its body and its partner's release precedes it by design: neither makes the lock long. */
-	@:pin('control') @:killer('M-TS-WRAPPER-LEAKS', 'M-TS-WRAPPER-CROSSING')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-LEAKS', 'M-TS-WRAPPER-CROSSING')
 	public function testABriefHoldThroughWrappersKeepsTheLockShort(): Void {
 		#if (sys || nodejs)
 		Assert.same([], lockFindings([
@@ -838,7 +873,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A function that releases on SOME path only is no release wrapper: the caller's hold goes on past the call. */
-	@:pin('control') @:killer('M-TS-WRAPPER-MAY-RELEASE')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-MAY-RELEASE')
 	public function testAConditionalReleaseIsNoWrapper(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "A.m" across a call that can block: Sys.sleep', lockFindings([
@@ -851,7 +887,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A function that takes on SOME path only is no take wrapper: its take leaks, so the lock stays long. */
-	@:pin('control') @:killer('M-TS-WRAPPER-MAY-TAKE')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-MAY-TAKE')
 	public function testAConditionalTakeIsNoWrapper(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> A.lockIt -> Mutex.acquire', lockFindings([
@@ -864,7 +901,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A wrapper called by its name through a receiver the graph cannot type has a caller no one sees: its take stays its own. */
-	@:pin('control') @:killer('M-TS-WRAPPER-UNRESOLVED')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-UNRESOLVED')
 	public function testAWrapperCalledThroughAnUntypedReceiverKeepsItsTakeLong(): Void {
 		#if (sys || nodejs)
 		Assert.contains('main thread reaches blocking "Mutex.acquire": A.main -> B.lockIt -> Mutex.acquire', lockFindings([
@@ -878,7 +916,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A call through an interface whose every implementation is the same wrapper is that wrapper's take. */
-	@:pin('control') @:killer('M-TS-WRAPPER-NO-PASS-THROUGH')
+	@:pin('control')
+	@:killer('M-TS-WRAPPER-NO-PASS-THROUGH')
 	public function testAWrapperReachedThroughAnInterfaceTakesTheLock(): Void {
 		#if (sys || nodejs)
 		Assert.contains('"A.main" holds "B.m" across a call that can block: Sys.sleep', lockFindings([
@@ -893,7 +932,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** The main thread through a `quietRoots` function reaches its sinks unreported. */
-	@:pin('control') @:killer('M-TS-QUIET-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-QUIET-IGNORED')
 	public function testAPathThroughAQuietRootIsNotReported(): Void {
 		#if (sys || nodejs)
 		Assert.same([], violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
@@ -910,7 +950,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A hold only a `quietRoots` function runs is quiet too (the client's Help-menu cache wipe under the file-system locks): the
 	 * main thread waits there on purpose, and never for its own hold — while a hold some loud path also runs still reports.
 	 */
-	@:pin('control') @:killer('M-TS-QUIET-HOLD')
+	@:pin('control')
+	@:killer('M-TS-QUIET-HOLD')
 	public function testAHoldOnlyAQuietRootRunsIsNotReported(): Void {
 		#if (sys || nodejs)
 		final fixture: String -> Array<Violation> = also ->
@@ -933,7 +974,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A sink a quiet root reaches is still reported when another main-thread path reaches it too. */
-	@:pin('control') @:killer('M-TS-QUIET-SWALLOWS')
+	@:pin('control')
+	@:killer('M-TS-QUIET-SWALLOWS')
 	public function testAnotherPathToAQuietSinkStillReports(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"quietRoots":["A.shutdown"]}}}', [
@@ -947,7 +989,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** What a quiet root running on a background thread marshals to the main thread is as quiet as the root. */
-	@:pin('control') @:killer('M-TS-QUIET-INTO-CALLBACK')
+	@:pin('control')
+	@:killer('M-TS-QUIET-INTO-CALLBACK')
 	public function testWhatAQuietRootRegistersRunsLoud(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -972,7 +1015,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A quiet root loud main-thread code calls is no quiet root: its whole reach reports. */
-	@:pin('control') @:killer('M-TS-QUIET-LOUD-CALLER')
+	@:pin('control')
+	@:killer('M-TS-QUIET-LOUD-CALLER')
 	public function testAQuietRootALoudCallerCallsIsLoud(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -990,7 +1034,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Re-entrance is per OBJECT: another instance's lock of the same member, taken under a hold, is a real wait. */
-	@:pin('control') @:killer('M-TS-REENTRANT-ANY-OBJECT')
+	@:pin('control')
+	@:killer('M-TS-REENTRANT-ANY-OBJECT')
 	public function testATakeOfAnotherObjectsLockBlocksUnderAReentrantHold(): Void {
 		#if (sys || nodejs)
 		Assert.same(['"C.transfer" holds "C._m" across a call that can block: Mutex.acquire'], heldBy('C.transfer', objectFixture()));
@@ -1000,7 +1045,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A wrapper called on another object takes that object's lock: a real wait under a re-entrant hold. */
-	@:pin('control') @:killer('M-TS-REENTRANT-WRAPPER-ELSEWHERE')
+	@:pin('control')
+	@:killer('M-TS-REENTRANT-WRAPPER-ELSEWHERE')
 	public function testAWrapperOnAnotherObjectBlocksUnderAReentrantHold(): Void {
 		#if (sys || nodejs)
 		Assert.same([
@@ -1012,7 +1058,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold of ANOTHER object's lock is no hold of the running object's: re-taking the own lock under it still waits. */
-	@:pin('control') @:killer('M-TS-REENTRANT-HOLDER-ELSEWHERE')
+	@:pin('control')
+	@:killer('M-TS-REENTRANT-HOLDER-ELSEWHERE')
 	public function testAHoldOfAnotherObjectsLockIsNotReentrantForTheOwnLock(): Void {
 		#if (sys || nodejs)
 		Assert.same(['"C.cross" holds "C._m" across a call that can block: Mutex.acquire'], heldBy('C.cross', objectFixture()));
@@ -1022,7 +1069,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Re-taking the running object's own lock, directly or through its own methods, blocks nothing under its hold. */
-	@:pin('control') @:killer('M-TS-SELF-NEVER')
+	@:pin('control')
+	@:killer('M-TS-SELF-NEVER')
 	public function testARetakeOfTheOwnObjectsLockIsFree(): Void {
 		#if (sys || nodejs)
 		Assert.same([], heldBy('C.nested', objectFixture()));
@@ -1032,7 +1080,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold of a `reentrantLocks` lock may take that same lock again: the re-take inside it blocks nothing. */
-	@:pin('control') @:killer('M-TS-REENTRANT-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-REENTRANT-IGNORED')
 	public function testARetakeOfAHeldReentrantLockIsNoBlockingCall(): Void {
 		#if (sys || nodejs)
 		Assert.same([], heldBy('A.main', reentrantFixture('"reentrantLocks":["Mutex.acquire"],')));
@@ -1042,7 +1091,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Re-entrance is a property a lock kind is GIVEN: an unlisted one keeps the re-take a blocking call. */
-	@:pin('control') @:killer('M-TS-REENTRANT-ASSUMED')
+	@:pin('control')
+	@:killer('M-TS-REENTRANT-ASSUMED')
 	public function testARetakeOfAnUnlistedLockKindStillBlocks(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -1054,7 +1104,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** One finding per hold: the calls that block are counted, the first `EVIDENCE_CAP` distinct ones named, the rest counted. */
-	@:pin('control') @:killer('M-TS-EVIDENCE-UNCAPPED')
+	@:pin('control')
+	@:killer('M-TS-EVIDENCE-UNCAPPED')
 	public function testAHoldIsOneFindingListingItsBlockingCalls(): Void {
 		#if (sys || nodejs)
 		final names: Array<String> = [for (i in 0...9) 'f$i'];
@@ -1078,7 +1129,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold's finding sits at the first call of the hold that can block. */
-	@:pin('control') @:killer('M-TS-HOLD-ANCHOR-LAST')
+	@:pin('control')
+	@:killer('M-TS-HOLD-ANCHOR-LAST')
 	public function testAHoldIsAnchoredAtItsFirstBlockingCall(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class A { static final m:Mutex = new Mutex(); static function main():Void { m.acquire(); x();'
@@ -1093,7 +1145,9 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A hold of a lock no member names is reported under the pair's take member. */
-	@:pin('control') @:killer('M-TS-UNKNOWN-LOCK-UNNAMED') @:killer('M-TS-B-UNKNOWN-AS-MAIN-ONLY')
+	@:pin('control')
+	@:killer('M-TS-UNKNOWN-LOCK-UNNAMED')
+	@:killer('M-TS-B-UNKNOWN-AS-MAIN-ONLY')
 	public function testAHoldOfAnUnknownLockNamesThePair(): Void {
 		#if (sys || nodejs)
 		Assert.same(['"B.use" holds "Mutex.acquire" across a call that can block: Sys.sleep'], heldBy('B.use', lockFindings([
@@ -1106,7 +1160,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** One main-thread finding per call site, naming every sink a dispatch there may reach. */
-	@:pin('control') @:killer('M-TS-SITE-PER-TARGET')
+	@:pin('control')
+	@:killer('M-TS-SITE-PER-TARGET')
 	public function testAMainThreadCallSiteIsOneFinding(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["I.read","B.read"]}}}', [
@@ -1125,7 +1180,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * `download` holds `_batch` and calls `save`, which takes `_mutation`. One finding, at the call where the main
 	 * thread's hold reaches the other lock, naming both chains.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-ANCHOR-AT-TAKE')
+	@:pin('control')
+	@:killer('M-TS-ORDER-ANCHOR-AT-TAKE')
 	public function testALockOrderInversionAcrossThreadsIsReported(): Void {
 		#if (sys || nodejs)
 		final sources: Array<String> = storeFixture(
@@ -1144,7 +1200,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** The fixed order — `_batch` before `_mutation` everywhere, `Db.add` re-taking the re-entrant `_batch` — orders nothing backwards. */
-	@:pin('control') @:killer('M-TS-ORDER-RETAKE-STEPS')
+	@:pin('control')
+	@:killer('M-TS-ORDER-RETAKE-STEPS')
 	public function testOneLockOrderOnEveryThreadIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -1169,7 +1226,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Both orders taken only on background threads: one worker may run them both, so the pair is not reported. */
-	@:pin('control') @:killer('M-TS-ORDER-BG-AS-MAIN')
+	@:pin('control')
+	@:killer('M-TS-ORDER-BG-AS-MAIN')
 	public function testAnInversionBetweenBackgroundStepsIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -1187,7 +1245,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A helper taking two locks (`acquireLocks`) leaves both held in its caller: `W.rename`, called under them, re-takes
 	 * them through `createFolder`, which orders nothing — while the background `stamp` takes `_mutation` then `_tree`.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-NO-HELPER-HOLDS')
+	@:pin('control')
+	@:killer('M-TS-ORDER-NO-HELPER-HOLDS')
 	public function testAHelperTakingTwoLocksHoldsThemInItsCaller(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
@@ -1210,7 +1269,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * `Ui.defer`, which `registers` names — runs later, holding nothing: `takeB` is no step from `_a` to `_b`.
 	 * A value handed to a call no list names runs where it is handed (`ThreadStates.runsHere`), under the hold.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-FOLLOWS-REFS')
+	@:pin('control')
+	@:killer('M-TS-ORDER-FOLLOWS-REFS')
 	public function testACallbackRegisteredUnderAHoldTakesNothingInOrder(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
@@ -1226,7 +1286,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A lock no member names (a parameter) is no lock of the order: two unknown locks may be any two objects. */
-	@:pin('control') @:killer('M-TS-ORDER-UNKNOWN-LOCK')
+	@:pin('control')
+	@:killer('M-TS-ORDER-UNKNOWN-LOCK')
 	public function testAnUnknownLockOrdersNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
@@ -1241,7 +1302,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Two functions calling each other, which nothing else calls, are still walked: from either, holding nothing, on the main thread. */
-	@:pin('control') @:killer('M-TS-ORDER-CYCLES-UNWALKED')
+	@:pin('control')
+	@:killer('M-TS-ORDER-CYCLES-UNWALKED')
 	public function testACallCycleNothingEntersIsWalked(): Void {
 		#if (sys || nodejs)
 		Assert.equals(
@@ -1259,7 +1321,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A take in the owner's constructor, on the object no other thread can reach yet, orders nothing. */
-	@:pin('control') @:killer('M-TS-ORDER-CTOR-CONTENDED')
+	@:pin('control')
+	@:killer('M-TS-ORDER-CTOR-CONTENDED')
 	public function testATakeInTheOwnersConstructorOrdersNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
@@ -1277,7 +1340,8 @@ class ThreadSafetyCheckTest extends Test {
 	 * A helper giving back two locks (`releaseLocks`) ends their holds in its caller: `w.touch()` after it runs holding
 	 * neither, while the background `stamp` takes `_tree` and then `_mutation`.
 	 */
-	@:pin('control') @:killer('M-TS-ORDER-HELPER-NEVER-RELEASES')
+	@:pin('control')
+	@:killer('M-TS-ORDER-HELPER-NEVER-RELEASES')
 	public function testAHelperGivingBackTwoLocksEndsTheirHolds(): Void {
 		#if (sys || nodejs)
 		Assert.same([], orderFindings([
@@ -1295,7 +1359,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** the client's `addRemoteAction2`: a `throw` in a `switch` between the take and the release leaves the lock held. */
-	@:pin('control') @:killer('M-TS-THROW-UNRAISED')
+	@:pin('control')
+	@:killer('M-TS-THROW-UNRAISED')
 	public function testAThrowBetweenTakeAndReleaseLeavesTheLockHeld(): Void {
 		#if (sys || nodejs)
 		final source: String = 'class Db { final _m:Mutex = new Mutex(); public function new() {} public function add(kind:Int):Bool {'
@@ -1313,7 +1378,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** Two takes of one lock held at one `throw` are one finding there. */
-	@:pin('control') @:killer('M-TS-THROW-PER-TAKE')
+	@:pin('control')
+	@:killer('M-TS-THROW-PER-TAKE')
 	public function testTwoTakesHeldAtOneThrowAreOneFinding(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -1331,7 +1397,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A throw under the two locks a helper takes leaves both held: the holds a helper opens in its caller escape too. */
-	@:pin('control') @:killer('M-TS-THROW-HELPER-HOLDS-UNREAD')
+	@:pin('control')
+	@:killer('M-TS-THROW-HELPER-HOLDS-UNREAD')
 	public function testAThrowUnderAHelpersLocksLeavesBothHeld(): Void {
 		#if (sys || nodejs)
 		final found: Array<String> = throwFindings('', [
@@ -1362,7 +1429,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A `catch` that releases and rethrows gives the lock back on the exceptional path. */
-	@:pin('control') @:killer('M-TS-THROW-CATCH-IGNORED')
+	@:pin('control')
+	@:killer('M-TS-THROW-CATCH-IGNORED')
 	public function testACatchReleasingAndRethrowingIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('', [
@@ -1375,7 +1443,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A take inside the `try`: what the body threw while holding reaches the `catch` held, and its rethrow escapes with it. */
-	@:pin('control') @:killer('M-TS-THROW-CATCH-ENTRY-UNHELD')
+	@:pin('control')
+	@:killer('M-TS-THROW-CATCH-ENTRY-UNHELD')
 	public function testARethrowOfWhatTheBodyThrewHoldingEscapesHeld(): Void {
 		#if (sys || nodejs)
 		Assert.same(
@@ -1393,7 +1462,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** the client's `TreeWatcher.createDirectory`: a hold across a call that reaches a `throwers` entry with no `catch` on the way. */
-	@:pin('control') @:killer('M-TS-THROW-NO-PROPAGATION')
+	@:pin('control')
+	@:killer('M-TS-THROW-NO-PROPAGATION')
 	public function testAHoldAcrossACallReachingAThrowerEscapes(): Void {
 		#if (sys || nodejs)
 		Assert.same([
@@ -1414,7 +1484,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A callee that catches what the thrower raises raises nothing itself. */
-	@:pin('control') @:killer('M-TS-THROW-TRY-UNCAUGHT')
+	@:pin('control')
+	@:killer('M-TS-THROW-TRY-UNCAUGHT')
 	public function testACalleeCatchingTheThrowerRaisesNothing(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [watcherFixture('try ensure(p) catch (e:Dynamic) {}')]));
@@ -1433,7 +1504,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A `throw` inside a function value made under the hold runs later, not where the lock is held. */
-	@:pin('control') @:killer('M-TS-THROW-NESTED-FN')
+	@:pin('control')
+	@:killer('M-TS-THROW-NESTED-FN')
 	public function testAThrowInALambdaMadeUnderTheHoldIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('', [
@@ -1446,7 +1518,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A raising call in a step that also releases the lock may run after the release: the step raises nothing held. */
-	@:pin('control') @:killer('M-TS-THROW-STEP-RELEASES')
+	@:pin('control')
+	@:killer('M-TS-THROW-STEP-RELEASES')
 	public function testARaisingCallInAStepThatReleasesIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
@@ -1460,7 +1533,8 @@ class ThreadSafetyCheckTest extends Test {
 	}
 
 	/** A raising call in the very step that takes the lock, ahead of the take, raises with nothing held. */
-	@:pin('control') @:killer('M-TS-THROW-BEFORE-TAKE')
+	@:pin('control')
+	@:killer('M-TS-THROW-BEFORE-TAKE')
 	public function testARaisingCallAheadOfTheTakeInItsStepIsQuiet(): Void {
 		#if (sys || nodejs)
 		Assert.same([], throwFindings('"FileSystem.createDirectory"', [
