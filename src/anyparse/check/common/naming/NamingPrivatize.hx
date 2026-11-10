@@ -197,7 +197,7 @@ final class NamingPrivatize {
 	private static function memberAt(cls: QueryNode, declSpan: Span, source: String, plugin: GrammarPlugin): Null<FoundMember> {
 		final seams: MemberBranchSeams = MemberBranchScan.seamsOf(plugin.refShape(), source, plugin.lexicalRegions.bind(source));
 		var found: Null<FoundMember> = null;
-		MemberBranchScan.eachMember(seams, cls, child -> MemberKinds.isMemberDeclKind(child.kind), (child, run, certain) -> {
+		MemberBranchScan.eachMember(seams, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
 			final span: Null<Span> = child.span;
 			if (span != null && span.from == declSpan.from) found = { run: run, certain: certain };
 		});

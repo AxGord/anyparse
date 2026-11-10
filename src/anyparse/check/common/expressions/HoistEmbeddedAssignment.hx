@@ -2,6 +2,7 @@ package anyparse.check.common.expressions;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.RiskyFix;
+import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -268,11 +269,11 @@ final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff imple
 			if (!inContainer || node.children.length != 2) return false;
 			final target: QueryNode = node.children[0];
 			if (target.kind != spine.ident || target.name == null) return false;
-			if (subtreeHas(node.children[1], spine.assign)) return false;
+			if (MemberKinds.subtreeContainsKind(node.children[1], spine.assign)) return false;
 			found.push(node);
 			return true;
 		}
-		if (!spine.passThrough.contains(node.kind)) return !subtreeHas(node, spine.assign);
+		if (!spine.passThrough.contains(node.kind)) return !MemberKinds.subtreeContainsKind(node, spine.assign);
 		final within: Bool = inContainer || spine.containers.contains(node.kind);
 		return node.children.foreach(child -> descend(child, spine, within, false, found));
 	}
@@ -280,10 +281,6 @@ final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff imple
 	/** The bare name an assignment writes, or null when its l-value is not one. */
 	private static function targetName(assign: QueryNode): Null<String> {
 		return assign.children.length == 0 ? null : assign.children[0].name;
-	}
-
-	private static function subtreeHas(node: QueryNode, kind: String): Bool {
-		return node.kind == kind || node.children.exists(child -> subtreeHas(child, kind));
 	}
 
 	/** How many nodes in `node`'s subtree carry `name` — any kind, so a read through any form counts. */

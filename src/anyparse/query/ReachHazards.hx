@@ -142,7 +142,7 @@ final class ReachHazards {
 		final out: Array<Span> = [];
 		final seams: MemberBranchSeams = MemberBranchScan.seamsOf(_shape, source, _plugin.lexicalRegions.bind(source));
 		final host: QueryNode = RefactorSupport.typeDeclOf(decls[0])?.nameNode ?? decls[0];
-		MemberBranchScan.eachMember(seams, host, c -> MemberKinds.isMemberDeclKind(c.kind), (c, run, certain) -> {
+		MemberBranchScan.eachMember(seams, host, MemberKinds.isMemberDeclNode, (c, run, certain) -> {
 			final declaredStatic: Bool = staticKind != null && run.exists(m -> m.kind == staticKind);
 			final init: Null<QueryNode> = fieldKinds.contains(c.kind) ? CtorFieldFold.declInitializer(c, _shape) : null;
 			final span: Null<Span> = init?.span;

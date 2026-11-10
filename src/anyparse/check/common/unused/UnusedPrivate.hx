@@ -982,7 +982,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		for (child in node.children)
 			out = condKind != null && child.kind == condKind
 				? survivingPerType(child, seams, condKind, out)
-				: MemberBranchScan.survivingDeletions(seams, child, out, c -> MemberKinds.isMemberDeclKind(c.kind));
+				: MemberBranchScan.survivingDeletions(seams, child, out, MemberKinds.isMemberDeclNode);
 		return out;
 	}
 

@@ -389,7 +389,7 @@ final class MemberBranchScan {
 	private static function eachRegion(seams: MemberBranchSeams, container: QueryNode, visit: QueryNode -> Void): Void {
 		for (child in container.children) {
 			if (isRegion(seams, child)) visit(child);
-			if (!MemberKinds.isMemberDeclKind(child.kind)) eachRegion(seams, child, visit);
+			if (!MemberKinds.isMemberDeclNode(child)) eachRegion(seams, child, visit);
 		}
 	}
 

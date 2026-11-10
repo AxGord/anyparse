@@ -641,7 +641,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		var proven: Bool = false;
 		var refused: Bool = false;
 		MemberKinds.eachMemberHost(host, memberHost -> {
-			for (child in memberHost.children) if (child.name == name && MemberKinds.isMemberDeclKind(child.kind)) {
+			for (child in memberHost.children) if (child.name == name && MemberKinds.isMemberDeclNode(child)) {
 				final span: Null<Span> = child.span;
 				if (span == null || !s.fieldDeclKinds.contains(child.kind) || accessors[span.from] == true)
 					refused = true;

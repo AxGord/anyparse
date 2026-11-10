@@ -82,7 +82,7 @@ final class SymbolIndexMembers {
 				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
 				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
 				if (
-					MemberKinds.isMemberDeclKind(child.kind)
+					MemberKinds.isMemberDeclNode(child)
 					|| (n.kind == SymbolIndexBuilder.ANON_KIND && ANON_SHORT_FIELD_KINDS.contains(child.kind))
 				) {
 					final nm: Null<String> = child.name;

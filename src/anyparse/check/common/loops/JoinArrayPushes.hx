@@ -593,7 +593,7 @@ final class JoinArrayPushes extends RuleBase {
 
 	/** Whether `node`'s subtree holds a call or a construction — anything that runs code of its own. */
 	private static function runsCode(node: QueryNode, s: Seams): Bool {
-		return node.kind == s.callKind || node.kind == s.newExprKind || node.children.exists(child -> runsCode(child, s));
+		return MemberKinds.subtreeContainsAnyKind(node, MemberKinds.withSetKinds([], [s.callKind, s.newExprKind]));
 	}
 
 	/**

@@ -5,8 +5,6 @@ import anyparse.runtime.Span;
 import anyparse.util.Compare;
 import anyparse.util.Strings;
 
-using Lambda;
-
 /**
  * Parsed `apq search` pattern — a `QueryNode` tree augmented with
  * metavariable identification.
@@ -366,6 +364,11 @@ final class PatternStar {
 		+ 'around a SINGLE star, so a second one has nothing to anchor against (a constructor\'s type arguments are a list '
 		+ 'of their own: `new $$T<...>(...)` is one star in each)';
 
+	/** True when `root` contains at least one star — the gate every text-producing op consults. */
+	public static inline function contains(root: QueryNode): Bool {
+		return MemberKinds.subtreeContainsKind(root, KIND);
+	}
+
 	/**
 	 * True when the `...` starting at `at` stands alone in a child slot —
 	 * the nearest non-space character before it is one of `([{,<` or the
@@ -438,11 +441,6 @@ final class PatternStar {
 	 */
 	public static function validate(root: QueryNode): Null<String> {
 		return root.kind == KIND ? ROOT_STAR_REFUSAL : checkNode(root);
-	}
-
-	/** True when `root` contains at least one star — the gate every text-producing op consults. */
-	public static function contains(root: QueryNode): Bool {
-		return root.kind == KIND || root.children.exists(contains);
 	}
 
 	private static function checkNode(node: QueryNode): Null<String> {

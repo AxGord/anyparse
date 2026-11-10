@@ -127,7 +127,7 @@ final class AddMember {
 		final added: Array<String> = [];
 		var addedOpaqueRegion: Bool = false;
 		MemberKinds.eachMemberHost(decl.nameNode, host -> {
-			for (child in host.children) if (MemberKinds.isMemberDeclKind(child.kind)) {
+			for (child in host.children) if (MemberKinds.isMemberDeclNode(child)) {
 				final span: Null<Span> = child.span;
 				if (span != null) {
 					final isAdded: Bool = span.from >= at && span.from < to;

@@ -2008,7 +2008,7 @@ final class NullFlow {
 	 * else-arm (ok false) implies nothing, so `addLaunderedNarrowing` suppresses its mirror.
 	 */
 	private static function establishCompoundPredicates(state: FlowState, ctx: FlowCtx, name: String, andRhs: QueryNode): Void {
-		if (containsOr(andRhs)) return;
+		if (MemberKinds.subtreeContainsKind(andRhs, BOOL_OR_KIND)) return;
 		// A conjunct target that is ALSO written elsewhere in the RHS (`u != null && (u = mk()) ==
 		// null`) cannot be trusted — `ok` reflects the pre-write value, so exclude it, mirroring
 		// narrowedCopy's cond-self-write guard.
@@ -2034,11 +2034,6 @@ final class NullFlow {
 			notEq: false,
 			compound: true
 		});
-	}
-
-	/** Whether `node`'s subtree contains any logical-`||` operator — the compound-predicate refusal trigger. */
-	private static function containsOr(node: QueryNode): Bool {
-		return node.kind == BOOL_OR_KIND || node.children.exists(containsOr);
 	}
 
 	/**

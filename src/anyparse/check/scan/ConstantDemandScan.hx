@@ -2,6 +2,7 @@ package anyparse.check.scan;
 
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.ReflectionScan.ScopeFile;
+import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 
 /**
@@ -38,8 +39,8 @@ final class ConstantDemandScan {
 	}
 
 	/** Whether the initializer `init` holds a call or an allocation, so running it may reach any field of the type. */
-	public function runsCode(init: QueryNode): Bool {
-		return _callKinds.contains(init.kind) || init.children.exists(runsCode);
+	public inline function runsCode(init: QueryNode): Bool {
+		return MemberKinds.subtreeContainsAnyKind(init, _callKinds);
 	}
 
 	/** Whether `member` is a static-init function holding a call or an allocation: it runs before every initializer. */

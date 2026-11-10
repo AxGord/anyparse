@@ -41,7 +41,7 @@ final class ConstantReadSlots {
 			// projects as a top-level declaration, and its value is the same compile-time constant.
 			slots.push({
 				declaration: true,
-				constant: (constantMembers && !fn && MemberKinds.isMemberDeclKind(c.kind)) || (runInline && !fn),
+				constant: (constantMembers && !fn && MemberKinds.isMemberDeclNode(c)) || (runInline && !fn),
 				constantMembers: c.kind == seams.enumAbstractDeclKind || runEnumMeta || (constantMembers && c.kind == seams.conditionalKind)
 			});
 			runInline = false;

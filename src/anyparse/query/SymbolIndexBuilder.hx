@@ -638,7 +638,7 @@ final class SymbolIndexBuilder {
 		final from: Array<String> = [];
 		final to: Array<String> = [];
 		for (c in node.children) {
-			if (c.kind == shape.conditionalMemberKind && holdsKind(c, [fromKind, toKind])) return null;
+			if (c.kind == shape.conditionalMemberKind && MemberKinds.subtreeContainsAnyKind(c, [fromKind, toKind])) return null;
 			final written: Null<Array<String>> = if (c.kind == fromKind)
 				from
 			else if (c.kind == toKind)
@@ -656,11 +656,6 @@ final class SymbolIndexBuilder {
 			transitive: carriesAnyMeta(pendingMeta, shape.transitiveCastTypeMetaNames),
 			typeSelected: carriesMeta(pendingMeta, shape.typeSelectedAbstractMetaName)
 		};
-	}
-
-	/** Whether `node` or a node under it is of one of `kinds`. */
-	private static function holdsKind(node: QueryNode, kinds: Array<String>): Bool {
-		return kinds.contains(node.kind) || node.children.exists(c -> holdsKind(c, kinds));
 	}
 
 	/**
