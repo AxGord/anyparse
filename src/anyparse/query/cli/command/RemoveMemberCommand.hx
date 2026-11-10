@@ -1,5 +1,7 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.CommentMentions;
 import anyparse.query.ExitCode.*;
 
 /**
@@ -133,10 +135,14 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 		if (named == null) return EXIT_RUNTIME;
 		final target: NamedMember = named;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
-		return CliEdit.finishEdit(
-			op, filePath, write, RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson),
-			fix ? plugin : null
-		);
+		final result: EditResult = RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson);
+		// Comments are prose the structural removal never reads: a name still written in one is said
+		// here, so a removal does not read as a clean scrub.
+		final left: Null<String> = switch result {
+			case Ok(text, _): CommentMentions.leftBehind(filePath, text, plugin.lexicalRegions(text), target.member);
+			case Err(_): null;
+		};
+		return CliEdit.finishEdit(op, filePath, write, result, fix ? plugin : null, left);
 	}
 
 	private static function printRemoveMemberUsage(): Void {

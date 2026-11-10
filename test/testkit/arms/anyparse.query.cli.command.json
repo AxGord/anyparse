@@ -1179,6 +1179,30 @@
 			"find": "if (unmatched.length > 0) {",
 			"replace": "if (false) {",
 			"note": "a scope matching no file narrows the move to the rest in silence"
+		},
+		{
+			"name": "M-MENTIONS-COMMENTS-UNEMITTED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsComments",
+			"find": "final hits: Array<CommentMention> = CommentMentions.find(entry.source, lexicalRegions(entry.source), target);",
+			"replace": "final hits: Array<CommentMention> = [];",
+			"note": "the comments section is never printed, so a name written only in a doc or plain comment reads as absent and a scrub looks clean while prose still names it"
+		},
+		{
+			"name": "M-REMOVE-MEMBER-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveMemberCommand",
+			"method": "runRemoveMember",
+			"find": "CommentMentions.leftBehind(filePath, text, plugin.lexicalRegions(text), target.member)",
+			"replace": "null",
+			"note": "a removal says nothing of the comments that still name the removed member, so it reads as a clean scrub while prose dangles"
+		},
+		{
+			"name": "M-MENTIONS-COMMENTS-LIMITED",
+			"type": "anyparse.query.cli.command.MentionsCommand",
+			"method": "emitMentionsComments",
+			"find": "CliIo.sysPrint(CommentMentions.render(entry.path, entry.source, hits, flat));",
+			"replace": "CliIo.sysPrint(CommentMentions.render(entry.path, entry.source, hits.slice(0, 1), flat));",
+			"note": "the comments section is cut to its first hit per file, so a scrub run with a small --limit reads the remaining comment mentions as gone"
 		}
 	]
 }

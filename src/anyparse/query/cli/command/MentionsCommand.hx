@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.CommentMentions;
 import anyparse.query.ExitCode.*;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
@@ -77,7 +78,7 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 
 	/**
 	 * `apq mentions <name> <file-or-dir-or-glob>...` — every named-leaf
-	 * occurrence of an identifier. Unions three precise queries:
+	 * occurrence of an identifier. Unions three precise queries and a comment scan:
 	 *
 	 *  - `uses` — type-position references (field/param/return/extends).
 	 *  - `refs` — value-binding references (var/fn/param of that name).
@@ -85,12 +86,15 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 	 *    case-patterns (`case Foo(_):` → `IdentExpr 'Foo'`), `new Foo()`
 	 *    ctor calls, field-name slots, and an import / using whose last
 	 *    dotted segment is the name (`import pkg.Foo;`, printed whole).
+	 *  - comments — the name as a whole identifier inside a doc or plain
+	 *    comment, from the lexer's comment regions (never a text scan), as
+	 *    its own section: it is prose, not a reference.
 	 *
 	 * The "everything called X" question. Complementary to `blast`:
 	 * `blast` answers "what could break when I change type T's shape"
 	 * via a name-based field-access SUPERSET; `mentions` answers "where
 	 * is the literal token X tokenised in the AST" precisely. No
-	 * heuristic — every section is structural; a simple name widens only
+	 * heuristic — every section reads the AST or the lexer; a simple name widens only
 	 * to the last segment of a dotted type reference or import. Use this
 	 * when refs/uses/blast all return 0 but you know the name appears
 	 * (case-patterns are the canonical example).
@@ -134,10 +138,11 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 			final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
 			final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat, plugin.lexicalRegions);
 			final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat, refShape.stringLiteralDelimiters);
+			final commentAny: Bool = emitMentionsComments(target, valueTrees, plugin.lexicalRegions, o.flat);
 
-			final any: Bool = usesAny || refsAny || litAny;
+			final any: Bool = usesAny || refsAny || litAny || commentAny;
 			if (any) anyName = true;
-			if (!any) CliIo.stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
+			if (!any) CliIo.stderr('apq mentions: no uses / refs / lit-leaf / comment of "$target" found\n');
 		}
 		return ctx.emptyExit(!anyName);
 	}
@@ -151,7 +156,7 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('  --limit <n>         Cap the lit section at n hits\n');
 		CliIo.sysPrint('  --lang <name>       Grammar plugin (default: by file extension)\n');
 		CliIo.sysPrint('\n');
-		CliIo.sysPrint('Every named-leaf occurrence of an identifier. Unions:\n');
+		CliIo.sysPrint('Every occurrence of an identifier. Unions:\n');
 		CliIo.sysPrint('  uses  — type-position references (precise); a simple <name>\n');
 		CliIo.sysPrint('          also answers a QUALIFIED spelling of the same last\n');
 		CliIo.sysPrint('          segment (`Mod.T`), and the hit prints the path found\n');
@@ -161,12 +166,18 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('          imports, `new Foo()`, field-name slots; a simple <name>\n');
 		CliIo.sysPrint('          also answers an import / using whose LAST segment it\n');
 		CliIo.sysPrint('          is (`import pkg.Foo;`), and the hit prints the path\n');
+		CliIo.sysPrint('  comments — the name as a whole identifier inside a doc or plain\n');
+		CliIo.sysPrint('          comment, each hit labelled `doc` or `plain` with its source line.\n');
+		CliIo.sysPrint('          Never a reference: prose is where a removed or renamed name\n');
+		CliIo.sysPrint('          lingers, so a scrub reads this section too\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Use this when refs/uses/blast return 0 but you know the\n');
 		CliIo.sysPrint('name appears (case-patterns are the canonical example —\n');
-		CliIo.sysPrint('blind to refs/uses/blast). All three sections are structural,\n');
+		CliIo.sysPrint('blind to refs/uses/blast). The first three sections are structural,\n');
 		CliIo.sysPrint('with no heuristic; the only over-match is a qualified path\n');
 		CliIo.sysPrint('whose last segment is the name but whose module is another.\n');
+		CliIo.sysPrint('The comments section reads the lexer\'s comment regions (a string\n');
+		CliIo.sysPrint('literal holding the word is no hit) and is exempt from --limit.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('A bare `--` splits SEVERAL names from the scope: the tree is parsed ONCE\n');
 		CliIo.sysPrint('and every name answered off it, each under its own `=== <name> ===` section.\n');
@@ -213,12 +224,12 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 	private static function collectMentionsValueTrees(
 		targets: Array<String>, paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool
 	): Null<Array<{ path: String, source: String, tree: QueryNode }>> {
-		// Single value-AST pass per file, shared across all three sections AND
+		// Single value-AST pass per file, shared across all four sections AND
 		// across every target of a batch. Mirrors `runBlast`'s caching discipline.
-		// All three sections (uses / refs / lit-exact) search for a target
-		// verbatim, so the raw-substring pre-filter is a strict necessary
-		// condition — taken as the UNION over the targets, since a file holding
-		// any one of them must be parsed. Section 3 (`lit`) matches decoded
+		// All four sections (uses / refs / lit-exact / comments) search for a target
+		// verbatim — a comment hit is a raw substring too — so the raw-substring
+		// pre-filter is a strict necessary condition — taken as the UNION over the
+		// targets, since a file holding any one of them must be parsed. Section 3 (`lit`) matches decoded
 		// literal values, so a backslash-bearing target opts the WHOLE pre-filter
 		// out — same escaped-literal caution as `runLit`, and it has to be all or
 		// nothing: a union that dropped one target's key would skip files that
@@ -317,6 +328,25 @@ final class MentionsCommand implements CliCommand implements LeadingQuery {
 		CliIo.sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
 		for (entry in shown) CliIo.sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return true;
+	}
+
+	private static function emitMentionsComments(
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, lexicalRegions: (String) -> Array<LexRegion>,
+		flat: Bool
+	): Bool {
+		// Section 4 — the name written in a comment, doc or plain. Read from the lexer's comment
+		// regions, so a string literal holding the word is no hit, and kept apart from the three
+		// structural sections: prose is where a removed or renamed name lingers, and a hit there
+		// is not a reference.
+		var any: Bool = false;
+		for (entry in valueTrees) {
+			final hits: Array<CommentMention> = CommentMentions.find(entry.source, lexicalRegions(entry.source), target);
+			if (hits.length == 0) continue;
+			if (!any) CliIo.sysPrint('# comments (doc and plain; whole-identifier, never a reference)\n');
+			any = true;
+			CliIo.sysPrint(CommentMentions.render(entry.path, entry.source, hits, flat));
+		}
+		return any;
 	}
 
 }

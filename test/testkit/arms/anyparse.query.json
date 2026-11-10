@@ -16329,6 +16329,38 @@
 			"find": "!= Same) continue",
 			"replace": "== Unbound) continue",
 			"note": "a file whose A is another type has its mention repointed at the destination"
+		},
+		{
+			"name": "M-COMMENT-MENTIONS-DOC-ALWAYS",
+			"type": "anyparse.query.CommentMentions",
+			"method": "find",
+			"find": "final doc: Bool = SourceComments.isDocBlock(source, tok);",
+			"replace": "final doc: Bool = true;",
+			"note": "every comment hit is labelled doc, so a plain note about a removed name is indistinguishable from its documentation"
+		},
+		{
+			"name": "M-COMMENT-MENTIONS-SUBSTRING",
+			"type": "anyparse.query.CommentMentions",
+			"method": "find",
+			"find": "SourceText.identTokenOffset(source, new Span(from, body.to), name)",
+			"replace": "source.substring(0, body.to).indexOf(name, from)",
+			"note": "a longer identifier that merely contains the name counts as a mention, so a scrub reads a sibling's name as a leftover of the removed one"
+		},
+		{
+			"name": "M-COMMENT-MENTIONS-TEXT-SCAN",
+			"type": "anyparse.query.CommentMentions",
+			"method": "find",
+			"find": "SourceComments.collectCommentTokens(regions)",
+			"replace": "[{ from: 0, to: source.length, isLine: true }]",
+			"note": "the name is looked up in the whole file text instead of the lexer's comment regions, so a string literal holding the word is reported as a comment"
+		},
+		{
+			"name": "M-COMMENT-LEFTBEHIND-DOC-SPLIT",
+			"type": "anyparse.query.CommentMentions",
+			"method": "leftBehind",
+			"find": "final docs: Int = hits.count(hit -> hit.doc);",
+			"replace": "final docs: Int = 0;",
+			"note": "the note counts every remaining mention as plain, so a leftover in a member's documentation is not told apart from a stray comment"
 		}
 	]
 }

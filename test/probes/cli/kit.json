@@ -37,7 +37,8 @@
 		"verifydata/M.hx": "import haxe.macro.Context;\n\nclass M {\n\tpublic static macro function check() {\n\t\tfinal v = haxe.Json.parse(sys.io.File.getContent(\"data.json\"));\n\t\tif (v.a != 1) Context.error(\"bad data\", Context.currentPos());\n\t\treturn macro 1;\n\t}\n}\n",
 		"p/Build.hx": "package p;\n\ntypedef Ctx = {\n\tfinal flag: Bool;\n\tfinal other: Int;\n}\n\nclass Build {\n\tpublic static function make(): Ctx {\n\t\treturn {flag: true, other: 1};\n\t}\n\n\tpublic static function held(): Bool {\n\t\tfinal c: Ctx = {flag: false, other: 2};\n\t\treturn c.flag;\n\t}\n}\n",
 		"p/Reader.hx": "package p;\n\nimport p.Build.Ctx;\n\nclass Reader {\n\tpublic static function read(c: Ctx): Bool {\n\t\treturn c.flag;\n\t}\n}\n",
-		"reg/p.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"M-A\",\n\t\t\t\"type\": \"p.X\",\n\t\t\t\"method\": \"m\",\n\t\t\t\"force\": \"1\",\n\t\t\t\"note\": \"n\"\n\t\t}\n\t]\n}\n"
+		"reg/p.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"M-A\",\n\t\t\t\"type\": \"p.X\",\n\t\t\t\"method\": \"m\",\n\t\t\t\"force\": \"1\",\n\t\t\t\"note\": \"n\"\n\t\t}\n\t]\n}\n",
+		"comments/M.hx": "package a;\n\n/** The class that replaced Zq. */\nclass M {\n\n\t// plain note about Zq here\n\tpublic function new() {}\n\n\t/** Not Zqx, and not aZq either. */\n\t/* block note: Zq */\n\tpublic function f(): Void {\n\t\ttrace('Zq');\n\t}\n\n}\n"
 	},
 	"invocations": [
 		{
@@ -8716,6 +8717,38 @@
 				"exit": 0,
 				"out": "d3e3b5570cb0c6fd",
 				"err": "4228b219eebec95c",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mentions Zq comments",
+			"argv": [
+				"apq",
+				"mentions",
+				"Zq",
+				"comments"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4f81fb18f9522f19",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mentions Zq comments",
+			"argv": [
+				"hxq",
+				"mentions",
+				"Zq",
+				"comments"
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "4f81fb18f9522f19",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		}
