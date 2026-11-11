@@ -362,6 +362,7 @@ final class WriterCtorPatternLowering {
 		}
 		if (TriviaPairAltCtor.isAltTrailOptBranch(branch)) extras++;
 		if (TriviaPairAltCtor.isCaptureSourceBranch(branch)) extras++;
+		if (TriviaPairAltCtor.isCtorKwValueBranch(branch)) extras += 2;
 		return extras;
 	}
 

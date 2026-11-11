@@ -129,7 +129,13 @@
 		"anon-comment/v11.hx": "class C {\n\tvar t:{\n\t\t@:optional var c:Int;\n\t\t// doc\n\t\tvar d:Int;\n\t};\n}\n",
 		"lead/A.hx": "typedef T = {\n\t/* Comment */ a: Float,\n\t/* Comment */ b: Float\n}\n",
 		"lead/G.hx": "typedef T = {\n\t/* Comment */ a: Float,\n\tb: Float\n}\n",
-		"lead/C.hx": "class C {\n\tvar x:{\n\t\t/* Comment */ a: Float,\n\t\t/* Comment */ b: Float\n\t};\n}\n"
+		"lead/C.hx": "class C {\n\tvar x:{\n\t\t/* Comment */ a: Float,\n\t\t/* Comment */ b: Float\n\t};\n}\n",
+		"kwv/o2.hx": "class A {\n\tfunction f() {\n\t\treturn\n\t\t\t// own\n\t\t\tx;\n\t\tthrow // a\n\t\t\t// b\n\t\t\tx;\n\t\treturn x; // t\n\t\treturn; // v\n\t\tvar g = () -> throw\n\t\t\t// own\n\t\t\tx;\n\t\treturn if (a) b else c;\n\t\treturn switch x {\n\t\t\tcase _: 1;\n\t\t}\n\t\ttry // c\n\t\t\tfoo();\n\t\tcatch (e:Dynamic) // d\n\t\t\tbar();\n\t}\n}\n",
+		"kwv/m.hx": "class A {\n\tfunction f() {\n\t\tvar a = try // c\n\t\t\tfoo() catch (e:Dynamic) 1;\n\t\tvar b = do // c\n\t\t\tx; while (y);\n\t}\n\tfunction g() return // c\n\t\tx;\n\tfunction h() {\n\t\treturn /* c */\n\t\t\tx;\n\t\treturn /* c */ x;\n\t}\n}\n",
+		"kwv-trypolicy/b.hx": "class A {\n\tfunction f() {\n\t\ttry {\n\t\t\tfoo();\n\t\t} catch (e:Dynamic) {}\n\t\ttry foo() catch (e:Dynamic) {}\n\t\tvar a = try {\n\t\t\tfoo();\n\t\t} catch (e:Dynamic) 1;\n\t\tvar b = try foo() catch (e:Dynamic) 1;\n\t}\n}\n",
+		"kwv-trypolicy/hxformat.json": "{\"whitespace\":{\"tryPolicy\":\"none\"}}\n",
+		"kwv-objlit/o.hx": "class A {\n\tfunction f() {\n\t\treturn // c\n\t\t{a: 1, b: 2};\n\t}\n\tfunction g() {\n\t\treturn {a: 1, b: 2};\n\t}\n}\n",
+		"kwv-objlit/hxformat.json": "{\"indentation\":{\"indentObjectLiteral\":true},\"lineEnds\":{\"leftCurly\":\"before\"}}\n"
 	},
 	"invocations": [
 		{
@@ -2240,6 +2246,74 @@
 			"expect": {
 				"exit": 0,
 				"out": "d5f0a47ac530b08a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "kwv/o2.hx",
+			"fixpoint": "kwv/o2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"kwv/o2.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bc483835e1ebe746",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "kwv/m.hx",
+			"fixpoint": "kwv/m.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"kwv/m.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "cbbc2609afe79557",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "kwv-trypolicy/b.hx",
+			"fixpoint": "kwv-trypolicy/b.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"kwv-trypolicy/b.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "8065361af92a5273",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "kwv-objlit/o.hx",
+			"fixpoint": "kwv-objlit/o.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"kwv-objlit/o.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2e40865edfe13922",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

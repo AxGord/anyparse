@@ -229,8 +229,13 @@ final class WriterKwRefLowering {
 		final indentEntries: { indentArgs: Null<Array<String>>, ifExprIndentArgs: Null<Array<String>> } = kwRefIndentEntries(branch);
 		final indentArgs: Null<Array<String>> = indentEntries.indentArgs;
 		final ifExprIndentArgs: Null<Array<String>> = indentEntries.ifExprIndentArgs;
-		final policyWrapped: Expr = ctorBodyPolicyFlag != null
-			? WriterBodyPolicyLowering.bodyPolicyWrap(kw.bodyPolicy, {
+		// A `ctorKwTrivia` ctor's comments between its keyword and its operand: handed to the policy wrap as an
+		// `else` body's are, or, with no policy, laid out by the same `kwSameLayoutDoc` its `Same` layout takes.
+		final kwGap: Bool = kwValueGap(kw, c);
+		final afterKwExpr: Null<Expr> = kwGap ? altSlotAccess(branch, children.length, argNames, KwAfter) : null;
+		final kwLeadingExpr: Null<Expr> = kwGap ? altSlotAccess(branch, children.length, argNames, KwLeading) : null;
+		final policyWrapped: Expr = if (ctorBodyPolicyFlag != null)
+			WriterBodyPolicyLowering.bodyPolicyWrap(kw.bodyPolicy, {
 				flagName: ctorBodyPolicyFlag,
 				exprFlagName: ctorBodyPolicyExprFlag,
 				writeCall: subCall,
@@ -242,13 +247,21 @@ final class WriterKwRefLowering {
 				widthAware: ctorWidthAware,
 				ifExprIndentArgs: ifExprIndentArgs,
 				singleLineFlagName: ctorSingleLineFlag,
-				singleLineMultiCtors: ctorSingleLineMultiCtors
+				singleLineMultiCtors: ctorSingleLineMultiCtors,
+				afterKwExpr: afterKwExpr,
+				kwLeadingExpr: kwLeadingExpr
 			})
-			: subCall;
+		else if (kwGap)
+			macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				kwSameLayoutDoc($afterKwExpr, $kwLeadingExpr, _cols, $subCall, false, opt);
+			}
+		else
+			subCall;
 
 		// Build the body Doc: indentValueIfCtor ObjectLit-indent override +
 		// captureSource verbatim/HardFlatten gate — see kwRefBodyExpr.
-		final bodyExpr: Expr = kwRefBodyExpr(kw, c, policyWrapped, subCall, indentArgs);
+		final bodyExpr: Expr = kwRefBodyExpr(kw, c, policyWrapped, subCall, indentArgs, afterKwExpr, kwLeadingExpr);
 
 		// Resolve the kw-trailing-space behaviour (strip vs runtime-switched
 		// space) and assemble the kw / lead / body / trail parts — see
@@ -659,6 +672,7 @@ final class WriterKwRefLowering {
 		// tight under the strip.
 		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
 		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null
+			|| kwValueGap(kw, c)
 			|| subStructStartsWithBodyPolicy(kw, refName)
 			|| subStructStartsWithBodyBreak(kw, refName)
 			|| subStructStartsWithBareBodyBreaks(kw, refName)
@@ -781,7 +795,8 @@ final class WriterKwRefLowering {
 	 * (trivia mode) and its force-flat HardFlatten pin.
 	 */
 	private static function kwRefBodyExpr(
-		kw: KwRefCtx, c: WriterLowering.LowerBranchCtx, policyWrapped: Expr, subCall: Expr, indentArgs: Null<Array<String>>
+		kw: KwRefCtx, c: WriterLowering.LowerBranchCtx, policyWrapped: Expr, subCall: Expr, indentArgs: Null<Array<String>>,
+		afterKwExpr: Null<Expr>, kwLeadingExpr: Null<Expr>
 	): Expr {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
@@ -800,12 +815,17 @@ final class WriterKwRefLowering {
 			final optAccess: Expr = optFieldAccess(optField);
 			final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
 			final valueAccess: Expr = macro $i{argNames[0]};
+			// The bypass writes no kw-trivia slot, so a captured comment keeps the policy wrap that renders it.
+			final slotsEmpty: Expr = afterKwExpr == null || kwLeadingExpr == null
+				? macro true
+				: macro $afterKwExpr == null && $kwLeadingExpr.length == 0;
 			macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				if (
 					$optAccess
 					&& $leftCurlyAccess == anyparse.format.BracePlacement.Next
 					&& Type.enumConstructor($valueAccess) == $v{ctorName}
+					&& $slotsEmpty
 				)
 					_dc([_dop(' '), _dn(_cols, $subCall)])
 				else
@@ -1110,6 +1130,14 @@ final class WriterKwRefLowering {
 			final _eo = $optExpr;
 			opt.$knob && $holds ? _eo : _setEnumAbstract(_eo, opt);
 		};
+	}
+
+	/**
+	 * True when the branch's paired ctor holds the comments between its keyword and its operand
+	 * (`TriviaPairAltCtor.isCtorKwValueBranch`): the operand's layout then owns the gap after the keyword.
+	 */
+	private static function kwValueGap(kw: KwRefCtx, c: WriterLowering.LowerBranchCtx): Bool {
+		return kw.ctx.trivia && kw.isTriviaBearing(c.typePath) && TriviaPairAltCtor.isCtorKwValueBranch(c.branch);
 	}
 
 }

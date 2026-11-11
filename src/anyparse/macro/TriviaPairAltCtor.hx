@@ -264,6 +264,16 @@ final class TriviaPairAltCtor {
 	}
 
 	/**
+	 * True for a single-Ref `@:kw` ctor opted in by `@:fmt(ctorKwTrivia)` (`HxStatement.ReturnStmt`): the gap
+	 * between its keyword and its operand grows the two LAST positional args (`afterKw`, `kwLeading`), the ctor-arg
+	 * twin of a struct's first field opting in (`TriviaPairSlots.isCtorKwBodyRef`), written back the same way.
+	 */
+	public static function isCtorKwValueBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref && branch.hasMeta(':kw') && branch.fmtHasFlag('ctorKwTrivia'));
+	}
+
+	/**
 	 * Number of positional synth args `buildEnumCtor` appends to a paired
 	 * Alt ctor beyond its declared children — the single source of truth
 	 * for the trivia-mode ctor arity every pattern-building consumer
@@ -314,7 +324,8 @@ final class TriviaPairAltCtor {
 			+ (hasPostfixCloseTrailing ? 3 : 0)
 			+ (isInfixChainBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
-			+ (isTernaryTrailBranch(branch) ? 2 : 0);
+			+ (isTernaryTrailBranch(branch) ? 2 : 0)
+			+ (isCtorKwValueBranch(branch) ? 2 : 0);
 		// CHECKSTYLE:ON
 	}
 
@@ -528,6 +539,11 @@ final class TriviaPairAltCtor {
 			// relocating it inside the argument list; null otherwise. Read by the
 			// writer via `argNames[4]`.
 			args.push({ name: 'callLeadingComment', type: nullStrCT });
+		}
+		// The kw→operand gap of a `ctorKwTrivia` ctor, appended last so `altSlotAccess` counts it from the end.
+		if (isCtorKwValueBranch(branch)) {
+			args.push({ name: TriviaTypeSynth.KW_AFTER_ARG_NAME, type: macro : Null<String> });
+			args.push({ name: TriviaTypeSynth.KW_LEADING_ARG_NAME, type: macro : Array<String> });
 		}
 		return {
 			name: ctorName,

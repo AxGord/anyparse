@@ -2763,6 +2763,29 @@
 			"find": "$matrixSucceedsExpr || _gridPads != null",
 			"replace": "$matrixSucceedsExpr",
 			"note": "under a pure noWrap cascade a grid holding a blank line or a comment flattens instead of keeping its rows"
+		},
+		{
+			"name": "M-KW-VALUE-COMMENT-DROPPED",
+			"type": "anyparse.macro.TriviaPairAltCtor",
+			"method": "isCtorKwValueBranch",
+			"force": "false",
+			"note": "a single-Ref kw ctor grows no kw-trivia args, so the comment between `return` / `throw` and its value is dropped at parse"
+		},
+		{
+			"name": "M-KW-SLOT-POLICY-SEP-IGNORED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "kwSlotSep",
+			"find": "emptySep == null ? gap",
+			"replace": "true ? gap",
+			"note": "a site carrying kw-trivia slots sends empty slots through kwGapDoc too, so tryPolicy none / before writes `try {` instead of `try{`"
+		},
+		{
+			"name": "M-KW-REF-OBJLIT-BYPASS-DROPS-SLOTS",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "kwRefBodyExpr",
+			"find": "&& $slotsEmpty",
+			"replace": "&& true",
+			"note": "the indentObjectLiteral bypass of a return value writes no kw-trivia slot, so `return // c` before an object literal under leftCurly before drops the comment"
 		}
 	]
 }

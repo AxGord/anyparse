@@ -324,8 +324,6 @@ final class WriterBodyPolicyLowering {
 		opts: WriterLowering.WrapBodyOpts, hasKwSlots: Bool
 	): { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } {
 		final kwPolicyFlagName: Null<String> = opts.kwPolicyFlagName;
-		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
-		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
 		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final wpAfter: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final wpBoth: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
@@ -344,9 +342,7 @@ final class WriterBodyPolicyLowering {
 		// `return \n{...}`. For Same policy with non-hardline-opening body
 		// (Ident, Call, block ctor `{...}`), OptSpace renders as `' '`,
 		// preserving pre-slice byte output.
-		final sameSepNb: Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
-			: kwPolicyInlineSep ?? macro _dop(' ');
+		final sameSepNb: Expr = hasKwSlots ? kwSlotSep(opts, macro false, kwPolicyInlineSep) : kwPolicyInlineSep ?? macro _dop(' ');
 		return { kwPolicyInlineSep: kwPolicyInlineSep, sameSepNb: sameSepNb };
 	}
 
@@ -459,8 +455,6 @@ final class WriterBodyPolicyLowering {
 		final writeCall: Expr = shared.writeCall;
 		final hasKwSlots: Bool = shared.hasKwSlots;
 		final kwPolicyInlineSep: Null<Expr> = shared.kwPolicyInlineSep;
-		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
-		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
 		final bpPathLC: Array<String> = ['anyparse', 'format', 'BracePlacement'];
 		final nextPatLC: Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
 		final isNextExpr: Expr = {
@@ -468,12 +462,11 @@ final class WriterBodyPolicyLowering {
 			pos: Context.currentPos()
 		};
 		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
-		final sameSepBlock: Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
-			: {
-				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null }], sameSepBlockSameLayout),
-				pos: Context.currentPos()
-			};
+		final slotlessSep: Expr = {
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null }], sameSepBlockSameLayout),
+			pos: Context.currentPos()
+		};
+		final sameSepBlock: Expr = hasKwSlots ? kwSlotSep(opts, isNextExpr, kwPolicyInlineSep == null ? null : slotlessSep) : slotlessSep;
 		return macro _dc([$sameSepBlock, $writeCall]);
 	}
 
@@ -1075,6 +1068,18 @@ final class WriterBodyPolicyLowering {
 		return !shared.hasKwSlots || afterKwExpr == null || kwLeadingExpr == null
 			? fitExpr
 			: macro $afterKwExpr == null && $kwLeadingExpr.length == 0 ? $fitExpr : $nextLayoutExpr;
+	}
+
+	/**
+	 * The kw→body separator of a site carrying kw-trivia slots. Empty slots take `emptySep`, the
+	 * separator the site writes without slots, so a `kwPolicy` knob is still consulted there; a
+	 * captured comment goes through `kwGapDoc`. A null `emptySep` sends both through `kwGapDoc`.
+	 */
+	private static function kwSlotSep(opts: WriterLowering.WrapBodyOpts, nextCurly: Expr, emptySep: Null<Expr>): Expr {
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		final gap: Expr = macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $nextCurly, opt);
+		return emptySep == null ? gap : macro ($afterKwExpr == null && $kwLeadingExpr.length == 0 ? $emptySep : $gap);
 	}
 
 }

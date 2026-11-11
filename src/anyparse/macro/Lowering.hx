@@ -1102,7 +1102,9 @@ class Lowering {
 		final triviaWrapOpenNewline: Bool = _ctx.trivia
 			&& isTriviaBearing(typePath)
 			&& TriviaPairAltCtor.isAltWrapOpenNewlineBranch(branch);
-		final ctorCall: Expr = buildKwRefCtorCall(ctorRef, triviaTrailOpt, triviaCaptureSource, triviaWrapOpenNewline);
+		// `@:fmt(ctorKwTrivia)` on the ctor: the comments between its keyword and its operand ride its two last args.
+		final triviaKwValue: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaPairAltCtor.isCtorKwValueBranch(branch);
+		final ctorCall: Expr = buildKwRefCtorCall(ctorRef, triviaTrailOpt, triviaCaptureSource, triviaWrapOpenNewline, triviaKwValue);
 		final kwLead: Null<String> = branch.annotations[AnnotationKeys.KW_LEAD_TEXT];
 		final steps: Array<Expr> = [macro skipWs(ctx)];
 		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
@@ -1125,7 +1127,7 @@ class Lowering {
 		// is the right default for every other Case 3 kw-branch (`if`,
 		// `while`, `for`, `switch`, `throw`, etc.).
 		final forwardNewlineForBody: Bool = branch.fmtHasFlag('forwardNewlineForBody');
-		appendKwRefLeadSteps(steps, kwLead, leadText, forwardNewlineForBody, triviaWrapOpenNewline);
+		appendKwRefLeadSteps(steps, kwLead, leadText, forwardNewlineForBody, triviaWrapOpenNewline, triviaKwValue);
 		// Capture _start_pos AFTER any lead literal AND its skipWs, so
 		// the substring spans only what lives between lead and trail.
 		// In `@:raw` rules the `skipWs` call gets stripped by the rule-

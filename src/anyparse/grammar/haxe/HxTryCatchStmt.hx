@@ -24,7 +24,7 @@ package anyparse.grammar.haxe;
  * `<field>BeforeNewline:Bool` synth slot to a FIRST Ref field, paired with
  * `@:fmt(forwardNewlineForBody)` on `HxStatement.TryCatchStmt` (Case 3 OMITS the post-kw
  * `skipWs(ctx)` so the inner first-field's `collectTrivia` captures `newlineBefore`), which
- * the writer forwards into `bodyPolicyWrap` for the `Keep` dispatch.
+ * the writer forwards into `bodyPolicyWrap` for the `Keep` dispatch; `@:fmt(ctorKwTrivia)` keeps that gap's comments.
  *
  * omega-try-brace-symmetry: `@:fmt(tryBraceSymmetry('catches', 'BlockStmt'))` on `body` and
  * `@:fmt(tryCatchBraceSymmetry('body', 'BlockStmt'))` on `catches` substitute both halves
@@ -45,7 +45,7 @@ package anyparse.grammar.haxe;
 typedef HxTryCatchStmt = {
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('tryBody'), kwPolicy('tryPolicy'), bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'), beforeNewlineSlotFirst,
-		constructFitBody, tryBraceSymmetry('catches', 'BlockStmt'), tryDeBrace)
+		constructFitBody, tryBraceSymmetry('catches', 'BlockStmt'), tryDeBrace, ctorKwTrivia)
 	var body: HxStatement;
 	@:trivia
 	@:tryparse

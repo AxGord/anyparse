@@ -139,6 +139,9 @@ final class WriterLoweringSupport {
 	private static function altSlotAccess(branch: ShapeNode, baseIdx: Int, argNames: Array<String>, slot: AltSlot): Null<Expr> {
 		// noqa: complexity
 		if (!altSlotHasSlot(branch, slot)) return null;
+		// The kw→operand gap pair is the paired ctor's last two args.
+		if (slot == KwAfter || slot == KwLeading)
+			return macro $i{argNames[baseIdx + TriviaPairAltCtor.extraAltArgs(branch) - (slot == KwAfter ? 2 : 1)]};
 		var idx: Int = baseIdx;
 		if (slot == CloseTrailing) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltCloseTrailingBranch(branch)) {
@@ -190,6 +193,7 @@ final class WriterLoweringSupport {
 			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixChainBranch(branch);
 			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);
 			case TernaryCondTrail, TernaryThenTrail: TriviaPairAltCtor.isTernaryTrailBranch(branch);
+			case KwAfter, KwLeading: TriviaPairAltCtor.isCtorKwValueBranch(branch);
 		};
 	}
 

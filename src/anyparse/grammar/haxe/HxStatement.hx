@@ -89,7 +89,7 @@ enum HxStatement {
 			'returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'
 		), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace'), widthAware,
-		propagateExprPosition)
+		propagateExprPosition, ctorKwTrivia)
 	ReturnStmt(value: HxExpr);
 	@:kw('return')
 	@:trail(';')
@@ -111,7 +111,7 @@ enum HxStatement {
 	SwitchStmtBare(stmt: HxSwitchStmtBare);
 	@:kw('throw')
 	@:trail(';')
-	@:fmt(bodyPolicy('throwBody'))
+	@:fmt(bodyPolicy('throwBody'), ctorKwTrivia)
 	ThrowStmt(expr: HxExpr);
 	@:kw('do')
 	@:trail(';')

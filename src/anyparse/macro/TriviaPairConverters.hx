@@ -63,12 +63,13 @@ final class TriviaPairConverters {
 
 	public static function buildConvertersClass(convertedNames: Array<String>, synthPack: Array<String>): TypeDefinition {
 		final pos: Position = Context.currentPos();
+		// Spelled out, not `Compare.compareString`: under that helper's mutation arm the trivia build failed.
 		convertedNames.sort((a: String, b: String) -> if (a < b)
 			-1
 		else if (a > b)
 			1
 		else
-			0);
+			0); // noqa: prefer-compare-function
 		final shape: ShapeBuilder.ShapeResult = TriviaTypeSynth.shapes[TriviaTypeSynth.shapes.length - 1];
 		final fns: Array<Field> = [];
 		for (origName in convertedNames) {
@@ -128,6 +129,7 @@ final class TriviaPairConverters {
 		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
 		// the paired ctor's arity.
 		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) n += 3; // noqa: magic-number
+		if (TriviaPairAltCtor.isCtorKwValueBranch(branch)) n += 2; // afterKw + kwLeading
 		return n;
 	}
 
@@ -473,6 +475,10 @@ final class TriviaPairConverters {
 			// wraps. `null` matches the parser's initial state for a call with no
 			// pre-callee leading comment.
 			defaults.push(macro (null: Null<String>)); // callLeadingComment
+		}
+		if (TriviaPairAltCtor.isCtorKwValueBranch(branch)) {
+			defaults.push(macro (null: Null<String>)); // afterKw
+			defaults.push(macro ([]: Array<String>)); // kwLeading
 		}
 		return defaults;
 	}

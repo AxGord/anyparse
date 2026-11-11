@@ -12,7 +12,7 @@ import utest.Test;
  * The Trivia parser captures a comment only where a capture slot exists
  * (statement / member / call-argument boundaries, the Pratt operand stash,
  * the per-construct sidecar slots). An inline block comment in a slot-less
- * expression seam — `if (/* c *\/ x)`, `return /* r *\/ x;`, a type
+ * expression seam — `if (/* c *\/ x)`, `return /* r *\/;`, a type
  * annotation, a class header — is consumed as whitespace and never reaches
  * the AST, so the writer re-emits the construct without it.
  *
@@ -37,8 +37,8 @@ class HxInlineBlockCommentWriteTest extends Test {
 		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\tif (/* c */ x) {\n\t\t\trun();\n\t\t}\n\t}\n}\n', '/* c */');
 	}
 
-	public inline function testReturnLeadingBlockComment(): Void {
-		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n', '/* r */');
+	public inline function testVoidReturnBlockComment(): Void {
+		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */;\n\t}\n}\n', '/* r */');
 	}
 
 	public function setup(): Void {

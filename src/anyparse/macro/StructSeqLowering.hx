@@ -241,7 +241,29 @@ final class StructSeqLowering {
 					parseSteps
 				);
 			// The ctor already consumed its keyword: the gap capture an optional kw runs after its commit runs here.
-			if (ctorKwBody) parseSteps.push(commitTriviaAction(sc, true, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal));
+			if (ctorKwBody) emitCtorKwGapCapture(
+				sc, parseSteps, { afterKw: afterKwLocal, kwLeading: kwLeadingLocal, bodyOnSameLine: bodyOnSameLineLocal },
+				[
+					{
+						has: hasBeforeNewlineSlot,
+						local: beforeNlLocal,
+						value: macro !$i{bodyOnSameLineLocal},
+						type: macro : Bool
+					},
+					{
+						has: hasBeforeLeadingSlot,
+						local: beforeLeadingLocal,
+						value: macro [],
+						type: macro : Array<String>
+					},
+					{
+						has: hasBeforeBlankSlot,
+						local: beforeBlankLocal,
+						value: macro false,
+						type: macro : Bool
+					}
+				]
+			);
 			emitFieldValueByKind(
 				sc, child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
@@ -1550,6 +1572,29 @@ final class StructSeqLowering {
 		return nullLiteral != null && ParseDispatchLowering.endsWithWordChar(nullLiteral)
 			? macro matchKw(ctx, $v{nullLiteral})
 			: macro matchLit(ctx, $v{nullLiteral});
+	}
+
+	/**
+	 * The kw→body gap capture of a first field after its ctor's keyword (`isCtorKwBodyField`): the kw-trivia slots
+	 * take the gap's comments, and each before-slot the same gap feeds (`beforeNewlineSlotFirst`) is declared from
+	 * that one capture, so a comment is never held twice.
+	 */
+	private static function emitCtorKwGapCapture(
+		sc: StructSeqCtx, parseSteps: Array<Expr>, kwLocals: { afterKw: String, kwLeading: String, bodyOnSameLine: String },
+		beforeSlots: Array<{
+			has: Bool,
+			local: String,
+			value: Expr,
+			type: ComplexType
+		}>
+	): Void {
+		parseSteps.push(commitTriviaAction(sc, true, kwLocals.afterKw, kwLocals.kwLeading, kwLocals.bodyOnSameLine));
+		for (slot in beforeSlots) if (slot.has) {
+			final local: String = slot.local;
+			final type: ComplexType = slot.type;
+			final value: Expr = slot.value;
+			parseSteps.push(macro final $local: $type = $value);
+		}
 	}
 
 }

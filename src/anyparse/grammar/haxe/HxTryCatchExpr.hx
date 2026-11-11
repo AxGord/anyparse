@@ -45,7 +45,7 @@ package anyparse.grammar.haxe;
 typedef HxTryCatchExpr = {
 	@:trailOpt(';')
 	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow'),
-		tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt'))
+		tryBraceSymmetry('catches', 'BlockExpr', 'ExprStmt'), ctorKwTrivia)
 	var body: HxExpr;
 	@:trivia
 	@:tryparse

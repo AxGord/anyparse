@@ -120,6 +120,7 @@ enum HxExpr {
 	@:fmt(switchPolicy, propagateExprPosition)
 	SwitchExprBare(stmt: HxSwitchStmtBare);
 	@:kw('try')
+	@:fmt(forwardNewlineForBody)
 	TryExpr(stmt: HxTryCatchExpr);
 	@:kw('untyped')
 	UntypedExpr(operand: HxExpr);
@@ -205,11 +206,12 @@ enum HxExpr {
 	@:kw('return')
 	CondSpliceReturnExpr(inner: HxCondSpliceClosedRegion);
 	@:kw('return')
-	@:fmt(propagateExprPosition)
+	@:fmt(propagateExprPosition, ctorKwTrivia)
 	ReturnExpr(value: HxExpr);
 	@:kw('return')
 	VoidReturnExpr;
 	@:kw('throw')
+	@:fmt(ctorKwTrivia)
 	ThrowExpr(value: HxExpr);
 	@:kw('break')
 	BreakExpr;

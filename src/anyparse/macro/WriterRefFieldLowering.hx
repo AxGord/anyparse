@@ -834,22 +834,9 @@ final class WriterRefFieldLowering {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
 			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
 			// dispatch lives in emitBareRefNonBodyPolicy.
-			// The head-gap comments a bare body's break-wrap writes: the prior field's after-trail comment and this
-			// field's own-line run (a lead-less, kw-less non-first Ref of a trivia-bearing rule grows that slot).
-			final ownGap: Bool = ctx.ctx.trivia
-				&& !isFirstField
-				&& kwLead == null
-				&& leadText == null
-				&& !isRaw
-				&& ctx.isTriviaBearing(typePath);
-			final headGap: Null<HeadGapSlots> = !ownGap && prevTrailFieldName == null
-				? null
-				: {
-					afterTrail: prevTrailFieldName == null
-						? macro null
-						: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-					beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
-				};
+			final headGap: Null<HeadGapSlots> = bareBodyHeadGap(
+				ctx, child, typePath, fieldName, isFirstField, kwLead == null && leadText == null && !isRaw, prevTrailFieldName
+			);
 			emitBareRefNonBodyPolicy(
 				ctx, child, parts, refName, fieldName, typePath, effAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
 				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing, headGap
@@ -1963,6 +1950,31 @@ final class WriterRefFieldLowering {
 	/** Whether a struct field is written after a token of its own struct: a keyword, a lead, or an earlier field. */
 	private static function followsToken(isFirstField: Bool, kwLead: Null<String>, leadText: Null<String>): Bool {
 		return !isFirstField || kwLead != null || leadText != null;
+	}
+
+	/**
+	 * The head-gap comments a bare body's break-wrap writes, or null when the field grows none: the prior field's
+	 * after-trail comment and this field's own-line run (a lead-less, kw-less non-first Ref of a trivia-bearing rule
+	 * grows that slot); a first field after its ctor's keyword (`try` of a value) holds the gap in its kw-trivia slots.
+	 */
+	private static function bareBodyHeadGap(
+		ctx: RefFieldCtx, child: ShapeNode, typePath: String, fieldName: String, isFirstField: Bool, bare: Bool,
+		prevTrailFieldName: Null<String>
+	): Null<HeadGapSlots> {
+		if (ctx.ctx.trivia && TriviaPairSlots.isCtorKwBodyRef(child, isFirstField))
+			return {
+				afterTrail: valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
+				beforeLeading: valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX)
+			};
+		final ownGap: Bool = ctx.ctx.trivia && !isFirstField && bare && ctx.isTriviaBearing(typePath);
+		return !ownGap && prevTrailFieldName == null
+			? null
+			: {
+				afterTrail: prevTrailFieldName == null
+					? macro null
+					: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+				beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
+			};
 	}
 
 }

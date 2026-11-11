@@ -40,7 +40,8 @@
 		"captureRhsTrail",
 		"captureSource",
 		"captureTernaryTrail",
-		"captureWrapOpenNewline"
+		"captureWrapOpenNewline",
+		"ctorKwTrivia"
 	],
 	"TriviaPairConverters": [
 		"nestBody"

@@ -131,11 +131,18 @@ final class KwBranchLowering {
 	 * both of kw and lead may be absent.
 	 */
 	private static function appendKwRefLeadSteps(
-		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, forwardNewlineForBody: Bool, triviaWrapOpenNewline: Bool
+		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, forwardNewlineForBody: Bool, triviaWrapOpenNewline: Bool,
+		triviaKwValue: Bool
 	): Void {
 		if (kwLead != null) {
 			steps.push(macro expectKw(ctx, $v{kwLead}));
-			if (!forwardNewlineForBody) steps.push(macro skipWs(ctx));
+			// A `ctorKwTrivia` ctor keeps the kw→operand gap's comments for its two last args (`buildKwRefCtorCall`).
+			if (triviaKwValue) {
+				steps.push(macro final _kwAfter: Null<String> = collectTrailingFull(ctx));
+				steps.push(macro final _kwLeading: Array<String> = collectTrivia(ctx).leadingComments);
+			} else if (!forwardNewlineForBody) {
+				steps.push(macro skipWs(ctx));
+			}
 		}
 		if (leadText == null) return;
 		steps.push(macro expectLit(ctx, $v{leadText}));
@@ -325,7 +332,7 @@ final class KwBranchLowering {
 	 * capture channels carry.
 	 */
 	private static function buildKwRefCtorCall(
-		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaWrapOpenNewline: Bool
+		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaWrapOpenNewline: Bool, triviaKwValue: Bool
 	): Expr {
 		final ctorArgs: Array<Expr> = [macro _raw];
 		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
@@ -333,6 +340,10 @@ final class KwBranchLowering {
 		if (triviaWrapOpenNewline) {
 			ctorArgs.push(macro _wrapOpenNewline);
 			ctorArgs.push(macro _wrapOpenTrailing);
+		}
+		if (triviaKwValue) {
+			ctorArgs.push(macro _kwAfter);
+			ctorArgs.push(macro _kwLeading);
 		}
 
 		return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };

@@ -436,6 +436,15 @@ class TriviaTypeSynth {
 
 	public static inline final TERNARY_THEN_TRAIL_ARG_NAME: String = 'thenTrailComment';
 
+	/**
+	 * The two positional arg names a single-Ref `@:kw` ctor opted in by `@:fmt(ctorKwTrivia)` appends
+	 * (`TriviaPairAltCtor.isCtorKwValueBranch`): the comment on the keyword's line and the own-line comments
+	 * between the keyword and its operand — the ctor-arg twins of a struct field's `AfterKw` / `KwLeading` slots.
+	 */
+	public static inline final KW_AFTER_ARG_NAME: String = 'afterKw';
+
+	public static inline final KW_LEADING_ARG_NAME: String = 'kwLeading';
+
 	private static final PAIRED_SUFFIX: String = 'T';
 	private static final SYNTH_SUBPACK: String = 'trivia';
 	private static final SYNTH_MODULE_LEAF: String = 'Pairs';
