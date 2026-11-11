@@ -655,6 +655,13 @@
 			"find": "leads ? PAD_LEADS : PAD_MEASURED",
 			"replace": "PAD_MEASURED",
 			"note": "a region branch broken by shape no longer moves its siblings: a fitting region keeps its one-line branches beside the broken one"
+		},
+		{
+			"name": "M-LINE-COMMENT-LED-ANY",
+			"type": "anyparse.format.MemberGap",
+			"method": "lineCommentLed",
+			"force": "leadingComments.length > 0",
+			"note": "any leading comment counts as a line comment, so a doc comment hands an enum abstract body to the abstract rules"
 		}
 	]
 }

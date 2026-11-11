@@ -31,6 +31,16 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
 	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
 	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
+	private static final HX_CLASS_MEMBER: String = 'anyparse.grammar.haxe.HxClassMember';
+	private static final HX_MEMBER_MODIFIER: String = 'anyparse.grammar.haxe.HxMemberModifier';
+	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.HxAbstractDecl';
+
+	/** The `HxClassMember` ctors that declare a method, whatever form its name or signature takes. */
+	private static final FN_MEMBER_CTORS: Array<String> = ['FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'];
+
+	/** The `HxClassMember` ctors that declare a field: a value unless it has accessors or is `static`. */
+	private static final FIELD_MEMBER_CTORS: Array<String> = ['VarMember', 'FinalMember'];
+
 	private static final HX_ENUM_MEMBER: String = 'anyparse.grammar.haxe.HxEnumMember';
 	private static final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
 	private static final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
@@ -289,7 +299,9 @@ final class HxAstPredLowering extends AstPredLowering {
 			containerItemKindsField(),
 			ternaryBranchHoldsMultilineBlockField(),
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
-			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, [])
+			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
+			memberBeyondValueField(),
+			abstractBodyBeyondValuesField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -1103,6 +1115,45 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))
 		], macro false);
 		return predField(TYPE_ENDS_WITH_BRACE, [valueArg('t', HX_TYPE)], macro : Bool, body, 'True iff a type expression ends with `}`.');
+	}
+
+	/**
+	 * `memberBeyondValue` — whether an abstract body member is something besides a value: a method, a property (a field
+	 * with an accessor clause) or a `static` member. A value is a non-static `var` / `final` with no accessors.
+	 */
+	private function memberBeyondValueField(): Field {
+		final isStatic: Expr = sw(
+			starElem(HX_MEMBER_DECL, 'modifiers', ident('_x')), [caseOf(HX_MEMBER_MODIFIER, ['Static'], macro true)], macro false
+		);
+		final isMethodOrProperty: Expr = nullSwitch(field(ident('md'), 'member'), macro false, [
+			caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro true),
+			caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null)
+		], macro false);
+		return predField(
+			'memberBeyondValue', [bareArg('md', HX_MEMBER_DECL)],
+			macro : Bool, macro Lambda.exists(md.modifiers, _x -> $isStatic) || $isMethodOrProperty,
+			'True iff an abstract body member is a method, a property or a `static` member.'
+		);
+	}
+
+	/**
+	 * `abstractBodyBeyondValues` — whether an abstract body is more than a list of values: a member is beyond a value
+	 * (`memberBeyondValue`) or a line comment above one labels a group. Read by `HxDecl.EnumAbstractDecl`'s
+	 * `@:fmt(propagateEnumAbstractContext(...))`; a doc comment and a `#if` region are not such a member.
+	 */
+	private function abstractBodyBeyondValuesField(): Field {
+		final lineLed: Expr = starElemWrapped(HX_ABSTRACT_DECL, 'members')
+			? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)
+			: macro false;
+		final member: Expr = {
+			expr: ECall(ident('memberBeyondValue'), [starElem(HX_ABSTRACT_DECL, 'members', ident('_m'))]),
+			pos: Context.currentPos()
+		};
+		return predField(
+			'abstractBodyBeyondValues', [valueArg('d', HX_ABSTRACT_DECL)],
+			macro : Bool, macro d != null && Lambda.exists(d.members, _m -> $lineLed || $member),
+			'True iff an abstract body holds a method, a property, a `static` member or a line comment above a member.'
+		);
 	}
 
 }

@@ -4,8 +4,9 @@ package anyparse.grammar.haxe.format;
  * Nested `emptyLines.enumAbstractEmptyLines` section of a haxe-formatter `hxformat.json` config (the fork's
  * `EnumAbstractFieldsEmptyLinesConfig`): the `interfaceEmptyLines` keys, which the loader routes into the
  * `enumAbstract*` knobs, plus `beginTypeIfDocComments` / `endTypeIfDocComments`, the counts that replace
- * `beginType` / `endType` for a body holding a doc comment, and `afterFieldsWithDocComments`,
- * the policy after a doc-commented member (absent: the global key).
+ * `beginType` / `endType` for a body holding a doc comment, `afterFieldsWithDocComments`,
+ * the policy after a doc-commented member (absent: the global key), and `abstractRulesUnlessValueList`, which hands a
+ * body holding more than values to the `abstractEmptyLines` rules (absent: off).
  */
 @:peg
 typedef HxFormatEnumAbstractEmptyLinesConfig = {
@@ -27,4 +28,6 @@ typedef HxFormatEnumAbstractEmptyLinesConfig = {
 	var endTypeIfDocComments: Int;
 	@:optional
 	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+	@:optional
+	var abstractRulesUnlessValueList: Bool;
 };

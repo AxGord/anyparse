@@ -575,7 +575,7 @@ final class WriterKwRefLowering {
 		else if (afterToken)
 			optExpr = macro _clearArrowBodyLead($optExpr, opt);
 		optExpr = reflowFrameThroughWrapOpt(branch, macro $i{argNames[0]}, optExpr);
-		if (propagateEnumAbstract) optExpr = macro _setEnumAbstract($optExpr, opt);
+		if (propagateEnumAbstract) optExpr = enumAbstractContextOpt(kw, branch, argNames[0], optExpr);
 		// `@:fmt(propagateNestedType)` on `HxType.Parens` / `ConditionalType` marks the inner type as nested.
 		if (branch.fmtHasFlag('propagateNestedType')) optExpr = macro _setNestedType($optExpr, opt);
 		// `@:fmt(clearTypedefContext)` on `HxType.ArrowFn`: a function type under a typedef is not the typedef body.
@@ -1089,6 +1089,27 @@ final class WriterKwRefLowering {
 		final through: Expr = macro ($isWrapper ? _setReflowThroughWrap($optExpr, opt) : $optExpr);
 		final framed: Expr = macro ($isLiteral ? _setValueIfBranch($optExpr, opt) : $through);
 		return macro (opt._literalReflow == anyparse.format.LiteralReflow.ThroughWrap ? $framed : $optExpr);
+	}
+
+	/**
+	 * The operand opt under `@:fmt(propagateEnumAbstractContext)`: flagged `_inEnumAbstract`. Its two-string form
+	 * `(optField, predicate)` leaves the flag off while `opt.<optField>` is set and the generated predicate holds for the
+	 * operand, so that body reads the plain kind's knobs.
+	 */
+	private static function enumAbstractContextOpt(kw: KwRefCtx, branch: ShapeNode, operand: String, optExpr: Expr): Expr {
+		final unless: Null<Array<String>> = branch.fmtReadStringArgs('propagateEnumAbstractContext');
+		if (unless == null || unless.length == 0) return macro _setEnumAbstract($optExpr, opt);
+		if (unless.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(propagateEnumAbstractContext) takes no args or 2 (optField, predicate), got ${unless.length}',
+				Context.currentPos()
+			);
+		final knob: String = unless[0];
+		final holds: Expr = AstPredLowering.predCallExpr(kw.shape.root, kw.ctx.trivia, false, unless[1], [macro $i{operand}]);
+		return macro {
+			final _eo = $optExpr;
+			opt.$knob && $holds ? _eo : _setEnumAbstract(_eo, opt);
+		};
 	}
 
 }

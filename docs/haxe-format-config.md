@@ -656,6 +656,26 @@ typedef anon type) — `WriterTriviaStarDispatch.afterDocPolicy`.
 turns `enum E { A; /** doc */ B; <blank> C; }` into `A;`, a blank line, `/** doc */ B;` and `C;`
 right under it.
 
+## `emptyLines.enumAbstractEmptyLines.abstractRulesUnlessValueList`
+
+anyparse-only, a Bool, `false` by default. Set, an `enum abstract` body that is more than a list
+of values follows the plain abstract's rules — `abstractEmptyLines`' `beginType` / `endType`,
+between-member counts and `existingBetweenFields` — instead of the `enumAbstractEmptyLines` ones.
+More than values: a method, a property (a field with accessors), a `static` member, or a line
+comment (`//`) in front of a member, the usual label of a group. A value is a non-static `var` /
+`final` without accessors; a doc comment or a `#if` region does not count, and a body of plain
+values keeps today's output whatever the key says.
+Runtime: the generated predicate `abstractBodyBeyondValues` (`HxAstPredLowering`), read through
+`HxDecl.EnumAbstractDecl`'s `@:fmt(propagateEnumAbstractContext('<knob>', '<predicate>'))`, which
+then leaves `_inEnumAbstract` off.
+
+```json
+{"emptyLines": {"enumAbstractEmptyLines": {"existingBetweenFields": "remove", "abstractRulesUnlessValueList": true}}}
+```
+
+keeps the blank lines between `// arrows` and `// letters` groups of values and between the values
+and a property below them, while a plain `enum abstract` value list still loses its blank lines.
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.

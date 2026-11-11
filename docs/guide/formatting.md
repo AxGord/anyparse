@@ -115,6 +115,14 @@ or `one`, like the global key, for the blank line after a member that carries a 
 directly. Left out, an enum or typedef keeps the source blank and an `enum abstract` follows the global key. Details:
 `docs/haxe-format-config.md`.
 
+## An `enum abstract` with more than values: `emptyLines.enumAbstractEmptyLines.abstractRulesUnlessValueList`
+
+`false` by default. Set, an `enum abstract` body holding a method, a property, a `static` member or a `//` comment in
+front of a member follows `abstractEmptyLines` — blank lines at `{` and `}`, between members, `existingBetweenFields` —
+instead of `enumAbstractEmptyLines`, so groups labelled by line comments and values above a property keep their blank
+lines. A body of plain values, doc comments and `#if` regions included, keeps the `enumAbstractEmptyLines` rules.
+Details: `docs/haxe-format-config.md`.
+
 ## The trailing comma: `wrapping.trailingComma`
 
 `remove` by default: an array, map or object literal and a `new` or call argument list never end with a `,`, flat

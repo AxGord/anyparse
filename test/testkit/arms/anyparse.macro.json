@@ -2699,6 +2699,14 @@
 			"find": "else if (afterToken)",
 			"replace": "else if (false)",
 			"note": "a later struct field keeps the arrow-body lead, so a metadata target literal loses the open pad"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-RULES-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "enumAbstractContextOpt",
+			"find": "opt.$knob && $holds ? _eo",
+			"replace": "$holds ? _eo",
+			"note": "the option is not read, so a body holding more than values takes the abstract rules with the key off"
 		}
 	]
 }

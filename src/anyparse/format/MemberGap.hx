@@ -49,6 +49,9 @@ final class MemberGap {
 	/** The opening of a doc comment - the leading-comment prefix the doc-comment rule keys on. */
 	private static final DOC_OPEN: String = '/**';
 
+	/** The opening of a line comment. */
+	private static final LINE_OPEN: String = '//';
+
 	/**
 	 * Whether the doc-comment rule drops the gap's SOURCE blank: after a
 	 * doc-led member under `after = None`, or before one under `before = None`.
@@ -103,6 +106,11 @@ final class MemberGap {
 	/** Whether a member's leading comments carry a doc comment (`/**`), which is what the doc-comment rule keys on. */
 	public static function docLed(leadingComments: Array<String>): Bool {
 		return leadingComments.exists(c -> c.startsWith(DOC_OPEN));
+	}
+
+	/** Whether a member's leading comments carry a line comment (`//`), the kind that labels a group of members. */
+	public static function lineCommentLed(leadingComments: Array<String>): Bool {
+		return leadingComments.exists(c -> c.startsWith(LINE_OPEN));
 	}
 
 	/**

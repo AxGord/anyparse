@@ -1306,6 +1306,78 @@
 			"find": "@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),\n\t\treflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))\n\tvar body",
 			"replace": "var body",
 			"note": "a while comprehension body carries no body policy again, so comprehensionFor does not reach it: it glues to the head under next and stays at the head's indent when the source broke it"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-RULES-KEY-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyEnumAbstractEmptyLines",
+			"find": "if (conf.abstractRulesUnlessValueList != null) opt.enumAbstractRulesUnlessValueList = conf.abstractRulesUnlessValueList;",
+			"replace": "",
+			"note": "`enumAbstractEmptyLines.abstractRulesUnlessValueList` is parsed and dropped, so every enum abstract body keeps the enumAbstract rules"
+		},
+		{
+			"name": "M-MEMBER-BEYOND-VALUE-NEVER",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro Lambda.exists(md.modifiers, _x -> $isStatic) || $isMethodOrProperty",
+			"replace": "macro false",
+			"note": "no member counts as more than a value, so only a line comment hands a body to the abstract rules"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-LINE-COMMENT-UNREAD",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"replace": "? macro false",
+			"note": "a line comment above a value is no trigger, so line-comment groups close up under the key"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-BEYOND-VALUES-ALWAYS",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "macro d != null && Lambda.exists(d.members, _m -> $lineLed || $member)",
+			"replace": "macro d != null",
+			"note": "every body counts as more than values, so a plain value list takes the abstract rules under the key"
+		},
+		{
+			"name": "M-MEMBER-PROPERTY-AS-VALUE",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro _v.access != null",
+			"replace": "macro false",
+			"note": "a field with accessors counts as a value, so a property is no trigger"
+		},
+		{
+			"name": "M-MEMBER-STATIC-AS-VALUE",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseOf(HX_MEMBER_MODIFIER, ['Static'], macro true)",
+			"replace": "caseOf(HX_MEMBER_MODIFIER, ['Static'], macro false)",
+			"note": "a static member counts as a value, so a static var is no trigger"
+		},
+		{
+			"name": "M-MEMBER-METHOD-AS-VALUE",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro true)",
+			"replace": "caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro false)",
+			"note": "a method counts as a value, so a function is no trigger"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-TRAILING-COMMENT-READ",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"replace": "? macro _m.trailingComment != null || anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"note": "a comment trailing a value counts as a group label, so a trailing line comment hands the body to the abstract rules"
+		},
+		{
+			"name": "M-MEMBER-FINAL-AS-BEYOND-VALUE",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null)",
+			"replace": "caseBindMulti(HX_CLASS_MEMBER, ['VarMember'], [0 => '_v'], macro _v.access != null), caseOf(HX_CLASS_MEMBER, ['FinalMember'], macro true)",
+			"note": "a final field counts as more than a value whatever its accessors, so a final value hands the body to the abstract rules"
 		}
 	]
 }

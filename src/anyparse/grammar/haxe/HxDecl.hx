@@ -87,9 +87,12 @@ enum HxDecl {
 	 * The legacy `@:enum abstract` metadata form is orthogonal — the
 	 * `@:enum` tag rides the `HxTopLevelDecl.meta` Star and reaches the
 	 * plain `AbstractDecl` branch.
+	 *
+	 * The body reads the `enumAbstract*` knobs, unless `enumAbstractRulesUnlessValueList` is set and it holds more than
+	 * values (`abstractBodyBeyondValues`): such a body lives by the plain abstract's blank-line rules.
 	 */
 	@:kw('enum')
-	@:fmt(propagateEnumAbstractContext)
+	@:fmt(propagateEnumAbstractContext('enumAbstractRulesUnlessValueList', 'abstractBodyBeyondValues'))
 	EnumAbstractDecl(decl: HxAbstractDecl);
 	EnumDecl(decl: HxEnumDecl);
 	InterfaceDecl(decl: HxInterfaceDecl);

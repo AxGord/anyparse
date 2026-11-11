@@ -886,7 +886,10 @@ final class HaxeFormatConfigLoader {
 		if (conf.afterVars != null) opt.externClassAfterVars = conf.afterVars;
 	}
 
-	/** `enumAbstractEmptyLines`' between-member keys into the knobs an abstract body reads while `_inEnumAbstract` is set. */
+	/**
+	 * `enumAbstractEmptyLines`' between-member keys into the knobs an abstract body reads while `_inEnumAbstract` is set,
+	 * and `abstractRulesUnlessValueList`, which leaves that flag off for a body holding more than values.
+	 */
 	private static function applyEnumAbstractEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		final conf: Null<HxFormatEnumAbstractEmptyLinesConfig> = section.enumAbstractEmptyLines;
 		if (conf == null) return;
@@ -895,6 +898,7 @@ final class HaxeFormatConfigLoader {
 		if (conf.betweenVars != null) opt.enumAbstractBetweenVars = conf.betweenVars;
 		if (conf.betweenFunctions != null) opt.enumAbstractBetweenFunctions = conf.betweenFunctions;
 		if (conf.afterVars != null) opt.enumAbstractAfterVars = conf.afterVars;
+		if (conf.abstractRulesUnlessValueList != null) opt.enumAbstractRulesUnlessValueList = conf.abstractRulesUnlessValueList;
 	}
 
 	/** `macroClassEmptyLines`' between-member keys into the knobs a `macro class` body reads. */
