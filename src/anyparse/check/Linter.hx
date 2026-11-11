@@ -700,7 +700,7 @@ final class Linter {
 			final volatileMessage: VolatileMessage = cast check;
 			// A real closure, not the bare interface-method reference: hxcpp lowers that
 			// to a dynamic field read whose type StringMap.set cannot pick an overload for.
-			out[check.id()] = volatileMessage.messageIdentity;
+			out[check.id()] = message -> volatileMessage.messageIdentity(message);
 		}
 		return out;
 	}
