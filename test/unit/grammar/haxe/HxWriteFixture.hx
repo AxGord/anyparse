@@ -31,27 +31,23 @@ final class HxWriteFixture {
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	/**
-	 * `src` parsed and re-emitted by the trivia writer under the hx-format config
-	 * `configJson`, with `finalNewline` off so the expected text of a slice assertion
-	 * needs no trailing newline.
+	 * `src` parsed and re-emitted by the trivia writer under `config` (a hx-format document, or typed options from `HxWriteOptionsKit`),
+	 * with `finalNewline` off so the expected text of a slice assertion needs no trailing newline. The caller's options are copied, so that
+	 * switch never reaches them and one options object serves several writes.
 	 */
-	public static function triviaWrite(src: String, configJson: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	public static function triviaWrite(src: String, config: HxWriteConfig): String {
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), withoutFinalNewline(config));
 	}
 
 
 	/**
-	 * `src` parsed and re-emitted by the PLAIN writer (no trivia) under `configJson`, with
+	 * `src` parsed and re-emitted by the PLAIN writer (no trivia) under `config`, with
 	 * `finalNewline` off for the same reason as `triviaWrite`. The plain writer captures no
 	 * source-newline slots, so it is what a test asks when the question is the grammar's own
 	 * shape gates rather than a formatting knob.
 	 */
-	public static function plainWrite(src: String, configJson: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
-		opts.finalNewline = false;
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	public static function plainWrite(src: String, config: HxWriteConfig): String {
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), withoutFinalNewline(config));
 	}
 
 	/**
@@ -72,6 +68,12 @@ final class HxWriteFixture {
 	/** The options `HaxeModuleTriviaWriter.write` defaults to, under `listsKeepSource`. */
 	public static function listsKeepSourceOptions(): HxModuleWriteOptions {
 		return HaxeFormatConfigLoader.loadHxFormatJson(listsKeepSource('{}'));
+	}
+
+	private static function withoutFinalNewline(options: HxModuleWriteOptions): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = new HxModuleWriteOptions(options);
+		opts.finalNewline = false;
+		return opts;
 	}
 
 	private static function entriesOf(value: JValue): Array<JEntry> {

@@ -435,9 +435,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// the second function — default `One` policy forces a blank line.
 		// Disable `betweenFunctions` default to isolate the doc-comment axis.
 		final src: String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}');
 		assertWriteContains(src, opts, 'a():Void {}\n\n\tpublic function b', 'expected blank line between doc-commented a() and b()');
 	}
 
@@ -446,7 +444,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// (no blank line in output either). Disable `betweenFunctions`
 		// default to isolate the doc-comment axis.
 		final src: String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected tight layout (no blank line) with `ignore`');
@@ -456,7 +454,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// Source HAS a blank line — `None` policy strips it. Disable
 		// `betweenFunctions` default to isolate the doc-comment axis.
 		final src: String = 'class M {\n\t/** */\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "none", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
 		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected blank line stripped with `none`');
@@ -467,9 +465,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// trigger the policy — only `/**`-prefixed comments count. Disable
 		// `betweenFunctions` default to isolate the doc-comment axis.
 		final src: String = 'class M {\n\t/* not doc */\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}');
 		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected no blank line when leading is plain block comment');
 	}
 

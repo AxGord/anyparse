@@ -1,0 +1,47 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package unit.grammar.haxe. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-KIT-FORK-STARTS-RAW",
+			"type": "unit.grammar.haxe.HxWriteOptionsKit",
+			"method": "forkWith",
+			"find": "HaxeFormatConfigLoader.loadHxFormatJson('{}')",
+			"replace": "new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)",
+			"note": "the fork baseline starts from the compiled defaults, so the six body policies and the curly blanks a config document re-baselines stay at their raw values"
+		},
+		{
+			"name": "M-KIT-RAW-STARTS-FORK",
+			"type": "unit.grammar.haxe.HxWriteOptionsKit",
+			"method": "rawWith",
+			"find": "new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)",
+			"replace": "HaxeFormatConfigLoader.loadHxFormatJson('{}')",
+			"note": "the raw baseline starts from the config loader, so the compiled defaults arrive already re-baselined to the fork's values"
+		},
+		{
+			"name": "M-KIT-STRICT-NO-REFUSAL",
+			"type": "unit.grammar.haxe.HxWriteOptionsKit",
+			"method": "strictJson",
+			"find": "if (ignored.length > 0) throw",
+			"replace": "if (ignored.length > 1000) throw",
+			"note": "a document naming a setting the loader does not act on loads silently, as the plain loader does"
+		},
+		{
+			"name": "M-FIXTURE-TYPED-OPTIONS-IGNORED",
+			"type": "unit.grammar.haxe.HxWriteFixture",
+			"method": "withoutFinalNewline",
+			"find": "new HxModuleWriteOptions(options)",
+			"replace": "new HxModuleWriteOptions(anyparse.grammar.haxe.HaxeFormat.instance.defaultWriteOptions)",
+			"note": "a typed write copies the compiled defaults instead of the options it was handed, so no typed knob reaches the writer"
+		},
+		{
+			"name": "M-FIXTURE-TYPED-OPTIONS-ALIASED",
+			"type": "unit.grammar.haxe.HxWriteFixture",
+			"method": "withoutFinalNewline",
+			"find": "final opts: HxModuleWriteOptions = new HxModuleWriteOptions(options);",
+			"replace": "final opts: HxModuleWriteOptions = options;",
+			"note": "a typed write switches finalNewline off on the caller's own options object instead of on a copy"
+		}
+	]
+}

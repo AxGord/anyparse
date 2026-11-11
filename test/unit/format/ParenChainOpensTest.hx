@@ -1,6 +1,8 @@
 package unit.format;
 
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import unit.grammar.haxe.HxWriteFixture;
+import unit.grammar.haxe.HxWriteOptionsKit;
 
 /**
  * An `+` / `-` or `&&` / `||` chain sitting in a parenthesis that does not fit opens the parenthesis as a container: `(` ends the
@@ -10,7 +12,6 @@ import unit.grammar.haxe.HxWriteFixture;
 @:nullSafety(Strict)
 final class ParenChainOpensTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 40}}';
 	private static final CONDITION_CONFIG: String = '{"wrapping": {"maxLineLength": 40, "conditionWrapping": {'
 		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
@@ -256,13 +257,18 @@ final class ParenChainOpensTest extends Test {
 
 	public function testFittingChainStaysGlued(): Void {
 		final src: String = 'class C {\n\tfunction fits() {\n\t\tvar x = 1 * (a + b);\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, CONFIG));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, narrow()));
+	}
+
+	/** The width the chains are laid out at, typed over the baseline a config document starts from. */
+	private function narrow(): HxModuleWriteOptions {
+		return HxWriteOptionsKit.forkWith(opts -> opts.lineWidth = 40);
 	}
 
 	private function assertLaidOut(flat: String, expected: String, ?config: String): Void {
-		final json: String = config ?? CONFIG;
-		Assert.equals(expected, HxWriteFixture.triviaWrite(flat, json));
-		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, json));
+		final opts: HxModuleWriteOptions = config == null ? narrow() : HxWriteOptionsKit.strictJson(config);
+		Assert.equals(expected, HxWriteFixture.triviaWrite(flat, opts));
+		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, opts));
 	}
 
 }

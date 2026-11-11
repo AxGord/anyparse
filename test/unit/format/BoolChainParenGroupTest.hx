@@ -1,6 +1,8 @@
 package unit.format;
 
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import unit.grammar.haxe.HxWriteFixture;
+import unit.grammar.haxe.HxWriteOptionsKit;
 
 /**
  * A paren group operand of an `&&` / `||` chain whose own `||` / `&&` content does not fit on the line lays out as a
@@ -114,13 +116,13 @@ final class BoolChainParenGroupTest extends Test {
 	public function testFittingGroupStaysWhole(): Void {
 		final src: String = 'class C {\n\tfunction fits(item:Item, key:String):Bool {\n'
 			+ '\t\treturn item.enabled && (accepts(item, key) || item.children.length > 0 || item.aliases.length > 0);\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, CONFIG));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HxWriteOptionsKit.strictJson(CONFIG)));
 	}
 
 	private function assertLaidOut(flat: String, expected: String, ?config: String): Void {
-		final json: String = config ?? CONFIG;
-		Assert.equals(expected, HxWriteFixture.triviaWrite(flat, json));
-		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, json));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(config ?? CONFIG);
+		Assert.equals(expected, HxWriteFixture.triviaWrite(flat, opts));
+		Assert.equals(expected, HxWriteFixture.triviaWrite(expected, opts));
 	}
 
 }
