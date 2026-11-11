@@ -62,9 +62,10 @@ final class LeaseTest extends Test {
 			'--label',
 			'lint',
 			'--',
-			'node',
-			'bin/test.js'
-		], Lease.take(mode, command, { min: 2, max: 2 }, 'lint').argv);
+			'sh',
+			'-c'
+		], Lease.take(mode, command, { min: 2, max: 2 }, 'lint').argv.slice(0, 9));
+		Assert.same(['sh', 'node', 'bin/test.js'], Lease.take(mode, command, { min: 2, max: 2 }, 'lint').argv.slice(-3));
 		Assert.same([
 			'/p/scripts/wf-run',
 			'--fail-open',
@@ -74,9 +75,10 @@ final class LeaseTest extends Test {
 			'--label',
 			'suite',
 			'--',
-			'node',
-			'bin/test.js'
-		], Lease.take(mode, command, { min: 2, max: 6 }, 'suite').argv);
+			'sh',
+			'-c'
+		], Lease.take(mode, command, { min: 2, max: 6 }, 'suite').argv.slice(0, 10));
+		Assert.same(['sh', 'node', 'bin/test.js'], Lease.take(mode, command, { min: 2, max: 6 }, 'suite').argv.slice(-3));
 		Assert.same(command.argv, Lease.take(mode, command, null, 'x').argv, 'no ask, no lease');
 		Assert.same(command.argv, Lease.take(Held(10), command, { min: 1, max: 1 }, 'x').argv);
 		Assert.same(command.argv, Lease.take(Unpooled, command, { min: 1, max: 1 }, 'x').argv);

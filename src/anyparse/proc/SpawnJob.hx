@@ -55,4 +55,11 @@ typedef SpawnJob = {
 	 */
 	var ?awaitProgress: Bool;
 
+	/**
+	 * The job's program waits for a pool lease before it runs the job itself, and marks the grant by writing the file
+	 * `ProcessSpawn.GRANT_ENV` names: `timeout` (`ProcessSpawn.JOB_BOUND` when it names none) counts from that grant, and
+	 * until then the job is queued, not wedged.
+	 */
+	var ?leased: Bool;
+
 }

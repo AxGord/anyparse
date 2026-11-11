@@ -31,7 +31,9 @@ final class BaselineWarmTest extends Test {
 		);
 		Assert.equals('/plugin/scripts/wf-run', argv[0]);
 		Assert.isTrue(argv.contains('--threads'), argv.join(' '));
-		final tail: Array<String> = argv.slice(argv.indexOf('--') + 1);
+		// the lease's grant mark (`Command.leasedUnder`) stands between the wrapper and the run
+		Assert.same(['sh', '-c'], argv.slice(argv.indexOf('--') + 1, argv.indexOf('--') + 3));
+		final tail: Array<String> = argv.slice(argv.indexOf('--') + 5);
 		Assert.same([
 			'node',
 			'/cache/abc.dev.js',

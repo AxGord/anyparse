@@ -71,7 +71,9 @@ final class PostLandTest extends Test {
 		final argv: Array<String> = PostLand.argvOf(Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache');
 		Assert.equals('/plugin/scripts/wf-run', argv[0]);
 		Assert.isTrue(argv.contains('--threads'), argv.join(' '));
-		final at: Int = argv.indexOf('--');
+		// the lease's grant mark (`Command.leasedUnder`) stands between the wrapper and the run
+		final at: Int = argv.indexOf('--') + 4;
+		Assert.same(['sh', '-c'], argv.slice(at - 3, at - 1));
 		Assert.same([
 			'node',
 			'/cache/abc.dev.js',

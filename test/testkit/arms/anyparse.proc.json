@@ -52,8 +52,8 @@
 			"type": "anyparse.proc.ProcessSpawn",
 			"method": "PARALLEL_DRIVER",
 			"kind": "FinalMember",
-			"find": " if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);",
-			"replace": "",
+			"find": " const arm = () => { if (bound > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, bound); };",
+			"replace": " const arm = () => {};",
 			"note": "a job's timeout is ignored, so a hung generate command blocks the run forever"
 		},
 		{
@@ -344,6 +344,23 @@
 			"find": "final timeout: Int = boundOf(job);",
 			"replace": "final timeout: Int = job.timeout ?? 0;",
 			"note": "the default bound of a short program is computed and never applied to the run"
+		},
+		{
+			"name": "M-LEASE-CLOCK-FROM-SPAWN",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (grant == null) arm(); else c.grant",
+			"replace": "arm(); if (grant == null) {} else c.grant",
+			"note": "a leased job is timed from the spawn of its lease wrapper, so a long lease wait kills a job that never started"
+		},
+		{
+			"name": "M-LEASE-DRIVER-BOUND",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "driverBound",
+			"find": "if (jobs.exists(job -> job.leased == true)) return Std.int(MAX_BOUND);",
+			"replace": "",
+			"note": "a batch holding a leased job keeps the wall bound counted from the driver spawn, so the lease wait kills the whole batch"
 		}
 	]
 }

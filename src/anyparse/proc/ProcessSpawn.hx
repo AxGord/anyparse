@@ -170,7 +170,8 @@ final class ProcessSpawn {
 	 * job names and kills what its group still runs at its exit (`orphan left running: …`), listing the
 	 * processes only when a signal 0 to the group says one is left. A job with `idle` is killed once neither its
 	 * streams nor the file `progress` names moved for that long, and answers a `failure` quoting
-	 * that file; with `awaitProgress` the silence counts only from the first change of that file.
+	 * that file; with `awaitProgress` the silence counts only from the first change of that file. A `leased` job's
+	 * `timeout` counts from the moment the file `GRANT_ENV` names exists.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const TETHER = '"
@@ -230,7 +231,7 @@ final class ProcessSpawn {
 		+ "function flush() { if (flushed) return; flushed = true; emit('{\"runs\":' + JSON.stringify(out) + '}'); }"
 		+ 'function finish(i, rec) { if (out[i]) return; if (rec.status === null) delete rec.status; out[i] = rec;'
 		+ ' if (kids[i] && kids[i].timer) clearTimeout(kids[i].timer);'
-		+ ' if (kids[i]) { clearTimeout(kids[i].grace); clearTimeout(kids[i].stuck); clearInterval(kids[i].watch); }'
+		+ ' if (kids[i]) { clearTimeout(kids[i].grace); clearTimeout(kids[i].stuck); clearInterval(kids[i].watch); clearInterval(kids[i].grant); }'
 		+ ' kids[i] = null; running--; done++; if (dying) { settle(); return; }'
 		+ ' if (stop && rec.status !== 0 && !rec.cancelled) cancelAfter(i);'
 		+ ' if (done === jobs.length) flush(); else start(); }'
@@ -249,14 +250,22 @@ final class ProcessSpawn {
 		+ " if (j.stdin != null && !j.tethered) try { input = require('fs').openSync(j.stdin, 'r'); } catch (err) {"
 		+ " finish(i, { status: null, out: '', err: '', failure: 'could not open ' + j.stdin + ' as the standard input of ' + what,"
 		+ ' overflowed: false }); continue; }'
+		+ " const grant = j.leased ? require('path').join(require('path').dirname(process.argv[5]), 'grant-' + i) : null;"
 		+ " const opts = { cwd: j.cwd == null ? undefined : j.cwd, stdio: [input, 'pipe', 'pipe'],"
-		+ ' env: j.env == null ? undefined : Object.assign({}, process.env, j.env), detached: group };'
+		+ ' env: j.env == null && grant == null ? undefined : Object.assign({}, process.env, j.env || {}, grant == null ? {} : { '
+		+ GRANT_ENV
+		+ ': grant }), detached: group };'
 		+ " const c = j.tethered ? cp.spawn(process.execPath, ['-e', TETHER, '--', group ? '1' : '0', JSON.stringify(j.shell == null"
 		+ ' ? { cmd: prog, args: j.args } : { cmd: j.shell, args: [], shell: true })], opts)'
 		+ ' : j.shell == null ? cp.spawn(prog, j.args, opts) : cp.spawn(j.shell, Object.assign({ shell: true }, opts));'
 		+ " if (typeof input === 'number') require('fs').closeSync(input);"
 		+ " c.tethered = j.tethered === true; if (c.tethered) c.stdin.on('error', () => {}); kids[i] = c; recordGroup(j, c);"
-		+ ' if (j.timeout > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, j.timeout);'
+		+ ' const bound = j.leased && !(j.timeout > 0) ? '
+		+ JOB_BOUND
+		+ ' : j.timeout;'
+		+ ' const arm = () => { if (bound > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, bound); };'
+		+ " if (grant == null) arm(); else c.grant = setInterval(() => { if (!require('fs').existsSync(grant)) return;"
+		+ ' clearInterval(c.grant); arm(); }, 100);'
 		+ " if (j.awaitProgress && j.progress) try { c.mark = require('fs').statSync(j.progress).mtimeMs; } catch (err) {}"
 		+ " c.beat = Date.now(); c.stdout.on('data', d => { c.beat = Date.now(); size += d.length;"
 		+ ' if (size > max) { over = true; kill(c); } else o.push(d); });'
@@ -268,7 +277,7 @@ final class ProcessSpawn {
 		+ ' finish(i, { status: over || c.cancelled || c.timedOut || c.stalled ? null : code,'
 		+ " out: Buffer.concat(o).toString('utf8'),"
 		+ " err: c.orphans ? text + (text === '' || text.endsWith('\\n') ? '' : '\\n') + c.orphans : text,"
-		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + j.timeout + ' ms'"
+		+ " failure: c.cancelled ? 'cancelled — an earlier job failed' : c.timedOut ? what + ' timed out after ' + bound + ' ms'"
 		+ " : c.stalled ? what + ' made ' + c.stalled : over ? what + ' out-wrote its ' + max + ' byte output buffer' : '',"
 		+ ' overflowed: over, cancelled: c.cancelled === true }); };'
 		+ " c.on('close', code => answer(code)); c.on('exit', () => lingering(i, c, j.reap === true, answer)); }"
@@ -865,9 +874,11 @@ final class ProcessSpawn {
 	 * The milliseconds a process driver running `jobs` at most `parallel` at a time may take before it counts as wedged:
 	 * every round of `parallel` jobs the longest job's own `timeout` (`JOB_BOUND` for a job naming none), plus
 	 * `DRIVER_SLACK`. Far above any honest run, so it can only end a driver that stopped doing its work — the bound exists
-	 * so that nothing waits on one forever. Pure.
+	 * so that nothing waits on one forever. A batch holding a `leased` job is bounded by `MAX_BOUND` alone: an honest
+	 * lease wait has no end the driver could know, and each leased job is bounded from its grant by its own `timeout`. Pure.
 	 */
 	public static function driverBound(jobs: Array<SpawnJob>, parallel: Int): Int {
+		if (jobs.exists(job -> job.leased == true)) return Std.int(MAX_BOUND);
 		var longest: Float = 0;
 		for (job in jobs) longest = Math.max(longest, job.timeout != null && job.timeout > 0 ? job.timeout : JOB_BOUND);
 		final rounds: Float = Math.ceil(jobs.length / Math.max(1, parallel));
@@ -909,7 +920,7 @@ final class ProcessSpawn {
 
 	/** Whether `job` can only run through the process driver: a shell line, a tether, a reaped group or a progress watch. */
 	public static function needsDriver(job: SpawnJob): Bool {
-		return job.shell != null || job.tethered == true || job.reap == true || (job.idle ?? 0) > 0;
+		return job.shell != null || job.tethered == true || job.reap == true || (job.idle ?? 0) > 0 || job.leased == true;
 	}
 
 	/** The runs the process driver answered in `text`; null when it is no answer of the driver's shape. */
@@ -963,6 +974,12 @@ final class ProcessSpawn {
 	 * the process driver (`PARALLEL_DRIVER`).
 	 */
 	public static inline final ANSWER_ENV: String = 'APQ_SPAWN_ANSWER';
+
+	/**
+	 * The variable the process driver sets for a `leased` job: the file its lease wrapper writes once the lease is granted,
+	 * the moment the job's `timeout` starts counting.
+	 */
+	public static inline final GRANT_ENV: String = 'APQ_LEASE_GRANT';
 
 	/**
 	 * Whether `job` names a program that ends within moments and starts nothing that outlives it (git plumbing, process

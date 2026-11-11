@@ -27,6 +27,17 @@ final class Command {
 	 */
 	public static inline final MAX_BUFFER: Int = 256 * 1024 * 1024;
 
+	/**
+	 * The `sh` script `leasedUnder` runs at the grant: mark it in the file the driver named, then run the command in its place.
+	 * The mark is never fatal (a redirection error on the special builtin `:` would exit the shell) and the variable ends with
+	 * it, so neither the command nor anything it starts inherits a grant file that is not theirs.
+	 */
+	public static inline final GRANT_MARK: String = 'true > "$${'
+		+ ProcessSpawn.GRANT_ENV
+		+ ':-/dev/null}"; unset '
+		+ ProcessSpawn.GRANT_ENV
+		+ '; exec "$$@"';
+
 	public final argv: Array<String>;
 
 	private final _cwd: Null<String>;
@@ -102,9 +113,12 @@ final class Command {
 	 * first change of `progress`: a command that queues behind a lease wrapper has not begun, and is not silent.
 	 */
 	public function watched(ms: Int, progress: String, awaitProgress: Bool = false): Command {
-		return new Command(
-			argv, _cwd, _env, _timeout, _input, _upstream, _tethered, { idle: ms, progress: progress, awaitProgress: awaitProgress }
-		);
+		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
+			idle: ms,
+			progress: progress,
+			awaitProgress: awaitProgress,
+			leased: _guard.leased
+		});
 	}
 
 	/**
@@ -116,6 +130,21 @@ final class Command {
 		if (_upstream != null) throw new Exception('`${toString()}` is a pipeline, and a prefix would run only its last stage');
 		if (prefix.length == 0) throw new Exception('a prefix needs a program to run');
 		return new Command(prefix.concat(argv), _cwd, _env, _timeout, _input, _upstream, _tethered, _guard);
+	}
+
+	/**
+	 * This command run by the lease wrapper `prefix`, as `under` runs it, with its `timeout` counting from the lease's grant and
+	 * not from the wrapper's start: between the two the command is queued, not wedged. A `sh` between the wrapper and the command
+	 * writes the file `ProcessSpawn.GRANT_ENV` names, then becomes the command. Runs through the process driver.
+	 */
+	public function leasedUnder(prefix: Array<String>): Command {
+		final wrapped: Command = under(prefix.concat(['sh', '-c', GRANT_MARK, 'sh']));
+		return new Command(wrapped.argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {
+			idle: _guard.idle,
+			progress: _guard.progress,
+			awaitProgress: _guard.awaitProgress,
+			leased: true
+		});
 	}
 
 	/** This command with `text` as its standard input. */
@@ -192,6 +221,7 @@ final class Command {
 		if (_guard.idle > 0) job.idle = _guard.idle;
 		if (_guard.progress != null) job.progress = _guard.progress;
 		if (_guard.awaitProgress) job.awaitProgress = true;
+		if (_guard.leased) job.leased = true;
 		return job;
 	}
 
@@ -209,7 +239,12 @@ final class Command {
 	/** The command running `argv[0]` over the rest of `argv`. */
 	public static function of(argv: Array<String>): Command {
 		if (argv.length == 0) throw new Exception('a command needs a program to run');
-		return new Command(argv.copy(), null, {}, 0, null, null, false, { idle: 0, progress: null, awaitProgress: false });
+		return new Command(argv.copy(), null, {}, 0, null, null, false, {
+			idle: 0,
+			progress: null,
+			awaitProgress: false,
+			leased: false
+		});
 	}
 
 	/** One argument of a `Cmd.cmd` template: `value` as text; a null `value` (`source` in the template) throws. */
@@ -249,7 +284,7 @@ final class Command {
 	 * watch for silence or tether to a driver. Its streams go to files and not to pipes, so what it leaves behind cannot hold the run.
 	 */
 	private static function runsDirect(job: SpawnJob): Bool {
-		return job.tethered != true && (job.idle ?? 0) <= 0 && ProcessSpawn.isShort(job);
+		return job.tethered != true && job.leased != true && (job.idle ?? 0) <= 0 && ProcessSpawn.isShort(job);
 	}
 
 }
@@ -265,5 +300,8 @@ typedef Guard = {
 
 	/** Whether `idle` counts from the first change of `progress` and not from the start. */
 	var awaitProgress: Bool;
+
+	/** Whether the command waits for a pool lease first, its timeout counting from the grant (`SpawnJob.leased`). */
+	var leased: Bool;
 
 }

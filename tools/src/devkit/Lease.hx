@@ -62,7 +62,8 @@ final class Lease {
 	/**
 	 * `command` under a lease of its own of `ask` threads, labelled `label` in the pool, when `mode` is `Own` and there is an
 	 * `ask`; else `command` as it is. A pool `wf-run` cannot use runs the command unleased on the fewest threads it asked
-	 * (`--fail-open`): the pool never fails a run. `WF_THREADS` of the command is what the lease granted.
+	 * (`--fail-open`): the pool never fails a run. `WF_THREADS` of the command is what the lease granted, and its `timeout`
+	 * counts from the grant (`Command.leasedUnder`).
 	 */
 	public static function take(mode: LeaseMode, command: Command, ask: Null<Ask>, label: String): Command {
 		return switch [mode, ask] {
@@ -76,7 +77,7 @@ final class Lease {
 				];
 				if (flexible) prefix.push('--wait-full=$WAIT_FULL_SECONDS');
 				if (ask.priority != null) prefix.push('--priority=${ask.priority}');
-				command.under(prefix.concat(['--label', label, '--']));
+				command.leasedUnder(prefix.concat(['--label', label, '--']));
 			case _: command;
 		};
 	}
