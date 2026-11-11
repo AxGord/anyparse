@@ -125,6 +125,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-using-over-static-import',
 			'redundant-import',
 			'redundant-isvar',
+			'redundant-narrowing-copy',
 			'scratch-field',
 			'shorten-type-ref',
 			'typed-event-constant',

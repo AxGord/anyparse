@@ -30,14 +30,16 @@ final class StableChain {
 	private final _typeSources: () -> Map<Int, String>;
 	private final _index: () -> Null<SymbolIndex>;
 	private final _file: String;
+	private final _anyDataField: Bool;
 
 	/**
 	 * `typeSources`: each declaration's written type by binding offset (`TypeInfoProvider.declaredTypeSources`); `index`:
-	 * the run's declarations, asked only when a chain reaches past a local.
+	 * the run's declarations, asked only when a chain reaches past a local. `anyDataField`: a member also counts when it is a
+	 * mutable field (a `var`), for a caller that bounds the writes itself over the region it reads.
 	 */
 	public function new(
 		tree: QueryNode, shape: RefShape, locals: UnchangedLocal, typeSources: () -> Map<Int, String>, index: () -> Null<SymbolIndex>,
-		file: String
+		file: String, anyDataField: Bool = false
 	) {
 		_tree = tree;
 		_shape = shape;
@@ -45,6 +47,7 @@ final class StableChain {
 		_typeSources = typeSources;
 		_index = index;
 		_file = file;
+		_anyDataField = anyDataField;
 	}
 
 	/**
@@ -86,7 +89,7 @@ final class StableChain {
 		final hit: Null<HostedMembers> = index.typing.members.declaringMember(host, name);
 		if (hit == null || !(_shape.classDeclKinds ?? []).contains(hit.host.type.kind)) return null;
 		final live: Array<MemberInfo> = index.typing.builds.declarations(hit.host, name);
-		if (live.length == 0 || !live.foreach(isFinalField)) return null;
+		if (live.length == 0 || !live.foreach(isDataField)) return null;
 		final reader: Null<FileInfo> = index.fileInfo(_file);
 		if (reader == null) return null;
 		final type: Null<String> = index.typing.members.memberRead(host, name, [], reader)?.text;
@@ -95,9 +98,9 @@ final class StableChain {
 			: { key: '${below.key}.$name', binding: below.binding, type: type };
 	}
 
-	private function isFinalField(m: MemberInfo): Bool {
+	private function isDataField(m: MemberInfo): Bool {
 		return (_shape.fieldDeclKinds ?? []).contains(m.kind)
-			&& !(_shape.mutableFieldDeclKinds ?? []).contains(m.kind)
+			&& (_anyDataField || !(_shape.mutableFieldDeclKinds ?? []).contains(m.kind))
 			&& !m.hasGetter
 			&& !m.isDynamic;
 	}

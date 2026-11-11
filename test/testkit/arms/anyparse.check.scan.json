@@ -1586,6 +1586,62 @@
 			"find": "host == null || (host != t && (host.hasBuild || host.hasAutoBuild))",
 			"replace": "host == null",
 			"note": "a using on a typedef of a class a build macro extends reads the members the declaration shows, so the unused-import arm declares it unused and --fix deletes a using whose macro-made statics the file may call"
+		},
+		{
+			"name": "M-RNC-GETTER-WINDOW",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "runsOnItsOwn",
+			"find": "return !PurityScan.isPure(node, proofs.purity);",
+			"replace": "return false;",
+			"note": "a getter read between a copy and its last use runs no code, so the rewrite reads a field the getter may have changed"
+		},
+		{
+			"name": "M-RNC-INDEX-WINDOW",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "runsOnItsOwn",
+			"find": " || kind == _shape.indexAccessKind",
+			"replace": "",
+			"note": "an index access an abstract overloads (`@:arrayAccess`) runs no code, so the rewrite reads a field the overload may have changed"
+		},
+		{
+			"name": "M-RNC-OPERATOR-WINDOW",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "runsOnItsOwn",
+			"find": "return !verdict.match(Builtin);",
+			"replace": "return false;",
+			"note": "an operator an abstract overloads (`@:op`) runs no code, so the rewrite reads a field the overload may have changed"
+		},
+		{
+			"name": "M-RNC-CAST-WINDOW",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "converts",
+			"find": "case Bound(decls): !decls.foreach(r -> _plainKinds.contains(r.type.kind));",
+			"replace": "case Bound(decls): false;",
+			"note": "a value written into an abstract that converts it (`@:from`) runs no code, so the rewrite reads a field the conversion may have changed"
+		},
+		{
+			"name": "M-RNC-ARGUMENT-WINDOW",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "opensAnArgumentBefore",
+			"find": "if ((call.children[i].span?.to ?? to) <= to) return true;",
+			"replace": "if (false) return true;",
+			"note": "an argument evaluated before the copy's last use is converted to its parameter ahead of it, which the window never sees"
+		},
+		{
+			"name": "M-RNC-NULL-OPERAND",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "runsOnItsOwn",
+			"find": "c.kind != _shape.nullLiteralKind && !structural(c)",
+			"replace": "!structural(c)",
+			"note": "`null` is asked for an operator overload like any operand, which nothing types, so no comparison with null is proven the language's own and the rule never fires where an overload is declared"
+		},
+		{
+			"name": "M-RNC-STRUCTURAL-OPERAND",
+			"type": "anyparse.check.scan.UnseenCalls",
+			"method": "runsOnItsOwn",
+			"find": "c.kind != _shape.nullLiteralKind && !structural(c)",
+			"replace": "c.kind != _shape.nullLiteralKind",
+			"note": "a function value compared with null is asked for an operator overload, which nothing types, so a callback copy is never reported where an overload is declared"
 		}
 	]
 }

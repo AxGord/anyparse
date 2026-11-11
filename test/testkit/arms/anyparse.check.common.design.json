@@ -161,22 +161,6 @@
 			"note": "a hold of a lock no member names is reported naming nothing"
 		},
 		{
-			"name": "M-TS-QUIET-LOUD-CALLER",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "settleContexts",
-			"find": "if (loud.length == 0) return states;",
-			"replace": "return states;",
-			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
-		},
-		{
-			"name": "M-TS-QUIET-INTO-CALLBACK",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "callbackContext",
-			"find": "final loud: Int = ((ctx & CTX_QUIET) != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));",
-			"replace": "final loud: Int = ctx;",
-			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
-		},
-		{
 			"name": "M-TS-ORDER-NO-HELPER-HOLDS",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "run",
@@ -201,92 +185,12 @@
 			"note": "the holds a multi-lock helper opens in its caller never escape, so a throw under them is quiet"
 		},
 		{
-			"name": "M-TS-STORE-INERT",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "runsNothing",
-			"find": "sealedSlots.contains(edge.storedInto ?? '')\n\t\t\t||",
-			"replace": "",
-			"note": "a method assigned to a dynamic member runs where it is assigned, so a handler a worker invokes reads as run by the constructor that stored it"
-		},
-		{
-			"name": "M-TS-STORE-UNMIRRORED",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "deriveStoredCalls",
-			"find": "for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({",
-			"replace": "for (id in runs) for (e in graph.inEdges(id).copy()) if (false) graph.deriveEdge({",
-			"note": "a value stored into a dynamic member is never called where the member is, so the chain to it names no invoker and its thread is a guess"
-		},
-		{
-			"name": "M-TS-STORE-SEALED-BLIND",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "deriveStoredCalls",
-			"find": "!sealed.contains(slotId) && !unresolvedNames.contains(name) && ",
-			"replace": "!sealed.contains(slotId) && ",
-			"note": "a call of the member's name the graph cannot resolve is taken to run nothing stored, so the value loses the context it may run in"
-		},
-		{
-			"name": "M-TS-NEVER-INVOKES-BY-TARGET",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "neverInvoked",
-			"find": "lists.neverInvokeIds.contains(via) || ",
-			"replace": "",
-			"note": "a qualified neverInvokes entry is never matched, so removing a handler still reads as running it"
-		},
-		{
-			"name": "M-TS-NEVER-INVOKES-BY-NAME",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "neverInvoked",
-			"find": " || lists.neverInvokeNames.contains(member)",
-			"replace": "",
-			"note": "a bare neverInvokes name matches only a call the graph resolves, so removing a handler inherited from a library type still runs it"
-		},
-		{
 			"name": "M-TS-MAIN-CHECK-NO-GETTER",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "chainLists",
 			"find": "matchAll(graph, mainChecks.concat(mainChecks.map(getterOf.bind(_, accessorPrefixes))))",
 			"replace": "matchAll(graph, mainChecks)",
 			"note": "a main-thread check written as a property is never recognised at its reads, which call the getter"
-		},
-		{
-			"name": "M-TS-CLOSED-WORLD-UNREAD",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "mayRunFromOutside",
-			"find": "byFile[graph.node(id)?.file ?? '']?.closedWorld == true && ",
-			"replace": "false && ",
-			"note": "closedWorld is never read, so a method nothing calls is still assumed to run on the main thread"
-		},
-		{
-			"name": "M-TS-SEAL-CTOR",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "sealedFromOutside",
-			"find": "name == (shape.constructorName ?? 'new') || ",
-			"replace": "",
-			"note": "a constructor nothing in the run constructs reads as dead, so the app's entry object runs on no thread"
-		},
-		{
-			"name": "M-TS-SEAL-OVERRIDE",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "plainMember",
-			"find": "m.kind == shape.overrideModifierKind || ",
-			"replace": "",
-			"note": "an override of a library method reads as dead, though the library calls it"
-		},
-		{
-			"name": "M-TS-SEAL-SUPERTYPE",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "sealedFromOutside",
-			"find": " || !inheritsNothingNamed(graph, type, name)",
-			"replace": "",
-			"note": "a method an unindexed interface may declare reads as dead, though code outside the run calls it through that interface"
-		},
-		{
-			"name": "M-TS-SEAL-UNRESOLVED",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "sealedFromOutside",
-			"find": "if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;",
-			"replace": "if (graph.unresolvedAccessesRunning([node]).length > 0) return false;",
-			"note": "a method an unresolved call may name reads as dead"
 		},
 		{
 			"name": "M-TS-DEAD-HOLDS-KEPT",
@@ -683,14 +587,6 @@
 			"note": "a hold left on a throw whose lock member a reflective write unsealed no longer says who unsealed it"
 		},
 		{
-			"name": "M-TS-CTOR-STORE-INERT",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "runsNothing",
-			"find": "|| stored.stored(edge)\n\t\t\t||",
-			"replace": "|| ",
-			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client RowList.reload)"
-		},
-		{
 			"name": "M-OWNED-OWNERS-IGNORED",
 			"type": "anyparse.check.common.design.OwnedTypes",
 			"method": "ownedAt",
@@ -1039,14 +935,6 @@
 			"find": "return named;",
 			"replace": "return true;",
 			"note": "a name the type does not declare (an import, an inherited or module-level symbol) is read as a constant"
-		},
-		{
-			"name": "M-TS-SPAWN-MAIN-CONTEXT",
-			"type": "anyparse.check.common.design.ThreadSafety",
-			"method": "callbackContext",
-			"find": "return if (ThreadStates.runsOnMain(graph, edge, lists))",
-			"replace": "return if (false)",
-			"note": "a value at a main position takes the spawn's background context"
 		},
 		{
 			"name": "M-OWNED-TIER-NO-USE-SITE",

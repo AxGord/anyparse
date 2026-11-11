@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "f455fe3a13d47f34",
+				"err": "7c15ccf8ce50bb33",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1712,7 +1712,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "f131188b6052efe9",
+				"err": "004cd47ca1078f98",
 				"files": "5ac73425cffbf6fb",
 				"compiles": [
 					false,
@@ -2063,6 +2063,37 @@
 					true
 				],
 				"sameRun": [
+					true
+				]
+			}
+		},
+		{
+			"name": "RNC1",
+			"note": "redundant-narrowing-copy: the copy of a field is reported only where nothing between it and its last use can change the field (the fire* shapes), not past a call, a write, a loop, a getter, an overloaded operator or index, a converting type or an argument (the silent* shapes)",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-narrowing-copy",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Runner {\n\tpublic static function create(fn:()->Void):Void {}\n}\n\nclass Box {\n\tpublic var o:Null<Box>;\n\tpublic var height:Float = 0;\n\tpublic var y:Float = 0;\n\tpublic var gg(get, never):Float;\n\n\tpublic function new() {}\n\n\tfunction get_gg():Float return 0;\n\n\tpublic function m():Void {}\n\n\tpublic function n(v:Int):Void {}\n\n\tpublic function show():String return 'box';\n}\n\nabstract Wrap(Box) from Box {\n\tpublic function show():String return 'wrap';\n}\n\nabstract Num(Int) from Int {\n\t@:op(A + B) public function add(b:Num):Num return this;\n}\n\nabstract Grid(Array<Int>) {\n\tpublic function new() this = [];\n\n\t@:arrayAccess public function at(i:Int):Int return this[i];\n}\n\nclass Main {\n\tvar box:Null<Box>;\n\tvar plain:Box;\n\tvar p:Main;\n\tvar shared:Null<Box>;\n\tvar nm:Num = 0;\n\tvar grid:Grid = new Grid();\n\tvar k:Int = 0;\n\tvar h:Float = 0;\n\tvar onChange:Null<(Main) -> Void>;\n\tvar g(get, never):Float;\n\tstatic var sbox:Null<Box>;\n\n\tpublic function new() {}\n\n\tfunction get_g():Float {\n\t\tbox = null;\n\t\treturn 1;\n\t}\n\n\tfunction other():Void {}\n\n\tfunction calc():Int return 1;\n\n\tfunction take(a:Null<Box>, b:Int):Void {}\n\n\tfunction take2(a:Int, b:Null<Box>):Void {}\n\n\tfunction fireField():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tif (l != null) l.y = h - l.height;\n\t}\n\n\tfunction fireListener():Void {\n\t\tfinal listener:Null<(Main) -> Void> = onChange;\n\t\tif (listener != null) listener(this);\n\t}\n\n\tfunction fireStatic():Void {\n\t\tfinal l:Null<Box> = sbox;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction fireChain():Void {\n\t\tfinal l:Null<Box> = p.shared;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction fireCallArgument():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tif (l != null) l.n(calc());\n\t}\n\n\tfunction fireOperator():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tfinal n = k + 1;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentCall():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tother();\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentWrite():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tbox = null;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentLoop():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tfor (i in 0...3) if (l != null) l.m();\n\t}\n\n\tfunction silentLocal(q:Null<Box>):Void {\n\t\tfinal l:Null<Box> = q;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentGetterOnThis():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tif (l != null) l.y = g - l.height;\n\t}\n\n\tfunction silentGetterOnCopy():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tif (l != null) l.y = l.gg + l.height;\n\t}\n\n\tfunction silentAnnotatedAbstract():String {\n\t\tfinal l:Null<Wrap> = box;\n\t\tif (l != null) return l.show();\n\t\treturn '';\n\t}\n\n\tfunction silentOperator():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tfinal n = nm + nm;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentIndex():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tfinal e = grid[k];\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentCast():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tfinal w:Wrap = plain;\n\t\tif (l != null) l.m();\n\t}\n\n\tfunction silentArgument():Void {\n\t\tfinal l:Null<Box> = box;\n\t\tif (l != null) take2(k, l);\n\t}\n\n\tpublic static function main() {}\n}\n",
+				"apq.json": "{\"rules\":{\"thread-safety\":{\"spawns\":[\"Runner.create\"],\"closedWorld\":true}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "b3d8969adbf815d8",
+				"err": "3b0f90aa041ff738",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
 					true
 				]
 			}

@@ -212,6 +212,122 @@
 			"find": "roots.length < 2 || (tailUsed && last == kids.length - 1)",
 			"replace": "roots.length < 2",
 			"note": "a run that is a used block's value is wrapped in a Void guard, which no longer compiles"
+		},
+		{
+			"name": "M-RNC-CALL-WINDOW",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "windowIsQuiet",
+			"find": "!scan.calls.exists(c -> c.from >= from && c.to <= to) && !scan.writes",
+			"replace": "!scan.writes",
+			"note": "a call between the copy and its last use no longer keeps the copy, so the field is read again after a call that may have rewritten it"
+		},
+		{
+			"name": "M-RNC-WRITE-WINDOW",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "windowIsQuiet",
+			"find": " && !scan.writes.exists(w -> from <= w.effect && w.effect <= to)",
+			"replace": "",
+			"note": "a write taking effect before the last use no longer keeps the copy, so the field is read again after it changed"
+		},
+		{
+			"name": "M-RNC-WRAPPED-USE",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "wrapsNoUse",
+			"force": "true",
+			"note": "a use inside a loop or a function literal opened after the copy no longer keeps it, so the field is read again per iteration or at a later call"
+		},
+		{
+			"name": "M-RNC-NULL-COMPARED",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "nullCompared",
+			"force": "true",
+			"note": "a copy no null check reads is flagged too, which is the join-single-use-local rule's case and not a narrowing copy"
+		},
+		{
+			"name": "M-RNC-READ-ONLY",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "readsOf",
+			"find": "h.kind != RefKind.Read || ",
+			"replace": "",
+			"note": "a write of the copy is no longer a refusal, so a copy that is reassigned is rewritten into a write of the field"
+		},
+		{
+			"name": "M-RNC-INTERPOLATED",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "readsOf",
+			"find": "h.interpolated || ",
+			"replace": "",
+			"note": "a braceless $copy inside a string is rewritten to the field text, which reads only the first name of a chain"
+		},
+		{
+			"name": "M-RNC-LOCAL-COPY",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "fieldOf",
+			"find": "(init.kind == s.identKind && read.binding >= 0)",
+			"replace": "false",
+			"note": "a copy of a local or a parameter is taken for a copy of a field, though there is nothing to read directly"
+		},
+		{
+			"name": "M-RNC-REDECLARED",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "redeclared",
+			"force": "false",
+			"note": "a name the field path reads declared again in the window no longer refuses, so the text the copy becomes binds to the new declaration"
+		},
+		{
+			"name": "M-RNC-CHAIN-GUARDED",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "evaluatedUnconditionally",
+			"force": "true",
+			"note": "a field chain first read under a branch or after a short-circuit is rewritten, so a null link that threw at the copy is never read"
+		},
+		{
+			"name": "M-RNC-COMMENT",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "candidate",
+			"find": "if (CheckScan.hasCommentMarker(source, dropSpan.from, dropSpan.to)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a comment on the copy's line is deleted with it"
+		},
+		{
+			"name": "M-RNC-FACTS-ALWAYS",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "run",
+			"find": "if (threads.steady(l.file, l.found.field, l.found.firstUse))",
+			"replace": "if (true)",
+			"note": "the thread facts are never asked, so a project that declares nothing about its writers gets the rewrite"
+		},
+		{
+			"name": "M-RNC-FIX-TEXT",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "fix",
+			"find": "edits.push({ span: use, text: m.initText });",
+			"replace": "edits.push({ span: use, text: m.name });",
+			"note": "a use of the copy is left as it was, so the dropped declaration leaves an unbound name"
+		},
+		{
+			"name": "M-RNC-FIX-DROP",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "fix",
+			"find": "edits.push({ span: m.dropSpan, text: '' });",
+			"replace": "if (false) edits.push({ span: m.dropSpan, text: '' });",
+			"note": "the copy's declaration stays, so the rewrite leaves a dead local"
+		},
+		{
+			"name": "M-RNC-COPY-TYPE",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "keepsFieldType",
+			"find": "return declared != null && bare(written, scan) == bare(declared, scan);",
+			"replace": "return true;",
+			"note": "a copy written as an abstract the field converts into is read as the field, so its uses pick the abstract's members no longer"
+		},
+		{
+			"name": "M-RNC-REFLECTIVE-CLASSES",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy.ThreadFacts",
+			"method": "known",
+			"find": "ReflectiveReach.declaredClasses(files, resolve)",
+			"replace": "null",
+			"note": "the classes the config declares reflective are not read, so a reflective write of a type parameter is taken to reach any field"
 		}
 	]
 }

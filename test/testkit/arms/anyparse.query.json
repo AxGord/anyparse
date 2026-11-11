@@ -15585,7 +15585,7 @@
 		{
 			"name": "M-RCAST-VAR-FIELD",
 			"type": "anyparse.query.StableChain",
-			"method": "isFinalField",
+			"method": "isDataField",
 			"force": "true",
 			"note": "a var field or a getter counts as final, so a call reassigning it or a getter computing it is bound to one stale value"
 		},
@@ -16615,6 +16615,22 @@
 			"find": "reportConfig(ledger, found.path, found.content);",
 			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
 			"note": "a command lookup reports through the process fallback ledger instead of the one the command handed in, so its line is said against another run"
+		},
+		{
+			"name": "M-RNC-ANY-DATA-FIELD",
+			"type": "anyparse.query.StableChain",
+			"method": "isDataField",
+			"find": "(_anyDataField || !(",
+			"replace": "(!(",
+			"note": "a mutable field is no stable chain for a caller that asked for any data field, so no copy of a var is ever found"
+		},
+		{
+			"name": "M-RNC-GETTER",
+			"type": "anyparse.query.StableChain",
+			"method": "isDataField",
+			"find": "&& !m.hasGetter",
+			"replace": "&& true",
+			"note": "a property with a getter reads as a plain field, so a copy of it is rewritten into repeated calls of the getter"
 		}
 	]
 }

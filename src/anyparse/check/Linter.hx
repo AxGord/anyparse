@@ -181,6 +181,7 @@ import anyparse.check.common.nullsafety.PossibleNullDereference;
 import anyparse.check.common.nullsafety.PreferNullCoalescing;
 import anyparse.check.common.nullsafety.PreferSafeNav;
 import anyparse.check.common.nullsafety.PreferSafeNavComparison;
+import anyparse.check.common.nullsafety.RedundantNarrowingCopy;
 import anyparse.check.common.nullsafety.RedundantNullCoalescing;
 import anyparse.check.common.nullsafety.UncheckedNullable;
 import anyparse.check.common.nullsafety.UnguardedNullableDeref;
@@ -496,6 +497,7 @@ final class Linter {
 			new PreferFinalClass(),
 			new PreferSafeNav(),
 			new GroupSafeNav(),
+			new RedundantNarrowingCopy(),
 			new PreferSafeNavComparison(),
 			new EnglishComments(),
 			// Beside `english-comments`, and disjoint from it by what each reads: that rule flags a

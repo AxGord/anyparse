@@ -8358,7 +8358,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "9ccdfcaa5a9982f7",
+				"out": "5d39f51e151c9589",
 				"err": "b16af8623e04073d",
 				"files": "e3b0c44298fc1c14"
 			}

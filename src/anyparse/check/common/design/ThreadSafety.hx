@@ -6,7 +6,6 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.common.design.threads.AllocationSets;
 import anyparse.check.common.design.threads.BoundedRepeats;
 import anyparse.check.common.design.threads.CallRepetition;
-import anyparse.check.common.design.threads.DeadCatches;
 import anyparse.check.common.design.threads.EdgeConditions;
 import anyparse.check.common.design.threads.ErrorPaths.ErrorPaths;
 import anyparse.check.common.design.threads.ErrorPaths.PathCosts;
@@ -36,14 +35,12 @@ import anyparse.check.common.design.threads.ProjectCoverage;
 import anyparse.check.common.design.threads.ProjectNatives;
 import anyparse.check.common.design.threads.ReflectiveReach;
 import anyparse.check.common.design.threads.RootCauseFold;
-import anyparse.check.common.design.threads.StoredValues;
+import anyparse.check.common.design.threads.ThreadContexts;
 import anyparse.check.common.design.threads.ThreadGraph;
 import anyparse.check.common.design.threads.ThreadSafetyOptions;
 import anyparse.check.common.design.threads.ThreadStates;
 import anyparse.check.common.design.threads.ThrowReach;
 import anyparse.query.CallGraph;
-import anyparse.query.MemberKinds;
-import anyparse.query.ReachAdmission;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
 import haxe.Exception;
@@ -64,7 +61,7 @@ using StringTools;
  * [2]}`), which runs MAIN later where the call is proven to bind that parameter (`ThreadStates.runsOnMain`) —, one
  * passed to a `marshals` target runs MAIN, any other inherits its registrar's context. A node nothing reached is
  * ASSUMED main. A call runs only where the code around it lets it (`EdgeConditions`); a value stored into a `dynamic`
- * member runs where the member runs (`deriveStoredCalls`). Sinks inside a `marshals` function are its own machinery.
+ * member runs where the member runs (`ThreadContexts`). Sinks inside a `marshals` function are its own machinery.
  *
  * Locks are told apart by the OBJECT (`LockSites`: the sealed member holding it). A sink that TAKES a `lockPairs` lock
  * stalls only when the lock is LONG: some function holds it, on some path (`LockWindow`), across a call that blocks;
@@ -80,10 +77,10 @@ using StringTools;
  * naming one, `ThreadSafetyOptions.SpawnArguments`), matched by their last two dot-segments (`Type.*` covers a
  * type); a `lockPairs` entry is `<lock pattern>/<unlock member name>`, and a lock WRAPPER's call takes or gives its
  * lock with no entry of its own; `quietRoots` are handlers that block on purpose — the main thread
- * is QUIET in them while no loud main-thread code calls them (`settleContexts`), and a hold only
+ * is QUIET in them while no loud main-thread code calls them (`ThreadContexts`), and a hold only
  * they run is reported by no finding (b); `reentrantLocks` are takes the holder may repeat on the
  * SAME object; `neverInvokes` calls run no function value handed to them; `mainThreadChecks` answer whether the running
- * thread is the main one; `closedWorld` says every caller and every write is in the run (`sealedFromOutside`,
+ * thread is the main one; `closedWorld` says every caller and every write is in the run (`ThreadContexts`,
  * `FieldWrites`), held only by a run covering the project it closes (`ProjectCoverage`); `exclude` drops files by
  * a '/'-bounded path-segment run before the graph is built; `shortSinks` are the sinks one call of which waits briefly,
  * `compilerFacts: true` builds the graph through the run's compiler facts when it has them
@@ -181,31 +178,21 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			plugin, problems
 		);
 		final byFile: Map<String, ChainLists> = listsByFile(
-			files, graph, sets, new PositiveSinks(graph, plugin, natives, library), plugin.refShape().accessorMethodPrefixes ?? [],
-			problems
+			files, _resolveConfig, graph, sets, new PositiveSinks(graph, plugin, natives, library),
+			plugin.refShape().accessorMethodPrefixes ?? [], problems
 		);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
 		// nothing to find, and what the config lost says why
 		if (sinkIds.length == 0) return reportConfigProblems(problems, []);
 		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
-		final unresolvedNames: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
-		final sealedSlots: Array<String> = deriveStoredCalls(graph, unresolvedNames);
-
-		final trees: FunctionTrees = new FunctionTrees(graph, plugin);
-		final conditions: EdgeConditions = new EdgeConditions(
-			graph, trees, plugin, file -> listsOf(file).mainCheckIds, new DeadCatches(graph, trees, plugin, listsOf).holds
-		);
-		// a value a constructor only stores runs where the field is called: those calls derived, its `Ref` running nothing
-		final stored: StoredValues = new StoredValues(
-			graph, trees, plugin, ReflectiveReach.declaredMethodHolders(files, _resolveConfig), file -> byFile[file]?.closedWorld == true
-		);
-		final inertRef: (CallEdge) -> Bool = runsNothing.bind(graph, sealedSlots, stored, listsOf);
-		final seedable: (String) -> Bool = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
-		// a quiet root is judged by the chain of the file declaring it
-		final states: ThreadStates = settleContexts(graph, listsOf, [
-			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
-		], conditions, inertRef, seedable);
+		final contexts: ThreadContexts = new ThreadContexts(graph, plugin, files, _resolveConfig, byFile);
+		final unresolvedNames: Array<String> = contexts.unresolvedNames;
+		final trees: FunctionTrees = contexts.trees;
+		final conditions: EdgeConditions = contexts.conditions;
+		final inertRef: (CallEdge) -> Bool = contexts.inertRef;
+		final seedable: (String) -> Bool = contexts.seedable;
+		final states: ThreadStates = contexts.states;
 
 		final throws: ThrowReach = new ThrowReach(graph, plugin.refShape(), file -> listsOf(file).throwerIds, trees);
 		// every write of the project, seen only when the run covers a closed project (`listsByFile`)
@@ -338,6 +325,11 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		}, dominators, normal);
 	}
 
+	/** A subject naming several ids (the two locks of an inversion), sorted and joined by `SUBJECT_SEPARATOR`. */
+	public static inline function subjectOf(ids: Array<String>): String {
+		return sortedIds(ids).join(SUBJECT_SEPARATOR);
+	}
+
 	/**
 	 * Each file's `ChainLists`, one record per DISTINCT option set: `sets` receives them in the order their first file
 	 * appears, so a single-chain run holds exactly one. The options are read and checked once per config
@@ -346,9 +338,9 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	 * `closedWorld` holds only for a run that covers the project the declaration closes (`ProjectCoverage`): a run over
 	 * part of it sees neither every caller nor every write, and reads the chain as open — said in `problems`.
 	 */
-	private function listsByFile(
-		files: Array<{ file: String, source: String }>, graph: CallGraph, sets: Array<ChainLists>, positive: PositiveSinks,
-		accessorPrefixes: Array<String>, problems: Array<String>
+	public static function listsByFile(
+		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, graph: CallGraph, sets: Array<ChainLists>,
+		positive: PositiveSinks, accessorPrefixes: Array<String>, problems: Array<String>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
@@ -357,7 +349,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final coverage: ProjectCoverage = new ProjectCoverage(graph.heldFiles().map(h -> h.file));
 		final factsAsked: Array<Bool> = [];
 		for (entry in files) {
-			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			final config: LintConfig = LintConfig.resolveWith(resolve, entry.file);
 			final options: ThreadSafetyOptions = read.get(config) ?? ThreadSafetyOptions.read(config);
 			read.set(config, options);
 			final option: (String) -> Array<String> = options.list;
@@ -404,11 +396,6 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		return byFile;
 	}
 
-	/** A subject naming several ids (the two locks of an inversion), sorted and joined by `SUBJECT_SEPARATOR`. */
-	public static inline function subjectOf(ids: Array<String>): String {
-		return sortedIds(ids).join(SUBJECT_SEPARATOR);
-	}
-
 	/**
 	 * `parts` joined as a call chain, at most `cap` of them: the head says where the chain leaves its function, the
 	 * last two what it ends in.
@@ -443,14 +430,11 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		return sorted;
 	}
 
-	/**
-	 * Whether no supertype of `type` may declare `name` (`MemberLookup.supertypesDeclareNone`, by declaration): every one
-	 * the index resolves declares none, and every one it does not is the superclass of a class — whose members the class can
-	 * only reach by an `override`, which a sealed member never carries. An interface the index does not hold may declare
-	 * anything; a graph with no index proves nothing.
-	 */
-	private static inline function inheritsNothingNamed(graph: CallGraph, type: String, name: String): Bool {
-		return graph.index?.typing.members.supertypesDeclareNone(type, name) == true;
+	/** The lists of the chain `file` sits under — every edge's file is one the graph was built from. */
+	public static function listsOfFile(byFile: Map<String, ChainLists>, file: String): ChainLists {
+		final lists: Null<ChainLists> = byFile[file];
+		if (lists == null) throw new Exception('thread-safety: an edge sits in "$file", which no run file resolved a config for');
+		return lists;
 	}
 
 	/**
@@ -507,13 +491,6 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		};
 	}
 
-	/** The lists of the chain `file` sits under — every edge's file is one the graph was built from. */
-	private static function listsOfFile(byFile: Map<String, ChainLists>, file: String): ChainLists {
-		final lists: Null<ChainLists> = byFile[file];
-		if (lists == null) throw new Exception('thread-safety: an edge sits in "$file", which no run file resolved a config for');
-		return lists;
-	}
-
 	/**
 	 * The getter a property pattern `T.p` reads through (`T.get_p`, by the grammar's first accessor prefix): a check
 	 * written as the property matches the accessor its reads call.
@@ -558,145 +535,6 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			}
 		}
 		return pairs;
-	}
-
-	/**
-	 * Whether the `Ref` edge `edge` runs its value from nowhere: a value stored into a member of `sealedSlots`, which
-	 * runs where that member runs (`deriveStoredCalls`), one a constructor only stores into a field, which runs where the
-	 * field is called (`StoredValues`), one handed to a call that never runs it (`neverInvoked`), or the compiler facts'
-	 * record of a value made at a site the syntax already records handing it to a call — the same value at the same span,
-	 * said once with its `via` (`ThreadGraph.madeWhereHanded`).
-	 */
-	private static function runsNothing(
-		graph: CallGraph, sealedSlots: Array<String>, stored: StoredValues, listsOf: (String) -> ChainLists, edge: CallEdge
-	): Bool {
-		return sealedSlots.contains(edge.storedInto ?? '')
-			|| stored.stored(edge)
-			|| neverInvoked(edge, listsOf(edge.file))
-			|| ThreadGraph.madeWhereHanded(graph, edge);
-	}
-
-	/**
-	 * Whether a function the walk reaches through no edge may still run, ASSUMED on the main thread: any function, unless
-	 * its file's chain declares `closedWorld` and nothing outside the run can invoke it (`sealedFromOutside`).
-	 */
-	private static function mayRunFromOutside(
-		graph: CallGraph, plugin: GrammarPlugin, unresolvedNames: Array<String>, byFile: Map<String, ChainLists>, id: String
-	): Bool {
-		return !(byFile[graph.node(id)?.file ?? '']?.closedWorld == true && sealedFromOutside(graph, plugin, unresolvedNames, id));
-	}
-
-	/**
-	 * Whether the call the value of the `Ref` edge `edge` is handed to never runs it: one its chain's `neverInvokes`
-	 * names — a `Type.member` entry by the graph's target, a bare member name by the name the call is written with,
-	 * resolved or not.
-	 */
-	private static function neverInvoked(edge: CallEdge, lists: ChainLists): Bool {
-		final via: String = edge.via ?? '';
-		final member: String = edge.viaMember ?? '';
-		return lists.neverInvokeIds.contains(via) || lists.neverInvokeNames.contains(member);
-	}
-
-	/**
-	 * The context a callback `edge` of `graph` registers from `ctx` runs in: a `spawns` target's BG — MAIN at an argument
-	 * its object entry names `main` (`ThreadStates.runsOnMain`) —, a `marshals` target's MAIN, any other the registrar's
-	 * own — quiet never among them: a callback runs later, from whatever invokes it.
-	 */
-	private static function callbackContext(graph: CallGraph, edge: CallEdge, lists: ChainLists, ctx: Int): Int {
-		final via: Null<String> = edge.via;
-		final loud: Int = ((ctx & CTX_QUIET) != 0 ? CTX_MAIN : 0) | (ctx & (CTX_MAIN | CTX_BG));
-		return if (ThreadStates.runsOnMain(graph, edge, lists))
-			CTX_MAIN
-		else if (via != null && lists.spawnIds.contains(via))
-			CTX_BG
-		else if (via != null && lists.marshalIds.contains(via))
-			CTX_MAIN
-		else
-			loud;
-	}
-
-	/**
-	 * The contexts (`ThreadStates`) with the `quiet` roots only the main thread never enters loud: a root some invocation
-	 * reaches from loud MAIN code is dropped, and the contexts are solved again until none is. A root's registration as a
-	 * callback (a `Ref`, as a handler is) does not make it loud: declaring how such a callback runs is what the list is for.
-	 */
-	private static function settleContexts(
-		graph: CallGraph, listsOf: (String) -> ChainLists, quiet: Array<String>, conditions: EdgeConditions, inertRef: (CallEdge) -> Bool,
-		seedable: (String) -> Bool
-	): ThreadStates {
-		var roots: Array<String> = quiet;
-		while (true) {
-			final states: ThreadStates = new ThreadStates(
-				graph, conditions, roots, (e, ctx) -> callbackContext(graph, e, listsOf(e.file), ctx), inertRef, seedable
-			);
-			final loud: Array<String> = [
-				for (q in roots) if (graph.inEdges(q).exists(e -> e.kind.isInvocation() && (states.edgeContext(e) & CTX_MAIN) != 0)) q
-			];
-			if (loud.length == 0) return states;
-			roots = roots.filter(q -> !loud.contains(q));
-		}
-	}
-
-	/**
-	 * A function value assigned to a `dynamic` method (`CallEdge.storedInto`) runs wherever that member runs: each
-	 * invocation of the member, or of an override of it, is a call of the value too, and each read of the member as a
-	 * value a reference to it. Those edges join the graph, at the member's own sites. Returns the members whose every
-	 * run the graph sees — no call or read of their name it could not resolve — where the assignment itself runs nothing.
-	 */
-	private static function deriveStoredCalls(graph: CallGraph, unresolvedNames: Array<String>): Array<String> {
-		final sealed: Array<String> = [];
-		final stores: Array<CallEdge> = [for (e in graph.edges) if (e.kind == Ref && e.storedInto != null) e];
-		for (store in stores) {
-			final slotId: String = store.storedInto ?? '';
-			final slot: Null<FnNode> = graph.node(slotId);
-			final name: Null<String> = slot?.name;
-			final type: Null<String> = slot?.typeName;
-			if (slot == null || name == null || type == null) continue;
-			final runs: Array<String> = [slotId].concat(graph.virtualTargets(type, name));
-			for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({
-				from: e.from,
-				to: store.to,
-				kind: e.kind,
-				via: e.via,
-				file: e.file,
-				span: e.span,
-				dispatchType: null,
-				receiverField: null
-			});
-			if (!sealed.contains(slotId) && !unresolvedNames.contains(name) && graph.unresolvedAccessesRunning([slot]).length == 0)
-				sealed.push(slotId);
-		}
-		return sealed;
-	}
-
-	/**
-	 * Whether nothing outside the run's files can invoke `id`, so that under `closedWorld` a function nothing in them
-	 * reaches runs on no thread at all: a member method (no lambda, no local function, no constructor, no field
-	 * initializer, no `main`) no supertype may declare (`inheritsNothingNamed`), carrying no `override` and no metadata,
-	 * whose name no unresolved call or access may mean.
-	 */
-	private static function sealedFromOutside(graph: CallGraph, plugin: GrammarPlugin, unresolvedNames: Array<String>, id: String): Bool {
-		final node: Null<FnNode> = graph.node(id);
-		final name: Null<String> = node?.name;
-		final type: Null<String> = node?.typeName;
-		if (node == null || name == null || type == null || node.isExternal || node.isBodyless || id.indexOf('#') >= 0) return false;
-		final shape: RefShape = plugin.refShape();
-		if (name == (shape.constructorName ?? 'new') || name == ENTRY_POINT || name.startsWith('<')) return false;
-		if (graph.ownMember(type, name) != id || !inheritsNothingNamed(graph, type, name)) return false;
-		if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;
-		final declarations: Array<FnDeclaration> = graph.declarationsOf(id);
-		return declarations.length > 0 && declarations.foreach(d -> plainMember(graph, plugin, d));
-	}
-
-	/** Whether the member declared at `d` carries neither `override` nor any metadata. */
-	private static function plainMember(graph: CallGraph, plugin: GrammarPlugin, d: FnDeclaration): Bool {
-		final tree: Null<QueryNode> = graph.treeOf(d.file);
-		if (tree == null) return false;
-		final shape: RefShape = plugin.refShape();
-		final kinds: Array<String> = (shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
-		final leading: Null<Array<QueryNode>> = MemberKinds.precedingAt(tree, d.span, kinds);
-		return leading != null
-			&& !leading.exists(m -> m.kind == shape.overrideModifierKind || plugin.metaShape().metaKinds.contains(m.kind));
 	}
 
 	/**

@@ -3803,6 +3803,150 @@
 			"find": "return CallSelection.chosen(Meta, verdicts) == 0;",
 			"replace": "return false;",
 			"note": "a call to an `@:overload` callee binds nothing even when its own signature is the one selected"
+		},
+		{
+			"name": "M-RNC-SPAWNED-WRITE",
+			"type": "anyparse.check.common.design.threads.SpawnedWriters",
+			"method": "mayChangeUnderRead",
+			"find": "if (_contexts.runsBackground(fn) || (",
+			"replace": "if (false || (",
+			"note": "a write that runs on a spawned thread no longer puts the field at risk"
+		},
+		{
+			"name": "M-RNC-SPAWNED-READER",
+			"type": "anyparse.check.common.design.threads.SpawnedWriters",
+			"method": "mayChangeUnderRead",
+			"find": "(readerSpawned && fn != null && !isConstructor(fn))",
+			"replace": "false",
+			"note": "a field read on a spawned thread is taken to hold still while another function writes it"
+		},
+		{
+			"name": "M-RNC-REFLECTIVE",
+			"type": "anyparse.check.common.design.threads.SpawnedWriters",
+			"method": "mayChangeUnderRead",
+			"find": "if (_writes.reflectivelyWritten(name)) return true;",
+			"replace": "if (false) return true;",
+			"note": "a write by name no longer puts the field at risk"
+		},
+		{
+			"name": "M-TS-QUIET-LOUD-CALLER",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "settleContexts",
+			"find": "if (loud.length == 0) return states;",
+			"replace": "return states;",
+			"note": "a quiet root loud UI code also calls stays quiet, so everything it reaches from that handler goes unreported"
+		},
+		{
+			"name": "M-TS-QUIET-INTO-CALLBACK",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "callbackContext",
+			"find": "(ctx & ThreadSafety.CTX_QUIET) != 0 ? ThreadSafety.CTX_MAIN : 0",
+			"replace": "ctx & ThreadSafety.CTX_QUIET",
+			"note": "a callback a quiet root registers or spawns inherits its quiet, so a listener or worker it hands on is never reported"
+		},
+		{
+			"name": "M-TS-STORE-INERT",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "runsNothing",
+			"find": "sealedSlots.contains(edge.storedInto ?? '')\n\t\t\t||",
+			"replace": "",
+			"note": "a method assigned to a dynamic member runs where it is assigned, so a handler a worker invokes reads as run by the constructor that stored it"
+		},
+		{
+			"name": "M-TS-STORE-UNMIRRORED",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "deriveStoredCalls",
+			"find": "for (id in runs) for (e in graph.inEdges(id).copy()) if (e.kind != Contains) graph.deriveEdge({",
+			"replace": "for (id in runs) for (e in graph.inEdges(id).copy()) if (false) graph.deriveEdge({",
+			"note": "a value stored into a dynamic member is never called where the member is, so the chain to it names no invoker and its thread is a guess"
+		},
+		{
+			"name": "M-TS-STORE-SEALED-BLIND",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "deriveStoredCalls",
+			"find": "!sealed.contains(slotId) && !unresolvedNames.contains(name) && ",
+			"replace": "!sealed.contains(slotId) && ",
+			"note": "a call of the member's name the graph cannot resolve is taken to run nothing stored, so the value loses the context it may run in"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-TARGET",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "neverInvoked",
+			"find": "lists.neverInvokeIds.contains(via) || ",
+			"replace": "",
+			"note": "a qualified neverInvokes entry is never matched, so removing a handler still reads as running it"
+		},
+		{
+			"name": "M-TS-NEVER-INVOKES-BY-NAME",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "neverInvoked",
+			"find": " || lists.neverInvokeNames.contains(member)",
+			"replace": "",
+			"note": "a bare neverInvokes name matches only a call the graph resolves, so removing a handler inherited from a library type still runs it"
+		},
+		{
+			"name": "M-TS-CLOSED-WORLD-UNREAD",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "mayRunFromOutside",
+			"find": "byFile[graph.node(id)?.file ?? '']?.closedWorld == true && ",
+			"replace": "false && ",
+			"note": "closedWorld is never read, so a method nothing calls is still assumed to run on the main thread"
+		},
+		{
+			"name": "M-TS-SEAL-CTOR",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "sealedFromOutside",
+			"find": "name == (shape.constructorName ?? 'new') || ",
+			"replace": "",
+			"note": "a constructor nothing in the run constructs reads as dead, so the app's entry object runs on no thread"
+		},
+		{
+			"name": "M-TS-SEAL-OVERRIDE",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "plainMember",
+			"find": "m.kind == shape.overrideModifierKind || ",
+			"replace": "",
+			"note": "an override of a library method reads as dead, though the library calls it"
+		},
+		{
+			"name": "M-TS-SEAL-SUPERTYPE",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "sealedFromOutside",
+			"find": " || !inheritsNothingNamed(graph, type, name)",
+			"replace": "",
+			"note": "a method an unindexed interface may declare reads as dead, though code outside the run calls it through that interface"
+		},
+		{
+			"name": "M-TS-SEAL-UNRESOLVED",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "sealedFromOutside",
+			"find": "if (unresolvedNames.contains(name) || graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"replace": "if (graph.unresolvedAccessesRunning([node]).length > 0) return false;",
+			"note": "a method an unresolved call may name reads as dead"
+		},
+		{
+			"name": "M-TS-CTOR-STORE-INERT",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "runsNothing",
+			"find": "|| stored.stored(edge)\n\t\t\t||",
+			"replace": "|| ",
+			"note": "a value a constructor only stores runs where it is handed, under the hold around the `new` (R7 L1b, client RowList.reload)"
+		},
+		{
+			"name": "M-TS-SPAWN-MAIN-CONTEXT",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "callbackContext",
+			"find": "return if (ThreadStates.runsOnMain(graph, edge, lists))",
+			"replace": "return if (false)",
+			"note": "a value at a main position takes the spawn's background context"
+		},
+		{
+			"name": "M-RNC-UNBOUNDED-REFLECTIVE",
+			"type": "anyparse.check.common.design.threads.SpawnedWriters",
+			"method": "mayChangeUnderRead",
+			"find": "if (site.reflective && site.reaches == null) return true;",
+			"replace": "",
+			"note": "a reflective write whose target the run cannot bound is taken to leave a field it may reach untouched"
 		}
 	]
 }
