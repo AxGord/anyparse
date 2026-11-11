@@ -184,6 +184,7 @@ import anyparse.check.common.nullsafety.UncheckedNullable;
 import anyparse.check.common.nullsafety.UnguardedNullableDeref;
 import anyparse.check.common.nullsafety.UnnecessaryNullCheck;
 import anyparse.check.common.nullsafety.UnnecessarySafeNav;
+import anyparse.check.common.types.AnonShortFields;
 import anyparse.check.common.types.AvoidAny;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.common.types.CatchDynamic;
@@ -462,6 +463,7 @@ final class Linter {
 			new RedundantCastType(),
 			new RedundantUncheckedCast(),
 			new RedundantAscription(),
+			new AnonShortFields(),
 			new DeadNullGuard(),
 			new DeadNullCoalescing(),
 			new DeadSafeNav(),

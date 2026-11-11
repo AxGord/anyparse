@@ -6,6 +6,7 @@ import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.NodeShape;
+import anyparse.query.SourceText;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using StringTools;
@@ -138,7 +139,7 @@ final class ComprehensionFills {
 	 */
 	private static function innerElement(text: String, annotation: Null<String>, outer: Null<String>): String {
 		final restated: Bool = annotation == null
-			|| (outer != null && PreferComprehension.stripWhitespace(outer) == PreferComprehension.stripWhitespace(annotation));
+			|| (outer != null && SourceText.withoutSpace(outer) == SourceText.withoutSpace(annotation));
 		return restated ? '[$text]' : '([$text] : $annotation)';
 	}
 

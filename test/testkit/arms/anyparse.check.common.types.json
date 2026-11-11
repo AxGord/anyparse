@@ -378,6 +378,83 @@
 			"find": "remedy: grows ? setType : null",
 			"replace": "remedy: setType",
 			"note": "the Array advice names the project set module although it needs none, so a build blind to that module silences a finding whose advice it can follow"
+		},
+		{
+			"name": "M-ANON-SHORT-KEEPS-LONG",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "keepsLong",
+			"force": "false",
+			"note": "a final or function field, an extension clause or an #if region no longer keeps its body in the long form, so the rule rewrites around it"
+		},
+		{
+			"name": "M-ANON-SHORT-KEEPS-PUBLIC",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "keepsLong",
+			"find": "kind == seams.publicKind || ",
+			"replace": "",
+			"note": "a leading public is treated as a member the short form cannot spell, so a public var field is left alone"
+		},
+		{
+			"name": "M-ANON-SHORT-MIXED",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "keepsLong",
+			"find": " || seams.shortKinds.contains(kind)",
+			"replace": "",
+			"note": "a short field beside a var field is treated as a member the short form cannot spell, so a mixed body stays as written"
+		},
+		{
+			"name": "M-ANON-SHORT-ACCESSOR",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "bareHead",
+			"force": "true",
+			"note": "a property with an accessor clause counts as a plain field and loses its accessor"
+		},
+		{
+			"name": "M-ANON-SHORT-TAIL",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "bareTail",
+			"force": "true",
+			"note": "a comment between a field type and its terminator is overwritten with the separator"
+		},
+		{
+			"name": "M-ANON-SHORT-DOC",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "docAbove",
+			"find": "return CheckScan.hasDocBefore(source, docEnds, at);",
+			"replace": "return false;",
+			"note": "a doc block above a var field is left dangling over the rewritten field"
+		},
+		{
+			"name": "M-ANON-SHORT-RUN-COMMENT",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "commentIn",
+			"find": "return SourceComments.hasCommentMarker(source, from, to);",
+			"replace": "return false;",
+			"note": "a comment inside the leading run the fix replaces is deleted with it"
+		},
+		{
+			"name": "M-ANON-SHORT-FOREIGN-META",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "rewrite",
+			"find": "if (isVar && foreignMeta) return null;",
+			"replace": "",
+			"note": "a var field under an annotation other than the optional marker loses that annotation"
+		},
+		{
+			"name": "M-ANON-SHORT-OPTIONAL-MARK",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "longFieldEdits",
+			"find": "optionalMeta && !optionalDecl ? OPTIONAL_MARK : ''",
+			"replace": "''",
+			"note": "an optional var field is rewritten to a required short field"
+		},
+		{
+			"name": "M-ANON-SHORT-SEPARATOR",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "longFieldEdits",
+			"find": "final wanted: String = last ? '' : FIELD_SEPARATOR;",
+			"replace": "final wanted: String = '';",
+			"note": "the fields of a rewritten body run together with no separator"
 		}
 	]
 }

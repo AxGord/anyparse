@@ -11,6 +11,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
+import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
 
@@ -384,7 +385,7 @@ final class PreferComprehension extends RuleBase {
 	private static function isEmptyArrayLocal(decl: QueryNode, ctx: ComprehensionCtx): Bool {
 		if (!ctx.seams.localDeclKinds.contains(decl.kind) || decl.children.length != 1 || decl.name == null) return false;
 		final initSpan: Null<Span> = decl.children[0].span;
-		return initSpan != null && stripWhitespace(ctx.source.substring(initSpan.from, initSpan.to)) == '[]';
+		return initSpan != null && SourceText.withoutSpace(ctx.source.substring(initSpan.from, initSpan.to)) == '[]';
 	}
 
 	/**
@@ -613,16 +614,6 @@ final class PreferComprehension extends RuleBase {
 			|| node.children.exists(c -> referencesName(c, name, s));
 	}
 
-	/** `source` with every space, tab, carriage return and newline removed. */
-	private static function stripWhitespace(source: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...source.length) {
-			final c: Int = source.fastCodeAt(i);
-			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
-		}
-		return buf.toString();
-	}
-
 	/**
 	 * Whether the array declaration's own annotation PROVABLY restates `annotation` at this link's
 	 * position — the link must be the whole push argument, and the array's ELEMENT type must be
@@ -632,7 +623,7 @@ final class PreferComprehension extends RuleBase {
 	 */
 	private static function restatesElementType(l: ChainLocal, annotation: String, acc: ComprehensionAcc): Bool {
 		final element: Null<String> = acc.elementType;
-		return l.wholeArgument && element != null && stripWhitespace(element) == stripWhitespace(annotation);
+		return l.wholeArgument && element != null && SourceText.withoutSpace(element) == SourceText.withoutSpace(annotation);
 	}
 
 	/**

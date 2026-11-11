@@ -2,6 +2,20 @@
 
 Type positions, casts, is-checks, Dynamic, exception types. One section per rule, by id; each rule's language, default and fix marker are in the [rule index](../../lint-rules.md#types), and a suite test fails when a registered rule has no section here or a section names no rule of this category.
 
+## `anon-short-fields`
+
+An anonymous structure type written in the `var` long form where the short form is the same type: `typedef P = { var name:String; var role:String; }` becomes `typedef P = { name:String, role:String }`. `Info`, DEFAULT OFF — one form for anonymous structures is a project convention, opt in with `apq.json` `"rules": { "anon-short-fields": { "enabled": true } }`. It reads a typedef body and an inline structure type (a signature, a field, a type argument) alike, and `--fix` rewrites it.
+
+Fires when the body holds at least one `var` field and every one of them is plain: `public` (dropped, a structure field is public anyway) and `@:optional` (becomes `?x:T`, as does `var ?x:T`) are the only things allowed in front of it, and it has no accessor clause, initializer or further declarator. Short fields beside it stay as they are. Anything the short form cannot spell keeps the WHOLE body as written and the rule silent: a `final` or `function` field, a `> Base` extension clause, an `#if` region, any other annotation on a `var` field. So does a comment the rewrite would lose — a doc block above a `var` field, or a comment between `var` and the name, around the colon or before the `;`. A trailing `// note` after a field and a line comment above one stay with their field. The fix touches only the leading `var` run and the terminator (`;` becomes `,` between fields and goes after the last), never the type, so a structure nested in a field's type is rewritten by its own finding in the same run; the result is the writer's canonical form and reports nothing.
+
+```haxe
+typedef P = {
+	public var name:String;
+	@:optional var role:String;
+}
+// --fix: typedef P = { name:String, ?role:String }
+```
+
 ## `avoid-any`
 
 `Any` in a declared type position — a field, parameter or return type, a type argument (`Array<Any>`), or an annotated local — read through the walk `avoid-dynamic` runs, so a position, the exact-token span, the extern skip and the options mean the same in both. `Info`, report-only, DEFAULT OFF, enabled in this project's `apq.json`. `Any` is safe where `Dynamic` is not, so a finding is not an error: it says a narrower type exists. The message names the way for a value read from a JSON document: a `@:schema(JsonFormat)` typedef and its generated parser. Options: `excludePaths`, `excludeMeta`.

@@ -95,6 +95,13 @@ final class SourceText {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
+	/** `text` with every space, tab, CR and LF removed — the form two source fragments are compared in when layout is irrelevant. */
+	public static function withoutSpace(text: String): String {
+		final out: StringBuf = new StringBuf();
+		for (i in 0...text.length) if (!isSpace(text.fastCodeAt(i))) out.addChar(text.fastCodeAt(i));
+		return out.toString();
+	}
+
 	/**
 	 * `text` with every run of `isSpace` characters collapsed to one space and both ends trimmed —
 	 * how a multi-line expression is quoted on one message line.

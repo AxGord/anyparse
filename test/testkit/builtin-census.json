@@ -1,6 +1,7 @@
 {
 "builtins": [
 	"always-null-comparison",
+	"anon-short-fields",
 	"anon-type-dup",
 	"assignment-in-condition",
 	"asymmetric-branch-braces",
