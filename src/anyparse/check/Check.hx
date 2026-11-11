@@ -679,6 +679,36 @@ interface CarryingFix {
 }
 
 /**
+ * One line a fixer wants said about a finding it left alone: `key` identifies the finding within its rule (the run says each
+ * `key` once, however many fixpoint passes re-ask), `text` is the whole line without a trailing newline.
+ */
+typedef FixNote = { var key: String; var text: String; }
+
+/** What `NotedFix.fixNoted` answers: the edits `Check.fix` returns, and the notes that go with them. */
+typedef NotedEdits = { var edits: Array<FixEdit>; var notes: Array<FixNote>; }
+
+/**
+ * Opt-in declaration that a `Check`'s fix has something to SAY besides its edits — a finding it withheld, and why, in a line
+ * the run prints.
+ *
+ * `fix` is re-asked on every fixpoint pass, and from several paths, so a fixer that printed from inside it said the same line
+ * again each time. The producer returns the lines instead and the driver (`LintFixDriver.ruleEditsFor`) says each `key` once per
+ * run. The edit-list return of `Check.fix` is untouched, so no other fixer pays for this.
+ *
+ * CONTRACT, the one `CarryingFix` carries: `Check.fix` MUST be the pure projection of `fixNoted` (`fixNoted(...).edits`) so the
+ * two views never disagree about WHICH edits the fix produces. LIMIT: a caller that asks `fix` directly (a unit `check.fix`,
+ * `FixVerifier` for a risky check) never sees a note, and a check that is both `CarryingFix` and `NotedFix` is asked through
+ * `fixCarrying` only.
+ */
+@:nullSafety(Strict)
+interface NotedFix {
+
+	/** The same edits `Check.fix` returns for `violations` (this check's OWN, for ONE `source`), with the notes to say. */
+	public function fixNoted(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): NotedEdits;
+
+}
+
+/**
  * Opt-in declaration that a `Check` has NO autofix AT ALL — report-only BY DESIGN, rather
  * than because a gate closed on this run.
  *

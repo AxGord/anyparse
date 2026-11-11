@@ -1,5 +1,8 @@
 package anyparse.check.common.members;
 
+import anyparse.check.Check.FixNote;
+import anyparse.check.Check.NotedEdits;
+import anyparse.check.Check.NotedFix;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CondRegionScan;
@@ -11,7 +14,6 @@ import anyparse.query.MemberReach;
 import anyparse.query.ParseGate;
 import anyparse.query.RawSourceScan;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RunLedger;
 import anyparse.query.ShapeVocab;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
@@ -299,14 +301,7 @@ import haxe.Exception;
  * `inheritedProbe` for the residual.
  */
 @:nullSafety(Strict)
-final class FieldInitAtDeclaration extends RuleBase {
-
-	/**
-	 * The `RunLedger` topic of the `file#field` keys already reported by `fix`'s skip diagnostic — one line per
-	 * field per run. `lint --fix` re-runs the rule until it reaches a fixpoint, so
-	 * an undeduplicated line would repeat once per pass.
-	 */
-	private static inline final SKIPS_TOPIC: String = 'field-init-skip';
+final class FieldInitAtDeclaration extends RuleBase implements NotedFix {
 
 	public function new() {
 		super(
@@ -351,9 +346,18 @@ final class FieldInitAtDeclaration extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		return fixNoted(source, violations, plugin, index).edits;
+	}
+
+	/**
+	 * `fix`'s edits plus one note per skipped violation, which the fix driver says once per run. `fix` is the
+	 * projection of this.
+	 */
+	public function fixNoted(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): NotedEdits {
 		final shape: RefShape = plugin.refShape();
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return [];
+		if (tree == null) return { edits: [], notes: [] };
+		final notes: Array<FixNote> = [];
 		final moving: Array<Int> = RunScan.spanStarts(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -372,7 +376,7 @@ final class FieldInitAtDeclaration extends RuleBase {
 				final stmtSpan: Null<Span> = loc.stmt.span;
 				if (rhsSpan == null || fieldSpan == null || stmtSpan == null) continue;
 				if (!prefixMovesTogether(loc.container, stmtSpan.from, moving, source, shape, inheritedProbe(v.file, () -> index))) {
-					reportSkip(v.file, loc.field.name);
+					notes.push(skipNote(v.file, loc.field.name));
 					continue;
 				}
 				final insertPos: Int = CtorFieldWrite.fieldDeclInitInsertPos(source, fieldSpan);
@@ -398,14 +402,14 @@ final class FieldInitAtDeclaration extends RuleBase {
 			final assignSpan: Null<Span> = emb.assign.span;
 			if (rhsSpan == null || fieldSpan == null || assignSpan == null) continue;
 			if (!prefixMovesTogether(emb.container, assignSpan.from, moving, source, shape, inheritedProbe(v.file, () -> index))) {
-				reportSkip(v.file, emb.field.name);
+				notes.push(skipNote(v.file, emb.field.name));
 				continue;
 			}
 			final insertPos: Int = CtorFieldWrite.fieldDeclInitInsertPos(source, fieldSpan);
 			edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
 			edits.push({ span: assignSpan, text: source.substring(emb.target.from, emb.target.to) });
 		}
-		return edits;
+		return { edits: edits, notes: notes };
 	}
 
 	/** Push the `field-init-at-declaration` violation for an accepted `cand`. */
@@ -459,14 +463,12 @@ final class FieldInitAtDeclaration extends RuleBase {
 		};
 	}
 
-	/**
-	 * Report `name` skipped once per field per run. `lint --fix` re-runs the rule until it
-	 * reaches a fixpoint, so an undeduplicated line would repeat once per pass.
-	 */
-	private static function reportSkip(file: String, name: Null<String>): Void {
-		final key: String = '$file#$name';
-		if (!RunLedger.first(SKIPS_TOPIC, key)) return;
-		stderr('apq fix: field-init-at-declaration: \'$name\' skipped — a prefix candidate is not in the fix set\n');
+	/** The note for `name` skipped: keyed per field, so the run says it once however many passes re-ask. */
+	private static function skipNote(file: String, name: Null<String>): FixNote {
+		return {
+			key: '$file#$name',
+			text: 'apq fix: field-init-at-declaration: \'$name\' skipped — a prefix candidate is not in the fix set'
+		};
 	}
 
 	/** Walk `node`, considering every class-like container found. */
@@ -795,13 +797,6 @@ final class FieldInitAtDeclaration extends RuleBase {
 		final callSpan: Null<Span> = calls[0].span;
 		final calleeSpan: Null<Span> = calls[0].children[0].span;
 		return callSpan == null || calleeSpan == null || writeFrom < calleeSpan.to || writeFrom >= callSpan.to;
-	}
-
-	/** Guarded stderr write — mirrors `LintConfig.stderr` (`#if sys` alone is false on hxnodejs). */
-	private static function stderr(s: String): Void {
-		#if (sys || nodejs)
-		Sys.stderr().writeString(s);
-		#end
 	}
 
 	/**

@@ -1222,6 +1222,22 @@
 			"find": " || a.rank == EnumValue || b.rank == EnumValue",
 			"replace": "",
 			"note": "the reason of a value inside a mixed-rank conditional block is the pinned-block reason, not the rule that values lead"
+		},
+		{
+			"name": "M-FIELDINIT-SKIP-NOTE",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "fixNoted",
+			"find": "notes.push(skipNote(v.file, loc.field.name));",
+			"replace": "notes.slice(0);",
+			"note": "the constructor-statement skip is no longer returned as a note, so a thinned fix list leaves a field in the constructor with no word said about it"
+		},
+		{
+			"name": "M-FIELDINIT-SKIP-NOTE-EMBEDDED",
+			"type": "anyparse.check.common.members.FieldInitAtDeclaration",
+			"method": "fixNoted",
+			"find": "notes.push(skipNote(v.file, emb.field.name));",
+			"replace": "notes.slice(0);",
+			"note": "the embedded-assignment skip is no longer returned as a note, so a thinned fix list leaves a field written inside an expression with no word said about it"
 		}
 	]
 }

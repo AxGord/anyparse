@@ -1291,6 +1291,22 @@
 			"find": "if (sectionOpts == null && configPath != null && optsJson != null && lang == HXFORMAT_LANG)",
 			"replace": "if (sectionOpts == null && configPath != null && optsJson != null && false)",
 			"note": "a config the user names with --config is applied and never reported, so an unreadable indentation.character in it keeps the default silently"
+		},
+		{
+			"name": "M-LINT-FIX-NOTE-ONCE",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "freshNoteLines",
+			"find": "RunLedger.first(",
+			"replace": "true || RunLedger.first(",
+			"note": "the run no longer remembers a said note, so every fixpoint pass and every per-finding retry prints the same skip line again"
+		},
+		{
+			"name": "M-LINT-FIX-NOTE-ROUTED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "ruleEditsFor",
+			"find": "else if (check is NotedFix)",
+			"replace": "else if (false)",
+			"note": "the driver asks a NotedFix through plain fix, so its notes are never collected and a skipped field is silent"
 		}
 	]
 }

@@ -747,9 +747,12 @@ final class LintFixDriver {
 		// projection of what comes back — asking both would run the same analysis twice and let
 		// the two answers disagree, which is exactly what that interface's contract forbids.
 		final carrying: Array<CarryingEdit> = check is CarryingFix ? (cast check: CarryingFix).fixCarrying(source, own, cached, index) : [];
-		final checkEdits: Array<{ span: Span, text: String }> = check is CarryingFix
-			? carrying.map(edit -> { span: edit.span, text: edit.text })
-			: check.fix(source, own, cached, index);
+		final checkEdits: Array<{ span: Span, text: String }> = if (check is CarryingFix)
+			carrying.map(edit -> { span: edit.span, text: edit.text })
+		else if (check is NotedFix)
+			askNoted(cast check, check.id(), source, own, cached, index)
+		else
+			check.fix(source, own, cached, index);
 		// The guard runs BEFORE the ledger, because the ledger's subject is what the check
 		// ACHIEVED and a refused edit set achieves nothing. Counting it as `edits` claimed the rule
 		// had fixed these findings, so the run reported no decline for them at all — and the one
@@ -1536,6 +1539,24 @@ final class LintFixDriver {
 		final found: Array<Violation> = lint(set.filter(entry -> changed.exists(entry.file)), narrow);
 		for (v in lint(set, wide)) found.push(v);
 		return Linter.withoutSuperseded(found, checks).filter(v -> changed.exists(v.file));
+	}
+
+	/** The text of each of `notes` this run has not yet said for `rule`, marking them said. */
+	public static function freshNoteLines(rule: String, notes: Array<FixNote>): Array<String> {
+		return [for (note in notes) if (RunLedger.first('fix-note:$rule', note.key)) note.text];
+	}
+
+	/**
+	 * The edits of a `NotedFix`, its notes said on the way: each note's `key` once per run and rule, however many passes, splits
+	 * and retries re-ask the same finding. A note is a line for the person reading the run, so it goes to stderr.
+	 */
+	private static function askNoted(
+		check: NotedFix, rule: String, source: String, own: Array<Violation>, plugin: GrammarPlugin, index: SymbolIndex
+	): Array<FixEdit> {
+		final answer: NotedEdits = check.fixNoted(source, own, plugin, index);
+
+		for (line in freshNoteLines(rule, answer.notes)) CliIo.stderr('$line\n');
+		return answer.edits;
 	}
 
 }
