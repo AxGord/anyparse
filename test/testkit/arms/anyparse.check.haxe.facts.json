@@ -1205,6 +1205,46 @@
 			"find": "journalOf(plugin), plugin, fallback)",
 			"replace": "journalOf(plugin), plugin)",
 			"note": "a file whose text is gone is declined instead of being asked of the display server"
+		},
+		{
+			"name": "M-EAV-DECLARATION-READ",
+			"type": "anyparse.check.haxe.facts.FactsTypeOracle",
+			"method": "enumValueKeys",
+			"find": "if (n.kind == FactKinds.VAR && SourceText.lastSegment(n.owner) == SourceText.lastSegment(v.type) + IMPL_SUFFIX) continue;",
+			"replace": "",
+			"note": "a value declaration reads its own constant, so every value reads as read"
+		},
+		{
+			"name": "M-EAV-FACTS-CASE",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "for (value in c.values) enumValue(patterns, value);",
+			"replace": "",
+			"note": "a case pattern of a switch of several arms records no read"
+		},
+		{
+			"name": "M-EAV-FACTS-COMPARE",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "enumValue(enumAbstractOf(a.t), b);",
+			"replace": "",
+			"note": "the comparison a single-arm switch is lowered to records no read of its pattern"
+		},
+		{
+			"name": "M-EAV-STRING-QUOTE",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "enumValue",
+			"find": "${JsonText.quote(s)}",
+			"replace": "${q(s)}",
+			"note": "a string constant is written unescaped, so a control character in it breaks its node record"
+		},
+		{
+			"name": "M-EAV-FACTS-CAST",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "visit",
+			"find": "enumValue(enumAbstractOf(e.t), inner, e.pos);",
+			"replace": "enumValue(null, inner, e.pos);",
+			"note": "a value read as an expression records no read, so a qualified read leaves its value unread"
 		}
 	]
 }

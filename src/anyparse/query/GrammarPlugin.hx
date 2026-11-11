@@ -1471,6 +1471,13 @@ final class RefShape {
 	public var retainedDeclMetaName: Null<String>;
 
 	/**
+	 * The metadata tag that EXPORTS a declaration under its name to code outside the program (Haxe `@:expose`, which
+	 * publishes a type or a field to the host's JavaScript), so a reader no project scan and no compile sees may reach it.
+	 * `unused-enum-abstract-value` weighs no value it or its type carries. Optional; unset → no declaration is exported.
+	 */
+	public var exportedDeclMetaName: Null<String>;
+
+	/**
 	 * The metadata tag that declares a type is emitted as a PLAIN NATIVE type for the host
 	 * platform rather than as a runtime object of the language's own model (Haxe `@:nativeGen`,
 	 * which is what makes a `cs` / `java` class usable directly by foreign code — the Unity

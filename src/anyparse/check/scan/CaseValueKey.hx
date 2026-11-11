@@ -80,6 +80,21 @@ final class CaseValueKey {
 		};
 	}
 
+	/**
+	 * The value key of a constant a compiler spelled as `text`: a number (`n`), a string (`s`) or a bool (`b`) by `kind`,
+	 * or null for another kind or a number that does not read as one.
+	 */
+	public static function ofConstant(kind: String, text: String): Null<String> {
+		return switch kind {
+			case 'n':
+				final value: Float = Std.parseFloat(text);
+				Math.isNaN(value) ? null : numberKey(value);
+			case 's': STRING_PREFIX + text;
+			case 'b': BOOL_PREFIX + text;
+			case _: null;
+		};
+	}
+
 	/** The value key of a literal of node kind `kind` written as `text`, or null when it is not provably known. */
 	public static function of(kind: String, text: String, seams: CaseValueSeams): Null<String> {
 		final number: Null<Float> = numberOf(kind, text, seams);

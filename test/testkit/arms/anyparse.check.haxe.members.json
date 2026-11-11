@@ -1,0 +1,95 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.check.haxe.members. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-EAV-CONDITIONAL",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "mayRead",
+			"find": "return typed.length == 0;",
+			"replace": "return false;",
+			"note": "an occurrence in a branch no build compiled reads nothing"
+		},
+		{
+			"name": "M-EAV-FIX-OFF",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "considerType",
+			"find": "final blocker: Null<String> = fixing",
+			"replace": "final blocker: Null<String> = true",
+			"note": "the fix runs without its config key"
+		},
+		{
+			"name": "M-EAV-IMPLICIT-ARRIVAL",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "exemption",
+			"find": "clauses.from.length > 0 || ",
+			"replace": "",
+			"note": "a type with a from cast is weighed"
+		},
+		{
+			"name": "M-EAV-LABEL-ALONE",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "removal",
+			"find": "if (aloneInGroup(source, node, parent, lines.to)) while (true) {",
+			"replace": "if (false) while (true) {",
+			"note": "a value alone in its group leaves its label behind"
+		},
+		{
+			"name": "M-EAV-LATER-IMPLICIT",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "removalBlocker",
+			"find": "later.exists(v -> v.initializerKind == null)",
+			"replace": "false",
+			"note": "a value a later implicit number follows is removed"
+		},
+		{
+			"name": "M-EAV-NAMED-AS-VALUE",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "exemption",
+			"find": "return namedAsValue(type, ctx) ? 'some code names it as a value' : null;",
+			"replace": "return null;",
+			"note": "a type handed to a macro as a value is weighed"
+		},
+		{
+			"name": "M-EAV-NO-FACTS",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "mayRead",
+			"find": "if (facts == null || reads == null) return true;",
+			"replace": "if (facts == null || reads == null) return false;",
+			"note": "without facts an occurrence reads nothing"
+		},
+		{
+			"name": "M-EAV-OTHER-TYPE-READ",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "mayRead",
+			"find": "return typed.length == 0;",
+			"replace": "return true;",
+			"note": "an occurrence the builds typed as another type's value keeps the value"
+		},
+		{
+			"name": "M-EAV-PINNED",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "run",
+			"find": "!type.hasKeep && ",
+			"replace": "",
+			"note": "a @:keep type is weighed"
+		},
+		{
+			"name": "M-EAV-MACRO-HOST",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "handedAt",
+			"find": "&& argument && !plainHost(node.name, file, ctx);",
+			"replace": "&& argument && false;",
+			"note": "a type argument of a host a build macro writes is no hand-off"
+		},
+		{
+			"name": "M-EAV-UNRECORDED-READ",
+			"type": "anyparse.check.haxe.members.UnusedEnumAbstractValue",
+			"method": "mayRead",
+			"find": "return typed.length == 0;",
+			"replace": "return o.kind == ConditionalRaw && typed.length == 0;",
+			"note": "compiled code recording no value at an occurrence reads nothing"
+		}
+	]
+}

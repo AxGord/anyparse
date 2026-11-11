@@ -228,6 +228,7 @@ import anyparse.check.haxe.loops.PreferMap;
 import anyparse.check.haxe.loops.PreferMapLiteral;
 import anyparse.check.haxe.loops.PreferSinglePass;
 import anyparse.check.haxe.members.StaticInitOrder;
+import anyparse.check.haxe.members.UnusedEnumAbstractValue;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
 import anyparse.check.haxe.types.AvoidHaxeJson;
 import anyparse.check.haxe.types.PreferIsOperator;
@@ -290,6 +291,7 @@ final class Linter {
 			new PreferCompareFunction(),
 			new PreferSplitPart(),
 			new StaticInitOrder(),
+			new UnusedEnumAbstractValue(),
 			new NullSafetyStrict(),
 			new SelfAssignment(),
 			new DuplicateCase(),

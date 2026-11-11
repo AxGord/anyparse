@@ -25,8 +25,8 @@ final class TypedFactsWalk {
 
 	/** The categories of a node line, in the order they are written. */
 	private static final CATEGORIES: Array<String> = [
-		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'hands', 'gens', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'exps',
-		'fns'
+		'params', 'calls', 'news', 'fields', 'elems', 'flows', 'hands', 'gens', 'strs', 'iters', 'refl', 'native', 'vars', 'reads', 'vals',
+		'exps', 'fns'
 	];
 
 	/** The accesses of a call of a method a type declares, whose parameters take its arguments (`Argument`). */
@@ -633,6 +633,9 @@ final class TypedFactsWalk {
 				walk(a);
 				walk(b);
 			case TBinop(OpEq | OpNotEq | OpLt | OpLte | OpGt | OpGte, a, b):
+				// a single-arm switch over an enum abstract is lowered to a comparison with the bare constant of its pattern
+				enumValue(enumAbstractOf(a.t), b);
+				enumValue(enumAbstractOf(b.t), a);
 				walkAs(a, Compare);
 				walkAs(b, Compare);
 			case TReturn(value):
@@ -652,6 +655,8 @@ final class TypedFactsWalk {
 				for (entry in entries) walk(entry.expr);
 				literalFlows(e);
 			case TCast(inner, null):
+				// a value of an enum abstract is read as its constant cast to the abstract, at the read's own range
+				enumValue(enumAbstractOf(e.t), inner, e.pos);
 				// an unchecked cast is recorded whatever the two types: its source is what escapes
 				final sink: String = str(e.t);
 				flowText(sourceType(inner), sink == '?' ? 'Dynamic' : sink, 'cast', e.pos);
@@ -693,7 +698,10 @@ final class TypedFactsWalk {
 			case TSwitch(subject, cases, otherwise):
 				// the subject is only compared with the patterns; each arm is the switch's own value
 				walkAs(subject, Compare);
+				// a `case` pattern naming a value of an enum abstract is the bare constant, typed as the underlying type
+				final patterns: Null<String> = enumAbstractOf(subject.t);
 				for (c in cases) {
+					for (value in c.values) enumValue(patterns, value);
 					for (value in c.values) walk(value);
 					walkAs(c.expr, use);
 				}
@@ -1112,6 +1120,23 @@ final class TypedFactsWalk {
 			: ',"o":${q(sourceType(first))}' + (exactObject(first) ? ',"x":true' : '');
 	}
 
+	/**
+	 * Record `value` as a read of a value of the enum abstract `type` when it is a constant, at `at` or its own range: the
+	 * compiler leaves no field access where it inlined the value, only the constant.
+	 */
+	private function enumValue(type: Null<String>, value: TypedExpr, ?at: Position): Void {
+		if (type == null) return;
+		final constant: Null<String> = switch value.expr {
+			case TConst(TInt(i)): '"k":"n","v":${q(Std.string(i))}';
+			case TConst(TFloat(f)): '"k":"n","v":${q(f)}';
+			// a string constant is any text, control characters included, which the names `q` quotes never hold
+			case TConst(TString(s)): '"k":"s","v":${JsonText.quote(s)}';
+			case TConst(TBool(b)): '"k":"b","v":${q(Std.string(b))}';
+			case _: null;
+		};
+		if (constant != null) add('vals', '{"t":${q(type)},$constant,"p":${this.at(at ?? value.pos)}}');
+	}
+
 	/** Whether `info` lies in the declared range of `method`. */
 	private static inline function holds(method: InlineMethod, info: { min: Int, max: Int, file: String }): Bool {
 		return info.file == method.file && info.min >= method.min && info.max <= method.max;
@@ -1244,6 +1269,15 @@ final class TypedFactsWalk {
 			case TParenthesis(inner), TMeta(_, inner): isThis(inner);
 			case TConst(TThis): true;
 			case _: false;
+		};
+	}
+
+	/** The id of the enum abstract `t` is, through typedefs and `Null`, or null for any other type. */
+	private static function enumAbstractOf(t: Type): Null<String> {
+		return switch TypeTools.follow(t) {
+			case TAbstract(_.get() => a, [inner]) if (a.pack.length == 0 && a.name == 'Null'): enumAbstractOf(inner);
+			case TAbstract(_.get() => a, _) if (a.meta.has(':enum')): TypedFactsTypeStrings.typeId(a.pack, a.name);
+			case _: null;
 		};
 	}
 

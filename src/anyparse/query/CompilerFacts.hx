@@ -194,6 +194,18 @@ typedef StringFact = {
 /** A `for` loop the compiler kept as one: the binder's type and the iterated value's. */
 typedef IterationFact = { final binder: String; final iterated: String; final at: FactPos; }
 
+/**
+ * A value of the enum abstract `type` (its id) the code reads: the compiler puts the value's constant in its place, so
+ * the read is the constant's `kind` (`n` number, `s` string, `b` bool) and `text` at the read — a written value, a
+ * `case` pattern of a switch over the abstract, or an operand compared with one of its values.
+ */
+typedef EnumValueFact = {
+	final type: String;
+	final kind: String;
+	final text: String;
+	final at: FactPos;
+}
+
 /** A `Reflect`/`Type` call, with its first literal string argument and its first type argument. */
 typedef ReflectionFact = {
 
@@ -342,6 +354,9 @@ typedef FactNode = {
 	final natives: Array<NativeFact>;
 	final vars: Array<VarFact>;
 	final reads: Array<LocalReadFact>;
+
+	/** The values of enum abstracts the node's code reads, each where the compiler put the constant in its place. */
+	final enumValues: Array<EnumValueFact>;
 	final fns: Array<String>;
 
 	/** The bodies inlined calls spliced into this node, one per method's declared range (`spliceOf`). */

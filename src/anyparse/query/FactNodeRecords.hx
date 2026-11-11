@@ -5,6 +5,7 @@ import anyparse.grammar.json.JsonNative;
 import anyparse.query.CompilerFacts.ArgumentFact;
 import anyparse.query.CompilerFacts.CallFact;
 import anyparse.query.CompilerFacts.ElementWriteFact;
+import anyparse.query.CompilerFacts.EnumValueFact;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FieldFact;
@@ -91,6 +92,7 @@ final class FactNodeRecords {
 			natives: [],
 			vars: [],
 			reads: [],
+			enumValues: [],
 			fns: [],
 			splices: [],
 			expansions: []
@@ -192,6 +194,16 @@ final class FactNodeRecords {
 		FactMerge.collect(
 			record.iters, i -> place(i.p), FactNodeRecordText.compactFactIterRecord, fresh.bind('iter'),
 			(i, where) -> ({ binder: i.v, iterated: i.i, at: where }: IterationFact), node.iterations
+		);
+		FactMerge.collect(
+			record.vals, v -> place(v.p), FactNodeRecordText.compactFactValRecord, fresh.bind('val'),
+			(v, where) -> ({
+				type: v.t,
+				kind: v.k,
+				text: v.v,
+				at: where
+			}: EnumValueFact),
+			node.enumValues
 		);
 		FactMerge.collect(
 			record.refl, r -> place(r.p), FactNodeRecordText.compactFactReflRecord, fresh.bind('refl'),

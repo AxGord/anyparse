@@ -2,8 +2,10 @@ package anyparse.check.haxe.facts;
 
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
+import anyparse.check.FactsOracle.EnumValueReads;
 import anyparse.check.FactsOracle.InheritedMember;
 import anyparse.check.haxe.facts.FactsTypeSpelling.TypeScope;
+import anyparse.check.scan.CaseValueKey;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts;
 import anyparse.query.EditJournal;
@@ -270,10 +272,7 @@ final class FactsTypeOracle implements FactsOracle {
 	 * own `@:build` — and `Undeclared` otherwise. The first supertype that answers decides, in the order the facts list them.
 	 */
 	public function inheritedMember(file: String, owner: String, name: String): InheritedMember {
-		final key: String = facts.keyOf(file);
-		final ids: Array<String> = [
-			for (id in facts.typeIds()) if (SourceText.lastSegment(id) == owner && facts.typePosition(id)?.file == key) id
-		];
+		final ids: Array<String> = typedIds(file, owner);
 		if (ids.length == 0) return Untyped;
 		for (id in ids) for (sup in facts.supertypesOf(id)) {
 			final declared: Null<TypeFact> = facts.type(sup);
@@ -289,6 +288,27 @@ final class FactsTypeOracle implements FactsOracle {
 		final id: Null<String> = typeIdAt(file, expr, false);
 		final declared: Null<TypeFact> = id == null ? null : facts.type(id);
 		return declared != null && declared.alike && declared.kind == FactKinds.CLASS && !declared.isExtern;
+	}
+
+	public function enumValueReads(file: String, owner: String): Null<EnumValueReads> {
+		final ids: Array<String> = typedIds(file, owner);
+		if (ids.length != 1) return null;
+		final id: String = ids[0];
+		return { type: id, keys: enumValueKeys(id) };
+	}
+
+	public function enumValuesReadAt(file: String, span: Span): Null<Array<String>> {
+		if (!facts.compiled(file)) return null;
+		final site: Null<FactsSite> = siteOf(file);
+		if (site == null || site.text != site.current) return null;
+		final nodes: Array<FactNode> = site.facts.nodesAround(site.file, span);
+		if (nodes.length == 0) return null;
+		final types: Array<String> = [];
+		for (n in nodes)
+			for (v in n.enumValues)
+				if (v.at.file == site.key && v.at.span.to == span.to && v.at.span.from <= span.from && !types.contains(v.type))
+					types.push(v.type);
+		return types;
 	}
 
 	/**
@@ -451,6 +471,29 @@ final class FactsTypeOracle implements FactsOracle {
 					&& memberOf(n) == name
 				)
 					n
+		];
+	}
+
+	/** The keys of the values of the enum abstract `type` (its id) the code of every node of the table reads. */
+	private function enumValueKeys(type: String): Array<String> {
+		final out: Array<String> = [];
+		for (id in facts.nodeIds()) {
+			final n: Null<FactNode> = facts.node(id);
+			if (n != null) for (v in n.enumValues) if (v.type == type) {
+				// a value's own declaration is a field of the abstract's implementation initialized with the constant: no read
+				if (n.kind == FactKinds.VAR && SourceText.lastSegment(n.owner) == SourceText.lastSegment(v.type) + IMPL_SUFFIX) continue;
+				final value: Null<String> = CaseValueKey.ofConstant(v.kind, v.text);
+				if (value != null && !out.contains(value)) out.push(value);
+			}
+		}
+		return out;
+	}
+
+	/** The ids of the types the builds typed named `owner` and declared in `file`. */
+	private function typedIds(file: String, owner: String): Array<String> {
+		final key: String = facts.keyOf(file);
+		return [
+			for (id in facts.typeIds()) if (SourceText.lastSegment(id) == owner && facts.typePosition(id)?.file == key) id
 		];
 	}
 

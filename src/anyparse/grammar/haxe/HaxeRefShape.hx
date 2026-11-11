@@ -969,6 +969,8 @@ final class HaxeRefShape {
 		// The one that makes a whole TYPE per instantiation rather than rewriting the carrier's members.
 		table.macroMadeTypeMetaNames = ['@:genericBuild'];
 		table.retainedDeclMetaName = '@:keep';
+		// `@:expose` publishes a declaration to the host's JavaScript under its name, beyond every scan and compile here.
+		table.exportedDeclMetaName = '@:expose';
 		// `@:rtti` emits a `haxe.rtti.Rtti` description keyed by member NAME — a separate question from
 		// `@:keep`, which only keeps the member alive.
 		table.reflectedDeclMetaName = '@:rtti';

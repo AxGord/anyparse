@@ -214,6 +214,7 @@
 	"unresolved-type-name",
 	"unstored-property",
 	"unused-case-binder",
+	"unused-enum-abstract-value",
 	"unused-import",
 	"unused-local",
 	"unused-loop-binder",

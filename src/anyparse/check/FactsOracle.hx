@@ -23,6 +23,20 @@ interface FactsOracle extends TypeOracle {
 	/** What the `extends` chain of `owner`, declared in `file`, says of a member called `name`. */
 	public function inheritedMember(file: String, owner: String, name: String): InheritedMember;
 
+	/**
+	 * The values the builds read of the enum abstract `owner`, declared in `file`, or null when no build typed it there: the
+	 * abstract's id and the `CaseValueKey` of every value read anywhere in the typed code, whatever range it was read at.
+	 */
+	public function enumValueReads(file: String, owner: String): Null<EnumValueReads>;
+
+	/**
+	 * The ids of the enum abstracts a value of which the builds read at the range ending where `span` of `file` ends and
+	 * holding it — a value's name, bare or qualified — or null when no build typed the code there as the run reads it: a
+	 * file or a member no configuration compiled, or one the run rewrote. A conditional branch every build left out
+	 * inside typed code answers an empty list like code that reads no value.
+	 */
+	public function enumValuesReadAt(file: String, span: Span): Null<Array<String>>;
+
 }
 
 /** What the builds typed of a type's supertypes about a member name (`FactsTypeOracle.inheritedMember`). */
@@ -41,3 +55,6 @@ enum InheritedMember {
 	Undeclared;
 
 }
+
+/** The values the builds read of one enum abstract (`FactsOracle.enumValueReads`). */
+typedef EnumValueReads = { final type: String; final keys: Array<String>; }

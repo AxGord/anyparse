@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.util.Compare;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -127,6 +128,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'shorten-type-ref',
 			'typed-event-constant',
 			'unstored-property',
+			'unused-enum-abstract-value',
 			'unused-public-member'
 		], idsImplementing(c -> c is RiskyFix));
 	}
@@ -306,12 +308,7 @@ class BuiltinFixClassCensusTest extends Test {
 	/** The ids of every builtin matching `predicate`, sorted — the census's declared column. */
 	private function idsImplementing(predicate: (Check) -> Bool): Array<String> {
 		final ids: Array<String> = [for (check in Linter.builtins()) if (predicate(check)) check.id()];
-		ids.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		ids.sort(Compare.compareString);
 		return ids;
 	}
 
@@ -321,12 +318,7 @@ class BuiltinFixClassCensusTest extends Test {
 
 	private static function render(names: Array<String>): String {
 		final sorted: Array<String> = names.copy();
-		sorted.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		sorted.sort(Compare.compareString);
 		return '{\n"builtins": [\n' + sorted.map(name -> '\t"$name"').join(',\n') + '\n]\n}\n';
 	}
 

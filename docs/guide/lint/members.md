@@ -160,3 +160,45 @@ write through `Dynamic`.
 public var size(default, set):Int;
 function set_size(v:Int):Int { layout(v); return v; }  // reported: size is never stored
 ```
+
+## `unused-enum-abstract-value`
+
+An enum abstract value no code of any build reads. `Info`, Haxe only, DEFAULT OFF (opt in with
+`"unused-enum-abstract-value": { "enabled": true }`). A value's name says little: a bare `GRID` in a
+`case` or beside `==` is the value of whatever type the place expects, so the rule weighs reads by
+TYPE through the compiler facts of every `compilerOracle` configuration: the facts record each value
+the compiler read of each enum abstract (it inlines the constant, so a written value, a `case`
+pattern and an operand compared with a value are all recorded where they were read). An occurrence
+of the name the builds typed as another type's value reads nothing; one in code no configuration
+compiled (a file, a member, or a `#if` branch every build left out), one in compiled code where the
+facts record no value at all (a qualified `case Cmd.RUN:` over a `String` or `Dynamic` subject), or
+in a string literal naming it keeps the value. Without facts (`--no-oracle`, no oracle configured) only a value whose name occurs
+nowhere in the project outside its declaration is reported. Run it over the whole project: a narrow
+scope cannot see a read in another file.
+
+Not weighed at all: a type a value arrives into implicitly (a `from` cast or an implicit conversion
+member), a `@:keep` type, a value carrying `@:keep` or `@:expose`, a type a build macro writes, a type declared
+under conditional compilation, a type some code names as a value rather than as a type or as the
+qualifier of one of its members, and a type written as a type argument of a host the index does not
+resolve to declarations no build macro writes (`Bits<Narrow>` under a `@:genericBuild`) — a macro or a
+reflection call handed the type may enumerate its values.
+
+`--fix` removes the value with its doc comment, and only when the rule's `fix` key is `true`
+(`"unused-enum-abstract-value": { "enabled": true, "fix": true }`); otherwise the finding is
+report-only and says so. It removes only a value written with its own initializer (the constant is
+folded into every read, so nothing compiled changes) after which no value of the type is numbered
+implicitly (removing one would renumber those). A `//` line directly above the value labels its
+group: it stays while another value of the group follows, and goes with a value alone in its group.
+`RiskyFix`: applied only under a `compilerOracle`, and reverted where a configuration stops compiling.
+
+```haxe
+enum abstract Layout(String) to String {
+	final NONE = 'none';
+	final GRID = 'grid';  // reported: no build reads Layout.GRID
+}
+
+enum abstract View(Int) {
+	final LIST;
+	final GRID;  // kept: `if (view == GRID)` reads View.GRID by expected type
+}
+```

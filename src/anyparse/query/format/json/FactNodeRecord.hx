@@ -35,6 +35,7 @@ typedef FactNodeRecord = {
 	final ?refl: Array<FactReflRecord>;
 	final ?native: Array<FactNativeRecord>;
 	final ?vars: Array<FactVarRecord>;
+	final ?vals: Array<FactValRecord>;
 
 	/** `[min, max, type, name]`, or `[file index, min, max, type, name]` for a foreign position. */
 	final ?reads: Array<Array<JValue>>;
