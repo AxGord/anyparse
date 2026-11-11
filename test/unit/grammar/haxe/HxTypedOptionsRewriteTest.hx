@@ -80,6 +80,8 @@ final class HxTypedOptionsRewriteTest extends Test {
 		Assert.isFalse(same(written, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-STRICTJSON-SITE')
 	public function testAStrictJsonCallOfTheKitIsRewrittenLikeALoaderCall(): Void {
 		final text: String = ok(rewritten('HxWriteOptionsKit.strictJson(\'{"sameLine": {"tryBody": "same"}}\')'));
 		Assert.isTrue(text.contains('HxWriteOptionsKit.forkWith(edited -> edited.tryBody = BodyPolicy.Same)'), text);
@@ -97,6 +99,94 @@ final class HxTypedOptionsRewriteTest extends Test {
 	public function testOfJsonKeepsItsConfigWrapper(): Void {
 		final text: String = ok(rewritten("HxWriteConfig.ofJson('{}')"));
 		Assert.isTrue(text.contains('HxWriteConfig.ofOptions(HxWriteOptionsKit.forkWith(edited -> {}))'), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-FIXTURE-SITE')
+	public function testAFixtureCallsJsonArgumentBecomesTheTypedEdit(): Void {
+		final json: String = '{"sameLine": {"tryBody": "same"}}';
+		final text: String = ok(rewritten('HxWriteFixture.triviaWrite(SRC, \'$json\')'));
+		Assert.isTrue(
+			text.contains('HxWriteFixture.triviaWrite(SRC, HxWriteOptionsKit.forkWith(edited -> edited.tryBody = BodyPolicy.Same))'), text
+		);
+		final plain: String = ok(rewritten('HxWriteFixture.plainWrite(SRC, \'$json\')'));
+		Assert.isTrue(
+			plain.contains('HxWriteFixture.plainWrite(SRC, HxWriteOptionsKit.forkWith(edited -> edited.tryBody = BodyPolicy.Same))'), plain
+		);
+		Assert.isFalse(text.contains('{"sameLine"'), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-ARGUMENT-ONLY')
+	public function testAFixtureCallKeepsTheSourceItWasGiven(): Void {
+		final text: String = ok(rewritten("HxWriteFixture.triviaWrite('class A {}' + tail, '{}')"));
+		Assert.isTrue(text.contains("HxWriteFixture.triviaWrite('class A {}' + tail, HxWriteOptionsKit.forkWith(edited -> {}))"), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-ALREADY-TYPED')
+	public function testAFixtureCallWithATypedConfigurationIsLeftAlone(): Void {
+		final once: String = ok(rewritten("HxWriteFixture.triviaWrite(SRC, '{}')"));
+		switch HxTypedOptionsRewrite.rewrite(once, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(once, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
+		final wrapped: String = 'HxWriteFixture.plainWrite(SRC, HxWriteConfig.ofOptions(HxWriteOptionsKit.forkWith(edited -> {})))';
+		Assert.isTrue(ok(rewritten(wrapped)).contains(wrapped));
+		final raw: String = 'HxWriteFixture.triviaWrite(SRC, HxWriteOptionsKit.rawWith(_ -> {}))';
+		Assert.isTrue(ok(rewritten(raw)).contains(raw));
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-NESTED-FIXTURE')
+	public function testAFixtureCallInAFixtureCallsSourceIsRewrittenInTheSameRun(): Void {
+		final json: String = '{"sameLine": {"tryBody": "same"}}';
+		final typed: String = 'HxWriteOptionsKit.forkWith(edited -> edited.tryBody = BodyPolicy.Same)';
+		final once: String = ok(rewritten('HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, \'$json\'), \'$json\')'));
+		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, $typed), $typed)')), once);
+		Assert.isFalse(once.contains('{"sameLine"'), once);
+		switch HxTypedOptionsRewrite.rewrite(once, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(once, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
+		final typedOuter: String = ok(
+			rewritten("HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, '{}'), HxWriteOptionsKit.rawWith(_ -> {}))")
+		);
+		Assert.isTrue(
+			flat(typedOuter)
+				.contains(flat(
+					'HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, HxWriteOptionsKit.forkWith(edited -> {})), '
+					+ 'HxWriteOptionsKit.rawWith(_ -> {}))'
+				)),
+			typedOuter
+		);
+		final refused: String = err(rewritten("HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, cfg), '{}')"));
+		Assert.isTrue(refused.contains('triviaWrite(SRC, cfg'), refused);
+	}
+
+	public function testAFixtureCallIsRefusedLikeALoaderCall(): Void {
+		final variable: String = err(rewritten('HxWriteFixture.triviaWrite(SRC, cfg)'));
+		Assert.isTrue(variable.contains('one plain string literal'), variable);
+		Assert.isTrue(variable.contains('triviaWrite'), variable);
+		final ignored: String = err(rewritten("HxWriteFixture.plainWrite(SRC, '{\"sameLine\": {\"throwBody\": \"next\"}}')"));
+		Assert.isTrue(ignored.contains('throwBody'), ignored);
+	}
+
+	public function testACallOfAnotherTypeNamedLikeAFixtureMethodIsLeftAlone(): Void {
+		final src: String = 'class S {\n\n\tfunction f() {\n\t\ttriviaWrite(SRC, \'{}\');\n\t\tOther.plainWrite(SRC, \'{}\');\n\t}\n\n}\n';
+		switch HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(src, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
 	}
 
 	public function testTheKitAndTheValueTypesAreImportedOnceWhereThePackageDiffers(): Void {
@@ -174,6 +264,11 @@ final class HxTypedOptionsRewriteTest extends Test {
 				'';
 			case Err(message): message;
 		};
+	}
+
+	/** `text` without whitespace: the writer lays a long call out over lines, and a case asks for the call, not for its layout. */
+	private static function flat(text: String): String {
+		return ~/\s+/g.replace(text, '');
 	}
 
 }

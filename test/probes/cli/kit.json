@@ -8978,6 +8978,26 @@
 				"err": "ff88515ef5ecad9c",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "typed-options rewrites a fixture call nested in a fixture call's source argument in one run",
+			"note": "the base left both configurations as JSON; the tip turns the outer and the inner configuration into the kit's forkWith",
+			"argv": [
+				"hxq",
+				"typed-options",
+				"--kit",
+				"unit.grammar.haxe.HxWriteOptionsKit",
+				"NestedProbe.hx"
+			],
+			"files": {
+				"NestedProbe.hx": "package typedopts;\n\nclass NestedProbe {\n\n\tfunction f(src:String):Void {\n\t\tHxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(src, '{\"sameLine\": {\"tryBody\": \"same\"}}'), '{\"sameLine\": {\"tryBody\": \"same\"}}');\n\t}\n\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "dd9f82330a74c4ff",
+				"err": "4f704ede9655650d",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

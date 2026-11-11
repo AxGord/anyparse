@@ -161,6 +161,10 @@ final class TypedOptionsCommand implements CliCommand {
 		);
 		CliIo.sysPrint('(ofJson keeps its wrapper: HxWriteConfig.ofOptions(<Type>.forkWith(...))). <Type> is the qualified options kit;\n');
 		CliIo.sysPrint('its import is added where the file is in another package, with the import of each type a value names.\n');
+		CliIo.sysPrint('HxWriteFixture.triviaWrite / plainWrite(<source>, <literal>) have only the configuration argument replaced,\n');
+		CliIo.sysPrint('by the bare <Type>.forkWith(...), fixture calls nested in the source argument included. A configuration that is\n');
+		CliIo.sysPrint('<Type>.forkWith(...), <Type>.rawWith(...) or HxWriteConfig.ofOptions(...) is left as it is; any other\n');
+		CliIo.sysPrint('non-literal configuration (a variable, listsKeepSourceOptions()) is refused.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint("A knob is assigned when the document changed it from loadHxFormatJson('{}'), so a key that sets several\n");
 		CliIo.sysPrint('knobs becomes each of them. A file is left untouched, and reported, when a call holds an argument that is not\n');

@@ -1533,7 +1533,7 @@
 		{
 			"name": "M-TYPED-OPTIONS-BASELINE",
 			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
-			"method": "replacement",
+			"method": "typedEdit",
 			"find": "final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');",
 			"replace": "final base: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);",
 			"note": "the edit is written over the compiled defaults instead of the baseline the call started from, so an empty document assigns the six body policies and the curly blanks the loader re-baselines"
@@ -1559,6 +1559,45 @@
 			"find": "stmts.length < 2 ? null",
 			"replace": "true ? null",
 			"note": "a multi-statement pattern keeps only its first statement, so the rest is silently dropped and the search is wider than written"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-STRICTJSON-SITE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "callShapes",
+			"find": "{ pattern: '$kitName.strictJson($$json)', asConfig: false, argumentOnly: false },",
+			"replace": "",
+			"note": "the kit's own strictJson call is not a call shape, so it is left as the JSON it loads instead of becoming the typed edit"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FIXTURE-SITE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "callShapes",
+			"find": "{ pattern: 'HxWriteFixture.triviaWrite($$source, $$json)', asConfig: false, argumentOnly: true },",
+			"replace": "",
+			"note": "a HxWriteFixture.triviaWrite call is not a call shape, so its JSON configuration argument stays a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ARGUMENT-ONLY",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "replacement",
+			"find": "edits.push({ span: target, text: fork });",
+			"replace": "edits.push({ span: m.span, text: fork });",
+			"note": "a fixture call is replaced whole by the typed edit, so the source text it was given is dropped along with the configuration"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ALREADY-TYPED",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "isTypedConfig",
+			"force": "false",
+			"note": "a fixture call whose configuration is already the typed edit is refused as a non-literal argument, so a second run over a migrated file fails"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NESTED-FIXTURE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "replacement",
+			"find": "final refusal: Null<String> = nestedEdits(source, run, edits);",
+			"replace": "final refusal: Null<String> = null;",
+			"note": "a fixture call inside another fixture call's source argument is not read, so the outer call is migrated and the inner one keeps its JSON"
 		}
 	]
 }
