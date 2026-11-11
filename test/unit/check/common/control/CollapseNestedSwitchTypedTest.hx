@@ -91,6 +91,15 @@ class CollapseNestedSwitchTypedTest extends Test {
 		Assert.equals(0, found(site(OUTER_OK, INNER_OK, 'case Left(r): 2;')).length);
 	}
 
+	/** A constructor inside a `#if` region, on either branch, still has to be matched for the coverage proof. */
+	@:pin('control')
+	@:killer('M-COLLAPSE-TYPED-ALL-CTORS')
+	public function testRegionConstructorLeftOutRefused(): Void {
+		Assert.equals(1, found(region('case Q: 1;\n\t\t\t\t\tcase A(u, _): 2;\n\t\t\t\t\tcase Z: 3;')).length);
+		Assert.equals(0, found(region('case Q: 1;\n\t\t\t\t\tcase A(u, _): 2;')).length);
+		Assert.equals(0, found(region('case Q: 1;\n\t\t\t\t\tcase Z: 3;')).length);
+	}
+
 	@:pin('control')
 	@:killer('M-COLLAPSE-TYPED-GUARD')
 	public function testGuardedArmCoversNothing(): Void {
@@ -222,6 +231,13 @@ class CollapseNestedSwitchTypedTest extends Test {
 	private function local(inner: String): String {
 		return 'package app;\nenum PE {\n\tP(b: QE);\n}\nenum QE {\n\tQ;\n\tA(u: Int, v: Int);\n}\n'
 			+ 'class C {\n\tfunction f(s: PE): Int {\n\t\treturn switch s {\n\t\t\tcase P(b):\n\t\t\t\t$inner\n\t\t};\n\t}\n}\n';
+	}
+
+	/** One file: `local` with the inner enum's `A` on the `#if` branch and `Z` on the `#else` branch of one region. */
+	private function region(arms: String): String {
+		return 'package app;\nenum PE {\n\tP(b: QE);\n}\nenum QE {\n\tQ;\n\t#if foo\n\tA(u: Int, v: Int);\n\t#else\n\tZ;\n\t#end\n}\n'
+			+ 'class C {\n\tfunction f(s: PE): Int {\n\t\treturn switch s {\n\t\t\tcase P(b):\n\t\t\t\tswitch b {\n\t\t\t\t\t$arms\n'
+			+ '\t\t\t\t}\n\t\t};\n\t}\n}\n';
 	}
 
 	/** One file: `f` switches on the optional slot of `Some`, bare, its enum `decl` declared beside `QE`. */
