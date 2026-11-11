@@ -371,6 +371,35 @@
 			"find": "return replaceWithCallee(source, violations.filter(v -> !isStd(v)), plugin);",
 			"replace": "return replaceWithCallee(source, violations, plugin);",
 			"note": "the safe fix rewrites a std callee without the oracle's compile check"
+		},
+		{
+			"name": "M-RLW-RECEIVER-NEVER",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "receiverSignature",
+			"force": "null",
+			"note": "no receiver is resolved, so `x -> fw.abs(x)` over a final field stays a lambda"
+		},
+		{
+			"name": "M-RLW-TYPE-PARAM-UNBOUND",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "boundOf",
+			"force": "null",
+			"note": "a type parameter is not read as its bound, so `x -> watcher.abs(x)` over a `final watcher:W` with `W:Fw` stays a lambda"
+		},
+		{
+			"name": "M-RLW-OWN-FIELD-UNSTABLE",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "ownFieldType",
+			"find": "|| stable == null ",
+			"replace": "",
+			"note": "a var field typed by a type parameter counts as stable, so `x -> v.abs(x)` is reduced to a closure that reads `v` once"
+		},
+		{
+			"name": "M-RLW-CONSTRUCTION-BLIND",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "beforeConstruction",
+			"force": "false",
+			"note": "a field receiver inside a constructor counts as assigned, so `cb = x -> h.abs(x); h = new Fw();` is reduced to a method value that reads h before it is set"
 		}
 	]
 }

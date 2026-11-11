@@ -7,12 +7,17 @@ import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
 import anyparse.query.IndexScope;
+import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
+import anyparse.query.SpanTypeInfoProvider;
+import anyparse.query.StableChain;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
+import anyparse.query.UnchangedLocal;
 
 /**
  * ETA-REDUCTION: flags a lambda whose whole body is ONE call that forwards the lambda's own
@@ -76,9 +81,9 @@ import anyparse.query.TypeSyntax;
  * - a member of the ENCLOSING type is accepted; an inherited member is not visible here and
  *   is refused for want of evidence;
  * - `Type.member` is accepted when `Type` is declared EXACTLY ONCE in the lint scope and the
- *   member is `static`. An ambiguous simple name, a lower-initial receiver (an instance whose
- *   type the rule cannot know), a longer receiver chain, and a receiver name that is also a
- *   local are all refused;
+ *   member is `static`. An ambiguous simple name and a receiver name that is also a local are refused;
+ * - `recv.member` of an instance method is accepted when `recv` reads the same object on every call
+ *   (`receiverSignature`): `this`, or a stable chain of final fields whose type is one declaration in scope;
  * - a `static` of a STD type (`Reflect.compare`, `Math.sqrt`) is accepted on a complete project when no file in
  *   scope declares the simple name, the project index binds it to exactly one std declaration, and the member is one
  *   plain function of that arity: not optional, rest, overloaded, macro, dynamic or under `#if`. The
@@ -159,6 +164,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		final projectComplete: Bool = RefactorSupport.projectIsComplete(plugin);
 		final violations: Array<Violation> = [];
+		final spanInfo: Null<SpanTypeInfoProvider> = plugin is SpanTypeInfoProvider ? cast plugin : null;
 		for (entry in parsed) {
 			final ctx: Ctx = {
 				file: entry.file,
@@ -171,7 +177,13 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 				tree: entry.tree,
 				typeSources: typeInfo?.declaredTypeSources(entry.source),
 				typeSyntax: plugin.typeSyntax,
-				written: []
+				written: [],
+				chains: new StableChain(
+					entry.tree, shape, new UnchangedLocal(entry.tree, shape), TypeInfoMemo.declaredTypeSources(typeInfo, entry.source),
+					() -> index, entry.file
+				),
+				constraints: constraintsOf(spanInfo, entry.source),
+				construction: collectConstruction(entry.tree, seams, [])
 			};
 			walk(violations, entry.file, entry.tree, null, ctx);
 		}
@@ -334,7 +346,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		if (name == null) return Reduction.None;
 		final signature: Null<Signature> = callee.kind == ctx.seams.identKind
 			? bareSignature(name, enclosing, ctx)
-			: staticSignature(callee, name, ctx);
+			: staticSignature(callee, name, ctx) ?? receiverSignature(callee, name, enclosing, ctx);
 		if (signature != null) return signature.safe && signature.arity == forward.arity ? Reduction.Plain : Reduction.None;
 		return stdStatic(callee, name, forward.arity, ctx) ? Reduction.Std : Reduction.None;
 	}
@@ -420,6 +432,113 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		final members: Null<Map<String, Signature>> = typeName == null ? null : ctx.types[typeName];
 		final member: Null<Signature> = members == null ? null : members[name];
 		return member != null && member.isStatic ? member : null;
+	}
+
+	/**
+	 * The instance method `name` read off a receiver that evaluates to the same object on every call: `this`, or a
+	 * stable chain (`StableChain`) whose type is one declaration of the run. `o.m` as a value evaluates `o` once, the
+	 * lambda on every call, so any other receiver keeps the lambda.
+	 */
+	private static function receiverSignature(
+		callee: QueryNode, name: String, enclosing: Null<Map<String, Signature>>, ctx: Ctx
+	): Null<Signature> {
+		if (callee.kind != ctx.seams.fieldAccessKind || callee.children.length != 1) return null;
+		final receiver: QueryNode = callee.children[0];
+		final self: Bool = receiver.kind == ctx.seams.identKind && receiver.name == ctx.shape.selfReferenceText;
+		if (!self && beforeConstruction(callee, ctx)) return null;
+		final members: Null<Map<String, Signature>> = self ? enclosing : hostMembers(receiver, ctx);
+		final member: Null<Signature> = members == null ? null : members[name];
+		return member != null && !member.isStatic ? member : null;
+	}
+
+	/**
+	 * Whether `node` runs while its object is still being built — inside a constructor or a field initializer — where a
+	 * field receiver may be unassigned: the lambda reads it on each call, the method value at once.
+	 */
+	private static function beforeConstruction(node: QueryNode, ctx: Ctx): Bool {
+		final span: Null<Span> = node.span;
+		return span == null || ctx.construction.exists(s -> s.from <= span.from && span.to <= s.to);
+	}
+
+	/** The spans of every constructor and field initializer under `node`. */
+	private static function collectConstruction(node: QueryNode, seams: Seams, out: Array<Span>): Array<Span> {
+		final span: Null<Span> = node.span;
+		final member: Bool = seams.memberDeclKinds.contains(node.kind);
+		if (member && span != null && (!seams.functionKinds.contains(node.kind) || node.name == seams.constructorName)) {
+			out.push(span);
+			return out;
+		}
+		for (c in node.children) collectConstruction(c, seams, out);
+		return out;
+	}
+
+	/** The members of the one declaration a stable receiver's type denotes, a type parameter read as its one bound. */
+	private static function hostMembers(receiver: QueryNode, ctx: Ctx): Null<Map<String, Signature>> {
+		final at: Null<Span> = receiver.span;
+		final index: Null<SymbolIndex> = ctx.index;
+		final file: Null<FileInfo> = index?.fileInfo(ctx.file);
+		if (at == null || index == null || file == null) return null;
+		final spelling: Null<String> = ctx.chains.typeOf(receiver) ?? ownFieldType(receiver, at.from, file, index, ctx);
+		if (spelling == null) return null;
+		final written: String = boundOf(spelling, at.from, file, ctx) ?? spelling;
+		return switch index.typing.resolve(file, written, at.from) {
+			case Declared(decl): ctx.types[decl.type.name];
+			case Unknown: null;
+		};
+	}
+
+	/**
+	 * The written type of a stable receiver that is a field of the enclosing type itself (`f`, `this.f`): the typing service
+	 * reads no type for a field typed by the type's own parameter, which `boundOf` then reads as its bound.
+	 */
+	private static function ownFieldType(receiver: QueryNode, at: Int, file: FileInfo, index: SymbolIndex, ctx: Ctx): Null<String> {
+		final name: Null<String> = ownFieldName(receiver, ctx);
+		final stable: Null<StableRead> = name == null ? null : ctx.chains.read(receiver);
+		final found: Null<TypeDeclInfo> = file.types.find(t -> t.span.from <= at && at < t.span.to);
+		if (name == null || stable == null || stable.binding != -1 || found == null) return null;
+		final decl: TypeDeclInfo = found;
+		final hit: Null<HostedMembers> = index.typing.members.declaringMember({ file: file, type: decl }, name);
+		if (hit == null || hit.host.type != decl) return null;
+		final live: Array<MemberInfo> = index.typing.builds.declarations(hit.host, name);
+		final first: Null<MemberInfo> = live[0];
+		final written: Null<String> = first?.typeSource;
+		return written != null && live.foreach(m -> m.typeSource == written) ? written : null;
+	}
+
+	/** The field name of a receiver `f` or `this.f`. */
+	private static function ownFieldName(receiver: QueryNode, ctx: Ctx): Null<String> {
+		final self: Null<String> = ctx.shape.selfReferenceText;
+		if (receiver.kind == ctx.seams.identKind) return receiver.name == self ? null : receiver.name;
+		if (receiver.kind != ctx.seams.fieldAccessKind || receiver.children.length != 1) return null;
+		final inner: QueryNode = receiver.children[0];
+		return inner.kind == ctx.seams.identKind && inner.name == self ? receiver.name : null;
+	}
+
+	/** The single bound of `spelling` when it names a type parameter of the type declaration holding offset `at`. */
+	private static function boundOf(spelling: String, at: Int, file: FileInfo, ctx: Ctx): Null<String> {
+		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.span.from <= at && at < t.span.to);
+		if (decl == null || !decl.typeParamNames.contains(spelling)) return null;
+		for (offset => params in ctx.constraints()) {
+			if (offset < decl.span.from || offset >= decl.span.to) continue;
+			final bounds: Null<Array<String>> = params[spelling];
+			return bounds != null && bounds.length == 1 ? bounds[0] : null;
+		}
+		return null;
+	}
+
+	/** Each type declaration's type parameter bounds of `source`, read once on the first ask. */
+	private static function constraintsOf(
+		provider: Null<SpanTypeInfoProvider>, source: String
+	): () -> Map<Int, Map<String, Array<String>>> {
+		var memo: Null<Map<Int, Map<String, Array<String>>>> = null;
+		return () -> {
+			final known: Null<Map<Int, Map<String, Array<String>>>> = memo;
+			if (known != null) return known;
+			final reader: Null<SpanTypeInfoProvider> = provider;
+			final read: Map<Int, Map<String, Array<String>>> = reader == null ? [] : reader.spanTypeInfo(source).typeParamConstraints;
+			memo = read;
+			return read;
+		};
 	}
 
 	/**
@@ -732,6 +851,15 @@ private typedef Ctx = {
 
 	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
 	final written: Map<String, Bool>;
+
+	/** Which receivers read the same object on every call. */
+	final chains: StableChain;
+
+	/** Constructors and field initializers, where a field receiver may not be assigned yet. */
+	final construction: Array<Span>;
+
+	/** Type parameter bounds by declaration offset (`SpanTypeInfo.typeParamConstraints`). */
+	final constraints: () -> Map<Int, Map<String, Array<String>>>;
 
 };
 

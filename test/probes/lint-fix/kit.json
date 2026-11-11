@@ -1946,6 +1946,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "D-RLW-CTOR",
+			"note": "redundant-lambda-wrapper: a lambda reading a field the constructor assigns after it must stay a lambda",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-lambda-wrapper",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Helper {\n\tpublic function new() {}\n\tpublic function m(x: Int): Int return x;\n}\n\nclass Main {\n\tfinal h: Helper;\n\tfinal cb: Int -> Int;\n\n\tpublic function new() {\n\t\tcb = x -> h.m(x);\n\t\th = new Helper();\n\t}\n\n\tstatic function main() {\n\t\ttrace(new Main().cb(1));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

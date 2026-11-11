@@ -56,6 +56,11 @@ final class StableChain {
 		return found == null ? null : { key: found.key, binding: found.binding };
 	}
 
+	/** The type the stable chain `node` reads, in this file's spelling; null when the chain is not stable or its type unwritten. */
+	public function typeOf(node: QueryNode): Null<String> {
+		return link(node)?.type;
+	}
+
 	private function link(node: QueryNode): Null<Link> {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
