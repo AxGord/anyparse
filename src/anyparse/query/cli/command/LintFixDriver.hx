@@ -332,13 +332,17 @@ final class LintFixDriver {
 		// the report and to the fixer. Re-measured every pass, because a pass rewrites the file
 		// it reads — see `LintRange` for the drift that buys and why it is bounded.
 		final sourceOf: (String) -> Null<String> = f -> fileSourceOf(files, f);
+		final ruleNotes: Array<ConfigNote> = [];
 		final found: Array<Violation> = LintReport.withinRange(
-			PhaseTimings.measure('pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement)),
+			PhaseTimings.measure(
+				'pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement, null, ruleNotes)
+			),
 			sourceOf, range
 		);
 		final whole: Array<Violation> = PhaseTimings.measure(
-			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)
+			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement, null, ruleNotes)
 		);
+		Linter.sayConfigNotes(activeScopeChecks.concat(fullScopeChecks), ruleNotes, said, CliIo.stderr);
 		for (v in LintReport.withinRange(whole, sourceOf, range)) found.push(v);
 		// The two scopes lint in two runs, so the cross-rule supersession `Linter.collect` applies inside each
 		// one is asked again over their union: an underscore-prefixed local is `no-underscore-prefix`'s in

@@ -183,6 +183,23 @@ class TypedEventConstantCheckTest extends Test {
 		], unknownBase);
 	}
 
+	/**
+	 * A declaration problem found inside the run goes to the notes `Linter.run` hands the rule, for the command to say
+	 * through its ledger — never to stderr from inside the rule.
+	 */
+	@:pin('control')
+	@:killer('M-TYPED-EVENT-NOTES-DROPPED')
+	public function testADeclarationProblemGoesToTheRunsNotes(): Void {
+		final notes: Array<ConfigNote> = [];
+		final config: String = CONFIG.replace('ev.Event"', 'ev.Nope"');
+		Assert.equals(
+			0, Linter.run(project(''), new HaxeQueryPlugin(), [new TypedEventConstant()], resolver(config), false, null, notes).length
+		);
+		Assert.same([
+			'apq lint: typed-event-constant: "eventBase" "ev.Nope" names no single type in the resolution scope — rule inert\n'
+		], notes.map(n -> n.message));
+	}
+
 	/** The fixture project: the event declarations first, then the user file whose `run` body is `body`. */
 	private function project(body: String): Array<{ file: String, source: String }> {
 		final main: String = 'package app;\n\nimport ev.Dispatcher;\nimport ev.Event;\n\nclass Main {\n\tpublic function new() {}\n\n'

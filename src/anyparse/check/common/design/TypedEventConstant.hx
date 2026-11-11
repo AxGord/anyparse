@@ -117,7 +117,7 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 		if (index == null) return [];
 		final problems: Array<String> = [];
 		final types: Null<EventTypes> = validate(spec, index, plugin, problems);
-		for (p in problems) ConfiguredTypes.warn(RULE_ID, p);
+		for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 		if (types == null) return [];
 		final parsed: Array<Parsed> = [];
 		for (entry in files) {
@@ -181,7 +181,7 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 	private function specFor(file: String): Null<EventSpec> {
 		final problems: Array<String> = [];
 		final spec: Null<EventSpec> = RuleDeclaration.eventTypes(LintConfig.resolveWith(_resolveConfig, file), RULE_ID, problems);
-		for (p in problems) ConfiguredTypes.warn(RULE_ID, p);
+		for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 		return spec;
 	}
 

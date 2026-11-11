@@ -164,8 +164,28 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	private function specsFor(file: String): Array<IdiomSpec> {
 		final problems: Array<String> = [];
 		final specs: Array<IdiomSpec> = RuleDeclaration.idioms(LintConfig.resolveWith(_resolveConfig, file), RULE_ID, problems);
-		for (p in problems) ConfiguredTypes.warn(RULE_ID, p);
+		for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 		return specs;
+	}
+
+	/** `validate` memoised per distinct spec list, printing every problem once. */
+	private function validatedFor(
+		specs: Array<IdiomSpec>, index: SymbolIndex, seams: Seams, memo: Map<String, Array<Idiom>>
+	): Array<Idiom> {
+		final key: String = specs.map(s -> '${s.type}|${s.fields.join(',')}|${s.method}|${s.copy}|${s.subtypes}').join(';');
+		final known: Null<Array<Idiom>> = memo[key];
+		if (known != null) return known;
+		final problems: Array<String> = [];
+		final idioms: Array<Idiom> = validate(specs, index, seams.fieldKinds, seams.memberKinds, seams.typeSyntax, problems);
+		for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
+		// Longest first, and a copy before a method of the same width: the sliding match takes the first idiom that fits.
+		idioms.sort((a, b) ->
+			b.spec.fields.length - a.spec.fields.length != 0
+				? b.spec.fields.length - a.spec.fields.length
+				: (a.spec.copy != null ? 0 : 1) - (b.spec.copy != null ? 0 : 1)
+		);
+		memo[key] = idioms;
+		return idioms;
 	}
 
 	/**
@@ -207,26 +227,6 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 			out.push({ spec: spec, type: declared });
 		}
 		return out;
-	}
-
-	/** `validate` memoised per distinct spec list, printing every problem once. */
-	private static function validatedFor(
-		specs: Array<IdiomSpec>, index: SymbolIndex, seams: Seams, memo: Map<String, Array<Idiom>>
-	): Array<Idiom> {
-		final key: String = specs.map(s -> '${s.type}|${s.fields.join(',')}|${s.method}|${s.copy}|${s.subtypes}').join(';');
-		final known: Null<Array<Idiom>> = memo[key];
-		if (known != null) return known;
-		final problems: Array<String> = [];
-		final idioms: Array<Idiom> = validate(specs, index, seams.fieldKinds, seams.memberKinds, seams.typeSyntax, problems);
-		for (p in problems) ConfiguredTypes.warn(RULE_ID, p);
-		// Longest first, and a copy before a method of the same width: the sliding match takes the first idiom that fits.
-		idioms.sort((a, b) ->
-			b.spec.fields.length - a.spec.fields.length != 0
-				? b.spec.fields.length - a.spec.fields.length
-				: (a.spec.copy != null ? 0 : 1) - (b.spec.copy != null ? 0 : 1)
-		);
-		memo[key] = idioms;
-		return idioms;
 	}
 
 	/** Whether `owned` is a plain INSTANCE field: a field kind, no accessor that runs code, not static, not `#if`-guarded. */

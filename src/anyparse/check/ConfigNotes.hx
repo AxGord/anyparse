@@ -24,7 +24,7 @@ final class ConfigNotes {
 	 * stderr fallback — is not said again.
 	 */
 	public static function say(ledger: RunLedger, notes: Array<ConfigNote>, write: (String) -> Void): Void {
-		for (note in notes) if (ledger.first(LintConfig.WARNED_TOPIC, note.key)) write(note.message);
+		for (note in notes) if (ledger.first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) write(note.message);
 		notes.resize(0);
 	}
 

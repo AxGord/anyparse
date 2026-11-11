@@ -244,7 +244,9 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final operators: OperatorGate = new OperatorGate(selection, seams, entry.file, entry.source, tree);
-			final ctx: Null<PlanContext> = contextFor(plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file), operators);
+			final ctx: Null<PlanContext> = contextFor(
+				plugin, seams, entry.source, FormatConfigDiscovery.discover(entry.file, _configNotes), operators
+			);
 			if (ctx == null) return;
 			// The whitelist is resolved PER FILE: `apq.json` is discovered by walking up
 			// from each file, so one run can span several configs, and reading the first
@@ -276,7 +278,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final file: String = RunScan.oneFile(violations, RULE_ID);
-		final ctx: Null<PlanContext> = contextFor(plugin, seams, source, FormatConfigDiscovery.discover(file));
+		final ctx: Null<PlanContext> = contextFor(plugin, seams, source, FormatConfigDiscovery.discover(file, _configNotes));
 		if (ctx == null) return [];
 		// The macro-argument refusal is a property of a construct's ANCESTRY and of a
 		// cross-file symbol index, neither of which `fix` is handed — `applyBySpan` finds

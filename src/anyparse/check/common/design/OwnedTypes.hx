@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.ConfiguredTypes.OwnedMember;
 import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.check.scan.CheckScan;
@@ -172,7 +173,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 			if (declarations.length == 0) continue;
 			if (declarations != declared) {
 				declared = declarations;
-				subjects = subjectsOf(declarations, index);
+				subjects = subjectsOf(declarations, index, _configNotes);
 			}
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (info != null) scanFile(entry.file, entry.source, info, subjects, index, plugin, out);
@@ -314,11 +315,13 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	}
 
 	/** Every subject `declarations` own, resolved against `index`; a path the index cannot place is said once. */
-	private static function subjectsOf(declarations: Array<TypeOwnership>, index: SymbolIndex): Array<OwnedSubject> {
+	private static function subjectsOf(
+		declarations: Array<TypeOwnership>, index: SymbolIndex, notes: Null<Array<ConfigNote>>
+	): Array<OwnedSubject> {
 		final out: Array<OwnedSubject> = [];
 		for (d in declarations) {
-			for (path in typePathsOf(d.types, index)) {
-				final types: Array<ResolvedType> = resolvedOrSaid(path, index);
+			for (path in typePathsOf(d.types, index, notes)) {
+				final types: Array<ResolvedType> = resolvedOrSaid(path, index, notes);
 				out.push({
 					label: path,
 					simple: SourceText.lastSegment(path),
@@ -332,10 +335,10 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 			for (path in d.members) {
 				final typePath: String = SourceText.parentPath(path);
 				final name: String = SourceText.lastSegment(path);
-				final types: Array<ResolvedType> = resolvedOrSaid(typePath, index);
+				final types: Array<ResolvedType> = resolvedOrSaid(typePath, index, notes);
 				final declaredAs: Null<OwnedMember> = types.length == 0 ? null : ConfiguredTypes.memberOf(index, types[0], name);
 				if (types.length > 0 && declaredAs == null && name != CONSTRUCTOR)
-					ConfiguredTypes.warn(RULE_ID, '"$path" names no member of $typePath — matched as a static by name');
+					ConfiguredTypes.warn(notes, RULE_ID, '"$path" names no member of $typePath — matched as a static by name');
 				out.push({
 					label: path,
 					simple: SourceText.lastSegment(typePath),
@@ -354,7 +357,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 	 * The type paths `declared` names: an exact path as written, and a glob (`Glob.qualifiedNames`) as every non-private
 	 * type of the index whose path it matches — one said when it matches none.
 	 */
-	private static function typePathsOf(declared: Array<String>, index: SymbolIndex): Array<String> {
+	private static function typePathsOf(declared: Array<String>, index: SymbolIndex, notes: Null<Array<ConfigNote>>): Array<String> {
 		final out: Array<String> = [];
 		for (path in declared) {
 			if (!Glob.isGlob(path)) {
@@ -367,15 +370,15 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 				final typePath: String = ModuleScan.pathOfDecl(info, t);
 				if (!t.isPrivate && glob.match(typePath) && !out.contains(typePath)) out.push(typePath);
 			}
-			if (out.length == before) ConfiguredTypes.warn(RULE_ID, '"$path" matches no type in the resolution scope');
+			if (out.length == before) ConfiguredTypes.warn(notes, RULE_ID, '"$path" matches no type in the resolution scope');
 		}
 		return out;
 	}
 
 	/** The declarations `path` names; none, said once, when it names nothing the index holds. */
-	private static function resolvedOrSaid(path: String, index: SymbolIndex): Array<ResolvedType> {
+	private static function resolvedOrSaid(path: String, index: SymbolIndex, notes: Null<Array<ConfigNote>>): Array<ResolvedType> {
 		final types: Array<ResolvedType> = index.refs.resolveQualifiedRefAll(path);
-		if (types.length == 0) ConfiguredTypes.warn(RULE_ID, '"$path" names no type in the resolution scope — matched by name');
+		if (types.length == 0) ConfiguredTypes.warn(notes, RULE_ID, '"$path" names no type in the resolution scope — matched by name');
 		return types;
 	}
 

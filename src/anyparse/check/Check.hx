@@ -173,6 +173,18 @@ interface ConfigAware {
 }
 
 /**
+ * A check whose config diagnostics — a declaration naming nothing, an `hxformat.json` setting hxq ignores — go to the
+ * run's notes: the linter hands it the array the command later says through its `RunLedger`, or null for a caller with
+ * no ledger, which falls back to `ConfigNotes`' once-per-run stderr line.
+ */
+@:nullSafety(Strict)
+interface ConfigNoting {
+
+	public function setConfigNotes(notes: Null<Array<anyparse.check.LintConfig.ConfigNote>>): Void;
+
+}
+
+/**
  * Opt-OUT marker for a `Check` that legitimately needs to see INSIDE a `macro …` quotation.
  *
  * By default every finding whose span sits inside a reification subtree is dropped before it is

@@ -365,13 +365,14 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
 		return seams == null ? [] : [
-			for (entry in files) for (m in collect(plugin, entry.source, seams, FormatConfigDiscovery.discover(entry.file))) {
-				file: entry.file,
-				span: m.span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'this single-statement lambda body can be an expression body'
-			}
+			for (entry in files)
+				for (m in collect(plugin, entry.source, seams, FormatConfigDiscovery.discover(entry.file, _configNotes))) {
+					file: entry.file,
+					span: m.span,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: 'this single-statement lambda body can be an expression body'
+				}
 		];
 	}
 
@@ -384,7 +385,8 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		// whole file, so `fix` must measure under exactly the settings `run` measured with.
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final byKey: Map<String, Match> = [];
-		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file))) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collect(plugin, source, seams, FormatConfigDiscovery.discover(file, _configNotes)))
+			byKey['${m.span.from}:${m.span.to}'] = m;
 		return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text })));
 	}
 

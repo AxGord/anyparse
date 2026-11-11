@@ -1,5 +1,7 @@
 package unit.query;
 
+import anyparse.check.LintConfig.ConfigNote;
+import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.RunLedger;
 import haxe.io.Path;
@@ -94,6 +96,28 @@ class FormatConfigDiscoveryTest extends Test {
 	/** Remove every directory the finished fixture built — the cache outlives the test, the files need not. */
 	public function teardown(): Void {
 		_trees.removeAll();
+	}
+
+	/**
+	 * Handed notes, `discover` puts the unusable-settings line there under `REPORTED_TOPIC` and says nothing itself, so a
+	 * command says it through its own ledger and the stderr fallback never marks the path.
+	 */
+	@:pin('control')
+	@:killer('M-HXFORMAT-NOTES-FALLBACK')
+	public function testNotesCollectTheReportInsteadOfSayingIt(): Void {
+		final dir: String = _trees.make('apq-fcd-notes');
+		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
+		final notes: Array<ConfigNote> = [];
+		// The run's environment may silence the report; this fixture is about where it goes, so it unsilences.
+		final before: Null<String> = Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR);
+		Sys.putEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR, '');
+		final found: Null<String> = FormatConfigDiscovery.discover(Path.join([dir, 'A.hx']), notes);
+		Sys.putEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR, before ?? '');
+		Assert.notNull(found);
+		Assert.equals(1, notes.length);
+		Assert.equals(FormatConfigDiscovery.REPORTED_TOPIC, notes[0].topic);
+		Assert.equals('hxformat.json', Path.withoutDirectory(notes[0].key));
+		Assert.equals(0, FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf('apq-fcd-notes') >= 0).length);
 	}
 
 	/**

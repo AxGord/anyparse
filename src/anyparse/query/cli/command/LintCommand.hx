@@ -325,10 +325,12 @@ final class LintCommand implements CliCommand {
 		final reach: ImportReach = new ImportReach(OracleProviders.of(plugin), oracles);
 		// The range and the reach both narrow BEFORE supersession: a finding either withholds must not take the one it supersedes with it,
 		// and a finding outside the range costs no probe.
+		final ruleNotes: Array<ConfigNote> = [];
 		final found: Array<Violation> = Linter.run(
 			files, cached, activeChecks, resolveConfig, applyEnablement,
-			all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)
+			all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached), ruleNotes
 		);
+		Linter.sayConfigNotes(activeChecks, ruleNotes, ledger, CliIo.stderr);
 		// One narrowing, applied before everything downstream: the report, the severity summary and
 		// `--fail-on` all speak about the SAME set, so a caller can gate on "my edit introduced
 		// something" without the exit code and the printed lines disagreeing. The refreshed

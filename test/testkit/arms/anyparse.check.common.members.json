@@ -721,7 +721,7 @@
 			"name": "M-MO-WRITER-REPORT-UNREAD",
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "run",
-			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))",
+			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'), _configNotes)",
 			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), writer: null }",
 			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 client blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
 		},
@@ -729,7 +729,7 @@
 			"name": "M-MO-WRITER-FIX-UNREAD",
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "fix",
-			"find": "? MemberSpacing.policyOf(violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'))",
+			"find": "? MemberSpacing.policyOf(\n\tviolations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'), _configNotes\n)",
 			"replace": "? { separateInline: optionOn(violations[0].file, 'separateInlineSubgroup'), writer: null }",
 			"note": "the FIX path ignores the writer's member-gap policy, so a doc-commented field the report flags re-derives as no issue there and is never set off"
 		},

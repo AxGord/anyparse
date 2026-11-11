@@ -153,7 +153,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			walk(
 				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors,
 				plugin.lexicalRegions(entry.source),
-				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup')),
+				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'), _configNotes),
 				EnumAbstractForms.valueStarts(plugin, tree)
 			);
 		});
@@ -177,7 +177,9 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 				final movableArglessNew: Bool = violations.length > 0 && optionOn(violations[0].file, 'movableArglessNew');
 				final spacing: SpacingPolicy = violations.length > 0
-					? MemberSpacing.policyOf(violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'))
+					? MemberSpacing.policyOf(
+						violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'), _configNotes
+					)
 					: { separateInline: false, writer: null };
 				// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
 				// on this path — so a container that declines can write its reason onto the very finding that

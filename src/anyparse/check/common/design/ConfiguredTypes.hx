@@ -1,5 +1,6 @@
 package anyparse.check.common.design;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -64,11 +65,11 @@ final class ConfiguredTypes {
 	}
 
 	/**
-	 * Print `line` about `rule`'s configuration once per run, through `LintConfig`'s own ledger — a config problem
-	 * is a property of the document, and a run re-reads the document once per linted directory.
+	 * Says `line` about `rule`'s configuration once per run: into `notes` when the run collects them, else through `ConfigNotes`'
+	 * fallback — a config problem is a property of the document, and a run re-reads the document once per linted directory.
 	 */
-	public static function warn(rule: String, line: String): Void {
-		LintConfig.warnOnce('$rule:$line', 'apq lint: $rule: $line\n');
+	public static function warn(notes: Null<Array<ConfigNote>>, rule: String, line: String): Void {
+		ConfigNotes.note(notes, '$rule:$line', 'apq lint: $rule: $line\n');
 	}
 
 	/** `memberOf`'s recursion; `seen` cycle-guards on the resolved identity. */

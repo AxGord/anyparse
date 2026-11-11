@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.ConfigNoting;
 import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
@@ -9,6 +10,7 @@ import anyparse.check.Check.LanguageBound;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.control.AssignmentInCondition;
 import anyparse.check.common.control.AsymmetricBranchBraces;
 import anyparse.check.common.control.CasePatternSeparator;
@@ -237,6 +239,7 @@ import anyparse.check.haxe.types.PreferIsOperator;
 import anyparse.check.haxe.types.PreferMapType;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.RunLedger;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -697,7 +700,7 @@ final class Linter {
 			final volatileMessage: VolatileMessage = cast check;
 			// A real closure, not the bare interface-method reference: hxcpp lowers that
 			// to a dynamic field read whose type StringMap.set cannot pick an overload for.
-			out[check.id()] = message -> volatileMessage.messageIdentity(message);
+			out[check.id()] = volatileMessage.messageIdentity;
 		}
 		return out;
 	}
@@ -767,7 +770,8 @@ final class Linter {
 	 */
 	public static function run(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false, ?narrow: (Array<Violation>) -> Array<Violation>
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false, ?narrow: (Array<Violation>) -> Array<Violation>,
+		?configNotes: Array<ConfigNote>
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
 		// Parse each file once and share the trees across all checks — each check
@@ -777,6 +781,8 @@ final class Linter {
 		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
+		// A null `configNotes` resets a check reused from an earlier run, so its diagnostics never land in an array nobody says.
+		for (check in active) if (check is ConfigNoting) (cast check: ConfigNoting).setConfigNotes(configNotes);
 		// `collect` has already applied the reification, inline-suppression and (unless an explicit
 		// --rule selection bypasses it) per-file enablement gates.
 		final out: Array<Violation> = collect(files, cached, active, resolveConfig, applyEnablement, narrow);
@@ -786,6 +792,18 @@ final class Linter {
 			if (sev != null) violation.severity = sev;
 		}
 		return out;
+	}
+
+	/**
+	 * Says the config diagnostics `checks` collected into `notes` during a `run` through `ledger`, and detaches the
+	 * array from them: a later `fix` or direct `run` with no notes of its own falls back to `ConfigNotes`' stderr line
+	 * instead of pushing into an array nobody says again.
+	 */
+	public static function sayConfigNotes(
+		checks: Array<Check>, notes: Array<ConfigNote>, ledger: Null<RunLedger>, write: (String) -> Void
+	): Void {
+		ConfigNotes.say(ledger ?? RunLedger.fallback(), notes, write);
+		for (check in checks) if (check is ConfigNoting) (cast check: ConfigNoting).setConfigNotes(null);
 	}
 
 	/**

@@ -1284,6 +1284,14 @@
 			"find": "if (!Glob.isGlob(path)) {",
 			"replace": "if (true) {",
 			"note": "a wildcard in a declared type path is read as a literal path, so a package glob owns nothing"
+		},
+		{
+			"name": "M-TYPED-EVENT-NOTES-DROPPED",
+			"type": "anyparse.check.common.design.TypedEventConstant",
+			"method": "run",
+			"find": "ConfiguredTypes.warn(_configNotes, RULE_ID, p)",
+			"replace": "ConfiguredTypes.warn(null, RULE_ID, p)",
+			"note": "a declaration problem the run finds is printed from inside the rule through the stderr fallback again, and the command whose notes it should reach never says it"
 		}
 	]
 }

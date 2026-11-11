@@ -16571,9 +16571,9 @@
 		{
 			"name": "M-FMT-CONFIG-SILENCE-IGNORED",
 			"type": "anyparse.query.FormatConfigDiscovery",
-			"method": "reportConfig",
-			"find": "if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;",
-			"replace": "if (false) return;",
+			"method": "ignoredSettingsLine",
+			"find": "Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1'",
+			"replace": "false",
 			"note": "APQ_NO_CONFIG_WARN=1 no longer silences the config report"
 		},
 		{
@@ -16591,6 +16591,14 @@
 			"find": "return current;",
 			"replace": "return new RunLedger();",
 			"note": "the ledger a run is handed is not the one a context-less caller shares, so a diagnostic said through one is said again through the other"
+		},
+		{
+			"name": "M-HXFORMAT-NOTES-FALLBACK",
+			"type": "anyparse.query.FormatConfigDiscovery",
+			"method": "discover",
+			"find": "notes.push({ key: found.path, message: message, topic: REPORTED_TOPIC });",
+			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
+			"note": "discover prints the unusable-settings line through the fallback ledger even when its caller collects notes, so a lint rule prints it from inside the run"
 		}
 	]
 }

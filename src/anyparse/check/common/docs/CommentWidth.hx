@@ -118,7 +118,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(entry.file));
+			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(entry.file, _configNotes));
 			if (metrics == null) continue;
 			for (wide in classify(entry.source, plugin, metrics)) violations.push({
 				file: entry.file,
@@ -145,7 +145,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final file: String = violations[0].file;
-		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file));
+		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file, _configNotes));
 		if (metrics == null) return [];
 		final wanted: Array<Int> = [for (v in violations) if (v.span != null) (v.span: Span).from];
 		final wide: Array<WideLine> = classify(source, plugin, metrics);

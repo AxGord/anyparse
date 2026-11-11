@@ -516,7 +516,7 @@
 			"name": "M-CONFIG-NOTE-REPEATS",
 			"type": "anyparse.check.ConfigNotes",
 			"method": "say",
-			"find": "if (ledger.first(LintConfig.WARNED_TOPIC, note.key)) ",
+			"find": "if (ledger.first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) ",
 			"replace": "",
 			"note": "a config diagnostic the run already said is printed again by every command that collects it"
 		},
@@ -524,8 +524,8 @@
 			"name": "M-CONFIG-NOTE-SAYS-LATEST",
 			"type": "anyparse.check.ConfigNotes",
 			"method": "say",
-			"find": "if (ledger.first(LintConfig.WARNED_TOPIC, note.key)) ",
-			"replace": "if (RunLedger.fallback().first(LintConfig.WARNED_TOPIC, note.key)) ",
+			"find": "if (ledger.first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) ",
+			"replace": "if (RunLedger.fallback().first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) ",
 			"note": "a command says through whichever run began last instead of the ledger it was handed, so a ledger of its own forgets what it said"
 		}
 	]

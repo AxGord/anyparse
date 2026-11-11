@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.ConfigFinder.ConfigFile;
 import anyparse.query.cli.CliIo;
@@ -82,15 +83,25 @@ final class FormatConfigDiscovery {
 	/**
 	 * The content of the nearest `hxformat.json` at or above `filePath`'s own
 	 * directory, or null when no ancestor directory holds one, when the one it holds
-	 * is blank (`normalize`), and on targets with no filesystem.
+	 * is blank (`normalize`), and on targets with no filesystem. With `notes` the settings hxq will not act on go there,
+	 * under `REPORTED_TOPIC`, for the command to say through its ledger; without, `reportConfig` says them through the
+	 * fallback ledger.
 	 */
-	public static function discover(filePath: String): Null<String> {
+	public static function discover(filePath: String, ?notes: Array<ConfigNote>): Null<String> {
 		#if (sys || nodejs)
 		final start: String = haxe.io.Path.directory(FileSystem.absolutePath(filePath));
 		if (!CACHE.exists(start)) remember(start, filePath);
 		final found: Null<ConfigFile> = CACHE[start];
 		if (found == null) return null;
-		reportConfig(RunLedger.fallback(), found.path, found.content);
+		if (notes == null) {
+			reportConfig(RunLedger.fallback(), found.path, found.content);
+		} else {
+			final line: Null<String> = ignoredSettingsLine(found.path, found.content);
+			if (line != null) {
+				final message: String = line;
+				notes.push({ key: found.path, message: message, topic: REPORTED_TOPIC });
+			}
+		}
 		return found.content;
 		#else
 		return null;
@@ -105,11 +116,21 @@ final class FormatConfigDiscovery {
 	 */
 	public static function reportConfig(ledger: RunLedger, path: String, content: String): Void {
 		#if (sys || nodejs)
-		final stated: Null<String> = normalize(content);
-		if (stated == null || !ledger.first(REPORTED_TOPIC, path)) return;
-		if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;
-		final line: Null<String> = HaxeFormatConfigDiagnostics.message(path, HaxeFormatConfigDiagnostics.diagnose(stated));
+		if (normalize(content) == null || !ledger.first(REPORTED_TOPIC, path)) return;
+		final line: Null<String> = ignoredSettingsLine(path, content);
 		if (line != null) CliIo.stderr(line);
+		#end
+	}
+
+	/** The line naming the settings of `content` (the config at `path`) hxq will not act on; null when none or silenced. */
+	private static function ignoredSettingsLine(path: String, content: String): Null<String> {
+		#if (sys || nodejs)
+		final stated: Null<String> = normalize(content);
+		return stated == null || Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1'
+			? null
+			: HaxeFormatConfigDiagnostics.message(path, HaxeFormatConfigDiagnostics.diagnose(stated));
+		#else
+		return null;
 		#end
 	}
 

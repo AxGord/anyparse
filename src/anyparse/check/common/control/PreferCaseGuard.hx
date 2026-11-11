@@ -152,7 +152,7 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, parsed, resolved, violations) -> {
-			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(entry.file));
+			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(entry.file, _configNotes));
 			if (metrics == null) return;
 			final layout: LayoutMetrics = metrics;
 			for (candidate in collect({
@@ -187,7 +187,7 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 		final resolved: Seams = seams;
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, parsed -> {
-			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file));
+			final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file, _configNotes));
 			if (metrics == null) return [];
 			final layout: LayoutMetrics = metrics;
 			final given: Null<SymbolIndex> = index;

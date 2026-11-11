@@ -119,7 +119,16 @@ typedef DiscoveredConfig = { var config: LintConfig; var chain: Array<String>; }
  * One config diagnostic: `key` is its once-per-run identity under `LintConfig.WARNED_TOPIC`, `message` the
  * whole text a user sees, newline included.
  */
-typedef ConfigNote = { final key: String; final message: String; }
+typedef ConfigNote = {
+
+	final key: String;
+	final message: String;
+
+	/** The `RunLedger` topic `key` is said under; absent, `LintConfig.WARNED_TOPIC`. */
+	@:optional
+	final topic: Null<String>;
+
+}
 
 /**
  * Project-level lint configuration, read from an `apq.json` discovered by

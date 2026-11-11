@@ -1,5 +1,6 @@
 package anyparse.check.common.members;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.members.MemberSlots.OrderedMember;
 import anyparse.query.FormatConfigDiscovery;
 
@@ -79,8 +80,10 @@ final class MemberSpacing {
 	 * file's own `hxformat.json` (discovered from its path, as `fmt` does), so the blank lines the rule demands are the
 	 * ones the writer keeps.
 	 */
-	public static function policyOf(file: String, plugin: GrammarPlugin, separateInline: Bool): SpacingPolicy {
-		return { separateInline: separateInline, writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file)) };
+	public static function policyOf(
+		file: String, plugin: GrammarPlugin, separateInline: Bool, notes: Null<Array<ConfigNote>>
+	): SpacingPolicy {
+		return { separateInline: separateInline, writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file, notes)) };
 	}
 
 	/** `spacing` for one container of kind `containerKind`: the writer policy is kept only when the writer runs it on that kind. */
