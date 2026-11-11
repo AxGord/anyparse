@@ -39,7 +39,7 @@ final class HxWriteOptionsKit {
 	 */
 	public static function strictJson(json: String): HxModuleWriteOptions {
 		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose(json);
-		final ignored: Array<String> = issues.keys.concat(issues.wrapValues).concat(issues.unsupported).concat(issues.values);
+		final ignored: Array<String> = HaxeFormatConfigDiagnostics.ignored(issues);
 		if (ignored.length > 0) throw 'hxformat.json settings the loader does not act on: ${ignored.join('; ')}';
 		return HaxeFormatConfigLoader.loadHxFormatJson(json);
 	}

@@ -193,6 +193,10 @@ final class JsonQueryPlugin implements GrammarPlugin {
 		return [];
 	}
 
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return null;
+	}
+
 	/**
 	 * Does `text` read as a JSON document by its first non-whitespace character — `{` or `[` — the content signal
 	 * the CLI goes by when a document arrives on stdin with no `--lang`. A scalar document is not recognised: a bare

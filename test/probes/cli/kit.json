@@ -8958,6 +8958,26 @@
 				"err": "bb6d3c41872c5495",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "typed-options rewrites a kit strictJson call and a loader call of one literal into the kit's forkWith",
+			"note": "the base has no such subcommand; the tip rewrites both calls and adds the kit and BodyPolicy imports",
+			"argv": [
+				"hxq",
+				"typed-options",
+				"--kit",
+				"unit.grammar.haxe.HxWriteOptionsKit",
+				"T.hx"
+			],
+			"files": {
+				"T.hx": "package typedopts;\n\nclass T {\n\n\tfunction f() {\n\t\tfinal a = HxWriteOptionsKit.strictJson('{\"sameLine\": {\"tryBody\": \"same\"}}');\n\t\tfinal b = HaxeFormatConfigLoader.loadHxFormatJson('{}');\n\t}\n\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "fc1d056ce0464138",
+				"err": "ff88515ef5ecad9c",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

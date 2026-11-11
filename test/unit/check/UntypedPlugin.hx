@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -139,6 +140,10 @@ final class UntypedPlugin implements GrammarPlugin {
 	/** The documented answer for a grammar with no ambient-import concept: no position could hold one. */
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return [];
+	}
+
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return null;
 	}
 
 }

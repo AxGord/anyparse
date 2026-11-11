@@ -1,6 +1,7 @@
 package anyparse.grammar.mermaid;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -183,6 +184,10 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return [];
+	}
+
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return null;
 	}
 
 	/** `node` with every node id `$name` turned into the metavariable `name`. */

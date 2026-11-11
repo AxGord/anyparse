@@ -1529,6 +1529,28 @@
 			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))\n\t",
 			"replace": "",
 			"note": "a local var's metadata names no simplicity predicate, so fit breaks it"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-BASELINE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "replacement",
+			"find": "final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');",
+			"replace": "final base: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);",
+			"note": "the edit is written over the compiled defaults instead of the baseline the call started from, so an empty document assigns the six body policies and the curly blanks the loader re-baselines"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LITERAL-ONLY",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "literalOf",
+			"force": "''",
+			"note": "every argument reads as an empty document, so a variable or a concatenation is rewritten as if it were a literal instead of refused"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-IGNORED-KEY",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "ignored",
+			"force": "[]",
+			"note": "a document setting a key the loader does not act on is rewritten as if every key were read, so the typed edit silently drops it"
 		}
 	]
 }

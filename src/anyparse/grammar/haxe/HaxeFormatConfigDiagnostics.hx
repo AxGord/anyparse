@@ -113,6 +113,11 @@ final class HaxeFormatConfigDiagnostics {
 		return clauses.length == 0 ? null : 'apq: $path: ${clauses.join('; ')} [silence with $SILENCE_VAR=1]\n';
 	}
 
+	/** Every setting of `issues` the loader does not act on, as the phrases a reader greps for: the whole of `HaxeFormatConfigIssues`. */
+	public static function ignored(issues: HaxeFormatConfigIssues): Array<String> {
+		return issues.keys.concat(issues.wrapValues).concat(issues.unsupported).concat(issues.values);
+	}
+
 	private static inline function add(into: Array<String>, issue: String): Void {
 		if (!into.contains(issue)) into.push(issue);
 	}

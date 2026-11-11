@@ -23,6 +23,7 @@ import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.CompilerFacts;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
@@ -870,6 +871,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
 	): Null<FactsOracle> {
 		return FactsTypeOracle.forFiles(grammar, files, fallback);
+	}
+
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return HxTypedOptionsRewrite.rewrite(source, kit, reformat, this, optsJson);
 	}
 
 	/**

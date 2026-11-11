@@ -78,6 +78,7 @@ import anyparse.query.cli.command.StripCommand;
 import anyparse.query.cli.command.SweepCommand;
 import anyparse.query.cli.command.SymbolsCommand;
 import anyparse.query.cli.command.TestSummaryCommand;
+import anyparse.query.cli.command.TypedOptionsCommand;
 import anyparse.query.cli.command.UsesCommand;
 import anyparse.query.cli.command.WriterEqualsCommand;
 import anyparse.query.cli.command.WriterProbeCommand;
@@ -167,6 +168,7 @@ final class CliRegistry {
 			new CasesCommand(),
 			new CondCommand(),
 			new ResolveDefineCommand(),
+			new TypedOptionsCommand(),
 			new CalleesCommand(),
 			new CallersCommand(),
 			new ReachCommand(),

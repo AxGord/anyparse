@@ -40,6 +40,23 @@ final class Rewrite {
 	public static function rewrite(
 		source: String, patternText: String, replacementText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
+		return rewriteBy(
+			source, patternText, reformat, plugin, optsJson, true, m -> switch expandTemplate(replacementText, source, m.bindings) {
+				case null: Refused('replacement references an unknown or non-integer metavariable');
+				case expansion: Spliced(expansion.text, expansion.holes);
+			}
+		);
+	}
+
+	/**
+	 * `rewrite` with the replacement computed per match: `expand` answers the text one match becomes, or the reason it
+	 * cannot, and a refusal refuses the whole rewrite with nothing spliced. `required` false lets a pattern with no match
+	 * answer the source unchanged, so one pass can try several call shapes.
+	 */
+	public static function rewriteBy(
+		source: String, patternText: String, reformat: Bool, plugin: GrammarPlugin, optsJson: Null<String>, required: Bool,
+		expand: Match -> Replacement
+	): EditResult {
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);
 			case Parsed(parsed): parsed;
@@ -60,7 +77,7 @@ final class Rewrite {
 		if (PatternStar.contains(pattern.root)) return Err(STAR_REFUSAL);
 
 		final matches: Array<Match> = Matcher.search(pattern, tree);
-		if (matches.length == 0) return Err('no match for the pattern');
+		if (matches.length == 0) return required ? Err('no match for the pattern') : Ok(source, 0);
 
 		// Matches arrive pre-order (outer first). Keep only non-overlapping
 		// spans — a nested match inside a kept one would corrupt the edit.
@@ -84,8 +101,10 @@ final class Rewrite {
 		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
 		final edits: Array<GuardedEdit> = [];
 		for (k => m in accepted) {
-			final expansion: Null<Expansion> = expandTemplate(replacementText, source, m.bindings);
-			if (expansion == null) return Err('replacement references an unknown or non-integer metavariable');
+			final expansion: Expansion = switch expand(m) {
+				case Refused(message): return Err(message);
+				case Spliced(text, holes): { text: text, holes: holes };
+			};
 			final aligned: Expansion = mixed ? alignTrailer(expansion, trailers[k], trailers) : expansion;
 			edits.push({ span: m.span, text: aligned.text, holes: aligned.holes });
 		}
@@ -263,6 +282,12 @@ final class Rewrite {
 		};
 	}
 
+}
+
+/** What one match becomes under `Rewrite.rewriteBy`: new text with the ranges of it that came from the input, or the reason it cannot. */
+enum Replacement {
+	Spliced(text: String, holes: Array<Span>);
+	Refused(message: String);
 }
 
 /** One expanded replacement: its text, and where in it each metavariable's source landed. */

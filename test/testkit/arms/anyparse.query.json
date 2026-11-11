@@ -10548,7 +10548,7 @@
 		{
 			"name": "M-REWRITE-UNWRITTEN-IGNORED",
 			"type": "anyparse.query.Rewrite",
-			"method": "rewrite",
+			"method": "rewriteBy",
 			"find": "for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));",
 			"replace": "for (m in accepted) for (part in m.unwritten.slice(0, 0)) return Err(unwrittenRefusal(source, part));",
 			"note": "`rewrite` splices over a construction whose type arguments no metavariable holds, dropping them"

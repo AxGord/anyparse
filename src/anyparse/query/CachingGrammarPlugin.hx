@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.scan.ReflectionMemo;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.AmbientImportGovernance;
 import anyparse.query.GrammarPlugin.AmbientImportGovernedFiles;
@@ -909,6 +910,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		};
 		_declarations[file] = { source: source, info: info };
 		return info;
+	}
+
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return _inner.typedOptionsRewrite(source, kit, reformat, optsJson);
 	}
 
 	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */

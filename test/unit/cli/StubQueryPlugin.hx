@@ -2,6 +2,7 @@ package unit.cli;
 
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -153,6 +154,10 @@ final class StubQueryPlugin implements GrammarPlugin {
 
 	public function ambientImportSites(path: String, pkg: String): Array<String> {
 		return _inner.ambientImportSites(path, pkg);
+	}
+
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+		return null;
 	}
 
 	/** Whether `text` starts with this plugin's `SHEBANG`. */

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
@@ -429,6 +430,13 @@ interface GrammarPlugin {
 	 * established: there is no ladder to climb when its top is unknown.
 	 */
 	public function ambientImportSites(path: String, pkg: String): Array<String>;
+
+	/**
+	 * Optional: `source` with every call that loads a test's configuration document from a literal rewritten as the typed edit of the
+	 * options kit `kit` (a qualified type), the imports that edit needs added, as `apq typed-options` writes it; `Ok(source, 0)` when the
+	 * source holds no such call, `Err` naming what refused it. Null when the grammar has no configuration document to type.
+	 */
+	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult>;
 
 }
 
