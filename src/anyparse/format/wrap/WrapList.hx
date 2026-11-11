@@ -4075,12 +4075,9 @@ class WrapList {
 	 * `true` iff `item` is a `for` comprehension element with a NON-block body that
 	 * already renders multi-line — the shape the cuddled-open knob re-lays-out.
 	 *
-	 * `while` comprehensions are EXCLUDED even though they are the sister generator
-	 * form: `HxWhileExpr.body` carries no `@:fmt(bodyPolicy(...))`, so its body has no
-	 * policy `Nest` to shift out of and cuddling the head would leave the body at
-	 * CONTAINER indent, level with the closing `]`, violating this shape's own
-	 * one-level contract. Wire a body policy on `HxWhileExpr` first if `while`
-	 * comprehensions ever need this.
+	 * `while` comprehensions are not claimed: `HxWhileExpr.body` carries the same
+	 * body policy as `HxForExpr.body`, so the one-level contract would hold for them,
+	 * but this knob's shape and its probes are written and pinned for the `for` form only.
 	 *
 	 * Two gates, both cheap left-spine / flat walks the sibling predicates already
 	 * use: the first visible Text is the reserved `for` keyword, and the body is NOT a

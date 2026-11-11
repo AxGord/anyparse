@@ -150,9 +150,9 @@ typedef HxFormatSameLineSection = {
 	var elseIfCommentReflow: Bool;
 
 	/**
-	 * Body placement for an expression-position `for` — the array-comprehension
-	 * generator (`[for (x in xs) <body>]`) and any value-position `for`. Reaches
-	 * `HxForExpr.body` / `HxForReif.body` through
+	 * Body placement for an expression-position `for` or `while` — the array-comprehension
+	 * generators (`[for (x in xs) <body>]`, `[while (cond) <body>]`) and any value-position loop. Reaches
+	 * `HxForExpr.body` / `HxForReif.body` / `HxWhileExpr.body` through
 	 * `@:fmt(bodyPolicy('expressionForBody'))`, the knob `expressionIf` also fans
 	 * out into; this key is read AFTER that fanout, so the specific value wins.
 	 *

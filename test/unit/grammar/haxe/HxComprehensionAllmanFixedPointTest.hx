@@ -134,7 +134,8 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 			longIterableShape(k - 20),
 			assignShape(k),
 			callIterableShape(k),
-			comprehensionIterableShape(k)
+			comprehensionIterableShape(k),
+			whileShape(k)
 		]) assertOneWriteWithinLimit(src, config, k);
 	}
 
@@ -279,6 +280,12 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	private static function comprehensionIterableShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tvar y = [for (x in [for (y in ys) {a: y, b: 2}]) {'
 			+ 'alpha: x.aaaaaaaaaaaaaaaaaaaaaaa, beta: x.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
+	}
+
+	/** A `while` comprehension, whose literal body takes the `for` body's placement. */
+	private static function whileShape(k: Int): String {
+		return 'class M {\n\tfunction f() {\n\t\tvar y = [while (it.hasNext()) {'
+			+ 'alpha: it.aaaaaaaaaaaaaaaaaaaaaaaaa, beta: it.bbbbbbbbbbbbbbbbbbbbbbbbbbbbb, k: \'${kinds(k)}\'}];\n\t}\n}';
 	}
 
 	/** A comprehension as the last of two arguments, of a call that is the last of two arguments. */

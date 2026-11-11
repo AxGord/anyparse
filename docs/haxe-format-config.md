@@ -298,7 +298,7 @@ applies.
 | `functionBody` | same/next/fitLine/keep | `next` | separator between a function declaration's `()` and a single-expression body (`function f() trace("hi");`); `BlockBody` and the `;`-only `NoBody` are unaffected |
 | `anonFunctionBody` | same/next/fitLine/keep | `same` | expression-position sibling of `functionBody`, for `HxFnExpr.body`'s `ExprBody` branch (e.g. `function() trace(i)`) |
 | `untypedBody` | same/next/fitLine/keep | `same` | parent→`untyped` separator at `HxFnBody.UntypedBlockBody` (`function f():T untyped { … }`); the statement form `HxStatement.UntypedBlockStmt` (incl. `try untyped { … }`) deliberately does not read this knob — stacking it with parent body-policy / block-stmt separators would double a gap |
-| `expressionIf` | same/next/fitLine/keep | n/a — no single default, see Governs | body placement for the expression-position counterparts of `if`/`for` (array comprehensions and any value-position `if`/`for`). One JSON key fans into three runtime knobs (`expressionIfBody` / `expressionElseBody` / `expressionForBody`); ABSENT, each of the three keeps its OWN compiled default — `same` / `same` / `keep`, not a uniform value (not re-baselined the way `ifBody`'s sextet is — `expressionIfBody`/`expressionElseBody`/`expressionForBody` are outside the `ω-D6`/`ω-D7` block). PRESENT, `keep`/`same` propagate to all three; `next`/`fitLine` propagate only to the if/else pair, never to `expressionForBody` (a `for` has no `else` sibling, so the arrow-body/comprehension-filter fallback that `next`/`fitLine` would otherwise break stays intact) — `comprehensionFor` is the way to set the `for` case specifically, and it is read AFTER this fanout so it always wins |
+| `expressionIf` | same/next/fitLine/keep | n/a — no single default, see Governs | body placement for the expression-position counterparts of `if`/`for`/`while` (array comprehensions and any value-position `if`/`for`/`while`). One JSON key fans into three runtime knobs (`expressionIfBody` / `expressionElseBody` / `expressionForBody`); ABSENT, each of the three keeps its OWN compiled default — `same` / `same` / `keep`, not a uniform value (not re-baselined the way `ifBody`'s sextet is — `expressionIfBody`/`expressionElseBody`/`expressionForBody` are outside the `ω-D6`/`ω-D7` block). PRESENT, `keep`/`same` propagate to all three; `next`/`fitLine` propagate only to the if/else pair, never to `expressionForBody` (a `for` or `while` has no `else` sibling, so the arrow-body/comprehension-filter fallback that `next`/`fitLine` would otherwise break stays intact) — `comprehensionFor` is the way to set the `for`/`while` case specifically, and it is read AFTER this fanout so it always wins |
 | `comprehensionFor` | same/next/fitLine/keep | absent → `keep` | the SPECIFIC override of `expressionForBody`, read after the `expressionIf` fanout — see its own section below |
 | `elseIf` | same/next | `same` | keyword placement for a nested `if` inside an `else` (`else if (…)` inline vs. `else` alone then `if` one indent deeper); overrides `elseBody` for the `IfStmt` ctor |
 | `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "Three keys with a position trap" below and its field doc |
@@ -444,9 +444,9 @@ normalisation wired only on the terminal reaches `#elseif` alone.
 ## `sameLine.comprehensionFor` — a body policy, plus one bracket side effect
 
 **`sameLine.comprehensionFor: "same" | "next" | "fitLine" | "keep"`** places the BODY of an
-expression-position `for` — the array-comprehension generator (`[for (x in xs) <body>]`) and any
-value-position `for`. The contract is `HxFormatSameLineSection.comprehensionFor`'s field doc: it
-reaches `HxForExpr.body` / `HxForReif.body` through the same `expressionForBody` knob
+expression-position `for` or `while` — the array-comprehension generators (`[for (x in xs) <body>]`,
+`[while (cond) <body>]`) and any value-position loop. The contract is `HxFormatSameLineSection.comprehensionFor`'s field doc: it
+reaches `HxForExpr.body` / `HxForReif.body` / `HxWhileExpr.body` through the same `expressionForBody` knob
 `sameLine.expressionIf` fans out into and is read AFTER that fanout, so the specific key outranks
 the general one; the four values are the engine's own `BodyPolicy`.
 

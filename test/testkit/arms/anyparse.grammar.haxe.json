@@ -1288,6 +1288,24 @@
 			"find": "@:kw('#if')",
 			"replace": "@:kw('#iff')",
 			"note": "the enum body no longer recognises a `#if` region between its constructors, so a region of whole constructors stops parsing"
+		},
+		{
+			"name": "M-WHILE-COMPREHENSION-NOT-STRICT",
+			"type": "anyparse.grammar.haxe.HxWhileExpr",
+			"method": "HxWhileExpr",
+			"kind": "TypedefDecl",
+			"find": "'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))",
+			"replace": "'ParenExpr'))",
+			"note": "a while comprehension body is a plain fitLine body again, so a body that does not fit beside the head wraps the head's condition call instead of moving to the next line"
+		},
+		{
+			"name": "M-WHILE-COMPREHENSION-NO-BODY-POLICY",
+			"type": "anyparse.grammar.haxe.HxWhileExpr",
+			"method": "HxWhileExpr",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),\n\t\treflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))\n\tvar body",
+			"replace": "var body",
+			"note": "a while comprehension body carries no body policy again, so comprehensionFor does not reach it: it glues to the head under next and stays at the head's indent when the source broke it"
 		}
 	]
 }

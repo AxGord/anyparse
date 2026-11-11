@@ -313,8 +313,8 @@ final class HaxeFormatConfigLoader {
 		applySameLineBodies(section, opt);
 		applyExpressionIfFanout(section, opt);
 		// omega-comprehension-for-body: `sameLine.comprehensionFor` is the SPECIFIC
-		// body policy for an expression-position `for` (the array-comprehension
-		// generator, `HxForExpr.body` / `HxForReif.body` through
+		// body policy for an expression-position `for` or `while` (the array-comprehension
+		// generators, `HxForExpr.body` / `HxForReif.body` / `HxWhileExpr.body` through
 		// `@:fmt(bodyPolicy('expressionForBody'))`), so it is read AFTER the
 		// `expressionIf` fanout, which sets the same knob as a general default and
 		// must not clobber the specific key.

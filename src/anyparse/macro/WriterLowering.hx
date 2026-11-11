@@ -1940,7 +1940,7 @@ typedef WrapBodyOpts = {
 	?elseSwitchArgs: Null<Array<String>>,
 	// omega-strict-fitline-body: the body ctors from
 	// `@:fmt(strictFitLineBody('<ctor>'…))` (`HxForExpr.body` /
-	// `HxForReif.body`) whose glue may survive. Its `FitLine` layout keeps the
+	// `HxForReif.body` / `HxWhileExpr.body`) whose glue may survive. Its `FitLine` layout keeps the
 	// glue only for a body that IS one of those keyword-led constructs AND
 	// whose head line ends at an open delimiter, so nothing below the head can
 	// render at the container indent; every other non-flat body goes to the

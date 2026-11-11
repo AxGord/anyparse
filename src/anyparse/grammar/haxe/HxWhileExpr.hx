@@ -12,17 +12,18 @@ package anyparse.grammar.haxe;
  * expression parser looks at it. The dual-typedef split mirrors
  * `HxForStmt`/`HxForExpr` (and `HxIfStmt`/`HxIfExpr` before that).
  *
- * No `@:fmt(bodyPolicy(...))` on `body` — array-comprehension bodies
- * almost always fit on one line in practice (`[while (cond) v]`).
- * If corpus evidence later shows a multi-line policy is needed, wire
- * the `bodyPolicy` knob the same way `HxWhileStmt` does. Same
- * precedent as `HxForExpr` and `HxIfExpr` skipping the body wrap
- * knobs that their statement-level counterparts carry.
+ * `body` carries the `HxForExpr.body` flags: a `while` comprehension is laid
+ * out like a `for` one, so a body that does not fit beside the head moves to
+ * the next line before the head's own condition call wraps, under the one
+ * comprehension knob `expressionForBody`. `HxForExpr`'s doc carries each flag's contract.
  */
 @:peg
 typedef HxWhileExpr = {
 	@:lead('(')
 	@:trail(')')
 	var cond: HxExpr;
+	@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),
+		reflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),
+		strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))
 	var body: HxExpr;
 };
