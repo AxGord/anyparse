@@ -49,12 +49,11 @@ class FieldInitAtDeclarationSkipNoteTest extends Test {
 	@:killer('M-LINT-FIX-NOTE-ONCE')
 	public function testNoteIsSaidOncePerRuleAndKey(): Void {
 		final notes: Array<FixNote> = [{ key: 'k1', text: 'one' }, { key: 'k2', text: 'two' }];
-		RunLedger.begin();
-		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines('r', notes));
-		Assert.same([], LintFixDriver.freshNoteLines('r', notes));
-		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines('other', notes));
-		RunLedger.begin();
-		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines('r', notes));
+		final run: RunLedger = RunLedger.begin();
+		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines(run, 'r', notes));
+		Assert.same([], LintFixDriver.freshNoteLines(run, 'r', notes));
+		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines(run, 'other', notes));
+		Assert.same(['one', 'two'], LintFixDriver.freshNoteLines(RunLedger.begin(), 'r', notes));
 	}
 
 	/** The driver asks a `NotedFix` through `fixNoted` and records its notes, however many times it re-asks. */
@@ -71,14 +70,14 @@ class FieldInitAtDeclarationSkipNoteTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: CHAIN }];
 		final all: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.equals(3, all.length);
-		RunLedger.begin();
+		final run: RunLedger = RunLedger.begin();
 		for (_ in 0...2) {
 			final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-				CHAIN, all.slice(1), [check], plugin, CheckFixture.index(files, plugin)
+				CHAIN, all.slice(1), [check], plugin, CheckFixture.index(files, plugin), null, run
 			);
 			Assert.equals(0, LintFixDriver.contributedEdits(groups).length);
 		}
-		Assert.same(['C.hx#_b', 'C.hx#_c'], RunLedger.keysOf('fix-note:field-init-at-declaration'));
+		Assert.same(['C.hx#_b', 'C.hx#_c'], run.keysOf('fix-note:field-init-at-declaration'));
 		#else
 		Assert.pass('non-sys target');
 		#end

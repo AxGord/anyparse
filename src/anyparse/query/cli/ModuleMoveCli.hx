@@ -55,7 +55,7 @@ final class ModuleMoveCli {
 	}
 
 	/** Run the module form of `move`. */
-	public static function run(args: Array<String>): Int {
+	public static function run(args: Array<String>, ledger: RunLedger): Int {
 		final opts: Null<ModuleMoveOpts> = parseArgs(args);
 		if (opts == null) return EXIT_USAGE;
 		if (opts.moves.length == 0) {
@@ -97,9 +97,9 @@ final class ModuleMoveCli {
 		final notes: Array<ConfigNote> = [];
 		final config: LintConfig = LintConfig.discover(opts.moves[0].from, notes);
 		OracleProviders.reportDrops(config, plugin, notes);
-		ConfigNotes.say(notes, CliIo.stderr);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		final resolution: Null<ResolutionScope> = LintCommand.resolutionThunk(
-			opts.lang, scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
+			opts.lang, scopeFiles, [], config.resolutionLibs(), config.resolutionStd(), ledger
 		);
 		final result: ModuleMoveResult = ModuleMove.run({
 			moves: opts.moves,
@@ -122,7 +122,7 @@ final class ModuleMoveCli {
 					CliIo.stderr('apq move: refused — module text outside --scope spells a moved path, nothing written\n');
 					return EXIT_RUNTIME;
 				}
-				emit(opts, outcome, scopeFiles, plugin, ext);
+				emit(opts, outcome, scopeFiles, plugin, ext, ledger);
 		};
 	}
 
@@ -186,13 +186,13 @@ final class ModuleMoveCli {
 	/** Print the preview, or write the relocation. */
 	private static function emit(
 		opts: ModuleMoveOpts, outcome: ModuleMoveOutcome, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
-		ext: String
+		ext: String, ledger: RunLedger
 	): Int {
 		if (!opts.write) return preview(outcome);
 		final notes: Array<ConfigNote> = [];
 		final verifyOracles: Bool = opts.verify
 			&& LintConfig.discover(outcome.moves[0].from, notes).compilerOracles(OracleProviders.of(plugin), notes).length > 0;
-		ConfigNotes.say(notes, CliIo.stderr);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		if (opts.verify && !verifyOracles) {
 			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apq.json — nothing written\n');
 			return EXIT_RUNTIME;

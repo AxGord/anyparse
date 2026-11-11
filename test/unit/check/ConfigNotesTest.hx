@@ -15,7 +15,7 @@ class ConfigNotesTest extends Test {
 	@:killer('M-CONFIG-NOTE-STATIC')
 	public function testACollectingCallerGetsTheNoteInsteadOfTheFallback(): Void {
 		#if (sys || nodejs)
-		RunLedger.begin();
+		final ledger: RunLedger = RunLedger.begin();
 		final dir: String = CliFixture.writeDir('confignotes', [
 			{ name: 'apq.json', source: '{"rules": [' },
 			{ name: 'Foo.hx', source: 'class Foo {}\n' }
@@ -28,7 +28,7 @@ class ConfigNotesTest extends Test {
 		final message: String = notes.length == 1 ? notes[0].message : '';
 		final key: String = notes.length == 1 ? notes[0].key : '';
 		Assert.isTrue(message.indexOf('failed to parse') >= 0, message);
-		Assert.isFalse(RunLedger.said(LintConfig.WARNED_TOPIC, key), 'the fallback did not say it');
+		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, key), 'the fallback did not say it');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -37,11 +37,22 @@ class ConfigNotesTest extends Test {
 	@:pin('control')
 	@:killer('M-CONFIG-NOTE-REPEATS')
 	public function testSaySaysEachKeyOncePerRun(): Void {
-		RunLedger.begin();
+		final ledger: RunLedger = RunLedger.begin();
 		final said: Array<String> = [];
-		ConfigNotes.say([{ key: 'confignotes-key', message: 'one\n' }], said.push);
-		ConfigNotes.say([{ key: 'confignotes-key', message: 'one\n' }], said.push);
+		ConfigNotes.say(ledger, [{ key: 'confignotes-key', message: 'one\n' }], said.push);
+		ConfigNotes.say(ledger, [{ key: 'confignotes-key', message: 'one\n' }], said.push);
 		Assert.equals(1, said.length);
+	}
+
+	@:pin('control')
+	@:killer('M-CONFIG-NOTE-SAYS-LATEST')
+	public function testSayAnswersToTheLedgerItIsGiven(): Void {
+		final earlier: RunLedger = RunLedger.begin();
+		final said: Array<String> = [];
+		ConfigNotes.say(earlier, [{ key: 'confignotes-own', message: 'one\n' }], said.push);
+		Assert.notEquals(earlier, RunLedger.begin());
+		ConfigNotes.say(earlier, [{ key: 'confignotes-own', message: 'one\n' }], said.push);
+		Assert.equals(1, said.length, 'the ledger it was given remembers, whichever run began since');
 	}
 
 }

@@ -49,11 +49,20 @@ final class CliContext {
 	/** What the find-walks of this call found, shared by the contexts of its runs (`Cli`'s `runEach` reads it). */
 	public final matches: RunMatches;
 
-	public function new(requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches) {
+	/**
+	 * What this call has said already (`RunLedger`): a command says a diagnostic through it, so the run is told once however
+	 * many layers raise it. `Cli.run` makes one per call and every context of the call shares it.
+	 */
+	public final ledger: RunLedger;
+
+	public function new(
+		requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches, ?ledger: RunLedger
+	) {
 		this.requireMatch = requireMatch;
 		this.postWriteFix = postWriteFix;
 		this.stdin = stdin;
 		this.matches = matches ?? new RunMatches();
+		this.ledger = ledger ?? RunLedger.fallback();
 	}
 
 	/**

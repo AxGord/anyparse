@@ -30,7 +30,7 @@ final class OracleCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runOracle(args);
+		return runOracle(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -47,7 +47,7 @@ final class OracleCommand implements CliCommand {
 	 * The scope is there to locate the project's `apq.json` exactly as `lint` does; without
 	 * a `compilerOracle` key the command is inert and exits 0, again exactly like `lint`.
 	 */
-	private static function runOracle(args: Array<String>): Int {
+	private static function runOracle(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		final specs: Array<String> = [];
 		for (arg in new OracleCommand().flags().walk(args)) {
@@ -94,7 +94,7 @@ final class OracleCommand implements CliCommand {
 		final compiler: OracleProvider = OracleProviders.of(CliArgs.pickPlugin(lang));
 		ConfigDisagreement.warnOracle(compiler, resolveConfig, paths, notes);
 		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles(compiler, notes);
-		ConfigNotes.say(notes, CliIo.stderr);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		if (oracles.length > 0) return recordOracleVerdicts(compiler, oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;

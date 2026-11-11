@@ -693,7 +693,7 @@ final class LintConfig {
 	 * the once-per-file-per-run ledger `discover`'s two diagnostics share.
 	 */
 	private static function warnOnce(configPath: String, message: String): Void {
-		if (RunLedger.first(WARNED_TOPIC, configPath)) stderr(message);
+		if (RunLedger.fallback().first(WARNED_TOPIC, configPath)) stderr(message);
 	}
 
 	/**

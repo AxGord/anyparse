@@ -15679,8 +15679,8 @@
 			"name": "M-RUN-KEEPS-LEDGER",
 			"type": "anyparse.query.Cli",
 			"method": "run",
-			"find": "\tRunLedger.begin();\n",
-			"replace": "",
+			"find": "\tfinal ledger: RunLedger = RunLedger.begin();\n",
+			"replace": "\tfinal ledger: RunLedger = RunLedger.fallback();\n",
 			"note": "a run no longer starts with an empty warn-once ledger, so a second call in one engine process stays silent about a broken lint config and a skipped field-init where a fresh process warns"
 		},
 		{
@@ -15726,8 +15726,8 @@
 			"name": "M-CLI-EXIT-ON-EMPTY-PER-RUN",
 			"type": "anyparse.query.Cli",
 			"method": "runEach",
-			"find": "new CliContext(false, postWriteFix, chosen.stdin, matches)",
-			"replace": "new CliContext(requireMatch, postWriteFix, chosen.stdin, matches)",
+			"find": "new CliContext(false, postWriteFix, chosen.stdin, matches, ledger)",
+			"replace": "new CliContext(requireMatch, postWriteFix, chosen.stdin, matches, ledger)",
 			"note": "--exit-on-empty judges each grammar's run, so a call whose Haxe run found the name fails because its JSON run did not"
 		},
 		{
@@ -16575,6 +16575,22 @@
 			"find": "if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;",
 			"replace": "if (false) return;",
 			"note": "APQ_NO_CONFIG_WARN=1 no longer silences the config report"
+		},
+		{
+			"name": "M-RUN-LEDGER-BEGIN-REUSES",
+			"type": "anyparse.query.RunLedger",
+			"method": "begin",
+			"find": "current = new RunLedger();",
+			"replace": "",
+			"note": "a run begun after another inherits what the first said, so a call in a long-lived engine process starts with the previous call's diagnostics already marked as said"
+		},
+		{
+			"name": "M-RUN-LEDGER-BEGIN-ANSWERS-OTHER",
+			"type": "anyparse.query.RunLedger",
+			"method": "begin",
+			"find": "return current;",
+			"replace": "return new RunLedger();",
+			"note": "the ledger a run is handed is not the one a context-less caller shares, so a diagnostic said through one is said again through the other"
 		}
 	]
 }

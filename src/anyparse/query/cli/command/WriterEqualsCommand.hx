@@ -33,7 +33,7 @@ final class WriterEqualsCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runWriterEquals(args);
+		return runWriterEquals(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -86,7 +86,7 @@ final class WriterEqualsCommand implements CliCommand {
 	 * form `HxModuleWriter.write(HaxeModuleParser.parse(src))`. Always
 	 * probe the pipeline that matches the test entry being constructed.
 	 */
-	private static function runWriterEquals(args: Array<String>): Int {
+	private static function runWriterEquals(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = HXFORMAT_LANG;
 		var plain: Bool = false;
 		var inputPath: Null<String> = null;
@@ -134,7 +134,7 @@ final class WriterEqualsCommand implements CliCommand {
 		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? CliIo.readFile(configPath) : null);
 		// A config the user NAMED is reported like a discovered one; a `.hxtest` section has no file of its own to name.
 		if (sectionOpts == null && configPath != null && optsJson != null && lang == HXFORMAT_LANG)
-			FormatConfigDiscovery.reportConfig(ConfigFinder.absolute(configPath), optsJson);
+			FormatConfigDiscovery.reportConfig(ledger, ConfigFinder.absolute(configPath), optsJson);
 
 		final emitted: Null<String> = try {
 			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));

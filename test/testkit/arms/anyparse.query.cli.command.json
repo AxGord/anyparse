@@ -1296,8 +1296,8 @@
 			"name": "M-LINT-FIX-NOTE-ONCE",
 			"type": "anyparse.query.cli.command.LintFixDriver",
 			"method": "freshNoteLines",
-			"find": "RunLedger.first(",
-			"replace": "true || RunLedger.first(",
+			"find": "said.first(",
+			"replace": "true || said.first(",
 			"note": "the run no longer remembers a said note, so every fixpoint pass and every per-finding retry prints the same skip line again"
 		},
 		{

@@ -7,7 +7,8 @@ import anyparse.ds.Set;
  * whole when the next run begins (`Cli.run`), so a call in a long-lived engine process starts clean by construction rather than
  * by a reset each ledger's owner must remember.
  *
- * A direct caller outside any `Cli.run` shares the ledger of the most recent run, or the initial one before the first run;
+ * A command reads its run's ledger off its `CliContext`. A caller with no context of its own — a rule, a write op's `--fix`
+ * re-entry — shares the ledger of the most recent run (`fallback`), or the initial one before the first run;
  * docs/design-principles.md § 2.
  */
 @:nullSafety(Strict)
@@ -19,30 +20,34 @@ final class RunLedger {
 
 	private function new() {}
 
-	/** Starts a run with nothing said. */
-	public static function begin(): Void {
-		current = new RunLedger();
-	}
-
 	/** True the first time `key` is asked under `topic` in this run, false on every later ask. */
-	public static function first(topic: String, key: String): Bool {
+	public function first(topic: String, key: String): Bool {
 		final entry: String = entryOf(topic, key);
-		if (current._said.has(entry)) return false;
-		current._said.add(entry);
+		if (_said.has(entry)) return false;
+		_said.add(entry);
 		return true;
 	}
 
 	/** Whether `key` was already said under `topic` in this run, without saying it. */
-	public static function said(topic: String, key: String): Bool {
-		return current._said.has(entryOf(topic, key));
+	public function said(topic: String, key: String): Bool {
+		return _said.has(entryOf(topic, key));
 	}
 
 	/** Every key said under `topic` in this run. */
-	public static function keysOf(topic: String): Array<String> {
+	public function keysOf(topic: String): Array<String> {
 		final prefix: String = entryOf(topic, '');
-		return [
-			for (entry in current._said) if (entry.startsWith(prefix)) entry.substr(prefix.length)
-		];
+		return [for (entry in _said) if (entry.startsWith(prefix)) entry.substr(prefix.length)];
+	}
+
+	/** The ledger of the most recent run: what a caller holding no run's ledger of its own says through. */
+	public static inline function fallback(): RunLedger {
+		return current;
+	}
+
+	/** Starts a run with nothing said, and answers its ledger. */
+	public static function begin(): RunLedger {
+		current = new RunLedger();
+		return current;
 	}
 
 	/** A topic never holds a line break, so the first one separates topic from key unambiguously. */

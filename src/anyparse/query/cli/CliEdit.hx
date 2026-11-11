@@ -365,7 +365,7 @@ final class CliEdit {
 			'--no-oracle',
 			'--range',
 			[for (w in windows) '${w.from}:${w.to}'].join(',')
-		]);
+		], RunLedger.fallback());
 	}
 
 	/**

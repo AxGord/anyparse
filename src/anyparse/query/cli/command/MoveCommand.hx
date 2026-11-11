@@ -53,7 +53,7 @@ final class MoveCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args) : runMove(args);
+		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args, ctx.ledger) : runMove(args);
 	}
 
 	public function usage(): Void {

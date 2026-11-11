@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.RunLedger;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -84,7 +85,8 @@ class FormatConfigDiscoveryTest extends Test {
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
 		Assert.notNull(FormatConfigDiscovery.discover(Path.join([nested, 'A.hx'])));
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths().filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback())
+			.filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported path under the fixture, got ${named.join(', ')}');
 		Assert.equals('hxformat.json', Path.withoutDirectory(named[0]), 'the report named ${named[0]} instead of the config it read');
 	}

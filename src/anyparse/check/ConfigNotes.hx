@@ -20,11 +20,11 @@ final class ConfigNotes {
 	}
 
 	/**
-	 * Prints each collected note through the run ledger: a key said earlier this run — by a command or by the
+	 * Prints each collected note through the run's `ledger`: a key said earlier this run — by a command or by the
 	 * stderr fallback — is not said again.
 	 */
-	public static function say(notes: Array<ConfigNote>, write: (String) -> Void): Void {
-		for (note in notes) if (RunLedger.first(LintConfig.WARNED_TOPIC, note.key)) write(note.message);
+	public static function say(ledger: RunLedger, notes: Array<ConfigNote>, write: (String) -> Void): Void {
+		for (note in notes) if (ledger.first(LintConfig.WARNED_TOPIC, note.key)) write(note.message);
 		notes.resize(0);
 	}
 

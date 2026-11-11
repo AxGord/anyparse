@@ -166,7 +166,7 @@ final class LintCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		final status: Int = PhaseTimings.measure('lint', runLint.bind(args));
+		final status: Int = PhaseTimings.measure('lint', runLint.bind(args, ctx.ledger));
 		PhaseTimings.report(CliIo.stderr);
 		return status;
 	}
@@ -194,7 +194,7 @@ final class LintCommand implements CliCommand {
 	 * discovery, the resolution scope, the oracle keys — instead of assembling a
 	 * second copy of it that would drift.
 	 */
-	public static function runLint(args: Array<String>): Int {
+	public static function runLint(args: Array<String>, ledger: RunLedger): Int {
 		final o: LintOpts = LintArgs.parseLintArgs(args);
 		if (o.errExit != null) return o.errExit;
 
@@ -243,7 +243,7 @@ final class LintCommand implements CliCommand {
 			final notes: Array<ConfigNote> = [];
 			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file, notes), o.reviewBudget);
 			OracleProviders.reportDrops(discovered, plugin, notes);
-			ConfigNotes.say(notes, CliIo.stderr);
+			ConfigNotes.say(ledger, notes, CliIo.stderr);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
@@ -275,7 +275,7 @@ final class LintCommand implements CliCommand {
 		final resolutionRoots: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots());
 		final resolutionLibs: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs());
 		final unconfigured: Null<ResolutionScope> = resolutionThunk(
-			plugin.langName(), files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd())
+			plugin.langName(), files, resolutionRoots, resolutionLibs, paths.foreach(p -> resolveConfig(p).resolutionStd()), ledger
 		);
 		// Compiler oracle (opt-in via apq.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
@@ -284,7 +284,7 @@ final class LintCommand implements CliCommand {
 		// the reader is a word when the scope spans roots that name DIFFERENT builds, since
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
-		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle, OracleProviders.of(plugin));
+		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle, OracleProviders.of(plugin), ledger);
 		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
 		final compiler: OracleProvider = OracleProviders.of(plugin);
 		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
@@ -312,7 +312,7 @@ final class LintCommand implements CliCommand {
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, o.range, o.verbose, o.fixProbes, o.reviewBudget
+						o.noOracle, o.range, o.verbose, o.fixProbes, o.reviewBudget, ledger
 					)
 			);
 
@@ -386,8 +386,10 @@ final class LintCommand implements CliCommand {
 	 * grammar the scope is parsed by — never by an extension of its own.
 	 */
 	public static function resolutionThunk(
-		lang: String, files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool
+		lang: String, files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool,
+		?ledger: RunLedger
 	): Null<ResolutionScope> {
+		final said: RunLedger = ledger ?? RunLedger.fallback();
 		final declared: Bool = roots.length > 0 || libNames.length > 0;
 		if (!declared && !(stdEnabled && StdResolver.stdDir() != null)) return null;
 		// Dedup by the SYMLINK-RESOLVED absolute path: a library glob path is always absolute, a report
@@ -418,7 +420,7 @@ final class LintCommand implements CliCommand {
 						files: Array<{ file: String, source: String }>,
 						matched: Bool,
 						allMatched: Bool
-					} = readResolutionRoots(lang, roots, reportPaths);
+					} = readResolutionRoots(lang, roots, reportPaths, said);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
 					rootsAllMatched = read.allMatched;
@@ -490,13 +492,14 @@ final class LintCommand implements CliCommand {
 	 * a hand-kept roster of the five that do, failing open the day a sixth joins them.
 	 */
 	private static function warnScopeNotices(
-		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool, compiler: OracleProvider
+		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool, compiler: OracleProvider,
+		ledger: RunLedger
 	): Void {
 		final notes: Array<ConfigNote> = [];
 		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths, notes);
 		if (!noOracle) ConfigDisagreement.warnOracle(compiler, resolveConfig, paths, notes);
 		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths, notes);
-		ConfigNotes.say(notes, CliIo.stderr);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 	}
 
 	/**
@@ -539,7 +542,7 @@ final class LintCommand implements CliCommand {
 	 * spells (`speed`, `panel`, `timer`, `ready`, `names`) and gains none.
 	 */
 	private static function readResolutionRoots(
-		lang: String, roots: Array<String>, reportPaths: Map<String, Bool>
+		lang: String, roots: Array<String>, reportPaths: Map<String, Bool>, ledger: RunLedger
 	): { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
 		// A declared root resolving to no file of the grammar — a typo, a directory since moved, a path written
@@ -567,7 +570,7 @@ final class LintCommand implements CliCommand {
 		}
 		final notes: Array<ConfigNote> = [];
 		ConfigDisagreement.warnUnreachableProjectRoots(unreachable, notes);
-		ConfigNotes.say(notes, CliIo.stderr);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		// MATCHED counts the report files too: a whole-project lint excludes every root file from `out`,
 		// and its roots matched all the same.
 		return { files: out, matched: unreachable.length < roots.length, allMatched: unreachable.length == 0 };

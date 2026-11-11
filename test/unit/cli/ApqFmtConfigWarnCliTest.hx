@@ -3,6 +3,7 @@ package unit.cli;
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.Cli;
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.RunLedger;
 
 using StringTools;
 
@@ -34,7 +35,7 @@ class ApqFmtConfigWarnCliTest extends Test {
 		sys.FileSystem.createDirectory(subDir);
 		sys.io.File.saveContent('$subDir/B.hx', 'class B {}\n');
 		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx', '$subDir/B.hx']), 'both fixtures are already canonical');
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths().filter(p -> p.indexOf(dir) >= 0);
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf(dir) >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported config path under $dir, got ${named.join(', ')}');
 		CliFixture.removeDir(dir);
 		#else
@@ -53,7 +54,7 @@ class ApqFmtConfigWarnCliTest extends Test {
 		]);
 		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx']));
 		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx']), 'the second run reads the memoised directory');
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths().filter(p -> p.indexOf(dir) >= 0);
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf(dir) >= 0);
 		Assert.equals(1, named.length, 'the second run reported nothing about the config under $dir');
 		CliFixture.removeDir(dir);
 		#else

@@ -235,9 +235,9 @@ final class Cli {
 	 * what a bug wants.
 	 */
 	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
-		RunLedger.begin();
+		final ledger: RunLedger = RunLedger.begin();
 		try {
-			return dispatch(args, chooseLanguage);
+			return dispatch(args, chooseLanguage, ledger);
 		} catch (exception: WriteFailure) {
 			// Named with the subcommand, like every other line the CLI prints: a bare `apq:` costs
 			// a script the identity of the op that failed, and `args[0]` is the op by construction
@@ -269,7 +269,7 @@ final class Cli {
 	 * Separate from `run` so the write-failure catch has somewhere to sit that is not inside 100
 	 * arms: the split is the catch, and nothing else moved.
 	 */
-	private static function dispatch(args: Array<String>, chooseLanguage: Bool): Int {
+	private static function dispatch(args: Array<String>, chooseLanguage: Bool, ledger: RunLedger): Int {
 		if (args.length == 0 || args[0] == '-h' || args[0] == '--help') {
 			printUsage();
 			return EXIT_OK;
@@ -319,9 +319,9 @@ final class Cli {
 		final command: CliCommand = registered;
 		final run: () -> Int = if (chooseLanguage) {
 			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
-			runEach.bind(command, chosen, requireMatch, postWriteFix);
+			runEach.bind(command, chosen, requireMatch, postWriteFix, ledger);
 		} else {
-			() -> command.run(rest, new CliContext(requireMatch, postWriteFix));
+			() -> command.run(rest, new CliContext(requireMatch, postWriteFix, null, null, ledger));
 		};
 		if (!verify) return run();
 		final journal: WriteJournal = new WriteJournal();
@@ -349,15 +349,18 @@ final class Cli {
 	 * `command` run once per argv `chosen` holds, each with a context of its own; the worst (highest) status of the runs.
 	 * Over several runs `--exit-on-empty` judges the call: it fails only when every run's find-walk came back empty.
 	 */
-	private static function runEach(command: CliCommand, chosen: LanguageChoiceResult, requireMatch: Bool, postWriteFix: Bool): Int {
-		if (chosen.runs.length == 1) return command.run(chosen.runs[0], new CliContext(requireMatch, postWriteFix, chosen.stdin));
+	private static function runEach(
+		command: CliCommand, chosen: LanguageChoiceResult, requireMatch: Bool, postWriteFix: Bool, ledger: RunLedger
+	): Int {
+		if (chosen.runs.length == 1)
+			return command.run(chosen.runs[0], new CliContext(requireMatch, postWriteFix, chosen.stdin, null, ledger));
 		final matches: RunMatches = new RunMatches();
 		var worst: Int = EXIT_OK;
 		for (i => argv in chosen.runs) {
 			// Each of several runs leads with `--lang <name>` (`LanguageChoice.perLanguage`): the label says whose grammar the
 			// hits and the summary that follow on this run belong to.
 			CliIo.stderr('apq ${command.name()}: --lang ${argv[1]} (run ${i + 1} of ${chosen.runs.length})\n');
-			final code: Int = command.run(argv, new CliContext(false, postWriteFix, chosen.stdin, matches));
+			final code: Int = command.run(argv, new CliContext(false, postWriteFix, chosen.stdin, matches, ledger));
 			if (code > worst) worst = code;
 		}
 		return requireMatch && worst == EXIT_OK && matches.allEmpty() ? EXIT_RUNTIME : worst;

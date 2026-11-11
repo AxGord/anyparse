@@ -75,8 +75,8 @@ final class FormatConfigDiscovery {
 	}
 
 	/** The config paths this run has already reported. */
-	public static inline function reportedPaths(): Array<String> {
-		return RunLedger.keysOf(REPORTED_TOPIC);
+	public static inline function reportedPaths(ledger: RunLedger): Array<String> {
+		return ledger.keysOf(REPORTED_TOPIC);
 	}
 
 	/**
@@ -90,7 +90,7 @@ final class FormatConfigDiscovery {
 		if (!CACHE.exists(start)) remember(start, filePath);
 		final found: Null<ConfigFile> = CACHE[start];
 		if (found == null) return null;
-		reportConfig(found.path, found.content);
+		reportConfig(RunLedger.fallback(), found.path, found.content);
 		return found.content;
 		#else
 		return null;
@@ -103,10 +103,10 @@ final class FormatConfigDiscovery {
 	 * a command for the file the user named (`writer-equals --config`); a config text with no file behind it (a `.hxtest`
 	 * section, a test literal) never comes here, so it has no file to name and stays silent.
 	 */
-	public static function reportConfig(path: String, content: String): Void {
+	public static function reportConfig(ledger: RunLedger, path: String, content: String): Void {
 		#if (sys || nodejs)
 		final stated: Null<String> = normalize(content);
-		if (stated == null || !RunLedger.first(REPORTED_TOPIC, path)) return;
+		if (stated == null || !ledger.first(REPORTED_TOPIC, path)) return;
 		if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;
 		final line: Null<String> = HaxeFormatConfigDiagnostics.message(path, HaxeFormatConfigDiagnostics.diagnose(stated));
 		if (line != null) CliIo.stderr(line);
