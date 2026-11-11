@@ -2425,6 +2425,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "AMB1",
+			"note": "an ambient source moved into a directory where a module stays: the stationary module would read Dep through a chain it never had (up.pkg.Dep -> dep.Dep), so the move is refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/pkg/A.hx",
+				"src/pkg/import.hx",
+				"--to",
+				"src/up/pkg",
+				"--scope",
+				"src"
+			],
+			"files": {
+				"src/pkg/A.hx": "package pkg;\n\nclass A {\n\tvar d: Dep;\n}\n",
+				"src/pkg/import.hx": "import dep.Dep;\n",
+				"src/dep/Dep.hx": "package dep;\n\nclass Dep {\n\tpublic function new() {}\n\tpublic function who(): String return \"dep\";\n}\n",
+				"src/up/pkg/X.hx": "package up.pkg;\n\nclass X {\n\tpublic static function main() trace(new Dep().who());\n}\n",
+				"src/up/pkg/Dep.hx": "package up.pkg;\n\nclass Dep {\n\tpublic function new() {}\n\tpublic function who(): String return \"local\";\n}\n",
+				"main/Main.hx": "class Main { static function main() up.pkg.X.main(); }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "88a19a42244be849",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

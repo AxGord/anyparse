@@ -167,6 +167,15 @@ final class UsingSites {
 		return map;
 	}
 
+	/**
+	 * The member names a `using` of a module path may extend with: the grammar's known list for it, else the members `index`
+	 * declares for it, null for a module neither knows.
+	 */
+	public static function methodsOfModules(plugin: GrammarPlugin, index: SymbolIndex): (String) -> Null<Array<String>> {
+		final members: Map<String, Array<String>> = membersByModule(index);
+		return raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+	}
+
 	/** Every member access under `node` with a name, by the offset of that name in `source`. */
 	private static function collectNamedAccesses(node: QueryNode, source: String, kinds: Array<String>, out: Map<Int, QueryNode>): Void {
 		final span: Null<Span> = node.span;

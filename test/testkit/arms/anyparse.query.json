@@ -14355,6 +14355,75 @@
 			"note": "a using the new ambient chain repeats of the module's own counts as a changed ranking"
 		},
 		{
+			"name": "M-MODMOVE-AMBIENT-SOURCE-REFUSED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "planSource",
+			"force": "Left('ambient import source')",
+			"note": "an ambient source is refused again, so a directory moved whole cannot take its chain with it"
+		},
+		{
+			"name": "M-MODMOVE-AMBIENT-GOVERNED-STRANDED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "planSource",
+			"find": "!plugin.ambientImportSites(file, info.pkg).contains(m.from)",
+			"replace": "true",
+			"note": "a module the moved source governs is never looked for, so one left behind loses its chain unseen"
+		},
+		{
+			"name": "M-MODMOVE-USING-GAIN-ALWAYS",
+			"type": "anyparse.query.ModuleMove",
+			"method": "takeOvers",
+			"force": "gained",
+			"note": "every gained using is taken for one that wins a call, though nothing ranked below it offers one"
+		},
+		{
+			"name": "M-MODMOVE-USING-GAIN-OUTRANKED-ALL",
+			"type": "anyparse.query.ModuleMove",
+			"method": "takeOvers",
+			"force": "[]",
+			"note": "a gained using that outranks one contesting a call is admitted"
+		},
+		{
+			"name": "M-MODMOVE-USING-CONTEST-IGNORED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "takeOvers",
+			"find": "sites == null || sites.contested(unguarded(g), unguarded(r), methodsOf)",
+			"replace": "true",
+			"note": "a gained using above a rival sharing no name with it is refused as if it contested"
+		},
+		{
+			"name": "M-MODMOVE-AMBIENT-ARRIVAL-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "planSource",
+			"find": "relativeTo(Path.directory(file), toDir) != null &&",
+			"replace": "false &&",
+			"note": "a module staying in the directory a source arrives in is not looked for, so it reads its names through a chain it never had"
+		},
+		{
+			"name": "M-MODMOVE-AMBIENT-RENAME-KEPT",
+			"type": "anyparse.query.ModuleMove",
+			"method": "planSource",
+			"find": "Path.withoutDirectory(m.from) != Path.withoutDirectory(m.to)",
+			"replace": "false",
+			"note": "an ambient source renamed by a move is taken for one still an ambient source"
+		},
+		{
+			"name": "M-MODMOVE-AMBIENT-DESTINATION-FREE",
+			"type": "anyparse.query.ModuleMove",
+			"method": "planSource",
+			"find": "sourceOf.exists(m.to) || moves.count(o -> o.to == m.to) > 1",
+			"replace": "false",
+			"note": "an ambient source moved onto an existing one is not refused for the destination"
+		},
+		{
+			"name": "M-MODMOVE-USING-GAIN-CARRIED",
+			"type": "anyparse.query.ModuleMove",
+			"method": "usingRefusals",
+			"find": ".filter(u -> !gained.contains(u))",
+			"replace": "",
+			"note": "an admitted gained using takes part in the order a lost one is carried by, so the carry is refused"
+		},
+		{
 			"name": "M-MODMOVE-USING-REPEAT-LAST",
 			"type": "anyparse.query.ModuleMove",
 			"method": "lastWins",

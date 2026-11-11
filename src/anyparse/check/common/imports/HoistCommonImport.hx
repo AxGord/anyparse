@@ -632,8 +632,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	): (String, String, String) -> Bool {
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
-		final members: Map<String, Array<String>> = UsingSites.membersByModule(widest);
-		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+		final methodsOf: (String) -> Null<Array<String>> = UsingSites.methodsOfModules(plugin, widest);
 		final sitesOf: Map<String, UsingSites> = [];
 		function contested(file: String, path: String, other: String): Bool {
 			final source: Null<String> = sourceOf[file];

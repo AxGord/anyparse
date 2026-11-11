@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.scan.UsingSites;
 import anyparse.query.DeclaredSortedLists.SortedListPart;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ImportOrder.ImportAnchor;
@@ -86,6 +87,8 @@ private typedef PlannedMove = {
 /** A module's `using` statements in Haxe's ranking order: its ambient chain's, outermost first, then its own. */
 private typedef UsingOrder = { final chain: Array<String>; final own: Array<String>; }
 
+/** The relocations one request plans: the modules, and the ambient sources that travel with the modules they govern. */
+private typedef PlannedSet = { final modules: Array<PlannedMove>; final sources: Array<ModuleRelocation>; }
 /**
  * Relocate whole MODULES to another package — every type of the module, its module-private ones included, travels with
  * the file — and rewrite every reference so that each name means what it meant before.
@@ -102,8 +105,9 @@ private typedef UsingOrder = { final chain: Array<String>; final own: Array<Stri
  *    restores is a refusal;
  *  - every rewritten module parses.
  *
- * An import run that was sorted stays sorted, and a declared sorted list stays sorted (`DeclaredSortedLists`). The op is
- * PURE: the caller reads every file and decides whether to write, delete and create.
+ * An import run that was sorted stays sorted, and a declared sorted list stays sorted (`DeclaredSortedLists`). A directory's
+ * ambient source (`import.hx`) is relocated with the modules it governs, never alone. The op is PURE: the caller reads
+ * every file and decides whether to write, delete and create.
  */
 @:nullSafety(Strict)
 final class ModuleMove {
@@ -114,12 +118,15 @@ final class ModuleMove {
 		final pre: SymbolIndex = indexWith(request.scopeFiles, request.libraryFiles, plugin);
 		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', pre.skippedFiles().filter(f -> sourceOf.exists(f)));
 		if (skipped != null) return Refused([skipped]);
-		final planned: Array<PlannedMove> = switch planAll(withMirrors(request.moves, request.mirrors, sourceOf), pre, sourceOf, plugin) {
+		final set: PlannedSet = switch planAll(withMirrors(request.moves, request.mirrors, sourceOf), pre, sourceOf, plugin) {
 			case Left(reasons): return Refused(reasons);
 			case Right(p): p;
 		};
+		final planned: Array<PlannedMove> = set.modules;
 		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
 		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
+		final travelled: Map<String, String> = newPathOf.copy();
+		for (s in set.sources) travelled[s.from] = s.to;
 		// Phase 1: every spelling rewritten, the package statements, sorted import runs and declared lists kept sorted.
 		final texts: Map<String, String> = switch rewriteAll(request, planned, plugin) {
 			case Left(reasons): return Refused(reasons);
@@ -130,21 +137,23 @@ final class ModuleMove {
 		// changes its reading — last, so it reads the imports phase 2 wrote, which could turn its head into a member access.
 		final probes: Array<BindingProbe> = bindingProbes(request.scopeFiles, planned, newPathOf, plugin);
 		final imports: Array<String> = [];
-		switch repairBindings(request.scopeFiles, request.libraryFiles, texts, planned, probes, pre, plugin, imports) {
+		switch repairBindings(request.scopeFiles, request.libraryFiles, texts, planned, travelled, probes, pre, plugin, imports) {
 			case Left(found):
 				return Refused(found);
 			case Right(_):
 		}
-		final unqualified: Array<String> = qualifySpellings(request.scopeFiles, request.libraryFiles, texts, planned, pre, plugin);
+		final unqualified: Array<String> = qualifySpellings(
+			request.scopeFiles, request.libraryFiles, texts, planned, travelled, pre, plugin
+		);
 		if (unqualified.length > 0) return Refused(unqualified);
 		// Phase 3: the result parses, and the declared texts follow.
-		return switch changesOf(request, texts, newPathOf, renames, plugin) {
+		return switch changesOf(request, texts, travelled, renames, plugin) {
 			case Left(reasons): Refused(reasons);
 			case Right(placeRegistries(request, _) => Left(reasons)): Refused(reasons);
 			case Right(placeRegistries(request, _) => Right(placed)): Moved({
 				changes: placed.changes,
-				removed: planned.map(p -> p.move.from).concat(placed.removed),
-				moves: planned.map(p -> p.move),
+				removed: set.sources.map(s -> s.from).concat(planned.map(p -> p.move.from)).concat(placed.removed),
+				moves: set.sources.concat(planned.map(p -> p.move)),
 				renames: renames,
 				imports: imports
 			});
@@ -197,8 +206,7 @@ final class ModuleMove {
 		final found: Null<FileInfo> = infoOf[m.from];
 		if (found == null) return Left('${m.from} is not a parsed module under the scope');
 		final info: FileInfo = found;
-		if (plugin.ambientImportSites(m.from, info.pkg).contains(m.from))
-			return Left('${m.from} is an ambient import source, not a module — moving one is not supported');
+
 		if (Path.withoutDirectory(m.from) != Path.withoutDirectory(m.to))
 			return Left('${m.from} -> ${m.to}: a relocation keeps the module name; renaming a module is a different change');
 		if (info.pkg == '') return Left('${m.from} is in the root package, where its path is its bare name — not supported');
@@ -410,7 +418,7 @@ final class ModuleMove {
 	 */
 	private static function qualifySpellings(
 		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
-		planned: Array<PlannedMove>, pre: SymbolIndex, plugin: GrammarPlugin
+		planned: Array<PlannedMove>, travelled: Map<String, String>, pre: SymbolIndex, plugin: GrammarPlugin
 	): Array<String> {
 		final shape: RefShape = plugin.refShape();
 		final reasons: Array<String> = [];
@@ -422,9 +430,9 @@ final class ModuleMove {
 		if (scanned.length == 0) return reasons;
 		final edits: Map<String, Array<TextEdit>> = [];
 		for (d in ModuleMoveBindings.qualifiedDrifts(
-			pre, postIndex(files, library, texts, newPathOf, plugin), scanned, [for (p in planned) p.rename.oldPath => p.rename.newPath],
+			pre, postIndex(files, library, texts, travelled, plugin), scanned, [for (p in planned) p.rename.oldPath => p.rename.newPath],
 			relocated, plugin, [for (e in files) e.file => e.source],
-			[for (e in files) newPathOf[e.file] ?? e.file => texts[e.file] ?? e.source]
+			[for (e in files) travelled[e.file] ?? e.file => texts[e.file] ?? e.source]
 		)) {
 			final full: String = d.qualified ?? '';
 			if (full == '') {
@@ -488,23 +496,23 @@ final class ModuleMove {
 	 */
 	private static function repairBindings(
 		files: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>, texts: Map<String, String>,
-		planned: Array<PlannedMove>, probes: Array<BindingProbe>, pre: SymbolIndex, plugin: GrammarPlugin, imports: Array<String>
+		planned: Array<PlannedMove>, newPathOf: Map<String, String>, probes: Array<BindingProbe>, pre: SymbolIndex, plugin: GrammarPlugin,
+		imports: Array<String>
 	): Either<Array<String>, Bool> {
-		final newPathOf: Map<String, String> = [for (p in planned) p.move.from => p.move.to];
 		final renamed: Map<String, String> = [for (p in planned) p.rename.oldPath => p.rename.newPath];
 		final before: Map<String, String> = [for (e in files) e.file => e.source];
 		final post: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
 		final first: Array<BindingDrift> = driftsIn(post, files, texts, newPathOf, probes, pre, renamed, plugin, before);
 		final reasons: Array<String> = [for (d in first) if (d.repair == null) describeDrift(d)];
 		final lost: Map<String, Array<String>> = [];
-		for (r in usingRefusals(planned, pre, post, lost)) reasons.push(r);
+		for (r in usingRefusals(planned, pre, post, lost, texts, plugin)) reasons.push(r);
 		if (reasons.length > 0) return Left(reasons);
 		if (first.length == 0 && !lost.keys().hasNext()) return Right(true);
 		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
 		if (unwritten != null) return Left([unwritten]);
 		final again: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
 		final second: Array<String> = driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before).map(describeDrift);
-		for (r in usingRefusals(planned, pre, again, [])) second.push(r);
+		for (r in usingRefusals(planned, pre, again, [], texts, plugin)) second.push(r);
 		return second.length == 0 ? Right(true) : Left(second);
 	}
 
@@ -568,17 +576,64 @@ final class ModuleMove {
 	/** Every relocation of `moves` planned against the analysed set `pre`, or every reason one cannot be. */
 	private static function planAll(
 		moves: Array<ModuleRelocation>, pre: SymbolIndex, sourceOf: Map<String, String>, plugin: GrammarPlugin
-	): Either<Array<String>, Array<PlannedMove>> {
+	): Either<Array<String>, PlannedSet> {
 		final infoOf: Map<String, FileInfo> = [for (fi in pre.allFiles()) fi.file => fi];
 		final reasons: Array<String> = [];
 		final planned: Array<PlannedMove> = [];
-		for (m in moves) switch plan(m, moves, infoOf, sourceOf, plugin) {
-			case Left(message):
-				reasons.push(message);
-			case Right(p):
-				planned.push(p);
+		final sources: Array<ModuleRelocation> = [];
+		for (m in moves) {
+			final found: Null<FileInfo> = infoOf[m.from];
+			if (
+				found != null && plugin.ambientImportSites(m.from, found.pkg).contains(m.from)
+			) switch planSource(m, moves, infoOf, sourceOf, plugin) {
+				case Left(message):
+					reasons.push(message);
+				case Right(s):
+					sources.push(s);
+			} else switch plan(m, moves, infoOf, sourceOf, plugin) {
+				case Left(message):
+					reasons.push(message);
+				case Right(p):
+					planned.push(p);
+			}
 		}
-		return reasons.length > 0 ? Left(reasons) : Right(planned);
+		return reasons.length > 0 ? Left(reasons) : Right({ modules: planned, sources: sources });
+	}
+
+	/**
+	 * One ambient source's relocation (`import.hx`: no package, no module path), or the reason it cannot be made. The chain it
+	 * holds governs every module under its directory, so it travels only with ALL of them, each landing at the same place
+	 * relative to it — and into a directory no other module stays in, since it would govern those too. Then every module
+	 * keeps the chain it had.
+	 */
+	private static function planSource(
+		m: ModuleRelocation, moves: Array<ModuleRelocation>, infoOf: Map<String, FileInfo>, sourceOf: Map<String, String>,
+		plugin: GrammarPlugin
+	): Either<String, ModuleRelocation> {
+		if (Path.withoutDirectory(m.from) != Path.withoutDirectory(m.to))
+			return Left('${m.from} -> ${m.to}: a relocation keeps the file name; renaming an ambient source is a different change');
+		if (sourceOf.exists(m.to) || moves.count(o -> o.to == m.to) > 1) return Left('${m.to} already exists');
+		final fromDir: String = Path.directory(m.from);
+		final toDir: String = Path.directory(m.to);
+		for (file => info in infoOf) {
+			final rel: Null<String> = relativeTo(Path.directory(file), fromDir);
+			if (rel == null || file == m.from || !plugin.ambientImportSites(file, info.pkg).contains(m.from)) continue;
+			final moving: Null<ModuleRelocation> = moves.find(o -> o.from == file);
+			if (moving == null || relativeTo(Path.directory(moving.to), toDir) != rel)
+				return Left(
+					'${m.from} governs $file, which does not move with it to $toDir — move every module under $fromDir to the same '
+					+ 'place relative to its ambient source, or leave the source where it is'
+				);
+		}
+		final stationary: Array<String> = [
+			for (file in sourceOf.keys()) if (relativeTo(Path.directory(file), toDir) != null && !moves.exists(o -> o.from == file)) file
+		];
+		return stationary.length > 0
+			? Left(
+				'${m.from} would govern ${stationary.join(', ')} under $toDir, which stay where they are — their names would resolve '
+				+ 'through a chain they never had; move the source to a directory no module stays in'
+			)
+			: Right(m);
 	}
 
 	/**
@@ -680,14 +735,17 @@ final class ModuleMove {
 
 	/**
 	 * One refusal per relocated module whose ORDERED `using` list — the ambient chain's outermost first, then its own, each
-	 * relocated path read under its new name — the move changes beyond repair: a module the list GAINS (its extensions could
-	 * take over a call), or a lost one that written just above the module's own `using`s would not stand where it stood (the
-	 * later `using` wins a method two of them define). A repairable loss is recorded in `lost` under the module's new path.
+	 * relocated path read under its new name — the move changes beyond repair: a gained module that could take over a call
+	 * (`takeOvers`; one outranked wherever it offers is admitted), or a lost one that written just above the module's own
+	 * `using`s would not stand where it stood (the later `using` wins a method two of them define). A repairable loss is
+	 * recorded in `lost` under the module's new path.
 	 */
 	private static function usingRefusals(
-		planned: Array<PlannedMove>, pre: SymbolIndex, post: SymbolIndex, lost: Map<String, Array<String>>
+		planned: Array<PlannedMove>, pre: SymbolIndex, post: SymbolIndex, lost: Map<String, Array<String>>, texts: Map<String, String>,
+		plugin: GrammarPlugin
 	): Array<String> {
 		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
+		final methodsOf: (String) -> Null<Array<String>> = UsingSites.methodsOfModules(plugin, post);
 		final out: Array<String> = [];
 		for (p in planned) {
 			final was: Null<FileInfo> = pre.fileInfo(p.move.from);
@@ -700,24 +758,47 @@ final class ModuleMove {
 			if (before.join('\n') == after.join('\n')) continue;
 			final target: String = p.move.to;
 			final gained: Array<String> = after.filter(u -> !before.contains(u));
-			if (gained.length > 0) {
+			final source: Null<String> = texts[p.move.from];
+			final taking: Array<String> = takeOvers(
+				after, gained, source == null ? null : new UsingSites(source, plugin, target, post), methodsOf
+			);
+			if (taking.length > 0) {
 				out.push(
-					'$target gains `using ${gained.join(', ')}` through its new ambient chain — its extensions could take over a call '
+					'$target gains `using ${taking.join(', ')}` through its new ambient chain — its extensions could take over a call '
 					+ 'the module makes; move it where the chain does not change, or drop that `using` from the chain first'
 				);
 				continue;
 			}
 			final missing: Array<String> = before.filter(u -> !after.contains(u));
-			final carried: Array<String> = lastWins(a.chain.concat(missing).concat(a.own));
+			final carried: Array<String> = lastWins(a.chain.concat(missing).concat(a.own)).filter(u -> !gained.contains(u));
 			if (missing.exists(u -> u.startsWith('#')) || carried.join('\n') != before.join('\n'))
 				out.push(
 					'$target loses `using ${missing.join(', ')}`, and written into the module it would not keep its order among the '
 					+ '`using`s still in force — the later one wins a method both define; move it where its ambient chain is kept'
 				);
-			else
+			else if (missing.length > 0)
 				lost[target] = missing;
 		}
 		return out;
+	}
+
+	/**
+	 * The `gained` statements of `after` (every `using` in force, lowest rank first) that could take a call over. One outranks
+	 * only the statements ranked below it, so it takes a call over only where one of those may offer the same access
+	 * (`UsingSites.contested`); a gained `using` with no such rival below it leaves every call where it was. No `sites` (the
+	 * module's text is unknown) leaves every rival contesting.
+	 */
+	private static function takeOvers(
+		after: Array<String>, gained: Array<String>, sites: Null<UsingSites>, methodsOf: (String) -> Null<Array<String>>
+	): Array<String> {
+		return gained.filter(
+			g -> after.slice(0, after.indexOf(g)).exists(r -> sites == null || sites.contested(unguarded(g), unguarded(r), methodsOf))
+		);
+	}
+
+	/** The module path of an entry of a `UsingOrder`, without the `#` that marks a guarded statement. */
+	private static function unguarded(entry: String): String {
+		return entry.startsWith('#') ? entry.substr(1) : entry;
 	}
 
 	/**

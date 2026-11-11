@@ -310,8 +310,11 @@ class ModuleMoveTest extends Test {
 	public function testAnAmbientUsingTheNewDirectoryAddsIsRefused(): Void {
 		final a: String = 'package p;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n';
 		final tools: String = 'package p.q;\n\nclass Tools3 {\n\tpublic static function twice(n: Int): Int return n * 3;\n}\n';
+		final tools2: String = 'package p;\n\nclass Tools2 {\n\tpublic static function twice(n: Int): Int return n * 2;\n}\n';
 		final reasons: Array<String> = refused([move('src/p/A.hx', 'src/p/q/A.hx')], [
 			file('src/p/A.hx', a),
+			file('src/p/Tools2.hx', tools2),
+			file('src/p/import.hx', 'using p.Tools2;\n'),
 			file('src/p/q/Tools3.hx', tools),
 			file('src/p/q/import.hx', 'using p.q.Tools3;\n')
 		]);

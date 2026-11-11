@@ -87,8 +87,7 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 		// contests every rival.
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
-		final members: Map<String, Array<String>> = UsingSites.membersByModule(resolveIndex);
-		final methodsOf: (String) -> Null<Array<String>> = raw -> plugin.knownExtensionMethods(raw) ?? members[raw];
+		final methodsOf: (String) -> Null<Array<String>> = UsingSites.methodsOfModules(plugin, resolveIndex);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: Null<String> = sourceOf[info.file];
