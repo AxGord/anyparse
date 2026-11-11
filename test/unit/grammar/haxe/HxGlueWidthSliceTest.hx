@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
@@ -243,7 +242,7 @@ final class HxGlueWidthSliceTest extends Test {
 	}
 
 	private inline function write(src: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(json));
 	}
 
 }

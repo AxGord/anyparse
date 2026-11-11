@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -64,7 +63,7 @@ final class HxCondForContainerGlueSliceTest extends Test {
 		final opened: String = 'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taa == null || bb == null || [\n'
 			+ '\t\t\t\talphaItemNameHere,\n\t\t\t\tbetaItemNameHere,\n\t\t\t\tgammaItemNameHere,\n\t\t\t\tdeltaItemNameHere,'
 			+ '\n\t\t\t\tepsilonItemName\n\t\t\t].indexOf(k) < 0\n\t\t) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(config);
 		opts.finalNewline = false;
 		Assert.equals(opened, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(flat), opts));
 	}

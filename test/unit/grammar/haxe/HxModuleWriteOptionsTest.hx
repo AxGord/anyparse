@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -38,7 +37,7 @@ class HxModuleWriteOptionsTest extends Test {
 	@:pin('control')
 	@:killer('M-LOADER-WRITES-THE-DEFAULT')
 	public function testALoadedConfigLeavesTheDefaultRecordAlone(): Void {
-		final loaded: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final loaded: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(KeepEmptyLinesPolicy.Remove, loaded.afterLeftCurly);
 		Assert.equals(KeepEmptyLinesPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.afterLeftCurly);
 	}

@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -75,7 +74,7 @@ final class HxElseIfBodyBreakTest extends Test {
 	public function testFitLineIfWithElseKeepsInline(): Void {
 		// With fitLineIfWithElse:true the whole if/else may keep fitting halves
 		// inline, so the else-if body stays on the header line.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"sameLine":{"ifBody":"fitLine","expressionIf":"next","fitLineIfWithElse":true}}'
 		);
 		final src: String = 'class M { function f() { if (a) { p(); } else if (q(v) == -1) w(v); } }';
@@ -87,15 +86,13 @@ final class HxElseIfBodyBreakTest extends Test {
 		// Under the default config (ifBody=Next) the else-if body already breaks
 		// for a different reason; assert the change did not collapse it inline.
 		final src: String = 'class M { function f() { if (a) { p(); } else if (q(v) == -1) w(v); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('else if (q(v) == -1) w(v)') == -1, 'default config must not collapse the else-if body inline: <$out>');
 	}
 
 	private inline function writeFitLineNext(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"sameLine":{"ifBody":"fitLine","expressionIf":"next"}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine":{"ifBody":"fitLine","expressionIf":"next"}}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

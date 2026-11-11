@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.AstPredsT;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
@@ -40,7 +39,7 @@ final class HxCaseBodyOffListWorkTest extends Test {
 		});
 		final config: String = '{"sameLine": {"caseSiblings": "$siblings", "caseBody": "$caseBody", "expressionCase": "$caseBody"}}';
 		Reflect.setField(AstPredsT, name, spy);
-		HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(HELD_SRC), HaxeFormatConfigLoader.loadHxFormatJson(config));
+		HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(HELD_SRC), HxWriteOptionsKit.strictJson(config));
 		Reflect.setField(AstPredsT, name, original);
 		return reads;
 	}

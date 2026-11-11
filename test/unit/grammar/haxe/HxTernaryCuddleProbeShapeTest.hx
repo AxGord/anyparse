@@ -6,7 +6,6 @@ import anyparse.format.wrap.BinaryChainEmit;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
@@ -94,7 +93,7 @@ final class HxTernaryCuddleProbeShapeTest extends Test {
 
 	/** The number of continuation-fits probe nodes `emit` puts in a cuddle-admitted ternary at `location`. */
 	private static function probes(location: WrappingLocation): Int {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG_ON);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CFG_ON);
 		final rules: WrapRules = { rules: [], defaultMode: WrapMode.OnePerLineAfterFirst, defaultLocation: location };
 		return countProbes(BinaryChainEmit.emit([Text('flag'), brokenObject(), Text('{ beta: 2 }')], ['?', ':'], opts, rules));
 	}

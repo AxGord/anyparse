@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -63,7 +62,7 @@ class HxEnumScopeEmptyLinesSliceTest extends Test {
 	}
 
 	private function write(src: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(json));
 	}
 
 }

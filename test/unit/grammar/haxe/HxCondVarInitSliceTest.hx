@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -111,7 +110,7 @@ class HxCondVarInitSliceTest extends HxTestHelpers {
 	public function testBlankLineAfterTryCatchInitializerSurvives(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal a:Int = try {\n\t\t\tg();\n\t\t} catch (e:Exception) {\n'
 			+ '\t\t\th();\n\t\t}\n\n\t\tk();\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(TRIVIA_CONFIG);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(TRIVIA_CONFIG);
 		opts.finalNewline = false;
 		Assert.equals(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts));
 	}

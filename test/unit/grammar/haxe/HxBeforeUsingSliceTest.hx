@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -102,26 +101,22 @@ class HxBeforeUsingSliceTest extends Test {
 	}
 
 	public function testConfigLoaderMapsBeforeUsing(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"importAndUsing": {"beforeUsing": 2}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"importAndUsing": {"beforeUsing": 2}}}');
 		Assert.equals(2, opts.beforeUsing);
 	}
 
 	public function testConfigLoaderMapsBeforeUsingZero(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"importAndUsing": {"beforeUsing": 0}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"importAndUsing": {"beforeUsing": 0}}}');
 		Assert.equals(0, opts.beforeUsing);
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(1, opts.beforeUsing);
 	}
 
 	public function testConfigLoaderMissingNestedKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 2}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 2}}');
 		Assert.equals(1, opts.beforeUsing);
 	}
 
@@ -130,7 +125,7 @@ class HxBeforeUsingSliceTest extends Test {
 	}
 
 	private inline function makeOpts(beforeUsing: Int): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.beforeUsing = beforeUsing;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `beforeUsing:2`

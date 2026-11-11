@@ -224,6 +224,7 @@ class HxFormatterCorpusTest extends Test {
 				continue;
 			}
 			final opts: HxModuleWriteOptions = try {
+				// A fork fixture's config names settings this writer does not implement; the sweep reads it as `hxq fmt` does.
 				HaxeFormatConfigLoader.loadHxFormatJson(tc.config);
 			} catch (exception: Exception) {
 				skipConfig++;

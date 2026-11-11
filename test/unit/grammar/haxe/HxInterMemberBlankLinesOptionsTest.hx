@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -105,26 +104,22 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testConfigLoaderMapsBetweenFunctionsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 2}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"classEmptyLines": {"betweenFunctions": 2}}}');
 		Assert.equals(2, opts.betweenFunctions);
 	}
 
 	public function testConfigLoaderMapsBetweenVarsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"classEmptyLines": {"betweenVars": 3}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"classEmptyLines": {"betweenVars": 3}}}');
 		Assert.equals(3, opts.betweenVars);
 	}
 
 	public function testConfigLoaderMapsAfterVarsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"classEmptyLines": {"afterVars": 1}}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"classEmptyLines": {"afterVars": 1}}}');
 		Assert.equals(1, opts.afterVars);
 	}
 
 	public function testConfigLoaderMissingSectionKeepsDefaults(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(0, opts.betweenVars);
 		Assert.equals(1, opts.betweenFunctions);
 		Assert.equals(1, opts.afterVars);
@@ -135,7 +130,7 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(betweenVars: Int, betweenFunctions: Int, afterVars: Int): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.betweenVars = betweenVars;
 		opts.betweenFunctions = betweenFunctions;
 		opts.afterVars = afterVars;

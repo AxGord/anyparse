@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -116,17 +115,17 @@ class HxIfPolicyOptionsTest extends Test {
 	}
 
 	public function testJsonOnlyBeforeMapsToBefore(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"ifPolicy": "onlyBefore"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"ifPolicy": "onlyBefore"}}');
 		Assert.equals(WhitespacePolicy.Before, opts.ifPolicy);
 	}
 
 	public function testJsonNoneMapsToNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"ifPolicy": "none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"ifPolicy": "none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.ifPolicy);
 	}
 
 	public function testJsonAroundMapsToBoth(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"ifPolicy": "around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"ifPolicy": "around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.ifPolicy);
 	}
 
@@ -135,7 +134,7 @@ class HxIfPolicyOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(ifPolicy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifPolicy = ifPolicy;
 		return opts;
 	}

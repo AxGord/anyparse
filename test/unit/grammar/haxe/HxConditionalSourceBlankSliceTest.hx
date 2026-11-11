@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -51,16 +50,14 @@ class HxConditionalSourceBlankSliceTest extends Test {
 	}
 
 	public function testConfigLoaderParsesKnob(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"emptyLines": {"importAndUsing": {"keepSourceBlankAcrossConditional": true}}}'
 		);
 		Assert.isTrue(opts.keepSourceBlankAcrossConditional);
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefaultFalse(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"importAndUsing": {"beforeUsing": 2}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"importAndUsing": {"beforeUsing": 2}}}');
 		Assert.isFalse(opts.keepSourceBlankAcrossConditional);
 	}
 
@@ -69,7 +66,7 @@ class HxConditionalSourceBlankSliceTest extends Test {
 	}
 
 	private inline function makeOpts(keepBlank: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.keepSourceBlankAcrossConditional = keepBlank;
 		opts.maxConsecutiveBlanks = -1;
 		return opts;

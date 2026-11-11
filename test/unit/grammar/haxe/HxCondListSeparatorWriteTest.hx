@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -86,7 +85,7 @@ class HxCondListSeparatorWriteTest extends Test {
 	public function testParamsUnderLeadingBreakFillGainNoComma(): Void {
 		// `fillLineWithLeadingBreak` packed the list with one uniform separator, so a comma the source wrote inside
 		// a region came back doubled outside it — `a:Bool = false, , b:Int` once `air` is defined.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping": {"functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": []}}}'
 		);
 		final source: String = 'class A {\n\tfunction f(a:Bool = false\n\t\t#if air, b:Int #end) {}\n\n'
@@ -168,7 +167,7 @@ class HxCondListSeparatorWriteTest extends Test {
 
 	/** Under `TRAILING_ONE_PER_LINE`, `source` writes as `expected`, and `expected` writes as itself. */
 	private function assertWritesOnce(source: String, expected: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(TRAILING_ONE_PER_LINE);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(TRAILING_ONE_PER_LINE);
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(expected), opts));
 	}

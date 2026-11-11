@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxArrowFnType;
 import anyparse.grammar.haxe.HxArrowParamBody;
@@ -260,12 +259,12 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 	}
 
 	public function testFunctionTypeHaxe4LoaderMapsAround(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"functionTypeHaxe4Policy":"around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"functionTypeHaxe4Policy":"around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.functionTypeHaxe4);
 	}
 
 	public function testFunctionTypeHaxe4LoaderMapsNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"functionTypeHaxe4Policy":"none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"functionTypeHaxe4Policy":"none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.functionTypeHaxe4);
 	}
 
@@ -289,7 +288,7 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.functionTypeHaxe4 = policy;
 		return opts;
 	}

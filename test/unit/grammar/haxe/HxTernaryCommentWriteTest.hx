@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.comment.CommentLossException;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -106,7 +105,7 @@ class HxTernaryCommentWriteTest extends Test {
 	}
 
 	private function roundTripWith(source: String, cfg: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		return HaxeModuleTriviaWriter.write(ast, opts);
 	}

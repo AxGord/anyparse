@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
@@ -127,7 +126,7 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 	}
 
 	private inline function triviaWriteWith(cfg: String, src: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(cfg));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(cfg));
 	}
 
 	private inline function triviaWriteAround(src: String): String {

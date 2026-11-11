@@ -32,7 +32,7 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testSingleRuleWithSingleConditionIngested(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"noWrap","rules":[{"type":"onePerLine","conditions":[{"cond":"itemCount >= '
 			+ 'n","value":4}]}]}}}'
 		);
@@ -46,7 +46,7 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testMultipleConditionsAndAllPredicates(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"rules":[{"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3},{'
 			+ '"cond":"exceedsMaxLineLength","value":0}]},{"type":"onePerLineAfterFirst","conditions":[{"cond":"anyItemLength >= '
 			+ 'n","value":30},{"cond":"allItemLengths < n","value":50}]},{'
@@ -76,7 +76,7 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testLineLengthCondIngested(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLineAfterFirst","conditions":[{"cond":"lineLength >= n","value":160}]},{'
 			+ '"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3}]}]}}}'
 		);
@@ -108,7 +108,7 @@ class HxWrapRulesIngestTest extends Test {
 			'{"cond":"allItemLengths < n","value":30}'
 		];
 		final ruleList: String = conds.map(cond -> '{"type":"noWrap","conditions":[$cond]}').join(',');
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"wrapping":{"arrayWrap":{"rules":[$ruleList]}}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"wrapping":{"arrayWrap":{"rules":[$ruleList]}}}');
 		final rules: Array<WrapRule> = opts.arrayLiteralWrap.rules;
 		Assert.equals(6, rules.length);
 		Assert.equals(WrapConditionType.EqualItemLengths, rules[0].conditions[0].cond);
@@ -144,7 +144,7 @@ class HxWrapRulesIngestTest extends Test {
 	 * `equalItemLengths` with no value meant "match when the items differ".
 	 */
 	public function testOmittedCondValueDefaultsToOne(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"arrayWrap":{"rules":[{"type":"noWrap","conditions":[{"cond":"equalItemLengths"}]}]}}}'
 		);
 		Assert.equals(1, opts.arrayLiteralWrap.rules[0].conditions[0].value);
@@ -157,7 +157,7 @@ class HxWrapRulesIngestTest extends Test {
 	 * looks like when the engine has not learned the condition.
 	 */
 	public function testComplexItemCountCondIngested(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[{"cond":"complexItemCount >= n","value":2}]}]}}}'
 		);
 		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
@@ -173,7 +173,7 @@ class HxWrapRulesIngestTest extends Test {
 	 * condition earns its keep, so it ingests through that cascade rather than `arrayWrap`.
 	 */
 	public function testHasContainerItemsCondIngested(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"callParameter":{"rules":[{"type":"onePerLine","conditions":[{"cond":"hasContainerItems","value":1}]}]}}}'
 		);
 		Assert.equals(1, opts.callParameterWrap.rules.length);
@@ -185,7 +185,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	/** `hasMultilineLambdaItems` ingests as a bare predicate, like its two neighbours. */
 	public function testHasMultilineLambdaItemsCondIngested(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"callParameter":{"rules":[{"type":"onePerLine","conditions":[{"cond":"hasMultilineLambdaItems","value":1}]}]}}}'
 		);
 		Assert.equals(1, opts.callParameterWrap.rules.length);
@@ -211,7 +211,7 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testEmptyRulesArrayResetsCascade(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}'
 		);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.defaultMode);
@@ -219,14 +219,14 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testAbsentRulesPreservesBaselineCascade(): Void {
-		final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"wrapping":{"methodChain":{"defaultWrap":"noWrap"}}}');
+		final base: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"wrapping":{"methodChain":{"defaultWrap":"noWrap"}}}');
 		Assert.equals(base.methodChainWrap.rules.length, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 	}
 
 	public function testArrayWrapAndAnonTypeShareTheSameIngest(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[]}]},'
 			+ '"anonType":{"rules":[{"type":"fillLine","conditions":[]}]}}}'
 		);
@@ -237,7 +237,7 @@ class HxWrapRulesIngestTest extends Test {
 	}
 
 	public function testEmptyConditionsArrayProducesAlwaysFiringRule(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLine","conditions":[]}]}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);

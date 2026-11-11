@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -68,22 +67,22 @@ class HxCatchBodySliceTest extends Test {
 	}
 
 	public function testJsonNextMapsToNext(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "next"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"catchBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.catchBody);
 	}
 
 	public function testJsonSameMapsToSame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "same"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"catchBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.catchBody);
 	}
 
 	public function testJsonFitLineMapsToFitLine(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"catchBody": "fitLine"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"catchBody": "fitLine"}}');
 		Assert.equals(BodyPolicy.FitLine, opts.catchBody);
 	}
 
 	public function testEmptyJsonKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.catchBody);
 	}
 
@@ -122,7 +121,7 @@ class HxCatchBodySliceTest extends Test {
 	public function testCatchBodyAndTryPolicyIndependent(): Void {
 		// Adding `catchBody` must NOT silence `tryPolicy` — the latter
 		// gates the `try`→body gap, which is a different field site.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"tryPolicy": "none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"tryPolicy": "none"}}');
 		opts.catchBody = BodyPolicy.Next;
 		final src: String = 'class M { function f():Void { try { a; } catch (e:Any) { b; } } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
@@ -130,7 +129,7 @@ class HxCatchBodySliceTest extends Test {
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.catchBody = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

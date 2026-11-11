@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
@@ -40,7 +39,7 @@ class HxMethodChainWrapCapabilityTest extends Test {
 	}
 
 	public function testJsonDefaultWrapOverridesDefaultMode(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"wrapping":{"methodChain":{"defaultWrap":"onePerLine","rules":[]}}}'
 		);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.defaultMode);
@@ -48,7 +47,7 @@ class HxMethodChainWrapCapabilityTest extends Test {
 	}
 
 	public function testEmptyJsonKeepsSeededDefaults(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 		Assert.equals(6, opts.methodChainWrap.rules.length);
 	}

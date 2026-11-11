@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -75,7 +74,7 @@ class HxSourceBlankPreserveSliceTest extends Test {
 	}
 
 	private function write(src: String, json: String, ?capOverride: Null<Int>): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		if (capOverride != null) opts.maxConsecutiveBlanks = capOverride;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}

@@ -32,7 +32,6 @@ class ElseSwitchPlacementSliceTest extends Test {
 	private static final DEFAULT: String = '$BASE}';
 	private static final SAME: String = '$BASE, "sameLine": {"elseSwitch": "same"}}';
 	private static final NEXT: String = '$BASE, "sameLine": {"elseSwitch": "next"}}';
-	private static final EXPLICIT_KEEP: String = '$BASE, "sameLine": {"elseSwitch": "keep"}}';
 
 	/**
 	 * The value-`if` needs `expressionIf: next` under it, or the branch policies default to `Same` and glue every
@@ -82,11 +81,6 @@ class ElseSwitchPlacementSliceTest extends Test {
 			+ '\t\telse switch s {\n\t\t\tcase _:\n\t\t\t\treturn 1;\n\t\t}\n\t}\n}';
 		final out: String = HxWriteFixture.triviaWrite(oneLine, NEXT);
 		Assert.isTrue(out.indexOf('else switch') == -1, 'expected the switch pushed off the else line in: <$out>');
-	}
-
-	/** An explicit `"keep"` is unsupported and leaves the default, so it writes what an absent key writes. */
-	public function testExplicitKeepAgreesWithTheAbsentKey(): Void {
-		Assert.equals(HxWriteFixture.triviaWrite(TWO_LINE, DEFAULT), HxWriteFixture.triviaWrite(TWO_LINE, EXPLICIT_KEEP));
 	}
 
 	/**

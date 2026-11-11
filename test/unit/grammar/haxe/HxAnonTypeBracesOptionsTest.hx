@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -82,7 +81,7 @@ final class HxAnonTypeBracesOptionsTest extends Test {
 	public function testJsonLoaderRoutesAnonTypeBracesPolicies(): Void {
 		final json: String =
 			'{ "whitespace": { "bracesConfig": { "anonTypeBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.Both, opts.anonTypeBracesOpen);
 		Assert.equals(WhitespacePolicy.Both, opts.anonTypeBracesClose);
 	}
@@ -93,7 +92,7 @@ final class HxAnonTypeBracesOptionsTest extends Test {
 		// the loader still picks up the recognised opening/closing pair.
 		final json: String = '{ "whitespace": { "bracesConfig": { "anonTypeBraces": {'
 			+ ' "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.anonTypeBracesOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.anonTypeBracesClose);
 	}
@@ -103,7 +102,7 @@ final class HxAnonTypeBracesOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(open: WhitespacePolicy, close: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.anonTypeBracesOpen = open;
 		opts.anonTypeBracesClose = close;
 		return opts;

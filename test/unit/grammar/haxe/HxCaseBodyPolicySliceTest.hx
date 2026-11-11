@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -52,7 +51,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 
 	public function testNextKeepsSingleStmtMultiline(): Void {
 		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.caseBody = BodyPolicy.Next;
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -93,26 +92,26 @@ final class HxCaseBodyPolicySliceTest extends Test {
 	}
 
 	public function testConfigLoaderMapsCaseBodySame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"caseBody": "same"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"caseBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.caseBody);
 		Assert.equals(BodyPolicy.FitLine, opts.expressionCase);
 	}
 
 	public function testConfigLoaderMapsExpressionCaseSame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionCase": "same"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"expressionCase": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.expressionCase);
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 
 	public function testConfigLoaderEmptyKeepsDefaults(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 		Assert.equals(BodyPolicy.FitLine, opts.expressionCase);
 	}
 
 	public function testBothKnobsSameStillFlattens(): Void {
 		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.caseBody = BodyPolicy.Same;
 		opts.expressionCase = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -128,7 +127,7 @@ final class HxCaseBodyPolicySliceTest extends Test {
 		// break half of the contract is pinned in
 		// `HxCaseBodyFitLineSliceTest` (exact-fit / fit+1 boundary).
 		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.caseBody = BodyPolicy.FitLine;
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -136,13 +135,13 @@ final class HxCaseBodyPolicySliceTest extends Test {
 	}
 
 	private inline function writeWithCaseBody(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.caseBody = policy;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 	private inline function writeWithExpressionCase(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.expressionCase = policy;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}

@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
@@ -58,7 +57,7 @@ class HxEnumExistingBetweenFieldsTest extends Test {
 	}
 
 	private function write(src: String, json: String): String {
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(json));
 		return out.rtrim();
 	}
 

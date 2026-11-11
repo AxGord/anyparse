@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -101,17 +100,17 @@ class HxIntervalPolicySliceTest extends HxTestHelpers {
 	}
 
 	public function testIntervalPolicyLoaderMapsAround(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"intervalPolicy":"around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"intervalPolicy":"around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.intervalPolicy);
 	}
 
 	public function testIntervalPolicyLoaderMapsNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"intervalPolicy":"none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"intervalPolicy":"none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.intervalPolicy);
 	}
 
 	public function testIntervalPolicyLoaderDefaultsToNoneWhenAbsent(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(WhitespacePolicy.None, opts.intervalPolicy);
 	}
 
@@ -120,7 +119,7 @@ class HxIntervalPolicySliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.intervalPolicy = policy;
 		return opts;
 	}

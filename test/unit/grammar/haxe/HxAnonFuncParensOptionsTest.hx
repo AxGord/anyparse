@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -91,28 +90,28 @@ class HxAnonFuncParensOptionsTest extends Test {
 	}
 
 	public function testJsonBeforeMapsToBefore(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
 		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
 	}
 
 	public function testJsonAroundMapsToBoth(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "around"}}}}'
 		);
 		Assert.equals(WhitespacePolicy.Both, opts.anonFuncParens);
 	}
 
 	public function testJsonNoneMapsToNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "none"}}}}'
 		);
 		Assert.equals(WhitespacePolicy.None, opts.anonFuncParens);
 	}
 
 	public function testJsonOnlyBeforeMapsToBefore(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "onlyBefore"}}}}'
 		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
@@ -120,7 +119,7 @@ class HxAnonFuncParensOptionsTest extends Test {
 
 	public function testJsonAnonAndFuncParamIndependent(): Void {
 		// Setting only anonFuncParens via JSON must not alter funcParamParens.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
 		);
 		Assert.equals(WhitespacePolicy.Before, opts.anonFuncParens);
@@ -132,7 +131,7 @@ class HxAnonFuncParensOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(anonPolicy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.anonFuncParens = anonPolicy;
 		return opts;
 	}

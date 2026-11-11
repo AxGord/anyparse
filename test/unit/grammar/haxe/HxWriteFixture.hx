@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -67,7 +66,7 @@ final class HxWriteFixture {
 
 	/** The options `HaxeModuleTriviaWriter.write` defaults to, under `listsKeepSource`. */
 	public static function listsKeepSourceOptions(): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson(listsKeepSource('{}'));
+		return HxWriteOptionsKit.strictJson(listsKeepSource('{}'));
 	}
 
 	private static function withoutFinalNewline(options: HxModuleWriteOptions): HxModuleWriteOptions {

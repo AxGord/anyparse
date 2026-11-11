@@ -60,10 +60,7 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 		+ '100}], "type": "noWrap"}]}, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}}, "whitespace": {'
 		+ '"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}, '
-		+ '"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}, "typedefBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before"}, "blockBraces": {'
-		+ '"openingPolicy": "around", "closingPolicy": "before"}, "unknownBraces": {"openingPolic'
-		+ 'y": "after", "closingPolicy": "before"}}}}';
+		+ '"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
 
 	public function new(): Void {
 		super();

@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -43,7 +42,7 @@ class HxTypedefBetweenBlankTest extends Test {
 		// fails, predicate stays false, afterMultilineDecl doesn't fire.
 		// betweenSingleLineTypes (default 0) handles the gap → 0 blanks.
 		final src: String = 'typedef A = {x:Int};\ntypedef B = {y:Int};\n';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isFalse(out.indexOf('};\n\ntypedef B') != -1, 'expected NO blank between cuddled typedefs under Same in:\n<$out>');
 	}
@@ -78,7 +77,7 @@ class HxTypedefBetweenBlankTest extends Test {
 	}
 
 	private inline function writeWithLeftCurlyBoth(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"leftCurly": "both"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"leftCurly": "both"}}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

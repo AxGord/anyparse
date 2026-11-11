@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.SameLinePolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -13,7 +12,7 @@ import utest.Test;
  */
 class HxTryOverflowLayoutTest extends Test {
 
-	private static inline final CONFIG: String = '{"wrapping":{"maxLineLength":140}}';
+	private static final CONFIG: String = '{"wrapping":{"maxLineLength":140}}';
 	private static final CONFIG_A: String = '{"wrapping":{"maxLineLength":140},"sameLine":{"expressionTryOverflow":"same"}}';
 	private static final CONFIG_KEEP_ARRAY: String = '{"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"onePerLine"}}}';
 	private static final CONFIG_IF_FIT: String =
@@ -98,7 +97,7 @@ class HxTryOverflowLayoutTest extends Test {
 	@:pin('control')
 	@:killer('M-TRY-OVERFLOW-KEY')
 	public function testTheKeyKeepsTheBodyOnTheTryLine(): Void {
-		Assert.equals(SameLinePolicy.Same, HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_A).expressionTryOverflow);
+		Assert.equals(SameLinePolicy.Same, HxWriteOptionsKit.strictJson(CONFIG_A).expressionTryOverflow);
 		final src: String = inClass('final carried: CarriedDocuments = try $CALL_2 $CATCH $BODY;');
 		contains(HxWriteFixture.triviaWrite(src, CONFIG_A), '\t\tfinal carried:CarriedDocuments = try $CALL_2\n');
 	}

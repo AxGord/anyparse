@@ -1,11 +1,11 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
- * What a `HxWriteFixture` write takes as its configuration: a hxformat.json document, loaded as `HaxeFormatConfigLoader.loadHxFormatJson`
- * loads it, or typed `HxModuleWriteOptions` (`HxWriteOptionsKit`) used as given. Both convert implicitly, so a call site names neither.
+ * What a `HxWriteFixture` write takes as its configuration: a hxformat.json document, loaded by `HxWriteOptionsKit.strictJson` so a key
+ * the loader ignores fails the test instead of leaving it testing the default, or typed `HxModuleWriteOptions` (`HxWriteOptionsKit`) used
+ * as given. Both convert implicitly, so a call site names neither.
  */
 abstract HxWriteConfig(HxModuleWriteOptions) to HxModuleWriteOptions {
 
@@ -15,7 +15,7 @@ abstract HxWriteConfig(HxModuleWriteOptions) to HxModuleWriteOptions {
 
 	@:from
 	public static function ofJson(json: String): HxWriteConfig {
-		return new HxWriteConfig(HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return new HxWriteConfig(HxWriteOptionsKit.strictJson(json));
 	}
 
 	@:from

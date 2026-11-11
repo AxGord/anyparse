@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -177,7 +176,7 @@ class HxWrapConditionVocabularyTest extends Test {
 	}
 
 	private static function format(source: String, config: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(config);
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 	}

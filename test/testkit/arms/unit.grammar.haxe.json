@@ -42,6 +42,14 @@
 			"find": "final opts: HxModuleWriteOptions = new HxModuleWriteOptions(options);",
 			"replace": "final opts: HxModuleWriteOptions = options;",
 			"note": "a typed write switches finalNewline off on the caller's own options object instead of on a copy"
+		},
+		{
+			"name": "M-FIXTURE-JSON-LENIENT",
+			"type": "unit.grammar.haxe.HxWriteConfig",
+			"method": "ofJson",
+			"find": "HxWriteOptionsKit.strictJson(json)",
+			"replace": "anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson(json)",
+			"note": "a fixture write handed a hxformat.json document loads it as the plain loader does, so a key the loader ignores leaves the test writing the default"
 		}
 	]
 }

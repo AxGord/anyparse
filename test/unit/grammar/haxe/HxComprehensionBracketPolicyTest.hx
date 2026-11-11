@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.AstPreds;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxComprehension;
@@ -40,7 +39,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 	}
 
 	public function testDefaultComprehensionBracketsTight(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(WhitespacePolicy.None, opts.comprehensionBracketsOpen);
 		Assert.equals(WhitespacePolicy.None, opts.comprehensionBracketsClose);
 	}
@@ -51,7 +50,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 	}
 
 	public function testComprehensionForFitLinePadsOptions(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine":{"comprehensionFor":"fitLine"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine":{"comprehensionFor":"fitLine"}}');
 		Assert.equals(WhitespacePolicy.After, opts.comprehensionBracketsOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.comprehensionBracketsClose);
 	}
@@ -105,7 +104,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 	public function testExplicitBracketConfigPadsComprehension(): Void {
 		final json: String =
 			'{"whitespace":{"bracketConfig":{"comprehensionBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.comprehensionBracketsOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.comprehensionBracketsClose);
 	}
@@ -255,7 +254,7 @@ class HxComprehensionBracketPolicyTest extends Test {
 	}
 
 	private inline function write(src: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(json));
 	}
 
 }

@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -46,20 +45,19 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	/** the client's load-bearing formatting keys, with all three policies off. */
-	private static final BASE_JSON: String =
-		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140},"whitespace":{"commaPolicy":"after"}}';
+	private static final BASE_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140}}';
 
 	/** Same, with `uniformStatementBlanks: collapse` (the client's own setting). */
 	private static final COLLAPSE_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140},'
-		+ '"whitespace":{"commaPolicy":"after"},"emptyLines":{"uniformStatementBlanks":"collapse"}}';
+		+ '"emptyLines":{"uniformStatementBlanks":"collapse"}}';
 
 	/** Same, with `wrapping.trailingComma: remove`. */
-	private static final REMOVE_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140,"trailingComma":"remove"},"whitespace":{"commaPolicy":"after"}}';
+	private static final REMOVE_JSON: String =
+		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"trailingComma":"remove"}}';
 
 	/** Same, with `wrapping.arrayMatrixWrap: matrixWrapNoAlign`. */
-	private static final NO_ALIGN_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140,"arrayMatrixWrap":"matrixWrapNoAlign"},"whitespace":{"commaPolicy":"after"}}';
+	private static final NO_ALIGN_JSON: String =
+		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"arrayMatrixWrap":"matrixWrapNoAlign"}}';
 
 	/**
 	 * `collapse` plus a pure-`noWrap` array cascade — the config where the
@@ -68,16 +66,15 @@ class HxListLiteralEmissionSliceTest extends Test {
 	 */
 	private static final COLLAPSE_NOWRAP_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
 		+ '"wrapping":{"maxLineLength":140,"arrayWrap":{"defaultWrap":"noWrap","rules":[]}},'
-		+ '"whitespace":{"commaPolicy":"after"},"emptyLines":{"uniformStatementBlanks":"collapse"}}';
+		+ '"emptyLines":{"uniformStatementBlanks":"collapse"}}';
 
 	/** `wrapping.trailingComma: remove` plus the `trailingCommas` ADD knobs on. */
 	private static final REMOVE_OVER_ADD_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140,"trailingComma":"remove"},"whitespace":{"commaPolicy":"after"},'
+		+ '"wrapping":{"maxLineLength":140,"trailingComma":"remove"},'
 		+ '"trailingCommas":{"arrayLiteralDefault":"yes","callArgumentDefault":"yes","objectLiteralDefault":"yes"}}';
 
 	/** Same ADD knobs, `wrapping.trailingComma` absent — the `keep` baseline. */
-	private static final ADD_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140},"whitespace":{"commaPolicy":"after"},'
+	private static final ADD_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140},'
 		+ '"trailingCommas":{"arrayLiteralDefault":"yes","callArgumentDefault":"yes","objectLiteralDefault":"yes"}}';
 
 	/**
@@ -143,8 +140,8 @@ class HxListLiteralEmissionSliceTest extends Test {
 	private static final MATRIX: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\tSTRAIGHT_LINE, STRAIGHT_LINE_DASHED,\n'
 		+ '\t\t\tARC_LINE, ARC_LINE_DASHED,\n\t\t\tWAVE_LINE, WAVE_LINE_DASHED\n\t\t];\n\t}\n}\n';
 
-	private static final KEEP_JSON: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140,"trailingComma":"keep"},"whitespace":{"commaPolicy":"after"}}';
+	private static final KEEP_JSON: String =
+		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"trailingComma":"keep"}}';
 
 	// --- config plumbing ---
 
@@ -385,7 +382,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	// --- helpers ---
 
 	private static function opts(json: String): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
+		return HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource(json));
 	}
 
 	private static function write(source: String, json: String): String {

@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.SiblingPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -91,7 +90,7 @@ final class HxCondBodyElementPerLineTest extends Test {
 
 	@:pin('guard')
 	public function testOffDecidesEachBranchAlone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.conditionalSiblings = SiblingPolicy.Off;
 		Assert.equals(
 			'class C {\n\t#if a var r:Int; #else\n\tvar s:Int;\n\tvar t:Int;\n\t#end\n}\n',

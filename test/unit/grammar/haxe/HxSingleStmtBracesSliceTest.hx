@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -761,26 +760,26 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	public function testLoaderMapsRemove(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		Assert.isTrue(opts.dropSingleStmtBraces);
 	}
 
 	public function testLoaderExplicitKeepStaysOff(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }'
 		);
 		Assert.isFalse(opts.dropSingleStmtBraces);
 	}
 
 	public function testLoaderOmittedStaysOff(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.isFalse(opts.dropSingleStmtBraces);
 	}
 
 	public function testIdempotentAndReparses(): Void {
 		final source: String = 'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n'
 			+ '\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
 		Assert.equals(pass1, pass2);
@@ -802,14 +801,14 @@ class HxSingleStmtBracesSliceTest extends Test {
 
 	public function testTrailingCommentDeBraceIdempotent(): Void {
 		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
 		Assert.equals(pass1, pass2);
 	}
 
 	private static function assertFmt(source: String, expected: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		Assert.equals('$expected\n', out);
 	}
@@ -820,7 +819,7 @@ class HxSingleStmtBracesSliceTest extends Test {
 
 	/** `source` written back byte-identically under `configJson` — the shape all three inertness claims share. */
 	private static function assertInert(source: String, configJson: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(configJson);
 		Assert.equals('$source\n', HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 	}
 

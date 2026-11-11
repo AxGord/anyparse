@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -78,7 +77,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testClassKnobsDoNotAffectInterface(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.betweenFunctions = 5;
 		opts.afterVars = 5;
 		final out: String = HaxeModuleTriviaWriter.write(
@@ -91,7 +90,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testInterfaceKnobsDoNotAffectClass(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.interfaceBetweenVars = 5;
 		opts.interfaceBetweenFunctions = 5;
 		opts.interfaceAfterVars = 5;
@@ -105,35 +104,29 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testConfigLoaderMapsInterfaceBetweenFunctionsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"interfaceEmptyLines": {"betweenFunctions": 2}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"interfaceEmptyLines": {"betweenFunctions": 2}}}');
 		Assert.equals(2, opts.interfaceBetweenFunctions);
 	}
 
 	public function testConfigLoaderMapsInterfaceBetweenVarsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"interfaceEmptyLines": {"betweenVars": 3}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"interfaceEmptyLines": {"betweenVars": 3}}}');
 		Assert.equals(3, opts.interfaceBetweenVars);
 	}
 
 	public function testConfigLoaderMapsInterfaceAfterVarsInt(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"emptyLines": {"interfaceEmptyLines": {"afterVars": 4}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"interfaceEmptyLines": {"afterVars": 4}}}');
 		Assert.equals(4, opts.interfaceAfterVars);
 	}
 
 	public function testConfigLoaderMissingSectionKeepsInterfaceDefaults(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(0, opts.interfaceBetweenVars);
 		Assert.equals(0, opts.interfaceBetweenFunctions);
 		Assert.equals(0, opts.interfaceAfterVars);
 	}
 
 	public function testConfigLoaderInterfaceSectionLeavesClassUntouched(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"emptyLines": {"interfaceEmptyLines": {"betweenFunctions": 2, "afterVars": 4}}}'
 		);
 		Assert.equals(0, opts.betweenVars);
@@ -142,7 +135,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testConfigLoaderClassSectionLeavesInterfaceUntouched(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 5, "afterVars": 5, "betweenVars": 5}}}'
 		);
 		Assert.equals(0, opts.interfaceBetweenVars);
@@ -151,7 +144,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src: String, ifaceBetweenVars: Int, ifaceBetweenFunctions: Int, ifaceAfterVars: Int): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.interfaceBetweenVars = ifaceBetweenVars;
 		opts.interfaceBetweenFunctions = ifaceBetweenFunctions;
 		opts.interfaceAfterVars = ifaceAfterVars;

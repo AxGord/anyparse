@@ -6,7 +6,6 @@ import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapList;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
@@ -41,8 +40,7 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 
 	/** the client's `hxformat.json`, minified. */
 	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
-		+ '"alignInlineSwitchCaseBody":true},'
-		+ '"emptyLines":{"maxAnywhereInFile":1,"afterBlocks":"remove","afterLeftCurly":"remove",'
+		+ '"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":1,"afterLeftCurly":"remove",'
 		+ '"beforeRightCurly":"remove","classEmptyLines":{"beginType":1,"endType":1},'
 		+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,'
 		+ '"endType":1},"uniformStatementBlanks":"collapse"},"wrapping":{"comprehensionCuddledOpen":true,'
@@ -66,21 +64,17 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 		+ '"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
 		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
 		+ '"whitespace":{"addLineCommentSpace":false,"normalizeLineCommentIndent":true,'
-		+ '"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around",'
-		+ '"switchPolicy":"around","catchPolicy":"around","arrowFunctionsPolicy":"around",'
+		+ '"ifPolicy":"around","forPolicy":"around","whilePolicy":"around",'
+		+ '"switchPolicy":"around","arrowFunctionsPolicy":"around",'
 		+ '"functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"none","binopPolicy":"around",'
-		+ '"intervalPolicy":"around","openingBracketPolicy":"none","closingBracketPolicy":"none",'
+		+ '"intervalPolicy":"around",'
 		+ '"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before",'
 		+ '"arrowBodyOpenPad":true,"arrowBodyReflow":true},"anonTypeBraces":{"openingPolicy":"after",'
-		+ '"closingPolicy":"before"},"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},'
-		+ '"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},'
-		+ '"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"closingPolicy":"before"},'
 		+ '"singleStatementBraces":"remove"},"parenConfig":{"callParens":{"openingPolicy":"none",'
 		+ '"closingPolicy":"none"},"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
 		+ '"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},'
 		+ '"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
-		+ '"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},'
-		+ '"expressionParens":{"openingPolicy":"none","closingPolicy":"none"},'
 		+ '"switchSubjectParens":"remove"}},"lineEnds":{"emptyCurly":"noBreak"},'
 		+ '"comments":{"blockCommentStyle":"javadoc"},'
 		+ '"sameLine":{"caseBody":"fitLine","expressionCase":"fitLine","ifBody":"fitLine",'
@@ -216,7 +210,7 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 	 * regression was invisible until the walker was probed directly.
 	 */
 	public function testEveryEmittedChainShapeReadsAsAChainItem(): Void {
-		final opt: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG);
+		final opt: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CFG);
 		for (named in chainCascades()) {
 			final doc: Doc = MethodChainEmit.emit(Text('recv'), chainSegments(), opt, named.rules, false, named.leadingBreak);
 			Assert.isTrue(WrapList.isMethodChainItem(doc), 'chain shape "${named.name}" must read as a method-chain item');

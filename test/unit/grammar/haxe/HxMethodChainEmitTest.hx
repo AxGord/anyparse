@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.wrap.WrapMode;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -43,7 +42,7 @@ class HxMethodChainEmitTest extends Test {
 
 	public function testTwoSegmentChainNoWrapStaysInline(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.NoWrap };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a.b().c();') != -1, 'expected chain inline under NoWrap default: <$out>');
@@ -51,7 +50,7 @@ class HxMethodChainEmitTest extends Test {
 
 	public function testThreeSegmentChainOnePerLineBreaksAll(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		// OnePerLine shape: receiver inline, every segment on its own
@@ -77,7 +76,7 @@ class HxMethodChainEmitTest extends Test {
 	 */
 	public function testPolicyCascadeKeepsANonChainItemGluedToTheHead(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine, chainItemsAfterCloseParenOnly: true };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		assertHeadGluedTailBroken(out);
@@ -126,7 +125,7 @@ class HxMethodChainEmitTest extends Test {
 
 	public function testThreeSegmentChainOnePerLineAfterFirstKeepsFirstInline(): Void {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLineAfterFirst };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a.b()') != -1, 'expected receiver+seg0 inline: <$out>');
@@ -139,7 +138,7 @@ class HxMethodChainEmitTest extends Test {
 		// Two segments: `.b()` (call) + `.c` (field). Under OnePerLine
 		// both should break.
 		final src: String = 'class Foo { static function f() { a.b().c; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('\n\t\t\t.b()') != -1, 'expected .b() on own indented line: <$out>');
@@ -151,7 +150,7 @@ class HxMethodChainEmitTest extends Test {
 		// guard keeps this on the default emission path. Must stay
 		// inline even with an aggressive default mode.
 		final src: String = 'class Foo { static function f() { a.b(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a.b();') != -1, 'expected single call inline: <$out>');
@@ -163,7 +162,7 @@ class HxMethodChainEmitTest extends Test {
 		// transition (Call→FieldAccess→Call) nor a Call wrapping a
 		// chain. Stays inline.
 		final src: String = 'class Foo { static var x = a.b; }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLine };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('a.b;') != -1, 'expected plain field access inline: <$out>');
@@ -185,7 +184,7 @@ class HxMethodChainEmitTest extends Test {
 				{"conditions":[{"cond":"itemCount >= n","value":2}],"type":"onePerLine"}
 			]}}
 		}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		// Function body at 2 tabs; chain Nest pushes segs to 3 tabs;
 		// lambda's `\n{` lands at 3 tabs (chain seg column), body at 4.
@@ -203,7 +202,7 @@ class HxMethodChainEmitTest extends Test {
 	 */
 	private static function abcdChainUnderConfig(cfg: String): String {
 		final src: String = 'class Foo { static function f() { a.b().c().d(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 

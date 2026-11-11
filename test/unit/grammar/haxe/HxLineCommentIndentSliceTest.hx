@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.Suppression;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -245,7 +244,7 @@ class HxLineCommentIndentSliceTest extends Test {
 
 	private static function formatted(source: String, configJson: String): String {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(configJson);
 		return HaxeModuleTriviaWriter.write(ast, opts);
 	}
 

@@ -25,8 +25,8 @@ final class HxMethodChainExactLimitBoundaryTest extends Test {
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
 		+ '"itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, '
 		+ '"expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": '
-		+ '"after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {'
+		+ '"binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
 		+ '"none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
 
 	public function new(): Void {

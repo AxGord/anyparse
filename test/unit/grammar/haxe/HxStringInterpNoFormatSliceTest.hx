@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -112,17 +111,17 @@ final class HxStringInterpNoFormatSliceTest extends Test {
 	// ---- JSON config ----
 
 	public function testJsonFalseMapsToFalse(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": false}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"formatStringInterpolation": false}}');
 		Assert.isFalse(opts.formatStringInterpolation, 'expected `false` from JSON config');
 	}
 
 	public function testJsonTrueMapsToTrue(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"formatStringInterpolation": true}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"formatStringInterpolation": true}}');
 		Assert.isTrue(opts.formatStringInterpolation, 'expected `true` from JSON config');
 	}
 
 	public function testJsonAbsentKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.isTrue(opts.formatStringInterpolation, 'expected default `true` when key absent');
 	}
 

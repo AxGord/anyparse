@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.BracePlacement;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -97,7 +96,7 @@ class HxLeftCurlyOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(leftCurly: BracePlacement): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.leftCurly = leftCurly;
 		// Mirror the loader's `lineEnds.leftCurly` cascade for per-construct
 		// knobs that no longer fall back to the global `leftCurly` at the

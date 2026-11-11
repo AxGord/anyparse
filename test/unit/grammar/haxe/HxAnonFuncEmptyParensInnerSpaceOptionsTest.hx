@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -55,7 +54,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 		// Full `issue_251` shape requires both knobs: outside-before-`(`
 		// space (anonFuncParens = Before) AND inside-of-empty-`(` space
 		// (anonFuncParamParensKeepInnerWhenEmpty = true).
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.anonFuncParens = anyparse.format.WhitespacePolicy.Before;
 		opts.anonFuncParamParensKeepInnerWhenEmpty = true;
 		final out: String = HxModuleWriter.write(
@@ -85,14 +84,14 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 
 	public function testJsonRemoveInnerFalseKeepsSpace(): Void {
 		// haxe-formatter `removeInnerWhenEmpty: false` inverts to opt = true.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": false}}}}'
 		);
 		Assert.isTrue(opts.anonFuncParamParensKeepInnerWhenEmpty);
 	}
 
 	public function testJsonRemoveInnerTrueCollapses(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"removeInnerWhenEmpty": true}}}}'
 		);
 		Assert.isFalse(opts.anonFuncParamParensKeepInnerWhenEmpty);
@@ -100,7 +99,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 
 	public function testJsonAbsentLeavesDefault(): Void {
 		// Sibling keys (openingPolicy) must not flip the knob.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
 		);
 		Assert.isFalse(opts.anonFuncParamParensKeepInnerWhenEmpty);
@@ -108,7 +107,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 
 	public function testJsonOpeningAndKeepInnerIndependent(): Void {
 		// Setting both keys propagates both runtime fields independently.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before", "removeInnerWhenEmpty": false}}}}'
 		);
 		Assert.isTrue(opts.anonFuncParamParensKeepInnerWhenEmpty);
@@ -120,7 +119,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(keepInner: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.anonFuncParamParensKeepInnerWhenEmpty = keepInner;
 		return opts;
 	}

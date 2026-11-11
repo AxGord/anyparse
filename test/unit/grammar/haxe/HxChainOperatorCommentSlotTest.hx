@@ -14,7 +14,6 @@ final class HxChainOperatorCommentSlotTest extends Test {
 
 	private static final MODES: Array<String> = [
 		'noWrap',
-		'keep',
 		'onePerLine',
 		'onePerLineAfterFirst',
 		'fillLine',

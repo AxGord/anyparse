@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -52,12 +51,12 @@ class HxCaseBodySameLineSliceTest extends Test {
 		// Fork's SameLineConfig declares `caseBody: Next`. A fixture that
 		// omits `sameLine` (or the `caseBody` key inside it) must still
 		// receive `Next` so corpus parity holds at Δ 0/0/0.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 
 	public function testJsonSameLinePresentButCaseBodyOmittedAppliesForkNextDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "sameLine": { "ifBody": "next" } }');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{ "sameLine": { "ifBody": "next" } }');
 		Assert.equals(BodyPolicy.Next, opts.caseBody);
 	}
 

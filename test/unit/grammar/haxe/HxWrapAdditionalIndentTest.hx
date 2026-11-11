@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.wrap.WrapRule;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -101,7 +100,7 @@ class HxWrapAdditionalIndentTest extends Test {
 	@:killer('M-LOADER-RULE-INDENT')
 	public function testTheLoaderReadsARulesIndent(): Void {
 		final cfg: String = '$PREFIX"anonFunctionSignature": {"rules": [$EXCEEDS, "additionalIndent": 3}]}}}';
-		final rules: Array<WrapRule> = HaxeFormatConfigLoader.loadHxFormatJson(cfg).anonFunctionSignatureWrap.rules;
+		final rules: Array<WrapRule> = HxWriteOptionsKit.strictJson(cfg).anonFunctionSignatureWrap.rules;
 		Assert.equals(1, rules.length);
 		Assert.equals(3, rules[0].additionalIndent);
 	}

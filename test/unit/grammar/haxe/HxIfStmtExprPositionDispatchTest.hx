@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -44,7 +43,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 	public function testStatementIfBodySameFlattens(): Void {
 		// ifBody=Same overrides the break — top-level if flattens.
 		final src: String = 'class M { function f():Void { if (c) foo(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('if (c) foo();') != -1, 'ifBody=Same must flatten at statement-position: <$out>');
@@ -56,7 +55,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// down through case body. Default ifBody=Next, but
 		// expressionIfBody=Same routes the dispatch to flatten.
 		final src: String = 'class M { function f():Bool { return switch (t) { case A: if (c) foo(); }; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.Next;
 		opts.expressionIfBody = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -68,7 +67,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// `expressionIfBody` only — `ifBody=Same` is dead-letter.
 		// Verifies the dispatch is exclusive (not OR semantic).
 		final src: String = 'class M { function f():Bool { return switch (t) { case A: if (c) foo(); }; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.Same;
 		opts.expressionIfBody = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -82,7 +81,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// Expression-position via return-switch case body —
 		// elseBody=Next, expressionElseBody=Same → flatten else.
 		final src: String = 'class M { function f():Bool { return switch (t) { case A: if (c) a(); else b(); }; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.Same;
 		opts.elseBody = BodyPolicy.Next;
 		opts.expressionIfBody = BodyPolicy.Same;
@@ -99,7 +98,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// reads ifBody. Ensures backward compatibility for the dual-
 		// flag rewrite — single-flag stmt-side semantics unchanged.
 		final src: String = 'class M { function f():Void { if (c) foo(); } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.Next;
 		opts.expressionIfBody = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -113,7 +112,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// `shouldReturnBeSameLine` AST split. `returnBody=Next` alone must
 		// NOT break a single-line value; `returnBodySingleLine=Next` does.
 		final src: String = 'class M { function f():Int { return 42; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.returnBody = BodyPolicy.Next;
 		opts.returnBodySingleLine = BodyPolicy.Same;
 		final outSame: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -132,7 +131,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 		// the if-body breaks onto the next line regardless of the
 		// single-line knob.
 		final src: String = 'class M { function f():Int { return if (c) 1 else 2; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.returnBody = BodyPolicy.Next;
 		opts.returnBodySingleLine = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -142,7 +141,7 @@ final class HxIfStmtExprPositionDispatchTest extends Test {
 	}
 
 	private inline function writeWithDefaults(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

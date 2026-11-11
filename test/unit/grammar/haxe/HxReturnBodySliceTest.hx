@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -104,27 +103,27 @@ class HxReturnBodySliceTest extends Test {
 	}
 
 	public function testConfigLoaderMapsReturnBodySame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "same"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"returnBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.returnBody);
 	}
 
 	public function testConfigLoaderMapsReturnBodyNext(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "next"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"returnBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
 	}
 
 	public function testConfigLoaderMapsReturnBodyFitLine(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"returnBody": "fitLine"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"returnBody": "fitLine"}}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBody);
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBody);
 	}
 
 	public function testConfigLoaderMapsReturnBodySingleLine(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"sameLine": {"returnBody": "next", "returnBodySingleLine": "same"}}'
 		);
 		Assert.equals(BodyPolicy.Next, opts.returnBody);
@@ -132,7 +131,7 @@ class HxReturnBodySliceTest extends Test {
 	}
 
 	public function testConfigLoaderReturnBodySingleLineDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.FitLine, opts.returnBodySingleLine);
 	}
 
@@ -212,7 +211,7 @@ class HxReturnBodySliceTest extends Test {
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		// ω-return-body-single-line: set both axes so these mechanism tests
 		// observe `policy` regardless of whether the return value renders as a
 		// single line (driven by `returnBodySingleLine`) or multi-line / control-

@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.CommentStyle;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -603,7 +602,7 @@ class HxTriviaWriteTest extends Test {
 	public function testLeadingLineCommentSpaceCanBeDisabled(): Void {
 		final source: String = '//foo\nclass Main {}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			HxWriteFixture.listsKeepSource('{"whitespace": {"addLineCommentSpace": false}}')
 		);
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
@@ -646,7 +645,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitMultiLineRoundTrip(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -664,7 +663,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitTrailingComment(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1 // tag\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -811,7 +810,7 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	private static function withCommentStyle(style: CommentStyle): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.commentStyle = style;
 		return opts;
 	}

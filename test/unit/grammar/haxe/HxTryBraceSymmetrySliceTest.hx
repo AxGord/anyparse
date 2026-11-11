@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -50,7 +49,7 @@ class HxTryBraceSymmetrySliceTest extends Test {
 		// The verdict counts an ALREADY bare body as de-braced. Asking "is every body braced" instead
 		// would wrap this catch and de-brace it again on the next pass — two rewrites for one answer.
 		final source: String = 'class F {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp();\n\t\t} catch (e:Exception) q();\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		Assert.equals('class F {\n\tfunction f():Void {\n\t\ttry p() catch (e:Exception) q();\n\t}\n}\n', pass1);
 	}
@@ -156,7 +155,7 @@ class HxTryBraceSymmetrySliceTest extends Test {
 	public inline function testDeBracedGroupIsIdempotent(): Void {
 		final source: String =
 			'class F {\n\tfunction f():Void {\n\t\ttry {\n\t\t\tp();\n\t\t} catch (e:Exception) {\n\t\t\tq();\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
 		Assert.equals(pass1, pass2);
@@ -174,14 +173,14 @@ class HxTryBraceSymmetrySliceTest extends Test {
 	}
 
 	private static function assertFmt(source: String, expected: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		Assert.equals('$expected\n', out);
 	}
 
 	/** `source` written back byte-identically under `configJson` — the shape every inertness claim shares. */
 	private static function assertInert(source: String, configJson: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(configJson);
 		Assert.equals('$source\n', HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 	}
 

@@ -79,4 +79,20 @@ final class HxWriteOptionsKitTest extends Test {
 		Assert.equals(40, HxWriteOptionsKit.strictJson('{"wrapping": {"maxLineLength": 40}}').lineWidth);
 	}
 
+	/**
+	 * A document handed to a fixture write goes through `strictJson`, so a
+	 * key the loader ignores fails the test instead of writing the default.
+	 */
+	@:pin('control')
+	@:killer('M-FIXTURE-JSON-LENIENT')
+	public function testAFixtureWriteRefusesAKeyTheLoaderIgnores(): Void {
+		var refusal: Null<String> = null;
+		try {
+			HxWriteFixture.triviaWrite(IF_SOURCE, '{"sameLine": {"ifBodee": "next"}}');
+		} catch (exception: String) {
+			refusal = exception;
+		}
+		Assert.isTrue(refusal != null && refusal.indexOf('ifBodee') != -1, 'the refusal must name the key: <$refusal>');
+	}
+
 }

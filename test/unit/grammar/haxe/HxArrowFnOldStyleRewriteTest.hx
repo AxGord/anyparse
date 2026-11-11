@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeTypeRewrites;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -123,7 +122,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		return HxWriteOptionsKit.strictJson('{}');
 	}
 
 	private inline function writeDefault(src: String): String {

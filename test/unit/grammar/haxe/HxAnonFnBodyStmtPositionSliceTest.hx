@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -74,7 +73,7 @@ final class HxAnonFnBodyStmtPositionSliceTest extends Test {
 	}
 
 	private inline function writeTm(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.ifBody = BodyPolicy.FitLine;
 		opts.expressionIfBody = BodyPolicy.Next;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

@@ -684,7 +684,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	}
 
 	private inline function write(src: String, cfg: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(cfg));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(cfg));
 	}
 
 	/** `d` switch statements nested through each other's first case body. */

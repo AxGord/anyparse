@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.format.BracePlacement;
 import anyparse.format.EmptyCurly;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -54,17 +53,17 @@ class HxEmptyCurlyOptionsTest extends Test {
 	}
 
 	public function testConfigLoaderMapsBreak(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"emptyCurly": "break"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"emptyCurly": "break"}}');
 		Assert.equals(EmptyCurly.Break, opts.emptyCurly);
 	}
 
 	public function testConfigLoaderMapsNoBreak(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"emptyCurly": "noBreak"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"emptyCurly": "noBreak"}}');
 		Assert.equals(EmptyCurly.Same, opts.emptyCurly);
 	}
 
 	public function testConfigLoaderMissingKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(EmptyCurly.Same, opts.emptyCurly);
 	}
 
@@ -74,12 +73,12 @@ class HxEmptyCurlyOptionsTest extends Test {
 	}
 
 	public function testGlobalEmptyCurlyCascadesIntoBlockEmptyCurly(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"emptyCurly": "break"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"emptyCurly": "break"}}');
 		Assert.equals(EmptyCurly.Break, opts.blockEmptyCurly);
 	}
 
 	public function testBlockCurlySubKeyOverridesGlobalForBlockEmptyCurly(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"lineEnds": {"emptyCurly": "break", "blockCurly": {"emptyCurly": "noBreak"}}}'
 		);
 		Assert.equals(EmptyCurly.Break, opts.emptyCurly);
@@ -87,7 +86,7 @@ class HxEmptyCurlyOptionsTest extends Test {
 	}
 
 	public function testBlockCurlySubKeyAloneSetsBlockEmptyCurly(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"blockCurly": {"emptyCurly": "break"}}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"blockCurly": {"emptyCurly": "break"}}}');
 		Assert.equals(EmptyCurly.Same, opts.emptyCurly);
 		Assert.equals(EmptyCurly.Break, opts.blockEmptyCurly);
 	}
@@ -119,7 +118,7 @@ class HxEmptyCurlyOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(ec: EmptyCurly): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.emptyCurly = ec;
 		// Mirror the loader's `lineEnds.emptyCurly` cascade for per-construct
 		// EmptyCurly knobs that no longer fall back to the global at the

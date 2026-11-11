@@ -20,7 +20,7 @@ import utest.Test;
 final class HxCloseTrailKeywordWriteTest extends Test {
 
 	/** Every value a `sameLine` placement knob takes. */
-	private static final MODES: Array<String> = ['same', 'next', 'keep', 'fitLine'];
+	private static final MODES: Array<String> = ['same', 'next', 'fitLine'];
 
 	public function new(): Void {
 		super();

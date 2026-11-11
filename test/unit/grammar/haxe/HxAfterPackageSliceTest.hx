@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -88,17 +87,17 @@ class HxAfterPackageSliceTest extends Test {
 	}
 
 	public function testConfigLoaderMapsAfterPackage(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 2}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 2}}');
 		Assert.equals(2, opts.afterPackage);
 	}
 
 	public function testConfigLoaderMapsAfterPackageZero(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines": {"afterPackage": 0}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 0}}');
 		Assert.equals(0, opts.afterPackage);
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(1, opts.afterPackage);
 	}
 
@@ -107,7 +106,7 @@ class HxAfterPackageSliceTest extends Test {
 	}
 
 	private inline function makeOpts(afterPackage: Int): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.afterPackage = afterPackage;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `afterPackage:2`

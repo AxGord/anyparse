@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -63,21 +62,17 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	}
 
 	public function testConfigCollapseParsed(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{ "emptyLines": { "uniformStatementBlanks": "collapse" } }'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{ "emptyLines": { "uniformStatementBlanks": "collapse" } }');
 		Assert.equals(UniformStatementBlanksPolicy.Collapse, opts.uniformStatementBlanks);
 	}
 
 	public function testConfigKeepParsed(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{ "emptyLines": { "uniformStatementBlanks": "keep" } }'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{ "emptyLines": { "uniformStatementBlanks": "keep" } }');
 		Assert.equals(UniformStatementBlanksPolicy.Keep, opts.uniformStatementBlanks);
 	}
 
 	public function testConfigOmittedDefaultsKeep(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(UniformStatementBlanksPolicy.Keep, opts.uniformStatementBlanks);
 	}
 

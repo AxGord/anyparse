@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -39,18 +38,18 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 
 	public function testJsonLoaderRoutesIndentComplexValueExpressionsTrue(): Void {
 		final json: String = '{"indentation":{"indentComplexValueExpressions":true}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(true, opts.indentComplexValueExpressions);
 	}
 
 	public function testJsonLoaderRoutesIndentComplexValueExpressionsFalse(): Void {
 		final json: String = '{"indentation":{"indentComplexValueExpressions":false}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource(json));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource(json));
 		Assert.equals(false, opts.indentComplexValueExpressions);
 	}
 
 	public function testJsonLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		Assert.equals(false, opts.indentComplexValueExpressions);
 	}
 
@@ -115,7 +114,7 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(indentComplexValueExpressions: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentComplexValueExpressions = indentComplexValueExpressions;
 		return opts;
 	}

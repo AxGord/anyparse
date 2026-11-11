@@ -20,7 +20,7 @@ import utest.Test;
 final class HxCloseTrailBlockCommentWriteTest extends Test {
 
 	/** Every value a `sameLine` placement knob takes. */
-	private static final MODES: Array<String> = ['same', 'next', 'keep', 'fitLine'];
+	private static final MODES: Array<String> = ['same', 'next', 'fitLine'];
 
 	/** The marker a fixture writes after each `}` that a comment trails. */
 	private static final MARK: String = '}@';

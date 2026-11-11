@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -71,22 +70,22 @@ class HxFunctionBodyPolicySliceTest extends Test {
 	}
 
 	public function testConfigLoaderMapsFunctionBodySame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"functionBody": "same"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"functionBody": "same"}}');
 		Assert.equals(BodyPolicy.Same, opts.functionBody);
 	}
 
 	public function testConfigLoaderMapsFunctionBodyNext(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"functionBody": "next"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"functionBody": "next"}}');
 		Assert.equals(BodyPolicy.Next, opts.functionBody);
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.Next, opts.functionBody);
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.functionBody = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -240,7 +239,7 @@ class MetadataLineEndSitesTest extends Test {
 
 	/** A config naming `forceAfterLast` for `key`: a value no default holds, so a dropped key shows. */
 	private static function configured(key: String): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"$key": "forceAfterLast"}}');
+		return HxWriteOptionsKit.strictJson('{"lineEnds": {"$key": "forceAfterLast"}}');
 	}
 
 	/** The trivia writer with every metadata knob at `None` before `configure`, so one site moves alone. */

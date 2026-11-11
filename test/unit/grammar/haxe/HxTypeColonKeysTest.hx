@@ -3,7 +3,6 @@ package unit.grammar.haxe;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.grammar.haxe.HaxeFormatConfigIssues;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
@@ -142,7 +141,7 @@ final class HxTypeColonKeysTest extends Test {
 	}
 
 	private static function load(json: String): HxModuleWriteOptions {
-		return HaxeFormatConfigLoader.loadHxFormatJson(json);
+		return HxWriteOptionsKit.strictJson(json);
 	}
 
 	private static function write(src: String, json: String): String {

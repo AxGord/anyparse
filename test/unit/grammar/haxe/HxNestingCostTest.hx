@@ -6,7 +6,6 @@ import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -223,7 +222,7 @@ class HxNestingCostTest extends Test {
 	}
 
 	private static function options(cfg: Null<String>): HxModuleWriteOptions {
-		return cfg == null ? HaxeFormat.instance.defaultWriteOptions : HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		return cfg == null ? HaxeFormat.instance.defaultWriteOptions : HxWriteOptionsKit.strictJson(cfg);
 	}
 
 	/**

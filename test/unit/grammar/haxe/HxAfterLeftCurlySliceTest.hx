@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -66,7 +65,7 @@ class HxAfterLeftCurlySliceTest extends Test {
 
 	public function testJsonExplicitRemoveStillRemoves(): Void {
 		final source: String = 'class C {\n\n\tvar x:Int;\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{ "emptyLines": { "afterLeftCurly": "remove", "beforeRightCurly": "remove" } }'
 		);
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.afterLeftCurly);
@@ -80,13 +79,13 @@ class HxAfterLeftCurlySliceTest extends Test {
 		// Fork's `EmptyLinesConfig` declares both knobs `@:default(Remove)`.
 		// A fixture that omits `emptyLines` (or the curly keys inside it)
 		// must still receive `Remove` so corpus parity holds at Δ 0/0/0.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.afterLeftCurly);
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.beforeRightCurly);
 	}
 
 	public function testJsonEmptyLinesPresentButCurlyOmittedAppliesForkRemoveDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{ "emptyLines": { "afterPackage": 0 } }');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{ "emptyLines": { "afterPackage": 0 } }');
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.afterLeftCurly);
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.beforeRightCurly);
 	}

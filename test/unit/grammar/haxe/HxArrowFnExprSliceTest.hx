@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -80,7 +79,7 @@ class HxArrowFnExprSliceTest extends HxTestHelpers {
 		// Setting `arrowFunctions=None` must not collapse the
 		// type-position arrow's spacing.
 		final src: String = 'class C { var f:(Int) -> Bool; }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.arrowFunctions = WhitespacePolicy.None;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('var f:(Int) -> Bool;') != -1, 'expected `(Int) -> Bool` in: <$out>');
@@ -92,22 +91,22 @@ class HxArrowFnExprSliceTest extends HxTestHelpers {
 	}
 
 	public function testArrowFunctionsLoaderMapsAround(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"arrowFunctionsPolicy":"around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"arrowFunctionsPolicy":"around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.arrowFunctions);
 	}
 
 	public function testArrowFunctionsLoaderMapsNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"arrowFunctionsPolicy":"none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"arrowFunctionsPolicy":"none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.arrowFunctions);
 	}
 
 	public function testArrowFunctionsLoaderMapsBefore(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"arrowFunctionsPolicy":"before"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"arrowFunctionsPolicy":"before"}}');
 		Assert.equals(WhitespacePolicy.Before, opts.arrowFunctions);
 	}
 
 	public function testArrowFunctionsLoaderMapsAfter(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace":{"arrowFunctionsPolicy":"after"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace":{"arrowFunctionsPolicy":"after"}}');
 		Assert.equals(WhitespacePolicy.After, opts.arrowFunctions);
 	}
 
@@ -125,7 +124,7 @@ class HxArrowFnExprSliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.arrowFunctions = policy;
 		return opts;
 	}

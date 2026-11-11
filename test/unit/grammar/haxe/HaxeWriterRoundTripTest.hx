@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -436,7 +435,7 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		src: String, ifBody: BodyPolicy, elseBody: BodyPolicy, forBody: BodyPolicy, whileBody: BodyPolicy, doBody: BodyPolicy,
 		lineWidth: Int
 	): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.lineWidth = lineWidth;
 		opts.ifBody = ifBody;
 		opts.elseBody = elseBody;

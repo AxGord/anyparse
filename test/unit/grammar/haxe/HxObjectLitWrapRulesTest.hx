@@ -6,7 +6,6 @@ import anyparse.format.wrap.WrapList;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -157,7 +156,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 
 	public function testCustomNoWrapDefaultDisablesEngine(): Void {
 		final src: String = 'class Foo { static var x = {one: 1, two: 2, three: 3, four: 4, five: 5}; }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.objectLiteralWrap = { rules: [], defaultMode: WrapMode.NoWrap };
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(
@@ -171,7 +170,7 @@ final class HxObjectLitWrapRulesTest extends Test {
 	}
 
 	private inline function writeWith(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 

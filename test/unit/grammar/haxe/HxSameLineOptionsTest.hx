@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.SameLinePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -74,7 +73,7 @@ class HxSameLineOptionsTest extends Test {
 		// a bare-body statement-form try-catch must still break to multi-line —
 		// `try\n\tBARE\ncatch (e:Any)\n\tBARE;` — matching haxe-formatter's
 		// auto-break for non-block statement-form try-catches (issue_21).
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		final src: String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('try trace') == -1, 'bare body must break onto own line in: <$out>');
@@ -90,7 +89,7 @@ class HxSameLineOptionsTest extends Test {
 		// `sameLineCatch=Same`. Block bodies route through `HxTryCatchStmt`
 		// (not `HxTryCatchStmtBare`) — verifies disambiguation via
 		// `tryBranch` source-order in `HxStatement` works as designed.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		final src: String = 'class F { function f():Void { try {} catch (e:E) {} } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('} catch ') != -1, 'block-form `} catch ` must stay inline in: <$out>');
@@ -102,7 +101,7 @@ class HxSameLineOptionsTest extends Test {
 		// vs `HxExpr.TryExpr`). `expressionTry=Same` (the inline default for
 		// expression-form one-liners) must NOT propagate to the statement-
 		// form bare layout — bare bodies still break here.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.expressionTry = SameLinePolicy.Same;
 		final src: String = 'class F { function f():Void { try trace("") catch (e:Any) trace(""); } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
@@ -202,7 +201,7 @@ class HxSameLineOptionsTest extends Test {
 
 	public function testExpressionTryIndependentFromSameLineCatch(): Void {
 		// sameLineCatch=Next must not affect expression-form when expressionTry=Same.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.sameLineCatch = SameLinePolicy.Next;
 		opts.expressionTry = SameLinePolicy.Same;
 		final src: String = 'class F { function f():Void { var x = try foo() catch (_:Any) null; try {} catch (e:E) {} } }';
@@ -212,7 +211,7 @@ class HxSameLineOptionsTest extends Test {
 	}
 
 	public function testExpressionTryJsonNext(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"sameLine": {"expressionTry": "next"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine": {"expressionTry": "next"}}');
 		Assert.equals(SameLinePolicy.Next, opts.expressionTry);
 		Assert.equals(SameLinePolicy.Same, opts.sameLineCatch);
 	}
@@ -248,7 +247,7 @@ class HxSameLineOptionsTest extends Test {
 		// `@:fmt(blockBodyKeepsInline)` — `sameLineCatch=Next` must keep
 		// breaking `} catch` to `}\ncatch` regardless of body shape, mirroring
 		// haxe-formatter's `sameLine.tryCatch=next` contract.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.sameLineCatch = SameLinePolicy.Next;
 		final src: String = 'class F { function f():Void { try {} catch (e:E) {} } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
@@ -283,7 +282,7 @@ class HxSameLineOptionsTest extends Test {
 	}
 
 	private function writeWithExpressionTry(src: String, policy: SameLinePolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.expressionTry = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
@@ -291,7 +290,7 @@ class HxSameLineOptionsTest extends Test {
 	private function writeWithBodyPolicy(
 		src: String, ifBody: anyparse.format.BodyPolicy, elseBody: anyparse.format.BodyPolicy, sameLineElse: Bool
 	): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.sameLineElse = boolToSameLine(sameLineElse);
 		opts.ifBody = ifBody;
 		opts.elseBody = elseBody;
@@ -303,7 +302,7 @@ class HxSameLineOptionsTest extends Test {
 	}
 
 	private function makeOpts(sameLineElse: Bool, sameLineCatch: Bool, sameLineDoWhile: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.sameLineElse = boolToSameLine(sameLineElse);
 		opts.sameLineCatch = boolToSameLine(sameLineCatch);
 		opts.sameLineDoWhile = boolToSameLine(sameLineDoWhile);

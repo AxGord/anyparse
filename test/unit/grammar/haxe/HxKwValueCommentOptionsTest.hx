@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
@@ -37,7 +36,7 @@ class HxKwValueCommentOptionsTest extends Test {
 	}
 
 	private function write(source: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), HxWriteOptionsKit.strictJson(json));
 	}
 
 }

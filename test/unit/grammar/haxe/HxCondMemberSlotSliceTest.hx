@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -295,7 +294,7 @@ class HxCondMemberSlotSliceTest extends HxTestHelpers {
 	 * cannot show that both branches survive verbatim.
 	 */
 	private function triviaEquals(source: String, label: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(TRIVIA_CONFIG);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(TRIVIA_CONFIG);
 		opts.finalNewline = false;
 		Assert.equals(source, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts), label);
 	}

@@ -105,12 +105,12 @@ class HxThrowBodySliceTest extends Test {
 	}
 
 	public function testConfigLoaderEmptyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(BodyPolicy.Same, opts.throwBody);
 	}
 
 	public function testReturnBodyAndThrowBodyIndependent(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.returnBody = BodyPolicy.Same;
 		opts.throwBody = BodyPolicy.Next;
 		final src: String = 'class M { function f():Int { throw 1; } }';
@@ -119,7 +119,7 @@ class HxThrowBodySliceTest extends Test {
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.throwBody = policy;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

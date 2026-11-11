@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BracePlacement;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -84,7 +83,7 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 
 	public function testCascadeSetsBothKnobsViaJson(): Void {
 		final src: String = 'class Foo { static var x = {a: 1}; }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			HxWriteFixture.listsKeepSource('{"lineEnds": {"leftCurly": "before"}}')
 		);
 		Assert.equals(BracePlacement.Next, opts.objectLiteralLeftCurly);
@@ -94,7 +93,7 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src: String, placement: BracePlacement): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.objectLiteralLeftCurly = placement;
 		// Disable indentObjectLiteral so this suite stays focused on the
 		// leftCurly axis — slice ω-indent-objectliteral default-true would

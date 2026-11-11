@@ -29,8 +29,8 @@ final class HxCallGroupRestProbeNestedArgTest extends Test {
 		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
 		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, '
 		+ '"conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {"commaPolicy": '
-		+ '"after", "binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
+		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "whitespace": {'
+		+ '"binopPolicy": "around", "arrowFunctionsPolicy": "around", "functionTypeHaxe3Policy": '
 		+ '"none", "functionTypeHaxe4Policy": "none"}, "sameLine": {"expressionIf": "next"}}';
 
 	public function new(): Void {

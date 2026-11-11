@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -71,7 +70,7 @@ final class HxObjectLitBracesOptionsTest extends Test {
 	public function testJsonLoaderRoutesObjectLitBracesPolicies(): Void {
 		final json: String =
 			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesClose);
 	}
@@ -79,7 +78,7 @@ final class HxObjectLitBracesOptionsTest extends Test {
 	public function testJsonLoaderIgnoresUnknownBracesKey(): Void {
 		final json: String = '{ "whitespace": { "bracesConfig": { "objectLiteralBraces": {'
 			+ ' "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.objectLiteralBracesClose);
 	}
@@ -91,7 +90,7 @@ final class HxObjectLitBracesOptionsTest extends Test {
 		// correct field per Star site.
 		final json: String =
 			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesClose);
 		Assert.equals(WhitespacePolicy.None, opts.anonTypeBracesOpen);
@@ -103,7 +102,7 @@ final class HxObjectLitBracesOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(open: WhitespacePolicy, close: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.objectLiteralBracesOpen = open;
 		opts.objectLiteralBracesClose = close;
 		return opts;

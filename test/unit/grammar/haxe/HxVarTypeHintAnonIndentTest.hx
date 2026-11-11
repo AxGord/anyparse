@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -62,7 +61,7 @@ class HxVarTypeHintAnonIndentTest extends Test {
 		// pre- and post-slice byte-shapes for the colon→`{` boundary
 		// since the gate only flips the surrounding Nest level.
 		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int\n\t};\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			HxWriteFixture.listsKeepSource('{"lineEnds": {"leftCurly": "both"}}')
 		);
 		opts.indentVarTypeHintAnon = false;
@@ -86,7 +85,7 @@ class HxVarTypeHintAnonIndentTest extends Test {
 		// `opt.anonTypeLeftCurly == Next` fails, so the wrap is inert.
 		// Multi-line source-anon emits cuddled `{` and pre-slice nest.
 		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int\n\t};\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(HxWriteFixture.listsKeepSource('{}'));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(
 			out.indexOf('\tvar a:{\n\t\tx:Int,\n\t\ty:Int\n\t};') != -1 || out.indexOf('\tvar a:{x:Int, y:Int};') != -1,
@@ -95,7 +94,7 @@ class HxVarTypeHintAnonIndentTest extends Test {
 	}
 
 	private inline function writeWithLeftCurlyBoth(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			HxWriteFixture.listsKeepSource('{"lineEnds": {"leftCurly": "both"}}')
 		);
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

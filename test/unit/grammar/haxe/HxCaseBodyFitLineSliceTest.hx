@@ -1,7 +1,6 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -92,7 +91,7 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		// The JSON value already PARSED before this slice; what it now means
 		// at runtime is pinned by the layout tests below (this one alone
 		// also passes on the pre-slice engine).
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
 			'{"sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}}'
 		);
 		Assert.equals(BodyPolicy.FitLine, opts.caseBody);
@@ -391,7 +390,7 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 	}
 
 	private inline function write(src: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson(json));
 	}
 
 }

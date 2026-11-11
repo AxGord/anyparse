@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -85,7 +84,7 @@ class HxControlFlowPoliciesOptionsTest extends Test {
 	public function testIfPolicyUnaffectedByControlFlowKnobs(): Void {
 		// `if` ctor carries `@:fmt(ifPolicy)` only — flipping forPolicy /
 		// whilePolicy / switchPolicy must not collapse the if gap.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.forPolicy = WhitespacePolicy.None;
 		opts.whilePolicy = WhitespacePolicy.None;
 		opts.switchPolicy = WhitespacePolicy.None;
@@ -94,17 +93,17 @@ class HxControlFlowPoliciesOptionsTest extends Test {
 	}
 
 	public function testJsonForPolicyOnlyBeforeMapsToBefore(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"forPolicy": "onlyBefore"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"forPolicy": "onlyBefore"}}');
 		Assert.equals(WhitespacePolicy.Before, opts.forPolicy);
 	}
 
 	public function testJsonWhilePolicyNoneMapsToNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"whilePolicy": "none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"whilePolicy": "none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.whilePolicy);
 	}
 
 	public function testJsonSwitchPolicyAroundMapsToBoth(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"switchPolicy": "around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"switchPolicy": "around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.switchPolicy);
 	}
 
@@ -122,7 +121,7 @@ class HxControlFlowPoliciesOptionsTest extends Test {
 
 	private function writeBodyStmt(body: String, mutate: HxModuleWriteOptions -> Void): String {
 		final src: String = 'class C { static function m() { $body } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		mutate(opts);
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -91,7 +90,7 @@ final class HxTypeParamSpacingOptionsTest extends Test {
 
 	public function testJsonLoaderRoutesTypeParamPolicies(): Void {
 		final json: String = '{ "whitespace": { "typeParamOpenPolicy": "after", "typeParamClosePolicy": "before" } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.typeParamOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.typeParamClose);
 	}
@@ -101,7 +100,7 @@ final class HxTypeParamSpacingOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(open: WhitespacePolicy, close: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.typeParamOpen = open;
 		opts.typeParamClose = close;
 		return opts;

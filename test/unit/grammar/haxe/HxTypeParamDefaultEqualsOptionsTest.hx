@@ -2,7 +2,6 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -104,19 +103,19 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 	}
 
 	public function testJsonBinopPolicyNoneMapsToTypeParamDefaultEqualsNone(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"binopPolicy": "none"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"binopPolicy": "none"}}');
 		Assert.equals(WhitespacePolicy.None, opts.typeParamDefaultEquals);
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class C<T = Int> {}'), opts);
 		Assert.isTrue(out.indexOf('class C<T=Int> {}') != -1, 'expected tight `<T=Int>` in: <$out>');
 	}
 
 	public function testJsonBinopPolicyAroundMapsToTypeParamDefaultEqualsBoth(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"binopPolicy": "around"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"whitespace": {"binopPolicy": "around"}}');
 		Assert.equals(WhitespacePolicy.Both, opts.typeParamDefaultEquals);
 	}
 
 	public function testJsonOmittedKeepsBaseDefault(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		Assert.equals(WhitespacePolicy.Both, opts.typeParamDefaultEquals);
 	}
 
@@ -125,7 +124,7 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(typeParamDefaultEquals: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.typeParamDefaultEquals = typeParamDefaultEquals;
 		return opts;
 	}

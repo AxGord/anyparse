@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -115,7 +114,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// rule still fires in the break-mode arm of the cascade and
 		// the After-op shape never surfaces.
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		// Default flips to OnePerLine even on a short chain — every
@@ -156,7 +155,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// break-mode hardline collision.
 		final src: String = 'class C { static function m():Void { dirty = a || b || c; } }';
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('dirty =\n') != -1, 'expected `dirty =\\n` (no trailing space before break-mode hardline) in: <$out>');
@@ -189,7 +188,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		final src: String = 'class Main {\n\tpublic static function main() {\n\t\treturn !(\n'
 			+ '\t\t\ta.y + b.h <= c.y || d.y >= e.y + f.h ||\n\t\t\tg.x + h.w <= i.x || j.x >= k.x + l.w\n\t\t);\n\t}\n}';
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('\n\t\t);') != -1, 'expected close `)` on own line at outer indent in: <$out>');
@@ -228,7 +227,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// drop path even on a short chain.
 		final src: String = 'class C { static function m():Void { var v:Bool = (a || b || c); } }';
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('(a ||') != -1, 'expected items[0] glued to `(` (no `\\n+indent` between) in: <$out>');
@@ -248,7 +247,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// 1st `dirty=` statement of issue_187_oneline.
 		final src: String = 'class C { static function m():Void { dirty = a || b || c; } }';
 		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('=\n') != -1, 'expected `=\\n` (leading break still emits after assignment) in: <$out>');
@@ -257,7 +256,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 	public function testIdempotencyLongBoolChain(): Void {
 		final src: String = 'class C { static function m():Void {'
 			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.lineWidth = 80;
 		final w1: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		final w2: String = HxModuleWriter.write(HaxeModuleParser.parse(w1), opts);
@@ -275,7 +274,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		final src: String = 'class C { static function m():Void { total = alphaaaa + betaaaaa + gammaaaa + deltaaaa + epsiloon; } }';
 		final cfg: String = '{ "wrapping": { "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": ['
 			+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 60;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		// Head line packs at least the first two operands (FillLine), so the
@@ -300,7 +299,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 			+ '}, "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
 			+ '"type": "fillLine", "location": "beforeLast"} ] }, "callParameter": { "defaultWrap": "fillLineWithLeadingBreak", "rules": ['
 			+ ' {"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"} ] } } }';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		opts.lineWidth = 100;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		// The wide call head is alone on its continuation line...
@@ -320,7 +319,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// on `expressionWrapping` being non-NoWrap (so the default corpus
 		// config stays byte-inert) AND the paren sitting inside a condition
 		// (`_parenInCondition`). A small group that still fits keeps glued.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONDITION_CHAIN_CFG);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CONDITION_CHAIN_CFG);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(CONDITION_CHAIN_SRC), opts);
 		// Open head: `(` ends the `&&` line, the first operand drops below.
@@ -337,7 +336,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		// pivot for the If*-based forward-glue to commit, so a dedicated Fill
 		// forward-glue (last operand opens -> render the packed operands glued)
 		// mirrors `collapseChainBreaksAfter` for this shape.
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONDITION_CHAIN_CFG);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CONDITION_CHAIN_CFG);
 		opts.lineWidth = 80;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(CONDITION_CHAIN_SRC), opts);
 		// Head stays on the open-paren line: `... betaCondVal && (` then a break.
@@ -347,7 +346,7 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 	}
 
 	private inline function writeWithLineWidth(src: String, width: Int): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		opts.lineWidth = width;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

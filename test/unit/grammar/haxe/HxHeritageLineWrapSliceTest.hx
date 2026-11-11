@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -30,7 +29,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	public function testExtendsBreaksBeforeKeywordWhenLineExceedsMax(): Void {
 		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
 			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		final input: String = '@:nullSafety final class GenericContainerXYZ extends FetchHelper<GenericContainerEntityXYZ, '
 			+ 'pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
 		final expected: String = '@:nullSafety final class GenericContainerXYZ\n'
@@ -45,7 +44,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	public function testExtendsBreaksBeforeKeywordBraceBoundary(): Void {
 		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
 			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
 		final input: String = '@:nullSafety final class Languages extends NetSmartEntity<Array<Language>, Array<Language>, '
 			+ 'Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
 		final expected: String = '@:nullSafety final class Languages\n'
@@ -58,7 +57,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testShortHeritageStaysFlat(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
 		final input: String = 'class Foo extends Bar {}';
 		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
 		final actual: String = actualRaw.length > 0 && actualRaw.fastCodeAt(actualRaw.length - 1) == '\n'.code

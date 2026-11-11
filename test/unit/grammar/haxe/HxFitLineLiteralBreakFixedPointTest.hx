@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -205,7 +207,10 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-CHAIN-LITERAL-NAMED')
 	public function testAnAnonAnnotationStaysFlatBesideABreakingTernaryLiteral(): Void {
-		final xconfig: String = sys.io.File.getContent('tools/data/xconfig-hxformat.json');
+		// A real tree's document: it carries settings the loader does not act on, so it loads as `hxq fmt` loads it, not strictly.
+		final xconfig: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
+			sys.io.File.getContent('tools/data/xconfig-hxformat.json')
+		);
 		final call: String = 'commitAssisted(candidates, measured.judging, files, changedFiles, editsPerFile)';
 		final fields: String = '\n\t\t\ttail: \', oracle-assisted: 0 applied\',\n\t\t\tappliedCount: 0\n\t\t';
 		final flat: String = crossStatement(
