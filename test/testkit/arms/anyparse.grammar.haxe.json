@@ -1436,6 +1436,99 @@
 			"find": "opt.typeParamConstraintColon = HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy);",
 			"replace": "opt.typeParamConstraintColon = WhitespacePolicy.None;",
 			"note": "whitespace.typeParamConstraintColonPolicy is read and dropped, so the colon of a type-parameter constraint stays tight under every value of the key"
+		},
+		{
+			"name": "M-META-FIT-ARGS-IGNORED",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "metadataIsSimpleField",
+			"find": "macro $args.length == 0 || $args.length == 1 && $argSimple",
+			"replace": "macro true",
+			"note": "every metadata call reads as simple, so a call or several arguments no longer break the run"
+		},
+		{
+			"name": "M-META-FIT-INTERP-PLAIN",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "interpStringIsPlainField",
+			"find": "caseOf(HX_STRING_SEGMENT, ['Block', 'Ident'], macro true)",
+			"replace": "caseOf(HX_STRING_SEGMENT, ['Block', 'Ident'], macro false)",
+			"note": "an interpolated string argument reads as simple"
+		},
+		{
+			"name": "M-META-FIT-MULTILINE-PLAIN",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "interpStringIsPlainField",
+			"find": "macro StringTools.contains(_l, '\\n')",
+			"replace": "macro false",
+			"note": "a string argument spanning lines reads as simple"
+		},
+		{
+			"name": "M-META-FIT-PATH-OFF",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "exprIsPathField",
+			"find": "caseBind(HX_EXPR, 'FieldAccess', [0 => '_o'], rec)",
+			"replace": "caseBind(HX_EXPR, 'FieldAccess', [0 => '_o'], macro false)",
+			"note": "a dotted-path argument reads as complex"
+		},
+		{
+			"name": "M-META-FIT-LITERAL-OFF",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true)",
+			"replace": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro false)",
+			"note": "a number or bool argument reads as complex"
+		},
+		{
+			"name": "M-META-FIT-UNMAPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatValues",
+			"method": "metadataLineEndToRuntime",
+			"find": "case HxFormatMetadataLineEndPolicy.Fit: MetadataLineEndPolicy.Fit;",
+			"replace": "",
+			"note": "lineEnds value fit falls to none"
+		},
+		{
+			"name": "M-META-FIT-TYPE-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "module-level metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-MEMBER-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-ENUM-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxEnumMember",
+			"method": "HxEnumMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "enum constructor metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-ANON-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-UNWIRED",
+			"type": "anyparse.grammar.haxe.HxMetaExpr",
+			"method": "HxMetaExpr",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))\n\t",
+			"replace": "",
+			"note": "a local var's metadata names no simplicity predicate, so fit breaks it"
 		}
 	]
 }

@@ -59,6 +59,16 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
 	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
 	private static final HX_TYPE: String = 'anyparse.grammar.haxe.HxType';
+	private static final HX_METADATA: String = 'anyparse.grammar.haxe.HxMetadata';
+	private static final HX_META_CALL_ARGS: String = 'anyparse.grammar.haxe.HxMetaCallArgs';
+	private static final HX_INTERP_STRING: String = 'anyparse.grammar.haxe.HxInterpString';
+	private static final HX_STRING_SEGMENT: String = 'anyparse.grammar.haxe.HxStringSegment';
+
+	/** Generated helpers of `metadataIsSimple`: a metadata argument's verdict, a dotted path, a plain single-quoted string. */
+	private static final META_ARG_IS_SIMPLE: String = '_metaArgIsSimple';
+
+	private static final EXPR_IS_PATH: String = '_exprIsPath';
+	private static final INTERP_STRING_IS_PLAIN: String = '_interpStringIsPlain';
 
 	/** Generated predicate the anon-member separator gate calls on a field's declared type. */
 	private static final TYPE_ENDS_WITH_BRACE: String = '_typeEndsWithBrace';
@@ -301,7 +311,11 @@ final class HxAstPredLowering extends AstPredLowering {
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
 			memberBeyondValueField(),
-			abstractBodyBeyondValuesField()
+			abstractBodyBeyondValuesField(),
+			metadataIsSimpleField(),
+			metaArgIsSimpleField(),
+			exprIsPathField(),
+			interpStringIsPlainField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
 	}
 
@@ -1153,6 +1167,63 @@ final class HxAstPredLowering extends AstPredLowering {
 			'abstractBodyBeyondValues', [valueArg('d', HX_ABSTRACT_DECL)],
 			macro : Bool, macro d != null && Lambda.exists(d.members, _m -> $lineLed || $member),
 			'True iff an abstract body holds a method, a property, a `static` member or a line comment above a member.'
+		);
+	}
+
+	/**
+	 * `metadataIsSimple(m)`: no argument, or exactly one that is a literal or a dotted path — the metadata the `Fit`
+	 * line-end policy may place by width alone. A raw `PlainMeta` and a `#if` region are never simple.
+	 */
+	private function metadataIsSimpleField(): Field {
+		final args: Expr = field(ident('_c'), 'args');
+		final first: Expr = starElem(HX_META_CALL_ARGS, 'args', macro $args[0]);
+		final argSimple: Expr = { expr: ECall(ident(META_ARG_IS_SIMPLE), [first]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(ident('m'), macro false, [
+			caseOf(HX_METADATA, ['Meta'], macro true),
+			caseBind(HX_METADATA, 'MetaCall', [0 => '_c'], macro $args.length == 0 || $args.length == 1 && $argSimple)
+		], macro false);
+		return predField(
+			'metadataIsSimple', [valueArg('m', HX_METADATA)],
+			macro : Bool, body, 'True iff a metadata takes no argument, or one literal, identifier or dotted path.'
+		);
+	}
+
+	/** A metadata argument is simple when it is a number, `true`/`false`/`null`, a one-line plain string or a dotted path. */
+	private function metaArgIsSimpleField(): Field {
+		final path: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('e')]), pos: Context.currentPos() };
+		final plain: Expr = { expr: ECall(ident(INTERP_STRING_IS_PLAIN), [ident('_s')]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(ident('e'), macro false, [
+			caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true),
+			caseBind(HX_EXPR, 'DoubleStringExpr', [0 => '_d'], macro !StringTools.contains(_d, '\n')),
+			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain)
+		], path);
+		return predField(
+			META_ARG_IS_SIMPLE, [valueArg('e', HX_EXPR)], macro : Bool, body, 'True iff a metadata argument is a literal or a dotted path.'
+		);
+	}
+
+	private function exprIsPathField(): Field {
+		final rec: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('_o')]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(ident('e'), macro false, [
+			caseOf(HX_EXPR, ['IdentExpr'], macro true),
+			caseBind(HX_EXPR, 'FieldAccess', [0 => '_o'], rec)
+		], macro false);
+		return predField(
+			EXPR_IS_PATH, [valueArg('e', HX_EXPR)], macro : Bool, body, 'True iff an expression is an identifier or a dotted path.'
+		);
+	}
+
+	/** A single-quoted string interpolates through a `Block` or `Ident` segment; a line break in a literal segment spans lines. */
+	private function interpStringIsPlainField(): Field {
+		final segment: Expr = starElem(HX_INTERP_STRING, 'parts', ident('_p'));
+		final complex: Expr = sw(segment, [
+			caseBind(HX_STRING_SEGMENT, 'Literal', [0 => '_l'], macro StringTools.contains(_l, '\n')),
+			caseOf(HX_STRING_SEGMENT, ['Block', 'Ident'], macro true)
+		], macro false);
+		return predField(
+			INTERP_STRING_IS_PLAIN, [valueArg('s', HX_INTERP_STRING)],
+			macro : Bool, macro s == null || !Lambda.exists(s.parts, _p -> $complex),
+			'True iff a single-quoted string neither interpolates nor spans lines.'
 		);
 	}
 

@@ -837,7 +837,10 @@ final class HxModuleWriteOptions {
 	 * function (upstream `lineEnds.metadataFunction`).
 	 * No policy follows the source layout. `None` — every metadata joined by a space, no forced
 	 * break after the last; `After` (default) — one metadata per line, a hardline after each;
-	 * `AfterLast` and `ForceAfterLast` — metadata joined by a space, a hardline after the last.
+	 * `AfterLast` and `ForceAfterLast` — metadata joined by a space, a hardline after the last;
+	 * `Fit` — one simple metadata (no argument, or one literal / identifier / dotted-path argument)
+	 * stays on the declaration's line when it fits, several simple ones share one line above the
+	 * declaration when that row fits, otherwise one per line.
 	 */
 	public var metadataFunctionLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.After;
 
@@ -963,6 +966,14 @@ final class HxModuleWriteOptions {
 	 * one unit past its line, two while nested.
 	 */
 	public var _inNestedType: Bool = false; // noqa: naming
+
+	/**
+	 * The context a link of a metadata chain (`@:fmt(metaLineEndChain)`, a local `@:a @:b var x`) is written under:
+	 * `0` for the outermost link, `1` inside a chain of simple annotations only, `2` inside one holding a complex
+	 * annotation. Set on each next link and cleared on the chain's tail, so the outermost link decides the whole
+	 * chain's `Fit` layout (`WriterMetaLineEndLowering.chainJoinExpr`).
+	 */
+	public var _metaChain: Int = 0; // noqa: naming
 
 	/**
 	 * ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is

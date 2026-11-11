@@ -98,36 +98,52 @@ final class WriterStarPadLowering {
 				emitTryparsePadSepEmit(c, padLeading, padTrailing, sepBeforeOptActive, softFill, parts);
 			}
 		} else {
-			// `@:fmt(glueToPrevious)`: no space before a glued element (the case body's `{ … };`).
-			final glueTest: Null<Expr> = WriterLoweringSupport.glueElemTestExpr(
-				MetaInspect.fmtReadStringArgs(c.starNode, 'glueToPrevious'), macro _arr[_si + 1]
-			);
-			final nextGlued: Expr = glueTest ?? macro false;
-			final metaPolicy: Null<Expr> = f.metaPolicy;
-			final policyDecl: Expr = metaPolicy == null
-				? macro {}
-				: macro final _metaPolicy: anyparse.format.MetadataLineEndPolicy = $metaPolicy;
-			final elemSep: Expr = metaPolicy == null
-				? macro _dt(' ')
-				: macro (_metaPolicy == anyparse.format.MetadataLineEndPolicy.After ? _dhl() : _dt(' '));
-			final afterLast: Expr = metaPolicy == null ? macro {} : macro if (
-				_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0
-			)
-				_docs.push(_dhl());
-			parts.push(macro {
-				final _arr = $fieldAccess;
-				final _docs: Array<anyparse.core.Doc> = [];
-				$policyDecl;
-				var _si: Int = 0;
-				while (_si < _arr.length) {
-					_docs.push($elemCall);
-					if (_si < _arr.length - 1 && !$nextGlued) _docs.push($elemSep);
-					_si++;
-				}
-				$afterLast;
-				_dc(_docs);
-			});
+			emitTryparseRunEmit(c, f, parts);
 		}
+	}
+
+	/**
+	 * The unpadded try-parse Star: elements joined by a space, or by the separators and the break after the last
+	 * a metadata site's line-end knob (`f.metaPolicy`) asks for.
+	 */
+	private static function emitTryparseRunEmit(c: PlainStarCtx, f: PadFlags, parts: Array<Expr>): Void {
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemCall: Expr = c.elemCall;
+		// `@:fmt(glueToPrevious)`: no space before a glued element (the case body's `{ … };`).
+		final glueTest: Null<Expr> = WriterLoweringSupport.glueElemTestExpr(
+			MetaInspect.fmtReadStringArgs(c.starNode, 'glueToPrevious'), macro _arr[_si + 1]
+		);
+		final nextGlued: Expr = glueTest ?? macro false;
+		final metaPolicy: Null<Expr> = f.metaPolicy;
+		final policyDecl: Expr = metaPolicy == null
+			? macro {}
+			: WriterMetaLineEndLowering.fitDecls(
+				WriterMetaLineEndLowering.simplePred(f.metaNode, f.rootTypePath, f.trivia), metaPolicy, macro _arr, e -> e, macro false
+			);
+		final fitSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
+		final elemSep: Expr = metaPolicy == null
+			? macro _dt(' ')
+			: macro (_metaPolicy == anyparse.format.MetadataLineEndPolicy.After ? _dhl() : $fitSep);
+		final rowWrap: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitRowWrapExpr(macro 0);
+		final fitAfterLast: Expr = WriterMetaLineEndLowering.fitAfterLastExpr();
+		final afterLast: Expr = metaPolicy == null ? macro {} : macro if (
+			_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0
+		)
+			_docs.push($fitAfterLast);
+		parts.push(macro {
+			final _arr = $fieldAccess;
+			final _docs: Array<anyparse.core.Doc> = [];
+			$policyDecl;
+			var _si: Int = 0;
+			while (_si < _arr.length) {
+				_docs.push($elemCall);
+				if (_si < _arr.length - 1 && !$nextGlued) _docs.push($elemSep);
+				_si++;
+			}
+			$rowWrap;
+			$afterLast;
+			_dc(_docs);
+		});
 	}
 
 	/**

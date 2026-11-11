@@ -1296,6 +1296,7 @@ final class WriterOptFanout {
 		}
 		// Nested-type context for `@:fmt(compactUnlessNested)`: set at a nesting site, cleared per anon element.
 		if (optionsHasField(optionsTypePath, '_inNestedType')) for (f in nestedTypeFields(optionsCT)) fields.push(f);
+		if (optionsHasField(optionsTypePath, '_metaChain')) fields.push(setMetaChainField(optionsCT));
 		// ω-enumabstract-begin-end: opt-fanout helper for
 		// `@:fmt(propagateEnumAbstractContext)` on `EnumAbstractDecl(decl)`.
 		// Set-only (an `enum abstract` body nests no further type decl, so no
@@ -1555,6 +1556,32 @@ final class WriterOptFanout {
 			pos: Context.currentPos()
 		};
 		return [shim('_setNestedType', true), shim('_clearNestedType', false)];
+	}
+
+	/**
+	 * Opt-fanout shim `_setMetaChain(o, v)` for the metadata-chain context `_metaChain` (`WriterMetaLineEndLowering.chainOptExpr`).
+	 * Idempotent: returns `o` when the context already equals `v`. Emitted only when the opt typedef declares `_metaChain:Int`.
+	 */
+	private static function setMetaChainField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setMetaChain',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro : Int },
+					chainBaseArg(optionsCT)
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._metaChain == v) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._metaChain = v;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
 	}
 
 }

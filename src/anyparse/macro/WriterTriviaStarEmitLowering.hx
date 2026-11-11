@@ -300,6 +300,15 @@ final class WriterTriviaStarEmitLowering {
 			? null
 			: WriterMetaLineEndLowering.annotatesExpr(ctx.ctorPat, starNode, c.typePath, fieldAccess);
 		final metaLineEndPolicy: Null<Expr> = metaAnnotates == null ? ownMetaPolicy : macro ($metaAnnotates ? ($ownMetaPolicy: Int) : -2);
+		// A run holding a comment, or followed by one before what it annotates, breaks as under `After` whatever `Fit`
+		// would read off its width.
+		final gapComment: Expr = WriterMetaLineEndLowering.gapCommentExpr(ctx.ctorPat, starNode, c.typePath, fieldAccess);
+		final runComment: Expr = macro _trailLC.length > 0
+			|| Lambda.exists(_arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);
+		final metaPolicyDecls: Expr = WriterMetaLineEndLowering.fitDecls(
+			WriterMetaLineEndLowering.simplePred(starNode, ctx.ctorPat.shape.root, true), metaLineEndPolicy ?? macro -1, macro _arr,
+			e -> macro $e.node, macro $gapComment || $runComment
+		);
 		// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
 		// metas that the EOF-Star branch reads, so an inner Star (e.g.
 		// `HxConditionalDecl.body`) opted in via the metas drives the
@@ -396,7 +405,7 @@ final class WriterTriviaStarEmitLowering {
 			tryparseTrailBB, tryparseTrailLC, tryparseTrailBA, firstSepOverride, subsequentSepOverride, caseBodyFlagNames,
 			flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing, propagateExprPosition, refuseFlatOnComplex,
 			cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos, cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos,
-			cascadeInfos.headCtorInfos, metaLineEndPolicy, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware,
+			cascadeInfos.headCtorInfos, metaPolicyDecls, cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware,
 			tryparsePriorAfterTrailExpr, tryparseForceInlineSep, tryparseBlockEnded || tryparseSepFaithful ? tryparseSepText : null,
 			tryparseBlockEnded, tryparseSepFaithful, listLayout, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace,
 			clearExprPositionNonTail, tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseCondExprFit, tryparseElemCondFn,

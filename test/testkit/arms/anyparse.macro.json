@@ -2396,9 +2396,9 @@
 		{
 			"name": "M-META-CHAIN-NO-PEEL",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
-			"method": "chainSepExpr",
-			"find": "while (true) $peel;",
-			"replace": "",
+			"method": "chainWalk",
+			"find": "macro while (true) $peel",
+			"replace": "macro {}",
 			"note": "a chain head reads its policy from the next annotation instead of the tail, so only the last one of a chain sees the var"
 		},
 		{
@@ -2436,15 +2436,15 @@
 		{
 			"name": "M-META-CHAIN-NO-SOURCE",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
-			"method": "chainSepExpr",
-			"find": "if ((_policy: Int) < 0)\n\t\t\t\t$sourceSep;\n\t\t\telse if (",
+			"method": "chainJoinExpr",
+			"find": "if ((_policy: Int) < 0)\n\t\t\t\t_dc([$sourceSep, $doc]);\n\t\t\telse if (",
 			"replace": "if (",
 			"note": "an annotation chain whose tail is no var takes the None policy, so an own-line @doc before an array element joins its element"
 		},
 		{
 			"name": "M-META-PLAIN-NO-BREAK",
 			"type": "anyparse.macro.WriterStarPadLowering",
-			"method": "emitTryparsePadEmit",
+			"method": "emitTryparseRunEmit",
 			"find": "_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0",
 			"replace": "false",
 			"note": "the plain writer emits no break after the last metadata while the following separator is still dropped, so metadata glues to the declaration"
@@ -2802,6 +2802,123 @@
 			"find": "optParts.push(whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead')));",
 			"replace": "optParts.push(macro _dt($v{leadText}));",
 			"note": "an optional tight lead's whitespace knob is not read, so the colon of a type-parameter constraint is written bare under every policy"
+		},
+		{
+			"name": "M-META-FIT-ONE-BREAKS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitAfterLastExpr",
+			"find": "_metaFit == 1 ? _dile(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl()",
+			"replace": "_dhl()",
+			"note": "under fit a lone simple metadata always takes its own line, as under after"
+		},
+		{
+			"name": "M-META-FIT-ONE-GLUES",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitAfterLastExpr",
+			"find": "_dile(opt.lineWidth + 1, _dhl(), _dt(' '))",
+			"replace": "_dt(' ')",
+			"note": "under fit a lone simple metadata stays on the declaration's line even when that line passes the maximum"
+		},
+		{
+			"name": "M-META-FIT-ONE-OFF-BY-ONE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitAfterLastExpr",
+			"find": "opt.lineWidth + 1, _dhl(), _dt(' '))",
+			"replace": "opt.lineWidth, _dhl(), _dt(' '))",
+			"note": "a declaration line of exactly the maximum width counts as too long, so its metadata moves off it"
+		},
+		{
+			"name": "M-META-FIT-ROW-UNGROUPED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitRowWrapExpr",
+			"force": "macro {}",
+			"note": "the soft lines of a fit row answer no group of their own, so a fitting row of simple metadata breaks one per line"
+		},
+		{
+			"name": "M-META-FIT-ROW-NEVER-BREAKS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitSepExpr",
+			"find": "_metaFit == 2 ? _dl() : _dt(' ')",
+			"replace": "_dt(' ')",
+			"note": "a fit row joins its metadata with plain spaces, so a row past the maximum stays one line"
+		},
+		{
+			"name": "M-META-FIT-ROW-GLUES",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitDecls",
+			"find": "($arr.length == 1 ? 1 : 2)",
+			"replace": "1",
+			"note": "several simple metadata are read as one, so a fitting run glues to the declaration"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-BREAKS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainJoinExpr",
+			"find": "_dc([_dile(opt.lineWidth + 1, _dhl(), _dt(' ')), $doc]);",
+			"replace": "_dc([_dhl(), $doc]);",
+			"note": "under fit a local var's lone simple metadata always takes its own line"
+		},
+		{
+			"name": "M-META-FIT-COMMENT-IGNORED",
+			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
+			"method": "emitTriviaTryparseStar",
+			"find": "|| Lambda.exists(_arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);",
+			"replace": "|| false;",
+			"note": "a comment inside a metadata run no longer breaks it, so fit lays a commented run out by width"
+		},
+		{
+			"name": "M-META-FIT-PLAIN-BREAKS",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparseRunEmit",
+			"find": "_docs.push($fitAfterLast);",
+			"replace": "_docs.push(_dhl());",
+			"note": "the plain writer breaks after a lone simple metadata under fit"
+		},
+		{
+			"name": "M-META-FIT-GAP-COMMENT-IGNORED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "gapCommentExpr",
+			"force": "macro false",
+			"note": "a comment between the last metadata and the declaration no longer breaks the run, so a lone simple metadata glues the comment onto its line"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-CONTEXT-DROPPED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainOptExpr",
+			"force": "optExpr",
+			"note": "each link of a local chain decides alone, so several simple metadata are glued to the var"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-ROW-UNGROUPED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainJoinExpr",
+			"find": "_dg(_dc([_dl(), $doc]));",
+			"replace": "_dc([_dl(), $doc]);",
+			"note": "a local row of simple metadata answers no group of its own, so a fitting row breaks one per line"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-ROW-END-MEASURED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainJoinExpr",
+			"find": "_dbg(_dc([_dhl(), $doc]));",
+			"replace": "_dc([_dhl(), $doc]);",
+			"note": "the break closing a local row falls inside the row group, so every row breaks one per line"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-COMPLEX-FORGOTTEN",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainOptExpr",
+			"find": "_chainSimple ? 1 : 2",
+			"replace": "_chainSimple ? 1 : 0",
+			"note": "an inner link forgets a complex metadata before it, so its simple tail glues to the var"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-TAIL-INHERITS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainOptExpr",
+			"find": "!$fieldAccess.match($chainPat) ? 0 : ",
+			"replace": "",
+			"note": "a chain tail keeps the chain context, so a local inside its initializer breaks its lone simple metadata off its line"
 		}
 	]
 }

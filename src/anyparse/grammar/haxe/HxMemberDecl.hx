@@ -39,6 +39,7 @@ package anyparse.grammar.haxe;
 typedef HxMemberDecl = {
 	@:trivia
 	@:tryparse
+	@:fmt(metaLineEndSimple('metadataIsSimple'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'),
 		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
 		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'))

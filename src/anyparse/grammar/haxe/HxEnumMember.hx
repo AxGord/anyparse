@@ -40,6 +40,7 @@ package anyparse.grammar.haxe;
 typedef HxEnumMember = {
 	@:trivia
 	@:tryparse
+	@:fmt(metaLineEndSimple('metadataIsSimple'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))
 	var meta: Array<HxMetadata>;
 	@:optional

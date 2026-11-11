@@ -1351,6 +1351,7 @@ final class WriterRefFieldLowering {
 		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
 		prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>
 	): Void {
+		final trivia: Bool = ctx.ctx.trivia;
 		// ω-meta-allman-objectlit: `@:fmt(allmanIndentForCtor('<ctor>'))`
 		// on a bare-Ref non-first field forces an Allman-style
 		// brace placement plus one indent step when the field's
@@ -1390,16 +1391,18 @@ final class WriterRefFieldLowering {
 			// honour source-side line breaks the same way
 			// the rest of the writer does. Plain mode (no
 			// trivia signal) keeps the unconditional space.
-			final sepExpr: Expr = ctx.ctx.trivia && ctx.isTriviaBearing(typePath)
+			final sepExpr: Expr = trivia && ctx.isTriviaBearing(typePath)
 				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
 				: macro _dt(' ');
-			final metaAwareSep: Expr = WriterMetaLineEndLowering.chainSepExpr(ctx.ctorPat, child, typePath, fieldAccess, sepExpr) ?? sepExpr;
+			final joined: Expr = WriterMetaLineEndLowering.chainJoinExpr(
+				ctx.ctorPat, child, typePath, fieldAccess, sepExpr, trivia, macro _doc
+			) ?? macro _dc([$sepExpr, _doc]);
 			parts.push(macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _doc: anyparse.core.Doc = $writeCall;
-				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$metaAwareSep, _doc]);
+				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : $joined;
 			});
-		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.ctx.trivia && ctx.isTriviaBearing(typePath)) {
+		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && trivia && ctx.isTriviaBearing(typePath)) {
 			// ω-cond-comp-expr-body-nest: source-shape-driven
 			// body break+nest. The bare-Ref non-first slot
 			// `<f>BeforeNewline:Bool` (synth via
@@ -1650,6 +1653,7 @@ final class WriterRefFieldLowering {
 			if (propagateTypedef) e = macro _setTypedefBody($e, opt);
 			if (propagateEnumAbstract) e = macro _setEnumAbstract($e, opt);
 			if (child.fmtHasFlag('propagateNestedType')) e = macro _setNestedType($e, opt);
+			e = WriterMetaLineEndLowering.chainOptExpr(ctx.ctorPat, child, typePath, fieldAccess, e, ctx.ctx.trivia);
 			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap, opt);
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.

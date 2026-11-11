@@ -2998,6 +2998,9 @@ typedef PadFlags = {
 	final sepBeforeOptActive: Bool;
 	final softFill: Bool;
 	final metaPolicy: Null<Expr>;
+	final metaNode: ShapeNode;
+	final rootTypePath: String;
+	final trivia: Bool;
 };
 /**
  * The three classify-info results resolved by

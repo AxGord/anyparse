@@ -178,3 +178,29 @@ final a = if (c)
 else
 	make(x, y);
 ```
+
+## Metadata placed by width: `lineEnds.metadata*: fit`
+
+`fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of
+haxe-formatter's schema. It is decided by width and never reads the source layout:
+
+- one simple metadata stays on the declaration's line when that line fits `wrapping.maxLineLength`, else takes a line of its own;
+- several simple metadata share one line above the declaration when that row fits, and are never joined to the declaration itself;
+- otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
+
+Simple is no argument, or exactly one that is a number, `true` / `false` / `null`, an identifier, a dotted path or a
+one-line string without interpolation (`@:nullSafety(Strict)`, `@:access(pkg.Type)`, `@:xml('action')`). A call, several
+arguments, an object, array or function literal and an interpolated or multi-line string are complex. With `fit` on all four keys:
+
+```haxe
+@:access(a.B) @:nullSafety(Strict)
+abstract class C {
+	@:from public static inline function f(v:Int):C {}
+
+	@:build(macros.X.build())
+	@:a
+	var t:Int;
+}
+```
+
+A local `var` or `final` follows the same rules: `@:a @:b var x = 1;` puts `@:a @:b` on a line of its own above the `var`.

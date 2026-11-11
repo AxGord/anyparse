@@ -846,7 +846,10 @@ final class WriterStarEmitLowering {
 			lineLengthAwareSeps: lineLengthAwareSeps,
 			sepBeforeOptActive: sepBeforeOptActive,
 			softFill: softFill,
-			metaPolicy: WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath)
+			metaPolicy: WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath),
+			metaNode: starNode,
+			rootTypePath: ctx.shape.root,
+			trivia: ctx.ctx.trivia
 		};
 		emitTryparsePadEmit(c, padFlags, parts);
 	}

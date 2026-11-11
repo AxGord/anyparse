@@ -255,9 +255,11 @@ final class TriviaTryparseLowering {
 		final condIncreaseGateExpr: Expr = triviaTryparseCondIncreaseGateExpr(condBodyIndent);
 		final condNestedIncreaseGateExpr: Expr = triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent);
 		final lastTrailTerminatorEmit: Expr = macro {};
-		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` from
-		// the site's knob (0 = None default, byte-identical).
-		final metaPolicyExpr: Expr = metaLineEndPolicy ?? macro -1;
+		// The run's line-end locals `_metaPolicy` / `_metaFit` (`WriterMetaLineEndLowering.fitDecls`); a Star
+		// with no knob answers `-1`, no metadata site.
+		final metaPolicyExpr: Expr = metaLineEndPolicy ?? WriterMetaLineEndLowering.fitDecls(
+			null, macro -1, macro _arr, e -> e, macro false
+		);
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
 		final glueRefusalExpr: Expr = triviaTryparseGlueRefusalExpr(refuseGlueOnControlFlow);
 		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);
@@ -468,6 +470,7 @@ final class TriviaTryparseLowering {
 		final padLeadingExpr: Expr = c.padLeadingExpr;
 		final padTrailingExpr: Expr = c.padTrailingExpr;
 		final metaPolicyExpr: Expr = c.metaPolicyExpr;
+		final metaRowWrap: Expr = WriterMetaLineEndLowering.fitRowWrapExpr(macro _metaRowAt);
 		final condIncreaseGateExpr: Expr = c.condIncreaseGateExpr;
 		final condNestedIncreaseGateExpr: Expr = c.condNestedIncreaseGateExpr;
 		final cascadeInitPrev: Expr = c.cascadeInitPrev;
@@ -508,7 +511,7 @@ final class TriviaTryparseLowering {
 				&& _arr.length > 0
 				&& (_arr[0].newlineBefore || $v{c.elementPerLine} && _arr.length > 1);
 			$trailEndsLineDecl;
-			final _metaPolicy: Int = $metaPolicyExpr;
+			$metaPolicyExpr;
 			// ω-condcomp-empty-body-newline (Stage A): an EMPTY cond-comp body
 			// / elseBody Star (`HxConditionalStmt`/`Decl`/… `body` carries BOTH
 			// `@:fmt(padLeading, padTrailing)`) must still emit a single
@@ -557,7 +560,9 @@ final class TriviaTryparseLowering {
 				// the splice site reads it safely; when sepText is null /
 				// blockEnded false, the splice expands to `{}` (no read).
 				var _priorElemDoc: Null<anyparse.core.Doc> = null;
+				final _metaRowAt: Int = _docs.length;
 				$whileExpr;
+				$metaRowWrap;
 				$assemblyExpr;
 			}
 		};
@@ -680,6 +685,7 @@ final class TriviaTryparseLowering {
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(forceInlineSep);
 		final glueExpr: Expr = c.glueToPreviousExpr;
 		final elementPerLine: Bool = c.elementPerLine;
+		final metaSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
 		return macro {
 			if ($glueExpr) {
 				// `@:fmt(glueToPrevious)`: no separator — the element continues the previous one's line.
@@ -721,9 +727,9 @@ final class TriviaTryparseLowering {
 				// for the After policy.
 				_docs.push(_dhl());
 			} else if (_si > 0 && _metaPolicy >= 0) {
-				// Every policy but After joins a metadata run with a space: its layout never follows a
-				// source newline between metas.
-				_docs.push(_dt(' '));
+				// Every policy but After joins a metadata run with a space, a soft line inside a `Fit` row: its
+				// layout never follows a source newline between metas.
+				_docs.push($metaSep);
 			} else if ($forceInlineCond) {
 				_docs.push(_dt(' '));
 			} else if (_si > 0 && (_t.newlineBefore || $v{elementPerLine})) {
@@ -840,6 +846,7 @@ final class TriviaTryparseLowering {
 		final trailPad: Expr = padSlotExpr(c, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : $trailPadSpaceDoc));
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
 		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(c);
+		final metaAfterLast: Expr = WriterMetaLineEndLowering.fitAfterLastExpr();
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -861,8 +868,8 @@ final class TriviaTryparseLowering {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
 				_docs.push($trailPad);
 			} else if (_metaPolicy > 0 && _arr.length > 0) {
-				_lineTrailBroken = true;
-				_docs.push(_dhl());
+				_lineTrailBroken = _metaFit != 1;
+				_docs.push($metaAfterLast);
 			}
 			// ω-trivia-tryparse-linelength: when the LAST element carries
 			// a same-line `// trail`, a `//` line comment runs until the

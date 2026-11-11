@@ -215,6 +215,7 @@ final class HaxeFormatValues {
 			case HxFormatMetadataLineEndPolicy.After: MetadataLineEndPolicy.After;
 			case HxFormatMetadataLineEndPolicy.AfterLast: MetadataLineEndPolicy.AfterLast;
 			case HxFormatMetadataLineEndPolicy.ForceAfterLast: MetadataLineEndPolicy.ForceAfterLast;
+			case HxFormatMetadataLineEndPolicy.Fit: MetadataLineEndPolicy.Fit;
 			case _: MetadataLineEndPolicy.None;
 		};
 	}

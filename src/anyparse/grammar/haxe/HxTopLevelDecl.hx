@@ -41,6 +41,7 @@ package anyparse.grammar.haxe;
 typedef HxTopLevelDecl = {
 	@:trivia
 	@:tryparse
+	@:fmt(metaLineEndSimple('metadataIsSimple'))
 	@:fmt(metaLineEndPolicy('metadataTypeLineEnd'), metaLineEndIfCtor('decl', 'metadataVarLineEnd', 'VarDecl'),
 		metaLineEndIfCtor('decl', 'metadataFunctionLineEnd', 'FnDecl'))
 	var meta: Array<HxMetadata>;

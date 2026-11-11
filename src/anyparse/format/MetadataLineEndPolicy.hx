@@ -18,6 +18,11 @@ package anyparse.format;
  * space AND a hardline fires after the last element: the
  * `@A @B @C\nfunction main()` shape.
  *
+ * `Fit` — decided by width, from simplicity the grammar's predicate reads
+ * off each element: one simple element stays on the declaration's line
+ * when that line fits, several simple ones share one line of their own
+ * above it when that row fits, and anything else is one per line.
+ *
  * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` and its
  * `metaLineEndIfCtor` / `metaLineEndChain` refinements, which name a
  * metadata site's knob (`anyparse.macro.WriterMetaLineEndLowering`).
@@ -31,4 +36,5 @@ enum abstract MetadataLineEndPolicy(Int) from Int to Int {
 	final After = 1;
 	final AfterLast = 2;
 	final ForceAfterLast = 3;
+	final Fit = 4;
 }
