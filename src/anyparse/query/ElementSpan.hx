@@ -547,7 +547,9 @@ final class ElementSpan {
 		// DECLARATION under it, which is staying. Removing an `@:access` off a real
 		// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
 		// just deleting documentation the caller never addressed.
-		final span: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
+		final lead: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
+		// A comment that closes the element's own line is the element's trailing note and leaves with it.
+		final span: Span = lineClosingCommentSpan(source, lead, regionsOf);
 
 		var isComma: Bool = adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = commaKinds.contains(parent.kind);
@@ -556,19 +558,44 @@ final class ElementSpan {
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
 		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
 		final cut: Span = isComma
-			? commaListCut(source, span)
+			? commaListCut(source, span, regionsOf)
 			: braceEdgeSpan(source, blankExtendedSpan(source, lineExtendedSpan(source, span)));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
+	}
+
+	/**
+	 * `span` grown forward over the comments that follow it on its own line, when they run to the line's
+	 * end: `b(); // t` is one unit, so deleting `b();` must not leave `// t` over the next sibling. A block
+	 * comment followed by more code on the line stays — it is not this element's note. Comments come from
+	 * the lexer's regions, read only when the next byte after the span's horizontal space opens one.
+	 */
+	public static function lineClosingCommentSpan(source: String, span: Span, regions: () -> Array<LexRegion>): Span {
+		var at: Int = span.to;
+		while (at < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(at))) at++;
+		if (at >= source.length || source.fastCodeAt(at) != '/'.code) return span;
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions());
+		var to: Int = span.to;
+		while (true) {
+			final end: Int = SourceComments.trailingCommentEnd(source, tokens, to);
+			if (end == to) break;
+			to = end;
+		}
+		var rest: Int = to;
+		while (rest < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(rest))) rest++;
+		final closesLine: Bool = rest >= source.length || source.fastCodeAt(rest) == '\n'.code;
+		return to > span.to && closesLine ? new Span(span.from, to) : span;
 	}
 
 	/**
 	 * The span removing `span` — one element of a comma list, or a contiguous run of them — takes with its
 	 * separator: ONE comma (the trailing one, else the leading one, `commaExtendedSpan`) and, when that leaves
 	 * its line empty, the whole line. The comma half of `elementCut`, published for `MoveElements`, which cuts a
-	 * run of elements as one span: two adjacent element cuts on one line would collide.
+	 * run of elements as one span: two adjacent element cuts on one line would collide. With `regions` a comment
+	 * that closes the element's line goes with it.
 	 */
-	public static function commaListCut(source: String, span: Span): Span {
-		return lineExtendedSpan(source, commaExtendedSpan(source, span));
+	public static function commaListCut(source: String, span: Span, ?regions: () -> Array<LexRegion>): Span {
+		final withComma: Span = commaExtendedSpan(source, span);
+		return lineExtendedSpan(source, regions == null ? withComma : lineClosingCommentSpan(source, withComma, regions));
 	}
 
 	/**

@@ -678,10 +678,18 @@ final class SourceComments {
 	 */
 	public static function memberTriviaSpan(source: String, span: Span, comments: Array<CommentTok>): Span {
 		final from: Int = absorbLeadingComments(source, comments, span.from);
-		var to: Int = span.to;
-		final t: Null<CommentTok> = firstCommentStartingAfter(comments, to);
-		if (t != null && source.substring(to, t.from).trim() == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
-		return new Span(from, to);
+		return new Span(from, trailingCommentEnd(source, comments, span.to));
+	}
+
+	/**
+	 * The end of the comment that trails `pos` on its own line, with only whitespace between, or
+	 * `pos` when none does: the one answer to "where does the comment trailing a span end".
+	 */
+	public static function trailingCommentEnd(source: String, comments: Array<CommentTok>, pos: Int): Int {
+		final t: Null<CommentTok> = firstCommentStartingAfter(comments, pos);
+		if (t == null) return pos;
+		final gap: String = source.substring(pos, t.from);
+		return gap.trim() == '' && gap.indexOf('\n') < 0 ? t.to : pos;
 	}
 
 	/**

@@ -952,9 +952,41 @@
 			"name": "M-CUT-DOC-KEPT-BY-ANY-PREFIX",
 			"type": "anyparse.query.ElementSpan",
 			"method": "elementCut",
-			"find": "\tfinal span: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
-			"replace": "\tfinal span: Span = withDoc && !isDeclPrefixSibling(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
+			"find": "\tfinal lead: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
+			"replace": "\tfinal lead: Span = withDoc && !isDeclPrefixSibling(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
 			"note": "the doc exception widens from annotations to every declaration prefix sibling, so a cursor on a bare modifier removes the member and leaves its doc block behind to document the next one"
+		},
+		{
+			"name": "M-CLOSING-COMMENTS-ONLY-FIRST",
+			"type": "anyparse.query.ElementSpan",
+			"method": "lineClosingCommentSpan",
+			"find": "to = end;",
+			"replace": "{ to = end; break; }",
+			"note": "only the first comment that closes the line goes with the element, so a second one survives as an own-line comment over the next sibling"
+		},
+		{
+			"name": "M-COMMA-CUT-COMMENT-KEPT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "commaListCut",
+			"find": "regions == null ? withComma : lineClosingCommentSpan(source, withComma, regions)",
+			"replace": "withComma",
+			"note": "an element's note written after its separator survives the cut as an own-line comment inside the list"
+		},
+		{
+			"name": "M-CUT-TRAILING-COMMENT-KEPT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "elementCut",
+			"find": "\tfinal span: Span = lineClosingCommentSpan(source, lead, regionsOf);",
+			"replace": "\tfinal span: Span = lead;",
+			"note": "the cut stops at the element's last token, so the comment that closed its line survives as an own-line comment over the next sibling"
+		},
+		{
+			"name": "M-CLOSING-COMMENT-TAKEN-BEFORE-CODE",
+			"type": "anyparse.query.ElementSpan",
+			"method": "lineClosingCommentSpan",
+			"find": "return to > span.to && closesLine ? new Span(span.from, to) : span;",
+			"replace": "return to > span.to ? new Span(span.from, to) : span;",
+			"note": "a block comment followed by more code on the line is taken with the element, so the next statement's own note is deleted with a neighbour"
 		},
 		{
 			"name": "M-QUALPATH-COMMENT-COUNTED",
@@ -11314,8 +11346,8 @@
 			"name": "M-REMOVE-COMMA-LINE-KEPT",
 			"type": "anyparse.query.ElementSpan",
 			"method": "commaListCut",
-			"find": "return lineExtendedSpan(source, commaExtendedSpan(source, span));",
-			"replace": "return commaExtendedSpan(source, span);",
+			"find": "return lineExtendedSpan(source, regions == null ? withComma : lineClosingCommentSpan(source, withComma, regions));",
+			"replace": "return regions == null ? withComma : lineClosingCommentSpan(source, withComma, regions);",
 			"note": "removing a one-per-line element leaves its indentation and line break behind, a blank line inside the list"
 		},
 		{

@@ -8936,6 +8936,28 @@
 				"err": "35eb0d74415b0449",
 				"files": "85e1c1b57a9a8231"
 			}
+		},
+		{
+			"name": "remove-element takes the trailing comment of the removed statement",
+			"note": "the comment closing the statement's line leaves with it; base left `// t2` over c()",
+			"argv": [
+				"hxq",
+				"remove-element",
+				"r2.hx",
+				"--match",
+				"b()",
+				"--kind",
+				"ExprStmt"
+			],
+			"files": {
+				"r2.hx": "class C {\n\tfunction f():Void {\n\t\ta(); // t1\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "d3f75b062be494fd",
+				"err": "bb6d3c41872c5495",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }
