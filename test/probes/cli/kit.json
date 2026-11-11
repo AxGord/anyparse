@@ -40,7 +40,9 @@
 		"reg/p.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"M-A\",\n\t\t\t\"type\": \"p.X\",\n\t\t\t\"method\": \"m\",\n\t\t\t\"force\": \"1\",\n\t\t\t\"note\": \"n\"\n\t\t}\n\t]\n}\n",
 		"comments/M.hx": "package a;\n\n/** The class that replaced Zq. */\nclass M {\n\n\t// plain note about Zq here\n\tpublic function new() {}\n\n\t/** Not Zqx, and not aZq either. */\n\t/* block note: Zq */\n\tpublic function f(): Void {\n\t\ttrace('Zq');\n\t}\n\n}\n",
 		"one.json": "[{\"n\": 1}, {\"n\": 2}]\n",
-		"search/Lambda.hx": "class A {\n\tfunction f(xs: Array<Int>) {\n\t\tvar a = xs.map(group -> group);\n\t\tvar b = xs.map(group -> (group : Int));\n\t\tvar c = xs.map(g -> h);\n\t\tvar d = xs.map(p -> new p());\n\t}\n}\n"
+		"search/Lambda.hx": "class A {\n\tfunction f(xs: Array<Int>) {\n\t\tvar a = xs.map(group -> group);\n\t\tvar b = xs.map(group -> (group : Int));\n\t\tvar c = xs.map(g -> h);\n\t\tvar d = xs.map(p -> new p());\n\t}\n}\n",
+		"identitymap/apq.json": "{\"rules\":{\"identity-map\":{\"enabled\":true}}}\n",
+		"identitymap/Main.hx": "enum abstract E(String) {\n\tvar A = 'a';\n}\n\nclass Main {\n\tstatic function main():Void {\n\t\tfinal ints:Array<Int> = [1, 2, 3];\n\t\tfinal a:Array<Null<Int>> = ints.map(x -> x);\n\t\tfinal b:Array<Null<Int>> = [for (x in ints) x];\n\t\tfinal d:Array<Dynamic> = ints.map(x -> (x : Dynamic));\n\t\tfinal es:Array<E> = [A];\n\t\tfinal c:Array<Null<E>> = es.map(x -> (x : Null<E>));\n\t\ttrace(a, b, c, d);\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -8356,7 +8358,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "c462848b7181eec4",
+				"out": "afb047f27771aa79",
 				"err": "b16af8623e04073d",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -8868,6 +8870,25 @@
 				"exit": 0,
 				"out": "01eeebdee3c53b48",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint identitymap --rule identity-map --all --lang haxe",
+			"argv": [
+				"apq",
+				"lint",
+				"identitymap",
+				"--rule",
+				"identity-map",
+				"--all",
+				"--lang",
+				"haxe"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "9ab59f3ed169d47a",
+				"err": "ded6b5879382d603",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

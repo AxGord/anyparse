@@ -5,6 +5,8 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.expressions.PreferBind;
+import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
+import anyparse.check.haxe.loops.MappedComprehension.Mapping;
 import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
 import anyparse.query.SourceText;
@@ -23,7 +25,8 @@ import anyparse.query.SymbolIndex;
  *
  * The comprehension stays for a body that is not one value expression — an `if` without `else` (a filter), a nested loop,
  * `return` / `break` / `continue`, a block or `var`, a `try`, a `#if` — and for an assignment to the binder, a rebinding
- * of its name, `super` (a closure cannot call it), a body that never reads the binder, a bare `x`, a key-value binder, a map entry body and
+ * of its name, `super` (a closure cannot call it), a body that never reads the binder, a bare `x`
+ * or an ascribed `(x : T)` (a copy, `identity-map`'s), a key-value binder, a map entry body and
  * a comprehension whose dropped punctuation carries a comment. The iterable must be an `Array`
  * (`RefShape.arrayTypeNames`): another collection's `map` returns that collection, and an iterator has none. It must be a
  * postfix operand as written — an identifier, a member, a call, an index or a parenthesis — since the rewrite appends
@@ -90,7 +93,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		var built: Bool = false;
 		function walk(node: QueryNode): Void {
 			if (seams.opaqueKinds.contains(node.kind)) return;
-			final head: Null<Mapping> = mappedLoop(node, seams);
+			final head: Null<Mapping> = MappedComprehension.of(node, seams);
 			final span: Null<Span> = node.span;
 			if (head != null && span != null) {
 				final at: Span = span;
@@ -115,29 +118,6 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		return out;
 	}
 
-	/**
-	 * The iterable, the binder and the body when `node` is `[for (x in xs) body]`: an array literal holding only a loop
-	 * over a postfix-operand iterable with no value binder. Else null.
-	 */
-	private static function mappedLoop(node: QueryNode, s: Seams): Null<Mapping> {
-		if (node.kind != s.arrayLiteralKind || node.children.length != 1) return null;
-		final loop: QueryNode = node.children[0];
-		final binder: Null<String> = loop.name;
-		if (!s.iterationKinds.contains(loop.kind) || binder == null || loop.children.exists(c -> s.valueBinderKinds.contains(c.kind)))
-			return null;
-		final operands: Array<QueryNode> = BinderScan.loopOperands(loop, s.valueBinderKinds);
-		if (operands.length != 2 || !s.operandKinds.contains(operands[0].kind)) return null;
-		final iterableSpan: Null<Span> = operands[0].span;
-		final bodySpan: Null<Span> = operands[1].span;
-		return iterableSpan == null || bodySpan == null ? null : {
-			iterable: operands[0],
-			body: operands[1],
-			binder: binder,
-			iterableSpan: iterableSpan,
-			bodySpan: bodySpan
-		};
-	}
-
 	/** The partial application the body is when it is one call taking the binder as one bare argument and `bind` is proven. */
 	private static function boundMapper(m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, source: String, s: Seams): Null<String> {
 		final call: QueryNode = m.body;
@@ -155,19 +135,13 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	/** `x -> body` when the body is one value expression reading the binder. */
 	private static function lambdaMapper(m: Mapping, source: String, s: Seams): Null<String> {
 		return !s.lambdaForm
-			|| isBinder(m.body, m.binder, s)
+			|| MappedComprehension.isBinder(m.body, m.binder, s)
+			|| isAscribedBinder(m.body, m.binder, s)
 			|| !readsName(m.body, m.binder, s)
 			|| leavesValue(m.body, m.binder, s)
 			|| BinderScan.boundNames(m.body, s.shape).contains(m.binder)
 			? null
 			: '${m.binder} -> ${source.substring(m.bodySpan.from, m.bodySpan.to)}';
-	}
-
-	/** Whether `node` is the bare binder, parentheses peeled. */
-	private static function isBinder(node: QueryNode, binder: String, s: Seams): Bool {
-		var n: QueryNode = node;
-		while (n.kind == s.parenKind && n.children.length == 1) n = n.children[0];
-		return n.kind == s.identKind && n.name == binder;
 	}
 
 	private static function readsName(node: QueryNode, name: String, s: Seams): Bool {
@@ -184,20 +158,17 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		return s.leavingKinds.contains(node.kind)
 			|| (s.ifExpressionKinds.contains(node.kind) && !BranchChain.hasElse(node))
 			|| (isIdent && node.name == s.superText)
-			|| (s.writeKinds.contains(node.kind) && node.children.length > 0 && isBinder(node.children[0], binder, s))
+			|| (s.writeKinds.contains(node.kind) && node.children.length > 0 && MappedComprehension.isBinder(node.children[0], binder, s))
 			|| node.children.exists(c -> leavesValue(c, binder, s));
 	}
 
 	/** The seams the rule reads, or null when one it cannot do without is unset. */
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final arrayKind: Null<String> = shape.arrayLiteralKind;
+		final comprehension: Null<ComprehensionSeams> = MappedComprehension.seamsOf(shape);
 		final callKind: Null<String> = shape.callKind;
 		final arrayTypes: Null<Array<String>> = shape.arrayTypeNames;
-		final iterationKinds: Null<Array<String>> = shape.iterationBindingKinds;
-		if (arrayKind == null || callKind == null || arrayTypes == null || iterationKinds == null) return null;
-		final operandKinds: Array<String> = [shape.identKind, callKind];
-		for (k in [shape.fieldAccessKind, shape.indexAccessKind, shape.parenKind]) if (k != null) operandKinds.push(k);
+		if (comprehension == null || callKind == null || arrayTypes == null) return null;
 		// Without the statement-list kinds a block body cannot be told from a value, so the lambda spelling is off.
 		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
 		final single: Array<Null<String>> = [
@@ -213,7 +184,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		final leaving: Array<String> = [for (k in single) if (k != null) k];
 		final lists: Array<Null<Array<String>>> = [
 			blockKinds,
-			iterationKinds,
+			comprehension.iterationKinds,
 			shape.localDeclKinds,
 			shape.localDeclExprKinds,
 			shape.staticLocalDeclKinds,
@@ -230,16 +201,17 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		];
 		for (list in lists) for (k in list ?? []) leaving.push(k);
 		return {
-			arrayLiteralKind: arrayKind,
+			arrayLiteralKind: comprehension.arrayLiteralKind,
 			callKind: callKind,
-			identKind: shape.identKind,
-			parenKind: shape.parenKind,
+			identKind: comprehension.identKind,
+			parenKind: comprehension.parenKind,
 			arrayTypeNames: arrayTypes,
-			iterationKinds: iterationKinds,
-			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
-			operandKinds: operandKinds,
+			iterationKinds: comprehension.iterationKinds,
+			valueBinderKinds: comprehension.valueBinderKinds,
+			operandKinds: comprehension.operandKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			shape: shape,
+			checkTypeKind: shape.checkTypeKind,
 			lambdaForm: blockKinds.length > 0,
 			leavingKinds: leaving,
 			ifExpressionKinds: shape.ifExpressionKinds ?? [],
@@ -251,21 +223,15 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 
 	/** Whether the text the rewrite drops around the iterable and the body — `[for (x in `, `) `, `]` — holds no comment. */
 	private static function gapsHoldNoComment(m: Mapping, whole: Span, source: String): Bool {
-		return !CheckScan.hasCommentMarker(source, whole.from, m.iterableSpan.from)
-			&& !CheckScan.hasCommentMarker(source, m.iterableSpan.to, m.bodySpan.from)
-			&& !CheckScan.hasCommentMarker(source, m.bodySpan.to, whole.to);
+		return !CheckScan.regionHoldsComment(source, whole, [m.iterableSpan, m.bodySpan]);
+	}
+
+	/** Whether `node` is the binder under a type ascription, `(x : T)` — the copy that `identity-map` reads. */
+	private static function isAscribedBinder(node: QueryNode, binder: String, s: Seams): Bool {
+		return node.kind == s.checkTypeKind && node.children.length == 1 && MappedComprehension.isBinder(node.children[0], binder, s);
 	}
 
 }
-
-/** One `[for (x in xs) body]`: the iterable, the loop binder and the body, with the spans the rewrite splices. */
-private typedef Mapping = {
-	final iterable: QueryNode;
-	final body: QueryNode;
-	final binder: String;
-	final iterableSpan: Span;
-	final bodySpan: Span;
-};
 
 /** The resolved seams `PreferMap` reads in both `run` and `fix`. */
 private typedef Seams = {
@@ -280,6 +246,7 @@ private typedef Seams = {
 	final operandKinds: Array<String>;
 	final opaqueKinds: Array<String>;
 	final shape: RefShape;
+	final checkTypeKind: Null<String>;
 
 	/** Whether the lambda spelling is available: the grammar names its statement lists, so a block body is recognisable. */
 	final lambdaForm: Bool;

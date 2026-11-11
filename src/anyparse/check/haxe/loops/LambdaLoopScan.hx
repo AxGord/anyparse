@@ -890,7 +890,7 @@ final class LambdaLoopScan {
 		// A subsumed trailing return is swallowed by the replacement; a fall-through one is reached
 		// by other paths and must survive, so the region stops at the loop.
 		final region: Span = cand.subsumesTrailing ? new Span(anchorSpan.from, trailingSpan.to) : anchorSpan;
-		if (droppedRegionHasComment(source, region, parts.kept)) return null;
+		if (CheckScan.regionHoldsComment(source, region, parts.kept)) return null;
 		final core: String = callText(cand.head, parts.iterable, parts.predicate, kind);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;
@@ -972,21 +972,6 @@ final class LambdaLoopScan {
 	private static function negatedSpan(cond: QueryNode, s: Seams): Null<Span> {
 		final notKind: Null<String> = s.notKind;
 		return notKind != null && cond.kind == notKind && cond.children.length == 1 ? cond.children[0].span : null;
-	}
-
-	/**
-	 * Whether a comment sits anywhere in the replaced `region` but the `kept` sub-expression spans —
-	 * the loop header, the `) if (` glue, the literal return and the gap before the trailing return.
-	 * The whole region is replaced by one call, so such a comment is silently dropped; refusing here
-	 * leaves the loop a report-only finding. `kept` is in ascending source order and disjoint.
-	 */
-	private static function droppedRegionHasComment(source: String, region: Span, kept: Array<Span>): Bool {
-		var cursor: Int = region.from;
-		for (span in kept) {
-			if (CheckScan.hasCommentMarker(source, cursor, span.from)) return true;
-			cursor = span.to;
-		}
-		return CheckScan.hasCommentMarker(source, cursor, region.to);
 	}
 
 	/** `src` verbatim when `safe`, else wrapped in parentheses — keeps a spliced sub-expression's precedence intact. */

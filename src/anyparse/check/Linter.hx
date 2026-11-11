@@ -220,6 +220,7 @@ import anyparse.check.haxe.imports.PreferUsingOverStaticImport;
 import anyparse.check.haxe.literals.PreferInterpolation;
 import anyparse.check.haxe.literals.PreferLpad;
 import anyparse.check.haxe.literals.TrigraphInString;
+import anyparse.check.haxe.loops.IdentityMap;
 import anyparse.check.haxe.loops.PreferCount;
 import anyparse.check.haxe.loops.PreferExists;
 import anyparse.check.haxe.loops.PreferFind;
@@ -323,6 +324,7 @@ final class Linter {
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
 			new PreferMap(),
+			new IdentityMap(),
 			new PreferSinglePass(),
 			new PreferMapType(),
 			// Ahead of `fold-adjacent-string-literals` (registered near the top, above) in

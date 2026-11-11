@@ -108,6 +108,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'avoid-dynamic',
 			'dead-null-guard',
 			'hoist-embedded-assignment',
+			'identity-map',
 			'null-safety-strict',
 			'prefer-access-meta',
 			'prefer-case-guard',

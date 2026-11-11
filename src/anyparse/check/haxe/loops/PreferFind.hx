@@ -618,7 +618,9 @@ final class PreferFind extends HaxeRule {
 			// still observe. Only the loop — the guard's whole body — collapses to the assignment.
 			final decl: QueryNode = cand.sibling;
 			final declName: Null<String> = cand.declName;
-			return declName == null || !declTypeTolerable(decl, source) || loopRegionHasComment(source, forSpan, iterSpan, condSpan)
+			return declName == null
+				|| !declTypeTolerable(decl, source)
+				|| CheckScan.regionHoldsComment(source, forSpan, [iterSpan, condSpan])
 				? null
 				: [{ span: forSpan, text: '$declName = $findExpr;' }];
 		}
@@ -719,19 +721,8 @@ final class PreferFind extends HaxeRule {
 	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
 	 */
 	private static function droppedRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span): Bool {
-		return loopRegionHasComment(source, forSpan, iterSpan, condSpan) || CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
-	}
-
-	/**
-	 * Whether a comment sits ANYWHERE in the loop but its two re-spliced sub-expressions — the
-	 * for-header around the iterable and the condition, and the whole loop body. Every form
-	 * replaces the loop node wholesale, so such a comment is silently dropped; refusing here
-	 * leaves the loop a report-only finding.
-	 */
-	private static function loopRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span): Bool {
-		return CheckScan.hasCommentMarker(source, forSpan.from, iterSpan.from)
-			|| CheckScan.hasCommentMarker(source, iterSpan.to, condSpan.from)
-			|| CheckScan.hasCommentMarker(source, condSpan.to, forSpan.to);
+		return CheckScan.regionHoldsComment(source, forSpan, [iterSpan, condSpan])
+			|| CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
 	}
 
 }

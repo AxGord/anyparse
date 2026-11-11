@@ -62,6 +62,7 @@
 	"hoist-common-import",
 	"hoist-embedded-assignment",
 	"identical-operands",
+	"identity-map",
 	"if-false",
 	"import-order",
 	"import-outside-guard",

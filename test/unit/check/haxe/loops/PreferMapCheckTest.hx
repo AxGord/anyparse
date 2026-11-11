@@ -225,6 +225,14 @@ class PreferMapCheckTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
+	/** `[for (x in xs) (x : T)]` is a copy as well, the one `identity-map` rewrites; `prefer-map` leaves it. */
+	@:pin('control')
+	@:killer('M-PM-ASCRIBED-BINDER')
+	public function testAscribedBinderNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('final ys = [for (p in ps) (p : Null<P>)];')).length);
+		Assert.equals(1, violations(wrap('final ys = [for (p in ps) (p.a : Null<Int>)];')).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferMap(), src);
 	}

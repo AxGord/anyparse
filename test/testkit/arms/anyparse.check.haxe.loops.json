@@ -71,7 +71,7 @@
 			"name": "M-PM-BARE-BINDER",
 			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "lambdaMapper",
-			"find": "isBinder(m.body, m.binder, s)",
+			"find": "MappedComprehension.isBinder(m.body, m.binder, s)",
 			"replace": "false",
 			"note": "the bare binder becomes the identity map"
 		},
@@ -79,7 +79,7 @@
 			"name": "M-PM-BINDER-WRITE",
 			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "leavesValue",
-			"find": "&& isBinder(node.children[0], binder, s)",
+			"find": "&& MappedComprehension.isBinder(node.children[0], binder, s)",
 			"replace": "&& false",
 			"note": "a body that writes the binder is moved into a lambda"
 		},
@@ -103,9 +103,8 @@
 			"name": "M-PM-GAP-COMMENT",
 			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "gapsHoldNoComment",
-			"find": "!CheckScan.hasCommentMarker(source, m.iterableSpan.to, m.bodySpan.from)",
-			"replace": "true",
-			"note": "a comment between the iterable and the body is dropped by the rewrite"
+			"force": "true",
+			"note": "a comment in the text the rewrite drops around the iterable and the body goes with it"
 		},
 		{
 			"name": "M-PSP-ANY-RECEIVER",
@@ -185,6 +184,71 @@
 			"method": "messageIdentity",
 			"force": "message",
 			"note": "prefer-map names no identity of its own again, so the rewrite its message quotes keys the finding"
+		},
+		{
+			"name": "M-IM-ALWAYS-CHAINED",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "copiedByParent",
+			"force": "true",
+			"note": "every map is taken for one a copying call follows, so a lone ascription hands back the very array it widens"
+		},
+		{
+			"name": "M-IM-CHAIN-COPIES",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "copiedByParent",
+			"force": "false",
+			"note": "a map that feeds concat / filter / slice gets a copy of its own as well"
+		},
+		{
+			"name": "M-IM-ARRAY-ONLY",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "provesIdentity",
+			"find": "s.arrayTypeNames.contains(ty.nominal(hit.iterable) ?? '')",
+			"replace": "true",
+			"note": "a List or an iterator map is rewritten to an array"
+		},
+		{
+			"name": "M-IM-VALUE-TYPE",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "holdsValueType",
+			"force": "false",
+			"note": "an Int / Float / Bool element is ascribed as an array, which the compiler unifies and a static target lays out differently"
+		},
+		{
+			"name": "M-IM-REAL-MAP",
+			"type": "anyparse.check.haxe.loops.MappedComprehension",
+			"method": "isBinder",
+			"force": "true",
+			"note": "every body is taken for the binder, so a real mapping is rewritten to the array it maps"
+		},
+		{
+			"name": "M-IM-COMMENT",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "droppedTextHoldsComment",
+			"force": "false",
+			"note": "a comment in the text the rewrite drops goes with it"
+		},
+		{
+			"name": "M-PM-ASCRIBED-BINDER",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "isAscribedBinder",
+			"force": "false",
+			"note": "an ascribed binder becomes the identity map xs.map(x -> (x : T))"
+		},
+		{
+			"name": "M-IM-NO-FIX",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "fix",
+			"force": "[]",
+			"note": "the rule reports but never rewrites, so the compiler-accepted widening stays as written"
+		},
+		{
+			"name": "M-IM-OVER-VALUE-TYPE",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "overValueType",
+			"find": "if (next != null && overValueType(next, r.file, r.type.span.from, index, s, hops - 1)) return true;",
+			"replace": "if (false) return true;",
+			"note": "an abstract or alias over a value type is taken for a reference type"
 		}
 	]
 }

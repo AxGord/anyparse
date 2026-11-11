@@ -737,6 +737,19 @@ final class CheckScan {
 	}
 
 	/**
+	 * Whether the text of `region` outside the ascending `kept` spans — the text a rewrite drops — holds a comment: a
+	 * rewrite that keeps only those spans would take the comment with it.
+	 */
+	public static function regionHoldsComment(source: String, region: Span, kept: Array<Span>): Bool {
+		var cursor: Int = region.from;
+		for (span in kept) {
+			if (hasCommentMarker(source, cursor, span.from)) return true;
+			cursor = span.to;
+		}
+		return hasCommentMarker(source, cursor, region.to);
+	}
+
+	/**
 	 * The edit for one flagged constant comparison `node`, or null (refuse). Shape (a)
 	 * when `node` is the sole condition of a no-`else` `if`; shape (b) when it is a
 	 * direct operand of the matching homogeneous logical chain (`&&` for always-true,
