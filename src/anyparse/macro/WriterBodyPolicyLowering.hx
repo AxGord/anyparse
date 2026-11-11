@@ -546,8 +546,19 @@ final class WriterBodyPolicyLowering {
 			// ω-elseif-body-break: `_inElseIfBranch` (set by an enclosing `else if`
 			// via propagateElseIfBranch) is an extra break trigger even when this
 			// `if` has no `else` of its own — mirrors fork's `isPartOfIfElse`
-			// "if inside else" clause. Still suppressed by `fitLineIfWithElse`.
-			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
+			// "if inside else" clause. Under `fitLineIfWithElse` a branch of a chain keeps its own placement only while every
+			// branch of the chain renders on one line (`BodyFit.chainBranchLayout`); otherwise the whole chain is a ladder.
+			final _inChain: Bool = $elseAccess != null || opt._inElseIfBranch;
+			if (_inChain && !opt.fitLineIfWithElse) {
+				_dn(_cols, _dc([_dhl(), _body]));
+			} else {
+				final _fit: anyparse.core.Doc = $fitInnerExpr;
+				_inChain
+					? anyparse.format.BodyFit.chainBranchLayout(
+						_cols, _body, _fit, _dn(_cols, _dc([_dhl(), _body])), opt._ifChainToken, opt.lineWidth
+					)
+					: _fit;
+			}
 		};
 	}
 

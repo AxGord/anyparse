@@ -148,7 +148,7 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t} else if (b) { // open delims (  [  {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif ('
 		+ 'b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t}\n}';
-	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
+	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
 		+ '\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n'
 		+ '\t\t\t\t\tgammaValue, deltaValue);\n\t}\n}';
 
@@ -157,7 +157,7 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n'
 		+ '\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
 
-	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
+	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
 		+ '\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n'
 		+ '\t\t\t\t\tgammaValue, deltaValue);\n\t\t\telse\n\t\t\t\tfallbackStep();\n\t}\n}';
 
@@ -187,8 +187,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\tif (b)\n\t\t\tfor (item in collection) {\n\t\t\t\thandle(item);\n\t\t\t}\n\t\telse\n'
 		+ '\t\t\tfallbackStep();\n\t}\n}';
 
-	private static final PROBE_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\t\tif (b) for (item in collection) {\n\t\t\t\thandle(item);\n\t\t\t}\n\t\t\telse\n'
+	private static final PROBE_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
+		+ '\t\t\tif (b)\n\t\t\t\tfor (item in collection) {\n\t\t\t\t\thandle(item);\n\t\t\t\t}\n\t\t\telse\n'
 		+ '\t\t\t\tfallbackStep();\n\t}\n}';
 
 	/** `ifBody`/`elseBody: same` - the one policy pair that leaves a bare body with no hardline. */

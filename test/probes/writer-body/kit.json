@@ -59,7 +59,9 @@
 		"arrowbodypad/ArrowBodyPad.hx": "class C {\n\tfunction test() {\n\t\tfinal entries = users.map(e -> {a: e.a, b: e.b});\n\t\tfinal f = users.map((e, g) -> { a: e.a });\n\t\tfinal v = { a: 1 };\n\t}\n}\n",
 		"arrowbodypad/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140}, \"whitespace\": {\"bracesConfig\": {\"objectLiteralBraces\": {\"openingPolicy\": \"after\", \"closingPolicy\": \"before\"}}}}\n",
 		"typecolon/Probe.hx": "typedef F = (?call:Int, x:String, Int) -> Bool;\ntypedef G<T:A & B> = T;\n",
-		"typecolon/hxformat.json": "{\"whitespace\": {\"arrowParamColonPolicy\": \"after\", \"typeParamConstraintColonPolicy\": \"around\"}}"
+		"typecolon/hxformat.json": "{\"whitespace\": {\"arrowParamColonPolicy\": \"after\", \"typeParamConstraintColonPolicy\": \"around\"}}",
+		"if-chain-ladder/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true, \"fitLineBodyGlue\": true}}\n",
+		"if-chain-ladder/R1.hx": "class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tx();\n\t\t\ty();\n\t\t} else b();\n\t\tif (a) b(); else {\n\t\t\tx();\n\t\t\ty();\n\t\t}\n\t}\n\tfunction nestedElse() {\n\t\tif (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n\t\telse for (i in xs) if (b) y(); else z();\n\t}\n\tfunction nestedThenSeparateChain() {\n\t\tif (a) for (i in xs) {\n\t\t\tif (b) y(); else z();\n\t\t} else w();\n\t}\n\tfunction trailingComment() {\n\t\tif (a) x(); // note\n\t\telse y();\n\t}\n\tfunction ownLine() {\n\t\tif (retryCount == 0) attachCollectedLabel(defaultPreviewSurface, 'some long labelxx');\n\t\telse b();\n\t}\n\tfunction value() {\n\t\tvar v = if (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument) else b;\n\t}\n\tfunction elseIfNested() {\n\t\tif (a) x(); else if (b) for (i in xs) if (c) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother); else q(); else r();\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -659,6 +661,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "08b3c2a149384be8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "if-chain-ladder/R1.hx",
+			"note": "an if with an else under fitLineIfWithElse + fitLineBodyGlue: a multi-line branch body ladders every branch of its chain, else-if links included, while a chain nested in a non-link body, a braced chain, a value-if and a body that moves to its own line but stays one line keep their own layout",
+			"fixpoint": "if-chain-ladder/R1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"if-chain-ladder/R1.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "8735ff527dbf6d1a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

@@ -2919,6 +2919,30 @@
 			"find": "!$fieldAccess.match($chainPat) ? 0 : ",
 			"replace": "",
 			"note": "a chain tail keeps the chain context, so a local inside its initializer breaks its lone simple metadata off its line"
+		},
+		{
+			"name": "M-IF-CHAIN-PER-LINK",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "openIfChainField",
+			"find": "if (!o.fitLineIfWithElse || o._inElseIfBranch && o._ifChainToken != null) return o;",
+			"replace": "if (!o.fitLineIfWithElse) return o;",
+			"note": "every else-if link opens a chain of its own, so a multi-line branch ladders only the links from it on and the head above it keeps its glue"
+		},
+		{
+			"name": "M-CHAIN-NO-ELSE-JOINS",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyFitExpr",
+			"find": "final _inChain: Bool = $elseAccess != null || opt._inElseIfBranch;",
+			"replace": "final _inChain: Bool = true;",
+			"note": "an if without an else counts as a chain branch, so its wrapped body leaves the head line for a ladder"
+		},
+		{
+			"name": "M-IF-CHAIN-NESTED-INHERITS",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "openIfChainField",
+			"find": "o._inElseIfBranch && o._ifChainToken != null",
+			"replace": "o._ifChainToken != null",
+			"note": "every if inherits the token of the chain it is nested in, so a fitting chain inside a laddered branch body ladders with it"
 		}
 	]
 }

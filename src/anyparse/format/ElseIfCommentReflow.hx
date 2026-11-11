@@ -112,6 +112,14 @@ final class ElseIfCommentReflow {
 			case Nest(indent, inner): rewrap(scan(inner, trailing, afterCond), d -> Doc.Nest(indent, d));
 			case Group(inner): rewrap(scan(inner, trailing, afterCond), d -> Doc.Group(d));
 			case BodyGroup(inner): rewrap(scan(inner, trailing, afterCond), d -> Doc.BodyGroup(d));
+			// A placement the measure render decides (`BodyFit.chainBranchLayout`): the comment anchors only when BOTH
+			// layouts anchor it, since either may render.
+			case BreakCommit(brk, flat, token) if (token != null):
+				switch [scan(brk, trailing, afterCond), scan(flat, trailing, afterCond)] {
+					case [Anchored(b), Anchored(f)]: Anchored(Doc.BreakCommit(b, f, token));
+					case [Scanning(b), Scanning(f)] if (b == f): Scanning(b);
+					case _: Refused;
+				}
 			case _: Refused;
 		};
 	}

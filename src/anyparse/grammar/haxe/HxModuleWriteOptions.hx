@@ -1117,4 +1117,11 @@ final class HxModuleWriteOptions {
 	// `sameLine.ifBody:fitLine` + `fitLineIfWithElse:false`. Default false.
 	public var _inElseIfBranch: Bool = false; // noqa: naming
 
+	/**
+	 * Write-time-only identity of the `if` / `else if` chain the current statement belongs to, so every branch body of
+	 * it follows one `BreakCommit` decision under `fitLineIfWithElse`. A fresh token per head `if`
+	 * (`@:fmt(openIfChain)` on `HxStatement.IfStmt`), inherited unchanged by an `else if` link (`_inElseIfBranch`).
+	 */
+	public var _ifChainToken: Null<anyparse.core.BreakToken> = null; // noqa: naming
+
 }

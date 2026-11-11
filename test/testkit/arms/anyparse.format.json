@@ -670,6 +670,21 @@
 			"find": "if (was == now) continue;",
 			"replace": "if (false) continue;",
 			"note": "a knob whose value the edit left alone is looked at again, and the compiled adapter functions, the same on both sides, are refused as if the edit had changed them"
+		},
+		{
+			"name": "M-CHAIN-BRANCH-NONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "chainBranchLayout",
+			"force": "layout",
+			"note": "a branch of an if-with-else chain keeps its own fitLine placement whatever its siblings render, so a multi-line body glues to its head again"
+		},
+		{
+			"name": "M-CHAIN-BRANCH-ALWAYS",
+			"type": "anyparse.format.BodyFit",
+			"method": "chainBranchLayout",
+			"find": "final multiLine: Doc = flatWidth == -1 ? mark : Doc.IfArrowContinuationFits(cols, flatWidth, lineWidth + 1, mark, Doc.Empty);",
+			"replace": "final multiLine: Doc = mark;",
+			"note": "every branch counts as multi-line, so a chain whose branches all fit on their heads goes as a ladder too"
 		}
 	]
 }
