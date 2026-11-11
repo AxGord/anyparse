@@ -1878,6 +1878,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "D-REDUNDANT-ELSE-REGION-CAPTURE",
+			"note": "a local an else body declares must not be lifted out of an #if region over a later read of the field of that name: refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-else-after-return",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic var t:Int = 10;\n\n\tstatic function f(c:Bool):Int {\n\t\t#if dflag\n\t\tif (c)\n\t\t\treturn 1;\n\t\telse {\n\t\t\tvar t = 2;\n\t\t\tSys.println(t);\n\t\t}\n\t\t#end\n\t\treturn t;\n\t}\n\n\tstatic function main() {\n\t\tSys.println(f(false));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

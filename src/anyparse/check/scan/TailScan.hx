@@ -197,6 +197,9 @@ final class TailScan {
 			opaqueKinds: shape.opaqueKinds ?? [],
 			terminalKinds: terminalKinds,
 			identKinds: identKinds,
+			scopeKinds: shape.scopeKinds,
+			spliceKinds: shape.spliceKinds ?? [],
+			condKind: shape.conditionalMemberKind,
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: localDeclContinuationKinds,
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
@@ -216,6 +219,34 @@ final class TailScan {
 		return seams.fnDeclKinds.contains(stmt.kind)
 			? stmt
 			: BinderScan.topLevelDeclaredNode(stmt, seams.localDeclKinds, seams.localDeclExprKinds, seams.metaKinds);
+	}
+
+	/**
+	 * Whether the locals `stmts` declare, once lifted into the frame the statements of `later` run in, would capture a read
+	 * there: a bare read of the same spelling — a field or free name no frame holds — silently rebinds to the lifted local and
+	 * still compiles. A splice among `later` may expand to a read of any name, so it counts whenever `stmts` declare a local.
+	 * Reads before the lifted run, and the branches of the statement it leaves, never see it.
+	 */
+	public static function capturesLaterRead(stmts: Array<QueryNode>, later: Array<QueryNode>, seams: TailSeams): Bool {
+		final declared: Array<String> = localDeclNames(stmts, seams);
+		return declared.length != 0 && (
+			referencesAny(later, declared, seams.identKinds) || later.exists(s -> MemberKinds.subtreeContainsAnyKind(s, seams.spliceKinds))
+		);
+	}
+
+	/**
+	 * The statements that follow, past the end of `child`'s own statement list, in the frame a local lifted out of it lands in:
+	 * `outer` — what follows `parent` — unless `child` opens a scope (it follows nothing in the enclosing frame) or is a
+	 * conditional region directly in a block, which opens none, so the block's later statements follow it too. Threading it down
+	 * gives every statement list the statements after the `#if` regions that wrap it.
+	 */
+	public static function framesTailAfter(
+		parent: QueryNode, position: Int, child: QueryNode, outer: Array<QueryNode>, seams: TailSeams
+	): Array<QueryNode> {
+		if (seams.scopeKinds.contains(child.kind)) return [];
+		return seams.blockKinds.contains(parent.kind) && child.kind == seams.condKind
+			? parent.children.slice(position + 1).concat(outer)
+			: outer;
 	}
 
 	/** Whether `node`'s subtree holds an identifier (or string-interpolation identifier) named in `names`. */
@@ -271,6 +302,9 @@ typedef TailSeams = {
 	final opaqueKinds: Array<String>;
 	final terminalKinds: Array<String>;
 	final identKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final spliceKinds: Array<String>;
+	final condKind: Null<String>;
 	final localDeclKinds: Array<String>;
 	final localDeclContinuationKinds: Array<String>;
 	final localDeclExprKinds: Array<String>;

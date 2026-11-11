@@ -8,7 +8,8 @@ import anyparse.check.common.control.RedundantElse;
  * always exits (`return` / `throw` / `break` / `continue`) is flagged `Info`,
  * only when the `if` is a direct block statement. `fix` de-nests the else body,
  * skipping only when an else-body local name collides with the enclosing scope
- * (a sibling local or a function parameter) — a same-scope redeclaration.
+ * (a sibling local or a function parameter) — a same-scope redeclaration; the capture of a later
+ * read is `RedundantElseRebindCheckTest`'s.
  */
 class RedundantElseCheckTest extends Test {
 

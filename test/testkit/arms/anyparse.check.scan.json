@@ -1475,6 +1475,35 @@
 			"find": " || isConstructor(child, seams)",
 			"replace": "",
 			"note": "a constructor body read loses inline, and a field the constructor reads is unset when another type's static initializer allocates it first"
+		},
+		{
+			"name": "M-REDUNDANT-ELSE-CAPTURE-BLIND",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "capturesLaterRead",
+			"force": "false",
+			"note": "a later read of a name the lifted run declares, or a later splice, no longer holds the lift back, so the moved local silently rebinds it"
+		},
+		{
+			"name": "M-REDUNDANT-ELSE-CAPTURE-ALWAYS",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "capturesLaterRead",
+			"force": "true",
+			"note": "every run with a local is treated as capturing, so a lift nothing later reads is withheld"
+		},
+		{
+			"name": "M-TAIL-FRAME-REGION-BLIND",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "framesTailAfter",
+			"force": "outer",
+			"note": "the statements after an enclosing `#if` region are not counted as following a statement inside it, so a local lifted out of the region captures a read after its `#end`"
+		},
+		{
+			"name": "M-TAIL-FRAME-OUTER-DROPPED",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "framesTailAfter",
+			"find": ".concat(outer)",
+			"replace": "",
+			"note": "the statements after an OUTER `#if` region no longer reach an `if` inside a nested region, so a local lifted out of the inner one captures a read between the two `#end`s"
 		}
 	]
 }

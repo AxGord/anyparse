@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.check.Check.QuotationAware;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.check.scan.ScopeFrames;
+import anyparse.check.scan.TailScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
@@ -58,6 +59,9 @@ import anyparse.query.SymbolIndex;
  * the flagged `if`; a real `{ … }` block IS one, so a de-nest inside it may legally shadow an
  * outer name and only that block's own frame applies. The one subtraction: a branch never sees
  * what a SIBLING branch of its OWN region binds, those being mutually exclusive configurations.
+ * The same gate refuses a body whose local a LATER statement reads (a field or free name in no
+ * frame would rebind to it), or any body with a local when a splice follows; "later" runs past the
+ * end of every enclosing `#if` region, which opens no scope (`TailScan.capturesLaterRead`).
  *
  * The COMMENT gate refuses when the rewrite would DELETE a comment. Only two source slices are
  * re-emitted verbatim — the `if` through the end of its then-branch, and the else body's
@@ -110,7 +114,9 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
 			final flagged: Array<String> = RunScan.spanKeys(violations);
 			final edits: Array<{ span: Span, text: String }> = [];
-			collectDeNests(tree, source, seams, [], SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, []);
+			collectDeNests(
+				tree, source, seams, [], SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), flagged, edits, [], []
+			);
 			return CanonicalEdit.dropContainedEdits(edits);
 		}, CheckScan.parseBranchAwareOrNull);
 	}
@@ -199,21 +205,25 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 	 * bindings a de-nested local would land beside. `inherited` are the names already bound where
 	 * `node` sits; `ScopeFrames` owns the visibility model itself — this walker only threads what
 	 * it returns, so `RedundantElse` and `GuardReturn` gate on one shared notion of "already
-	 * bound here".
+	 * bound here". `outer` are the statements after the `#if` regions wrapping `node`.
 	 */
 	private static function collectDeNests(
 		node: QueryNode, source: String, seams: Seams, inherited: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>, outer: Array<QueryNode>
 	): Void {
 		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, seams, inherited);
 		if (seams.blockKinds.contains(node.kind))
-			for (stmt in node.children)
-				if (seams.ifKinds.contains(stmt.kind)) deNest(stmt, source, seams, scopeNames, comments, flagged, edits, narrowed);
+			for (position => stmt in node.children)
+				if (seams.ifKinds.contains(stmt.kind))
+					deNest(
+						stmt, node.children.slice(position + 1).concat(outer), source, seams, scopeNames, comments, flagged, edits,
+						narrowed
+					);
 		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, seams);
 		for (index => c in node.children)
 			collectDeNests(
 				c, source, seams, ScopeFrames.childScopeNames(node, c, seams, inherited, scopeNames, ownParams), comments, flagged, edits,
-				narrowedIn(node, index, seams, narrowed)
+				narrowedIn(node, index, seams, narrowed), TailScan.framesTailAfter(node, index, c, outer, seams.tail)
 			);
 	}
 
@@ -258,8 +268,9 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 	 * `scopeNames` are the enclosing-scope bindings the de-nested locals must not collide with.
 	 */
 	private static function deNest(
-		ifNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, narrowed: Array<String>
+		ifNode: QueryNode, later: Array<QueryNode>, source: String, seams: Seams, scopeNames: Array<String>,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, flagged: Array<String>, edits: Array<{ span: Span, text: String }>,
+		narrowed: Array<String>
 	): Void {
 		if (!BranchChain.hasElse(ifNode)) return;
 		final elseNode: QueryNode = BranchChain.elseBranch(ifNode);
@@ -270,7 +281,7 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = BranchChain.thenOf(ifNode).span;
 		if (ifSpan == null || thenSpan == null) return;
-		final deNested: Null<String> = deNestText(elseNode, source, seams, scopeNames);
+		final deNested: Null<String> = deNestText(elseNode, later, source, seams, scopeNames);
 		if (deNested == null) return;
 		final ifKept: String = source.substring(ifSpan.from, thenSpan.to);
 		edits.push({ span: new Span(ifSpan.from, ifSpan.to), text: deNested == '' ? ifKept : '$ifKept\n$deNested' });
@@ -280,11 +291,13 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 	 * The else body's source de-nested to top-level statements: the statement run `deNestedRun`
 	 * marks out, taken verbatim (an empty block yields ''). Returns null when an else-body top-level
 	 * local (`localDeclKinds`) has a name in `scopeNames` (the enclosing scope) — de-nesting would
-	 * redeclare it in the same scope — or when a coordinate is missing.
+	 * redeclare it in the same scope — or `TailScan.capturesLaterRead`, or when a coordinate is missing.
 	 */
-	private static function deNestText(elseNode: QueryNode, source: String, seams: Seams, scopeNames: Array<String>): Null<String> {
+	private static function deNestText(
+		elseNode: QueryNode, later: Array<QueryNode>, source: String, seams: Seams, scopeNames: Array<String>
+	): Null<String> {
 		final stmts: Array<QueryNode> = seams.support.blockKinds().contains(elseNode.kind) ? elseNode.children : [elseNode];
-		if (ScopeFrames.collidesWithScope(stmts, seams, scopeNames)) return null;
+		if (ScopeFrames.collidesWithScope(stmts, seams, scopeNames) || TailScan.capturesLaterRead(stmts, later, seams.tail)) return null;
 		final run: Null<Span> = deNestedRun(elseNode, source, seams);
 		return run == null ? null : source.substring(run.from, run.to);
 	}
@@ -329,7 +342,8 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		if (ifKinds.length == 0) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		return support == null ? null : {
+		final tail: Null<TailSeams> = TailScan.resolveSeams(plugin);
+		return support == null || tail == null ? null : {
 			ifKinds: ifKinds,
 			support: support,
 			shape: shape,
@@ -347,7 +361,8 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 			nullLitKind: shape.nullLiteralKind,
 			parenKind: shape.parenKind,
 			selfRef: shape.selfReferenceText,
-			resetKinds: resetKindsOf(shape)
+			resetKinds: resetKindsOf(shape),
+			tail: tail
 		};
 	}
 
@@ -383,5 +398,8 @@ private typedef Seams = {
 
 	/** Kinds that drop a field's non-null narrowing when the kept then-branch holds one. */
 	final resetKinds: Array<String>;
+
+	/** The `fix` capture gate's seams: the names an else body binds and the identifier kinds a later read is spelled with. */
+	final tail: TailSeams;
 
 };
