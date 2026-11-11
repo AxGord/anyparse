@@ -735,6 +735,14 @@
 			"find": "c.file.endsWith(ext)",
 			"replace": "false",
 			"note": "a module move no longer carries the registry fragments of the members it re-spelled"
+		},
+		{
+			"name": "M-LANG-UNKNOWN-NOT-REFUSED",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "refuseUnknown",
+			"find": "\t\tif (at + 1 >= args.length) return;",
+			"replace": "\t\treturn;",
+			"note": "an explicit --lang is never checked against the registry, so an unknown one reaches the command and fails only after a document has been read"
 		}
 	]
 }

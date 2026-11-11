@@ -54,7 +54,11 @@ final class LanguageChoice {
 		final at: Int = given.indexOf(PRESET_FLAG);
 		final preset: Null<String> = presetAt(given, at);
 		final args: Array<String> = preset == null ? given : given.slice(0, at).concat(given.slice(at + 2));
-		if (args.contains(LANG_FLAG)) return { runs: [args], stdin: null };
+		final explicit: Int = args.indexOf(LANG_FLAG);
+		if (explicit >= 0) {
+			refuseUnknown(args, explicit);
+			return { runs: [args], stdin: null };
+		}
 		if (command is LanguageFree || languageFreeFor(command, args) || args.contains('--help') || args.contains('-h'))
 			return preset == null ? { runs: [args], stdin: null } : named(preset, args);
 		final files: Array<Int> = fileArguments(args, command);
@@ -157,6 +161,14 @@ final class LanguageChoice {
 		if (at < 0) return null;
 		if (at + 1 >= given.length) throw new UsageFailure('$PRESET_FLAG needs a language name');
 		return given[at + 1];
+	}
+
+	/** An explicit `--lang` (at `at`) naming no registered grammar is refused here, before any document is read. */
+	private static function refuseUnknown(args: Array<String>, at: Int): Void {
+		if (at + 1 >= args.length) return;
+		final lang: String = args[at + 1];
+		if (!CliArgs.grammars().exists(entry -> entry.lang == lang))
+			throw new UsageFailure('no grammar plugin for --lang "$lang" — known: ${known()}');
 	}
 
 	/** Every registered `--lang` with its extensions, for a usage error: `haxe .hx, json .json`. */
