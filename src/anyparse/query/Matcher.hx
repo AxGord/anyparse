@@ -39,6 +39,9 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class Matcher {
 
+	/** Kind of the node a metavariable bound in a NAME slot is recorded as: the identifier alone, no subtree. */
+	private static final NAME_ONLY: String = 'NameOnly';
+
 	/**
 	 * Walk `tree` at every node and attempt to unify it with `pattern.root`.
 	 * Returns one `Match` per successful unification. Matches are
@@ -47,22 +50,23 @@ final class Matcher {
 	 */
 	public static function search(pattern: Pattern, tree: QueryNode, ?kindFilter: String): Array<Match> {
 		final out: Array<Match> = [];
-		walk(pattern.root, tree, pattern.kindEquivalence, out, kindFilter);
+		walk(pattern.root, tree, pattern.kindEquivalence, pattern.identKind, out, kindFilter);
 		return out;
 	}
 
 	private static function walk(
-		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, out: Array<Match>, kindFilter: Null<String>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, identKind: Null<String>, out: Array<Match>,
+		kindFilter: Null<String>
 	): Void {
 		if (kindFilter == null || input.kind == kindFilter) {
 			final bindings: Map<String, QueryNode> = [];
 			final unwritten: Array<Unwritten> = [];
-			if (unify(pattern, input, eq, bindings, unwritten)) {
+			if (unify(pattern, input, eq, identKind, bindings, unwritten)) {
 				final span: Null<Span> = input.span;
 				if (span != null) out.push(new Match(span, bindings, input, unwritten));
 			}
 		}
-		for (c in input.children) walk(pattern, c, eq, out, kindFilter);
+		for (c in input.children) walk(pattern, c, eq, identKind, out, kindFilter);
 	}
 
 	/**
@@ -74,7 +78,8 @@ final class Matcher {
 	 * 1`) are enforced.
 	 */
 	private static function unify(
-		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, identKind: Null<String>, bindings: Map<String, QueryNode>,
+		unwritten: Array<Unwritten>
 	): Bool {
 		// A star is consumed by its PARENT's child loop below and never reaches
 		// here as a whole-subtree pattern — `PatternStar.validate` refuses a
@@ -87,7 +92,7 @@ final class Matcher {
 			if (n == null) return false;
 			if (n == Metavar.WILDCARD_NAME) return true;
 			final prior: Null<QueryNode> = bindings[n];
-			if (prior != null) return MemberKinds.structurallyEqual(prior, input);
+			if (prior != null) return sameBinding(prior, input, identKind);
 			bindings[n] = input;
 			return true;
 		}
@@ -108,18 +113,16 @@ final class Matcher {
 			if (bare != Metavar.WILDCARD_NAME) {
 				if (iname == null) return false;
 				final prior: Null<QueryNode> = bindings[bare];
-				if (prior == null) {
-					bindings[bare] = new QueryNode('NameOnly', iname, [], input.span);
-				} else if (prior.kind == 'NameOnly') {
-					if (prior.name != iname) return false;
-				} else {
+				if (prior == null)
+					bindings[bare] = new QueryNode(NAME_ONLY, iname, [], input.span);
+				else if (prior.name != iname || !(prior.kind == NAME_ONLY || isIdentRef(prior, identKind)))
 					return false;
-				}
 			}
 		} else if (pname != iname) {
 			return false;
 		}
-		return unifyType(pattern.type, input.type, eq, bindings, unwritten) && unifyChildren(pattern, input, eq, bindings, unwritten);
+		return unifyType(pattern.type, input.type, eq, identKind, bindings, unwritten)
+			&& unifyChildren(pattern, input, eq, identKind, bindings, unwritten);
 	}
 
 	/**
@@ -138,10 +141,10 @@ final class Matcher {
 	 * wrote `var f = 1` — re-parseable, and an `Int` where there was a `Float`.
 	 */
 	private static function unifyType(
-		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>,
-		unwritten: Array<Unwritten>
+		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, identKind: Null<String>,
+		bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
-		if (pType != null) return iType != null && unify(pType, iType, eq, bindings, unwritten);
+		if (pType != null) return iType != null && unify(pType, iType, eq, identKind, bindings, unwritten);
 		final at: Null<Span> = iType?.span;
 		if (at != null) unwritten.push(TypeAnnotation(at));
 		return true;
@@ -156,7 +159,8 @@ final class Matcher {
 	 * `unwritten`, because nothing in the pattern can carry those arguments into a replacement.
 	 */
 	private static function unifyChildren(
-		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, identKind: Null<String>, bindings: Map<String, QueryNode>,
+		unwritten: Array<Unwritten>
 	): Bool {
 		final pTypes: Int = pattern.typeArgCount;
 		final iTypes: Int = input.typeArgCount;
@@ -165,10 +169,10 @@ final class Matcher {
 		if (pTypes == 0 && iTypes > 0) {
 			final at: Null<Span> = input.span;
 			if (at != null) unwritten.push(TypeArguments(at));
-		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, bindings, unwritten)) {
+		} else if (!unifyRun(pc, 0, pTypes, ic, 0, iTypes, eq, identKind, bindings, unwritten)) {
 			return false;
 		}
-		return unifyRun(pc, pTypes, pc.length, ic, iTypes, ic.length, eq, bindings, unwritten);
+		return unifyRun(pc, pTypes, pc.length, ic, iTypes, ic.length, eq, identKind, bindings, unwritten);
 	}
 
 	/**
@@ -181,14 +185,14 @@ final class Matcher {
 	 */
 	private static function unifyRun(
 		p: Array<QueryNode>, pFrom: Int, pTo: Int, i: Array<QueryNode>, iFrom: Int, iTo: Int, eq: Null<KindEquivalence>,
-		bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
+		identKind: Null<String>, bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
 		final star: Int = starIndex(p, pFrom, pTo);
 		final pLen: Int = pTo - pFrom;
 		final iLen: Int = iTo - iFrom;
 		if (star < 0) {
 			if (pLen != iLen) return false;
-			for (k in 0...pLen) if (!unify(p[pFrom + k], i[iFrom + k], eq, bindings, unwritten)) return false;
+			for (k in 0...pLen) if (!unify(p[pFrom + k], i[iFrom + k], eq, identKind, bindings, unwritten)) return false;
 			return true;
 		}
 		final prefix: Int = star - pFrom;
@@ -197,8 +201,8 @@ final class Matcher {
 		// never a negative run, so an input shorter than the anchors is a miss
 		// rather than an overlap (`h(1, ..., 1)` does not match `h(1)`).
 		if (iLen < prefix + suffix) return false;
-		for (k in 0...prefix) if (!unify(p[pFrom + k], i[iFrom + k], eq, bindings, unwritten)) return false;
-		for (k in 0...suffix) if (!unify(p[pTo - 1 - k], i[iTo - 1 - k], eq, bindings, unwritten)) return false;
+		for (k in 0...prefix) if (!unify(p[pFrom + k], i[iFrom + k], eq, identKind, bindings, unwritten)) return false;
+		for (k in 0...suffix) if (!unify(p[pTo - 1 - k], i[iTo - 1 - k], eq, identKind, bindings, unwritten)) return false;
 		return true;
 	}
 
@@ -206,6 +210,22 @@ final class Matcher {
 	private static function starIndex(children: Array<QueryNode>, from: Int, to: Int): Int {
 		for (k in from ... to) if (children[k].kind == PatternStar.KIND) return k;
 		return -1;
+	}
+
+	/**
+	 * The one answer to "does a repeated metavariable's second place name what its first place bound": a NAME slot binds
+	 * a `NameOnly` node, an expression binds its subtree, and the two agree when the expression is the grammar's identifier
+	 * reference of that name; two subtrees agree structurally.
+	 */
+	private static function sameBinding(prior: QueryNode, input: QueryNode, identKind: Null<String>): Bool {
+		return prior.kind == NAME_ONLY
+			? isIdentRef(input, identKind) && input.name == prior.name
+			: MemberKinds.structurallyEqual(prior, input);
+	}
+
+	/** Whether `node` is the grammar's identifier reference (`Pattern.identKind`); with no `identKind` none is, so a match fails closed. */
+	private static function isIdentRef(node: QueryNode, identKind: Null<String>): Bool {
+		return identKind != null && node.kind == identKind;
 	}
 
 }

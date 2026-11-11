@@ -39,7 +39,8 @@
 		"p/Reader.hx": "package p;\n\nimport p.Build.Ctx;\n\nclass Reader {\n\tpublic static function read(c: Ctx): Bool {\n\t\treturn c.flag;\n\t}\n}\n",
 		"reg/p.json": "{\n\t\"arms\": [\n\t\t{\n\t\t\t\"name\": \"M-A\",\n\t\t\t\"type\": \"p.X\",\n\t\t\t\"method\": \"m\",\n\t\t\t\"force\": \"1\",\n\t\t\t\"note\": \"n\"\n\t\t}\n\t]\n}\n",
 		"comments/M.hx": "package a;\n\n/** The class that replaced Zq. */\nclass M {\n\n\t// plain note about Zq here\n\tpublic function new() {}\n\n\t/** Not Zqx, and not aZq either. */\n\t/* block note: Zq */\n\tpublic function f(): Void {\n\t\ttrace('Zq');\n\t}\n\n}\n",
-		"one.json": "[{\"n\": 1}, {\"n\": 2}]\n"
+		"one.json": "[{\"n\": 1}, {\"n\": 2}]\n",
+		"search/Lambda.hx": "class A {\n\tfunction f(xs: Array<Int>) {\n\t\tvar a = xs.map(group -> group);\n\t\tvar b = xs.map(group -> (group : Int));\n\t\tvar c = xs.map(g -> h);\n\t\tvar d = xs.map(p -> new p());\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -8852,6 +8853,21 @@
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
 				"err": "6945d1c0a2cb3edb",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq search $xs.map($p -> $p) search/Lambda.hx",
+			"argv": [
+				"hxq",
+				"search",
+				"$xs.map($p -> $p)",
+				"search/Lambda.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "01eeebdee3c53b48",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

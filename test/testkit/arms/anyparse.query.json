@@ -16394,6 +16394,38 @@
 			"find": "(meta != '' && m.metaNames.contains(meta)) || (fieldOperator != '' && m.operatorOverloads.contains(fieldOperator))",
 			"replace": "false",
 			"note": "a field read ignores @:op(a.b) and @:resolve, so an intercepted field read looks pure"
+		},
+		{
+			"name": "M-MATCH-NAME-EXPR-UNEQUAL",
+			"type": "anyparse.query.Matcher",
+			"method": "sameBinding",
+			"find": "isIdentRef(input, identKind) && input.name == prior.name",
+			"replace": "false",
+			"note": "a metavariable bound by a lambda parameter never equals the same metavariable written in the body, so `$p -> $p` finds nothing"
+		},
+		{
+			"name": "M-MATCH-NAME-EXPR-ANY-NAME",
+			"type": "anyparse.query.Matcher",
+			"method": "sameBinding",
+			"find": "isIdentRef(input, identKind) && input.name == prior.name",
+			"replace": "isIdentRef(input, identKind)",
+			"note": "a repeated metavariable equals any identifier written in the second place, so `$p -> $p` matches `g -> h`"
+		},
+		{
+			"name": "M-MATCH-EXPR-NAME-UNEQUAL",
+			"type": "anyparse.query.Matcher",
+			"method": "unify",
+			"find": "prior.kind == NAME_ONLY || isIdentRef(prior, identKind)",
+			"replace": "prior.kind == NAME_ONLY",
+			"note": "a metavariable bound by an expression never equals the same metavariable written as a lambda parameter, so `$p.map($p -> $_)` finds nothing"
+		},
+		{
+			"name": "M-MATCH-IDENT-REF-ANY-NAMED-NODE",
+			"type": "anyparse.query.Matcher",
+			"method": "isIdentRef",
+			"find": "identKind != null && node.kind == identKind",
+			"replace": "node.name != null",
+			"note": "any named node counts as an identifier reference, so `$xs.map($p -> $p)` matches `xs.map(p -> new p())`"
 		}
 	]
 }

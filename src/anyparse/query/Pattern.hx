@@ -67,15 +67,23 @@ final class Pattern {
 	 */
 	public final ignoredMetavars: Array<String>;
 
+	/**
+	 * The kind a plain identifier REFERENCE has in the grammar (`RefShape.identKind`), supplied by the plugin's `parsePattern`.
+	 * The `Matcher` reads it to let a metavariable bound in a NAME slot (a lambda parameter) agree with the same metavariable
+	 * written as an expression; `null` = no such agreement, the metavariable stays unequal across the two places.
+	 */
+	public final identKind: Null<String>;
+
 	public function new(
 		root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>,
-		?ignoredMetavars: Null<Array<String>>
+		?ignoredMetavars: Null<Array<String>>, ?identKind: Null<String>
 	) {
 		this.root = root;
 		this.category = category;
 		this.source = source;
 		this.kindEquivalence = kindEquivalence;
 		this.ignoredMetavars = ignoredMetavars ?? [];
+		this.identKind = identKind;
 	}
 
 	/**

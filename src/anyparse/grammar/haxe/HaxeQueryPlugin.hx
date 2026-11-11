@@ -471,7 +471,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			if (refusal != null) throw refusal;
 			final reclassified: QueryNode = Metavar.reclassify(starred, refShape().identKind);
 			return new Pattern(
-				reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE, Metavar.ignoredNames(variant, reclassified)
+				reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE, Metavar.ignoredNames(variant, reclassified),
+				refShape().identKind
 			);
 		}
 		// Every attempt's parser error is offset into a synthetic wrapper
