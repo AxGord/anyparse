@@ -136,6 +136,29 @@ final class MemberOrderMessageTest extends Test {
 		Assert.equals(identity, check.messageIdentity(identity));
 	}
 
+	/** A value of an enum abstract is named with the article it reads with, against the member it must lead. */
+	@:pin('control')
+	@:killer('M-MO-REASON-ENUM-VALUE-LABEL')
+	public function testAdvisoryNamesAValueOfAnEnumAbstract(): Void {
+		Assert.equals(
+			'type member \'A\' is out of canonical order: a value of an enum abstract must precede the public instance method \'f\'',
+			messageFor('enum abstract E(Int) { public function f():Bool { return true; } final A; }')
+		);
+	}
+
+	/** A value inside a mixed-rank `#if` block still leads: the reason names the value rule, not a pinned block it is not in. */
+	@:pin('control')
+	@:killer('M-MO-REASON-ENUM-VALUE-SHORTCUT-OFF')
+	public function testAValueInAPinnedBlockStillNamesTheValueRule(): Void {
+		Assert.equals(
+			'type member \'B\' is out of canonical order: a value of an enum abstract must precede the private static var \'K\'',
+			messageFor(
+				'enum abstract E(Int) {\n\tstatic inline var K:Int = 1;\n\n\t#if foo\n\tfinal B;\n\tstatic inline var S:Int = 2;\n'
+				+ '\t#end\n\n\tfinal C;\n}'
+			)
+		);
+	}
+
 	/** The single message of a source that has exactly one order finding. */
 	private function messageFor(src: String): String {
 		final vs: Array<Violation> = violations(src);

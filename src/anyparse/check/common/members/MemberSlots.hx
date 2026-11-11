@@ -1,5 +1,6 @@
 package anyparse.check.common.members;
 
+import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.CondDirectives;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -92,11 +93,14 @@ final class MemberSlots {
 	 */
 	public static function collectMembers(
 		container: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>, accessors: Map<Int, Bool>,
-		regions: Array<LexRegion>
+		regions: Array<LexRegion>, ?valueStarts: Array<Int>
 	): Array<OrderedMember> {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final out: Array<OrderedMember> = [];
 		collectInto(out, container, source, shape, metaKinds, comments, [], null, accessors);
+		final hosted: Bool = container.kind == shape.enumAbstractDeclKind;
+		final starts: Array<Int> = valueStarts ?? [];
+		for (m in out) if (isPlainValueRank(m) && (hosted || EnumAbstractForms.isValue(m.node.span, starts))) m.rank = EnumValue;
 		return out;
 	}
 
@@ -135,6 +139,17 @@ final class MemberSlots {
 			if (before.opens != after.opens || after.index <= before.index) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether `m` is a plain stored field of an enum abstract - a non-`static` `var` / `final` with no accessor clause -
+	 * which is a VALUE: its position fixes the auto-numbering of an `Int` abstract, so it never changes rank group or order.
+	 */
+	private static inline function isPlainValueRank(m: OrderedMember): Bool {
+		return m.rank == PublicImmutableField
+			|| m.rank == PublicMutableField
+			|| m.rank == PrivateImmutableField
+			|| m.rank == PrivateMutableField;
 	}
 
 	/** The canonical-order rank of a member given its static / public flags and whether it is a field. */
@@ -488,12 +503,15 @@ final class MemberSlots {
  * `var`), static methods trail. Non-static property fields (those with a `(get, set)`-style
  * accessor clause) sub-split ahead of the plain fields: a read-only property (stored read)
  * before a getter property, both before the `final` field, before the plain `var`. A
+ * `EnumValue` is outside the ladder: a value of an enum abstract sorts before every other member and keeps its source
+ * order among the values, because that order is the abstract's auto-numbering. A
  * distinct type rather than a bare `Int` so a rank can never be confused with an unrelated
  * count; the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
  * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
  * abstract).
  */
 enum abstract MemberRank(Int) {
+	final EnumValue = -1;
 	final StaticPublicImmutableField = 0;
 	final StaticPublicMutableField = 1;
 	final StaticPrivateImmutableField = 2;

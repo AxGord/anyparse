@@ -1723,6 +1723,99 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "MEMBER-ORDER-ENUM-VALUES",
+			"note": "an enum abstract keeps its values first and in source order under member-order --fix, so the auto-numbering the program prints does not change",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"member-order",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main():Void {\n\t\tSys.println([(E.B : Int), (E.A : Int), E.K].join(\",\"));\n\t\t#if dflag Sys.println((E.X : Int)); #end\n\t\tSys.println((E.C : Int));\n\t}\n}\n\nenum abstract E(Int) to Int {\n\tpublic function f():Bool {\n\t\treturn true;\n\t}\n\n\tfinal B;\n\tpublic var v(get, never):Bool;\n\tfinal A;\n\tpublic static inline var K:Int = 1;\n\n\tprivate function get_v():Bool {\n\t\treturn false;\n\t}\n\n\tpublic function g():Bool {\n\t\treturn true;\n\t}\n\n\t#if dflag\n\tfinal X;\n\t#end\n\n\tfinal C;\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "07eeac80c11c74b4",
+				"files": "043dc9d51b264036",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MEMBER-ORDER-ENUM-VALUES-MIXED",
+			"note": "values with mixed visibility, initializers and an #else branch keep their order and numbering under member-order --fix",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"member-order",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main():Void {\n\t\tSys.println([(E.B : Int), (E.A : Int), E.K].join(\",\"));\n\t\t#if dflag Sys.println((E.X : Int)); #end\n\t\tSys.println((E.C : Int));\n\t}\n}\n\nenum abstract E(Int) to Int {\n\tpublic function f():Bool {\n\t\treturn true;\n\t}\n\n\tvar B;\n\tpublic var A = 10;\n\t#if dflag\n\tvar X;\n\t#else\n\tvar Y;\n\t#end\n\tpublic var C;\n\tpublic static inline var K:Int = 1;\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "07eeac80c11c74b4",
+				"files": "2cef23a6c7fc6903",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MEMBER-ORDER-LEGACY-ENUM-VALUES",
+			"note": "a legacy @:enum abstract is an enum abstract too: its values are no ordinary fields, member-order reports and moves none of them",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"member-order",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main():Void {\n\t\tSys.println([(E.B : Int), (E.A : Int), (E.C : Int), (E.D : Int)].join(\",\"));\n\t}\n}\n\n@:enum abstract E(Int) to Int {\n\tvar B;\n\tpublic var A;\n\tvar C = 5;\n\tvar D;\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

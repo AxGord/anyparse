@@ -1166,6 +1166,62 @@
 			"find": "RefactorSupport.resolutionProjectSourcesOf(plugin) ?? files)",
 			"replace": "ReflectionScan.scopeFiles(files, plugin))",
 			"note": "inline-constant reads macro-context files of the library half too, so a library type sharing a project class name keeps its constants inline"
+		},
+		{
+			"name": "M-MO-ENUM-ABSTRACT-WALK-OFF",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "isOrderedContainer",
+			"find": " || kind == shape.enumAbstractDeclKind",
+			"replace": "",
+			"note": "member-order stops walking an enum abstract, so its members are never reported or reordered"
+		},
+		{
+			"name": "M-MO-ENUM-VALUE-RANK-OFF",
+			"type": "anyparse.check.common.members.MemberSlots",
+			"method": "collectMembers",
+			"find": "m.rank = EnumValue;",
+			"replace": "m.rank = m.rank;",
+			"note": "the values of an enum abstract rank as ordinary fields again, so they sort by visibility and rank and move"
+		},
+		{
+			"name": "M-MO-ENUM-VALUE-KEEPS-SOURCE-ORDER-OFF",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "compareOrder",
+			"find": "if (a.rank == EnumValue || b.rank == EnumValue) return a.rank != b.rank ? a.rank - b.rank : a.index - b.index;",
+			"replace": "if (a.rank == EnumValue && b.rank != EnumValue) return -1;\n\tif (b.rank == EnumValue && a.rank != EnumValue) return 1;",
+			"note": "two values go through the ordinary comparison, whose initializer sub-order moves an init-less value behind an initialized one"
+		},
+		{
+			"name": "M-MO-ENUM-LEGACY-REPORT-OFF",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "run",
+			"find": "EnumAbstractForms.valueStarts(plugin, tree)",
+			"replace": "[]",
+			"note": "the report path no longer knows a legacy @:enum abstract, so its values rank as ordinary fields and a value list is flagged"
+		},
+		{
+			"name": "M-MO-ENUM-LEGACY-FIX-OFF",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "fix",
+			"find": "EnumAbstractForms.valueStarts(plugin, tree)",
+			"replace": "[]",
+			"note": "the fix path no longer knows a legacy @:enum abstract, so it moves a value ahead of an earlier one"
+		},
+		{
+			"name": "M-MO-REASON-ENUM-VALUE-LABEL",
+			"type": "anyparse.check.common.members.MemberOrderReason",
+			"method": "rankLabel",
+			"find": "case EnumValue: 'value of an enum abstract';",
+			"replace": "case EnumValue: 'enum abstract value';",
+			"note": "a value of an enum abstract is named with a label that reads badly after the article the sentence puts in front of it"
+		},
+		{
+			"name": "M-MO-REASON-ENUM-VALUE-SHORTCUT-OFF",
+			"type": "anyparse.check.common.members.MemberOrderReason",
+			"method": "of",
+			"find": " || a.rank == EnumValue || b.rank == EnumValue",
+			"replace": "",
+			"note": "the reason of a value inside a mixed-rank conditional block is the pinned-block reason, not the rule that values lead"
 		}
 	]
 }

@@ -9,6 +9,7 @@ import anyparse.check.common.members.MemberSlots.MemberRank;
 import anyparse.check.common.members.MemberSlots.OrderedMember;
 import anyparse.check.common.members.MemberSpacing.LayoutIssue;
 import anyparse.check.common.members.MemberSpacing.SpacingPolicy;
+import anyparse.check.scan.EnumAbstractForms;
 import anyparse.ds.InOrder;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
@@ -152,7 +153,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			walk(
 				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors,
 				plugin.lexicalRegions(entry.source),
-				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'))
+				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup')),
+				EnumAbstractForms.valueStarts(plugin, tree)
 			);
 		});
 	}
@@ -196,7 +198,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 					: MAX_RELOCATED_LINES;
 				fixWalk(
 					edits, source, tree, shape, plugin.metaShape().metaKinds, flagged, accessors,
-					{ movableArglessNew: movableArglessNew, budget: budget, spacing: spacing }, index, file, plugin.lexicalRegions(source)
+					{ movableArglessNew: movableArglessNew, budget: budget, spacing: spacing },
+					index, file, plugin.lexicalRegions(source), EnumAbstractForms.valueStarts(plugin, tree)
 				);
 				return edits;
 			})
@@ -336,10 +339,12 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
-		accessors: Map<Int, Bool>, regions: Array<LexRegion>, spacing: SpacingPolicy
+		accessors: Map<Int, Bool>, regions: Array<LexRegion>, spacing: SpacingPolicy, valueStarts: Array<Int>
 	): Void {
-		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
-			final members: Array<OrderedMember> = MemberSlots.collectMembers(node, source, shape, metaKinds, accessors, regions);
+		if (isOrderedContainer(node.kind, shape)) {
+			final members: Array<OrderedMember> = MemberSlots.collectMembers(
+				node, source, shape, metaKinds, accessors, regions, valueStarts
+			);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(
 				members, source, computePlan(members, source, shape), MemberSpacing.forContainer(spacing, node.kind)
 			);
@@ -351,7 +356,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape, metaKinds, accessors, regions, spacing);
+		for (c in node.children) walk(out, file, source, c, shape, metaKinds, accessors, regions, spacing, valueStarts);
 	}
 
 	/**
@@ -361,11 +366,12 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
 		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
-		regions: Array<LexRegion>
+		regions: Array<LexRegion>, valueStarts: Array<Int>
 	): Void {
-		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
-			emitReorder(edits, source, node, shape, metaKinds, flagged, accessors, options, index, file, regions);
-		for (c in node.children) fixWalk(edits, source, c, shape, metaKinds, flagged, accessors, options, index, file, regions);
+		if (isOrderedContainer(node.kind, shape))
+			emitReorder(edits, source, node, shape, metaKinds, flagged, accessors, options, index, file, regions, valueStarts);
+		for (c in node.children)
+			fixWalk(edits, source, c, shape, metaKinds, flagged, accessors, options, index, file, regions, valueStarts);
 	}
 
 	/**
@@ -381,9 +387,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, metaKinds: Array<String>,
 		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
-		regions: Array<LexRegion>
+		regions: Array<LexRegion>, valueStarts: Array<Int>
 	): Void {
-		final members: Array<OrderedMember> = MemberSlots.collectMembers(container, source, shape, metaKinds, accessors, regions);
+		final members: Array<OrderedMember> = MemberSlots.collectMembers(
+			container, source, shape, metaKinds, accessors, regions, valueStarts
+		);
 		if (members.length < 2) return;
 		final plan: SortPlan = computePlan(members, source, shape);
 		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);
@@ -963,6 +971,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		final sa: Int = sectionOf(a.rank);
 		final sb: Int = sectionOf(b.rank);
 		if (sa != sb) return sa - sb;
+		if (a.rank == EnumValue || b.rank == EnumValue) return a.rank != b.rank ? a.rank - b.rank : a.index - b.index;
 		final oa: Null<Int> = rankedOrdinalOf(a, plan);
 		final ob: Null<Int> = rankedOrdinalOf(b, plan);
 		final pa: Int = pinnedKey(a, oa);
@@ -1103,6 +1112,15 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		}
 		covered.sort((x, y) -> x.from - y.from);
 		return covered;
+	}
+
+	/**
+	 * Whether a node of `kind` has its members ordered: a visibility container, and an enum abstract, whose members are the
+	 * same declarations and whose values `MemberSlots` ranks apart. Kept apart from `visibilityContainerKinds`, which other
+	 * rules read for what a visibility container IS.
+	 */
+	private static function isOrderedContainer(kind: String, shape: RefShape): Bool {
+		return (shape.visibilityContainerKinds ?? []).contains(kind) || kind == shape.enumAbstractDeclKind;
 	}
 
 }

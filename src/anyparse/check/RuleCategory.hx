@@ -62,11 +62,6 @@ enum abstract RuleCategory(String) to String {
 		Design
 	];
 
-	/** The category spelled `id`, or null when no category has that id. */
-	public static function fromId(id: String): Null<RuleCategory> {
-		return ALL.find(c -> (c: String) == id);
-	}
-
 	/** One line saying what the category's rules are about, for listings and the generated rule index. */
 	public function description(): String {
 		return switch abstract {
@@ -83,6 +78,11 @@ enum abstract RuleCategory(String) to String {
 			case Expressions: 'locals, statement syntax, lambdas, the shape of a call';
 			case Design: 'metrics, duplication, project contracts, concurrency';
 		};
+	}
+
+	/** The category spelled `id`, or null when no category has that id. */
+	public static function fromId(id: String): Null<RuleCategory> {
+		return ALL.find(c -> (c: String) == id);
 	}
 
 }

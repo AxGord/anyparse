@@ -57,7 +57,7 @@ final class MemberOrderReason {
 
 	/** Why `a` must sit before `b`: the first key of `compareOrder` on which the pair differs, in words. */
 	public static function of(a: OrderedMember, b: OrderedMember, keys: OrderKeys): String {
-		if (keys.elseExempt || keys.section != keys.otherSection) return rankReason(a, b);
+		if (keys.elseExempt || keys.section != keys.otherSection || a.rank == EnumValue || b.rank == EnumValue) return rankReason(a, b);
 		final pinned: Bool = a.condition != null && keys.ranked == null;
 		final otherPinned: Bool = b.condition != null && keys.otherRanked == null;
 		if (pinned != otherPinned) return pinReason(a, b, keys.section);
@@ -74,6 +74,7 @@ final class MemberOrderReason {
 	/** A rank named the way the user's own order spec names it - what the reader has to move the member past. */
 	private static function rankLabel(rank: MemberRank): String {
 		return switch rank {
+			case EnumValue: 'value of an enum abstract';
 			case StaticPublicImmutableField: 'public constant';
 			case StaticPublicMutableField: 'public static var';
 			case StaticPrivateImmutableField: 'private constant';
