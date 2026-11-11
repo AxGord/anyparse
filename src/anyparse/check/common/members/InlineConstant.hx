@@ -676,7 +676,7 @@ final class InlineConstant extends RuleBase {
 		if (name == null || inlineSpan == null) return;
 		final init: Null<QueryNode> = ConstantFieldScan.initializerOf(field);
 		if (init == null || !ConstantFieldScan.isPlainStringLiteral(init, source, seams)) return;
-		if (facts.demand.names.exists(name)) return;
+		if (facts.demand.holds(name, container.name)) return;
 		if (facts.reflected.unreadable.exists(unreadable -> RawSourceScan.mentionsWord(unreadable, name))) return;
 		final containerName: Null<String> = container.name;
 		if (mods.exported && containerName != null && facts.macroConsumed.contains(containerName)) return;

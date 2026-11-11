@@ -1339,8 +1339,8 @@
 			"name": "M-DEMAND-TARGET-CODE-FIRST-ONLY",
 			"type": "anyparse.check.scan.ConstantDemandScan",
 			"method": "walk",
-			"find": "demand(child.children[1], source, seams, out);",
-			"replace": "spellNames(child, out);",
+			"find": "demand(child.children[1], source, seams, enclosing, out);",
+			"replace": "spellNames(child, seams, enclosing, out);",
 			"note": "every argument of a target-code call holds, not only the code argument"
 		},
 		{
@@ -1355,15 +1355,15 @@
 			"name": "M-DEMAND-STATIC-LOCAL-EVERY-BINDING",
 			"type": "anyparse.check.scan.ConstantDemandScan",
 			"method": "walk",
-			"find": "// The whole declaration: a multi-binding form nests the later initializers in continuation nodes.\nspellNames(child, out);",
-			"replace": "demand(ConstantFieldScan.initializerOf(child), source, seams, out);",
+			"find": "// The whole declaration: a multi-binding form nests the later initializers in continuation nodes.\nspellNames(child, seams, enclosing, out);",
+			"replace": "demand(ConstantFieldScan.initializerOf(child), source, seams, enclosing, out);",
 			"note": "only the last binding of a multi-binding local static is read"
 		},
 		{
 			"name": "M-DEMAND-SPELLS-DESCENDANTS",
 			"type": "anyparse.check.scan.ConstantDemandScan",
 			"method": "spellNames",
-			"find": "for (child in node.children) spellNames(child, out);",
+			"find": "for (child in node.children) spellNames(child, seams, enclosing, out);",
 			"replace": "",
 			"note": "a read spelled below the position (a qualified path, an interpolated segment) holds nothing"
 		},
@@ -1528,6 +1528,46 @@
 			"find": "c.children.foreach(r -> isPure(r, ctx))",
 			"replace": "true",
 			"note": "a transparent call no longer asks its receiver, a getter receiver reads as pure"
+		},
+		{
+			"name": "M-DEMAND-QUALIFIER-NAMES-ITS-TYPE",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "holds",
+			"find": "qualifier == typeName || !_typeMembers.exists(qualifier);",
+			"replace": "true;",
+			"note": "a spelling qualified by another known type holds every constant of the name again"
+		},
+		{
+			"name": "M-DEMAND-QUALIFIER-UNKNOWN-HOLDS",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "holds",
+			"find": "qualifier == typeName || !_typeMembers.exists(qualifier)",
+			"replace": "qualifier == typeName",
+			"note": "an unresolved qualifier no longer holds the constant"
+		},
+		{
+			"name": "M-DEMAND-QUALIFIER-OWN-HOLDS",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "holds",
+			"find": "qualifier == typeName || !_typeMembers.exists(qualifier)",
+			"replace": "!_typeMembers.exists(qualifier)",
+			"note": "a spelling qualified by the constant own type no longer holds it"
+		},
+		{
+			"name": "M-DEMAND-BARE-OTHER-OWN-MEMBER",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "holds",
+			"find": "!(_typeMembers[enclosing] ?? []).contains(name)",
+			"replace": "true",
+			"note": "a bare name inside another type declaring its own member holds every constant of the name again"
+		},
+		{
+			"name": "M-DEMAND-BARE-OWN-HOLDS",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "holds",
+			"find": "enclosing == null || enclosing == typeName || ",
+			"replace": "enclosing == null || ",
+			"note": "a bare name inside the constant own type no longer holds it"
 		}
 	]
 }
