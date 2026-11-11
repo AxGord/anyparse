@@ -21,7 +21,7 @@ class HoistCommonBranchHeadTest extends Test {
 	private static final FIELD_OWNER: String = 'class C { var count:Int = 1; function reset():Void { count = 0; } ';
 	private static final TYPES: String = 'class P { public var x:Int = 0; public var g(get, never):Int; function get_g():Int return 1; } '
 		+ 'abstract A(Array<Int>) { @:arrayAccess function at(i:Int):Int return 1; } '
-		+ 'abstract O(Int) { public var x(default, never):Int = 1; @:op(A + B) function add(o:O):O return this; } ';
+		+ 'abstract O(Int) { public var x(default, never):Int = 1; @:op(a.b) function dot(n:String):Int return 1; } ';
 
 	public function testSharedHeadMovesBeforeTheIf(): Void {
 		final vs: Array<Violation> = violations(TWO_BRANCHES);
@@ -368,7 +368,7 @@ class HoistCommonBranchHeadTest extends Test {
 	@:killer('M-PURITY-OVERLOAD-OFF')
 	public function testAbstractWithAccessOverloadIsNotPure(): Void {
 		Assert.equals(0, violations(TYPES + receiverRead('u:A', 'u[0]')).length);
-		Assert.equals(0, violations(TYPES + receiverRead('u:O', 'u.x')).length);
+		Assert.equals(0, violations(TYPES + receiverRead('u:O', 'u.y')).length);
 	}
 
 	@:pin('control')

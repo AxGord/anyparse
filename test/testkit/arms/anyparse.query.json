@@ -16378,6 +16378,22 @@
 			"find": "replaced ? [wide] : [",
 			"replace": "[",
 			"note": "a character the rewrite replaced at the edge of a cut is left outside it, so a renamed first letter carries the find without it"
+		},
+		{
+			"name": "M-PURITY-INDEX-READ-ASKS-FIELD",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "overloadsAccess",
+			"find": "field ? isFieldReadAccess(m) : isIndexAccess(m)",
+			"replace": "isFieldReadAccess(m)",
+			"note": "an index read ignores the index access, so an overloaded index read looks pure"
+		},
+		{
+			"name": "M-PURITY-FIELD-INTERCEPTOR-IGNORED",
+			"type": "anyparse.query.OperatorOverloads",
+			"method": "isFieldReadAccess",
+			"find": "(meta != '' && m.metaNames.contains(meta)) || (fieldOperator != '' && m.operatorOverloads.contains(fieldOperator))",
+			"replace": "false",
+			"note": "a field read ignores @:op(a.b) and @:resolve, so an intercepted field read looks pure"
 		}
 	]
 }

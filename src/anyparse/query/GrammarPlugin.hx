@@ -3961,6 +3961,20 @@ typedef ExecutionShape = {
 	var indexOperatorOverloadKind: String;
 
 	/**
+	 * The implicit-call annotation under which the language runs a member for a FIELD read of a name its type does not
+	 * declare (Haxe `@:resolve`). Optional; unset means no annotation intercepts a field read.
+	 */
+	@:optional
+	var fieldReadMetaName: String;
+
+	/**
+	 * The node kind an operator-overload annotation's FIELD form projects as (Haxe `@:op(a.b)`): such a member runs at a
+	 * field read, like one under `fieldReadMetaName`. Optional; unset means there is none.
+	 */
+	@:optional
+	var fieldReadOperatorOverloadKind: String;
+
+	/**
 	 * Compound-assignment kind -> the binary operator kind it applies (Haxe `AddAssign` -> `Add`): an overload of the
 	 * binary operator runs at the compound form too. Optional; unset means a compound form runs only its own overloads.
 	 */

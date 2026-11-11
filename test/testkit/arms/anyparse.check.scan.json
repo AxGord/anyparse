@@ -1418,9 +1418,9 @@
 			"name": "M-PURITY-OVERLOAD-OFF",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "if (typing.accessOverloaded(typeName)) return true;",
+			"find": "typing.accessOverloaded(typeName, false) || ",
 			"replace": "",
-			"note": "an abstract declaring an overload reads as plain"
+			"note": "an abstract declaring an index access reads as plain at an index read"
 		},
 		{
 			"name": "M-PURITY-UNKNOWN-MEMBER",
@@ -1467,6 +1467,22 @@
 			"find": "ambientCovers(header.ambientUsings, module)",
 			"replace": "false",
 			"note": "a `using` the folder's import.hx already supplies reads as absent, so the fix inserts a second one the redundant-import check then removes"
+		},
+		{
+			"name": "M-PURITY-INTERCEPTOR-DECLARED-NAME",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "getter == null && typing.accessOverloaded(typeName, true)",
+			"replace": "typing.accessOverloaded(typeName, true)",
+			"note": "a declared field of an abstract with @:op(a.b) or @:resolve reads as running the interceptor"
+		},
+		{
+			"name": "M-PURITY-FIELD-READ-ASKS-INDEX",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "(getter == null && typing.accessOverloaded(typeName, true))",
+			"replace": "typing.accessOverloaded(typeName, false)",
+			"note": "a field read asks the index-access question, so a field read on an abstract with @:arrayAccess looks impure"
 		}
 	]
 }

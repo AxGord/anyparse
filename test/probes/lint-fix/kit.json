@@ -1816,6 +1816,68 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PURITY-FIELD-READ-OVERLOADS",
+			"note": "a field read on an abstract with only @:arrayAccess or @:op(A + B) stays pure: join-branch-call fires on all three abstracts (base: 1)",
+			"argv": [
+				"hxq",
+				"lint",
+				"B.hx",
+				"--no-oracle",
+				"--all",
+				"--rule",
+				"join-branch-call"
+			],
+			"files": {
+				"B.hx": "abstract Plain<T>(Array<T>) { public function push(x:T):Int return this.push(x); }\nabstract WithIndex<T>(Array<T>) { public function push(x:T):Int return this.push(x); @:arrayAccess public function get(i:Int):T return this[i]; }\nabstract WithOp<T>(Array<T>) { public function push(x:T):Int return this.push(x); @:op(A + B) static function add<T>(a:WithOp<T>, b:WithOp<T>):WithOp<T> return a; }\nclass B { public static function p(c:Bool, xs:Plain<Int>) { if (c) xs.push(1); else xs.push(2); } public static function i(c:Bool, xs:WithIndex<Int>) { if (c) xs.push(1); else xs.push(2); } public static function o(c:Bool, xs:WithOp<Int>) { if (c) xs.push(1); else xs.push(2); } }\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "93d8eb96a18086dd",
+				"err": "34e561e7866bbea1",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "PURITY-INTERCEPTOR-DECLARED-NAME",
+			"note": "a declared member of an abstract with @:op(a.b) is read directly: join-branch-call fires once",
+			"argv": [
+				"hxq",
+				"lint",
+				"D.hx",
+				"--no-oracle",
+				"--all",
+				"--rule",
+				"join-branch-call"
+			],
+			"files": {
+				"D.hx": "abstract WithDot<T>(Array<T>) { public function push(x:T):Int return this.push(x); @:op(a.b) function dot(n:String):Int return 0; }\nclass D { public static function d(c:Bool, xs:WithDot<Int>) { if (c) xs.push(1); else xs.push(2); } }\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "2b49cc8633e5958c",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

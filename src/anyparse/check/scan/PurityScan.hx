@@ -147,11 +147,12 @@ final class PurityScan {
 		final typeName: Null<String> = recv == null ? null : receiverTypeName(recv, ctx);
 		if (typeName == null) return unknownRuns;
 		final typing: TypingService = ctx.index.typing;
-		if (typing.accessOverloaded(typeName)) return true;
-		if (access.kind != ctx.fieldAccessKind) return unknownRuns && !typing.typeDeclared(typeName);
+		if (access.kind != ctx.fieldAccessKind)
+			return typing.accessOverloaded(typeName, false) || (unknownRuns && !typing.typeDeclared(typeName));
 		final field: Null<String> = access.name;
 		final getter: Null<Bool> = field == null ? null : typing.members.memberGetter(typeName, field);
-		return getter == true || (unknownRuns && getter == null);
+		// a field-read interceptor runs only for a name the type does not declare; an unplaced name stays conservative
+		return getter == true || (unknownRuns && getter == null) || (getter == null && typing.accessOverloaded(typeName, true));
 	}
 
 	/**

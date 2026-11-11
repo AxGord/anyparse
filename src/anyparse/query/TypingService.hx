@@ -205,9 +205,9 @@ final class TypingService {
 		return member ? AsMember : ByModulePath;
 	}
 
-	/** Whether a type of the name `typeName` is an abstract whose field or index access may select an overload. */
-	public function accessOverloaded(typeName: String): Bool {
-		return operators.overloadsAccess(_refs.resolvedDeclsNamed(_refs.aliasedName(typeName)));
+	/** Whether a type of the name `typeName` is an abstract whose field read (`field`) or index read may select an overload. */
+	public function accessOverloaded(typeName: String, field: Bool): Bool {
+		return operators.overloadsAccess(_refs.resolvedDeclsNamed(_refs.aliasedName(typeName)), field);
 	}
 
 	/** Whether the index holds a declaration of the type `typeName` names, through its typedef aliases. */

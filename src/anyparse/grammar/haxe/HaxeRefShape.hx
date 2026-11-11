@@ -488,6 +488,8 @@ final class HaxeRefShape {
 			stringConversionCalls: ['Std.string'],
 			indexAccessMetaName: '@:arrayAccess',
 			indexOperatorOverloadKind: 'ArrayExpr',
+			fieldReadMetaName: '@:resolve',
+			fieldReadOperatorOverloadKind: 'FieldAccess',
 			compoundAssignOperators: [
 				'AddAssign' => 'Add',
 				'SubAssign' => 'Sub',

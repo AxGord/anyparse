@@ -45,6 +45,12 @@ final class OperatorOverloads {
 	/** The operator kind an overload of the index operator records (`ExecutionShape.indexOperatorOverloadKind`), or null. */
 	private final _indexOperator: Null<String>;
 
+	/** The annotation of a field-read interceptor (`ExecutionShape.fieldReadMetaName`), or null. */
+	private final _fieldReadMeta: Null<String>;
+
+	/** The operator kind an overload of the field-read operator records (`ExecutionShape.fieldReadOperatorOverloadKind`), or null. */
+	private final _fieldReadOperator: Null<String>;
+
 	/** Built once by the owning `TypingService`. */
 	public function new(casts: AbstractCasts, unification: Unification, shape: RefShape) {
 		_casts = casts;
@@ -53,6 +59,8 @@ final class OperatorOverloads {
 		_commutativeMeta = shape.commutativeOperatorMetaName;
 		_indexMeta = shape.execution?.indexAccessMetaName;
 		_indexOperator = shape.execution?.indexOperatorOverloadKind;
+		_fieldReadMeta = shape.execution?.fieldReadMetaName;
+		_fieldReadOperator = shape.execution?.fieldReadOperatorOverloadKind;
 	}
 
 	/**
@@ -94,11 +102,21 @@ final class OperatorOverloads {
 		return agreed;
 	}
 
-	/** Whether any of `decls` is an abstract declaring an index access or an operator overload, so a read through it may select code. */
-	public function overloadsAccess(decls: Array<ResolvedType>): Bool {
+	/**
+	 * Whether any of `decls` is an abstract declaring a member that runs at this read: for a field read (`field`) a
+	 * field-read interceptor, for an index read an index access. Another operator overload runs at its own operator only.
+	 */
+	public function overloadsAccess(decls: Array<ResolvedType>, field: Bool): Bool {
 		return decls.exists(
-			d -> _abstractKinds.contains(d.type.kind) && d.type.members.exists(m -> isIndexAccess(m) || m.operatorOverloads.length != 0)
+			d -> _abstractKinds.contains(d.type.kind) && d.type.members.exists(m -> field ? isFieldReadAccess(m) : isIndexAccess(m))
 		);
+	}
+
+	/** Whether `m` intercepts a field read of its abstract: annotated as one, or an overload of the field-read operator. */
+	private inline function isFieldReadAccess(m: MemberInfo): Bool {
+		final meta: String = _fieldReadMeta ?? '';
+		final fieldOperator: String = _fieldReadOperator ?? '';
+		return (meta != '' && m.metaNames.contains(meta)) || (fieldOperator != '' && m.operatorOverloads.contains(fieldOperator));
 	}
 
 	/** Whether `m` is an index access of its abstract: annotated as one, or an overload of the index operator. */
