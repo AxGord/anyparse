@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 
@@ -66,11 +67,8 @@ final class HaxePatternFragment {
 		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
 		// stmts[0]. We navigate by enum kind names; struct envelopes are
 		// transparent in the QueryNode tree.
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		final block: Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
-		if (block == null) return null;
-		if (block.children.length == 0) return null;
+		final block: Null<QueryNode> = wrappedBlock(module);
+		if (block == null || block.children.length == 0) return null;
 		final first: QueryNode = block.children[0];
 		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
 		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
@@ -84,6 +82,17 @@ final class HaxePatternFragment {
 		// throw) are not `ExprStmt` and pass through unchanged. Node-level
 		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
 		return first.kind == 'ExprStmt' ? null : first;
+	}
+
+	/**
+	 * Every statement of a wrapped fragment of two or more statements, under one synthetic
+	 * `Pattern.SEQUENCE_KIND` root; `null` for a single statement, which `extractFirstStmt` owns.
+	 */
+	public static function extractStmtSequence(module: QueryNode): Null<QueryNode> {
+		final block: Null<QueryNode> = wrappedBlock(module);
+		if (block == null) return null;
+		final stmts: Array<QueryNode> = block.children.filter(s -> s.kind != 'EmptyStmt');
+		return stmts.length < 2 ? null : new QueryNode(Pattern.SEQUENCE_KIND, null, stmts.map(rerootFinalVarDecl), block.span);
 	}
 
 	public static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
@@ -142,6 +151,12 @@ final class HaxePatternFragment {
 			if (found != null) return found;
 		}
 		return null;
+	}
+
+	/** The function body block of a fragment wrapped by `wrapAsStmt`. */
+	private static function wrappedBlock(module: QueryNode): Null<QueryNode> {
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		return cls == null ? null : findFirstByKind(cls, 'BlockBody');
 	}
 
 }

@@ -1551,6 +1551,14 @@
 			"method": "ignored",
 			"force": "[]",
 			"note": "a document setting a key the loader does not act on is rewritten as if every key were read, so the typed edit silently drops it"
+		},
+		{
+			"name": "M-PATTERN-SEQ-FIRST-ONLY",
+			"type": "anyparse.grammar.haxe.HaxePatternFragment",
+			"method": "extractStmtSequence",
+			"find": "stmts.length < 2 ? null",
+			"replace": "true ? null",
+			"note": "a multi-statement pattern keeps only its first statement, so the rest is silently dropped and the search is wider than written"
 		}
 	]
 }

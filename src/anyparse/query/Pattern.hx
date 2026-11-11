@@ -31,6 +31,12 @@ using anyparse.util.Strings;
 @:nullSafety(Strict)
 final class Pattern {
 
+	/**
+	 * Kind of the synthetic root of a `Seq` pattern: its children are the statements, matched
+	 * against a run of adjacent siblings with one shared set of bindings.
+	 */
+	public static final SEQUENCE_KIND: String = 'PatternSequence';
+
 	public final root: QueryNode;
 	public final category: PatternCategory;
 	public final source: String;
@@ -136,6 +142,7 @@ enum abstract PatternCategory(Int) {
 	final Stmt = 1;
 	final Expr = 2;
 	final MetaArgs = 3;
+	final Seq = 4;
 }
 
 /**

@@ -415,6 +415,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final substituted: String = Metavar.substituteMetavarsHaxe(source, lexicalRegions(source));
 		final attempts: Array<{ wrap: String -> String, extract: QueryNode -> Null<QueryNode>, category: PatternCategory }> = [
 			{ wrap: src -> src, extract: HaxePatternFragment.extractFirstDecl, category: PatternCategory.Decl },
+			{ wrap: HaxePatternFragment.wrapAsStmt, extract: HaxePatternFragment.extractStmtSequence, category: PatternCategory.Seq },
 			{ wrap: HaxePatternFragment.wrapAsStmt, extract: HaxePatternFragment.extractFirstStmt, category: PatternCategory.Stmt },
 			{ wrap: HaxePatternFragment.wrapAsExpr, extract: HaxePatternFragment.extractFirstExpr, category: PatternCategory.Expr },
 			{ wrap: HaxePatternFragment.wrapAsMetaArgs, extract: HaxePatternFragment.extractFirstMeta, category: PatternCategory.MetaArgs }

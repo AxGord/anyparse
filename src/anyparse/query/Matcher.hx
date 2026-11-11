@@ -58,6 +58,10 @@ final class Matcher {
 		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, identKind: Null<String>, out: Array<Match>,
 		kindFilter: Null<String>
 	): Void {
+		if (pattern.kind == Pattern.SEQUENCE_KIND) {
+			walkSequence(pattern, input, eq, identKind, out, kindFilter);
+			return;
+		}
 		if (kindFilter == null || input.kind == kindFilter) {
 			final bindings: Map<String, QueryNode> = [];
 			final unwritten: Array<Unwritten> = [];
@@ -226,6 +230,36 @@ final class Matcher {
 	/** Whether `node` is the grammar's identifier reference (`Pattern.identKind`); with no `identKind` none is, so a match fails closed. */
 	private static function isIdentRef(node: QueryNode, identKind: Null<String>): Bool {
 		return identKind != null && node.kind == identKind;
+	}
+
+	/**
+	 * A sequence pattern matches every run of adjacent children of one node whose members unify, in
+	 * order, with its statements under ONE bindings map, so a metavariable repeated across statements
+	 * names the same thing in each. The match spans the run and its node holds the run.
+	 */
+	private static function walkSequence(
+		pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>, identKind: Null<String>, out: Array<Match>,
+		kindFilter: Null<String>
+	): Void {
+		final n: Int = pattern.children.length;
+		final kids: Array<QueryNode> = input.children;
+		for (start in 0...kids.length - n + 1) {
+			final bindings: Map<String, QueryNode> = [];
+			final unwritten: Array<Unwritten> = [];
+			var ok: Bool = true;
+			for (k in 0...n) if (!unify(pattern.children[k], kids[start + k], eq, identKind, bindings, unwritten)) {
+				ok = false;
+				break;
+			}
+			if (!ok) continue;
+			final first: Null<Span> = kids[start].span;
+			final last: Null<Span> = kids[start + n - 1].span;
+			if (first == null || last == null) continue;
+			if (kindFilter != null && kids[start].kind != kindFilter) continue;
+			final span: Span = new Span(first.from, last.to);
+			out.push(new Match(span, bindings, new QueryNode(Pattern.SEQUENCE_KIND, null, kids.slice(start, start + n), span), unwritten));
+		}
+		for (c in kids) walkSequence(pattern, c, eq, identKind, out, kindFilter);
 	}
 
 }

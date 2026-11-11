@@ -16599,6 +16599,14 @@
 			"find": "notes.push({ key: found.path, message: message, topic: REPORTED_TOPIC });",
 			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
 			"note": "discover prints the unusable-settings line through the fallback ledger even when its caller collects notes, so a lint rule prints it from inside the run"
+		},
+		{
+			"name": "M-MATCH-SEQ-FRESH-BINDINGS",
+			"type": "anyparse.query.Matcher",
+			"method": "walkSequence",
+			"find": "kids[start + k], eq, identKind, bindings, unwritten)",
+			"replace": "kids[start + k], eq, identKind, [], unwritten)",
+			"note": "each statement of a sequence pattern binds its own metavariables, so `$l` repeated across statements names any three things"
 		}
 	]
 }
