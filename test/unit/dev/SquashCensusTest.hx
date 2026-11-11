@@ -147,6 +147,58 @@ final class SquashCensusTest extends Test {
 		}));
 	}
 
+	@:pin('control')
+	@:killer('M-SQUASH-VERDICT-GROWTH-BLIND')
+	public function testAFileOutsideTheFiledSetFailsTheRow(): Void {
+		final verdict: SquashVerdict = SquashCensus.verdict(reportOf(['src/A.hx', 'src/B.hx'], [], 0), ['src/A.hx'], 'squash');
+		Assert.notNull(verdict.failure);
+		Assert.isTrue((verdict.failure ?? '').startsWith('squash +1'));
+		Assert.same(['+ src/B.hx'], verdict.detail);
+	}
+
+	@:pin('control')
+	@:killer('M-SQUASH-VERDICT-FILED-NOT-TOLERATED')
+	public function testTheFiledSetItselfIsTolerated(): Void {
+		final verdict: SquashVerdict = SquashCensus.verdict(reportOf(['src/A.hx', 'src/B.hx'], [], 0), ['src/B.hx', 'src/A.hx'], 'squash');
+		Assert.isNull(verdict.failure);
+		Assert.same([], verdict.detail);
+	}
+
+	@:pin('control')
+	@:killer('M-SQUASH-VERDICT-SHRINK-FAILS')
+	public function testAFiledFileThatNowAgreesIsNotedAndNotRefused(): Void {
+		final verdict: SquashVerdict = SquashCensus.verdict(reportOf(['src/A.hx'], [], 0), ['src/A.hx', 'src/B.hx'], 'squash');
+		Assert.isNull(verdict.failure);
+		Assert.equals(1, verdict.detail.length);
+		Assert.isTrue(verdict.detail[0].startsWith('- src/B.hx'));
+	}
+
+	@:pin('control')
+	@:killer('M-SQUASH-VERDICT-ONE-PASS-BLIND')
+	public function testASquashThatMakesAFileNeedASecondRewriteFailsTheRow(): Void {
+		final verdict: SquashVerdict = SquashCensus.verdict(reportOf([], ['src/A.hx'], 0), [], 'squash');
+		Assert.notNull(verdict.failure);
+		Assert.same(['1pass-new src/A.hx'], verdict.detail);
+	}
+
+	@:pin('control')
+	@:killer('M-SQUASH-VERDICT-UNPARSED-BLIND')
+	public function testAFileTheGrammarCannotFormatFailsTheRow(): Void {
+		final verdict: SquashVerdict = SquashCensus.verdict(reportOf([], [], 2), [], 'squash');
+		Assert.notNull(verdict.failure);
+		Assert.isTrue((verdict.failure ?? '').indexOf('2 file(s)') >= 0);
+	}
+
+	@:pin('control')
+	@:killer('M-SQUASH-STANDING-FORK-SKIPPED')
+	public function testANamedForkSrcIsJudgedBesideTheTree(): Void {
+		final withFork: SquashVerdict = standingOf(true);
+		Assert.isTrue((withFork.failure ?? '').indexOf('squash fork') >= 0);
+		final without: SquashVerdict = standingOf(false);
+		Assert.notNull(without.failure);
+		Assert.isTrue((without.failure ?? '').indexOf('squash fork') < 0);
+	}
+
 	/**
 	 * The engine of a census over `A`, `B`, `C`: the originals settle only on a second rewrite for `B` and cannot be formatted for
 	 * `C`; the squashed copies need a second rewrite for `A` and `B`; `--write` changes nothing.
@@ -204,6 +256,36 @@ final class SquashCensusTest extends Test {
 				return true;
 			}
 		}));
+	}
+
+	/** A report over one tree with `differs`, `newOnePass` and `unparsed` files, the other columns left at zero. */
+	private static function reportOf(differs: Array<String>, newOnePass: Array<String>, unparsed: Int): SquashReport {
+		return {
+			rows: [
+				{
+					dir: 'src',
+					files: 0,
+					squashed: 0,
+					unparsed: unparsed,
+					onePassOriginal: 0,
+					onePassSquashed: 0,
+					onePassNew: newOnePass.length,
+					differs: differs.length
+				}
+			],
+			newOnePass: newOnePass,
+			differs: differs
+		};
+	}
+
+	/** The battery row's standing over the faked engine, a corpus fork named or not. */
+	private static function standingOf(named: Bool): SquashVerdict {
+		return TempDir.with(repo -> TempDir.with(fork -> TempDir.with(scratch -> {
+			for (root in [repo, fork]) for (name in ['A', 'B', 'C'])
+				put(root.file('src/$name.hx'), 'class $name {\n\tvar x: Int;\n\tvar y: Int;\n}\n');
+			for (dir in ['test', 'tools']) put(repo.file('$dir/T.hx'), 'class T {\n}\n');
+			return SquashCensus.standing(fakeEngine, repo.path, named ? fork.path : null, scratch.path);
+		})));
 	}
 
 }

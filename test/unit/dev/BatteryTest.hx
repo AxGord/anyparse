@@ -82,6 +82,7 @@ final class BatteryTest extends Test {
 		Assert.isNull(Battery.waiver('corpus', ['corpus'], NotRun('the suite was red')), 'a row that did not run is not waived');
 		Assert.isNull(Battery.waiver('corpus', ['corpus'], Passed));
 		Assert.isTrue(Battery.rowNames().contains('corpus') && Battery.rowNames().contains('fmt xconfig'));
+		Assert.isTrue(Battery.rowNames().contains('fmt squash'));
 	}
 
 	public function testTheClosingLinesCarryTheBaseDeltaAndACorpusNotRun(): Void {
@@ -122,7 +123,7 @@ final class BatteryTest extends Test {
 			Assert.equals(parent, Battery.baseOf(null, false, repo));
 			Assert.equals('named', Battery.baseOf('named', false, repo), '--base wins');
 			Assert.isNull(Battery.baseOf(null, true, repo), '--no-base compares nothing');
-			Assert.raises(() -> Battery.baseOf('named', true, repo), UsageError);
+			Assert.raises(Battery.baseOf.bind('named', true, repo), UsageError);
 		});
 	}
 

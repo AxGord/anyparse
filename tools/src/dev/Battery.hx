@@ -8,6 +8,7 @@ import dev.ForkFmt.ForkVerdict;
 import dev.GateReuse.GateOffer;
 import dev.LintScope.WholeReport;
 import dev.Shard.Tally;
+import dev.SquashCensus.SquashVerdict;
 import dev.XconfigFmt.XconfigFailure;
 import dev.XconfigFmt.XconfigRun;
 import devkit.Args;
@@ -74,7 +75,7 @@ final class Battery {
 	/** The branches, all at once, each running its steps in order: a step reads what the one before it wrote. */
 	private static final BRANCHES: Array<Array<String>> = [
 		[SUITE_ROW, CORPUS_ROW],
-		['fmt', 'fmt xconfig'],
+		['fmt', 'fmt xconfig', 'fmt squash'],
 		['typer probes', 'jvm probe'],
 		['oracle', 'lint', 'blast', 'kit probes']
 	];
@@ -173,6 +174,7 @@ final class Battery {
 			case CORPUS_ROW: corpus;
 			case 'fmt': fmt;
 			case 'fmt xconfig': fmtXconfig;
+			case 'fmt squash': fmtSquash;
 			case 'typer probes': () -> TyperProbesRow.outcome(_plan.repo, Sys.println);
 			case 'jvm probe': jvmProbe;
 			case 'oracle': oracle;
@@ -494,6 +496,18 @@ final class Battery {
 			_suiteGreen ? Passed : Failed('the impact suite is not green (dev shard keeps its own per-shard logs on failure)'),
 			() -> RedOnBase.suite(RedOnBase.requestFor(_plan, SUITE_ROW, _mode), failing)
 		);
+	}
+
+	/**
+	 * The squash row: formatting the squashed tree must give the formatted tree, but for the files `SquashCensus` files; a file
+	 * joining them fails the row, and the corpus fork's `src` is judged the same way when the fork is named.
+	 */
+	private function fmtSquash(): Outcome {
+		final root: String = workFile('squash');
+		final verdict: SquashVerdict = SquashCensus.standing(hxq, _plan.repo, Sys.getEnv(GateTree.FORK_VAR), root);
+		for (line in verdict.detail) Sys.println(line);
+		final failure: Null<String> = verdict.failure;
+		return failure == null ? Passed : Failed(failure);
 	}
 
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */

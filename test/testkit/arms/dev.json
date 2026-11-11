@@ -2585,6 +2585,54 @@
 			"find": "args.option('--engine')",
 			"replace": "null",
 			"note": "the --engine option of the command is read and dropped, so the run never sees it"
+		},
+		{
+			"name": "M-SQUASH-VERDICT-GROWTH-BLIND",
+			"type": "dev.SquashCensus",
+			"method": "verdict",
+			"find": "if (grown.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a file that formats differently once squashed and is not filed passes the row"
+		},
+		{
+			"name": "M-SQUASH-VERDICT-FILED-NOT-TOLERATED",
+			"type": "dev.SquashCensus",
+			"method": "verdict",
+			"find": "XconfigFmt.setMoves(expected, report.differs)",
+			"replace": "XconfigFmt.setMoves([], report.differs)",
+			"note": "the filed set is not tolerated: its files count as growth"
+		},
+		{
+			"name": "M-SQUASH-VERDICT-SHRINK-FAILS",
+			"type": "dev.SquashCensus",
+			"method": "verdict",
+			"find": "for (file in agree) detail.push(",
+			"replace": "for (file in agree) why.push(",
+			"note": "a filed file that now agrees fails the row instead of being noted"
+		},
+		{
+			"name": "M-SQUASH-VERDICT-ONE-PASS-BLIND",
+			"type": "dev.SquashCensus",
+			"method": "verdict",
+			"find": "if (report.newOnePass.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a squash that makes a file need a second rewrite passes the row"
+		},
+		{
+			"name": "M-SQUASH-VERDICT-UNPARSED-BLIND",
+			"type": "dev.SquashCensus",
+			"method": "verdict",
+			"find": "if (unparsed > 0) why.push(",
+			"replace": "if (false) why.push(",
+			"note": "a file the grammar cannot format drops out of the comparison unseen"
+		},
+		{
+			"name": "M-SQUASH-STANDING-FORK-SKIPPED",
+			"type": "dev.SquashCensus",
+			"method": "standing",
+			"find": "if (fork == null || fork == '' || !FileSystem.exists(Path.join([fork, 'src']))) return own;",
+			"replace": "if (fork == null || fork == '' || FileSystem.exists('/')) return own;",
+			"note": "the corpus fork's src is never judged by the row"
 		}
 	]
 }

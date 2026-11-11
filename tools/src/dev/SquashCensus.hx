@@ -39,6 +39,8 @@ typedef SquashRow = {
 /** The census: a row per tree, and the files behind the last two columns. */
 typedef SquashReport = { final rows: Array<SquashRow>; final newOnePass: Array<String>; final differs: Array<String>; }
 
+/** What the battery row says of a census: the failing line (null when it holds) and the lines beneath it, notes of progress included. */
+typedef SquashVerdict = { final failure: Null<String>; final detail: Array<String>; }
 /**
  * The one answer to "how much of the writer's output depends on where the author broke lines": `dev squash-census [<dir>...]
  * [--repo DIR] [--files]` squashes (`Squash`) every `.hx` of each tree on a COPY, formats the copy and the original copy under the
@@ -50,6 +52,20 @@ typedef SquashReport = { final rows: Array<SquashRow>; final newOnePass: Array<S
 final class SquashCensus {
 
 	public static inline final USAGE: String = 'usage: dev squash-census [<dir>...] [--repo DIR] [--files]';
+
+	/**
+	 * The files the battery row tolerates as formatting differently once squashed: it refuses a file joining them, and notes a file
+	 * that left the set as progress to remove here.
+	 */
+	public static final SQUASH_DIFFERS: Array<String> = [
+		'src/anyparse/grammar/haxe/HaxeQueryPlugin.hx',
+		'src/anyparse/macro/TriviaBlockLowering.hx',
+		'src/anyparse/macro/WriterBodyPolicyLowering.hx',
+		'src/anyparse/query/cli/CliWalk.hx'
+	];
+
+	/** The same set for the corpus fork's `src`, relative to the fork. */
+	public static final FORK_DIFFERS: Array<String> = ['src/formatter/Cli.hx'];
 
 	private static final LIST_SUMMARY: String = 'apq fmt --list:';
 	private static final HEADER: Array<String> = [
@@ -142,6 +158,43 @@ final class SquashCensus {
 			differs: report.rows.fold((row, n) -> n + row.differs, 0)
 		};
 		return Table.render(HEADER, report.rows.concat([total]).map(cellsOf));
+	}
+
+	/**
+	 * The verdict on `report` against the `expected` set of files that format differently once squashed. A file outside the set, a
+	 * squash that made a file need a second rewrite, or a file the grammar cannot format (it leaves the comparison unseen) fails;
+	 * a file in the set that now agrees only adds a note. `label` names the tree in the failing line.
+	 */
+	public static function verdict(report: SquashReport, expected: Array<String>, label: String): SquashVerdict {
+		final moved: Array<String> = XconfigFmt.setMoves(expected, report.differs);
+		final grown: Array<String> = [for (move in moved) if (move.startsWith('+ ')) move.substr(2)];
+		final agree: Array<String> = [for (move in moved) if (move.startsWith('- ')) move.substr(2)];
+		final unparsed: Int = report.rows.fold((row, n) -> n + row.unparsed, 0);
+		final why: Array<String> = [];
+		final detail: Array<String> = [];
+		if (grown.length > 0) {
+			why.push('+${grown.length} differ once squashed: fix the writer, or file in SquashCensus (decisions line)');
+			for (file in grown) detail.push('+ $file');
+		}
+		if (report.newOnePass.length > 0) {
+			why.push('${report.newOnePass.length} need a second rewrite once squashed');
+			for (file in report.newOnePass) detail.push('1pass-new $file');
+		}
+		if (unparsed > 0) why.push('$unparsed file(s) the grammar cannot format drop out of the comparison');
+		for (file in agree) detail.push('- $file now agrees once squashed: remove it from the expected set');
+		return { failure: why.length == 0 ? null : '$label ${why.join('; ')}', detail: detail };
+	}
+
+	/**
+	 * The battery's row: `repo`'s own tree against `SQUASH_DIFFERS` and, when `fork` names a corpus fork holding a `src`, its
+	 * `src` against `FORK_DIFFERS`, worked in `scratch`. `hxq` is the command that runs the engine.
+	 */
+	public static function standing(hxq: Array<String> -> Command, repo: String, fork: Null<String>, scratch: String): SquashVerdict {
+		final own: SquashVerdict = verdict(census(hxq, repo, GateTree.TREE_SCOPE, Path.join([scratch, 'repo'])), SQUASH_DIFFERS, 'squash');
+		if (fork == null || fork == '' || !FileSystem.exists(Path.join([fork, 'src']))) return own;
+		final corpus: SquashVerdict = verdict(census(hxq, fork, ['src'], Path.join([scratch, 'fork'])), FORK_DIFFERS, 'squash fork');
+		final failures: Array<String> = [for (v in [own, corpus]) if (v.failure != null) v.failure];
+		return { failure: failures.length == 0 ? null : failures.join('; '), detail: own.detail.concat(corpus.detail) };
 	}
 
 	/** Whether `run` ended the way `fmt` ends when it ran: 0, or 1 when some file failed to format. */
