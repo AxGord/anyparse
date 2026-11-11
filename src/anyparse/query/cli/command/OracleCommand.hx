@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.ConfigDisagreement;
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.query.ExitCode.*;
 import anyparse.query.OracleProvider;
@@ -81,17 +82,19 @@ final class OracleCommand implements CliCommand {
 		// `lint` over the same scope asks the FIRST path's builds, so those are the verdicts worth recording; a scope
 		// whose roots name other builds is told so, in `lint`'s own words, rather than silently judged by the first.
 		final configByDir: Map<String, LintConfig> = [];
+		final notes: Array<ConfigNote> = [];
 		function resolveConfig(file: String): LintConfig {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
-			final discovered: LintConfig = LintConfig.discover(file);
+			final discovered: LintConfig = LintConfig.discover(file, notes);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
 		final compiler: OracleProvider = OracleProviders.of(CliArgs.pickPlugin(lang));
-		ConfigDisagreement.warnOracle(compiler, resolveConfig, paths);
-		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles(compiler);
+		ConfigDisagreement.warnOracle(compiler, resolveConfig, paths, notes);
+		final oracles: Array<OracleConfig> = resolveConfig(paths[0]).compilerOracles(compiler, notes);
+		ConfigNotes.say(notes, CliIo.stderr);
 		if (oracles.length > 0) return recordOracleVerdicts(compiler, oracles);
 		CliIo.stderr('apq oracle: no compilerOracle configured for ${specs.join(', ')} — nothing to typecheck\n');
 		return EXIT_OK;

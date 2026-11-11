@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.OracleProvider;
@@ -42,8 +43,8 @@ final class ConfigDisagreement {
 	 * memoised resolver lives, and where the
 	 * run knows whether any `FrameworkAware` rule is active to read the roster at all.
 	 */
-	public static function warnRoster(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {
-		warn('scope-disagreement', 'the framework roster', rosterMessage(resolve, paths));
+	public static function warnRoster(resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>): Void {
+		warn('scope-disagreement', 'the framework roster', rosterMessage(resolve, paths), notes);
 	}
 
 	/**
@@ -52,8 +53,10 @@ final class ConfigDisagreement {
 	 * Called from `Cli.runLint` and gated there on `--no-oracle`: a run that takes no oracle verdict
 	 * has nothing a disagreement could corrupt.
 	 */
-	public static function warnOracle(compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {
-		warn('scope-disagreement', 'the compiler oracle', oracleMessage(compiler, resolve, paths));
+	public static function warnOracle(
+		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
+	): Void {
+		warn('scope-disagreement', 'the compiler oracle', oracleMessage(compiler, resolve, paths, notes), notes);
 	}
 
 	/**
@@ -76,8 +79,10 @@ final class ConfigDisagreement {
 	 * declared cannot be invented, and guessing them (the config's own directory, the oracle hxml's
 	 * classpath) would silently widen what every such project resolves against.
 	 */
-	public static function warnMissingProjectRoots(resolve: Null<(String) -> LintConfig>, paths: Array<String>): Void {
-		warn('scope-gap', 'the project source roots', missingProjectRootsMessage(resolve, paths));
+	public static function warnMissingProjectRoots(
+		resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
+	): Void {
+		warn('scope-gap', 'the project source roots', missingProjectRootsMessage(resolve, paths), notes);
 	}
 
 	/**
@@ -94,8 +99,8 @@ final class ConfigDisagreement {
 	 * DEMAND, so a run whose checks never build the index still pays nothing for the question. The
 	 * twin of the `could not resolve haxelib "…"` note that sits beside it.
 	 */
-	public static function warnUnreachableProjectRoots(roots: Array<String>): Void {
-		warn('scope-gap', 'unreachable project source roots', unreachableProjectRootsMessage(roots));
+	public static function warnUnreachableProjectRoots(roots: Array<String>, ?notes: Array<ConfigNote>): Void {
+		warn('scope-gap', 'unreachable project source roots', unreachableProjectRootsMessage(roots), notes);
 	}
 
 	/**
@@ -116,9 +121,9 @@ final class ConfigDisagreement {
 	 * renders as `null`. That difference is what once reported the first mixed scope this ran over as a disagreement about nothing.
 	 */
 	private static function oracleMessage(
-		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>
+		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
 	): Null<String> {
-		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles(compiler)));
+		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles(compiler, notes)));
 	}
 
 	/**
@@ -179,9 +184,8 @@ final class ConfigDisagreement {
 	 * Through `LintConfig`'s own ledger rather than a second one, so a run that has already warned
 	 * about a setting stays quiet however many rules ask the question again.
 	 */
-	@:access(anyparse.check.LintConfig)
-	private static function warn(kind: String, label: String, line: Null<String>): Void {
-		if (line != null) LintConfig.warnOnce('$kind:$label', line);
+	private static function warn(kind: String, label: String, line: Null<String>, notes: Null<Array<ConfigNote>>): Void {
+		if (line != null) ConfigNotes.note(notes, '$kind:$label', line);
 	}
 
 	/**

@@ -49,8 +49,8 @@ final class OracleProviders {
 	 * Read `config`'s `compilerOracle` declarations so their dropped entries are reported, for a command that discovers a
 	 * config and never asks it for builds: the warning is the only sign that an entry the project wrote is gone.
 	 */
-	public static function reportDrops(config: LintConfig, plugin: GrammarPlugin): Void {
-		config.compilerOracles(of(plugin)); // noqa: unused-return-value
+	public static function reportDrops(config: LintConfig, plugin: GrammarPlugin, ?notes: Array<ConfigNote>): Void {
+		config.compilerOracles(of(plugin), notes); // noqa: unused-return-value
 	}
 
 }

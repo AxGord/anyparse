@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.check.Check;
 import anyparse.check.ConfigDisagreement;
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
@@ -239,8 +240,10 @@ final class LintCommand implements CliCommand {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
-			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file), o.reviewBudget);
-			OracleProviders.reportDrops(discovered, plugin);
+			final notes: Array<ConfigNote> = [];
+			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file, notes), o.reviewBudget);
+			OracleProviders.reportDrops(discovered, plugin, notes);
+			ConfigNotes.say(notes, CliIo.stderr);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
@@ -489,9 +492,11 @@ final class LintCommand implements CliCommand {
 	private static function warnScopeNotices(
 		activeChecks: Array<Check>, resolveConfig: (String) -> LintConfig, paths: Array<String>, noOracle: Bool, compiler: OracleProvider
 	): Void {
-		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths);
-		if (!noOracle) ConfigDisagreement.warnOracle(compiler, resolveConfig, paths);
-		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);
+		final notes: Array<ConfigNote> = [];
+		if (activeChecks.exists(c -> c is FrameworkAware)) ConfigDisagreement.warnRoster(resolveConfig, paths, notes);
+		if (!noOracle) ConfigDisagreement.warnOracle(compiler, resolveConfig, paths, notes);
+		ConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths, notes);
+		ConfigNotes.say(notes, CliIo.stderr);
 	}
 
 	/**
@@ -560,7 +565,9 @@ final class LintCommand implements CliCommand {
 				out.push(entry);
 			}
 		}
-		ConfigDisagreement.warnUnreachableProjectRoots(unreachable);
+		final notes: Array<ConfigNote> = [];
+		ConfigDisagreement.warnUnreachableProjectRoots(unreachable, notes);
+		ConfigNotes.say(notes, CliIo.stderr);
 		// MATCHED counts the report files too: a whole-project lint excludes every root file from `out`,
 		// and its roots matched all the same.
 		return { files: out, matched: unreachable.length < roots.length, allMatched: unreachable.length == 0 };

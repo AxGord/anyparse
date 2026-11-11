@@ -113,7 +113,7 @@
 			"name": "M-SCOPE-GAP-UNWIRED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "warnScopeNotices",
-			"find": "\t\tConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths);\n",
+			"find": "\t\tConfigDisagreement.warnMissingProjectRoots(resolveConfig, paths, notes);\n",
 			"replace": "",
 			"note": "the missing-roots notice is written but never called, which is what moving it below the --fix early return would also do - the message fixtures stay green and every run goes silent"
 		},
@@ -121,7 +121,7 @@
 			"name": "M-SCOPE-GAP-ROOT-UNWIRED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "readResolutionRoots",
-			"find": "\t\tConfigDisagreement.warnUnreachableProjectRoots(unreachable);\n",
+			"find": "\t\tConfigDisagreement.warnUnreachableProjectRoots(unreachable, notes);\n",
 			"replace": "",
 			"note": "a declared resolutionRoots entry that matches no .hx goes back to being read, dropped and never mentioned - the only place that learns it stops saying so"
 		},

@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ConfigFinder.ConfigChain;
@@ -93,8 +94,10 @@ final class ModuleMoveCli {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(opts.lang));
 		// The library sources names resolve to — `resolutionLibs` and the std, read as `lint` reads them; without them a
 		// name an import of a library module may bind cannot be read, and the move refuses it.
-		final config: LintConfig = LintConfig.discover(opts.moves[0].from);
-		OracleProviders.reportDrops(config, plugin);
+		final notes: Array<ConfigNote> = [];
+		final config: LintConfig = LintConfig.discover(opts.moves[0].from, notes);
+		OracleProviders.reportDrops(config, plugin, notes);
+		ConfigNotes.say(notes, CliIo.stderr);
 		final resolution: Null<ResolutionScope> = LintCommand.resolutionThunk(
 			opts.lang, scopeFiles, [], config.resolutionLibs(), config.resolutionStd()
 		);
@@ -186,7 +189,11 @@ final class ModuleMoveCli {
 		ext: String
 	): Int {
 		if (!opts.write) return preview(outcome);
-		if (opts.verify && LintConfig.discover(outcome.moves[0].from).compilerOracles(OracleProviders.of(plugin)).length == 0) {
+		final notes: Array<ConfigNote> = [];
+		final verifyOracles: Bool = opts.verify
+			&& LintConfig.discover(outcome.moves[0].from, notes).compilerOracles(OracleProviders.of(plugin), notes).length > 0;
+		ConfigNotes.say(notes, CliIo.stderr);
+		if (opts.verify && !verifyOracles) {
 			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apq.json — nothing written\n');
 			return EXIT_RUNTIME;
 		}

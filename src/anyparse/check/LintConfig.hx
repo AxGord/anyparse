@@ -116,6 +116,12 @@ typedef OracleGenerate = {
 typedef DiscoveredConfig = { var config: LintConfig; var chain: Array<String>; }
 
 /**
+ * One config diagnostic: `key` is its once-per-run identity under `LintConfig.WARNED_TOPIC`, `message` the
+ * whole text a user sees, newline included.
+ */
+typedef ConfigNote = { final key: String; final message: String; }
+
+/**
  * Project-level lint configuration, read from an `apq.json` discovered by
  * walking up from a linted file's directory (the apq-native counterpart of the
  * `checkstyle.json` compat config). Grammar-agnostic — it keys rules by their
@@ -246,7 +252,7 @@ final class LintConfig {
 	 * `dist/<target>/haxe/debug.hxml` — or null when the config was parsed without a base
 	 * directory, where there is nothing to resolve against.
 	 */
-	public function compilerOracles(compiler: OracleProvider): Array<OracleConfig> {
+	public function compilerOracles(compiler: OracleProvider, ?notes: Array<ConfigNote>): Array<OracleConfig> {
 		if (_oracles.read.length > 0 || _oracles.declared.length == 0) return _oracles.read;
 		// Every folded declaration is read, the shadowed ones only for their dropped entries: a mistake in
 		// a document the nearer one overrides is still reported.
@@ -258,7 +264,7 @@ final class LintConfig {
 			for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);
 			final document: Null<String> = declared.document;
 			if (document != null && drops.length > 0)
-				warnOnce('$document#compilerOracle', drops.map(drop -> 'apq: $document: $drop\n').join(''));
+				ConfigNotes.note(notes, '$document#compilerOracle', drops.map(drop -> 'apq: $document: $drop\n').join(''));
 		}
 		return _oracles.read = nearest ?? [];
 	}
@@ -579,8 +585,8 @@ final class LintConfig {
 	 * chain still applies: the nearest config being broken must not also throw away
 	 * the project's.
 	 */
-	public static inline function discover(path: String): LintConfig {
-		return discoverChain(path).config;
+	public static inline function discover(path: String, ?notes: Array<ConfigNote>): LintConfig {
+		return discoverChain(path, null, notes).config;
 	}
 
 	/**
@@ -591,14 +597,15 @@ final class LintConfig {
 	 * declares is resolved against that document's own directory; that is what lets a report group
 	 * files by chain rather than by directory.
 	 */
-	public static function discoverChain(path: String, ?documents: DocumentMemo): DiscoveredConfig {
+	public static function discoverChain(path: String, ?documents: DocumentMemo, ?notes: Array<ConfigNote>): DiscoveredConfig {
 		final chain: ConfigChain = ConfigFinder.findUpProject(path, ConfigFinder.PROJECT_ROOT_MARKERS);
 		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
 		// A document that EXISTS and cannot be read is the one outcome with no other
 		// symptom: the ancestor's answer applies to a question this document already
 		// answered, and nothing else says so.
-		for (path in chain.unreadable) warnOnce(path, 'apq: $path could not be read — ignored, the rest of the chain still applies\n');
+		for (path in chain.unreadable)
+			ConfigNotes.note(notes, path, 'apq: $path could not be read — ignored, the rest of the chain still applies\n');
 		for (entry in chain.documents) {
 			final doc: Null<LintDocument> = LintDocuments.parseDocumentIn(documents, entry.content, Path.directory(entry.path));
 			if (doc == null) {
@@ -607,7 +614,7 @@ final class LintConfig {
 				// toggle. Once per file per run: `discover` re-runs for every linted
 				// directory (the CLI memoises per directory, not per config), so an
 				// unde-duplicated line would repeat N times per run.
-				warnOnce(entry.path, 'apq: ${entry.path} failed to parse — ignored, the rest of the chain still applies\n');
+				ConfigNotes.note(notes, entry.path, 'apq: ${entry.path} failed to parse — ignored, the rest of the chain still applies\n');
 				continue;
 			}
 			// A per-ENTRY drop degrades silently in exactly the way the wholesale rejection
@@ -616,7 +623,7 @@ final class LintConfig {
 			// attributed to the document that declared it, since a chain has several.
 			if (doc.drops.length > 0) {
 				final lines: Array<String> = doc.drops.map(drop -> 'apq: ${entry.path}: $drop\n');
-				warnOnce(entry.path, lines.join(''));
+				ConfigNotes.note(notes, entry.path, lines.join(''));
 			}
 			for (declared in doc.oracleDeclarations) declared.document = entry.path;
 			merged = merged == null ? doc : LintDocuments.mergeDocuments(merged, doc);

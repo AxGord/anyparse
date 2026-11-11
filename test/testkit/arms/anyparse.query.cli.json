@@ -743,6 +743,14 @@
 			"find": "\t\tif (at + 1 >= args.length) return;",
 			"replace": "\t\treturn;",
 			"note": "an explicit --lang is never checked against the registry, so an unknown one reaches the command and fails only after a document has been read"
+		},
+		{
+			"name": "M-MODMOVE-CLI-VERIFY-NO-ORACLE",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "emit",
+			"note": "--verify with no compilerOracle no longer refuses: the move writes",
+			"find": "if (opts.verify && !verifyOracles) {",
+			"replace": "if (opts.verify && !verifyOracles && false) {"
 		}
 	]
 }

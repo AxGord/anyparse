@@ -8913,6 +8913,29 @@
 				"err": "1d7d38d1f2d7ff05",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "oracle under a broken nested config and a dropped compilerOracle",
+			"note": "the nested failed-to-parse line comes before the compilerOracle drop, the order discovery meets them",
+			"argv": [
+				"apq",
+				"oracle",
+				"a/A.hx",
+				"Z.hx"
+			],
+			"files": {
+				".git/HEAD": "ref: refs/heads/main\n",
+				"apq.json": "{\"compilerOracle\": [42]}\n",
+				"a/apq.json": "{\"rules\": [\n",
+				"a/A.hx": "class A {}\n",
+				"Z.hx": "class Z {}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "35eb0d74415b0449",
+				"files": "85e1c1b57a9a8231"
+			}
 		}
 	]
 }

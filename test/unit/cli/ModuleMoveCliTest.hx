@@ -103,6 +103,30 @@ class ModuleMoveCliTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-MODMOVE-CLI-VERIFY-NO-ORACLE')
+	public function testVerifyWithNoCompilerOracleRefusesAndWritesNothing(): Void {
+		#if (sys || nodejs)
+		final dir: String = project([
+			{ name: 'apq.json', source: '{"move": {"scope": ["src"]}}' },
+			{ name: 'src/pkg/A.hx', source: A }
+		]);
+		var rc: Int = 0;
+		final printed: String = CliFixture.captureStderr(() ->
+			rc = Cli.run(['move', '$dir/src/pkg/A.hx', '--to', '$dir/src/pkg/sub', '--write', '--verify'])
+		);
+		Assert.equals((anyparse.query.ExitCode.EXIT_RUNTIME: Int), rc, 'the move is refused');
+		#if nodejs
+		Assert.isTrue(printed.contains('--verify needs a "compilerOracle" in apq.json — nothing written'), printed);
+		#end
+		Assert.equals(A, File.getContent('$dir/src/pkg/A.hx'), 'the original stays');
+		Assert.isFalse(FileSystem.exists('$dir/src/pkg/sub'), 'nothing is written');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	@:pin('control')
 	@:killer('M-MODMOVE-CLI-TEXT-ROOT-MISSING')
 	public function testADeclaredTextRootThatDoesNotExistRefuses(): Void {
 		#if (sys || nodejs)

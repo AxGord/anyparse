@@ -503,6 +503,22 @@
 			"find": "while (annotationKinds.contains(inner.kind) && inner.children.length > 0) inner = inner.children[inner.children.length - 1];",
 			"replace": "",
 			"note": "a splice under a metadata wrapper (`@:mergeBlock $b{decls};`) is not seen as a splice, so a de-nest beside or past it passes the collision gate though the splice declares into the enclosing block"
+		},
+		{
+			"name": "M-CONFIG-NOTE-STATIC",
+			"type": "anyparse.check.ConfigNotes",
+			"method": "note",
+			"find": "if (notes != null)",
+			"replace": "if (notes != null && false)",
+			"note": "a command that collects config notes gets none: every diagnostic goes back to the bare stderr fallback and the run ledger print never sees it"
+		},
+		{
+			"name": "M-CONFIG-NOTE-REPEATS",
+			"type": "anyparse.check.ConfigNotes",
+			"method": "say",
+			"find": "if (RunLedger.first(LintConfig.WARNED_TOPIC, note.key)) ",
+			"replace": "",
+			"note": "a config diagnostic the run already said is printed again by every command that collects it"
 		}
 	]
 }
