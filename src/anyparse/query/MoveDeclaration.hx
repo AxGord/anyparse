@@ -93,25 +93,19 @@ final class MoveDeclaration {
 						objects(
 							list, 'parts', ['file', 'select']
 						)
-							.map(
-								part ->
-									{
-										file: at(string(part, 'sortedLists.parts', 'file')),
-										select: string(part, 'sortedLists.parts', 'select')
-									}
-							)
+							.map(part -> {
+								file: at(string(part, 'sortedLists.parts', 'file')),
+								select: string(part, 'sortedLists.parts', 'select')
+							})
 				],
 				mirrors: objects(
 					section, 'mirrors', ['source', 'test', 'suffixes']
 				)
-					.map(
-						m ->
-							{
-								source: at(string(m, 'mirrors', 'source')),
-								test: at(string(m, 'mirrors', 'test')),
-								suffixes: strings(m, 'suffixes')
-							}
-					)
+					.map(m -> {
+						source: at(string(m, 'mirrors', 'source')),
+						test: at(string(m, 'mirrors', 'test')),
+						suffixes: strings(m, 'suffixes')
+					})
 			})
 		catch (exception: Exception)
 			Left(exception.message);

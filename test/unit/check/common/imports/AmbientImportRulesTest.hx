@@ -490,9 +490,10 @@ class AmbientImportRulesTest extends Test {
 		final root: String = CliFixture.writeTree('apq_ambient_rules', tree);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final files: Array<{ file: String, source: String }> = analysed.map(name ->
-				{ file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
-			);
+			final files: Array<{ file: String, source: String }> = analysed.map(name -> {
+				file: '$root/$name',
+				source: sys.io.File.getContent('$root/$name')
+			});
 			out = reported(files, '$root/');
 		});
 		return out;

@@ -1595,9 +1595,10 @@ class ThreadSafetyCheckTest extends Test {
 	/** Every finding over `tree` with the run's files listed in `order`, as sorted `<relative path>: <message>` lines. */
 	private function chainFindings(tree: Array<{ name: String, source: String }>, order: Array<String>): Array<String> {
 		final root: String = CliFixture.writeTree('threadsafetychains', tree);
-		final files: Array<{ file: String, source: String }> = order.map(name ->
-			{ file: '$root/$name', source: tree.find(t -> t.name == name)?.source ?? '' }
-		);
+		final files: Array<{ file: String, source: String }> = order.map(name -> {
+			file: '$root/$name',
+			source: tree.find(t -> t.name == name)?.source ?? ''
+		});
 		final vs: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), [new ThreadSafety()]);
 		final found: Array<String> = [
 			for (v in vs)

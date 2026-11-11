@@ -569,13 +569,10 @@ final class LintFixVerify {
 		// alone). What the suite does cover is the shared entry itself and the identical wiring
 		// in `FixVerifier.verify`, which IS discriminating. Keep this line spelled the same as that
 		// one so the two cannot drift apart unnoticed.
-		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(
-			check ->
-				{
-					check: check,
-					all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
-				}
-		);
+		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(check -> {
+			check: check,
+			all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
+		});
 		// Nothing to annotate costs nothing: no probe, no display server.
 		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))
 			return { tail: ', oracle-assisted: 0 applied${excludedTail(excluded)}', appliedCount: 0, excluded: excluded };

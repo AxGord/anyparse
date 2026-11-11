@@ -182,16 +182,14 @@ final class GateLint {
 				oracle: true,
 				snapshot: baseLint
 			}
-		].concat(baseline.infra.map(
-			s -> {
-				name: Path.withoutDirectory(s.tree),
-				tree: s.tree,
-				scope: ['.'],
-				key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.'], rules),
-				oracle: false,
-				snapshot: s.snapshot
-			}
-		));
+		].concat(baseline.infra.map(s -> {
+			name: Path.withoutDirectory(s.tree),
+			tree: s.tree,
+			scope: ['.'],
+			key: cacheKey('tree ${s.tree} ${GateTree.treeState(s.tree)} no-oracle', ['.'], rules),
+			oracle: false,
+			snapshot: s.snapshot
+		}));
 		final reports: Array<Null<String>> = trees.map(t -> cachedLint(t.key));
 		final misses: Array<Int> = [for (i => report in reports) if (report == null) i];
 		final runs: Array<Result> = misses.length == 0

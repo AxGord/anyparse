@@ -122,17 +122,15 @@ class TestChild {
 
 	/** The output file of a `bounded-run` or `bounded-pending` child: the runs it answers. */
 	private static function runsText(runs: Array<ProcessRun>): String {
-		final written: Array<ChildRun> = runs.map(
-			r -> {
-				status: r.status,
-				out: r.out,
-				err: r.err,
-				failure: r.failure,
-				overflowed: r.overflowed,
-				cancelled: r.cancelled,
-				unstarted: r.unstarted
-			}
-		);
+		final written: Array<ChildRun> = runs.map(r -> {
+			status: r.status,
+			out: r.out,
+			err: r.err,
+			failure: r.failure,
+			overflowed: r.overflowed,
+			cancelled: r.cancelled,
+			unstarted: r.unstarted
+		});
 		return TestChildDocumentWriter.write({ runs: written }, JsonFormat.instance.compactWriteOptions);
 	}
 

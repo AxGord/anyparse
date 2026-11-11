@@ -553,9 +553,10 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 	private static function buildEdit(m: Match, source: String, span: Span, s: Seams, emit: Emit): { span: Span, text: String } {
 		final merge: Null<Merge> = m.merge;
 		if (merge != null) return mergedEdit(m, merge, source, s, emit);
-		final built: Array<{ cond: String, value: String }> = m.pairs.map(p ->
-			{ cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
-		);
+		final built: Array<{ cond: String, value: String }> = m.pairs.map(p -> {
+			cond: text(source, p.cond),
+			value: IfExpressionChain.spanText(source, p.value, m.carried)
+		});
 		return { span: span, text: IfExpressionChain.buildText(text(source, m.prefix), built, text(source, m.terminalValue)) };
 	}
 

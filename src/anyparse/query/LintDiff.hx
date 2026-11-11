@@ -466,15 +466,13 @@ final class LintDiff {
 		final counted: LintDiffBuckets = bucket(added, removed, e -> e.rule);
 		final beforeBy: Map<String, Int> = ruleTotals(before);
 		final afterBy: Map<String, Int> = ruleTotals(after);
-		final out: Array<LintDiffRuleDelta> = counted.names.map(
-			n -> {
-				rule: n,
-				before: beforeBy[n] ?? 0,
-				after: afterBy[n] ?? 0,
-				added: counted.added[n] ?? 0,
-				removed: counted.removed[n] ?? 0
-			}
-		);
+		final out: Array<LintDiffRuleDelta> = counted.names.map(n -> {
+			rule: n,
+			before: beforeBy[n] ?? 0,
+			after: afterBy[n] ?? 0,
+			added: counted.added[n] ?? 0,
+			removed: counted.removed[n] ?? 0
+		});
 		out.sort(compareRuleMovement);
 		return out;
 	}

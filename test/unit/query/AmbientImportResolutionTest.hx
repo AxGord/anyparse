@@ -406,9 +406,10 @@ class AmbientImportResolutionTest extends Test {
 	/** The index over every `.hx` of the fixture tree, paths as written. */
 	private function indexOf(root: String): SymbolIndex {
 		#if (sys || nodejs)
-		final files: Array<{ file: String, source: String }> = TREE.map(entry ->
-			{ file: '$root/${entry.name}', source: sys.io.File.getContent('$root/${entry.name}') }
-		);
+		final files: Array<{ file: String, source: String }> = TREE.map(entry -> {
+			file: '$root/${entry.name}',
+			source: sys.io.File.getContent('$root/${entry.name}')
+		});
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
 		return CheckFixture.index([], new HaxeQueryPlugin());
@@ -418,9 +419,10 @@ class AmbientImportResolutionTest extends Test {
 	/** The index over exactly `names` of the tree at `root`, paths as written — for a narrow-scope fixture. */
 	private function indexOfTree(root: String, names: Array<String>): SymbolIndex {
 		#if (sys || nodejs)
-		final files: Array<{ file: String, source: String }> = names.map(name ->
-			{ file: '$root/$name', source: sys.io.File.getContent('$root/$name') }
-		);
+		final files: Array<{ file: String, source: String }> = names.map(name -> {
+			file: '$root/$name',
+			source: sys.io.File.getContent('$root/$name')
+		});
 		return CheckFixture.index(files, new HaxeQueryPlugin());
 		#else
 		return CheckFixture.index([], new HaxeQueryPlugin());

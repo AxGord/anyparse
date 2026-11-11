@@ -430,9 +430,10 @@ final class CrossRenameMember {
 			for (off in proven.offsets) addOff(off);
 			if (offsets.length == 0) continue;
 
-			final edits: Array<{ span: Span, text: String }> = offsets.map(off ->
-				{ span: new Span(off, off + target.memberName.length), text: newName }
-			);
+			final edits: Array<{ span: Span, text: String }> = offsets.map(off -> {
+				span: new Span(off, off + target.memberName.length),
+				text: newName
+			});
 			final newSource: String = CanonicalEdit.applyEdits(entry.source, edits);
 
 			final newTree: QueryNode = switch ParseGate.parse(plugin, newSource, 'rewritten ${entry.file}') {

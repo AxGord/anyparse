@@ -2106,6 +2106,17 @@ class WrapList {
 			if (ifElseSplit != null && arrowBodyIsBrokenIfElse(ifElseSplit.body))
 				return bareArrowGlueShape(open, close, openInside, closeInside, ifElseSplit.head, ifElseSplit.body, cols);
 		}
+		// A sole arrow argument whose body is brace-led — a statement block or an object literal — keeps that body on
+		// the `->` line and is shaped as the plain argument it then is: the brace is its wrap point, so the call hugs it
+		// (`f(u -> {` … `})`) exactly as it hugs a sole `{`-led argument, or opens with the lambda flat on its own line
+		// when that is where it fits.
+		if (open == '(' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))
+			return shape(
+				mode, open, close, sep,
+				[replaceArrowMarker(items[0], (_, _, fl) -> WrapBoundary(fl)) ?? items[0]],
+				openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags, lineWidth,
+				flatTrailingComma, comprehensionCuddledOpen, soleItemCuddledBrackets, complexItemKinds
+			);
 		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, items, openInside, closeInside);
 		if (comprBlockHug != null) return comprBlockHug;
 		final comprCuddledOpen: Null<Doc> = shapeComprehensionCuddledOpen(
@@ -2671,7 +2682,7 @@ class WrapList {
 		// so the arrow body AND the close `)` break together (fork's `arrow ->`
 		// break + `lineEndBefore(pClose)` close-own-line), or both stay glued.
 		// The decision node is placed AT THE ARROW BODY (after the `(params) ->`
-		// head, via `coupledArrowItem`) so its flat/break boundary is IDENTICAL
+		// head, via `replaceArrowMarker`) so its flat/break boundary is IDENTICAL
 		// to the arrow marker's own probe (same col, same `flatBody + close +
 		// rest` width). At the open paren it over-measured by one column at the
 		// exact-`lineWidth` boundary and broke a fitting `exists(arrow) ? a : b`
@@ -2679,28 +2690,22 @@ class WrapList {
 		// (whose `fitsFlat` defers the block `BodyGroup` to width 0) so the close
 		// stays glued (`})`) — the block owns its own multi-line layout.
 		if (arrowBodyIsBlock(arrowItem)) return Group(IfBreak(brkShape, flatShape));
-		final coupled: Null<Doc> = coupledArrowItem(arrowItem, closeInside, close);
+		final coupled: Null<Doc> = replaceArrowMarker(arrowItem, (n, brk, fl) -> coupledMarker(n, brk, fl, closeInside, close));
 		return coupled != null ? Concat([Text(open), openInside, coupled]) : Group(IfBreak(brkShape, flatShape));
 	}
 
 	/**
-	 * ω-arrow-residual-linewrap: build the coupled arrow-body + close-paren shape.
-	 * Splits `arrowItem` into its glued head (`(params) ->`) and the trailing
-	 * arrow-body marker `WrapBoundary(IfResidualLineExceeds(n, brk, flat))`, then
-	 * re-emits ONE decision node at the body position whose flat side glues the
-	 * close (`flat close`) and whose break side puts the close on its own line
-	 * (`brk \n close`). Returns null when `arrowItem` carries no marker.
-	 * ω-arrow-residual-linewrap: return `item` with its trailing arrow-body marker
-	 * replaced by the coupled decision node (`coupledMarker`), or null when `item`
-	 * carries no marker. Recurses through a trailing `Concat` like the sibling
-	 * marker walkers (`arrowBodyDoc` / `arrowBodyIsBlock`).
+	 * Return `item` with its trailing arrow-body marker `WrapBoundary(IfResidualLineExceeds(n, brk, flat))` replaced by
+	 * `replace(n, brk, flat)`, or null when `item` carries no marker. Recurses through a trailing `Concat` like the
+	 * sibling marker walkers (`arrowBodyDoc` / `arrowBodyIsBlock`). ω-arrow-residual-linewrap puts the coupled decision
+	 * node (`coupledMarker`) there; a brace-led body takes the marker's flat side, so it never breaks after `->`.
 	 */
-	private static function coupledArrowItem(item: Doc, closeInside: Doc, close: String): Null<Doc> {
+	private static function replaceArrowMarker(item: Doc, replace: (Int, Doc, Doc) -> Doc): Null<Doc> {
 		switch item {
 			case WrapBoundary(IfResidualLineExceeds(n, brk, fl)):
-				return coupledMarker(n, brk, fl, closeInside, close);
+				return replace(n, brk, fl);
 			case Concat(arr) if (arr.length > 0):
-				final sub: Null<Doc> = coupledArrowItem(arr[arr.length - 1], closeInside, close);
+				final sub: Null<Doc> = replaceArrowMarker(arr[arr.length - 1], replace);
 				if (sub == null) return null;
 				final copy: Array<Doc> = arr.copy();
 				copy[copy.length - 1] = sub;

@@ -291,8 +291,7 @@ final class Parity {
 			stdin: null,
 			files: files,
 			commits: []
-		}
-		);
+		});
 	}
 
 	/** `argv` (`apq|hxq <command> …`) run by the shim of `shimTree` on `engine`, the code cache off on both sides alike. */

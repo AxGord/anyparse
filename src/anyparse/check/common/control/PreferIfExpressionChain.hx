@@ -430,9 +430,10 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 			headSpan, kept, IfExpressionChain.carryGaps(seats), source, comments
 		);
 		if (carried == null) return null;
-		final pairs: Array<{ cond: String, value: String }> = emitted.map(rung ->
-			{ cond: rung.condText, value: IfExpressionChain.spanText(source, rung.value, carried) }
-		);
+		final pairs: Array<{ cond: String, value: String }> = emitted.map(rung -> {
+			cond: rung.condText,
+			value: IfExpressionChain.spanText(source, rung.value, carried)
+		});
 		return {
 			span: headSpan,
 			editSpan: new Span(headSpan.from, chainEnd.to),

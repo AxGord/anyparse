@@ -537,6 +537,22 @@
 			"method": "containerTakesOwnLine",
 			"force": "false",
 			"note": "every call-bearing literal argument packs with its neighbours, so one with four items, a nested container or a long width no longer takes its own line"
+		},
+		{
+			"name": "M-ARROW-BRACE-BODY-NO-HUG",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shape",
+			"find": "if (open == '(' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))",
+			"replace": "if (open == '<' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))",
+			"note": "a sole brace-bodied arrow argument goes back to the generic shapes: a cascade that falls to fillLineWithLeadingBreak opens the call paren and a noWrap one strands the close paren below the body"
+		},
+		{
+			"name": "M-ARROW-BRACE-BODY-KEEPS-ARROW-BREAK",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shape",
+			"find": "(_, _, fl) -> WrapBoundary(fl)",
+			"replace": "(n, brk, fl) -> IfResidualLineExceeds(n, brk, fl)",
+			"note": "the brace-led body keeps its break-after-arrow decision, so an object literal too long for the head line moves below the arrow instead of breaking its own fields"
 		}
 	]
 }

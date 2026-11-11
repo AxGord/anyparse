@@ -198,13 +198,14 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 	/**
 	 * DISCRIMINATES the guard's SECOND conjunct (`hasForcedBreak`): a FLAT object-literal arrow body also starts with
 	 * `{`, but it rides the head line in full, so breaking after `->` genuinely shortens that line and must still
-	 * happen. A `{`-only guard suppressed the break and pushed this fixture from 127 to 141 columns against the 140
-	 * budget. Reverting the whole arm leaves this test PASSING -- it pins the guard's width, not its existence.
+	 * happen. A `{`-only guard suppressed the break and pushed the line past its budget. The lambda is a variable
+	 * initializer here: as a SOLE call argument the call itself takes the flat side and hugs (`LambdaObjectArgHugTest`).
+	 * Reverting the whole arm leaves this test PASSING -- it pins the guard's width, not its existence.
 	 */
 	public function testFlatObjectLiteralArrowBodyStillBreaks(): Void {
-		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal resultName = collectionNameValue.mapEntriesHere(\n'
-			+ '\t\t\tentryValueName ->\n\t\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, '
-			+ 'secondaryLabelName: entryValueName.captionName }\n\t\t);\n\t}\n\n}';
+		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\tfinal mapperFunctionNameHereXxxxxxxxxxx:Mapper = entryValueName '
+			+ '->\n\t\t\t{primaryKeyFieldNamexxxxxxxxxx: entryValueName.identifierName, '
+			+ 'secondaryLabelName: entryValueName.captionName };\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
