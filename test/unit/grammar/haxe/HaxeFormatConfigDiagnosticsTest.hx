@@ -280,7 +280,12 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 
 	/** Nothing to say means nothing is said — the clean-config path must not print an empty header. */
 	public function testMessageIsNullWhenThereIsNothingToSay(): Void {
-		Assert.isNull(HaxeFormatConfigDiagnostics.message('/p/hxformat.json', { keys: [], wrapValues: [], unsupported: [] }));
+		Assert.isNull(HaxeFormatConfigDiagnostics.message('/p/hxformat.json', {
+			keys: [],
+			wrapValues: [],
+			unsupported: [],
+			values: []
+		}));
 	}
 
 	/** A chain emitter reads no indent, so a chain rule's `additionalIndent` is reported as having no effect. */
@@ -315,9 +320,12 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 	@:pin('control')
 	@:killer('M-KEEP-CLAUSE-SILENT')
 	public function testKeepClauseNamesTheAlternatives(): Void {
-		final line: Null<String> = HaxeFormatConfigDiagnostics.message(
-			'/p/hxformat.json', { keys: [], wrapValues: [], unsupported: ['sameLine.ifBody "keep"'] }
-		);
+		final line: Null<String> = HaxeFormatConfigDiagnostics.message('/p/hxformat.json', {
+			keys: [],
+			wrapValues: [],
+			unsupported: ['sameLine.ifBody "keep"'],
+			values: []
+		});
 		Assert.notNull(line);
 		Assert.stringContains('1 "keep" setting(s) hxq does not support, so the default applies: sameLine.ifBody "keep"', line ?? '');
 		Assert.stringContains('use same, next or fitLine', line ?? '');
@@ -357,6 +365,42 @@ class HaxeFormatConfigDiagnosticsTest extends Test {
 		);
 		Assert.same(placementKeys.map(key -> 'sameLine.$key "keep"'), issues.unsupported);
 		Assert.equals(0, issues.keys.length);
+	}
+
+	/**
+	 * An `indentation.character` the loader cannot read is reported as data against the config, the readable spellings never:
+	 * the loader itself keeps the default indent and says nothing, so this report is the author's only signal.
+	 */
+	@:pin('control')
+	@:killer('M-INDENT-CHARACTER-UNREPORTED')
+	public function testAnUnreadableIndentCharacterIsReported(): Void {
+		final issues: HaxeFormatConfigIssues = HaxeFormatConfigDiagnostics.diagnose('{"indentation": {"character": "space"}}');
+		Assert.same([
+			'indentation.character "space" (use "tab" or a literal run of spaces such as "    ")'
+		], issues.values);
+		for (readable in ['tab', '  ', '    '])
+			Assert.same([], HaxeFormatConfigDiagnostics.diagnose('{"indentation": {"character": "$readable"}}').values, readable);
+		final options: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"indentation": {"character": "space"}}');
+		Assert.equals(
+			HaxeFormatConfigLoader.loadHxFormatJson('{}').indentChar, options.indentChar, 'an unreadable spelling keeps the default indent'
+		);
+	}
+
+	/** The report's line names the unreadable values and that the default stays in force. */
+	@:pin('control')
+	@:killer('M-VALUES-CLAUSE-SILENT')
+	public function testTheValuesClauseSaysTheDefaultIsKept(): Void {
+		final line: Null<String> = HaxeFormatConfigDiagnostics.message('/p/hxformat.json', {
+			keys: [],
+			wrapValues: [],
+			unsupported: [],
+			values: ['indentation.character "space"']
+		});
+		Assert.equals(
+			'apq: /p/hxformat.json: 1 value(s) hxq cannot read, so the default is kept: indentation.character "space" '
+			+ '[silence with APQ_NO_CONFIG_WARN=1]\n',
+			line
+		);
 	}
 
 }

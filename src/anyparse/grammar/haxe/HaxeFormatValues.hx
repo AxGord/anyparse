@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.BracePlacement;
 import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.EmptyCurly;
+import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.MetadataLineEndPolicy;
@@ -310,6 +311,21 @@ final class HaxeFormatValues {
 			case HxFormatWrappingTrailingCommaPolicy.Remove: TrailingCommaPolicy.Remove;
 			case _: TrailingCommaPolicy.Keep;
 		};
+	}
+
+	/**
+	 * The indent unit `indentation.character` names, or null for a spelling hxq does not read. The accepted forms mirror the
+	 * reference haxe-formatter schema: the word `tab`, or a literal run of spaces whose LENGTH is the indent size — so the common
+	 * misspelling `"space"` is unreadable there too.
+	 */
+	private static function indentCharFromString(s: String): Null<IndentChar> {
+		if (s == 'tab') return IndentChar.Tab;
+		return s.length > 0 && isAllSpaces(s) ? IndentChar.Space : null;
+	}
+
+	private static function isAllSpaces(s: String): Bool {
+		for (i in 0...s.length) if (s.charCodeAt(i) != ' '.code) return false;
+		return true;
 	}
 
 }

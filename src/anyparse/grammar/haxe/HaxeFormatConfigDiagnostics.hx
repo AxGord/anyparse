@@ -3,6 +3,7 @@ package anyparse.grammar.haxe;
 import anyparse.format.ArrayMatrixWrap;
 import anyparse.grammar.haxe.format.HxFormatConfig;
 import anyparse.grammar.haxe.format.HxFormatConfigParser;
+import anyparse.grammar.haxe.format.HxFormatIndentationSection;
 import anyparse.grammar.haxe.format.HxFormatSameLineSection;
 import anyparse.grammar.haxe.format.HxFormatWhitespacePolicy;
 import anyparse.grammar.haxe.format.HxFormatWhitespaceSection;
@@ -10,7 +11,6 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
-import anyparse.query.RunLedger;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Parser;
 import anyparse.runtime.Span.Position;
@@ -35,31 +35,16 @@ using Lambda;
  * Real configs each carry a dozen or so unimplemented keys — mostly
  * whitespace / brace policies.
  *
- * Analysis and reporting are split on purpose: `diagnose` is a pure function of the config text and is what tests assert
- * on, while `warn` is the boundary shell that knows the file the text came from and owns the once-per-path stderr line.
- * One older diagnostic of the same kind still lives elsewhere: `HaxeFormatConfigLoader.warnUnknownIndentCharacter`
- * reports an unreadable `indentation.character` from inside the loader, deduplicated by VALUE and without naming the
- * file. Folding it in here needs its recognition predicate to become a shared `…FromString` reader first, so it stays
- * where it is for now — and `indentation` is therefore the one section whose VALUES this class does not survey.
+ * This class only says WHAT: `diagnose` is a pure function of the config text and `message` its one line of text. Saying
+ * it is the caller's — `FormatConfigDiscovery` holds the file the text came from and prints the line once per run, so the
+ * grammar layer writes nothing to stderr and keeps no run state.
  */
 @:access(anyparse.grammar.haxe.HaxeFormatValues)
 @:nullSafety(Strict)
 final class HaxeFormatConfigDiagnostics {
 
-	/**
-	 * The `RunLedger` topic of the config paths already reported, so a run that resolves the same
-	 * `hxformat.json` for hundreds of files says it once. Carries no parse state — only
-	 * "this path has been examined".
-	 */
-	private static final REPORTED_TOPIC: String = 'hxformat-config';
-
 	/** Set to `1` to silence the config report — for a project that knows its config states more than hxq reads. */
-	private static final SILENCE_VAR: String = 'APQ_NO_CONFIG_WARN';
-
-	/** The config paths this run has already reported. */
-	public static inline function reportedPaths(): Array<String> {
-		return RunLedger.keysOf(REPORTED_TOPIC);
-	}
+	public static final SILENCE_VAR: String = 'APQ_NO_CONFIG_WARN';
 
 	/**
 	 * The settings in `json` hxq will not act on: keys with no schema
@@ -79,7 +64,12 @@ final class HaxeFormatConfigDiagnostics {
 	public static function diagnose(json: String): HaxeFormatConfigIssues {
 		final ctx: Parser = new Parser(new StringInput(json));
 		final cfg: Null<HxFormatConfig> = try HxFormatConfigParser.parseWith(ctx) catch (exception: Exception) null;
-		if (cfg == null) return { keys: [], wrapValues: [], unsupported: [] };
+		if (cfg == null) return {
+			keys: [],
+			wrapValues: [],
+			unsupported: [],
+			values: []
+		};
 		final index: LineIndex = new LineIndex(json);
 		final wrapValues: Array<String> = [];
 		final unsupported: Array<String> = [];
@@ -90,49 +80,20 @@ final class HaxeFormatConfigDiagnostics {
 		final keys: Array<String> = ctx.unknownFields.map(unknownKeyIssue.bind(_, index));
 		final whitespace: Null<HxFormatWhitespaceSection> = cfg.whitespace;
 		if (whitespace != null) collectColonIssue(whitespace, keys);
-		return { keys: keys, wrapValues: wrapValues, unsupported: unsupported };
+		final values: Array<String> = [];
+		final indentation: Null<HxFormatIndentationSection> = cfg.indentation;
+		if (indentation != null) collectIndentationIssue(indentation, values);
+		return {
+			keys: keys,
+			wrapValues: wrapValues,
+			unsupported: unsupported,
+			values: values
+		};
 	}
 
 	/**
-	 * Report `json`'s unusable settings on stderr, once per config path
-	 * for the life of the run. Silent when the config is fully
-	 * understood, when `APQ_NO_CONFIG_WARN=1`, and on a target with no
-	 * stderr.
-	 *
-	 * Sibling of `CliIo.stderr`'s EPIPE guard: `Sys.stderr()` on
-	 * nodejs is a synchronous `Fs.writeSync(2, …)` that never touches the
-	 * `process.stderr` stream object, so a closed downstream reader (this
-	 * is the FIRST line of most gate transcripts, per the class doc above)
-	 * throws here directly instead of emitting an `'error'` event
-	 * `Cli.main`'s process-level listener could catch. Not routed through
-	 * `CliIo.stderr` — this is a grammar-layer module and does not depend
-	 * on the CLI package — so the guard is duplicated locally rather than
-	 * shared; `CliIo.stderr` is the sibling copy if this ever grows a
-	 * third caller and is worth consolidating.
-	 */
-	public static function warn(path: String, json: String): Void {
-		if (!RunLedger.first(REPORTED_TOPIC, path)) return;
-		#if nodejs
-		if (Sys.getEnv(SILENCE_VAR) == '1') return;
-		final line: Null<String> = message(path, diagnose(json));
-		if (line == null) return;
-		try {
-			Sys.stderr().writeString(line);
-		} catch (exception: Exception) {
-			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
-			throw exception;
-		}
-		#elseif sys
-		if (Sys.getEnv(SILENCE_VAR) == '1') return;
-		final line: Null<String> = message(path, diagnose(json));
-		if (line != null) Sys.stderr().writeString(line);
-		#end
-	}
-
-	/**
-	 * The stderr line for `issues`, or `null` when there is nothing to
-	 * say. Split out of `warn` so the wording is pinned by a test rather
-	 * than by someone reading a terminal.
+	 * The stderr line for `issues` about the config at `path`, or `null` when there is nothing to
+	 * say — data, so the wording is pinned by a test rather than by someone reading a terminal.
 	 */
 	public static function message(path: String, issues: HaxeFormatConfigIssues): Null<String> {
 		final clauses: Array<String> = [];
@@ -147,6 +108,8 @@ final class HaxeFormatConfigDiagnostics {
 				+ ' (hxq lays code out from the syntax tree, not the source line breaks: use same, next or fitLine for sameLine, a wrap '
 				+ 'mode such as noWrap, onePerLine or fillLine for wrapping)'
 			);
+		if (issues.values.length > 0)
+			clauses.push('${issues.values.length} value(s) hxq cannot read, so the default is kept: ${issues.values.join(', ')}');
 		return clauses.length == 0 ? null : 'apq: $path: ${clauses.join('; ')} [silence with $SILENCE_VAR=1]\n';
 	}
 
@@ -297,6 +260,13 @@ final class HaxeFormatConfigDiagnostics {
 			final value: String = Std.string(Reflect.field(section, key));
 			if (isKeep(value)) add(into, 'sameLine.$key "$value"');
 		}
+	}
+
+	/** An `indentation.character` spelling `HaxeFormatValues.indentCharFromString` does not read, which leaves the default indent. */
+	private static function collectIndentationIssue(section: HxFormatIndentationSection, into: Array<String>): Void {
+		final character: Null<String> = section.character;
+		if (character != null && HaxeFormatValues.indentCharFromString(character) == null)
+			add(into, 'indentation.character "$character" (use "tab" or a literal run of spaces such as "    ")');
 	}
 
 }

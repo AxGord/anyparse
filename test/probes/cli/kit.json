@@ -8891,6 +8891,28 @@
 				"err": "ded6b5879382d603",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "fmt --list under a config with an unknown key and an unreadable indentation.character",
+			"note": "one report line names the config with both clauses, once for two files in two directories",
+			"argv": [
+				"hxq",
+				"fmt",
+				"--list",
+				"A.hx",
+				"sub/B.hx"
+			],
+			"files": {
+				"hxformat.json": "{\"indentation\":{\"character\":\"space\"},\"noSuchKnob\":1}",
+				"A.hx": "class A {\n\tfunction f() {}\n}\n",
+				"sub/B.hx": "class A {\n\tfunction f() {}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "1d7d38d1f2d7ff05",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

@@ -12,7 +12,7 @@ package anyparse.grammar.haxe;
  * whole rule that names it, so the cascade falls through to a different
  * rule and the construct lays out by a policy nobody wrote down.
  *
- * Both arrays are already formatted for display and carry no positions
+ * Every array is already formatted for display and carries no positions
  * of their own — a key phrase embeds its own `(l.N)` and a wrap phrase
  * embeds the offending string, which is what an author greps for.
  */
@@ -28,6 +28,12 @@ typedef HaxeFormatConfigIssues = {
 	 * Every `keep` value, `sameLine.<key> "keep"` or `wrapping … "keep"`: the fork's "reproduce the source's line
 	 * breaks", which hxq does not support — the writer lays code out from the syntax tree and the options alone.
 	 */
-	unsupported: Array<String>
+	unsupported: Array<String>,
+
+	/**
+	 * Values hxq cannot read, so the knob they name keeps its default: `indentation.character "space"`. Unlike an
+	 * unreadable wrap string nothing else is dropped with them.
+	 */
+	values: Array<String>
 
 };

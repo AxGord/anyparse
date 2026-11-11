@@ -6,6 +6,7 @@ import anyparse.format.BracePlacement;
 import anyparse.format.CommentStyle;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.EmptyCurly;
+import anyparse.format.IndentChar;
 import anyparse.format.KeepEmptyLinesPolicy;
 import anyparse.format.OperatorSpacing;
 import anyparse.format.RightCurlyPlacement;
@@ -50,8 +51,6 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
-import anyparse.query.RunLedger;
-import haxe.Exception;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of keys the `HxModule` writer understands
@@ -94,9 +93,6 @@ import haxe.Exception;
 @:access(anyparse.grammar.haxe.HaxeFormatValues)
 @:nullSafety(Strict)
 final class HaxeFormatConfigLoader {
-
-	/** The `RunLedger` topic of the `indentation.character` values already reported — one line per value per run. */
-	private static final INDENT_CHARACTER_TOPIC: String = 'hxformat-indent-character';
 
 	/**
 	 * Parses a `hxformat.json` document and returns the equivalent
@@ -147,20 +143,11 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyIndentation(section: HxFormatIndentationSection, opt: HxModuleWriteOptions): Void {
 		final character: Null<String> = section.character;
-		if (character != null) {
-			if (character == 'tab') {
-				opt.indentChar = Tab;
-				opt.indentSize = 1;
-			} else if (isAllSpaces(character) && character.length > 0) {
-				opt.indentChar = Space;
-				opt.indentSize = character.length;
-			} else {
-				// A REAL config value the loader does not recognize must not degrade
-				// silently — the file formats with the DEFAULT (tabs) and the author
-				// has no signal why their `"space"` / `"\t"` spelling did nothing
-				// (same policy as `LintConfig.discover`'s reject diagnostic).
-				warnUnknownIndentCharacter(character);
-			}
+		// An unreadable spelling keeps the default indent; `HaxeFormatConfigDiagnostics` names it against the config's file.
+		final indentChar: Null<IndentChar> = character == null ? null : HaxeFormatValues.indentCharFromString(character);
+		if (character != null && indentChar != null) {
+			opt.indentChar = indentChar;
+			opt.indentSize = indentChar == IndentChar.Tab ? 1 : character.length;
 		}
 		if (section.tabWidth != null) opt.tabWidth = section.tabWidth;
 		if (section.trailingWhitespace != null) opt.trailingWhitespace = section.trailingWhitespace;
@@ -540,11 +527,6 @@ final class HaxeFormatConfigLoader {
 			return;
 		}
 		if (category != null) applyParenTriple(opt, category, gap, insideOpen, insideClose);
-	}
-
-	private static function isAllSpaces(s: String): Bool {
-		for (i in 0...s.length) if (s.charCodeAt(i) != ' '.code) return false;
-		return true;
 	}
 
 	private static function applyWrappingScalars(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
@@ -1140,35 +1122,6 @@ final class HaxeFormatConfigLoader {
 		if (section.comprehensionFor != HxFormatBodyPolicy.FitLine) return;
 		opt.comprehensionBracketsOpen = WhitespacePolicy.After;
 		opt.comprehensionBracketsClose = WhitespacePolicy.Before;
-	}
-
-	/**
-	 * Once-per-value stderr diagnostic for an unrecognized `indentation.character`.
-	 * The accepted forms mirror the reference haxe-formatter schema: the word
-	 * `tab`, or a literal run of spaces whose LENGTH is the indent size (so the
-	 * common misspelling `"space"` is invalid there too — this line is what tells
-	 * the author, instead of a silent tab-indented result).
-	 *
-	 * Sibling of `CliIo.stderr`'s EPIPE guard (same reasoning as
-	 * `HaxeFormatConfigDiagnostics.warn`): `Sys.stderr()` on nodejs is a
-	 * synchronous `Fs.writeSync(2, …)` that bypasses the `process.stderr`
-	 * stream object, so a closed downstream reader throws here directly
-	 * instead of raising the `'error'` event `Cli.main`'s listener catches.
-	 */
-	private static function warnUnknownIndentCharacter(character: String): Void {
-		if (!RunLedger.first(INDENT_CHARACTER_TOPIC, character)) return;
-		final line: String = 'apq: hxformat.json indentation.character \'$character'
-			+ '\' is not recognized — use "tab" or a literal run of spaces (e.g. "    "); keeping the default\n';
-		#if nodejs
-		try {
-			Sys.stderr().writeString(line);
-		} catch (exception: Exception) {
-			if (Reflect.field(exception.native, 'code') == 'EPIPE') js.Node.process.exit(0);
-			throw exception;
-		}
-		#elseif sys
-		Sys.stderr().writeString(line);
-		#end
 	}
 
 	/**

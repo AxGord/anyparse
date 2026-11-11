@@ -16519,6 +16519,30 @@
 			"find": "startOf(fit, find.length - suffix, writtenLength), now.length, true",
 			"replace": "startOf(fit, find.length - suffix, writtenLength), now.length, false",
 			"note": "a shared suffix whose first separator the rewrite replaced starts after the replacement, so the replace joins two tokens"
+		},
+		{
+			"name": "M-FMT-CONFIG-MEMO-HIT-SILENT",
+			"type": "anyparse.query.FormatConfigDiscovery",
+			"method": "discover",
+			"find": "if (!CACHE.exists(start)) remember(start, filePath);",
+			"replace": "final hit: Bool = CACHE.exists(start); if (!hit) remember(start, filePath); if (hit) return CACHE[start]?.content;",
+			"note": "a config this process already read is reported only on the run that first walked to it, so a later run in the same engine says nothing"
+		},
+		{
+			"name": "M-FMT-CONFIG-REPORT-UNPRINTED",
+			"type": "anyparse.query.FormatConfigDiscovery",
+			"method": "reportConfig",
+			"find": "if (line != null) CliIo.stderr(line);",
+			"replace": "if (line != null && false) CliIo.stderr(line);",
+			"note": "the report is recorded as said and never reaches stderr"
+		},
+		{
+			"name": "M-FMT-CONFIG-SILENCE-IGNORED",
+			"type": "anyparse.query.FormatConfigDiscovery",
+			"method": "reportConfig",
+			"find": "if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;",
+			"replace": "if (false) return;",
+			"note": "APQ_NO_CONFIG_WARN=1 no longer silences the config report"
 		}
 	]
 }

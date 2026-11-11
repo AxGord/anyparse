@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.ConfigFinder.ConfigFile;
+import anyparse.query.cli.CliIo;
 #if (sys || nodejs)
 import sys.FileSystem;
 #end
@@ -20,14 +21,15 @@ import sys.FileSystem;
  *
  * Memoised by DIRECTORY, not by file: a lint run over one project asks the same
  * question once per file and the answer is identical for every file in a
- * directory. The cache is process-scoped and content-blind, so an
+ * directory. The memo holds only what is on disk; what this run has already SAID about a config lives in the run's
+ * `RunLedger`, so a new run reports it again. The cache is process-scoped and content-blind, so an
  * `hxformat.json` edited on disk mid-process keeps serving the old text — the
  * same trade the parse tiers make, and acceptable for a config that is read-only
  * for the life of a run.
  *
  * The walk itself is `ConfigFinder.findUpFile` — the shared walk-up every config lookup in
  * this package uses — so the loop lives in one place and this module owns only the memo,
- * the blank-payload fold and the diagnostic. One consequence of delegating: an
+ * the blank-payload fold and the once-per-run report of `HaxeFormatConfigDiagnostics`. One consequence of delegating: an
  * `hxformat.json` that EXISTS but cannot be read used to propagate the IO exception out of
  * `discover`; `findUpFile` answers null for it, so such a file now resolves to the writer's
  * defaults, the same answer as no config at all.
@@ -38,10 +40,17 @@ import sys.FileSystem;
 final class FormatConfigDiscovery {
 
 	/**
-	 * Directory -> the config text governing it, or null when no ancestor has one.
-	 * `Map.exists` distinguishes "not looked up yet" from "looked up, found nothing".
+	 * The `RunLedger` topic of the config paths this run has reported, so
+	 * a run that resolves one config for hundreds of files says it once.
 	 */
-	private static final CACHE: Map<String, Null<String>> = [];
+	public static final REPORTED_TOPIC: String = 'hxformat-config';
+
+	/**
+	 * Directory -> the config governing it, its text already `normalize`d, or null when no ancestor has one (or the one it
+	 * has is blank). `Map.exists` distinguishes "not looked up yet" from "looked up, found nothing". The path rides with the
+	 * text so a memo hit can still name the file it reports on.
+	 */
+	private static final CACHE: Map<String, Null<ConfigFile>> = [];
 
 	/**
 	 * `text` with a BLANK payload folded into "no config at all".
@@ -65,6 +74,11 @@ final class FormatConfigDiscovery {
 		CACHE.clear();
 	}
 
+	/** The config paths this run has already reported. */
+	public static inline function reportedPaths(): Array<String> {
+		return RunLedger.keysOf(REPORTED_TOPIC);
+	}
+
 	/**
 	 * The content of the nearest `hxformat.json` at or above `filePath`'s own
 	 * directory, or null when no ancestor directory holds one, when the one it holds
@@ -73,20 +87,39 @@ final class FormatConfigDiscovery {
 	public static function discover(filePath: String): Null<String> {
 		#if (sys || nodejs)
 		final start: String = haxe.io.Path.directory(FileSystem.absolutePath(filePath));
-		if (CACHE.exists(start)) return CACHE[start];
-		final found: Null<ConfigFile> = ConfigFinder.findUpFile(filePath, 'hxformat.json');
-		final content: Null<String> = normalize(found?.content);
-		CACHE[start] = content;
-		// The one place that holds BOTH a config's text and the path it came from,
-		// and reaches it exactly once per directory — so this is where "hxq will not
-		// act on these settings" can name a file. A config handed straight to the
-		// loader as a string (a corpus fixture's section 1, a test literal) has no
-		// file to name and stays silent by construction.
-		if (found != null && content != null) HaxeFormatConfigDiagnostics.warn(found.path, content);
-		return content;
+		if (!CACHE.exists(start)) remember(start, filePath);
+		final found: Null<ConfigFile> = CACHE[start];
+		if (found == null) return null;
+		reportConfig(found.path, found.content);
+		return found.content;
 		#else
 		return null;
 		#end
 	}
+
+	/**
+	 * Says the settings of the config at `path` hxq will not act on, once per path per run — on a memo hit too, so a run in
+	 * a long-lived engine process reports a config an earlier run already read. `discover` calls it for the file it found,
+	 * a command for the file the user named (`writer-equals --config`); a config text with no file behind it (a `.hxtest`
+	 * section, a test literal) never comes here, so it has no file to name and stays silent.
+	 */
+	public static function reportConfig(path: String, content: String): Void {
+		#if (sys || nodejs)
+		final stated: Null<String> = normalize(content);
+		if (stated == null || !RunLedger.first(REPORTED_TOPIC, path)) return;
+		if (Sys.getEnv(HaxeFormatConfigDiagnostics.SILENCE_VAR) == '1') return;
+		final line: Null<String> = HaxeFormatConfigDiagnostics.message(path, HaxeFormatConfigDiagnostics.diagnose(stated));
+		if (line != null) CliIo.stderr(line);
+		#end
+	}
+
+	#if (sys || nodejs)
+	/** Walks up from `filePath` for the config governing directory `start`, and memoises the answer under `start`. */
+	private static function remember(start: String, filePath: String): Void {
+		final file: Null<ConfigFile> = ConfigFinder.findUpFile(filePath, 'hxformat.json');
+		final content: Null<String> = normalize(file?.content);
+		CACHE[start] = file == null || content == null ? null : { path: file.path, content: content };
+	}
+	#end
 
 }

@@ -1283,6 +1283,14 @@
 			"find": "CliIo.writeFiles(followed.writes);",
 			"replace": "for (w in followed.writes) sys.io.File.saveContent(w.path, w.content);",
 			"note": "the registry document a write op re-spells bypasses the write journal, so a run its typecheck puts back leaves the arm on the spelling the rollback undid"
+		},
+		{
+			"name": "M-WRITER-EQUALS-CONFIG-UNREPORTED",
+			"type": "anyparse.query.cli.command.WriterEqualsCommand",
+			"method": "runWriterEquals",
+			"find": "if (sectionOpts == null && configPath != null && optsJson != null && lang == HXFORMAT_LANG)",
+			"replace": "if (sectionOpts == null && configPath != null && optsJson != null && false)",
+			"note": "a config the user names with --config is applied and never reported, so an unreadable indentation.character in it keeps the default silently"
 		}
 	]
 }

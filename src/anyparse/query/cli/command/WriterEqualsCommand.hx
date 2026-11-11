@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.ConfigFinder;
 import anyparse.query.ExitCode.*;
 import anyparse.runtime.ParseError;
 
@@ -13,6 +14,9 @@ final class WriterEqualsCommand implements CliCommand {
 
 	private static inline final BYTE_DIFF_WINDOW: Int = 40;
 	private static inline final BYTE_DIFF_LEAD: Int = 4;
+
+	/** The `--lang` whose writer reads an `hxformat.json`, the document `--config` names; also the default `--lang`. */
+	private static final HXFORMAT_LANG: String = 'haxe';
 
 	public function new() {}
 
@@ -83,7 +87,7 @@ final class WriterEqualsCommand implements CliCommand {
 	 * probe the pipeline that matches the test entry being constructed.
 	 */
 	private static function runWriterEquals(args: Array<String>): Int {
-		var lang: String = 'haxe';
+		var lang: String = HXFORMAT_LANG;
 		var plain: Bool = false;
 		var inputPath: Null<String> = null;
 		var expectedPath: Null<String> = null;
@@ -128,6 +132,9 @@ final class WriterEqualsCommand implements CliCommand {
 		// then plugin defaults.
 		final sectionOpts: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPathFinal);
 		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? CliIo.readFile(configPath) : null);
+		// A config the user NAMED is reported like a discovered one; a `.hxtest` section has no file of its own to name.
+		if (sectionOpts == null && configPath != null && optsJson != null && lang == HXFORMAT_LANG)
+			FormatConfigDiscovery.reportConfig(ConfigFinder.absolute(configPath), optsJson);
 
 		final emitted: Null<String> = try {
 			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));

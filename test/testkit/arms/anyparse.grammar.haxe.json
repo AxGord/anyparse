@@ -1404,6 +1404,22 @@
 			"find": "caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null)",
 			"replace": "caseBindMulti(HX_CLASS_MEMBER, ['VarMember'], [0 => '_v'], macro _v.access != null), caseOf(HX_CLASS_MEMBER, ['FinalMember'], macro true)",
 			"note": "a final field counts as more than a value whatever its accessors, so a final value hands the body to the abstract rules"
+		},
+		{
+			"name": "M-INDENT-CHARACTER-UNREPORTED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "diagnose",
+			"find": "if (indentation != null) collectIndentationIssue(indentation, values);",
+			"replace": "if (indentation != null && false) collectIndentationIssue(indentation, values);",
+			"note": "an indentation.character the loader cannot read keeps the default indent with nothing to say so"
+		},
+		{
+			"name": "M-VALUES-CLAUSE-SILENT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigDiagnostics",
+			"method": "message",
+			"find": "if (issues.values.length > 0)",
+			"replace": "if (false)",
+			"note": "the report finds the unreadable values and prints nothing about them"
 		}
 	]
 }

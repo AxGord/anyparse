@@ -1,6 +1,5 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
 import anyparse.query.FormatConfigDiscovery;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -74,7 +73,7 @@ class FormatConfigDiscoveryTest extends Test {
 	 *
 	 * `discover` is the one place that holds both the config's text and the path it was read
 	 * from, which is what lets the diagnostic point an author at the file to edit. Since the
-	 * walk moved to `ConfigFinder.findUpFile` that path arrives as `found.path` rather than as
+	 * walk moved to `ConfigFinder.findUpFile` that path arrives as the found file's `path` rather than as
 	 * the loop's own `candidate`, so the choice is now a hop that can be got wrong silently:
 	 * `filePath` is in scope, is a String, and would report a config error against every `.hx`
 	 * under the config instead of once against the config. Killer for exactly that arm.
@@ -85,7 +84,7 @@ class FormatConfigDiscoveryTest extends Test {
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
 		Assert.notNull(FormatConfigDiscovery.discover(Path.join([nested, 'A.hx'])));
-		final named: Array<String> = HaxeFormatConfigDiagnostics.reportedPaths().filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths().filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported path under the fixture, got ${named.join(', ')}');
 		Assert.equals('hxformat.json', Path.withoutDirectory(named[0]), 'the report named ${named[0]} instead of the config it read');
 	}
