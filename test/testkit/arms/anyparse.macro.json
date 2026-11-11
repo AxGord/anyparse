@@ -2707,6 +2707,54 @@
 			"find": "opt.$knob && $holds ? _eo",
 			"replace": "$holds ? _eo",
 			"note": "the option is not read, so a body holding more than values takes the abstract rules with the key off"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-GRID-OFF",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTriviaGridExpr",
+			"find": "if (!matrixWrap) return macro null;",
+			"replace": "return macro null;",
+			"note": "a grid holding a blank line or a comment goes one element per line again"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-ROW-BREAKS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiLeadExpr",
+			"find": "macro _gridPads != null && _si % _gridRun != 0",
+			"replace": "macro false",
+			"note": "every cell of a kept grid starts its own line, so the rows dissolve one per line"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-NO-LEAD-COMMENT",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTriviaGridExpr",
+			"find": "_t.leadingComments.length > 0 && _gi % (_grun ?? 1) != 0 && !$gluedLead",
+			"replace": "_t.leadingComments.length > 0",
+			"note": "an own-line comment before a row refuses the grid, so the list goes one element per line"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-NO-PAD",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepForceMultiExpr",
+			"find": "$gridPadExpr;",
+			"replace": "",
+			"note": "an aligned grid holding a blank line loses its column pads"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-GLUED-LEAD",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTriviaGridExpr",
+			"find": "!$gluedLead",
+			"replace": "true",
+			"note": "a block comment glued to a cell inside a row refuses the grid, so the list goes one element per line"
+		},
+		{
+			"name": "M-MATRIX-TRIVIA-NOWRAP-FLATTENS",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepDispatchExpr",
+			"find": "$matrixSucceedsExpr || _gridPads != null",
+			"replace": "$matrixSucceedsExpr",
+			"note": "under a pure noWrap cascade a grid holding a blank line or a comment flattens instead of keeping its rows"
 		}
 	]
 }

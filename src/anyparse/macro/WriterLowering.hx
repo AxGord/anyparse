@@ -2442,6 +2442,7 @@ typedef SepStarDispatchCtx = {
 	final noWrapDefaultCheckExpr: Expr;
 	final predicateScanExpr: Expr;
 	final matrixSucceedsExpr: Expr;
+	final triviaGridExpr: Expr;
 	final forceMultiExpr: Expr;
 	final noTriviaBranch: Expr;
 };

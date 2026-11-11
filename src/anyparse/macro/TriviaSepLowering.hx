@@ -340,6 +340,7 @@ final class TriviaSepLowering {
 			noWrapDefaultCheckExpr: noWrapDefaultCheckExpr,
 			predicateScanExpr: predicateScan,
 			matrixSucceedsExpr: matrixSucc,
+			triviaGridExpr: triviaSepTriviaGridExpr(matrixWrap, triviaElemCall),
 			forceMultiExpr: triviaSepForceMultiExpr(sepCtx),
 			noTriviaBranch: noTriviaBranch
 		}
@@ -425,13 +426,16 @@ final class TriviaSepLowering {
 	}
 
 	/**
-	 * Sep-Star force-multi per-element leading break dispatch: noWrap-flat
-	 * cuddle, or the legacy unconditional hardline. References the runtime `_noWrapFlatten`/`_si`/
+	 * Sep-Star force-multi per-element leading break dispatch: a space inside a row of a kept grid, noWrap-flat
+	 * cuddle, or the legacy unconditional hardline. References the runtime `_gridPads`/`_gridRun`/`_noWrapFlatten`/`_si`/
 	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 */
-	private static function triviaSepForceMultiLeadExpr(): Expr {
+	private static function triviaSepForceMultiLeadExpr(matrixWrap: Bool): Expr {
+		final inRow: Expr = matrixWrap ? macro _gridPads != null && _si % _gridRun != 0 : macro false;
 		return macro {
-			if (_noWrapFlatten) {
+			if ($inRow) {
+				_inner.push(_dt(' '));
+			} else if (_noWrapFlatten) {
 				// ω-nowrap-flat: cuddle every element flat (space sep),
 				// mirroring the fork's `noWrap()` line-end suppression.
 				// The ONLY break is the unsuppressible newline a `//`
@@ -529,7 +533,10 @@ final class TriviaSepLowering {
 		final triviaLeadDoc: Expr = c.triviaLeadDoc;
 		final triviaTrailDoc: Expr = c.triviaTrailDoc;
 		final triviaElemCall: Expr = c.triviaElemCall;
-		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr();
+		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr(c.matrixWrap);
+		// A kept grid's cell takes its column pad right before its text, after any comment that leads it.
+		final gridPadExpr: Expr = c.matrixWrap ? macro if (_gridPads != null && _gridPads[_si] > 0)
+			_inner.push(_dt(StringTools.lpad('', ' ', _gridPads[_si]))) : macro {};
 		final lineExpr: Expr = triviaSepForceMultiLineExpr(
 			c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText, c.relocateTrailingComments
 		);
@@ -566,6 +573,7 @@ final class TriviaSepLowering {
 					_ci++;
 				}
 				$balcEmitExpr;
+				$gridPadExpr;
 				final _elem: anyparse.core.Doc = $triviaElemCall;
 				_fmDocs.push(_elem);
 				$lineExpr;
@@ -1244,6 +1252,45 @@ final class TriviaSepLowering {
 	}
 
 	/**
+	 * Sep-Star grid probe for a list the force-multi loop lays out: the leading pad of each cell when a matrix-eligible
+	 * Star whose blank lines or comments need hardlines still forms a uniform source grid, else null. The grid owns the
+	 * row breaks, so every blank line and own-line leading comment must sit before a row; a block comment glued to a
+	 * cell may sit inside one. Sets `_gridRun` to the column count. References the runtime `_arr`/`_requiresHardline`/
+	 * `_ignoreEmit`/`_gridRun` locals.
+	 */
+	private static function triviaSepTriviaGridExpr(matrixWrap: Bool, triviaElemCall: Expr): Expr {
+		if (!matrixWrap) return macro null;
+		final gluedLead: Expr = triviaSepGluedLeadExpr();
+		return macro if (_requiresHardline && !_ignoreEmit && opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
+			final _gdocs: Array<anyparse.core.Doc> = [];
+			final _grow: Array<Bool> = [];
+			var _gi: Int = 0;
+			while (_gi < _arr.length) {
+				final _t = _arr[_gi];
+				_gdocs.push($triviaElemCall);
+				_grow.push(_gi == 0 || _t.newlineBefore);
+				_gi++;
+			}
+			final _grun: Null<Int> = anyparse.format.wrap.MatrixWrap.columnCount(_gdocs, _grow);
+			var _gok: Bool = _grun != null;
+			_gi = 0;
+			while (_gok && _gi < _arr.length) {
+				final _t = _arr[_gi];
+				if (_t.leadingComments.length > 0 && _gi % (_grun ?? 1) != 0 && !$gluedLead) _gok = false;
+				_gi++;
+			}
+			if (_gok && _grun != null) {
+				_gridRun = _grun;
+				anyparse.format.wrap.MatrixWrap.cellPads(_gdocs, _grun, opt.arrayMatrixWrap);
+			} else {
+				null;
+			}
+		} else {
+			null;
+		};
+	}
+
+	/**
 	 * Sep-Star non-empty-list dispatch block: derives the keep/ignore/noWrap/
 	 * forceMulti predicates (via the predicate-split machinery) and routes the
 	 * list to the keep-matrix grid, the force-multi loop, or the no-trivia
@@ -1258,6 +1305,7 @@ final class TriviaSepLowering {
 		final noWrapDefaultCheckExpr: Expr = c.noWrapDefaultCheckExpr;
 		final predicateScanExpr: Expr = c.predicateScanExpr;
 		final matrixSucceedsExpr: Expr = c.matrixSucceedsExpr;
+		final triviaGridExpr: Expr = c.triviaGridExpr;
 
 		final forceMultiExpr: Expr = c.forceMultiExpr;
 		final noTriviaBranch: Expr = c.noTriviaBranch;
@@ -1351,7 +1399,11 @@ final class TriviaSepLowering {
 			// (column-aligned grid). Only computed for a matrix-eligible
 			// Star (`matrixWrap`) under noWrap with no comment/blank
 			// hardline; every other path leaves it false.
-			final _matrixSucceeds: Bool = $matrixSucceedsExpr;
+			// A grid whose blank lines or comments need hardlines keeps its rows in the force-multi loop: `_gridPads`
+			// holds each cell's leading pad and `_gridRun` the column count, null and 0 for every other list.
+			var _gridRun: Int = 0;
+			final _gridPads: Null<Array<Int>> = $triviaGridExpr;
+			final _matrixSucceeds: Bool = $matrixSucceedsExpr || _gridPads != null;
 			// ω-array-reflow: when the Star opted into
 			// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
 			// signal is bare source newlines (no hardline-requiring

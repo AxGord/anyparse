@@ -51,27 +51,16 @@ final class MatrixWrap {
 		final n: Int = items.length;
 		if (n < 2) return null;
 
-		final lineRun: Null<Int> = matrixColumnCount(items, rowStart, n);
+		final lineRun: Null<Int> = columnCount(items, rowStart);
 		if (lineRun == null) return null;
 
-		// Per-column max bare width (no separator).
-		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
-		final maxCols: Array<Int> = [for (_ in 0...lineRun) 0];
-		for (i in 0...n) {
-			final c: Int = i % lineRun;
-			if (widths[i] > maxCols[c]) maxCols[c] = widths[i];
-		}
-
-		final align: Bool = mode == MatrixWrapWithAlign;
+		final pads: Array<Int> = cellPads(items, lineRun, mode);
 		final body: Array<Doc> = [];
 		final lastIdx: Int = n - 1;
 		for (i in 0...n) {
 			final c: Int = i % lineRun;
 			if (c == 0) body.push(Line('\n'));
-			if (align) {
-				final pad: Int = maxCols[c] - widths[i];
-				if (pad > 0) body.push(Text(spaces(pad)));
-			}
+			if (pads[i] > 0) body.push(Text(spaces(pads[i])));
 			body.push(items[i]);
 			final isLast: Bool = i == lastIdx;
 			if (!isLast || appendTrailingComma) body.push(Text(sep));
@@ -80,6 +69,47 @@ final class MatrixWrap {
 			if (!isLast && c != lineRun - 1) body.push(Text(' '));
 		}
 		return Concat([Text(open), Nest(cols, Concat(body)), Line('\n'), Text(close)]);
+	}
+
+	/**
+	 * The leading pad of each cell of a `lineRun`-column grid: under `MatrixWrapWithAlign` the width a cell lacks
+	 * against its column's widest cell, so every column right-aligns; zero for every cell under any other policy.
+	 */
+	public static function cellPads(items: Array<Doc>, lineRun: Int, mode: ArrayMatrixWrap): Array<Int> {
+		final n: Int = items.length;
+		if (mode != MatrixWrapWithAlign) return [for (_ in 0...n) 0];
+		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
+		final maxCols: Array<Int> = [for (_ in 0...lineRun) 0];
+		for (i in 0...n) {
+			final c: Int = i % lineRun;
+			if (widths[i] > maxCols[c]) maxCols[c] = widths[i];
+		}
+		return [for (i in 0...n) maxCols[i % lineRun] - widths[i]];
+	}
+
+	/**
+	 * The matrix column count for `items`, or `null` when the elements do not
+	 * form a uniform grid (single row, ragged rows, or any multi-line cell).
+	 * The column count is the run length of the first source row; every later
+	 * row — including the last — must match it, and each interior break must
+	 * land on a row boundary. `rowStart` is length-aligned with `items`, as in `tryLayout`.
+	 */
+	public static function columnCount(items: Array<Doc>, rowStart: Array<Bool>): Null<Int> {
+		final n: Int = items.length;
+		// Column count = run length of the first source row. All
+		// subsequent rows (including the final one) must match.
+		var lineRun: Int = 0;
+		for (i in 0...n) {
+			if (rowStart[i] && lineRun == 0 && i > 0) lineRun = i;
+			if (isMultiline(items[i])) return null;
+		}
+		// Single row (no interior break) → not a matrix.
+		if (lineRun <= 1) return null;
+		// Total must split into whole rows of `lineRun` columns, and
+		// every interior break must land exactly on a row boundary.
+		if (n % lineRun != 0) return null;
+		for (i in 0...n) if (rowStart[i] != (i % lineRun == 0)) return null;
+		return lineRun;
 	}
 
 	private static function spaces(n: Int): String {
@@ -134,31 +164,6 @@ final class MatrixWrap {
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * The matrix column count for `items`, or `null` when the elements do not
-	 * form a uniform grid (single row, ragged rows, or any multi-line cell).
-	 * The column count is the run length of the first source row; every later
-	 * row — including the last — must match it, and each interior break must
-	 * land on a row boundary. Split out of `tryLayout` for the complexity
-	 * threshold.
-	 */
-	private static function matrixColumnCount(items: Array<Doc>, rowStart: Array<Bool>, n: Int): Null<Int> {
-		// Column count = run length of the first source row. All
-		// subsequent rows (including the final one) must match.
-		var lineRun: Int = 0;
-		for (i in 0...n) {
-			if (rowStart[i] && lineRun == 0 && i > 0) lineRun = i;
-			if (isMultiline(items[i])) return null;
-		}
-		// Single row (no interior break) → not a matrix.
-		if (lineRun <= 1) return null;
-		// Total must split into whole rows of `lineRun` columns, and
-		// every interior break must land exactly on a row boundary.
-		if (n % lineRun != 0) return null;
-		for (i in 0...n) if (rowStart[i] != (i % lineRun == 0)) return null;
-		return lineRun;
 	}
 
 }
