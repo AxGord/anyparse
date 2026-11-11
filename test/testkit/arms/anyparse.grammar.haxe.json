@@ -1279,6 +1279,15 @@
 			"find": "Quoted(text: HxPpCondQuoted)",
 			"replace": "@:lead('#') Quoted(text: HxPpCondQuoted)",
 			"note": "a quoted string is no condition operand, so a quoted `#if` condition carries no condition at all"
+		},
+		{
+			"name": "M-ENUM-CTOR-REGION-KW",
+			"type": "anyparse.grammar.haxe.HxEnumCtor",
+			"method": "Conditional",
+			"kind": "ParamCtor",
+			"find": "@:kw('#if')",
+			"replace": "@:kw('#iff')",
+			"note": "the enum body no longer recognises a `#if` region between its constructors, so a region of whole constructors stops parsing"
 		}
 	]
 }
