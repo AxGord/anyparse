@@ -77,7 +77,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		if (violations.length == 0) return [];
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: violations[0].file, source: source }], plugin);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
-			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex);
+			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex, violations[0].file);
 			return TailScan.flaggedEdits(scan(tree, source, seams, purity, plugin.lexicalRegions.bind(source)), violations);
 		});
 	}

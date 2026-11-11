@@ -1909,6 +1909,43 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "JB1",
+			"note": "join-branch-call over reads the typer must bind: an inherited member's getter field, a map-loop binder's getter and a Dynamic receiver are refused; a static, a map-loop binder's plain field, an inferred local, a nested loop binder and Array.length are joined",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"join-branch-call",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Base.hx": "class Base {\n\tpublic var p:P;\n\tpublic var q(get, never):P;\n\tfunction get_q():P return p;\n\tpublic function new() {}\n}\n",
+				"D.hx": "class D extends Base {\n\tstatic function h(a:Int, b:Int) {}\n\tpublic function staticPlain(c:Bool) { if (c) h(S.v.x, 1); else h(S.v.x, 2); }\n\tpublic function staticGetter(c:Bool) { if (c) h(S.w.x, 1); else h(S.w.x, 2); }\n\tpublic function inheritedGetterMember(c:Bool) { if (c) h(q.x, 1); else h(q.x, 2); }\n\tpublic function inheritedPlainMemberGetterField(c:Bool) { if (c) h(p.g, 1); else h(p.g, 2); }\n\tpublic function selfInheritedGetter(c:Bool) { if (c) h(this.q.x, 1); else h(this.q.x, 2); }\n\tpublic function mapLoop(c:Bool, m:Map<String, P>) { for (k => u in m) { if (c) h(u.x, 1); else h(u.x, 2); } }\n\tpublic function mapLoopGetter(c:Bool, m:Map<String, P>) { for (k => u in m) { if (c) h(u.g, 1); else h(u.g, 2); } }\n\tpublic function shadowLocal(c:Bool) { var q = new P(); if (c) h(q.x, 1); else h(q.x, 2); }\n\tpublic function dyn(c:Bool, u:Dynamic) { if (c) h(u.x, 1); else h(u.x, 2); }\n\tpublic function anon(c:Bool, u:{x:Int}) { if (c) h(u.x, 1); else h(u.x, 2); }\n\tpublic function nestedLoop(c:Bool, us:Array<Array<P>>) { for (a in us) for (u in a) { if (c) h(u.x, 1); else h(u.x, 2); } }\n\tpublic function arrLen(c:Bool, us:Array<P>) { if (c) h(us.length, 1); else h(us.length, 2); }\n}\n",
+				"P.hx": "class P { public var x:Int = 0; public var g(get, never):Int; function get_g():Int return 1; public function new() {} }\n",
+				"S.hx": "class S {\n\tpublic static var v:P = new P();\n\tpublic static var w(get, never):P;\n\tstatic function get_w():P return v;\n}\n",
+				"apq.json": "{}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"D",
+					"--interp"
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "4f975d4d655e720b",
+				"err": "69206d9ea5878232",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
 		}
 	]
 }

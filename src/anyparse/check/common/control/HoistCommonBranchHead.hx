@@ -49,13 +49,14 @@ final class HoistCommonBranchHead extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams, HeadScan.lazyContext(plugin, entry.source, tree, symbols))) violations.push({
-				file: entry.file,
-				span: c.span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: message(c)
-			});
+			for (c in scan(tree, entry.source, seams, HeadScan.lazyContext(plugin, entry.source, tree, symbols, entry.file)))
+				violations.push({
+					file: entry.file,
+					span: c.span,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: message(c)
+				});
 		});
 	}
 
@@ -69,7 +70,9 @@ final class HoistCommonBranchHead extends RuleBase {
 		if (violations.length == 0) return [];
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: violations[0].file, source: source }], plugin, index);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
-			return TailScan.flaggedEdits(scan(tree, source, seams, HeadScan.lazyContext(plugin, source, tree, symbols)), violations);
+			return TailScan.flaggedEdits(
+				scan(tree, source, seams, HeadScan.lazyContext(plugin, source, tree, symbols, violations[0].file)), violations
+			);
 		});
 	}
 

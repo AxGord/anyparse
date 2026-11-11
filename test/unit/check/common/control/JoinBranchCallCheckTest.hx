@@ -40,8 +40,11 @@ class JoinBranchCallCheckTest extends Test {
 
 	/** A receiver is part of the callee, so a method call folds exactly like a plain one. */
 	public function testReceiverCallFixed(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits(wrap('if (a) items.push("x");\n\t\telse if (b) items.push("y");\n\t\telse items.push("z");'));
+		// the receiver is typed: a read through a receiver the index cannot place may run a getter
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class L { public function push(s:String):Void {} }\nclass C {\n\tfunction f(items:L) {\n\t\tif (a) items.push("x");\n'
+			+ '\t\telse if (b) items.push("y");\n\t\telse items.push("z");\n\t}\n}'
+		);
 		Assert.equals(1, es.length);
 		Assert.equals('items.push(if (a) "x" else if (b) "y" else "z");', es[0].text);
 	}

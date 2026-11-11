@@ -157,7 +157,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		final loopKinds: Array<String> = ShapeVocab.loopKinds(shape);
 		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
-			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index);
+			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index, entry.file);
 			if (purity == null) return;
 			final resolved: PurityCtx = purity;
 			final units: Array<QueryNode> = [];

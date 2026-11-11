@@ -19,7 +19,7 @@ using StringTools;
 class JoinOverrideChainCheckTest extends Test {
 
 	/** Two consecutive partial-writer switches over one declared local — the motivating shape. */
-	private static inline final CHAIN: String = 'class C {\n\tfunction f(a:E, b:E) {\n'
+	private static inline final CHAIN: String = 'class E { public var k:Int; }\nclass C {\n\tfunction f(a:E, b:E) {\n'
 		+ '\t\tvar x:String = null;\n'
 		+ '\t\tswitch a.k {\n\t\t\tcase 1: x = \'p\';\n\t\t\tcase 2: x = \'q\';\n\t\t\tcase _:\n\t\t}\n'
 		+ '\t\tswitch b.k {\n\t\t\tcase 3: x = \'r\';\n\t\t\tcase _:\n\t\t}\n'
@@ -231,7 +231,7 @@ class JoinOverrideChainCheckTest extends Test {
 
 	/** Wrap a statement body in a minimal parseable class + method. */
 	private function wrap(body: String): String {
-		return 'class C {\n\tfunction f(a:E, b:E) {\n\t\t$body\n\t}\n}\n';
+		return 'class E { public var k:Int; }\nclass C {\n\tfunction f(a:E, b:E) {\n\t\t$body\n\t}\n}\n';
 	}
 
 	private function violations(src: String): Array<Violation> {

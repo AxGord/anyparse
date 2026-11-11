@@ -205,7 +205,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			if (!built) {
 				built = true;
 				final idx: Null<SymbolIndex> = index();
-				final purity: Null<PurityCtx> = idx == null ? null : PurityScan.contextOf(plugin, source, tree, idx);
+				final purity: Null<PurityCtx> = idx == null ? null : PurityScan.contextOf(plugin, source, tree, idx, file);
 				final nominal: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file, idx);
 				final written: Null<(QueryNode) -> Null<String>> = CheckScan.typeSourceResolver(source, plugin, tree, file, idx);
 				final nullity: DeclaredNullity = DeclaredNullity.of(

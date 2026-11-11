@@ -10,8 +10,11 @@ import anyparse.check.common.design.ExtractRepeatedExpression;
  */
 class ExtractRepeatedExpressionTest extends Test {
 
+	/** The types of the `a.b.c.d` chain the fixtures read: plain fields, so the purity walk proves every hop a plain read. */
+	private static final TYPES: String = 'class A { public var b:AB; } class AB { public var c:AC; } class AC { public var d:Int; } ';
+
 	public function testFieldChainRepeatedThriceFlagged(): Void {
-		final vs: Array<Violation> = violations('class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }');
+		final vs: Array<Violation> = violations('${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); k(a.b.c); } }');
 		Assert.equals(1, vs.length);
 		Assert.equals('extract-repeated-expression', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -20,7 +23,7 @@ class ExtractRepeatedExpressionTest extends Test {
 	}
 
 	public function testTwoOccurrencesNotFlagged(): Void {
-		Assert.equals(0, violations('class C { function m() { k(a.b.c); k(a.b.c); } }').length);
+		Assert.equals(0, violations('${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); } }').length);
 	}
 
 	public function testCalleeOfCallNotCounted(): Void {
@@ -33,7 +36,7 @@ class ExtractRepeatedExpressionTest extends Test {
 	public function testCalleeReceiverStillCountedWhenNonTrivial(): Void {
 		// Excluding the callee does not blind the check to the value inside it: `a.b.c` is a
 		// two-hop chain and a genuine repeated value, so it is reported in place of `a.b.c.d`.
-		final vs: Array<Violation> = violations('class C { function m() { a.b.c.d(1); a.b.c.d(2); a.b.c.d(3); } }');
+		final vs: Array<Violation> = violations('${TYPES}class C { function m(a:A) { a.b.c.d(1); a.b.c.d(2); a.b.c.d(3); } }');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('`a.b.c`') != -1);
 	}
@@ -128,24 +131,27 @@ class ExtractRepeatedExpressionTest extends Test {
 	public function testMutuallyExclusiveBranchesExcluded(): Void {
 		// One occurrence per exclusive switch case — only one runs, so a shared local is pointless.
 		Assert.equals(
-			0, violations('class C { function m(x:Int) { switch x { case 0: k(a.b.c); case 1: k(a.b.c); case 2: k(a.b.c); } } }').length
+			0,
+			violations('${TYPES}class C { function m(x:Int, a:A) { switch x { case 0: k(a.b.c); case 1: k(a.b.c); case 2: k(a.b.c); } } }')
+				.length
 		);
 	}
 
 	public function testCoExecutingBranchOccurrencesFlagged(): Void {
 		// Two occurrences co-execute in the then-branch, so the repeat is real.
-		final vs: Array<Violation> = violations('class C { function m(c:Bool) { if (c) { k(a.b.c); k(a.b.c); } else { k(a.b.c); } } }');
+		final vs: Array<Violation> =
+			violations('${TYPES}class C { function m(c:Bool, a:A) { if (c) { k(a.b.c); k(a.b.c); } else { k(a.b.c); } } }');
 		Assert.equals(1, vs.length);
 	}
 
 	public function testNestedFunctionIsSeparateBody(): Void {
 		// Two in the outer body + one in a nested function — neither body reaches the threshold.
-		Assert.equals(0, violations('class C { function m() { k(a.b.c); k(a.b.c); function inner() { k(a.b.c); } } }').length);
+		Assert.equals(0, violations('${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); function inner() { k(a.b.c); } } }').length);
 	}
 
 	public function testSubsumedSubExpressionDropped(): Void {
 		// Only the maximal chain is reported, not its equally-frequent prefix.
-		final vs: Array<Violation> = violations('class C { function m() { k(a.b.c.d); k(a.b.c.d); k(a.b.c.d); } }');
+		final vs: Array<Violation> = violations('${TYPES}class C { function m(a:A) { k(a.b.c.d); k(a.b.c.d); k(a.b.c.d); } }');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('a.b.c.d') != -1);
 	}
@@ -187,9 +193,11 @@ class ExtractRepeatedExpressionTest extends Test {
 		// expression going from three occurrences to four is the same standing advisory about
 		// the same body, so the tally leaves the blast-radius key.
 		final check: ExtractRepeatedExpression = new ExtractRepeatedExpression();
-		final three: String = CheckFixture.violations(check, 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); } }')[0].message;
+		final three: String = CheckFixture.violations(
+			check, '${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); k(a.b.c); } }'
+		)[0].message;
 		final four: String = CheckFixture.violations(
-			check, 'class C { function m() { k(a.b.c); k(a.b.c); k(a.b.c); k(a.b.c); } }'
+			check, '${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); k(a.b.c); k(a.b.c); } }'
 		)[0].message;
 		Assert.notEquals(three, four);
 		final identity: String = check.messageIdentity(three);
@@ -232,7 +240,7 @@ class ExtractRepeatedExpressionTest extends Test {
 			'final g = function named() { k(a.b.c); };',
 			'inline function inl() { k(a.b.c); }'
 		]) {
-			final src: String = 'class C { function m() { k(a.b.c); k(a.b.c); $inner } }';
+			final src: String = '${TYPES}class C { function m(a:A) { k(a.b.c); k(a.b.c); $inner } }';
 			Assert.equals(0, violations(src).length, inner);
 		}
 	}
@@ -294,12 +302,14 @@ class ExtractRepeatedExpressionTest extends Test {
 			'a.b = null;',
 			'a.b.c = null;',
 			'cast(a, A).b = null;'
-		]) Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); $write k(a.b.c); k(a.b.c); } }').length, write);
-		Assert.equals(1, violations('class C { var a:A; var z:A; function m() { k(a.b.c); this.z = null; k(a.b.c); k(a.b.c); } }').length);
+		]) Assert.equals(0, violations('${TYPES}class C { var a:A; function m() { k(a.b.c); $write k(a.b.c); k(a.b.c); } }').length, write);
+		Assert.equals(
+			1, violations('${TYPES}class C { var a:A; var z:A; function m() { k(a.b.c); this.z = null; k(a.b.c); k(a.b.c); } }').length
+		);
 		final indexed: String = 'class C { var a:A; var zs:Array<A>; function m() { k(a.b.c); zs[0] = null; k(a.b.c); k(a.b.c); } }';
-		Assert.equals(1, violations(indexed).length, 'an index write of another member');
+		Assert.equals(1, violations(TYPES + indexed).length, 'an index write of another member');
 		final sibling: String = 'class C { var a:A; function m() { k(a.b.c); cast(a, A).z = null; k(a.b.c); k(a.b.c); } }';
-		Assert.equals(1, violations(sibling).length, 'a write of a sibling member through a cast');
+		Assert.equals(1, violations(TYPES + sibling).length, 'a write of a sibling member through a cast');
 	}
 
 	/**
@@ -310,9 +320,10 @@ class ExtractRepeatedExpressionTest extends Test {
 	@:pin('control')
 	@:killer('M-EXTRACT-REPEAT-REFERENCE-READ')
 	public function testAWriteBelowAChainKeepsItsReference(): Void {
-		Assert.equals(1, violations('class C { var a:A; function m() { k(a.b.c); a.b.c.d = null; k(a.b.c); k(a.b.c); } }').length);
+		Assert.equals(1, violations('${TYPES}class C { var a:A; function m() { k(a.b.c); a.b.c.d = null; k(a.b.c); k(a.b.c); } }').length);
 		Assert.equals(
-			0, violations('class C { var a:A; function m() { k(Std.int(a.b)); a.b.c = 1; k(Std.int(a.b)); k(Std.int(a.b)); } }').length
+			0,
+			violations('${TYPES}class C { var a:A; function m() { k(Std.int(a.b)); a.b.c = 1; k(Std.int(a.b)); k(Std.int(a.b)); } }').length
 		);
 	}
 
@@ -328,7 +339,7 @@ class ExtractRepeatedExpressionTest extends Test {
 	@:pin('control')
 	@:killer('M-EXTRACT-REPEAT-UNKNOWN-WRITE')
 	public function testAWriteOfAnUnnamedTargetSplitsTheGroup(): Void {
-		Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); f().x = null; k(a.b.c); k(a.b.c); } }').length);
+		Assert.equals(0, violations('${TYPES}class C { var a:A; function m() { k(a.b.c); f().x = null; k(a.b.c); k(a.b.c); } }').length);
 	}
 
 	/**
@@ -410,8 +421,8 @@ class ExtractRepeatedExpressionTest extends Test {
 	@:killer('M-EXTRACT-REPEAT-TARGET-COUNTED')
 	public function testAWriteTargetIsNoOccurrence(): Void {
 		for (write in ['a.b.c = 5;', 'a.b.c += 5;', 'a.b.c++;'])
-			Assert.equals(0, violations('class C { var a:A; function m() { k(a.b.c); k(a.b.c); $write } }').length, write);
-		Assert.equals(1, violations('class C { var a:A; function m() { k(a.b.c); k(a.b.c); k(a.b.c); a.b.c = 5; } }').length);
+			Assert.equals(0, violations('${TYPES}class C { var a:A; function m() { k(a.b.c); k(a.b.c); $write } }').length, write);
+		Assert.equals(1, violations('${TYPES}class C { var a:A; function m() { k(a.b.c); k(a.b.c); k(a.b.c); a.b.c = 5; } }').length);
 	}
 
 	/** A call inside a lambda may run a sibling closure that writes the local the lambda reads. */

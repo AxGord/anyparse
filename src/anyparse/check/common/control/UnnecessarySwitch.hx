@@ -118,7 +118,7 @@ final class UnnecessarySwitch extends RuleBase {
 		final resolved: Seams = seams;
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return [
-			for (entry in files) for (candidate in candidates(resolved, plugin, entry.source, index)) {
+			for (entry in files) for (candidate in candidates(resolved, plugin, entry.source, index, entry.file)) {
 				file: entry.file,
 				span: candidate.span,
 				rule: RULE_ID,
@@ -142,16 +142,18 @@ final class UnnecessarySwitch extends RuleBase {
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over(files, plugin);
 		final byKey: Map<String, Candidate> = [];
-		for (candidate in candidates(resolved, plugin, source, resolvedIndex))
+		for (candidate in candidates(resolved, plugin, source, resolvedIndex, violations[0].file))
 			byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 		return CheckScan.collectSpanEdits(violations, byKey, (candidate, _) -> candidate.edit);
 	}
 
 	/** Every degenerate switch in `source`, in document order, each with the edit that unwraps it. */
-	private static function candidates(seams: Seams, plugin: GrammarPlugin, source: String, index: SymbolIndex): Array<Candidate> {
+	private static function candidates(
+		seams: Seams, plugin: GrammarPlugin, source: String, index: SymbolIndex, file: String
+	): Array<Candidate> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index, file);
 		if (purity == null) return [];
 		final out: Array<Candidate> = [];
 		walk(seams, purity, tree, source, false, null, out);

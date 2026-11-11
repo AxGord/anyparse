@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
@@ -39,10 +40,10 @@ import anyparse.query.TypingService;
  * of the RESOLVER together — the enclosing type must declare a getter of the name, AND the
  * identifier must not bind to a value declaration that shadows it (`readsGetterUnqualified`).
  *
- * A read whose receiver type does not resolve may be a getter: `isProvenPure` reads it as impure,
- * `isPure` as plain, because receivers the rules type on their own (a loop binder, a lambda
- * parameter) do not resolve here. A read on an abstract declaring an operator or index overload
- * is impure for both, its access may select code.
+ * A read the index cannot prove plain may be a getter and is impure: a receiver whose type does not
+ * resolve, a member the index cannot place. A loop binder and a lambda parameter written with no type
+ * resolve to the type the typer binds them to. An index read on an abstract declaring an index
+ * overload is impure, its access may select code.
  *
  * Grammar-agnostic: `contextOf` resolves every kind through `RefShape` and returns null when
  * the grammar leaves the field-access or call kind unset, which makes a caller a no-op rather
@@ -53,25 +54,35 @@ final class PurityScan {
 
 	/**
 	 * Whether every node in `node`'s subtree is side-effect-free, an access `accessRunsCode` clears counting as one. An
-	 * access whose receiver type does not resolve is assumed a plain read here; the caller that reorders an expression
-	 * against effects it cannot see asks `isProvenPure`.
+	 * access the index cannot prove plain — its receiver type unresolved, its member unplaced — may be a getter, so it
+	 * counts as impure.
 	 */
-	public static inline function isPure(node: QueryNode, ctx: PurityCtx): Bool {
-		return pure(node, ctx, false);
-	}
-
-	/** `isPure` with unknown read as impure: an access through a receiver whose type does not resolve may be a getter. */
-	public static inline function isProvenPure(node: QueryNode, ctx: PurityCtx): Bool {
-		return pure(node, ctx, true);
+	public static function isPure(node: QueryNode, ctx: PurityCtx): Bool {
+		final kind: String = node.kind;
+		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
+		function childrenPure() return node.children.foreach(c -> isPure(c, ctx));
+		if (ctx.safeKinds.contains(kind)) return childrenPure();
+		if (kind == ctx.fieldAccessKind || (ctx.indexAccessKind != null && kind == ctx.indexAccessKind))
+			return !accessRunsCode(node, ctx) && childrenPure();
+		if (kind != ctx.callKind || !isPureCall(node, ctx)) return false;
+		// the callee is a transparent function `StdlibPurity` placed, not a property read: only its receiver is asked
+		final callee: Null<QueryNode> = node.children[0];
+		final calleeRead: Bool = callee != null && callee.kind == ctx.fieldAccessKind;
+		return node.children.foreach(c -> calleeRead && c == callee ? c.children.foreach(r -> isPure(r, ctx)) : isPure(c, ctx));
 	}
 
 	/**
 	 * The per-file context `isPure` threads through its walk, or null when the grammar leaves the
-	 * field-access or call kind unset. `index` supplies the property-getter map and
+	 * field-access or call kind unset. `report` supplies the property-getter map, read through the run's resolution scope
+	 * when it has one, since whether a member runs code is what the name MEANS (`IndexScope`, a std `length` included), and
 	 * `declaredTypes` the receiver types; a plugin that is no `TypeInfoProvider` yields an empty
-	 * map, which leaves every non-`this` receiver unresolved.
+	 * map, which leaves every non-`this` receiver unresolved. `file` is the file `source` is read from:
+	 * a lambda parameter takes its type only from a function type read in that file.
 	 */
-	public static function contextOf(plugin: GrammarPlugin, source: String, root: QueryNode, index: SymbolIndex): Null<PurityCtx> {
+	public static function contextOf(
+		plugin: GrammarPlugin, source: String, root: QueryNode, report: SymbolIndex, file: String
+	): Null<PurityCtx> {
+		final index: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? report;
 		final shape: RefShape = plugin.refShape();
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		final callKind: Null<String> = shape.callKind;
@@ -96,8 +107,10 @@ final class PurityScan {
 			selfReferenceText: shape.selfReferenceText,
 			declaredTypes: declaredTypes,
 			receiverTypes: receiverTypes,
+			boundReceiverType: CheckScan.typeNominalResolver(source, plugin, root, file, index, true, false),
 			wrappers: wrappers,
 			index: index,
+			report: report,
 			root: root
 		};
 	}
@@ -123,36 +136,23 @@ final class PurityScan {
 	 * function, a complex receiver) is unproven and therefore impure.
 	 */
 	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
-		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index);
-	}
-
-	private static function pure(node: QueryNode, ctx: PurityCtx, unknownRuns: Bool): Bool {
-		final kind: String = node.kind;
-		if (kind == ctx.identKind) return !readsGetterUnqualified(node, ctx);
-		function childrenPure() return node.children.foreach(c -> pure(c, ctx, unknownRuns));
-		if (ctx.safeKinds.contains(kind)) return childrenPure();
-		if (kind == ctx.fieldAccessKind || (ctx.indexAccessKind != null && kind == ctx.indexAccessKind))
-			return !accessRunsCode(node, ctx, unknownRuns) && childrenPure();
-		return kind == ctx.callKind && isPureCall(node, ctx) && childrenPure();
+		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.report);
 	}
 
 	/**
-	 * Whether a field or index read may run code: the type is an abstract whose access may select an overload, the field
-	 * is a property getter (`MemberLookup.memberGetter`), or, with `unknownRuns` set, the receiver type does not resolve, an
-	 * index read's type has no declaration, or a field read's member is not proven plain. The overload and declaration
-	 * questions follow a typedef alias; the getter question does not, so a field read through an alias is unknown.
+	 * Whether a field or index read may run code: the receiver type does not resolve, an index read's type declares an
+	 * index overload or has no declaration, or a field read's member is a property getter or is not proven plain
+	 * (`MemberLookup.memberGetter`). Every question follows a typedef alias (`TypeRefIndex.aliasedName`). A field-read
+	 * interceptor (`@:op(a.b)`, `@:resolve`) runs only for a name the type does not declare, which is unplaced already.
 	 */
-	private static function accessRunsCode(access: QueryNode, ctx: PurityCtx, unknownRuns: Bool): Bool {
+	private static function accessRunsCode(access: QueryNode, ctx: PurityCtx): Bool {
 		final recv: Null<QueryNode> = access.children[0];
 		final typeName: Null<String> = recv == null ? null : receiverTypeName(recv, ctx);
-		if (typeName == null) return unknownRuns;
+		if (typeName == null) return true;
 		final typing: TypingService = ctx.index.typing;
-		if (access.kind != ctx.fieldAccessKind)
-			return typing.accessOverloaded(typeName, false) || (unknownRuns && !typing.typeDeclared(typeName));
+		if (access.kind != ctx.fieldAccessKind) return typing.accessOverloaded(typeName, false) || !typing.typeDeclared(typeName);
 		final field: Null<String> = access.name;
-		final getter: Null<Bool> = field == null ? null : typing.members.memberGetter(typeName, field);
-		// a field-read interceptor runs only for a name the type does not declare; an unplaced name stays conservative
-		return getter == true || (unknownRuns && getter == null) || (getter == null && typing.accessOverloaded(typeName, true));
+		return field == null || typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field) != false;
 	}
 
 	/**
@@ -183,15 +183,27 @@ final class PurityScan {
 		return !TypeResolver.bindsToValueDeclaration(name, span, ctx.root, ctx.shape);
 	}
 
-	/** The type name a receiver read denotes: a value's declared type, or the type a path spells; null when neither is known. */
+	/**
+	 * The type name a receiver read denotes: a value's declared type, a member of the enclosing type read with no self
+	 * reference (inherited ones too), the type a path spells, or the type a binding written with none is bound to (a loop
+	 * binder's element, a lambda parameter's expected type: `boundReceiverType`); null when none is known.
+	 */
 	private static function receiverTypeName(recv: QueryNode, ctx: PurityCtx): Null<String> {
 		final path: Null<Array<String>> = NominalTypes.pathOf(recv, ctx.identKind, ctx.fieldAccessKind);
 		if (path == null) return null;
 		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, ctx.root, ctx.receiverTypes, ctx.shape);
-		if (rootType != null) return pathEndType(path, rootType, ctx);
-		if (!TypeResolver.receiverRootIsUnboundType(recv, ctx.root, ctx.shape)) return null;
-		for (i => segment in path) if (SourceText.isUpperInitial(segment)) return pathEndType(path.slice(i), segment, ctx);
-		return null;
+		final bound: (QueryNode) -> Null<String> = ctx.boundReceiverType ?? (_ -> null);
+		if (rootType == null && TypeResolver.receiverRootIsUnboundType(recv, ctx.root, ctx.shape)) {
+			var rootIdent: QueryNode = recv;
+			while (rootIdent.kind == ctx.fieldAccessKind) rootIdent = rootIdent.children[0];
+			// a name the enclosing type declares or inherits is read through an implicit self reference, ahead of a type name
+			final member: Null<String> = bound(rootIdent);
+			if (member != null) return pathEndType(path, member, ctx) ?? bound(recv);
+			for (i => segment in path) if (SourceText.isUpperInitial(segment)) return pathEndType(path.slice(i), segment, ctx);
+			return null;
+		}
+		final written: Null<String> = rootType == null ? null : pathEndType(path, rootType, ctx);
+		return written ?? bound(recv);
 	}
 
 	private static function pathEndType(path: Array<String>, rootType: String, ctx: PurityCtx): Null<String> {
@@ -227,8 +239,17 @@ typedef PurityCtx = {
 
 	/** Every binding's outer nominal, parametric and optional types included: a receiver's type is what this asks. */
 	final receiverTypes: Map<Int, String>;
+
+	/**
+	 * The member-lookup type of a receiver whose binding writes none (`CheckScan.typeNominalResolver`): the typer binds a loop
+	 * binder and a lambda parameter as the program does. Null when the grammar carries no type information.
+	 */
+	final boundReceiverType: Null<(QueryNode) -> Null<String>>;
 	final wrappers: Array<String>;
 	final index: SymbolIndex;
+
+	/** The caller's report-scoped index: a stdlib static is transparent only while no type of the REPORT shadows its name. */
+	final report: SymbolIndex;
 	final root: QueryNode;
 
 };

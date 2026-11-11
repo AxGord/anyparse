@@ -782,7 +782,7 @@ final class LambdaLoopScan {
 				if (!purityBuilt) {
 					purityBuilt = true;
 					final symbols: Null<SymbolIndex> = index();
-					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols);
+					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols, file);
 				}
 				return purity;
 			},

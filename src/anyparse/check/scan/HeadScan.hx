@@ -35,7 +35,7 @@ final class HeadScan {
 	 * structural gates. Null when the index or the grammar's field-access / call seam is missing — the gates then refuse.
 	 */
 	public static function lazyContext(
-		plugin: GrammarPlugin, source: String, tree: QueryNode, symbols: () -> Null<SymbolIndex>
+		plugin: GrammarPlugin, source: String, tree: QueryNode, symbols: () -> Null<SymbolIndex>, file: String
 	): () -> Null<HeadCtx> {
 		var built: Bool = false;
 		var ctx: Null<HeadCtx> = null;
@@ -43,7 +43,7 @@ final class HeadScan {
 			if (!built) {
 				built = true;
 				final index: Null<SymbolIndex> = symbols();
-				final purity: Null<PurityCtx> = index == null ? null : PurityScan.contextOf(plugin, source, tree, index);
+				final purity: Null<PurityCtx> = index == null ? null : PurityScan.contextOf(plugin, source, tree, index, file);
 				if (purity != null) ctx = { unchanged: new UnchangedLocal(tree, purity.shape), purity: purity, tree: tree };
 			}
 			return ctx;
@@ -82,8 +82,7 @@ final class HeadScan {
 		final last: Null<Span> = run[run.length - 1].span;
 		final ctx: Null<HeadCtx> = context();
 		if (first == null || last == null || ctx == null) return false;
-		if (!conds.foreach(c -> PurityScan.isProvenPure(c, ctx.purity)))
-			return run.foreach(s -> isConstantDecl(s, ctx.purity.safeKinds, seams));
+		if (!conds.foreach(c -> PurityScan.isPure(c, ctx.purity))) return run.foreach(s -> isConstantDecl(s, ctx.purity.safeKinds, seams));
 		final region: Span = new Span(first.from, last.to);
 		return !readsBeyondHeldLocals(conds, region, seams, ctx) || isInert(run, conds, region, ctx);
 	}
@@ -113,7 +112,7 @@ final class HeadScan {
 		final purity: PurityCtx = ctx.purity;
 		function quiet(node: QueryNode): Bool {
 			final runsCode: Bool = node.kind == purity.shape.newExprKind
-				|| (node.kind == purity.callKind && !PurityScan.isProvenPure(node, purity));
+				|| (node.kind == purity.callKind && !PurityScan.isPure(node, purity));
 			return !runsCode && node.children.foreach(quiet);
 		}
 		if (!run.foreach(quiet)) return false;

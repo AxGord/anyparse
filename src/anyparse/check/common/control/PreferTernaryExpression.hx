@@ -172,6 +172,7 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 		walk(root, {
 			root: root,
 			source: source,
+			file: file,
 			site: NegatedCondition.siteOf(s.negation, file, source, root),
 			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
 			seams: s,
@@ -262,7 +263,7 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 		// argument: it writes the callee once, a ternary writes it twice. Both match this span and
 		// only one edit survives -- `Cli.computeFileLintEdits` keeps the earlier check in
 		// `Linter.builtins()` order, which is this one -- so the handoff has to happen here.
-		if (JoinBranchCall.claims(scan.plugin, scan.source, scan.root, node, scan.comments, scan.resolveIndex)) return null;
+		if (JoinBranchCall.claims(scan.plugin, scan.source, scan.root, node, scan.comments, scan.resolveIndex, scan.file)) return null;
 		final span: Null<Span> = node.span;
 		final condSpan: Null<Span> = condition.span;
 		final thenSpan: Null<Span> = thenBranch.span;
@@ -311,6 +312,7 @@ private typedef Scan = {
 
 	var root: QueryNode;
 	var source: String;
+	var file: String;
 
 	/** The file's negation site (`NegatedCondition`), null when the grammar has no not kind. */
 	var site: Null<InversionSite>;

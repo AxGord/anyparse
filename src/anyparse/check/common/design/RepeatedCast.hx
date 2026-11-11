@@ -141,7 +141,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 				if (!purityRead) {
 					purityRead = true;
 					final index: Null<SymbolIndex> = symbols();
-					purity = index == null ? null : PurityScan.contextOf(plugin, source, tree, index);
+					purity = index == null ? null : PurityScan.contextOf(plugin, source, tree, index, file);
 				}
 				return purity;
 			},

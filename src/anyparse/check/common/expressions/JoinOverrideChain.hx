@@ -114,7 +114,7 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		final resolved: Seams = seams;
 		final index: SymbolIndex = IndexScope.report(files, plugin);
 		return [
-			for (entry in files) for (m in matches(entry.source, plugin, resolved, index)) {
+			for (entry in files) for (m in matches(entry.source, plugin, resolved, index, entry.file)) {
 				file: entry.file,
 				span: m.declSpan,
 				rule: RULE_ID,
@@ -137,7 +137,7 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over(files, plugin);
 		final byKey: Map<String, Match> = [];
-		for (m in matches(source, plugin, seams, resolvedIndex)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		for (m in matches(source, plugin, seams, resolvedIndex, violations[0].file)) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 		return CanonicalEdit.dropContainedEdits(
 			CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))
 		);
@@ -166,10 +166,10 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 	}
 
 	/** Every collapsible run in `source`, in document order, each with the edit that collapses it. */
-	private static function matches(source: String, plugin: GrammarPlugin, s: Seams, index: SymbolIndex): Array<Match> {
+	private static function matches(source: String, plugin: GrammarPlugin, s: Seams, index: SymbolIndex, file: String): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index);
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index, file);
 		if (purity == null) return [];
 		final out: Array<Match> = [];
 		collect(tree, tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, purity, out);

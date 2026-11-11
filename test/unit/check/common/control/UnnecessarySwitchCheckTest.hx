@@ -76,8 +76,10 @@ class UnnecessarySwitchCheckTest extends Test {
 
 	/** A plain field read is droppable — the shape the whole rule was written for. */
 	public function testFieldSubjectFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f(e: Dynamic): Void {\n\t\tswitch e.action {\n\t\t\tcase _: t();\n\t\t}\n\t}\n}';
+		final src: String = 'class E { public var action:Int; }\nclass C {\n\tfunction f(e: E): Void {\n\t\tswitch e.action {\n'
+			+ '\t\t\tcase _: t();\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
+		Assert.equals(0, violations(src.replace('e: E', 'e: Dynamic')).length, 'a Dynamic receiver may run code');
 	}
 
 	/** A property read is a `get_p()` CALL, qualified or not — both spellings refuse. */

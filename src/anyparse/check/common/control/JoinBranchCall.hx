@@ -157,7 +157,7 @@ final class JoinBranchCall extends RuleBase {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final ctx: Null<Ctx> = contextOf(plugin, entry.source, seams, symbols);
+			final ctx: Null<Ctx> = contextOf(plugin, entry.source, seams, symbols, entry.file);
 			if (ctx == null) continue;
 			walk(ctx.root, violations, entry.file, ctx);
 		}
@@ -170,7 +170,7 @@ final class JoinBranchCall extends RuleBase {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
-		final ctx: Null<Ctx> = contextOf(plugin, source, seams, IndexScope.lazySymbolIndex(files, plugin, index));
+		final ctx: Null<Ctx> = contextOf(plugin, source, seams, IndexScope.lazySymbolIndex(files, plugin, index), violations[0].file);
 		if (ctx == null) return [];
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, [for (kind in seams.byKind.keys()) kind], (node, span) -> {
@@ -204,13 +204,13 @@ final class JoinBranchCall extends RuleBase {
 	 */
 	public static function claims(
 		plugin: GrammarPlugin, source: String, root: QueryNode, head: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		symbols: () -> Null<SymbolIndex>
+		symbols: () -> Null<SymbolIndex>, file: String
 	): Bool {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return false;
 		final pos: Null<IfPosition> = positionOf(head, seams);
 		if (pos == null || pos.statement) return false;
-		return match(head, ctxOn(plugin, source, root, comments, seams, symbols), pos) != null;
+		return match(head, ctxOn(plugin, source, root, comments, seams, symbols, file), pos) != null;
 	}
 
 	/** The source text of `span`. */
@@ -263,11 +263,13 @@ final class JoinBranchCall extends RuleBase {
 	 * hold no candidate at all. A file that cannot produce one (no index, or a grammar seam unset)
 	 * reports nothing rather than hoisting an unproven expression.
 	 */
-	private static function contextOf(plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>): Null<Ctx> {
+	private static function contextOf(
+		plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>, file: String
+	): Null<Ctx> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		return tree == null
 			? null
-			: ctxOn(plugin, source, tree, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols);
+			: ctxOn(plugin, source, tree, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), seams, symbols, file);
 	}
 
 	/**
@@ -278,7 +280,7 @@ final class JoinBranchCall extends RuleBase {
 	 */
 	private static function ctxOn(
 		plugin: GrammarPlugin, source: String, root: QueryNode, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams,
-		symbols: () -> Null<SymbolIndex>
+		symbols: () -> Null<SymbolIndex>, file: String
 	): Ctx {
 		var purity: Null<PurityCtx> = null;
 		var built: Bool = false;
@@ -291,7 +293,7 @@ final class JoinBranchCall extends RuleBase {
 				if (!built) {
 					built = true;
 					final index: Null<SymbolIndex> = symbols();
-					purity = index == null ? null : PurityScan.contextOf(plugin, source, root, index);
+					purity = index == null ? null : PurityScan.contextOf(plugin, source, root, index, file);
 				}
 				return purity;
 			}

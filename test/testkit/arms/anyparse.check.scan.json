@@ -1184,14 +1184,6 @@
 			"note": "a head holding a return, throw, break or continue is moved before the if, so the exit runs ahead of the condition and the branches' own code"
 		},
 		{
-			"name": "M-PURITY-STATIC-GETTER",
-			"type": "anyparse.check.scan.PurityScan",
-			"method": "accessRunsCode",
-			"find": "getter == true || (",
-			"replace": "(",
-			"note": "a property read through the name of its own type is taken for a plain field, so a condition that runs the getter is moved past a head that reads what the getter changes"
-		},
-		{
 			"name": "M-HCBH-HELD-LOCAL",
 			"type": "anyparse.check.scan.HeadScan",
 			"method": "readsBeyondHeldLocals",
@@ -1203,7 +1195,7 @@
 			"name": "M-HCBH-INERT-CALL",
 			"type": "anyparse.check.scan.HeadScan",
 			"method": "isInert",
-			"find": "(node.kind == purity.callKind && !PurityScan.isProvenPure(node, purity))",
+			"find": "(node.kind == purity.callKind && !PurityScan.isPure(node, purity))",
 			"replace": "false",
 			"note": "a call in the head is taken for inert, so a condition reading a field the call writes runs after the new value is set"
 		},
@@ -1219,7 +1211,7 @@
 			"name": "M-HCBH-EFFECTFUL-COND",
 			"type": "anyparse.check.scan.HeadScan",
 			"method": "mayPrecede",
-			"find": "!conds.foreach(c -> PurityScan.isProvenPure(c, ctx.purity))",
+			"find": "!conds.foreach(c -> PurityScan.isPure(c, ctx.purity))",
 			"replace": "false",
 			"note": "a condition that calls a function, assigns or runs a property getter is taken for pure, so a head that reads state those effects change runs ahead of them"
 		},
@@ -1379,7 +1371,7 @@
 			"name": "M-PURITY-UNRESOLVED-RECEIVER",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "if (typeName == null) return unknownRuns;",
+			"find": "if (typeName == null) return true;",
 			"replace": "if (typeName == null) return false;",
 			"note": "an unresolved receiver reads as pure again"
 		},
@@ -1394,8 +1386,8 @@
 			"name": "M-PURITY-GETTER-OFF",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "getter == true || ",
-			"replace": "",
+			"find": "field) != false;",
+			"replace": "field) == null;",
 			"note": "a getter of a resolved type reads as plain"
 		},
 		{
@@ -1410,17 +1402,17 @@
 			"name": "M-PURITY-UNKNOWN-MEMBER",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "unknownRuns && getter == null",
-			"replace": "false",
-			"note": "a field the index cannot place reads as plain under isProvenPure"
+			"find": "field) != false;",
+			"replace": "field) == true;",
+			"note": "a field the index cannot place reads as plain"
 		},
 		{
 			"name": "M-PURITY-UNKNOWN-INDEX",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "unknownRuns && !typing.typeDeclared(typeName)",
-			"replace": "false",
-			"note": "an index read on a type outside the index reads as plain under isProvenPure"
+			"find": " || !typing.typeDeclared(typeName)",
+			"replace": "",
+			"note": "an index read on a type outside the index reads as plain"
 		},
 		{
 			"name": "M-FRAME-SPLICE-UNKNOWN",
@@ -1456,16 +1448,16 @@
 			"name": "M-PURITY-INTERCEPTOR-DECLARED-NAME",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "getter == null && typing.accessOverloaded(typeName, true)",
-			"replace": "typing.accessOverloaded(typeName, true)",
+			"find": "field) != false;",
+			"replace": "field) != false || typing.accessOverloaded(typeName, true);",
 			"note": "a declared field of an abstract with @:op(a.b) or @:resolve reads as running the interceptor"
 		},
 		{
 			"name": "M-PURITY-FIELD-READ-ASKS-INDEX",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "(getter == null && typing.accessOverloaded(typeName, true))",
-			"replace": "typing.accessOverloaded(typeName, false)",
+			"find": "field) != false;",
+			"replace": "field) != false || typing.accessOverloaded(typeName, false);",
 			"note": "a field read asks the index-access question, so a field read on an abstract with @:arrayAccess looks impure"
 		},
 		{
@@ -1504,6 +1496,38 @@
 			"find": ".concat(outer)",
 			"replace": "",
 			"note": "the statements after an OUTER `#if` region no longer reach an `if` inside a nested region, so a local lifted out of the inner one captures a read between the two `#end`s"
+		},
+		{
+			"name": "M-PURITY-ALIAS-GETTER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "memberGetter(ctx.index.refs.aliasedName(typeName), field)",
+			"replace": "memberGetter(typeName, field)",
+			"note": "a field read through a typedef alias is asked of the alias, which declares no member, so a plain field reads as unknown"
+		},
+		{
+			"name": "M-PURITY-BOUND-RECEIVER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "receiverTypeName",
+			"find": "return written ?? bound(recv);",
+			"replace": "return written;",
+			"note": "a loop binder or a lambda parameter written with no type stays unresolved, so a plain field read on it reads as impure"
+		},
+		{
+			"name": "M-PURITY-IMPLICIT-SELF-MEMBER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "receiverTypeName",
+			"find": "final member: Null<String> = bound(rootIdent);",
+			"replace": "final member: Null<String> = null;",
+			"note": "an inherited member read with no self reference stays unresolved, so a plain field read through it reads as impure"
+		},
+		{
+			"name": "M-PURITY-TRANSPARENT-CALL-RECEIVER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isPure",
+			"find": "c.children.foreach(r -> isPure(r, ctx))",
+			"replace": "true",
+			"note": "a transparent call no longer asks its receiver, a getter receiver reads as pure"
 		}
 	]
 }

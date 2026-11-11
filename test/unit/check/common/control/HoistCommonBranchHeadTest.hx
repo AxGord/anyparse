@@ -333,7 +333,7 @@ class HoistCommonBranchHeadTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-PURITY-STATIC-GETTER')
+	@:killer('M-PURITY-GETTER-OFF')
 	public function testGetterReadThroughItsOwnTypeIsNotPure(): Void {
 		Assert.equals(
 			0,
@@ -379,7 +379,7 @@ class HoistCommonBranchHeadTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-PURITY-UNKNOWN-MEMBER')
+	@:killer('M-PURITY-GETTER-OFF')
 	public function testTypedefAliasReceiverIsNotPure(): Void {
 		Assert.equals(0, violations('${TYPES}typedef Al = P; ' + receiverRead('u:Al', 'u.g')).length);
 	}

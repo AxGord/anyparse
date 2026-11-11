@@ -224,7 +224,7 @@ final class JoinArrayPushes extends RuleBase {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		return [
-			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes)) {
+			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes, entry.file)) {
 				file: entry.file,
 				span: m.span,
 				rule: RULE_ID,
@@ -251,7 +251,7 @@ final class JoinArrayPushes extends RuleBase {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin, index);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
 		final byKey: Map<String, Match> = [];
-		for (m in collectMatches(plugin, source, seams, symbols, writes)) byKey['${m.span.from}:${m.span.to}'] = m;
+		for (m in collectMatches(plugin, source, seams, symbols, writes, violations[0].file)) byKey['${m.span.from}:${m.span.to}'] = m;
 		final edits: Array<{ span: Span, text: String }> = [];
 		RunScan.eachMatched(violations, byKey, (m, _) -> for (edit in m.edits) edits.push(edit));
 		return CanonicalEdit.dropContainedEdits(edits);
@@ -321,7 +321,7 @@ final class JoinArrayPushes extends RuleBase {
 	 * that gate — most files hold none, and building it forces the symbol index.
 	 */
 	private static function collectMatches(
-		plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>, writes: () -> FieldWriteIndex
+		plugin: GrammarPlugin, source: String, seams: Seams, symbols: () -> Null<SymbolIndex>, writes: () -> FieldWriteIndex, file: String
 	): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -337,7 +337,7 @@ final class JoinArrayPushes extends RuleBase {
 				if (!built) {
 					built = true;
 					final index: Null<SymbolIndex> = symbols();
-					purity = index == null ? null : PurityScan.contextOf(plugin, source, root, index);
+					purity = index == null ? null : PurityScan.contextOf(plugin, source, root, index, file);
 				}
 				return purity;
 			}

@@ -95,7 +95,7 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 					built = true;
 					types = CheckScan.typeNominalResolver(source, plugin, tree, file, index(file), true);
 					final symbols: Null<SymbolIndex> = index(file);
-					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols);
+					purity = symbols == null ? null : PurityScan.contextOf(plugin, source, tree, symbols, file);
 				}
 				final resolve: Null<(QueryNode) -> Null<String>> = types;
 				final type: Null<String> = resolve == null ? null : resolve(arrayBase(head.receiver, seams));

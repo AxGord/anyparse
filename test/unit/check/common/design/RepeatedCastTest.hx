@@ -165,13 +165,14 @@ class RepeatedCastTest extends Test {
 	}
 
 	public function testTwoRunsInOneStatementBindOneAtATime(): Void {
+		final types: String = 'class B { public var c:Int; } class D { public var c:Int; } ';
 		final src: String =
-			'class C { function m(o:Dynamic, p:Dynamic) { sink(cast(o, B).c, cast(p, D).c); sink(cast(o, B).c, cast(p, D).c); } }';
-		final once: String =
-			'class C { function m(o:Dynamic, p:Dynamic) { final b: B = cast(o, B); sink(b.c, cast(p, D).c); sink(b.c, cast(p, D).c); } }';
+			'${types}class C { function m(o:Dynamic, p:Dynamic) { sink(cast(o, B).c, cast(p, D).c); sink(cast(o, B).c, cast(p, D).c); } }';
+		final once: String = types
+			+ 'class C { function m(o:Dynamic, p:Dynamic) { final b: B = cast(o, B); sink(b.c, cast(p, D).c); sink(b.c, cast(p, D).c); } }';
 		Assert.equals(once, CheckFixture.fixedSource(new RepeatedCast(), src));
 		Assert.equals(
-			'class C { function m(o:Dynamic, p:Dynamic) {'
+			'${types}class C { function m(o:Dynamic, p:Dynamic) {'
 			+ ' final b: B = cast(o, B); final d: D = cast(p, D); sink(b.c, d.c); sink(b.c, d.c); } }',
 			CheckFixture.fixedSource(new RepeatedCast(), once)
 		);

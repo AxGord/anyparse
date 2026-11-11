@@ -307,7 +307,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		if (info == null || tree == null) return [];
 		final root: QueryNode = tree;
 		final fileInfo: FileInfo = info;
-		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index);
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index, file);
 		if (purity == null) return [];
 		final readPurity: PurityCtx = purity;
 		final ctx: Ctx = {
