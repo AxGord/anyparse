@@ -849,8 +849,9 @@ final class HxModuleWriteOptions {
 
 	/**
 	 * Line-end policy for the remaining metadata sites: enum constructors, anon fields without a
-	 * keyword, a member the `var` / `function` arms do not name, inline metadata after a `var` keyword
-	 * (upstream `lineEnds.metadataOther`); values as on `metadataFunctionLineEnd`.
+	 * keyword and a member the `var` / `function` arms do not name (upstream `lineEnds.metadataOther`);
+	 * values as on `metadataFunctionLineEnd`. Metadata between a `var` keyword and its name answers to no
+	 * knob: it stays on the declaration's line.
 	 */
 	public var metadataOtherLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.After;
 

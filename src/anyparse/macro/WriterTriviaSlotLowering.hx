@@ -203,9 +203,11 @@ final class WriterTriviaSlotLowering {
 	 * unmodified separator when the field is not a Ref (no `BeforeLeading` slot)
 	 * or the slot is empty.
 	 */
-	private static function buildBeforeLeadingSep(child: ShapeNode, fieldName: String, triviaSepExpr: Expr): Expr {
+	private static function buildBeforeLeadingSep(child: ShapeNode, fieldName: String, triviaSepExpr: Expr, onLine: Bool = false): Expr {
 		// Gated on `child.kind == Ref` to match `TriviaTypeSynth.isBareNonFirstRef`,
-		// the only host that grows the `BeforeLeading` slot.
+		// the only host that grows the `BeforeLeading` slot. On an `onLine` field (`inlineSep`) only a line
+		// comment is followed by a break: a block comment keeps the gap on one line, so a rewrite reads
+		// it as the same-line comment it is.
 		return child.kind == Ref ? {
 			final leadAccess: Expr = beforeLeadingAccess(fieldName);
 			macro {
@@ -217,7 +219,7 @@ final class WriterTriviaSlotLowering {
 					final _p598: Array<anyparse.core.Doc> = [_sep598];
 					for (_ci598 in 0..._leadCm598.length) {
 						_p598.push(leadingCommentDocRun(_leadCm598, _ci598, opt));
-						_p598.push(_dhl());
+						_p598.push($v{onLine} && !StringTools.startsWith(_leadCm598[_ci598], '//') ? _dt(' ') : _dhl());
 					}
 					_dc(_p598);
 				}

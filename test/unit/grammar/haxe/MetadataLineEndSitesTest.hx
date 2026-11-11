@@ -159,15 +159,6 @@ class MetadataLineEndSitesTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-META-VARDECL-UNWIRED')
-	public function testTheOtherKnobGovernsMetadataAfterTheVarKeyword(): Void {
-		Assert.equals(
-			'class C {\n\tfunction f() {\n\t\tvar @:e\n\t\tz = 1;\n\t}\n}\n',
-			trivia('class C {\n\tfunction f() {\n\t\tvar @:e z = 1;\n\t}\n}\n', o -> o.metadataOtherLineEnd = MetadataLineEndPolicy.After)
-		);
-	}
-
-	@:pin('control')
 	@:killer('M-META-AFTER-SOURCE-SEP')
 	public function testTheDefaultDropsABlankBetweenMetadata(): Void {
 		Assert.equals('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', defaults('class C {\n\t@:a\n\n\t@:b\n\tvar x:Int;\n}\n'));

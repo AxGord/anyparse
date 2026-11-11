@@ -19,13 +19,15 @@ import haxe.macro.Expr;
 final class WriterMetaLineEndLowering {
 
 	/**
-	 * The runtime policy of a metadata run, or `null` when the field names no knob. `subject`
-	 * replaces the sibling's own value for a chain, whose annotated value is known only at the tail.
-	 * With no knob of its own, a value no arm names answers `-1`: no metadata site.
+	 * The runtime policy of a metadata run, or `null` when the field names no knob. `@:fmt(metaLineEndInline)`
+	 * answers `None` for a run that sits inside a declaration (between a `var` keyword and its name), where a
+	 * break would split it. `subject` replaces the sibling's own value for a chain, whose annotated value is
+	 * known only at the tail. With no knob of its own, a value no arm names answers `-1`: no metadata site.
 	 */
 	public static function policyExpr(
 		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, ?subject: Expr
 	): Null<Expr> {
+		if (MetaInspect.fmtHasFlag(field, 'metaLineEndInline')) return macro anyparse.format.MetadataLineEndPolicy.None;
 		final own: Null<String> = MetaInspect.fmtReadString(field, 'metaLineEndPolicy');
 		final arms: Array<Array<String>> = MetaInspect.fmtReadStringArgsAll(field, 'metaLineEndIfCtor');
 		if (own == null && arms.length == 0) return null;

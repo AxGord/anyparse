@@ -1050,9 +1050,18 @@
 			"type": "anyparse.grammar.haxe.HxVarDecl",
 			"method": "HxVarDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
-			"replace": "var meta",
-			"note": "metadata after a var keyword names no knob, so metadataOther does not reach it"
+			"find": "@:fmt(metaLineEndInline)\n\tvar meta",
+			"replace": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
+			"note": "metadata after a var keyword answers the metadataOther knob again, so After breaks the declaration between the keyword and its name"
+		},
+		{
+			"name": "M-META-VARNAME-INLINE-SEP",
+			"type": "anyparse.grammar.haxe.HxVarDecl",
+			"method": "HxVarDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(inlineSep)\n\tvar name",
+			"replace": "var name",
+			"note": "the binding name follows the source newline after the metadata run again"
 		},
 		{
 			"name": "M-META-MEMBER-VAR-ARM-OFF",

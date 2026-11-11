@@ -11,6 +11,14 @@
 			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
 		},
 		{
+			"name": "M-GAP-BLOCK-COMMENT-BREAKS",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "buildBeforeLeadingSep",
+			"find": "$v{onLine} && !StringTools.startsWith(_leadCm598[_ci598], '//') ? _dt(' ') : _dhl()",
+			"replace": "_dhl()",
+			"note": "a block comment in the gap before an inlineSep field is followed by a break again, so the first write leaves it on the metadata's line and a second write moves it"
+		},
+		{
 			"name": "M-ENDTYPE-BLOCK-COMMENT-ONLY",
 			"type": "anyparse.macro.TriviaBlockLowering",
 			"method": "triviaBlockElseBody",
@@ -2421,8 +2429,8 @@
 			"name": "M-META-PAD-DROPS-GAP-COMMENT",
 			"type": "anyparse.macro.WriterFieldSepLowering",
 			"method": "buildBareRefLeadingSep",
-			"find": "final sep: Expr = prevPadTrailing == null ? triviaSepExpr : macro $prevPadTrailing ? $afterPad : $triviaSepExpr;\n\t\t\treturn buildBeforeLeadingSep(child, fieldName, sep);",
-			"replace": "return withPadTrailingDrop(prevPadTrailing, buildBeforeLeadingSep(child, fieldName, triviaSepExpr));",
+			"find": "final sep: Expr = prevPadTrailing == null ? triviaSepExpr : macro $prevPadTrailing ? $afterPad : $triviaSepExpr;\n\t\t\treturn buildBeforeLeadingSep(child, fieldName, sep, inlineSep);",
+			"replace": "return withPadTrailingDrop(prevPadTrailing, buildBeforeLeadingSep(child, fieldName, triviaSepExpr, inlineSep));",
 			"note": "the break after the last metadata drops the whole gap before the declaration, its comments with it"
 		},
 		{

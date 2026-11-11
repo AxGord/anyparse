@@ -13,7 +13,9 @@ package anyparse.grammar.haxe;
  * `@:optional` AND `Null<HxExpr>` — both axes are required by `ShapeBuilder` (D23); `@:lead('=')` is the
  * commit point (D24). A leading `@:trivia @:tryparse var meta:Array<HxMetadata>` Star captures inline metadata
  * between the keyword and the name (`var @:name name = 'Foo';`), the byte-twin of `HxMemberDecl.meta`; at
- * member positions the outer wrapper's slot is canonical and this Star is permissive.
+ * member positions the outer wrapper's slot is canonical and this Star is permissive. It answers to no
+ * `metadata*LineEnd` knob (`metaLineEndInline`): a break there would split the declaration between its keyword
+ * and its name.
  *
  * Multi-variable declarations (`var a, b = 1, c = 2;`) go through `more`: a `@:trivia @:tryparse
  * Array<HxVarMore>` Star carrying every binding after the first (each `HxVarMore` is `,` + a full
@@ -43,8 +45,9 @@ package anyparse.grammar.haxe;
 typedef HxVarDecl = {
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))
+	@:fmt(metaLineEndInline)
 	var meta: Array<HxMetadata>;
+	@:fmt(inlineSep)
 	var name: HxVarNameLit;
 	@:optional
 	@:fmt(tightLead)

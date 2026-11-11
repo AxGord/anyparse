@@ -407,8 +407,9 @@ final class WriterFieldSepLowering {
 			// `D.fillOnOverflow` drops rather than counting as an item.
 			// ω-splice-op-fill: `@:fmt(inlineSep)` is the same decision
 			// for a gap the enclosing fill does NOT own — a single space,
-			// never a break. Consumer: `HxCondSpliceOpTerm.op`, where the
-			// operator must stay glued to the operand it closes.
+			// never a break; after a Star that may be empty, a space only when it is not. Consumers:
+			// `HxCondSpliceOpTerm.op`, where the operator must stay glued to the operand it closes, and
+			// `HxVarDecl.name`, which must stay on the line of the metadata before it.
 			final fillSeam: Bool = child.fmtHasFlag('fillSeam');
 			final inlineSep: Bool = child.fmtHasFlag('inlineSep');
 			// ω-region-prefix-blank: `@:fmt(keepBlankAfterStarCtor(...))` adds one
@@ -427,7 +428,7 @@ final class WriterFieldSepLowering {
 			final triviaSepExpr: Expr = if (fillSeam)
 				macro _de();
 			else if (inlineSep)
-				macro _dt(' ');
+				inlineSepExpr(prevAnyStarNonEmpty);
 			else if (prevAnyStarNonEmpty != null) {
 				final prev: Expr = prevAnyStarNonEmpty;
 				macro $prev ? $nlSep : _de();
@@ -439,11 +440,16 @@ final class WriterFieldSepLowering {
 			// and only a kept source blank adds its second break; the comments stay.
 			final afterPad: Expr = blankKept == null ? macro _de() : macro $blankKept ? _dhl() : _de();
 			final sep: Expr = prevPadTrailing == null ? triviaSepExpr : macro $prevPadTrailing ? $afterPad : $triviaSepExpr;
-			return buildBeforeLeadingSep(child, fieldName, sep);
+			return buildBeforeLeadingSep(child, fieldName, sep, inlineSep);
 		}
 		if (prevAnyStarNonEmpty == null) return withPadTrailingDrop(prevPadTrailing, macro _dt(' '));
 		final prev: Expr = prevAnyStarNonEmpty;
 		return withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de());
+	}
+
+	/** The gap of an `inlineSep` field: one space, or nothing when the Star before it is empty. */
+	private static function inlineSepExpr(prevAnyStarNonEmpty: Null<Expr>): Expr {
+		return prevAnyStarNonEmpty == null ? macro _dt(' ') : macro $prevAnyStarNonEmpty ? _dt(' ') : _de();
 	}
 
 }
