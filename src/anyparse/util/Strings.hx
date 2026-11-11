@@ -157,6 +157,7 @@ final class Strings {
 	 * `quotedEnd` over any character source: `charAt` answers the code at an index and `-1` past the end, so a reader
 	 * that is not a `String` (a parser's input) asks the same question without copying its text.
 	 */
+	@:noUsing
 	public static function quotedEndOf(charAt: (Int) -> Int, at: Int): Int {
 		final quote: Int = charAt(at);
 		var i: Int = at + 1;
@@ -180,6 +181,7 @@ final class Strings {
 	 * Braces count naively, the way the compiler's `${ … }` scanner counts them: a brace inside a nested string still
 	 * counts. The one answer to "where does an interpolation block end".
 	 */
+	@:noUsing
 	public static function closingBrace(length: Int, codeAt: Int -> Int, open: Int): Int {
 		var depth: Int = 0;
 		for (i in open ... length) {

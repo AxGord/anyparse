@@ -7,8 +7,8 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -133,7 +133,7 @@ final class ExtractMethod {
 		source: String, startLine: Int, startCol: Int, endLine: Int, endCol: Int, name: String, reformat: Bool, plugin: GrammarPlugin,
 		shape: RefShape, ?optsJson: String, member: Bool = false
 	): EditResult {
-		if (!Strings.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
+		if (!name.isIdentifier()) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);

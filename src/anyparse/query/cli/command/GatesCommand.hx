@@ -5,8 +5,8 @@ import anyparse.query.Meta.MetaHit;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -346,7 +346,7 @@ final class GatesCommand implements CliCommand {
 		while (i < inner.length) {
 			final c: Int = inner.fastCodeAt(i);
 			if (c == "'".code || c == '"'.code) {
-				final end: Int = Strings.quotedEnd(inner, i);
+				final end: Int = inner.quotedEnd(i);
 				// An unterminated quote swallows the rest, so the whole text is the argument.
 				if (end == i) return inner.trim();
 				i = end;

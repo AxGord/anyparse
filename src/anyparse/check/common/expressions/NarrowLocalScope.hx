@@ -10,8 +10,8 @@ import anyparse.query.Refs;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -247,7 +247,7 @@ final class NarrowLocalScope extends RuleBase {
 			declSpan: declSpan,
 			removeSpan: removeSpan,
 			declText: source.substring(declSpan.from, declSpan.to - 1).rtrim(),
-			insertAt: Strings.lineStart(source, targetSpan.from),
+			insertAt: source.lineStart(targetSpan.from),
 			indent: SourceText.lineIndentAt(source, targetSpan.from)
 		};
 	}

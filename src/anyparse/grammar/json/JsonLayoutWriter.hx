@@ -4,9 +4,9 @@ import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using StringTools;
 using Lambda;
 
@@ -358,7 +358,7 @@ final class JsonLayoutWriter {
 	private function currentLineIndent(): String {
 		final start: Int = _out.lastIndexOf('\n') + 1;
 		var end: Int = start;
-		while (end < _out.length && Strings.isSpaceOrTab(_out.fastCodeAt(end))) end++;
+		while (end < _out.length && _out.fastCodeAt(end).isSpaceOrTab()) end++;
 		return _out.substring(start, end);
 	}
 
@@ -445,7 +445,7 @@ final class JsonLayoutWriter {
 		var at: Int = text.indexOf('\n');
 		while (at >= 0 && at + 1 < text.length) {
 			var end: Int = at + 1;
-			while (end < text.length && Strings.isSpaceOrTab(text.fastCodeAt(end))) end++;
+			while (end < text.length && text.fastCodeAt(end).isSpaceOrTab()) end++;
 			if (end > at + 1 && end < text.length && text.fastCodeAt(end) != '\n'.code && text.fastCodeAt(end) != '\r'.code) {
 				final first: String = text.charAt(at + 1);
 				return first == IndentChar.Tab ? first : text.substring(at + 1, end);

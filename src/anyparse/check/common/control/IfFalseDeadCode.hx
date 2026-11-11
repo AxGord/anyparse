@@ -4,8 +4,8 @@ import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.CondCondition;
 import anyparse.runtime.Input;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -187,7 +187,7 @@ final class IfFalseDeadCode extends RuleBase {
 		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length, reader);
 		if (condition == null) return false;
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
-		return Strings.stripOuterParens(text) == literal;
+		return text.stripOuterParens() == literal;
 	}
 
 	/**

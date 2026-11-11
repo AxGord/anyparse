@@ -12,7 +12,8 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
@@ -636,10 +637,10 @@ final class InlineConstant extends RuleBase {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = source.fastCodeAt(i);
-			if (Strings.isIdentStart(c)) {
+			if (c.isIdentStart()) {
 				final start: Int = i;
 				i++;
-				while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+				while (i < n && source.fastCodeAt(i).isIdentChar()) i++;
 				final token: String = source.substring(start, i);
 				if (isUpper(token.fastCodeAt(0)) && !out.contains(token)) out.push(token);
 			} else {

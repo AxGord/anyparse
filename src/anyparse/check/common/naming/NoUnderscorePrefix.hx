@@ -12,8 +12,8 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.Rename;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -362,7 +362,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 		while (i < name.length && name.fastCodeAt(i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
-		if (!Strings.isIdentifier(stripped)) {
+		if (!stripped.isIdentifier()) {
 			refusal('stripping the underscores leaves \'$stripped\', which is not an identifier');
 			return null;
 		}

@@ -38,7 +38,7 @@ final class UsingScan {
 	public static inline final FILE_WIDE_SUBJECT: String = 'a rewritten call';
 
 	/** The wildcard import kind — the one form that binds names it does not spell out (`headerRebindsName`). */
-	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
+	private static final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
@@ -408,6 +408,24 @@ final class UsingScan {
 		return ambient.exists(path -> bindsModule(path, module));
 	}
 
+	/**
+	 * The declaration whose statics `type` brings to a `using`: itself, or — for a `typedef` of another type — the type it
+	 * aliases, followed down the chain. Null when an alias does not resolve to one declaration.
+	 */
+	@:access(anyparse.query.SymbolIndex)
+	public static function aliasedHost(type: TypeDeclInfo, file: FileInfo, index: SymbolIndex): Null<TypeDeclInfo> {
+		var cur: ResolvedType = { file: file, type: type };
+		final seen: Array<TypeDeclInfo> = [];
+		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
+			final target: Null<String> = cur.type.aliasTargetRaw;
+			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file, cur.type.span.from);
+			if (next == null || seen.contains(next.type)) return null;
+			seen.push(cur.type);
+			cur = next;
+		}
+		return cur.type;
+	}
+
 	/** The graver of two verdicts. */
 	private static inline function worse(a: UsingConflict, b: UsingConflict): UsingConflict {
 		return if (a == UsingConflict.Conflict || b == UsingConflict.Conflict)
@@ -480,24 +498,6 @@ final class UsingScan {
 		else
 			out.push({ path: ModuleScan.pathOfDecl(d.file, d.type), type: d.type, file: d.file });
 		return out.length == 0 ? null : out;
-	}
-
-	/**
-	 * The declaration whose statics `type` brings to a `using`: itself, or — for a `typedef` of another type — the type it
-	 * aliases, followed down the chain. Null when an alias does not resolve to one declaration.
-	 */
-	@:access(anyparse.query.SymbolIndex)
-	private static function aliasedHost(type: TypeDeclInfo, file: FileInfo, index: SymbolIndex): Null<TypeDeclInfo> {
-		var cur: ResolvedType = { file: file, type: type };
-		final seen: Array<TypeDeclInfo> = [];
-		while (cur.type.kind == SymbolIndex.TYPEDEF_DECL_KIND && !cur.type.isAnonStruct) {
-			final target: Null<String> = cur.type.aliasTargetRaw;
-			final next: Null<ResolvedType> = target == null ? null : index.refs.resolveTypeRef(target, cur.file, cur.type.span.from);
-			if (next == null || seen.contains(next.type)) return null;
-			seen.push(cur.type);
-			cur = next;
-		}
-		return cur.type;
 	}
 
 	/**

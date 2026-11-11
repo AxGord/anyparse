@@ -14,7 +14,8 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.NodeShape;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags an EMPTY-ARRAY binding followed by a run of `a.push(<expr>);` statements — an array
@@ -469,7 +470,7 @@ final class JoinArrayPushes extends RuleBase {
 	private static function localMatch(decl: LocalDecl, run: Array<Push>, scope: Span, ctx: Ctx): Null<Match> {
 		final source: String = ctx.source;
 		final end: Int = run[run.length - 1].stmt.to;
-		if (CheckScan.hasCommentMarker(source, decl.span.from, Strings.lineEnd(source, end))) return null;
+		if (CheckScan.hasCommentMarker(source, decl.span.from, source.lineEnd(end))) return null;
 		for (push in run) if (referencesName(push.arg, decl.name, ctx.seams)) return null;
 		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, [])
 			? { span: decl.span, edits: foldEdits(decl.literal, run, ctx) }
@@ -536,7 +537,7 @@ final class JoinArrayPushes extends RuleBase {
 		final end: Int = run[run.length - 1].stmt.to;
 		if (!receiversDenoteField(run, container, decl.span.from, ctx)) return null;
 		if (CheckScan.hasCommentMarker(source, decl.span.from, decl.span.to)) return null;
-		if (CheckScan.hasCommentMarker(source, from, Strings.lineEnd(source, end))) return null;
+		if (CheckScan.hasCommentMarker(source, from, source.lineEnd(end))) return null;
 		if (OccurrenceScan.referencedInRange(source, name, ctorSpan.from, from, [])) return null;
 		// The field's OWN declaration is excluded: a field declared BELOW the constructor lies in
 		// this range and would satisfy the read-after gate with nothing but itself.

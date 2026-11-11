@@ -7,7 +7,8 @@ import anyparse.runtime.BodySkip.SkipMarkRole;
 import anyparse.runtime.CondCondition;
 import anyparse.runtime.Input;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * The shared conditional-compilation directive reader: the one place its consumers locate a
@@ -58,7 +59,7 @@ final class CondDirectives {
 	 * identifier spliced next to it. Out of range answers false: nothing there to weld with.
 	 */
 	public static inline function isIdentCharAt(source: String, at: Int): Bool {
-		return at >= 0 && at < source.length && Strings.isIdentChar(source.fastCodeAt(at));
+		return at >= 0 && at < source.length && source.fastCodeAt(at).isIdentChar();
 	}
 
 	/**
@@ -288,7 +289,7 @@ final class CondDirectives {
 		for (keyword in keywords) {
 			final end: Int = at + keyword.length;
 			if (end > source.length || source.substring(at, end) != keyword) continue;
-			if (end == source.length || !Strings.isIdentChar(source.fastCodeAt(end))) return keyword;
+			if (end == source.length || !source.fastCodeAt(end).isIdentChar()) return keyword;
 		}
 		return null;
 	}

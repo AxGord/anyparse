@@ -3,7 +3,8 @@ package anyparse.check.common.docs;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /** One comment token as `RefactorSupport.collectCommentTokens` yields it: its span, and whether it is a `//` line comment. */
 private typedef CommentToken = { var from: Int; var to: Int; var isLine: Bool; }
@@ -174,7 +175,7 @@ final class EmptyComment extends RuleBase {
 	 * only the comment itself.
 	 */
 	private static function deletionSpan(source: String, span: Span): Span {
-		final lineStart: Int = Strings.lineStart(source, span.from);
+		final lineStart: Int = source.lineStart(span.from);
 		var lineEnd: Int = span.to;
 		while (lineEnd < source.length && source.fastCodeAt(lineEnd) != '\n'.code) lineEnd++;
 		final codeBefore: Bool = source.substring(lineStart, span.from).trim() != '';

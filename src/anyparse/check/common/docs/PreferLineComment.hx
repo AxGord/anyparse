@@ -6,7 +6,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.CommonPrefix;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * One convertible block comment: the span to REPORT (the comment token), the span to
@@ -159,7 +160,7 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 		if (tok.to - tok.from < 4 || source.substring(tok.to - 2, tok.to) != '*/') return null; // noqa: magic-number
 		final lineEnd: Int = lineEndOf(source, tok.to);
 		if (source.substring(tok.to, lineEnd).trim() != '') return null;
-		final indent: String = source.substring(Strings.lineStart(source, tok.from), tok.from);
+		final indent: String = source.substring(source.lineStart(tok.from), tok.from);
 		final raw: String = source.substring(tok.from, tok.to);
 		final multiline: Bool = raw.indexOf('\n') >= 0;
 		if (multiline && indent.trim() != '') return null;

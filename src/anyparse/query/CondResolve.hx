@@ -5,8 +5,8 @@ import anyparse.query.CondQuery.CondBranch;
 import anyparse.query.CondQuery.CondRegion;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -157,7 +157,7 @@ final class CondResolve {
 		if (replacement != '' || !SourceText.startsItsLine(text, from) || !CondDirectives.endsItsLine(text, to)) return new Span(from, to);
 		var end: Int = to;
 		while (end < text.length && text.fastCodeAt(end) != '\n'.code) end++;
-		return new Span(Strings.lineStart(text, from), end < text.length ? end + 1 : end);
+		return new Span(text.lineStart(from), end < text.length ? end + 1 : end);
 	}
 
 	/**

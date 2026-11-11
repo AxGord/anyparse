@@ -6,9 +6,9 @@ import anyparse.query.Matcher.Unwritten;
 import anyparse.query.ParenGuard.GuardedEdit;
 import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -148,7 +148,7 @@ final class Rewrite {
 				continue;
 			}
 			var j: Int = i + 1;
-			while (j < n && Strings.isIdentChar(template.fastCodeAt(j))) j++;
+			while (j < n && template.fastCodeAt(j).isIdentChar()) j++;
 			if (j == i + 1) {
 				buf.addChar('$'.code);
 				written++;

@@ -6,7 +6,8 @@ import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Where an oracle-named type will be WRITTEN — the context that decides which of the compiler's
@@ -277,7 +278,7 @@ final class LiteralInfer {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = printed.fastCodeAt(i);
-			if (!Strings.isIdentChar(c) && c != '.'.code) {
+			if (!c.isIdentChar() && c != '.'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
@@ -285,7 +286,7 @@ final class LiteralInfer {
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = printed.fastCodeAt(i);
-				if (!Strings.isIdentChar(cc) && cc != '.'.code) break;
+				if (!cc.isIdentChar() && cc != '.'.code) break;
 				i++;
 			}
 			buf.add(f(printed.substring(start, i)));
@@ -368,12 +369,12 @@ final class LiteralInfer {
 		final n: Int = t.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!Strings.isIdentChar(t.fastCodeAt(i))) {
+			if (!t.fastCodeAt(i).isIdentChar()) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && Strings.isIdentChar(t.fastCodeAt(i))) i++;
+			while (i < n && t.fastCodeAt(i).isIdentChar()) i++;
 			if (t.substring(start, i) == '_') return true;
 		}
 		return false;

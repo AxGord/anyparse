@@ -9,8 +9,8 @@ import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypingService.HeadReading;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /** The simple names one file's meaning is compared on, and where the file lives before and after the relocation. */
@@ -301,10 +301,10 @@ final class ModuleMoveBindings {
 		final dot: Int = o.at + o.name.length;
 		if (dot >= text.length || text.fastCodeAt(dot) != '.'.code) return '';
 		var end: Int = dot + 1;
-		while (end < text.length && Strings.isIdentChar(text.fastCodeAt(end))) end++;
+		while (end < text.length && text.fastCodeAt(end).isIdentChar()) end++;
 		final sub: String = text.substring(dot + 1, end);
 		final initial: Int = sub.length == 0 ? 0 : sub.fastCodeAt(0);
-		return Strings.isIdentifier(sub) && (!upper || (initial >= 'A'.code && initial <= 'Z'.code)) ? sub : '';
+		return sub.isIdentifier() && (!upper || (initial >= 'A'.code && initial <= 'Z'.code)) ? sub : '';
 	}
 
 	/** Every qualified spelling `Head.Sub` written in code in `text` — interpolation holes included — read by its shape alone. */

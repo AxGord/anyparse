@@ -4,10 +4,10 @@ import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.OracleOutcome;
-import anyparse.util.Strings;
 import haxe.Exception;
 import haxe.io.Path;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -394,7 +394,7 @@ final class LintFixSafePass {
 			while (scan < line.length && isDigit(line.fastCodeAt(scan))) scan++;
 			if (scan == from || line.charAt(scan) != ':') continue;
 			var start: Int = colon;
-			while (start > 0 && !Strings.isSpaceOrTab(line.fastCodeAt(start - 1))) start--;
+			while (start > 0 && !line.fastCodeAt(start - 1).isSpaceOrTab()) start--;
 			final path: String = line.substring(start, colon);
 			// No extension, no file: a message can carry its own `word:12:` and must not be
 			// read as a position (nothing would match it, but it would be PRINTED as blamed).

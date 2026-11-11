@@ -1568,6 +1568,24 @@
 			"find": "enclosing == null || enclosing == typeName || ",
 			"replace": "enclosing == null || ",
 			"note": "a bare name inside the constant own type no longer holds it"
+		},
+		{
+			"name": "M-USING-ALIAS-NOT-FOLLOWED",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "membersByModule",
+			"kind": "FnMember",
+			"find": "UsingScan.aliasedHost(t, info, index)",
+			"replace": "t",
+			"note": "a using on a typedef of a class reads the alias's own empty member set, so the unused-import arm declares it unused and --fix deletes a using whose class statics the file calls"
+		},
+		{
+			"name": "M-USING-ALIAS-BUILD-IGNORED",
+			"type": "anyparse.check.scan.UsingSites",
+			"method": "membersByModule",
+			"kind": "FnMember",
+			"find": "host == null || (host != t && (host.hasBuild || host.hasAutoBuild))",
+			"replace": "host == null",
+			"note": "a using on a typedef of a class a build macro extends reads the members the declaration shows, so the unused-import arm declares it unused and --fix deletes a using whose macro-made statics the file may call"
 		}
 	]
 }

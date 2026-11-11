@@ -1,8 +1,7 @@
 package anyparse.format;
 
+using anyparse.util.Strings;
 using StringTools;
-
-import anyparse.util.Strings;
 
 /**
  * Text normalisation for a conditional-compilation condition - the `#if` /
@@ -44,7 +43,7 @@ final class DirectiveCondition {
 			final c: Int = text.fastCodeAt(i);
 			if (c == '"'.code || c == "'".code) {
 				// An unterminated literal keeps the rest of the text as authored.
-				final closed: Int = Strings.quotedEnd(text, i);
+				final closed: Int = text.quotedEnd(i);
 				final end: Int = closed > i ? closed : n;
 				out += text.substring(i, end);
 				i = end;
@@ -57,7 +56,7 @@ final class DirectiveCondition {
 			}
 			final lead: Int = trimmedEnd(out);
 			var j: Int = i + 2;
-			while (j < n && Strings.isSpaceOrTab(text.fastCodeAt(j))) j++;
+			while (j < n && text.fastCodeAt(j).isSpaceOrTab()) j++;
 			// A newline on either side is the author's layout, not spacing - leave the
 			// whole occurrence alone and resume after it.
 			if (lead < 0 || hasNewline(text, i + 2, j)) {
@@ -88,7 +87,7 @@ final class DirectiveCondition {
 		while (k > 0) {
 			final c: Int = out.fastCodeAt(k - 1);
 			if (c == '\n'.code || c == '\r'.code) return -1;
-			if (!Strings.isSpaceOrTab(c)) break;
+			if (!c.isSpaceOrTab()) break;
 			k--;
 		}
 		return k;

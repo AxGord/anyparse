@@ -127,7 +127,7 @@ final class LibraryCalls {
 				break;
 			}
 			final own: String -> Bool = written -> {
-				final nominal: Null<String> = NominalTypes.outerNominalOf(StringTools.trim(written), _scope.plugin.typeSyntax);
+				final nominal: Null<String> = NominalTypes.outerNominalOf(written.trim(), _scope.plugin.typeSyntax);
 				inertType(written) || nominal == current || nominal == type || nominal == _scope.shape.voidTypeName;
 			};
 			for (m in decl.members) {

@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /** One relocated module: its module path before and after, dotted (`pkg.sub.Mod`). */
 typedef ModuleRename = { final oldPath: String; final newPath: String; }
@@ -41,8 +42,8 @@ final class ModulePathTokens {
 			final before: Int = at == 0 ? -1 : text.fastCodeAt(at - 1);
 			final afterIdx: Int = at + token.length;
 			final after: Int = afterIdx >= text.length ? -1 : text.fastCodeAt(afterIdx);
-			if (before >= 0 && (Strings.isIdentChar(before) || (dotted && before == '.'.code))) continue;
-			if (after >= 0 && Strings.isIdentChar(after)) continue;
+			if (before >= 0 && (before.isIdentChar() || (dotted && before == '.'.code))) continue;
+			if (after >= 0 && after.isIdentChar()) continue;
 			out.push(at);
 		}
 	}
@@ -118,12 +119,12 @@ final class ModulePathTokens {
 				continue;
 			}
 			final c: Int = source.fastCodeAt(i);
-			if (!Strings.isIdentStart(c)) {
+			if (!c.isIdentStart()) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+			while (i < n && source.fastCodeAt(i).isIdentChar()) i++;
 			if ((!upperOnly || (c >= 'A'.code && c <= 'Z'.code)) && !dotBefore(source, start))
 				out.push({ name: source.substring(start, i), at: start });
 		}

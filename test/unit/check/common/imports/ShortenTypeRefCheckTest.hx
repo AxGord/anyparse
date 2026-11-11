@@ -965,7 +965,7 @@ class ShortenTypeRefCheckTest extends Test {
 	/** The declaration line of the local named `v`, for an exact whole-line assertion. */
 	private function annotationLine(source: String): String {
 		for (line in source.split('\n')) {
-			final trimmed: String = StringTools.trim(line);
+			final trimmed: String = line.trim();
 			if (trimmed.indexOf('final v') == 0 || trimmed.indexOf('var v') == 0) return line;
 		}
 		return source;

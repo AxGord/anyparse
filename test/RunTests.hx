@@ -54,9 +54,9 @@ class RunTests {
 		// `test:<text>` runs the tests whose `<class>.<method>` contains `<text>`
 		// (`dev mutation-check --killer-first`).
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
-		final filters: Array<ShardToken> = filterEnv == null ? [] : [
-			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') ShardFilter.parse(StringTools.trim(f))
-		];
+		final filters: Array<ShardToken> = filterEnv == null
+			? []
+			: [for (f in filterEnv.split(',')) if (f.trim() != '') ShardFilter.parse(f.trim())];
 		function addCase(testCase: utest.Test): Void {
 			if (filters.length == 0) {
 				runner.addCase(testCase);

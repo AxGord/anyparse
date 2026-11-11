@@ -5,8 +5,8 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -90,7 +90,7 @@ final class Rename {
 		source: String, line: Int, col: Int, newName: String, plugin: GrammarPlugin, shape: RefShape, qualifyShadowed: Bool = false,
 		?file: String
 	): RenameResult {
-		if (!Strings.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!newName.isIdentifier()) return Err('new name "$newName" is not a valid identifier');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);

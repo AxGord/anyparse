@@ -93,7 +93,7 @@ class MoveMemberSliceTest extends Test {
 			case Ok(changes, advisory):
 				final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 				Assert.isTrue(newB.contains('public static function util'), 'private should promote to public');
-				Assert.isTrue(advisory != null && StringTools.contains(advisory, 'promoted'), 'advisory should mention promotion');
+				Assert.isTrue(advisory != null && advisory.contains('promoted'), 'advisory should mention promotion');
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 		}
@@ -1401,7 +1401,7 @@ class MoveMemberSliceTest extends Test {
 			case Ok(changes, _):
 				Assert.fail('expected Err, got Ok with ${changes.length} change(s)');
 			case Err(message):
-				Assert.isTrue(StringTools.contains(message, needle), 'Err "$message" should mention "$needle"');
+				Assert.isTrue(message.contains(needle), 'Err "$message" should mention "$needle"');
 		}
 	}
 

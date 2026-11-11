@@ -12,9 +12,9 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -528,7 +528,7 @@ final class MoveSymbol {
 		var seat: Int = -1;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && !imp.guarded) {
 			final at: Int = imp.span.from;
-			final start: Int = Strings.lineStart(destSource, at);
+			final start: Int = destSource.lineStart(at);
 			if (isBlank(destSource, start, at) && (seat < 0 || start < seat)) seat = start;
 		}
 		// A guarded statement, and one sharing its line, offer no candidate of their own — but the
@@ -567,7 +567,7 @@ final class MoveSymbol {
 		source: String, declSpan: Span, groupEnd: Int, comments: Array<Span>
 	): Null<{ span: Span, textEnd: Int }> {
 		// Start of the decl's own line.
-		final lineStart: Int = Strings.lineStart(source, declSpan.from);
+		final lineStart: Int = source.lineStart(declSpan.from);
 		// The characters between the line start and the decl must be pure
 		// whitespace (the decl's indentation) — otherwise the decl shares a
 		// line with other code and a whole-line cut would corrupt it.
@@ -728,7 +728,7 @@ final class MoveSymbol {
 	private static function blankRunStart(source: String, at: Int): Int {
 		var start: Int = at;
 		while (start > 0) {
-			final prevLineStart: Int = Strings.lineStart(source, start - 1);
+			final prevLineStart: Int = source.lineStart(start - 1);
 			if (!isBlank(source, prevLineStart, start - 1)) return start;
 			start = prevLineStart;
 		}
@@ -822,7 +822,7 @@ final class MoveSymbol {
 		var to: Int = imp.span.to;
 		if (to < source.length && source.charAt(to) == '\n') to++;
 		// Also drop the import's own leading indentation if any.
-		final from: Int = Strings.lineStart(source, imp.span.from);
+		final from: Int = source.lineStart(imp.span.from);
 		final actualFrom: Int = isBlank(source, from, imp.span.from) ? from : imp.span.from;
 		return new Span(actualFrom, to);
 	}
@@ -1056,7 +1056,7 @@ final class MoveSymbol {
 	 */
 	private static function importIndent(source: String, imp: ImportInfo): String {
 		final at: Int = imp.span.from;
-		final start: Int = Strings.lineStart(source, at);
+		final start: Int = source.lineStart(at);
 		return isBlank(source, start, at) ? source.substring(start, at) : '';
 	}
 
@@ -1331,11 +1331,11 @@ final class MoveSymbol {
 	 * not trivia, so the walk stops at the separator rather than swallowing it.
 	 */
 	private static function triviaStartOf(source: String, at: Int, comments: Array<Span>): Int {
-		var start: Int = Strings.lineStart(source, at);
+		var start: Int = source.lineStart(at);
 		while (start > 0) {
 			// `start` is at the start of the current line; step to the previous line.
 			final prevLineEnd: Int = start - 1; // the n terminating the previous line
-			final prevLineStart: Int = Strings.lineStart(source, prevLineEnd);
+			final prevLineStart: Int = source.lineStart(prevLineEnd);
 			// A BLOCK comment whose continuation lines carry no `*` gutter — the
 			// `/**\n\tText\n**/` spelling — is ordinary prose to a per-line prefix test, so the
 			// walk stopped one line below the opener and the cut took only the closing `**/`.
@@ -1343,7 +1343,7 @@ final class MoveSymbol {
 			// look at. The lexer already knows where the comment starts; ask it before reading the text.
 			final open: Int = commentStartCovering(comments, prevLineEnd);
 			if (open >= 0 && open < prevLineStart) {
-				start = Strings.lineStart(source, open);
+				start = source.lineStart(open);
 				continue;
 			}
 			if (!isContiguousTriviaLine(source.substring(prevLineStart, prevLineEnd))) break;

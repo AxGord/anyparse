@@ -1,9 +1,9 @@
 package anyparse.query;
 
+using anyparse.util.Strings;
 using Lambda;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 /**
  * Character-, word- and line-level primitives over RAW source text. Nothing here reads the
@@ -73,7 +73,7 @@ final class SourceText {
 
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name: Null<String>): Bool {
-		return name != null && name != 'this' && Strings.isIdentifier(name);
+		return name != null && name != 'this' && name.isIdentifier();
 	}
 
 	/**
@@ -130,9 +130,9 @@ final class SourceText {
 		while (i + name.length <= to) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + name.length > to) return -1;
-			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1));
+			final beforeOk: Bool = at == 0 || !source.fastCodeAt(at - 1).isIdentChar();
 			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !source.fastCodeAt(afterIdx).isIdentChar();
 			if (beforeOk && afterOk) return at;
 			i = at + 1;
 		}
@@ -211,9 +211,9 @@ final class SourceText {
 	 */
 	public static function firstTokenEnd(source: String, from: Int): Int {
 		if (from < 0 || from >= source.length) return from;
-		if (!Strings.isIdentChar(source.fastCodeAt(from))) return from + 1;
+		if (!source.fastCodeAt(from).isIdentChar()) return from + 1;
 		var i: Int = from + 1;
-		while (i < source.length && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < source.length && source.fastCodeAt(i).isIdentChar()) i++;
 		return i;
 	}
 
@@ -411,8 +411,7 @@ final class SourceText {
 	/** Whether the occurrence of `name` at `at` in `head` stands alone — no identifier character on either side. */
 	private static inline function standaloneIdentAt(head: String, name: String, at: Int): Bool {
 		final after: Int = at + name.length;
-		return (at == 0 || !Strings.isIdentChar(head.fastCodeAt(at - 1)))
-			&& (after >= head.length || !Strings.isIdentChar(head.fastCodeAt(after)));
+		return (at == 0 || !head.fastCodeAt(at - 1).isIdentChar()) && (after >= head.length || !head.fastCodeAt(after).isIdentChar());
 	}
 
 	private static inline function isUpperCode(code: Int): Bool {

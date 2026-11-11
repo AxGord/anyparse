@@ -30,7 +30,7 @@ final class ProcessProbe {
 		final out: String = table(['-A', '-o', 'pid=,command=']);
 		final pids: Array<Int> = [];
 		for (line in out.split('\n')) {
-			final row: String = StringTools.trim(line);
+			final row: String = line.trim();
 			final gap: Int = row.indexOf(' ');
 			if (gap <= 0 || row.indexOf(fragment, gap) < 0) continue;
 			final pid: Null<Int> = Std.parseInt(row.substring(0, gap));

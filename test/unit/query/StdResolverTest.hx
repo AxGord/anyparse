@@ -199,7 +199,7 @@ class StdResolverTest extends Test {
 		}
 		final toplevel: Array<String> = Glob.expand(StdResolver.resolutionSpecs(dir)[0], '.hx');
 		Assert.isTrue(toplevel.length > 0, 'the toplevel glob matched at least one core type');
-		final hasStd: Bool = toplevel.exists(p -> StringTools.endsWith(p, '/Std.hx'));
+		final hasStd: Bool = toplevel.exists(p -> p.endsWith('/Std.hx'));
 		Assert.isTrue(hasStd, 'the toplevel glob includes Std.hx');
 		final hasTargetSubtree: Bool = toplevel.exists(p -> p.indexOf('/js/') >= 0 || p.indexOf('/cpp/') >= 0);
 		Assert.isFalse(hasTargetSubtree, 'the toplevel glob excludes target-specific subtrees');
@@ -264,27 +264,6 @@ class StdResolverTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	/**
-	 * `isStdFile` for `relative` under `root`, with `HAXE_STD_PATH` pointed at `root` for the
-	 * duration. Brackets the env write and the `stdDir` memo on BOTH sides — the memo is
-	 * process-wide, so the rest of the suite must come back to the real std.
-	 *
-	 * The restore passes the ORIGINAL value back, null included: `putEnv` with null REMOVES the
-	 * variable, and an unset `HAXE_STD_PATH` is not the same as an empty one — the `haxe`
-	 * subprocess the compiler-oracle tests spawn reads it and fails outright on an empty value.
-	 */
-	private function stdFileUnder(root: String, relative: String): Bool {
-		final original: Null<String> = Sys.getEnv('HAXE_STD_PATH');
-		StdResolver.resetCache();
-		Sys.putEnv('HAXE_STD_PATH', root);
-		final answer: Bool = StdResolver.isStdFile(haxe.io.Path.join([root, relative]));
-		Sys.putEnv('HAXE_STD_PATH', original);
-		StdResolver.resetCache();
-		return answer;
-	}
-	#end
-
 	@:pin('control')
 	@:killer('M-STD-SIBLING-HOMEBREW')
 	public function testTheStdBesideTheCompilerIsFoundInEitherLayout(): Void {
@@ -332,5 +311,26 @@ class StdResolverTest extends Test {
 	public function testHomebrewIsProbedBeforeUsrLocal(): Void {
 		Assert.equals('/opt/homebrew/lib/haxe/std', StdResolver.discover(null, null, StdResolver.KNOWN_LOCATIONS, _ -> true));
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * `isStdFile` for `relative` under `root`, with `HAXE_STD_PATH` pointed at `root` for the
+	 * duration. Brackets the env write and the `stdDir` memo on BOTH sides — the memo is
+	 * process-wide, so the rest of the suite must come back to the real std.
+	 *
+	 * The restore passes the ORIGINAL value back, null included: `putEnv` with null REMOVES the
+	 * variable, and an unset `HAXE_STD_PATH` is not the same as an empty one — the `haxe`
+	 * subprocess the compiler-oracle tests spawn reads it and fails outright on an empty value.
+	 */
+	private function stdFileUnder(root: String, relative: String): Bool {
+		final original: Null<String> = Sys.getEnv('HAXE_STD_PATH');
+		StdResolver.resetCache();
+		Sys.putEnv('HAXE_STD_PATH', root);
+		final answer: Bool = StdResolver.isStdFile(haxe.io.Path.join([root, relative]));
+		Sys.putEnv('HAXE_STD_PATH', original);
+		StdResolver.resetCache();
+		return answer;
+	}
+	#end
 
 }

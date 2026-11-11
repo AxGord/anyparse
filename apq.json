@@ -404,6 +404,10 @@
 		"prefer-lpad": true,
 		"prefer-map": true,
 		"prefer-single-pass": true,
+		"prefer-static-extension": {
+			"enabled": true,
+			"types": ["Lambda", "StringTools", "anyparse.util.Strings"]
+		},
 		"prefer-compare-function": {
 			"enabled": true,
 			"compare": {

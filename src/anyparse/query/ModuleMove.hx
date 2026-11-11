@@ -26,6 +26,7 @@ import haxe.ds.ArraySort;
 import haxe.ds.Either;
 import haxe.io.Path;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /** One module to relocate: the file it is and the file it becomes (same name, another directory). */
@@ -263,7 +264,7 @@ final class ModuleMove {
 			final head: String = source.substring(e.span.from, e.span.to).split('.')[0];
 			if (binders.contains(head))
 				reasons.push(
-					'$file:${Strings.lineOf(source, e.span.from)} spells ${source.substring(e.span.from, e.span.to)} in code, and "$head'
+					'$file:${source.lineOf(e.span.from)} spells ${source.substring(e.span.from, e.span.to)} in code, and "$head'
 					+ '" is also a name this file declares — the path may read as a member access on it; qualify it differently first'
 				);
 		}
@@ -480,7 +481,7 @@ final class ModuleMove {
 			final head: String = e.text.split('.')[0];
 			if (binders.contains(head))
 				reasons.push(
-					'$file:${Strings.lineOf(text, e.span.from)} needs ${e.text} written in full, and "$head'
+					'$file:${text.lineOf(e.span.from)} needs ${e.text} written in full, and "$head'
 					+ '" is also a name this file declares — the full path may read as a member access on it; qualify it differently first'
 				);
 		}
@@ -568,7 +569,7 @@ final class ModuleMove {
 	private static function isSubTypeOf(path: String, module: String, shape: RefShape): Bool {
 		if (!path.startsWith('$module.')) return false;
 		final rest: String = path.substr(module.length + 1);
-		if (rest.length == 0 || rest.indexOf('.') >= 0 || !Strings.isIdentifier(rest)) return false;
+		if (rest.length == 0 || rest.indexOf('.') >= 0 || !rest.isIdentifier()) return false;
 		final initial: Int = rest.fastCodeAt(0);
 		return shape.typeNamesUpperInitial != true || (initial >= 'A'.code && initial <= 'Z'.code);
 	}
@@ -861,7 +862,7 @@ final class ModuleMove {
 			final order: Int = ImportOrder.orderOf(entries);
 			if (order >= 0 && !ImportOrder.sortedUnder(entries.map(ModulePathTokens.rewrite.bind(_, renames)), order))
 				out.push(
-					'$file:${Strings.lineOf(source, span.from)} holds a sorted list the move would leave unsorted — declare it in the '
+					'$file:${source.lineOf(span.from)} holds a sorted list the move would leave unsorted — declare it in the '
 					+ '"move" section\'s "sortedLists" so it is re-sorted'
 				);
 		}

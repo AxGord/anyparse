@@ -17,6 +17,7 @@ import anyparse.runtime.StringInput;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
 using Lambda;
 
 private typedef Shape = { name: String, gen: Int -> String, cfg: Null<String> };
@@ -94,7 +95,7 @@ class HxNestingCostTest extends Test {
 			{ name: 'call-chain', gen: n -> nest(n, 'f(a + ', ').g()', '0'), cfg: null },
 			{
 				name: 'glued-bool-chain',
-				gen: n -> '${StringTools.rpad('', 'a', 39)} && (${StringTools.rpad('', 'b', 82)} || ${nest(n, '(a ? ', ' : 1)', '0')})',
+				gen: n -> '${''.rpad('a', 39)} && (${''.rpad('b', 82)} || ${nest(n, '(a ? ', ' : 1)', '0')})',
 				cfg: CHAIN_GLUE_CFG
 			}
 		]

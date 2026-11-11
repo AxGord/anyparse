@@ -17,7 +17,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a local `var` / `final` declared WITHOUT an explicit `:Type` annotation —
@@ -693,12 +694,12 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 		final n: Int = typeSrc.length;
 		var i: Int = 0;
 		while (i < n) {
-			if (!Strings.isIdentStart(typeSrc.fastCodeAt(i))) {
+			if (!typeSrc.fastCodeAt(i).isIdentStart()) {
 				i++;
 				continue;
 			}
 			final start: Int = i;
-			while (i < n && Strings.isIdentChar(typeSrc.fastCodeAt(i))) i++;
+			while (i < n && typeSrc.fastCodeAt(i).isIdentChar()) i++;
 			if (!COPYABLE_BUILTINS.contains(typeSrc.substring(start, i))) return false;
 		}
 		return true;

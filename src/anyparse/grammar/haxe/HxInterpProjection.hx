@@ -5,6 +5,7 @@ import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -99,7 +100,7 @@ final class HxInterpProjection {
 		if (span == null || span.to - span.from < 2) return;
 		final inner: String = source.substring(span.from + 1, span.to - 1);
 		final decoded: Array<HxDecodedChar> = HxStringEscape.decode(inner);
-		if (!decoded.exists(c -> c.to - c.from > 1 && (c.code == HxStringEscape.DOLLAR || Strings.isIdentChar(c.code)))) return;
+		if (!decoded.exists(c -> c.to - c.from > 1 && (c.code == HxStringEscape.DOLLAR || c.code.isIdentChar()))) return;
 		final parsed: Map<String, QueryNode> = [];
 		for (c in node.children) {
 			final childSpan: Null<Span> = c.span;
@@ -167,7 +168,7 @@ final class HxInterpProjection {
 			out.push(node(BLOCK_KIND, null, decoded, i, close, base));
 			return close + 1;
 		}
-		if (Strings.isIdentStart(next)) {
+		if (next.isIdentStart()) {
 			var end: Int = i + 1;
 			final name: StringBuf = new StringBuf();
 			while (end < decoded.length && Strings.isIdentChar(decoded[end].code)) {

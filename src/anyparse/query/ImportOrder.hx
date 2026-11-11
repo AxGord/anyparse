@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -445,7 +445,7 @@ final class ImportOrder {
 		final chosen: Null<RunChoice> = chooseRun(runs ?? runsOf(source, block), path);
 		if (chosen == null) return -1;
 		final run: Array<ImportLine> = chosen.run;
-		return chosen.slot < 0 ? run[run.length - 1].chunkTo : Strings.lineStart(source, run[chosen.slot].declFrom);
+		return chosen.slot < 0 ? run[run.length - 1].chunkTo : source.lineStart(run[chosen.slot].declFrom);
 	}
 
 	/**
@@ -460,7 +460,7 @@ final class ImportOrder {
 	 */
 	public static function orderAt(source: String, block: Array<ImportSlot>, at: Int, ?runs: Array<Array<ImportLine>>): Int {
 		for (run in runs ?? runsOf(source, block)) {
-			final anchored: Bool = run[run.length - 1].chunkTo == at || run.exists(line -> Strings.lineStart(source, line.declFrom) == at);
+			final anchored: Bool = run[run.length - 1].chunkTo == at || run.exists(line -> source.lineStart(line.declFrom) == at);
 			if (anchored) return orderOf(pathsOf(run));
 		}
 		return -1;
@@ -600,7 +600,7 @@ final class ImportOrder {
 	 */
 	private static function lineOf(source: String, slot: ImportSlot): Null<ImportLine> {
 		if (slot.from < 0 || slot.to < 0) return null;
-		final lineStart: Int = Strings.lineStart(source, slot.from);
+		final lineStart: Int = source.lineStart(slot.from);
 		if (source.substring(lineStart, slot.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', slot.to);
 		return if (newline < 0)
@@ -675,7 +675,7 @@ final class ImportOrder {
 	private static function withLeadingComments(source: String, lineStart: Int): Int {
 		var from: Int = lineStart;
 		while (from > 0) {
-			final previousStart: Int = Strings.lineStart(source, from - 1);
+			final previousStart: Int = source.lineStart(from - 1);
 			final previous: String = source.substring(previousStart, from - 1).trim();
 			if (!previous.startsWith('//')) break;
 			if (previous.indexOf('/*') >= 0 || previous.indexOf('*/') >= 0) break;

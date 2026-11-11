@@ -21,7 +21,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueDoors;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -249,7 +250,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	private static inline final DEFAULT_IMPORT_MIN_USES: Int = 2;
 
 	/** The finding message when the short name is ALREADY reachable — the rewrite needs no import. */
-	private static inline final MSG_FIXABLE: String = 'an over-qualified type reference - the short name resolves to the same type here';
+	private static final MSG_FIXABLE: String = 'an over-qualified type reference - the short name resolves to the same type here';
 
 	/** The `apq.json` option overriding `DEFAULT_IMPORT_MIN_USES`. */
 	private static final IMPORT_MIN_USES_KEY: String = 'importMinUses';
@@ -460,7 +461,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 
 	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
 	private static inline function isPathChar(c: Int): Bool {
-		return c == '.'.code || Strings.isIdentChar(c);
+		return c == '.'.code || c.isIdentChar();
 	}
 
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */

@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -146,9 +146,9 @@ final class AddParam {
 		if (i < paramText.length && paramText.fastCodeAt(i) == '?'.code) i++;
 		while (i < paramText.length && SourceText.isSpace(paramText.fastCodeAt(i))) i++;
 		final start: Int = i;
-		if (i >= paramText.length || !Strings.isIdentStart(paramText.fastCodeAt(i))) return null;
+		if (i >= paramText.length || !paramText.fastCodeAt(i).isIdentStart()) return null;
 		i++;
-		while (i < paramText.length && Strings.isIdentChar(paramText.fastCodeAt(i))) i++;
+		while (i < paramText.length && paramText.fastCodeAt(i).isIdentChar()) i++;
 		return paramText.substring(start, i);
 	}
 

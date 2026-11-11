@@ -116,7 +116,7 @@ class ExplicitTypeReturnOracleTest extends Test {
 		display.stop();
 		switch CanonicalEdit.canonicalize(SRC, edits, true, plugin) {
 			case Ok(text):
-				final packed: String = StringTools.replace(text, ' ', '');
+				final packed: String = text.replace(' ', '');
 				Assert.isTrue(packed.indexOf('label(n:Int):String') != -1, 'the value-returning method is annotated String');
 				Assert.isTrue(packed.indexOf('shout(n:Int):Void') != -1, 'the value-less method is annotated Void');
 				Assert.isTrue(packed.indexOf('functionnew(){}') != -1, 'the constructor is left alone');

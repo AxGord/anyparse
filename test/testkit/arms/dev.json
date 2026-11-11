@@ -2079,7 +2079,7 @@
 			"name": "M-SQUASH-DIRECTIVE-LINE",
 			"type": "dev.Squash",
 			"method": "squashable",
-			"find": "&& !meets(directives, Strings.lineStart(source, from), from)",
+			"find": "&& !meets(directives, source.lineStart(from), from)",
 			"replace": "",
 			"note": "a break beside a conditional-compilation line is squashed, so a directive no longer owns its line"
 		},

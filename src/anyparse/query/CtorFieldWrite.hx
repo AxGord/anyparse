@@ -5,9 +5,9 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -780,8 +780,8 @@ final class CtorFieldWrite {
 			final idx: Int = source.indexOf(name, from);
 			if (idx < 0) return false;
 			from = idx + len;
-			final boundedBefore: Bool = idx == 0 || !Strings.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = from >= n || !Strings.isIdentChar(source.fastCodeAt(from));
+			final boundedBefore: Bool = idx == 0 || !source.fastCodeAt(idx - 1).isIdentChar();
+			final boundedAfter: Bool = from >= n || !source.fastCodeAt(from).isIdentChar();
 			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from, lexicalRegions))
 				return true;
 		}
@@ -793,8 +793,8 @@ final class CtorFieldWrite {
 		var i: Int = LexicalRegions.skipTriviaLazy(source, pos, lexicalRegions);
 		if (i >= n || source.fastCodeAt(i) != '.'.code) return false;
 		i = LexicalRegions.skipTriviaLazy(source, i + 1, lexicalRegions);
-		if (i >= n || !Strings.isIdentStart(source.fastCodeAt(i))) return false;
-		while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+		if (i >= n || !source.fastCodeAt(i).isIdentStart()) return false;
+		while (i < n && source.fastCodeAt(i).isIdentChar()) i++;
 		i = LexicalRegions.skipTriviaLazy(source, i, lexicalRegions);
 		return i < n && source.fastCodeAt(i) == '('.code;
 	}

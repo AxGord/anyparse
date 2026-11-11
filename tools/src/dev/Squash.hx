@@ -8,9 +8,9 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceText;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 using StringTools;
 
@@ -89,8 +89,8 @@ final class Squash {
 			&& !verbatim.exists(span -> from <= span.to && to >= span.from)
 			&& !isComment(from - 1, regions)
 			&& !isComment(to, regions)
-			&& !meets(directives, Strings.lineStart(source, from), from)
-			&& !meets(directives, to, Strings.lineEnd(source, to));
+			&& !meets(directives, source.lineStart(from), from)
+			&& !meets(directives, to, source.lineEnd(to));
 	}
 
 	private static function isComment(offset: Int, regions: Array<LexRegion>): Bool {

@@ -13,7 +13,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a function that re-implements a helper the project keeps in a shared home: its parameters, return type and body
@@ -179,7 +180,7 @@ final class HelperCopy extends RuleBase implements NoAutofix implements DefaultO
 			binders: binders,
 			bare: DuplicateCode.bareKinds(shape)
 		};
-		final owner: String = Strings.allBefore(Strings.allAfterLast(entry.file, '/'), '.');
+		final owner: String = entry.file.allAfterLast('/').allBefore('.');
 		final out: Array<{ fn: QueryNode, key: String, label: String }> = [];
 		for (fn in functionsOf(tree, ctx.opaqueKinds)) {
 			final key: Null<String> = keyOf(ctx, fn);

@@ -4,7 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a `/**`-opened doc block written between the `package` statement and the
@@ -236,7 +237,7 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	 * end), in which case a line-granular move would take that code with it.
 	 */
 	private static function wholeLineSpan(source: String, tok: CommentTok): Null<Span> {
-		final lineStart: Int = Strings.lineStart(source, tok.from);
+		final lineStart: Int = source.lineStart(tok.from);
 		if (source.substring(lineStart, tok.from).trim() != '') return null;
 		final newline: Int = source.indexOf('\n', tok.to);
 		return if (newline < 0)

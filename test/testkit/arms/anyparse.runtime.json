@@ -93,7 +93,7 @@
 			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
 			"type": "anyparse.runtime.DroppedSepComment",
 			"method": "last",
-			"find": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"find": "if (comment == null || !comment.startsWith('//')) return arr;",
 			"replace": "if (comment == null) return arr;",
 			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
 		},

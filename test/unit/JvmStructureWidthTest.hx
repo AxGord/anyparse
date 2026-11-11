@@ -4,9 +4,11 @@ import anyparse.ds.Set;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import utest.Assert;
 import utest.Test;
+
+using anyparse.util.Strings;
+
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -175,7 +177,7 @@ final class JvmStructureWidthTest extends Test {
 
 	/** The 1-based line `span` starts on, 0 for a node without one. */
 	private static function lineOf(span: Null<Span>, source: String): Int {
-		return span == null ? 0 : Strings.lineOf(source, span.from);
+		return span == null ? 0 : source.lineOf(span.from);
 	}
 
 }

@@ -6,6 +6,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
@@ -30,8 +31,9 @@ private typedef FileScan = {
 /**
  * What one run knows about the modules its import statements name, built once and asked per statement.
  * `resolveIndex` is the resolution index, or the report index when the plugin has no resolution scope;
- * the three `report*` maps stay report-scoped because the arms reading them DELETE on a complete symbol
- * set, which a partially indexed library cannot vouch for.
+ * the two `report*` maps stay report-scoped because the arms reading them DELETE on a complete symbol
+ * set, which a partially indexed library cannot vouch for; `membersByModule` is report UNION the project's own
+ * `resolutionRoots`, which are complete, and never a library.
  */
 private typedef ImportEvidence = {
 	final resolveIndex: SymbolIndex;
@@ -39,7 +41,7 @@ private typedef ImportEvidence = {
 	final bindings: ImportBindings;
 	final membersByPath: Map<String, Array<String>>;
 	final reportMembersByPath: Map<String, Array<String>>;
-	final reportMembersByModule: Map<String, Array<String>>;
+	final membersByModule: Map<String, Array<String>>;
 };
 
 /**
@@ -163,7 +165,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 
 	/** Why an unrecognised `using` is never deleted: an extension call cannot be ruled out. */
 	private static final DECLINE_USING_UNTRACKED: String = '$MSG_USING_UNTRACKED — the module\'s extension methods are known neither '
-		+ 'to the std probe nor to the report index, so a `.method(` call on any receiver could be resolving through it';
+		+ 'to the std probe nor to the report and project index, so a `.method(` call on any receiver could be resolving through it';
 
 	/** Why a guarded import stays advisory even when the scan PROVED it unused. */
 	private static final DECLINE_GUARDED: String = '$MSG_GUARDED — the verdict holds in every branch (the scan reads the raw text of '
@@ -364,6 +366,8 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 		final moduleTypes: Map<String, Array<String>> = [];
 		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
 		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
+		final projectFiles: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
+		final projectIndex: Null<SymbolIndex> = projectFiles == null ? null : IndexScope.over(projectFiles, plugin);
 		return {
 			resolveIndex: resolveIndex,
 			moduleTypes: moduleTypes,
@@ -374,8 +378,10 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 			// resolution map when there is no scope.
 			reportMembersByPath: resolveIndex == index ? membersByPath : membersByImportPath(index),
 			// Every top-level type of a module contributes static extensions, so the `using` arm reads a
-			// per-MODULE set; report-scoped for the same reason.
-			reportMembersByModule: UsingSites.membersByModule(index)
+			// per-MODULE set; a module of the project's own `resolutionRoots` is a known set even outside the report set,
+			// so a narrow lint does not leave its `using` unverifiable. A library stays report-scoped: its extension
+			// surface is not its modules' statics alone (`@:using`).
+			membersByModule: UsingSites.membersByModule(projectIndex ?? index)
 		};
 	}
 
@@ -489,11 +495,11 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 	 *  - the module is declared NOWHERE the run can read → it stays an `Info`
 	 *    advisory, since an extension call cannot be ruled out.
 	 *
-	 * The report-set fallback is the `using` twin of `addWildViolation`: both need
-	 * the module's COMPLETE symbol set before they may warn, and both get it from
-	 * the same report-scoped map so the verdict never widens to a library the run
-	 * only partially indexed. Without it every project-local `using` — the whole
-	 * `using pkg.MetaInspect` family of a macro-heavy tree — was unverifiable.
+	 * The module-set fallback reads the report set UNION the project's `resolutionRoots`, so a
+	 * project module outside the report set (a narrow lint of one file) is as known as one
+	 * inside it; a library module is not, its extension surface reaching past its own statics
+	 * (`@:using`). Without it every project-local `using`
+	 * — the whole `using pkg.MetaInspect` family of a macro-heavy tree — was unverifiable.
 	 */
 	private static function addUsingViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, plugin: GrammarPlugin, evidence: ImportEvidence
@@ -501,7 +507,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 		// A bare mention in the module declaring what the statement names is that module's own declaration, never a use.
 		final declaring: Array<String> = evidence.resolveIndex.refs.resolveQualifiedRefAll(imp.raw).map(r -> r.file.file);
 		if (referenced(scans.filter(s -> !declaring.contains(s.file)), SourceText.lastSegment(imp.raw))) return;
-		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.reportMembersByModule[imp.raw];
+		final methods: Null<Array<String>> = plugin.knownExtensionMethods(imp.raw) ?? evidence.membersByModule[imp.raw];
 		if (methods == null) {
 			out.push(make(file, imp, Severity.Info, 'using import \'${imp.raw}\': $MSG_USING_UNTRACKED', DECLINE_USING_UNTRACKED));
 			return;

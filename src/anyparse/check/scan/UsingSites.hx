@@ -159,11 +159,29 @@ final class UsingSites {
 
 	/**
 	 * The member names a `using` of each module may extend with, by module: the union over every top-level type the module
-	 * declares in `index`, main and sub-module alike — a static extension is contributed by every type of the module.
+	 * declares in `index`, main and sub-module alike — a static extension is contributed by every type of the module. A
+	 * `typedef` of another type contributes that type's members; a module whose alias does not resolve has no entry.
 	 */
+	@:access(anyparse.query.SymbolIndex)
 	public static function membersByModule(index: SymbolIndex): Map<String, Array<String>> {
 		final map: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) map[info.module] = [for (t in info.types) for (m in t.members) m.name];
+		for (info in index.allFiles()) {
+			final names: Array<String> = [];
+			var known: Bool = true;
+			for (t in info.types) {
+				// a `typedef` of a class brings that class's statics, so its members are the target's; an alias that
+				// does not resolve, or whose host a build macro may extend, leaves the module without a known set
+				final host: Null<TypeDeclInfo> = t.kind == SymbolIndex.TYPEDEF_DECL_KIND && !t.isAnonStruct
+					? UsingScan.aliasedHost(t, info, index)
+					: t;
+				if (host == null || (host != t && (host.hasBuild || host.hasAutoBuild))) {
+					known = false;
+					break;
+				}
+				for (m in host.members) names.push(m.name);
+			}
+			if (known) map[info.module] = names;
+		}
 		return map;
 	}
 

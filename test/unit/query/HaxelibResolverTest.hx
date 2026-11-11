@@ -2,6 +2,8 @@ package unit.query;
 
 import anyparse.query.HaxelibResolver;
 
+using StringTools;
+
 /**
  * Coverage of the PURE `HaxelibResolver` assembly (`sourceDirFrom` / `rootFrom`)
  * with NO real haxelib: given a `haxelib libpath` stdout string plus a
@@ -95,7 +97,7 @@ class HaxelibResolverTest extends Test {
 			return;
 		}
 		Assert.isTrue(haxe.io.Path.isAbsolute(dir), 'the resolved source dir is absolute');
-		Assert.isTrue(StringTools.endsWith(dir, '/src'), 'utest classPath "src" joins to <root>/src, got $dir');
+		Assert.isTrue(dir.endsWith('/src'), 'utest classPath "src" joins to <root>/src, got $dir');
 		#if (sys || nodejs)
 		Assert.isTrue(sys.FileSystem.isDirectory(dir), 'the resolved utest source dir exists on disk');
 		#end

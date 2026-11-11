@@ -3,7 +3,8 @@ package anyparse.check.common.docs;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * One reading found inside a comment: the bytes it covers, and the shape that identifies it.
@@ -84,8 +85,8 @@ final class DocMeasurementClaim extends RuleBase implements DefaultOff implement
 	private static inline final OPENER_LENGTH: Int = 2;
 
 	/** What every finding asks for, once the shape has been named. */
-	private static inline final ADVICE: String =
-		' — a reading is of one tree at one moment: keep the conclusion in a phrase, and leave the numbers to the commit message or the ledger';
+	private static final ADVICE: String = ' — a reading is of one tree at one moment: keep the conclusion in a phrase, and leave the '
+		+ 'numbers to the commit message or the ledger';
 
 	/** The arrow prose types where the drawn one is unavailable. */
 	private static final TYPED_ARROW: String = '->';
@@ -312,7 +313,7 @@ final class DocMeasurementClaim extends RuleBase implements DefaultOff implement
 
 	/** Whether a token starts at `at` — nothing an identifier may carry stands before it. */
 	private static function isTokenStart(source: String, from: Int, at: Int): Bool {
-		return at == from || !Strings.isIdentChar(source.fastCodeAt(at - 1));
+		return at == from || !source.fastCodeAt(at - 1).isIdentChar();
 	}
 
 	/**

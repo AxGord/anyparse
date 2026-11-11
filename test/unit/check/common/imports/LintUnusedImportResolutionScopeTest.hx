@@ -17,6 +17,9 @@ class LintUnusedImportResolutionScopeTest extends Test {
 	/** A tiny stand-in "library" module injected as the resolution scope. */
 	private static final WIDGET: String = 'package ext.lib;\n\nclass Widget {}';
 
+	/** A stand-in library module whose one static is an extension of `String`. */
+	private static final PAD: String = 'package ext.lib;\n\nclass Pad {\n\tpublic static function pad(s: String): String return s;\n}';
+
 	/** An unused named import of a resolution-scoped library module is a deletable Warning (was an Info advisory). */
 	public function testLibraryImportUnusedIsWarning(): Void {
 		final use: String = 'package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}';
@@ -102,7 +105,7 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		final wildcard: Array<Violation> = runScoped('package pkg;\n\nimport some.pack.*;\n\nclass C {}', lib);
 		assertDecline(wildcard, 'has an unknown member set');
 		final usingUnknown: Array<Violation> = runScoped('package pkg;\n\nusing totally.unknown.Helpers;\n\nclass C {}', lib);
-		assertDecline(usingUnknown, 'known neither to the std probe nor to the report index');
+		assertDecline(usingUnknown, 'known neither to the std probe nor to the report and project index');
 		// The other half of the contract: a finding the fix DOES take carries no reason at all, so a
 		// reader never sees a decline where an edit happened.
 		final report: Array<{ file: String, source: String }> = [
@@ -113,6 +116,79 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		Assert.equals(Severity.Warning, deletable.violations[0].severity);
 		Assert.isNull(deletable.violations[0].declineReason, 'a finding the fix takes declined nothing');
 		Assert.equals(1, deletable.edits.length, 'and it really is the arm that produces an edit');
+	}
+
+	/** A `using` on a module of the project's own `resolutionRoots` that no extension call goes through is a deletable Warning. */
+	@:pin('control')
+	@:killer('M-USING-MODULE-REPORT-SCOPED')
+	public function testProjectRootUsingUnusedIsWarning(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Pad;\n\nclass C {}';
+		final vs: Array<Violation> = runWithProjectRoots(use, [{ file: 'ext/lib/Pad.hx', source: PAD }]);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('unused using'));
+	}
+
+	/** Control: the same `using` kept live by an extension call it provides reports nothing. */
+	@:pin('control')
+	@:killer('M-USING-MODULE-REPORT-SCOPED')
+	public function testProjectRootUsingKeptByExtensionCall(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Pad;\n\nclass C {\n\tfunction f(s: String): String return s.pad();\n}';
+		final vs: Array<Violation> = runWithProjectRoots(use, [{ file: 'ext/lib/Pad.hx', source: PAD }]);
+		Assert.equals(0, vs.length);
+	}
+
+	/** A `using` on a LIBRARY module stays an unverifiable Info: a library's extension surface is not its statics alone. */
+	@:pin('control')
+	@:killer('M-USING-LIBRARY-WIDENED')
+	public function testLibraryUsingStaysInfo(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Pad;\n\nclass C {}';
+		final vs: Array<Violation> = runScoped(use, [{ file: 'ext/lib/Pad.hx', source: PAD }]);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('extension use not tracked'));
+	}
+
+	/** A `using` on a project module that is a typedef of a class brings that class's statics: the extension call keeps it. */
+	@:pin('control')
+	@:killer('M-USING-ALIAS-NOT-FOLLOWED')
+	public function testProjectRootUsingOfTypedefKeptByTargetsExtensionCall(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Alias;\n\nclass C {\n\tfunction f(s: String): String return s.pad();\n}';
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'ext/lib/Pad.hx', source: PAD },
+			{ file: 'ext/lib/Alias.hx', source: 'package ext.lib;\n\ntypedef Alias = ext.lib.Pad;' }
+		];
+		Assert.equals(0, runWithProjectRoots(use, project).length);
+	}
+
+	/** A typedef whose target no index resolves leaves its `using` an unverifiable Info, never a deletable Warning. */
+	@:pin('control')
+	@:killer('M-USING-ALIAS-NOT-FOLLOWED')
+	public function testProjectRootUsingOfUnresolvedTypedefStaysInfo(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Alias;\n\nclass C {}';
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'ext/lib/Alias.hx', source: 'package ext.lib;\n\ntypedef Alias = totally.unknown.Thing;' }
+		];
+		final vs: Array<Violation> = runWithProjectRoots(use, project);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	/**
+	 * A typedef of a class a build macro extends leaves its `using` an
+	 * unverifiable Info: the statics the macro adds are not in the declaration.
+	 */
+	@:pin('control')
+	@:killer('M-USING-ALIAS-BUILD-IGNORED')
+	public function testProjectRootUsingOfTypedefOfBuiltClassStaysInfo(): Void {
+		final use: String = 'package pkg;\n\nusing ext.lib.Alias;\n\nclass C {}';
+		final project: Array<{ file: String, source: String }> = [
+			{ file: 'ext/lib/Built.hx', source: 'package ext.lib;\n\n@:build(ext.lib.Maker.run())\nclass Built {}' },
+			{ file: 'ext/lib/Alias.hx', source: 'package ext.lib;\n\ntypedef Alias = ext.lib.Built;' }
+		];
+		final vs: Array<Violation> = runWithProjectRoots(use, project);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
 	/**
@@ -144,6 +220,15 @@ class LintUnusedImportResolutionScopeTest extends Test {
 			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(lib) } }
 		);
 		return scoped;
+	}
+
+	private function runWithProjectRoots(useSource: String, project: Array<{ file: String, source: String }>): Array<Violation> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope(
+			{ declared: true, sources: () -> { report: report, projectRoots: project, library: new LibrarySources(project) } }
+		);
+		return CheckFixture.violationsIn(new UnusedImport(), report, scoped);
 	}
 
 }

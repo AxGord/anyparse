@@ -1,5 +1,7 @@
 package anyparse.runtime;
 
+using StringTools;
+
 /**
  * The list a sep-Star writer lays out when it drops the trailing separator a comment followed.
  *
@@ -28,7 +30,7 @@ final class DroppedSepComment {
 		if (sepEmitted || arr.length == 0) return arr;
 		final t: Trivial<T> = arr[arr.length - 1];
 		final comment: Null<String> = t.trailingComment;
-		if (comment == null || !StringTools.startsWith(comment, '//')) return arr;
+		if (comment == null || !comment.startsWith('//')) return arr;
 		final rehomed: Null<T> = rehome(t.node, comment);
 		if (rehomed == null) return arr;
 		final node: T = rehomed;

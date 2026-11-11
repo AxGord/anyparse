@@ -5,8 +5,8 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.TypingService.BareBinding;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -227,7 +227,7 @@ final class TypeRefPrinter {
 		var i: Int = 0;
 		while (i < n) {
 			final c: Int = t.fastCodeAt(i);
-			if (!Strings.isIdentChar(c) && c != '.'.code) {
+			if (!c.isIdentChar() && c != '.'.code) {
 				buf.addChar(c);
 				i++;
 				continue;
@@ -235,7 +235,7 @@ final class TypeRefPrinter {
 			final start: Int = i;
 			while (i < n) {
 				final cc: Int = t.fastCodeAt(i);
-				if (!Strings.isIdentChar(cc) && cc != '.'.code) break;
+				if (!cc.isIdentChar() && cc != '.'.code) break;
 				i++;
 			}
 			buf.add(print(t.substring(start, i)).text);

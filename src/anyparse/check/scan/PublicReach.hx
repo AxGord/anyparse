@@ -3,8 +3,9 @@ package anyparse.check.scan;
 import anyparse.query.MemberKinds;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 import haxe.Exception;
+
+using anyparse.util.Strings;
 
 /**
  * The whole-project REACH evidence a fix needs before it may act on the claim "nothing outside
@@ -92,12 +93,12 @@ final class PublicReach {
 		final stop: Int = to <= source.length ? to : source.length;
 		var i: Int = from;
 		while (i < stop) {
-			if (!Strings.isIdentStart(source.fastCodeAt(i))) {
+			if (!source.fastCodeAt(i).isIdentStart()) {
 				i++;
 				continue;
 			}
 			var end: Int = i + 1;
-			while (end < stop && Strings.isIdentChar(source.fastCodeAt(end))) end++;
+			while (end < stop && source.fastCodeAt(end).isIdentChar()) end++;
 			final token: String = source.substring(i, end);
 			out[token] = (out[token] ?? 0) + 1;
 			i = end;

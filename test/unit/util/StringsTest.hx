@@ -2,6 +2,7 @@ package unit.util;
 
 import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /** `Strings`: the behaviour a caller of the one text helper relies on, the contract a re-implementation must meet. */
@@ -12,81 +13,81 @@ final class StringsTest extends Test {
 	@:pin('control')
 	@:killer('M-UTIL-LINE-START-PREV')
 	public function testALineStartsAfterThePreviousBreak(): Void {
-		Assert.equals(0, Strings.lineStart(LINES, 0));
-		Assert.equals(0, Strings.lineStart(LINES, 1));
-		Assert.equals(3, Strings.lineStart(LINES, 3));
-		Assert.equals(3, Strings.lineStart(LINES, 4));
-		Assert.equals(6, Strings.lineStart(LINES, 7));
+		Assert.equals(0, LINES.lineStart(0));
+		Assert.equals(0, LINES.lineStart(1));
+		Assert.equals(3, LINES.lineStart(3));
+		Assert.equals(3, LINES.lineStart(4));
+		Assert.equals(6, LINES.lineStart(7));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-START-PREV')
 	public function testAPositionOnABreakBelongsToTheLineItEnds(): Void {
-		Assert.equals(0, Strings.lineStart(LINES, 2));
-		Assert.equals(3, Strings.lineStart(LINES, 5));
+		Assert.equals(0, LINES.lineStart(2));
+		Assert.equals(3, LINES.lineStart(5));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-START-CLAMP')
 	public function testAPositionPastTheTextIsTheLastLine(): Void {
-		Assert.equals(6, Strings.lineStart(LINES, 99));
-		Assert.equals(6, Strings.lineStart(LINES, LINES.length));
-		Assert.equals(0, Strings.lineStart('', 0));
+		Assert.equals(6, LINES.lineStart(99));
+		Assert.equals(6, LINES.lineStart(LINES.length));
+		Assert.equals(0, ''.lineStart(0));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-START-NEGATIVE')
 	public function testANegativePositionIsTheTextStart(): Void {
-		Assert.equals(0, Strings.lineStart(LINES, -5));
+		Assert.equals(0, LINES.lineStart(-5));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-OF-BASE')
 	public function testLinesAreCountedFromOne(): Void {
-		Assert.equals(1, Strings.lineOf(LINES, 0));
-		Assert.equals(1, Strings.lineOf('', 0));
-		Assert.equals(1, Strings.lineOf(LINES, -5));
+		Assert.equals(1, LINES.lineOf(0));
+		Assert.equals(1, ''.lineOf(0));
+		Assert.equals(1, LINES.lineOf(-5));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-OF-BREAK')
 	public function testALineIsCountedAtItsBreak(): Void {
-		Assert.equals(1, Strings.lineOf(LINES, 2));
-		Assert.equals(2, Strings.lineOf(LINES, 3));
-		Assert.equals(3, Strings.lineOf(LINES, 7));
-		Assert.equals(1, Strings.lineOf('a\r b', 4));
+		Assert.equals(1, LINES.lineOf(2));
+		Assert.equals(2, LINES.lineOf(3));
+		Assert.equals(3, LINES.lineOf(7));
+		Assert.equals(1, 'a\r b'.lineOf(4));
 	}
 
 	public function testALinePastTheTextIsTheLastOne(): Void {
-		Assert.equals(3, Strings.lineOf(LINES, 99));
+		Assert.equals(3, LINES.lineOf(99));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-LINE-CUT')
 	public function testTheFirstLineStopsAtTheBreak(): Void {
-		Assert.equals('ab', Strings.firstLine(LINES));
-		Assert.equals('', Strings.firstLine('\nab'));
+		Assert.equals('ab', LINES.firstLine());
+		Assert.equals('', '\nab'.firstLine());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-LINE-WHOLE')
 	public function testATextWithoutABreakIsItsOwnFirstLine(): Void {
-		Assert.equals('ab', Strings.firstLine('ab'));
-		Assert.equals('', Strings.firstLine(''));
+		Assert.equals('ab', 'ab'.firstLine());
+		Assert.equals('', ''.firstLine());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-LINE-NO-BREAK-CR')
 	public function testATrailingCarriageReturnWithoutALineFeedStays(): Void {
-		Assert.equals('ab\r', Strings.firstLine('ab\r'));
+		Assert.equals('ab\r', 'ab\r'.firstLine());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-LINE-CR')
 	public function testTheCarriageReturnOfABreakIsNotPartOfTheLine(): Void {
-		Assert.equals('ab', Strings.firstLine('ab\r\ncd'));
-		Assert.equals('a\rb', Strings.firstLine('a\rb\ncd'));
-		Assert.equals('', Strings.firstLine('\r\ncd'));
+		Assert.equals('ab', 'ab\r\ncd'.firstLine());
+		Assert.equals('a\rb', 'a\rb\ncd'.firstLine());
+		Assert.equals('', '\r\ncd'.firstLine());
 	}
 
 	@:pin('control')
@@ -94,20 +95,20 @@ final class StringsTest extends Test {
 	public function testBlankIsWhatTrimStrips(): Void {
 		for (c in 0...128) {
 			final s: String = String.fromCharCode(c);
-			Assert.equals(s.trim() == '', Strings.isBlank(s), 'code $c');
+			Assert.equals(s.trim() == '', s.isBlank(), 'code $c');
 		}
-		Assert.isTrue(Strings.isBlank(' \t\r\n\x0B\x0C'));
+		Assert.isTrue(' \t\r\n\x0B\x0C'.isBlank());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-BLANK-EMPTY')
 	public function testTheEmptyTextIsBlank(): Void {
-		Assert.isTrue(Strings.isBlank(''));
+		Assert.isTrue(''.isBlank());
 	}
 
 	public function testATextWithACharacterIsNotBlank(): Void {
-		Assert.isFalse(Strings.isBlank('  a '));
-		Assert.isFalse(Strings.isBlank(' '));
+		Assert.isFalse('  a '.isBlank());
+		Assert.isFalse(' '.isBlank());
 	}
 
 	@:pin('control')
@@ -136,176 +137,176 @@ final class StringsTest extends Test {
 	@:pin('control')
 	@:killer('M-UTIL-IDENTIFIER-START')
 	public function testAnIdentifierDoesNotStartWithADigit(): Void {
-		Assert.isTrue(Strings.isIdentifier('_a1'));
-		Assert.isTrue(Strings.isIdentifier('x'));
-		Assert.isFalse(Strings.isIdentifier('1a'));
+		Assert.isTrue('_a1'.isIdentifier());
+		Assert.isTrue('x'.isIdentifier());
+		Assert.isFalse('1a'.isIdentifier());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-IDENTIFIER-REST')
 	public function testEveryCharacterOfAnIdentifierIsChecked(): Void {
-		Assert.isFalse(Strings.isIdentifier('a-b'));
-		Assert.isFalse(Strings.isIdentifier('ab '));
-		Assert.isFalse(Strings.isIdentifier('a.b'));
+		Assert.isFalse('a-b'.isIdentifier());
+		Assert.isFalse('ab '.isIdentifier());
+		Assert.isFalse('a.b'.isIdentifier());
 	}
 
 	public function testTheEmptyTextIsNoIdentifier(): Void {
-		Assert.isFalse(Strings.isIdentifier(''));
+		Assert.isFalse(''.isIdentifier());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-CHAR-COUNT')
 	public function testEveryOccurrenceOfACharacterIsCounted(): Void {
-		Assert.equals(2, Strings.charCount(LINES, '\n'.code));
-		Assert.equals(1, Strings.charCount(LINES, 'a'.code));
-		Assert.equals(0, Strings.charCount(LINES, 'z'.code));
-		Assert.equals(0, Strings.charCount('', 'a'.code));
-		Assert.equals(3, Strings.charCount('aaa', 'a'.code));
+		Assert.equals(2, LINES.charCount('\n'.code));
+		Assert.equals(1, LINES.charCount('a'.code));
+		Assert.equals(0, LINES.charCount('z'.code));
+		Assert.equals(0, ''.charCount('a'.code));
+		Assert.equals(3, 'aaa'.charCount('a'.code));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-BEFORE-CUT')
 	public function testBeforeTheFirstDelimiterStopsAtIt(): Void {
-		Assert.equals('a', Strings.allBeforeOrNull('a::b::c', '::'));
-		Assert.equals('', Strings.allBeforeOrNull('::b', '::'));
-		Assert.equals('a', Strings.allBefore('a::b::c', '::'));
+		Assert.equals('a', 'a::b::c'.allBeforeOrNull('::'));
+		Assert.equals('', '::b'.allBeforeOrNull('::'));
+		Assert.equals('a', 'a::b::c'.allBefore('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-BEFORE-MISSING')
 	public function testWithoutADelimiterTheNullFormIsNull(): Void {
-		Assert.isNull(Strings.allBeforeOrNull('abc', '::'));
+		Assert.isNull('abc'.allBeforeOrNull('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-BEFORE-PLAIN')
 	public function testWithoutADelimiterTheBeforePartIsTheWholeText(): Void {
-		Assert.equals('abc', Strings.allBefore('abc', '::'));
+		Assert.equals('abc', 'abc'.allBefore('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-CUT')
 	public function testAfterTheFirstDelimiterSkipsAllOfIt(): Void {
-		Assert.equals('b::c', Strings.allAfterOrNull('a::b::c', '::'));
-		Assert.equals('', Strings.allAfterOrNull('a::', '::'));
-		Assert.equals('b::c', Strings.allAfter('a::b::c', '::'));
+		Assert.equals('b::c', 'a::b::c'.allAfterOrNull('::'));
+		Assert.equals('', 'a::'.allAfterOrNull('::'));
+		Assert.equals('b::c', 'a::b::c'.allAfter('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-MISSING')
 	public function testWithoutADelimiterTheAfterNullFormIsNull(): Void {
-		Assert.isNull(Strings.allAfterOrNull('abc', '::'));
+		Assert.isNull('abc'.allAfterOrNull('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-PLAIN')
 	public function testWithoutADelimiterTheAfterPartIsTheWholeText(): Void {
-		Assert.equals('abc', Strings.allAfter('abc', '::'));
+		Assert.equals('abc', 'abc'.allAfter('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-LAST-CUT')
 	public function testAfterTheLastDelimiterSkipsAllOfIt(): Void {
-		Assert.equals('c', Strings.allAfterLastOrNull('a::b::c', '::'));
-		Assert.equals('', Strings.allAfterLastOrNull('a::b::', '::'));
-		Assert.equals('c', Strings.allAfterLast('a::b::c', '::'));
+		Assert.equals('c', 'a::b::c'.allAfterLastOrNull('::'));
+		Assert.equals('', 'a::b::'.allAfterLastOrNull('::'));
+		Assert.equals('c', 'a::b::c'.allAfterLast('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-LAST-LAST')
 	public function testTheLastDelimiterIsTheOneThatCounts(): Void {
-		Assert.equals('b', Strings.allAfterLast('a.b', '.'));
-		Assert.equals('c', Strings.allAfterLast('a.b.c', '.'));
+		Assert.equals('b', 'a.b'.allAfterLast('.'));
+		Assert.equals('c', 'a.b.c'.allAfterLast('.'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-LAST-MISSING')
 	public function testWithoutADelimiterTheAfterLastNullFormIsNull(): Void {
-		Assert.isNull(Strings.allAfterLastOrNull('abc', '::'));
+		Assert.isNull('abc'.allAfterLastOrNull('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-AFTER-LAST-PLAIN')
 	public function testWithoutADelimiterTheAfterLastPartIsTheWholeText(): Void {
-		Assert.equals('abc', Strings.allAfterLast('abc', '::'));
+		Assert.equals('abc', 'abc'.allAfterLast('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-SPLIT-FIRST')
 	public function testAFirstSplitCutsAtTheFirstDelimiter(): Void {
-		Assert.same({ before: 'a', after: 'b::c' }, Strings.firstSplit('a::b::c', '::'));
+		Assert.same({ before: 'a', after: 'b::c' }, 'a::b::c'.firstSplit('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-FIRST-SPLIT-MISSING')
 	public function testAFirstSplitWithoutADelimiterIsNull(): Void {
-		Assert.isNull(Strings.firstSplit('abc', '::'));
+		Assert.isNull('abc'.firstSplit('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LAST-SPLIT-LAST')
 	public function testALastSplitCutsAtTheLastDelimiter(): Void {
-		Assert.same({ before: 'a::b', after: 'c' }, Strings.lastSplit('a::b::c', '::'));
+		Assert.same({ before: 'a::b', after: 'c' }, 'a::b::c'.lastSplit('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LAST-SPLIT-MISSING')
 	public function testALastSplitWithoutADelimiterIsNull(): Void {
-		Assert.isNull(Strings.lastSplit('abc', '::'));
+		Assert.isNull('abc'.lastSplit('::'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-EXTRACT-START')
 	public function testExtractSkipsTheWholeOpeningDelimiter(): Void {
-		Assert.equals('b', Strings.extract('a<<b>>c', '<<', '>>'));
-		Assert.equals('', Strings.extract('<>', '<', '>'));
+		Assert.equals('b', 'a<<b>>c'.extract('<<', '>>'));
+		Assert.equals('', '<>'.extract('<', '>'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-EXTRACT-CLOSE-AFTER')
 	public function testExtractClosesAfterTheOpening(): Void {
-		Assert.equals('b', Strings.extract(']a[b]', '[', ']'));
+		Assert.equals('b', ']a[b]'.extract('[', ']'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-EXTRACT-NO-OPEN')
 	public function testExtractWithoutAnOpeningDelimiterIsNull(): Void {
-		Assert.isNull(Strings.extract('a]', '[', ']'));
+		Assert.isNull('a]'.extract('[', ']'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-EXTRACT-NO-CLOSE')
 	public function testExtractWithoutAClosingDelimiterIsNull(): Void {
-		Assert.isNull(Strings.extract('a[b', '[', ']'));
+		Assert.isNull('a[b'.extract('[', ']'));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-QUOTED-END-AT-CLOSE')
 	public function testAQuotedLiteralEndsJustPastItsClosingQuote(): Void {
-		Assert.equals(6, Strings.quotedEnd('x "ab" y', 2));
-		Assert.equals(4, Strings.quotedEnd('\'ab\' y', 0));
+		Assert.equals(6, 'x "ab" y'.quotedEnd(2));
+		Assert.equals(4, '\'ab\' y'.quotedEnd(0));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-QUOTED-ESCAPE-OFF')
 	public function testAnEscapedQuoteDoesNotEndTheLiteral(): Void {
-		Assert.equals(6, Strings.quotedEnd('"a\\"b"', 0));
+		Assert.equals(6, '"a\\"b"'.quotedEnd(0));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-QUOTED-BREAK-IGNORED')
 	@:killer('M-UTIL-QUOTED-UNTERMINATED-LENGTH')
 	public function testAnUnterminatedLiteralStopsAtTheLineBreak(): Void {
-		Assert.equals(0, Strings.quotedEnd('"abc', 0));
-		Assert.equals(0, Strings.quotedEnd('"ab\ncd"', 0));
-		Assert.equals(2, Strings.quotedEnd('x "ab\n"', 2));
+		Assert.equals(0, '"abc'.quotedEnd(0));
+		Assert.equals(0, '"ab\ncd"'.quotedEnd(0));
+		Assert.equals(2, 'x "ab\n"'.quotedEnd(2));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-QUOTED-ESCAPE-BREAK-OFF')
 	public function testADanglingBackslashBeforeALineBreakIsUnterminated(): Void {
-		Assert.equals(0, Strings.quotedEnd('"ab\\\n"', 0));
-		Assert.equals(0, Strings.quotedEnd('"ab\\', 0));
+		Assert.equals(0, '"ab\\\n"'.quotedEnd(0));
+		Assert.equals(0, '"ab\\'.quotedEnd(0));
 	}
 
 	@:pin('control')
@@ -339,50 +340,50 @@ final class StringsTest extends Test {
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-CLOSE-DEPTH')
 	public function testOnePairAroundEverythingIsWrapped(): Void {
-		Assert.isTrue(Strings.wrappedInParens('(a)'));
-		Assert.isTrue(Strings.wrappedInParens('()'));
-		Assert.isTrue(Strings.wrappedInParens('((a))'));
-		Assert.isTrue(Strings.wrappedInParens('(a(b)c)'));
+		Assert.isTrue('(a)'.wrappedInParens());
+		Assert.isTrue('()'.wrappedInParens());
+		Assert.isTrue('((a))'.wrappedInParens());
+		Assert.isTrue('(a(b)c)'.wrappedInParens());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-CLOSE-AT-END')
 	public function testTwoSeparatePairsAreNotOneWrap(): Void {
-		Assert.isFalse(Strings.wrappedInParens('(a)+(b)'));
-		Assert.isFalse(Strings.wrappedInParens('(a)(b)'));
-		Assert.isFalse(Strings.wrappedInParens('()()'));
+		Assert.isFalse('(a)+(b)'.wrappedInParens());
+		Assert.isFalse('(a)(b)'.wrappedInParens());
+		Assert.isFalse('()()'.wrappedInParens());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-UNCLOSED')
 	public function testAnUnclosedOpenerIsNotWrapped(): Void {
-		Assert.isFalse(Strings.wrappedInParens('(()'));
-		Assert.isFalse(Strings.wrappedInParens('((a)'));
-		Assert.isFalse(Strings.wrappedInParens('('));
+		Assert.isFalse('(()'.wrappedInParens());
+		Assert.isFalse('((a)'.wrappedInParens());
+		Assert.isFalse('('.wrappedInParens());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-OPENER')
 	public function testTextNotOpeningWithAParenthesisIsNotWrapped(): Void {
-		Assert.isFalse(Strings.wrappedInParens('a(b)'));
-		Assert.isFalse(Strings.wrappedInParens(')('));
-		Assert.isFalse(Strings.wrappedInParens('a'));
-		Assert.isFalse(Strings.wrappedInParens(''));
+		Assert.isFalse('a(b)'.wrappedInParens());
+		Assert.isFalse(')('.wrappedInParens());
+		Assert.isFalse('a'.wrappedInParens());
+		Assert.isFalse(''.wrappedInParens());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-STRIP-ALL')
 	public function testEveryWrappingPairIsStripped(): Void {
-		Assert.equals('a', Strings.stripOuterParens('((a))'));
-		Assert.equals('a', Strings.stripOuterParens('a'));
-		Assert.equals('(a)+(b)', Strings.stripOuterParens('(a)+(b)'));
-		Assert.equals('(a)+(b)', Strings.stripOuterParens('((a)+(b))'));
+		Assert.equals('a', '((a))'.stripOuterParens());
+		Assert.equals('a', 'a'.stripOuterParens());
+		Assert.equals('(a)+(b)', '(a)+(b)'.stripOuterParens());
+		Assert.equals('(a)+(b)', '((a)+(b))'.stripOuterParens());
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-PARENS-STRIP-TRIM')
 	public function testWhiteSpaceInsideAPairIsTrimmedAtEachStep(): Void {
-		Assert.equals('a', Strings.stripOuterParens('( (a) )'));
+		Assert.equals('a', '( (a) )'.stripOuterParens());
 	}
 
 	@:pin('control')
@@ -400,39 +401,39 @@ final class StringsTest extends Test {
 	@:pin('control')
 	@:killer('M-UTIL-SPACE-OR-TAB-CR')
 	public function testNothingElseIsABlankWithinALine(): Void {
-		for (c in 0...128) if (c != ' '.code && c != '\t'.code) Assert.isFalse(Strings.isSpaceOrTab(c), 'code $c');
+		for (c in 0...128) if (c != ' '.code && c != '\t'.code) Assert.isFalse(c.isSpaceOrTab(), 'code $c');
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-END-BREAK')
 	public function testALineEndsAtItsBreak(): Void {
-		Assert.equals(2, Strings.lineEnd(LINES, 0));
-		Assert.equals(2, Strings.lineEnd(LINES, 1));
-		Assert.equals(2, Strings.lineEnd(LINES, 2));
-		Assert.equals(5, Strings.lineEnd(LINES, 3));
+		Assert.equals(2, LINES.lineEnd(0));
+		Assert.equals(2, LINES.lineEnd(1));
+		Assert.equals(2, LINES.lineEnd(2));
+		Assert.equals(5, LINES.lineEnd(3));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-END-LAST')
 	public function testTheLastLineEndsAtTheTextEnd(): Void {
-		Assert.equals(8, Strings.lineEnd(LINES, 6));
-		Assert.equals(8, Strings.lineEnd(LINES, 7));
-		Assert.equals(8, Strings.lineEnd(LINES, 8));
-		Assert.equals(0, Strings.lineEnd('', 0));
+		Assert.equals(8, LINES.lineEnd(6));
+		Assert.equals(8, LINES.lineEnd(7));
+		Assert.equals(8, LINES.lineEnd(8));
+		Assert.equals(0, ''.lineEnd(0));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-END-LAST')
 	public function testAPositionPastTheTextEndsAtTheTextEnd(): Void {
-		Assert.equals(8, Strings.lineEnd(LINES, 99));
+		Assert.equals(8, LINES.lineEnd(99));
 	}
 
 	@:pin('control')
 	@:killer('M-UTIL-LINE-END-BREAK')
 	public function testTheCarriageReturnOfABreakStaysInTheLine(): Void {
-		Assert.equals(2, Strings.lineEnd('a\r\nb', 0));
-		Assert.equals(2, Strings.lineEnd('a\r\nb', 1));
-		Assert.equals(4, Strings.lineEnd('a\r\nb', 3));
+		Assert.equals(2, 'a\r\nb'.lineEnd(0));
+		Assert.equals(2, 'a\r\nb'.lineEnd(1));
+		Assert.equals(4, 'a\r\nb'.lineEnd(3));
 	}
 
 	private static function closing(text: String, open: Int): Int {

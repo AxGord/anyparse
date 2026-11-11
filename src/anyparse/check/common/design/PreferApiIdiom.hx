@@ -16,7 +16,8 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.NodeShape;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Rewrites consecutive writes of a type's fields into the one method call the PROJECT declares equivalent —
@@ -418,7 +419,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final copy: Null<String> = idiom.spec.copy;
 		final from: Int = window[0].span.from;
 		final last: Write = window[window.length - 1];
-		final lineEnd: Int = Strings.lineEnd(ctx.source, last.span.to);
+		final lineEnd: Int = ctx.source.lineEnd(last.span.to);
 		final recvSpan: Null<Span> = window[0].recv.span;
 		if (recvSpan == null) return null;
 		final recvText: String = ctx.source.substring(recvSpan.from, recvSpan.to);

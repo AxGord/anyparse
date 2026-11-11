@@ -4,8 +4,9 @@ import anyparse.query.InertRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
-import anyparse.util.Strings;
 import haxe.Exception;
+
+using anyparse.util.Strings;
 
 /**
  * Whether the sources a compile parsed READ a define — the one answer to "may a define a probe adds to a compile
@@ -108,7 +109,7 @@ final class DefineReads {
 	private static function precedingWord(source: String, at: Int): String {
 		final end: Int = backOverSpaces(source, at - 1) + 1;
 		var start: Int = end;
-		while (start > 0 && Strings.isIdentChar(source.fastCodeAt(start - 1))) start--;
+		while (start > 0 && source.fastCodeAt(start - 1).isIdentChar()) start--;
 		return source.substring(start, end);
 	}
 
@@ -122,8 +123,7 @@ final class DefineReads {
 	/** Whether `word` at `at` is a whole word: no identifier character touches either end. */
 	private static function wordAt(source: String, at: Int, word: String): Bool {
 		final end: Int = at + word.length;
-		return (at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1)))
-			&& (end >= source.length || !Strings.isIdentChar(source.fastCodeAt(end)));
+		return (at == 0 || !source.fastCodeAt(at - 1).isIdentChar()) && (end >= source.length || !source.fastCodeAt(end).isIdentChar());
 	}
 
 	private static function inside(spans: Array<Span>, at: Int): Bool {

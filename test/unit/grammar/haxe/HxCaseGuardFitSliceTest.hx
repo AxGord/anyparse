@@ -6,6 +6,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * Case-guard condition wrapping must not count the case BODY when
  * deciding whether the `case P if (cond):` label fits, and a genuinely
@@ -74,7 +76,7 @@ final class HxCaseGuardFitSliceTest extends Test {
 		final out: String = write(src, CONFIG);
 		for (line in out.split('\n')) if (line.length != 0)
 			Assert.isTrue(
-				StringTools.startsWith(line, '\t') || StringTools.startsWith(line, 'class') || StringTools.startsWith(line, '}'),
+				line.startsWith('\t') || line.startsWith('class') || line.startsWith('}'),
 				'no produced line may sit at column 0 except class braces, got <$line> in <$out>'
 			);
 	}

@@ -8,8 +8,8 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -572,7 +572,7 @@ final class MapKeysLookup extends RuleBase {
 		if (colon < 0 || colon >= to) return null;
 		final start: Int = skipSpace(source, colon + 1, to);
 		var i: Int = start;
-		while (i < to && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < to && source.fastCodeAt(i).isIdentChar()) i++;
 		return i == start ? null : source.substring(start, i);
 	}
 

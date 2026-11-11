@@ -16,8 +16,8 @@ import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -209,7 +209,7 @@ final class CrossRenameMember {
 		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, refShape: RefShape
 	): CrossRenameResult {
-		if (!Strings.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!newName.isIdentifier()) return Err('new name "$newName" is not a valid identifier');
 
 		final cursorTree: QueryNode = switch ParseGate.parse(plugin, cursorSource, cursorFile) {
 			case Unparsed(message): return Err(message);

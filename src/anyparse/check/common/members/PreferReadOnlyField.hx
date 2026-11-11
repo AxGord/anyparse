@@ -7,7 +7,8 @@ import anyparse.query.MemberWriteScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a PUBLIC `var` field written ONLY inside its declaring class — never from
@@ -207,7 +208,7 @@ final class PreferReadOnlyField extends RuleBase {
 		var i: Int = span.from + keyword.length;
 		while (i < n && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		final start: Int = i;
-		while (i < n && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < n && source.fastCodeAt(i).isIdentChar()) i++;
 		return i > start ? i : -1;
 	}
 

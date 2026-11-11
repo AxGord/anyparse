@@ -18,8 +18,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -288,10 +288,10 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 		}
 		if (next == null) return true;
 		// the first whole line after the member: the rest of a line it ends on is no blank line
-		var at: Int = Strings.lineEnd(source, end - 1) + 1;
+		var at: Int = source.lineEnd(end - 1) + 1;
 		while (at < next.from) {
-			final eol: Int = Strings.lineEnd(source, at);
-			if (Strings.isBlank(source.substring(at, eol))) return true;
+			final eol: Int = source.lineEnd(at);
+			if (source.substring(at, eol).isBlank()) return true;
 			at = eol + 1;
 		}
 		return false;

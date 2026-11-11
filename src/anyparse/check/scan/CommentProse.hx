@@ -1,7 +1,8 @@
 package anyparse.check.scan;
 
 import anyparse.format.comment.CommentDirective;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * The PROSE JUDGE behind `prefer-doc-comment`'s content gates: whether one `//` comment
@@ -160,12 +161,12 @@ final class CommentProse {
 
 	/** Whether `c` may appear inside a Haxe identifier. */
 	private static inline function isIdentChar(c: Int): Bool {
-		return c == '$'.code || Strings.isIdentChar(c);
+		return c == '$'.code || c.isIdentChar();
 	}
 
 	/** Whether `c` may START a Haxe identifier. */
 	private static inline function isIdentStart(c: Int): Bool {
-		return c == '$'.code || Strings.isIdentStart(c);
+		return c == '$'.code || c.isIdentStart();
 	}
 
 	/** Whether every line is drawn only from rule characters and whitespace. */

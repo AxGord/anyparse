@@ -77,7 +77,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		display.stop();
 		switch CanonicalEdit.canonicalize(SRC, edits, true, plugin) {
 			case Ok(text):
-				final packed: String = StringTools.replace(text, ' ', '');
+				final packed: String = text.replace(' ', '');
 				Assert.isTrue(packed.indexOf('varmapped:Array<Int>') != -1, 'the .map() local is annotated Array<Int>');
 				Assert.isTrue(packed.indexOf('varcomp:Array<Int>') != -1, 'the comprehension local is annotated Array<Int>');
 				Assert.isTrue(packed.indexOf('varempty=[]') != -1, 'the monomorph empty array stays report-only');

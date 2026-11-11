@@ -4,9 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -389,7 +389,7 @@ final class CtorFieldFold {
 		var i: Int = declSpan.from + 'var'.length;
 		while (i < limit && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		final nameStart: Int = i;
-		while (i < limit && Strings.isIdentChar(source.fastCodeAt(i))) i++;
+		while (i < limit && source.fastCodeAt(i).isIdentChar()) i++;
 		if (i == nameStart) return null;
 		final nameEnd: Int = i;
 		while (i < limit && SourceText.isSpace(source.fastCodeAt(i))) i++;

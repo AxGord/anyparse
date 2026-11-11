@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
@@ -246,8 +247,8 @@ final class MemberWriteScan {
 			final idx: Int = source.indexOf(name, at);
 			if (idx < 0 || idx + len > to) return false;
 			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !Strings.isIdentChar(source.fastCodeAt(idx - 1));
-			final boundedAfter: Bool = at >= n || !Strings.isIdentChar(source.fastCodeAt(at));
+			final boundedBefore: Bool = idx == 0 || !source.fastCodeAt(idx - 1).isIdentChar();
+			final boundedAfter: Bool = at >= n || !source.fastCodeAt(at).isIdentChar();
 			if (!boundedBefore || !boundedAfter) continue;
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
 			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, at, lexicalRegions)) return true;
@@ -312,7 +313,7 @@ final class MemberWriteScan {
 			at = idx + meta.length;
 			if (at >= source.length) return true;
 			final next: Int = source.fastCodeAt(at);
-			if (!Strings.isIdentChar(next) && next != '.'.code) return true;
+			if (!next.isIdentChar() && next != '.'.code) return true;
 		}
 	}
 

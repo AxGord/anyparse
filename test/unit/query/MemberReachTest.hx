@@ -12,6 +12,7 @@ import anyparse.query.ReachProject;
 import anyparse.runtime.Span;
 import unit.CheckFixture;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -1693,7 +1694,7 @@ class MemberReachTest extends Test {
 		final result: ReachResult = reachOf([src], [a, b], true).mayMutateNamed('F0.hx', 'xs', new Span(at, at + 2), regionOf(src));
 		assertMatch(
 			result, r -> switch r {
-				case Unknown(Aliased(_, _, culprit, _)): StringTools.endsWith(culprit, '/Host.hx');
+				case Unknown(Aliased(_, _, culprit, _)): culprit.endsWith('/Host.hx');
 				case _: false;
 			}
 		);

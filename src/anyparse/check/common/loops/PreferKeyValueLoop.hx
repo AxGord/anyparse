@@ -9,8 +9,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.common.naming.ShadowingLocal;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -396,7 +396,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 			ELEMENT_TYPE_DECLINE
 		else if (CheckScan.hasCommentMarker(source, m.forSpan.from, declEnd))
 			ElementLoopRewrite.COMMENT_DECLINE
-		else if (CheckScan.hasCommentMarker(source, declEnd, Strings.lineEnd(source, declEnd)))
+		else if (CheckScan.hasCommentMarker(source, declEnd, source.lineEnd(declEnd)))
 			TRAILING_COMMENT_DECLINE
 		else
 			null;

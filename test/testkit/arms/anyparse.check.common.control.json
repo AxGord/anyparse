@@ -1062,7 +1062,7 @@
 			"name": "M-IFFALSE-PARENS-KEPT",
 			"type": "anyparse.check.common.control.IfFalseDeadCode",
 			"method": "isIfLiteralAt",
-			"find": "Strings.stripOuterParens(text)",
+			"find": "text.stripOuterParens()",
 			"replace": "text",
 			"note": "the parentheses around the literal are not peeled, so a spaced `#if ( false )` stops reading as the literal"
 		},
@@ -1077,7 +1077,7 @@
 			"name": "M-IFFALSE-ONE-PAREN-LAYER",
 			"type": "anyparse.check.common.control.IfFalseDeadCode",
 			"method": "isIfLiteralAt",
-			"find": "Strings.stripOuterParens(text)",
+			"find": "text.stripOuterParens()",
 			"replace": "(text.charAt(0) == '(' ? text.substring(1, text.length - 1).trim() : text)",
 			"note": "only ONE layer of parentheses around the literal is peeled, so `#if ((false))` stops reading as the literal"
 		},

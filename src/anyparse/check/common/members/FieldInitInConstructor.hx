@@ -16,7 +16,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a private instance field whose CONSTANT declaration default is overwritten by exactly
@@ -322,7 +323,7 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 	private static function derivedConstantName(fieldName: String): Null<String> {
 		final core: String = SourceText.upperSnake(fieldName);
 		final name: String = '$core$DEFAULT_SUFFIX';
-		return core == '' || !Strings.isIdentifier(name) ? null : name;
+		return core == '' || !name.isIdentifier() ? null : name;
 	}
 
 	/** Record one member to splice at `at`, merging it into the insertion already pending there. */

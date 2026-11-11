@@ -14,8 +14,8 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypeTerm.TypeEnd;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -611,9 +611,7 @@ final class ComposedValues {
 	/** The name of the object-literal field `field`, holding one value, when it is an identifier; null otherwise. */
 	private static function fieldName(field: QueryNode, shape: RefShape): Null<String> {
 		final name: Null<String> = field.name;
-		return field.kind == shape.objectFieldKind && field.children.length == 1 && name != null && Strings.isIdentifier(name)
-			? name
-			: null;
+		return field.kind == shape.objectFieldKind && field.children.length == 1 && name != null && name.isIdentifier() ? name : null;
 	}
 
 	/** The array type of the element types `parts` (`unifiedType`); null where they unify to no one type. */

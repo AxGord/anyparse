@@ -1,8 +1,7 @@
 package anyparse.core;
 
+using anyparse.util.Strings;
 using StringTools;
-
-import anyparse.util.Strings;
 
 /**
  * Static `Doc` measurement utilities that don't depend on render-time
@@ -760,7 +759,7 @@ final class DocMeasure {
 
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
-		return c == '$'.code || Strings.isIdentStart(c);
+		return c == '$'.code || c.isIdentStart();
 	}
 
 	/**

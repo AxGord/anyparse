@@ -5,8 +5,8 @@ import anyparse.query.CondValue;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -416,7 +416,7 @@ final class CondRegionLiveness {
 			cursor.ok = false;
 			return null;
 		}
-		if (Strings.isIdentStart(code)) {
+		if (code.isIdentStart()) {
 			final from: Int = cursor.pos;
 			cursor.pos = flagEnd(text, cursor.pos);
 			final flag: String = text.substring(from, cursor.pos);
@@ -424,7 +424,7 @@ final class CondRegionLiveness {
 		}
 		if (code == '"'.code || code == '\''.code) {
 			final from: Int = cursor.pos;
-			final end: Int = Strings.quotedEnd(text, from);
+			final end: Int = text.quotedEnd(from);
 			if (end > from) {
 				cursor.pos = end;
 				return CondValues.text(text.substring(from + 1, end - 1));
@@ -467,7 +467,7 @@ final class CondRegionLiveness {
 		skipSpace(text, cursor);
 		final quote: Int = cursor.pos < text.length ? text.fastCodeAt(cursor.pos) : 0;
 		final from: Int = cursor.pos;
-		final end: Int = quote == '"'.code || quote == '\''.code ? Strings.quotedEnd(text, from) : from;
+		final end: Int = quote == '"'.code || quote == '\''.code ? text.quotedEnd(from) : from;
 		if (end <= from) {
 			cursor.ok = false;
 			return null;
@@ -518,9 +518,9 @@ final class CondRegionLiveness {
 	private static function flagEnd(text: String, at: Int): Int {
 		var i: Int = at;
 		while (true) {
-			while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
+			while (i < text.length && text.fastCodeAt(i).isIdentChar()) i++;
 			if (i + 1 >= text.length || text.fastCodeAt(i) != '.'.code) return i;
-			if (!Strings.isIdentStart(text.fastCodeAt(i + 1))) return i;
+			if (!text.fastCodeAt(i + 1).isIdentStart()) return i;
 			i += 2;
 		}
 	}

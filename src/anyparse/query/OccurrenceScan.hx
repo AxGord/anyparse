@@ -7,9 +7,9 @@ import anyparse.query.OccurrenceScan.OccurrenceClass;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -237,7 +237,7 @@ final class OccurrenceScan {
 			return skip.length > 0
 				&& start >= 0
 				&& source.substr(start, skip.length) == skip
-				&& (start == 0 || !Strings.isIdentChar(source.fastCodeAt(start - 1)));
+				&& (start == 0 || !source.fastCodeAt(start - 1).isIdentChar());
 		}
 		var i: Int = 0;
 		while (true) {
@@ -246,7 +246,7 @@ final class OccurrenceScan {
 			i = at + 1;
 			if (at == 0 || source.fastCodeAt(at - 1) != '.'.code) continue;
 			final afterIdx: Int = at + len;
-			if (afterIdx < source.length && Strings.isIdentChar(source.fastCodeAt(afterIdx))) continue;
+			if (afterIdx < source.length && source.fastCodeAt(afterIdx).isIdentChar()) continue;
 			if (!qualifiedBySkip(at - 1) && (notAUse == null || !notAUse(at))) return true;
 		}
 	}
@@ -285,8 +285,8 @@ final class OccurrenceScan {
 			if (at < 0 || at + len > stop) break;
 			i = at + 1;
 			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1));
-			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
+			final beforeOk: Bool = at == 0 || !source.fastCodeAt(at - 1).isIdentChar();
+			final afterOk: Bool = afterIdx >= source.length || !source.fastCodeAt(afterIdx).isIdentChar();
 			if (beforeOk && afterOk && !offsetWithinAny(at, excluded))
 				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, len, condSpans, regions) });
 		}
@@ -484,9 +484,9 @@ final class OccurrenceScan {
 		while (i + len <= stop) {
 			final at: Int = source.indexOf(name, i);
 			if (at < 0 || at + len > stop) return false;
-			final beforeOk: Bool = at == 0 || !Strings.isIdentChar(source.fastCodeAt(at - 1)) || interpolationEscapeBefore(source, at);
+			final beforeOk: Bool = at == 0 || !source.fastCodeAt(at - 1).isIdentChar() || interpolationEscapeBefore(source, at);
 			final afterIdx: Int = at + len;
-			final afterOk: Bool = afterIdx >= source.length || !Strings.isIdentChar(source.fastCodeAt(afterIdx));
+			final afterOk: Bool = afterIdx >= source.length || !source.fastCodeAt(afterIdx).isIdentChar();
 			if (
 				beforeOk
 				&& afterOk

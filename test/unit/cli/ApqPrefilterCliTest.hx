@@ -123,7 +123,7 @@ class ApqPrefilterCliTest extends Test {
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
 		return if (tmp == null || tmp.length <= 0)
 			'/tmp'
-		else if (StringTools.endsWith(tmp, '/'))
+		else if (tmp.endsWith('/'))
 			tmp.substring(0, tmp.length - 1)
 		else
 			tmp;

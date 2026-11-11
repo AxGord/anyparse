@@ -4,6 +4,8 @@ import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import haxe.Exception;
 
+using StringTools;
+
 /**
  * Slice 2C probe — verifies `HaxeQueryPlugin.parsePattern` correctly:
  *  - parses the pattern via the try-fallback decl/stmt/expr cascade,
@@ -254,7 +256,7 @@ class PatternParseProbeTest extends Test {
 			if (n != null) into.push(n);
 		}
 		final n2: Null<String> = node.name;
-		if (n2 != null && node.kind != Metavar.KIND && StringTools.startsWith(n2, '$')) into.push(n2.substring(1));
+		if (n2 != null && node.kind != Metavar.KIND && n2.startsWith('$')) into.push(n2.substring(1));
 		for (c in node.children) collectMetavarNames(c, into);
 	}
 

@@ -7,7 +7,8 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ScopeFiles.ParsedFile;
 import anyparse.query.ScopeFiles.ScopeParse;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Outcome of a `CrossRename.crossRenameType` call. `Ok` carries the
@@ -150,7 +151,7 @@ final class CrossRename {
 		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
 	): CrossRenameResult {
-		if (!Strings.isIdentifier(newName)) return Err('new name "$newName" is not a valid identifier');
+		if (!newName.isIdentifier()) return Err('new name "$newName" is not a valid identifier');
 
 		// 1. Resolve the type declaration the cursor sits on.
 		final cursorTree: QueryNode = switch ParseGate.parse(plugin, cursorSource, cursorFile) {

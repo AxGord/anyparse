@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -119,7 +119,7 @@ final class ExtractVar {
 	public static function extractVar(
 		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int
 	): ExtractResult {
-		if (!Strings.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
+		if (!name.isIdentifier()) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);
@@ -155,7 +155,7 @@ final class ExtractVar {
 
 		// The hoisted decl is inserted at the start of the enclosing
 		// statement's line, carrying that statement's leading indentation.
-		final lineStart: Int = Strings.lineStart(source, hoistSpan.from);
+		final lineStart: Int = source.lineStart(hoistSpan.from);
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 

@@ -1,7 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * The one answer to "where does a comment name `Type.member` in backticks": the spans of the TYPE
@@ -28,7 +29,7 @@ final class DocMemberRefs {
 				if (at < 0 || at + needle.length > comment.to) break;
 				from = at + 1;
 				final end: Int = at + needle.length;
-				if (end < source.length && Strings.isIdentChar(source.fastCodeAt(end))) continue;
+				if (end < source.length && source.fastCodeAt(end).isIdentChar()) continue;
 				out.push(new Span(at + 1, at + 1 + typeName.length));
 			}
 		}

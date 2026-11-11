@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Parsed `apq search` pattern — a `QueryNode` tree augmented with
@@ -194,9 +195,9 @@ final class Metavar {
 			}
 			if (c == '$'.code && i + 1 < len) {
 				final next: Int = source.fastCodeAt(i + 1);
-				if (Strings.isIdentStart(next)) {
+				if (next.isIdentStart()) {
 					var j: Int = i + 1;
-					while (j < len && Strings.isIdentChar(source.fastCodeAt(j))) j++;
+					while (j < len && source.fastCodeAt(j).isIdentChar()) j++;
 					final bare: String = source.substring(i + 1, j);
 					buf.add(PLACEHOLDER_PREFIX);
 					buf.add(bare);

@@ -20,7 +20,8 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
@@ -363,7 +364,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			at = close + 1;
 		}
 		var next: Int = at;
-		while (next < end && Strings.isSpaceOrTab(source.fastCodeAt(next))) next++;
+		while (next < end && source.fastCodeAt(next).isSpaceOrTab()) next++;
 		return next < source.length && source.fastCodeAt(next) == ';'.code ? at : -1;
 	}
 
@@ -626,7 +627,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final bodySpan: Null<Span> = body.span;
 		if (bodySpan == null) return -1;
 		var pos: Int = bodySpan.from;
-		while (pos > lo && Strings.isSpaceOrTab(source.fastCodeAt(pos - 1))) pos--;
+		while (pos > lo && source.fastCodeAt(pos - 1).isSpaceOrTab()) pos--;
 		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
 	}
 

@@ -5,8 +5,8 @@ import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -649,12 +649,7 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 			final child: QueryNode = n.children[0];
 			final inner: Null<Span> = child.span;
 			if (outer == null || inner == null) return true;
-			if (
-				!Strings.isBlank(source.substring(outer.from + 1, inner.from)) || !Strings.isBlank(
-					source.substring(inner.to, outer.to - 1)
-				)
-			)
-				return true;
+			if (!source.substring(outer.from + 1, inner.from).isBlank() || !source.substring(inner.to, outer.to - 1).isBlank()) return true;
 			n = child;
 		}
 		return false;

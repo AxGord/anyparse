@@ -2,8 +2,6 @@ package unit.check.common.members;
 
 import anyparse.check.common.members.PreferFinalPublicField;
 
-using Lambda;
-
 /**
  * The structural-conformance gate of `prefer-final-public-field`
  * (`StructuralTypes.structuralConformanceForbidsFinal`). Haxe unifies a class instance with an

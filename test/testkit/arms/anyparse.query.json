@@ -45,7 +45,7 @@
 			"name": "M-COND-FRAME-CONDITION-RAW",
 			"type": "anyparse.query.CondBranchPath",
 			"method": "conditionText",
-			"find": "return span == null ? '' : Strings.stripOuterParens(CondDirectives.normalizeCondition(source.substring(span.from, span.to)));",
+			"find": "return span == null ? '' : CondDirectives.normalizeCondition(source.substring(span.from, span.to)).stripOuterParens();",
 			"replace": "return span == null ? '' : source.substring(span.from, span.to);",
 			"note": "a branch key is the condition's raw bytes, so `#if (js)` and `#if js` stop comparing equal and two sibling regions guarding one build read as different branches again"
 		},
@@ -440,7 +440,7 @@
 			"name": "M-DOCSPLIT-OWNER-ANY",
 			"type": "anyparse.query.CanonicalEdit",
 			"method": "docSplittingEdit",
-			"find": "if (!Strings.isIdentStart(next) && next != '@'.code && next != '#'.code) continue;",
+			"find": "if (!next.isIdentStart() && next != '@'.code && next != '#'.code) continue;",
 			"replace": "",
 			"note": "the positive criterion is gone, so an orphaned doc before the byte that CLOSES a body counts as documenting something and add-member's append is refused with a remedy it cannot perform"
 		},
@@ -14242,7 +14242,7 @@
 			"name": "M-MODMOVE-DOTTED-UNBOUNDED",
 			"type": "anyparse.query.ModulePathTokens",
 			"method": "occurrences",
-			"find": "if (after >= 0 && Strings.isIdentChar(after)) continue;",
+			"find": "if (after >= 0 && after.isIdentChar()) continue;",
 			"replace": "",
 			"note": "a module path is matched as a prefix of a longer name, so pkg.AB follows pkg.A"
 		},
@@ -16388,7 +16388,7 @@
 			"name": "M-DOC-MENTION-PREFIX-NAME",
 			"type": "anyparse.query.DocMemberRefs",
 			"method": "typeSpans",
-			"find": "Strings.isIdentChar(source.fastCodeAt(end))",
+			"find": "source.fastCodeAt(end).isIdentChar()",
 			"replace": "false",
 			"note": "a member whose name only starts with the moved one is taken for it, so its mention is repointed"
 		},

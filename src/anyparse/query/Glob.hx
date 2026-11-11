@@ -190,7 +190,7 @@ final class Glob {
 			final path: String = '$dir/$name';
 			if (FileSystem.isDirectory(path))
 				collect(path, extension, into);
-			else if (StringTools.endsWith(name, extension))
+			else if (name.endsWith(extension))
 				into.push(path);
 		}
 	}

@@ -3,8 +3,8 @@ package anyparse.check.common.control;
 import anyparse.query.CondDirectives;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -197,9 +197,9 @@ final class CondRegionMerge extends RuleBase {
 		final open: CondDirective = directives[second.open];
 		final closeFrom: Int = close.span.from;
 		final openTo: Int = open.span.to;
-		final closeLineFrom: Int = Strings.lineStart(source, closeFrom);
+		final closeLineFrom: Int = source.lineStart(closeFrom);
 		final closeLineTo: Int = lineEnd(source, close.span.to);
-		final openLineFrom: Int = Strings.lineStart(source, open.span.from);
+		final openLineFrom: Int = source.lineStart(open.span.from);
 		final openLineTo: Int = lineEnd(source, openTo);
 		if (source.substring(closeLineFrom, closeFrom).trim() != '') return null;
 		if (source.substring(openLineFrom, open.span.from).trim() != '') return null;
@@ -250,7 +250,7 @@ final class CondRegionMerge extends RuleBase {
 
 	/** Whether `negated` negates `plain`. */
 	private static function negates(plain: String, negated: String): Bool {
-		return negated.startsWith('!') && Strings.stripOuterParens(negated.substring(1).trim()) == Strings.stripOuterParens(plain);
+		return negated.startsWith('!') && negated.substring(1).trim().stripOuterParens() == plain.stripOuterParens();
 	}
 
 

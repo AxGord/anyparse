@@ -19,8 +19,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -289,7 +289,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 		if (statement == null || at == null) return [];
 		final name: Null<String> = freshName(first.typeText, scan);
 		if (name == null) return [];
-		final lineStart: Int = Strings.lineStart(scan.source, at.from);
+		final lineStart: Int = scan.source.lineStart(at.from);
 		final lead: String = scan.source.substring(lineStart, at.from);
 		final glue: String = lead.trim().length == 0 ? '\n$lead' : ' ';
 		final text: String = 'final $name: ${first.typeText} = ${scan.source.substring(first.span.from, first.span.to)};$glue';

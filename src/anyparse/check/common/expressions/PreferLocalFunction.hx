@@ -8,8 +8,8 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -401,7 +401,7 @@ final class PreferLocalFunction extends RuleBase {
 		final t: String = [
 			for (k in 0...type.length) if (!SourceText.isSpace(type.fastCodeAt(k))) type.charAt(k)
 		].join('');
-		return Strings.stripOuterParens(t);
+		return t.stripOuterParens();
 	}
 
 	/**
@@ -522,8 +522,8 @@ final class PreferLocalFunction extends RuleBase {
 		var i: Int = 0;
 		if (i < text.length && text.fastCodeAt(i) == '?'.code) i++;
 		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
-		if (i >= text.length || !Strings.isIdentStart(text.fastCodeAt(i))) return false;
-		while (i < text.length && Strings.isIdentChar(text.fastCodeAt(i))) i++;
+		if (i >= text.length || !text.fastCodeAt(i).isIdentStart()) return false;
+		while (i < text.length && text.fastCodeAt(i).isIdentChar()) i++;
 		while (i < text.length && SourceText.isSpace(text.fastCodeAt(i))) i++;
 		return i < text.length && text.fastCodeAt(i) == ':'.code;
 	}

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+using anyparse.util.Strings;
 using Lambda;
 
 import anyparse.check.scan.CheckScan;
@@ -8,7 +9,6 @@ import anyparse.format.comment.CommentDirective;
 import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 /**
  * One comment token collected by `collectCommentTokens`: its byte span and
@@ -309,7 +309,7 @@ final class SourceComments {
 	 * splicers prefix with instead.
 	 */
 	public static function commentContinuation(source: String, tok: CommentTok): String {
-		var indent: String = source.substring(Strings.lineStart(source, tok.from), tok.from);
+		var indent: String = source.substring(source.lineStart(tok.from), tok.from);
 		if (indent.trim() != '') indent = indent.substring(0, indent.length - indent.ltrim().length);
 		if (tok.isLine) return '$indent// ';
 		final body: String = source.substring(tok.from + 2, tok.to);

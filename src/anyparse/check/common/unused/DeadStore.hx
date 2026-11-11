@@ -9,8 +9,8 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.util.Strings;
 
+using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -638,10 +638,10 @@ final class DeadStore extends RuleBase {
 	 */
 	private static function initializerStripSpan(source: String, initSpan: Span): Null<Span> {
 		var cut: Int = initSpan.from;
-		while (cut > 0 && Strings.isSpaceOrTab(source.fastCodeAt(cut - 1))) cut--;
+		while (cut > 0 && source.fastCodeAt(cut - 1).isSpaceOrTab()) cut--;
 		if (cut == 0 || source.fastCodeAt(cut - 1) != '='.code) return null;
 		cut--;
-		while (cut > 0 && Strings.isSpaceOrTab(source.fastCodeAt(cut - 1))) cut--;
+		while (cut > 0 && source.fastCodeAt(cut - 1).isSpaceOrTab()) cut--;
 		return new Span(cut, initSpan.to);
 	}
 

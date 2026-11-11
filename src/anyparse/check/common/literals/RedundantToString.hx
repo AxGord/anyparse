@@ -11,7 +11,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeResolver;
-import anyparse.util.Strings;
+
+using anyparse.util.Strings;
 
 /**
  * Flags a `.toString()` call sitting in a position that ALREADY stringifies, so the call only
@@ -501,7 +502,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 		final literalSource: String = source.substring(literalSpan.from, literalSpan.to);
 		return if (literalSource.indexOf('\\x') != -1 || literalSource.indexOf('\\u') != -1)
 			null
-		else if (span.to < source.length && Strings.isIdentChar(source.fastCodeAt(span.to)))
+		else if (span.to < source.length && source.fastCodeAt(span.to).isIdentChar())
 			null
 		else
 			{ span: span, text: '$$$name' };

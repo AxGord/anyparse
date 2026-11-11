@@ -1,6 +1,7 @@
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span.Position;
+import anyparse.util.Compare;
 import haxe.Exception;
 import sys.FileSystem;
 import unit.grammar.haxe.HxFormatterCorpusHelpers;
@@ -96,12 +97,7 @@ final class _ReconSkipParse { // noqa: naming
 			final dir: String = '$root/test/testcases/$bucket';
 			if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) continue;
 			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0);
+			names.sort(Compare.compareString);
 			for (name in names) if (name.endsWith(HXTEST_EXT)) {
 				final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest('$dir/$name');
 				if (tc == null) continue;
@@ -240,7 +236,7 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function normalize(message: Null<String>): String {
-		return message == null || message == '' ? '<no message>' : StringTools.replace(message, '\n', '\\n').replace('\t', '\\t');
+		return message == null || message == '' ? '<no message>' : message.replace('\n', '\\n').replace('\t', '\\t');
 	}
 
 	private static function head(input: String): String {

@@ -3,8 +3,9 @@ package anyparse.query;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
+
+using anyparse.util.Strings;
 
 /**
  * Which declaration owns each line of a file: a named node with at most one named ancestor (none below a module-level
@@ -76,7 +77,7 @@ final class DeclarationLines {
 	 * Whether `line` holds an identifier character — a line of punctuation alone, a closing brace, holds none.
 	 */
 	public static function carriesWords(line: String): Bool {
-		for (i in 0...line.length) if (Strings.isIdentChar(line.fastCodeAt(i))) return true;
+		for (i in 0...line.length) if (line.fastCodeAt(i).isIdentChar()) return true;
 		return false;
 	}
 

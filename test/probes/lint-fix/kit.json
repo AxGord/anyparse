@@ -1978,6 +1978,94 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "U1",
+			"note": "a project-root module whose `using` no extension call goes through is a deletable Warning on a narrow lint, and the fix keeps the program compiling",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/C.hx",
+				"--rule",
+				"unused-import",
+				"--no-oracle",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{\"resolutionRoots\": [\"lib\", \"pkg\"]}\n",
+				"lib/ext/Pad.hx": "package ext;\n\nclass Pad {\n\n\tpublic static function pad(s:String):String {\n\t\treturn s + '!';\n\t}\n\n}\n",
+				"lib/ext/T.hx": "package ext;\n\ntypedef T = ext.Pad;\n",
+				"pkg/C.hx": "package pkg;\n\nusing ext.Pad;\n\nclass C {\n\n\tstatic function main():Void {\n\t\tSys.println('c');\n\t}\n\n}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					"lib",
+					"-cp",
+					"pkg",
+					"-main",
+					"pkg.C",
+					"--interp"
+				],
+				"run": true
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "61dc387b1dfe6c11",
+				"files": "6b219b60f1853f00",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
+		},
+		{
+			"name": "U2",
+			"note": "a `using` of a project module that is a typedef of a class brings the class's statics: the extension call keeps it, the fix deletes nothing",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg/E.hx",
+				"--rule",
+				"unused-import",
+				"--no-oracle",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{\"resolutionRoots\": [\"lib\", \"pkg\"]}\n",
+				"lib/ext/Pad.hx": "package ext;\n\nclass Pad {\n\n\tpublic static function pad(s:String):String {\n\t\treturn s + '!';\n\t}\n\n}\n",
+				"lib/ext/T.hx": "package ext;\n\ntypedef T = ext.Pad;\n",
+				"pkg/E.hx": "package pkg;\n\nusing ext.T;\n\nclass E {\n\n\tstatic function main():Void {\n\t\tSys.println('a'.pad());\n\t}\n\n}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					"lib",
+					"-cp",
+					"pkg",
+					"-main",
+					"pkg.E",
+					"--interp"
+				],
+				"run": true
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
 		}
 	]
 }

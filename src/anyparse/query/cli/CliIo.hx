@@ -409,7 +409,7 @@ final class CliIo {
 						stack.push(path);
 						continue;
 					}
-					if (!StringTools.endsWith(name, '.hx')) continue;
+					if (!name.endsWith('.hx')) continue;
 					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
 				}
 			} catch (_: Exception) {

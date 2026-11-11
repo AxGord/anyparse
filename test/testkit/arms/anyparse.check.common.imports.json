@@ -442,6 +442,24 @@
 			"method": "messageIdentity",
 			"force": "MessageMask.maskAfter(MessageMask.maskAfter(message, SHARE_LEAD), READ_LEAD)",
 			"note": "the count of governed modules a share is read against stays in the identity, so a file added beside the finding changes the identity of a finding the change never touched"
+		},
+		{
+			"name": "M-USING-MODULE-REPORT-SCOPED",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "evidenceOf",
+			"kind": "FnMember",
+			"find": "UsingSites.membersByModule(projectIndex ?? index)",
+			"replace": "UsingSites.membersByModule(index)",
+			"note": "the extension methods of a using module read off the report set alone leave a project module outside a narrow lint an unverifiable Info, and its unused using undeleted"
+		},
+		{
+			"name": "M-USING-LIBRARY-WIDENED",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "evidenceOf",
+			"kind": "FnMember",
+			"find": "UsingSites.membersByModule(projectIndex ?? index)",
+			"replace": "UsingSites.membersByModule(resolveIndex)",
+			"note": "a using on a library module read as its own statics alone is declared unused and deleted, though a library's extension surface reaches past them"
 		}
 	]
 }
