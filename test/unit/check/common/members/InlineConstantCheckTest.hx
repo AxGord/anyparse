@@ -567,9 +567,8 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(0, violations("class C { static inline final S: String = 'x'; static function f(a = S) {} }").length);
 	}
 
-	/** A constructor's default holds it too. */
-	@:pin('control')
-	@:killer('M-DEMAND-DEFAULT-ARG')
+	/** A constructor's default holds it too, by either of two positions: no single cut flips it. */
+	@:pin('guard')
 	public function testConstructorDefaultHoldsString(): Void {
 		Assert.equals(0, violations("class C { static inline final S: String = 'x'; public function new(a = S) {} }").length);
 	}
@@ -587,21 +586,21 @@ class InlineConstantCheckTest extends Test {
 
 	/** The initializer of another `static inline` requires a compile-time value. */
 	@:pin('control')
-	@:killer('M-DEMAND-STATIC-INIT')
+	@:killer('M-DEMAND-FIELD-INIT')
 	public function testInlineInitializerHoldsString(): Void {
 		Assert.equals(0, violations("class C { static inline final S: String = 'x'; static inline final T: String = S + 'y'; }").length);
 	}
 
 	/** A plain static initializer reading it may run first once the read stops folding. */
 	@:pin('control')
-	@:killer('M-DEMAND-STATIC-INIT')
+	@:killer('M-DEMAND-FIELD-INIT')
 	public function testStaticInitializerReadHoldsString(): Void {
 		Assert.equals(0, violations("class C { static final T: String = S + 'y'; static inline final S: String = 'x'; }").length);
 	}
 
 	/** An enum-abstract value is implicitly inline and refuses a non-inline read. */
 	@:pin('control')
-	@:killer('M-DEMAND-ENUM-ABSTRACT')
+	@:killer('M-DEMAND-FIELD-INIT')
 	public function testEnumAbstractValueHoldsString(): Void {
 		Assert.equals(
 			0, violations("class C { public static inline final S: String = 'x'; }\nenum abstract E(String) { var V = C.S; }").length
@@ -637,6 +636,72 @@ class InlineConstantCheckTest extends Test {
 	public function testLaterCallInitializerDoesNotHoldString(): Void {
 		Assert.equals(
 			1, violations("class C { static inline final S: String = 'x'; static var u = g(); static function g() { return 1; } }").length
+		);
+	}
+
+	/** An instance field initializer reads the constant by interpolation: it can run inside another type's static initializer. */
+	@:pin('control')
+	@:killer('M-DEMAND-FIELD-INIT')
+	public function testInstanceFieldInterpolationHoldsString(): Void {
+		Assert.equals(
+			0,
+			violations(
+				"class Account { private static inline final NS: String = 'Account'; public final check = new Endpoint('$NS/Check'); "
+				+ 'public function new() {} }'
+			).length
+		);
+	}
+
+	/** An instance field initializer of ANOTHER type reads it through a qualified name. */
+	@:pin('control')
+	@:killer('M-DEMAND-FIELD-INIT')
+	public function testForeignQualifiedInstanceFieldHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { public static inline final S: String = 'x'; }" },
+			{ file: 'D.hx', source: 'class D { public final a = new Endpoint(C.S); public function new() {} }' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
+	/** A static initializer of ANOTHER type reads it through a qualified name. */
+	@:pin('control')
+	@:killer('M-DEMAND-FIELD-INIT')
+	public function testForeignQualifiedStaticInitializerHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { public static inline final S: String = 'x'; }" },
+			{ file: 'D.hx', source: 'class D { public static final a = C.S + 1; }' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
+	/** A constructor body reads it while the instance is built, which another type's static initializer may do first. */
+	@:pin('control')
+	@:killer('M-DEMAND-CONSTRUCTOR')
+	public function testConstructorReadHoldsString(): Void {
+		Assert.equals(
+			0,
+			violations("class C { static inline final S: String = 'x'; public var v: String; public function new() { v = S + 'y'; } }")
+				.length
+		);
+	}
+
+	/** A constructor of ANOTHER type reads it through a qualified name. */
+	@:pin('control')
+	@:killer('M-DEMAND-CONSTRUCTOR')
+	public function testForeignQualifiedConstructorReadHoldsString(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: "class C { public static inline final S: String = 'x'; }" },
+			{ file: 'D.hx', source: 'class D { public function new() { trace(C.S); } }' }
+		];
+		Assert.equals(0, CheckFixture.violationsIn(new InlineConstant(), files).length);
+	}
+
+	/** A read in an ordinary method runs after every initializer: the constant is still reported. */
+	@:pin('guard')
+	public function testMethodReadOnlyDoesNotHoldString(): Void {
+		Assert.equals(
+			1,
+			violations("class C { static inline final S: String = 'x'; public function new() {} function m() { return S + 'y'; } }").length
 		);
 	}
 

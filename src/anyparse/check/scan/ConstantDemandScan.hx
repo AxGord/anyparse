@@ -14,10 +14,12 @@ import anyparse.query.ParseGate;
  * one, in a member, lambda, constructor or another file), a `static inline` initializer, a field value of an abstract
  * (`implicitStaticFieldHostKinds`), the first argument of a `targetCodeCallNames` call.
  *
- * Init-order positions (a non-inline read compiles and sees an unset field on js, neko and interp): any other static
- * or module-level initializer, a local static's initializer, and a `staticInitFunctionNames` function, which runs before
- * them all. `runsCode` answers the indirect form, an earlier initializer that may reach the field through a call, and
- * `staticInitRunsCode` the same through a static-init function of the constant's own type.
+ * Init-order positions (a non-inline read compiles and sees an unset field on js, neko, interp and, by the order of the
+ * classes' boot, hxcpp): any other static or module-level initializer, an instance field's initializer and a
+ * constructor of any type (either can run while a static initializer of another type allocates it), a local static's
+ * initializer, and a `staticInitFunctionNames` function, which runs before them all. A direct read is the bound: no
+ * walk through the calls those make. `runsCode` answers the indirect form, an earlier initializer that may reach the
+ * field through a call, and `staticInitRunsCode` the same through a static-init function of the constant's own type.
  *
  * Still unseen: a read through a function inside a static-init cycle between classes (the compiler warns on such a
  * cycle, `WStaticInitOrder`); a static-init function of ANOTHER type reaching the constant through a function; a
@@ -55,11 +57,12 @@ final class ConstantDemandScan {
 		final staticInitFunctionNames: Array<String> = shape.execution?.staticInitFunctionNames ?? [];
 		final seams: DemandSeams = {
 			constants: constants,
-			implicitStaticHostKinds: shape.implicitStaticFieldHostKinds ?? [],
+
 			paramKinds: shape.paramKinds ?? [],
 			moduleValueKinds: [for (k in shape.moduleValueDeclKinds) if (!functionKinds.contains(k)) k],
 			staticLocalKinds: shape.staticLocalDeclKinds ?? [],
 			staticInitFunctionNames: staticInitFunctionNames,
+			constructorName: shape.constructorName,
 			callKind: shape.callKind,
 			targetCodeCallNames: shape.execution?.targetCodeCallNames ?? []
 		};
@@ -73,23 +76,15 @@ final class ConstantDemandScan {
 		return new ConstantDemandScan(names, [for (kind in [call, alloc]) if (kind != null) kind], staticInitFunctionNames);
 	}
 
-	/**
-	 * Record the demanding positions under `node`. `static` projects as a sibling preceding its member, so the running
-	 * flag standing when a member appears describes that member, and every member resets it.
-	 */
+	/** Record the demanding positions under `node`. */
 	private static function walk(node: QueryNode, source: String, seams: DemandSeams, out: Map<String, Bool>): Void {
 		final constants: ConstantFieldSeams = seams.constants;
-		final implicitlyStatic: Bool = seams.implicitStaticHostKinds.contains(node.kind);
-		var sawStatic: Bool = false;
 		for (child in node.children) {
 			final kind: String = child.kind;
-			if (kind == constants.staticKind) {
-				sawStatic = true;
-			} else if (constants.members.contains(kind)) {
+			if (constants.members.contains(kind)) {
 				final isField: Bool = constants.finalFieldKinds.contains(kind) || constants.mutableFieldKinds.contains(kind);
-				if (isField && (sawStatic || implicitlyStatic)) demand(ConstantFieldScan.initializerOf(child), source, seams, out);
-				if (seams.staticInitFunctionNames.contains(child.name ?? '')) spellNames(child, out);
-				sawStatic = false;
+				if (isField) demand(ConstantFieldScan.initializerOf(child), source, seams, out);
+				if (seams.staticInitFunctionNames.contains(child.name ?? '') || isConstructor(child, seams)) spellNames(child, out);
 			} else if (seams.moduleValueKinds.contains(kind) || seams.paramKinds.contains(kind)) {
 				demand(ConstantFieldScan.initializerOf(child), source, seams, out);
 			} else if (seams.staticLocalKinds.contains(kind)) {
@@ -122,16 +117,21 @@ final class ConstantDemandScan {
 		for (child in node.children) spellNames(child, out);
 	}
 
+	/** Whether `member` is the type's constructor, which runs while every instance field initializer of the type does. */
+	private static function isConstructor(member: QueryNode, seams: DemandSeams): Bool {
+		return seams.constructorName != null && member.name == seams.constructorName;
+	}
+
 }
 
 /** The grammar seams `ConstantDemandScan.walk` reads, resolved once per run. */
 private typedef DemandSeams = {
 	final constants: ConstantFieldSeams;
-	final implicitStaticHostKinds: Array<String>;
 	final paramKinds: Array<String>;
 	final moduleValueKinds: Array<String>;
 	final staticLocalKinds: Array<String>;
 	final staticInitFunctionNames: Array<String>;
+	final constructorName: Null<String>;
 	final callKind: Null<String>;
 	final targetCodeCallNames: Array<String>;
 };

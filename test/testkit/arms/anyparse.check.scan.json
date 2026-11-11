@@ -1296,27 +1296,19 @@
 			"note": "a module-level value read loses inline and may read an unset field"
 		},
 		{
-			"name": "M-DEMAND-STATIC-INIT",
+			"name": "M-DEMAND-FIELD-INIT",
 			"type": "anyparse.check.scan.ConstantDemandScan",
 			"method": "walk",
-			"find": "(sawStatic || implicitlyStatic)",
-			"replace": "implicitlyStatic",
-			"note": "a static or static-inline initializer read loses inline"
-		},
-		{
-			"name": "M-DEMAND-ENUM-ABSTRACT",
-			"type": "anyparse.check.scan.ConstantDemandScan",
-			"method": "walk",
-			"find": "(sawStatic || implicitlyStatic)",
-			"replace": "sawStatic",
-			"note": "an enum-abstract value read loses inline: Inline variable initialization must be a constant value"
+			"find": "if (isField) demand(",
+			"replace": "if (false) demand(",
+			"note": "a field initializer read, static or instance, loses inline"
 		},
 		{
 			"name": "M-DEMAND-INIT-FUNCTION",
 			"type": "anyparse.check.scan.ConstantDemandScan",
 			"method": "walk",
-			"find": "if (seams.staticInitFunctionNames.contains(child.name ?? '')) spellNames(child, out);",
-			"replace": "if (false) spellNames(child, out);",
+			"find": "seams.staticInitFunctionNames.contains(child.name ?? '') || ",
+			"replace": "",
 			"note": "a __init__ read loses inline and sees the field unset"
 		},
 		{
@@ -1342,14 +1334,6 @@
 			"find": "_staticInitFunctionNames.contains(member.name ?? '') && ",
 			"replace": "",
 			"note": "any function holding a call counts as running at static-init time"
-		},
-		{
-			"name": "M-DEMAND-LEGACY-ENUM-ABSTRACT",
-			"type": "anyparse.check.scan.ConstantDemandScan",
-			"method": "walk",
-			"find": "seams.implicitStaticHostKinds.contains(node.kind)",
-			"replace": "node.kind == 'EnumAbstractDecl'",
-			"note": "a legacy @:enum abstract projects as a plain abstract; its value is no longer a demanding position"
 		},
 		{
 			"name": "M-DEMAND-TARGET-CODE",
@@ -1483,6 +1467,14 @@
 			"find": "(getter == null && typing.accessOverloaded(typeName, true))",
 			"replace": "typing.accessOverloaded(typeName, false)",
 			"note": "a field read asks the index-access question, so a field read on an abstract with @:arrayAccess looks impure"
+		},
+		{
+			"name": "M-DEMAND-CONSTRUCTOR",
+			"type": "anyparse.check.scan.ConstantDemandScan",
+			"method": "walk",
+			"find": " || isConstructor(child, seams)",
+			"replace": "",
+			"note": "a constructor body read loses inline, and a field the constructor reads is unset when another type's static initializer allocates it first"
 		}
 	]
 }

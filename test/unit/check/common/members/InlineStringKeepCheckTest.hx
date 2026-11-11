@@ -59,7 +59,7 @@ class InlineStringKeepCheckTest extends Test {
 
 	/** A legacy `@:enum abstract` projects as a plain abstract, and its value refuses a non-inline read just the same. */
 	@:pin('control')
-	@:killer('M-DEMAND-LEGACY-ENUM-ABSTRACT')
+	@:killer('M-DEMAND-FIELD-INIT')
 	public function testLegacyEnumAbstractValueHoldsString(): Void {
 		Assert.equals(
 			0, violations("class K { public static inline final A1: String = 'a'; }\n@:enum abstract E(String) { var A = K.A1; }").length
