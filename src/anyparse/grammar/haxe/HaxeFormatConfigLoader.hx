@@ -1133,6 +1133,10 @@ final class HaxeFormatConfigLoader {
 			opt.objectFieldColon = HaxeFormatValues.whitespaceToRuntime(section.objectFieldColonPolicy);
 		if (section.typeHintColonPolicy != null) opt.typeHintColon = HaxeFormatValues.whitespaceToRuntime(section.typeHintColonPolicy);
 		if (section.typeCheckColonPolicy != null) opt.typeCheckColon = HaxeFormatValues.whitespaceToRuntime(section.typeCheckColonPolicy);
+		if (section.arrowParamColonPolicy != null)
+			opt.arrowParamColon = HaxeFormatValues.whitespaceToRuntime(section.arrowParamColonPolicy);
+		if (section.typeParamConstraintColonPolicy != null)
+			opt.typeParamConstraintColon = HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy);
 		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = HaxeFormatValues.whitespaceToRuntime(section.typeParamOpenPolicy);
 		if (section.typeParamClosePolicy != null) opt.typeParamClose = HaxeFormatValues.whitespaceToRuntime(section.typeParamClosePolicy);
 		if (section.binopPolicy != null) opt.typeParamDefaultEquals = HaxeFormatValues.whitespaceToRuntime(section.binopPolicy);

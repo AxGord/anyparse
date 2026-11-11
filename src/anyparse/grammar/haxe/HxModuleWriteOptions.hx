@@ -572,6 +572,16 @@ final class HxModuleWriteOptions {
 	public var typedefAssign: WhitespacePolicy = WhitespacePolicy.Both;
 	public var typedefIntersection: WhitespacePolicy = WhitespacePolicy.After; // noqa: prefer-final-public-field
 	public var typeParamDefaultEquals: WhitespacePolicy = WhitespacePolicy.Both;
+
+	/**
+	 * The `:` of a named function-type parameter, `(call:QueryNode) -> Bool` (`HxArrowParamBody`). A knob of its own
+	 * rather than `typeHintColon`, so the arrow-type colon is set without moving every annotation; `None` keeps it tight.
+	 */
+	public var arrowParamColon: WhitespacePolicy = WhitespacePolicy.None;
+
+	/** The `:` joining a declare-site type parameter to its constraint, `<T:Dynamic>` (`HxTypeParamDecl.constraint`); `None` is tight. */
+	public var typeParamConstraintColon: WhitespacePolicy = WhitespacePolicy.None;
+
 	public var typeParamOpen: WhitespacePolicy = WhitespacePolicy.None;
 	public var typeParamClose: WhitespacePolicy = WhitespacePolicy.None;
 	public var anonTypeBracesOpen: WhitespacePolicy = WhitespacePolicy.None;

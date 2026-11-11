@@ -57,7 +57,9 @@
 		"condcomment/C.hx": "class A {\n\tstatic function f() {\n\t\t#if (!js /* don't */ && !nodejs)\n\t\ttrace(1);\n\t\t#end\n\t}\n}\n",
 		"cond/P.hx": "class C {\n\tfunction f() {\n\t\t#if a foo(); bar(); #end\n\t\t#if a foo(); #elseif b bar(); baz(); #else qux(); #end\n\t}\n\n\t#if a var p:Int; var q:Int; #end\n\n\t#if a var r:Int; #else var s:Int; var t:Int; #end\n}\n",
 		"arrowbodypad/ArrowBodyPad.hx": "class C {\n\tfunction test() {\n\t\tfinal entries = users.map(e -> {a: e.a, b: e.b});\n\t\tfinal f = users.map((e, g) -> { a: e.a });\n\t\tfinal v = { a: 1 };\n\t}\n}\n",
-		"arrowbodypad/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140}, \"whitespace\": {\"bracesConfig\": {\"objectLiteralBraces\": {\"openingPolicy\": \"after\", \"closingPolicy\": \"before\"}}}}\n"
+		"arrowbodypad/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140}, \"whitespace\": {\"bracesConfig\": {\"objectLiteralBraces\": {\"openingPolicy\": \"after\", \"closingPolicy\": \"before\"}}}}\n",
+		"typecolon/Probe.hx": "typedef F = (?call:Int, x:String, Int) -> Bool;\ntypedef G<T:A & B> = T;\n",
+		"typecolon/hxformat.json": "{\"whitespace\": {\"arrowParamColonPolicy\": \"after\", \"typeParamConstraintColonPolicy\": \"around\"}}"
 	},
 	"invocations": [
 		{
@@ -639,6 +641,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "c9ca846ad47349aa",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "typecolon/Probe.hx",
+			"note": "the colon of a named function-type parameter, an optional one included, and of a type-parameter constraint, an intersection included, follows its own key; both stay tight with no key",
+			"fixpoint": "typecolon/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"typecolon/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "08b3c2a149384be8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

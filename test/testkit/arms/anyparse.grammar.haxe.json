@@ -1420,6 +1420,22 @@
 			"find": "if (issues.values.length > 0)",
 			"replace": "if (false)",
 			"note": "the report finds the unreadable values and prints nothing about them"
+		},
+		{
+			"name": "M-ARROW-COLON-KEY-UNMAPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "opt.arrowParamColon = HaxeFormatValues.whitespaceToRuntime(section.arrowParamColonPolicy);",
+			"replace": "opt.arrowParamColon = WhitespacePolicy.None;",
+			"note": "whitespace.arrowParamColonPolicy is read and dropped, so the colon of a named function-type parameter stays tight under every value of the key"
+		},
+		{
+			"name": "M-CONSTRAINT-COLON-KEY-UNMAPPED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "opt.typeParamConstraintColon = HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy);",
+			"replace": "opt.typeParamConstraintColon = WhitespacePolicy.None;",
+			"note": "whitespace.typeParamConstraintColonPolicy is read and dropped, so the colon of a type-parameter constraint stays tight under every value of the key"
 		}
 	]
 }

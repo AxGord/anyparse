@@ -58,6 +58,16 @@ and still takes edits that leave it alone. Whether a seam-adjacent `else` compil
 on the defines (`#if a if (c) f(); #end else g();` compiles only with `-D a`), which no
 whole-file parse knows, so a seam makes an `else` acceptable, never proven valid.
 
+## The colon of a function-type parameter and of a type-parameter constraint: `whitespace.arrowParamColonPolicy`, `whitespace.typeParamConstraintColonPolicy`
+
+Two keys of their own, not part of haxe-formatter's schema. `arrowParamColonPolicy` spaces the `:` of a named function-type parameter (`(call:QueryNode) -> Bool`); `typeParamConstraintColonPolicy` spaces the `:` of a type-parameter constraint (`<T:Dynamic>`, in a class, typedef or function header). Each takes the usual policy values (`none`, `before`, `after`, `around`) and is set on its own. Left out, the colon stays tight (`(call:Int)`, `<T:Foo>`) whatever `typeHintColonPolicy` says for the annotation colons (`var x: Int`, `f(a: Int)`).
+
+```haxe
+// "arrowParamColonPolicy": "after", "typeParamConstraintColonPolicy": "around"
+typedef Check = (call: QueryNode) -> Bool;
+function first<T : Dynamic>(items:Array<T>):T {}
+```
+
 ## A value `try` that does not fit: `sameLine.expressionTryOverflow`
 
 A brace-less value `try` (`final x = try f() catch (e: E) g()`) that fits the line stays on it. One that does not fit breaks at its seams, never inside the first call or the tail, with `sameLine.expressionTry` left at `same`. `next` (the default) puts each body on its own indented line with `catch` at the statement's indent, the shape a value `if` takes under `sameLine.expressionIf: next`:

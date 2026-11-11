@@ -2786,6 +2786,22 @@
 			"find": "&& $slotsEmpty",
 			"replace": "&& true",
 			"note": "the indentObjectLiteral bypass of a return value writes no kw-trivia slot, so `return // c` before an object literal under leftCurly before drops the comment"
+		},
+		{
+			"name": "M-ARROW-COLON-LEAD-POLICY-OFF",
+			"type": "anyparse.macro.WriterRefLeadLowering",
+			"method": "emitMandatoryLead",
+			"find": "final knob: Null<String> = spaceKnob(child, 'lead');",
+			"replace": "final knob: Null<String> = null;",
+			"note": "a mandatory lead's whitespace knob is not read, so the colon of a named function-type parameter is written bare under every policy"
+		},
+		{
+			"name": "M-CONSTRAINT-COLON-LEAD-POLICY-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefLead",
+			"find": "optParts.push(whitespacePolicyLead(child, leadText, spaceKnob(child, 'lead')));",
+			"replace": "optParts.push(macro _dt($v{leadText}));",
+			"note": "an optional tight lead's whitespace knob is not read, so the colon of a type-parameter constraint is written bare under every policy"
 		}
 	]
 }

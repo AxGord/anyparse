@@ -53,6 +53,20 @@ typedef HxFormatWhitespaceSection = {
 	var colonPolicy: HxFormatWhitespacePolicy;
 	@:optional
 	var typeCheckColonPolicy: HxFormatWhitespacePolicy;
+
+	/**
+	 * hxq-only (the fork has no such key): the `:` of a named function-type parameter, `(call:QueryNode) -> Bool`.
+	 * Absent keeps it tight whatever `typeHintColonPolicy` says. Feeds `arrowParamColon`.
+	 */
+	@:optional
+	var arrowParamColonPolicy: HxFormatWhitespacePolicy;
+
+	/**
+	 * hxq-only (the fork has no such key): the `:` of a type-parameter constraint, `<T:Dynamic>`. Absent keeps it
+	 * tight whatever `typeHintColonPolicy` says. Feeds `typeParamConstraintColon`.
+	 */
+	@:optional
+	var typeParamConstraintColonPolicy: HxFormatWhitespacePolicy;
 	@:optional
 	var typeParamOpenPolicy: HxFormatWhitespacePolicy;
 	@:optional
