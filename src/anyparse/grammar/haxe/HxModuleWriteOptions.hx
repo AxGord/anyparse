@@ -580,12 +580,11 @@ final class HxModuleWriteOptions {
 	public var objectLiteralBracesClose: WhitespacePolicy = WhitespacePolicy.None;
 	// ω-arrow-body-objlit-pad-keep: when `true`, the open-side
 	// `objectLiteralBracesOpen` inner pad is applied EVEN when the literal
-	// is an arrow-lambda body (`u -> { email: v }`). Default `false`
-	// mirrors the fork's `MarkWhitespace.successiveParenthesis`
-	// compress-mode `case Arrow: return;` which drops the opening-brace
-	// pad after a `->` token (`u -> {email: v }`). Fed by
+	// is an arrow-lambda body (`u -> { email: v }`), so both braces pad
+	// alike. `false` drops only the open pad after a `->` token
+	// (`u -> {email: v }`), the fork's layout. Fed by
 	// `whitespace.bracesConfig.objectLiteralBraces.arrowBodyOpenPad`.
-	public var objectLiteralArrowBodyOpenPad: Bool = false;
+	public var objectLiteralArrowBodyOpenPad: Bool = true;
 	// ω-arrow-body-objlit-reflow: when `true`, a source-multiline object
 	// literal that is an arrow-lambda body drops its source newlines and
 	// the wrap cascade re-flows it by width (`u -> { a: 1 }` when it
@@ -894,7 +893,7 @@ final class HxModuleWriteOptions {
 	// ternary arm, a prefix or keyword operand), so it reaches only the leftmost
 	// leaf of the arrow body: the node whose first token follows `->`. Read by
 	// `HxObjectLit.fields` (`@:fmt(arrowBodyOpenPadSuppress)`) to drop the open
-	// pad, the fork's `case Arrow: return;` on the previous token. Default `false`.
+	// pad when `objectLiteralArrowBodyOpenPad` is off. Default `false`.
 	public var _arrowBodyLead: Bool = false; // noqa: naming
 	// omega-arrow-value-if-reflow - set on the branch writes of an `HxIfExpr`
 	// that REFUSED the arrow-body reflow (a comment anywhere on its

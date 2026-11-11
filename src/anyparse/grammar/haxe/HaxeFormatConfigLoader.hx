@@ -1072,10 +1072,9 @@ final class HaxeFormatConfigLoader {
 				opt.objectLiteralBracesOpen = HaxeFormatValues.whitespaceToRuntime(objectLit.openingPolicy);
 			if (objectLit.closingPolicy != null)
 				opt.objectLiteralBracesClose = HaxeFormatValues.whitespaceToRuntime(objectLit.closingPolicy);
-			// ω-arrow-body-objlit-pad-keep: `arrowBodyOpenPad: true` opts
-			// into keeping the open-side pad on arrow-lambda-body literals
-			// (`u -> { email: v }`) — a deliberate divergence from the
-			// fork, which always drops it (`MarkWhitespace.
+			// ω-arrow-body-objlit-pad-keep: the open-side pad on an arrow-lambda-body
+			// literal (`u -> { email: v }`) is kept by default so both braces pad alike;
+			// `arrowBodyOpenPad: false` drops it as the fork does (`MarkWhitespace.
 			// successiveParenthesis` compress-mode `case Arrow: return;`).
 			if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;
 			// ω-arrow-body-objlit-reflow: `arrowBodyReflow: true` re-flows a

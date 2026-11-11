@@ -9,8 +9,8 @@ import sys.io.File;
 /**
  * This repository's own `hxformat.json` keeps the object-literal pad symmetric
  * (`{ a: 1 }`) where the literal is an arrow-lambda body, the same as at a var
- * value or a call argument: the fork-parity open-pad suppression there is a
- * default, and the repo config turns it off with `arrowBodyOpenPad`.
+ * value or a call argument: the config states `arrowBodyOpenPad` outright, so the layout
+ * holds whatever the default of that key is.
  */
 @:nullSafety(Strict)
 final class HxRepoConfigLambdaObjectBracesTest extends Test {

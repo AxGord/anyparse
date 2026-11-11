@@ -20,6 +20,23 @@
 			"note": "objectLiteralBraces.arrowBodyOpenPad:true is read as false, so an arrow-lambda-body literal loses its open pad again under a config that asked to keep it"
 		},
 		{
+			"name": "M-ARROW-BODY-PAD-KEY-IGNORED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyBracesConfig",
+			"find": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;",
+			"replace": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = true;",
+			"note": "objectLiteralBraces.arrowBodyOpenPad:false is read as true, so a caller who asked for the open pad dropped after `->` still gets it"
+		},
+		{
+			"name": "M-ARROW-BODY-PAD-DEFAULT-OFF",
+			"type": "anyparse.grammar.haxe.HxModuleWriteOptions",
+			"method": "objectLiteralArrowBodyOpenPad",
+			"kind": "VarMember",
+			"find": "Bool = true",
+			"replace": "Bool = false",
+			"note": "an arrow-lambda-body object literal drops its open pad again under the default options, so the braces pad `{a: 1 }`"
+		},
+		{
 			"name": "M-ALWAYS-SAME",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applySameLine",

@@ -60,7 +60,7 @@ final class HxArrowBlockBodyOpenSliceTest extends Test {
 		+ '"arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none",'
 		+ '"functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around",'
 		+ '"openingBracketPolicy":"none","closingBracketPolicy":"none",'
-		+ '"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"},'
+		+ '"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before","arrowBodyOpenPad":false},'
 		+ '"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"},'
 		+ '"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},'
 		+ '"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},'

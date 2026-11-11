@@ -37,8 +37,8 @@ package anyparse.grammar.haxe;
  * signals so a source-multiline literal collapses to one line; the flag is cleared on each
  * expression-position descent. `@:fmt(arrowBodyOpenPadSuppress)` — when
  * `opt._arrowBodyLead` is set (the literal is the leftmost leaf of an arrow-lambda body),
- * the open-side inner pad is dropped (`u -> {email: v }`), the fork's `case Arrow: return;`;
- * `objectLiteralBraces.arrowBodyOpenPad: true` keeps the pad, a deliberate divergence.
+ * the open-side inner pad is dropped (`u -> {email: v }`) unless `opt.objectLiteralArrowBodyOpenPad`
+ * (default on; `objectLiteralBraces.arrowBodyOpenPad`) keeps it, so both braces pad alike.
  */
 @:peg
 typedef HxObjectLit = {

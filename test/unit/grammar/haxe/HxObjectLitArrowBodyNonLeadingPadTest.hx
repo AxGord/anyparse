@@ -14,7 +14,7 @@ final class HxObjectLitArrowBodyNonLeadingPadTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before"}}}}';
+		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": false}}}}';
 
 	public function new(): Void {
 		super();

@@ -5,7 +5,8 @@ import utest.Test;
 
 /**
  * ω-arrow-body-objlit-pad scope: under `objectLiteralBraces.openingPolicy:
- * "after"` the open-side inner pad (`{ alpha`) is DROPPED when the object
+ * "after"` with `arrowBodyOpenPad: false` (the default is `true`, see
+ * `HxArrowBodyPadDefaultTest`) the open-side inner pad (`{ alpha`) is DROPPED when the object
  * literal is the leftmost leaf of an arrow-lambda body — its `{` sits
  * directly after the `->` token (`u -> {alpha: v }`). Mirrors fork
  * `MarkWhitespace.successiveParenthesis` compress-mode `case Arrow:
@@ -19,7 +20,7 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before"}}}}';
+		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": false}}}}';
 	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
 		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
 		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
