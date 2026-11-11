@@ -122,14 +122,22 @@ final class Patch {
 	 * declaration's slice, then its own doc; exact, then dedented; exactly once); null where that op would refuse the fragment.
 	 */
 	public static function cutSpan(source: String, tree: QueryNode, node: QueryNode, oldText: String, plugin: GrammarPlugin): Null<Span> {
-		final span: Null<Span> = node.span;
-		if (span == null || oldText.length == 0) return null;
-		final group: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+		final group: Null<Span> = cutRegion(source, tree, node, plugin);
+		if (group == null || oldText.length == 0) return null;
 		final slice: String = source.substring(group.from, group.to);
 		final found: LocatedFrom = locateWithOwnDoc(source, slice, group, oldText, node.kind, '', false, plugin);
 		if (found.located.error != null) return null;
 		final range: Located = found.located.ranges[0];
 		return new Span(found.base + range.from, found.base + range.to);
+	}
+
+	/**
+	 * The declaration's slice a fragment of `node` is looked for in: the node with its own modifiers and metadata, which can
+	 * start before the node's span; null for a node without a span.
+	 */
+	public static function cutRegion(source: String, tree: QueryNode, node: QueryNode, plugin: GrammarPlugin): Null<Span> {
+		final span: Null<Span> = node.span;
+		return span == null ? null : ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
 	}
 
 	/**

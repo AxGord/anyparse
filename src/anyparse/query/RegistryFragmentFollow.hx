@@ -70,8 +70,8 @@ final class RegistryFragmentFollow {
 			notes.push('arm ${record.name}: "${record.type}#$member" is not one declaration on both sides of the rewrite — re-aim it');
 			return;
 		}
-		final oldSpan: Null<Span> = before[0].span;
-		final newSpan: Null<Span> = after[0].span;
+		final oldSpan: Null<Span> = Patch.cutRegion(module.source, module.tree, before[0], plugin);
+		final newSpan: Null<Span> = Patch.cutRegion(module.newSource, module.newTree, after[0], plugin);
 		if (oldSpan == null || newSpan == null) return;
 		final now: String = module.newSource.substring(newSpan.from, newSpan.to);
 		final maps: Array<Array<Int>> = alignments(module.source.substring(oldSpan.from, oldSpan.to), now);
@@ -149,14 +149,6 @@ final class RegistryFragmentFollow {
 		return located != null && splices(rewrite.module.newSource, located, replace, rewrite.plugin);
 	}
 
-	/** Every position an old boundary can land on: both sides of text inserted there, under each alignment, ascending. */
-	private static function boundaries(maps: Array<Array<Int>>, at: Int, end: Int): Array<Int> {
-		final out: Array<Int> = [];
-		for (map in maps) for (p in [startOf(map, at, end), endOf(map, at)]) if (!out.contains(p)) out.push(p);
-		out.sort((a, b) -> a - b);
-		return out;
-	}
-
 	/** Where a cut starting at `at` now starts: text the rewrite put at the boundary stays outside the cut. */
 	private static function startOf(map: Array<Int>, at: Int, end: Int): Int {
 		for (k in at ... map.length) if (map[k] >= 0) return map[k];
@@ -197,7 +189,11 @@ final class RegistryFragmentFollow {
 		return null;
 	}
 
-	/** A replace with what it shares with its find in the new spelling, each boundary choice; the replace as written last. */
+	/**
+	 * A replace with what it shares with its find in the new spelling, each boundary choice; the replace as written last.
+	 * A shared part ends and starts as a cut does, so a separator the rewrite replaced at its edge (a space become a line
+	 * break) comes with it and the two parts never join.
+	 */
 	private static function replacesOf(
 		find: String, replace: String, from: Int, fit: Array<Int>, writtenLength: Int, newFrom: Int, newTo: Int, rewrite: Rewrite
 	): Array<String> {
@@ -207,11 +203,13 @@ final class RegistryFragmentFollow {
 		final now: String = rewrite.now;
 		final ends: Array<Int> = prefix == 0
 			? [newFrom]
-			: boundaries(rewrite.maps, from + startOf(fit, prefix, writtenLength), now.length).filter(p -> p >= newFrom && p <= newTo);
+			: cutBoundaries(
+				rewrite.maps, from + startOf(fit, prefix, writtenLength), now.length, false
+			).filter(p -> p >= newFrom && p <= newTo);
 		final tails: Array<Int> = suffix == 0
 			? [newTo]
-			: boundaries(
-				rewrite.maps, from + startOf(fit, find.length - suffix, writtenLength), now.length
+			: cutBoundaries(
+				rewrite.maps, from + startOf(fit, find.length - suffix, writtenLength), now.length, true
 			).filter(p -> p >= newFrom && p <= newTo);
 		tails.reverse();
 		final out: Array<String> = [

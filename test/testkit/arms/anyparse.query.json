@@ -16026,7 +16026,7 @@
 		{
 			"name": "M-REGISTRY-FOLLOW-BOUNDARY-TAKES-INSERTED",
 			"type": "anyparse.query.RegistryFragmentFollow",
-			"method": "boundaries",
+			"method": "cutBoundaries",
 			"find": "[startOf(map, at, end), endOf(map, at)]",
 			"replace": "[endOf(map, at)]",
 			"note": "a delimiter inserted exactly at a boundary can no longer join the cut"
@@ -16426,6 +16426,30 @@
 			"find": "identKind != null && node.kind == identKind",
 			"replace": "node.name != null",
 			"note": "any named node counts as an identifier reference, so `$xs.map($p -> $p)` matches `xs.map(p -> new p())`"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-SHARED-EDGE-REPLACED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "startOf(fit, prefix, writtenLength), now.length, false",
+			"replace": "startOf(fit, prefix, writtenLength), now.length, true",
+			"note": "a shared prefix whose last separator the rewrite replaced ends before the replacement, so the replace joins two tokens"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-ALIGNS-WITH-METADATA",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "followRecord",
+			"find": "Patch.cutRegion(module.source, module.tree, before[0], plugin)",
+			"replace": "before[0].span",
+			"note": "the member before the rewrite is aligned without its metadata, so a find over a constructor's metadata cannot be aligned"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-SHARED-SUFFIX-EDGE-REPLACED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "startOf(fit, find.length - suffix, writtenLength), now.length, true",
+			"replace": "startOf(fit, find.length - suffix, writtenLength), now.length, false",
+			"note": "a shared suffix whose first separator the rewrite replaced starts after the replacement, so the replace joins two tokens"
 		}
 	]
 }
