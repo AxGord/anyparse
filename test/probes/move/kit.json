@@ -2457,6 +2457,36 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "G1",
+			"note": "dest whose whole body sits in one #if: the moved type joins the region its carried import lives in",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Host.hx",
+				"--select",
+				"ClassDecl:Moved",
+				"src/r/Dest.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/Host.hx": "package p;\n\nimport haxe.Json;\n\nclass Host {}\n\nclass Moved {\n\tpublic function new() {}\n\n\tpublic static function read(s: String): Dynamic return Json.parse(s);\n}\n",
+				"src/r/Dest.hx": "package r;\n\n#if foo\nimport haxe.Json;\n\nclass Dest {}\n#end\n",
+				"main/Main.hx": "class Main {\n\tstatic function main() {\n\t\t#if foo\n\t\tr.Dest.Moved.read(\"1\");\n\t\t#end\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "031ac0a651595a2b",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

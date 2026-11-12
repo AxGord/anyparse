@@ -16631,6 +16631,14 @@
 			"find": "&& !m.hasGetter",
 			"replace": "&& true",
 			"note": "a property with a getter reads as a plain field, so a copy of it is rewritten into repeated calls of the getter"
+		},
+		{
+			"name": "M-MOVE-TYPE-GUARDED-DEST-SEATS-AT-EOF",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "guardCloseSeat",
+			"find": "== '#end' ? lineStart : -1",
+			"replace": "== '#end' ? -1 : -1",
+			"note": "a type moved into a module whose whole body sits in one #if region is seated after that region's #end, so it is outside the guard its carried import was written into"
 		}
 	]
 }

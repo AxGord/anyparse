@@ -739,7 +739,7 @@ class MoveSymbolSliceTest extends Test {
 			{ file: 'p/Host.hx', source: 'package p;\n\n#if js\nclass Host {}\n#end\n' }
 		]);
 		Assert.equals(
-			'package p;\n\n#if js\nimport q.Dep;\n\nclass Host {}\n#end\n\nclass Mover {\n\tvar d:Dep;\n}\n',
+			'package p;\n\n#if js\nimport q.Dep;\n\nclass Host {}\n\nclass Mover {\n\tvar d:Dep;\n}\n#end\n',
 			changeFor(changes, 'p/Host.hx').newSource
 		);
 	}

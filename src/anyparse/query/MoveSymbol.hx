@@ -807,6 +807,14 @@ final class MoveSymbol {
 			return edits;
 		}
 		if (carriedEdit != null) edits.push(carriedEdit);
+		final guardClose: Int = guardCloseSeat(destSource, trimmedEnd, plugin);
+		if (guardClose >= 0) {
+			// The destination's whole body is one `#if` region that ends the file: the declaration joins it, beside
+			// the imports the carry wrote into that region, instead of landing past its `#end` where they are not in scope.
+			final bodyEnd: Int = trimTrailingNewlines(destSource.substring(0, guardClose));
+			edits.push({ span: new Span(bodyEnd, guardClose), text: '\n\n$decl\n' });
+			return edits;
+		}
 		// Replace the trailing-newline region with: separator + decl + that EOF run.
 		edits.push({ span: new Span(trimmedEnd, destSource.length), text: '$sep$decl$eof' });
 
@@ -1450,6 +1458,20 @@ final class MoveSymbol {
 		imports.sort((a, b) -> ImportOrder.compare(ascii, plainImportPath(a) ?? a, plainImportPath(b) ?? b));
 		final head: Array<String> = imports.length > 0 && usings.length > 0 ? imports.concat(['']) : imports;
 		return head.concat(usings).concat(blocks);
+	}
+
+	/**
+	 * The line start of the `#end` that closes the region guarding the destination's WHOLE body, when that region
+	 * ends the file (`trimmedEnd` is the end of its last non-newline character); -1 for any other destination,
+	 * which keeps the plain end-of-file seat. The region is the one `ModuleScan.guardedBodyRegion` names.
+	 */
+	private static function guardCloseSeat(source: String, trimmedEnd: Int, plugin: GrammarPlugin): Int {
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		final region: Null<QueryNode> = tree == null ? null : ModuleScan.guardedBodyRegion(tree, source, plugin);
+		final span: Null<Span> = region?.span;
+		if (span == null || span.to != trimmedEnd) return -1;
+		final lineStart: Int = source.lastIndexOf('\n', trimmedEnd - 1) + 1;
+		return lineStart > span.from && source.substring(lineStart, trimmedEnd).trim() == '#end' ? lineStart : -1;
 	}
 
 }
