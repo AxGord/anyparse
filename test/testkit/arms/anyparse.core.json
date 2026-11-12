@@ -439,14 +439,6 @@
 			"note": "the walk descends fit bodies whatever the caller asked"
 		},
 		{
-			"name": "M-WIDTH-RULE-DECISION-UNREAD",
-			"type": "anyparse.core.BreakCommits",
-			"method": "decisionMapped",
-			"find": "f(brk, b -> Group(IfWidthExceeds(n, b, flat)));",
-			"replace": "null;",
-			"note": "a literal broken by a lineLength rule is no width decision to the shared reader, so its comprehension body stays glued and the next write moves it Allman"
-		},
-		{
 			"name": "M-TCO-OVERWIDE-CODE-MOVED",
 			"type": "anyparse.core.Renderer",
 			"method": "pushTrailingCommentChoice",

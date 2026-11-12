@@ -297,14 +297,6 @@
 			"note": "the space is dropped also before a body that only ends in the decision (a nested `for`), gluing `)for` in the offered layout"
 		},
 		{
-			"name": "M-WIDTH-RULE-TAIL-UNREAD",
-			"type": "anyparse.format.BodyAllman",
-			"method": "tailBreak",
-			"find": "Doc.Group(Doc.IfWidthExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
-			"replace": "Doc.Group(Doc.IfLineExceeds(_, Doc.LeadingBreak(cols, brk, token), _)) if (token != null):",
-			"note": "the Allman break of a lineLength-rule literal is not offered to its one-item list, which stays laddered where the next write cuddles"
-		},
-		{
 			"name": "M-BODY-EDGE-STATED-IGNORED",
 			"type": "anyparse.format.MemberGap",
 			"method": "bodyEdge",

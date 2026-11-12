@@ -37,9 +37,7 @@ final class HxObjectLitLineLengthRuleFixedPointTest extends Test {
 	}
 
 	/** One write is a fixed point within the limit at every width. */
-	@:pin('control')
-	@:killer('M-WIDTH-RULE-DECISION-UNREAD')
-	@:killer('M-WIDTH-RULE-TAIL-UNREAD')
+	@:pin('guard')
 	public function testAWidthRuleLiteralInAComprehensionSettlesInOneWrite(): Void {
 		for (k in 1...MAX_K + 1) {
 			final src: String = 'class M {\n\tfunction f() {\n\t\tvar y = [for (t in xs) {alpha: t.aaaaaaaaaaaaaaaaaaaaaaa, '
