@@ -2293,6 +2293,37 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "D-JBC-STDLIB-ARGUMENT-JOINS",
+			"note": "a Math static, a String method and a StringTools result read shared by both branches are each proven transparent under the std the run resolves, so every branch pair is reported",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"join-branch-call",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function h(a:Dynamic, b:Int):Void {\n\t\tSys.println(a + \":\" + b);\n\t}\n\n\tstatic function f(c:Bool, n:Float):Void {\n\t\tif (c) h(Math.abs(n), 1); else h(Math.abs(n), 2);\n\t}\n\n\tstatic function g(c:Bool, s:String):Void {\n\t\tif (c) h(s.charCodeAt(0), 1); else h(s.charCodeAt(0), 2);\n\t}\n\n\tstatic function k(c:Bool, s:String):Void {\n\t\tif (c) h(StringTools.trim(s).length, 1); else h(StringTools.trim(s).length, 2);\n\t}\n\n\tstatic function main() {\n\t\tf(true, -1.5);\n\t\tg(false, \"a\");\n\t\tk(true, \" ab \");\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "c17171f3d8f6d9da",
+				"err": "34e561e7866bbea1",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

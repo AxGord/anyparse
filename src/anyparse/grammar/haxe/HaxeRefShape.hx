@@ -1186,7 +1186,30 @@ final class HaxeRefShape {
 			'Reflect.fields' => 'Array<String>',
 			'Type.getInstanceFields' => 'Array<String>',
 			'Type.getClassFields' => 'Array<String>',
-			'Type.getEnumConstructs' => 'Array<String>'
+			'Type.getEnumConstructs' => 'Array<String>',
+			// The transparent `Std` / `StringTools` / `Path` statics that answer a `String` (`StdlibPurity.answersString`).
+			'Std.string' => 'String',
+			'StringTools.trim' => 'String',
+			'StringTools.ltrim' => 'String',
+			'StringTools.rtrim' => 'String',
+			'StringTools.lpad' => 'String',
+			'StringTools.rpad' => 'String',
+			'StringTools.replace' => 'String',
+			'StringTools.hex' => 'String',
+			'StringTools.urlEncode' => 'String',
+			'StringTools.urlDecode' => 'String',
+			'StringTools.htmlEscape' => 'String',
+			'StringTools.htmlUnescape' => 'String',
+			'StringTools.quoteUnixArg' => 'String',
+			'StringTools.quoteWinArg' => 'String',
+			'Path.join' => 'String',
+			'Path.directory' => 'String',
+			'Path.extension' => 'String',
+			'Path.withoutExtension' => 'String',
+			'Path.withoutDirectory' => 'String',
+			'Path.normalize' => 'String',
+			'Path.addTrailingSlash' => 'String',
+			'Path.removeTrailingSlash' => 'String'
 		];
 		// `haxe.ds.Map`'s abstract wrappers carry no return annotation (`public inline
 		// function exists(key:K) return this.exists(key);`), so no resolution scope can read

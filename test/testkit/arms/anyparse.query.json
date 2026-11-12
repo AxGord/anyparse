@@ -11378,7 +11378,7 @@
 			"name": "M-STD-SHADOW-IGNORED",
 			"type": "anyparse.query.StdlibPurity",
 			"method": "calleePurity",
-			"find": "&& !index.refs.declaresName(typeName)",
+			"find": "&& !NominalTypes.shadowedByNonStdType(index, typeName)",
 			"replace": "",
 			"note": "a project type named `Std` passes for the std one, so its arbitrary `Std.int` is hoisted and a dead store of it deleted"
 		},
@@ -16647,6 +16647,38 @@
 			"find": "inherited && !trustBuild &&",
 			"replace": "inherited &&",
 			"note": "a member an inherited build declarer writes reads as unknown for a reader that trusts the declaration, so a read through this is impure while the bare spelling is not"
+		},
+		{
+			"name": "M-STDLIB-STATIC-SHADOW-COUNTS-STD",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": "!NominalTypes.shadowedByNonStdType(index, typeName)",
+			"replace": "!index.refs.declaresName(typeName)",
+			"note": "the std's own indexed `Math` / `StringTools` shadows the static again, so under a resolution scope no stdlib static is transparent and a shared `Math.abs(n)` argument stays unjoined"
+		},
+		{
+			"name": "M-STDLIB-STATIC-SHADOW-IGNORED",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": "!NominalTypes.shadowedByNonStdType(index, typeName)",
+			"replace": "true",
+			"note": "a project type named `Math` / `StringTools` no longer shadows the stdlib static, so its own `abs` / `trim` is taken for the transparent one and the branches join"
+		},
+		{
+			"name": "M-STDLIB-STRING-RECEIVER-IDENT-ONLY",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "calleePurity",
+			"find": ": isStringReceiver != null && isStringReceiver(receiver)",
+			"replace": ": false",
+			"note": "a `String` method is transparent only on an identifier declared `String`, so `u.t.toUpperCase()` on a typed field of a typedef or class stays unjoined"
+		},
+		{
+			"name": "M-STDLIB-ANSWERS-STRING-STATIC-ONLY",
+			"type": "anyparse.query.StdlibPurity",
+			"method": "answersString",
+			"find": ": shape.stringLiteralMethodReturns?.get(callNode.children[0].name ?? '') == STRING_TYPE",
+			"replace": ": false",
+			"note": "only a tabled static answers a String, so a String method on a type-rooted field (`K.name.toUpperCase().length`) has no known result type and stays unjoined"
 		}
 	]
 }

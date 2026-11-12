@@ -70,9 +70,9 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals('<0 edits>', fixText(wrap('Std.string(o.f)')));
 	}
 
-	/** The outer call's argument is a call whose type this fixture proves nothing about, so the proven inner one is rewritten. */
+	/** The inner `Std.string` is a tabled static answering a `String`: the outer call is rewritten, the inner is its interpolated part. */
 	public function testFixNested(): Void {
-		Assert.equals("'$y'", fixText(body('var y: Int = 1;\n\t\tvar x = Std.string(Std.string(y));')));
+		Assert.equals("'${Std.string(y)}'", fixText(body('var y: Int = 1;\n\t\tvar x = Std.string(Std.string(y));')));
 	}
 
 	public function testFieldAccessInNullCheckedBranchNotFlagged(): Void {

@@ -21,6 +21,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 @:nullSafety(Strict)
 final class StdlibPurity {
 
+	private static final STRING_TYPE: String = 'String';
+
 	/** The one effect-free `String` method that is not transparent: it answers a FRESH, mutable array. */
 	private static final SPLIT_METHOD: String = 'split';
 
@@ -127,12 +129,31 @@ final class StdlibPurity {
 	 * Whether `callNode`'s CALLEE is a referentially transparent stdlib function: two calls with the same arguments may
 	 * be computed once, and a discarded one dropped. It answers for the callee ONLY — the arguments are the caller's
 	 * business, so a caller that walks a subtree must recurse into them itself (`Std.int(Math.random())` has a
-	 * transparent callee and an impure argument).
+	 * transparent callee and an impure argument). `isStringReceiver` lets a caller that also proves the RECEIVER pure
+	 * (`PurityScan`) vouch for a `String` method's non-identifier receiver, a typed field read; a caller that does not
+	 * leaves it out, since a deletion walk never asks the receiver.
 	 */
 	public static function isTransparentCallee(
-		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
+		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex,
+		?isStringReceiver: (QueryNode) -> Bool
 	): Bool {
-		return calleePurity(callNode, tree, shape, declaredTypes, index) == StdCallPurity.Transparent;
+		return calleePurity(callNode, tree, shape, declaredTypes, index, isStringReceiver) == StdCallPurity.Transparent;
+	}
+
+	/**
+	 * Whether `callNode` is a transparent stdlib call that answers a `String` — the type a read of its result
+	 * (`StringTools.trim(s).length`) is then known to have, which `PurityScan` cannot place on a call receiver otherwise.
+	 */
+	public static function answersString(
+		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex,
+		?isStringReceiver: (QueryNode) -> Bool
+	): Bool {
+		if (calleePurity(callNode, tree, shape, declaredTypes, index, isStringReceiver) != StdCallPurity.Transparent) return false;
+		// a tabled static is a type's own call, whose shadowing `calleePurity` has already refused; any other callee is a `String` method
+		final tabled: Null<{ typeName: String, returnSource: String }> = NominalTypes.tabledStaticCall(callNode, tree, shape);
+		return tabled != null
+			? tabled.returnSource == STRING_TYPE
+			: shape.stringLiteralMethodReturns?.get(callNode.children[0].name ?? '') == STRING_TYPE;
 	}
 
 	/** Whether `callNode`'s CALLEE is a side-effect-free stdlib function (a discarded call may go); callee only. */
@@ -146,14 +167,16 @@ final class StdlibPurity {
 	 * How far `callNode`'s CALLEE is proven pure, or null when it is not a proven stdlib function at all. A STATIC callee
 	 * requires: a field access `Type.method` whose flattened `Type.method` names a `TRANSPARENT_STATICS` entry
 	 * (`Transparent`) or an `EFFECT_FREE_STATICS` one (`EffectFree`); a receiver that is a genuine type / package
-	 * reference (`TypeResolver.receiverRootIsUnboundType`); and no project type declaring the simple type name
-	 * (`index.refs.declaringFiles` empty). A `String` METHOD qualifies on an identifier DECLARED `String`
-	 * (`declaredTypes` at its binding — a `Null<String>` reads `Null` and is refused) when no project type shadows
+	 * reference (`TypeResolver.receiverRootIsUnboundType`); and no type outside the std declaring the simple type name
+	 * (`NominalTypes.shadowedByNonStdType`: the std itself is indexed under a resolution scope). A `String` METHOD
+	 * qualifies on an identifier DECLARED `String` (`declaredTypes` at its binding — a `Null<String>` reads `Null` and is
+	 * refused), or on a receiver `isStringReceiver` vouches for, when no project type shadows
 	 * `String`; an instance field wins over a `using` extension of the same name, so the method IS the std one, and a
 	 * null receiver's throw is the exposure `TypeResolver.isPlainFieldRead` already accepts.
 	 */
 	private static function calleePurity(
-		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
+		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex,
+		?isStringReceiver: (QueryNode) -> Bool
 	): Null<StdCallPurity> {
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (fieldAccessKind == null || callNode.children.length == 0) return null;
@@ -162,14 +185,21 @@ final class StdlibPurity {
 		final method: String = callee.name ?? '';
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
-		if (typeName != null && TypeResolver.receiverRootIsUnboundType(receiver, tree, shape) && !index.refs.declaresName(typeName)) {
+		if (
+			typeName != null
+			&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
+			&& !NominalTypes.shadowedByNonStdType(index, typeName)
+		) {
 			final qualified: String = '$typeName.$method';
 			if (TRANSPARENT_STATICS.contains(qualified)) return StdCallPurity.Transparent;
 			if (EFFECT_FREE_STATICS.contains(qualified)) return StdCallPurity.EffectFree;
 		}
 		if (!TRANSPARENT_STRING_METHODS.contains(method) && method != SPLIT_METHOD) return null;
 		final from: Null<Int> = TypeResolver.identBindingFrom(receiver, tree, shape);
-		return if (from == null || declaredTypes[from] != 'String' || NominalTypes.shadowedByNonStdType(index, 'String'))
+		final stringReceiver: Bool = from != null
+			? declaredTypes[from] == STRING_TYPE
+			: isStringReceiver != null && isStringReceiver(receiver);
+		return if (!stringReceiver || NominalTypes.shadowedByNonStdType(index, STRING_TYPE))
 			null
 		else if (method == SPLIT_METHOD)
 			StdCallPurity.EffectFree

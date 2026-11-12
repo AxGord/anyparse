@@ -136,7 +136,20 @@ final class PurityScan {
 	 * function, a complex receiver) is unproven and therefore impure.
 	 */
 	private static inline function isPureCall(call: QueryNode, ctx: PurityCtx): Bool {
-		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.report);
+		return StdlibPurity.isTransparentCallee(call, ctx.root, ctx.shape, ctx.declaredTypes, ctx.report, r -> readsStringField(r, ctx));
+	}
+
+	/**
+	 * Whether `recv` is a field read whose member the index declares plainly typed `String` — the receiver of a `String`
+	 * method `StdlibPurity` takes on this scan's word, since `isPure` asks the receiver read itself next.
+	 */
+	private static function readsStringField(recv: QueryNode, ctx: PurityCtx): Bool {
+		final host: Null<QueryNode> = recv.kind == ctx.fieldAccessKind ? recv.children[0] : null;
+		final member: Null<String> = recv.name;
+		final hostType: Null<String> = host == null ? null : receiverTypeName(host, ctx);
+		return member != null
+			&& hostType != null
+			&& ctx.index.typing.members.memberTypeSourceOf(ctx.index.refs.aliasedName(hostType), member) == 'String';
 	}
 
 	/**
@@ -186,9 +199,14 @@ final class PurityScan {
 	/**
 	 * The type name a receiver read denotes: a value's declared type, a member of the enclosing type read with no self
 	 * reference (inherited ones too), the type a path spells, or the type a binding written with none is bound to (a loop
-	 * binder's element, a lambda parameter's expected type: `boundReceiverType`); null when none is known.
+	 * binder's element, a lambda parameter's expected type: `boundReceiverType`), `String` for a transparent stdlib call that
+	 * answers one; null when none is known.
 	 */
 	private static function receiverTypeName(recv: QueryNode, ctx: PurityCtx): Null<String> {
+		if (recv.kind == ctx.callKind)
+			return StdlibPurity.answersString(recv, ctx.root, ctx.shape, ctx.declaredTypes, ctx.report, r -> readsStringField(r, ctx))
+				? 'String'
+				: null;
 		final path: Null<Array<String>> = NominalTypes.pathOf(recv, ctx.identKind, ctx.fieldAccessKind);
 		if (path == null) return null;
 		final rootType: Null<String> = NominalTypes.pathRootTypeName(recv, ctx.root, ctx.receiverTypes, ctx.shape);

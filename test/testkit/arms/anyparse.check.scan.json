@@ -1658,6 +1658,30 @@
 			"find": "memberGetter(owner, name) != true",
 			"replace": "memberGetter(owner, name) == false",
 			"note": "a bare member an inherited build declarer writes reads as a possible getter when the index cannot place it, so its branches stay apart"
+		},
+		{
+			"name": "M-PURITY-CALL-RECEIVER-UNTYPED",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "receiverTypeName",
+			"find": "StdlibPurity.answersString(recv, ctx.root, ctx.shape, ctx.declaredTypes, ctx.report, r -> readsStringField(r, ctx))",
+			"replace": "false",
+			"note": "a transparent stdlib call has no known result type, so a read of it (`StringTools.trim(s).length`) may run a getter and the branches sharing it stay unjoined"
+		},
+		{
+			"name": "M-PURITY-STRING-FIELD-RECEIVER-UNVOUCHED",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isPureCall",
+			"find": "ctx.report, r -> readsStringField(r, ctx))",
+			"replace": "ctx.report)",
+			"note": "the scan vouches for no typed-field receiver of a `String` method, so `u.t.toUpperCase()` stays impure and unjoined"
+		},
+		{
+			"name": "M-PURITY-CALLEE-RECEIVER-UNASKED",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "isPure",
+			"find": "c.children.foreach(r -> isPure(r, ctx))",
+			"replace": "true",
+			"note": "the receiver of a transparent callee is no longer asked, so a typed field whose getter runs code is taken for pure and joined"
 		}
 	]
 }
