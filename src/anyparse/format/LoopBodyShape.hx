@@ -8,7 +8,8 @@ package anyparse.format;
  * `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (the fields
  * carrying `@:fmt(loopBodyIfElseNext(...))`). It answers ONE question no body
  * PLACEMENT can ask for itself: is the statement about to be glued to the loop
- * header an `if` that carries an `else`? Its answer substitutes
+ * header an `if` that carries an `else`? `@:fmt(statementIfBody(...))` asks it of a
+ * function body, to mark that `if` a statement. Its answer substitutes
  * `BodyPolicy.Next` for the placement in `WriterBodyPolicyLowering.`
  * `buildBodyCoreWrap`, upstream of every layout, so `same` and `keep` obey it
  * exactly as `fitLine` does.

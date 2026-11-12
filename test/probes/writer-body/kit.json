@@ -61,7 +61,9 @@
 		"typecolon/Probe.hx": "typedef F = (?call:Int, x:String, Int) -> Bool;\ntypedef G<T:A & B> = T;\n",
 		"typecolon/hxformat.json": "{\"whitespace\": {\"arrowParamColonPolicy\": \"after\", \"typeParamConstraintColonPolicy\": \"around\"}}",
 		"if-chain-ladder/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true, \"fitLineBodyGlue\": true}}\n",
-		"if-chain-ladder/R1.hx": "class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tx();\n\t\t\ty();\n\t\t} else b();\n\t\tif (a) b(); else {\n\t\t\tx();\n\t\t\ty();\n\t\t}\n\t}\n\tfunction nestedElse() {\n\t\tif (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n\t\telse for (i in xs) if (b) y(); else z();\n\t}\n\tfunction nestedThenSeparateChain() {\n\t\tif (a) for (i in xs) {\n\t\t\tif (b) y(); else z();\n\t\t} else w();\n\t}\n\tfunction trailingComment() {\n\t\tif (a) x(); // note\n\t\telse y();\n\t}\n\tfunction ownLine() {\n\t\tif (retryCount == 0) attachCollectedLabel(defaultPreviewSurface, 'some long labelxx');\n\t\telse b();\n\t}\n\tfunction value() {\n\t\tvar v = if (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument) else b;\n\t}\n\tfunction elseIfNested() {\n\t\tif (a) x(); else if (b) for (i in xs) if (c) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother); else q(); else r();\n\t}\n}\n"
+		"if-chain-ladder/R1.hx": "class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tx();\n\t\t\ty();\n\t\t} else b();\n\t\tif (a) b(); else {\n\t\t\tx();\n\t\t\ty();\n\t\t}\n\t}\n\tfunction nestedElse() {\n\t\tif (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n\t\telse for (i in xs) if (b) y(); else z();\n\t}\n\tfunction nestedThenSeparateChain() {\n\t\tif (a) for (i in xs) {\n\t\t\tif (b) y(); else z();\n\t\t} else w();\n\t}\n\tfunction trailingComment() {\n\t\tif (a) x(); // note\n\t\telse y();\n\t}\n\tfunction ownLine() {\n\t\tif (retryCount == 0) attachCollectedLabel(defaultPreviewSurface, 'some long labelxx');\n\t\telse b();\n\t}\n\tfunction value() {\n\t\tvar v = if (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument) else b;\n\t}\n\tfunction elseIfNested() {\n\t\tif (a) x(); else if (b) for (i in xs) if (c) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother); else q(); else r();\n\t}\n}\n",
+		"ladder-every-statement/T.hx": "class T {\n\tfunction f(k:Int, xs:Array<Int>) {\n\t\tswitch k {\n\t\t\tcase 1: if (c) a(); else b();\n\t\t\tdefault: for (i in xs) { if (c) a(); else b(); }\n\t\t}\n\t}\n\n\tfunction h() if (c) a(); else b();\n\n\tfunction g() if (a) x() else if (b) y();\n}\n",
+		"ladder-every-statement/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true}}"
 	},
 	"invocations": [
 		{
@@ -679,6 +681,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "3f7fe3f6fae49ad7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "ladder-every-statement/T.hx",
+			"note": "under fitLine an if with an else ladders in every statement position: a statement-switch case tail, a loop block that is that tail, a function body, and a function-body else-if chain whose last link has no else (the base kept them inline or half-laddered)",
+			"fixpoint": "ladder-every-statement/T.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"ladder-every-statement/T.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "94ca850c680c634f",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

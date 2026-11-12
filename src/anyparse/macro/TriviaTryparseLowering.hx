@@ -1198,13 +1198,17 @@ final class TriviaTryparseLowering {
 			final caseTailBarrier: Expr = WriterLowering.astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
 			// omega-stmt-list-callarg-barrier: every element, tail included.
 			final stmtOptExpr: Expr = WriterOptFanout.statementListElemOpt(macro _writerOpt);
+			final tailOptExpr: Expr = macro (
+				$caseTailBarrier && !opt._inExprPosition && (
+					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
+				) ? _clearExprPosition($stmtOptExpr) : $stmtOptExpr
+			);
+			// The tail of a STATEMENT-switch case (incoming frame false) is no value whatever frame it was handed:
+			// `_statementFrame` says so to everything below it until a value site of its own resets the frame.
 			macro (
-				_si == _arr.length - 1 ? (
-					$caseTailBarrier && !opt._inExprPosition && (
-						opt.expressionIfBody == anyparse.format.BodyPolicy.Next
-						|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
-					) ? _clearExprPosition($stmtOptExpr) : $stmtOptExpr
-				) : _clearExprPosition($stmtOptExpr)
+				_si == _arr.length - 1
+					? (opt._inExprPosition ? $tailOptExpr : _setStatementFrame($tailOptExpr))
+					: _clearExprPosition($stmtOptExpr)
 			);
 		} else {
 			macro _writerOpt;

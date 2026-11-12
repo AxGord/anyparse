@@ -1193,9 +1193,11 @@ class WriterLowering {
 			// `elseBranch` is null — mirrors fork's arrow-body / comprehension-
 			// filter-if short-circuits onto `ifBody`. When this flag is set
 			// the field also opts into the `optionalBodyFieldName` channel so
-			// `elseFieldName` is populated regardless of `ifElseLadder`.
+			// `elseFieldName` is populated regardless of `ifElseLadder`. An expression `if`'s ladder
+			// (`exprIfElseLadder`) adds no channel: its bodies name the `else` field to the ladder alone.
 			final fallbackFlag: Null<String> = child.fmtReadString('noSiblingFallback');
-			final elseFieldName: Null<String> = child.fmtHasFlag('ifElseLadder') || fallbackFlag != null ? optionalBodyFieldName : null;
+			final statementLadder: Bool = child.fmtHasFlag('ifElseLadder') && !child.fmtHasFlag('exprIfElseLadder');
+			final elseFieldName: Null<String> = statementLadder || fallbackFlag != null ? optionalBodyFieldName : null;
 			// ω-condwrap-fitline-construct-group: this field consumes the pending
 			// cond iff it is the mandatory bare-Ref bodyPolicy body immediately
 			// following the condWrap field (mirrors emitMandatoryRefField's
@@ -1849,6 +1851,12 @@ typedef WrapBodyOpts = {
 	// `@:fmt(ifElseLadder)` on a statement-`if` branch body: inside an `if` / `else` chain the body's placement is
 	// `Next` (`WriterBodyPolicyLowering.buildIfElseLadderTest`). Null/false → byte-inert.
 	?ifElseLadder: Bool,
+	// `@:fmt(exprIfElseLadder)` beside it: the `if` is an expression, a statement only where `opt._statementFrame` makes it
+	// one (`WriterBodyPolicyLowering.ifElseLadderStatementTest`).
+	?exprIfElseLadder: Bool,
+	// The `else` field whose presence puts a ladder body in a chain, read by the ladder alone: an expression `if`'s
+	// `else` branch leaves `elseFieldName` null, so its FitLine layout keeps reading `fitLineIfWithElse` as before.
+	?ladderElseFieldName: String,
 	?afterKwExpr: Null<Expr>,
 	?kwLeadingExpr: Null<Expr>,
 	?kwPolicyFlagName: Null<String>,

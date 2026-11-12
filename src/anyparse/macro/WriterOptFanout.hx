@@ -261,18 +261,20 @@ final class WriterOptFanout {
 	 */
 	private static function setExprPositionField(
 		optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool, clearsArrowValueIfBlocked: Bool,
-		clearsArrowBodyLead: Bool
+		clearsArrowBodyLead: Bool, clearsStatementFrame: Bool
 	): Field {
 		var guard: Expr = macro o._inExprPosition;
 		if (clearsValueIfBranch) guard = macro $guard && o._literalReflow == anyparse.format.LiteralReflow.Off;
 		if (clearsArrowLambdaBody) guard = macro $guard && !o._inArrowLambdaBody;
 		if (clearsArrowValueIfBlocked) guard = macro $guard && !o._arrowValueIfBlocked;
 		if (clearsArrowBodyLead) guard = macro $guard && !o._arrowBodyLead;
+		if (clearsStatementFrame) guard = macro $guard && !o._statementFrame;
 		final clears: Array<Expr> = [];
 		if (clearsValueIfBranch) clears.push(macro _c._literalReflow = anyparse.format.LiteralReflow.Off);
 		if (clearsArrowLambdaBody) clears.push(macro _c._inArrowLambdaBody = false);
 		if (clearsArrowValueIfBlocked) clears.push(macro _c._arrowValueIfBlocked = false);
 		if (clearsArrowBodyLead) clears.push(macro _c._arrowBodyLead = false);
+		if (clearsStatementFrame) clears.push(macro _c._statementFrame = false);
 		final body: Expr = macro {
 			if ($guard) return o;
 			final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
@@ -468,6 +470,8 @@ final class WriterOptFanout {
 	 * `_setExprPosition`. Returns the input opt unchanged when
 	 * `_inExprPosition` is already `false` (no allocation on non-expr
 	 * descents); otherwise returns a `_copyOpt(o)` with the flag cleared.
+	 * A carried `_statementFrame` goes with the frame it corrected (and the
+	 * pass-through needs both flags already clear).
 	 * Consumed by `triviaBlockStarExpr`'s per-element call when the parent
 	 * Star carries `@:fmt(clearExprPositionNonTail)` (BlockExpr / BlockStmt)
 	 * so the expression-position frame is cleared for every NON-tail block
@@ -476,7 +480,9 @@ final class WriterOptFanout {
 	 * typedef carries `_inExprPosition:Bool` — paired with `_setExprPosition`
 	 * emission.
 	 */
-	private static function clearExprPositionField(optionsCT: ComplexType): Field {
+	private static function clearExprPositionField(optionsCT: ComplexType, clearsStatementFrame: Bool): Field {
+		final guard: Expr = clearsStatementFrame ? macro !o._inExprPosition && !o._statementFrame : macro !o._inExprPosition;
+		final clears: Array<Expr> = clearsStatementFrame ? [macro _c._statementFrame = false] : [];
 		return {
 			name: '_clearExprPosition',
 			access: [APrivate, AStatic],
@@ -484,9 +490,10 @@ final class WriterOptFanout {
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
-					if (!o._inExprPosition) return o;
+					if ($guard) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inExprPosition = false;
+					$b{clears};
 					return _c;
 				}
 			}),
@@ -1244,10 +1251,14 @@ final class WriterOptFanout {
 		final hasArrowValueIfBlocked: Bool = optionsHasField(optionsTypePath, '_arrowValueIfBlocked');
 		final hasArrowBodyLead: Bool = optionsHasField(optionsTypePath, '_arrowBodyLead');
 		fields.push(clearArrowBodyLeadField(optionsCT, hasArrowBodyLead));
+		final hasStatementFrame: Bool = optionsHasField(optionsTypePath, '_statementFrame');
 		if (optionsHasInExprPosition(optionsTypePath)) {
-			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody, hasArrowValueIfBlocked, hasArrowBodyLead));
-			fields.push(clearExprPositionField(optionsCT));
+			fields.push(setExprPositionField(
+				optionsCT, hasValueIfBranch, hasArrowLambdaBody, hasArrowValueIfBlocked, hasArrowBodyLead, hasStatementFrame
+			));
+			fields.push(clearExprPositionField(optionsCT, hasStatementFrame));
 		}
+		if (hasStatementFrame) fields.push(setStatementFrameField(optionsCT));
 		if (hasArrowValueIfBlocked) fields.push(setArrowValueIfBlockedField(optionsCT));
 
 		if (optionsHasField(optionsTypePath, '_arrowValueIfElemTrailComment')) fields.push(setArrowValueIfElemTrailCommentField(optionsCT));
@@ -1577,6 +1588,29 @@ final class WriterOptFanout {
 					if (o._metaChain == v) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._metaChain = v;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * Opt-fanout setter for `_statementFrame`: the code below stands as a statement whatever the expression frame says.
+	 * Set on the tail of a statement-switch case and by `@:fmt(statementIfBody(...))`; idempotent, allocation-free when
+	 * the flag is already set. Emitted only when the opt typedef carries `_statementFrame:Bool`.
+	 */
+	private static function setStatementFrameField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setStatementFrame',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
+				ret: optionsCT,
+				expr: macro {
+					if (o._statementFrame) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._statementFrame = true;
 					return _c;
 				}
 			}),

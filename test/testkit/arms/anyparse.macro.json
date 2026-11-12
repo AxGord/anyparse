@@ -2988,9 +2988,81 @@
 			"name": "M-IF-ELSE-LADDER-IN-EXPR",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildIfElseLadderTest",
-			"find": "macro (!opt._inExprPosition && $inChain)",
-			"replace": "inChain",
+			"find": "return macro ($statement && $inChain)",
+			"replace": "return inChain",
 			"note": "a statement if in expression position ladders too, so a block's value tail if leaves its expression-knob placement"
+		},
+		{
+			"name": "M-CASE-TAIL-STATEMENT-FRAME-OFF",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseElemCallExprs",
+			"find": "_setStatementFrame($tailOptExpr)",
+			"replace": "$tailOptExpr",
+			"note": "the tail of a statement-switch case keeps only its force-propagated frame, so its if / else (and one in a loop body under it) stays inline"
+		},
+		{
+			"name": "M-CASE-TAIL-STATEMENT-FRAME-ALWAYS",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseElemCallExprs",
+			"find": "(opt._inExprPosition ? $tailOptExpr : _setStatementFrame($tailOptExpr))",
+			"replace": "_setStatementFrame($tailOptExpr)",
+			"note": "a value-switch case tail is marked a statement too, so its if / else ladders"
+		},
+		{
+			"name": "M-STATEMENT-FRAME-SURVIVES-VALUE-SITE",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "setExprPositionField",
+			"find": "if (clearsStatementFrame) clears.push(macro _c._statementFrame = false);",
+			"replace": "final _cut: Bool = clearsStatementFrame;",
+			"note": "a value site under a statement-case tail keeps the statement frame, so a block that is a variable's value ladders its tail if / else"
+		},
+		{
+			"name": "M-STATEMENT-IF-BODY-OFF",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "statementIfBodyOpt",
+			"find": "return macro ($probe ? _setStatementFrame(_clearExprPosition($e, opt), opt) : $e);",
+			"replace": "return e;",
+			"note": "a function body that is an if / else is not marked a statement, so its branches keep the expression placement"
+		},
+		{
+			"name": "M-STATEMENT-IF-BODY-KEEPS-FRAME",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "statementIfBodyOpt",
+			"find": "_setStatementFrame(_clearExprPosition($e, opt), opt)",
+			"replace": "_setStatementFrame($e, opt)",
+			"note": "a function body keeps the expression frame it was handed, so a local function in a case tail stays inline"
+		},
+		{
+			"name": "M-EXPR-IF-LADDER-WITHOUT-FRAME",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "ifElseLadderStatementTest",
+			"find": "macro (!opt._inExprPosition && opt._statementFrame)",
+			"replace": "macro !opt._inExprPosition",
+			"note": "an expression if ladders wherever the frame is unset, so a throw operand or a condition ladders"
+		},
+		{
+			"name": "M-EXPR-ELSE-IF-LINK-UNMARKED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "optionalRefOptArgExpr",
+			"find": "macro ($statement ? $mark : $e);",
+			"replace": "e;",
+			"note": "an else-if link of an expression if is never marked a chain, so a function body chain without a last else half-ladders"
+		},
+		{
+			"name": "M-EXPR-ELSE-IF-LINK-UNGATED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "optionalRefOptArgExpr",
+			"find": "macro ($statement ? $mark : $e);",
+			"replace": "mark;",
+			"note": "an else-if link of an expression if is marked a chain in a value position too, so a value chain breaks its last link"
+		},
+		{
+			"name": "M-EXPR-LADDER-FEEDS-ELSE-CHANNEL",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "lowerStruct",
+			"find": "final statementLadder: Bool = child.fmtHasFlag('ifElseLadder') && !child.fmtHasFlag('exprIfElseLadder');",
+			"replace": "final statementLadder: Bool = child.fmtHasFlag('ifElseLadder');",
+			"note": "an expression if else branch gets the else channel, so its FitLine layout reads the if as having an else and breaks before the else value"
 		}
 	]
 }

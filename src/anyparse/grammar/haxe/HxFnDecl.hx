@@ -23,6 +23,8 @@ package anyparse.grammar.haxe;
  * policy-aware ` {` / `\n\t{` for `BlockBody`. `HxFnBody` is trivia-bearing (paired type
  * `HxFnBodyT`).
  *
+ * `@:fmt(statementIfBody('IfExpr', 'elseBranch', 'ExprBody'))`: a body that is an `if` with an `else` is a
+ * statement, never a value of the enclosing expression, so that `if` ladders (`HxIfExpr`).
  * `@:fmt(metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))` handles a metadata-prefixed
  * block body — `function f():Ret @:meta { … }`. Such a body parses as
  * `ExprBody(MetaExpr(_, BlockExpr))`, so the default `bodyPolicyForCtor('ExprBody',
@@ -53,6 +55,7 @@ typedef HxFnDecl = {
 	@:lead(':')
 	var returnType: Null<HxType>;
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
-		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
+		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'),
+		statementIfBody('IfExpr', 'elseBranch', 'ExprBody'))
 	var body: HxFnBody;
 }

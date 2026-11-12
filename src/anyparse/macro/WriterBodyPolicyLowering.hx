@@ -1097,16 +1097,28 @@ final class WriterBodyPolicyLowering {
 
 	/**
 	 * The runtime test that a body of `@:fmt(ifElseLadder)` belongs to an `if` / `else` chain of statements: its own `if` has
-	 * an `else` (`elseFieldName`), or it is an `else if` link (`opt._inElseIfBranch`). A field with an expression-position
-	 * knob (`exprFlagName`) leaves the ladder out where that knob places it (`opt._inExprPosition`): there the `if` yields
-	 * a value. Null on any other body field.
+	 * an `else` (`ladderElseFieldName`), or it is an `else if` link (`opt._inElseIfBranch`). A field with an expression-position
+	 * knob (`exprFlagName`) also asks `ifElseLadderStatementTest` whether the `if` stands as a statement here; where it
+	 * yields a value the expression knob places it. Null on any other body field.
 	 */
 	private static function buildIfElseLadderTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
-		final elseFieldName: Null<String> = opts.elseFieldName;
+		final elseFieldName: Null<String> = opts.ladderElseFieldName;
 		if (opts.ifElseLadder != true || elseFieldName == null) return null;
 		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
 		final inChain: Expr = macro ($elseAccess != null || opt._inElseIfBranch);
-		return opts.exprFlagName == null ? inChain : macro (!opt._inExprPosition && $inChain);
+		if (opts.exprFlagName == null) return inChain;
+		final statement: Expr = ifElseLadderStatementTest(opts.exprIfElseLadder == true);
+		return macro ($statement && $inChain);
+	}
+
+	/**
+	 * The one answer to "does this `if` stand as a statement" for the if/else ladder. A statement `if` does outside
+	 * expression position and wherever `opt._statementFrame` overrides a force-propagated frame. An expression `if`
+	 * (`@:fmt(exprIfElseLadder)`) does only where `_statementFrame` says so outside expression position: an unset frame
+	 * is no evidence for it, since a condition or an operand leaves the frame unset too.
+	 */
+	private static function ifElseLadderStatementTest(expressionIf: Bool): Expr {
+		return expressionIf ? macro (!opt._inExprPosition && opt._statementFrame) : macro (!opt._inExprPosition || opt._statementFrame);
 	}
 
 }

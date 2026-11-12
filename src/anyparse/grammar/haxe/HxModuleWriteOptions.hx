@@ -1120,5 +1120,10 @@ final class HxModuleWriteOptions {
 	// "if inside else" clause, so a single-statement `else if (c) stmt;` with no
 	// `else` of its own still goes on its own line. Default false.
 	public var _inElseIfBranch: Bool = false; // noqa: naming
+	// Write-time-only signal: the code here stands as a STATEMENT whatever `_inExprPosition` says. Set on the
+	// tail of a statement-switch case (whose expression frame is force-propagated there) and on a function body
+	// that is an `if` with an `else`; `_setExprPosition` / `_clearExprPosition` drop it, since the frame they set
+	// replaces the one it corrects. Read by the if/else ladder (`buildIfElseLadderTest`). Default false.
+	public var _statementFrame: Bool = false; // noqa: naming
 
 }

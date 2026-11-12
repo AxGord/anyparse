@@ -461,6 +461,8 @@ final class WriterRefFieldLowering {
 				arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
 				ifElseLadder: child.fmtHasFlag('ifElseLadder'),
+				exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
+				ladderElseFieldName: fieldName,
 				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
@@ -537,6 +539,7 @@ final class WriterRefFieldLowering {
 	 * wrap.
 	 */
 	@:access(anyparse.macro.WriterArrowValueIfLowering)
+	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function optionalRefOptArgExpr(ctx: RefFieldCtx, child: ShapeNode, refName: String, elseChainSuppressExpr: Expr): Expr {
 		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
 		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
@@ -559,12 +562,20 @@ final class WriterRefFieldLowering {
 		if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
 		e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 		if (propagateElseIfBranch) {
-			final ifPat: Null<Expr> = findCtorPattern(ctx.ctorPat, refName, 'IfStmt');
+			final stmtPat: Null<Expr> = findCtorPattern(ctx.ctorPat, refName, 'IfStmt');
+			final ifPat: Null<Expr> = stmtPat ?? findCtorPattern(ctx.ctorPat, refName, 'IfExpr');
 			if (ifPat != null) {
 				// else-if -> set; a non-if else-branch (block / simple stmt) must
 				// CLEAR the flag it may have inherited from a preceding chain link
 				// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
-				final setExpr: Expr = macro _setElseIfBranch($e, opt);
+				// An expression `if` link is marked only where it stands as a statement: a value chain keeps its layout.
+				final mark: Expr = macro _setElseIfBranch($e, opt);
+				final setExpr: Expr = if (stmtPat != null) {
+					mark;
+				} else {
+					final statement: Expr = WriterBodyPolicyLowering.ifElseLadderStatementTest(true);
+					macro ($statement ? $mark : $e);
+				};
 				final clearExpr: Expr = macro _clearElseIfBranch($e, opt);
 				e = {
 					expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
@@ -992,7 +1003,9 @@ final class WriterRefFieldLowering {
 			arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 			loopBodyIfElseArgs: loopBodyIfElseArgs,
 			elseSwitchArgs: elseSwitchArgs,
-			ifElseLadder: child.fmtHasFlag('ifElseLadder')
+			ifElseLadder: child.fmtHasFlag('ifElseLadder'),
+			exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
+			ladderElseFieldName: elseFieldName
 		}));
 		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
 		// from HERE, where the field's own meta and its own comment slots are in
@@ -1662,6 +1675,7 @@ final class WriterRefFieldLowering {
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
 			e = reflowCtorOnFitLineOpt(child, fieldAccess, e);
 			if (clearElseIfBranch) e = macro _clearElseIfBranch($e, opt);
+			e = statementIfBodyOpt(child, fieldAccess, e);
 			e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 			e;
 		};
@@ -1981,6 +1995,25 @@ final class WriterRefFieldLowering {
 					: valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
 				beforeLeading: ownGap ? beforeLeadingAccess(fieldName) : macro ([]: Array<String>)
 			};
+	}
+
+	/**
+	 * `@:fmt(statementIfBody('<ifCtor>', '<elseField>'[, '<wrapperCtor>']))`: a body field whose value is an `if` with an
+	 * `else` (`LoopBodyShape.isIfWithElse`) holds it as a statement — a function body's value is never the enclosing
+	 * expression's. The `if` is written outside expression position and under `_statementFrame`, so its branches ladder.
+	 */
+	private static function statementIfBodyOpt(child: ShapeNode, fieldAccess: Expr, e: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('statementIfBody');
+		if (args == null) return e;
+		if (args.length != 2 && args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(statementIfBody(...)) requires (ifCtor, elseField[, wrapperCtor]), got ${args.length} args',
+				Context.currentPos()
+			);
+		final probe: Expr = args.length == 3
+			? macro anyparse.format.LoopBodyShape.isIfWithElse($fieldAccess, $v{args[0]}, $v{args[1]}, $v{args[2]})
+			: macro anyparse.format.LoopBodyShape.isIfWithElse($fieldAccess, $v{args[0]}, $v{args[1]});
+		return macro ($probe ? _setStatementFrame(_clearExprPosition($e, opt), opt) : $e);
 	}
 
 }

@@ -291,6 +291,7 @@ final class WriterFieldSepLowering {
 	 * via `withPadTrailingDrop`. Extracted to keep `sameLineSeparator`
 	 * below the complexity gate.
 	 */
+	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function sameLineSeparatorShapeAware(ctx: FieldSepCtx, c: SameLineShapeAwareCtx): Expr {
 		// ω-expression-case-flat-fanout: shape-aware-break for `else` is
 		// correct only when the child body actually lays out on its own
@@ -319,22 +320,26 @@ final class WriterFieldSepLowering {
 		final childBodyPolicyFlag: Null<String> = childBodyPolicy.stmt;
 		if (childBodyPolicyFlag == null) return withPadTrailingDrop(c.prevPadTrailing, c.shapeAwareSwitch);
 		final stmtBpAccess: Expr = optFieldAccess(childBodyPolicyFlag);
-		// `@:fmt(ifElseLadder)`: outside expression position a brace-less branch before `else` is on its own line whatever
-		// the statement knob says (`buildIfElseLadderTest`), so only the expression knob can still make it inline.
+		// `@:fmt(ifElseLadder)`: where the `if` stands as a statement a brace-less branch before `else` is on its own line
+		// whatever the statement knob says (`buildIfElseLadderTest`), so only the expression knob can still make it inline.
+		// A statement `if` is a value only in expression position, so there the expression knob alone is read.
 		final ladder: Bool = c.child.fmtHasFlag('ifElseLadder');
+		final exprLadder: Bool = c.child.fmtHasFlag('exprIfElseLadder');
 		final bpAccess: Expr = if (childBodyPolicy.expr == null) {
 			stmtBpAccess;
 		} else {
 			final exprBpAccess: Expr = optFieldAccess(childBodyPolicy.expr);
-			ladder ? exprBpAccess : macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
+			ladder && !exprLadder ? exprBpAccess : macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
 		};
 		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-		final isInlineExpr: Expr = if (!ladder)
+		final isInlineExpr: Expr = if (!ladder) {
 			macro $bpAccess == $samePat;
-		else if (childBodyPolicy.expr == null)
+		} else if (childBodyPolicy.expr == null) {
 			macro false;
-		else
-			macro opt._inExprPosition && $bpAccess == $samePat;
+		} else {
+			final statement: Expr = WriterBodyPolicyLowering.ifElseLadderStatementTest(exprLadder);
+			macro !$statement && $bpAccess == $samePat;
+		};
 		// ω-ifelse-semicolon-next-line: when the body is forced inline
 		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
 		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a
