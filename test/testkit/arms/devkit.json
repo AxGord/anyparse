@@ -78,6 +78,86 @@
 			"find": "if (seconds == null || ask.min >= ask.max) return null;",
 			"replace": "if (seconds == null) return '';",
 			"note": "a lease with no curve still sends an empty flag, which the pool refuses with exit 64 and no lease"
+		},
+		{
+			"name": "M-BRANCHES-HEAVY-ASK-CURVE",
+			"type": "devkit.Branches",
+			"method": "heavyAsk",
+			"find": "if (seconds != null) ask.estSeconds = seconds;",
+			"replace": "",
+			"note": "the ask never carries the curve the history knows, so no flag reaches the pool"
+		},
+		{
+			"name": "M-BRANCHES-HISTORY-ASK",
+			"type": "devkit.Branches",
+			"method": "leased",
+			"find": "rest, history, timingKey(label, rows))",
+			"replace": "rest, null, timingKey(label, rows))",
+			"note": "the heavy branch never reads its history, so the pool keeps waiting for its whole share"
+		},
+		{
+			"name": "M-BRANCHES-RECORD-FIT",
+			"type": "devkit.Branches",
+			"method": "record",
+			"find": "|| summary.unfit().length > 0",
+			"replace": "",
+			"note": "a branch with a failed step records its time, and a red run that stopped early reads as the branch's speed"
+		},
+		{
+			"name": "M-LEASEHISTORY-BOUND",
+			"type": "devkit.LeaseHistory",
+			"method": "record",
+			"find": "if (lines.length <= MAX_LINES) return;",
+			"replace": "return;",
+			"note": "the history file is never compacted and grows with every run"
+		},
+		{
+			"name": "M-LEASEHISTORY-FIT-FILL",
+			"type": "devkit.LeaseHistory",
+			"method": "curve",
+			"find": "out[size] = a + b / size;",
+			"replace": "out[size] = 0;",
+			"note": "the sizes never run take no time in the curve, so the pool picks the largest size whatever the measured ones say"
+		},
+		{
+			"name": "M-LEASEHISTORY-KEY",
+			"type": "devkit.LeaseHistory",
+			"method": "keyOf",
+			"find": "RUN_SPECIFIC.replace(label.trim(), '*')",
+			"replace": "label.trim()",
+			"note": "a label keeps its slice id and commit, so no two runs share a key and no history ever builds"
+		},
+		{
+			"name": "M-LEASEHISTORY-MIN-RUNS",
+			"type": "devkit.LeaseHistory",
+			"method": "p90",
+			"find": "if (times.length < MIN_RUNS) return null;",
+			"replace": "if (times.length < 1) return null;",
+			"note": "a size run once or twice takes that run as its time, so one slow run sets the estimate the pool picks a size by"
+		},
+		{
+			"name": "M-LEASEHISTORY-ONE-SIZE-NO-CURVE",
+			"type": "devkit.LeaseHistory",
+			"method": "curve",
+			"find": "if (sizes.length < 2) return null;",
+			"replace": "",
+			"note": "one measured size fits a flat curve through the whole range, so the pool is told every size takes as long as the one that was run"
+		},
+		{
+			"name": "M-LEASEHISTORY-RECENT",
+			"type": "devkit.LeaseHistory",
+			"method": "seconds",
+			"find": "runs[threads] = seen.slice(-RECENT);",
+			"replace": "runs[threads] = seen;",
+			"note": "every run ever recorded counts, so a tree that got faster is estimated by the runs of the tree it was"
+		},
+		{
+			"name": "M-LEASEHISTORY-SERIES-BOUND",
+			"type": "devkit.LeaseHistory",
+			"method": "bounded",
+			"find": "if (count <= RECENT) kept.push(lines[i]);",
+			"replace": "kept.push(lines[i]);",
+			"note": "a compaction keeps every run of a series, so one command run often fills the file with its own past"
 		}
 	]
 }

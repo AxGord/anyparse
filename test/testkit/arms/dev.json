@@ -2786,6 +2786,30 @@
 			"method": "refusal",
 			"force": "null",
 			"note": "a mutation-arm run cut short by its timeout or a signal, or one that printed no row for some arms, writes a verdict that counts every missing arm as held"
+		},
+		{
+			"name": "M-POSTLAND-LEASED-HISTORY",
+			"type": "dev.PostLand",
+			"method": "leased",
+			"find": "Shard.DEFAULT_SHARDS, history,",
+			"replace": "Shard.DEFAULT_SHARDS, null,",
+			"note": "the post-land run never reads its history, so its lease waits for its whole share however the sizes ran before"
+		},
+		{
+			"name": "M-GATE-RECORD-DROPPED",
+			"type": "dev.SliceGate",
+			"method": "runBranch",
+			"note": "a heavy gate branch the pool leased never leaves its time in the lease history, so no curve ever builds from gate runs",
+			"find": "Branches.record(history, 'slice-gate ${Path.withoutDirectory(_gate.tree)}', rows, _gate.options.threads, _gate.summary);",
+			"replace": ""
+		},
+		{
+			"name": "M-GATE-RECORD-HELD",
+			"type": "dev.SliceGate",
+			"method": "runBranch",
+			"note": "a branch that ran on a share of its caller's held lease records that share's time as a pool grant, so the curve mixes sizes the pool never granted",
+			"find": "if (pooled && demand(rows) == null)",
+			"replace": "if (demand(rows) == null)"
 		}
 	]
 }

@@ -2,9 +2,11 @@ package dev;
 
 import anyparse.core.PoolLease;
 import devkit.Args;
+import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease;
+import devkit.LeaseHistory;
 import devkit.Result;
 import devkit.Summary.Outcome;
 import devkit.TmpLifecycle;
@@ -46,9 +48,6 @@ final class PostLand {
 
 	/** The totals line `dev shard` ends its tally with. */
 	private static final TOTALS: EReg = ~/--- suite-shard: \d+ classes \/ (\d+) tests \/ (\d+) assertions/;
-
-	/** The pool's lease for the run: flexible, and behind the leases a land asks for. */
-	private static final ASK: Ask = { min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 };
 
 	/** The commits whose whole suite ended red and were not cleared. */
 	public static inline function red(cache: String): Array<String> {
@@ -155,7 +154,7 @@ final class PostLand {
 	): Array<String> {
 		return leased(mode, ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache].concat(
 			suite ? [] : [HXCPP_ONLY]
-		), 'post-land $sha');
+		), 'post-land $sha', suite ? LeaseHistory.under(cache) : null);
 	}
 
 	/**
@@ -260,8 +259,10 @@ final class PostLand {
 	}
 
 	/** The command `words` behind the pool lease `mode` grants, as a detached run of this tool asks for it. */
-	public static function leased(mode: LeaseMode, words: Array<String>, label: String): Array<String> {
-		return Lease.take(mode, Command.of(words), ASK, label).argv;
+	public static function leased(mode: LeaseMode, words: Array<String>, label: String, ?history: LeaseHistory): Array<String> {
+		final ask: Ask = Branches.heavyAsk(Lease.HEAVY_MIN, Shard.DEFAULT_SHARDS, history, LeaseHistory.keyOf(label));
+		ask.priority = 0;
+		return Lease.take(mode, Command.of(words), ask, label).argv;
 	}
 
 	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */
@@ -391,6 +392,8 @@ final class PostLand {
 			(work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
 		);
 		settle(cache, sha, verdict);
+		if (suite && verdict.match(Passed))
+			LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), PoolLease.threads());
 		switch verdict {
 			case Failed(why):
 				Sys.println('post-land: $sha RED — $why');

@@ -171,7 +171,7 @@ final class Branches {
 	 */
 	public static function leased(
 		mode: LeaseMode, branches: Array<Array<String>>, demand: Array<String> -> Null<Int>, command: Array<String> -> Command,
-		label: String
+		label: String, ?history: LeaseHistory
 	): Array<String> -> Command {
 		return switch mode {
 			case Own(_, budget):
@@ -180,7 +180,7 @@ final class Branches {
 				rows -> {
 					final threads: Null<Int> = demand(rows);
 					final ask: Null<Ask> = if (threads == null)
-						{ min: Std.int(Math.min(Lease.HEAVY_MIN, rest)), max: rest }
+						heavyAsk(Std.int(Math.min(Lease.HEAVY_MIN, rest)), rest, history, timingKey(label, rows))
 					else if (threads > 0)
 						{ min: threads, max: threads, priority: ahead }
 					else
@@ -189,6 +189,31 @@ final class Branches {
 				};
 			case Held(_), Unpooled: command;
 		};
+	}
+
+	/** The identity of the branch running `rows` under `label` in the timing history: the label of its lease, run ids dropped. */
+	public static function timingKey(label: String, rows: Array<String>): String {
+		return LeaseHistory.keyOf('$label ${rows.join(',')}');
+	}
+
+	/**
+	 * The flexible ask of the heavy branch, `min` to `max` threads, with the seconds `history` has for `key` on each size when
+	 * it has them for every one.
+	 */
+	public static function heavyAsk(min: Int, max: Int, history: Null<LeaseHistory>, key: String): Ask {
+		final ask: Ask = { min: min, max: max };
+		final seconds: Null<Map<Int, Int>> = history?.seconds(key, min, max);
+		if (seconds != null) ask.estSeconds = seconds;
+		return ask;
+	}
+
+	/**
+	 * What a branch the pool leased `threads` threads leaves in `history` as it ends, which took as long as this process has
+	 * lived: its time on that many threads, unless a step of it did not end fit (a failed run's time says nothing).
+	 */
+	public static function record(history: LeaseHistory, label: String, rows: Array<String>, threads: Null<Int>, summary: Summary): Void {
+		if (threads == null || summary.unfit().length > 0) return;
+		history.recordLived(timingKey(label, rows), threads);
 	}
 
 	/** The threads every branch of `branches` but the heavy one holds, as `demand` names them. */

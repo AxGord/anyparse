@@ -16,6 +16,7 @@ import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease;
+import devkit.LeaseHistory;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -138,7 +139,9 @@ final class Battery {
 			.env(GateTree.ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
 			.timeout(BRANCH_TIMEOUT_MS);
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
-		final leased: Array<String> -> Command = Branches.leased(_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}');
+		final leased: Array<String> -> Command = Branches.leased(
+			_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
+		);
 		for (name => value in Branches.run(_plan.run, BRANCHES, order, leased, branchReport, _summary)) _readings[name] = value;
 		final span: Float = Timer.stamp() - parallel;
 		for (rows in BRANCHES) {
@@ -162,6 +165,8 @@ final class Battery {
 			});
 		}
 		Branches.leave(branchReport(rows), _plan.run, _summary, _readings);
+		if (_plan.ownLease && branchThreads(rows) == null)
+			Branches.record(LeaseHistory.under(_plan.cache), 'battery ${_plan.head}', rows, PoolLease.threads(), _summary);
 		return 0;
 	}
 

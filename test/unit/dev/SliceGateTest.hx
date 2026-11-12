@@ -13,6 +13,7 @@ import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease.LeaseMode;
+import devkit.LeaseHistory;
 import devkit.Summary.Step;
 import devkit.TempDir;
 import haxe.io.Path;
@@ -75,6 +76,12 @@ final class SliceGateTest extends Test {
 		+ "fs.writeFileSync(logs+'/rows/'+rows[0]+'.json.progress',rows[0]);setInterval(()=>{},1000);";
 
 	private static final FAILING_LISTS_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='lists'?'failed':'passed'");
+	private static final CACHE_VAR: String = 'ANYPARSE_BLAST_CACHE';
+
+	/** Where the scratch gates' lease history goes: no gate under test may write the real one. */
+	private var _cache: Null<TempDir>;
+
+	private var _cacheWas: Null<String>;
 
 	/**
 	 * A `--rows` branch runs inside the lease its gate took for it and never asks the pool itself, even inside a workflow
@@ -579,6 +586,49 @@ final class SliceGateTest extends Test {
 		Assert.isTrue(ran.branches.startsWith('arms'), 'the arms branch ran first: ${ran.branches}');
 		Assert.isTrue(ran.table.indexOf('\narms ') < ran.table.indexOf('\nsuite '), ran.table);
 		Assert.isFalse(ran.table.contains('not run: arms red'), ran.table);
+	}
+
+	public function setup(): Void {
+		_cacheWas = Sys.getEnv(CACHE_VAR);
+		final cache: TempDir = TempDir.create();
+		_cache = cache;
+		Sys.putEnv(CACHE_VAR, cache.path);
+	}
+
+	public function teardown(): Void {
+		final was: Null<String> = _cacheWas;
+		if (was == null)
+			js.Syntax.code('delete process.env[{0}]', CACHE_VAR);
+		else
+			Sys.putEnv(CACHE_VAR, was);
+		_cache?.dispose();
+	}
+
+	/**
+	 * A `--rows` branch the pool leased threads (no `--threads` of its caller) leaves its time in the lease history, under the
+	 * key its gate's lease label makes of its rows and on the threads the pool granted; a branch handed `--threads` by a gate
+	 * that holds its own lease leaves nothing.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-RECORD-DROPPED')
+	@:killer('M-GATE-RECORD-HELD')
+	public function testAPooledHeavyBranchRecordsItsTimeAndAHeldOneDoesNot(): Void {
+		TempDir.with(dir -> {
+			final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
+			FileSystem.createDirectory('$tree-logs/rows');
+			final history: String = Path.join([_cache?.path ?? '', LeaseHistory.FILE]);
+			final saved: String = Sys.getEnv('WF_THREADS') ?? '';
+			CliFixture.always(() -> Sys.putEnv('WF_THREADS', saved), () -> {
+				Sys.putEnv('WF_THREADS', '3');
+				Assert.equals(0, SliceGate.main([tree, '--rows', 'suite', '--logs', '$tree-logs', '--run', 'r', '--threads', '2']));
+				Assert.isFalse(FileSystem.exists(history), 'a branch given its threads by a held lease');
+				Assert.equals(0, SliceGate.main([tree, '--rows', 'suite', '--logs', '$tree-logs', '--run', 'r']));
+			});
+			final key: String = Branches.timingKey('slice-gate ${Path.withoutDirectory(tree)}', ['suite']);
+			final lines: Array<String> = File.getContent(history).split('\n').filter(line -> line != '');
+			Assert.equals(1, lines.length);
+			Assert.isTrue(lines[0].startsWith('$key\t3\t'), lines[0]);
+		});
 	}
 
 	/**

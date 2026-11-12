@@ -15,6 +15,7 @@ import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Excerpt;
 import devkit.Lease;
+import devkit.LeaseHistory;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -217,11 +218,15 @@ final class SliceGate {
 	 * itself in the branch's progress file as it starts, and the report is left after every row, so a branch cut for silence
 	 * costs only the row it stood in.
 	 */
-	private function runBranch(rows: Array<String>): Int {
+	private function runBranch(rows: Array<String>, pooled: Bool): Int {
 		for (name in rows) {
 			File.saveContent(branchProgress(rows), name);
 			gate(name, rowStep(name));
 			Branches.leave(branchReport(rows), _gate.options.run, _gate.summary, _readings);
+		}
+		if (pooled && demand(rows) == null) {
+			final history: LeaseHistory = LeaseHistory.under(Land.cacheDir(Sys.getEnv));
+			Branches.record(history, 'slice-gate ${Path.withoutDirectory(_gate.tree)}', rows, _gate.options.threads, _gate.summary);
 		}
 		return 0;
 	}
@@ -279,8 +284,10 @@ final class SliceGate {
 			case Held(held): Branches.perHeavy(held, branches, demand);
 			case _: null;
 		};
-		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)}';
-		final leased: Array<String> -> Command = Branches.leased(_mode, branches, demand, branchCommand(self, threads), label);
+		final leased: Array<String> -> Command = Branches.leased(
+			_mode, branches, demand, branchCommand(self, threads), 'slice-gate ${Path.withoutDirectory(_gate.tree)}',
+			LeaseHistory.under(Land.cacheDir(Sys.getEnv))
+		);
 		for (name => value in Branches.run(_gate.options.run, branches, order, leased, branchReport, _gate.summary))
 			_readings[name] = value;
 	}
@@ -668,7 +675,8 @@ final class SliceGate {
 		final allowArms: Array<String> = args.options('--allow-arm');
 		final logsOption: Null<String> = args.option('--logs');
 		final rows: Null<String> = args.option('--rows');
-		final threads: Null<Int> = Std.parseInt(args.option('--threads') ?? '') ?? (rows == null ? null : PoolLease.threads());
+		final threadsOption: Null<String> = args.option('--threads');
+		final threads: Null<Int> = Std.parseInt(threadsOption ?? '') ?? (rows == null ? null : PoolLease.threads());
 		final run: String = args.option('--run') ?? Branches.newRunId();
 		final tree: String = FileSystem.fullPath(args.positionals(['<worktree>'])[0]);
 		if (!FileSystem.exists(Path.join([tree, 'tools/dev.hxml']))) throw new UsageError('$tree is not an anyparse tree');
@@ -689,7 +697,7 @@ final class SliceGate {
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
 		}, leaseModeOf(rows));
-		if (rows != null) return gate.runBranch(rows.split(','));
+		if (rows != null) return gate.runBranch(rows.split(','), threadsOption == null);
 		return baseline ? gate.recordBaseline() : gate.check();
 	}
 
