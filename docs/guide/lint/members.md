@@ -48,7 +48,10 @@ value of any abstract (`enum abstract` or legacy `@:enum abstract`), another sta
 local `static` initializer, the code argument of `js.Syntax.code` or `__js__`, a `__init__` function
 (or a `__init__` holding a call: the type's constants all stay), an earlier static initializer
 holding a call or `new`, an `extern` field or type (`private` before it too), `@:keep` / `@:rtti`,
-and a `public` one whose class is mentioned in macro code. A `static inline var` of a string goes `final` first and
+a name an instance field initializer or a constructor spells, a file the parser cannot read spelling the name, a class
+with a build macro (its own or an inherited `@:autoBuild`), and a `public` one whose class is mentioned in macro code.
+These are read over the project's `resolutionRoots`, so linting one directory answers as linting the whole project; a
+project declaring none answers over the linted files only. A `static inline var` of a string goes `final` first and
 loses `inline` on the next pass. `member-order` then ranks it after its inline siblings; its `--fix`
 moves them up.
 

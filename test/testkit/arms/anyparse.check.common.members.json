@@ -1238,6 +1238,14 @@
 			"find": "notes.push(skipNote(v.file, emb.field.name));",
 			"replace": "notes.slice(0);",
 			"note": "the embedded-assignment skip is no longer returned as a note, so a thinned fix list leaves a field written inside an expression with no word said about it"
+		},
+		{
+			"name": "M-INLINE-BUILD-INDEX-REPORT-SCOPE",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "run",
+			"find": "IndexScope.resolution(files, plugin)",
+			"replace": "IndexScope.report(files, plugin)",
+			"note": "inline-constant asks the build-macro question over the linted files only, so a build-macro supertype outside the report no longer keeps a constant inline"
 		}
 	]
 }

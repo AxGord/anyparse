@@ -163,7 +163,8 @@ using anyparse.util.Strings;
  *    tooling; inlining would erase its reflective value, and the String arm declines them too.
  * 6. NO macro-built OWNER. A `@:build` / `@:autoBuild` / `@:genericBuild` type's fields are not the
  *    fields the declaration holds, so neither arm can reason about them:
- *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container. A builder that
+ *    `TypeTraits.transitivelyCarriesBuildMacro` declines the whole container, asked over the
+ *    resolution scope so a supertype outside the report counts. A builder that
  *    rewrites the flagged field's initializer makes the added `inline` "Inline variable
  *    initialization must be a constant value", for a `@:build` on the class and for an
  *    `@:autoBuild` reached through `implements` alike — and in the second shape the class carries
@@ -220,10 +221,11 @@ final class InlineConstant extends RuleBase {
 			proof: proof,
 			demand: ConstantDemandScan.of(files, plugin, seams)
 		};
-		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer`. This rule
+		// Built for ONE question — `transitivelyCarriesBuildMacro` in `scanContainer` — and asked over the
+		// resolution scope: what a supertype MEANS does not depend on which directory is linted. This rule
 		// asked no index before; the four field rules, `member-order` and `prefer-inline` all did,
 		// and the gap was measured rather than argued (see the class doc).
-		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final index: SymbolIndex = IndexScope.resolution(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
