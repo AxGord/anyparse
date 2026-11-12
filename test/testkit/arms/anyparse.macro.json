@@ -1936,7 +1936,15 @@
 			"method": "fitYieldsToKwComments",
 			"find": "return !shared.hasKwSlots ||",
 			"replace": "return true ||",
-			"note": "the FitLine body layout never reads the keyword's comment slots, so `else // c` before a non-block body loses its comment"
+			"note": "the FitLine body layout never reads the keyword's comment slots, so `do // c` before a non-block body under the compiled FitLine default loses its comment"
+		},
+		{
+			"name": "M-NEXT-DROPS-KW-COMMENT",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyNextLayout",
+			"find": "nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, _vifBody, opt, ${valueIfGapExpr(softGap, macro _vifBody)})",
+			"replace": "_dn(_cols, _dc([${valueIfGapExpr(softGap, macro _vifBody)}, _vifBody]))",
+			"note": "the Next body layout never reads the keyword's comment slots, so `else // c` before a laddered non-block branch loses its comment"
 		},
 		{
 			"name": "M-GRAMMAR-DISCOVERY-NONE",

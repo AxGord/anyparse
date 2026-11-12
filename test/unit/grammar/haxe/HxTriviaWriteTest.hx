@@ -334,15 +334,15 @@ class HxTriviaWriteTest extends Test {
 	/**
 	 * ω-trivia-after-kw-next-layout — same-line `// comment` after `else`
 	 * (the optional-kw commit point) must be preserved cuddled to the
-	 * keyword when the body's `bodyPolicy` resolves to `Next` (haxe-
-	 * formatter default for `elseBody`). Reproduces
+	 * keyword when the body takes the `Next` layout (the if/else ladder
+	 * puts a brace-less branch there in every config). Reproduces
 	 * `issue_45_comment_breaks_indentation.hxtest`'s third byte-diff
 	 * mechanism: pre-slice the captured `_afterKw_elseBody` slot only fed
 	 * the Same-layout's `kwGapDoc`, so the Next-layout `_dn(_cols, [_dhl,
 	 * body])` silently dropped the comment.
 	 */
 	@:pin('control')
-	@:killer('M-FIT-DROPS-KW-COMMENT')
+	@:killer('M-NEXT-DROPS-KW-COMMENT')
 	public function testSameLineCommentAfterElseNonBlockRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta();\n\t\telse // afterElse\n\t\t\tb();\n\t}\n}';
 		assertRoundtrip(source);

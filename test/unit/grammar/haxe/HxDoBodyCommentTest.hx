@@ -14,6 +14,7 @@ class HxDoBodyCommentTest extends Test {
 
 	@:pin('control')
 	@:killer('M-DO-KW-COMMENT-DROPPED')
+	@:killer('M-FIT-DROPS-KW-COMMENT')
 	public function testSameLineCommentAfterDoNonBlockRoundTrip(): Void {
 		assertRoundtrip('class Foo {\n\tfunction bar() {\n\t\tdo // afterDo\n\t\t\ta(); while (cond);\n\t}\n}');
 	}
