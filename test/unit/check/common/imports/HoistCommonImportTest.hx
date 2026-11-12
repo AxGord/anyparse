@@ -1080,7 +1080,7 @@ class HoistCommonImportTest extends Test {
 		CliFixture.captureStderr(() ->
 			LintFixDriver.runLintFix(
 				files, checks ?? [new HoistCommonImport(), new UnusedImport(), new EmptyAmbientSource()], new HaxeQueryPlugin(),
-				_ -> LintConfig.parse(config), false, null, [], true, null, false, RunLedger.begin()
+				_ -> LintConfig.parse(config), false, null, [], true, null, false, new RunLedger()
 			)
 		);
 	}

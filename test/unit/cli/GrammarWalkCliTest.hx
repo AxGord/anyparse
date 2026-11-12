@@ -35,7 +35,7 @@ class GrammarWalkCliTest extends Test {
 	public function testResolutionRootsFollowTheGrammar(): Void {
 		final dir: String = mixedTree();
 		CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
-			final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(CliArgs.JSON_LANG, [], [dir], [], false, RunLedger.begin());
+			final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(CliArgs.JSON_LANG, [], [dir], [], false, new RunLedger());
 			Assert.same(['b.json'], names(scope?.sources().projectRoots ?? []));
 		});
 	}

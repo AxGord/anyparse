@@ -9,14 +9,13 @@ class CliContextLedgerTest extends Test {
 	@:pin('control')
 	@:killer('M-CONTEXT-LEDGER-IGNORED')
 	public function testAContextCarriesTheLedgerItWasGiven(): Void {
-		final own: RunLedger = RunLedger.begin();
-		Assert.notEquals(own, RunLedger.begin());
+		final own: RunLedger = new RunLedger();
 		Assert.equals(own, new CliContext(false, own).ledger);
 	}
 
 	@:pin('guard')
 	public function testTheContextsOfOneRunShareItsLedger(): Void {
-		final own: RunLedger = RunLedger.begin();
+		final own: RunLedger = new RunLedger();
 		Assert.equals(new CliContext(false, own).ledger, new CliContext(true, own).ledger);
 	}
 

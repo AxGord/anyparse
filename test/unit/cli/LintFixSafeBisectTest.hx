@@ -231,7 +231,7 @@ class LintFixSafeBisectTest extends Test {
 		final err: String = CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(
 				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, null,
-				[{ hxml: 'check.hxml', dir: root, defines: [] }], false, null, false, RunLedger.begin()
+				[{ hxml: 'check.hxml', dir: root, defines: [] }], false, null, false, new RunLedger()
 			)
 		);
 		return { code: code, err: err };

@@ -203,7 +203,7 @@ class OrphanContinuationTest extends Test {
 
 	@:access(anyparse.query.cli.command.FmtCommand)
 	private static function callFormatOneFile(plugin: GrammarPlugin, path: String): FmtFileResult {
-		return FmtCommand.formatOneFile(plugin, 'haxe', path, true, false, RunLedger.begin());
+		return FmtCommand.formatOneFile(plugin, 'haxe', path, true, false, new RunLedger());
 	}
 
 	private static function inMain(body: String): String {

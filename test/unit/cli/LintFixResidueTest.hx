@@ -154,7 +154,7 @@ class LintFixResidueTest extends Test {
 		final stderr: String = CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(
 				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse(config), false, null, oracles, oracles.length == 0, null,
-				false, RunLedger.begin()
+				false, new RunLedger()
 			)
 		);
 		return { code: code, stderr: stderr, after: files[0].source };

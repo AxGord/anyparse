@@ -50,16 +50,15 @@ final class LintReviewBudgetCliTest extends Test {
 	@:killer('M-LINT-REVIEW-BUDGET-ZERO', 'M-STRICT-INT-ABOVE-INT32')
 	@:pin('control')
 	public function testABudgetBelowOneLineIsAUsageError(): Void {
-		Assert.equals(5000, LintArgs.parseLintArgs(['--fix', '--review-budget', '5000', 'C.hx'], RunLedger.fallback()).reviewBudget);
+		Assert.equals(5000, LintArgs.parseLintArgs(['--fix', '--review-budget', '5000', 'C.hx'], new RunLedger()).reviewBudget);
 		for (bad in ['0', '-3'])
 			Assert.equals(
-				ExitCode.EXIT_USAGE, LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], RunLedger.fallback()).errExit,
+				ExitCode.EXIT_USAGE, LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], new RunLedger()).errExit,
 				'budget "$bad"'
 			);
 		for (bad in ['many', '', '2147483648', '4294967295', '99999999999'])
 			Assert.raises(
-				() -> LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], RunLedger.fallback()), UsageFailure,
-				'budget "$bad"'
+				() -> LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], new RunLedger()), UsageFailure, 'budget "$bad"'
 			);
 	}
 

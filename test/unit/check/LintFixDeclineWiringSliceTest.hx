@@ -89,7 +89,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.isTrue(own.length > 0, 'the fixture reports at least one unused-local finding');
 		final ledger: Map<String, RuleFixOutcome> = [];
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), RunLedger.begin()
+			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), new RunLedger()
 		);
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, true, []);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
@@ -138,7 +138,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final noted: Array<String> = [];
 		LintFixDriver.applyLintPass(
 			files, files, plugin, [check],
-			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 2, noted, [], [], [], [], null, RunLedger.begin()
+			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 2, noted, [], [], [], [], null, new RunLedger()
 		);
 		Assert.isTrue(noted.contains('C.hx'), 'the pass-2 refusal is reported and counted as a skipped file');
 		#else
@@ -173,7 +173,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final ledger: Map<String, RuleFixOutcome> = [];
 		// `countDeclines` false IS "this is not pass 1" — the driver passes `passes == 1`.
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), RunLedger.begin()
+			REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), new RunLedger()
 		);
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, false, []);
 		final edits: Array<{ span: Span, text: String }> = LintFixDriver.contributedEdits(groups);
@@ -220,7 +220,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: REFUSED_BY_WRITER }];
 		final own: Array<Violation> = Linter.run(files, plugin, checks, _ -> LintConfig.parse('{}'), false);
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			REFUSED_BY_WRITER, own, checks, plugin, CheckFixture.index(files, plugin), RunLedger.begin()
+			REFUSED_BY_WRITER, own, checks, plugin, CheckFixture.index(files, plugin), new RunLedger()
 		);
 		Assert.equals(2, groups.length, 'both rules answered with edits: $groups');
 		// DETECT-PROOF: the whole set really is refused, so the salvage below is doing work rather
@@ -329,7 +329,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		Assert.isTrue(own.length > 0, 'the fixture reports a fixable finding');
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			source, own, [check], plugin, CheckFixture.index(files, plugin), RunLedger.begin()
+			source, own, [check], plugin, CheckFixture.index(files, plugin), new RunLedger()
 		);
 		Assert.equals(1, LintFixDriver.contributedEdits(groups).length, 'and the check produced its edit');
 		final blamed: Array<String> = [];
@@ -409,7 +409,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final changed: Array<String> = [];
 		LintFixDriver.applyLintPass(
 			files, files, plugin, [check],
-			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], [], null, RunLedger.begin()
+			[], [check], _ -> LintConfig.parse('{}'), false, ['C.hx' => null], 1, noted, [], changed, [], [], null, new RunLedger()
 		);
 		Assert.equals(0, noted.length, 'nothing was refused: $noted');
 		Assert.isTrue(changed.contains('C.hx'), 'and the file was written');
@@ -478,9 +478,8 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final own: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.ledgerFileLintEdits(
-			ledger,
-			LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), RunLedger.begin()), true,
-			[]
+			ledger, LintFixDriver.collectFileLintEdits(REFUSED, own, [check], plugin, CheckFixture.index(files, plugin), new RunLedger()),
+			true, []
 		);
 		final row: Null<RuleFixOutcome> = ledger['unused-local'];
 		if (row == null) {
@@ -970,7 +969,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final ledger: Map<String, RuleFixOutcome> = [];
 		LintFixDriver.applyLintPass(
 			files, files, plugin, [check],
-			[], [check], _ -> LintConfig.parse('{}'), false, ['G.hx' => null], 1, noted, [], [], ledger, [], null, RunLedger.begin()
+			[], [check], _ -> LintConfig.parse('{}'), false, ['G.hx' => null], 1, noted, [], [], ledger, [], null, new RunLedger()
 		);
 		final written: String = files[0].source;
 		// ONE assertion over both halves, so neither can be satisfied alone.
@@ -1008,12 +1007,12 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final files: Array<{ file: String, source: String }> = [{ file: 'G.hx', source: source }];
 		final index: SymbolIndex = CheckFixture.index(files, plugin);
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			source, CheckFixture.violationsIn(check, files, plugin), [check], plugin, index, RunLedger.begin()
+			source, CheckFixture.violationsIn(check, files, plugin), [check], plugin, index, new RunLedger()
 		);
 		final blamed: Array<String> = [];
 		final settled: Null<{ text: String, rewrites: Null<Int> }> = LintFixDriver.salvageFileLintEdits(
 			source, groups, 'FILE LEVEL SENTENCE', plugin, null, blamed,
-			LintFixDriver.findingSplitter(source, [check], plugin, index, RunLedger.begin())
+			LintFixDriver.findingSplitter(source, [check], plugin, index, new RunLedger())
 		);
 		Assert.notNull(settled, 'the clean part was written');
 		Assert.equals(1, blamed.length, 'one part is blamed: $blamed');
@@ -1046,7 +1045,7 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(2, own.length, 'the fixture reports both locals');
 		final ledger: Map<String, RuleFixOutcome> = [];
 		final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-			source, own, [check], plugin, CheckFixture.index(files, plugin), RunLedger.begin()
+			source, own, [check], plugin, CheckFixture.index(files, plugin), new RunLedger()
 		);
 		LintFixDriver.ledgerFileLintEdits(ledger, groups, true, []);
 		final written: String = CanonicalEdit.applyEdits(source, LintFixDriver.contributedEdits(groups));

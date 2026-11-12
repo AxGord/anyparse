@@ -14,9 +14,8 @@ class ConfigNotesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-CONFIG-NOTE-STATIC')
-	public function testACollectingCallerGetsTheNoteInsteadOfTheFallback(): Void {
+	public function testACollectingCallerGetsTheNoteAsANote(): Void {
 		#if (sys || nodejs)
-		final ledger: RunLedger = RunLedger.begin();
 		final dir: String = CliFixture.writeDir('confignotes', [
 			{ name: 'apq.json', source: '{"rules": [' },
 			{ name: 'Foo.hx', source: 'class Foo {}\n' }
@@ -27,9 +26,7 @@ class ConfigNotesTest extends Test {
 		Assert.isTrue(config.enabledFor('naming'), 'the broken document is skipped, not fatal');
 		Assert.equals(1, notes.length, 'the broken document is one note');
 		final message: String = notes.length == 1 ? notes[0].message : '';
-		final key: String = notes.length == 1 ? notes[0].key : '';
 		Assert.isTrue(message.indexOf('failed to parse') >= 0, message);
-		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, key), 'the fallback did not say it');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -38,7 +35,7 @@ class ConfigNotesTest extends Test {
 	@:pin('control')
 	@:killer('M-CONFIG-NOTE-REPEATS')
 	public function testSaySaysEachKeyOncePerRun(): Void {
-		final ledger: RunLedger = RunLedger.begin();
+		final ledger: RunLedger = new RunLedger();
 		final said: Array<String> = [];
 		ConfigNotes.say(ledger, [{ key: 'confignotes-key', message: 'one\n' }], said.push);
 		ConfigNotes.say(ledger, [{ key: 'confignotes-key', message: 'one\n' }], said.push);
@@ -48,12 +45,11 @@ class ConfigNotesTest extends Test {
 	@:pin('control')
 	@:killer('M-CONFIG-NOTE-SAYS-LATEST')
 	public function testSayAnswersToTheLedgerItIsGiven(): Void {
-		final earlier: RunLedger = RunLedger.begin();
+		final earlier: RunLedger = new RunLedger();
 		final said: Array<String> = [];
+		Assert.isTrue(earlier.first(LintConfig.WARNED_TOPIC, 'confignotes-own'));
 		ConfigNotes.say(earlier, [{ key: 'confignotes-own', message: 'one\n' }], said.push);
-		Assert.notEquals(earlier, RunLedger.begin());
-		ConfigNotes.say(earlier, [{ key: 'confignotes-own', message: 'one\n' }], said.push);
-		Assert.equals(1, said.length, 'the ledger it was given remembers, whichever run began since');
+		Assert.equals(0, said.length, 'the ledger it was given already holds the key');
 	}
 
 	@:pin('control')
@@ -73,17 +69,6 @@ class ConfigNotesTest extends Test {
 		#else
 		Assert.pass('stderr is captured on node only');
 		#end
-	}
-
-	/** The stderr path reaches for no run ledger: what a run has said is the run's, and a caller with none holds its own `said`. */
-	@:pin('control')
-	@:killer('M-CONFIG-NOTE-WARN-READS-STATIC')
-	public function testWarnSaysNothingThroughTheRunLedger(): Void {
-		final ledger: RunLedger = RunLedger.begin();
-		final said: Array<String> = [];
-		ConfigNotes.warn([{ key: 'confignotes-warn-own', message: 'one\n' }], null, said.push);
-		Assert.equals(1, said.length, 'the note is said');
-		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-warn-own'), 'and no run ledger records it');
 	}
 
 	/** A caller that warns more than once with one `said` says each key once over all its calls. */

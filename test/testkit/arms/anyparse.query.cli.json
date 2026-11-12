@@ -757,8 +757,8 @@
 			"type": "anyparse.query.cli.CliContext",
 			"method": "new",
 			"find": "this.ledger = ledger;",
-			"replace": "this.ledger = RunLedger.fallback();",
-			"note": "a context built with the run's ledger answers the latest one instead, so a command says through whichever run began last"
+			"replace": "this.ledger = new RunLedger();",
+			"note": "a context built with the run's ledger answers a fresh one instead, so a command says through a ledger the run never sees"
 		},
 		{
 			"name": "M-CHANGED-SINCE-RANGE-ACCEPTED",

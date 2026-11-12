@@ -294,7 +294,7 @@ final class ImportReachTest extends Test {
 	private static function groupsUnder(root: String, reach: ImportReach): Array<RuleEdits> {
 		final run: Found = foundIn(root, MAIN);
 		return LintFixDriver.collectFileLintEdits(
-			MAIN, run.own, [run.check], run.plugin, CheckFixture.index(run.files, run.plugin), RunLedger.begin(), reach
+			MAIN, run.own, [run.check], run.plugin, CheckFixture.index(run.files, run.plugin), new RunLedger(), reach
 		);
 	}
 

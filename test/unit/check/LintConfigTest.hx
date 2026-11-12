@@ -410,9 +410,9 @@ class LintConfigTest extends Test {
 		final undeclared: LintConfig = LintConfig.parse('{"compilerOracle": "a.hxml"}');
 		final configs: Map<String, LintConfig> = ['a' => complete, 'b' => otherList, 'c' => undeclared];
 		final resolve: String -> LintConfig = path -> configs[path] ?? undeclared;
-		Assert.isTrue(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'a'], resolve, RunLedger.fallback()));
-		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'b'], resolve, RunLedger.fallback()));
-		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'c'], resolve, RunLedger.fallback()));
+		Assert.isTrue(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'a'], resolve, new RunLedger()));
+		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'b'], resolve, new RunLedger()));
+		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'c'], resolve, new RunLedger()));
 	}
 
 	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */

@@ -51,23 +51,25 @@ class LintPerFileConfigCliTest extends Test {
 		final key: String = 'scope-disagreement:the compiler oracle';
 		final plain: String = dirWith('Foo.hx', UNUSED, '{"rules":{"unused-import":{"enabled":false}}}');
 		final none: String = dirWith('Bar.hx', UNUSED, null);
-		final mixed: Int = Cli.run(['lint', none, plain]);
+		final mixedRun: RunLedger = new RunLedger();
+		final mixed: Int = Cli.run(['lint', none, plain], false, mixedRun);
 		Assert.isFalse(
-			RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key),
+			mixedRun.said(LintConfig.WARNED_TOPIC, key),
 			'two roots that both name NO oracle agree — an OMITTED optional constructor argument is `undefined` on js, so a'
 			+ ' config-less directory rendered as `undefined|undefined` against a parsed document\'s `null|null`, and the very'
 			+ ' first mixed scope this ran over warned about nothing (exit $mixed)'
 		);
 		final one: String = dirWith('Foo.hx', UNUSED, '{"compilerOracle":"one.hxml"}');
 		final two: String = dirWith('Bar.hx', UNUSED, '{"compilerOracle":"two.hxml"}');
-		final skipped: Int = Cli.run(['lint', '--no-oracle', one, two]);
+		final skippedRun: RunLedger = new RunLedger();
+		final skipped: Int = Cli.run(['lint', '--no-oracle', one, two], false, skippedRun);
 		Assert.isFalse(
-			RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key),
-			'a run that takes no oracle verdict has nothing to warn about (exit $skipped)'
+			skippedRun.said(LintConfig.WARNED_TOPIC, key), 'a run that takes no oracle verdict has nothing to warn about (exit $skipped)'
 		);
-		final consulted: Int = Cli.run(['lint', one, two]);
+		final consultedRun: RunLedger = new RunLedger();
+		final consulted: Int = Cli.run(['lint', one, two], false, consultedRun);
 		Assert.isTrue(
-			RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key), 'a run that DOES consult one names the disagreement (exit $consulted)'
+			consultedRun.said(LintConfig.WARNED_TOPIC, key), 'a run that DOES consult one names the disagreement (exit $consulted)'
 		);
 		CliFixture.removeDir(plain);
 		CliFixture.removeDir(none);
@@ -103,24 +105,28 @@ class LintPerFileConfigCliTest extends Test {
 		final none: String = dirWith('Bar.hx', UNUSED, null);
 		// EXIT_OK asserted, not just interpolated: an absence assertion after a run that never
 		// linted anything would pass for the wrong reason.
-		Assert.equals(0, Cli.run(['lint', '--no-oracle', none, silent]), 'two roots that declare no roster lint clean');
-		Assert.isFalse(RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key), 'and agree');
+		final agreeing: RunLedger = new RunLedger();
+		Assert.equals(0, Cli.run(['lint', '--no-oracle', none, silent], false, agreeing), 'two roots that declare no roster lint clean');
+		Assert.isFalse(agreeing.said(LintConfig.WARNED_TOPIC, key), 'and agree');
 		// Same two contracts, opposite order, and one contract's names permuted: the consumer reads
 		// a roster with `filter` / `exists`, so neither order carries meaning.
 		final ordered: String = dirWith('Foo.hx', UNUSED, '{"frameworks":[{"root":"A","names":["x","y"]},{"root":"B","names":["z"]}]}');
 		final permuted: String = dirWith('Bar.hx', UNUSED, '{"frameworks":[{"root":"B","names":["z"]},{"root":"A","names":["y","x"]}]}');
-		Assert.equals(0, Cli.run(['lint', '--no-oracle', ordered, permuted]), 'a permuted roster lints clean');
-		Assert.isFalse(RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key), 'and is the same roster, not a disagreement');
+		final permutedRun: RunLedger = new RunLedger();
+		Assert.equals(0, Cli.run(['lint', '--no-oracle', ordered, permuted], false, permutedRun), 'a permuted roster lints clean');
+		Assert.isFalse(permutedRun.said(LintConfig.WARNED_TOPIC, key), 'and is the same roster, not a disagreement');
 		final godot: String = dirWith('Foo.hx', UNUSED, '{"frameworks":[{"root":"Node","names":["_ready"]}]}');
 		final unity: String = dirWith('Bar.hx', UNUSED, '{"frameworks":[{"root":"MonoBehaviour","names":["Start"]}]}');
 		// A run holding no `FrameworkAware` rule applies no roster, so it must not claim one did.
-		final unrelated: Int = Cli.run(['lint', '--no-oracle', '--rule', 'prefer-single-quotes', godot, unity]);
+		final unrelatedRun: RunLedger = new RunLedger();
+		final unrelated: Int = Cli.run(['lint', '--no-oracle', '--rule', 'prefer-single-quotes', godot, unity], false, unrelatedRun);
 		Assert.isFalse(
-			RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key), 'no FrameworkAware rule in the run, no roster claim (exit $unrelated)'
+			unrelatedRun.said(LintConfig.WARNED_TOPIC, key), 'no FrameworkAware rule in the run, no roster claim (exit $unrelated)'
 		);
-		final disagreeing: Int = Cli.run(['lint', '--no-oracle', godot, unity]);
+		final disagreeingRun: RunLedger = new RunLedger();
+		final disagreeing: Int = Cli.run(['lint', '--no-oracle', godot, unity], false, disagreeingRun);
 		Assert.isTrue(
-			RunLedger.fallback().said(LintConfig.WARNED_TOPIC, key),
+			disagreeingRun.said(LintConfig.WARNED_TOPIC, key),
 			'two rosters ARE a disagreement, and `--no-oracle` does not silence this half (exit $disagreeing)'
 		);
 		CliFixture.removeDir(silent);

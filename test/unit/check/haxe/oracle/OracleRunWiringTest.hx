@@ -120,7 +120,7 @@ final class OracleRunWiringTest extends Test {
 			final ahead: AheadBuilds = { probe: null };
 			final scope: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
 				new HaxeQueryPlugin(), resolution, oracles, null, null, null, ahead,
-				LintArgs.parseLintArgs(args.concat(['Main.hx']), RunLedger.fallback())
+				LintArgs.parseLintArgs(args.concat(['Main.hx']), new RunLedger())
 			);
 			return scope?.facts != null && ahead.facts != null;
 		}

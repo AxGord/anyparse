@@ -133,7 +133,7 @@ class LintFixRemoveTest extends Test {
 		CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(
 				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, null, oracles, oracles.length == 0, null, false,
-				RunLedger.begin()
+				new RunLedger()
 			)
 		);
 		return code;

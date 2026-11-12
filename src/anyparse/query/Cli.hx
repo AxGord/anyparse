@@ -233,9 +233,12 @@ final class Cli {
 	 *
 	 * Only this exception. An internal error still reaches the reader as a stack trace, which is
 	 * what a bug wants.
+	 *
+	 * `runLedger` is the run's warn-once ledger when the caller wants to read what the run said afterwards;
+	 * omitted, the run owns a fresh one.
 	 */
-	public static function run(args: Array<String>, chooseLanguage: Bool = false): Int {
-		final ledger: RunLedger = RunLedger.begin();
+	public static function run(args: Array<String>, chooseLanguage: Bool = false, ?runLedger: RunLedger): Int {
+		final ledger: RunLedger = runLedger ?? new RunLedger();
 		try {
 			return dispatch(args, chooseLanguage, ledger);
 		} catch (exception: WriteFailure) {

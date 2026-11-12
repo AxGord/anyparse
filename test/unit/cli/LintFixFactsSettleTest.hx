@@ -46,7 +46,7 @@ class LintFixFactsSettleTest extends Test {
 				[{ file: file, source: before }],
 				[new ExplicitLocalType()],
 				new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, resolution, [{ hxml: 'check.hxml', dir: dir, defines: [] }],
-				false, null, false, RunLedger.begin()
+				false, null, false, new RunLedger()
 			)
 		);
 		Assert.notEquals(before, File.getContent(file), 'the run wrote the file');

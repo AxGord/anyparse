@@ -86,7 +86,7 @@ class FormatConfigDiscoveryTest extends Test {
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
-		final ledger: RunLedger = RunLedger.begin();
+		final ledger: RunLedger = new RunLedger();
 		Assert.notNull(FormatConfigDiscovery.discoverFor(Path.join([nested, 'A.hx']), ledger));
 		final named: Array<String> = FormatConfigDiscovery.reportedPaths(ledger).filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported path under the fixture, got ${named.join(', ')}');
@@ -100,7 +100,7 @@ class FormatConfigDiscoveryTest extends Test {
 
 	/**
 	 * Handed notes, `discover` puts the unusable-settings line there under `REPORTED_TOPIC` and says nothing itself, so a
-	 * command says it through its own ledger and the stderr fallback never marks the path.
+	 * command says it through its own ledger.
 	 */
 	@:pin('control')
 	@:killer('M-HXFORMAT-NOTES-FALLBACK')
@@ -117,25 +117,20 @@ class FormatConfigDiscoveryTest extends Test {
 		Assert.equals(1, notes.length);
 		Assert.equals(FormatConfigDiscovery.REPORTED_TOPIC, notes[0].topic);
 		Assert.equals('hxformat.json', Path.withoutDirectory(notes[0].key));
-		Assert.equals(0, FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf('apq-fcd-notes') >= 0).length);
 	}
 
 	/**
-	 * A command's lookup reports through the ledger it hands in and never through the process fallback, and a lookup
-	 * handed neither notes nor a ledger reports nowhere.
+	 * A command's lookup reports through the ledger it hands in, and a lookup handed neither notes nor a ledger reports nowhere.
 	 */
 	@:pin('control')
 	@:killer('M-HXFORMAT-DISCOVER-FOR-FALLBACK')
 	public function testDiscoverForSaysThroughTheCommandLedgerOnly(): Void {
 		final dir: String = _trees.make('apq-fcd-own-ledger');
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
-		final ledger: RunLedger = RunLedger.begin();
-		// A later run's `begin` moves the fallback off the command's ledger, so the two can be told apart.
-		final fallback: RunLedger = RunLedger.begin();
+		final ledger: RunLedger = new RunLedger();
 		Assert.notNull(FormatConfigDiscovery.discover(Path.join([dir, 'B.hx'])));
 		Assert.notNull(FormatConfigDiscovery.discoverFor(Path.join([dir, 'A.hx']), ledger));
 		Assert.equals(1, FormatConfigDiscovery.reportedPaths(ledger).filter(p -> p.indexOf('apq-fcd-own-ledger') >= 0).length);
-		Assert.equals(0, FormatConfigDiscovery.reportedPaths(fallback).filter(p -> p.indexOf('apq-fcd-own-ledger') >= 0).length);
 	}
 
 	/**

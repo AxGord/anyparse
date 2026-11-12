@@ -34,8 +34,9 @@ class ApqFmtConfigWarnCliTest extends Test {
 		final subDir: String = '$dir/sub';
 		sys.FileSystem.createDirectory(subDir);
 		sys.io.File.saveContent('$subDir/B.hx', 'class B {}\n');
-		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx', '$subDir/B.hx']), 'both fixtures are already canonical');
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf(dir) >= 0);
+		final ledger: RunLedger = new RunLedger();
+		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx', '$subDir/B.hx'], false, ledger), 'both fixtures are already canonical');
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(ledger).filter(p -> p.indexOf(dir) >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported config path under $dir, got ${named.join(', ')}');
 		CliFixture.removeDir(dir);
 		#else
@@ -53,8 +54,9 @@ class ApqFmtConfigWarnCliTest extends Test {
 			{ name: 'A.hx', source: 'class A {}\n' }
 		]);
 		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx']));
-		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx']), 'the second run reads the memoised directory');
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf(dir) >= 0);
+		final second: RunLedger = new RunLedger();
+		Assert.equals(0, Cli.run(['fmt', '--list', '$dir/A.hx'], false, second), 'the second run reads the memoised directory');
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(second).filter(p -> p.indexOf(dir) >= 0);
 		Assert.equals(1, named.length, 'the second run reported nothing about the config under $dir');
 		CliFixture.removeDir(dir);
 		#else

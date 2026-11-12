@@ -15679,8 +15679,8 @@
 			"name": "M-RUN-KEEPS-LEDGER",
 			"type": "anyparse.query.Cli",
 			"method": "run",
-			"find": "\tfinal ledger: RunLedger = RunLedger.begin();\n",
-			"replace": "\tfinal ledger: RunLedger = RunLedger.fallback();\n",
+			"find": "\tfinal ledger: RunLedger = runLedger ?? new RunLedger();\n",
+			"replace": "\tstatic var kept: RunLedger = new RunLedger();\n\tfinal ledger: RunLedger = runLedger ?? kept;\n",
 			"note": "a run no longer starts with an empty warn-once ledger, so a second call in one engine process stays silent about a broken lint config and a skipped field-init where a fresh process warns"
 		},
 		{
@@ -16577,28 +16577,12 @@
 			"note": "APQ_NO_CONFIG_WARN=1 no longer silences the config report"
 		},
 		{
-			"name": "M-RUN-LEDGER-BEGIN-REUSES",
-			"type": "anyparse.query.RunLedger",
-			"method": "begin",
-			"find": "current = new RunLedger();",
-			"replace": "",
-			"note": "a run begun after another inherits what the first said, so a call in a long-lived engine process starts with the previous call's diagnostics already marked as said"
-		},
-		{
-			"name": "M-RUN-LEDGER-BEGIN-ANSWERS-OTHER",
-			"type": "anyparse.query.RunLedger",
-			"method": "begin",
-			"find": "return current;",
-			"replace": "return new RunLedger();",
-			"note": "the ledger a run is handed is not the one a context-less caller shares, so a diagnostic said through one is said again through the other"
-		},
-		{
 			"name": "M-HXFORMAT-NOTES-FALLBACK",
 			"type": "anyparse.query.FormatConfigDiscovery",
 			"method": "discover",
 			"find": "notes.push({ key: found.path, message: message, topic: REPORTED_TOPIC });",
-			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
-			"note": "discover prints the unusable-settings line through the fallback ledger even when its caller collects notes, so a lint rule prints it from inside the run"
+			"replace": "reportConfig(new RunLedger(), found.path, found.content);",
+			"note": "discover prints the unusable-settings line itself even when its caller collects notes, so a lint rule prints it from inside the run"
 		},
 		{
 			"name": "M-MATCH-SEQ-FRESH-BINDINGS",
@@ -16613,8 +16597,8 @@
 			"type": "anyparse.query.FormatConfigDiscovery",
 			"method": "discoverFor",
 			"find": "reportConfig(ledger, found.path, found.content);",
-			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
-			"note": "a command lookup reports through the process fallback ledger instead of the one the command handed in, so its line is said against another run"
+			"replace": "reportConfig(new RunLedger(), found.path, found.content);",
+			"note": "a command lookup reports through a fresh ledger instead of the one the command handed in, so its line is said against no run"
 		},
 		{
 			"name": "M-RNC-ANY-DATA-FIELD",
