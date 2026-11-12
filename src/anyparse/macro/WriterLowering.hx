@@ -1003,14 +1003,14 @@ class WriterLowering {
 		var prevTrailFieldName: Null<String> = null;
 		// ψ₁₂: captures the name of the first `@:optional` sibling that
 		// carries `@:fmt(bodyPolicy(...))` — consumed by children tagged
-		// `@:fmt(fitLineIfWithElse)` to wire a runtime sibling-presence
-		// check into the `FitLine` branch of `bodyPolicyWrap`. In the
+		// `@:fmt(ifElseLadder)` to wire a runtime sibling-presence
+		// check into the policy selector of `bodyPolicyWrap`. In the
 		// current grammar this is `HxIfStmt.elseBody`; the same shape
 		// (pair of bodyPolicy fields, one required, one optional) can
 		// opt in without further macro changes. First-match semantics:
 		// a struct with two optional bodyPolicy siblings would quietly
 		// pick one — no such grammar exists today, and a future case
-		// can disambiguate via an explicit arg on `@:fmt(fitLineIfWithElse)`.
+		// can disambiguate via an explicit arg on `@:fmt(ifElseLadder)`.
 		var optionalBodyFieldName: Null<String> = null;
 		for (c in node.children) if (c.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true && c.fmtReadStringArgs('bodyPolicy') != null) {
 			optionalBodyFieldName = c.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
@@ -1193,10 +1193,9 @@ class WriterLowering {
 			// `elseBranch` is null — mirrors fork's arrow-body / comprehension-
 			// filter-if short-circuits onto `ifBody`. When this flag is set
 			// the field also opts into the `optionalBodyFieldName` channel so
-			// `elseFieldName` is populated regardless of `fitLineIfWithElse`.
+			// `elseFieldName` is populated regardless of `ifElseLadder`.
 			final fallbackFlag: Null<String> = child.fmtReadString('noSiblingFallback');
-			final elseFieldName: Null<String> =
-				child.fmtHasFlag('fitLineIfWithElse') || fallbackFlag != null ? optionalBodyFieldName : null;
+			final elseFieldName: Null<String> = child.fmtHasFlag('ifElseLadder') || fallbackFlag != null ? optionalBodyFieldName : null;
 			// ω-condwrap-fitline-construct-group: this field consumes the pending
 			// cond iff it is the mandatory bare-Ref bodyPolicy body immediately
 			// following the condWrap field (mirrors emitMandatoryRefField's
@@ -1847,6 +1846,9 @@ typedef WrapBodyOpts = {
 	bodyTypePath: String,
 	hasElseIf: Bool,
 	elseFieldName: Null<String>,
+	// `@:fmt(ifElseLadder)` on a statement-`if` branch body: inside an `if` / `else` chain the body's placement is
+	// `Next` (`WriterBodyPolicyLowering.buildIfElseLadderTest`). Null/false → byte-inert.
+	?ifElseLadder: Bool,
 	?afterKwExpr: Null<Expr>,
 	?kwLeadingExpr: Null<Expr>,
 	?kwPolicyFlagName: Null<String>,

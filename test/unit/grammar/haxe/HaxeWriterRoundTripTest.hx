@@ -405,12 +405,12 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('while (x)\n\t\t\tdoSomethingVeryLong();') != -1, 'expected while-body break in: <$out>');
 	}
 
-	private function testElseBodyPolicyNextBreaksOnlyElseBody(): Void {
+	private function testElseBodyPolicyNextLaddersTheChain(): Void {
 		final out: String = writeWithOpts(
 			'class F { function f() { if (x) doA(); else doB(); } }', BodyPolicy.Same, BodyPolicy.Next, BodyPolicy.Same, BodyPolicy.Same,
 			BodyPolicy.Same, 120
 		);
-		Assert.isTrue(out.indexOf('if (x) doA();') != -1, 'expected then-body flat in: <$out>');
+		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoA();') != -1, 'expected then-body laddered in: <$out>');
 		Assert.isTrue(out.indexOf('else\n\t\t\tdoB();') != -1, 'expected else-body next line in: <$out>');
 	}
 

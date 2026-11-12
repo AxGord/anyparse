@@ -129,7 +129,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "206b3b5484c9975f",
+				"out": "abaa361c74f910b7",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -669,7 +669,7 @@
 		},
 		{
 			"name": "if-chain-ladder/R1.hx",
-			"note": "an if with an else under fitLineIfWithElse + fitLineBodyGlue: a multi-line branch body ladders every branch of its chain, else-if links included, while a chain nested in a non-link body, a braced chain, a value-if and a body that moves to its own line but stays one line keep their own layout",
+			"note": "an if with an else under fitLineIfWithElse + fitLineBodyGlue: every brace-less branch body of its chain goes on its own line, else-if links and nested chains included, one-line bodies too; a braced branch keeps `} else` and a value-if keeps its own layout",
 			"fixpoint": "if-chain-ladder/R1.hx",
 			"argv": [
 				"hxq",
@@ -678,7 +678,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "8735ff527dbf6d1a",
+				"out": "3f7fe3f6fae49ad7",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

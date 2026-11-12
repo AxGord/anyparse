@@ -460,6 +460,7 @@ final class WriterRefFieldLowering {
 				bracketBodyGlueArgs: child.fmtReadStringArgs(WriterLowering.BRACKET_BODY_GLUE),
 				arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
+				ifElseLadder: child.fmtHasFlag('ifElseLadder'),
 				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
@@ -990,7 +991,8 @@ final class WriterRefFieldLowering {
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 			loopBodyIfElseArgs: loopBodyIfElseArgs,
-			elseSwitchArgs: elseSwitchArgs
+			elseSwitchArgs: elseSwitchArgs,
+			ifElseLadder: child.fmtHasFlag('ifElseLadder')
 		}));
 		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
 		// from HERE, where the field's own meta and its own comment slots are in

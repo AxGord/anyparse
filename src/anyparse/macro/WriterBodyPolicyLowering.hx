@@ -101,16 +101,14 @@ final class WriterBodyPolicyLowering {
 	 * to the next line.
 	 *
 	 * ψ₁₂: when `elseFieldName` is non-null (derived from a sibling
-	 * `@:optional` bodyPolicy field captured by `lowerStruct` and gated
-	 * by the field's own `@:fmt(fitLineIfWithElse)` flag), the `FitLine`
-	 * branch is replaced with a runtime ternary that degrades to the
-	 * `Next` layout when `opt.fitLineIfWithElse` is `false` AND the
-	 * sibling is non-null. On the sibling site itself (`elseBody`) the
-	 * runtime check trivially resolves to `opt.fitLineIfWithElse`
-	 * because the emission is already inside the `if (_optVal != null)`
-	 * guard; on the peer site (`thenBody`) the check becomes a real
-	 * lookup on `value.<elseFieldName>`. When `elseFieldName` is null,
-	 * the `FitLine` branch stays byte-identical to pre-ψ₁₂.
+	 * `@:optional` bodyPolicy field captured by `lowerStruct`), the
+	 * `FitLine` branch degrades to the `Next` layout when
+	 * `opt.fitLineIfWithElse` is `false` AND the sibling is non-null, and a
+	 * field carrying `@:fmt(ifElseLadder)` substitutes `Next` for its whole
+	 * placement inside a chain (`buildIfElseLadderTest`). On the sibling site
+	 * itself (`elseBody`) the presence check is trivially true because the
+	 * emission is already inside the `if (_optVal != null)` guard; on the peer
+	 * site (`thenBody`) it is a real lookup on `value.<elseFieldName>`.
 	 *
 	 * The case patterns are built as raw `EField` expressions to avoid
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
@@ -546,19 +544,9 @@ final class WriterBodyPolicyLowering {
 			// ω-elseif-body-break: `_inElseIfBranch` (set by an enclosing `else if`
 			// via propagateElseIfBranch) is an extra break trigger even when this
 			// `if` has no `else` of its own — mirrors fork's `isPartOfIfElse`
-			// "if inside else" clause. Under `fitLineIfWithElse` a branch of a chain keeps its own placement only while every
-			// branch of the chain renders on one line (`BodyFit.chainBranchLayout`); otherwise the whole chain is a ladder.
-			final _inChain: Bool = $elseAccess != null || opt._inElseIfBranch;
-			if (_inChain && !opt.fitLineIfWithElse) {
-				_dn(_cols, _dc([_dhl(), _body]));
-			} else {
-				final _fit: anyparse.core.Doc = $fitInnerExpr;
-				_inChain
-					? anyparse.format.BodyFit.chainBranchLayout(
-						_cols, _body, _fit, _dn(_cols, _dc([_dhl(), _body])), opt._ifChainToken, opt.lineWidth
-					)
-					: _fit;
-			}
+			// "if inside else" clause. A statement `if` never reaches here inside a chain: `ifElseLadder` puts its
+			// branch bodies on `Next` upstream (`buildBodyCoreWrap`), so this gate is a value-`if`'s.
+			opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
 		};
 	}
 
@@ -720,7 +708,12 @@ final class WriterBodyPolicyLowering {
 		// (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`) read the flag alone, so the
 		// OPEN seam must not depend on which policy arm the body reaches.
 		final bracketTest: Null<Expr> = bp.buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
-		final policyFlag: Expr = bracketTest == null ? loopPolicy : macro ($bracketTest ? $samePat : $loopPolicy);
+		final bracketPolicy: Expr = bracketTest == null ? loopPolicy : macro ($bracketTest ? $samePat : $loopPolicy);
+		// The if/else ladder: a branch body of a statement `if` chain that reaches this selector has no braces of its own
+		// (a block takes an outer arm, a `switch` the `elseSwitch` substitution below), so it goes on its own line
+		// whatever the placement says. Brace-delimited branches keep their glue, and an `if` without an `else` is no chain.
+		final ladderTest: Null<Expr> = buildIfElseLadderTest(opts);
+		final policyFlag: Expr = ladderTest == null ? bracketPolicy : macro ($ladderTest ? $nextPat : $bracketPolicy);
 		final policyCases: Array<Case> = [
 			{ values: [samePat], expr: sameLayoutExpr, guard: null },
 			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
@@ -1100,6 +1093,20 @@ final class WriterBodyPolicyLowering {
 		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
 		final gap: Expr = macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $nextCurly, opt);
 		return emptySep == null ? gap : macro ($afterKwExpr == null && $kwLeadingExpr.length == 0 ? $emptySep : $gap);
+	}
+
+	/**
+	 * The runtime test that a body of `@:fmt(ifElseLadder)` belongs to an `if` / `else` chain of statements: its own `if` has
+	 * an `else` (`elseFieldName`), or it is an `else if` link (`opt._inElseIfBranch`). A field with an expression-position
+	 * knob (`exprFlagName`) leaves the ladder out where that knob places it (`opt._inExprPosition`): there the `if` yields
+	 * a value. Null on any other body field.
+	 */
+	private static function buildIfElseLadderTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
+		final elseFieldName: Null<String> = opts.elseFieldName;
+		if (opts.ifElseLadder != true || elseFieldName == null) return null;
+		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
+		final inChain: Expr = macro ($elseAccess != null || opt._inElseIfBranch);
+		return opts.exprFlagName == null ? inChain : macro (!opt._inExprPosition && $inChain);
 	}
 
 }

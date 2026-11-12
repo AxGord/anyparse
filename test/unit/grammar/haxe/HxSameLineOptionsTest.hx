@@ -255,23 +255,15 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement-form `} catch` must break in: <$out>');
 	}
 
-	public function testSameLineElseInlineWhenBothBodiesSame(): Void {
-		// ω-expression-case-flat-fanout: when both `ifBody` and `elseBody`
-		// are runtime-`Same`, the entire if-else collapses inline — the
-		// ψ₉ shape-awareness suppression for non-block prevBody is itself
-		// suppressed because `elseBody=Same` means the else-body is forced
-		// inline anyway, so a lone `else` on its own line would dangle.
-		// `case POpen: if (x) doA(); else doB();` is the canonical
-		// expression-position consumer (HxCaseBranch's flat-fanout swaps
-		// `elseBody` to `expressionCase`); the same shape applies whenever
-		// a programmatic caller sets `elseBody=Same` directly. Block-bodied
-		// then-branches still use the `sameLineElse` flag (see the sibling
-		// test below).
+	public function testSameBodiesStillLadderAStatementIfWithAnElse(): Void {
+		// Both `ifBody` and `elseBody` `Same`: a statement `if` with an `else` and brace-less branches is a ladder all the same,
+		// so the `else` takes its own line; the inline collapse stays an expression-position shape (`case POpen: …` of a
+		// value switch), placed by the expression knobs.
 		final out: String = writeWithBodyPolicy(
 			'class F { function f():Void { if (x) doA(); else doB(); } }', anyparse.format.BodyPolicy.Same,
 			anyparse.format.BodyPolicy.Same, true
 		);
-		Assert.isTrue(out.indexOf('doA(); else doB();') != -1, 'expected `doA(); else doB();` inline in: <$out>');
+		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoA();\n\t\telse\n\t\t\tdoB();') != -1, 'expected the ladder in: <$out>');
 	}
 
 	public function testSameLineElseTrueHonoredByBlockThenBody(): Void {

@@ -439,7 +439,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * block/case tail `if` drops (or reduces) the inherited
 	 * expression-position frame instead of force-propagating it. An
 	 * `if` WITH an `else` keeps the frame so the chain breaks together
-	 * under `fitLineIfWithElse` (mirrors the `noSiblingFallback`
+	 * as one ladder (`@:fmt(ifElseLadder)`, mirrors the `noSiblingFallback`
 	 * no-else gate); `for` / `while` tails are excluded — the fork
 	 * breaks their expression-position bodies, so force-propagation
 	 * already matches. Consumed by the `@:fmt(clearExprPositionNonTail)`

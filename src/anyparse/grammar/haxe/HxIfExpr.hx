@@ -34,7 +34,7 @@ package anyparse.grammar.haxe;
  * `@:fmt(elseIf)` on `elseBranch` routes an `else if` chain through `opt.elseIf` instead of
  * `expressionElseBody`. `@:fmt(noSiblingFallback('ifBody'))` on `thenBranch` swaps `opt.expressionIfBody` for
  * `opt.ifBody` when `elseBranch` is null (the fork's `markIf` short-circuits for an arrow-body or
- * comprehension-filter `if`) — the inverse polarity of `HxIfStmt`'s `fitLineIfWithElse`.
+ * comprehension-filter `if`). With an `else`, a `FitLine` then-branch keeps the head only under `opt.fitLineIfWithElse`.
  *
  * `@:fmt(inlineBlockBodyIfFlag('expressionIfWithBlocks'))` on both branches flattens a `BlockExpr` body to
  * `{stmt;}` under the knob (opt-in; trivia-mode `//` comments inside the block break syntax, as in the fork).

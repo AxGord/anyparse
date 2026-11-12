@@ -466,7 +466,7 @@ final class WriterBraceSymmetryLowering {
 		// `_setSsbSuppress` so unwraps nested deeper in the then-body
 		// (e.g. `if (a) while (c) { if (b) x; } else y`) are gated too.
 		// `elseFieldName` is non-null only for `HxIfStmt.thenBody` (via
-		// `fitLineIfWithElse`'s optionalBodyFieldName channel); for / while bodies
+		// `ifElseLadder`'s optionalBodyFieldName channel); for / while bodies
 		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
 		// access is byte-identical to pre-slice.
 		final dropBraces: Bool = bs.ctx.trivia && child.fmtHasFlag(DROP_SINGLE_STMT_BRACES);
@@ -511,7 +511,7 @@ final class WriterBraceSymmetryLowering {
 				)
 			);
 		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
-		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse
+		// is non-null only for `HxIfStmt.thenBody` (the ifElseLadder
 		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
 		// stay exempt from gate 8 and the wrap direction.
 		final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;

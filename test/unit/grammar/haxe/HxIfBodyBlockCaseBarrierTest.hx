@@ -22,7 +22,7 @@ import utest.Test;
  * (the config where the inherited frame would otherwise force a break);
  * under the default `Keep` the source-preserving behaviour is untouched.
  * It fires for NO-ELSE `if`s only — a with-else chain keeps the frame so
- * the whole chain breaks together via `fitLineIfWithElse`.
+ * the whole chain breaks together as one if/else ladder.
  *
  * Per `feedback_unit_test_trivia_writer.md`: trivia pair only.
  */

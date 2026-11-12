@@ -118,10 +118,10 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '"whitespace": {"addLineCommentSpace": false, "bracesConfig": {"singleStatementBraces": "remove"}}, '
 		+ '"sameLine": {"ifBody": "fitLine"}}';
 
-	/** The one config where a bare body reaches the writer as a width PROBE rather than a break. */
+	/** The one config where a bare body reaches the writer as a width PROBE rather than a break: a value tail's `if`. */
 	private static final CONFIG_GLUED_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 60}, "whitespace": {"addLineCommentSpace": false}, '
-		+ '"sameLine": {"ifBody": "fitLine", "fitLineIfWithElse": true, "elseIfCommentReflow": true}}';
+		+ '"maxLineLength": 60}, "whitespace": {"addLineCommentSpace": false}, "sameLine": {"ifBody": "fitLine", '
+		+ '"expressionIf": "fitLine", "fitLineIfWithElse": true, "elseIfCommentReflow": true}}';
 
 	private static final WRAPPED_COND_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else\n\t\t\t// see foo(alphaBetaGamma\n'
@@ -146,20 +146,20 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t\t// open delims (  [  {\n\t\tif (b) {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
 	private static final OPEN_DELIM_REFLOWED: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else if (b) { // open delims (  [  {\n\t\t\ttwo();\n\t\t\ttwoMore();\n\t\t}\n\t}\n}';
-	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif ('
-		+ 'b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t}\n}';
-	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n'
-		+ '\t\t\t\t\tgammaValue, deltaValue);\n\t}\n}';
+	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a)\n\t\t\t\tone();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t\t};\n\t}\n}';
+	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a) one();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue,\n'
+		+ '\t\t\t\t\t\tdeltaValue);\n\t\t};\n\t}\n}';
 
 	/** The probe body followed by an `else`, so a walk that stepped OVER the probe would anchor there. */
-	private static final GLUED_BODY_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\tif (b)\n\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n'
-		+ '\t\telse\n\t\t\tfallbackStep();\n\t}\n}';
+	private static final GLUED_BODY_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a)\n\t\t\t\tone();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n'
+		+ '\t\t\telse\n\t\t\t\tfallbackStep();\n\t\t};\n\t}\n}';
 
-	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue,\n'
-		+ '\t\t\t\t\tgammaValue, deltaValue);\n\t\t\telse\n\t\t\t\tfallbackStep();\n\t}\n}';
+	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a) one();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue,\n'
+		+ '\t\t\t\t\t\tdeltaValue);\n\t\t\t\telse fallbackStep();\n\t\t};\n\t}\n}';
 
 	/**
 	 * An EMPTY then-body renders as one closed `{}` token with no interior break,
@@ -183,13 +183,13 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t} else\n\t\t\t// note\n\t\t\tif (b) {}\n\t}\n}';
 
 	/** A bare body that already carries hardlines: the writer wraps it in a glue PROBE. */
-	private static final PROBE_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\tif (b)\n\t\t\tfor (item in collection) {\n\t\t\t\thandle(item);\n\t\t\t}\n\t\telse\n'
-		+ '\t\t\tfallbackStep();\n\t}\n}';
+	private static final PROBE_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a)\n\t\t\t\tone();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\tif (b)\n\t\t\t\tfor (item in collection) {\n\t\t\t\t\thandle(item);\n\t\t\t\t}\n\t\t\telse\n'
+		+ '\t\t\t\tfallbackStep();\n\t\t};\n\t}\n}';
 
-	private static final PROBE_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
-		+ '\t\t\tif (b)\n\t\t\t\tfor (item in collection) {\n\t\t\t\t\thandle(item);\n\t\t\t\t}\n\t\t\telse\n'
-		+ '\t\t\t\tfallbackStep();\n\t}\n}';
+	private static final PROBE_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a) one();\n\t\t\telse\n'
+		+ '\t\t\t\t// note\n\t\t\t\tif (b) for (item in collection) {\n\t\t\t\t\thandle(item);\n\t\t\t\t}\n'
+		+ '\t\t\t\telse fallbackStep();\n\t\t};\n\t}\n}';
 
 	/** `ifBody`/`elseBody: same` - the one policy pair that leaves a bare body with no hardline. */
 	private static final CONFIG_INLINE_BODY: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, '
@@ -198,11 +198,11 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	private static final NO_ANCHOR_SRC: String =
 		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n\t\tif (b)\n\t\t\ttwo();\n\t}\n}';
 	private static final NO_ANCHOR_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\t\tif (b) two();\n\t}\n}';
+		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse if (b) // note\n\t\t\ttwo();\n\t}\n}';
 	private static final INLINE_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse\n\t\t\t// note\n'
 		+ '\t\tif (b)\n\t\t\ttwo();\n\t\telse\n\t\t\tthree();\n\t}\n}';
 	private static final INLINE_ELSE_CANON: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) one();\n\t\telse\n\t\t\t// note\n\t\t\tif (b) two();\n\t\t\telse three();\n\t}\n}';
+		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tone();\n\t\telse if (b) // note\n\t\t\ttwo();\n\t\telse\n\t\t\tthree();\n\t}\n}';
 	private static final AFTER_KW_SRC: String = 'class C {\n\tfunction f() {\n\t\tif (a) {\n\t\t\tone();\n\t\t\toneMore();\n'
 		+ '\t\t} else // cuddled to else\n\t\t\t// interposed\n\t\t\tif (b) {\n\t\t\t\ttwo();\n'
 		+ '\t\t\t\ttwoMore();\n\t\t\t}\n\t}\n}';
@@ -284,13 +284,12 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * breaks after `{`.
 	 */
 	@:pin('control')
-	@:killer('M-EICR-HEADTEXT-ANY')
-	public function testInlineBodyPolicyLeavesNoAnchorAndRefuses(): Void {
+	@:killer('M-IF-ELSE-LADDER-OFF')
+	public function testInlinePlacementLaddersAndAnchorsTheComment(): Void {
+		// A `same` placement no longer keeps a chain's bodies inline: the ladder puts each body below its head, so the link's
+		// head line ends at its `)` and the comment trails it there, with or without an `else` of the link's own.
 		Assert.equals(NO_ANCHOR_CANON, write(NO_ANCHOR_SRC, CONFIG_INLINE_BODY));
 		Assert.equals(NO_ANCHOR_CANON, write(NO_ANCHOR_CANON, CONFIG_INLINE_BODY));
-		// With an `else` of its own the nested `if` DOES emit a hardline, but only
-		// past its rendered then-body - the scan stops at that body's `;` instead
-		// of hanging the head's comment off the end of a statement.
 		Assert.equals(INLINE_ELSE_CANON, write(INLINE_ELSE_SRC, CONFIG_INLINE_BODY));
 		Assert.equals(INLINE_ELSE_CANON, write(INLINE_ELSE_CANON, CONFIG_INLINE_BODY));
 	}
@@ -405,9 +404,9 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	 * the exponential shape cannot produce this answer in reasonable time either way.
 	 */
 	@:pin('control')
-	@:killer('M-EICR-HEADTEXT-ANY')
-	public function testDeepRefusedChainStaysCorrect(): Void {
-		Assert.equals(deepChain(16, true), write(deepChain(16, false), CONFIG_INLINE_BODY));
+	@:killer('M-IF-ELSE-LADDER-OFF')
+	public function testDeepChainLaddersEveryLink(): Void {
+		Assert.equals(deepLadder(16), write(deepChain(16, false), CONFIG_INLINE_BODY));
 	}
 
 	/**
@@ -500,6 +499,18 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 			lines.push('${pad(i - 1)}else');
 			lines.push('${pad(glued ? i : 1)}// note $i');
 			link(i);
+		}
+		lines.push('\t}');
+		lines.push('}');
+		return lines.join('\n');
+	}
+
+	/** The `n`-link ladder `deepChain(n, false)` writes to: every link glued to its `else`, its comment trailing the head. */
+	private static function deepLadder(n: Int): String {
+		final lines: Array<String> = ['class C {', '\tfunction f() {', '\t\tif (c0)', '\t\t\tstep0();'];
+		for (i in 1...n + 1) {
+			lines.push('\t\telse if (c$i) // note $i');
+			lines.push('\t\t\tstep$i();');
 		}
 		lines.push('\t}');
 		lines.push('}');

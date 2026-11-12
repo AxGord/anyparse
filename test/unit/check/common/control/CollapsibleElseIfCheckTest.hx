@@ -154,7 +154,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	/** End-to-end: a bare then-branch collapses onto the `else` line, no braces introduced. */
 	public function testFixOutputCollapsesOntoElseLine(): Void {
 		final out: String = applyFixOnce(wrap('if (a) p(); else {\n\t\t\tif (b) q();\n\t\t}'), REMOVE_BRACES_CONFIG);
-		Assert.isTrue(out.indexOf('else if (b) q();') != -1);
+		Assert.isTrue(out.indexOf('else if (b)\n') != -1);
 		Assert.equals(-1, out.indexOf('else if (b) {'));
 	}
 
@@ -167,7 +167,7 @@ class CollapsibleElseIfCheckTest extends Test {
 	public function testAMacroReificationIsReadAndFixed(): Void {
 		final src: String = wrap('final e = macro {\n\t\t\tif (a) p(); else {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\t};');
 		Assert.equals(1, violations(src).length);
-		Assert.isTrue(applyFixOnce(src, REMOVE_BRACES_CONFIG).indexOf('else if (b) q();') != -1);
+		Assert.isTrue(applyFixOnce(src, REMOVE_BRACES_CONFIG).indexOf('else if (b)\n') != -1);
 	}
 
 	/**

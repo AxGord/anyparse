@@ -74,9 +74,9 @@ final class HxElseIfBodyBreakTest extends Test {
 		Assert.isTrue(out.indexOf('if (c) d();') != -1, 'an if inside a chain-final else-block must keep its body inline: <$out>');
 	}
 
-	public function testFitLineIfWithElseKeepsInline(): Void {
-		// With fitLineIfWithElse:true the whole if/else may keep fitting halves
-		// inline, so the else-if body stays on the header line.
+	public function testFitLineIfWithElseStillBreaksElseIfBody(): Void {
+		// An if/else chain of statements is a ladder whatever fitLineIfWithElse says,
+		// so the brace-less else-if body leaves the header line.
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
 			edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
 			edited.ifBody = BodyPolicy.FitLine;
@@ -86,7 +86,7 @@ final class HxElseIfBodyBreakTest extends Test {
 		});
 		final src: String = 'class M { function f() { if (a) { p(); } else if (q(v) == -1) w(v); } }';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('else if (q(v) == -1) w(v);') != -1, 'fitLineIfWithElse:true must keep the else-if body inline: <$out>');
+		Assert.isTrue(out.indexOf('else if (q(v) == -1)\n') != -1, 'the else-if body must leave its header line: <$out>');
 	}
 
 	public function testDefaultConfigElseIfUntouched(): Void {

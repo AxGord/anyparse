@@ -1,7 +1,6 @@
 package anyparse.format;
 
 import anyparse.core.BreakCommits;
-import anyparse.core.BreakToken;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
@@ -198,22 +197,6 @@ final class BodyFit {
 	 */
 	public static function glueLayout(cols: Int, body: Doc, glued: Doc, lineWidth: Int): Doc {
 		return lineWidth <= 0 ? glued : Doc.IfGluedFirstLineExceeds(lineWidth, cols, breakLayout(cols, body), glued);
-	}
-
-	/**
-	 * One branch body of an `if` / `else` chain whose branches lay out as ONE unit: `layout`, the branch's own placement, while
-	 * every branch of the chain renders on one line, and `ladder` (the body on its own line one indent deeper) for all of them
-	 * once any one renders on more. `token` names the chain, so the chain is one `BreakCommit` decision; null leaves `layout`.
-	 *
-	 * The measure render takes the token when THIS body renders on more than one line: always when it holds a hard line, and
-	 * otherwise when its flat width does not fit one indent deeper than the head, the widest line any placement offers it.
-	 */
-	public static function chainBranchLayout(cols: Int, body: Doc, layout: Doc, ladder: Doc, token: Null<BreakToken>, lineWidth: Int): Doc {
-		if (token == null) return layout;
-		final flatWidth: Int = WrapList.flatLength(body);
-		final mark: Doc = Doc.BreakMark(Doc.Empty, token);
-		final multiLine: Doc = flatWidth == -1 ? mark : Doc.IfArrowContinuationFits(cols, flatWidth, lineWidth + 1, mark, Doc.Empty);
-		return Doc.BreakCommit(ladder, Doc.Concat([layout, multiLine]), token);
 	}
 
 	/**

@@ -11,7 +11,7 @@ using StringTools;
  * `else` at the loop's own indent, where it reads as a branch of the loop.
  *
  * The gate is the CHILD's shape, not a sibling field: `if` without `else` keeps gluing, because
- * `for (xs) if (c) f(x);` is a deliberate project idiom. That is the whole difference from `fitLineIfWithElse`, which
+ * `for (xs) if (c) f(x);` is a deliberate project idiom. That is the whole difference from the if/else ladder, which
  * one storey down asks whether the `if` BEING placed has an `else` of its own.
  *
  * Every fixture is asserted on BOTH knob states off a config pair that differs in nothing but the knob, so a diff

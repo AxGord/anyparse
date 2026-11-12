@@ -547,29 +547,6 @@ final class WriterOptFanout {
 	}
 
 	/**
-	 * Opt-fanout setter for `@:fmt(openIfChain)` on a statement-`if` ctor: a head `if` opens a chain with a fresh
-	 * `_ifChainToken`, an `else if` link (`_inElseIfBranch`) keeps the token its head opened, so the branch bodies of one chain
-	 * share one `BreakCommit` decision. Only `fitLineIfWithElse` reads the token, so without it `o` returns unchanged and no copy is made.
-	 */
-	private static function openIfChainField(optionsCT: ComplexType): Field {
-		return {
-			name: '_openIfChain',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (!o.fitLineIfWithElse || o._inElseIfBranch && o._ifChainToken != null) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._ifChainToken = new anyparse.core.BreakToken();
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
 	 * ω-anonfunction-empty-curly — opt-fanout shim for the
 	 * `propagateAnonFnContext` meta. Idempotent sister to
 	 * `_setExprPosition` — returns `o` unchanged when `_inAnonFnBody`
@@ -1280,7 +1257,6 @@ final class WriterOptFanout {
 		if (optionsHasField(optionsTypePath, '_inElseIfBranch')) {
 			fields.push(setElseIfBranchField(optionsCT));
 			fields.push(clearElseIfBranchField(optionsCT));
-			if (optionsHasField(optionsTypePath, '_ifChainToken')) fields.push(openIfChainField(optionsCT));
 		}
 
 		if (hasValueIfBranch) {

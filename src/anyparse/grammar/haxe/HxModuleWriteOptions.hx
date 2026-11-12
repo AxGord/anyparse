@@ -197,6 +197,11 @@ final class HxModuleWriteOptions {
 	 */
 	public var elseSwitch: KeywordPlacement = KeywordPlacement.Same;
 
+	/**
+	 * Under `FitLine`, whether a value-`if` then-branch with an `else` keeps its fitLine placement (`true`) or goes on
+	 * its own line (`false`). A statement `if` no longer reads it: every if/else chain of statements is a ladder
+	 * (`@:fmt(ifElseLadder)` on `HxIfStmt`).
+	 */
 	public var fitLineIfWithElse: Bool = false;
 
 	/**
@@ -359,9 +364,9 @@ final class HxModuleWriteOptions {
 	 * cannot express: `forBody: next` produces the same layout for the `if`/
 	 * `else` pair but moves the guard idiom under the header too.
 	 *
-	 * Distinct from `fitLineIfWithElse` one storey down, which asks whether the
-	 * `if` BEING placed has an `else` sibling of its own. That flag is shared
-	 * with upstream semantics and is deliberately not widened to loops.
+	 * Distinct from the if/else ladder one storey down (`@:fmt(ifElseLadder)`),
+	 * which asks whether the `if` BEING placed has an `else` sibling of its own,
+	 * and is deliberately not widened to loops.
 	 *
 	 * Default `false` is fork parity. Fed by `sameLine.loopBodyIfElseNext`;
 	 * consumed by `WriterBodyPolicyLowering.buildBodyCoreWrap`, which substitutes
@@ -1110,18 +1115,10 @@ final class HxModuleWriteOptions {
 	// `@:fmt(propagateElseIfBranch)` ONLY when the else-branch runtime ctor is
 	// `IfStmt`, and cleared on the inner `if`'s then-body recursion
 	// (`@:fmt(clearElseIfBranch)`) so it reaches exactly that one inner `if`'s
-	// body fit-gate and dies. Read by the `fitLineIfWithElse` body gate
-	// (`buildBodyFitExpr`) as an extra break trigger: mirrors haxe-formatter's
-	// `MarkSameLine.isPartOfIfElse` "if inside else" clause, so a fitting
-	// single-statement `else if (c) stmt;` degrades to `Next` under
-	// `sameLine.ifBody:fitLine` + `fitLineIfWithElse:false`. Default false.
+	// body and dies. Read by the if/else ladder (`buildIfElseLadderTest`) as
+	// chain membership: mirrors haxe-formatter's `MarkSameLine.isPartOfIfElse`
+	// "if inside else" clause, so a single-statement `else if (c) stmt;` with no
+	// `else` of its own still goes on its own line. Default false.
 	public var _inElseIfBranch: Bool = false; // noqa: naming
-
-	/**
-	 * Write-time-only identity of the `if` / `else if` chain the current statement belongs to, so every branch body of
-	 * it follows one `BreakCommit` decision under `fitLineIfWithElse`. A fresh token per head `if`
-	 * (`@:fmt(openIfChain)` on `HxStatement.IfStmt`), inherited unchanged by an `else if` link (`_inElseIfBranch`).
-	 */
-	public var _ifChainToken: Null<anyparse.core.BreakToken> = null; // noqa: naming
 
 }

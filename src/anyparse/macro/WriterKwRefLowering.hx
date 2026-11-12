@@ -593,8 +593,6 @@ final class WriterKwRefLowering {
 		if (branch.fmtHasFlag('propagateNestedType')) optExpr = macro _setNestedType($optExpr, opt);
 		// `@:fmt(clearTypedefContext)` on `HxType.ArrowFn`: a function type under a typedef is not the typedef body.
 		if (branch.fmtHasFlag('clearTypedefContext')) optExpr = macro _clearTypedefBody($optExpr, opt);
-		// `@:fmt(openIfChain)` on a statement-`if` ctor: the chain identity its branch bodies share (`_openIfChain`).
-		if (branch.fmtHasFlag('openIfChain')) optExpr = macro _openIfChain($optExpr, opt);
 		if (clearExpr) {
 			final operandAccess: Expr = macro $i{argNames[0]};
 			final operandIsBlock: Expr = AstPredLowering.predCallExpr(

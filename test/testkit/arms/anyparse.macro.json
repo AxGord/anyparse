@@ -2921,30 +2921,6 @@
 			"note": "a chain tail keeps the chain context, so a local inside its initializer breaks its lone simple metadata off its line"
 		},
 		{
-			"name": "M-IF-CHAIN-PER-LINK",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "openIfChainField",
-			"find": "if (!o.fitLineIfWithElse || o._inElseIfBranch && o._ifChainToken != null) return o;",
-			"replace": "if (!o.fitLineIfWithElse) return o;",
-			"note": "every else-if link opens a chain of its own, so a multi-line branch ladders only the links from it on and the head above it keeps its glue"
-		},
-		{
-			"name": "M-CHAIN-NO-ELSE-JOINS",
-			"type": "anyparse.macro.WriterBodyPolicyLowering",
-			"method": "buildBodyFitExpr",
-			"find": "final _inChain: Bool = $elseAccess != null || opt._inElseIfBranch;",
-			"replace": "final _inChain: Bool = true;",
-			"note": "an if without an else counts as a chain branch, so its wrapped body leaves the head line for a ladder"
-		},
-		{
-			"name": "M-IF-CHAIN-NESTED-INHERITS",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "openIfChainField",
-			"find": "o._inElseIfBranch && o._ifChainToken != null",
-			"replace": "o._ifChainToken != null",
-			"note": "every if inherits the token of the chain it is nested in, so a fitting chain inside a laddered branch body ladders with it"
-		},
-		{
 			"name": "M-ALLMAN-GLUE-NO-BELOW-FIT",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "wrapBodyAllman",
@@ -2959,6 +2935,62 @@
 			"find": " || $optFlag != anyparse.format.BodyPolicy.FitLine",
 			"replace": "",
 			"note": "a flat literal moves below the head under comprehensionFor same too, where the body stays beside the head"
+		},
+		{
+			"name": "M-IF-ELSE-LADDER-OFF",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "final ladderTest: Null<Expr> = buildIfElseLadderTest(opts);",
+			"replace": "final ladderTest: Null<Expr> = null;",
+			"note": "no if/else chain is a ladder, so a brace-less branch body keeps whatever placement the config gave it"
+		},
+		{
+			"name": "M-IF-ELSE-LADDER-NO-LINK",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildIfElseLadderTest",
+			"find": "macro ($elseAccess != null || opt._inElseIfBranch)",
+			"replace": "macro ($elseAccess != null)",
+			"note": "an else-if link without an else of its own is no chain, so its brace-less body stays on the link's head"
+		},
+		{
+			"name": "M-IF-ELSE-LADDER-NO-ELSE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildIfElseLadderTest",
+			"find": "macro ($elseAccess != null || opt._inElseIfBranch)",
+			"replace": "macro (true || $elseAccess != null || opt._inElseIfBranch)",
+			"note": "every statement if counts as a chain, so an if without an else ladders its body too"
+		},
+		{
+			"name": "M-IF-ELSE-SWITCH-LADDERS",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyCoreWrap",
+			"find": "final esSame: Null<Expr> = tests.same;",
+			"replace": "final esSame: Null<Expr> = null;",
+			"note": "a switch branch reaches the policy selector, so the ladder takes it below the head and a both-braced chain loses its glue"
+		},
+		{
+			"name": "M-VALUE-IF-FIT-WITH-ELSE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildBodyFitExpr",
+			"find": "opt.fitLineIfWithElse || ($elseAccess == null",
+			"replace": "false || ($elseAccess == null",
+			"note": "a value-if ignores fitLineIfWithElse, so its fitLine then-branch leaves the head whenever an else follows"
+		},
+		{
+			"name": "M-IF-ELSE-SEP-INLINE",
+			"type": "anyparse.macro.WriterFieldSepLowering",
+			"method": "sameLineSeparatorShapeAware",
+			"find": "final ladder: Bool = c.child.fmtHasFlag('ifElseLadder');",
+			"replace": "final ladder: Bool = false;",
+			"note": "the else separator trusts a Same placement knob, so after a laddered then-body the else glues to the body's line"
+		},
+		{
+			"name": "M-IF-ELSE-LADDER-IN-EXPR",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildIfElseLadderTest",
+			"find": "macro (!opt._inExprPosition && $inChain)",
+			"replace": "inChain",
+			"note": "a statement if in expression position ladders too, so a block's value tail if leaves its expression-knob placement"
 		}
 	]
 }

@@ -319,14 +319,22 @@ final class WriterFieldSepLowering {
 		final childBodyPolicyFlag: Null<String> = childBodyPolicy.stmt;
 		if (childBodyPolicyFlag == null) return withPadTrailingDrop(c.prevPadTrailing, c.shapeAwareSwitch);
 		final stmtBpAccess: Expr = optFieldAccess(childBodyPolicyFlag);
+		// `@:fmt(ifElseLadder)`: outside expression position a brace-less branch before `else` is on its own line whatever
+		// the statement knob says (`buildIfElseLadderTest`), so only the expression knob can still make it inline.
+		final ladder: Bool = c.child.fmtHasFlag('ifElseLadder');
 		final bpAccess: Expr = if (childBodyPolicy.expr == null) {
 			stmtBpAccess;
 		} else {
 			final exprBpAccess: Expr = optFieldAccess(childBodyPolicy.expr);
-			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
+			ladder ? exprBpAccess : macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
 		};
 		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-		final isInlineExpr: Expr = macro $bpAccess == $samePat;
+		final isInlineExpr: Expr = if (!ladder)
+			macro $bpAccess == $samePat;
+		else if (childBodyPolicy.expr == null)
+			macro false;
+		else
+			macro opt._inExprPosition && $bpAccess == $samePat;
 		// ω-ifelse-semicolon-next-line: when the body is forced inline
 		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
 		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a

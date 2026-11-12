@@ -6,9 +6,9 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * Under `sameLine.fitLineIfWithElse` with `sameLine.fitLineBodyGlue`, an `if` that has an `else` lays its whole chain out as a ladder
- * as soon as ANY branch body renders on more than one line: each body on its own line one indent deeper, `else` at the `if`'s
- * indent. A chain whose every branch fits stays to fitLine, and an `if` without an `else` keeps gluing its body to the head.
+ * Under `sameLine.fitLineIfWithElse` with `sameLine.fitLineBodyGlue`, an `if` that has an `else` lays its whole chain out as a ladder:
+ * each brace-less body on its own line one indent deeper, `else` at the `if`'s indent, whether a body is multi-line or fits.
+ * An `if` without an `else` keeps gluing its body to the head.
  */
 @:nullSafety(Strict)
 final class HxIfWithElseBodyGlueLadderTest extends Test {
@@ -49,10 +49,10 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 		+ "\t\t\tattachCollectedLabel(defaultPreviewSurface,\n\t\t\t\t'some long label text here', anotherArgument, yetAnother);\n"
 		+ "\t\telse\n\t\t\tlog('y');\n\t}\n}";
 	private static final ONE_LINER_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (c) a(); else b();\n\t}\n}';
-	private static final ONE_LINER_FIT: String = 'class C {\n\tfunction f() {\n\t\tif (c) a();\n\t\telse b();\n\t}\n}';
+	private static final ONE_LINER_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (c)\n\t\t\ta();\n\t\telse\n\t\t\tb();\n\t}\n}';
 	private static final FITTING_CHAIN_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (a) x(); else if (b) y(); else z();\n\t}\n}';
-	private static final FITTING_CHAIN_FIT: String =
-		'class C {\n\tfunction f() {\n\t\tif (a) x();\n\t\telse if (b) y();\n\t\telse z();\n\t}\n}';
+	private static final FITTING_CHAIN_LADDER: String =
+		'class C {\n\tfunction f() {\n\t\tif (a)\n\t\t\tx();\n\t\telse if (b)\n\t\t\ty();\n\t\telse\n\t\t\tz();\n\t}\n}';
 	private static final NO_ELSE_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n'
 		+ "\t\t\tattachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n\t}\n}";
 	private static final NO_ELSE_GLUED: String = 'class C {\n\tfunction f() {\n'
@@ -64,8 +64,8 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 	private static final NESTED_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n'
 		+ '\t\t\tattachCollectedLabel(defaultPreviewSurface,\n'
 		+ '\t\t\t\t\'some long label text here\', anotherArgument, yetAnother);\n\t\telse\n'
-		+ '\t\t\tfor (i in xs)\n\t\t\t\tif (b) y();\n\t\t\t\telse z();\n\t\tif (a)\n\t\t\tfor ('
-		+ 'i in xs)\n\t\t\t\tif (b) y();\n\t\t\t\telse z();\n\t\telse\n\t\t\tw();\n\t}\n}';
+		+ '\t\t\tfor (i in xs)\n\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\tif (a)\n\t\t\tfor ('
+		+ 'i in xs)\n\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\telse\n\t\t\tw();\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -73,57 +73,64 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 
 	/** A wrapped call in the then-branch takes the ladder instead of gluing to the head. */
 	@:pin('control')
-	@:killer('M-CHAIN-BRANCH-NONE')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testWrappedCallBodyLaddersTheChain(): Void {
 		Assert.equals(CALL_LADDER, triviaWrite(CALL_SOURCE));
 	}
 
 	/** A `for` whose own body goes below it takes the ladder too. */
 	@:pin('control')
-	@:killer('M-CHAIN-BRANCH-NONE')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testForBodyLaddersTheChain(): Void {
 		Assert.equals(FOR_LADDER, triviaWrite(FOR_SOURCE));
 	}
 
 	/** An else-if chain whose head branch is multi-line goes as a ladder in every branch. */
 	@:pin('control')
-	@:killer('M-CHAIN-BRANCH-NONE')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testElseIfChainWithMultiLineHeadIsALadder(): Void {
 		Assert.equals(CHAIN_HEAD_LADDER, triviaWrite(CHAIN_HEAD_SOURCE));
 	}
 
 	/** A multi-line branch in the middle of an else-if chain ladders the branches before and after it. */
 	@:pin('control')
-	@:killer('M-IF-CHAIN-PER-LINK')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testElseIfChainWithMultiLineMiddleIsALadder(): Void {
 		Assert.equals(CHAIN_MIDDLE_LADDER, triviaWrite(CHAIN_MIDDLE_SOURCE));
 	}
 
-	/** Every branch fits: each stays on its head's line. */
+	/** Every branch fits: the chain is a ladder all the same. */
 	@:pin('control')
-	@:killer('M-CHAIN-BRANCH-ALWAYS')
-	public function testFittingOneLinerStaysFitLine(): Void {
-		Assert.equals(ONE_LINER_FIT, triviaWrite(ONE_LINER_SOURCE));
-		Assert.equals(FITTING_CHAIN_FIT, triviaWrite(FITTING_CHAIN_SOURCE));
+	@:killer('M-IF-ELSE-LADDER-OFF')
+	public function testFittingOneLinerLadders(): Void {
+		Assert.equals(ONE_LINER_LADDER, triviaWrite(ONE_LINER_SOURCE));
+		Assert.equals(FITTING_CHAIN_LADDER, triviaWrite(FITTING_CHAIN_SOURCE));
 	}
 
 	/** An `if` without an `else` still glues its wrapped body to the head. */
 	@:pin('control')
-	@:killer('M-CHAIN-NO-ELSE-JOINS')
+	@:killer('M-IF-ELSE-LADDER-NO-ELSE')
 	public function testNoElseStillGlues(): Void {
 		Assert.equals(NO_ELSE_GLUED, triviaWrite(NO_ELSE_SOURCE));
 	}
 
 	/** Every ladder is a fixed point of the writer. */
 	@:pin('control')
-	@:killer('M-CHAIN-BRANCH-NONE')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testLaddersAreIdempotent(): Void {
-		for (ladder in [CALL_LADDER, FOR_LADDER, CHAIN_HEAD_LADDER, CHAIN_MIDDLE_LADDER]) Assert.equals(ladder, triviaWrite(ladder));
+		for (ladder in [
+			CALL_LADDER,
+			FOR_LADDER,
+			CHAIN_HEAD_LADDER,
+			CHAIN_MIDDLE_LADDER,
+			ONE_LINER_LADDER,
+			FITTING_CHAIN_LADDER
+		]) Assert.equals(ladder, triviaWrite(ladder));
 	}
 
-	/** A chain nested in a branch body that is not an `else if` link is its own chain: the outer ladder leaves it to fitLine. */
+	/** A chain nested in a branch body that is not an `else if` link is a ladder of its own. */
 	@:pin('control')
-	@:killer('M-IF-CHAIN-NESTED-INHERITS')
+	@:killer('M-IF-ELSE-LADDER-OFF')
 	public function testNestedChainIsItsOwnChain(): Void {
 		Assert.equals(NESTED_LADDER, triviaWrite(NESTED_SOURCE));
 		Assert.equals(NESTED_LADDER, triviaWrite(NESTED_LADDER));

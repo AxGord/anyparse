@@ -95,7 +95,7 @@ enum HxStatement {
 	@:trail(';')
 	VoidReturnStmt;
 	@:kw('if')
-	@:fmt(ifPolicy, openIfChain)
+	@:fmt(ifPolicy)
 	IfStmt(stmt: HxIfStmt);
 	@:kw('while')
 	@:fmt(whilePolicy)
