@@ -841,14 +841,24 @@ final class CrossRenameMember {
 		final out: Array<{ subject: QueryNode, offsets: Array<Int> }> = [];
 		final switchKinds: Array<String> = refShape.switchKinds ?? [];
 		final equality: Array<String> = refShape.equalityKinds ?? [];
+		// An arm inside a `#if` region of the switch is an arm of that switch, as `Refs` reads it.
+		function armsOf(parent: QueryNode, into: Array<QueryNode>): Void {
+			for (child in parent.children) {
+				if (child.kind == refShape.caseBranchKind)
+					into.push(child);
+				else if (CondRegionScan.isConditionalKind(child.kind, refShape))
+					armsOf(child, into);
+			}
+		}
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
 			if (switchKinds.contains(node.kind) && children.length > 0) {
 				final offsets: Array<Int> = [];
-				for (branch in children)
-					if (branch.kind == refShape.caseBranchKind)
-						for (pattern in CasePatterns.patternRun(branch, refShape))
-							if (pattern.children.length == 1) patternHeads(pattern.children[0], name, refShape, offsets);
+				final arms: Array<QueryNode> = [];
+				armsOf(node, arms);
+				for (branch in arms)
+					for (pattern in CasePatterns.patternRun(branch, refShape))
+						if (pattern.children.length == 1) patternHeads(pattern.children[0], name, refShape, offsets);
 				if (offsets.length > 0) out.push({ subject: children[0], offsets: offsets });
 			}
 			// Only the RIGHT operand: 4.3.7 types the left first and passes it on as the expected type, so `A == e` is
