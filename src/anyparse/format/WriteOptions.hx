@@ -221,7 +221,7 @@ typedef WriteOptions = {
 
 	/**
 	 * When `true`, a delimited list whose SOLE element is an expression-
-	 * bodied `for` comprehension (`[for (x in xs) body]`, filter-`if` and
+	 * bodied `for` / `while` comprehension (`[for (x in xs) body]`, filter-`if` and
 	 * `k => v` map forms included) keeps the comprehension HEAD on the
 	 * opening-delimiter line — `[ for (x in xs)` — instead of breaking the
 	 * delimiter onto its own line, whenever the segment through the head's
@@ -230,13 +230,11 @@ typedef WriteOptions = {
 	 * lands on its own line at container indent. A head that does not fit
 	 * falls back to the delimiter-on-its-own-line layout.
 	 *
-	 * Three shapes are deliberately NOT covered and keep their pre-knob
-	 * layout: BLOCK-bodied comprehensions (`[for (x in xs) { … }]`, which
-	 * already head-hug under padded comprehension brackets), NESTED
-	 * generators (a second `for` / `while` inside the body), and `while`
-	 * comprehensions (whose body carries no placement policy to indent
-	 * against). The inner-delimiter padding follows the construct's own
-	 * bracket-spacing policy, so under tight brackets the head cuddles as
+	 * One shape is deliberately NOT covered and keeps its pre-knob
+	 * layout: a BLOCK-bodied comprehension (`[for (x in xs) { … }]`, which
+	 * already head-hugs under padded comprehension brackets). The
+	 * inner-delimiter padding follows the construct's own bracket-spacing
+	 * policy, so under tight brackets the head cuddles as
 	 * `[for (x in xs)`.
 	 *
 	 * Default `false` — absent from config means byte-identical output to

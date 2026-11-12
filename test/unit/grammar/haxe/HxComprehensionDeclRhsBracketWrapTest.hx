@@ -168,15 +168,11 @@ final class HxComprehensionDeclRhsBracketWrapTest extends Test {
 	 * width was ever lost and only the (config-independent) gate-1 disarm would
 	 * have been under test.
 	 */
-	public function testWhileComprehensionBreaksInsideBrackets(): Void {
+	public function testWhileComprehensionCuddlesInsideBrackets(): Void {
 		final src: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
 			+ 'while (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()];\n\t}\n}';
 		final expected: String = 'class Whiles {\n\tprivate function run():Void {\n\t\tfinal drainedNodes:Array<SceneNode<NodePayload>> = ['
-			+ '\n\t\t\twhile (_pendingQueue.hasNext()) if (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()\n\t\t];'
-			+ '\n'
-			+ '\t}'
-			+ '\n'
-			+ '}';
+			+ ' while (_pendingQueue.hasNext())\n\t\t\tif (_pendingQueue.peekIsReady()) _pendingQueue.takeNext()\n\t\t];\n\t}\n}';
 		assertWrite(expected, src, CFG);
 	}
 

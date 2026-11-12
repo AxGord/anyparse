@@ -38,8 +38,8 @@
 			"name": "M-ELSE-GATE",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "isCuddleableComprehensionItem",
-			"find": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);",
-			"replace": "return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item) && !hasTopLevelElse(item, 0);",
+			"find": "return (head == 'for' || head == 'while') && !isHeadGluedBraceBodyComprehension(item);",
+			"replace": "return (head == 'for' || head == 'while') && !isHeadGluedBraceBodyComprehension(item) && !hasTopLevelElse(item, 0);",
 			"note": "restores the S76 veto S78 removed — a comprehension whose body is an if/else refuses to cuddle its `[` again"
 		},
 		{
@@ -451,6 +451,14 @@
 			"find": ": IfFirstLineExceeds(lineWidth, openShape, IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape));",
 			"replace": ": IfNaturalFirstLineExceeds(lineWidth, openShape, glueShape);",
 			"note": "a flat-capable item measures its cuddled head by the line it would naturally render, so a head too wide for `[ for (` cuddles anyway and wraps its own iterable call instead of falling back to the leading break"
+		},
+		{
+			"name": "M-CUDDLE-WHILE-CLAIMED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "isCuddleableComprehensionItem",
+			"find": "(head == 'for' || head == 'while')",
+			"replace": "head == 'for'",
+			"note": "a `while` comprehension is claimed by the cuddled-open knob like a `for` one, so its head stays on the `[` line instead of the list leading-breaking"
 		},
 		{
 			"name": "M-FILL-TRAIL-SEP-UNGATED",

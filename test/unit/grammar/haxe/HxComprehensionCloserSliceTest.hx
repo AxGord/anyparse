@@ -193,16 +193,16 @@ final class HxComprehensionCloserSliceTest extends Test {
 	}
 
 	/**
-	 * A `while` comprehension satisfies NEITHER predicate — the block gate no longer claims it (its body is on a continuation line)
-	 * and `isCuddleableComprehensionItem` is `for`-only — so it reaches the generic cascade and leading-breaks. Its body takes the
-	 * `for` body policy and sits one indent below the head, never at the head's own indent.
+	 * A `while` comprehension cuddles like a `for` one: the block gate does not claim it (its body is on a continuation line) and
+	 * `isCuddleableComprehensionItem` does, so its `[` keeps the head and only the curly tail stays on the next line, one indent below
+	 * the head.
 	 */
-	public function testWhileComprehensionBraceTailLeadingBreaks(): Void {
+	public function testWhileComprehensionBraceTailCuddles(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ while (iteratorValue.hasNextElement())\n'
 			+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} "
 			+ '= $$p{[\'sourceObject\', fieldEntry.slot]} ];\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [\n\t\t\twhile (iteratorValue.hasNextElement())\n'
-			+ "\t\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} "
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal resultList = [ while (iteratorValue.hasNextElement())\n'
+			+ "\t\t\tmacro if ($p{['sourceObject', fieldEntry.slot]} != null) $p{[fieldEntry.slot]} "
 			+ '= $$p{[\'sourceObject\', fieldEntry.slot]}\n\t\t];\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src, ON));
 	}

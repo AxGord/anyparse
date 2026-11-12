@@ -1184,7 +1184,7 @@ class WrapList {
 				// `BinaryChainEmit.ternaryHugCollectionBranchIndex`) or a trailing `//`
 				// (`lastItemEndsWithLineComment`). The negating
 				// consumer therefore reads `null` as "cuddleable"; it stays honest
-				// through its own `firstVisibleText(item) == 'for'` conjunct, which is
+				// through its own `for` / `while` head conjunct, which is
 				// `null` for a `Fill` too. Enumerated rather than left to `case _` so a
 				// new `Doc` ctor fails to compile here instead of silently inheriting
 				// `null`.
@@ -3909,9 +3909,8 @@ class WrapList {
 	 * Sister-predicate contract: `isCuddleableComprehensionItem` negates THIS BODY
 	 * TEST, so no comprehension is ever both hugged and cuddled and none falls
 	 * between the two on body shape alone. It is not a total partition — the sibling
-	 * adds its own `for`-only and single-generator exclusions, so a `while`
-	 * comprehension and a nested-generator one satisfy NEITHER predicate and reach
-	 * the generic cascade, deliberately and pinned there.
+	 * also requires a `for` / `while` head, so a non-comprehension item satisfies NEITHER
+	 * predicate and reaches the generic cascade.
 	 */
 	private static function isHeadGluedBraceBodyComprehension(item: Doc): Bool {
 		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code);
@@ -4077,15 +4076,14 @@ class WrapList {
 	}
 
 	/**
-	 * `true` iff `item` is a `for` comprehension element with a NON-block body that
+	 * `true` iff `item` is a `for` / `while` comprehension element with a NON-block body that
 	 * already renders multi-line — the shape the cuddled-open knob re-lays-out.
 	 *
-	 * `while` comprehensions are not claimed: `HxWhileExpr.body` carries the same
-	 * body policy as `HxForExpr.body`, so the one-level contract would hold for them,
-	 * but this knob's shape and its probes are written and pinned for the `for` form only.
+	 * `while` is claimed like `for`: `HxWhileExpr.body` carries the same body policy as
+	 * `HxForExpr.body`, and the head the knob keeps on the `[` line is the same `kw (…)`.
 	 *
 	 * Two gates, both cheap left-spine / flat walks the sibling predicates already
-	 * use: the first visible Text is the reserved `for` keyword, and the body is NOT a
+	 * use: the first visible Text is a reserved `for` / `while` keyword, and the body is NOT a
 	 * head-glued `{ … }` (`isHeadGluedBraceBodyComprehension`, the exact negation of
 	 * `isBlockBodyComprehensionItem`'s own body test). Such a body head-hugs through
 	 * `shapeComprehensionBlockHug`, which runs first and glues `} ]`; that intercept
@@ -4105,12 +4103,13 @@ class WrapList {
 	 * which owns its own `Nest`.
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
-		return firstVisibleText(item) == 'for' && !isHeadGluedBraceBodyComprehension(item);
+		final head: Null<String> = firstVisibleText(item);
+		return (head == 'for' || head == 'while') && !isHeadGluedBraceBodyComprehension(item);
 	}
 
 	/**
 	 * Under `wrapping.comprehensionCuddledOpen`, a one-element list whose element is an
-	 * expression-bodied `for` comprehension keeps the comprehension HEAD glued to the open
+	 * expression-bodied `for` / `while` comprehension keeps the comprehension HEAD glued to the open
 	 * delimiter (`[ for (x in xs)`) and lets only the body — plus any filter `if` — wrap one
 	 * indent below, with the close delimiter alone at container indent. The body's indent comes
 	 * from the item's OWN body-policy `Nest`, taken relative to the line the head sits on, so
