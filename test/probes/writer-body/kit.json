@@ -63,7 +63,11 @@
 		"if-chain-ladder/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true, \"fitLineBodyGlue\": true}}\n",
 		"if-chain-ladder/R1.hx": "class C {\n\tfunction braced() {\n\t\tif (a) {\n\t\t\tx();\n\t\t\ty();\n\t\t} else b();\n\t\tif (a) b(); else {\n\t\t\tx();\n\t\t\ty();\n\t\t}\n\t}\n\tfunction nestedElse() {\n\t\tif (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n\t\telse for (i in xs) if (b) y(); else z();\n\t}\n\tfunction nestedThenSeparateChain() {\n\t\tif (a) for (i in xs) {\n\t\t\tif (b) y(); else z();\n\t\t} else w();\n\t}\n\tfunction trailingComment() {\n\t\tif (a) x(); // note\n\t\telse y();\n\t}\n\tfunction ownLine() {\n\t\tif (retryCount == 0) attachCollectedLabel(defaultPreviewSurface, 'some long labelxx');\n\t\telse b();\n\t}\n\tfunction value() {\n\t\tvar v = if (a) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument) else b;\n\t}\n\tfunction elseIfNested() {\n\t\tif (a) x(); else if (b) for (i in xs) if (c) attachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother); else q(); else r();\n\t}\n}\n",
 		"ladder-every-statement/T.hx": "class T {\n\tfunction f(k:Int, xs:Array<Int>) {\n\t\tswitch k {\n\t\t\tcase 1: if (c) a(); else b();\n\t\t\tdefault: for (i in xs) { if (c) a(); else b(); }\n\t\t}\n\t}\n\n\tfunction h() if (c) a(); else b();\n\n\tfunction g() if (a) x() else if (b) y();\n}\n",
-		"ladder-every-statement/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true}}"
+		"ladder-every-statement/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 80}, \"sameLine\": {\"ifBody\": \"fitLine\", \"elseBody\": \"fitLine\", \"fitLineIfWithElse\": true}}",
+		"fn-body-same/N.hx": "class C {\n\tfunction h() if (c) a(); else b();\n}\n",
+		"fn-body-same/S.hx": "class R {\n\tfunction namedBraced() if (c) { a(); } else { b(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) { a(); } else { b(); };\n\t\tfor (x in xs) if (c) { a(); } else { b(); }\n\t}\n}\n",
+		"fn-body-same/hxformat.json": "{\"sameLine\": {\"functionBody\": \"same\", \"anonFunctionBody\": \"same\"}}",
+		"fn-body-same/W.hx": "class W {\n\tfunction sw() if (c) switch x { case 1: a(); } else switch y { case 2: b(); }\n\n\tfunction mixed() if (c) { a(); } else b();\n\n\tfunction elif() if (c) { a(); } else if (d) { b(); } else c();\n\n\tfunction elifAll() if (c) { a(); } else if (d) { b(); } else { e(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) switch x { case 1: a(); } else switch y { case 2: b(); };\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -77,7 +81,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "2365d4c019a803c7",
+				"out": "ca32f7eca03749c1",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -95,7 +99,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "8d6059ac9e7e0cc0",
+				"out": "1870af579a6ae1f2",
 				"err": "da4d1f394fdd9f4c",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -113,7 +117,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "3957a4a2467b2fc4",
+				"out": "70592577b67979d4",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -131,7 +135,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "abaa361c74f910b7",
+				"out": "f01a47a4361b4392",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -149,7 +153,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "8821899b1a9c490c",
+				"out": "f01a47a4361b4392",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -167,7 +171,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "3957a4a2467b2fc4",
+				"out": "70592577b67979d4",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -699,6 +703,60 @@
 			"expect": {
 				"exit": 0,
 				"out": "94ca850c680c634f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "fn-body-same/N.hx",
+			"note": "a named function whose body is an if / else with brace-less branches, under functionBody same: the ladder goes on its own line below the head",
+			"fixpoint": "fn-body-same/N.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"fn-body-same/N.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e064744a16f8872e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "fn-body-same/S.hx",
+			"note": "named and anonymous function bodies whose if / else is braced in every branch, under functionBody / anonFunctionBody same: the chain stays glued to the head",
+			"fixpoint": "fn-body-same/S.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"fn-body-same/S.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "60b3f6e139bbd616",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "fn-body-same/W.hx",
+			"note": "function bodies under functionBody / anonFunctionBody same: an if / else of brace-led switches and an all-braced else-if chain stay glued, a mixed chain and an else-if chain with a brace-less tail go on their own line",
+			"fixpoint": "fn-body-same/W.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"fn-body-same/W.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bd8eb07290f7ac18",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

@@ -74,4 +74,36 @@ final class LoopBodyShape {
 		return body != null && Reflect.isEnumValue(body) && ctors.contains(Type.enumConstructor(body));
 	}
 
+	/**
+	 * Does the `ifCtor` chain `body` hold a branch that is none of the `bracedCtors` (a block, a brace-led `switch`)?
+	 *
+	 * Every `thenField` of the chain and its final `elseField` are read; an `elseField` holding another `ifCtor` is the
+	 * next link. `@:fmt(statementIfBody(...))` asks it before it moves a function body to its own line: a chain whose
+	 * every branch is braced keeps its glue (`function f() if (c) {`, `if (c) switch x {`), only a brace-less branch
+	 * ladders. `wrapperCtor`
+	 * unwraps one level as in `isIfWithElse`; any unmodelled shape answers `false`.
+	 */
+	public static function hasBareBranch(
+		body: Null<Any>, ifCtor: String, thenField: String, elseField: String, bracedCtors: Array<String>, ?wrapperCtor: String
+	): Bool {
+		if (!Reflect.isEnumValue(body)) return false;
+		final value: EnumValue = cast body;
+		if (wrapperCtor != null)
+			return Type.enumConstructor(value) == wrapperCtor
+				&& hasBareBranch(Type.enumParameters(value)[0], ifCtor, thenField, elseField, bracedCtors);
+		if (Type.enumConstructor(value) != ifCtor) return false;
+		final head: Null<Any> = Type.enumParameters(value)[0];
+		if (head == null || Reflect.isEnumValue(head)) return false;
+		if (isBareBranch(Reflect.field(head, thenField), bracedCtors)) return true;
+		final elseBranch: Null<Any> = Reflect.field(head, elseField);
+		return isBareBranch(elseBranch, [ifCtor])
+			? isBareBranch(elseBranch, bracedCtors)
+			: hasBareBranch(elseBranch, ifCtor, thenField, elseField, bracedCtors);
+	}
+
+	/** A present branch value that is an enum value none of `bracedCtors` names. */
+	private static function isBareBranch(branch: Null<Any>, bracedCtors: Array<String>): Bool {
+		return Reflect.isEnumValue(branch) && !bracedCtors.contains(Type.enumConstructor(cast branch));
+	}
+
 }

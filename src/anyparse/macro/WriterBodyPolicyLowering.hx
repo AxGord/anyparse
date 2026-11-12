@@ -46,6 +46,9 @@ using anyparse.macro.MetaInspect;
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering)
 final class WriterBodyPolicyLowering {
 
+	/** Where the braced ctors start in `@:fmt(statementIfBody(...))`'s names, after the wrapper ctor. */
+	private static inline final STATEMENT_IF_BRACED_ARG: Int = 4;
+
 	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
 	 * runtime-switched separator driven by `@:fmt(bodyPolicy("flagName"))`.
@@ -701,6 +704,8 @@ final class WriterBodyPolicyLowering {
 		// `omega-else-switch` comment below records.
 		final loopIfElseTest: Null<Expr> = buildLoopBodyIfElseTest(opts);
 		final loopPolicy: Expr = loopIfElseTest == null ? optFlag : macro ($loopIfElseTest ? $nextPat : $optFlag);
+		final statementIfTest: Null<Expr> = buildStatementIfBodyNextTest(opts);
+		final fnBodyPolicy: Expr = statementIfTest == null ? loopPolicy : macro ($statementIfTest ? $nextPat : $loopPolicy);
 		// omega-bracket-body-glue: a `[` body the knob hugs to its branch head IS the `Same`
 		// layout, so the knob is a policy SUBSTITUTION on the selector — one ternary over two
 		// enum constants instead of a whole extra outer arm, the same shape `loopIfElseTest`
@@ -708,7 +713,7 @@ final class WriterBodyPolicyLowering {
 		// (`semicolonBeforeSiblingWrap`, `beforeKwSeparator`) read the flag alone, so the
 		// OPEN seam must not depend on which policy arm the body reaches.
 		final bracketTest: Null<Expr> = bp.buildBracketBodyGlueTest(opts.bracketBodyGlueArgs, opts.bodyTypePath, opts.bodyValueExpr);
-		final bracketPolicy: Expr = bracketTest == null ? loopPolicy : macro ($bracketTest ? $samePat : $loopPolicy);
+		final bracketPolicy: Expr = bracketTest == null ? fnBodyPolicy : macro ($bracketTest ? $samePat : $fnBodyPolicy);
 		// The if/else ladder: a branch body of a statement `if` chain that reaches this selector has no braces of its own
 		// (a block takes an outer arm, a `switch` the `elseSwitch` substitution below), so it goes on its own line
 		// whatever the placement says. Brace-delimited branches keep their glue, and an `if` without an `else` is no chain.
@@ -952,12 +957,7 @@ final class WriterBodyPolicyLowering {
 				Context.currentPos()
 			);
 		final flagAccess: Expr = { expr: EField(macro opt, args[0]), pos: Context.currentPos() };
-		final ifCtor: String = args[1];
-		final elseField: String = args[2];
-		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		final shapeProbe: Expr = args.length == 4
-			? macro anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField}, $v{args[3]})
-			: macro anyparse.format.LoopBodyShape.isIfWithElse($bodyValueExpr, $v{ifCtor}, $v{elseField});
+		final shapeProbe: Expr = ifWithElseProbe(opts.bodyValueExpr, args[1], args[2], args.length == 4 ? args[3] : null);
 		return macro $flagAccess && $shapeProbe;
 	}
 
@@ -1119,6 +1119,37 @@ final class WriterBodyPolicyLowering {
 	 */
 	private static function ifElseLadderStatementTest(expressionIf: Bool): Expr {
 		return expressionIf ? macro (!opt._inExprPosition && opt._statementFrame) : macro (!opt._inExprPosition || opt._statementFrame);
+	}
+
+	/**
+	 * The `@:fmt(statementIfBody(ifCtor, thenField, elseField, wrapperCtor, bracedCtor…))` placement TEST: a function body
+	 * that is an `if` owning an `else` with a brace-less branch is a statement ladder, so `buildBodyCoreWrap`
+	 * substitutes `Next` for whatever placement the body knob chose, as the loop-body substitution does. A chain whose
+	 * every branch is braced keeps the knob's placement. Null when the field carries no such names.
+	 */
+	private static function buildStatementIfBodyNextTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
+		final args: Null<Array<String>> = opts.statementIfBodyArgs;
+		if (args == null) return null;
+		final value: Expr = opts.bodyValueExpr;
+		final wrapperCtor: Null<String> = statementIfBodyWrapper(args);
+		final withElse: Expr = ifWithElseProbe(value, args[0], args[2], wrapperCtor);
+		final braced: Array<String> = args.slice(STATEMENT_IF_BRACED_ARG);
+		final bare: Expr = wrapperCtor == null
+			? macro anyparse.format.LoopBodyShape.hasBareBranch($value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{braced})
+			: macro anyparse.format.LoopBodyShape.hasBareBranch($value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{braced}, $v{wrapperCtor});
+		return macro $withElse && $bare;
+	}
+
+	/** The `wrapperCtor` of `@:fmt(statementIfBody(...))` names, null when it is empty (the body is the `if` itself). */
+	private static function statementIfBodyWrapper(args: Array<String>): Null<String> {
+		return args[3] == '' ? null : args[3];
+	}
+
+	/** The runtime `LoopBodyShape.isIfWithElse` probe of `value`, with the one-level `wrapperCtor` unwrap when given. */
+	private static function ifWithElseProbe(value: Expr, ifCtor: String, elseField: String, wrapperCtor: Null<String>): Expr {
+		return wrapperCtor == null
+			? macro anyparse.format.LoopBodyShape.isIfWithElse($value, $v{ifCtor}, $v{elseField})
+			: macro anyparse.format.LoopBodyShape.isIfWithElse($value, $v{ifCtor}, $v{elseField}, $v{wrapperCtor});
 	}
 
 }

@@ -1937,6 +1937,10 @@ typedef WrapBodyOpts = {
 	// `fitLineIfWithElse` escape one storey down, which asks about the placed
 	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
 	?loopBodyIfElseArgs: Null<Array<String>>,
+	// The names of `@:fmt(statementIfBody(...))` on a function body field: a body that is such an `if` owning an `else`, with
+	// a brace-less branch, takes the `Next` placement whatever the body knob chose, as `loopBodyIfElseArgs` does for a loop
+	// body. Null → byte-inert.
+	?statementIfBodyArgs: Null<Array<String>>,
 	// omega-else-switch: the declarative names from
 	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on a BRANCH body field - the
 	// `KeywordPlacement` knob field first, then one or more body ctors that

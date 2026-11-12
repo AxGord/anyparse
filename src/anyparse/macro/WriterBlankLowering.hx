@@ -214,14 +214,26 @@ final class WriterBlankLowering {
 	 * operand passes `opt` unchanged, so the arrow-body lead survives leftmost descents,
 	 * while a right operand without its own frame drops it: it follows the operator token.
 	 */
-	private static function rightOperandOptExpr(branch: ShapeNode): Null<Expr> {
+	private static function rightOperandOptExpr(branch: ShapeNode, rightValue: Expr): Null<Expr> {
 		final rightOptBase: Expr = branch.fmtHasFlag('propagateExprPosition')
 			? macro _setExprPosition(opt)
 			: macro _clearArrowBodyLead(opt, opt);
 		final arrowBody: Null<Expr> = branch.fmtHasFlag('propagateArrowLambdaBody')
 			? macro _setArrowLambdaBody($rightOptBase, opt)
 			: rightOptBase;
-		return typedefClearedOperandOpt(branch, arrowBody);
+		return typedefClearedOperandOpt(branch, statementBodyForCtorOpt(branch, rightValue, arrowBody));
+	}
+
+	/**
+	 * `@:fmt(statementBodyForCtor('<ctor>', …))` on a function body: a body whose runtime ctor is one of the named ones
+	 * stands as a statement whatever the site holding the function says, so its writer runs under `_setStatementFrame`.
+	 * A block body yields no value of that site; `base` is the body's other fanout, or null.
+	 */
+	private static function statementBodyForCtorOpt(node: ShapeNode, value: Expr, base: Null<Expr>): Null<Expr> {
+		final ctors: Null<Array<String>> = node.fmtReadStringArgs('statementBodyForCtor');
+		if (ctors == null) return base;
+		final e: Expr = base ?? macro opt;
+		return macro (anyparse.format.LoopBodyShape.isOneOfCtors($value, $v{ctors}) ? _setStatementFrame($e, opt) : $e);
 	}
 
 	/**

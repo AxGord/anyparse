@@ -650,6 +650,23 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	}
 
 	/**
+	 * A case-tail `if` with an `else`, comment-held or glued, ladders below its label, and its sibling follows it there.
+	 */
+	@:pin('control')
+	@:killer('M-CASE-TAIL-STATEMENT-FRAME-OFF')
+	public function testACaseTailIfElseLaddersAndItsSiblingFollows(): Void {
+		final stmt: String = 'if (a) b() else c();';
+		for (branch in ['case 1:\n\t\t\t\t// c\n\t\t\t\t$stmt', 'case 1: $stmt']) {
+			final out: String = write(commented(branch), COMMENT_CFG);
+			Assert.isTrue(out.indexOf('\t\t\tcase 1:\n') != -1, 'the ladder goes below its label: <$out>');
+			Assert.isTrue(
+				out.indexOf('\t\t\t\tif (a)\n\t\t\t\t\tb()\n\t\t\t\telse\n\t\t\t\t\tc();\n') != -1, 'the if/else ladders: <$out>'
+			);
+			Assert.isTrue(out.indexOf('\t\t\tcase 2:\n\t\t\t\tcc(dd);') != -1, 'the sibling follows it below its label: <$out>');
+		}
+	}
+
+	/**
 	 * A trailing comment counts as width where the branch stands on its label, so a line that does not fit with its
 	 * comment leads; once a leading comment holds the branch below, only the statement is measured.
 	 */

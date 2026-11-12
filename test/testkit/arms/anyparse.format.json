@@ -662,6 +662,13 @@
 			"find": "if (was == now) continue;",
 			"replace": "if (false) continue;",
 			"note": "a knob whose value the edit left alone is looked at again, and the compiled adapter functions, the same on both sides, are refused as if the edit had changed them"
+		},
+		{
+			"name": "M-BARE-BRANCH-ALWAYS",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "hasBareBranch",
+			"force": "true",
+			"note": "every if / else function body counts as having a brace-less branch, so an all-braced chain leaves its functionBody / anonFunctionBody placement for the next line"
 		}
 	]
 }

@@ -29,7 +29,8 @@ class LambdaBranchingBodyBlockCheckTest extends Test {
 	public function testIfElseBodyWrapped(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tpost(ok -> if (ok) finish(); else abort(), onError);\n\t}\n}';
 		Assert.equals(
-			'class C {\n\tfunction f():Void {\n\t\tpost(ok -> {\n\t\t\tif (ok) finish(); else abort();\n\t\t}, onError);\n\t}\n}\n',
+			'class C {\n\tfunction f():Void {\n\t\tpost(ok -> {\n\t\t\tif (ok)\n\t\t\t\tfinish();\n\t\t\telse\n\t\t\t\tabort();\n'
+			+ '\t\t}, onError);\n\t}\n}\n',
 			applied(src)
 		);
 	}

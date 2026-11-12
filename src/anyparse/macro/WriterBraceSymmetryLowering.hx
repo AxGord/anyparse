@@ -465,10 +465,12 @@ final class WriterBraceSymmetryLowering {
 		// then-body that renders WITHOUT braces) wraps the writeCall's opt in
 		// `_setSsbSuppress` so unwraps nested deeper in the then-body
 		// (e.g. `if (a) while (c) { if (b) x; } else y`) are gated too.
-		// `elseFieldName` is non-null only for `HxIfStmt.thenBody` (via
-		// `ifElseLadder`'s optionalBodyFieldName channel); for / while bodies
-		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
-		// access is byte-identical to pre-slice.
+		// `elseFieldName` is computed for every statement-`ifElseLadder` field, the
+		// optional `HxIfStmt.elseBody` included, but only a MANDATORY body reaches this
+		// function (`HxIfStmt.thenBody`; `HxIfExpr.thenBranch` via `noSiblingFallback`,
+		// which carries no `dropSingleStmtBraces`), so `elseFollows` asks whether a
+		// then-body has an `else` sibling; for / while bodies pass `false`. Off-path
+		// (`dropSingleStmtBraces` absent or plain mode) the access is byte-identical.
 		final dropBraces: Bool = bs.ctx.trivia && child.fmtHasFlag(DROP_SINGLE_STMT_BRACES);
 		final elseAccess: Null<Expr> = dropBraces && elseFieldName != null
 			? { expr: EField(macro value, elseFieldName), pos: Context.currentPos() }
@@ -510,10 +512,10 @@ final class WriterBraceSymmetryLowering {
 					value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress
 				)
 			);
-		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
-		// is non-null only for `HxIfStmt.thenBody` (the ifElseLadder
-		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
-		// stay exempt from gate 8 and the wrap direction.
+		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - of the bodies
+		// reaching this function `elseFieldName` is non-null only for a then-body
+		// (`HxIfStmt.thenBody`, `HxIfExpr.thenBranch`), so for / while / do bodies pass
+		// `false` and stay exempt from gate 8 and the wrap direction.
 		final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;
 		final adoptExpr: Expr = adoptHeadGapComments(fieldAccess, headGap.sameLine, headGap.ownLines);
 		final effAccess: Expr = dropBraces

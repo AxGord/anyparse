@@ -3063,6 +3063,30 @@
 			"find": "final statementLadder: Bool = child.fmtHasFlag('ifElseLadder') && !child.fmtHasFlag('exprIfElseLadder');",
 			"replace": "final statementLadder: Bool = child.fmtHasFlag('ifElseLadder');",
 			"note": "an expression if else branch gets the else channel, so its FitLine layout reads the if as having an else and breaks before the else value"
+		},
+		{
+			"name": "M-STATEMENT-BODY-FOR-CTOR-OFF",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "statementBodyForCtorOpt",
+			"find": "final ctors: Null<Array<String>> = node.fmtReadStringArgs('statementBodyForCtor');",
+			"replace": "final ctors: Null<Array<String>> = null;",
+			"note": "no function or lambda block body is marked a statement, so its tail if / else keeps the frame of the site holding the function and stays inline"
+		},
+		{
+			"name": "M-ARROW-OPERAND-STATEMENT-BODY-OFF",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "rightOperandOptExpr",
+			"find": "statementBodyForCtorOpt(branch, rightValue, arrowBody)",
+			"replace": "arrowBody",
+			"note": "the infix arrow x -> { ... } drops its statementBodyForCtor flag, so its block tail if / else stays inline while the parenthesised lambda ladders"
+		},
+		{
+			"name": "M-STATEMENT-IF-BODY-NEXT-OFF",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildStatementIfBodyNextTest",
+			"find": "final args: Null<Array<String>> = opts.statementIfBodyArgs;",
+			"replace": "final args: Null<Array<String>> = null;",
+			"note": "a function body that is an if / else keeps the placement its body knob chose, so an anonymous function glues the ladder head to function()"
 		}
 	]
 }

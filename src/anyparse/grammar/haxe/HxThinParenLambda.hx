@@ -36,7 +36,8 @@ typedef HxThinParenLambda = {
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap'))
 	var params: Array<HxLambdaParam>;
-	@:fmt(space('arrowFunctions', 'lead'), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap)
+	@:fmt(space('arrowFunctions', 'lead'), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap,
+		statementBodyForCtor('BlockExpr'))
 	@:lead('->')
 	var body: HxExpr;
 }

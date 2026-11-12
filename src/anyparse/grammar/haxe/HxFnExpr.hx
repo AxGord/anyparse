@@ -57,6 +57,8 @@ typedef HxFnExpr = {
 	var returnType: Null<HxType>;
 	@:optional
 	@:absentOn(',', ')', ';', '}', ']')
-	@:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext, bodyPolicyForCtor('ExprBody', 'anonFunctionBody'))
+	@:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext, bodyPolicyForCtor('ExprBody', 'anonFunctionBody'),
+		statementIfBody('IfExpr', 'thenBranch', 'elseBranch', 'ExprBody', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare'),
+		statementBodyForCtor('BlockBody'))
 	var body: Null<HxFnExprBody>;
 }

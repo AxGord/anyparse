@@ -458,7 +458,7 @@ enum HxExpr {
 	// binary operator to its left — `a ?? x -> b` is `a ?? (x -> b)`, `a + x -> b` is
 	// `a + (x -> b)` — and the body is a whole expression (`x -> a ? b : c`, `x -> a = b`).
 	@:infix('->', 13, 'Right', 0)
-	@:fmt(propagateExprPosition, propagateArrowLambdaBody, arrowBodyLineWrap)
+	@:fmt(propagateExprPosition, propagateArrowLambdaBody, arrowBodyLineWrap, statementBodyForCtor('BlockExpr'))
 	ThinArrow(left: HxExpr, right: HxExpr);
 	@:infix('=>', 0, 'Right')
 	@:fmt(propagateExprPosition)

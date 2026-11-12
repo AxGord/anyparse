@@ -53,7 +53,6 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/sameline/issue_120_expression_case_2_keep.hxtest',
 		'test/testcases/sameline/issue_121_longer_expression_case_keep.hxtest',
 		'test/testcases/sameline/issue_125_expression_case_and_comment_keep.hxtest',
-		'test/testcases/sameline/issue_132_expression_case_if.hxtest',
 		'test/testcases/sameline/issue_137_array_comprehension.hxtest',
 		'test/testcases/sameline/issue_235_keep_if_else.hxtest',
 		'test/testcases/sameline/issue_254_case_colon_keep.hxtest',

@@ -665,7 +665,7 @@ final class WriterPrattLowering {
 		final rightChild: ShapeNode = children[1];
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations[AnnotationKeys.BASE_REF] : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
-		final rightOptExpr: Null<Expr> = rightOperandOptExpr(branch);
+		final rightOptExpr: Null<Expr> = rightOperandOptExpr(branch, macro $i{argNames[1]});
 		final leftCall: Expr = guardOpenLeft(
 			writeFnName, macro $i{argNames[0]}, leftCtx, prec,
 			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, typedefClearedOperandOpt(branch, null))

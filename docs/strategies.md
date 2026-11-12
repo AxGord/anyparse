@@ -133,7 +133,7 @@ refuseGlueOnControlFlowRoot, relocateTrailingComments, rightCurly[(…)], rightC
 semicolonBeforeSibling(…), semicolonNextLineElse, sepBeforeOpt, setBoolFlagFromStarCtor(…), shapeAware,
 sharpCondParensGap, sharpCondParensInside(…), siblingLead(…), siblingPad(…), siblingShare(…), siblingSlot(…),
 softFill, space(…), spaceAfterLead, spaceBeforeLead, spaceBeforeTrail,
-staticVarSubdivision(…), statementIfBody(…), suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
+staticVarSubdivision(…), statementBodyForCtor(…), statementIfBody(…), suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe,
 switchCondParensInsideClose, switchPolicy, switchSubjectNoWrap,
 switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnParenOperand(…), trailingComma(…),
 trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBraceSymmetry(…),

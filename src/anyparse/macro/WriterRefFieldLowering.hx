@@ -53,6 +53,8 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterRefLeadLowering, anyparse.macro.WriterTriviaSlotLowering)
 final class WriterRefFieldLowering {
 
+	private static final STATEMENT_IF_BODY: String = 'statementIfBody';
+
 	/**
 	 * The `value.<field>BeforeTrail` access for a mandatory Ref carrying `@:trail`
 	 * in a trivia-bearing rule, or null when the field has no such slot. Gate and
@@ -376,9 +378,10 @@ final class WriterRefFieldLowering {
 			final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
 			final sepExpr: Expr = buildLeftCurlySepExpr(ctx, refName, lcCtors, ctorExpr, lcSep);
 			if (bodyPolicyForCtorPairs.length > 0) {
-				optParts.push(
-					buildBodyPolicyForCtorChain(ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, null)
-				);
+				optParts.push(buildBodyPolicyForCtorChain(
+					ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, null,
+					child.fmtReadStringArgs(STATEMENT_IF_BODY)
+				));
 				// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 			} else {
 				optParts.push(sepExpr);
@@ -561,6 +564,8 @@ final class WriterRefFieldLowering {
 		if (child.fmtHasFlag('propagateNestedType')) e = macro _setNestedType($e, opt);
 		if (propagateValueIfBranch) e = macro _setValueIfBranch($e, opt);
 		e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
+		e = statementIfBodyOpt(child, macro _optVal, e);
+		e = statementBodyForCtorOpt(child, macro _optVal, e) ?? e;
 		if (propagateElseIfBranch) {
 			final stmtPat: Null<Expr> = findCtorPattern(ctx.ctorPat, refName, 'IfStmt');
 			final ifPat: Null<Expr> = stmtPat ?? findCtorPattern(ctx.ctorPat, refName, 'IfExpr');
@@ -1565,7 +1570,8 @@ final class WriterRefFieldLowering {
 					Context.currentPos()
 				);
 			parts.push(buildBodyPolicyForCtorChain(
-				ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, metaBlockGlueArgs
+				ctx, bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, metaBlockGlueArgs,
+				child.fmtReadStringArgs(STATEMENT_IF_BODY)
 			));
 			// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 		} else {
@@ -1676,6 +1682,7 @@ final class WriterRefFieldLowering {
 			e = reflowCtorOnFitLineOpt(child, fieldAccess, e);
 			if (clearElseIfBranch) e = macro _clearElseIfBranch($e, opt);
 			e = statementIfBodyOpt(child, fieldAccess, e);
+			e = statementBodyForCtorOpt(child, fieldAccess, e) ?? e;
 			e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 			e;
 		};
@@ -1707,7 +1714,7 @@ final class WriterRefFieldLowering {
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function buildBodyPolicyForCtorChain(
 		ctx: RefFieldCtx, pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr,
-		refName: String, metaBlockGlueArgs: Null<Array<String>>
+		refName: String, metaBlockGlueArgs: Null<Array<String>>, statementIfBodyArgs: Null<Array<String>>
 	): Expr {
 		final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
 		// Fold the pairs into a ternary chain. Iterate in reverse
@@ -1734,7 +1741,8 @@ final class WriterRefFieldLowering {
 				bodyTypePath: refName,
 				hasElseIf: false,
 				elseFieldName: null,
-				metaBlockGlueArgs: wrapMetaBlockGlue
+				metaBlockGlueArgs: wrapMetaBlockGlue,
+				statementIfBodyArgs: statementIfBodyArgs
 			});
 			chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
 			i--;
@@ -1998,21 +2006,24 @@ final class WriterRefFieldLowering {
 	}
 
 	/**
-	 * `@:fmt(statementIfBody('<ifCtor>', '<elseField>'[, '<wrapperCtor>']))`: a body field whose value is an `if` with an
-	 * `else` (`LoopBodyShape.isIfWithElse`) holds it as a statement — a function body's value is never the enclosing
-	 * expression's. The `if` is written outside expression position and under `_statementFrame`, so its branches ladder.
+	 * `@:fmt(statementIfBody('<ifCtor>', '<thenField>', '<elseField>', '<wrapperCtor>', '<bracedCtor>'…))`: a body field
+	 * whose value is an `if` with an `else` (`LoopBodyShape.isIfWithElse`) holds it as a statement — a function body's
+	 * value is never the enclosing expression's. The `if` is written outside expression position and under
+	 * `_statementFrame`, so its branches ladder; `thenField` and the braced ctors (a block, a brace-led `switch`) feed the
+	 * body's own-line test. An empty `wrapperCtor` means the body is the `if` itself.
 	 */
 	private static function statementIfBodyOpt(child: ShapeNode, fieldAccess: Expr, e: Expr): Expr {
-		final args: Null<Array<String>> = child.fmtReadStringArgs('statementIfBody');
+		final args: Null<Array<String>> = child.fmtReadStringArgs(STATEMENT_IF_BODY);
 		if (args == null) return e;
-		if (args.length != 2 && args.length != 3)
+		if (args.length <= WriterBodyPolicyLowering.STATEMENT_IF_BRACED_ARG)
 			Context.fatalError(
-				'WriterLowering: @:fmt(statementIfBody(...)) requires (ifCtor, elseField[, wrapperCtor]), got ${args.length} args',
+				'WriterLowering: @:fmt(statementIfBody(...)) requires (ifCtor, thenField, elseField, wrapperCtor, bracedCtor...), got '
+				+ '${args.length} args',
 				Context.currentPos()
 			);
-		final probe: Expr = args.length == 3
-			? macro anyparse.format.LoopBodyShape.isIfWithElse($fieldAccess, $v{args[0]}, $v{args[1]}, $v{args[2]})
-			: macro anyparse.format.LoopBodyShape.isIfWithElse($fieldAccess, $v{args[0]}, $v{args[1]});
+		final probe: Expr = WriterBodyPolicyLowering.ifWithElseProbe(
+			fieldAccess, args[0], args[2], WriterBodyPolicyLowering.statementIfBodyWrapper(args)
+		);
 		return macro ($probe ? _setStatementFrame(_clearExprPosition($e, opt), opt) : $e);
 	}
 
