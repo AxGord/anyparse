@@ -76,6 +76,8 @@ final class Lease {
 					flexible ? '${ask.min}-${ask.max}' : '${ask.max}'
 				];
 				if (flexible) prefix.push('--wait-full=$WAIT_FULL_SECONDS');
+				final estimate: Null<String> = estimateOf(ask);
+				if (estimate != null) prefix.push('--est-by-threads=$estimate');
 				if (ask.priority != null) prefix.push('--priority=${ask.priority}');
 				command.leasedUnder(prefix.concat(['--label', label, '--']));
 			case _: command;
@@ -89,6 +91,22 @@ final class Lease {
 	public static function ahead(): Int {
 		final own: String = Sys.getEnv('WF_PRIORITY') ?? '';
 		return (INTEGER.match(own) ? Std.parseInt(own) ?? 0 : 0) + 1;
+	}
+
+	/**
+	 * The `--est-by-threads` value of a flexible `ask`: its seconds for every size from `min` to `max`, as `K:SEC` pairs, or null
+	 * when it names none, is fixed, or misses a size (the pool then waits for the whole share, as without an estimate).
+	 */
+	public static function estimateOf(ask: Ask): Null<String> {
+		final seconds: Null<Map<Int, Int>> = ask.estSeconds;
+		if (seconds == null || ask.min >= ask.max) return null;
+		final pairs: Array<String> = [];
+		for (size in ask.min ... ask.max + 1) {
+			final known: Null<Int> = seconds[size];
+			if (known == null || known < 1) return null;
+			pairs.push('$size:$known');
+		}
+		return pairs.join(',');
 	}
 
 	/** The pool's budget as `wf-run --status` names it, or null when the status does not come. */
@@ -125,5 +143,12 @@ typedef Ask = {
 	 */
 	@:optional
 	var priority: Int;
+
+	/**
+	 * The seconds the command is expected to take on each size of the range, from the caller's own recorded runs, or none when
+	 * it has no reading by size. Only a curve covering every size from `min` to `max` reaches the pool.
+	 */
+	@:optional
+	var estSeconds: Map<Int, Int>;
 
 }

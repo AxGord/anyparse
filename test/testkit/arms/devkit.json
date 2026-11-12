@@ -54,6 +54,30 @@
 			"method": "perHeavy",
 			"force": "share(budget, light(branches, demand))",
 			"note": "each heavy branch of a gate asks for the whole rest of the lease, so the suite and the base suite beside it oversubscribe the threads the lease holds"
+		},
+		{
+			"name": "M-LEASE-EST-EMITTED",
+			"type": "devkit.Lease",
+			"method": "take",
+			"find": "if (estimate != null) prefix.push('--est-by-threads=$estimate');",
+			"replace": "",
+			"note": "a flexible lease never tells the pool its per-size estimate, so the pool picks the size by waiting for the whole share"
+		},
+		{
+			"name": "M-LEASE-EST-ONLY-WITH-CURVE",
+			"type": "devkit.Lease",
+			"method": "estimateOf",
+			"find": "if (known == null || known < 1) return null;",
+			"replace": "if (known == null) return null;",
+			"note": "a lease whose curve holds a size without a time still sends the flag, which the pool refuses with exit 64 and no lease"
+		},
+		{
+			"name": "M-LEASE-EST-NONE-WITHOUT-CURVE",
+			"type": "devkit.Lease",
+			"method": "estimateOf",
+			"find": "if (seconds == null || ask.min >= ask.max) return null;",
+			"replace": "if (seconds == null) return '';",
+			"note": "a lease with no curve still sends an empty flag, which the pool refuses with exit 64 and no lease"
 		}
 	]
 }

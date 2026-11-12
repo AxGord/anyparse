@@ -109,6 +109,38 @@ final class LeaseTest extends Test {
 		Assert.contains('--priority=7', argv);
 	}
 
+	/** A flexible lease with a time for every size of its range hands the pool its curve, one `K:SEC` pair per size, in order. */
+	@:pin('control')
+	@:killer('M-LEASE-EST-EMITTED')
+	public function testAFlexibleLeaseWithACurveNamesEverySize(): Void {
+		final seconds: Map<Int, Int> = [4 => 70, 2 => 120, 3 => 90];
+		final argv: Array<String> = Lease.take(
+			Own('/p/scripts/wf-run', 10), Command.of(['true']), { min: 2, max: 4, estSeconds: seconds }, 'suite'
+		)
+			.argv;
+		Assert.same([
+			'--wait-full=${Lease.WAIT_FULL_SECONDS}',
+			'--est-by-threads=2:120,3:90,4:70',
+			'--label'
+		], argv.slice(4, 7));
+	}
+
+	/** A lease with no curve, a fixed one and one with a size missing or without a time carries no estimate: the pool's fallback stays. */
+	@:pin('control')
+	@:killer('M-LEASE-EST-ONLY-WITH-CURVE')
+	@:killer('M-LEASE-EST-NONE-WITHOUT-CURVE')
+	public function testALeaseWithoutAFullCurveNamesNone(): Void {
+		final mode: LeaseMode = Own('/p/scripts/wf-run', 10);
+		final command: Command = Command.of(['true']);
+		final asks: Array<Ask> = [
+			{ min: 2, max: 4 },
+			{ min: 3, max: 3, estSeconds: [3 => 60] },
+			{ min: 2, max: 4, estSeconds: [2 => 120, 4 => 70] },
+			{ min: 2, max: 3, estSeconds: [2 => 120, 3 => 0] }
+		];
+		for (ask in asks) Assert.equals(-1, Lease.take(mode, command, ask, 'x').argv.join(' ').indexOf('--est-by-threads'));
+	}
+
 	/** A workflow plugin root in `dir` whose `scripts/wf-run` is the fake one. */
 	private static function pluginRoot(dir: TempDir): String {
 		final root: String = dir.file('plugin');
