@@ -120,13 +120,14 @@ final class ExtractConstantToMode {
 			reformat: reformat,
 			optsJson: CliArgs.discoverFormatConfig(filePath, ledger)
 		};
-		switch ExtractConstantTo.extractTo(request, new CachingGrammarPlugin(CliArgs.pickPlugin(lang))) {
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
+		switch ExtractConstantTo.extractTo(request, plugin) {
 			case Ok(newSource, newDest, advisories):
 				for (advisory in advisories) CliIo.stderr('apq $OP: note: $advisory\n');
 				final writes: Array<{ path: String, content: String }> = [{ path: filePath, content: newSource }];
 				if (intoPath != null && newDest != null) writes.push({ path: intoPath, content: newDest });
 				if (write) {
-					CliIo.writeFiles(writes);
+					RegistryFollowCommand.writeFollowed(OP, writes, plugin);
 					CliIo.stderr('apq $OP: wrote ${writes.length} file(s)\n');
 				} else {
 					for (w in writes) CliEdit.previewEdit(OP, w.path, w.content);

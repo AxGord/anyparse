@@ -25,7 +25,8 @@ private typedef RegistriesFollowed = {
 
 /**
  * `apq registry-follow` — carry the find/replace fragments of every `move.registries` record over a rewrite of the working
- * tree, compared against a git revision. `lint --fix`, `fmt --write` and `move` carry their own write through
+ * tree, compared against a git revision. `lint --fix`, `fmt --write`, `move`, `move-member`, `rename`,
+ * `extract-var`, `extract-constant` and the writer-emit ops behind `CliEdit.finishEdit` carry their own write through
  * `followWrite`; the command is for a rewrite none of them made, such as a hand edit of an arm's member.
  */
 @:nullSafety(Strict)
@@ -149,6 +150,21 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 		for (note in followed.notes) CliIo.stderr('apq $op: registry-follow: $note\n');
 		if (followed.count > 0)
 			CliIo.stderr('apq $op: registry-follow: ${followed.count} fragment(s) in ${followed.writes.length} file(s)\n');
+	}
+
+	/**
+	 * Write `writes` through `CliIo` and carry the registry fragments of the source files among them over the rewrite, each
+	 * against the text it held before; a file the set creates has no before and carries nothing.
+	 */
+	public static function writeFollowed(op: String, writes: Array<{ path: String, content: String }>, plugin: GrammarPlugin): Void {
+		final ext: String = CliArgs.sourceExtensionOf(plugin.langName());
+		final written: Array<WrittenSource> = [
+			for (w in writes)
+				if (w.path.endsWith(ext) && ConfigFinder.fileExists(w.path))
+					{ path: w.path, before: CliIo.readFile(w.path), after: w.content }
+		];
+		CliIo.writeFiles(writes);
+		followWrite(op, written, plugin);
 	}
 
 	private static inline function isRewritten(entry: ChangedPath, lang: String): Bool {

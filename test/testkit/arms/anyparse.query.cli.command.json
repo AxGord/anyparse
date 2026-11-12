@@ -1363,6 +1363,70 @@
 			"find": "SourceText.parseStrictSignedInt(cells[0])",
 			"replace": "Std.parseInt(cells[0])",
 			"note": "a mutation-schema plan id reads its leading digits, so 1x is accepted as 1"
+		},
+		{
+			"name": "M-RENAME-LOCAL-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "runRename",
+			"find": "RegistryFollowCommand.writeFollowed(OP, [{ path: filePath, content: text }], plugin);",
+			"replace": "CliIo.writeFiles([{ path: filePath, content: text }]);",
+			"note": "a rename of a local no longer carries the registry fragments of the member it rewrote"
+		},
+		{
+			"name": "M-RENAME-IN-FILE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "emitInFileRename",
+			"find": "RegistryFollowCommand.writeFollowed(\n\tOP, [change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }), plugin\n);",
+			"replace": "CliIo.writeFiles([change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }));",
+			"note": "an in-file rename of a type no longer carries the registry fragments of the members whose references it rewrote"
+		},
+		{
+			"name": "M-RENAME-SCOPE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "runRenameScope",
+			"find": "RegistryFollowCommand.writeFollowed(OP, changes.map(c -> { path: c.file, content: c.newSource }), plugin);",
+			"replace": "CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));",
+			"note": "a rename of a type across a scope no longer carries the registry fragments of the members whose references it rewrote"
+		},
+		{
+			"name": "M-EXTRACT-VAR-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.ExtractVarCommand",
+			"method": "runExtractVar",
+			"find": "RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);",
+			"replace": "CliIo.writeFiles([{ path: filePath, content: text }]);",
+			"note": "extract-var no longer carries the registry fragments of the member whose expression it named"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstant",
+			"find": "RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);",
+			"replace": "CliIo.writeFiles([{ path: filePath, content: text }]);",
+			"note": "extract-constant --type no longer carries the registry fragments of the members whose literal it replaced"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-INTO-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.ExtractConstantCommand",
+			"method": "runExtractConstantInto",
+			"find": "RegistryFollowCommand.writeFollowed(\n\tOP, [for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]),\n\tplugin\n);",
+			"replace": "CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]));",
+			"note": "extract-constant --into no longer carries the registry fragments of the members whose literal it replaced"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-TO-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.ExtractConstantToMode",
+			"method": "run",
+			"find": "RegistryFollowCommand.writeFollowed(OP, writes, plugin);",
+			"replace": "CliIo.writeFiles(writes);",
+			"note": "extract-constant --to no longer carries the registry fragments of the member whose literal it replaced"
+		},
+		{
+			"name": "M-MOVE-MEMBER-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.MoveCommand",
+			"method": "emitMoveResult",
+			"find": "RegistryFollowCommand.writeFollowed(cmd, changes.map(c -> { path: c.file, content: c.newSource }), plugin);",
+			"replace": "CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));",
+			"note": "a declaration-form move (move, move-member) no longer carries the registry fragments of the members whose references it repointed"
 		}
 	]
 }

@@ -27,10 +27,12 @@ private typedef RegistryChanges = { final changes: Array<FileChange>; final note
 @:nullSafety(Strict)
 final class RenameCommand implements CliCommand {
 
+	private static final OP: String = 'rename';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'rename';
+		return OP;
 	}
 
 	public function summary(): String {
@@ -126,7 +128,7 @@ final class RenameCommand implements CliCommand {
 		};
 
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
-		final op: String = 'rename';
+		final op: String = OP;
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 
@@ -146,7 +148,7 @@ final class RenameCommand implements CliCommand {
 		switch result {
 			case Ok(text):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(OP, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq rename: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);
@@ -208,7 +210,7 @@ final class RenameCommand implements CliCommand {
 				var totalOccurrences: Int = 0;
 				for (c in changes) totalOccurrences += c.count;
 				if (write) {
-					CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
+					RegistryFollowCommand.writeFollowed(OP, changes.map(c -> { path: c.file, content: c.newSource }), plugin);
 					CliIo.stderr('apq rename: wrote ${changes.length} file(s), $totalOccurrences occurrence(s)\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');
@@ -318,7 +320,7 @@ final class RenameCommand implements CliCommand {
 				filePath, source, line, col, newName, [{ file: filePath, source: source }],
 				plugin, plugin.typeRefShape(), plugin.refShape()
 			),
-			write, { changes: [], notes: [] }
+			write, { changes: [], notes: [] }, plugin
 		);
 	}
 
@@ -338,7 +340,7 @@ final class RenameCommand implements CliCommand {
 			case Left(message):
 				CliIo.stderr('apq rename: $message — nothing written\n');
 				EXIT_RUNTIME;
-			case Right(registries): emitInFileRename(result, write, registries);
+			case Right(registries): emitInFileRename(result, write, registries, plugin);
 		};
 	}
 
@@ -346,14 +348,18 @@ final class RenameCommand implements CliCommand {
 	 * Emit the ONE file change an in-file cross-rename produces, type or member: write it or print
 	 * it, then the file-scope advisory and whatever the op itself reported.
 	 */
-	private static function emitInFileRename(result: CrossRenameResult, write: Bool, registries: RegistryChanges): Int {
+	private static function emitInFileRename(
+		result: CrossRenameResult, write: Bool, registries: RegistryChanges, plugin: GrammarPlugin
+	): Int {
 		switch result {
 			case Ok(changes, advisory):
 				// The scope is one file and an empty change set is `Err`, so there is exactly one.
 				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
 				if (write) {
-					CliIo.writeFiles([change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }));
+					RegistryFollowCommand.writeFollowed(
+						OP, [change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }), plugin
+					);
 					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
 					for (r in registries.changes) CliIo.stderr('apq rename: wrote ${r.file}, registry record(s) followed\n');
 				} else {

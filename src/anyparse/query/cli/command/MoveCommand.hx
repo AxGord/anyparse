@@ -70,7 +70,7 @@ final class MoveCommand implements CliCommand {
 				// for nothing observable.
 				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin, ledger)] : rawChanges;
 				if (write) {
-					CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
+					RegistryFollowCommand.writeFollowed(cmd, changes.map(c -> { path: c.file, content: c.newSource }), plugin);
 					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) {

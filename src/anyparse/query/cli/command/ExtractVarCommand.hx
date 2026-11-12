@@ -131,7 +131,7 @@ final class ExtractVarCommand implements CliCommand {
 		switch result {
 			case Ok(text):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq extract-var: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);

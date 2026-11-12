@@ -139,7 +139,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 			case Ok(text, _): CommentMentions.leftBehind(filePath, text, plugin.lexicalRegions(text), target.member);
 			case Err(_): null;
 		};
-		return CliEdit.finishEdit(op, filePath, write, result, ledger, fix ? plugin : null, left);
+		return CliEdit.finishEdit(op, filePath, write, result, ledger, plugin, fix, left);
 	}
 
 	private static function printRemoveMemberUsage(): Void {

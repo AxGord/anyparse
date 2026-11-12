@@ -72,7 +72,7 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ctx.ledger);
 		return CliEdit.finishEdit(
 			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson),
-			ctx.ledger, ctx.postWriteFix ? plugin : null
+			ctx.ledger, plugin, ctx.postWriteFix
 		);
 	}
 

@@ -22,10 +22,12 @@ final class ExtractConstantCommand implements CliCommand {
 	/** The flags that select the addressed mode (`ExtractConstantToMode`) over the two literal modes. */
 	private static final ADDRESSED_FLAGS: Array<String> = ['--select', '--match', '--to'];
 
+	private static final OP: String = 'extract-constant';
+
 	public function new() {}
 
 	public function name(): String {
-		return 'extract-constant';
+		return OP;
 	}
 
 	public function summary(): String {
@@ -113,12 +115,12 @@ final class ExtractConstantCommand implements CliCommand {
 		// non-default-formatted file is wrongly rejected and --reformat rewrites its style.
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 
-		final op: String = 'extract-constant';
+		final op: String = OP;
 		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq extract-constant: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);
@@ -200,10 +202,10 @@ final class ExtractConstantCommand implements CliCommand {
 					// The module and the call sites that will reference its constant are ONE change
 					// set: a run that wrote the sites and then could not write the module would
 					// leave every one of them naming a constant that does not exist.
-					CliIo.writeFiles([for (c in changes) {
-						path: c.file,
-						content: c.newSource
-					}].concat([{ path: intoPath, content: finalModule }]));
+					RegistryFollowCommand.writeFollowed(
+						OP, [for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]),
+						plugin
+					);
 					CliIo.stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.count} occurrence(s)\n');

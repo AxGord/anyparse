@@ -775,6 +775,14 @@
 			"find": "ConfigNotes.say(ledger, notes, CliIo.stderr);",
 			"replace": "",
 			"note": "an edit op reading a broken apq.json collects the diagnostic and never says it: the op runs on the rest of the chain with no word"
+		},
+		{
+			"name": "M-EDIT-TAIL-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.CliEdit",
+			"method": "finishEdit",
+			"find": "before: before ?? text",
+			"replace": "before: text",
+			"note": "patch, replace-node, extract-method and the other writer-emit ops no longer carry the registry fragments of the members they rewrote"
 		}
 	]
 }

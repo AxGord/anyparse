@@ -67,6 +67,10 @@ final class RegistryFragmentFollow {
 		final before: Array<QueryNode> = MemberRegistryRename.selected(module.tree, record.kind, member, plugin);
 		final after: Array<QueryNode> = MemberRegistryRename.selected(module.newTree, record.kind, member, plugin);
 		if (before.length != 1 || after.length != 1) {
+			// A member that took its name in this rewrite (a rename whose registry record was renamed beside it) has no old
+			// side to align, and nothing to carry while every find still cuts it as written.
+			if (after.length == 1 && [for (i in 0...record.finds.length) applies(record, i, module, after[0], plugin)].foreach(a -> a))
+				return;
 			notes.push('arm ${record.name}: "${record.type}#$member" is not one declaration on both sides of the rewrite — re-aim it');
 			return;
 		}
@@ -83,10 +87,9 @@ final class RegistryFragmentFollow {
 			maps: maps,
 			plugin: plugin
 		};
-		for (i in 0...record.finds.length) {
+		for (i in 0...record.finds.length) if (!applies(record, i, module, after[0], plugin)) {
 			final find: StringSlot = record.finds[i];
-			final replace: Null<StringSlot> = record.replaces.length == record.finds.length ? record.replaces[i] : null;
-			if (appliesAsWritten(rewrite, find.value, replace?.value)) continue;
+			final replace: Null<StringSlot> = replaceOf(record, i);
 			final cut: Null<Span> = Patch.cutSpan(module.source, module.tree, before[0], find.value, plugin);
 			if (cut == null) {
 				notes.push('arm ${record.name}: its find occurs on neither side of the rewrite — re-aim it');
@@ -143,10 +146,15 @@ final class RegistryFragmentFollow {
 		return map;
 	}
 
-	/** Whether the record needs no re-spelling: its find still locates and its replace still parses in the rewritten source. */
-	private static function appliesAsWritten(rewrite: Rewrite, find: String, replace: Null<String>): Bool {
-		final located: Null<Span> = Patch.cutSpan(rewrite.module.newSource, rewrite.module.newTree, rewrite.target, find, rewrite.plugin);
-		return located != null && splices(rewrite.module.newSource, located, replace, rewrite.plugin);
+	/** Whether `record`'s `i`-th fragment needs no re-spelling: its find still locates in `target` and its replace still parses there. */
+	private static function applies(record: MemberRecord, i: Int, module: RewrittenModule, target: QueryNode, plugin: GrammarPlugin): Bool {
+		final located: Null<Span> = Patch.cutSpan(module.newSource, module.newTree, target, record.finds[i].value, plugin);
+		return located != null && splices(module.newSource, located, replaceOf(record, i)?.value, plugin);
+	}
+
+	/** The replace paired with `record`'s `i`-th find; none when the record's finds and replaces do not pair up. */
+	private static function replaceOf(record: MemberRecord, i: Int): Null<StringSlot> {
+		return record.replaces.length == record.finds.length ? record.replaces[i] : null;
 	}
 
 	/** Where a cut starting at `at` now starts: text the rewrite put at the boundary stays outside the cut. */

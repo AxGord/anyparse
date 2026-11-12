@@ -16144,8 +16144,8 @@
 			"name": "M-REGISTRY-FOLLOW-AS-WRITTEN-FIRST",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "followRecord",
-			"find": "if (appliesAsWritten(rewrite, find.value, replace?.value)) continue;",
-			"replace": "",
+			"find": "if (!applies(record, i, module, after[0], plugin))",
+			"replace": "if (true)",
 			"note": "a find that still applies is carried through the alignment anyway"
 		},
 		{
@@ -16647,6 +16647,14 @@
 			"find": "else if (CondRegionScan.isConditionalKind(child.kind, refShape))",
 			"replace": "else if (false)",
 			"note": "an arm inside a conditional region of its switch is no arm of that switch, so the constructor spelled there is left unproven and the rename refuses"
+		},
+		{
+			"name": "M-FOLLOW-RENAMED-MEMBER-QUIET",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "followRecord",
+			"find": "foreach(a -> a))",
+			"replace": "foreach(a -> a) && false)",
+			"note": "a record whose member the rewrite renamed is named as not one declaration on both sides, though every find still cuts it"
 		}
 	]
 }

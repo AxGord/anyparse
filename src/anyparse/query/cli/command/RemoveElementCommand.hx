@@ -136,8 +136,8 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			return target == null
 				? EXIT_RUNTIME
 				: CliEdit.finishEdit(
-					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), ledger,
-					fix ? plugin : null, RemoveElement.describeTarget(source, target, plugin, withDoc)
+					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), ledger, plugin,
+					fix, RemoveElement.describeTarget(source, target, plugin, withDoc)
 				);
 		}
 		final pos: Null<Position> = CliEdit.resolveAddressPos(OP, source, plugin, posSpec, selectExpr, matchExpr, nth);
@@ -150,7 +150,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
 		return CliEdit.finishEdit(
 			OP, filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson), ledger,
-			fix ? plugin : null, removed
+			plugin, fix, removed
 		);
 	}
 

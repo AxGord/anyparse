@@ -111,7 +111,7 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('set-doc', filePath, o.write, result, ledger, fix ? plugin : null);
+		return CliEdit.finishEdit('set-doc', filePath, o.write, result, ledger, plugin, fix);
 	}
 
 	private static function printSetDocUsage(): Void {

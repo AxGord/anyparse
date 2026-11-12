@@ -9,6 +9,7 @@ import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.LineDiff;
 import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
+import anyparse.query.cli.command.RegistryFollowCommand;
 import anyparse.runtime.Span;
 
 /**
@@ -70,15 +71,15 @@ final class CliEdit {
 	/**
 	 * Shared Ok/Err + write/preview tail for the single-result writer-emit ops.
 	 *
-	 * `fix` is the op's `--fix`, as the op's own grammar plugin (null: no `--fix`): after a
-	 * successful WRITE, lint what was written and apply the safe fixes, scoped to the code lines
-	 * this write actually changed, which that plugin's lexical regions tell from comments. It is
-	 * spelled as an ordinary parameter BEFORE the optional `detail` on purpose — Haxe skips an
-	 * optional by TYPE, so a trailing optional would let a `detail`-less call site's next argument
-	 * land on the wrong parameter with no error. `ledger` is the run's own: the `--fix` lint says through it.
+	 * A successful WRITE carries the registry fragments of the members it rewrote
+	 * (`RegistryFollowCommand.followWrite`), parsed by `plugin`, the op's own grammar. `fix` is the
+	 * op's `--fix`: after the write, lint what was written and apply the safe fixes, scoped to the
+	 * code lines this write actually changed, which `plugin`'s lexical regions tell from comments.
+	 * `ledger` is the run's own: the `--fix` lint says through it.
 	 */
 	public static function finishEdit(
-		opName: String, filePath: String, write: Bool, result: EditResult, ledger: RunLedger, ?fix: GrammarPlugin, ?detail: String
+		opName: String, filePath: String, write: Bool, result: EditResult, ledger: RunLedger, plugin: GrammarPlugin, fix: Bool,
+		?detail: String
 	): Int {
 		switch result {
 			case Ok(text, rewrites):
@@ -87,12 +88,14 @@ final class CliEdit {
 				// the mode where "did all of them land?" has no other answer.
 				final tail: String = detail == null ? '' : ' ($detail)';
 				if (write) {
-					// Read BEFORE the write, because the window `--fix` narrows to is the difference
-					// between these two texts and there is no second chance to see the old one.
-					final before: Null<String> = fix != null ? (try CliIo.readFile(filePath) catch (exception: Exception) null) : null;
+					// Read BEFORE the write, because both the registry follow and the window `--fix` narrows to
+					// are the difference between these two texts and there is no second chance to see the old one.
+					final before: Null<String> = try CliIo.readFile(filePath) catch (exception: Exception) null;
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
-					if (fix != null) postWriteFix(filePath, before, text, fix, ledger);
+					// An unreadable old text reads as unchanged: there is nothing to follow from.
+					RegistryFollowCommand.followWrite(opName, [{ path: filePath, before: before ?? text, after: text }], plugin);
+					if (fix) postWriteFix(filePath, before, text, plugin, ledger);
 				} else {
 					previewEdit(opName, filePath, text, tail);
 				}

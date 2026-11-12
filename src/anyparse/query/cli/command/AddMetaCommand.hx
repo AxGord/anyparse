@@ -89,7 +89,7 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 		if (target == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return CliEdit.finishEdit(
-			'add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), ledger, fix ? plugin : null
+			'add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), ledger, plugin, fix
 		);
 	}
 
