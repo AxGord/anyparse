@@ -1,5 +1,11 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -41,18 +47,73 @@ final class HxFunctionLambdaBodyWidthSliceTest extends Test {
 	 * behind a `BodyGroup`), and the three cascades that read the under-measured
 	 * width — `callParameter`, `methodChain` and `opAddSubChain`.
 	 */
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140, "methodChainCuddledLinks": true, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-		+ '{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}, "methodChain": {'
-		+ '"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "lineLength >= n", "value": 140}], "type": "onePerLineAfterFirst"}, '
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst"}]}, "mapWrap": {'
-		+ '"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 80}], "type": "noWrap"}, {'
-		+ '"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}, "opAddSubChain": {'
-		+ '"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
-		+ '"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}, "whitespace": '
-		+ '{"typeHintColonPolicy": "after", "typeCheckColonPolicy": "after"}, "sameLine": {"ifBody": "fitLine", '
-		+ '"forBody": "fitLine", "whileBody": "fitLine", "functionBody": "fitLine", "caseBody": "fitLine"}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.methodChainCuddledLinks = true;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.forBody = BodyPolicy.FitLine;
+		edited.whileBody = BodyPolicy.FitLine;
+		edited.caseBody = BodyPolicy.FitLine;
+		edited.functionBody = BodyPolicy.FitLine;
+		edited.typeHintColon = WhitespacePolicy.After;
+		edited.typeCheckColon = WhitespacePolicy.After;
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+		edited.mapLiteralWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.Ignore,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }], mode: WrapMode.NoWrap },
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLine }
+			]
+		};
+		edited.methodChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 140 }], mode: WrapMode.OnePerLineAfterFirst },
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLineAfterFirst }
+			]
+		};
+		edited.opAddSubChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					location: WrappingLocation.BeforeLast,
+					mode: WrapMode.FillLine
+				}
+			]
+		};
+		edited.comprehensionObjectLitGlue = true;
+	});
 
 	/** Statement prefix: a method body at two tabs. */
 	private static final HEAD: String = 'class M {\n\tfunction save() {\n\t\t';

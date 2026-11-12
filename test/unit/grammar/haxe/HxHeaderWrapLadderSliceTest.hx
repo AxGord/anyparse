@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -32,10 +36,20 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxHeaderWrapLadderSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {'
-		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {'
-		+ '"ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine"}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.forBody = BodyPolicy.FitLine;
+		edited.whileBody = BodyPolicy.FitLine;
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+		edited.comprehensionObjectLitGlue = true;
+	});
 	private static final LADDER_FOR: String = 'class C {\n\tfunction f(text:String):Bool {\n'
 		+ '\t\tfor (word in text.trim().toLowerCase().split(\' \')) if (_questionText.indexOf(word) '
 		+ '== -1 && _answerText.indexOf(word) == -1)\n\t\t\treturn false;\n\t\treturn true;\n\t}\n}';

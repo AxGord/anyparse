@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.MetadataLineEndPolicy;
+import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -27,14 +30,17 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordWhenLineExceedsMax(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
-			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
+		final cfg: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.lineWidth = 140;
+			edited.anonTypeBracesOpen = WhitespacePolicy.After;
+			edited.anonTypeBracesClose = WhitespacePolicy.Before;
+			edited.metadataTypeLineEnd = MetadataLineEndPolicy.None;
+		});
 		final input: String = '@:nullSafety final class GenericContainerXYZ extends FetchHelper<GenericContainerEntityXYZ, '
 			+ 'pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
 		final expected: String = '@:nullSafety final class GenericContainerXYZ\n'
 			+ '\textends FetchHelper<GenericContainerEntityXYZ, pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
-		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
+		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), cfg);
 		final actual: String = actualRaw.length > 0 && actualRaw.fastCodeAt(actualRaw.length - 1) == '\n'.code
 			? actualRaw.substr(0, actualRaw.length - 1)
 			: actualRaw;
@@ -42,14 +48,17 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordBraceBoundary(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},"lineEnds":{"metadataType":"none"},'
-			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(cfg);
+		final cfg: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.lineWidth = 140;
+			edited.anonTypeBracesOpen = WhitespacePolicy.After;
+			edited.anonTypeBracesClose = WhitespacePolicy.Before;
+			edited.metadataTypeLineEnd = MetadataLineEndPolicy.None;
+		});
 		final input: String = '@:nullSafety final class Languages extends NetSmartEntity<Array<Language>, Array<Language>, '
 			+ 'Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
 		final expected: String = '@:nullSafety final class Languages\n'
 			+ '\textends NetSmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
-		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
+		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), cfg);
 		final actual: String = actualRaw.length > 0 && actualRaw.fastCodeAt(actualRaw.length - 1) == '\n'.code
 			? actualRaw.substr(0, actualRaw.length - 1)
 			: actualRaw;
@@ -57,7 +66,7 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testShortHeritageStaysFlat(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final input: String = 'class Foo extends Bar {}';
 		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
 		final actual: String = actualRaw.length > 0 && actualRaw.fastCodeAt(actualRaw.length - 1) == '\n'.code

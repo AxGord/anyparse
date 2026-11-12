@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.runtime.ParseError;
 import utest.Assert;
@@ -78,7 +79,7 @@ final class HxExprIdentGuardSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 }

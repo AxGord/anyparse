@@ -3,6 +3,7 @@ package unit.grammar.haxe;
 import anyparse.format.BracePlacement;
 import anyparse.format.EmptyCurly;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -118,7 +119,7 @@ class HxEmptyCurlyOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(ec: EmptyCurly): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.emptyCurly = ec;
 		// Mirror the loader's `lineEnds.emptyCurly` cascade for per-construct
 		// EmptyCurly knobs that no longer fall back to the global at the

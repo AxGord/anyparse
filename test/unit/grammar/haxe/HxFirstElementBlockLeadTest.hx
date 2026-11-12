@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -15,28 +16,33 @@ final class HxFirstElementBlockLeadTest extends Test {
 	@:pin('control')
 	@:killer('M-OPEN-GLUED-COMMENT-AS-TRAIL')
 	public function testATypedefBodyTakesOneRewrite(): Void {
-		final once: String = HxWriteFixture.triviaWrite('typedef T = {\n\t/* Comment */ a: Float,\n\t/* Comment */ b: Float\n}', '{}');
+		final once: String = HxWriteFixture.triviaWrite(
+			'typedef T = {\n\t/* Comment */ a: Float,\n\t/* Comment */ b: Float\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}')
+		);
 		Assert.equals('typedef T = {/* Comment */ a:Float, /* Comment */ b:Float}', once);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, '{}'));
-		final single: String = HxWriteFixture.triviaWrite('typedef T = {\n\t/* Comment */ a: Float,\n\tb: Float\n}', '{}');
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
+		final single: String = HxWriteFixture.triviaWrite(
+			'typedef T = {\n\t/* Comment */ a: Float,\n\tb: Float\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}')
+		);
 		Assert.equals('typedef T = {/* Comment */ a:Float, b:Float}', single);
-		Assert.equals(single, HxWriteFixture.triviaWrite(single, '{}'));
+		Assert.equals(single, HxWriteFixture.triviaWrite(single, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	@:pin('control')
 	@:killer('M-OPEN-GLUED-COMMENT-AS-TRAIL')
 	public function testAnInlineAnonTypeTakesOneRewrite(): Void {
 		final once: String = HxWriteFixture.triviaWrite(
-			'class C {\n\tvar x:{\n\t\t/* Comment */ a: Float,\n\t\t/* Comment */ b: Float\n\t};\n}', '{}'
+			'class C {\n\tvar x:{\n\t\t/* Comment */ a: Float,\n\t\t/* Comment */ b: Float\n\t};\n}',
+			HaxeFormatConfigLoader.loadHxFormatJson('{}')
 		);
 		Assert.equals('class C {\n\tvar x:{/* Comment */ a:Float, /* Comment */ b:Float};\n}', once);
-		Assert.equals(once, HxWriteFixture.triviaWrite(once, '{}'));
+		Assert.equals(once, HxWriteFixture.triviaWrite(once, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	@:pin('guard')
 	public function testABlockCommentEndingTheOpenLineStaysThere(): Void {
 		final src: String = 'class C {\n\tvar x = { /* c */\n\t\ta: 1,\n\t\tb: 2\n\t};\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 }

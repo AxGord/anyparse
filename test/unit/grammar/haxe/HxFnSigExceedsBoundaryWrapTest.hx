@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -17,10 +20,23 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxFnSigExceedsBoundaryWrapTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
-		+ '"functionSignature": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "totalItemLength <= n", "value": 100}, {"cond": "exceedsMaxLineLength", "value": 0}], '
-		+ '"type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}], "type": "noWrap"}]}}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.functionSignatureWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					],
+					mode: WrapMode.NoWrap
+				},
+				{ conditions: [{ cond: WrapConditionType.ItemCountLessThan, value: 1 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();

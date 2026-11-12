@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxCatchClause;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -7,6 +8,7 @@ import anyparse.grammar.haxe.HxDoWhileStmt;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxTryCatchStmt;
@@ -542,7 +544,7 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 	 * same `HxDoWhileStmt`. Both writers keep it whole, and the formatted text is a fixed point.
 	 */
 	public function testDoWhileExpression(): Void {
-		final opts: String = '{"sameLine": {"doWhileBody": "fitLine"}}';
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.doBody = BodyPolicy.FitLine);
 		for (src => kept in [
 			'class C { function f():Void { final g = () -> do i++ while (i < 3); } }' => 'do i++ while (i < 3);',
 			'class C { function f():Void { final h = function() do i++ while (i < 5); } }' => 'do i++ while (i < 5);',

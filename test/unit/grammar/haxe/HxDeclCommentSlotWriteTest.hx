@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -82,9 +83,9 @@ final class HxDeclCommentSlotWriteTest extends Test {
 	}
 
 	private function assertModule(source: String, expected: String): Void {
-		final out: String = HxWriteFixture.triviaWrite(source, '{}');
+		final out: String = HxWriteFixture.triviaWrite(source, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 		Assert.equals(expected, out);
-		Assert.equals(out, HxWriteFixture.triviaWrite(out, '{}'), 'not a fixed point');
+		Assert.equals(out, HxWriteFixture.triviaWrite(out, HaxeFormatConfigLoader.loadHxFormatJson('{}')), 'not a fixed point');
 	}
 
 }

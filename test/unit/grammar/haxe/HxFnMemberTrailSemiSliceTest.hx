@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import utest.Assert;
 import utest.Test;
@@ -56,9 +57,10 @@ final class HxFnMemberTrailSemiSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
-	private inline function plainWrite(src: String): String return HxWriteFixture.plainWrite(src, '{}');
+	private inline function plainWrite(src: String): String
+		return HxWriteFixture.plainWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 
 }

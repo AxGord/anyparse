@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -110,14 +111,14 @@ class HxElseIfOptionsTest extends Test {
 	}
 
 	private function writeWithSameLineElseAndElseIf(src: String, sameLineElse: Bool, elseIf: KeywordPlacement): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineElse = sameLineElse ? SameLinePolicy.Same : SameLinePolicy.Next;
 		opts.elseIf = elseIf;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 	private function makeOpts(elseIf: KeywordPlacement, elseBody: BodyPolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.elseBody = elseBody;
 		opts.elseIf = elseIf;
 		return opts;

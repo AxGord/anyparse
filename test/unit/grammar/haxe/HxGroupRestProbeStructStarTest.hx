@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -47,8 +50,16 @@ import utest.Test;
 final class HxGroupRestProbeStructStarTest extends Test {
 
 	/** Type parameters wrap one-per-line as soon as the whole line exceeds 60. */
-	private static final TYPE_PARAM_CONFIG: String = '{"wrapping": {"maxLineLength": 60, "typeParameter": {"defaultWrap": '
-		+ '"ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}}}';
+	private static final TYPE_PARAM_CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 60;
+		edited.typeParameterWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.Ignore,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLine }
+			]
+		};
+	});
 
 	/**
 	 * The same type-parameter cascade with every construct that could ABSORB the
@@ -56,10 +67,19 @@ final class HxGroupRestProbeStructStarTest extends Test {
 	 * the line that can break and the assertion cannot be satisfied by a guard
 	 * wrap instead.
 	 */
-	private static final PATTERN_TYPE_PARAM_CONFIG: String = '{"wrapping": {"maxLineLength": 60, "typeParameter": '
-		+ '{"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": '
-		+ '"onePerLine"}]}, "casePattern": {"defaultWrap": "noWrap", "rules": []}, "conditionWrapping": {"defaultWrap": '
-		+ '"noWrap", "rules": []}, "opBoolChain": {"defaultWrap": "noWrap", "rules": []}}}';
+	private static final PATTERN_TYPE_PARAM_CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 60;
+		edited.casePatternWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+		edited.opBoolChainWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+		edited.conditionWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+		edited.typeParameterWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.Ignore,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLine }
+			]
+		};
+	});
 
 	/**
 	 * `HxObjectLit.fields` is a `@:trivia` Star, so it is the shape where the two
@@ -69,11 +89,37 @@ final class HxGroupRestProbeStructStarTest extends Test {
 	 * fixture's guard is a single identifier — nothing in it can break — so the
 	 * object literal is the only movable thing on the line.
 	 */
-	private static final OBJECT_PATTERN_CONFIG: String = '{"wrapping": {"maxLineLength": 60, "objectLiteral": '
-		+ '{"defaultWrap": "ignore", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": '
-		+ '"onePerLine"}]}, "callParameter": {"defaultWrap": "noWrap", "rules": []}, "casePattern": {"defaultWrap": '
-		+ '"noWrap", "rules": []}, "conditionWrapping": {"defaultWrap": "noWrap", "rules": []}, "opBoolChain": '
-		+ '{"defaultWrap": "noWrap", "rules": []}}}';
+	private static final OBJECT_PATTERN_CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 60;
+		edited.objectLiteralWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.Ignore,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLine }
+			]
+		};
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: []
+		};
+		edited.casePatternWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+		edited.opBoolChainWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+		edited.conditionWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.NoWrap, rules: [] };
+	});
 
 	public function new(): Void {
 		super();
