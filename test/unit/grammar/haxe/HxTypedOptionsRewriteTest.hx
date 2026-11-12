@@ -26,10 +26,10 @@ final class HxTypedOptionsRewriteTest extends Test {
 
 	private static final KIT: String = 'unit.grammar.haxe.HxWriteOptionsKit';
 
-	public function testEmptyDocumentIsAnEmptyEditOverTheLoaderBaseline(): Void {
+	public function testEmptyDocumentIsTheLoaderBaselineItself(): Void {
 		final text: String = ok(rewritten("loadHxFormatJson('{}')"));
-		Assert.isTrue(text.contains('HxWriteOptionsKit.forkWith(edited -> {})'), text);
-		Assert.isFalse(text.contains('loadHxFormatJson'), text);
+		Assert.isFalse(text.contains('forkWith'), text);
+		Assert.isTrue(text.contains("loadHxFormatJson('{}')"), text);
 	}
 
 	@:pin('control')
@@ -98,7 +98,7 @@ final class HxTypedOptionsRewriteTest extends Test {
 
 	public function testOfJsonKeepsItsConfigWrapper(): Void {
 		final text: String = ok(rewritten("HxWriteConfig.ofJson('{}')"));
-		Assert.isTrue(text.contains('HxWriteConfig.ofOptions(HxWriteOptionsKit.forkWith(edited -> {}))'), text);
+		Assert.isTrue(text.contains("HxWriteConfig.ofOptions(HaxeFormatConfigLoader.loadHxFormatJson('{}'))"), text);
 	}
 
 	@:pin('control')
@@ -120,7 +120,9 @@ final class HxTypedOptionsRewriteTest extends Test {
 	@:killer('M-TYPED-OPTIONS-ARGUMENT-ONLY')
 	public function testAFixtureCallKeepsTheSourceItWasGiven(): Void {
 		final text: String = ok(rewritten("HxWriteFixture.triviaWrite('class A {}' + tail, '{}')"));
-		Assert.isTrue(text.contains("HxWriteFixture.triviaWrite('class A {}' + tail, HxWriteOptionsKit.forkWith(edited -> {}))"), text);
+		Assert.isTrue(
+			text.contains("HxWriteFixture.triviaWrite('class A {}' + tail, HaxeFormatConfigLoader.loadHxFormatJson('{}'))"), text
+		);
 	}
 
 	@:pin('control')
@@ -161,7 +163,7 @@ final class HxTypedOptionsRewriteTest extends Test {
 		Assert.isTrue(
 			flat(typedOuter)
 				.contains(flat(
-					'HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, HxWriteOptionsKit.forkWith(edited -> {})), '
+					"HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(SRC, HaxeFormatConfigLoader.loadHxFormatJson('{}')), "
 					+ 'HxWriteOptionsKit.rawWith(_ -> {}))'
 				)),
 			typedOuter
@@ -253,7 +255,9 @@ final class HxTypedOptionsRewriteTest extends Test {
 		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.triviaWrite(SRC, CONFIG);')), once);
 		Assert.isTrue(flat(once).contains(flat('final b = CONFIG;')), once);
 		Assert.isTrue(flat(once).contains(flat('final c = HxWriteConfig.ofOptions(CONFIG);')), once);
-		Assert.isTrue(flat(once).contains(flat('final local: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});')), once);
+		Assert.isTrue(
+			flat(once).contains(flat("final local: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');")), once
+		);
 		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.plainWrite(SRC, local);')), once);
 		Assert.isTrue(once.contains('import anyparse.grammar.haxe.HxModuleWriteOptions;'), once);
 		switch HxTypedOptionsRewrite.rewrite(once, KIT, true, new HaxeQueryPlugin()) {
@@ -278,7 +282,9 @@ final class HxTypedOptionsRewriteTest extends Test {
 		final text: String = ok(
 			named("\tprivate static inline final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);')
 		);
-		Assert.isTrue(flat(text).contains(flat('private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith')), text);
+		Assert.isTrue(
+			flat(text).contains(flat('private static final CONFIG: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson')), text
+		);
 		Assert.isFalse(text.contains('inline'), text);
 	}
 

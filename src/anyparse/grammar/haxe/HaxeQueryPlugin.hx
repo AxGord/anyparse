@@ -874,8 +874,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return FactsTypeOracle.forFiles(grammar, files, fallback);
 	}
 
-	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
-		return HxTypedOptionsRewrite.rewrite(source, kit, reformat, this, optsJson);
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult> {
+		return HxTypedOptionsRewrite.rewrite(source, kit, reformat, this, optsJson, subjects);
 	}
 
 	/**

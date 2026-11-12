@@ -434,9 +434,12 @@ interface GrammarPlugin {
 	/**
 	 * Optional: `source` with every call that loads a test's configuration document from a literal rewritten as the typed edit of the
 	 * options kit `kit` (a qualified type), the imports that edit needs added, as `apq typed-options` writes it; `Ok(source, 0)` when the
-	 * source holds no such call, `Err` naming what refused it. Null when the grammar has no configuration document to type.
+	 * source holds no such call, `Err` naming what refused it. Null when the grammar has no configuration document to type. A call
+	 * left on its document because the options it loads are the test's subject appends a note to `subjects`.
 	 */
-	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult>;
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult>;
 
 }
 

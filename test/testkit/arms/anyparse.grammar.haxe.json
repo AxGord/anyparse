@@ -1683,6 +1683,22 @@
 			"method": "granted",
 			"force": "false",
 			"note": "a member final opened to another module by an access-granting meta, on it or on its type, is retyped though that module may read it as a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NO-SUBJECT",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "subject",
+			"find": "if (!examined || !note) return examined;",
+			"replace": "if (!examined || !note || true) return false;",
+			"note": "no call is a loader subject, so a test whose options are only read by field is rewritten into a tautology"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-EMPTY-FORK",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "typedEdit",
+			"find": "if (edits.length == 0) {",
+			"replace": "if (edits.length < 0) {",
+			"note": "a {} document becomes forkWith(edited -> {}) instead of the bare baseline"
 		}
 	]
 }

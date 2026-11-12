@@ -9049,8 +9049,8 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "fc1d056ce0464138",
-				"err": "ff88515ef5ecad9c",
+				"out": "cb724ceb1b48d48c",
+				"err": "97e03de79e51b116",
 				"files": "e3b0c44298fc1c14"
 			}
 		},

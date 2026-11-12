@@ -21,8 +21,8 @@ final class TypedOptionsCliTest extends Test {
 
 	#if (sys || nodejs)
 	private static final KIT: String = 'unit.grammar.haxe.HxWriteOptionsKit';
-	private static final CALL: String =
-		'package other;\n\nclass S {\n\n\tfunction f() {\n\t\tfinal opts = loadHxFormatJson(\'{}\');\n\t}\n\n}\n';
+	private static final CALL: String = 'package other;\n\nclass S {\n\n\tfunction f() {\n'
+		+ '\t\tfinal opts = loadHxFormatJson(\'{"emptyLines": {"afterPackage": 2}}\');\n\t}\n\n}\n';
 	private static final VARIABLE: String =
 		'package other;\n\nclass S {\n\n\tfunction f() {\n\t\tfinal opts = loadHxFormatJson(cfg);\n\t}\n\n}\n';
 	#end
@@ -35,7 +35,7 @@ final class TypedOptionsCliTest extends Test {
 		final after: String = File.getContent(path);
 		FileSystem.deleteFile(path);
 		Assert.equals(EXIT_OK, exit, err);
-		Assert.isTrue(after.contains('HxWriteOptionsKit.forkWith(edited -> {})'), after);
+		Assert.isTrue(after.contains('HxWriteOptionsKit.forkWith(edited -> edited.afterPackage = 2)'), after);
 		Assert.isFalse(after.contains('loadHxFormatJson'), after);
 		Assert.isTrue(err.contains('rewrote 1 file(s), 1 call(s)'), err);
 		#else

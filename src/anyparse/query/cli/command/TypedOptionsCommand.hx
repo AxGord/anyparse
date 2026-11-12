@@ -76,9 +76,11 @@ final class TypedOptionsCommand implements CliCommand {
 				failed++;
 				continue;
 			};
-			final answer: EditResult = io.plugin.typedOptionsRewrite(source, kit, o.reformat, CliArgs.discoverFormatConfig(path, ledger)) ?? Err(
-				'the ${io.plugin.langName()} grammar has no configuration document to type'
-			);
+			final subjects: Array<String> = [];
+			final answer: EditResult = io.plugin.typedOptionsRewrite(
+				source, kit, o.reformat, CliArgs.discoverFormatConfig(path, ledger), subjects
+			) ?? Err('the ${io.plugin.langName()} grammar has no configuration document to type');
+			for (note in subjects) CliIo.stderr('apq typed-options: $path: $note\n');
 			switch answer {
 				case Ok(text, rewrites):
 					if (text == source) continue;
@@ -178,6 +180,9 @@ final class TypedOptionsCommand implements CliCommand {
 		CliIo.sysPrint('knobs becomes each of them. A file is left untouched, and reported, when a call holds an argument that is not\n');
 		CliIo.sysPrint('a constant string nor a final holding one, a final read elsewhere, a setting the loader does not act on (the\n');
 		CliIo.sysPrint('key is named), a document that does not load, or a knob changed to a value with no source spelling.\n');
+		CliIo.sysPrint("A document equal to that baseline becomes HaxeFormatConfigLoader.loadHxFormatJson('{}'). A loader call whose\n");
+		CliIo.sysPrint('options are only read by field (inline or through the local they initialise) is the test\'s subject: it stays\n');
+		CliIo.sysPrint('on its document and is reported as `loader subject: <method>`.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --kit <Type>  The options kit, with forkWith(HxModuleWriteOptions -> Void)\n');

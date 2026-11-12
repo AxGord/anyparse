@@ -30,7 +30,9 @@ using anyparse.util.Strings;
  * `HaxeFormatConfigLoader.loadHxFormatJson(<literal>)` / `loadHxFormatJson(<literal>)`, `<kit>.strictJson(<literal>)` and
  * `HxWriteConfig.ofJson(<literal>)` of a Haxe source becomes `<kit>.forkWith(edited -> edited.<knob> = <value>)`
  * over the same baseline, `loadHxFormatJson('{}')`: a block of
- * assignments for several knobs, an empty one for none. A `HxWriteFixture.triviaWrite` / `plainWrite` call keeps its source argument and
+ * assignments for several knobs, the baseline call itself for none. A call whose options are the test's subject — only read by field,
+ * never handed on — stays on its document and is named, since its typed edit would assert itself.
+ * A `HxWriteFixture.triviaWrite` / `plainWrite` call keeps its source argument and
  * has only the configuration replaced, left as it is when it already is the typed edit or a value the file types as the options.
  * An argument naming a `final` that holds a constant string, read by those calls only and by no other module, is rewritten once, at
  * its declaration.
@@ -64,11 +66,19 @@ final class HxTypedOptionsRewrite {
 	/** The type a retyped `final` is written with, imported where the package differs. */
 	private static final OPTIONS_TYPE: String = 'anyparse.grammar.haxe.HxModuleWriteOptions';
 
+	/** The loader whose `loadHxFormatJson('{}')` is the baseline every typed edit forks; a document equal to it is written as that call. */
+	private static final LOADER_TYPE: String = 'anyparse.grammar.haxe.HaxeFormatConfigLoader';
+
+	/** A field read, the one use of loaded options that leaves them the test's subject. */
+	private static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
 	/**
 	 * `source` with each hxformat.json call turned into the typed edit of `kit` (a qualified type with `forkWith`), the imports that edit
 	 * needs added; `Ok(source, 0)` when it holds none.
 	 */
-	public static function rewrite(source: String, kit: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String): EditResult {
+	public static function rewrite(
+		source: String, kit: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String, ?subjects: Array<String>
+	): EditResult {
 		final knobs: Array<OptionKnob> = OptionKnobs.of(HxModuleWriteOptions);
 		final imports: Array<String> = [];
 		final kitName: String = kit.allAfterLast('.');
@@ -80,7 +90,8 @@ final class HxTypedOptionsRewrite {
 			imports: imports,
 			plugin: plugin,
 			sites: 0,
-			tree: null
+			tree: null,
+			subjects: subjects ?? []
 		};
 		switch namedConfigs(source, run, reformat, optsJson) {
 			case Err(message):
@@ -99,7 +110,7 @@ final class HxTypedOptionsRewrite {
 			}
 		}
 		if (run.sites == 0) return Ok(source, 0);
-		imports.push(kit);
+		if (text.indexOf('$kitName.') >= 0) imports.push(kit);
 		return withImports(text, imports, reformat, plugin, optsJson, run.sites);
 	}
 
@@ -119,7 +130,8 @@ final class HxTypedOptionsRewrite {
 		final whole: String = SourceSlice.slice(run.source, m.span);
 		final at: String = excerpt(whole);
 		final argument: Null<QueryNode> = m.bindings['json'];
-		if (!site.argumentOnly) return switch typedEdit(literalOf(argument), at, run) {
+		if (!site.argumentOnly && subject(m, run, true)) return Spliced(whole, []);
+		if (!site.argumentOnly) return switch typedEdit(literalOf(argument), at, run, whole) {
 			case Spliced(fork, _): Spliced(site.asConfig ? 'HxWriteConfig.ofOptions($fork)' : fork, []);
 			case refused: refused;
 		};
@@ -206,7 +218,9 @@ final class HxTypedOptionsRewrite {
 		for (shape in [
 			'$kitName.forkWith($$_)',
 			'$kitName.rawWith($$_)',
-			'HxWriteConfig.ofOptions($$_)'
+			'HxWriteConfig.ofOptions($$_)',
+			'${LOADER_TYPE.allAfterLast('.')}.loadHxFormatJson($$_)',
+			'loadHxFormatJson($$_)'
 		]) for (found in Matcher.search(plugin.parsePattern(shape), node)) if (found.node == node) return true;
 		return false;
 	}
@@ -215,7 +229,7 @@ final class HxTypedOptionsRewrite {
 	 * The typed edit of the document `json` (null when the configuration holds none), `Spliced` as the text of the call that builds it;
 	 * counted as one rewritten call.
 	 */
-	private static function typedEdit(json: Null<String>, at: String, run: Run): Replacement {
+	private static function typedEdit(json: Null<String>, at: String, run: Run, ?current: String): Replacement {
 		if (json == null)
 			return Refused('$at: the argument is not a constant string, nor a `final` holding one, so there is no document to read');
 		try {
@@ -224,12 +238,15 @@ final class HxTypedOptionsRewrite {
 			final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 			final edits: Array<String> = OptionsSource.changes(run.knobs, base, HaxeFormatConfigLoader.loadHxFormatJson(json), run.imports)
 				.map(c -> 'edited.${c.name} = ${c.source}');
-			final body: String = switch edits.length {
-				case 0: '{}';
-				case 1: edits[0];
-				case _: '{ ${edits.map(e -> '$e;').join(' ')} }';
-			};
+			if (edits.length == 0) {
+				final baseline: String = '${LOADER_TYPE.allAfterLast('.')}.loadHxFormatJson(\'{}\')';
+				if (baseline == current) return Spliced(baseline, []);
+				run.sites++;
+				run.imports.push(LOADER_TYPE);
+				return Spliced(baseline, []);
+			}
 			run.sites++;
+			final body: String = edits.length == 1 ? edits[0] : '{ ${edits.map(e -> '$e;').join(' ')} }';
 			return Spliced('${run.kitName}.forkWith(edited -> $body)', []);
 		} catch (exception: Exception) {
 			return Refused('$at: ${exception.message}');
@@ -352,9 +369,8 @@ final class HxTypedOptionsRewrite {
 	private static function typedValue(argument: QueryNode, run: Run): Bool {
 		final provider: Null<TypeInfoProvider> = run.plugin is TypeInfoProvider ? cast run.plugin : null;
 		if (provider == null) return false;
-		final tree: Null<QueryNode> = run.tree ?? treeOf(run.source, run.plugin);
+		final tree: Null<QueryNode> = parsed(run);
 		if (tree == null) return false;
-		run.tree = tree;
 		final shape: RefShape = run.plugin.refShape();
 		final typeSyntax: TypeSyntaxReader = run.plugin.typeSyntax;
 		final chain: ChainTypeContext = {
@@ -371,6 +387,56 @@ final class HxTypedOptionsRewrite {
 		return NominalTypes.outerNominalOf(held, typeSyntax) == OPTIONS_TYPE.allAfterLast('.');
 	}
 
+	/**
+	 * Whether the options call `m` loads are what its test examines: read only by field — inline, or through the local they
+	 * initialise — and never handed on, so a typed edit would make the test assert its own edit. `note` records the method.
+	 */
+	private static function subject(m: Match, run: Run, note: Bool): Bool {
+		final tree: Null<QueryNode> = parsed(run);
+		if (tree == null) return false;
+		final call: Null<QueryNode> = TreePath.withSpan(tree, m.span);
+		if (call == null) return false;
+		final path: Array<QueryNode> = TreePath.pathAround(tree, call) ?? [];
+		if (path.length < 2) return false;
+		final parent: QueryNode = path[path.length - 2];
+		final examined: Bool = if (parent.kind == FIELD_ACCESS_KIND)
+			parent.children[0] == call;
+		else if (parent.kind == LOCAL_FINAL_KIND || parent.kind == 'VarStmt')
+			fieldReadOnly(parent, tree, run);
+		else
+			false;
+		if (!examined || !note) return examined;
+		var method: String = '';
+		for (n in path) if (n.kind == 'FnMember') method = n.name ?? '';
+		final line: String = 'loader subject: $method';
+		if (!run.subjects.contains(line)) run.subjects.push(line);
+		return true;
+	}
+
+	/** Whether the local `decl` declares is read at least once and every read is the receiver of a field access. */
+	private static function fieldReadOnly(decl: QueryNode, tree: QueryNode, run: Run): Bool {
+		final name: Null<String> = decl.name;
+		final declAt: Null<Span> = decl.span;
+		if (name == null || declAt == null) return false;
+		final shape: RefShape = run.plugin.refShape();
+		var reads: Int = 0;
+		for (hit in Refs.find(name, tree, shape)) if (hit.kind != RefKind.Decl && hit.bindingSpan?.from == declAt.from) {
+			final read: Null<QueryNode> = TreePath.withSpan(tree, hit.span, shape.identKind);
+			if (read == null) return false;
+			final holder: Null<QueryNode> = TreePath.parentOf(tree, read);
+			if (holder == null || holder.kind != FIELD_ACCESS_KIND || holder.children[0] != read) return false;
+			reads++;
+		}
+		return reads > 0;
+	}
+
+	/** The parse of the run's current source, kept on the run until the source changes. */
+	private static function parsed(run: Run): Null<QueryNode> {
+		final tree: Null<QueryNode> = run.tree ?? treeOf(run.source, run.plugin);
+		run.tree = tree;
+		return tree;
+	}
+
 	/** The first line of `text`, cut to what a message quotes. */
 	private static function excerpt(text: String): String {
 		final line: String = text.firstLine();
@@ -385,7 +451,7 @@ final class HxTypedOptionsRewrite {
 			final argument: Null<QueryNode> = m.bindings['json'];
 			final name: Null<String> = argument?.name;
 			final at: Null<Span> = argument?.span;
-			if (argument == null || name == null || at == null || argument.kind != shape.identKind) continue;
+			if (argument == null || name == null || at == null || argument.kind != shape.identKind || subject(m, run, false)) continue;
 			final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
 			if (decl == null) continue;
 			final declAt: Null<Span> = decl.span;
@@ -475,6 +541,9 @@ private typedef Run = {
 
 	/** The parse of `source`, read when an argument is typed; null until then. */
 	var tree: Null<QueryNode>;
+
+	/** A note per call left on its document because the options it loads are the test's subject. */
+	final subjects: Array<String>;
 
 };
 

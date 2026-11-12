@@ -912,8 +912,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return info;
 	}
 
-	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
-		return _inner.typedOptionsRewrite(source, kit, reformat, optsJson);
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult> {
+		return _inner.typedOptionsRewrite(source, kit, reformat, optsJson, subjects);
 	}
 
 	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */

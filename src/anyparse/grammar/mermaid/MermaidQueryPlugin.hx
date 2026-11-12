@@ -186,7 +186,9 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 		return [];
 	}
 
-	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult> {
 		return null;
 	}
 

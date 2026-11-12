@@ -145,7 +145,9 @@ final class RenamedAnnotationPlugin implements GrammarPlugin {
 		return _inner.ambientImportSites(path, pkg);
 	}
 
-	public function typedOptionsRewrite(source: String, kit: String, reformat: Bool, ?optsJson: String): Null<EditResult> {
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult> {
 		return null;
 	}
 
