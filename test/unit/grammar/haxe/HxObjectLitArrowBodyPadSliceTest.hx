@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.HxListsKeepSource;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -18,15 +21,26 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": false}}}}';
-	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
-	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": '
-		+ '"after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+		edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+		edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+		edited.objectLiteralArrowBodyOpenPad = false;
+	});
+	private static final CONFIG_KEEP_PAD: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+		edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+		edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+	});
+	private static final CONFIG_REFLOW: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+		edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+		edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+		edited.objectLiteralArrowBodyReflow = true;
+	});
 
 	public function new(): Void {
 		super();
@@ -125,15 +139,15 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 	private inline function triviaWriteKeepPad(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_KEEP_PAD));
+		return HxWriteFixture.triviaWrite(src, CONFIG_KEEP_PAD);
 	}
 
 	private inline function triviaWriteReflow(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_REFLOW));
+		return HxWriteFixture.triviaWrite(src, CONFIG_REFLOW);
 	}
 
 }

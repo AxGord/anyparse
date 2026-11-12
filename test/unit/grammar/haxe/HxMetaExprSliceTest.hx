@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -84,7 +85,7 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		final src: String =
 			'class Main {\n\t@:overload(function())\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
 		final mod: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;
 		final out: String = HaxeModuleTriviaWriter.write(mod, opts);
 		Assert.equals(src, out);

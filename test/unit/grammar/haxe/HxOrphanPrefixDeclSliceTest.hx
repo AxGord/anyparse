@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxConditionalMeta;
@@ -55,7 +56,7 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 		final module: HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(2, module.decls.length);
 		Assert.isNull(module.decls[1].decl);
-		Assert.equals(source, HxWriteFixture.triviaWrite(source, '{}'));
+		Assert.equals(source, HxWriteFixture.triviaWrite(source, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/**
@@ -79,7 +80,10 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 		final orphan: HxEnumMember = ed.ctors[0];
 		Assert.isNull(orphan.ctor, 'a prefix-only enum member carries no constructor');
 		Assert.equals('sys', (expectConditionalMeta(orphan.meta[0]).cond: String));
-		Assert.equals('enum E {\n\t#if sys\n\t#end\n}', HxWriteFixture.triviaWrite('enum E {\n\t#if sys\n\t#end\n}', '{}'));
+		Assert.equals(
+			'enum E {\n\t#if sys\n\t#end\n}',
+			HxWriteFixture.triviaWrite('enum E {\n\t#if sys\n\t#end\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
 	}
 
 	public function testAnonBodyEmptyRegion(): Void {
@@ -87,7 +91,10 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 		final members: Array<HxAnonMember> = expectAnonMembers(expectTypedefDecl(module.decls[0]).type);
 		Assert.equals(1, members.length);
 		Assert.isNull(members[0].field, 'a prefix-only anon member carries no field');
-		Assert.equals('typedef T = {\n\t#if sys\n\t#end\n}', HxWriteFixture.triviaWrite('typedef T = {\n\t#if sys\n\t#end\n}', '{}'));
+		Assert.equals(
+			'typedef T = {\n\t#if sys\n\t#end\n}',
+			HxWriteFixture.triviaWrite('typedef T = {\n\t#if sys\n\t#end\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
 	}
 
 	// -- the writer half: a blank after a region prefix survives --
@@ -99,7 +106,11 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 			'enum E {\n\t#if sys\n\t#end\n\n\tA;\n}',
 			'typedef T = {\n\t#if sys\n\t#end\n\n\tvar a:Int;\n}',
 			'#if sys\n#end\n\nclass C {}'
-		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'), 'blank after region prefix kept for <$src>');
+		])
+			Assert.equals(
+				src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')),
+				'blank after region prefix kept for <$src>'
+			);
 	}
 
 	/**
@@ -110,12 +121,14 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 	 */
 	public function testBlankAfterMetadataPrefixStillCollapses(): Void {
 		Assert.equals(
-			'class C {\n\t@:keep\n\tvar x:Int;\n}', HxWriteFixture.triviaWrite('class C {\n\t@:keep\n\n\tvar x:Int;\n}', '{}'),
+			'class C {\n\t@:keep\n\tvar x:Int;\n}',
+			HxWriteFixture.triviaWrite('class C {\n\t@:keep\n\n\tvar x:Int;\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}')),
 			'member, no modifiers'
 		);
 		Assert.equals(
 			'class C {\n\t@:keep\n\tpublic var x:Int;\n}',
-			HxWriteFixture.triviaWrite('class C {\n\t@:keep\n\n\tpublic var x:Int;\n}', '{}'), 'modifier run follows the metadata'
+			HxWriteFixture.triviaWrite('class C {\n\t@:keep\n\n\tpublic var x:Int;\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}')),
+			'modifier run follows the metadata'
 		);
 	}
 
@@ -133,9 +146,11 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 			'typedef T = {\n\tvar a:Int;\n\t#if sys\n\t#end\n\t// c\n}',
 			'class C {}\n#if sys\n#end\n// c'
 		]) {
-			final once: String = HxWriteFixture.triviaWrite(src, '{}');
+			final once: String = HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 			Assert.equals(1, count(once, '// c'), 'the trailing comment comes out once for <$src>');
-			Assert.equals(once, HxWriteFixture.triviaWrite(once, '{}'), 'second pass must not grow <$src>');
+			Assert.equals(
+				once, HxWriteFixture.triviaWrite(once, HaxeFormatConfigLoader.loadHxFormatJson('{}')), 'second pass must not grow <$src>'
+			);
 		}
 	}
 

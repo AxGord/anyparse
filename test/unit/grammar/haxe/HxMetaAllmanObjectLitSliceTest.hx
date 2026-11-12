@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.format.TrailingCommaPolicy;
+import anyparse.grammar.haxe.HxListsKeepSource;
 import utest.Assert;
 import utest.Test;
 
@@ -74,7 +76,12 @@ final class HxMetaAllmanObjectLitSliceTest extends Test {
 	}
 
 	private inline function format(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource('{"wrapping": {"trailingComma": "keep"}}'));
+		return HxWriteFixture.triviaWrite(
+			src, HxWriteOptionsKit.forkWith(edited -> {
+				HxListsKeepSource.keep(edited);
+				edited.trailingComma = TrailingCommaPolicy.Keep;
+			})
+		);
 	}
 
 }

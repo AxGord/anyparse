@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -102,7 +103,7 @@ class HxMultilineDeclSliceTest extends Test {
 		// Force functionBody=Same so ExprBody renders flat; the predicate
 		// classifies ExprBody as kind=0 regardless, so the gap stays
 		// source-driven (no blank inserted).
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.functionBody = anyparse.format.BodyPolicy.Same;
 		final src: String = 'function a() trace(1);\nfunction b() trace(2);';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -165,7 +166,7 @@ class HxMultilineDeclSliceTest extends Test {
 	}
 
 	public function testBetweenSingleLineFinalClassesHonorsConfig(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines":{"betweenSingleLineTypes":1}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.betweenSingleLineTypes = 1);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse('final class A {}\nfinal class B {}'), opts);
 		Assert.equals(
 			'final class A {}\n\nfinal class B {}\n', out,
@@ -174,20 +175,20 @@ class HxMultilineDeclSliceTest extends Test {
 	}
 
 	private inline function write(src: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HxWriteOptionsKit.strictJson('{}'));
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 	private inline function writeUncapped(src: String): String {
 		// Disable the final-pass blank cap so the beforeType override (source
 		// 2 blanks -> 1) is visible rather than masked by the default
 		// maxConsecutiveBlanks:1 collapsing the gap regardless.
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.maxConsecutiveBlanks = -1;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 	private inline function writeWithCounts(src: String, after: Int, before: Int): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.afterMultilineDecl = after;
 		opts.beforeMultilineDecl = before;
 		// Disable the final-pass blank-line cap so this slice's `after:2` /

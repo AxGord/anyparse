@@ -1,8 +1,11 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxNamedFnExpr;
 import anyparse.grammar.haxe.HxStatement;
@@ -121,7 +124,7 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 
 	/** A comment after the statement's `;` stays where it was written, as it does after an anonymous function. */
 	public function testNamedFnExprExprBodyKeepsATrailingComment(): Void {
-		final opts: String = '{"sameLine": {"functionBody": "fitLine"}}';
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.functionBody = BodyPolicy.FitLine);
 		for (src in [
 			'class C {\n\tfunction f():Void {\n\t\tfinal g = function named() return 1; /*c*/\n\t\ttrace(g());\n\t}\n}',
 			'class C {\n\tfunction f():Void {\n\t\tfinal g = function named() return 1; // c\n\t\ttrace(g());\n\t}\n}',
@@ -149,7 +152,12 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 		]) {
 			Assert.equals(2, parseBody(src).length, src);
 			Assert.equals(
-				HxWriteFixture.triviaWrite(src, '{}'), HxWriteFixture.triviaWrite(HxWriteFixture.triviaWrite(src, '{}'), '{}'), src
+				HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')),
+				HxWriteFixture.triviaWrite(
+					HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')),
+					HaxeFormatConfigLoader.loadHxFormatJson('{}')
+				),
+				src
 			);
 		}
 		Assert.raises(parseBody.bind('class C { function f():Void { x = function n() return 1 trace(x()); } }'));

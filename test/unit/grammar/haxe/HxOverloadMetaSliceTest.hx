@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxMemberDecl;
@@ -102,9 +103,7 @@ class HxOverloadMetaSliceTest extends HxTestHelpers {
 		// keyword, so the kw-trailing space emits when the policy is
 		// `Before` / `Both`.
 		final src: String = 'class M {\n\t@:overload(function():Void {})\n\tfunction main();\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
-			'{"whitespace": {"parenConfig": {"anonFuncParamParens": {"openingPolicy": "before"}}}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.anonFuncParens = WhitespacePolicy.Before);
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(
 			out.indexOf('@:overload(function ()') >= 0, 'expected `@:overload(function ()` under anonFuncParens=Before in: <$out>'

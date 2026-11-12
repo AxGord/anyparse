@@ -1,5 +1,12 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.KeepEmptyLinesPolicy;
+import anyparse.format.SameLinePolicy;
+import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -20,10 +27,36 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxMethodChainCallParamRestAwareSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
-		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount '
-		+ '<= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();
@@ -60,45 +93,143 @@ final class HxMethodChainCallParamRestAwareSliceTest extends Test {
 	 * context), so this fails on the unfixed writer.
 	 */
 	public function testConcatArgLeadingBreaksInDotBrokenChain(): Void {
-		final config: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,'
-			+ '"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":2,'
-			+ '"afterLeftCurly":"keep","beforeRightCurly":"keep","classEmptyLines":{"beginType":1,"endType":1},'
-			+ '"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1}},'
-			+ '"wrapping":{"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak",'
-			+ '"rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength",'
-			+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},'
-			+ '"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak",'
-			+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
-			+ '"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],'
-			+ '"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= '
-			+ 'n","value":3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
-			+ '"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond":"exceedsMaxLineLength","value":0}],'
-			+ '"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine",'
-			+ '"location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
-			+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},'
-			+ '"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength",'
-			+ '"value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine",'
-			+ '"location":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak",'
-			+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},'
-			+ '"whitespace":{"addLineCommentSpace":false,"ifPolicy":"around","forPolicy":"around",'
-			+ '"whilePolicy":"around","switchPolicy":"around","arrowFunctionsPolicy":"around",'
-			+ '"functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"none","binopPolicy":"around",'
-			+ '"intervalPolicy":"around",'
-			+ '"bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before","arrowBodyOpenPad":false},'
-			+ '"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}},'
-			+ '"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},'
-			+ '"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},'
-			+ '"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},'
-			+ '"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"}}},"lineEnds":{"emptyCurly":"noBreak"},'
-			+ '"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine",'
-			+ '"expressionIf":"next","comprehensionFor":"fitLine"}}';
+		final config: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.lineWidth = 140;
+			edited.addLineCommentSpace = false;
+			edited.alignInlineSwitchCaseBody = true;
+			edited.maxConsecutiveBlanks = 2;
+			edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+			edited.ifBody = BodyPolicy.FitLine;
+			edited.forBody = BodyPolicy.FitLine;
+			edited.whileBody = BodyPolicy.FitLine;
+			edited.functionBody = BodyPolicy.FitLine;
+			edited.expressionIfBody = BodyPolicy.Next;
+			edited.expressionElseBody = BodyPolicy.Next;
+			edited.forPolicy = WhitespacePolicy.Both;
+			edited.switchKwLeadingSpace = true;
+			edited.beginType = 1;
+			edited.endType = 1;
+			edited.abstractBeginType = 1;
+			edited.abstractEndType = 1;
+			edited.interfaceBeginType = 1;
+			edited.interfaceEndType = 1;
+			edited.afterLeftCurly = KeepEmptyLinesPolicy.Keep;
+			edited.beforeRightCurly = KeepEmptyLinesPolicy.Keep;
+			edited.anonTypeBracesOpen = WhitespacePolicy.After;
+			edited.anonTypeBracesClose = WhitespacePolicy.Before;
+			edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+			edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+			edited.objectLiteralArrowBodyOpenPad = false;
+			edited.comprehensionBracketsOpen = WhitespacePolicy.After;
+			edited.comprehensionBracketsClose = WhitespacePolicy.Before;
+			edited.ifCondParensInsideClose = WhitespacePolicy.After;
+			edited.whileCondParensInsideClose = WhitespacePolicy.After;
+			edited.switchCondParensInsideClose = WhitespacePolicy.After;
+			edited.catchParensInsideClose = WhitespacePolicy.After;
+			edited.sharpCondParensInsideClose = WhitespacePolicy.After;
+			edited.callParameterWrap = {
+				containerItemWrap: {
+					defaultMode: WrapMode.OnePerLine,
+					rules: [
+						{
+							conditions: [
+								{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+								{ cond: WrapConditionType.HasContainerItems, value: 0 },
+								{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+							],
+							mode: WrapMode.FillLine
+						}
+					]
+				},
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.FillLineWithLeadingBreak,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+						],
+						mode: WrapMode.NoWrap
+					}
+				]
+			};
+			edited.opBoolChainWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.NoWrap,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+						],
+						mode: WrapMode.NoWrap
+					},
+					{
+						conditions: [
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+							{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+						],
+						mode: WrapMode.NoWrap
+					},
+					{
+						conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+						location: WrappingLocation.BeforeLast,
+						mode: WrapMode.FillLine
+					}
+				]
+			};
+			edited.opAddSubChainWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.NoWrap,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+					{
+						conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+						location: WrappingLocation.BeforeLast,
+						mode: WrapMode.FillLine
+					}
+				]
+			};
+			edited.conditionWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.FillLineWithLeadingBreak,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+				]
+			};
+			edited.functionSignatureWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.FillLineWithLeadingBreak,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 },
+							{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+						],
+						mode: WrapMode.NoWrap
+					},
+					{ conditions: [{ cond: WrapConditionType.ItemCountLessThan, value: 1 }], mode: WrapMode.NoWrap }
+				]
+			};
+			edited.expressionWrappingWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.FillLineWithLeadingBreak,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+				]
+			};
+			edited.comprehensionObjectLitGlue = true;
+			edited.functionTypeHaxe4 = WhitespacePolicy.None;
+			edited.intervalPolicy = WhitespacePolicy.Both;
+		});
 		final src: String = 'class C {\n\n\tstatic function makeList<T>(actions:Array<Act>):Array<T> {\n'
 			+ '\t\treturn [ for (action in actions) {\n\t\t\tfinal a:Payload = {\n\t\t\t\taddItems: holder.mainGroups != null\n'
 			+ '\t\t\t\t\t? holder.mainGroups.first.filter(SomeUtils.notEmpty)\n'
 			+ '\t\t\t\t\t\t.map(u -> {label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t.concat(\n'
 			+ '\t\t\t\t\t\t\tholder.mainGroups.backups.filter(SomeUtils.notEmpty).map(u -> {label: u.label, enabled: u.status == OPEN })\n'
 			+ '\t\t\t\t\t\t)\n\t\t\t\t\t: null\n\t\t\t};\n\t\t} ];\n\t}\n\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(config);
+		final opts: HxModuleWriteOptions = config;
 		opts.finalNewline = false;
 		Assert.equals(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts));
 	}

@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -34,7 +35,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 
 	public function testZeroStripsAllBlanks(): Void {
 		final src: String = 'package;\n\n\nclass Main {\n\tpublic function new() {}\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.maxConsecutiveBlanks = 0);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\nclass Main {\n\tpublic function new() {}\n}\n', out);
 	}
@@ -52,7 +53,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testOneCapsToOneBlank(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tfunction f() {\n\t\ta();\n\n\t\tb();\n\t}\n}\n', out);
 	}
@@ -60,7 +61,10 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	public function testTwoAllowsTwoBlanks(): Void {
 		// `afterPackage:3` requests 3 blanks; cap:2 trims to 2.
 		final src: String = 'package;\nclass Main {}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 3, "maxAnywhereInFile": 2}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.maxConsecutiveBlanks = 2;
+			edited.afterPackage = 3;
+		});
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\n\nclass Main {}\n', out);
 	}
@@ -68,7 +72,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	public function testNegativeOneDisablesCap(): Void {
 		// `afterPackage:4` requests 4 blanks; cap:-1 (off) lets them through.
 		final src: String = 'package;\nclass Main {}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 4}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.afterPackage = 4);
 		opts.maxConsecutiveBlanks = -1;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\n\n\n\nclass Main {}\n', out);
@@ -78,7 +82,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 		// Source carries 4 blanks between two single-line classes; the
 		// default cap:1 trims the inter-class gap down to 1 blank.
 		final src: String = 'class A {}\n\n\n\n\nclass B {}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class A {}\n\nclass B {}\n', out);
 	}
@@ -97,7 +101,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 		// `afterPackage:2` would emit 2 blanks; default `maxConsecutiveBlanks:1`
 		// caps that back to 1 blank — fork's mark-then-cap ordering.
 		final src: String = 'package;\nclass Main {}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"afterPackage": 2}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.afterPackage = 2);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('package;\n\nclass Main {}\n', out);
 	}
@@ -118,7 +122,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testAStringLiteralBlankRunIsNotACapCandidate(): Void {
 		final src: String = 'class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\tstatic function f() {}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.maxConsecutiveBlanks = 0);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\tstatic function f() {}\n}\n', out);
 	}
@@ -133,7 +137,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testTheCapTrimsCodeBlanksBesideALiteralThatKeepsItsOwn(): Void {
 		final src: String = 'class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\n\n\tstatic function f() {}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tstatic var s = "one\n\n\n\nfive";\n\n\tstatic function f() {}\n}\n', out);
 	}
@@ -166,7 +170,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testAGutterlessBlockCommentBlankRunIsNotACapCandidate(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\t/* one\n\n\n\t\tfour */\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tfunction f() {\n\t\t/* one\n\n\n\t\t\tfour */\n\t\ta();\n\n\t\tb();\n\t}\n}\n', out);
 	}
@@ -192,7 +196,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testTheMacroJoinedCommentPathKeepsItsBlankRun(): Void {
 		final src: String = '/* one\n\n\n four */\n\n\nclass X {}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.maxConsecutiveBlanks = 0);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('/* one\n\n\nfour */\nclass X {}\n', out);
 	}
@@ -210,9 +214,10 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testTheCapSeesBlankRowsCarryingTrailingWhitespaceIndent(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
-			'{"emptyLines": {"maxAnywhereInFile": 0}, "indentation": {"trailingWhitespace": true}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.trailingWhitespace = true;
+			edited.maxConsecutiveBlanks = 0;
+		});
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tfunction f() {\n\t\ta();\n\t\tb();\n\t}\n}\n', out);
 	}
@@ -231,9 +236,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testTheCapKeepsTheIndentOnTheBlankRowItKeeps(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
-			'{"emptyLines": {"maxAnywhereInFile": 1}, "indentation": {"trailingWhitespace": true}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.trailingWhitespace = true);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tfunction f() {\n\t\ta();\n\t\t\n\t\tb();\n\t}\n}\n', out);
 	}
@@ -255,7 +258,7 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testADocCommentsGenuinelyEmptyInteriorLinesAreContentToo(): Void {
 		final src: String = 'class Main {\n\t/**\n\t * one\n\n\n\t * four\n\t */\n\tfunction f() {\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"emptyLines": {"maxAnywhereInFile": 0}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.maxConsecutiveBlanks = 0);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\t/**\n\t * one\n\n\n\t * four\n\t */\n\tfunction f() {\n\t\ta();\n\t\tb();\n\t}\n}\n', out);
 	}
@@ -286,9 +289,10 @@ class HxMaxAnywhereInFileSliceTest extends Test {
 	 */
 	public function testAMarkedBreakRecordsTheOffsetItsLineEndLandsOn(): Void {
 		final src: String = 'class Main {\n\tfunction f() {\n\t\t/* one\n\n\n\t\tfour */\n\t\ta();\n\n\n\n\t\tb();\n\t}\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
-			'{"emptyLines": {"maxAnywhereInFile": 0}, "indentation": {"trailingWhitespace": true}}'
-		);
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.trailingWhitespace = true;
+			edited.maxConsecutiveBlanks = 0;
+		});
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.equals('class Main {\n\tfunction f() {\n\t\t/* one\n\t\t\n\t\t\n\t\t\tfour */\n\t\ta();\n\t\tb();\n\t}\n}\n', out);
 	}

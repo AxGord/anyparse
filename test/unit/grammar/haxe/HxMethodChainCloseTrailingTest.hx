@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -35,7 +36,7 @@ class HxMethodChainCloseTrailingTest extends Test {
 
 	public function testTrailingLineCommentBetweenChainSegmentsRoundTrips(): Void {
 		final source: String = 'class Foo {\n\tstatic function f() {\n\t\ta.b().c() // mid\n\t\t\t.d();\n\t}\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.methodChainWrap = { rules: [], defaultMode: WrapMode.OnePerLineAfterFirst };
 		opts.finalNewline = false;
 		final ast = HaxeModuleTriviaParser.parse(source);

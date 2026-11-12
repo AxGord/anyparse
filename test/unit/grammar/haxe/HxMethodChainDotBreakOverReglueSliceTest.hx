@@ -1,5 +1,10 @@
 package unit.grammar.haxe;
 
+import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxListsKeepSource;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -17,16 +22,73 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
-		+ '"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount '
-		+ '<= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
-	private static final CONFIG_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {'
-		+ '"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": '
-		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": '
-		+ '"noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": '
-		+ '100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {'
-		+ '"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+	});
+	private static final CONFIG_PAD: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+		edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+		edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+		edited.objectLiteralArrowBodyReflow = true;
+		edited.comprehensionBracketsOpen = WhitespacePolicy.After;
+		edited.comprehensionBracketsClose = WhitespacePolicy.Before;
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();
@@ -76,11 +138,11 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 	private inline function triviaWrite2(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG_PAD));
+		return HxWriteFixture.triviaWrite(src, CONFIG_PAD);
 	}
 
 }

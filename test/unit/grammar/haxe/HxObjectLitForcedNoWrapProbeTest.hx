@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.TrailingCommaPolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -28,8 +32,17 @@ final class HxObjectLitForcedNoWrapProbeTest extends Test {
 	private static inline final MAX_K: Int = 120;
 
 	/** A `noWrap` object-literal rule shadowing a one-per-line default, and a trailing comma added to a broken literal. */
-	private static final CFG: String = '{"wrapping": {"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
-		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}, "trailingCommas": {"objectLiteralDefault": "yes"}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.trailingComma = TrailingCommaPolicy.Keep;
+		edited.trailingCommaObjectLits = true;
+		edited.objectLiteralWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.OnePerLine,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 140 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();
