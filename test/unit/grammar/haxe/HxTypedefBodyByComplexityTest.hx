@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BracePlacement;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -11,7 +14,13 @@ import utest.Test;
  */
 final class HxTypedefBodyByComplexityTest extends Test {
 
-	private static final NEXT_CURLY: String = '{"lineEnds":{"leftCurly":"both"}}';
+	private static final NEXT_CURLY: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.leftCurly = BracePlacement.Next;
+		edited.objectLiteralLeftCurly = BracePlacement.Next;
+		edited.anonTypeLeftCurly = BracePlacement.Next;
+		edited.anonFunctionLeftCurly = BracePlacement.Next;
+		edited.blockLeftCurly = BracePlacement.Next;
+	});
 
 	public function new(): Void {
 		super();
@@ -24,14 +33,19 @@ final class HxTypedefBodyByComplexityTest extends Test {
 			'typedef T = {a:Int, b:Int}',
 			'typedef U = {var a:Int; var b:Int;}',
 			'typedef V = A & {a:Int, b:Int}'
-		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	@:pin('control')
 	@:killer('M-TYPEDEF-BODY-FORCED-PER-LINE')
 	public function testStructureExtensionsStayOnOneLine(): Void {
-		Assert.equals('typedef T = {> A, > B}', HxWriteFixture.triviaWrite('typedef T = {>A, >B}', '{}'));
-		Assert.equals('typedef U = {> A, var x:Int;}', HxWriteFixture.triviaWrite('typedef U = {>A, var x:Int;}', '{}'));
+		Assert.equals(
+			'typedef T = {> A, > B}', HxWriteFixture.triviaWrite('typedef T = {>A, >B}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
+		Assert.equals(
+			'typedef U = {> A, var x:Int;}',
+			HxWriteFixture.triviaWrite('typedef U = {>A, var x:Int;}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
 	}
 
 	@:pin('control')
@@ -39,7 +53,7 @@ final class HxTypedefBodyByComplexityTest extends Test {
 	public function testAWideBodyWrapsByRule(): Void {
 		Assert.equals(
 			'typedef L = {\n\ta:Int,\n\tb:Int,\n\tc:Int,\n\td:Int,\n\te:Int\n}',
-			HxWriteFixture.triviaWrite('typedef L = {a:Int, b:Int, c:Int, d:Int, e:Int}', '{}')
+			HxWriteFixture.triviaWrite('typedef L = {a:Int, b:Int, c:Int, d:Int, e:Int}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
 		);
 		Assert.equals(
 			'typedef L = {\n\taVeryLongFieldNameNumberOne:SomeVeryLongTypeName<WithParameter>,\n'
@@ -47,7 +61,7 @@ final class HxTypedefBodyByComplexityTest extends Test {
 			HxWriteFixture.triviaWrite(
 				'typedef L = {aVeryLongFieldNameNumberOne:SomeVeryLongTypeName<WithParameter>, '
 				+ 'aVeryLongFieldNameNumberTwo:AnotherLongType, aThirdField:YetAnotherLongTypeName, zzzzzzzzzzz:Int}',
-				'{}'
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
 			)
 		);
 	}

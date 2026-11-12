@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HxListsKeepSource;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -20,7 +22,10 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxTernaryCollectionHugSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		HxListsKeepSource.keep(edited);
+		edited.lineWidth = 140;
+	});
 
 	public function new(): Void {
 		super();
@@ -76,7 +81,7 @@ final class HxTernaryCollectionHugSliceTest extends Test {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, HxWriteFixture.listsKeepSource(CONFIG));
+		return HxWriteFixture.triviaWrite(src, CONFIG);
 	}
 
 }

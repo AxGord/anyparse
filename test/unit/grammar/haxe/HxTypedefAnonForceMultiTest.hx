@@ -2,6 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.BracePlacement;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -63,7 +64,13 @@ class HxTypedefAnonForceMultiTest extends Test {
 		// inter-typedef blank line.
 		final src: String = 'typedef Point2D = {\n\tx:Int,\n\ty:Int\n\t};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n\nclass A {\n'
 			+ '\tvar a:{x:Int, y:Int, z:Int};\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"lineEnds": {"leftCurly": "both"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.leftCurly = BracePlacement.Next;
+			edited.objectLiteralLeftCurly = BracePlacement.Next;
+			edited.anonTypeLeftCurly = BracePlacement.Next;
+			edited.anonFunctionLeftCurly = BracePlacement.Next;
+			edited.blockLeftCurly = BracePlacement.Next;
+		});
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		// Probe: Point3D body should be multi-line (force-multi fires).
 		// This is the contract of THIS slice. The remaining residual byte-
@@ -82,7 +89,7 @@ class HxTypedefAnonForceMultiTest extends Test {
 	}
 
 	private inline function makeOpts(leftCurly: BracePlacement): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.anonTypeLeftCurly = leftCurly;
 		return opts;
 	}

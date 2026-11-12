@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.format.KeepEmptyLinesPolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -13,9 +15,13 @@ final class HxTypedefRhsByRulesTest extends Test {
 	@:pin('control')
 	@:killer('M-TYPEDEF-RHS-KEEPS-SOURCE')
 	public function testASimpleBrokenBodyGoesOnOneLine(): Void {
-		Assert.equals('typedef T = {a:Int, b:Int}', HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int,\n\tb:Int\n}', '{}'));
 		Assert.equals(
-			'typedef U = {var a:Int; var b:Int;}', HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}', '{}')
+			'typedef T = {a:Int, b:Int}',
+			HxWriteFixture.triviaWrite('typedef T = {\n\ta:Int,\n\tb:Int\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
+		Assert.equals(
+			'typedef U = {var a:Int; var b:Int;}',
+			HxWriteFixture.triviaWrite('typedef U = {\n\tvar a:Int;\n\tvar b:Int;\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
 		);
 	}
 
@@ -23,7 +29,7 @@ final class HxTypedefRhsByRulesTest extends Test {
 	public function testAComplexFlatBodyWrapsByRule(): Void {
 		Assert.equals(
 			'typedef L = {\n\ta:Int,\n\tb:Int,\n\tc:Int,\n\td:Int,\n\te:Int\n}',
-			HxWriteFixture.triviaWrite('typedef L = {a:Int, b:Int, c:Int, d:Int, e:Int}', '{}')
+			HxWriteFixture.triviaWrite('typedef L = {a:Int, b:Int, c:Int, d:Int, e:Int}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
 		);
 	}
 
@@ -33,9 +39,10 @@ final class HxTypedefRhsByRulesTest extends Test {
 		Assert.equals(
 			'typedef U = {\n\tvar a:Int;\n\n\t/** doc */\n\tvar b:Int;\n}',
 			HxWriteFixture.triviaWrite(
-				'typedef U = {\n\tvar a:Int;\n\t/** doc */\n\tvar b:Int;\n}',
-				'{"emptyLines":{"beforeDocCommentEmptyLines":"one","typedefEmptyLines":{"beginTypeIfDocComments":0,'
-				+ '"endTypeIfDocComments":0}}}'
+				'typedef U = {\n\tvar a:Int;\n\t/** doc */\n\tvar b:Int;\n}', HxWriteOptionsKit.forkWith(edited -> {
+					edited.typedefBeginTypeIfDocComments = 0;
+					edited.typedefEndTypeIfDocComments = 0;
+				})
 			)
 		);
 	}
@@ -46,7 +53,8 @@ final class HxTypedefRhsByRulesTest extends Test {
 		Assert.equals(
 			'typedef T = {var a:Int; var b:Int;}',
 			HxWriteFixture.triviaWrite(
-				'typedef T = {\n\tvar a:Int;\n\n\tvar b:Int;\n}', '{"emptyLines":{"typedefEmptyLines":{"existingBetweenFields":"remove"}}}'
+				'typedef T = {\n\tvar a:Int;\n\n\tvar b:Int;\n}',
+				HxWriteOptionsKit.forkWith(edited -> edited.typedefExistingBetweenFields = KeepEmptyLinesPolicy.Remove)
 			)
 		);
 	}
@@ -56,11 +64,11 @@ final class HxTypedefRhsByRulesTest extends Test {
 	public function testAStatedBlankCountBreaksTheBody(): Void {
 		Assert.equals(
 			'typedef T = {\n\ta:Int,\n\n\tb:Int\n}',
-			HxWriteFixture.triviaWrite('typedef T = {a:Int, b:Int}', '{"emptyLines":{"typedefEmptyLines":{"betweenFields":1}}}')
+			HxWriteFixture.triviaWrite('typedef T = {a:Int, b:Int}', HxWriteOptionsKit.forkWith(edited -> edited.typedefBetweenFields = 1))
 		);
 		Assert.equals(
 			'typedef T = {\n\n\ta:Int,\n\tb:Int\n}',
-			HxWriteFixture.triviaWrite('typedef T = {a:Int, b:Int}', '{"emptyLines":{"typedefEmptyLines":{"beginType":1}}}')
+			HxWriteFixture.triviaWrite('typedef T = {a:Int, b:Int}', HxWriteOptionsKit.forkWith(edited -> edited.typedefBeginType = 1))
 		);
 	}
 

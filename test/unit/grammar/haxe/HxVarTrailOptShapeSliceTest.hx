@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 
@@ -85,7 +86,7 @@ final class HxVarTrailOptShapeSliceTest extends Test {
 	}
 
 	private inline function format(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 }

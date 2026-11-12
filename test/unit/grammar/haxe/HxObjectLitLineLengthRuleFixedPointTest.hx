@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -28,9 +31,17 @@ final class HxObjectLitLineLengthRuleFixedPointTest extends Test {
 	private static inline final MAX_K: Int = 100;
 
 	/** An object literal goes one field per line once its line reaches 110 columns; a comprehension cuddles its `for`. */
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
-		+ '"comprehensionCuddledOpen": true, "objectLiteral": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": '
-		+ '"lineLength >= n", "value": 110}], "type": "onePerLine"}]}}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.comprehensionCuddledOpen = true;
+		edited.objectLiteralWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 110 }], mode: WrapMode.OnePerLine }
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();
