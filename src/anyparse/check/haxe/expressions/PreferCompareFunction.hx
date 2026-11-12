@@ -281,7 +281,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			if (!CheckScan.hasCommentMarker(source, found.replaced.from, found.replaced.to)) out.push(found);
 		}
 		final t: Null<Typed> = named.isEmpty() ? null : typing();
-		if (t != null) movedCalls(body, fn, sole == null ? null : peeled(sole, s), returnedValues(body, sole, s), source, s, t, named, out);
+		if (t != null)
+			movedCalls(body, fn, sole == null ? null : peeled(sole, s), returnedValues(fn, body, sole, s), source, s, t, named, out);
 	}
 
 	/** The finding of a hand-written chain: the whole function when it is nothing but the comparison of its parameters in order. */
@@ -466,6 +467,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				identKind: shape.identKind,
 				blockKinds: blockKinds,
 				blockStmtKind: blockStmtKind,
+				exprStatementKind: shape.exprStatementKind,
+				fnExprKind: shape.fnExprKind,
 				shape: shape,
 				parenKind: shape.parenKind,
 				valueKinds: (shape.numericLiteralKinds ?? []).concat(shape.unaryMinusKinds ?? []),
@@ -648,11 +651,23 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		}
 	}
 
+	/** The expression an ARROW lambda's block yields as its last statement, when that statement is a bare expression. */
+	private static function arrowTail(fn: QueryNode, body: QueryNode, s: Seams): Null<QueryNode> {
+		final last: Null<QueryNode> = body.children[body.children.length - 1];
+		return s.fnExprKind == null
+			|| fn.kind == s.fnExprKind
+			|| last == null
+			|| last.kind != s.exprStatementKind
+			|| last.children.length != 1
+			? null
+			: last.children[0];
+	}
+
 	/**
 	 * The call or other value each path of a callback answers with: its expression body or each returned value, through
 	 * parentheses, a call-site `inline` and the branches of a conditional. Nested functions answer for themselves.
 	 */
-	private static function returnedValues(body: QueryNode, sole: Null<QueryNode>, s: Seams): Array<QueryNode> {
+	private static function returnedValues(fn: QueryNode, body: QueryNode, sole: Null<QueryNode>, s: Seams): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
 		function value(node: QueryNode): Void {
 			final open: QueryNode = peeled(node, s);
@@ -671,10 +686,13 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			else
 				for (c in node.children) walk(c);
 		}
-		if (sole == null || s.blockKinds.contains(body.kind))
+		if (sole == null || s.blockKinds.contains(body.kind)) {
 			walk(body);
-		else
+			final tail: Null<QueryNode> = arrowTail(fn, body, s);
+			if (tail != null) value(tail);
+		} else {
 			value(sole);
+		}
 		return out;
 	}
 
@@ -696,6 +714,8 @@ private typedef Seams = {
 	final identKind: String;
 	final blockKinds: Array<String>;
 	final blockStmtKind: String;
+	final exprStatementKind: Null<String>;
+	final fnExprKind: Null<String>;
 	final parenKind: Null<String>;
 	final shape: RefShape;
 	final valueKinds: Array<String>;

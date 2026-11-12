@@ -253,8 +253,8 @@
 			"name": "M-RCMP-MOVE-IGNORED",
 			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "fromCallback",
-			"find": "if (t != null) movedCalls(",
-			"replace": "if (t != null && named.isEmpty()) movedCalls(",
+			"find": "if (t != null)\n\t\t\tmovedCalls(",
+			"replace": "if (t != null && named.isEmpty())\n\t\t\tmovedCalls(",
 			"note": "a Reflect.compare call in a callback is never moved to the function the project names"
 		},
 		{
@@ -447,6 +447,14 @@
 			"find": "remedy: path",
 			"replace": "remedy: null",
 			"note": "a finding naming the project text utility carries no remedy module, so it is reported in a file whose build cannot resolve that utility"
+		},
+		{
+			"name": "M-RCMP-ARROW-TAIL",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "returnedValues",
+			"find": "final tail: Null<QueryNode> = arrowTail(fn, body, s);",
+			"replace": "final tail: Null<QueryNode> = null;",
+			"note": "an arrow block tail is not counted as returned, so a call there is reported without a fix"
 		}
 	]
 }
