@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.ArmSweep;
 import dev.BaselineWarm.WarmStart;
 import dev.GateReuse;
 import dev.Land;
@@ -808,6 +809,22 @@ final class LandTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-SWEEP-DUE-NEVER')
+	public function testTheLandingAnArmSweepFollowsStartsOneSweepOfTheLandedCommit(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: ArmSweep.EVERY - 1 });
+		Assert.equals(0, run.status, run.output);
+		Assert.equals(1, run.swept.length, run.output);
+		Assert.isTrue(run.swept[0].startsWith(run.headAfter), run.swept.join(' '));
+		Assert.stringContains('arm sweep of ', run.output);
+	}
+
+	public function testALandingNoArmSweepFollowsStartsNone(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: ArmSweep.EVERY });
+		Assert.equals(0, run.status, run.output);
+		Assert.same([], run.swept);
+	}
+
+	@:pin('control')
 	@:killer('M-LAND-WARM-THROW-FAILS-LAND')
 	public function testAWarmThatCannotStartNeverFailsOrRollsBackTheLand(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { warm: 'throws' });
@@ -882,6 +899,7 @@ final class LandTest extends Test {
 			seedRed(shape, cache);
 			final started: Array<String> = [];
 			final warmed: Array<String> = [];
+			final swept: Array<String> = [];
 			final bases: Array<String> = [];
 			var builtFrom: String = '';
 			var builtTree: String = '';
@@ -915,6 +933,10 @@ final class LandTest extends Test {
 					return Passed;
 				},
 				warm: warmSeam(shape, warmed),
+				sweep: (tree, sha) -> {
+					swept.push(sha);
+					return Passed;
+				},
 				compile: (tree, log) -> {
 					compiled.push(tree);
 					makeDirectories('$tree/bin');
@@ -954,6 +976,7 @@ final class LandTest extends Test {
 				flags: flags,
 				started: started,
 				warmed: warmed,
+				swept: swept,
 				impactBase: bases[0] ?? '',
 				selected: contentsOf('$logs/suite-impact.txt'),
 				headAfter: cmd('git -C $repo rev-parse --short=${dev.Battery.KEY_LENGTH} HEAD').run().out.trim(),
@@ -1184,6 +1207,9 @@ private typedef Landing = {
 
 	/** The commits the baseline warm was started for. */
 	var warmed: Array<String>;
+
+	/** The commits an arm sweep was started for. */
+	var swept: Array<String>;
 	var impactBase: String;
 	var selected: String;
 

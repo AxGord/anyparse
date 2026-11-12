@@ -29,6 +29,7 @@ final class Dev {
 		{ name: 'land', main: Land.main, usage: Land.USAGE },
 		{ name: 'post-land', main: PostLand.main, usage: PostLand.USAGE },
 		{ name: 'baseline-warm', main: BaselineWarm.main, usage: BaselineWarm.USAGE },
+		{ name: 'arm-sweep', main: ArmSweep.main, usage: ArmSweep.USAGE },
 		{ name: 'rule-code', main: RuleCode.main, usage: RuleCode.USAGE },
 		{ name: 'rule-scope', main: RuleScope.main, usage: RuleScope.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },

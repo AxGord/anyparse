@@ -52,12 +52,12 @@ final class PostLand {
 
 	/** The commits whose whole suite ended red and were not cleared. */
 	public static inline function red(cache: String): Array<String> {
-		return recorded(cache, RED);
+		return recorded(directory(cache), RED);
 	}
 
 	/** The commits whose whole suite was started, has not ended and whose process is still there. */
 	public static function running(cache: String): Array<String> {
-		return recorded(cache).filter(sha -> alive(cache, sha));
+		return recorded(directory(cache)).filter(sha -> alive(cache, sha));
 	}
 
 	/**
@@ -65,7 +65,7 @@ final class PostLand {
 	 * the land that started it. Their whole suite never gave a verdict.
 	 */
 	public static function lost(cache: String): Array<String> {
-		return recorded(cache).filter(sha -> !alive(cache, sha));
+		return recorded(directory(cache)).filter(sha -> !alive(cache, sha));
 	}
 
 	public static function main(argv: Array<String>): Int {
@@ -336,6 +336,27 @@ final class PostLand {
 		return built.ok ? Passed : Failed('the hxcpp build failed: ${built.firstError()}');
 	}
 
+	/** Writes `pid` into `file` unless the run, faster than its starter, has already written its own. */
+	public static function keepFirst(file: String, pid: Int): Void {
+		js.Syntax.code(
+			"(function (f, t) { try { require('fs').writeFileSync(f, t, { flag: 'wx' }); } catch (e) { } })({0}, {1})", file, '$pid\n'
+		);
+	}
+
+	/** The commits of the records `<sha>.<state>` in `dir`, none when `dir` does not exist. */
+	public static function recorded(dir: String, state: String = RUNNING): Array<String> {
+		if (!FileSystem.exists(dir)) return [];
+		final suffix: String = '.$state';
+		return [
+			for (name in FileSystem.readDirectory(dir)) if (name.endsWith(suffix)) name.substr(0, name.length - suffix.length)
+		];
+	}
+
+	/** Deletes `path` when it exists. */
+	public static function remove(path: String): Void {
+		if (FileSystem.exists(path)) FileSystem.deleteFile(path);
+	}
+
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
 		return fileOf(cache, sha, state);
 	}
@@ -359,13 +380,6 @@ final class PostLand {
 			&& js.Syntax.code(
 				"(function (p) { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } })({0})", pid
 			);
-	}
-
-	/** Writes `pid` into `file` unless the run, faster than its starter, has already written its own. */
-	private static function keepFirst(file: String, pid: Int): Void {
-		js.Syntax.code(
-			"(function (f, t) { try { require('fs').writeFileSync(f, t, { flag: 'wx' }); } catch (e) { } })({0}, {1})", file, '$pid\n'
-		);
 	}
 
 	private static function run(repo: String, sha: String, cache: String, suite: Bool): Int {
@@ -414,21 +428,8 @@ final class PostLand {
 		return Path.join([cache, DIRECTORY]);
 	}
 
-	private static function recorded(cache: String, state: String = RUNNING): Array<String> {
-		final dir: String = directory(cache);
-		if (!FileSystem.exists(dir)) return [];
-		final suffix: String = '.$state';
-		return [
-			for (name in FileSystem.readDirectory(dir)) if (name.endsWith(suffix)) name.substr(0, name.length - suffix.length)
-		];
-	}
-
 	private static function fileOf(cache: String, sha: String, suffix: String): String {
 		return fileIn(directory(cache), sha, suffix);
-	}
-
-	private static function remove(path: String): Void {
-		if (FileSystem.exists(path)) FileSystem.deleteFile(path);
 	}
 
 	/** A copy of the report file `report`, beside it, holding only what the backstop judges. */

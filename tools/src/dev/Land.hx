@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import dev.ArmSweep.SweepStart;
 import dev.BaselineWarm.WarmRecipe;
 import dev.BaselineWarm.WarmStart;
 import dev.LandFormat.FormatTools;
@@ -149,8 +150,9 @@ final class Land {
 	 * Every step in turn, each only while the ones before it passed; answers the exit status. The steps up to the battery work
 	 * in the candidate tree, so one that does not pass leaves main as it was; the tree is dropped whatever the outcome.
 	 */
-	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>): Int {
+	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>, sweep: Null<SweepStart>): Int {
 		final cache: Null<String> = battery?.cache;
+		var landing: Null<Int> = null;
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'post-red', step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail) },
 			{ name: 'clean', step: clean },
@@ -160,7 +162,7 @@ final class Land {
 			{ name: 'build', step: build },
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
-			{ name: 'battery', step: runBattery.bind(battery) },
+			{ name: 'battery', step: () -> runBattery(battery, claimed -> landing = claimed) },
 			{ name: 'advance', step: _candidate.advance },
 			{ name: 'binaries', step: install },
 			{ name: 'prose-refs', step: _prose.run },
@@ -171,7 +173,12 @@ final class Land {
 						_postLand, _impacted, _repo, git(['rev-parse', 'HEAD']).out.trim(), cache, _merged(_repo), _summary.detail
 					)
 			},
-			{ name: 'warm', step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail) }
+			{ name: 'warm', step: () -> BaselineWarm.afterwards(warm, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail) },
+			{
+				name: 'arm-sweep',
+				step: () ->
+					ArmSweep.afterwards(sweep, landing, ArmSweep.EVERY, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
+			}
 		];
 		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
 		final left: Null<String> = _candidate.drop();
@@ -306,11 +313,13 @@ final class Land {
 
 	/**
 	 * `dev battery` over the candidate tree, or a skip when there is no `request` (`--no-battery`). Quick or full is
-	 * decided here, from what the commit brought in and the count of landings, and the row names why.
+	 * decided here, from what the commit brought in and the count of landings, and the row names why; the number this landing
+	 * claimed from that count goes to `claimed`.
 	 */
-	private function runBattery(request: Null<BatteryRequest>): Outcome {
+	private function runBattery(request: Null<BatteryRequest>, claimed: Int -> Void): Outcome {
 		if (request == null) return Skipped(NO_BATTERY);
 		final landing: Int = Tally.next(Path.join([request.cache, TALLY_DIR]));
+		claimed(landing);
 		final why: Null<String> = fullReason(_merged(_candidate.tree), landing, request.full, request.every);
 		final record: Null<String> = GateReuse.locate(_repo, _branch);
 		final mode: String = why == null ? 'battery quick' : 'battery full: $why';
@@ -451,6 +460,7 @@ final class Land {
 			impact: SuiteImpact.ofTree,
 			postLand: PostLand.start,
 			warm: warming ? (tree, sha) -> BaselineWarm.start(tree, sha, request.cache, recipe) : null,
+			sweep: noBattery ? null : (tree, sha) -> ArmSweep.start(tree, sha, request.cache),
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println
@@ -459,7 +469,7 @@ final class Land {
 
 	/** The pick, the build and the battery of `options`; answers the exit status. */
 	public static function land(options: LandOptions): Int {
-		return new Land(options).run(options.message, options.battery, options.warm);
+		return new Land(options).run(options.message, options.battery, options.warm, options.sweep);
 	}
 
 	/**
@@ -667,6 +677,10 @@ typedef LandOptions = {
 	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
 	@:optional
 	var warm: Null<WarmStart>;
+
+	/** Starts the arm sweep of the landed commit on every `ArmSweep.EVERY`th landing (`ArmSweep.start`); absent starts none. */
+	@:optional
+	var sweep: Null<SweepStart>;
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;

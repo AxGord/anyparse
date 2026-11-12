@@ -2736,6 +2736,48 @@
 			"find": ".env(MutationSlot.FAIL_LOGS_VAR, failLogs(gate))",
 			"replace": ".env(MutationSlot.FAIL_LOGS_VAR, '')",
 			"note": "the run is not told where to keep a failed build's log, so a BUILD-FAIL leaves nothing the next gate can read"
+		},
+		{
+			"name": "M-SWEEP-DUE-NEVER",
+			"type": "dev.ArmSweep",
+			"method": "due",
+			"force": "false",
+			"note": "no landing is one a sweep follows, so the whole registry is never swept and a rotted arm is found only by the slice that trips on it"
+		},
+		{
+			"name": "M-SWEEP-DUE-ALWAYS",
+			"type": "dev.ArmSweep",
+			"method": "due",
+			"force": "landing != null",
+			"note": "every landing starts a sweep of the whole registry, so sweeps of hours pile up behind each other in the pool"
+		},
+		{
+			"name": "M-SWEEP-START-THROW-FAILS-LAND",
+			"type": "dev.ArmSweep",
+			"method": "afterwards",
+			"force": "start == null ? Skipped('no arm sweep requested') : start(repo, head)",
+			"note": "a sweep that cannot start throws or fails through the land step, so a green land is refused for a background census"
+		},
+		{
+			"name": "M-SWEEP-UNDERWAY-BLIND",
+			"type": "dev.ArmSweep",
+			"method": "underway",
+			"force": "null",
+			"note": "a running sweep is not seen, so a second sweep of the whole registry starts beside it"
+		},
+		{
+			"name": "M-SWEEP-VERDICT-DROPS-UNHELD",
+			"type": "dev.ArmSweep",
+			"method": "unheld",
+			"force": "[]",
+			"note": "the verdict names no arm that did not hold, so a rotted arm reaches no repair line"
+		},
+		{
+			"name": "M-SWEEP-PARTIAL-RUN-READ-WHOLE",
+			"type": "dev.ArmSweep",
+			"method": "refusal",
+			"force": "null",
+			"note": "a mutation-arm run cut short by its timeout or a signal, or one that printed no row for some arms, writes a verdict that counts every missing arm as held"
 		}
 	]
 }
