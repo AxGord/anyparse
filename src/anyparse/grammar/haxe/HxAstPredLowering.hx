@@ -34,6 +34,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_CLASS_MEMBER: String = 'anyparse.grammar.haxe.HxClassMember';
 	private static final HX_MEMBER_MODIFIER: String = 'anyparse.grammar.haxe.HxMemberModifier';
 	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.HxAbstractDecl';
+	private static final MEMBER_BEYOND_VALUE: String = 'memberBeyondValue';
+	private static final CONDITIONAL_CTOR: String = 'Conditional';
+	private static final HX_CONDITIONAL_MEMBER: String = 'anyparse.grammar.haxe.HxConditionalMember';
+	private static final HX_ELSEIF_MEMBER: String = 'anyparse.grammar.haxe.HxElseifMember';
 
 	/** The `HxClassMember` ctors that declare a method, whatever form its name or signature takes. */
 	private static final FN_MEMBER_CTORS: Array<String> = ['FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'];
@@ -852,7 +856,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function importLeafClassifierField(name: String, walker: String): Field {
 		final cases: Array<Case> = [
-			caseBind(HX_DECL, 'Conditional', [0 => '_c'], { expr: ECall(ident(walker), [ident('_c')]), pos: Context.currentPos() })
+			caseBind(HX_DECL, CONDITIONAL_CTOR, [0 => '_c'], { expr: ECall(ident(walker), [ident('_c')]), pos: Context.currentPos() })
 		];
 		for (c in IMPORT_PATH_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_p'], macro { ctorName: $v{c}, path: _p }));
 		for (c in IMPORT_ALIAS_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_a'], macro { ctorName: $v{c}, path: _a.path }));
@@ -874,7 +878,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function keepsBlankLeafClassifierField(): Field {
 		final cases: Array<Case> = [
 			caseBind(
-				HX_DECL, 'Conditional', [0 => '_c'],
+				HX_DECL, CONDITIONAL_CTOR, [0 => '_c'],
 				{ expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]), pos: Context.currentPos() }
 			)
 		];
@@ -1139,12 +1143,25 @@ final class HxAstPredLowering extends AstPredLowering {
 		final isStatic: Expr = sw(
 			starElem(HX_MEMBER_DECL, 'modifiers', ident('_x')), [caseOf(HX_MEMBER_MODIFIER, ['Static'], macro true)], macro false
 		);
+		inline function beyond(e: Expr): Expr return { expr: ECall(ident(MEMBER_BEYOND_VALUE), [e]), pos: Context.currentPos() };
+		final thenBody: Expr = macro Lambda.exists(_c.body, _b -> ${beyond(starElem(HX_CONDITIONAL_MEMBER, 'body', macro _b))});
+		final elseifBody: Expr = macro Lambda.exists(
+			_c.elseifs,
+			_e ->
+				Lambda.exists(
+					${field(starElem(HX_CONDITIONAL_MEMBER, 'elseifs', macro _e), 'body')},
+					_b -> ${beyond(starElem(HX_ELSEIF_MEMBER, 'body', macro _b))}
+				)
+		);
+		final elseBody: Expr = macro _c.elseBody != null
+			&& Lambda.exists(_c.elseBody, _b -> ${beyond(starElem(HX_CONDITIONAL_MEMBER, 'elseBody', macro _b))});
 		final isMethodOrProperty: Expr = nullSwitch(field(ident('md'), 'member'), macro false, [
 			caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro true),
-			caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null)
+			caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null),
+			caseBind(HX_CLASS_MEMBER, CONDITIONAL_CTOR, [0 => '_c'], macro $thenBody || $elseifBody || $elseBody)
 		], macro false);
 		return predField(
-			'memberBeyondValue', [bareArg('md', HX_MEMBER_DECL)],
+			MEMBER_BEYOND_VALUE, [bareArg('md', HX_MEMBER_DECL)],
 			macro : Bool, macro Lambda.exists(md.modifiers, _x -> $isStatic) || $isMethodOrProperty,
 			'True iff an abstract body member is a method, a property or a `static` member.'
 		);
@@ -1153,14 +1170,15 @@ final class HxAstPredLowering extends AstPredLowering {
 	/**
 	 * `abstractBodyBeyondValues` — whether an abstract body is more than a list of values: a member is beyond a value
 	 * (`memberBeyondValue`) or a line comment above one labels a group. Read by `HxDecl.EnumAbstractDecl`'s
-	 * `@:fmt(propagateEnumAbstractContext(...))`; a doc comment and a `#if` region are not such a member.
+	 * `@:fmt(propagateEnumAbstractContext(...))`; a doc comment is not such
+	 * a member, and a `#if` region is one only through the members it holds.
 	 */
 	private function abstractBodyBeyondValuesField(): Field {
 		final lineLed: Expr = starElemWrapped(HX_ABSTRACT_DECL, 'members')
 			? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)
 			: macro false;
 		final member: Expr = {
-			expr: ECall(ident('memberBeyondValue'), [starElem(HX_ABSTRACT_DECL, 'members', ident('_m'))]),
+			expr: ECall(ident(MEMBER_BEYOND_VALUE), [starElem(HX_ABSTRACT_DECL, 'members', ident('_m'))]),
 			pos: Context.currentPos()
 		};
 		return predField(

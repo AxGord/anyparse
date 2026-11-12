@@ -1390,6 +1390,38 @@
 			"note": "a method counts as a value, so a function is no trigger"
 		},
 		{
+			"name": "M-COND-MEMBER-THEN-UNREAD",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $elseifBody || $elseBody",
+			"note": "a member in the then-branch of a `#if` region does not count, so the region reads as values"
+		},
+		{
+			"name": "M-COND-MEMBER-ELSEIF-UNREAD",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $thenBody || $elseBody",
+			"note": "a member in an `#elseif` branch does not count"
+		},
+		{
+			"name": "M-COND-MEMBER-ELSE-UNREAD",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $thenBody || $elseifBody",
+			"note": "a member in the `#else` branch does not count"
+		},
+		{
+			"name": "M-COND-REGION-ALWAYS-BEYOND",
+			"type": "anyparse.grammar.haxe.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro true",
+			"note": "any `#if` region counts as beyond a value, so a region of plain values hands the body to the abstract rules"
+		},
+		{
 			"name": "M-ABSTRACT-BODY-TRAILING-COMMENT-READ",
 			"type": "anyparse.grammar.haxe.HxAstPredLowering",
 			"method": "abstractBodyBeyondValuesField",
