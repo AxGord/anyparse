@@ -24,7 +24,7 @@ import utest.Test;
  * default-off inertness.
  */
 @:nullSafety(Strict)
-class HxTryBraceSymmetrySliceTest extends Test {
+final class HxTryBraceSymmetrySliceTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;

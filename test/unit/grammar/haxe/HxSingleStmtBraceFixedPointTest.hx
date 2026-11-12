@@ -8,7 +8,7 @@ import utest.Test;
  * braces come off the AST the writer holds, not off text it reads back, so every question the second
  * pass would answer on the bare shape has to be answered on the first.
  */
-class HxSingleStmtBraceFixedPointTest extends Test {
+final class HxSingleStmtBraceFixedPointTest extends Test {
 
 	private static inline final CONFIG: String = '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "remove" } } }';
 

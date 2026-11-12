@@ -27,7 +27,7 @@ import utest.Test;
  * parity, idempotence and default-off inertness.
  */
 @:nullSafety(Strict)
-class HxSingleStmtBracesSliceTest extends Test {
+final class HxSingleStmtBracesSliceTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;

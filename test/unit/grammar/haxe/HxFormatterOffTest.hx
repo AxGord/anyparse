@@ -17,7 +17,7 @@ import utest.Test;
  * noise, and freezes layout the author never asked to freeze.
  */
 @:nullSafety(Strict)
-class HxFormatterOffTest extends Test {
+final class HxFormatterOffTest extends Test {
 
 	/** A layout no rule would produce, so a reflow is unmistakable. */
 	private static final HAND_LAID: String = '\t\tfinal a = [ 1,2,3,\n\t\t             4,5,6 ];';

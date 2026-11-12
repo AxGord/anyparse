@@ -36,7 +36,7 @@ import utest.Assert;
  * the campaign's requirement is that BOTH branches of a region survive
  * a rewrite, which a parse-only assertion cannot show.
  */
-class HxCondMemberSlotSliceTest extends HxTestHelpers {
+final class HxCondMemberSlotSliceTest extends HxTestHelpers {
 
 	private static final TRIVIA_CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}}';
 

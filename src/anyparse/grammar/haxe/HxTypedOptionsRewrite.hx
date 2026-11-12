@@ -34,6 +34,9 @@ using anyparse.util.Strings;
  * never handed on — stays on its document and is named, since its typed edit would assert itself.
  * A `HxWriteFixture.triviaWrite` / `plainWrite` call keeps its source argument and
  * has only the configuration replaced, left as it is when it already is the typed edit or a value the file types as the options.
+ * A document wrapped in `HxWriteFixture.listsKeepSource` is read with what the wrapper adds, and its typed edit starts with
+ * `HxListsKeepSource.keep`, the wrapper's typed counterpart, over the knobs the document changes from the wrapped baseline. A
+ * `final` read both under the wrapper and outside it holds no one document and refuses.
  * An argument naming a `final` that holds a constant string, read by those calls only and by no other module, is rewritten once, at
  * its declaration.
  *
@@ -71,6 +74,11 @@ final class HxTypedOptionsRewrite {
 
 	/** A field read, the one use of loaded options that leaves them the test's subject. */
 	private static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
+	/** The typed counterpart of the `listsKeepSource` wrapper, a call at the head of the edit, and the type it is imported from. */
+	private static final KEEP_CALL: String = 'HxListsKeepSource.keep(edited)';
+
+	private static final KEEP_TYPE: String = 'anyparse.grammar.haxe.HxListsKeepSource';
 
 	/**
 	 * `source` with each hxformat.json call turned into the typed edit of `kit` (a qualified type with `forkWith`), the imports that edit
@@ -131,7 +139,9 @@ final class HxTypedOptionsRewrite {
 		final at: String = excerpt(whole);
 		final argument: Null<QueryNode> = m.bindings['json'];
 		if (!site.argumentOnly && subject(m, run, true)) return Spliced(whole, []);
-		if (!site.argumentOnly) return switch typedEdit(literalOf(argument), at, run, whole) {
+		final inner: Null<QueryNode> = unwrapped(argument, run);
+		final kept: Bool = inner != argument;
+		if (!site.argumentOnly) return switch typedEdit(literalOf(inner), kept, at, run, whole) {
 			case Spliced(fork, _): Spliced(site.asConfig ? 'HxWriteConfig.ofOptions($fork)' : fork, []);
 			case refused: refused;
 		};
@@ -144,7 +154,7 @@ final class HxTypedOptionsRewrite {
 		final replaced: Null<Span> = argument?.span;
 		if (
 			argument != null && replaced != null && !isTypedConfig(argument, run.kitName, run.plugin) && !typedValue(argument, run)
-		) switch typedEdit(literalOf(argument), at, run) {
+		) switch typedEdit(literalOf(inner), kept, at, run) {
 			case Spliced(fork, _):
 				final target: Span = replaced;
 				edits.push({ span: target, text: fork });
@@ -229,15 +239,19 @@ final class HxTypedOptionsRewrite {
 	 * The typed edit of the document `json` (null when the configuration holds none), `Spliced` as the text of the call that builds it;
 	 * counted as one rewritten call.
 	 */
-	private static function typedEdit(json: Null<String>, at: String, run: Run, ?current: String): Replacement {
+	private static function typedEdit(json: Null<String>, kept: Bool, at: String, run: Run, ?current: String): Replacement {
 		if (json == null)
 			return Refused('$at: the argument is not a constant string, nor a `final` holding one, so there is no document to read');
 		try {
-			final ignored: Array<String> = HaxeFormatConfigDiagnostics.ignored(HaxeFormatConfigDiagnostics.diagnose(json));
+			final document: String = kept ? HxListsKeepSource.of(json) : json;
+			final ignored: Array<String> = HaxeFormatConfigDiagnostics.ignored(HaxeFormatConfigDiagnostics.diagnose(document));
 			if (ignored.length > 0) return Refused('$at: hxformat.json settings the loader does not act on: ${ignored.join('; ')}');
-			final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-			final edits: Array<String> = OptionsSource.changes(run.knobs, base, HaxeFormatConfigLoader.loadHxFormatJson(json), run.imports)
-				.map(c -> 'edited.${c.name} = ${c.source}');
+			// a wrapped document is diffed against the wrapped baseline: the wrapper's own addition is the `keep` call, not a table
+			final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(kept ? HxListsKeepSource.of('{}') : '{}');
+			final edits: Array<String> = kept ? [KEEP_CALL] : [];
+			for (c in OptionsSource.changes(run.knobs, base, HaxeFormatConfigLoader.loadHxFormatJson(document), run.imports))
+				edits.push('edited.${c.name} = ${c.source}');
+			if (kept) run.imports.push(KEEP_TYPE);
 			if (edits.length == 0) {
 				final baseline: String = '${LOADER_TYPE.allAfterLast('.')}.loadHxFormatJson(\'{}\')';
 				if (baseline == current) return Spliced(baseline, []);
@@ -448,27 +462,40 @@ final class HxTypedOptionsRewrite {
 		final byDeclaration: Map<Int, Named> = [];
 		final named: Array<Named> = [];
 		for (site in callShapes(run.kitName)) for (m in Matcher.search(run.plugin.parsePattern(site.pattern), tree)) {
-			final argument: Null<QueryNode> = m.bindings['json'];
+			final wrapper: Null<QueryNode> = m.bindings['json'];
+			final argument: Null<QueryNode> = unwrapped(wrapper, run);
 			final name: Null<String> = argument?.name;
 			final at: Null<Span> = argument?.span;
-			if (argument == null || name == null || at == null || argument.kind != shape.identKind || subject(m, run, false)) continue;
+			if (
+				argument == null
+				|| wrapper == null
+				|| name == null
+				|| at == null
+				|| argument.kind != shape.identKind
+				|| subject(m, run, false)
+			)
+				continue;
 			final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
 			if (decl == null) continue;
 			final declAt: Null<Span> = decl.span;
 			final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, shape);
 			if (declAt == null || init == null || literalOf(init) == null) continue;
+			final kept: Bool = argument != wrapper;
 			final entry: Named = byDeclaration[declAt.from] ?? {
 				name: name,
 				span: declAt,
 				init: init,
+				kept: kept,
+				mixed: false,
 				retyping: retyping(decl, tree, source, run, shape),
 				readers: []
 			};
+			if (entry.kept != kept) entry.mixed = true;
 			if (!byDeclaration.exists(declAt.from)) {
 				byDeclaration[declAt.from] = entry;
 				named.push(entry);
 			}
-			if (!entry.readers.exists(at.from)) entry.readers[at.from] = { match: m, site: site };
+			if (!entry.readers.exists(at.from)) entry.readers[at.from] = { match: m, site: site, wrapper: kept ? wrapper.span : null };
 		}
 		return named;
 	}
@@ -492,7 +519,9 @@ final class HxTypedOptionsRewrite {
 			return '$at: `${entry.name}` is read as a field, a read the rewrite does not follow, so it cannot hold the typed options';
 		final initAt: Null<Span> = entry.init.span;
 		if (initAt == null) return '$at: the initializer has no position to rewrite';
-		switch typedEdit(literalOf(entry.init), at, run) {
+		if (entry.mixed)
+			return '$at: `${entry.name}` is read both under `listsKeepSource` and outside it, so no one document is the typed options';
+		switch typedEdit(literalOf(entry.init), entry.kept, at, run) {
 			case Refused(message):
 				return message;
 			case Spliced(fork, _):
@@ -501,8 +530,15 @@ final class HxTypedOptionsRewrite {
 				);
 		}
 		for (cut in cuts) edits.push(cut);
-		for (reader in entry.readers) if (!reader.site.argumentOnly)
-			edits.push({ span: reader.match.span, text: reader.site.asConfig ? 'HxWriteConfig.ofOptions(${entry.name})' : entry.name });
+		for (reader in entry.readers) {
+			final wrapper: Null<Span> = reader.wrapper;
+			if (!reader.site.argumentOnly) {
+				edits.push({ span: reader.match.span, text: reader.site.asConfig ? 'HxWriteConfig.ofOptions(${entry.name})' : entry.name });
+			} else if (wrapper != null) {
+				final target: Span = wrapper;
+				edits.push({ span: target, text: entry.name });
+			}
+		}
 		return null;
 	}
 
@@ -523,6 +559,17 @@ final class HxTypedOptionsRewrite {
 			k--;
 		}
 		return false;
+	}
+
+	/**
+	 * The document `node` hands on when it is a `listsKeepSource` call, the call's argument; `node` itself otherwise. The wrapper adds to
+	 * a constant document what `HxListsKeepSource.of` adds, so the caller reads the argument and applies it.
+	 */
+	private static function unwrapped(node: Null<QueryNode>, run: Run): Null<QueryNode> {
+		if (node == null) return null;
+		for (found in Matcher.search(run.plugin.parsePattern('HxWriteFixture.listsKeepSource($$doc)'), node)) if (found.node == node)
+			return found.bindings['doc'];
+		return node;
 	}
 
 }
@@ -559,12 +606,14 @@ private typedef Named = {
 	name: String,
 	span: Span,
 	init: QueryNode,
+	kept: Bool,
+	mixed: Bool,
 	retyping: Retyping,
 	readers: Map<Int, Reader>
 };
 
 /** A call shape's match reading a retyped `final` as its configuration. */
-private typedef Reader = { match: Match, site: Site };
+private typedef Reader = { match: Match, site: Site, wrapper: Null<Span> };
 /** Whether a `final` may be retyped: with the edits of its modifier run, or pinned, with why not. */
 private enum Retyping {
 	Open(cuts: Array<Edit>);

@@ -15,7 +15,7 @@ import utest.Test;
  * An EMPTY collection is excluded: `{}` is not something to navigate around.
  */
 @:nullSafety(Strict)
-class HxFillAfterCollectionTest extends Test {
+final class HxFillAfterCollectionTest extends Test {
 
 	/** The array must reach the width cascade, else it keeps its source shape and the call never fills. */
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '

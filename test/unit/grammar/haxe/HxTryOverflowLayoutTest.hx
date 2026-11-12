@@ -10,7 +10,7 @@ import utest.Test;
  * `sameLine.expressionIf: next` — whatever the call or array inside it looks like; one that fits stays on one
  * line. `sameLine.expressionTryOverflow: same` keeps the body on the `try` line and breaks before `catch` only.
  */
-class HxTryOverflowLayoutTest extends Test {
+final class HxTryOverflowLayoutTest extends Test {
 
 	private static final CONFIG: String = '{"wrapping":{"maxLineLength":140}}';
 	private static final CONFIG_A: String = '{"wrapping":{"maxLineLength":140},"sameLine":{"expressionTryOverflow":"same"}}';

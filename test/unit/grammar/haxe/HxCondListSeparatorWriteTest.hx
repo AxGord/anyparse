@@ -23,7 +23,7 @@ import utest.Test;
  * The fix is the same signal on both sides — per-element `sepAfter`, which only a `@:trivia` Star
  * captures — so the assertions here are about the SEPARATOR COUNT surviving, not about layout.
  */
-class HxCondListSeparatorWriteTest extends Test {
+final class HxCondListSeparatorWriteTest extends Test {
 
 	/** Every list one item per line with the trailing-comma knob on, the configuration that appended `,` after `#end`. */
 	private static final TRAILING_ONE_PER_LINE: String = '{"wrapping": {"functionSignature": {"defaultWrap": "onePerLine", "rules": []}, '

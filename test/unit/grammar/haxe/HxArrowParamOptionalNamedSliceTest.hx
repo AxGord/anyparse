@@ -44,7 +44,7 @@ import utest.Assert;
  * surfaced the two switches this slice had to update.
  */
 @:nullSafety(Strict)
-class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
+final class HxArrowParamOptionalNamedSliceTest extends HxTestHelpers {
 
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 120}}';
 

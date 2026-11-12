@@ -12,7 +12,7 @@ import utest.Test;
  * one field per line) — an inline type hint and a typedef RHS body alike.
  */
 @:nullSafety(Strict)
-class HxAnonTypeIgnoreReflowTest extends Test {
+final class HxAnonTypeIgnoreReflowTest extends Test {
 
 	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "anonType": {"defaultWrap": "ignore", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, '

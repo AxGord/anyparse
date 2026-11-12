@@ -9193,6 +9193,27 @@
 				"err": "ab128e13656021cb",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "typed-options reads a listsKeepSource wrapper around a literal as the kit's edit headed by the wrapper's typed counterpart",
+			"note": "the base refuses the wrapped call as no constant string; the tip rewrites it to the kit's forkWith with HxListsKeepSource.keep and the document's own knob, and imports HxListsKeepSource",
+			"argv": [
+				"hxq",
+				"typed-options",
+				"--kit",
+				"unit.grammar.haxe.HxWriteOptionsKit",
+				"--reformat",
+				"WrappedProbeTest.hx"
+			],
+			"files": {
+				"WrappedProbeTest.hx": "package unit.grammar.haxe;\n\nimport anyparse.grammar.haxe.HxWriteOptionsKit;\n\nfinal class WrappedProbeTest extends utest.Test {\n\n\tpublic function testX(): Void {\n\t\tfinal o = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{\"sameLine\": {\"tryBody\": \"same\"}}'));\n\t\tutest.Assert.notNull(o);\n\t}\n\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "58eae49b28cbd54a",
+				"err": "f58948b1552942dd",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

@@ -176,6 +176,11 @@ final class TypedOptionsCommand implements CliCommand {
 		CliIo.sysPrint('it becomes the bare name, ofJson(<name>) becomes HxWriteConfig.ofOptions(<name>), a fixture call keeps it.\n');
 		CliIo.sysPrint('Every read of such a final must be one of these calls, else the file is refused.\n');
 		CliIo.sysPrint('\n');
+		CliIo.sysPrint('HxWriteFixture.listsKeepSource(<constant or final>) around a document is read as the document plus the list\n');
+		CliIo.sysPrint('wraps the wrapper adds: the edit starts with HxListsKeepSource.keep(edited), then assigns what the document\n');
+		CliIo.sysPrint('changes from the wrapped baseline; the wrapper argument of a fixture call is replaced too. A final read both\n');
+		CliIo.sysPrint('under the wrapper and outside it is refused. An unqualified listsKeepSource(...) is a test\'s own helper.\n');
+		CliIo.sysPrint('\n');
 		CliIo.sysPrint("A knob is assigned when the document changed it from loadHxFormatJson('{}'), so a key that sets several\n");
 		CliIo.sysPrint('knobs becomes each of them. A file is left untouched, and reported, when a call holds an argument that is not\n');
 		CliIo.sysPrint('a constant string nor a final holding one, a final read elsewhere, a setting the loader does not act on (the\n');

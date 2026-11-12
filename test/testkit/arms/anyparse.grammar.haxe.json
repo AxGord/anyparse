@@ -1534,7 +1534,7 @@
 			"name": "M-TYPED-OPTIONS-BASELINE",
 			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
 			"method": "typedEdit",
-			"find": "final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');",
+			"find": "final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(kept ? HxListsKeepSource.of('{}') : '{}');",
 			"replace": "final base: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);",
 			"note": "the edit is written over the compiled defaults instead of the baseline the call started from, so an empty document assigns the six body policies and the curly blanks the loader re-baselines"
 		},
@@ -1699,6 +1699,46 @@
 			"find": "if (edits.length == 0) {",
 			"replace": "if (edits.length < 0) {",
 			"note": "a {} document becomes forkWith(edited -> {}) instead of the bare baseline"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "unwrapped",
+			"find": "found.node == node",
+			"replace": "false",
+			"note": "a listsKeepSource call is no wrapper, so its argument is read as the document and the call is refused as no constant string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-NAMED",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "entry.kept, at, run",
+			"replace": "false, at, run",
+			"note": "a final read under the wrapper is retyped without what the wrapper adds"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-MIXED",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "if (entry.mixed)",
+			"replace": "if (false)",
+			"note": "a final read both under the wrapper and outside it is retyped anyway, so one of its readers gets the wrong document"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-OWN",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "unwrapped",
+			"find": "'HxWriteFixture.listsKeepSource($$doc)'",
+			"replace": "'listsKeepSource($$doc)'",
+			"note": "a test's own listsKeepSource helper is read as the fixture's wrapper, so its document is rewritten with list wraps it never had"
+		},
+		{
+			"name": "M-LISTS-KEEP-SOURCE-KEEP-ANON",
+			"type": "anyparse.grammar.haxe.HxListsKeepSource",
+			"method": "keep",
+			"find": "options.anonTypeWrap = wrapped.anonTypeWrap;",
+			"replace": "",
+			"note": "the typed counterpart leaves the anonymous-type wrap on its default fallback, so it no longer loads like the wrapped document"
 		}
 	]
 }

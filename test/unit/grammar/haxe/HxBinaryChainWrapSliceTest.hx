@@ -31,7 +31,7 @@ import utest.Assert;
  * (the overflow-glued `??` case is `HxBinopGroupWrapSliceTest`'s), and
  * round-trip stability of the new emission shape.
  */
-class HxBinaryChainWrapSliceTest extends HxTestHelpers {
+final class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 
 	/**
 	 * Shared input for the two cond-chain paren-open/head-glue guard tests

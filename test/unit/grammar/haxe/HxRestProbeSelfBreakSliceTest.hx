@@ -18,7 +18,7 @@ import utest.Test;
  * on one line (`[…].contains(type)`, `t(…).chain(…)`).
  */
 @:nullSafety(Strict)
-class HxRestProbeSelfBreakSliceTest extends Test {
+final class HxRestProbeSelfBreakSliceTest extends Test {
 
 	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "anonType": {"defaultWrap": "ignore", "rules": ['
 		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'

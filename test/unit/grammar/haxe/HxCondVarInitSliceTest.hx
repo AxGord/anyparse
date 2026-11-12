@@ -25,7 +25,7 @@ import utest.Assert;
  * slots `HxVarDecl` already reached through — leading metadata and the
  * `type` position — untouched.
  */
-class HxCondVarInitSliceTest extends HxTestHelpers {
+final class HxCondVarInitSliceTest extends HxTestHelpers {
 
 	private static final TRIVIA_CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}}';
 

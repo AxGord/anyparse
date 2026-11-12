@@ -47,7 +47,7 @@ import utest.Assert;
  * in its `type` slot — a trivia gap that belongs with `HxParamCommentWriteTest`.
  */
 @:nullSafety(Strict)
-class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
+final class HxLambdaParamDefaultSliceTest extends HxTestHelpers {
 
 	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 120}}';
 

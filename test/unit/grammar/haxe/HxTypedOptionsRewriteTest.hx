@@ -371,6 +371,76 @@ final class HxTypedOptionsRewriteTest extends Test {
 		Assert.isTrue(message.contains('`inline` under a conditional region'), message);
 	}
 
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-LISTS-KEEP-SOURCE')
+	public function testAListsKeepSourceWrapperIsReadAsItsTypedCounterpart(): Void {
+		final json: String = '\'{"sameLine": {"tryBody": "same"}}\'';
+		final loader: String = ok(rewritten('HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource($json))'));
+		Assert.isTrue(loader.contains('HxWriteOptionsKit.forkWith(edited -> {'), loader);
+		Assert.isTrue(flat(loader).contains(flat('HxListsKeepSource.keep(edited); edited.tryBody = BodyPolicy.Same;')), loader);
+		Assert.isFalse(loader.contains('Wrap = {'), loader);
+		Assert.isTrue(loader.contains('import anyparse.grammar.haxe.HxListsKeepSource;'), loader);
+		Assert.isFalse(loader.contains('listsKeepSource'), loader);
+		final fixture: String = ok(rewritten('HxWriteFixture.triviaWrite(SRC, HxWriteFixture.listsKeepSource(\'{}\'))'));
+		Assert.isTrue(
+			flat(fixture)
+				.contains(flat('HxWriteFixture.triviaWrite(SRC, HxWriteOptionsKit.forkWith(edited -> HxListsKeepSource.keep(edited)))')),
+			fixture
+		);
+		Assert.isFalse(fixture.contains('listsKeepSource'), fixture);
+		final own: String = ok(rewritten(
+			'HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource(\'{"wrapping": {"objectLiteral": {"defaultWrap": "noWrap"}}}\'))'
+		));
+		Assert.isTrue(own.indexOf('HxListsKeepSource.keep(edited)') < own.indexOf('edited.objectLiteralWrap = {'), own);
+		Assert.isFalse(own.contains('edited.arrayLiteralWrap'), own);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-NAMED')
+	public function testAFinalReadUnderTheWrapperHoldsTheWrappedDocument(): Void {
+		final src: String = module(
+			"\tprivate static final CONFIG: String = '{\"sameLine\": {\"tryBody\": \"same\"}}';",
+			'\t\tHxWriteFixture.triviaWrite(SRC, HxWriteFixture.listsKeepSource(CONFIG));\n'
+			+ '\t\tfinal b = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource(CONFIG));'
+		);
+		final once: String = ok(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()));
+		Assert.isTrue(
+			flat(once).contains(flat('private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {')), once
+		);
+		Assert.isTrue(once.contains('HxListsKeepSource.keep(edited);'), once);
+		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.triviaWrite(SRC, CONFIG);')), once);
+		Assert.isTrue(flat(once).contains(flat('final b = CONFIG;')), once);
+		Assert.isFalse(once.contains('listsKeepSource'), once);
+		switch HxTypedOptionsRewrite.rewrite(once, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(once, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-MIXED')
+	public function testAFinalReadUnderAndOutsideTheWrapperRefusesTheSource(): Void {
+		final message: String = err(named(
+			"\tprivate static final CONFIG: String = '{}';",
+			'\t\tHxWriteFixture.triviaWrite(SRC, HxWriteFixture.listsKeepSource(CONFIG));\n\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);'
+		));
+		Assert.isTrue(message.contains('`CONFIG` is read both under `listsKeepSource` and outside it'), message);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-OWN')
+	public function testATestsOwnListsKeepSourceHelperIsNotTheFixturesWrapper(): Void {
+		final src: String = module(
+			'\tprivate static function listsKeepSource(json: String): String {\n\t\treturn json;\n\t}',
+			"\t\tfinal opts = HxWriteOptionsKit.strictJson(listsKeepSource('{}'));"
+		);
+		final message: String = err(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()));
+		Assert.isTrue(message.contains('the argument is not a constant string'), message);
+	}
+
 	private static function rewritten(call: String): EditResult {
 		final src: String = 'package unit.grammar.haxe;\n\nclass S {\n\n\tfunction f() {\n\t\tfinal opts = $call;\n\t}\n\n}\n';
 		return HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin());

@@ -3,14 +3,9 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HxListsKeepSource;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.json.JEntry;
-import anyparse.grammar.json.JValue;
-import anyparse.grammar.json.JValueParser;
-import anyparse.grammar.json.JValueWriter;
-
-using Lambda;
 
 /**
  * Shared trivia-writer round-trip for the Haxe formatter slice tests.
@@ -54,14 +49,7 @@ final class HxWriteFixture {
 	 * break (an explicit `noWrap` does not): for a fixture whose subject is not how a list wraps.
 	 */
 	public static function listsKeepSource(configJson: String): String {
-		final config: JValue = JValueParser.parse(configJson);
-		final wrapping: Array<JEntry> = objectAt(entriesOf(config), 'wrapping');
-		for (key in ['objectLiteral', 'arrayWrap', 'mapWrap', 'anonType']) {
-			final section: Array<JEntry> = objectAt(wrapping, key);
-			if (!section.exists(entry -> (entry.key: String) == 'defaultWrap'))
-				section.push({ key: 'defaultWrap', value: JString('onePerLine') });
-		}
-		return JValueWriter.write(config);
+		return HxListsKeepSource.of(configJson);
 	}
 
 	/** The options `HaxeModuleTriviaWriter.write` defaults to, under `listsKeepSource`. */
@@ -73,21 +61,6 @@ final class HxWriteFixture {
 		final opts: HxModuleWriteOptions = new HxModuleWriteOptions(options);
 		opts.finalNewline = false;
 		return opts;
-	}
-
-	private static function entriesOf(value: JValue): Array<JEntry> {
-		return switch value {
-			case JObject(entries): entries;
-			case _: throw 'a config document is an object';
-		};
-	}
-
-	private static function objectAt(entries: Array<JEntry>, key: String): Array<JEntry> {
-		final found: Null<JEntry> = entries.find(entry -> (entry.key: String) == key);
-		if (found != null) return entriesOf(found.value);
-		final fresh: Array<JEntry> = [];
-		entries.push({ key: key, value: JObject(fresh) });
-		return fresh;
 	}
 
 }
