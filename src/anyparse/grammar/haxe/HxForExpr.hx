@@ -34,7 +34,7 @@ package anyparse.grammar.haxe;
  * structurally per the fork's rule for `[for (x in xs) {<multi>}]`; the asymmetry vs
  * `HxIfExpr.thenBranch` (which stays cuddled for `if (cond) {<obj>}`) is the fork's
  * per-construct rule. Its third argument is the exception: under `opt.comprehensionObjectLitGlue` (the loader derives
- * it from `sameLine.forBody: fitLine`) a literal body takes the glued placement however it breaks.
+ * it from `sameLine.forBody: fitLine`) a literal body that does not fit flat below the head glues, however it breaks.
  *
  * `@:fmt(reflowCtorOnFitLine('expressionForBody', 'ObjectLit'))` on `body` — under `sameLine.comprehensionFor: fitLine`
  * a literal body ignores its source lines: the literal's wrap cascade alone decides them, so one that fits collapses.

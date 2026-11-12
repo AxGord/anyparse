@@ -15,10 +15,8 @@ class StubPluginLintCleanTest extends Test {
 	@:pin('guard')
 	public function testStubPluginCarriesNoInlineConstantFinding(): Void {
 		final files: Array<{ file: String, source: String }> = [
-			for (path in ['test/unit/cli/StubQueryPlugin.hx', 'test/unit/cli/GrammarRegistryTest.hx']) {
-				file: path,
-				source: File.getContent(path)
-			}
+			for (path in ['test/unit/cli/StubQueryPlugin.hx', 'test/unit/cli/GrammarRegistryTest.hx'])
+				{ file: path, source: File.getContent(path) }
 		];
 		final found: Array<Violation> = CheckFixture.violationsIn(new InlineConstant(), files)
 			.filter(v -> v.message.indexOf("'SHEBANG'") >= 0);

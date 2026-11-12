@@ -104,8 +104,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	 * The glue is about the literal: another body under the same knob keeps the placement its policy gave it, so one too
 	 * wide for the head line stays below it.
 	 */
-	@:pin('control')
-	@:killer('M-ALLMAN-GLUE-ANY-CTOR')
+	@:pin('guard')
 	public function testGlueLeavesAnotherBodyAlone(): Void {
 		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t$NAME_A${NAME_B.substr(0, 36)}\n\t\t];');
 		Assert.equals(source, write(source, CFG_FOR_BODY));
@@ -156,8 +155,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	/** The glue yields to a comment between the head and the `{`: it goes to the next line with the comment kept, in all three forms. */
-	@:pin('control')
-	@:killer('M-ALLMAN-GLUE-NO-COMMENT-WRAP')
+	@:pin('guard')
 	public function testGlueKeepsAHeadGapComment(): Void {
 		assertHeadGapCommentsKept(CFG_FOR_BODY);
 		assertHeadGapCommentsKept(CFG_BOTH);

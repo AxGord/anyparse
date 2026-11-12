@@ -1061,10 +1061,8 @@ class HoistCommonImportTest extends Test {
 					+ '\t}\n\n}\n'
 			}
 		].concat([
-			for (module in ['TwoQq', 'ThreeQq', 'FourQq', 'FiveQq']) {
-				name: 'src/aqq/$module.hx',
-				source: 'package aqq;\n\nclass $module {}\n'
-			}
+			for (module in ['TwoQq', 'ThreeQq', 'FourQq', 'FiveQq'])
+				{ name: 'src/aqq/$module.hx', source: 'package aqq;\n\nclass $module {}\n' }
 		]);
 		return parent == '' ? tree : tree.concat([{ name: 'src/import.hx', source: parent }]);
 	}

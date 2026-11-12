@@ -503,8 +503,8 @@
 			"name": "M-FOR-BODY-PROBE-EAGER",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "bodyPolicyWrap",
-			"find": "final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr);",
-			"replace": "final finalWrapExpr: Expr = wrapBodyAllman(opts, macro { final _eagerProbe: anyparse.core.Doc = $bodyDoc; $wrapExpr; }, writeCall, glueLayoutExpr);",
+			"find": "final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr, optFlag);",
+			"replace": "final finalWrapExpr: Expr = wrapBodyAllman(opts, macro { final _eagerProbe: anyparse.core.Doc = $bodyDoc; $wrapExpr; }, writeCall, glueLayoutExpr, optFlag);",
 			"note": "an Allman-bearing body is written again by an eager probe beside the bound `_bpBody`, so a comprehension nest writes its innermost body 2^depth times"
 		},
 		{
@@ -1478,16 +1478,16 @@
 			"name": "M-ALLMAN-GLUE-IGNORED",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "wrapBodyAllman",
-			"find": "? $glueLayoutExpr : $allmanExpr",
-			"replace": "? $allmanExpr : $allmanExpr",
+			"find": "if ($glueAccess &&",
+			"replace": "if (false && $glueAccess &&",
 			"note": "a literal under the glue knob falls back to the Allman override and leaves the for line"
 		},
 		{
 			"name": "M-ALLMAN-GLUE-ANY-CTOR",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "wrapBodyAllman",
-			"find": "$glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName} ?",
-			"replace": "$glueAccess ?",
+			"find": "if ($glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName})",
+			"replace": "if ($glueAccess)",
 			"note": "the glue knob captures every body, not only the literal it names"
 		},
 		{
@@ -2943,6 +2943,22 @@
 			"find": "o._inElseIfBranch && o._ifChainToken != null",
 			"replace": "o._ifChainToken != null",
 			"note": "every if inherits the token of the chain it is nested in, so a fitting chain inside a laddered branch body ladders with it"
+		},
+		{
+			"name": "M-ALLMAN-GLUE-NO-BELOW-FIT",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": "_glueFlatWidth == -1 || opt.lineWidth <= 0",
+			"replace": "true",
+			"note": "a flat literal that fits below the head stays glued and the head wraps its own call"
+		},
+		{
+			"name": "M-ALLMAN-GLUE-MOVES-UNDER-ANY-POLICY",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "wrapBodyAllman",
+			"find": " || $optFlag != anyparse.format.BodyPolicy.FitLine",
+			"replace": "",
+			"note": "a flat literal moves below the head under comprehensionFor same too, where the body stays beside the head"
 		}
 	]
 }

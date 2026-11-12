@@ -159,7 +159,7 @@ final class WriterBodyPolicyLowering {
 		final coreWrapExpr: Expr = buildBodyCoreWrap(bp, opts, optFlag, layouts, blockSplit, ifStmtPattern);
 		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, shared.isBlockBody);
 		final glueLayoutExpr: Expr = wrapBodyAfterTrail(opts, sameLayoutExpr, writeCall, shared.isBlockBody);
-		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr);
+		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall, glueLayoutExpr, optFlag);
 		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -836,7 +836,9 @@ final class WriterBodyPolicyLowering {
 	 * (`@:fmt(bodyAllmanIndentForCtor(...))`). Returns `wrapExpr` unchanged
 	 * when no args.
 	 */
-	private static function wrapBodyAllman(opts: WriterLowering.WrapBodyOpts, wrapExpr: Expr, writeCall: Expr, glueLayoutExpr: Expr): Expr {
+	private static function wrapBodyAllman(
+		opts: WriterLowering.WrapBodyOpts, wrapExpr: Expr, writeCall: Expr, glueLayoutExpr: Expr, optFlag: Expr
+	): Expr {
 		final bodyAllmanIndentArgs: Null<Array<String>> = opts.bodyAllmanIndentArgs;
 		final bodyValueExpr: Expr = opts.bodyValueExpr;
 		if (bodyAllmanIndentArgs == null) return wrapExpr;
@@ -865,11 +867,18 @@ final class WriterBodyPolicyLowering {
 			}
 		};
 		if (bodyAllmanIndentArgs.length == 2) return allmanExpr;
-		// The optional third argument names a Bool knob under which a matching body takes the glued placement whatever its
-		// lines, so `{` stays on the header line and the literal breaks in place. `glueLayoutExpr` already yields to a head-gap
-		// comment, which forces the next-line layout there as on every other placement.
+		// The optional third argument names a Bool knob under which a matching body takes the glued placement, so `{` stays on
+		// the header line and the literal breaks in place, unless the body's policy is `FitLine` and it renders flat on the
+		// line below the head: there the measured placement moves it before the head's own call wraps. `glueLayoutExpr` already
+		// yields to a head-gap comment, which forces the next-line layout there as on every other placement.
 		final glueAccess: Expr = optFieldAccess(bodyAllmanIndentArgs[2]);
-		return macro $glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName} ? $glueLayoutExpr : $allmanExpr;
+		return macro if ($glueAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}) {
+			final _glueFlatWidth: Int = anyparse.format.wrap.WrapList.flatLength($writeCall);
+			_glueFlatWidth == -1 || opt.lineWidth <= 0 || $optFlag != anyparse.format.BodyPolicy.FitLine
+				? $glueLayoutExpr
+				: anyparse.core.Doc.IfArrowContinuationFits(_cols, _glueFlatWidth, opt.lineWidth + 1, $glueLayoutExpr, $allmanExpr);
+		} else
+			$allmanExpr;
 	}
 
 	/**
