@@ -1,5 +1,6 @@
 package unit.query;
 
+import anyparse.check.common.members.InlineConstant;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.ExtractConstantTo;
 
@@ -75,6 +76,16 @@ class ExtractConstantToSliceTest extends Test {
 		final result: Moved = ok(request(WORKER, { match: '60' }, 'MINUTE', other('pkg.b', 'Limits', null)));
 		Assert.isTrue(result.dest.contains('public static inline final MINUTE:Int = 60;'), 'inline, typed by the literal: ${result.dest}');
 		Assert.isTrue(result.source.contains('5 * Limits.MINUTE'), 'the literal is replaced where it sat');
+	}
+
+	/** A String literal moves as a typed `static final`, never `inline`, and the result is clean for `inline-constant`. */
+	@:pin('guard')
+	public function testAStringLiteralStaysStaticFinal(): Void {
+		final source: String = 'package pkg.a;\n\nclass Worker {\n\n\tfunction f():String {\n\t\treturn \'abc\';\n\t}\n}\n';
+		final result: Moved = ok(request(source, { match: '\'abc\'' }, 'NAME', other('pkg.b', 'Limits', null)));
+		Assert.isTrue(result.dest.contains('public static final NAME:String = \'abc\';'), 'typed, not inline: ${result.dest}');
+		Assert.isFalse(result.dest.contains('inline'), 'no inline: ${result.dest}');
+		Assert.equals(0, CheckFixture.violations(new InlineConstant(), result.dest).length, 'no inline-constant finding');
 	}
 
 	/** An operator expression is a constant but does not fold into `inline` here. */
