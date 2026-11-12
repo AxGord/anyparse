@@ -2,6 +2,7 @@ package unit.cli;
 
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.Cli;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliCallGraph;
 import anyparse.query.cli.CliRegistry;
@@ -34,7 +35,7 @@ class GrammarWalkCliTest extends Test {
 	public function testResolutionRootsFollowTheGrammar(): Void {
 		final dir: String = mixedTree();
 		CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
-			final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(CliArgs.JSON_LANG, [], [dir], [], false);
+			final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(CliArgs.JSON_LANG, [], [dir], [], false, RunLedger.begin());
 			Assert.same(['b.json'], names(scope?.sources().projectRoots ?? []));
 		});
 	}

@@ -15726,8 +15726,8 @@
 			"name": "M-CLI-EXIT-ON-EMPTY-PER-RUN",
 			"type": "anyparse.query.Cli",
 			"method": "runEach",
-			"find": "new CliContext(false, postWriteFix, chosen.stdin, matches, ledger)",
-			"replace": "new CliContext(requireMatch, postWriteFix, chosen.stdin, matches, ledger)",
+			"find": "new CliContext(false, ledger, postWriteFix, chosen.stdin, matches)",
+			"replace": "new CliContext(requireMatch, ledger, postWriteFix, chosen.stdin, matches)",
 			"note": "--exit-on-empty judges each grammar's run, so a call whose Haxe run found the name fails because its JSON run did not"
 		},
 		{

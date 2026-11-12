@@ -321,7 +321,7 @@ final class Cli {
 			final chosen: LanguageChoiceResult = LanguageChoice.choose(rest, command, CliIo.readStdin);
 			runEach.bind(command, chosen, requireMatch, postWriteFix, ledger);
 		} else {
-			() -> command.run(rest, new CliContext(requireMatch, postWriteFix, null, null, ledger));
+			() -> command.run(rest, new CliContext(requireMatch, ledger, postWriteFix));
 		};
 		if (!verify) return run();
 		final journal: WriteJournal = new WriteJournal();
@@ -352,15 +352,14 @@ final class Cli {
 	private static function runEach(
 		command: CliCommand, chosen: LanguageChoiceResult, requireMatch: Bool, postWriteFix: Bool, ledger: RunLedger
 	): Int {
-		if (chosen.runs.length == 1)
-			return command.run(chosen.runs[0], new CliContext(requireMatch, postWriteFix, chosen.stdin, null, ledger));
+		if (chosen.runs.length == 1) return command.run(chosen.runs[0], new CliContext(requireMatch, ledger, postWriteFix, chosen.stdin));
 		final matches: RunMatches = new RunMatches();
 		var worst: Int = EXIT_OK;
 		for (i => argv in chosen.runs) {
 			// Each of several runs leads with `--lang <name>` (`LanguageChoice.perLanguage`): the label says whose grammar the
 			// hits and the summary that follow on this run belong to.
 			CliIo.stderr('apq ${command.name()}: --lang ${argv[1]} (run ${i + 1} of ${chosen.runs.length})\n');
-			final code: Int = command.run(argv, new CliContext(false, postWriteFix, chosen.stdin, matches, ledger));
+			final code: Int = command.run(argv, new CliContext(false, ledger, postWriteFix, chosen.stdin, matches));
 			if (code > worst) worst = code;
 		}
 		return requireMatch && worst == EXIT_OK && matches.allEmpty() ? EXIT_RUNTIME : worst;

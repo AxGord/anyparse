@@ -13,6 +13,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.RunLedger;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
@@ -230,7 +231,7 @@ class LintFixSafeBisectTest extends Test {
 		final err: String = CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(
 				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, null,
-				[{ hxml: 'check.hxml', dir: root, defines: [] }], false, null, false
+				[{ hxml: 'check.hxml', dir: root, defines: [] }], false, null, false, RunLedger.begin()
 			)
 		);
 		return { code: code, err: err };

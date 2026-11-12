@@ -56,13 +56,13 @@ final class CliContext {
 	public final ledger: RunLedger;
 
 	public function new(
-		requireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches, ?ledger: RunLedger
+		requireMatch: Bool, ledger: RunLedger, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches
 	) {
 		this.requireMatch = requireMatch;
 		this.postWriteFix = postWriteFix;
 		this.stdin = stdin;
 		this.matches = matches ?? new RunMatches();
-		this.ledger = ledger ?? RunLedger.fallback();
+		this.ledger = ledger;
 	}
 
 	/**

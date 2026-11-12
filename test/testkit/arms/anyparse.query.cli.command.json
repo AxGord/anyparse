@@ -596,7 +596,7 @@
 			"name": "M-ADDIMPORT-CLI-BLIND-SEAT",
 			"type": "anyparse.query.cli.command.AddImportCommand",
 			"method": "runAddImport",
-			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source)",
+			"find": "ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source, ledger)",
 			"replace": "CliArgs.pickPlugin(lang)",
 			"note": "the op reads the file with no project resolution scope, so the insert seat takes every wildcard for a run boundary and places the import where the import-order rule does not"
 		},

@@ -6,6 +6,7 @@ import sys.io.File;
 import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.Cli;
 import anyparse.query.HaxelibResolver;
+import anyparse.query.RunLedger;
 import anyparse.query.StdResolver;
 import anyparse.query.cli.command.LintCommand;
 
@@ -442,7 +443,7 @@ class ResolutionScopeCliTest extends Test {
 			return;
 		}
 		final root: String = CliFixture.writeDir('resdeclared', [{ name: 'B.hx', source: 'package other;\nclass B {}\n' }]);
-		final sources: Null<ResolutionSources> = LintCommand.resolutionThunk('haxe', [], [root], [], true)?.sources();
+		final sources: Null<ResolutionSources> = LintCommand.resolutionThunk('haxe', [], [root], [], true, RunLedger.begin())?.sources();
 		CliFixture.removeDir(root);
 		final declared: Int = (sources?.declaredLibrary?.entries() ?? []).length;
 		Assert.equals(1, declared, 'the declared half is the root and nothing else');

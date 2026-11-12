@@ -16,11 +16,12 @@ final class ProjectResolution {
 	 * `plugin` for an edit of `file` (whose current text is `source`): the plugin itself, wrapped in a
 	 * `CachingGrammarPlugin` carrying the project's resolution scope when the project (or the std) provides one.
 	 */
-	public static function hostFor(plugin: GrammarPlugin, file: String, source: String): GrammarPlugin {
+	public static function hostFor(plugin: GrammarPlugin, file: String, source: String, ledger: RunLedger): GrammarPlugin {
 		final config: LintConfig = LintConfig.discover(file);
 		OracleProviders.reportDrops(config, plugin);
 		final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(
-			plugin.langName(), [{ file: file, source: source }], config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd()
+			plugin.langName(), [{ file: file, source: source }],
+			config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd(), ledger
 		);
 		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
 		if (scope != null) host.setResolutionScope(scope);

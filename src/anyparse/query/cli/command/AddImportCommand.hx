@@ -95,7 +95,7 @@ final class AddImportCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source);
+		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source, ledger);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin, optsJson);
 		final op: String = 'add-import';

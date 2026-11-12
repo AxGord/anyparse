@@ -15,6 +15,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.RunLedger;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
@@ -152,7 +153,8 @@ class LintFixResidueTest extends Test {
 		var code: Int = 0;
 		final stderr: String = CliFixture.captureStderr(() ->
 			code = LintFixDriver.runLintFix(
-				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse(config), false, null, oracles, oracles.length == 0, null, false
+				files, checks, new HaxeQueryPlugin(), _ -> LintConfig.parse(config), false, null, oracles, oracles.length == 0, null,
+				false, RunLedger.begin()
 			)
 		);
 		return { code: code, stderr: stderr, after: files[0].source };

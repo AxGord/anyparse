@@ -4,6 +4,7 @@ package unit.cli;
 import js.Node;
 #end
 import anyparse.query.Cli;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.CliCommand;
 import anyparse.query.cli.CliContext;
 import anyparse.query.cli.CliRegistry;
@@ -153,10 +154,11 @@ class CliCommandSeamTest extends Test {
 
 	/** The context a command is handed answers the run's own emptiness convention. */
 	public function testTheContextAnswersEmptinessFromTheRunsOwnFlag(): Void {
-		Assert.equals(0, new CliContext(false).emptyExit(true));
-		Assert.equals(0, new CliContext(false).emptyExit(false));
-		Assert.equals(1, new CliContext(true).emptyExit(true));
-		Assert.equals(0, new CliContext(true).emptyExit(false));
+		final ledger: RunLedger = RunLedger.begin();
+		Assert.equals(0, new CliContext(false, ledger).emptyExit(true));
+		Assert.equals(0, new CliContext(false, ledger).emptyExit(false));
+		Assert.equals(1, new CliContext(true, ledger).emptyExit(true));
+		Assert.equals(0, new CliContext(true, ledger).emptyExit(false));
 	}
 
 	#if nodejs

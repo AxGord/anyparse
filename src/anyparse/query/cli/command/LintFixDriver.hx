@@ -157,8 +157,8 @@ final class LintFixDriver {
 					() ->
 						applyLintPass(
 							active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement,
-							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, windowOf, created,
-							baselineBeforeCreate, originalOf, safeEditsOf, trail, reach, said
+							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, windowOf, said, created,
+							baselineBeforeCreate, originalOf, safeEditsOf, trail, reach
 						)
 				);
 				fixedCount += pass.fixedDelta;
@@ -301,8 +301,8 @@ final class LintFixDriver {
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
 		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, windowOf: Null<LintWindowOf>,
-		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>, ?editsOf: Map<String, Int>,
-		?trail: LintFixSafeTrail, ?reach: ImportReach, ?said: RunLedger
+		said: RunLedger, ?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>,
+		?editsOf: Map<String, Int>, ?trail: LintFixSafeTrail, ?reach: ImportReach
 	): LintPassResult {
 		// Every memo whose answer depends on an ambient source's TEXT is dropped at the head of each
 		// pass: a previous pass may have created or rewritten one, and a memo taken before that
@@ -392,7 +392,7 @@ final class LintFixDriver {
 			// The previous file's speculative parses go before this one makes its own: within one
 			// pass they are what grows, one edit set per check per file.
 			cached.retainSources(passSources(files, active));
-			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index, reach, said);
+			final groups: Array<RuleEdits> = collectFileLintEdits(entry.source, fileViolations, checks, cached, index, said, reach);
 			if (contributedEdits(groups).length == 0) {
 				ledgerFileLintEdits(ledger, groups, passes == 1, checks);
 				continue;
@@ -414,7 +414,7 @@ final class LintFixDriver {
 					final blamed: Array<String> = [];
 					settled = salvageFileLintEdits(
 						entry.source, groups, message, cached, optsByFile[entry.file], blamed,
-						findingSplitter(entry.source, checks, cached, index, reach, said)
+						findingSplitter(entry.source, checks, cached, index, said, reach)
 					);
 					// EVERY pass, not just the first: `noted` already dedupes per file, so the
 					// `passes == 1` this used to also carry bought nothing and cost the one place a
@@ -457,7 +457,7 @@ final class LintFixDriver {
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
 		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>, created: Array<String>,
-		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>, ?said: RunLedger
+		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>, said: RunLedger
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
@@ -476,7 +476,7 @@ final class LintFixDriver {
 			// the half that must be known good first.
 			final made: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileCreates(
 				creates, file -> fileSourceOf(files, file) != null || ConfigFinder.fileExists(file),
-				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file, said ?? RunLedger.fallback()))
+				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file, said))
 			);
 			if (made == null) continue;
 			// Re-bound: strict null-safety does not carry a narrowed local into a comprehension.
@@ -580,12 +580,12 @@ final class LintFixDriver {
 	private static function commitCreates(
 		made: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>,
 		optsByFile: Map<String, Null<String>>, created: Array<String>, touchedThisPass: Array<String>, changedFiles: Array<String>,
-		nextActive: Array<{ file: String, source: String }>, ?said: RunLedger
+		nextActive: Array<{ file: String, source: String }>, said: RunLedger
 	): Void {
 		for (m in made) {
 			CliIo.writeFile(m.file, m.source);
 			files.push(m);
-			optsByFile[m.file] = CliArgs.discoverFormatConfig(m.file, said ?? RunLedger.fallback());
+			optsByFile[m.file] = CliArgs.discoverFormatConfig(m.file, said);
 			created.push(m.file);
 			if (!touchedThisPass.contains(m.file)) touchedThisPass.push(m.file);
 			if (!changedFiles.contains(m.file)) changedFiles.push(m.file);
@@ -713,8 +713,8 @@ final class LintFixDriver {
 	 * others. `contributedEdits` flattens the survivors into the disjoint set the gate is handed.
 	 */
 	public static function collectFileLintEdits(
-		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex,
-		?reach: ImportReach, ?said: RunLedger
+		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex, said: RunLedger,
+		?reach: ImportReach
 	): Array<RuleEdits> {
 		final groups: Array<RuleEdits> = [];
 		final edits: Array<{ span: Span, text: String }> = [];
@@ -725,7 +725,7 @@ final class LintFixDriver {
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
-			final whole: RuleEdits = ruleEditsFor(check, source, own, cached, index, edits, reach, said);
+			final whole: RuleEdits = ruleEditsFor(check, source, own, cached, index, edits, said, reach);
 			// A guard refusal is a fact about SOME of the check's edits, and one finding's
 			// emptied slot used to cost the check every other finding in the file. Re-asked one
 			// finding at a time, so only the finding the guard names is refused — the same
@@ -734,7 +734,7 @@ final class LintFixDriver {
 			if (whole.refusal == null || own.length < 2)
 				accept(whole)
 			else
-				for (v in own) accept(ruleEditsFor(check, source, [v], cached, index, edits, reach, said));
+				for (v in own) accept(ruleEditsFor(check, source, [v], cached, index, edits, said, reach));
 		}
 		return groups;
 	}
@@ -745,7 +745,7 @@ final class LintFixDriver {
 	 */
 	private static function ruleEditsFor(
 		check: Check, source: String, own: Array<Violation>, cached: GrammarPlugin, index: SymbolIndex,
-		accepted: Array<{ span: Span, text: String }>, ?reach: ImportReach, ?said: RunLedger
+		accepted: Array<{ span: Span, text: String }>, said: RunLedger, ?reach: ImportReach
 	): RuleEdits {
 		// A `CarryingFix` is asked ONCE, through the richer seam, and its `fix` is the pure
 		// projection of what comes back — asking both would run the same analysis twice and let
@@ -754,7 +754,7 @@ final class LintFixDriver {
 		final checkEdits: Array<{ span: Span, text: String }> = if (check is CarryingFix)
 			carrying.map(edit -> { span: edit.span, text: edit.text })
 		else if (check is NotedFix)
-			askNoted(cast check, check.id(), source, own, cached, index, said ?? RunLedger.fallback())
+			askNoted(cast check, check.id(), source, own, cached, index, said)
 		else
 			check.fix(source, own, cached, index);
 		// The guard runs BEFORE the ledger, because the ledger's subject is what the check
@@ -808,12 +808,12 @@ final class LintFixDriver {
 	 * splits into nothing, which leaves the group refused whole, as before the split existed.
 	 */
 	public static function findingSplitter(
-		source: String, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex, ?reach: ImportReach, ?said: RunLedger
+		source: String, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex, said: RunLedger, ?reach: ImportReach
 	): (RuleEdits) -> Array<RuleEdits> {
 		return group -> {
 			final check: Null<Check> = checks.find(c -> c.id() == group.rule);
 			return check == null ? [] : [
-				for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [], reach, said)
+				for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [], said, reach)
 			];
 		};
 	}
@@ -1379,7 +1379,7 @@ final class LintFixDriver {
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool,
-		windowOf: Null<LintWindowOf>, verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP, ?reviewBudget: Int, ?runLedger: RunLedger
+		windowOf: Null<LintWindowOf>, verbose: Bool, runLedger: RunLedger, probeCap: Int = LintFixSafePass.PROBE_CAP, ?reviewBudget: Int
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
@@ -1393,7 +1393,7 @@ final class LintFixDriver {
 		final before: Map<String, String> = sourceSnapshot(files);
 		final exit: Int = applyLintFixes(
 			files, checks, plugin, resolveConfig, applyEnablement, windowOf, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
-			new ImportReach(OracleProviders.of(plugin), oracles), runLedger ?? RunLedger.fallback(), resolution
+			new ImportReach(OracleProviders.of(plugin), oracles), runLedger, resolution
 		);
 		// After every revert net has settled, so a fragment follows only the bytes the run kept.
 		RegistryFollowCommand.followWrite('lint', [

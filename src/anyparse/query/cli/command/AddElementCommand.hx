@@ -161,7 +161,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 			AddElement.insertSorted(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
 		else
 			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
-		return CliEdit.finishEdit('add-element', filePath, o.write, result, fix ? plugin : null);
+		return CliEdit.finishEdit('add-element', filePath, o.write, result, ledger, fix ? plugin : null);
 	}
 
 	private static function printAddElementUsage(): Void {

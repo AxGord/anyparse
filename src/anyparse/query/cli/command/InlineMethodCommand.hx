@@ -29,7 +29,7 @@ final class InlineMethodCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runInlineMethod(args);
+		return runInlineMethod(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -53,7 +53,7 @@ final class InlineMethodCommand implements CliCommand {
 	 * method may have callers in OTHER files that this in-file op cannot
 	 * see or update — inlining deletes the declaration regardless.
 	 */
-	private static function runInlineMethod(args: Array<String>): Int {
+	private static function runInlineMethod(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -103,7 +103,7 @@ final class InlineMethodCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source);
+		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source, ledger);
 		final op: String = 'inline-method';
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;

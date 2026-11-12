@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.command.LintFixDriver;
 
 /**
@@ -45,7 +46,7 @@ class LintFixFactsSettleTest extends Test {
 				[{ file: file, source: before }],
 				[new ExplicitLocalType()],
 				new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, resolution, [{ hxml: 'check.hxml', dir: dir, defines: [] }],
-				false, null, false
+				false, null, false, RunLedger.begin()
 			)
 		);
 		Assert.notEquals(before, File.getContent(file), 'the run wrote the file');

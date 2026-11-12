@@ -325,7 +325,7 @@ final class LintCommand implements CliCommand {
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, windowOf, o.verbose, o.fixProbes, o.reviewBudget, ledger
+						o.noOracle, windowOf, o.verbose, ledger, o.fixProbes, o.reviewBudget
 					)
 			);
 
@@ -402,9 +402,8 @@ final class LintCommand implements CliCommand {
 	 */
 	public static function resolutionThunk(
 		lang: String, files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool,
-		?ledger: RunLedger
+		ledger: RunLedger
 	): Null<ResolutionScope> {
-		final said: RunLedger = ledger ?? RunLedger.fallback();
 		final declared: Bool = roots.length > 0 || libNames.length > 0;
 		if (!declared && !(stdEnabled && StdResolver.stdDir() != null)) return null;
 		// Dedup by the SYMLINK-RESOLVED absolute path: a library glob path is always absolute, a report
@@ -435,7 +434,7 @@ final class LintCommand implements CliCommand {
 						files: Array<{ file: String, source: String }>,
 						matched: Bool,
 						allMatched: Bool
-					} = readResolutionRoots(lang, roots, reportPaths, said);
+					} = readResolutionRoots(lang, roots, reportPaths, ledger);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
 					rootsAllMatched = read.allMatched;

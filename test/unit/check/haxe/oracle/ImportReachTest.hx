@@ -10,6 +10,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli.RuleEdits;
 import anyparse.query.ImportReach;
 import anyparse.query.OracleProviders;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.command.LintFixDriver;
 
 /**
@@ -292,7 +293,9 @@ final class ImportReachTest extends Test {
 	/** The groups `lint --fix` would collect for `C.hx` under `reach`. */
 	private static function groupsUnder(root: String, reach: ImportReach): Array<RuleEdits> {
 		final run: Found = foundIn(root, MAIN);
-		return LintFixDriver.collectFileLintEdits(MAIN, run.own, [run.check], run.plugin, CheckFixture.index(run.files, run.plugin), reach);
+		return LintFixDriver.collectFileLintEdits(
+			MAIN, run.own, [run.check], run.plugin, CheckFixture.index(run.files, run.plugin), RunLedger.begin(), reach
+		);
 	}
 
 	/** The findings `lint` would report for `source` as `C.hx`, once `reach` has asked each remedy's builds. */

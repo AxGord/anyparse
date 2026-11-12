@@ -136,7 +136,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			return target == null
 				? EXIT_RUNTIME
 				: CliEdit.finishEdit(
-					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson),
+					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), ledger,
 					fix ? plugin : null, RemoveElement.describeTarget(source, target, plugin, withDoc)
 				);
 		}
@@ -149,7 +149,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		// nothing in the transcript said so. Naming the cut costs no behaviour and no ceremony.
 		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
 		return CliEdit.finishEdit(
-			OP, filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson),
+			OP, filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson), ledger,
 			fix ? plugin : null, removed
 		);
 	}

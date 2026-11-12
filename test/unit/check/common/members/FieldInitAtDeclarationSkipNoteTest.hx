@@ -73,7 +73,7 @@ class FieldInitAtDeclarationSkipNoteTest extends Test {
 		final run: RunLedger = RunLedger.begin();
 		for (_ in 0...2) {
 			final groups: Array<RuleEdits> = LintFixDriver.collectFileLintEdits(
-				CHAIN, all.slice(1), [check], plugin, CheckFixture.index(files, plugin), null, run
+				CHAIN, all.slice(1), [check], plugin, CheckFixture.index(files, plugin), run
 			);
 			Assert.equals(0, LintFixDriver.contributedEdits(groups).length);
 		}

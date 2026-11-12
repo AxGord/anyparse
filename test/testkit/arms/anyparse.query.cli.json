@@ -47,8 +47,8 @@
 			"type": "anyparse.query.cli.CliContext",
 			"method": "CliContext",
 			"kind": "ClassDecl",
-			"find": "public function new(\nrequireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches, ?ledger: RunLedger\n) {\nthis.requireMatch = requireMatch;",
-			"replace": "private static var _sticky: Bool = false;\n\npublic function new(\nrequireMatch: Bool, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches, ?ledger: RunLedger\n) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;",
+			"find": "public function new(\nrequireMatch: Bool, ledger: RunLedger, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches\n) {\nthis.requireMatch = requireMatch;",
+			"replace": "private static var _sticky: Bool = false;\n\npublic function new(\nrequireMatch: Bool, ledger: RunLedger, postWriteFix: Bool = false, ?stdin: String, ?matches: RunMatches\n) {\nif (requireMatch) _sticky = true;\nthis.requireMatch = _sticky;",
 			"note": "the per-run flag gains a static backing, so one invocation's --exit-on-empty survives into the next one in the same process"
 		},
 		{
@@ -756,7 +756,7 @@
 			"name": "M-CONTEXT-LEDGER-IGNORED",
 			"type": "anyparse.query.cli.CliContext",
 			"method": "new",
-			"find": "this.ledger = ledger ?? RunLedger.fallback();",
+			"find": "this.ledger = ledger;",
 			"replace": "this.ledger = RunLedger.fallback();",
 			"note": "a context built with the run's ledger answers the latest one instead, so a command says through whichever run began last"
 		},

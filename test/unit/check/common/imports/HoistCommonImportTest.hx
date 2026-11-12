@@ -8,6 +8,7 @@ import anyparse.check.common.naming.Naming;
 import anyparse.query.FileIdentity;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachBuilds;
+import anyparse.query.RunLedger;
 import anyparse.query.StdResolver;
 import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
@@ -1081,7 +1082,7 @@ class HoistCommonImportTest extends Test {
 		CliFixture.captureStderr(() ->
 			LintFixDriver.runLintFix(
 				files, checks ?? [new HoistCommonImport(), new UnusedImport(), new EmptyAmbientSource()], new HaxeQueryPlugin(),
-				_ -> LintConfig.parse(config), false, null, [], true, null, false
+				_ -> LintConfig.parse(config), false, null, [], true, null, false, RunLedger.begin()
 			)
 		);
 	}

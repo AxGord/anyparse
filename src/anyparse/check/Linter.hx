@@ -802,9 +802,9 @@ final class Linter {
 	 * instead of pushing into an array nobody says again.
 	 */
 	public static function sayConfigNotes(
-		checks: Array<Check>, notes: Array<ConfigNote>, ledger: Null<RunLedger>, write: (String) -> Void
+		checks: Array<Check>, notes: Array<ConfigNote>, ledger: RunLedger, write: (String) -> Void
 	): Void {
-		ConfigNotes.say(ledger ?? RunLedger.fallback(), notes, write);
+		ConfigNotes.say(ledger, notes, write);
 		for (check in checks) if (check is ConfigNoting) (cast check: ConfigNoting).setConfigNotes(null);
 	}
 

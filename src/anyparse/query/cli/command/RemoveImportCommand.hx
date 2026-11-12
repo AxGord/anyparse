@@ -103,7 +103,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return CliEdit.finishEdit(
-			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson),
+			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson), ledger,
 			fix ? plugin : null
 		);
 	}

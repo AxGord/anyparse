@@ -75,10 +75,10 @@ final class CliEdit {
 	 * this write actually changed, which that plugin's lexical regions tell from comments. It is
 	 * spelled as an ordinary parameter BEFORE the optional `detail` on purpose — Haxe skips an
 	 * optional by TYPE, so a trailing optional would let a `detail`-less call site's next argument
-	 * land on the wrong parameter with no error.
+	 * land on the wrong parameter with no error. `ledger` is the run's own: the `--fix` lint says through it.
 	 */
 	public static function finishEdit(
-		opName: String, filePath: String, write: Bool, result: EditResult, ?fix: GrammarPlugin, ?detail: String
+		opName: String, filePath: String, write: Bool, result: EditResult, ledger: RunLedger, ?fix: GrammarPlugin, ?detail: String
 	): Int {
 		switch result {
 			case Ok(text, rewrites):
@@ -92,7 +92,7 @@ final class CliEdit {
 					final before: Null<String> = fix != null ? (try CliIo.readFile(filePath) catch (exception: Exception) null) : null;
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
-					if (fix != null) postWriteFix(filePath, before, text, fix);
+					if (fix != null) postWriteFix(filePath, before, text, fix, ledger);
 				} else {
 					previewEdit(opName, filePath, text, tail);
 				}
@@ -333,7 +333,9 @@ final class CliEdit {
 	 * reported, so a lint that finds nothing to do, or refuses, must not turn the op into a
 	 * failure. What the fix pass did, it says itself.
 	 */
-	private static function postWriteFix(filePath: String, before: Null<String>, after: String, plugin: GrammarPlugin): Void {
+	private static function postWriteFix(
+		filePath: String, before: Null<String>, after: String, plugin: GrammarPlugin, ledger: RunLedger
+	): Void {
 		if (before == null) {
 			CliIo.stderr('apq: --fix skipped — could not read $filePath as it was before this write\n');
 			return;
@@ -367,7 +369,7 @@ final class CliEdit {
 			'--no-oracle',
 			'--range',
 			[for (w in windows) '${w.from}:${w.to}'].join(',')
-		], RunLedger.fallback());
+		], ledger);
 	}
 
 	/**
