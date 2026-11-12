@@ -1386,8 +1386,8 @@
 			"name": "M-PURITY-GETTER-OFF",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "field) != false;",
-			"replace": "field) == null;",
+			"find": "field, true) != false;",
+			"replace": "field, true) == null;",
 			"note": "a getter of a resolved type reads as plain"
 		},
 		{
@@ -1402,8 +1402,8 @@
 			"name": "M-PURITY-UNKNOWN-MEMBER",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "field) != false;",
-			"replace": "field) == true;",
+			"find": "field, true) != false;",
+			"replace": "field, true) == true;",
 			"note": "a field the index cannot place reads as plain"
 		},
 		{
@@ -1448,16 +1448,16 @@
 			"name": "M-PURITY-INTERCEPTOR-DECLARED-NAME",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "field) != false;",
-			"replace": "field) != false || typing.accessOverloaded(typeName, true);",
+			"find": "field, true) != false;",
+			"replace": "field, true) != false || typing.accessOverloaded(typeName, true);",
 			"note": "a declared field of an abstract with @:op(a.b) or @:resolve reads as running the interceptor"
 		},
 		{
 			"name": "M-PURITY-FIELD-READ-ASKS-INDEX",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "field) != false;",
-			"replace": "field) != false || typing.accessOverloaded(typeName, false);",
+			"find": "field, true) != false;",
+			"replace": "field, true) != false || typing.accessOverloaded(typeName, false);",
 			"note": "a field read asks the index-access question, so a field read on an abstract with @:arrayAccess looks impure"
 		},
 		{
@@ -1501,8 +1501,8 @@
 			"name": "M-PURITY-ALIAS-GETTER",
 			"type": "anyparse.check.scan.PurityScan",
 			"method": "accessRunsCode",
-			"find": "memberGetter(ctx.index.refs.aliasedName(typeName), field)",
-			"replace": "memberGetter(typeName, field)",
+			"find": "memberGetter(ctx.index.refs.aliasedName(typeName), field, true)",
+			"replace": "memberGetter(typeName, field, true)",
 			"note": "a field read through a typedef alias is asked of the alias, which declares no member, so a plain field reads as unknown"
 		},
 		{
@@ -1650,6 +1650,14 @@
 			"find": "names.filter(n -> !params.contains(n))",
 			"replace": "names",
 			"note": "a function parameter of the lifted local's name does not hide it, so a read of that parameter blocks the unwrap"
+		},
+		{
+			"name": "M-PURITY-BARE-READ-NULL-NOT-GETTER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "readsGetterUnqualified",
+			"find": "memberGetter(owner, name) != true",
+			"replace": "memberGetter(owner, name) == false",
+			"note": "a bare member an inherited build declarer writes reads as a possible getter when the index cannot place it, so its branches stay apart"
 		}
 	]
 }

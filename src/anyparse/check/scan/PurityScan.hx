@@ -152,7 +152,7 @@ final class PurityScan {
 		final typing: TypingService = ctx.index.typing;
 		if (access.kind != ctx.fieldAccessKind) return typing.accessOverloaded(typeName, false) || !typing.typeDeclared(typeName);
 		final field: Null<String> = access.name;
-		return field == null || typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field) != false;
+		return field == null || typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field, true) != false;
 	}
 
 	/**

@@ -81,8 +81,9 @@ final class MemberLookup {
 	 * it follows an unresolvable link through a unique simple-name fallback.
 	 *
 	 * Three gates apply to the INHERITED arm ONLY, leaving the direct answer byte-for-byte what
-	 * shipped. Two directions of change survive that, both conservative for every consumer listed
-	 * below: a previously-`null` answer can become `false` (the widening this exists for), and a
+	 * shipped; the two macro gates below are lifted by `trustBuild`. Two directions of change survive
+	 * that, both conservative for every consumer whose `trustBuild` is off: a previously-`null` answer can
+	 * become `false` (the widening this exists for), and a
 	 * previously-`false` one can be LIFTED to `true` — the root being a simple-name UNION, a
 	 * same-simple-named SIBLING declaration that inherits a getter now contributes its `true`
 	 * (`package a; class Sub {var f:Int;}` alongside `package b; class Sub extends Base {}` over a
@@ -94,7 +95,8 @@ final class MemberLookup {
 	 *   subtype's field and answers `false` for a member the subtype does not have.
 	 * - **`@:build` on an inherited declaring type.** The macro may rewrite that type's own field
 	 *   into a property, so its accessor shape is not readable from source: the arm contributes no
-	 *   `false` there and answers null.
+	 *   `false` there and answers null — unless `trustBuild` takes the declaration as written. A name nothing
+	 *   declares stays null either way.
 	 * - **`@:autoBuild` at or above an inherited declaring type** (`autoBuildAtOrAbove`). That macro
 	 *   generates into every DESCENDANT of its carrier, so a marker interface far above the type that
 	 *   WRITES the field rewrites it into a property exactly as `@:build` on the declarer would —
@@ -102,7 +104,8 @@ final class MemberLookup {
 	 *   `class Base implements Marker {public var f:Int = 1;}` + `class Sub extends Base {}`, where
 	 *   reading `s.f` runs a generated getter. A `false` is downgraded to null for every carrier the
 	 *   scan can REACH: import-visible through `resolveTypeRef`, or — since skipping here fails OPEN —
-	 *   reachable through `uniqueDeclarationOf`, the project-wide unique simple-name fallback. A
+	 *   reachable through `uniqueDeclarationOf`, the project-wide unique simple-name fallback; `trustBuild`
+	 *   lifts this gate with the `@:build` one. A
 	 *   carrier that is neither (its simple name absent from the index, or declared 2+ times) is the
 	 *   residual boundary and stays missed; the fallback is deliberately NOT a blanket refusal on any
 	 *   unresolvable link, since a genuinely external supertype such as `Sprite` must keep letting a
@@ -135,18 +138,20 @@ final class MemberLookup {
 	 *
 	 * THREE call sites across TWO predicates, feeding THREE fixers — and the conservative direction
 	 * points the same way for all of them, which is what makes widening this SHARED predicate in place
-	 * legitimate. `TypeResolver.isPlainFieldRead` (2 call sites) acts on `== false` ("provably plain
+	 * legitimate for the default answer. `TypeResolver.isPlainFieldRead` (2 call sites) acts on `== false` ("provably plain
 	 * read") and feeds two code-DELETING fixers: `TypeResolver.isDeletionPure` → `UnusedLocal`'s
 	 * `--fix`, and `DeadStore.rhsSafeToDelete` directly. So every new `false` is a positive proof — the
 	 * direction this widening exists for — and every downgrade to null merely keeps code.
 	 * `PurityScan.accessRunsCode` (1 call site) admits only `false` and refuses on `true` and `null`, so
 	 * new `true`s only make it MORE conservative. None of the three reads a spurious answer as a licence
-	 * to act.
+	 * to act. The one deliberate exception is `accessRunsCode`'s `trustBuild`: it opts out of both macro
+	 * gates so a read through `this` answers as the bare spelling already does (one answer for both), and
+	 * a macro-rewritten inherited field reads as plain there; the deletion fixers keep the default.
 	 */
-	public function memberGetter(typeName: String, field: String): Null<Bool> {
+	public function memberGetter(typeName: String, field: String, trustBuild: Bool = false): Null<Bool> {
 		var found: Null<Bool> = null;
 		for (decl in _refs.named(typeName)) {
-			final r: Null<Bool> = memberGetterWalk({ file: decl.file, type: decl.type }, field, false, []);
+			final r: Null<Bool> = memberGetterWalk({ file: decl.file, type: decl.type }, field, false, [], trustBuild);
 			if (r == true) return true;
 			if (r == false) found = false;
 		}
@@ -866,19 +871,21 @@ final class MemberLookup {
 	 * — a `static` lives in the other namespace, so the climb walks past it and can still reach an
 	 * instance member further up (`Top {var f}` ← `Mid {static var f}` ← `Leaf` answers `false`).
 	 */
-	private function memberGetterWalk(cur: ResolvedType, field: String, inherited: Bool, seen: Array<String>): Null<Bool> {
+	private function memberGetterWalk(
+		cur: ResolvedType, field: String, inherited: Bool, seen: Array<String>, trustBuild: Bool
+	): Null<Bool> {
 		if (!_refs.markSeen(cur, seen)) return null;
 		var declared: Bool = false;
 		for (m in cur.type.members) if (m.name == field && !(inherited && m.isStatic)) {
 			if (m.hasGetter) return true;
 			declared = true;
 		}
-		if (declared) return inherited && (cur.type.hasBuild || autoBuildAtOrAbove(cur, [])) ? null : false;
+		if (declared) return inherited && !trustBuild && (cur.type.hasBuild || autoBuildAtOrAbove(cur, [])) ? null : false;
 		var found: Null<Bool> = null;
 		for (link in _ancestors.links(cur)) {
 			final anc: Null<ResolvedType> = link.decl;
 			if (anc == null) continue;
-			final up: Null<Bool> = memberGetterWalk(anc, field, true, seen);
+			final up: Null<Bool> = memberGetterWalk(anc, field, true, seen, trustBuild);
 			if (up == true) return true;
 			if (up == false) found = false;
 		}

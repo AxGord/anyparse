@@ -16639,6 +16639,14 @@
 			"find": "foreach(a -> a))",
 			"replace": "foreach(a -> a) && false)",
 			"note": "a record whose member the rewrite renamed is named as not one declaration on both sides, though every find still cuts it"
+		},
+		{
+			"name": "M-MEMBER-GETTER-TRUSTS-BUILD",
+			"type": "anyparse.query.MemberLookup",
+			"method": "memberGetterWalk",
+			"find": "inherited && !trustBuild &&",
+			"replace": "inherited &&",
+			"note": "a member an inherited build declarer writes reads as unknown for a reader that trusts the declaration, so a read through this is impure while the bare spelling is not"
 		}
 	]
 }
