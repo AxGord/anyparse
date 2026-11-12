@@ -51,7 +51,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runCommentRewrite(args);
+		return runCommentRewrite(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -78,7 +78,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 		};
 	}
 
-	private static function runCommentRewrite(args: Array<String>): Int {
+	private static function runCommentRewrite(args: Array<String>, ledger: RunLedger): Int {
 		final o: CommentRewriteOpts = parseCommentRewriteArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final find: Null<String> = o.find;
@@ -102,7 +102,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 		final listMode: Bool = o.list || (!o.write && !io.singleFile);
 
 		final tally: { changed: Int, failed: Int } = rewriteCommentFiles(
-			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat, o.allowWide
+			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat, o.allowWide, ledger
 		);
 		final failed: Int = tally.failed;
 
@@ -254,7 +254,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 
 	private static function rewriteCommentFiles(
 		paths: Array<String>, findStr: String, replaceStr: String, plugin: GrammarPlugin, write: Bool, listMode: Bool, regex: Bool,
-		reformat: Bool, allowWide: Bool
+		reformat: Bool, allowWide: Bool, ledger: RunLedger
 	): { changed: Int, failed: Int } {
 		final op: String = 'comment-rewrite';
 		var changed: Int = 0;
@@ -267,7 +267,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 				failed++;
 				continue;
 			};
-			final optsJson: Null<String> = CliArgs.discoverFormatConfig(path);
+			final optsJson: Null<String> = CliArgs.discoverFormatConfig(path, ledger);
 			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson, allowWide) {
 				case Ok(text, rewrites):
 					CliEdit.warnRewrites(op, path, rewrites);

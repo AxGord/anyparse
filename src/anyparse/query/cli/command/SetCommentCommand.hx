@@ -69,7 +69,7 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ctx.ledger);
 		return CliEdit.finishEdit(
 			'set-comment', filePath, o.write, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson),
 			ctx.postWriteFix ? plugin : null

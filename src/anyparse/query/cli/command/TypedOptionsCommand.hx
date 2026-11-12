@@ -44,14 +44,14 @@ final class TypedOptionsCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runTypedOptions(args);
+		return runTypedOptions(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printUsage();
 	}
 
-	private static function runTypedOptions(args: Array<String>): Int {
+	private static function runTypedOptions(args: Array<String>, ledger: RunLedger): Int {
 		final o: TypedOptionsOpts = parseArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final kit: Null<String> = o.kit;
@@ -76,7 +76,7 @@ final class TypedOptionsCommand implements CliCommand {
 				failed++;
 				continue;
 			};
-			final answer: EditResult = io.plugin.typedOptionsRewrite(source, kit, o.reformat, CliArgs.discoverFormatConfig(path)) ?? Err(
+			final answer: EditResult = io.plugin.typedOptionsRewrite(source, kit, o.reformat, CliArgs.discoverFormatConfig(path, ledger)) ?? Err(
 				'the ${io.plugin.langName()} grammar has no configuration document to type'
 			);
 			switch answer {

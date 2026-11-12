@@ -29,7 +29,7 @@ final class SetModifierCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runSetModifier(args);
+		return runSetModifier(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -44,7 +44,7 @@ final class SetModifierCommand implements CliCommand {
 	 * single `-` (e.g. `-inline`); only a leading `--` is treated as an option.
 	 * Writer-formatted + re-parse-validated (canonical-gated unless `--reformat`).
 	 */
-	private static function runSetModifier(args: Array<String>): Int {
+	private static function runSetModifier(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -102,7 +102,7 @@ final class SetModifierCommand implements CliCommand {
 		final op: String = 'set-modifier';
 		final loc: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, pos, selectExpr, matchExpr, nth);
 		if (loc == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites(op, filePath, rewrites);

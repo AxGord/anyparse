@@ -556,7 +556,7 @@
 			"name": "M-EXTRACT-CONSTANT-ADDRESSED-UNROUTED",
 			"type": "anyparse.query.cli.command.ExtractConstantCommand",
 			"method": "runExtractConstant",
-			"find": "if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args);",
+			"find": "if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args, ledger);",
 			"replace": "",
 			"note": "the addressed flags reach the literal modes, which reject them"
 		},

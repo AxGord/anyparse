@@ -77,7 +77,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		final changed: Array<String> = [];
 		var selected: Int = 0;
 		for (entry in entries) {
-			final read: FileReading = readEntry(entry, range[0], range.length > 1 ? range[1] : null, opts.lang);
+			final read: FileReading = readEntry(entry, range[0], range.length > 1 ? range[1] : null, opts.lang, ctx.ledger);
 			final delta: Null<FileDelta> = read.delta;
 			if (delta == null) {
 				CliIo.stderr('apq changed: ${read.failure}\n');
@@ -185,7 +185,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 	}
 
 	/** Both versions of `entry` and what changed between them; the working tree stands in for a missing `tip`. */
-	private static function readEntry(entry: ChangedPath, base: String, tip: Null<String>, lang: String): FileReading {
+	private static function readEntry(entry: ChangedPath, base: String, tip: Null<String>, lang: String, ledger: RunLedger): FileReading {
 		final before: Null<String> = entry.status == 'A' ? '' : GitRevision.sourceAt(base, entry.basePath);
 		if (before == null) return { names: [], failure: '${entry.basePath} is not readable at "$base"' };
 		final now: Null<String> = if (entry.status == 'D')
@@ -200,7 +200,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 		if (DataDelta.reads(plugin.refShape())) return { names: [], delta: DataDelta.compare(plugin, before, now) };
 		if (!entry.path.toLowerCase().endsWith(CliArgs.sourceExtensionOf(plugin.langName())))
 			return { names: [], delta: DeclarationDelta.compareText(before, now) };
-		final delta: FileDelta = DeclarationDelta.compare(plugin, before, now, CliArgs.discoverFormatConfig(entry.path));
+		final delta: FileDelta = DeclarationDelta.compare(plugin, before, now, CliArgs.discoverFormatConfig(entry.path, ledger));
 		// another grammar's keys, a data file of this one, are no names a reader looks up in the code
 		final whole: Bool = entry.status == 'A' || entry.status == 'D';
 		return { names: plugin.langName() == lang ? DeclarationDelta.namesOf(delta, whole) : [], delta: delta };

@@ -31,7 +31,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveElement(args, ctx.postWriteFix);
+		return runRemoveElement(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -46,7 +46,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 	 * inverse of `add-element`; same column convention `apq refs` prints. A leading
 	 * doc comment goes with the element unless `--keep-doc` says otherwise.
 	 */
-	private static function runRemoveElement(args: Array<String>, fix: Bool): Int {
+	private static function runRemoveElement(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -123,7 +123,7 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			);
 			return EXIT_RUNTIME;
 		}
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		// `--kind` names the node to cut rather than its first token, so it goes through the
 		// address layer `replace-node` / `patch` share — a position narrows to the innermost node
 		// of the kind at the cursor, a selector or pattern lifts to its innermost enclosing one —

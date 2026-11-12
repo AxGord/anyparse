@@ -27,7 +27,7 @@ final class AddImportCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddImport(args);
+		return runAddImport(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -47,7 +47,7 @@ final class AddImportCommand implements CliCommand {
 	 * a non-canonical file without `--reformat`, or an unparseable result
 	 * exits non-zero with the file untouched.
 	 */
-	private static function runAddImport(args: Array<String>): Int {
+	private static function runAddImport(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -96,7 +96,7 @@ final class AddImportCommand implements CliCommand {
 		};
 
 		final plugin: GrammarPlugin = ProjectResolution.hostFor(CliArgs.pickPlugin(lang), filePath, source);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = AddImport.addImport(source, pathStr, isUsing, reformat, plugin, optsJson);
 		final op: String = 'add-import';
 		switch result {

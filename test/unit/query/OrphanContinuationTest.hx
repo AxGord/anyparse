@@ -10,6 +10,7 @@ import anyparse.query.OrphanContinuation;
 import anyparse.query.Patch;
 import anyparse.query.QueryNode;
 import anyparse.query.ReplaceNode.ReplaceTarget;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.command.FmtCommand;
 import unit.cli.CliFixture;
 
@@ -202,7 +203,7 @@ class OrphanContinuationTest extends Test {
 
 	@:access(anyparse.query.cli.command.FmtCommand)
 	private static function callFormatOneFile(plugin: GrammarPlugin, path: String): FmtFileResult {
-		return FmtCommand.formatOneFile(plugin, 'haxe', path, true, false);
+		return FmtCommand.formatOneFile(plugin, 'haxe', path, true, false, RunLedger.begin());
 	}
 
 	private static function inMain(body: String): String {

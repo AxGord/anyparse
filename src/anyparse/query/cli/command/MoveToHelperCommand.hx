@@ -31,14 +31,14 @@ final class MoveToHelperCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runMoveToHelper(args);
+		return runMoveToHelper(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printUsage();
 	}
 
-	private static function runMoveToHelper(args: Array<String>): Int {
+	private static function runMoveToHelper(args: Array<String>, ledger: RunLedger): Int {
 		final opts: Map<String, String> = [];
 		final flags: Array<String> = [];
 		final positional: Array<String> = [];
@@ -84,7 +84,7 @@ final class MoveToHelperCommand implements CliCommand {
 			srcFile, srcTypeName, names, helper, helperFile ?? defaultHelperFile, opts['--param'], scopeFiles, plugin,
 			plugin.typeRefShape()
 		);
-		return emit(result, scopeFiles, srcTypeName, helper, opts['--arms'], flags, plugin);
+		return emit(result, scopeFiles, srcTypeName, helper, opts['--arms'], flags, plugin, ledger);
 	}
 
 	/**
@@ -95,7 +95,7 @@ final class MoveToHelperCommand implements CliCommand {
 	@:access(anyparse.query.cli.command.MoveCommand)
 	private static function emit(
 		result: MoveResult, scopeFiles: Array<{ file: String, source: String }>, srcTypeName: String, helper: String,
-		armsFile: Null<String>, flags: Array<String>, plugin: GrammarPlugin
+		armsFile: Null<String>, flags: Array<String>, plugin: GrammarPlugin, ledger: RunLedger
 	): Int {
 		switch result {
 			case Err(message):
@@ -106,8 +106,8 @@ final class MoveToHelperCommand implements CliCommand {
 				final changes: Array<MoveChange> = [
 					for (c in raw)
 						created.contains(c.file)
-							? MoveCommand.fixedPointChange('move-to-helper', c, plugin, CliArgs.discoverFormatConfig(c.file))
-							: MoveCommand.canonicalMoveChange('move-to-helper', c, plugin)
+							? MoveCommand.fixedPointChange('move-to-helper', c, plugin, CliArgs.discoverFormatConfig(c.file, ledger))
+							: MoveCommand.canonicalMoveChange('move-to-helper', c, plugin, ledger)
 				];
 				final write: Bool = flags.contains('--write') && !flags.contains('--dry-run');
 				for (c in changes) {

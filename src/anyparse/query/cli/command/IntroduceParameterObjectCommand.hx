@@ -28,14 +28,14 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runIntroduceParameterObject(args);
+		return runIntroduceParameterObject(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printIntroduceParameterObjectUsage();
 	}
 
-	private static function runIntroduceParameterObject(args: Array<String>): Int {
+	private static function runIntroduceParameterObject(args: Array<String>, ledger: RunLedger): Int {
 		final op: String = 'introduce-parameter-object';
 		var lang: String = 'haxe';
 		var params: Null<String> = null;
@@ -105,8 +105,8 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		// plain splice — switching the canonical-out half of `editKeepingCanonical` off
 		// without saying so.
 		final result: EditResult = IntroduceParameterObject.introduce(
-			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(), CliArgs.discoverFormatConfig(filePath),
-			filePath
+			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape(),
+			CliArgs.discoverFormatConfig(filePath, ledger), filePath
 		);
 		switch result {
 			case Ok(text):

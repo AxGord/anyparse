@@ -37,16 +37,16 @@ final class ExtractConstantCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runExtractConstant(args);
+		return runExtractConstant(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printExtractConstantUsage();
 	}
 
-	private static function runExtractConstant(args: Array<String>): Int {
+	private static function runExtractConstant(args: Array<String>, ledger: RunLedger): Int {
 		final spec: CliFlags = new ExtractConstantCommand().flags();
-		if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args);
+		if (ADDRESSED_FLAGS.exists(flag -> spec.given(args, flag))) return ExtractConstantToMode.run(args, ledger);
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -91,7 +91,7 @@ final class ExtractConstantCommand implements CliCommand {
 
 		// --into selects cross-file mode; its absence keeps the single-file --type mode.
 		final into: Null<String> = intoPath;
-		if (into != null) return runExtractConstantInto(scopeArgs, into, nameStr, literalStr, reformat, write, plugin);
+		if (into != null) return runExtractConstantInto(scopeArgs, into, nameStr, literalStr, reformat, write, plugin, ledger);
 
 		if (scopeArgs.length != 1 || typeName == null) {
 			CliIo.stderr(
@@ -111,7 +111,7 @@ final class ExtractConstantCommand implements CliCommand {
 		// Discover the file's format config so the canonical gate matches the project's
 		// writer style (e.g. space-after-colon), exactly as the --into mode does — else a
 		// non-default-formatted file is wrongly rejected and --reformat rewrites its style.
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 
 		final op: String = 'extract-constant';
 		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin, optsJson) {
@@ -139,7 +139,8 @@ final class ExtractConstantCommand implements CliCommand {
 	 * applies the changes and the module.
 	 */
 	private static function runExtractConstantInto(
-		scopeArgs: Array<String>, intoPath: String, name: String, literal: String, reformat: Bool, write: Bool, plugin: GrammarPlugin
+		scopeArgs: Array<String>, intoPath: String, name: String, literal: String, reformat: Bool, write: Bool, plugin: GrammarPlugin,
+		ledger: RunLedger
 	): Int {
 		if (scopeArgs.length == 0) {
 			CliIo.stderr('apq extract-constant: --into mode expects one or more <scope> files/dirs/globs to search\n');
@@ -179,7 +180,7 @@ final class ExtractConstantCommand implements CliCommand {
 			null;
 		final modulePkg: String = NewCommand.derivePackage(intoPath);
 		final moduleClass: String = NewCommand.newFileClassName(intoPath);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(intoPath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(intoPath, ledger);
 
 		// A short / generic literal risks coupling unrelated occurrences — warn but proceed.
 		if (literal.length < SHORT_LITERAL_LEN)

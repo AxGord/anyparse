@@ -82,7 +82,7 @@ final class NewCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runNew(args);
+		return runNew(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -197,7 +197,7 @@ final class NewCommand implements CliCommand {
 	 * and the file is never written on a parse failure. Create-only: an existing
 	 * path is refused. Without `--write` the source goes to stdout.
 	 */
-	private static function runNew(args: Array<String>): Int {
+	private static function runNew(args: Array<String>, ledger: RunLedger): Int {
 		final o: NewOpts = parseNewArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final path: Null<String> = o.path;
@@ -233,7 +233,7 @@ final class NewCommand implements CliCommand {
 			CliIo.stderr('apq new: grammar "${o.lang}" declares no types to scaffold — create the file with --raw -\n');
 			return EXIT_USAGE;
 		}
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return executeNew(o, filePath, plugin, optsJson);
 	}
 

@@ -59,7 +59,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runResolveDefine(args);
+		return runResolveDefine(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -79,7 +79,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 		};
 	}
 
-	private static function runResolveDefine(args: Array<String>): Int {
+	private static function runResolveDefine(args: Array<String>, ledger: RunLedger): Int {
 		final o: ResolveDefineOpts = parseArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final define: Null<String> = o.define;
@@ -98,7 +98,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 		}
 
 		final listMode: Bool = o.list || (!o.write && !io.singleFile);
-		final tally: ResolveTally = resolveFiles(paths, defineStr, io.plugin, io.singleFile, listMode, o);
+		final tally: ResolveTally = resolveFiles(paths, defineStr, io.plugin, io.singleFile, listMode, o, ledger);
 
 		// The undecided report comes AFTER the walk so it is not interleaved with a preview's own
 		// stdout, and one line per region rather than one per file: the position is what the reader
@@ -217,7 +217,8 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 	}
 
 	private static function resolveFiles(
-		paths: Array<String>, define: String, plugin: GrammarPlugin, singleFile: Bool, listMode: Bool, o: ResolveDefineOpts
+		paths: Array<String>, define: String, plugin: GrammarPlugin, singleFile: Bool, listMode: Bool, o: ResolveDefineOpts,
+		ledger: RunLedger
 	): ResolveTally {
 		final op: String = 'resolve-define';
 		final undecided: Array<String> = [];
@@ -237,7 +238,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 			// and skipping it here also skips the canonical gate, which would otherwise refuse a
 			// drifted file this op was never going to touch.
 			if (!singleFile && source.indexOf(define) < 0) continue;
-			final optsJson: Null<String> = CliArgs.discoverFormatConfig(path);
+			final optsJson: Null<String> = CliArgs.discoverFormatConfig(path, ledger);
 			final answer: CondResolveResult = CondResolve.resolve(source, plugin, define, o.undefined, o.reformat, optsJson);
 			// Reported for a file that FAILED too: a region left standing is a fact about the file,
 			// and the write it failed would not have touched it either way.

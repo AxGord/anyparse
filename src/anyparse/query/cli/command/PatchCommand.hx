@@ -70,7 +70,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runPatch(args, ctx.postWriteFix);
+		return runPatch(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -86,11 +86,11 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	 * node's source. Finalized like replace-node: writer-formatted, re-parse
 	 * validated, canonical-gated unless `--reformat`.
 	 */
-	private static function runPatch(args: Array<String>, fix: Bool): Int {
+	private static function runPatch(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: PatchOpts = parsePatchArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final batch: Null<String> = o.batch;
-		if (batch != null) return runPatchBatch(batch, o.lang, o.sep);
+		if (batch != null) return runPatchBatch(batch, o.lang, o.sep, ledger);
 		var payload: Null<String> = o.payload;
 		if (o.fromFile != null || payload == '-') {
 			final resolved: Null<String> = CliArgs.resolveCodeArg('patch', payload, o.fromFile, true);
@@ -127,7 +127,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		);
 		if (target == null) return EXIT_RUNTIME;
 
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		// A multi-pair call is all-or-nothing, so a success line that names the count is
 		// the one thing that settles "did all of them land?" without re-reading the file.
 		return CliEdit.finishEdit(
@@ -148,7 +148,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	 * `--reformat` applies it — over a canonical input the gate is the only thing `--reformat` changes. A file that fails
 	 * the gate is patched without `--reformat`, so its rows are refused exactly as one `apq patch` refuses them.
 	 */
-	private static function runPatchBatch(rowsPath: String, lang: String, sep: String): Int {
+	private static function runPatchBatch(rowsPath: String, lang: String, sep: String, ledger: RunLedger): Int {
 		final rows: String = try {
 			CliIo.readFile(rowsPath);
 		} catch (exception: Exception) {
@@ -164,7 +164,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 				return EXIT_USAGE;
 			}
 			final refusal: Null<String> = try
-				batchRow(cells[0], cells[1], cells[2], cells[3], sep, plugin, canonical)
+				batchRow(cells[0], cells[1], cells[2], cells[3], sep, plugin, canonical, ledger)
 			catch (exception: Exception)
 				exception.message;
 			if (refusal != null) CliIo.writeFile('${cells[3]}.err', '$refusal\n');
@@ -174,7 +174,8 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 
 	/** One `--batch` row: its patched text written to `out`, or why not. */
 	private static function batchRow(
-		file: String, select: String, payloadPath: String, out: String, sep: String, plugin: GrammarPlugin, canonical: Map<String, Bool>
+		file: String, select: String, payloadPath: String, out: String, sep: String, plugin: GrammarPlugin, canonical: Map<String, Bool>,
+		ledger: RunLedger
 	): Null<String> {
 		// read as `--from-file` reads it, trailing newline dropped
 		final payload: Null<String> = CliArgs.resolveCodeArg('patch', null, payloadPath, true);
@@ -182,7 +183,7 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 		final pairs: Null<Array<{ oldText: String, newText: String }>> = splitPatchPayload(payload, sep);
 		if (pairs == null) return 'the payload must alternate old / new fragments separated by "$sep" lines';
 		final source: String = CliIo.readFile(file);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(file);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(file, ledger);
 		if (!canonical.exists(file))
 			canonical[file] = try plugin.writeRoundTrip(source, optsJson) == source catch (exception: Exception) false;
 		final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget('patch', source, file, plugin, select, null, null, null, null);

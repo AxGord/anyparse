@@ -16555,9 +16555,9 @@
 		{
 			"name": "M-FMT-CONFIG-MEMO-HIT-SILENT",
 			"type": "anyparse.query.FormatConfigDiscovery",
-			"method": "discover",
-			"find": "if (!CACHE.exists(start)) remember(start, filePath);",
-			"replace": "final hit: Bool = CACHE.exists(start); if (!hit) remember(start, filePath); if (hit) return CACHE[start]?.content;",
+			"method": "discoverFor",
+			"find": "final content: Null<String> = discover(filePath);",
+			"replace": "final hit: Bool = CACHE.exists(haxe.io.Path.directory(FileSystem.absolutePath(filePath))); final content: Null<String> = discover(filePath); if (hit) return content;",
 			"note": "a config this process already read is reported only on the run that first walked to it, so a later run in the same engine says nothing"
 		},
 		{
@@ -16607,6 +16607,14 @@
 			"find": "kids[start + k], eq, identKind, bindings, unwritten)",
 			"replace": "kids[start + k], eq, identKind, [], unwritten)",
 			"note": "each statement of a sequence pattern binds its own metavariables, so `$l` repeated across statements names any three things"
+		},
+		{
+			"name": "M-HXFORMAT-DISCOVER-FOR-FALLBACK",
+			"type": "anyparse.query.FormatConfigDiscovery",
+			"method": "discoverFor",
+			"find": "reportConfig(ledger, found.path, found.content);",
+			"replace": "reportConfig(RunLedger.fallback(), found.path, found.content);",
+			"note": "a command lookup reports through the process fallback ledger instead of the one the command handed in, so its line is said against another run"
 		}
 	]
 }

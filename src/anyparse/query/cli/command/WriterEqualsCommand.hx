@@ -130,7 +130,7 @@ final class WriterEqualsCommand implements CliCommand {
 		// fixture intent), fall back to `--config <path>` (project-wide
 		// opt-in for plain `.hx` files — dogfood `.hxformat.json` etc.),
 		// then plugin defaults.
-		final sectionOpts: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPathFinal);
+		final sectionOpts: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPathFinal, ledger);
 		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? CliIo.readFile(configPath) : null);
 		// A config the user NAMED is reported like a discovered one; a `.hxtest` section has no file of its own to name.
 		if (sectionOpts == null && configPath != null && optsJson != null && lang == HXFORMAT_LANG)

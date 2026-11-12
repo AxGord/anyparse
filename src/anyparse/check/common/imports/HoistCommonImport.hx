@@ -7,16 +7,17 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.ScopeDependent;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
+import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeNameBinding;
-import anyparse.query.cli.CliArgs;
 import haxe.ds.ArraySort;
 import haxe.io.Path;
 
@@ -481,14 +482,14 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	 * — or null when the writer refuses one, since then none may take it.
 	 */
 	private static function spelledInto(
-		plan: SinkPlan, textOf: Map<String, String>, sourceOf: Map<String, String>, plugin: GrammarPlugin
+		plan: SinkPlan, textOf: Map<String, String>, sourceOf: Map<String, String>, plugin: GrammarPlugin, ?notes: Array<ConfigNote>
 	): Null<Map<String, String>> {
 		final next: Map<String, String> = [];
 		for (file in plan.into) {
 			final current: Null<String> = textOf[file] ?? sourceOf[file];
 			if (current == null) return null;
 			switch AddImport.addImport(
-				current, plan.statement.path, plan.statement.isUsing, false, plugin, CliArgs.discoverFormatConfig(file)
+				current, plan.statement.path, plan.statement.isUsing, false, plugin, FormatConfigDiscovery.discover(file, notes)
 			) {
 				case EditResult.Ok(text, _):
 					next[file] = text;
@@ -538,9 +539,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	 * project's own import ordering rather than by this rule's idea of it.
 	 */
 	private static function builtAmbientSource(
-		site: String, existing: Null<String>, statements: Array<Hoistable>, plugin: GrammarPlugin
+		site: String, existing: Null<String>, statements: Array<Hoistable>, plugin: GrammarPlugin, ?notes: Array<ConfigNote>
 	): Null<String> {
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(site);
+		final optsJson: Null<String> = FormatConfigDiscovery.discover(site, notes);
 		// An EMPTY source is not at the writer's fixed point, so the inserting seat refuses it: a new
 		// source is SEEDED with its first statement instead, and every later one is placed by that seat
 		// exactly as it would be in an existing file. Imports lead, so the seed is one whenever there is

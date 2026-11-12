@@ -60,7 +60,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddElement(args, ctx.postWriteFix);
+		return runAddElement(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -101,7 +101,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 	 * Without `--write` the result goes to stdout; with `--write` it
 	 * overwrites in place.
 	 */
-	private static function runAddElement(args: Array<String>, fix: Bool): Int {
+	private static function runAddElement(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		// noqa: complexity
 		final o: AddElementOpts = parseAddElementArgs(args);
 		if (o.errExit != null) return o.errExit;
@@ -154,7 +154,7 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPluginFor(o.lang, filePath));
 		final pos: Null<Position> = CliEdit.resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
 		if (pos == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = if (appendSpec != null)
 			AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson)
 		else if (sortedSpec != null)

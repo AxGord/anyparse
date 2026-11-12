@@ -38,8 +38,8 @@ final class CliArgs {
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
 	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its call sites use.
 	 */
-	public static inline function discoverFormatConfig(filePath: String): Null<String> {
-		return FormatConfigDiscovery.discover(filePath);
+	public static inline function discoverFormatConfig(filePath: String, ledger: RunLedger): Null<String> {
+		return FormatConfigDiscovery.discoverFor(filePath, ledger);
 	}
 
 	/**
@@ -242,8 +242,8 @@ final class CliArgs {
 	 * plugin on its compiled defaults. The result feeds
 	 * `plugin.writeRoundTrip(source, optsJson)`.
 	 */
-	public static function readWriteOptionsJsonOrNull(path: String): Null<String> {
-		if (!path.endsWith('.hxtest')) return discoverFormatConfig(path);
+	public static function readWriteOptionsJsonOrNull(path: String, ledger: RunLedger): Null<String> {
+		if (!path.endsWith('.hxtest')) return discoverFormatConfig(path, ledger);
 		final content: String = CliIo.readFile(path);
 		final parts: Array<String> = content.split('\n---\n');
 		if (parts.length != 3) return null;

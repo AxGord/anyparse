@@ -27,14 +27,14 @@ final class PullUpCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runInheritanceMove(args, true);
+		return runInheritanceMove(args, true, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printInheritanceMoveUsage(true);
 	}
 
-	public static function runInheritanceMove(args: Array<String>, up: Bool): Int {
+	public static function runInheritanceMove(args: Array<String>, up: Bool, ledger: RunLedger): Int {
 		final cmd: String = up ? 'pull-up' : 'push-down';
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
@@ -90,7 +90,7 @@ final class PullUpCommand implements CliCommand {
 		final result: MoveResult = up
 			? InheritanceMove.pullUp(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin)
 			: InheritanceMove.pushDown(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin);
-		return MoveCommand.emitMoveResult(cmd, result, srcFileNN, srcFileNN, write, plugin);
+		return MoveCommand.emitMoveResult(cmd, result, srcFileNN, srcFileNN, write, plugin, ledger);
 	}
 
 	public static function printInheritanceMoveUsage(up: Bool): Void {

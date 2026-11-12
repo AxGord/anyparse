@@ -45,7 +45,7 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddMember(args, ctx.postWriteFix);
+		return runAddMember(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -77,7 +77,7 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 	 * name, a non-canonical file without `--reformat`, or an unparseable
 	 * result, exits non-zero with the file untouched.
 	 */
-	private static function runAddMember(args: Array<String>, fix: Bool): Int {
+	private static function runAddMember(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: AddMemberOpts = parseAddMemberArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var memberText: Null<String> = o.memberText;
@@ -105,7 +105,7 @@ final class AddMemberCommand implements CliCommand implements PostWriteFix {
 		};
 
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
 		return CliEdit.finishEdit('add-member', filePath, o.write, result, fix ? plugin : null);
 	}

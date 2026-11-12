@@ -65,7 +65,7 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 		final choices: Map<String, MergeChoice> = choicesFile == null ? [] : choicesOf(CliIo.readFile(choicesFile), path);
 		final result: MergeResult = StructuralMerge.merge(
 			plugin, shape, CliIo.readFile(opts.base), CliIo.readFile(opts.ours), CliIo.readFile(opts.theirs),
-			CliArgs.discoverFormatConfig(path), choices, linesMerged
+			CliArgs.discoverFormatConfig(path, ctx.ledger), choices, linesMerged
 		);
 		return switch result {
 			case Merged(text, how):

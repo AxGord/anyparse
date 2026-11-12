@@ -50,7 +50,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runReplaceNode(args, ctx.postWriteFix);
+		return runReplaceNode(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -89,7 +89,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 	 * to no / multiple nodes, a non-canonical file without `--reformat`, or
 	 * an unparseable result, exits non-zero with the file untouched.
 	 */
-	private static function runReplaceNode(args: Array<String>, fix: Bool): Int {
+	private static function runReplaceNode(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: ReplaceNodeOpts = parseReplaceNodeArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var newSource: Null<String> = o.newSource;
@@ -122,7 +122,7 @@ final class ReplaceNodeCommand implements CliCommand implements PostWriteFix {
 		);
 		if (target == null) return EXIT_RUNTIME;
 
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return CliEdit.finishEdit(
 			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson),
 			fix ? plugin : null

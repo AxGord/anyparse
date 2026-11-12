@@ -27,14 +27,14 @@ final class SafeDeleteCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runSafeDelete(args);
+		return runSafeDelete(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printSafeDeleteUsage();
 	}
 
-	private static function runSafeDelete(args: Array<String>): Int {
+	private static function runSafeDelete(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
 		var scopeDir: Null<String> = null;
@@ -93,7 +93,7 @@ final class SafeDeleteCommand implements CliCommand {
 		// defaults and refuse it, naming `apq fmt --write` as the remedy for the state that
 		// command had just produced; `--reformat` then re-canonicalised under the defaults,
 		// so the escape hatch de-formatted the file.
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN, ledger);
 		final result: EditResult = SafeDelete.safeDelete(
 			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape(), optsJson
 		);

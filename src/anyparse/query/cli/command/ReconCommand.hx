@@ -140,7 +140,7 @@ final class ReconCommand implements CliCommand {
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
 		#if (sys || nodejs)
-		return runRecon(args);
+		return runRecon(args, ctx.ledger);
 		#else
 		CliIo.stderr('apq recon: requires a sys target (filesystem walk)\n');
 		return EXIT_USAGE;
@@ -868,7 +868,7 @@ final class ReconCommand implements CliCommand {
 	 *  - `apq recon --probe <file>` — single-file probe. Useful for
 	 *    confirming a hypothesis about ONE fixture after a grammar edit.
 	 */
-	private static function runRecon(args: Array<String>): Int {
+	private static function runRecon(args: Array<String>, ledger: RunLedger): Int {
 		final o: ReconOpts = parseReconArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
@@ -877,7 +877,7 @@ final class ReconCommand implements CliCommand {
 		if (probePath != null)
 			return runReconProbe(
 				plugin, probePath, o.predictStrip, o.patterns, o.replacements, o.compiledRegex, o.showSource, o.writerEqualsAfter,
-				o.writerEqualsPlain, o.expectedPath, o.lang
+				o.writerEqualsPlain, o.expectedPath, o.lang, ledger
 			);
 		final rootFinal: String = o.rootDir ?? defaultReconRoot();
 		if (rootFinal == '') {
@@ -914,7 +914,7 @@ final class ReconCommand implements CliCommand {
 	private static function runReconProbe(
 		plugin: GrammarPlugin, path: String, predictStrip: Bool, patterns: Array<String>, replacements: Array<String>,
 		compiledRegex: Null<Array<EReg>>, showSource: Bool, writerEqualsAfter: Bool = false, writerEqualsPlain: Bool = false,
-		?expectedPathOpt: String, lang: String = 'haxe'
+		?expectedPathOpt: String, lang: String = 'haxe', ledger: RunLedger
 	): Int {
 		if (!FileSystem.exists(path)) {
 			CliIo.stderr('apq recon: --probe path "$path" does not exist\n');
@@ -939,7 +939,9 @@ final class ReconCommand implements CliCommand {
 				return EXIT_RUNTIME;
 			}
 			CliIo.sysPrint('PARSE OK\n');
-			return writerEqualsAfter ? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang) : EXIT_OK;
+			return writerEqualsAfter
+				? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang, ledger)
+				: EXIT_OK;
 		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(original);
 			final exp: String = reconNormalize(exception.expected);
@@ -970,7 +972,8 @@ final class ReconCommand implements CliCommand {
 	 * (`/tmp/probe.hx`) without typing the expected bytes twice.
 	 */
 	private static function runProbeWriterCheck(
-		plugin: GrammarPlugin, inputPath: String, source: String, plain: Bool, expectedPathOpt: Null<String>, lang: String
+		plugin: GrammarPlugin, inputPath: String, source: String, plain: Bool, expectedPathOpt: Null<String>, lang: String,
+		ledger: RunLedger
 	): Int {
 		// `.hxtest` expected sections drop one trailing `\n` via
 		// `stripPadNewlines` (the corpus harness adds `finalNewline=true`
@@ -987,7 +990,7 @@ final class ReconCommand implements CliCommand {
 		} else {
 			source;
 		};
-		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPath);
+		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(inputPath, ledger);
 		final emittedRaw: Null<String> = try {
 			(plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
 		} catch (exception: ParseError) {

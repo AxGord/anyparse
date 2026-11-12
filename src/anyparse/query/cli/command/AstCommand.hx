@@ -99,7 +99,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAst(args, ctx.readStdin);
+		return runAst(args, ctx.readStdin, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -107,7 +107,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 	}
 
 	/** `readStdin` supplies `--stdin`'s text — the run's `CliContext.readStdin`. */
-	public static function runAst(args: Array<String>, readStdin: () -> String): Int {
+	public static function runAst(args: Array<String>, readStdin: () -> String, ledger: RunLedger): Int {
 		final o: AstOpts = parseAstArgs(args);
 		if (o.errExit != null) return o.errExit;
 
@@ -161,7 +161,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// added / removed / reshaped in one shot, without a second `hxq diff`
 		// call. Exit non-zero when the writer output fails to re-parse
 		// (writer produced syntactically broken Haxe).
-		final writerExit: Null<Int> = writerModeExit(o, plugin, source, file, fileLabel);
+		final writerExit: Null<Int> = writerModeExit(o, plugin, source, file, fileLabel, ledger);
 		if (writerExit != null) return writerExit;
 
 		// `--type-refs` swaps ONLY the projection: every downstream branch
@@ -531,14 +531,14 @@ final class AstCommand implements CliCommand implements StdinDocument {
 	 */
 	private static function runAstWriterOutput(
 		plugin: GrammarPlugin, source: String, file: Null<String>, fileLabel: String, lang: String, writerOutputPlain: Bool,
-		writerDiff: Bool
+		writerDiff: Bool, ledger: RunLedger
 	): Int {
 		// `.hxtest` section-1 (writer config JSON) auto-applies for
 		// the file-path mode — drives `HxModuleWriteOptions` via
 		// `HaxeFormatConfigLoader` so a fixture reproduces the corpus
 		// harness's writer settings in a single command. `--code` /
 		// `--stdin` modes have no path → defaults stay.
-		final optsJson: Null<String> = file != null ? CliArgs.readWriteOptionsJsonOrNull((file: String)) : null;
+		final optsJson: Null<String> = file != null ? CliArgs.readWriteOptionsJsonOrNull((file: String), ledger) : null;
 		final emitted: Null<String> = try {
 			(writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson));
 		} catch (exception: ParseError) {
@@ -750,10 +750,10 @@ final class AstCommand implements CliCommand implements StdinDocument {
 	}
 
 	private static function writerModeExit(
-		o: AstOpts, plugin: GrammarPlugin, source: String, file: Null<String>, fileLabel: String
+		o: AstOpts, plugin: GrammarPlugin, source: String, file: Null<String>, fileLabel: String, ledger: RunLedger
 	): Null<Int> {
 		if (o.writerOutput) {
-			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff);
+			if (!o.typeRefs) return runAstWriterOutput(plugin, source, file, fileLabel, o.lang, o.writerOutputPlain, o.writerDiff, ledger);
 			CliIo.stderr('apq ast: --type-refs cannot be combined with --writer-output (the type-ref projection is not writable)\n');
 			return EXIT_USAGE;
 		}

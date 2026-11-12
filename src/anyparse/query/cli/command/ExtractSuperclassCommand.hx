@@ -29,14 +29,14 @@ final class ExtractSuperclassCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runExtractSuperclass(args);
+		return runExtractSuperclass(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printExtractSuperclassUsage();
 	}
 
-	private static function runExtractSuperclass(args: Array<String>): Int {
+	private static function runExtractSuperclass(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
 		var members: Null<String> = null;
@@ -96,8 +96,8 @@ final class ExtractSuperclassCommand implements CliCommand {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		if (CliArgs.refuseDataGrammar(OP, plugin)) return EXIT_RUNTIME;
 		// One config per FILE — see `runExtractInterface` for why each needs its own.
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(superFile);
-		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(superFile, ledger);
+		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN, ledger);
 		final result: MoveResult = ExtractSuperclass.extract(
 			srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);

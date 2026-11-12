@@ -53,7 +53,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runExtractMethod(args, ctx.postWriteFix);
+		return runExtractMethod(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -88,7 +88,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 	 * the rewritten source is emitted to stdout; with `--write` it
 	 * overwrites in place.
 	 */
-	private static function runExtractMethod(args: Array<String>, fix: Bool): Int {
+	private static function runExtractMethod(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: ExtractMethodOpts = parseExtractMethodArgs(args);
 		if (o.errExit != null) return o.errExit;
 		// parseExtractMethodArgs proved these non-null before returning with
@@ -109,7 +109,7 @@ final class ExtractMethodCommand implements CliCommand implements PostWriteFix {
 
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = ExtractMethod.extractMethod(
 			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson, o.member
 		);

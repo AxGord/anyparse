@@ -29,7 +29,7 @@ final class RemoveParamCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveParam(args);
+		return runRemoveParam(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -55,7 +55,7 @@ final class RemoveParamCommand implements CliCommand {
 	 * used parameter, an unresolvable call, an arity mismatch, or an
 	 * unparseable result, exits non-zero with the file untouched.
 	 */
-	private static function runRemoveParam(args: Array<String>): Int {
+	private static function runRemoveParam(args: Array<String>, ledger: RunLedger): Int {
 		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -125,7 +125,7 @@ final class RemoveParamCommand implements CliCommand {
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: RemoveParamResult = RemoveParam.removeParam(
-			source, pos.line, pos.col, paramIndex, plugin, shape, CliArgs.discoverFormatConfig(filePath), filePath
+			source, pos.line, pos.col, paramIndex, plugin, shape, CliArgs.discoverFormatConfig(filePath, ledger), filePath
 		);
 		switch result {
 			case Ok(text, advisory):

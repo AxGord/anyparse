@@ -84,8 +84,8 @@ final class FormatConfigDiscovery {
 	 * The content of the nearest `hxformat.json` at or above `filePath`'s own
 	 * directory, or null when no ancestor directory holds one, when the one it holds
 	 * is blank (`normalize`), and on targets with no filesystem. With `notes` the settings hxq will not act on go there,
-	 * under `REPORTED_TOPIC`, for the command to say through its ledger; without, `reportConfig` says them through the
-	 * fallback ledger.
+	 * under `REPORTED_TOPIC`, for the command to say through its ledger; without, they are not said (`discoverFor`
+	 * says them through a command's own ledger).
 	 */
 	public static function discover(filePath: String, ?notes: Array<ConfigNote>): Null<String> {
 		#if (sys || nodejs)
@@ -93,9 +93,7 @@ final class FormatConfigDiscovery {
 		if (!CACHE.exists(start)) remember(start, filePath);
 		final found: Null<ConfigFile> = CACHE[start];
 		if (found == null) return null;
-		if (notes == null) {
-			reportConfig(RunLedger.fallback(), found.path, found.content);
-		} else {
+		if (notes != null) {
 			final line: Null<String> = ignoredSettingsLine(found.path, found.content);
 			if (line != null) {
 				final message: String = line;
@@ -119,6 +117,22 @@ final class FormatConfigDiscovery {
 		if (normalize(content) == null || !ledger.first(REPORTED_TOPIC, path)) return;
 		final line: Null<String> = ignoredSettingsLine(path, content);
 		if (line != null) CliIo.stderr(line);
+		#end
+	}
+
+	/**
+	 * `discover` for a command: the settings hxq will not act on are said once per run through `ledger`,
+	 * the run's own, so no lookup falls back to a process ledger.
+	 */
+	public static function discoverFor(filePath: String, ledger: RunLedger): Null<String> {
+		#if (sys || nodejs)
+		final content: Null<String> = discover(filePath);
+		if (content == null) return null;
+		final found: Null<ConfigFile> = CACHE[haxe.io.Path.directory(FileSystem.absolutePath(filePath))];
+		if (found != null) reportConfig(ledger, found.path, found.content);
+		return content;
+		#else
+		return null;
 		#end
 	}
 

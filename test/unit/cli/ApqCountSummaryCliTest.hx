@@ -11,6 +11,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.common.naming.Naming;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.Cli;
+import anyparse.query.RunLedger;
 import anyparse.query.SymbolIndex;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.LintFixLedger;
@@ -66,7 +67,7 @@ final class ApqCountSummaryCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = fixtureDir('apq_count_write', 3, 2, 0);
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		Assert.equals(0, run.exit);
 		Assert.equals('apq fmt: rewrote 3 of 5 file(s)\n', run.summary);
 		Assert.equals(3, changedSince(dir, before), 'the line must name the files whose bytes actually moved');
@@ -86,7 +87,7 @@ final class ApqCountSummaryCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = fixtureDir('apq_count_write_clean', 0, 4, 0);
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		Assert.equals(0, run.exit);
 		Assert.equals('apq fmt: rewrote 0 of 4 file(s)\n', run.summary);
 		Assert.equals(0, changedSince(dir, before), 'a canonical tree must be left alone');
@@ -101,7 +102,7 @@ final class ApqCountSummaryCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = fixtureDir('apq_count_write_fail', 2, 0, 1);
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		Assert.notEquals(0, run.exit);
 		Assert.equals('apq fmt: rewrote 2 of 3 file(s), 1 failed\n', run.summary);
 		Assert.equals(2, changedSince(dir, before), 'the unparseable file is not a rewrite');
@@ -127,7 +128,7 @@ final class ApqCountSummaryCliTest extends Test {
 		final locked: Array<String> = ['$dir/D1.hx'];
 		if (!lockedOrSkipped(dir, locked)) return;
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		unlock(locked);
 		Assert.notEquals(0, run.exit);
 		Assert.equals('apq fmt: rewrote 1 of 2 file(s), 1 could not be written\n', run.summary);
@@ -157,7 +158,7 @@ final class ApqCountSummaryCliTest extends Test {
 		final locked: Array<String> = ['$dir/D0.hx', '$dir/D1.hx'];
 		if (!lockedOrSkipped(dir, locked)) return;
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		unlock(locked);
 		Assert.notEquals(0, run.exit, 'a run that could write nothing did not leave the tree canonical');
 		Assert.equals('apq fmt: rewrote 0 of 2 file(s), 2 could not be written\n', run.summary);
@@ -179,7 +180,7 @@ final class ApqCountSummaryCliTest extends Test {
 		final locked: Array<String> = ['$dir/D1.hx'];
 		if (!lockedOrSkipped(dir, locked)) return;
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--write'], RunLedger.begin());
 		unlock(locked);
 		Assert.notEquals(0, run.exit);
 		Assert.equals('apq fmt: rewrote 1 of 3 file(s), 1 failed, 1 could not be written\n', run.summary);
@@ -199,7 +200,7 @@ final class ApqCountSummaryCliTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = fixtureDir('apq_count_list', 2, 2, 0);
 		final before: Map<String, String> = snapshot(dir);
-		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--list']);
+		final run: FmtRunResult = FmtCommand.fmtRun([dir, '--list'], RunLedger.begin());
 		Assert.equals(0, run.exit);
 		Assert.equals('apq fmt --list: 2 of 4 file(s) would be rewritten\n', run.summary);
 		Assert.equals(0, changedSince(dir, before), '--list must not write');

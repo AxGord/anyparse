@@ -49,7 +49,7 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runSetDoc(args, ctx.postWriteFix);
+		return runSetDoc(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -79,7 +79,7 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 	 * the decl, leaving the declaration itself untouched; the result is writer-formatted and
 	 * re-parse-validated (canonical-gated unless `--reformat`).
 	 */
-	private static function runSetDoc(args: Array<String>, fix: Bool): Int {
+	private static function runSetDoc(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: SetDocOpts = parseSetDocArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var docText: Null<String> = o.docText;
@@ -109,7 +109,7 @@ final class SetDocCommand implements CliCommand implements PostWriteFix {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(o.lang));
 		final loc: Null<Position> = CliEdit.resolveAddressPos('set-doc', source, plugin, pos, o.selectExpr, o.matchExpr, o.nth);
 		if (loc == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
 		return CliEdit.finishEdit('set-doc', filePath, o.write, result, fix ? plugin : null);
 	}

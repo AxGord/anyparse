@@ -53,7 +53,7 @@ final class MoveCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args, ctx.ledger) : runMove(args);
+		return ModuleMoveCli.isModuleForm(args) ? ModuleMoveCli.run(args, ctx.ledger) : runMove(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -61,14 +61,14 @@ final class MoveCommand implements CliCommand {
 	}
 
 	public static function emitMoveResult(
-		cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool, plugin: GrammarPlugin
+		cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool, plugin: GrammarPlugin, ledger: RunLedger
 	): Int {
 		switch result {
 			case Ok(rawChanges, advisory):
 				// Only the WRITE path consumes `newSource`; a preview prints file names and a
 				// count, so canonicalising there would pay two writer passes per changed file
 				// for nothing observable.
-				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin)] : rawChanges;
+				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin, ledger)] : rawChanges;
 				if (write) {
 					CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
 					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');
@@ -142,7 +142,7 @@ final class MoveCommand implements CliCommand {
 	 * or none. `<line>:<col>` uses the same column convention `apq refs`
 	 * prints.
 	 */
-	private static function runMove(args: Array<String>): Int {
+	private static function runMove(args: Array<String>, ledger: RunLedger): Int {
 		final o: MoveOpts = parseMoveArgs(args);
 		if (o.errExit != null) return o.errExit;
 		// parseMoveArgs proved file/destFile/scope/address non-null before
@@ -172,7 +172,7 @@ final class MoveCommand implements CliCommand {
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final result: MoveResult = MoveSymbol.moveType(cursorFile, pos.line, pos.col, destFile, scopeFiles, plugin, typeRefShape);
-		return emitMoveResult('move', result, cursorFile, destFile, o.write, plugin);
+		return emitMoveResult('move', result, cursorFile, destFile, o.write, plugin, ledger);
 	}
 
 	private static function printMoveUsage(): Void {
@@ -335,14 +335,14 @@ final class MoveCommand implements CliCommand {
 	 * looks — the very symptom this exists to remove. A run that does not converge keeps the raw
 	 * splice rather than writing a text no round trip reproduces.
 	 */
-	private static function canonicalMoveChange(cmd: String, change: MoveChange, plugin: GrammarPlugin): MoveChange {
+	private static function canonicalMoveChange(cmd: String, change: MoveChange, plugin: GrammarPlugin, ledger: RunLedger): MoveChange {
 		// `readSourceForParse`, not `readFile`: it is the reader `collectScopeFiles` used to
 		// build the very sources this move was computed from, and it is `.hxtest`-aware. Reading
 		// the raw three-section file instead would answer "not canonical" for every `.hxtest`
 		// fixture and silently switch the gate off there.
 		final original: Null<String> = try CliIo.readSourceForParse(change.file) catch (exception: Exception) null;
 		if (original == null) return change;
-		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
+		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file, ledger);
 		return CanonicalEdit.isWriterCanonical(original, plugin, opts) ? fixedPointChange(cmd, change, plugin, opts) : change;
 	}
 

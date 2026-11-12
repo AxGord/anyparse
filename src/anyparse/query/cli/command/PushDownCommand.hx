@@ -25,7 +25,7 @@ final class PushDownCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return PullUpCommand.runInheritanceMove(args, false);
+		return PullUpCommand.runInheritanceMove(args, false, ctx.ledger);
 	}
 
 	public function usage(): Void {

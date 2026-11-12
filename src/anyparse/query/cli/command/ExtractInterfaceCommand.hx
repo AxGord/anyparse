@@ -35,7 +35,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runExtractInterface(args);
+		return runExtractInterface(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -68,7 +68,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 		return true;
 	}
 
-	private static function runExtractInterface(args: Array<String>): Int {
+	private static function runExtractInterface(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
 		var members: Null<String> = null;
@@ -132,8 +132,8 @@ final class ExtractInterfaceCommand implements CliCommand {
 		// called it drifted the moment it was written; passing null for the source would make
 		// a project-canonical class read as drifted and silently forfeit the canonical-out
 		// half of the edit.
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(ifaceFile);
-		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(ifaceFile, ledger);
+		final srcOptsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN, ledger);
 		final result: MoveResult = ExtractInterface.extract(
 			srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin, optsJson, srcOptsJson
 		);

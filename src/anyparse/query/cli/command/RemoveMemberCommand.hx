@@ -37,7 +37,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveMember(args, ctx.postWriteFix);
+		return runRemoveMember(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -55,7 +55,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 	 * doc comment unless `--keep-doc` says otherwise. Two declarations in ONE branch are refused instead: no build compiles the pair.
 	 * The by-name counterpart of `add-member`.
 	 */
-	private static function runRemoveMember(args: Array<String>, fix: Bool): Int {
+	private static function runRemoveMember(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -131,7 +131,7 @@ final class RemoveMemberCommand implements CliCommand implements PostWriteFix {
 		final named: Null<NamedMember> = addressed ? resolveMemberAddress(op, source, plugin, selectExpr, matchExpr, nth) : byName;
 		if (named == null) return EXIT_RUNTIME;
 		final target: NamedMember = named;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = RemoveMember.removeMember(source, target.type, target.member, reformat, plugin, withDoc, optsJson);
 		// Comments are prose the structural removal never reads: a name still written in one is said
 		// here, so a removal does not read as a clean scrub.

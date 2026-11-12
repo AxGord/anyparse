@@ -40,7 +40,7 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runProbe(args, ctx.readStdin);
+		return runProbe(args, ctx.readStdin, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -98,7 +98,7 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 	 * — useful when the snippet has shell-quoting trouble or comes
 	 * from a heredoc / process substitution.
 	 */
-	private static function runProbe(args: Array<String>, readStdin: () -> String): Int {
+	private static function runProbe(args: Array<String>, readStdin: () -> String, ledger: RunLedger): Int {
 		// Bare `apq probe` → usage. Doing the check up front (before the
 		// argv walker) keeps the empty-args branch return 0, matching
 		// the convention of `apq <cmd>` (no args) elsewhere.
@@ -174,7 +174,7 @@ final class ProbeCommand implements CliCommand implements StdinDocument {
 			['--stdin'];
 		else
 			['--code', codeFinal];
-		return AstCommand.runAst(injected.concat(forwarded), readStdin);
+		return AstCommand.runAst(injected.concat(forwarded), readStdin, ledger);
 	}
 
 	/**

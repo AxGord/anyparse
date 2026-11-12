@@ -125,7 +125,7 @@ final class FmtCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runFmt(args);
+		return runFmt(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -142,7 +142,7 @@ final class FmtCommand implements CliCommand {
 	 * Returning the line lets a test drive a REAL directory through the REAL loop
 	 * and assert it in every direction — over-report, under-report, and failure.
 	 */
-	public static function fmtRun(args: Array<String>): FmtRunResult {
+	public static function fmtRun(args: Array<String>, ledger: RunLedger): FmtRunResult {
 		final o: FmtOpts = parseFmtArgs(args);
 		if (o.errExit != null) {
 			// Re-bound: a narrowed FIELD never reaches an anonymous-structure literal
@@ -180,7 +180,9 @@ final class FmtCommand implements CliCommand {
 			// `o.list`, not `listMode`: the opaque-region notes are off for an EXPLICIT `--list`
 			// and on when list mode was merely implied, which is the difference between a gate
 			// and a survey — `opaqueCondRegionNotes` carries the reading and the measurement.
-			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write && !o.verify, listMode, o.verify, o.onePass, o.list);
+			final r: FmtFileResult = formatOneFile(
+				plugin, o.lang, path, o.write && !o.verify, listMode, ledger, o.verify, o.onePass, o.list
+			);
 			if (r.fatalExit != null) {
 				// Re-bound for the same reason as `parsedExit` above.
 				final fatal: Int = r.fatalExit;
@@ -362,8 +364,8 @@ final class FmtCommand implements CliCommand {
 	 * those behaviours lives in `fmtRun` / `formatOneFile`; this entry only
 	 * prints what the run decided to say.
 	 */
-	private static function runFmt(args: Array<String>): Int {
-		final run: FmtRunResult = fmtRun(args);
+	private static function runFmt(args: Array<String>, ledger: RunLedger): Int {
+		final run: FmtRunResult = fmtRun(args, ledger);
 		if (run.summary.length > 0) CliIo.stderr(run.summary);
 		return run.exit;
 	}
@@ -540,8 +542,8 @@ final class FmtCommand implements CliCommand {
 	}
 
 	private static function formatOneFile(
-		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, verify: Bool = false, onePass: Bool = false,
-		listedExplicitly: Bool = false
+		plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool, ledger: RunLedger, verify: Bool = false,
+		onePass: Bool = false, listedExplicitly: Bool = false
 	): FmtFileResult {
 		// A `.hxtest` is THREE sections (config / input / expected) around `\n---\n`,
 		// not a source file. Formatting it is meaningless in both directions: the whole
@@ -562,7 +564,7 @@ final class FmtCommand implements CliCommand {
 			CliIo.stderr('apq fmt: $path: ${exception.message}\n');
 			return { changed: false, failed: true, fatalExit: null };
 		};
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(path);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(path, ledger);
 		// The FIXED POINT, not one round trip. `--list` and `--write` decide from
 		// the same `formatted == source` comparison, so they cannot disagree within
 		// a run — they disagreed ACROSS runs, because a writer whose output is not

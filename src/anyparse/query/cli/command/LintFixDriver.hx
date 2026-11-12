@@ -81,7 +81,7 @@ final class LintFixDriver {
 		if (oracleConfigured) cached.editJournal = new EditJournal();
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
-		for (entry in files) optsByFile[entry.file] = CliArgs.discoverFormatConfig(entry.file);
+		for (entry in files) optsByFile[entry.file] = CliArgs.discoverFormatConfig(entry.file, said);
 		// What each safe round wrote, rule by rule, so a round the compiler rejects can be cut down to the edits it rejects —
 		// and what the net took back, so no later round of this run applies it again.
 		final trail: LintFixSafeTrail = new LintFixSafeTrail((file, base, groups) -> {
@@ -384,7 +384,7 @@ final class LintFixDriver {
 		}
 		fixedDelta += applyCrossFileRenames(
 			crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled, created ?? [],
-			baselineBeforeCreate, editsOf
+			baselineBeforeCreate, editsOf, said
 		);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
@@ -457,7 +457,7 @@ final class LintFixDriver {
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
 		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>, created: Array<String>,
-		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>
+		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>, ?said: RunLedger
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
@@ -476,7 +476,7 @@ final class LintFixDriver {
 			// the half that must be known good first.
 			final made: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileCreates(
 				creates, file -> fileSourceOf(files, file) != null || ConfigFinder.fileExists(file),
-				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file))
+				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file, said ?? RunLedger.fallback()))
 			);
 			if (made == null) continue;
 			// Re-bound: strict null-safety does not carry a narrowed local into a comprehension.
@@ -493,7 +493,7 @@ final class LintFixDriver {
 			// from disk by the very resolution the next pass runs — a file this pass created and only
 			// held in memory would leave every later pass answering from the chain that was.
 			if (createdNow.length + removes.length > 0 && beforeCreate != null) beforeCreate();
-			commitCreates(createdNow, files, optsByFile, created, touchedThisPass, changedFiles, nextActive);
+			commitCreates(createdNow, files, optsByFile, created, touchedThisPass, changedFiles, nextActive, said);
 			final removed: Array<String> = commitRemoves(removes, files, touchedThisPass, changedFiles, nextActive, editsOf);
 			commitStaged(staged, files, touchedThisPass, changedFiles, nextActive);
 			// A component is committed whole, so the safe-pass revert must roll it back whole:
@@ -580,12 +580,12 @@ final class LintFixDriver {
 	private static function commitCreates(
 		made: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>,
 		optsByFile: Map<String, Null<String>>, created: Array<String>, touchedThisPass: Array<String>, changedFiles: Array<String>,
-		nextActive: Array<{ file: String, source: String }>
+		nextActive: Array<{ file: String, source: String }>, ?said: RunLedger
 	): Void {
 		for (m in made) {
 			CliIo.writeFile(m.file, m.source);
 			files.push(m);
-			optsByFile[m.file] = CliArgs.discoverFormatConfig(m.file);
+			optsByFile[m.file] = CliArgs.discoverFormatConfig(m.file, said ?? RunLedger.fallback());
 			created.push(m.file);
 			if (!touchedThisPass.contains(m.file)) touchedThisPass.push(m.file);
 			if (!changedFiles.contains(m.file)) changedFiles.push(m.file);

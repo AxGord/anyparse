@@ -27,14 +27,14 @@ final class EncapsulateFieldCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runEncapsulateField(args);
+		return runEncapsulateField(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printEncapsulateFieldUsage();
 	}
 
-	private static function runEncapsulateField(args: Array<String>): Int {
+	private static function runEncapsulateField(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var typeName: Null<String> = null;
 		var reformat: Bool = false;
@@ -86,7 +86,7 @@ final class EncapsulateFieldCommand implements CliCommand {
 		if (CliArgs.refuseDataGrammar(op, plugin)) return EXIT_RUNTIME;
 		// Discover the file's format config so the canonical gate matches the project's writer
 		// style (space-after-colon, etc.), else a non-default-formatted file is wrongly rejected.
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin, optsJson);
 		switch result {
 			case Ok(text, rewrites):

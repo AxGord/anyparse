@@ -28,7 +28,7 @@ final class AddParamCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddParam(args);
+		return runAddParam(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -49,7 +49,7 @@ final class AddParamCommand implements CliCommand {
 	 * not on a function, a required parameter, a name collision, or an
 	 * unparseable result exits non-zero with the file untouched.
 	 */
-	private static function runAddParam(args: Array<String>): Int {
+	private static function runAddParam(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -108,7 +108,7 @@ final class AddParamCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 		final result: AddParamResult = AddParam.addParam(
-			source, pos.line, pos.col, paramStr, plugin, CliArgs.discoverFormatConfig(filePath)
+			source, pos.line, pos.col, paramStr, plugin, CliArgs.discoverFormatConfig(filePath, ledger)
 		);
 		switch result {
 			case Ok(text):

@@ -86,9 +86,9 @@ class FormatConfigDiscoveryTest extends Test {
 		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
 		final nested: String = Path.join([dir, 'a']);
 		FileSystem.createDirectory(nested);
-		Assert.notNull(FormatConfigDiscovery.discover(Path.join([nested, 'A.hx'])));
-		final named: Array<String> = FormatConfigDiscovery.reportedPaths(RunLedger.fallback())
-			.filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
+		final ledger: RunLedger = RunLedger.begin();
+		Assert.notNull(FormatConfigDiscovery.discoverFor(Path.join([nested, 'A.hx']), ledger));
+		final named: Array<String> = FormatConfigDiscovery.reportedPaths(ledger).filter(p -> p.indexOf('apq-fcd-reportpath') >= 0);
 		Assert.equals(1, named.length, 'expected exactly one reported path under the fixture, got ${named.join(', ')}');
 		Assert.equals('hxformat.json', Path.withoutDirectory(named[0]), 'the report named ${named[0]} instead of the config it read');
 	}
@@ -118,6 +118,24 @@ class FormatConfigDiscoveryTest extends Test {
 		Assert.equals(FormatConfigDiscovery.REPORTED_TOPIC, notes[0].topic);
 		Assert.equals('hxformat.json', Path.withoutDirectory(notes[0].key));
 		Assert.equals(0, FormatConfigDiscovery.reportedPaths(RunLedger.fallback()).filter(p -> p.indexOf('apq-fcd-notes') >= 0).length);
+	}
+
+	/**
+	 * A command's lookup reports through the ledger it hands in and never through the process fallback, and a lookup
+	 * handed neither notes nor a ledger reports nowhere.
+	 */
+	@:pin('control')
+	@:killer('M-HXFORMAT-DISCOVER-FOR-FALLBACK')
+	public function testDiscoverForSaysThroughTheCommandLedgerOnly(): Void {
+		final dir: String = _trees.make('apq-fcd-own-ledger');
+		File.saveContent(Path.join([dir, 'hxformat.json']), '{"noSuchKnobAtAll": 1}');
+		final ledger: RunLedger = RunLedger.begin();
+		// A later run's `begin` moves the fallback off the command's ledger, so the two can be told apart.
+		final fallback: RunLedger = RunLedger.begin();
+		Assert.notNull(FormatConfigDiscovery.discover(Path.join([dir, 'B.hx'])));
+		Assert.notNull(FormatConfigDiscovery.discoverFor(Path.join([dir, 'A.hx']), ledger));
+		Assert.equals(1, FormatConfigDiscovery.reportedPaths(ledger).filter(p -> p.indexOf('apq-fcd-own-ledger') >= 0).length);
+		Assert.equals(0, FormatConfigDiscovery.reportedPaths(fallback).filter(p -> p.indexOf('apq-fcd-own-ledger') >= 0).length);
 	}
 
 	/**

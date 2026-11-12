@@ -128,7 +128,7 @@ final class GraphCommand implements CliCommand {
 		}
 		final revisions: Null<Array<String>> = request.diff;
 		if (revisions != null) {
-			final changes: Null<CodeGraph> = diffGraph(request, revisions, kinds);
+			final changes: Null<CodeGraph> = diffGraph(request, revisions, kinds, ctx.ledger);
 			if (changes == null) return EXIT_RUNTIME;
 			final compared: String = '$COMMAND --diff ${revisions[0]} ${revisions[1]}';
 			if (page != null)
@@ -299,7 +299,9 @@ final class GraphCommand implements CliCommand {
 	 * The member graph of the scope at the first of `revisions` compared with the one at the second (`GraphDiff`), each
 	 * read from git with no checkout; null when either cannot be read or neither holds a file of the scope (message printed).
 	 */
-	private static function diffGraph(request: GraphRequest, revisions: Array<String>, kinds: Null<Array<EdgeKind>>): Null<CodeGraph> {
+	private static function diffGraph(
+		request: GraphRequest, revisions: Array<String>, kinds: Null<Array<EdgeKind>>, ledger: RunLedger
+	): Null<CodeGraph> {
 		// object id -> text: a file both revisions hold alike is read once
 		final texts: Map<String, String> = [];
 		final earlier: Null<GraphScope> = CliCallGraph.revisionScope(COMMAND, revisions[0], request.inputSpecs, request.lang, texts);
@@ -321,7 +323,7 @@ final class GraphCommand implements CliCommand {
 			? null
 			: GraphDiff.compare(
 				declaredView(callsBefore, kinds, request.external), declaredView(callsAfter, kinds, request.external),
-				changedMembers(earlier, later, renamed, callsAfter.index)
+				changedMembers(earlier, later, renamed, callsAfter.index, ledger)
 			);
 	}
 
@@ -343,7 +345,7 @@ final class GraphCommand implements CliCommand {
 	 * also under its module's name, which the call graph gives a function of no type.
 	 */
 	private static function changedMembers(
-		earlier: GraphScope, later: GraphScope, renamed: Map<String, String>, index: Null<SymbolIndex>
+		earlier: GraphScope, later: GraphScope, renamed: Map<String, String>, index: Null<SymbolIndex>, ledger: RunLedger
 	): Array<String> {
 		final packages: Map<String, String> = [];
 		if (index != null) for (info in index.allFiles()) packages[info.file] = info.pkg;
@@ -353,7 +355,7 @@ final class GraphCommand implements CliCommand {
 			if (was == null || was == f.source) continue;
 			final pkg: String = packages[f.file] ?? '';
 			final prefix: String = pkg == '' ? '' : '$pkg.';
-			final delta: FileDelta = DeclarationDelta.compare(later.plugin, was, f.source, CliArgs.discoverFormatConfig(f.file));
+			final delta: FileDelta = DeclarationDelta.compare(later.plugin, was, f.source, CliArgs.discoverFormatConfig(f.file, ledger));
 			for (change in delta.declarations) {
 				names.push(prefix + change.key);
 				if (change.depth == 0) names.push('$prefix${CallGraphNames.moduleTypeName(f.file)}.${change.key}');

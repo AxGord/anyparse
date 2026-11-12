@@ -29,7 +29,7 @@ final class ChangeSigCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runChangeSig(args);
+		return runChangeSig(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -53,7 +53,7 @@ final class ChangeSigCommand implements CliCommand {
 	 * qualified call site, an arity mismatch, or an unparseable result,
 	 * exits non-zero with the file untouched.
 	 */
-	private static function runChangeSig(args: Array<String>): Int {
+	private static function runChangeSig(args: Array<String>, ledger: RunLedger): Int {
 		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -121,7 +121,7 @@ final class ChangeSigCommand implements CliCommand {
 		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: ChangeSigResult = ChangeSig.changeSig(
-			source, pos.line, pos.col, permStr, plugin, shape, CliArgs.discoverFormatConfig(filePath), filePath
+			source, pos.line, pos.col, permStr, plugin, shape, CliArgs.discoverFormatConfig(filePath, ledger), filePath
 		);
 		switch result {
 			case Ok(text, advisory):

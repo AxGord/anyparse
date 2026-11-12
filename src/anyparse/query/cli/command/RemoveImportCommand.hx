@@ -27,7 +27,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRemoveImport(args, ctx.postWriteFix);
+		return runRemoveImport(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -43,7 +43,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 	 * a block comment directly above it goes too unless `--keep-doc` says otherwise.
 	 * The by-name counterpart of `remove-element`; backend of `lint --fix`.
 	 */
-	private static function runRemoveImport(args: Array<String>, fix: Bool): Int {
+	private static function runRemoveImport(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -101,7 +101,7 @@ final class RemoveImportCommand implements CliCommand implements PostWriteFix {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return CliEdit.finishEdit(
 			'remove-import', filePath, write, RemoveImport.removeImport(source, path, reformat, plugin, withDoc, optsJson),
 			fix ? plugin : null

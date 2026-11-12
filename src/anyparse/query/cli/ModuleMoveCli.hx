@@ -199,7 +199,7 @@ final class ModuleMoveCli {
 		}
 		final originalOf: Map<String, String> = [for (e in scopeFiles) e.file => e.source];
 		for (m in outcome.moves) originalOf[m.to] = originalOf[m.from] ?? '';
-		final canonical: Array<MoveChange> = outcome.changes.map(canonicalOf.bind(_, originalOf, plugin, ext));
+		final canonical: Array<MoveChange> = outcome.changes.map(canonicalOf.bind(_, originalOf, plugin, ext, ledger));
 		write(canonical, outcome.removed);
 		RegistryFollowCommand.followWrite('move', [
 			for (c in canonical) if (c.file.endsWith(ext)) { path: c.file, before: originalOf[c.file] ?? c.newSource, after: c.newSource }
@@ -211,11 +211,11 @@ final class ModuleMoveCli {
 
 	/** A module change canonicalised when the text it replaces was writer-canonical; any other text as is. */
 	private static function canonicalOf(
-		change: MoveChange, originalOf: Map<String, String>, plugin: GrammarPlugin, ext: String
+		change: MoveChange, originalOf: Map<String, String>, plugin: GrammarPlugin, ext: String, ledger: RunLedger
 	): MoveChange {
 		final original: Null<String> = originalOf[change.file];
 		if (!change.file.endsWith(ext) || original == null) return change;
-		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file);
+		final opts: Null<String> = CliArgs.discoverFormatConfig(change.file, ledger);
 		return CanonicalEdit.isWriterCanonical(original, plugin, opts)
 			? MoveCommand.fixedPointChange('move', change, plugin, opts)
 			: change;

@@ -21,7 +21,7 @@ final class ExtractConstantToMode {
 
 	private static final OP: String = 'extract-constant';
 
-	public static function run(args: Array<String>): Int {
+	public static function run(args: Array<String>, ledger: RunLedger): Int {
 		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
@@ -101,7 +101,7 @@ final class ExtractConstantToMode {
 					: null,
 				pkg: NewCommand.derivePackage(intoPath),
 				base: NewCommand.newFileClassName(intoPath),
-				optsJson: CliArgs.discoverFormatConfig(intoPath)
+				optsJson: CliArgs.discoverFormatConfig(intoPath, ledger)
 			};
 		final request: ExtractToRequest = {
 			source: source,
@@ -118,7 +118,7 @@ final class ExtractConstantToMode {
 			shared: shared,
 			annotate: annotate,
 			reformat: reformat,
-			optsJson: CliArgs.discoverFormatConfig(filePath)
+			optsJson: CliArgs.discoverFormatConfig(filePath, ledger)
 		};
 		switch ExtractConstantTo.extractTo(request, new CachingGrammarPlugin(CliArgs.pickPlugin(lang))) {
 			case Ok(newSource, newDest, advisories):

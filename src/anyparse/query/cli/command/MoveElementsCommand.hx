@@ -33,14 +33,14 @@ final class MoveElementsCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runMoveElements(args);
+		return runMoveElements(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printMoveElementsUsage();
 	}
 
-	private static function runMoveElements(args: Array<String>): Int {
+	private static function runMoveElements(args: Array<String>, ledger: RunLedger): Int {
 		final o: MoveElementsOpts = switch parseArgs(args) {
 			case Left(code): return code;
 			case Right(opts): opts;
@@ -74,8 +74,8 @@ final class MoveElementsCommand implements CliCommand {
 			target: o.target,
 			sorted: o.sorted,
 			reformat: o.reformat,
-			optsJson: CliArgs.discoverFormatConfig(sourceFile),
-			destOptsJson: destFile == null ? null : CliArgs.discoverFormatConfig(destFile)
+			optsJson: CliArgs.discoverFormatConfig(sourceFile, ledger),
+			destOptsJson: destFile == null ? null : CliArgs.discoverFormatConfig(destFile, ledger)
 		};
 		switch MoveElements.moveElements(request, plugin) {
 			case Ok(newSource, newDest, entries, digest):

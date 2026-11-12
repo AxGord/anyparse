@@ -51,7 +51,7 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runAddMeta(args, ctx.postWriteFix);
+		return runAddMeta(args, ctx.postWriteFix, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -65,7 +65,7 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 	 * the declaration keyword. A duplicate NAME is refused. See `AddMeta` for why
 	 * neither `patch` nor `add-element` can reach that position.
 	 */
-	private static function runAddMeta(args: Array<String>, fix: Bool): Int {
+	private static function runAddMeta(args: Array<String>, fix: Bool, ledger: RunLedger): Int {
 		final o: AddMetaOpts = parseAddMetaArgs(args);
 		if (o.errExit != null) return o.errExit;
 		final file: Null<String> = o.file;
@@ -87,7 +87,7 @@ final class AddMetaCommand implements CliCommand implements PostWriteFix {
 			'add-meta', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
 		);
 		if (target == null) return EXIT_RUNTIME;
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		return CliEdit.finishEdit(
 			'add-meta', filePath, o.write, AddMeta.addMeta(source, target, meta, o.reformat, plugin, optsJson), fix ? plugin : null
 		);

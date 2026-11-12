@@ -27,14 +27,14 @@ final class MoveMemberCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runMoveMember(args);
+		return runMoveMember(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
 		printMoveMemberUsage();
 	}
 
-	private static function runMoveMember(args: Array<String>): Int {
+	private static function runMoveMember(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
 		var destType: Null<String> = null;
@@ -109,7 +109,7 @@ final class MoveMemberCommand implements CliCommand {
 		final result: MoveResult = MoveMember.move(
 			srcFileNN, srcTypeName, memberNames, destTypeName, via, closure, scaffold, scopeFiles, plugin, plugin.typeRefShape(), keepBare
 		);
-		return MoveCommand.emitMoveResult(op, result, srcFileNN, srcFileNN, write, plugin);
+		return MoveCommand.emitMoveResult(op, result, srcFileNN, srcFileNN, write, plugin, ledger);
 	}
 
 	private static function printMoveMemberUsage(): Void {

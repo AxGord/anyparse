@@ -25,7 +25,7 @@ final class WriterProbeCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runWriterProbe(args);
+		return runWriterProbe(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -52,7 +52,7 @@ final class WriterProbeCommand implements CliCommand {
 	 * verbatim (no shell metacharacters) so a downstream `awk` /
 	 * `split` can pull either section without ambiguity.
 	 */
-	private static function runWriterProbe(args: Array<String>): Int {
+	private static function runWriterProbe(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var file: Null<String> = null;
 		for (arg in new WriterProbeCommand().flags().walk(args)) {
@@ -82,7 +82,7 @@ final class WriterProbeCommand implements CliCommand {
 		// `.hxtest` section-1 config drives BOTH labelled probes so the
 		// trivia ↔ plain comparison reflects the corpus harness's actual
 		// writer surface for this fixture.
-		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(fileFinal);
+		final optsJson: Null<String> = CliArgs.readWriteOptionsJsonOrNull(fileFinal, ledger);
 		final triviaOk: Bool = ProbeCommand.emitOneWriterProbe(plugin, source, fileFinal, lang, false, optsJson);
 		final plainOk: Bool = ProbeCommand.emitOneWriterProbe(plugin, source, fileFinal, lang, true, optsJson);
 		return triviaOk && plainOk ? EXIT_OK : EXIT_RUNTIME;

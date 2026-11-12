@@ -26,7 +26,7 @@ final class RewriteCommand implements CliCommand {
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
-		return runRewrite(args);
+		return runRewrite(args, ctx.ledger);
 	}
 
 	public function usage(): Void {
@@ -41,7 +41,7 @@ final class RewriteCommand implements CliCommand {
 	 * `${x-N}` shift an integer-literal metavar. All matches in one pass,
 	 * writer-formatted + re-parse-validated (canonical-gated unless `--reformat`).
 	 */
-	private static function runRewrite(args: Array<String>): Int {
+	private static function runRewrite(args: Array<String>, ledger: RunLedger): Int {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
@@ -90,7 +90,7 @@ final class RewriteCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = CliArgs.pickPlugin(lang);
-		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath);
+		final optsJson: Null<String> = CliArgs.discoverFormatConfig(filePath, ledger);
 		final op: String = 'rewrite';
 		switch Rewrite.rewrite(source, pat, repl, reformat, plugin, optsJson) {
 			case Ok(text, rewrites):
