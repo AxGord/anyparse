@@ -191,8 +191,7 @@ class HxReturnBodySliceTest extends Test {
 	 * Whether the value moves under `return` is decided by the AST, not by a source break the writer
 	 * keeps: an object literal written on one line or across three gives the same placement.
 	 */
-	@:pin('control')
-	@:killer('M-RETURN-SAME-EXEMPTS-BY-DOC')
+	@:pin('guard')
 	public function testSamePlacesTheValueAlikeForEitherObjectSpelling(): Void {
 		final oneLine: String = HxWriteFixture.triviaWrite(
 			'class C {\n\tfunction f() {\n\t\treturn '
@@ -208,6 +207,24 @@ class HxReturnBodySliceTest extends Test {
 		);
 		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', oneLine);
 		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', threeLines);
+	}
+
+	/**
+	 * A value whose Doc spans lines (a function-literal or commented-array argument) still moves under
+	 * `return` when its glued first line overflows: only a control-flow ctor stays, not any multi-line Doc.
+	 */
+	@:pin('control')
+	@:killer('M-RETURN-SAME-EXEMPTS-BY-DOC')
+	public function testSameMovesAMultilineValueThatIsNotControlFlow(): Void {
+		final long: String = '\'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\'';
+		final withFunction: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn someFunctionCall($long, function() {\n\t\t\tfoo();\n\t\t});\n\t}\n}', SAME_CONFIG
+		);
+		final withComment: String = HxWriteFixture.triviaWrite(
+			'class C {\n\tfunction f() {\n\t\treturn someFunctionCall($long, [\n\t\t\t1, // c\n\t\t\t2\n\t\t]);\n\t}\n}', SAME_CONFIG
+		);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', withFunction);
+		Assert.stringContains('\t\treturn\n\t\t\tsomeFunctionCall(', withComment);
 	}
 
 	private inline function writeWith(src: String, policy: BodyPolicy): String {
