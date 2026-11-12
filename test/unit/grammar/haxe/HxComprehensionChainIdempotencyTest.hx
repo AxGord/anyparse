@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -17,7 +18,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionChainIdempotencyTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.lineWidth = 140);
 
 	public function new(): Void {
 		super();

@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -190,7 +191,9 @@ class HxCondCommentDirectiveSeamTest extends Test {
 	public function testAlignedIncreaseKeepsEndAtMarkerIndent(): Void {
 		final source: String = 'class Foo {\n\t#if a\n\tvar v:Int;\n\t#else\n\t// only else\n\t#end\n}';
 		final expected: String = 'class Foo {\n\t#if a\n\t\tvar v:Int;\n\t#else\n\t\t// only else\n\t#end\n}\n';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"indentation": {"conditionalPolicy": "alignedIncrease"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited ->
+			edited.conditionalPolicy = ConditionalIndentationPolicy.AlignedIncrease
+		);
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 	}
 

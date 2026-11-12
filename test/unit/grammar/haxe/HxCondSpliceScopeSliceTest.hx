@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmt;
@@ -279,7 +280,7 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	}
 
 	private inline function triviaWrite(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 	private function parseBody(source: String): Array<HxStatement> {

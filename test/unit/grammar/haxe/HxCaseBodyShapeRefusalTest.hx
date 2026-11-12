@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -107,14 +108,14 @@ final class HxCaseBodyShapeRefusalTest extends Test {
 		// inline for logical chains. Confirms the refusal AND-s with the
 		// dispatched gate, not OR-s past it.
 		final src: String = 'class M { function f():Void { switch (x) { case 1: A || B; } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1: A || B;') == -1, 'refusal must override caseBody=Same: <$out>');
 	}
 
 	private inline function writeWithDefaults(src: String): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

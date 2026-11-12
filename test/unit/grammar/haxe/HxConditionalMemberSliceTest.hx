@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
@@ -158,7 +159,10 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 			'class C {\n\t#if sys\n\t#end\n\tvar x:Int;\n}',
 			'class C {\n\tpublic static inline final X:Int = 1;\n\n\t#if sys\n\t#end\n}',
 			'interface I {\n\t#if sys\n\t#end\n}'
-		]) Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'), 'writer round-trip for <$src>');
+		])
+			Assert.equals(
+				src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')), 'writer round-trip for <$src>'
+			);
 	}
 
 	/**
@@ -184,9 +188,9 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 			{ src: 'class C {\n\t@:keep\n\t// zz\n}', needle: '// zz' },
 			{ src: 'class C {\n\tstatic\n\t// zz\n}', needle: '// zz' }
 		]) {
-			final once: String = HxWriteFixture.triviaWrite(spec.src, '{}');
+			final once: String = HxWriteFixture.triviaWrite(spec.src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 			Assert.equals(1, count(once, spec.needle), 'comment emitted once for <${spec.src}>');
-			final twice: String = HxWriteFixture.triviaWrite(once, '{}');
+			final twice: String = HxWriteFixture.triviaWrite(once, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 			Assert.equals(once, twice, 'second pass must not grow <${spec.src}>');
 		}
 	}

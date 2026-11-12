@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -17,13 +21,41 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCompareOperandBreakSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": ['
-		+ '{"conditions": [{"cond": "itemCount <= n", "value": 3}, {'
-		+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": '
-		+ '"totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": '
-		+ '"noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", '
-		+ '"location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", '
-		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.opBoolChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					],
+					mode: WrapMode.NoWrap
+				},
+				{
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					],
+					mode: WrapMode.NoWrap
+				},
+				{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					location: WrappingLocation.BeforeLast,
+					mode: WrapMode.FillLine
+				}
+			]
+		};
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();

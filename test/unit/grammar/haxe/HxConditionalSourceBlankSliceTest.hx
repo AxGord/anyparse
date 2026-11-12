@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -66,7 +67,7 @@ class HxConditionalSourceBlankSliceTest extends Test {
 	}
 
 	private inline function makeOpts(keepBlank: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.keepSourceBlankAcrossConditional = keepBlank;
 		opts.maxConsecutiveBlanks = -1;
 		return opts;

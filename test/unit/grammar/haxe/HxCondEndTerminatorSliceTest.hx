@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -17,8 +19,11 @@ using StringTools;
 @:nullSafety(Strict)
 final class HxCondEndTerminatorSliceTest extends Test {
 
-	private static final DEFAULT: String = '{}';
-	private static final REMOVE: String = '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "remove" } } }';
+	private static final DEFAULT: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	private static final REMOVE: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.dropSingleStmtBraces = true;
+		edited.singleStmtBraceSymmetry = true;
+	});
 
 	public function new(): Void {
 		super();

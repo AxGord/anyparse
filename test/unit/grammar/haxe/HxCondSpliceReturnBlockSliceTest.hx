@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.query.QueryNode;
@@ -34,19 +35,19 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 
 	/** Gluing the `#if` onto the `return` takes the whole region one level left with it. */
 	public function testBrokenSourceReindentsToTheWriterIndent(): Void {
-		Assert.equals(CANONICAL, HxWriteFixture.triviaWrite(BROKEN_SOURCE, '{}'));
+		Assert.equals(CANONICAL, HxWriteFixture.triviaWrite(BROKEN_SOURCE, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** And the canonical form is a fixed point — the re-indent is idempotent, not a per-pass shift. */
 	public function testCanonicalFormRoundTripsByteExact(): Void {
-		Assert.equals(CANONICAL, HxWriteFixture.triviaWrite(CANONICAL, '{}'));
+		Assert.equals(CANONICAL, HxWriteFixture.triviaWrite(CANONICAL, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** A deeper region keeps its own relative structure: the base is a common PREFIX, not a width. */
 	public function testRelativeIndentationInsideTheRegionSurvives(): Void {
 		final src: String = 'class M {\n\tstatic function f():Int {\n\t\treturn #if a\n\t\t\tg({\n\t\t\t\tx: 1\n\t\t\t});\n\t\t#else\n'
 			+ '\t\t\t0;\n\t\t#end\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/**
@@ -74,13 +75,13 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 	/** And the pair round-trips: no `;` invented after the `#end`, no statement moved. */
 	public function testRegionAndFollowingStatementRoundTripByteExact(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\treturn #if js 1; #else 2; #end\n\t\ttrace(3);\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** A `;` the source DID write after the `#end` survives as its own empty statement. */
 	public function testWrittenSemicolonAfterTheRegionSurvives(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\treturn #if js 1; #else 2; #end;\n\t\ttrace(3);\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** The member after the region is the container's own child, not a node inside the function above it. */
@@ -117,14 +118,14 @@ class HxCondSpliceReturnBlockSliceTest extends HxTestHelpers {
 	public function testMetaPrefixedRegionRoundTripsByteExact(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\t@SuppressWarnings(\'x\')\n\t\t#if js\n\t\ta = 1;\n\t\t#else\n'
 			+ '\t\ta = 2;\n\t\t#end\n\t\tb = 3;\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** REGRESSION GUARD: a BARE region in a case body still belongs to the case, not to a statement ctor. */
 	public function testBareRegionInCaseBodyIsUnclaimed(): Void {
 		final src: String = 'class C {\n\tfunction f(v:Int) {\n\t\tswitch v {\n\t\t\tcase 0:\n\t\t\t\t#if js\n\t\t\t\ta = 1;\n'
 			+ '\t\t\t\t#else\n\t\t\t\ta = 2;\n\t\t\t\t#end\n\t\t\tcase _:\n\t\t\t\tb = 3;\n\t\t}\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	/** The statements of the single function in `source`, parsed by the PLAIN pipeline. */

@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.SameLinePolicy;
+import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -33,20 +37,39 @@ import utest.Test;
 final class HxComprehensionIfElseBodySliceTest extends Test {
 
 	/** Project-shaped config with the knob ON and padded comprehension brackets (`whitespace.bracketConfig`). */
-	private static final ON: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140, "comprehensionCuddledOpen": true}, "whitespace": {"bracketConfig": {"comprehensionBrackets": {'
-		+ '"openingPolicy": "onlyAfter", "closingPolicy": "before"}}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
+	private static final ON: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.comprehensionCuddledOpen = true;
+		edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.expressionIfBody = BodyPolicy.Next;
+		edited.expressionElseBody = BodyPolicy.Next;
+		edited.comprehensionBracketsOpen = WhitespacePolicy.After;
+		edited.comprehensionBracketsClose = WhitespacePolicy.Before;
+	});
 
 	/** Same, with `comprehensionFor: same` — tight brackets, generic `arrayWrap` cascade. The cuddle must answer identically. */
-	private static final TIGHT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "same"}}';
+	private static final TIGHT_ON: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.comprehensionCuddledOpen = true;
+		edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.expressionIfBody = BodyPolicy.Next;
+		edited.expressionElseBody = BodyPolicy.Next;
+		edited.expressionForBody = BodyPolicy.Same;
+	});
 
 	/** Same as `ON`, with `comprehensionFor: fitLine` — the strict value, which places the BODY below the head. */
-	private static final FIT_ON: String = '{"indentation": {"character": "tab", "tabWidth": 4},'
-		+ ' "wrapping": {"maxLineLength": 140, "comprehensionCuddledOpen": true},'
-		+ ' "whitespace": {"bracketConfig": {"comprehensionBrackets": {"openingPolicy": "onlyAfter", "closingPolicy": "before"}}},'
-		+ ' "sameLine": {"ifBody": "fitLine", "expressionIf": "next", "comprehensionFor": "fitLine"}}';
+	private static final FIT_ON: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.comprehensionCuddledOpen = true;
+		edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.expressionIfBody = BodyPolicy.Next;
+		edited.expressionElseBody = BodyPolicy.Next;
+		edited.comprehensionBracketsOpen = WhitespacePolicy.After;
+		edited.comprehensionBracketsClose = WhitespacePolicy.Before;
+	});
 
 	/** One comprehension whose body is an if/else, written flat on one source line. */
 	private static final IF_ELSE_FLAT: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (elementValue in '

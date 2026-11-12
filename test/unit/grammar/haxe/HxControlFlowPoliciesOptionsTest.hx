@@ -2,6 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -84,7 +85,7 @@ class HxControlFlowPoliciesOptionsTest extends Test {
 	public function testIfPolicyUnaffectedByControlFlowKnobs(): Void {
 		// `if` ctor carries `@:fmt(ifPolicy)` only — flipping forPolicy /
 		// whilePolicy / switchPolicy must not collapse the if gap.
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.forPolicy = WhitespacePolicy.None;
 		opts.whilePolicy = WhitespacePolicy.None;
 		opts.switchPolicy = WhitespacePolicy.None;
@@ -121,7 +122,7 @@ class HxControlFlowPoliciesOptionsTest extends Test {
 
 	private function writeBodyStmt(body: String, mutate: HxModuleWriteOptions -> Void): String {
 		final src: String = 'class C { static function m() { $body } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		mutate(opts);
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

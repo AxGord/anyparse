@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -33,10 +37,21 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondSpliceChainWrapSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},'
-		+ '"wrapping":{"maxLineLength":140,"opAddSubChain":{"defaultWrap":"noWrap",'
-		+ '"rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{'
-		+ '"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.opAddSubChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					location: WrappingLocation.BeforeLast,
+					mode: WrapMode.FillLine
+				}
+			]
+		};
+	});
 	private static final CANONICAL: String = 'class C {\n\tpublic function render():String {\n'
 		+ '\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + '
 		+ '"nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl"\n\t\t\t+ #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " '

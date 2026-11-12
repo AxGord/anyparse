@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -15,9 +19,17 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondWrapFitLineSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {'
-		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
-		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();

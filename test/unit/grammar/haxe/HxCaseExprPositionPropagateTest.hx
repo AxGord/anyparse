@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -45,7 +46,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 	public function testStatementCaseBodySameFlattens(): Void {
 		// caseBody=Same overrides the break — top-level case flattens.
 		final src: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 1: foo();') != -1, 'caseBody=Same must flatten at statement-position: <$out>');
@@ -59,7 +60,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		// line). caseBody intentionally Same to confirm it is IGNORED
 		// at expression-position.
 		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); case 3: bar(); } } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Next;
 		opts.expressionCase = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -72,7 +73,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		// expressionCase=Next at expression-position → inner cases
 		// break despite same-line source.
 		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); } } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('case 2: foo();') == -1, 'expressionCase=Next must break inner case: <$out>');
@@ -86,7 +87,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		// caseBody=Same is dead-letter for the inner case. Verifies
 		// the dispatch is exclusive (not OR semantic).
 		final src: String = 'class M { function f():Void { switch (x) { case 1: switch (y) { case 2: foo(); } } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Same;
 		opts.expressionCase = BodyPolicy.Next;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -104,7 +105,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 		// descendants — a case nested inside a default body picks
 		// expressionCase, not caseBody.
 		final src: String = 'class M { function f():Void { switch (x) { default: switch (y) { case 2: foo(); } } } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.caseBody = BodyPolicy.Next;
 		opts.expressionCase = BodyPolicy.Same;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
@@ -112,7 +113,7 @@ final class HxCaseExprPositionPropagateTest extends Test {
 	}
 
 	private inline function writeWithDefaults(src: String): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

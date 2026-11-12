@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.format.WhitespacePolicy;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -24,8 +26,11 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxComprehensionFitLineNoBreakTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.comprehensionBracketsOpen = WhitespacePolicy.After;
+		edited.comprehensionBracketsClose = WhitespacePolicy.Before;
+	});
 
 	public function new(): Void {
 		super();

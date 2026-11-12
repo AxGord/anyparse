@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -22,15 +26,55 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxChainOuterOperatorWrapSliceTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140,'
-		+ ' "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
-		+ '{"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]},'
-		+ ' "expressionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": ['
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]},'
-		+ ' "opAddSubChain": {"defaultWrap": "noWrap", "rules": ['
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},'
-		+ '{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+		edited.opAddSubChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					location: WrappingLocation.BeforeLast,
+					mode: WrapMode.FillLine
+				}
+			]
+		};
+		edited.expressionWrappingWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 	private static final HEAD: String = 'class Sample {\n\tprivate function query():Void {\n\t\ttry {\n';
 	private static final TAIL: String = "\t\t} catch (exception:Exception) {\n\t\t\tlog('boom');\n\t\t}\n\t}\n}";
 	private static final TERNARY: String = "(bucket ? '1 AND bucket_entry_id = $entryId' : '0 AND entry_id = $entryId')";

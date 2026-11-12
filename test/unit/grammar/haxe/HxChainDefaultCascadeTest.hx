@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -13,9 +16,16 @@ import utest.Test;
 final class HxChainDefaultCascadeTest extends Test {
 
 	/** Tabs, 140 columns, and a condition wrap that opens the `(` of a condition that does not fit. */
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, '
-		+ '"conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
-		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 
 	private static final FITS: String = 'class C {\n\tfunction a(c:Int):Bool {\n\t\treturn (c >= \'a\'.code && c <= \'z\'.code) '
 		+ '|| (c >= \'A\'.code && c <= \'Z\'.code) || (c >= \'0\'.code && c <= \'9\'.code) || c == \'_\'.code;\n\t}\n}';
@@ -116,15 +126,31 @@ final class HxChainDefaultCascadeTest extends Test {
 	@:killer('M-CHAIN-FORCE-KEEPS-OWN-RULES')
 	public function testInterpolatedChainStaysOnOneLine(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\ttrace(\'point $${topRightPointX - 7.5},$$topRightPointY\');\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{"wrapping": {"opAddSubChain": {"defaultWrap": "onePerLine", "rules": []}}}'));
+		Assert.equals(
+			src,
+			HxWriteFixture.triviaWrite(
+				src,
+				HxWriteOptionsKit.forkWith(
+					edited -> edited.opAddSubChainWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.OnePerLine, rules: [] }
+				)
+			)
+		);
 	}
 
 	/** An expression paren inside a condition lays its chain out by `expressionWrapping`, not by the chain cascade. */
 	@:pin('control')
 	@:killer('M-CHAIN-FORCE-KEEPS-OWN-RULES')
 	public function testExpressionParenInAConditionFollowsExpressionWrapping(): Void {
-		final cfg: String = '{"wrapping": {"maxLineLength": 80, "expressionWrapping": {"defaultWrap": "noWrap", "rules": [{"conditions": '
-			+ '[{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLineWithLeadingBreak"}]}}}';
+		final cfg: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.lineWidth = 80;
+			edited.expressionWrappingWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.NoWrap,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.FillLineWithLeadingBreak }
+				]
+			};
+		});
 		final src: String = 'class Main {\n\tstatic function main() {\n\t\tif ((veryLongExpressionAlpha + veryLongExpressionBravo + '
 			+ 'veryLongExpressionCharlie + veryLongExpressionDelta) > threshold) {\n\t\t\tdoSomething();\n\t\t}\n\t}\n}';
 		final opened: String = 'class Main {\n\tstatic function main() {\n\t\tif ((\n'

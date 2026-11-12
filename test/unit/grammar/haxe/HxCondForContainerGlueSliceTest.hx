@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -22,9 +26,18 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxCondForContainerGlueSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {'
-		+ '"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": '
-		+ '"exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"forBody": "fitLine"}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.forBody = BodyPolicy.FitLine;
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+		edited.comprehensionObjectLitGlue = true;
+	});
 	private static final GLUED: String = 'class C {\n\tfunction f() {\n\t\tfor (item in [\n\t\t\tfirstLongItemNameValue,\n'
 		+ '\t\t\tsecondLongItemNameValue,\n\t\t\tthirdLongItemNameValue,\n\t\t\tfourthLongItemNameV\n\t\t]) {\n'
 		+ '\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
@@ -52,18 +65,48 @@ final class HxCondForContainerGlueSliceTest extends Test {
 	 * (a separate, pre-existing writer trait), so only flat -> opened is asserted.
 	 */
 	public function testChainContainerCondOpensNotGlued(): Void {
-		final config: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": ['
-			+ '{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-			+ '{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
-			+ '"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, '
-			+ '"conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": ['
-			+ '{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
+		final config: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.lineWidth = 140;
+			edited.ifBody = BodyPolicy.FitLine;
+			edited.opBoolChainWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.NoWrap,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+						],
+						mode: WrapMode.NoWrap
+					},
+					{
+						conditions: [
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+							{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+						],
+						mode: WrapMode.NoWrap
+					},
+					{
+						conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+						location: WrappingLocation.BeforeLast,
+						mode: WrapMode.FillLine
+					}
+				]
+			};
+			edited.conditionWrap = {
+				defaultAdditionalIndent: 0,
+				defaultMode: WrapMode.FillLineWithLeadingBreak,
+				rules: [
+					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+				]
+			};
+		});
 		final flat: String = 'class C {\n\tfunction f() {\n\t\tif (aa == null || bb == null || [alphaItemNameHere, betaItemNameHere, '
 			+ 'gammaItemNameHere, deltaItemNameHere, epsilonItemName].indexOf(k) < 0) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
 		final opened: String = 'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taa == null || bb == null || [\n'
 			+ '\t\t\t\talphaItemNameHere,\n\t\t\t\tbetaItemNameHere,\n\t\t\t\tgammaItemNameHere,\n\t\t\t\tdeltaItemNameHere,'
 			+ '\n\t\t\t\tepsilonItemName\n\t\t\t].indexOf(k) < 0\n\t\t) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(config);
+		final opts: HxModuleWriteOptions = config;
 		opts.finalNewline = false;
 		Assert.equals(opened, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(flat), opts));
 	}

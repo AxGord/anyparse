@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondSpliceOpExpr;
@@ -149,8 +150,13 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 		// reach the output, so this spelling and the canonical one below both
 		// land on the same bytes. Under the default config the whole chain
 		// fits on one line, so that is where it goes.
-		Assert.equals(canonical, HxWriteFixture.triviaWrite(src, '{}'), 'NodeReport.toString reflows');
-		Assert.equals(canonical, HxWriteFixture.triviaWrite(canonical, '{}'), 'NodeReport.toString canonical is a fixed point');
+		Assert.equals(
+			canonical, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')), 'NodeReport.toString reflows'
+		);
+		Assert.equals(
+			canonical, HxWriteFixture.triviaWrite(canonical, HaxeFormatConfigLoader.loadHxFormatJson('{}')),
+			'NodeReport.toString canonical is a fixed point'
+		);
 	}
 
 	/**
@@ -350,7 +356,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	 * `if` body would turn a layout preference into a slice failure.
 	 */
 	private function triviaEquals(source: String, label: String): Void {
-		Assert.equals(source, HxWriteFixture.triviaWrite(source, '{}'), label);
+		Assert.equals(source, HxWriteFixture.triviaWrite(source, HaxeFormatConfigLoader.loadHxFormatJson('{}')), label);
 	}
 
 }

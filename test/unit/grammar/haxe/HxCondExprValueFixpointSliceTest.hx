@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -28,7 +29,7 @@ using StringTools;
 @:nullSafety(Strict)
 final class HxCondExprValueFixpointSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.lineWidth = 140);
 
 	/** A client getter merged by `cond-assign-merge --fix`, verbatim. */
 	private static final FLAT_RETURN: String = 'class Min {\n\tstatic function retArm():RegisteredDeviceTypeId {\n'

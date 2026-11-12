@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.format.SiblingPolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -24,7 +25,10 @@ final class HxCondBodyElementPerLineTest extends Test {
 	public function testStatementBodiesPutEachStatementOnItsLine(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t#if js\n\t\ta();\n\t\tb();\n\t\t#else\n\t\tc();\n\t\td();\n\t\t#end\n\t}\n}',
-			HxWriteFixture.triviaWrite('class C {\n\tfunction f() {\n\t\t#if js a(); b(); #else c(); d(); #end\n\t}\n}', '{}')
+			HxWriteFixture.triviaWrite(
+				'class C {\n\tfunction f() {\n\t\t#if js a(); b(); #else c(); d(); #end\n\t}\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
+			)
 		);
 	}
 
@@ -33,19 +37,26 @@ final class HxCondBodyElementPerLineTest extends Test {
 	public function testMemberAndEnumBodiesPutEachElementOnItsLine(): Void {
 		Assert.equals(
 			'class C {\n\t#if js\n\tvar x:Int;\n\tvar y:Int;\n\t#end\n}\n\nenum E {\n\t#if js\n\tA;\n\tB;\n\t#end\n}',
-			HxWriteFixture.triviaWrite('class C {\n\t#if js var x:Int; var y:Int; #end\n}\n\nenum E {\n\t#if js A; B; #end\n}', '{}')
+			HxWriteFixture.triviaWrite(
+				'class C {\n\t#if js var x:Int; var y:Int; #end\n}\n\nenum E {\n\t#if js A; B; #end\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
+			)
 		);
 	}
 
 	@:pin('control')
 	@:killer('M-COND-BODY-SOURCE-SEP')
 	public function testDeclarationAndCaseBodiesPutEachElementOnItsLine(): Void {
-		Assert.equals('#if js\nimport a.B;\nimport a.C;\n#end', HxWriteFixture.triviaWrite('#if js import a.B; import a.C; #end', '{}'));
+		Assert.equals(
+			'#if js\nimport a.B;\nimport a.C;\n#end',
+			HxWriteFixture.triviaWrite('#if js import a.B; import a.C; #end', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
+		);
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\tswitch (v) {\n\t\t\t#if js\n\t\t\tcase 1:\n\t\t\t\ta();\n\t\t\tcase 2:\n\t\t\t\tb();\n'
 			+ '\t\t\t#end\n\t\t}\n\t}\n}',
 			HxWriteFixture.triviaWrite(
-				'class C {\n\tfunction f() {\n\t\tswitch (v) {\n\t\t\t#if js case 1: a(); case 2: b(); #end\n\t\t}\n\t}\n}', '{}'
+				'class C {\n\tfunction f() {\n\t\tswitch (v) {\n\t\t\t#if js case 1: a(); case 2: b(); #end\n\t\t}\n\t}\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
 			)
 		);
 	}
@@ -55,14 +66,16 @@ final class HxCondBodyElementPerLineTest extends Test {
 	public function testABodyOfSeveralOpensAndClosesOnItsOwnLines(): Void {
 		Assert.equals(
 			'class C {\n\t#if js\n\tvar x:Int;\n\tvar y:Int;\n\t#end\n}',
-			HxWriteFixture.triviaWrite('class C {\n\t#if js var x:Int;\n\tvar y:Int; #end\n}', '{}')
+			HxWriteFixture.triviaWrite(
+				'class C {\n\t#if js var x:Int;\n\tvar y:Int; #end\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}')
+			)
 		);
 	}
 
 	@:pin('guard')
 	public function testAOneElementBodyKeepsItsLine(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\t#if js a(); #end\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	@:pin('control')
@@ -74,7 +87,7 @@ final class HxCondBodyElementPerLineTest extends Test {
 			HxWriteFixture.triviaWrite(
 				'class C {\n\t#if a var r:Int; #else var s:Int; var t:Int; #end\n\n\tfunction f() {\n'
 				+ '\t\t#if a foo(); #elseif b bar(); baz(); #else qux(); #end\n\t}\n}',
-				'{}'
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
 			)
 		);
 	}
@@ -84,13 +97,16 @@ final class HxCondBodyElementPerLineTest extends Test {
 	public function testABranchBrokenByShapeMovesItsSiblings(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t#if a\n\t\tfoo();\n\t\t#else\n\t\tbar();\n\t\tbaz();\n\t\t#end\n\t}\n}',
-			HxWriteFixture.triviaWrite('class C {\n\tfunction f() {\n\t\t#if a foo(); #else bar(); baz(); #end\n\t}\n}', '{}')
+			HxWriteFixture.triviaWrite(
+				'class C {\n\tfunction f() {\n\t\t#if a foo(); #else bar(); baz(); #end\n\t}\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
+			)
 		);
 	}
 
 	@:pin('guard')
 	public function testOffDecidesEachBranchAlone(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.conditionalSiblings = SiblingPolicy.Off;
 		Assert.equals(
 			'class C {\n\t#if a var r:Int; #else\n\tvar s:Int;\n\tvar t:Int;\n\t#end\n}\n',
@@ -104,7 +120,7 @@ final class HxCondBodyElementPerLineTest extends Test {
 	@:killer('M-SEMI-ELSEIF-PER-LINE')
 	public function testAValueRegionElseifKeepsItsLine(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tx = #if a false; #elseif b log(); true; #else true; #end\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 	@:pin('guard')
@@ -113,19 +129,23 @@ final class HxCondBodyElementPerLineTest extends Test {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t#if a\n\t\t// c\n\t\tfoo();\n$broken',
 			HxWriteFixture.triviaWrite(
-				'class C {\n\tfunction f() {\n\t\t#if a\n\t\t// c\n\t\tfoo();\n\t\t#else bar(); baz(); #end\n\t}\n}', '{}'
+				'class C {\n\tfunction f() {\n\t\t#if a\n\t\t// c\n\t\tfoo();\n\t\t#else bar(); baz(); #end\n\t}\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
 			)
 		);
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t#if a\n\t\t/* c */\n\t\tfoo();\n$broken',
-			HxWriteFixture.triviaWrite('class C {\n\tfunction f() {\n\t\t#if a /* c */ foo(); #else bar(); baz(); #end\n\t}\n}', '{}')
+			HxWriteFixture.triviaWrite(
+				'class C {\n\tfunction f() {\n\t\t#if a /* c */ foo(); #else bar(); baz(); #end\n\t}\n}',
+				HaxeFormatConfigLoader.loadHxFormatJson('{}')
+			)
 		);
 	}
 
 	@:pin('guard')
 	public function testATrailingLineCommentDoesNotVote(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\t#if a foo(); // t\n\t\t#else bar(); #end\n\t}\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, '{}'));
+		Assert.equals(src, HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 }
