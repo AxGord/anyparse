@@ -211,7 +211,7 @@ class HxRightCurlyOptionsTest extends Test {
 		// `_inAnonFnBody=false`, so `anonFunctionRightCurly=Inline` must
 		// NOT glue the function-decl close brace.
 		final src: String = 'class Main {\n\tstatic function f() {\n\t\ttrace(1);\n\t}\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> HxListsKeepSource.keep(edited));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		opts.anonFunctionRightCurly = RightCurlyPlacement.Inline;
 		// Leave blockRightCurly + anonTypeRightCurly at default Same so
 		// neither BlockStmt close nor any other shape is glued.
@@ -240,7 +240,7 @@ class HxRightCurlyOptionsTest extends Test {
 		// type close stays on its own line — the block knob does NOT
 		// propagate to `HxType.Anon` (different Star, different meta).
 		final src: String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> HxListsKeepSource.keep(edited));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		opts.blockRightCurly = RightCurlyPlacement.Inline;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('y:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
@@ -268,7 +268,7 @@ class HxRightCurlyOptionsTest extends Test {
 		// NOT propagate to `HxObjectLit.fields` (different Star, different
 		// meta).
 		final src: String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> HxListsKeepSource.keep(edited));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		opts.blockRightCurly = RightCurlyPlacement.Inline;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('b: 2\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
@@ -307,7 +307,7 @@ class HxRightCurlyOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(rc: RightCurlyPlacement): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> HxListsKeepSource.keep(edited));
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		// Mirror the loader's `lineEnds.rightCurly` cascade — set every
 		// per-construct RightCurlyPlacement knob in lockstep so byte-shape
 		// tests can exercise the block, anon-fn, anon-type, or object-
