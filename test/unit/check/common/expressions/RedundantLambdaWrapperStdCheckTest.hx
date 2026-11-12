@@ -99,14 +99,17 @@ class RedundantLambdaWrapperStdCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
-	/** A same-named type in another package that lacks the member still withholds the std proof: the table is keyed by simple name. */
-	public function testSameNameInAnotherPackageWithoutTheMemberIsNotStd(): Void {
+	/**
+	 * A same-named type in another package the host does not import leaves the name the std one:
+	 * the index binds it, whichever files were linted.
+	 */
+	public function testSameNameInAnotherPackageNotVisibleIsStillStd(): Void {
 		final other: String = 'package other;\n\nclass Reflect {\n\tpublic static function unrelated(a:Int):Int return a;\n}\n';
 		final src: String = body('out.sort((a, b) -> Reflect.compare(a, b));');
 		final withOther: Array<{ file: String, source: String }> = files(src).concat([{ file: 'other/Reflect.hx', source: other }]);
 		Assert.equals(
-			0, CheckFixture.violationsIn(new RedundantLambdaWrapper(), withOther, StdScope.plugin(withOther)).length,
-			'the project declares the name, so no std proof'
+			1, CheckFixture.violationsIn(new RedundantLambdaWrapper(), withOther, StdScope.plugin(withOther)).length,
+			'an unimported declaration of the name in another package leaves it the std one'
 		);
 		Assert.equals(1, stdFindings(src).length, 'without the other declaration the same source fires');
 	}

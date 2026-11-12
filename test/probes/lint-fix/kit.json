@@ -2192,6 +2192,107 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "D-RLW-FINAL-DECLARATION-BOTH-FILES",
+			"note": "a forwarding lambda over a `final class` receiver and its static callee is reported with both files linted",
+			"argv": [
+				"hxq",
+				"lint",
+				"H.hx",
+				"K.hx",
+				"--rule",
+				"redundant-lambda-wrapper",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tnew H().f([1, 2]);\n\t}\n}\n",
+				"H.hx": "class H {\n\tpublic final k:K;\n\tpublic function new() {\n\t\tk = new K();\n\t}\n\tpublic function f(xs:Array<Int>):Void {\n\t\tSys.println(xs.map(x -> K.keep(x)));\n\t\tSys.println(xs.map(x -> k.abs(x)));\n\t}\n}\n",
+				"K.hx": "final class K {\n\tpublic function new() {}\n\tpublic static function keep(x:Int):Int return x;\n\tpublic function abs(x:Int):Int return x;\n}\n",
+				"apq.json": "{ \"resolutionRoots\": [\".\"] }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "0c2218957e5226c1",
+				"err": "6c26d067b9a3026d",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D-RLW-STATIC-CALLEE-ONE-FILE",
+			"note": "the same lambdas are reported with only the host file linted: the declaring file answers through the resolution index",
+			"argv": [
+				"hxq",
+				"lint",
+				"H.hx",
+				"--rule",
+				"redundant-lambda-wrapper",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tnew H().f([1, 2]);\n\t}\n}\n",
+				"H.hx": "class H {\n\tpublic final k:K;\n\tpublic function new() {\n\t\tk = new K();\n\t}\n\tpublic function f(xs:Array<Int>):Void {\n\t\tSys.println(xs.map(x -> K.keep(x)));\n\t\tSys.println(xs.map(x -> k.abs(x)));\n\t}\n}\n",
+				"K.hx": "class K {\n\tpublic function new() {}\n\tpublic static function keep(x:Int):Int return x;\n\tpublic function abs(x:Int):Int return x;\n}\n",
+				"apq.json": "{ \"resolutionRoots\": [\".\"] }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "0c2218957e5226c1",
+				"err": "d3b5059079f0221f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D-RLW-STD-NAME-SHADOWED-BY-UNIMPORTED-TYPE",
+			"note": "a type of the std name declared in a package the host does not import leaves the callee the std one: the finding is the std arm with or without that file linted",
+			"argv": [
+				"hxq",
+				"lint",
+				"H.hx",
+				"mine/Path.hx",
+				"--rule",
+				"redundant-lambda-wrapper",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tnew H().f([[\"a\"], [\"b\"]]);\n\t}\n}\n",
+				"H.hx": "import haxe.io.Path;\n\nclass H {\n\tpublic function f(xs:Array<Array<String>>):Void {\n\t\tSys.println(xs.map(x -> Path.join(x)));\n\t}\n}\n",
+				"mine/Path.hx": "package mine;\n\nclass Path {\n\tpublic static function join(x:Array<String>):String return \"\";\n}\n",
+				"apq.json": "{ \"resolutionRoots\": [\".\"] }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "9ebb1230d4a9ebd7",
+				"err": "508980b5d1ec5208",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }

@@ -405,8 +405,8 @@
 			"name": "M-RLW-INTERFACE-RECEIVER-REDUCED",
 			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
 			"method": "hostMembers",
-			"find": "ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : ctx.types[decl.type.name]",
-			"replace": "ctx.types[decl.type.name]",
+			"find": "ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : declaredMembers(decl, ctx)",
+			"replace": "declaredMembers(decl, ctx)",
 			"note": "an interface receiver reads as its declaration's members, so `m -> iface.m(m)` is reduced to a method value that hxcpp lowers to a dynamic field read"
 		},
 		{
@@ -432,6 +432,36 @@
 			"find": "container.children.slice(position + 1).concat(outer)",
 			"replace": "container.children.slice(position + 1)",
 			"note": "the statements after a `#if` region wrapping the block are not looked at, so a read beyond the region is captured by the unwrapped local"
+		},
+		{
+			"name": "M-RLW-HOST-MEMBERS-LINTED-ONLY",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "declaredMembers",
+			"force": "null",
+			"note": "a receiver type declared in a file the lint was not handed offers no members, so its forwarding lambdas stay"
+		},
+		{
+			"name": "M-RLW-HOST-NODE-STARTS-AT-MODIFIER",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "hostNode",
+			"find": "span.from < type.span.to",
+			"replace": "span.from <= type.span.from",
+			"note": "the host node must start at or before the index span, so a declaration written with a leading `final` or metadata is never found and its receivers stay lambdas"
+		},
+		{
+			"name": "M-RLW-STATIC-HOST-LINTED-ONLY",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "declaredStaticHost",
+			"force": "null",
+			"note": "a `Type.member` callee whose type is declared in a file the lint was not handed resolves nothing, so its forwarding lambdas stay"
+		},
+		{
+			"name": "M-RLW-STD-GUARD-LINTED-ONLY",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "stdStatic",
+			"find": "|| projectDeclares(callee, typeName, ctx)",
+			"replace": "|| ctx.types.exists(typeName)",
+			"note": "the std arm refuses a name any linted file declares, even one the host cannot see, so the finding depends on which files were handed"
 		}
 	]
 }

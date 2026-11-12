@@ -13,6 +13,7 @@ import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StableChain;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
@@ -117,12 +118,11 @@ import anyparse.query.UnchangedLocal;
  *
  * ## Scope sensitivity — read this before believing a zero count
  *
- * The callee table is built from the files the check is HANDED, which is the report scope.
- * Linting one file therefore resolves almost nothing and reports almost nothing; the same file
- * inside a project-wide lint resolves its `Type.member` callees and reports them. That is the
- * safe direction (no evidence → no finding) but it makes a narrow run useless as a census.
+ * The members of a project-declared type, behind a `Type.member` callee or an instance receiver alike, are read off the
+ * declaration the index resolves, so the finding is the same whichever files the lint is handed; with no resolution
+ * scope a `Type.member` callee falls back to the types the handed files declare.
  *
- * That holds for the callees the project declares. A STD callee reads the resolution index instead, which holds the
+ * A STD callee reads the resolution index too, which holds the
  * std and the whole declared project, so it needs a COMPLETE project (every declared `resolutionRoots` entry matched,
  * `RefactorSupport.projectIsComplete`): one file linted inside such a project reports its std findings, and a project
  * declaring no roots reports none.
@@ -158,21 +158,28 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		// A narrowed local never reaches a non-nullable field of an anonymous structure literal; re-bind first.
 		final seams: Seams = resolved;
 		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = CheckScan.parseAll(plugin, files);
+
 		final types: Map<String, Null<Map<String, Signature>>> = collectTypes(parsed, seams);
 		final typeInfo: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final shape: RefShape = plugin.refShape();
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
+		final trees: Map<String, QueryNode> = [for (e in parsed) e.file => e.tree];
+		final hosted: Map<String, Null<Map<String, Signature>>> = [];
 		final projectComplete: Bool = RefactorSupport.projectIsComplete(plugin);
 		final violations: Array<Violation> = [];
 		final spanInfo: Null<SpanTypeInfoProvider> = plugin is SpanTypeInfoProvider ? cast plugin : null;
 		for (entry in parsed) {
 			final ctx: Ctx = {
 				file: entry.file,
+				types: types,
+				plugin: plugin,
+				trees: trees,
+				hosted: hosted,
 				index: index,
 				projectComplete: projectComplete,
 				seams: seams,
 				shape: shape,
-				types: types,
+
 				scope: fileScope(entry.tree, seams),
 				tree: entry.tree,
 				typeSources: typeInfo?.declaredTypeSources(entry.source),
@@ -429,7 +436,8 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	 */
 	private static function staticSignature(callee: QueryNode, name: String, ctx: Ctx): Null<Signature> {
 		final typeName: Null<String> = staticReceiver(callee, ctx);
-		final members: Null<Map<String, Signature>> = typeName == null ? null : ctx.types[typeName];
+		// An index, when present, is the final answer; the linted-files table serves only a run with no resolution scope.
+		final members: Null<Map<String, Signature>> = typeName == null ? null : declaredStaticHost(callee, typeName, ctx);
 		final member: Null<Signature> = members == null ? null : members[name];
 		return member != null && member.isStatic ? member : null;
 	}
@@ -485,7 +493,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		if (spelling == null) return null;
 		final written: String = boundOf(spelling, at.from, file, ctx) ?? spelling;
 		return switch index.typing.resolve(file, written, at.from) {
-			case Declared(decl): ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : ctx.types[decl.type.name];
+			case Declared(decl): ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : declaredMembers(decl, ctx);
 			case Unknown: null;
 		};
 	}
@@ -553,7 +561,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function stdStatic(callee: QueryNode, name: String, arity: Int, ctx: Ctx): Bool {
 		final typeName: Null<String> = staticReceiver(callee, ctx);
 		final index: Null<SymbolIndex> = ctx.index;
-		if (typeName == null || index == null || !ctx.projectComplete || ctx.types.exists(typeName)) return false;
+		if (typeName == null || index == null || !ctx.projectComplete || projectDeclares(callee, typeName, ctx)) return false;
 		final std: Null<ResolvedType> = index.stdDeclarationOf(typeName, ctx.file);
 		if (std == null) return false;
 		final named: Array<MemberInfo> = std.type.members.filter(m -> m.name == name);
@@ -569,21 +577,6 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 			&& !m.paramRest
 			&& m.paramSkippableFrom == m.paramTypeSources.length
 			&& m.paramTypeSources.length == arity;
-	}
-
-	/** Every type simple name declared across `parsed`, mapped to its function members — null when the name is declared more than once. */
-	private static function collectTypes(
-		parsed: Array<{ file: String, source: String, tree: QueryNode }>, seams: Seams
-	): Map<String, Null<Map<String, Signature>>> {
-		final out: Map<String, Null<Map<String, Signature>>> = [];
-		for (entry in parsed) collectTypeDecls(entry.tree, out, seams);
-		return out;
-	}
-
-	private static function collectTypeDecls(node: QueryNode, out: Map<String, Null<Map<String, Signature>>>, seams: Seams): Void {
-		final name: Null<String> = node.name;
-		if (seams.typeHostKinds.contains(node.kind) && name != null) out[name] = out.exists(name) ? null : membersOf(node, seams);
-		for (c in node.children) collectTypeDecls(c, out, seams);
 	}
 
 	/** One type's function members by name. A name declared twice (two arms of a conditional region) is kept but marked unsafe. */
@@ -794,6 +787,93 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		return out;
 	}
 
+	/**
+	 * The function members of the one declaration `decl`, read off its own file's tree — the run's when the file is linted, the
+	 * index's source otherwise — so the answer never depends on which files the lint was handed.
+	 */
+	private static function declaredMembers(decl: ResolvedType, ctx: Ctx): Null<Map<String, Signature>> {
+		final file: String = decl.file.file;
+		if (StdResolver.isStdFile(file) || ctx.index?.isThirdParty(file) == true) return null;
+		final key: String = '$file#${decl.type.span.from}';
+		if (ctx.hosted.exists(key)) return ctx.hosted[key];
+		var tree: Null<QueryNode> = ctx.trees[file];
+		final source: Null<String> = ctx.index?.sourceOf(file);
+		if (tree == null && source != null) {
+			tree = CheckScan.parseAll(ctx.plugin, [{ file: file, source: source }])[0]?.tree;
+			if (tree != null) ctx.trees[file] = tree;
+		}
+		final host: Null<QueryNode> = tree == null ? null : hostNode(tree, decl.type, ctx.seams);
+		final members: Null<Map<String, Signature>> = host == null ? null : membersOf(host, ctx.seams);
+		ctx.hosted[key] = members;
+		return members;
+	}
+
+	private static function hostNode(node: QueryNode, type: TypeDeclInfo, seams: Seams): Null<QueryNode> {
+		final span: Null<Span> = node.span;
+		if (
+			seams.typeHostKinds.contains(node.kind)
+			&& node.name == type.name
+			&& span != null
+			&& span.from < type.span.to
+			&& type.span.from < span.to
+		)
+			return node;
+		for (c in node.children) {
+			final found: Null<QueryNode> = hostNode(c, type, seams);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/**
+	 * The members of the one declaration the simple type name of a `Type.member` callee denotes from this file, read through the
+	 * index like an instance receiver's — null when the name is ambiguous, unresolved, or a std / third-party declaration.
+	 */
+	private static function declaredStaticHost(callee: QueryNode, typeName: String, ctx: Ctx): Null<Map<String, Signature>> {
+		if (ctx.index == null) return ctx.types[typeName];
+		final decl: Null<ResolvedType> = staticHostDeclaration(callee, typeName, ctx);
+		return decl == null ? null : declaredMembers(decl, ctx);
+	}
+
+	/** Every type simple name declared across `parsed`, mapped to its function members — null when the name is declared more than once. */
+	private static function collectTypes(
+		parsed: Array<{ file: String, source: String, tree: QueryNode }>, seams: Seams
+	): Map<String, Null<Map<String, Signature>>> {
+		final out: Map<String, Null<Map<String, Signature>>> = [];
+		for (entry in parsed) collectTypeDecls(entry.tree, out, seams);
+		return out;
+	}
+
+	private static function collectTypeDecls(node: QueryNode, out: Map<String, Null<Map<String, Signature>>>, seams: Seams): Void {
+		final name: Null<String> = node.name;
+		if (seams.typeHostKinds.contains(node.kind) && name != null) out[name] = out.exists(name) ? null : membersOf(node, seams);
+		for (c in node.children) collectTypeDecls(c, out, seams);
+	}
+
+	/**
+	 * The one declaration the simple type name of a `Type.member` callee denotes from this file;
+	 * null with no index, or when the name is ambiguous or unresolved.
+	 */
+	private static function staticHostDeclaration(callee: QueryNode, typeName: String, ctx: Ctx): Null<ResolvedType> {
+		final index: Null<SymbolIndex> = ctx.index;
+		final file: Null<FileInfo> = index?.fileInfo(ctx.file);
+		final from: Null<Int> = callee.span?.from;
+		if (index == null || file == null || from == null) return null;
+		return switch index.typing.resolve(file, typeName, from) {
+			case Declared(decl): decl;
+			case Unknown: null;
+		};
+	}
+
+	/**
+	 * Whether the index binds a `Type.member` callee's type name to a declaration outside the std,
+	 * that is a project type shadowing the std one.
+	 */
+	private static function projectDeclares(callee: QueryNode, typeName: String, ctx: Ctx): Bool {
+		final decl: Null<ResolvedType> = staticHostDeclaration(callee, typeName, ctx);
+		return decl != null && !StdResolver.isStdFile(decl.file.file);
+	}
+
 }
 
 /** The lambda's forwarded callee plus the parameter count it forwards — `forwarding`'s structural verdict. */
@@ -835,6 +915,13 @@ private typedef FileScope = {
 private typedef Ctx = {
 
 	final file: String;
+	final plugin: GrammarPlugin;
+
+	/** Every parsed file by path, the linted ones first and each file the index adds on demand; run-scoped. */
+	final trees: Map<String, QueryNode>;
+
+	/** Members of each resolved declaration, by file and offset; run-scoped. */
+	final hosted: Map<String, Null<Map<String, Signature>>>;
 
 	/** The resolution-scope index, or null on a bare plugin — a std callee is then never proven. */
 	final index: Null<SymbolIndex>;
@@ -843,9 +930,14 @@ private typedef Ctx = {
 	final projectComplete: Bool;
 	final seams: Seams;
 	final shape: RefShape;
-	final types: Map<String, Null<Map<String, Signature>>>;
 	final scope: FileScope;
 	final tree: QueryNode;
+
+	/**
+	 * The function members of each type name the LINTED files declare (null when declared twice): the fallback for a
+	 * `Type.member` name no index resolves, and the std arm's "declared in scope" guard.
+	 */
+	final types: Map<String, Null<Map<String, Signature>>>;
 
 	/** Verbatim `:Type` annotations by binding-span start, or null when the grammar exposes none. */
 	final typeSources: Null<Map<Int, String>>;
