@@ -963,7 +963,7 @@
 			"type": "anyparse.grammar.haxe.HaxeFormat",
 			"method": "defaultObjectLiteralWrap",
 			"find": "defaultMode: WrapMode.Ignore",
-			"replace": "defaultMode: WrapMode.NoWrap",
+			"replace": "defaultMode: WrapMode.OnePerLine",
 			"note": "the object-literal default stops being Ignore, so a source break keeps a short literal open"
 		},
 		{
@@ -971,7 +971,7 @@
 			"type": "anyparse.grammar.haxe.HaxeFormat",
 			"method": "defaultArrayLiteralWrap",
 			"find": "defaultMode: WrapMode.Ignore",
-			"replace": "defaultMode: WrapMode.NoWrap",
+			"replace": "defaultMode: WrapMode.OnePerLine",
 			"note": "the array and map default stops being Ignore, so a source break keeps a short list open"
 		},
 		{
@@ -979,7 +979,7 @@
 			"type": "anyparse.grammar.haxe.HaxeFormat",
 			"method": "defaultAnonTypeWrap",
 			"find": "defaultMode: WrapMode.Ignore",
-			"replace": "defaultMode: WrapMode.NoWrap",
+			"replace": "defaultMode: WrapMode.OnePerLine",
 			"note": "the anonymous-type default stops being Ignore, so a source break keeps a short anon type open"
 		},
 		{
