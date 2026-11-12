@@ -172,7 +172,7 @@ final class HxTypedOptionsRewriteTest extends Test {
 
 	public function testAFixtureCallIsRefusedLikeALoaderCall(): Void {
 		final variable: String = err(rewritten('HxWriteFixture.triviaWrite(SRC, cfg)'));
-		Assert.isTrue(variable.contains('one plain string literal'), variable);
+		Assert.isTrue(variable.contains('not a constant string'), variable);
 		Assert.isTrue(variable.contains('triviaWrite'), variable);
 		final ignored: String = err(rewritten("HxWriteFixture.plainWrite(SRC, '{\"sameLine\": {\"throwBody\": \"next\"}}')"));
 		Assert.isTrue(ignored.contains('throwBody'), ignored);
@@ -216,7 +216,7 @@ final class HxTypedOptionsRewriteTest extends Test {
 	public function testAnArgumentThatIsNotOnePlainLiteralIsRefused(): Void {
 		for (argument in ['cfg', "'{' + cfg + '}'", "'{$cfg}'"]) {
 			final message: String = err(rewritten('loadHxFormatJson($argument)'));
-			Assert.isTrue(message.contains('one plain string literal'), message);
+			Assert.isTrue(message.contains('not a constant string'), message);
 			Assert.isTrue(message.contains('loadHxFormatJson'), 'the message quotes the call: <$message>');
 		}
 	}
@@ -236,7 +236,133 @@ final class HxTypedOptionsRewriteTest extends Test {
 	public function testOneRefusedCallRefusesTheWholeSource(): Void {
 		final src: String =
 			'class S {\n\n\tfunction f() {\n\t\tfinal a = loadHxFormatJson(\'{}\');\n\t\tfinal b = loadHxFormatJson(cfg);\n\t}\n\n}\n';
-		Assert.isTrue(err(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin())).contains('one plain string literal'));
+		Assert.isTrue(err(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin())).contains('not a constant string'));
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-NAMED-FINAL')
+	public function testAFinalReadOnlyByConfigurationCallsIsRetypedOnce(): Void {
+		final typed: String = 'HxWriteOptionsKit.forkWith(edited -> edited.tryBody = BodyPolicy.Same)';
+		final src: String = module(
+			"\tprivate static final CONFIG: String = '{\"sameLine\": {\"tryBody\": \"same\"}}';",
+			'\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);\n\t\tfinal b = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);\n'
+			+ "\t\tfinal c = HxWriteConfig.ofJson(CONFIG);\n\t\tfinal local = '{}';\n\t\tHxWriteFixture.plainWrite(SRC, local);"
+		);
+		final once: String = ok(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()));
+		Assert.isTrue(flat(once).contains(flat('private static final CONFIG: HxModuleWriteOptions = $typed;')), once);
+		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.triviaWrite(SRC, CONFIG);')), once);
+		Assert.isTrue(flat(once).contains(flat('final b = CONFIG;')), once);
+		Assert.isTrue(flat(once).contains(flat('final c = HxWriteConfig.ofOptions(CONFIG);')), once);
+		Assert.isTrue(flat(once).contains(flat('final local: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});')), once);
+		Assert.isTrue(flat(once).contains(flat('HxWriteFixture.plainWrite(SRC, local);')), once);
+		Assert.isTrue(once.contains('import anyparse.grammar.haxe.HxModuleWriteOptions;'), once);
+		switch HxTypedOptionsRewrite.rewrite(once, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(once, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-CONCATENATION')
+	public function testAConcatenationOfLiteralsIsOneDocument(): Void {
+		final text: String = ok(rewritten("loadHxFormatJson('{\"sameLine\": ' + '{\"tryBody\": \"same\"}}')"));
+		Assert.isTrue(text.contains('forkWith(edited -> edited.tryBody = BodyPolicy.Same)'), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-INLINE-CUT')
+	public function testAnInlineFinalLosesItsInlineModifier(): Void {
+		final text: String = ok(
+			named("\tprivate static inline final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);')
+		);
+		Assert.isTrue(flat(text).contains(flat('private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith')), text);
+		Assert.isFalse(text.contains('inline'), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-PUBLIC-FINAL')
+	public function testAPublicFinalIsNotRetyped(): Void {
+		final message: String = err(named("\tpublic static final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);'));
+		Assert.isTrue(message.contains('`CONFIG` cannot hold the typed options: it is public'), message);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-NAMED-READERS')
+	public function testAFinalReadElsewhereRefusesTheSource(): Void {
+		final message: String = err(named('', "\t\tfinal cfg = '{}';\n\t\tHxWriteFixture.triviaWrite(SRC, cfg);\n\t\ttrace(cfg);"));
+		Assert.isTrue(message.contains('`cfg` is read where no configuration call reads it'), message);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-FIELD-READ')
+	public function testAFinalReadAsAFieldRefusesTheSource(): Void {
+		final message: String = err(
+			named("\tprivate static final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);\n\t\ttrace(S.CONFIG);')
+		);
+		Assert.isTrue(message.contains('`CONFIG` is read as a field'), message);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-TYPED-VALUE')
+	public function testAValueTypedAsTheOptionsIsLeftAlone(): Void {
+		final src: String = module(
+			'\tfunction g(given: Null<HxModuleWriteOptions>) {\n\t\tHxWriteFixture.plainWrite(SRC, given);\n\t}',
+			'\t\tfinal opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});\n\t\tHxWriteFixture.triviaWrite(SRC, opts);'
+		);
+		switch HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()) {
+			case Ok(text, rewrites):
+				Assert.equals(src, text);
+				Assert.equals(0, rewrites);
+			case Err(message):
+				Assert.fail(message);
+		}
+		final text: String = err(named('', '\t\tfinal s: String = make();\n\t\tHxWriteFixture.triviaWrite(SRC, s);'));
+		Assert.isTrue(text.contains('not a constant string'), text);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-FINAL-CLASS')
+	public function testAMemberOfAClassASubclassMayExtendIsNotRetyped(): Void {
+		final src: String = "package unit.grammar.haxe;\n\nclass S {\n\n\tprivate static final CONFIG: String = '{}';\n\n"
+			+ '\tfunction f() {\n\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);\n\t}\n\n}\n';
+		final message: String = err(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()));
+		Assert.isTrue(
+			message.contains('`CONFIG` cannot hold the typed options: it is a member of a type that is not a `final class`'), message
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-ACCESS-GRANT')
+	public function testAMemberAnAccessGrantOpensIsNotRetyped(): Void {
+		final onMember: String = err(
+			named("\t@:allow(other.X) private static final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);')
+		);
+		Assert.isTrue(onMember.contains('opened to another module by `@:allow`'), onMember);
+		final src: String = 'package unit.grammar.haxe;\n\n@:allow(other.X)\nfinal class S {\n\n\tprivate static final CONFIG: String = '
+			+ '\'{}\';\n\n\tfunction f() {\n\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);\n\t}\n\n}\n';
+		final onType: String = err(HxTypedOptionsRewrite.rewrite(src, KIT, true, new HaxeQueryPlugin()));
+		Assert.isTrue(onType.contains('opened to another module by `@:allow`'), onType);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-GUARDED-PUBLIC')
+	public function testAPublicUnderAConditionalRegionIsNotRetyped(): Void {
+		final message: String = err(
+			named("\t#if foo public #end static final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);')
+		);
+		Assert.isTrue(message.contains('`CONFIG` cannot hold the typed options: it is public'), message);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-GUARDED-INLINE')
+	public function testAnInlineUnderAConditionalRegionIsNotRetyped(): Void {
+		final message: String = err(
+			named("\t#if foo inline #end static final CONFIG: String = '{}';", '\t\tHxWriteFixture.triviaWrite(SRC, CONFIG);')
+		);
+		Assert.isTrue(message.contains('`inline` under a conditional region'), message);
 	}
 
 	private static function rewritten(call: String): EditResult {
@@ -269,6 +395,16 @@ final class HxTypedOptionsRewriteTest extends Test {
 	/** `text` without whitespace: the writer lays a long call out over lines, and a case asks for the call, not for its layout. */
 	private static function flat(text: String): String {
 		return ~/\s+/g.replace(text, '');
+	}
+
+	/** `module(members, body)` rewritten. */
+	private static function named(members: String, body: String): EditResult {
+		return HxTypedOptionsRewrite.rewrite(module(members, body), KIT, true, new HaxeQueryPlugin());
+	}
+
+	/** A module of the kit's package whose final class `S` declares `members` and runs `body` in `f`. */
+	private static function module(members: String, body: String): String {
+		return 'package unit.grammar.haxe;\n\nfinal class S {\n\n$members\n\n\tfunction f() {\n$body\n\t}\n\n}\n';
 	}
 
 }

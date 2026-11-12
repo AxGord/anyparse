@@ -9071,6 +9071,26 @@
 				"err": "4f704ede9655650d",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "typed-options retypes a private static inline final of a final class that only configuration calls read",
+			"note": "the base refuses the non-literal argument; the tip retypes the final (a concatenation of literals), drops its inline, turns the loader and ofJson readers into the name, and leaves the CFG parameter of testB alone",
+			"argv": [
+				"hxq",
+				"typed-options",
+				"--kit",
+				"unit.grammar.haxe.HxWriteOptionsKit",
+				"Shadow.hx"
+			],
+			"files": {
+				"Shadow.hx": "package unit.grammar.haxe;\n\nfinal class Shadow {\n\n\tprivate static inline final CFG = '{\"lineEnds\": ' + '{\"leftCurly\": \"both\"}}';\n\n\tpublic function testA():Void {\n\t\tHxWriteFixture.triviaWrite('class A {}', CFG);\n\t\tfinal o = HaxeFormatConfigLoader.loadHxFormatJson(CFG);\n\t\tfinal w = HxWriteConfig.ofJson(CFG);\n\t}\n\n\tpublic function testB(CFG:String):Void {\n\t\ttrace(CFG.length);\n\t}\n\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "443ae803dd69e1a3",
+				"err": "9846997134bcb3ee",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

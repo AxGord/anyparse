@@ -67,7 +67,7 @@ final class TypedOptionsCliTest extends Test {
 		FileSystem.deleteFile(path);
 		Assert.equals(EXIT_RUNTIME, exit, err);
 		Assert.equals(VARIABLE, after);
-		Assert.isTrue(err.contains('one plain string literal'), err);
+		Assert.isTrue(err.contains('not a constant string'), err);
 		#else
 		Assert.pass('non-sys target');
 		#end

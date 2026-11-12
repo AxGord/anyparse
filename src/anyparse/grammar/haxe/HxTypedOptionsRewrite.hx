@@ -1,15 +1,25 @@
 package anyparse.grammar.haxe;
 
+import anyparse.check.scan.CheckScan;
 import anyparse.format.OptionsSource;
 import anyparse.macro.OptionKnobs;
 import anyparse.query.AddImport;
-import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.CanonicalEdit;
+import anyparse.query.CtorFieldFold;
+import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Matcher;
+import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
+import anyparse.query.Refs;
 import anyparse.query.Rewrite;
+import anyparse.query.SetModifier;
 import anyparse.query.SourceSlice;
+import anyparse.query.TreePath;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
+import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -21,18 +31,38 @@ using anyparse.util.Strings;
  * `HxWriteConfig.ofJson(<literal>)` of a Haxe source becomes `<kit>.forkWith(edited -> edited.<knob> = <value>)`
  * over the same baseline, `loadHxFormatJson('{}')`: a block of
  * assignments for several knobs, an empty one for none. A `HxWriteFixture.triviaWrite` / `plainWrite` call keeps its source argument and
- * has only the configuration replaced, left as it is when it already is the typed edit.
+ * has only the configuration replaced, left as it is when it already is the typed edit or a value the file types as the options.
+ * An argument naming a `final` that holds a constant string, read by those calls only and by no other module, is rewritten once, at
+ * its declaration.
  *
  * An assignment is written for each knob whose value the document changed from that baseline, so a key that fans out over several
  * knobs, or cascades, is rewritten as the knobs it ended up setting and the options stay equal by construction. The rewrite refuses,
  * writing nothing, a document the loader does not act on (`HaxeFormatConfigDiagnostics`, the keys it names), a document that does
- * not load, a knob changed to a value with no source spelling, and an argument that is not one plain string literal.
+ * not load, a knob changed to a value with no source spelling, an argument that is neither a constant string nor such a `final`, and
+ * a `final` read anywhere else.
  */
 @:nullSafety(Strict)
 final class HxTypedOptionsRewrite {
 
 	/** How much of a refused call a message quotes. */
 	private static inline final CALL_EXCERPT: Int = 80;
+
+	/**
+	 * The name a parse of the source is reported under.
+	 */
+	private static final PARSED_AS: String = 'source';
+
+	/** The node of `a + b`, which joins two constant strings into one. */
+	private static final CONCATENATION_KIND: String = 'Add';
+
+	/** A local `final`, a declaration the rewrite may retype. */
+	private static final LOCAL_FINAL_KIND: String = 'FinalStmt';
+
+	/** A member `final`, a declaration the rewrite may retype when no other module can read it. */
+	private static final MEMBER_FINAL_KIND: String = 'FinalMember';
+
+	/** The type a retyped `final` is written with, imported where the package differs. */
+	private static final OPTIONS_TYPE: String = 'anyparse.grammar.haxe.HxModuleWriteOptions';
 
 	/**
 	 * `source` with each hxformat.json call turned into the typed edit of `kit` (a qualified type with `forkWith`), the imports that edit
@@ -49,10 +79,18 @@ final class HxTypedOptionsRewrite {
 			knobs: knobs,
 			imports: imports,
 			plugin: plugin,
-			sites: 0
+			sites: 0,
+			tree: null
 		};
+		switch namedConfigs(source, run, reformat, optsJson) {
+			case Err(message):
+				return Err(message);
+			case Ok(converted, _):
+				text = converted;
+		}
 		for (site in callShapes(kitName)) {
 			run.source = text;
+			run.tree = null;
 			switch Rewrite.rewriteBy(text, site.pattern, reformat, plugin, optsJson, false, m -> replacement(m, run, site)) {
 				case Err(message):
 					return Err(message);
@@ -79,21 +117,22 @@ final class HxTypedOptionsRewrite {
 
 	private static function replacement(m: Match, run: Run, site: Site): Replacement {
 		final whole: String = SourceSlice.slice(run.source, m.span);
-		final call: String = whole.firstLine();
-		final at: String = call.length > CALL_EXCERPT ? '${call.substring(0, CALL_EXCERPT)}…' : call;
+		final at: String = excerpt(whole);
 		final argument: Null<QueryNode> = m.bindings['json'];
-		if (!site.argumentOnly) return switch typedEdit(argument, at, run) {
+		if (!site.argumentOnly) return switch typedEdit(literalOf(argument), at, run) {
 			case Spliced(fork, _): Spliced(site.asConfig ? 'HxWriteConfig.ofOptions($fork)' : fork, []);
 			case refused: refused;
 		};
 		final edits: Array<Edit> = [];
-		final source: Null<QueryNode> = m.bindings['source'];
+		final source: Null<QueryNode> = m.bindings[PARSED_AS];
 		if (source != null) {
 			final refusal: Null<String> = nestedEdits(source, run, edits);
 			if (refusal != null) return Refused(refusal);
 		}
 		final replaced: Null<Span> = argument?.span;
-		if (argument != null && replaced != null && !isTypedConfig(argument, run.kitName, run.plugin)) switch typedEdit(argument, at, run) {
+		if (
+			argument != null && replaced != null && !isTypedConfig(argument, run.kitName, run.plugin) && !typedValue(argument, run)
+		) switch typedEdit(literalOf(argument), at, run) {
 			case Spliced(fork, _):
 				final target: Span = replaced;
 				edits.push({ span: target, text: fork });
@@ -103,9 +142,18 @@ final class HxTypedOptionsRewrite {
 		return Spliced(applied(whole, m.span.from, edits), []);
 	}
 
-	/** The text of a call argument that is one string literal with no interpolation, decoded; null for anything else. */
+	/**
+	 * The text of a constant string — a string literal with no interpolation, or a concatenation of them — decoded; null for anything
+	 * else.
+	 */
 	private static function literalOf(node: Null<QueryNode>): Null<String> {
 		if (node == null) return null;
+		if (node.kind == CONCATENATION_KIND && node.children.length == 2) {
+			final left: Null<String> = literalOf(node.children[0]);
+			if (left == null) return null;
+			final right: Null<String> = literalOf(node.children[1]);
+			return right == null ? null : '$left$right';
+		}
 		final raw: Null<String> = rawOf(node);
 		return raw == null || HxStringEscape.carriesEscapedDollar(raw)
 			? null
@@ -115,7 +163,7 @@ final class HxTypedOptionsRewrite {
 	private static function withImports(
 		text: String, wanted: Array<String>, reformat: Bool, plugin: GrammarPlugin, optsJson: Null<String>, total: Int
 	): EditResult {
-		final tree: QueryNode = switch ParseGate.parse(plugin, text, 'source') {
+		final tree: QueryNode = switch ParseGate.parse(plugin, text, PARSED_AS) {
 			case Unparsed(message): return Err(message);
 			case Parsed(parsed): parsed;
 		};
@@ -163,10 +211,13 @@ final class HxTypedOptionsRewrite {
 		return false;
 	}
 
-	/** The typed edit of the document `argument` holds, `Spliced` as the text of the call that builds it; counted as one rewritten call. */
-	private static function typedEdit(argument: Null<QueryNode>, at: String, run: Run): Replacement {
-		final json: Null<String> = literalOf(argument);
-		if (json == null) return Refused('$at: the argument is not one plain string literal, so there is no document to read');
+	/**
+	 * The typed edit of the document `json` (null when the configuration holds none), `Spliced` as the text of the call that builds it;
+	 * counted as one rewritten call.
+	 */
+	private static function typedEdit(json: Null<String>, at: String, run: Run): Replacement {
+		if (json == null)
+			return Refused('$at: the argument is not a constant string, nor a `final` holding one, so there is no document to read');
 		try {
 			final ignored: Array<String> = HaxeFormatConfigDiagnostics.ignored(HaxeFormatConfigDiagnostics.diagnose(json));
 			if (ignored.length > 0) return Refused('$at: hxformat.json settings the loader does not act on: ${ignored.join('; ')}');
@@ -229,21 +280,224 @@ final class HxTypedOptionsRewrite {
 		return left.from != right.from ? left.from - right.from : right.to - left.to;
 	}
 
+	/**
+	 * `source` with each `final` that holds a constant string and is read only as the configuration argument of a call shape turned, once,
+	 * into the typed options: the declaration holds the typed edit, a loader call reading it becomes the name, a fixture call keeps reading
+	 * it. A `final` read anywhere else refuses the source, so no reader is
+	 * left expecting the string; `Ok(source, 0)` when no call reads one.
+	 */
+	private static function namedConfigs(source: String, run: Run, reformat: Bool, optsJson: Null<String>): EditResult {
+		final tree: QueryNode = switch ParseGate.parse(run.plugin, source, PARSED_AS) {
+			case Unparsed(message): return Err(message);
+			case Parsed(parsed): parsed;
+		};
+		final shape: RefShape = run.plugin.refShape();
+		final edits: Array<Edit> = [];
+		for (entry in namedReads(tree, source, run, shape)) {
+			final refusal: Null<String> = namedEdits(entry, source, tree, run, shape, edits);
+			if (refusal != null) return Err(refusal);
+		}
+		if (edits.length == 0) return Ok(source, 0);
+		run.imports.push(OPTIONS_TYPE);
+		return CanonicalEdit.canonicalize(source, edits, reformat, run.plugin, optsJson);
+	}
+
+	/**
+	 * Whether the `final` `decl` may be retyped, as the edits of its modifier run — an `inline` dropped, since the retyped value, a call,
+	 * is no constant — or why not. A member is retyped only where no other module can read it: in a `final class`, not `public`, and
+	 * with no access-granting meta on it or on its type; an access-taking meta in another module stays out of reach.
+	 */
+	private static function retyping(decl: QueryNode, tree: QueryNode, source: String, run: Run, shape: RefShape): Retyping {
+		if (decl.kind == LOCAL_FINAL_KIND) return Open([]);
+		final type: Null<QueryNode> = TreePath.parentOf(tree, decl);
+		final wrapper: Null<QueryNode> = type == null ? null : TreePath.parentOf(tree, type);
+		final declAt: Null<Span> = decl.span;
+		if (decl.kind != MEMBER_FINAL_KIND || type == null || wrapper == null || declAt == null)
+			return Pinned('is no `final` the rewrite retypes');
+		if (wrapper.kind != shape.finalClassDeclKind)
+			return Pinned('is a member of a type that is not a `final class`, so a subclass in another module may read it');
+		final grants: Null<String> = shape.grantsPrivateAccessMetaName;
+		final metaKinds: Array<String> = run.plugin.metaShape().metaKinds;
+		final index: Int = type.children.indexOf(decl);
+		final module: QueryNode = TreePath.parentOf(tree, wrapper) ?? tree;
+		if (
+			granted(type.children, index, grants, metaKinds)
+			|| granted(module.children, module.children.indexOf(wrapper), grants, metaKinds)
+		)
+			return Pinned('is opened to another module by `$grants`');
+		final modifiers: ModifierRun = SetModifier.modifierRun(
+			source, type.children, index, shape, CheckScan.modifierKinds(shape), declAt.from
+		);
+		final publicName: String = (shape.publicModifierKind ?? '').toLowerCase();
+		final inlineName: String = (shape.inlineModifierKind ?? '').toLowerCase();
+		if (modifiers.names.contains(publicName) || modifiers.guarded.contains(publicName))
+			return Pinned('is public, so another module may read it');
+		if (modifiers.guarded.contains(inlineName))
+			return Pinned('is `inline` under a conditional region, which the retyped value, a call, cannot keep');
+		if (!modifiers.names.contains(inlineName)) return Open([]);
+		if (modifiers.split)
+			return Pinned('has a modifier run split by a region or a comment, so its `inline` cannot be dropped in one splice');
+		final kept: Array<String> = modifiers.names.filter(name -> name != inlineName);
+		return Open([
+			kept.length == 0
+				? { span: new Span(modifiers.from, declAt.from), text: '' }
+				: { span: new Span(modifiers.from, modifiers.to), text: kept.join(' ') }
+		]);
+	}
+
+	/**
+	 * Whether `argument` is a value typed as the options — a variable or a parameter written with the type — so a fixture call reading
+	 * it already is typed and is left as it is.
+	 */
+	private static function typedValue(argument: QueryNode, run: Run): Bool {
+		final provider: Null<TypeInfoProvider> = run.plugin is TypeInfoProvider ? cast run.plugin : null;
+		if (provider == null) return false;
+		final tree: Null<QueryNode> = run.tree ?? treeOf(run.source, run.plugin);
+		if (tree == null) return false;
+		run.tree = tree;
+		final shape: RefShape = run.plugin.refShape();
+		final typeSyntax: TypeSyntaxReader = run.plugin.typeSyntax;
+		final chain: ChainTypeContext = {
+			declaredTypeSources: provider.declaredTypeSources(run.source),
+			source: run.source,
+			typeSyntax: typeSyntax
+		};
+		// no index: only what the file itself writes types the value — an annotation, an initializer, a parameter
+		final written: Null<String> = NominalTypes.expressionTypeSource(
+			argument, tree, shape, provider.declaredTypes(run.source), null, '', chain
+		);
+		if (written == null) return false;
+		final held: String = NominalTypes.unwrapNullable(written, shape.nullableWrapperTypeNames ?? [], typeSyntax);
+		return NominalTypes.outerNominalOf(held, typeSyntax) == OPTIONS_TYPE.allAfterLast('.');
+	}
+
+	/** The first line of `text`, cut to what a message quotes. */
+	private static function excerpt(text: String): String {
+		final line: String = text.firstLine();
+		return line.length > CALL_EXCERPT ? '${line.substring(0, CALL_EXCERPT)}…' : line;
+	}
+
+	/** Each retypable `final` a call shape of `tree` reads as its configuration, in the order the shapes first read them. */
+	private static function namedReads(tree: QueryNode, source: String, run: Run, shape: RefShape): Array<Named> {
+		final byDeclaration: Map<Int, Named> = [];
+		final named: Array<Named> = [];
+		for (site in callShapes(run.kitName)) for (m in Matcher.search(run.plugin.parsePattern(site.pattern), tree)) {
+			final argument: Null<QueryNode> = m.bindings['json'];
+			final name: Null<String> = argument?.name;
+			final at: Null<Span> = argument?.span;
+			if (argument == null || name == null || at == null || argument.kind != shape.identKind) continue;
+			final decl: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, tree, shape);
+			if (decl == null) continue;
+			final declAt: Null<Span> = decl.span;
+			final init: Null<QueryNode> = CtorFieldFold.declInitializer(decl, shape);
+			if (declAt == null || init == null || literalOf(init) == null) continue;
+			final entry: Named = byDeclaration[declAt.from] ?? {
+				name: name,
+				span: declAt,
+				init: init,
+				retyping: retyping(decl, tree, source, run, shape),
+				readers: []
+			};
+			if (!byDeclaration.exists(declAt.from)) {
+				byDeclaration[declAt.from] = entry;
+				named.push(entry);
+			}
+			if (!entry.readers.exists(at.from)) entry.readers[at.from] = { match: m, site: site };
+		}
+		return named;
+	}
+
+	/**
+	 * The edits that retype `entry`, appended to `edits`: its declaration holds the typed edit, each loader call reading it becomes the
+	 * name. The refusal when a read of it is not a configuration call, or its document is refused; null otherwise.
+	 */
+	private static function namedEdits(
+		entry: Named, source: String, tree: QueryNode, run: Run, shape: RefShape, edits: Array<Edit>
+	): Null<String> {
+		final at: String = excerpt(SourceSlice.slice(source, entry.span));
+		final cuts: Array<Edit> = switch entry.retyping {
+			case Pinned(why): return '$at: `${entry.name}` cannot hold the typed options: it $why';
+			case Open(modifierEdits): modifierEdits;
+		};
+		for (hit in Refs.find(entry.name, tree, shape))
+			if (hit.kind != RefKind.Decl && hit.bindingSpan?.from == entry.span.from && !entry.readers.exists(hit.span.from))
+				return '$at: `${entry.name}` is read where no configuration call reads it, so it cannot hold the typed options';
+		if (Matcher.search(run.plugin.parsePattern('$$_.${entry.name}'), tree).length > 0)
+			return '$at: `${entry.name}` is read as a field, a read the rewrite does not follow, so it cannot hold the typed options';
+		final initAt: Null<Span> = entry.init.span;
+		if (initAt == null) return '$at: the initializer has no position to rewrite';
+		switch typedEdit(literalOf(entry.init), at, run) {
+			case Refused(message):
+				return message;
+			case Spliced(fork, _):
+				edits.push(
+					{ span: new Span(entry.span.from, initAt.to), text: 'final ${entry.name}: ${OPTIONS_TYPE.allAfterLast('.')} = $fork' }
+				);
+		}
+		for (cut in cuts) edits.push(cut);
+		for (reader in entry.readers) if (!reader.site.argumentOnly)
+			edits.push({ span: reader.match.span, text: reader.site.asConfig ? 'HxWriteConfig.ofOptions(${entry.name})' : entry.name });
+		return null;
+	}
+
+	/** The parse of `source`; null when it does not parse. */
+	private static function treeOf(source: String, plugin: GrammarPlugin): Null<QueryNode> {
+		return switch ParseGate.parse(plugin, source, PARSED_AS) {
+			case Unparsed(_): null;
+			case Parsed(parsed): parsed;
+		};
+	}
+
+	/** Whether the prefix run before `siblings[index]` holds the meta `grants`, one of `metaKinds`; never for a grammar with none. */
+	private static function granted(siblings: Array<QueryNode>, index: Int, grants: Null<String>, metaKinds: Array<String>): Bool {
+		if (grants == null) return false;
+		var k: Int = index - 1;
+		while (k >= 0 && ElementSpan.isDeclPrefixSibling(siblings[k])) {
+			if (metaKinds.contains(siblings[k].kind) && siblings[k].name == grants) return true;
+			k--;
+		}
+		return false;
+	}
+
 }
 
 private typedef Site = { pattern: String, asConfig: Bool, argumentOnly: Bool };
 
 /** One rewrite: the source it reads, the kit and the knobs it spells, the imports it collects, how many calls it converted so far. */
 private typedef Run = {
+
 	var source: String;
 	final kitName: String;
 	final knobs: Array<OptionKnob>;
 	final imports: Array<String>;
 	final plugin: GrammarPlugin;
 	var sites: Int;
+
+	/** The parse of `source`, read when an argument is typed; null until then. */
+	var tree: Null<QueryNode>;
+
 };
 
 /** A replacement of `span` of the source by `text`. */
 private typedef Edit = { span: Span, text: String };
 /** A match of a call shape with the shape it matched. */
 private typedef Found = { match: Match, site: Site };
+/**
+ * A `final` the rewrite retypes: its name, its declaration, the constant it holds, whether its modifiers let it be retyped, and each
+ * configuration call reading it, by argument.
+ */
+private typedef Named = {
+	name: String,
+	span: Span,
+	init: QueryNode,
+	retyping: Retyping,
+	readers: Map<Int, Reader>
+};
+
+/** A call shape's match reading a retyped `final` as its configuration. */
+private typedef Reader = { match: Match, site: Site };
+/** Whether a `final` may be retyped: with the edits of its modifier run, or pinned, with why not. */
+private enum Retyping {
+	Open(cuts: Array<Edit>);
+	Pinned(why: String);
+}

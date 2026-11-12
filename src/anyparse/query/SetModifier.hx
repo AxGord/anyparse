@@ -169,6 +169,74 @@ final class SetModifier {
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
+	/**
+	 * The bare modifier KEYWORDS of the prefix run before `siblings[declIndex]`, in source order, the
+	 * span they occupy, and whether a non-keyword prefix sibling stands BETWEEN two of them: the one
+	 * answer to "which modifiers does a declaration carry, and which only under a conditional region".
+	 *
+	 * `RefactorSupport.isDeclPrefixSibling` bounds the run — the shared predicate `declGroupSpan`
+	 * folds with — while `modifierKinds` picks the keywords out of it. An `@:meta`, a `#if … #end`
+	 * region and a keyword such a region merely contributes are therefore inside the run and outside
+	 * the SPAN, which reaches only from the first keyword to the last — unless one of them stands
+	 * between two keywords, which the span cannot express and `split` reports so the caller can
+	 * refuse rather than delete it. With no keyword at all the span is the empty insertion point at
+	 * `declFrom`, in front of the declaration.
+	 */
+	public static function modifierRun(
+		source: String, siblings: Array<QueryNode>, declIndex: Int, shape: RefShape, modifierKinds: Array<String>, declFrom: Int
+	): ModifierRun {
+		var startIndex: Int = declIndex;
+		while (startIndex > 0 && ElementSpan.isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
+		final regionKind: Null<String> = shape.conditionalMemberKind;
+		final headKinds: Array<String> = shape.condDeclPrefixKeywordKinds ?? [];
+		final names: Array<String> = [];
+		final guarded: Array<String> = [];
+		var from: Int = declFrom;
+		var to: Int = declFrom;
+		var anchor: Int = declFrom;
+		var anchored: Bool = false;
+		var split: Bool = false;
+		var crossed: Bool = false;
+		for (j in startIndex ... declIndex) {
+			final sib: QueryNode = siblings[j];
+			final sibSpan: Null<Span> = sib.span;
+			if (sibSpan == null) continue;
+			if (!modifierKinds.contains(sib.kind)) {
+				if (names.length > 0) crossed = true;
+				if (sib.kind == regionKind) for (child in sib.children) if (modifierKinds.contains(child.kind)) {
+					guarded.push(child.kind.toLowerCase());
+				} else if (headKinds.contains(child.kind) && !anchored) {
+					anchor = sibSpan.from;
+					anchored = true;
+				}
+				continue;
+			}
+			// A keyword reached across something that is not whitespace — another prefix sibling, or a
+			// COMMENT, which is trivia and so no sibling at all. Either way the first-to-last span the
+			// splice uses covers it, and re-emitting the run over it would delete it.
+			if (crossed || (names.length > 0 && source.substring(to, sibSpan.from).trim().length > 0)) split = true;
+			if (names.length == 0) from = sibSpan.from;
+			to = sibSpan.to;
+			names.push(sib.kind.toLowerCase());
+		}
+		// With no keyword to splice over, the run is an INSERTION point. It is the declaration's own
+		// start — except in front of a region contributing a declaration-starting keyword, which is
+		// part of the declaration's head (`#if … enum #end abstract E` reads `enum abstract`): writing
+		// the modifier after that `#end` produced `enum private abstract E(Int)`, which anyparse
+		// re-parses happily and Haxe rejects.
+		if (names.length == 0) {
+			from = anchor;
+			to = anchor;
+		}
+		return {
+			names: names,
+			from: from,
+			to: to,
+			split: split,
+			guarded: guarded
+		};
+	}
+
 	/** The declaration whose modifiers the position `line:col` of `tree` (the text `source`) addresses (`setModifier`). */
 	private static function declarationAt(source: String, tree: QueryNode, line: Int, col: Int): DeclarationSite {
 		final cursor: Int = Span.offsetOf(source, line, col);
@@ -259,73 +327,6 @@ final class SetModifier {
 	}
 
 	/**
-	 * The bare modifier KEYWORDS of the prefix run before `siblings[declIndex]`, in source order, the
-	 * span they occupy, and whether a non-keyword prefix sibling stands BETWEEN two of them.
-	 *
-	 * `RefactorSupport.isDeclPrefixSibling` bounds the run — the shared predicate `declGroupSpan`
-	 * folds with — while `modifierKinds` picks the keywords out of it. An `@:meta`, a `#if … #end`
-	 * region and a keyword such a region merely contributes are therefore inside the run and outside
-	 * the SPAN, which reaches only from the first keyword to the last — unless one of them stands
-	 * between two keywords, which the span cannot express and `split` reports so the caller can
-	 * refuse rather than delete it. With no keyword at all the span is the empty insertion point at
-	 * `declFrom`, in front of the declaration.
-	 */
-	private static function modifierRun(
-		source: String, siblings: Array<QueryNode>, declIndex: Int, shape: RefShape, modifierKinds: Array<String>, declFrom: Int
-	): ModifierRun {
-		var startIndex: Int = declIndex;
-		while (startIndex > 0 && ElementSpan.isDeclPrefixSibling(siblings[startIndex - 1])) startIndex--;
-		final regionKind: Null<String> = shape.conditionalMemberKind;
-		final headKinds: Array<String> = shape.condDeclPrefixKeywordKinds ?? [];
-		final names: Array<String> = [];
-		final guarded: Array<String> = [];
-		var from: Int = declFrom;
-		var to: Int = declFrom;
-		var anchor: Int = declFrom;
-		var anchored: Bool = false;
-		var split: Bool = false;
-		var crossed: Bool = false;
-		for (j in startIndex ... declIndex) {
-			final sib: QueryNode = siblings[j];
-			final sibSpan: Null<Span> = sib.span;
-			if (sibSpan == null) continue;
-			if (!modifierKinds.contains(sib.kind)) {
-				if (names.length > 0) crossed = true;
-				if (sib.kind == regionKind) for (child in sib.children) if (modifierKinds.contains(child.kind)) {
-					guarded.push(child.kind.toLowerCase());
-				} else if (headKinds.contains(child.kind) && !anchored) {
-					anchor = sibSpan.from;
-					anchored = true;
-				}
-				continue;
-			}
-			// A keyword reached across something that is not whitespace — another prefix sibling, or a
-			// COMMENT, which is trivia and so no sibling at all. Either way the first-to-last span the
-			// splice uses covers it, and re-emitting the run over it would delete it.
-			if (crossed || (names.length > 0 && source.substring(to, sibSpan.from).trim().length > 0)) split = true;
-			if (names.length == 0) from = sibSpan.from;
-			to = sibSpan.to;
-			names.push(sib.kind.toLowerCase());
-		}
-		// With no keyword to splice over, the run is an INSERTION point. It is the declaration's own
-		// start — except in front of a region contributing a declaration-starting keyword, which is
-		// part of the declaration's head (`#if … enum #end abstract E` reads `enum abstract`): writing
-		// the modifier after that `#end` produced `enum private abstract E(Int)`, which anyparse
-		// re-parses happily and Haxe rejects.
-		if (names.length == 0) {
-			from = anchor;
-			to = anchor;
-		}
-		return {
-			names: names,
-			from: from,
-			to: to,
-			split: split,
-			guarded: guarded
-		};
-	}
-
-	/**
 	 * The tail of a refusal message when one of `changes` names a modifier the declaration carries
 	 * inside a conditional region, or null when none does. A visibility collides with ANY
 	 * visibility: a flip removes one from the run and cannot remove one from a branch.
@@ -401,7 +402,7 @@ final class SetModifier {
  * keywords the run's conditional regions contribute (`guarded` — which this op does not rewrite and
  * a change must not collide with).
  */
-private typedef ModifierRun = {
+typedef ModifierRun = {
 	final names: Array<String>;
 	final from: Int;
 	final to: Int;

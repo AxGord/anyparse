@@ -1598,6 +1598,91 @@
 			"find": "final refusal: Null<String> = nestedEdits(source, run, edits);",
 			"replace": "final refusal: Null<String> = null;",
 			"note": "a fixture call inside another fixture call's source argument is not read, so the outer call is migrated and the inner one keeps its JSON"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NAMED-FINAL",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedReads",
+			"force": "[]",
+			"note": "no final is read as a named configuration, so an argument naming a constant final is refused as a non-literal argument"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-CONCATENATION",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "literalOf",
+			"find": "if (node.kind == CONCATENATION_KIND && node.children.length == 2) {",
+			"replace": "if (false) {",
+			"note": "a concatenation of string literals is no constant string, so it is refused instead of read as one document"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-INLINE-CUT",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "for (cut in cuts) edits.push(cut);",
+			"replace": "",
+			"note": "a retyped inline final keeps its inline modifier, so its initializer, now a call, does not compile"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-PUBLIC-FINAL",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "modifiers.names.contains(publicName) || ",
+			"replace": "",
+			"note": "a public final is retyped though another module may read it as a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NAMED-READERS",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "!entry.readers.exists(hit.span.from)",
+			"replace": "false",
+			"note": "a final read outside a configuration call is retyped anyway, so that reader is left expecting the string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FIELD-READ",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "if (Matcher.search(run.plugin.parsePattern('$$_.${entry.name}'), tree).length > 0)",
+			"replace": "if (false)",
+			"note": "a final read as a field is retyped anyway, a read the binding walk does not see"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-TYPED-VALUE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "typedValue",
+			"force": "false",
+			"note": "a fixture call reading a value typed as the options is refused as a non-literal argument, so a second run over a retyped final fails"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FINAL-CLASS",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "if (wrapper.kind != shape.finalClassDeclKind)",
+			"replace": "if (false)",
+			"note": "a member final of a class a subclass in another module may extend is retyped, so that subclass reading it as a string no longer compiles"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-GUARDED-PUBLIC",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": " || modifiers.guarded.contains(publicName)",
+			"replace": "",
+			"note": "a final public only under a conditional region is retyped, so another module reading it under that define no longer compiles"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-GUARDED-INLINE",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "if (modifiers.guarded.contains(inlineName))",
+			"replace": "if (false)",
+			"note": "a final inline only under a conditional region is retyped, keeping an inline over a call initializer that does not compile under that define"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ACCESS-GRANT",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "granted",
+			"force": "false",
+			"note": "a member final opened to another module by an access-granting meta, on it or on its type, is retyped though that module may read it as a string"
 		}
 	]
 }
