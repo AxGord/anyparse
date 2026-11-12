@@ -1725,6 +1725,14 @@
 			"note": "no call is a loader subject, so a test whose options are only read by field is rewritten into a tautology"
 		},
 		{
+			"name": "M-TYPED-OPTIONS-ASSERT-SUBJECT",
+			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
+			"method": "underAssert",
+			"find": "call.receiver.name == ASSERT_TYPE",
+			"replace": "call.receiver.name == ASSERT_TYPE && false",
+			"note": "a field read under an assertion is no subject unless every read is by field, so a test that also hands its options to a writer is rewritten into a tautology"
+		},
+		{
 			"name": "M-TYPED-OPTIONS-EMPTY-FORK",
 			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
 			"method": "typedEdit",

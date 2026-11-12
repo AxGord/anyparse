@@ -9,6 +9,7 @@ import anyparse.query.CtorFieldFold;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Matcher;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
@@ -31,7 +32,8 @@ using anyparse.util.Strings;
  * `HxWriteConfig.ofJson(<literal>)` of a Haxe source becomes `<kit>.forkWith(edited -> edited.<knob> = <value>)`
  * over the same baseline, `loadHxFormatJson('{}')`: a block of
  * assignments for several knobs, the baseline call itself for none. A call whose options are the test's subject — only read by field,
- * never handed on — stays on its document and is named, since its typed edit would assert itself.
+ * or read by field under an `Assert` call whatever else gets them — stays on its document and is named, since its typed edit would
+ * assert itself.
  * A `HxWriteFixture.triviaWrite` / `plainWrite` call keeps its source argument and
  * has only the configuration replaced, left as it is when it already is the typed edit or a value the file types as the options.
  * A document wrapped in `HxWriteFixture.listsKeepSource` is read with what the wrapper adds, and its typed edit starts with
@@ -74,6 +76,9 @@ final class HxTypedOptionsRewrite {
 
 	/** A field read, the one use of loaded options that leaves them the test's subject. */
 	private static final FIELD_ACCESS_KIND: String = 'FieldAccess';
+
+	/** The test framework's assertion type, whose calls examine a value rather than hand it on. */
+	private static final ASSERT_TYPE: String = 'Assert';
 
 	/** The typed counterpart of the `listsKeepSource` wrapper, a call at the head of the edit, and the type it is imported from. */
 	private static final KEEP_CALL: String = 'HxListsKeepSource.keep(edited)';
@@ -427,21 +432,37 @@ final class HxTypedOptionsRewrite {
 		return true;
 	}
 
-	/** Whether the local `decl` declares is read at least once and every read is the receiver of a field access. */
+	/**
+	 * Whether the local `decl` declares is examined by field: read at least once and every read is the receiver of a field access, or
+	 * one such read sits under an `Assert` call — the assertion checks the options as loaded, whatever else is handed them.
+	 */
 	private static function fieldReadOnly(decl: QueryNode, tree: QueryNode, run: Run): Bool {
 		final name: Null<String> = decl.name;
 		final declAt: Null<Span> = decl.span;
 		if (name == null || declAt == null) return false;
 		final shape: RefShape = run.plugin.refShape();
 		var reads: Int = 0;
+		var fieldReads: Int = 0;
+		var asserted: Bool = false;
 		for (hit in Refs.find(name, tree, shape)) if (hit.kind != RefKind.Decl && hit.bindingSpan?.from == declAt.from) {
-			final read: Null<QueryNode> = TreePath.withSpan(tree, hit.span, shape.identKind);
-			if (read == null) return false;
-			final holder: Null<QueryNode> = TreePath.parentOf(tree, read);
-			if (holder == null || holder.kind != FIELD_ACCESS_KIND || holder.children[0] != read) return false;
 			reads++;
+			final read: Null<QueryNode> = TreePath.withSpan(tree, hit.span, shape.identKind);
+			if (read == null) continue;
+			final holder: Null<QueryNode> = TreePath.parentOf(tree, read);
+			if (holder == null || holder.kind != FIELD_ACCESS_KIND || holder.children[0] != read) continue;
+			fieldReads++;
+			if (underAssert(holder, tree, shape)) asserted = true;
 		}
-		return reads > 0;
+		return asserted || (reads > 0 && fieldReads == reads);
+	}
+
+	/** Whether `node` lies within the arguments of an `Assert.<method>(...)` call. */
+	private static function underAssert(node: QueryNode, tree: QueryNode, shape: RefShape): Bool {
+		for (ancestor in TreePath.pathAround(tree, node) ?? []) {
+			final call: Null<MethodCall> = ancestor.kind == shape.callKind ? NodeShape.methodCall(ancestor, shape.fieldAccessKind) : null;
+			if (call != null && call.receiver.kind == shape.identKind && call.receiver.name == ASSERT_TYPE) return true;
+		}
+		return false;
 	}
 
 	/** The parse of the run's current source, kept on the run until the source changes. */

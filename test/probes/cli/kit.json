@@ -9217,6 +9217,27 @@
 				"err": "f58948b1552942dd",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "typed-options leaves a loader call on its document when its options are read by field under an Assert call and also reach a writer",
+			"note": "the base rewrites the call onto forkWith and the test asserts its own edit; the tip reports `loader subject: <method>` on stderr and rewrites no call",
+			"argv": [
+				"hxq",
+				"typed-options",
+				"--kit",
+				"unit.grammar.haxe.HxWriteOptionsKit",
+				"--reformat",
+				"MixedSubjectProbeTest.hx"
+			],
+			"files": {
+				"MixedSubjectProbeTest.hx": "package unit.grammar.haxe;\n\nimport utest.Assert;\n\nfinal class MixedSubjectProbeTest extends utest.Test {\n\n\tpublic function testX(): Void {\n\t\tfinal opts = HaxeFormatConfigLoader.loadHxFormatJson('{\"emptyLines\": {\"afterPackage\": 2}}');\n\t\tAssert.equals(2, opts.afterPackage);\n\t\tw(opts);\n\t}\n\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "d5f61d6ee1346653",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

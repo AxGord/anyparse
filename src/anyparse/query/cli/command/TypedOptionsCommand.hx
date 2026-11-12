@@ -186,8 +186,9 @@ final class TypedOptionsCommand implements CliCommand {
 		CliIo.sysPrint('a constant string nor a final holding one, a final read elsewhere, a setting the loader does not act on (the\n');
 		CliIo.sysPrint('key is named), a document that does not load, or a knob changed to a value with no source spelling.\n');
 		CliIo.sysPrint("A document equal to that baseline becomes HaxeFormatConfigLoader.loadHxFormatJson('{}'). A loader call whose\n");
-		CliIo.sysPrint('options are only read by field (inline or through the local they initialise) is the test\'s subject: it stays\n');
-		CliIo.sysPrint('on its document and is reported as `loader subject: <method>`.\n');
+		CliIo.sysPrint('options are only read by field (inline or through the local they initialise), or read by field under an Assert\n');
+		CliIo.sysPrint('call whatever else gets them, is the test\'s subject: it stays on its document and is reported as\n');
+		CliIo.sysPrint('`loader subject: <method>`.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('Options:\n');
 		CliIo.sysPrint('  --kit <Type>  The options kit, with forkWith(HxModuleWriteOptions -> Void)\n');

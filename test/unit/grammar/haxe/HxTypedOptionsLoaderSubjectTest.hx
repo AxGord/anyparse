@@ -72,6 +72,31 @@ final class HxTypedOptionsLoaderSubjectTest extends Test {
 		Assert.isTrue(text.contains("HaxeFormatConfigLoader.loadHxFormatJson('{}')"), text);
 	}
 
+	@:pin('control')
+	@:killer('M-TYPED-OPTIONS-ASSERT-SUBJECT')
+	public function testAFieldReadUnderAnAssertionIsASubjectEvenWhenAWriterGetsTheOptions(): Void {
+		final subjects: Array<String> = [];
+		final text: String = rewritten(
+			'\tfunction both() {\n\t\tfinal opts = HaxeFormatConfigLoader.loadHxFormatJson($DOC);\n'
+			+ '\t\tAssert.equals(2, opts.afterPackage);\n\t\tw(opts);\n\t}\n',
+			subjects
+		);
+		Assert.isFalse(text.contains('forkWith'), text);
+		Assert.same(['loader subject: both'], subjects);
+	}
+
+	@:pin('guard')
+	public function testAFieldReadOutsideAnAssertionLeavesAWriterCallRewritten(): Void {
+		final subjects: Array<String> = [];
+		final text: String = rewritten(
+			'\tfunction both() {\n\t\tfinal opts = HaxeFormatConfigLoader.loadHxFormatJson($DOC);\n'
+			+ '\t\tfinal shown = opts.afterPackage;\n\t\tw(opts);\n\t}\n',
+			subjects
+		);
+		Assert.isTrue(text.contains('forkWith(edited -> edited.afterPackage = 2)'), text);
+		Assert.same([], subjects);
+	}
+
 	/** A module of the kit's package whose class `S` holds `members`, rewritten; a refusal is a failure. */
 	private static function rewritten(members: String, subjects: Array<String>): String {
 		final src: String = 'package unit.grammar.haxe;\n\nimport utest.Assert;\n\nfinal class S {\n\n$members\n}\n';
