@@ -121,6 +121,9 @@ final class Land {
 	/** Whether the battery's suite ran only the classes the merge reaches, so the whole suite still has to run. */
 	private var _impacted: Bool = false;
 
+	/** The verdict of a battery red only on drift main brought (`LandFmtRace`), once the battery has judged. */
+	private var _race: Null<String> = null;
+
 	/** The binaries the candidate's build made, as paths under the tree. */
 	private var _outputs: Array<String> = [];
 
@@ -173,6 +176,8 @@ final class Land {
 		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
 		final left: Null<String> = _candidate.drop();
 		_print(_summary.table());
+		final race: Null<String> = _race;
+		if (race != null) _print(race);
 		if (left != null) _print('the candidate tree ${_candidate.tree} is left in place: $left');
 		final passed: Bool = _summary.passed();
 		_print('land $_branch: ${passed ? 'PASS' : 'FAIL'} — ${_candidate.standing()} — logs $_logs');
@@ -314,11 +319,15 @@ final class Land {
 			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record,
 			why == null ? impactFile() : null
 		);
-		return switch _exec(flags, _candidate.tree, Path.join([_logs, 'battery.log'])) {
-			case Failed(failure): Failed('$mode — $failure');
+		final log: String = Path.join([_logs, 'battery.log']);
+		return switch _exec(flags, _candidate.tree, log) {
+			case Failed(failure):
+				_race = LandFmtRace.read(_repo, _branch, log);
+				Failed('$mode — $failure');
 			case other: other;
 		};
 	}
+
 
 	private function git(words: Array<String>): Result {
 		return cmd('git -C $_repo $words').run();

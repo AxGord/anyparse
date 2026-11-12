@@ -307,9 +307,7 @@ final class Battery {
 		Sys.print(list.err);
 		if (!list.ok || list.out != '') {
 			Sys.print(list.out);
-			why.push(
-				'fmt --list --one-pass is not empty (or exited ${list.status} — a non-zero exit with an EMPTY list is the one-pass gate)'
-			);
+			why.push('${LandFmtRace.LISTED} (or exited ${list.status} — a non-zero exit with an EMPTY list is the one-pass gate)');
 		}
 		final fork: ForkVerdict = ForkFmt.verify(hxq, Sys.getEnv(GateTree.FORK_VAR));
 		for (line in fork.shown) Sys.println(line);

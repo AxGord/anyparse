@@ -2633,6 +2633,69 @@
 			"find": "if (fork == null || fork == '' || !FileSystem.exists(Path.join([fork, 'src']))) return own;",
 			"replace": "if (fork == null || fork == '' || FileSystem.exists('/')) return own;",
 			"note": "the corpus fork's src is never judged by the row"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-OWN-FILE",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": "own.contains(file) || ",
+			"replace": "",
+			"note": "a drifted file the branch itself changed is judged a race main brought, so the author is told to blame main for their own file"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-UNMOVED-FILE",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": "|| !moved.contains(file)",
+			"replace": "",
+			"note": "a drifted file main did not change since the merge base is judged a race, so drift main never brought is waved as main's"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-OTHER-RED-ROW",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": "rows.length != 1 || ",
+			"replace": "rows.length == 0 || ",
+			"note": "a battery red on another row besides fmt is judged a race, so a real failure hides behind the fmt-race text"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-OTHER-FMT-ROW",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": " || rows[0].name != ROW",
+			"replace": "",
+			"note": "a red fmt xconfig or fmt squash row alone is judged a race, though their files are not the one-pass list"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-FORK-REASON",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": " || why.indexOf('; ') >= 0",
+			"replace": "",
+			"note": "an fmt row red on the fork verify besides the listed files is judged a race, so a real divergence is told to be rewritten away"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-NO-FILES",
+			"type": "dev.LandFmtRace",
+			"method": "verdict",
+			"find": "files.length == 0 || ",
+			"replace": "",
+			"note": "a fmt row red with no listed file (the one-pass gate) is judged a race of no files"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-READ",
+			"type": "dev.LandFmtRace",
+			"method": "read",
+			"force": "null",
+			"note": "the land never reads its battery log for the race, so a drifted file only main changed is a bare FAIL again"
+		},
+		{
+			"name": "M-LAND-FMT-RACE-READ-OWN",
+			"type": "dev.LandFmtRace",
+			"method": "read",
+			"find": "verdict(File.getContent(log), own.lines(), moved.lines())",
+			"replace": "verdict(File.getContent(log), [], moved.lines())",
+			"note": "the land hands the verdict no file the branch changed, so the branch's own drifted file is called main's race"
 		}
 	]
 }

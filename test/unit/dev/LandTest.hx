@@ -3,6 +3,7 @@ package unit.dev;
 import dev.BaselineWarm.WarmStart;
 import dev.GateReuse;
 import dev.Land;
+import dev.LandFmtRace;
 import dev.LandFormat;
 import dev.SuiteImpact.SuiteScope;
 import devkit.Args.UsageError;
@@ -83,6 +84,38 @@ final class LandTest extends Test {
 		Assert.stringContains('1 file(s) of the candidate\'s build', run.output);
 		Assert.isFalse(run.candidateLeft);
 		Assert.stringContains('main at ${run.headAfter.substr(0, 7)}', run.output);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FMT-RACE-READ')
+	public function testAFmtRowRedOnAFileOnlyMainChangedPrintsTheRaceVerdict(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', {
+			full: false,
+			landed: 0,
+			fails: true,
+			redLog: fmtRedLog('src/X.hx')
+		}, { onMain: [{ path: 'src/X.hx', content: 'x\n' }] });
+		Assert.equals(1, run.status);
+		Assert.stringContains('\nfmt-race src/X.hx\n', run.output);
+		Assert.stringContains('hxq fmt --write src/X.hx', run.output);
+		Assert.isFalse(run.moved);
+	}
+
+	@:pin('control')
+	@:killer('M-LAND-FMT-RACE-READ-OWN')
+	public function testAFmtRowRedOnAFileTheBranchChangedPrintsNoRaceVerdict(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', {
+			full: false,
+			landed: 0,
+			fails: true,
+			redLog: fmtRedLog('src/X.hx')
+		}, {
+			base: [{ path: 'src/X.hx', content: 'a\nb\nc\nd\ne\nf\ng\nh\n' }],
+			onSide: [{ path: 'src/X.hx', content: 'A\nb\nc\nd\ne\nf\ng\nh\n' }],
+			onMain: [{ path: 'src/X.hx', content: 'a\nb\nc\nd\ne\nf\ng\nH\n' }]
+		});
+		Assert.equals(1, run.status);
+		Assert.isFalse(run.output.contains('fmt-race'), run.output);
 	}
 
 	@:pin('control')
@@ -900,10 +933,12 @@ final class LandTest extends Test {
 					}
 					return if (at >= 0)
 						makeBase(battery, cache, base)
-					else if (red)
-						Failed('the battery is red')
-					else
+					else if (red) {
+						File.saveContent(log, redLogOf(battery));
+						Failed('the battery is red');
+					} else {
 						Passed;
+					};
 				},
 				merged: tree -> unreadable ? null : Land.mergedPaths(tree),
 				print: line -> printed.push(line)
@@ -949,6 +984,16 @@ final class LandTest extends Test {
 				proseLog: contentsOf('$logs/prose-refs.txt')
 			};
 		});
+	}
+
+	private static function redLogOf(battery: Null<Battery>): String {
+		return battery?.redLog ?? '';
+	}
+
+	/** The log of a battery red on the `fmt` row alone, which lists `file`. */
+	private static function fmtRedLog(file: String): String {
+		return '=== fmt ===\n$file\n\nbuild (parallel)  passed     49.5s\nfmt               FAILED      15.8s  ${LandFmtRace.LISTED}'
+			+ ' (or exited 0)\n';
 	}
 
 	private static function write(repo: String, edits: Array<Edit>): Void {
@@ -1216,6 +1261,10 @@ private typedef Battery = {
 	/** Whether the script is red. */
 	@:optional
 	var fails: Bool;
+
+	/** What a red script leaves in its log. */
+	@:optional
+	var redLog: String;
 
 	/**
 	 * Whether the cache lacks the snapshot of the commit landed onto; whether the battery that makes it is red but still
