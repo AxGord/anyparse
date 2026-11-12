@@ -371,7 +371,7 @@ Break the mechanism in the main tree, `git diff > x.patch`, revert, add a manife
 | `NO-TESTS` | The filter matched no test class. Loud on purpose: a typo'd filter otherwise reads as `SURVIVED`. |
 | `WT-FAIL` | `git worktree add` failed — there was nothing to patch or run. |
 | `PATCH-FAIL` | `git apply` failed. Manifest or patch defect. |
-| `BUILD-FAIL` | The patched tree does not compile. A mutation the compiler rejects proves nothing about the suite. |
+| `BUILD-FAIL` | The patched tree does not compile. A mutation the compiler rejects proves nothing about the suite. With `APQ_ARMS_FAIL_LOGS` set (the slice gate sets it to `<logs>/arm-fail`) the build's command, tree, copy, patch and every attempt's output are kept as `<arm>-<n>.log` there, never overwritten by a later run, and the row names that file (`MutationSlot.keepFailure`). |
 | `RUN-FAIL` | No usable transcript, or a red header whose result rows the parser could not name. |
 
 `SURVIVED` is deliberately stricter than "nothing failed": utest auto-adds a `Warning('no assertions')` to a method that completes without asserting and computes `isOk` over warnings too, so the verdict comes from the header line and the per-class rows only *name* what went red. A marker the classifier does not recognise surfaces as `RUN-FAIL`, never as `SURVIVED`.

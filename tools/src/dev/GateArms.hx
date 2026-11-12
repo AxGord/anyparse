@@ -42,6 +42,9 @@ final class GateArms {
 	/** The logs file a kill run leaves: the commit it ran at, then the arms it killed, one per line. */
 	public static final KILLED_FILE: String = 'arms-killed.txt';
 
+	/** The directory of the gate's logs that holds the build log of each arm whose build failed. */
+	public static final FAIL_LOGS: String = 'arm-fail';
+
 	/** What a command of the plan may run before it is killed: a hung call, not a slow one; the plan runs in the gate's own process. */
 	private static inline final PLAN_TIMEOUT_MS: Int = 10 * 60 * 1000;
 
@@ -215,6 +218,14 @@ final class GateArms {
 		return gate.branchProgress(SliceGate.ARMS_ROW);
 	}
 
+	/**
+	 * Where a failed arm build's log is kept (`MutationSlot.keepFailure`): inside the gate's logs, which no later gate of the
+	 * worktree clears.
+	 */
+	private static inline function failLogs(gate: GateTree): String {
+		return gate.log(FAIL_LOGS);
+	}
+
 	/** How many threads a kill run held, as the row says it: the lease the tracks' suites read as `WF_THREADS`, not the `--jobs` slots. */
 	private static function leaseNote(held: Null<Int>): String {
 		return switch (held) {
@@ -267,7 +278,9 @@ final class GateArms {
 
 	/** The `--apply-only` run of `names`, told to `read`: every cut still applies to a scratch copy of the base, or its arm is waived. */
 	private static function applyOutcome(gate: GateTree, names: Array<String>, read: ArmReading): Outcome {
-		final run: Result = gate.inTree(cmd('node bin/dev.js mutation-arm $names --apply-only'));
+		final run: Result = gate.inTree(
+			cmd('node bin/dev.js mutation-arm $names --apply-only').env(MutationSlot.FAIL_LOGS_VAR, failLogs(gate))
+		);
 		final log: String = run.out + run.err;
 		File.saveContent(gate.log('arms-apply.log'), log);
 		final tally: EReg = ~/^\d+ arms: \d+ apply, (\d+) did not apply$/m;
@@ -291,7 +304,9 @@ final class GateArms {
 	private static function fastOutcome(gate: GateTree, picked: ArmSelection, old: Null<Array<ArmRecord>>, read: ArmReading): Outcome {
 		final names: Array<String> = picked.fast;
 		final run: Result = gate.inTree(
-			cmd('node bin/dev.js mutation-arm $names --fast ${jobsOf(gate)}').env(MutationSlot.PROGRESS_VAR, progressOf(gate))
+			cmd('node bin/dev.js mutation-arm $names --fast ${jobsOf(gate)}')
+				.env(MutationSlot.PROGRESS_VAR, progressOf(gate))
+				.env(MutationSlot.FAIL_LOGS_VAR, failLogs(gate))
 		);
 		final log: String = run.out + run.err;
 		File.saveContent(gate.log('arms.log'), log);
@@ -402,6 +417,7 @@ final class GateArms {
 				.at(checkout)
 				.env('HXQ_BIN', '$checkout/bin/apq.js')
 				.env(MutationSlot.PROGRESS_VAR, progressOf(gate))
+				.env(MutationSlot.FAIL_LOGS_VAR, failLogs(gate))
 				.run();
 			final log: String = run.out + run.err;
 			File.saveContent(gate.log('arms-base.log'), log);

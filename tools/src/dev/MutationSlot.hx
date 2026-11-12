@@ -52,6 +52,12 @@ final class MutationSlot {
 	/** The environment variable naming the file a slot rewrites as each track ends: a gate's sign of life for the arms row. */
 	public static final PROGRESS_VAR: String = 'APQ_ARMS_PROGRESS';
 
+	/**
+	 * The environment variable naming the directory a failed build's log is kept in (`keepFailure`): a track's workroot is
+	 * removed when its run ends, and a build that broke once may not break again.
+	 */
+	public static final FAIL_LOGS_VAR: String = 'APQ_ARMS_FAIL_LOGS';
+
 	/** Seconds a warm build may take before its server counts as hung, unless `APQ_MUTATION_BUILD_TIMEOUT` says otherwise. */
 	private static inline final BUILD_TIMEOUT_S: Int = 300;
 
@@ -221,12 +227,39 @@ final class MutationSlot {
 		return { verdict: MutationVerdict.label(result.kind), detail: result.detail, full: result.full };
 	}
 
-	/** The report cell naming why the build whose log is `log` failed, out of `BuildFailure`; the log's path when unreadable. */
-	public static function buildDetail(log: String): String {
+	/**
+	 * The report cell naming why the build whose log is `log` failed, out of `BuildFailure`; the log's path when unreadable. The
+	 * path shown is `kept` when the log was copied out of the workroot.
+	 */
+	public static function buildDetail(log: String, ?kept: String): String {
 		final text: Null<String> = try File.getContent(log) catch (exception: Exception) null;
 		if (text == null) return log;
 		final failure: BuildFailureResult = BuildFailure.classify(text);
-		return '${BuildFailure.label(failure.cause)} | ${failure.line} ($log)';
+		return '${BuildFailure.label(failure.cause)} | ${failure.line} (${kept ?? log})';
+	}
+
+	/**
+	 * Copy the output of a failed build out of the workroot into `dir` as `<name>-<n>.log`, `n` one past the highest a
+	 * kept log of `name` already has, so a later run of the same arm never overwrites it: `header` lines first, then each of
+	 * `logs` (the patch, a warm attempt's, then the cold build's) under its own heading. The one answer to "where does the output of a
+	 * failed arm build live after its run": the path it returns, which the arm's row names.
+	 */
+	public static function keepFailure(dir: String, name: String, header: Array<String>, logs: Array<String>): String {
+		FileSystem.createDirectory(dir);
+		final stem: String = '$name-';
+		var last: Int = 0;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final index: Null<Int> = entry.startsWith(stem) && entry.endsWith('.log')
+				? Std.parseInt(entry.substring(stem.length, entry.length - '.log'.length))
+				: null;
+			if (index != null && index > last) last = index;
+		}
+		final kept: String = Path.join([dir, '$stem${last + 1}.log']);
+		final sections: Array<String> = [
+			for (log in logs) if (FileSystem.exists(log)) '--- ${Path.withoutDirectory(log)} ---\n${File.getContent(log)}'
+		];
+		File.saveContent(kept, header.join('\n') + '\n\n' + sections.join('\n'));
+		return kept;
 	}
 
 	/** Whether the process `pid` exists; one this process may not signal still does. */
@@ -287,7 +320,7 @@ final class MutationSlot {
 		final own: String = Path.join([workroot, 'build-$name']);
 		final kind: Null<String> = mutant != null ? 'schema' : buildTrack(ctx, own, buildLog);
 		if (kind == null) {
-			writeVerdict(workroot, name, 'BUILD-FAIL', buildDetail(buildLog));
+			writeVerdict(workroot, name, 'BUILD-FAIL', buildDetail(buildLog, keptFailure(ctx, row, own, buildLog)));
 			return;
 		}
 		// candidates are dealt last, so a slot that reaches one is done building: its server's memory goes back
@@ -335,7 +368,7 @@ final class MutationSlot {
 			server.stop();
 			FileSystem.rename(log, '$log.$attempt');
 		}
-		final cold: Result = cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js $out').at(ctx.wt).run();
+		final cold: Result = coldBuild(out).at(ctx.wt).run();
 		saveLog(log, cold);
 		return cold.ok ? 'cold' : null;
 	}
@@ -540,6 +573,28 @@ final class MutationSlot {
 	/** What one build may take before it counts as hung: `BUILD_TIMEOUT_S` unless `APQ_MUTATION_BUILD_TIMEOUT` says otherwise. */
 	private static function buildTimeoutMs(): Int {
 		return envInt('APQ_MUTATION_BUILD_TIMEOUT', BUILD_TIMEOUT_S) * MS_PER_SECOND;
+	}
+
+	/** The cold build of the runner `out`: what a track's verdict stands on when no warm server built it. */
+	private static function coldBuild(out: String): Command {
+		return cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js $out');
+	}
+
+	/**
+	 * The build of track `row` that failed, kept under the directory `FAIL_LOGS_VAR` names (nothing when it names none): its
+	 * command, the slot's tree it ran in, its copy `own`, the patch's text, and every attempt's output, the cold build's last. Answers the
+	 * kept file's path, or null when nothing was kept.
+	 */
+	private static function keptFailure(ctx: SlotContext, row: TrackRow, own: String, buildLog: String): Null<String> {
+		final dir: String = Sys.getEnv(FAIL_LOGS_VAR) ?? '';
+		if (dir == '') return null;
+		final header: Array<String> = [
+			'arm: ${row.name}',
+			'command: ${coldBuild(Path.join([own, TEST_JS])).argv.join(' ')}',
+			'cwd: ${ctx.wt}',
+			'copy: $own'
+		];
+		return keepFailure(dir, row.name, header, [row.patch, '$buildLog.warm', '$buildLog.restarted', buildLog]);
 	}
 
 }

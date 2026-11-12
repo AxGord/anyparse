@@ -4,6 +4,7 @@ import dev.MutationCheck.TrackRow;
 import dev.MutationSlot;
 import devkit.Cmd.cmd;
 import devkit.TempDir;
+import haxe.Exception;
 import sys.FileSystem;
 import sys.io.File;
 import utest.Assert;
@@ -41,7 +42,7 @@ final class MutationSlotTest extends Test {
 				MutationSlot.writeVerdict(dir.path, 'M-B', 'SURVIVED', 'detail');
 				Assert.equals('arms: M-B SURVIVED', File.getContent(progress));
 				Assert.equals('SURVIVED\ndetail\n', File.getContent(dir.file('M-B.verdict')));
-			} catch (exception: haxe.Exception) {
+			} catch (exception: Exception) {
 				Sys.putEnv(MutationSlot.PROGRESS_VAR, saved);
 				throw exception;
 			}
@@ -103,13 +104,8 @@ final class MutationSlotTest extends Test {
 	public function testATrackThatCannotBeResetOrPatchedNamesWhy(): Void {
 		TempDir.with(dir -> {
 			final workroot: String = dir.file('work');
-			FileSystem.createDirectory(workroot);
+			committedSlot(workroot);
 			final slot: String = MutationSlot.slotDir(workroot, 1);
-			FileSystem.createDirectory(slot);
-			cmd('git init -q $slot').check();
-			File.saveContent('$slot/a.txt', 'a\n');
-			cmd('git -C $slot -c user.name=t -c user.email=t@t add a.txt').check();
-			cmd('git -C $slot -c user.name=t -c user.email=t@t commit -q -m a').check();
 			File.saveContent(dir.file('bad.patch'), '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-nope\n+b\n');
 			slotFiles(workroot, [
 				{
@@ -214,6 +210,52 @@ final class MutationSlotTest extends Test {
 		Assert.isFalse(MutationSlot.narrows(true, false, '1'), 'APQ_MUTATION_NO_NARROW turns it off');
 	}
 
+	/** A build that fails leaves its log under the directory `FAIL_LOGS_VAR` names, and the track's row names that file. */
+	@:pin('control')
+	@:killer('M-KEEP-FAIL-LOG-UNNAMED')
+	public function testAFailedBuildKeepsItsLogAndTheRowNamesIt(): Void {
+		TempDir.with(dir -> {
+			final kept: String = dir.file('kept');
+			withFailLogs(kept, () -> {
+				final workroot: String = failingTrack(dir, 'P');
+				final verdict: Array<String> = MutationSlot.readVerdict(workroot, 'P');
+				Assert.equals('BUILD-FAIL', verdict[0]);
+				Assert.stringContains(' (${kept}/P-1.log)', verdict[1]);
+				final text: String = File.getContent('$kept/P-1.log');
+				Assert.stringContains('arm: P\n', text);
+				Assert.stringContains('command: haxe test-js-common.hxml ', text);
+				Assert.stringContains('cwd: ${MutationSlot.slotDir(workroot, 1)}\n', text);
+				Assert.stringContains('--- P.build.log ---\n', text);
+				Assert.stringContains('+b\n', text, 'the patch that was cut in');
+			});
+		});
+	}
+
+	/** A later failure of the same arm adds a log of its own: a kept log is never overwritten, another arm counts apart. */
+	@:pin('control')
+	@:killer('M-KEEP-FAIL-LOG-OVERWRITES')
+	public function testALaterFailureOfTheSameArmAddsALogOfItsOwn(): Void {
+		TempDir.with(dir -> {
+			final kept: String = dir.file('kept');
+			withFailLogs(kept, () -> {
+				Assert.stringContains(' ($kept/P-1.log)', MutationSlot.readVerdict(failingTrack(dir, 'P'), 'P')[1]);
+				final first: String = File.getContent('$kept/P-1.log');
+				final second: String = MutationSlot.readVerdict(failingTrack(dir, 'P'), 'P')[1];
+				Assert.stringContains(' (${kept}/P-2.log)', second);
+				Assert.equals(first, File.getContent('$kept/P-1.log'));
+				Assert.stringContains(' (${kept}/Q-1.log)', MutationSlot.readVerdict(failingTrack(dir, 'Q'), 'Q')[1]);
+			});
+		});
+	}
+
+	/** Without a directory named, a failed build keeps nothing and its row names the workroot's own log. */
+	public function testAFailedBuildKeepsNothingWhenNoDirectoryIsNamed(): Void {
+		TempDir.with(dir -> withFailLogs('', () -> {
+			final workroot: String = failingTrack(dir, 'P');
+			Assert.stringContains(' (${workroot}/P.build.log)', MutationSlot.readVerdict(workroot, 'P')[1]);
+		}));
+	}
+
 	private static function reading(verdict: String, detail: String, ?full: String): Classified {
 		return { verdict: verdict, detail: detail, full: full };
 	}
@@ -239,6 +281,51 @@ final class MutationSlotTest extends Test {
 		File.saveContent('$workroot/${MutationSlot.ROWS}', rows.map(row -> '${MutationSlot.encodeRow(row)}\n').join(''));
 		File.saveContent('$workroot/${MutationSlot.ORDER}', rows.map(row -> '${row.name}\n').join(''));
 		File.saveContent('$workroot/${MutationSlot.OWNER}', '$owner\n');
+	}
+
+	/** `body` with the kept-log directory set to `kept` (unset when empty), the caller's value put back after. */
+	private static function withFailLogs(kept: String, body: () -> Void): Void {
+		final saved: String = Sys.getEnv(MutationSlot.FAIL_LOGS_VAR) ?? '';
+		Sys.putEnv(MutationSlot.FAIL_LOGS_VAR, kept);
+		try {
+			body();
+		} catch (exception: Exception) {
+			Sys.putEnv(MutationSlot.FAIL_LOGS_VAR, saved);
+			throw exception;
+		}
+		Sys.putEnv(MutationSlot.FAIL_LOGS_VAR, saved);
+	}
+
+	/**
+	 * Run track `name` in a fresh workroot of `dir` whose tree has no build file, so its patch applies and its build fails;
+	 * the workroot's path.
+	 */
+	private static function failingTrack(dir: TempDir, name: String): String {
+		final workroot: String = dir.file('work-${Std.random(1000000)}');
+		committedSlot(workroot);
+		final patch: String = '$workroot/$name.patch';
+		File.saveContent(patch, '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\n');
+		slotFiles(workroot, [
+			{
+				name: name,
+				patch: patch,
+				filter: 'ALL',
+				expected: ''
+			}
+		], '${js.Node.process.pid}');
+		Assert.equals(0, MutationSlot.run(1, workroot));
+		return workroot;
+	}
+
+	/** Create the workroot `workroot` with its slot 1: a git tree holding one committed file, `a.txt`. */
+	private static function committedSlot(workroot: String): Void {
+		FileSystem.createDirectory(workroot);
+		final slot: String = MutationSlot.slotDir(workroot, 1);
+		FileSystem.createDirectory(slot);
+		cmd('git init -q $slot').check();
+		File.saveContent('$slot/a.txt', 'a\n');
+		cmd('git -C $slot -c user.name=t -c user.email=t@t add a.txt').check();
+		cmd('git -C $slot -c user.name=t -c user.email=t@t commit -q -m a').check();
 	}
 
 }

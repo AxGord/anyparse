@@ -31,6 +31,8 @@ final class GateArmsTest extends Test {
 		+ "const r=a.indexOf('--repo');const repo=r<0?process.cwd():a[r+1];const tree=path.dirname(path.dirname(process.argv[1]));"
 		+ "const knob=n=>fs.existsSync(tree+'/knobs/'+n);fs.appendFileSync(tree+'/runs.log',(r<0?'at-slice ':'at-base ')+a.join(' ')+' "
 		+ "HXQ_BIN='+process.env.HXQ_BIN+'\\n');if(a[0]==='worker-build')process.exit(fs.existsSync(tree+'/fail-base-build')?1:0);"
+		+ "if(a.includes('--fast')||a.includes('--apply-only'))fs.appendFileSync(tree+'/faillogs.log',(r<0?'at-slice ':'at-base ')+"
+		+ "(a.includes('--fast')?'fast ':'apply ')+(process.env.APQ_ARMS_FAIL_LOGS||'-')+'\\n');"
 		+ "if(a.includes('--fast'))fs.appendFileSync(tree+'/progress.log',(process.env.APQ_ARMS_PROGRESS||'-')+'\\n');const "
 		+ "names=a.slice(1).filter(x=>x.startsWith('M-'));if(a.includes('--apply-only')){const bad=names.filter(n=>n!=='M-OK');for(const n "
 		+ "of bad)console.log('APPLY-FAIL  '+n+' why');console.log(names.length+' arms: '+(names.length-bad.length)+' apply, "
@@ -636,6 +638,39 @@ final class GateArmsTest extends Test {
 		Assert.notEquals(bases[0], bases[1], 'the base trees are one');
 	}
 
+	/** The apply check of the layout-only arms is told where a failed build's log is kept: the gate's own `arm-fail` directory. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-APPLY-FAIL-LOGS-UNSET')
+	public function testTheApplyRunKeepsFailedBuildLogsInTheGateLogs(): Void {
+		withTree(tree -> {
+			knob(tree, 'changed', REFLOWED);
+			Assert.isTrue(outcomeOf(tree, ['M-ROT', 'M-OWN', 'M-NEW']).match(Passed), 'every failing row is waived');
+			Assert.contains('at-slice apply ${failLogsOf(tree)}', failLogRuns(tree));
+		});
+	}
+
+	/** The kill run at the slice is told the same directory. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-KILL-FAIL-LOGS-UNSET')
+	public function testTheKillRunKeepsFailedBuildLogsInTheGateLogs(): Void {
+		withTree(tree -> {
+			knob(tree, 'all-killed');
+			Assert.isTrue(outcomeOf(tree, []).match(Passed), 'every selected arm killed');
+			Assert.same(['at-slice fast ${failLogsOf(tree)}'], failLogRuns(tree));
+		});
+	}
+
+	/** The kill run at the base, in its own checkout, writes into the gate's directory too, not the checkout's. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-BASE-FAIL-LOGS-UNSET')
+	public function testTheKillRunAtTheBaseKeepsFailedBuildLogsInTheGateLogs(): Void {
+		withTree(tree -> {
+			Assert.isFalse(outcomeOf(tree, []).match(Passed), 'the survivors send the row to the base');
+			final expected: String = failLogsOf(tree);
+			Assert.same(['at-slice fast $expected', 'at-base fast $expected'], failLogRuns(tree));
+		});
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {
@@ -700,7 +735,9 @@ final class GateArmsTest extends Test {
 			FileSystem.createDirectory(Path.join([tree, ArmRegistry.DIRECTORY]));
 			FileSystem.createDirectory('$tree-logs');
 			// the tree's own path makes its base commit unique: two trees made in one second would otherwise share one SHA
-			File.saveContent(Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nprogress.log\nhxq.log\nfail-base-build\n# $tree\n');
+			File.saveContent(
+				Path.join([tree, '.gitignore']), 'bin/\nknobs/\nruns.log\nprogress.log\nfaillogs.log\nhxq.log\nfail-base-build\n# $tree\n'
+			);
 			File.saveContent(Path.join([tree, 'bin/dev.js']), FAKE_DEV);
 			File.saveContent(Path.join([tree, 'bin/test.js']), '');
 			File.saveContent(Path.join([tree, 'bin/hxq']), FAKE_HXQ);
@@ -764,6 +801,16 @@ final class GateArmsTest extends Test {
 	/** A touched module whose changed members the report could not name. */
 	private static function whole(module: String): ModuleTouch {
 		return { module: module, members: null };
+	}
+
+	/** The directory of the tree's gate logs that holds the failed builds' logs. */
+	private static function failLogsOf(tree: String): String {
+		return Path.join(['$tree-logs', 'arm-fail']);
+	}
+
+	/** One line per `--apply-only` or `--fast` run the stand-in saw: where it ran, which run, the kept-logs directory it was handed. */
+	private static function failLogRuns(tree: String): Array<String> {
+		return File.getContent(Path.join([tree, 'faillogs.log'])).trim().split('\n');
 	}
 
 }
