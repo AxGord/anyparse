@@ -1,5 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.WhitespacePolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -53,14 +57,49 @@ final class HxSoleArgGluedCloseDedentTest extends Test {
 	 * `fillLineWithLeadingBreak`, the `objectLiteral` explode rule, and the brace
 	 * spacing the expectations are written in.
 	 */
-	private static final CFG: String = '{"indentation": {}, "emptyLines": {"classEmptyLines": {"beginType": 1, "endType": 1}}, '
-		+ '"wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", '
-		+ '"rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {'
-		+ '"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": '
-		+ '100}], "type": "noWrap"}]}, "objectLiteral": {"defaultWrap": "ignore", "rules": [{"conditions": ['
-		+ '{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLine"}]}}, "whitespace": {'
-		+ '"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}, '
-		+ '"anonTypeBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
+	private static final CFG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.beginType = 1;
+		edited.endType = 1;
+		edited.anonTypeBracesOpen = WhitespacePolicy.After;
+		edited.anonTypeBracesClose = WhitespacePolicy.Before;
+		edited.objectLiteralBracesOpen = WhitespacePolicy.After;
+		edited.objectLiteralBracesClose = WhitespacePolicy.Before;
+		edited.objectLiteralWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.Ignore,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.OnePerLine }
+			]
+		};
+		edited.callParameterWrap = {
+			containerItemWrap: {
+				defaultMode: WrapMode.OnePerLine,
+				rules: [
+					{
+						conditions: [
+							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+							{ cond: WrapConditionType.HasContainerItems, value: 0 },
+							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+						],
+						mode: WrapMode.FillLine
+					}
+				]
+			},
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap },
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 100 }
+					],
+					mode: WrapMode.NoWrap
+				}
+			]
+		};
+	});
 
 	public function new(): Void {
 		super();

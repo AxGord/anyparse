@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -126,11 +127,11 @@ final class HxStringInterpNoFormatSliceTest extends Test {
 	}
 
 	private inline function formatDefault(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 	private inline function formatNoFormat(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{"whitespace": {"formatStringInterpolation": false}}');
+		return HxWriteFixture.triviaWrite(src, HxWriteOptionsKit.forkWith(edited -> edited.formatStringInterpolation = false));
 	}
 
 }

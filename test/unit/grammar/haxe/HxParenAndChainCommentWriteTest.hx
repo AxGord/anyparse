@@ -1,6 +1,9 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -28,7 +31,9 @@ class HxParenAndChainCommentWriteTest extends Test {
 	}
 
 	public function testLineCommentBeforeAnAfterLastOperatorBreaksBeforeIt(): Void {
-		final config: String = '{"wrapping": {"opBoolChain": {"defaultLocation": "afterLast", "rules": []}}}';
+		final config: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(
+			edited -> edited.opBoolChainWrap = { defaultLocation: WrappingLocation.AfterLast, defaultMode: WrapMode.NoWrap, rules: [] }
+		);
 		final source: String = body('return a == 1 // c\n\t\t\t&& b == 2;');
 		final once: String = HxWriteFixture.triviaWrite(source, config);
 		Assert.equals(source.rtrim(), once);

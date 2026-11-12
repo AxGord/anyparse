@@ -1,7 +1,10 @@
 package unit.grammar.haxe;
 
+import anyparse.format.wrap.WrapMode;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -94,11 +97,13 @@ final class HxParenWrapSourceNewlineSliceTest extends Test {
 	}
 
 	private inline function formatDefault(src: String): String {
-		return HxWriteFixture.triviaWrite(src, '{}');
+		return HxWriteFixture.triviaWrite(src, HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 	private inline function formatOnePerLine(src: String): String {
-		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "onePerLine", "rules": [] } } }';
+		final cfg: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(
+			edited -> edited.opBoolChainWrap = { defaultAdditionalIndent: 0, defaultMode: WrapMode.OnePerLine, rules: [] }
+		);
 		return HxWriteFixture.triviaWrite(src, cfg);
 	}
 

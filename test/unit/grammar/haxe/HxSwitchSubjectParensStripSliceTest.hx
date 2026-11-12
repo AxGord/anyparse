@@ -24,7 +24,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxSwitchSubjectParensStripSliceTest extends Test {
 
-	private static final REMOVE: String = '{"whitespace": {"parenConfig": {"switchSubjectParens": "remove"}}}';
+	private static final REMOVE: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.dropSwitchSubjectParens = true);
 
 	public function new(): Void {
 		super();
@@ -94,7 +94,7 @@ final class HxSwitchSubjectParensStripSliceTest extends Test {
 	}
 
 	private inline function triviaWriteRemove(src: String): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(REMOVE);
+		final opts: HxModuleWriteOptions = REMOVE;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
