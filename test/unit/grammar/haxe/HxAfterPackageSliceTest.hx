@@ -97,7 +97,7 @@ class HxAfterPackageSliceTest extends Test {
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		Assert.equals(1, opts.afterPackage);
 	}
 
@@ -106,7 +106,7 @@ class HxAfterPackageSliceTest extends Test {
 	}
 
 	private inline function makeOpts(afterPackage: Int): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.afterPackage = afterPackage;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `afterPackage:2`

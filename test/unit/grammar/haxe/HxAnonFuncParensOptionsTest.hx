@@ -131,7 +131,7 @@ class HxAnonFuncParensOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(anonPolicy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.anonFuncParens = anonPolicy;
 		return opts;
 	}

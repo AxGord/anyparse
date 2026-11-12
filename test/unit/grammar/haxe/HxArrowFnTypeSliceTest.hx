@@ -288,7 +288,7 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.functionTypeHaxe4 = policy;
 		return opts;
 	}

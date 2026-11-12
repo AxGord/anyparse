@@ -122,7 +122,7 @@ class HxArrowFnOldStyleRewriteTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(): HxModuleWriteOptions {
-		return HxWriteOptionsKit.strictJson('{}');
+		return HxWriteOptionsKit.forkWith(edited -> {});
 	}
 
 	private inline function writeDefault(src: String): String {

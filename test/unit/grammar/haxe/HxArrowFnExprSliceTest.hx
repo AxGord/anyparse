@@ -79,7 +79,7 @@ class HxArrowFnExprSliceTest extends HxTestHelpers {
 		// Setting `arrowFunctions=None` must not collapse the
 		// type-position arrow's spacing.
 		final src: String = 'class C { var f:(Int) -> Bool; }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.arrowFunctions = WhitespacePolicy.None;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('var f:(Int) -> Bool;') != -1, 'expected `(Int) -> Bool` in: <$out>');
@@ -124,7 +124,7 @@ class HxArrowFnExprSliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.arrowFunctions = policy;
 		return opts;
 	}

@@ -110,7 +110,7 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 	public function testIdempotencyRoundTripLongChain(): Void {
 		final src: String = 'class C { static function m():Void {'
 			+ ' dirty = aaaaaaaaaaaa || bbbbbbbbbbbb || cccccccccccc || dddddddddddd || eeeeeeeeeeee; } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.lineWidth = 80;
 		final w1: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 		final w2: String = HxModuleWriter.write(HaxeModuleParser.parse(w1), opts);
@@ -118,7 +118,7 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 	}
 
 	private inline function writeWithLineWidth(src: String, width: Int): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.lineWidth = width;
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}

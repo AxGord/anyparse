@@ -79,7 +79,7 @@ class HxAfterLeftCurlySliceTest extends Test {
 		// Fork's `EmptyLinesConfig` declares both knobs `@:default(Remove)`.
 		// A fixture that omits `emptyLines` (or the curly keys inside it)
 		// must still receive `Remove` so corpus parity holds at Δ 0/0/0.
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.afterLeftCurly);
 		Assert.equals(KeepEmptyLinesPolicy.Remove, opts.beforeRightCurly);
 	}

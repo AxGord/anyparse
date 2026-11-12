@@ -73,7 +73,7 @@ final class HxAnonFnBodyStmtPositionSliceTest extends Test {
 	}
 
 	private inline function writeTm(src: String): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.ifBody = BodyPolicy.FitLine;
 		opts.expressionIfBody = BodyPolicy.Next;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

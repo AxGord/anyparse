@@ -54,7 +54,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 		// Full `issue_251` shape requires both knobs: outside-before-`(`
 		// space (anonFuncParens = Before) AND inside-of-empty-`(` space
 		// (anonFuncParamParensKeepInnerWhenEmpty = true).
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.anonFuncParens = anyparse.format.WhitespacePolicy.Before;
 		opts.anonFuncParamParensKeepInnerWhenEmpty = true;
 		final out: String = HxModuleWriter.write(
@@ -119,7 +119,7 @@ class HxAnonFuncEmptyParensInnerSpaceOptionsTest extends Test {
 	}
 
 	private inline function makeOpts(keepInner: Bool): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.anonFuncParamParensKeepInnerWhenEmpty = keepInner;
 		return opts;
 	}

@@ -111,7 +111,7 @@ class HxBeforeUsingSliceTest extends Test {
 	}
 
 	public function testConfigLoaderMissingKeyKeepsDefault(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		Assert.equals(1, opts.beforeUsing);
 	}
 
@@ -125,7 +125,7 @@ class HxBeforeUsingSliceTest extends Test {
 	}
 
 	private inline function makeOpts(beforeUsing: Int): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {});
 		opts.beforeUsing = beforeUsing;
 		opts.beforeType = 0;
 		// Disable the final-pass blank-line cap so this slice's `beforeUsing:2`
