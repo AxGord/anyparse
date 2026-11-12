@@ -30,8 +30,8 @@
 			"name": "M-LINT-RANGE-INERT",
 			"type": "anyparse.query.cli.command.LintReport",
 			"method": "withinRange",
-			"find": "if (range == null) return all;",
-			"replace": "if (range == null) return all;\nif (all != null) return all;",
+			"find": "windowOf == null",
+			"replace": "windowOf == null || all != null",
 			"note": "the --range window stops filtering, so a write op's --fix rewrites every finding in the file instead of only those on the lines it changed"
 		},
 		{
@@ -1001,16 +1001,16 @@
 			"name": "M-LINTREACH-REPORT-UNWIRED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "runLint",
-			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)",
-			"replace": "all -> LintReport.withinRange(all, f -> sourceOf[f], o.range)",
+			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], windowOf), files, cached)",
+			"replace": "all -> LintReport.withinRange(all, f -> sourceOf[f], windowOf)",
 			"note": "the report never asks the import reach, so a site whose helper the file build cannot see is still reported"
 		},
 		{
 			"name": "M-LINTREACH-REPORT-DROPS-REMEDIED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "runLint",
-			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached)",
-			"replace": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached).filter(v -> v.remedy == null)",
+			"find": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], windowOf), files, cached)",
+			"replace": "all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], windowOf), files, cached).filter(v -> v.remedy == null)",
 			"note": "every finding naming a remedy module is withheld, so a build that holds the helper never hears of the site"
 		},
 		{
@@ -1307,6 +1307,38 @@
 			"find": "else if (check is NotedFix)",
 			"replace": "else if (false)",
 			"note": "the driver asks a NotedFix through plain fix, so its notes are never collected and a skipped field is silent"
+		},
+		{
+			"name": "M-CHANGED-SINCE-INERT",
+			"type": "anyparse.query.cli.command.LintWindows",
+			"method": "resolver",
+			"find": "return file -> windows[file];",
+			"replace": "return _ -> null;",
+			"note": "the per-file windows are dropped, so --changed-since fixes and reports every finding of a touched file again, including the standing ones on lines the slice never changed"
+		},
+		{
+			"name": "M-CHANGED-SINCE-NEW-FILE-NARROWED",
+			"type": "anyparse.query.cli.command.LintWindows",
+			"method": "resolver",
+			"find": "if (base == null) continue;",
+			"replace": "if (base == null) {\nwindows[entry.file] = [];\ncontinue;\n}",
+			"note": "a file the revision does not hold gets an empty window, so a file new against the revision is skipped instead of fixed whole"
+		},
+		{
+			"name": "M-CHANGED-SINCE-CHANGED-LINES-DROPPED",
+			"type": "anyparse.query.cli.command.LintWindows",
+			"method": "resolver",
+			"find": "windows[entry.file] = changed ?? [];",
+			"replace": "windows[entry.file] = [];",
+			"note": "the changed lines never reach the window, so a finding on a line the working tree changed gets no fix"
+		},
+		{
+			"name": "M-CHANGED-SINCE-OVERFLOW-WHOLE",
+			"type": "anyparse.query.cli.command.LintWindows",
+			"method": "resolver",
+			"find": "windows[entry.file] = changed ?? [];",
+			"replace": "if (changed != null) windows[entry.file] = changed;",
+			"note": "a file whose diff outgrows the line differ gets no window, so --changed-since fixes it whole again instead of leaving it untouched"
 		}
 	]
 }

@@ -259,6 +259,12 @@ final class LintArgs {
 		CliIo.sysPrint('                   the report AND --fix. It narrows FINDINGS, not EDITS: an\n');
 		CliIo.sysPrint('                   atomic fix off a finding inside the window still writes\n');
 		CliIo.sysPrint('                   wherever its own fix says\n');
+		CliIo.sysPrint('  --changed-since <rev>  Only findings whose span STARTS on a line this working tree\n');
+		CliIo.sysPrint('                   added or changed against git revision <rev> (comment and blank\n');
+		CliIo.sysPrint('                   lines excluded), per file; any number of files. A file <rev> does\n');
+		CliIo.sysPrint('                   not hold counts whole, an unchanged one not at all, and one whose\n');
+		CliIo.sysPrint('                   diff outgrows the line differ is left untouched with a note. Narrows\n');
+		CliIo.sysPrint('                   the report AND --fix, FINDINGS not EDITS, like --range; not with --range\n');
 		CliIo.sysPrint('  --baseline <p>   Report only the findings the snapshot at <p> does not already\n');
 		CliIo.sysPrint('                   carry, then refresh <p> with EVERY finding of this run. The\n');
 		CliIo.sysPrint('                   comparison is lint-diff\'s multiset over (file, rule, severity,\n');
@@ -297,6 +303,7 @@ final class LintArgs {
 		final categoryFilters: Array<String> = [];
 		final inputSpecs: Array<String> = [];
 		var range: Null<LintRange> = null;
+		var changedSince: Null<String> = null;
 		var baseline: Null<String> = null;
 		var verbose: Bool = false;
 		var explainLong: Bool = false;
@@ -357,6 +364,8 @@ final class LintArgs {
 						);
 						return lintParseExit(EXIT_USAGE);
 					}
+				case '--changed-since':
+					changedSince = arg.value();
 				case '--fail-on':
 					final level: String = arg.value();
 					failOn = Severity.fromName(level);
@@ -398,6 +407,7 @@ final class LintArgs {
 			categoryFilters: categoryFilters,
 			inputSpecs: inputSpecs,
 			range: range,
+			changedSince: changedSince,
 			baseline: baseline,
 			verbose: verbose,
 			explainLong: explainLong,
@@ -452,6 +462,10 @@ final class LintArgs {
 			CliIo.stderr('apq lint: --explain-long explains a REPORT and cannot be combined with --fix\n');
 			return EXIT_USAGE;
 		}
+		if (o.range != null && o.changedSince != null) {
+			CliIo.stderr('apq lint: --range and --changed-since are two narrowings of one run — pass one\n');
+			return EXIT_USAGE;
+		}
 		if (o.range == null || paths.length == 1) return null;
 		CliIo.stderr(
 			'apq lint: --range needs a scope of exactly one file — ${CliArgs.quotedSpecs(o.inputSpecs)} matched ${paths.length}\n'
@@ -492,6 +506,7 @@ final class LintArgs {
 			categoryFilters: [],
 			inputSpecs: [],
 			range: null,
+			changedSince: null,
 			baseline: null,
 			verbose: false,
 			explainLong: false,

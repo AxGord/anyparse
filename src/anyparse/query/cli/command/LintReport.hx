@@ -11,6 +11,7 @@ import anyparse.query.LintDiff.LintDiffTally;
 import anyparse.query.LintDiff.LintMessageIdentities;
 import anyparse.query.cli.command.LintCommand.LintOpts;
 import anyparse.query.cli.command.LintCommand.LintRange;
+import anyparse.query.cli.command.LintCommand.LintWindowOf;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
@@ -70,17 +71,19 @@ final class LintReport {
 	 * which is what makes the window re-measurable per pass; see `LintRange`.
 	 */
 	public static function withinRange(
-		all: Array<Violation>, sourceOf: (String) -> Null<String>, range: Null<LintRange>
+		all: Array<Violation>, sourceOf: (String) -> Null<String>, windowOf: Null<LintWindowOf>
 	): Array<Violation> {
-		if (range == null) return all;
-		final windows: LintRange = range;
-		return all.filter(v -> {
-			final span: Null<Span> = v.span;
-			final source: Null<String> = sourceOf(v.file);
-			if (span == null || source == null) return false;
-			final line: Int = span.lineCol(source).line;
-			return windows.exists(window -> line >= window.from && line <= window.to);
-		});
+		return windowOf == null
+			? all
+			: all.filter(v -> {
+				final windows: Null<LintRange> = windowOf(v.file);
+				if (windows == null) return true;
+				final span: Null<Span> = v.span;
+				final source: Null<String> = sourceOf(v.file);
+				if (span == null || source == null) return false;
+				final line: Int = span.lineCol(source).line;
+				return windows.exists(window -> line >= window.from && line <= window.to);
+			});
 	}
 
 	/**

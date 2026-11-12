@@ -17,7 +17,7 @@ import anyparse.query.LintDiff;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
-import anyparse.query.cli.command.LintCommand.LintRange;
+import anyparse.query.cli.command.LintCommand.LintWindowOf;
 import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
 import anyparse.query.cli.command.LintFixVerify.RiskyFixOutcome;
 import anyparse.query.format.LintFormat;
@@ -65,8 +65,8 @@ final class LintFixDriver {
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, range: Null<LintRange>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int, reviewBudget: Null<Int>,
-		reach: ImportReach, said: RunLedger, ?resolution: ResolutionScope
+		applyEnablement: Bool, windowOf: Null<LintWindowOf>, verbose: Bool, oracles: Array<OracleConfig>, probeCap: Int,
+		reviewBudget: Null<Int>, reach: ImportReach, said: RunLedger, ?resolution: ResolutionScope
 	): Int {
 		final oracleConfigured: Bool = oracles.length > 0;
 		final split: CheckPartition = LintArgs.partitionChecks(checks, oracleConfigured);
@@ -157,8 +157,8 @@ final class LintFixDriver {
 					() ->
 						applyLintPass(
 							active, files, cached, split.activeScope, split.fullScope, split.safe, resolveConfig, applyEnablement,
-							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, range, created, baselineBeforeCreate,
-							originalOf, safeEditsOf, trail, reach, said
+							optsByFile, passes, noted, notedRewrites, changedFiles, ledger, coupled, windowOf, created,
+							baselineBeforeCreate, originalOf, safeEditsOf, trail, reach, said
 						)
 				);
 				fixedCount += pass.fixedDelta;
@@ -300,7 +300,7 @@ final class LintFixDriver {
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, notedRewrites: Array<String>,
-		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, range: Null<LintRange>,
+		changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>, coupled: Array<Array<String>>, windowOf: Null<LintWindowOf>,
 		?created: Array<String>, ?baselineBeforeCreate: () -> Void, ?originals: Map<String, String>, ?editsOf: Map<String, Int>,
 		?trail: LintFixSafeTrail, ?reach: ImportReach, ?said: RunLedger
 	): LintPassResult {
@@ -337,13 +337,13 @@ final class LintFixDriver {
 			PhaseTimings.measure(
 				'pass lint active', () -> Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement, null, ruleNotes)
 			),
-			sourceOf, range
+			sourceOf, windowOf
 		);
 		final whole: Array<Violation> = PhaseTimings.measure(
 			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement, null, ruleNotes)
 		);
 		Linter.sayConfigNotes(activeScopeChecks.concat(fullScopeChecks), ruleNotes, said, CliIo.stderr);
-		for (v in LintReport.withinRange(whole, sourceOf, range)) found.push(v);
+		for (v in LintReport.withinRange(whole, sourceOf, windowOf)) found.push(v);
 		// The two scopes lint in two runs, so the cross-rule supersession `Linter.collect` applies inside each
 		// one is asked again over their union: an underscore-prefixed local is `no-underscore-prefix`'s in
 		// the active set and `naming`'s in the full one, and the fixer should see it once, as the report does.
@@ -1378,8 +1378,8 @@ final class LintFixDriver {
 	 */
 	public static function runLintFix(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, range: Null<LintRange>,
-		verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP, ?reviewBudget: Int, ?runLedger: RunLedger
+		applyEnablement: Bool, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool,
+		windowOf: Null<LintWindowOf>, verbose: Bool, probeCap: Int = LintFixSafePass.PROBE_CAP, ?reviewBudget: Int, ?runLedger: RunLedger
 	): Int {
 		FmtCommand.warnCommentGuardDeclined();
 		// Said BEFORE the first write, and said in both netless arms — the flag the user passed
@@ -1392,7 +1392,7 @@ final class LintFixDriver {
 		// then cannot drift apart by construction.
 		final before: Map<String, String> = sourceSnapshot(files);
 		final exit: Int = applyLintFixes(
-			files, checks, plugin, resolveConfig, applyEnablement, range, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
+			files, checks, plugin, resolveConfig, applyEnablement, windowOf, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
 			new ImportReach(OracleProviders.of(plugin), oracles), runLedger ?? RunLedger.fallback(), resolution
 		);
 		// After every revert net has settled, so a fragment follows only the bytes the run kept.

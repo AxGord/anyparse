@@ -293,7 +293,9 @@ final class CliEdit {
 	 * two ends of a file would then have rewritten. Null when the diff passes `maxEdits`: the caller
 	 * then has no lines to narrow to, and must not fall back to the hull.
 	 */
-	public static function changedCodeWindows(before: String, after: String, plugin: GrammarPlugin, maxEdits: Int): Null<LintRange> {
+	public static function changedCodeWindows(
+		before: String, after: String, plugin: GrammarPlugin, maxEdits: Int = MAX_DIFF_EDITS
+	): Null<LintRange> {
 		final old: Array<String> = before.split('\n');
 		final now: Array<String> = after.split('\n');
 		final edits: Null<LineEdits> = LineDiff.edits(old, now, maxEdits);
@@ -337,7 +339,7 @@ final class CliEdit {
 			return;
 		}
 		if (before == after) return; // byte-identical write: nothing changed, nothing to lint
-		final found: Null<LintRange> = changedCodeWindows(before, after, plugin, MAX_DIFF_EDITS);
+		final found: Null<LintRange> = changedCodeWindows(before, after, plugin);
 		if (found == null) {
 			// Fail closed: the hull of an edit this large is most of the file, and a fix over it is
 			// exactly the rewrite of untouched code this scoping exists to prevent.

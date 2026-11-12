@@ -51,6 +51,10 @@ typedef CheckPartition = {
  * would leave the file broken, which is the opposite of a safety net.
  */
 typedef LintRange = Array<LineWindow>;
+/**
+ * What narrows a lint run per file: the `LintRange` a file's findings must fall in, or null for the whole file (`LintWindows`).
+ */
+typedef LintWindowOf = (String) -> Null<LintRange>;
 
 /** One `--range` span: a 1-based, inclusive pair of line numbers. */
 typedef LineWindow = { final from: Int; final to: Int; };
@@ -88,6 +92,12 @@ typedef LintOpts = {
 	var inputSpecs: Array<String>;
 	// The `--range` line window, or null for the whole scope. See `LintRange`.
 	var range: Null<LintRange>;
+
+	/**
+	 * `--changed-since <rev>`: the git revision whose diff against the working tree narrows each file to its changed lines
+	 * (`LintWindows`), or null.
+	 */
+	var changedSince: Null<String>;
 
 	/**
 	 * The `--baseline` snapshot path, or null. A run given one reports only the findings the
@@ -155,6 +165,7 @@ final class LintCommand implements CliCommand {
 			[
 				'--baseline',
 				'--category',
+				'--changed-since',
 				'--fail-on',
 				'--fix-probes',
 				'--format',
@@ -229,6 +240,8 @@ final class LintCommand implements CliCommand {
 			files.push({ file: path, source: fileSource });
 			sourceOf[path] = fileSource;
 		}
+		final windowOf: Null<LintWindowOf> = LintWindows.resolver(o.range, o.changedSince, files, plugin);
+		if (windowOf == null) return EXIT_USAGE;
 
 		// Per-file config: discover an apq.json by walking up from EACH linted
 		// file's directory, memoised per directory so a large run walks the tree once
@@ -285,7 +298,7 @@ final class LintCommand implements CliCommand {
 		// every risky and oracle-assisted verdict below is then taken against a build the
 		// second root never declared.
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle, OracleProviders.of(plugin), ledger);
-		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
+		final oracleConfig: Null<LintConfig> = resolveConfig(paths[0]);
 		final compiler: OracleProvider = OracleProviders.of(plugin);
 		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
 		final early: Null<StartedProbe<CompilerFacts>> = LintOracleRun.earlyFacts(compiler, unconfigured != null, oracles, o);
@@ -312,7 +325,7 @@ final class LintCommand implements CliCommand {
 				() ->
 					LintFixDriver.runLintFix(
 						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, o.range, o.verbose, o.fixProbes, o.reviewBudget, ledger
+						o.noOracle, windowOf, o.verbose, o.fixProbes, o.reviewBudget, ledger
 					)
 			);
 
@@ -328,7 +341,7 @@ final class LintCommand implements CliCommand {
 		final ruleNotes: Array<ConfigNote> = [];
 		final found: Array<Violation> = Linter.run(
 			files, cached, activeChecks, resolveConfig, applyEnablement,
-			all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], o.range), files, cached), ruleNotes
+			all -> reach.reportable(LintReport.withinRange(all, f -> sourceOf[f], windowOf), files, cached), ruleNotes
 		);
 		Linter.sayConfigNotes(activeChecks, ruleNotes, ledger, CliIo.stderr);
 		// One narrowing, applied before everything downstream: the report, the severity summary and

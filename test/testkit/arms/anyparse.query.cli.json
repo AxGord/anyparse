@@ -759,6 +759,14 @@
 			"find": "this.ledger = ledger ?? RunLedger.fallback();",
 			"replace": "this.ledger = RunLedger.fallback();",
 			"note": "a context built with the run's ledger answers the latest one instead, so a command says through whichever run began last"
+		},
+		{
+			"name": "M-CHANGED-SINCE-RANGE-ACCEPTED",
+			"type": "anyparse.query.cli.GitRevision",
+			"method": "textsAt",
+			"find": "if (named.failure != '' || named.status != 0) return null;",
+			"replace": "",
+			"note": "a revision range is no longer refused, so every file reads as absent at it and --changed-since fixes each one whole"
 		}
 	]
 }

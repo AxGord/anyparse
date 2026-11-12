@@ -102,6 +102,33 @@ final class GitRevision {
 		return ProcessSpawn.exec({ cmd: 'git', args: args, cwd: null }, GIT_BUFFER);
 	}
 
+	/**
+	 * Each of `paths` as revision `ref` held it, keyed by the path as given: a path git reports renamed since `ref` is read
+	 * under its earlier name, and a file `ref` does not hold maps to null. Every path is compared in ONE key space, the
+	 * repository root's, so `./A.hx`, `sub/../A.hx` and `../A.hx` name the file git names; a path outside the repository has
+	 * no entry at all. Null when git cannot compare the working tree with `ref`.
+	 */
+	public static function textsAt(ref: String, paths: Array<String>): Null<Map<String, Null<String>>> {
+		if (ref.startsWith('-')) return null;
+		// `git diff` also takes a range, which `git show <ref>:<path>` cannot read: every file would then read as absent, i.e. new
+		final named: ProcessRun = git(['rev-parse', '--verify', '--quiet', '$ref^{commit}']);
+		if (named.failure != '' || named.status != 0) return null;
+		final listed: ProcessRun = git(['diff', '--name-status', '-z', '-M', ref, '--']);
+		final prefix: ProcessRun = git(['rev-parse', '--show-prefix']);
+		if (listed.failure != '' || listed.status != 0 || prefix.failure != '' || prefix.status != 0) return null;
+		final earlier: Map<String, String> = [
+			for (entry in parseNameStatus(listed.out)) if (entry.status == 'R') entry.path => entry.basePath
+		];
+		final texts: Map<String, Null<String>> = [];
+		for (path in paths) {
+			final rooted: String = Path.normalize(prefix.out.trim() + cwdRelative(path));
+			if (rooted == '..' || rooted.startsWith('../')) continue;
+			final shown: ProcessRun = git(['show', '$ref:${earlier[rooted] ?? rooted}']);
+			texts[path] = shown.failure == '' && shown.status == 0 ? shown.out : null;
+		}
+		return texts;
+	}
+
 	/** Where git starts listing for each of `specs`, each once (`Glob.walkRoot`). */
 	private static function rootsOf(specs: Array<String>): Array<String> {
 		final roots: Array<String> = [];
