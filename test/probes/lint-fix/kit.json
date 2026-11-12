@@ -2097,6 +2097,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "D-RLW-INTERFACE-RECEIVER",
+			"note": "redundant-lambda-wrapper: a lambda over a receiver typed by an interface (final field or final local) is not reported, a class-typed final field still is",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"redundant-lambda-wrapper",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"Main.hx": "interface Id {\n\tfunction id(s: String): String;\n}\n\nclass Impl implements Id {\n\tpublic function new() {}\n\n\tpublic function id(s: String): String return s;\n}\n\nclass Main {\n\tfinal viaInterface: Id;\n\tfinal viaClass: Impl;\n\n\tpublic function new() {\n\t\tviaInterface = new Impl();\n\t\tviaClass = new Impl();\n\t}\n\n\tfunction table(): Array<String -> String> {\n\t\tfinal local: Id = new Impl();\n\t\treturn [m -> viaInterface.id(m), m -> viaClass.id(m), m -> local.id(m)];\n\t}\n\n\tstatic function main() {\n\t\ttrace(new Main().table().map(f -> f('a')));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "331b35b8a18f33f5",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

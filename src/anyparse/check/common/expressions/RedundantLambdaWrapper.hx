@@ -472,7 +472,10 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		return out;
 	}
 
-	/** The members of the one declaration a stable receiver's type denotes, a type parameter read as its one bound. */
+	/**
+	 * The members of the one declaration a stable receiver's type denotes, a type parameter read as its one bound. An interface
+	 * has none: a method value read through an interface receiver is a dynamic field read on some targets, so the lambda stays.
+	 */
 	private static function hostMembers(receiver: QueryNode, ctx: Ctx): Null<Map<String, Signature>> {
 		final at: Null<Span> = receiver.span;
 		final index: Null<SymbolIndex> = ctx.index;
@@ -482,7 +485,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		if (spelling == null) return null;
 		final written: String = boundOf(spelling, at.from, file, ctx) ?? spelling;
 		return switch index.typing.resolve(file, written, at.from) {
-			case Declared(decl): ctx.types[decl.type.name];
+			case Declared(decl): ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : ctx.types[decl.type.name];
 			case Unknown: null;
 		};
 	}
@@ -748,6 +751,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 			optionalParamKind: shape.optionalParamKind,
 			restParamKind: shape.restParamKind,
 			typeHostKinds: (shape.typeDeclKinds ?? []).concat(shape.visibilityContainerKinds ?? []),
+			interfaceKinds: shape.interfaceDeclKinds ?? [],
 			memberDeclKinds: shape.memberDeclKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			localFunctionKinds: shape.localFunctionKinds ?? [],
@@ -875,6 +879,7 @@ private typedef Seams = {
 	final optionalParamKind: Null<String>;
 	final restParamKind: Null<String>;
 	final typeHostKinds: Array<String>;
+	final interfaceKinds: Array<String>;
 	final memberDeclKinds: Array<String>;
 	final functionKinds: Array<String>;
 	final localFunctionKinds: Array<String>;

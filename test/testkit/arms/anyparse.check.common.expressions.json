@@ -400,6 +400,14 @@
 			"method": "beforeConstruction",
 			"force": "false",
 			"note": "a field receiver inside a constructor counts as assigned, so `cb = x -> h.abs(x); h = new Fw();` is reduced to a method value that reads h before it is set"
+		},
+		{
+			"name": "M-RLW-INTERFACE-RECEIVER-REDUCED",
+			"type": "anyparse.check.common.expressions.RedundantLambdaWrapper",
+			"method": "hostMembers",
+			"find": "ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : ctx.types[decl.type.name]",
+			"replace": "ctx.types[decl.type.name]",
+			"note": "an interface receiver reads as its declaration's members, so `m -> iface.m(m)` is reduced to a method value that hxcpp lowers to a dynamic field read"
 		}
 	]
 }
