@@ -725,6 +725,19 @@ final class DocMeasure {
 	}
 
 	/**
+	 * Columns the closer run opening a rest-probe group's BROKEN closing line takes before the rest resumes: the
+	 * `}` of `{\n…\n}]) {` that both layouts put ahead of the rest, so a later sibling's "breaks by itself"
+	 * prediction measures from past it. `0` when the broken tail is not a closing line under the group's indent.
+	 */
+	public static function brokenCloseRun(inner: Doc): Int {
+		final run: Int = closeLineRun( switch inner {
+			case IfBreak(breakDoc, _): breakDoc;
+			case _: inner;
+		});
+		return run > 0 ? run : 0;
+	}
+
+	/**
 	 * The line a glued ternary `c ? a : b` leaves after its condition's closing line: its width - the closer run that
 	 * opens it plus `? a : b` up to the tail's first forced break - and whether such a break ends it. A branch that opens
 	 * its own paren group follows the container rule: the group opens at the end of a line that fits, so only that first

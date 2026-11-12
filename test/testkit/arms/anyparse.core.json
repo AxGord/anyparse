@@ -315,7 +315,7 @@
 			"name": "M-RESTPROBE-COLUMN-FLAT",
 			"type": "anyparse.core.Renderer",
 			"method": "pushStructural",
-			"find": "col: f.indent < col ? f.indent : col,",
+			"find": "col: (f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner),",
 			"replace": "col: col + pendingSpace + DocMeasure.flatTokenWidth(inner),",
 			"note": "a rest-aware group predicts the rest from its flat-layout column, so a trailing list that breaks only because the group stayed flat is taken as a break of its own and the group stays flat over it"
 		},
@@ -668,6 +668,13 @@
 			"find": "js.node.Buffer.hxFromBytes(bytes)",
 			"replace": "js.node.Buffer.hxFromBytes(bytes.sub(0, bytes.length - 1))",
 			"note": "the digest drops the last byte, so no content hashes to the md5 of its bytes"
+		},
+		{
+			"name": "M-REST-PROBE-CLOSE-RUN-OFF",
+			"type": "anyparse.core.DocMeasure",
+			"method": "brokenCloseRun",
+			"force": "0",
+			"note": "a rest-probe group predicts a later sibling's break from before its own broken closer, so an early short literal breaks for a sibling that overflows anyway"
 		}
 	]
 }

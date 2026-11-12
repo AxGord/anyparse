@@ -2647,7 +2647,8 @@ class Renderer {
 				// measured flat: its break is the one this group's break buys. The
 				// predictions run from `min(col, f.indent)`, a lower bound of where
 				// the rest starts in BOTH layouts (flat: past `col`; broken: the
-				// closing line sits at the group's indent), so each "does not fit"
+				// closing line sits at the group's indent, its closer run ahead
+				// of the rest: `DocMeasure.brokenCloseRun`), so each "does not fit"
 				// holds for the flat layout as well and the line this group keeps
 				// flat is never wider than the limit.
 				if (f.forceFlat) {
@@ -2655,7 +2656,7 @@ class Renderer {
 				} else {
 					final restW: Int = flatTokenWidthOfRestStack(stack, {
 						width: width,
-						col: f.indent < col ? f.indent : col,
+						col: (f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner),
 						exactCol: true,
 						groupAsker: true
 					});
