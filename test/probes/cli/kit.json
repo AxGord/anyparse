@@ -8351,6 +8351,9 @@
 		},
 		{
 			"name": "apq lint oraclebad --lang haxe --list-rules",
+			"note": "the list grows with every rule: the row pins the bad-oracle config's exit and err, and that each line of the list is a rule name and its description",
+			"outShape": "^([a-z][a-z0-9-]* +\\S|=== |file: )",
+			"outMinLines": 200,
 			"argv": [
 				"apq",
 				"lint",
@@ -8361,7 +8364,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "5d39f51e151c9589",
+				"out": "006bbabcf71d39e7",
 				"err": "b16af8623e04073d",
 				"files": "e3b0c44298fc1c14"
 			}
