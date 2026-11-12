@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -77,7 +78,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testClassKnobsDoNotAffectInterface(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.betweenFunctions = 5;
 		opts.afterVars = 5;
 		final out: String = HaxeModuleTriviaWriter.write(
@@ -90,7 +91,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	public function testInterfaceKnobsDoNotAffectClass(): Void {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.interfaceBetweenVars = 5;
 		opts.interfaceBetweenFunctions = 5;
 		opts.interfaceAfterVars = 5;
@@ -144,7 +145,7 @@ class HxInterfaceInterMemberBlankLinesOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src: String, ifaceBetweenVars: Int, ifaceBetweenFunctions: Int, ifaceAfterVars: Int): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.interfaceBetweenVars = ifaceBetweenVars;
 		opts.interfaceBetweenFunctions = ifaceBetweenFunctions;
 		opts.interfaceAfterVars = ifaceAfterVars;

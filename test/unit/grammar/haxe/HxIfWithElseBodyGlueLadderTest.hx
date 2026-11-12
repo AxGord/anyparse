@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -12,9 +14,15 @@ import utest.Test;
 final class HxIfWithElseBodyGlueLadderTest extends Test {
 
 	/** fitLine bodies, fitLine with an else, body glue on. */
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 80}, '
-		+ '"whitespace": {"bracesConfig": {"singleStatementBraces": "remove"}}, "sameLine": {"ifBody": "fitLine", "elseBody": "fitLine", '
-		+ '"fitLineIfWithElse": true, "fitLineBodyGlue": true}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 80;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.elseBody = BodyPolicy.FitLine;
+		edited.fitLineIfWithElse = true;
+		edited.fitLineBodyGlue = true;
+		edited.dropSingleStmtBraces = true;
+		edited.singleStmtBraceSymmetry = true;
+	});
 
 	private static final CALL_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n'
 		+ "\t\t\tattachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n"

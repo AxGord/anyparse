@@ -2,6 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -102,7 +103,7 @@ class HxIndentCaseLabelsOptionsTest extends Test {
 	}
 
 	private inline function writeWith(src: String, indentCaseLabels: Bool): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.indentCaseLabels = indentCaseLabels;
 		// Pin expressionCase=Next so case-body inline-source samples
 		// keep the multiline body shape these indentCaseLabels assertions

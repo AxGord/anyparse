@@ -1,5 +1,11 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.SameLinePolicy;
+import anyparse.format.wrap.WrapConditionType;
+import anyparse.format.wrap.WrapMode;
+import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -24,14 +30,45 @@ import utest.Test;
 @:nullSafety(Strict)
 final class HxIfExprCondWrapSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": ['
-		+ '{"conditions": [{"cond": "itemCount <= n", "value": 3}, {'
-		+ '"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": ['
-		+ '{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": '
-		+ '0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], '
-		+ '"type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": '
-		+ '"fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", '
-		+ '"value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
+	private static final CONFIG: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+		edited.lineWidth = 140;
+		edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+		edited.ifBody = BodyPolicy.FitLine;
+		edited.expressionIfBody = BodyPolicy.Next;
+		edited.expressionElseBody = BodyPolicy.Next;
+		edited.opBoolChainWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.NoWrap,
+			rules: [
+				{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					],
+					mode: WrapMode.NoWrap
+				},
+				{
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 120 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					],
+					mode: WrapMode.NoWrap
+				},
+				{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					location: WrappingLocation.BeforeLast,
+					mode: WrapMode.FillLine
+				}
+			]
+		};
+		edited.conditionWrap = {
+			defaultAdditionalIndent: 0,
+			defaultMode: WrapMode.FillLineWithLeadingBreak,
+			rules: [
+				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
+			]
+		};
+	});
 	private static final EXPLODED: String = 'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) ->\n'
 		+ '\t\t\tif (\n\t\t\t\tfoundId == -1 && (excludeId == -1 || betaArg.id != excludeId)\n'
 		+ '\t\t\t\t&& (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)\n'

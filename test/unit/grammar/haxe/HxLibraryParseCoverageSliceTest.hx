@@ -1,5 +1,6 @@
 package unit.grammar.haxe;
 
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
@@ -208,7 +209,7 @@ class HxLibraryParseCoverageSliceTest extends HxTestHelpers {
 
 	/** Byte-exact trivia round-trip under the writer defaults: the source keeps its own `;` choices. */
 	private function triviaEquals(source: String): Void {
-		Assert.equals(source, HxWriteFixture.triviaWrite(source, '{}'));
+		Assert.equals(source, HxWriteFixture.triviaWrite(source, HaxeFormatConfigLoader.loadHxFormatJson('{}')));
 	}
 
 }

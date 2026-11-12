@@ -1,5 +1,8 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.format.SameLinePolicy;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
@@ -62,13 +65,18 @@ final class HxIfBodyBlockCaseBarrierTest extends Test {
 		// Under the default config (expressionIfBody=Keep) the barrier does NOT
 		// fire — inline source is preserved (ifBody=Next would have broken it).
 		final src: String = 'class M { function f() { call(() -> { if (a) b(); }); } }';
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(out.indexOf('if (a) b();') != -1, 'default config must preserve inline source (barrier gated off): <$out>');
 	}
 
 	private inline function writeFitLineNext(src: String): String {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{"sameLine":{"ifBody":"fitLine","expressionIf":"next"}}');
+		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
+			edited.sameLineExpressionElse = SameLinePolicy.SameOnBlock;
+			edited.ifBody = BodyPolicy.FitLine;
+			edited.expressionIfBody = BodyPolicy.Next;
+			edited.expressionElseBody = BodyPolicy.Next;
+		});
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 

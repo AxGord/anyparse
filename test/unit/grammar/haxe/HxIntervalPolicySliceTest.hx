@@ -2,6 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
@@ -119,7 +120,7 @@ class HxIntervalPolicySliceTest extends HxTestHelpers {
 	}
 
 	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.intervalPolicy = policy;
 		return opts;
 	}
