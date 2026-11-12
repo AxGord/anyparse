@@ -1642,6 +1642,14 @@
 			"find": "c.kind != _shape.nullLiteralKind && !structural(c)",
 			"replace": "c.kind != _shape.nullLiteralKind",
 			"note": "a function value compared with null is asked for an operator overload, which nothing types, so a callback copy is never reported where an overload is declared"
+		},
+		{
+			"name": "M-TAILSCAN-PARAM-SHADOW-IGNORED",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "readsUnshadowed",
+			"find": "names.filter(n -> !params.contains(n))",
+			"replace": "names",
+			"note": "a function parameter of the lifted local's name does not hide it, so a read of that parameter blocks the unwrap"
 		}
 	]
 }

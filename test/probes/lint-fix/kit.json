@@ -2161,6 +2161,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "D-UNNECESSARY-BLOCK-LATER-READ-CAPTURE",
+			"note": "a bare block whose local would capture a later bare read of the field of that name keeps its braces: the unwrap is withheld and the finding stays",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"unnecessary-block",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tvar t:Int = 0;\n\n\tpublic function new() {}\n\n\tfunction f(c:Bool):Int {\n\t\tfoo(1);\n\t\t{\n\t\t\tvar t = 2;\n\t\t\tfoo(t);\n\t\t}\n\t\treturn t;\n\t}\n\n\tfunction foo(x:Int):Void {\n\t\tSys.println(x);\n\t}\n\n\tstatic function main() {\n\t\tSys.println(new Main().f(true));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

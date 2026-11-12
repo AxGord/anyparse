@@ -40,6 +40,15 @@ class RedundantElseRebindCheckTest extends Test {
 		Assert.equals(1, edits(src).length);
 	}
 
+	/** A later read inside a function whose parameter is the local's name reads that parameter, so the de-nest stays. */
+	@:pin('guard')
+	public function testLaterReadShadowedByAnInnerFunctionParameterStillDeNests(): Void {
+		final src: String = 'class C {\n\tvar t:Int = 0;\n\n\tfunction f(c:Bool):Int {\n\t\tif (c)\n\t\t\treturn 1;\n\t\telse {\n'
+			+ '\t\t\tvar t = 2;\n\t\t\tfoo(t);\n\t\t}\n\t\treturn bar(function(t:Int) return t);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
 	/** A splice nested in a later call argument may expand to a read of any name: with a local in the else body the fix is withheld. */
 	@:pin('control')
 	@:killer('M-REDUNDANT-ELSE-CAPTURE-BLIND')

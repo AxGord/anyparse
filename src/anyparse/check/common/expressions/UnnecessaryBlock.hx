@@ -2,6 +2,7 @@ package anyparse.check.common.expressions;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ScopeFrames;
+import anyparse.check.scan.TailScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
@@ -34,7 +35,8 @@ using StringTools;
  * ## Autofix
  *
  * `--fix` unwraps the block — drops its braces, splicing the trimmed statements into the parent. The canonical
- * pipeline reformats the result.
+ * pipeline reformats the result. The fix alone withholds a block whose local would capture a bare read of its name
+ * later in the enclosing frame (`TailScan.capturesLaterRead`); the finding stays.
  *
  * ## Grammar-agnostic
  *
@@ -55,7 +57,7 @@ final class UnnecessaryBlock extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (block in unwrappable(tree, seams)) {
+			for (block in unwrappable(tree, seams, false)) {
 				final span: Null<Span> = block.span;
 				if (span != null) violations.push({
 					file: entry.file,
@@ -80,7 +82,7 @@ final class UnnecessaryBlock extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
 			final approved: Map<String, Bool> = [];
-			for (block in unwrappable(tree, seams)) {
+			for (block in unwrappable(tree, seams, true)) {
 				final span: Null<Span> = block.span;
 				if (span != null) approved['${span.from}:${span.to}'] = true;
 			}
@@ -97,10 +99,12 @@ final class UnnecessaryBlock extends RuleBase {
 	/**
 	 * Walk `node`, skipping reification subtrees; harvest the unwrappable blocks of every statement-list container.
 	 */
-	private static function walk(node: QueryNode, seams: Seams, frames: Map<QueryNode, Array<String>>, out: Array<QueryNode>): Void {
+	private static function walk(
+		node: QueryNode, seams: Seams, frames: Map<QueryNode, Array<String>>, outer: Array<QueryNode>, forFix: Bool, out: Array<QueryNode>
+	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
-		if (seams.containerKinds.contains(node.kind)) harvest(node, seams, frames[node] ?? [], out);
-		for (c in node.children) walk(c, seams, frames, out);
+		if (seams.containerKinds.contains(node.kind)) harvest(node, seams, frames[node] ?? [], outer, forFix, out);
+		for (index => c in node.children) walk(c, seams, frames, TailScan.framesTailAfter(node, index, c, outer, seams.tail), forFix, out);
 	}
 
 	/**
@@ -117,7 +121,8 @@ final class UnnecessaryBlock extends RuleBase {
 		final shape: RefShape = plugin.refShape();
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (blockStmtKind == null || support == null) return null;
+		final tail: Null<TailSeams> = TailScan.resolveSeams(plugin);
+		if (blockStmtKind == null || support == null || tail == null) return null;
 		final blockKinds: Array<String> = support.blockKinds();
 		final caseBranchKinds: Array<String> = ShapeVocab.switchArmKinds(shape);
 		return {
@@ -131,14 +136,18 @@ final class UnnecessaryBlock extends RuleBase {
 			condKind: shape.conditionalMemberKind,
 			spliceKinds: shape.spliceKinds ?? [],
 			exprStmtKind: shape.exprStatementKind,
-			annotationKinds: shape.prefixAnnotationKinds ?? []
+			annotationKinds: shape.prefixAnnotationKinds ?? [],
+			tail: tail
 		};
 	}
 
-	/** Every block of `root` that unwraps cleanly into its container, in document order. */
-	private static function unwrappable(root: QueryNode, seams: Seams): Array<QueryNode> {
+	/**
+	 * Every block of `root` that unwraps cleanly into its container, in document order; `forFix` also applies the
+	 * later-read gate, which withholds the unwrap and keeps the finding.
+	 */
+	private static function unwrappable(root: QueryNode, seams: Seams, forFix: Bool): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		walk(root, seams, ScopeFrames.frameIndex(root, seams), out);
+		walk(root, seams, ScopeFrames.frameIndex(root, seams), [], forFix, out);
 		return out;
 	}
 
@@ -158,17 +167,22 @@ final class UnnecessaryBlock extends RuleBase {
 	 * CONTAINER, not at the block: a block is itself a scope (`RefShape.scopeKinds`), so its own bindings are
 	 * absent from the container's frame and a candidate can never collide with itself.
 	 */
-	private static function harvest(container: QueryNode, seams: Seams, scopeNames: Array<String>, out: Array<QueryNode>): Void {
+	private static function harvest(
+		container: QueryNode, seams: Seams, scopeNames: Array<String>, outer: Array<QueryNode>, forFix: Bool, out: Array<QueryNode>
+	): Void {
 		var only: Null<QueryNode> = null;
-		for (child in container.children) if (child.kind == seams.blockStmtKind && child.span != null) {
+		var position: Int = -1;
+		for (index => child in container.children) if (child.kind == seams.blockStmtKind && child.span != null) {
 			if (only != null) return;
 			only = child;
+			position = index;
 		}
 		final block: Null<QueryNode> = only;
 		if (
 			block != null
 			&& block.children.length <= CheckScan.BARE_BLOCK_MAX_STATEMENTS
 			&& !ScopeFrames.collidesWithScope(block.children, seams, scopeNames)
+			&& !(forFix && TailScan.capturesLaterRead(block.children, container.children.slice(position + 1).concat(outer), seams.tail))
 		)
 			out.push(block);
 	}
@@ -191,4 +205,5 @@ private typedef Seams = {
 	final spliceKinds: Array<String>;
 	final exprStmtKind: Null<String>;
 	final annotationKinds: Array<String>;
+	final tail: TailSeams;
 };

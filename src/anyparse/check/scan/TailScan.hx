@@ -204,6 +204,7 @@ final class TailScan {
 			localDeclContinuationKinds: localDeclContinuationKinds,
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			fnDeclKinds: ShapeVocab.localFunctionScopeKinds(shape),
+			functionKinds: ShapeVocab.functionLikeKinds(shape),
 			metaKinds: plugin.metaShape().metaKinds,
 			support: support,
 			terminator: shape.statementTerminator
@@ -230,7 +231,8 @@ final class TailScan {
 	public static function capturesLaterRead(stmts: Array<QueryNode>, later: Array<QueryNode>, seams: TailSeams): Bool {
 		final declared: Array<String> = localDeclNames(stmts, seams);
 		return declared.length != 0 && (
-			referencesAny(later, declared, seams.identKinds) || later.exists(s -> MemberKinds.subtreeContainsAnyKind(s, seams.spliceKinds))
+			later.exists(s -> readsUnshadowed(s, declared, seams))
+			|| later.exists(s -> MemberKinds.subtreeContainsAnyKind(s, seams.spliceKinds))
 		);
 	}
 
@@ -254,6 +256,20 @@ final class TailScan {
 		final nm: Null<String> = node.name;
 		if (nm != null && identKinds.contains(node.kind) && names.contains(nm)) return true;
 		return node.children.exists(c -> mentionsName(c, names, identKinds));
+	}
+
+	/**
+	 * Like `mentionsName`, but a function's (or lambda's) own parameter hides its name inside it: a read there is of
+	 * the parameter, so a lifted local of that name cannot capture it. A parameter's default value is evaluated
+	 * outside, so it keeps the outer names.
+	 */
+	private static function readsUnshadowed(node: QueryNode, names: Array<String>, seams: TailSeams): Bool {
+		final nm: Null<String> = node.name;
+		if (nm != null && seams.identKinds.contains(node.kind) && names.contains(nm)) return true;
+		if (!seams.functionKinds.contains(node.kind)) return node.children.exists(c -> readsUnshadowed(c, names, seams));
+		final params: Array<String> = ScopeFrames.paramNames(node, seams);
+		final inner: Array<String> = names.filter(n -> !params.contains(n));
+		return node.children.exists(c -> readsUnshadowed(c, params.contains(c.name ?? '') ? names : inner, seams));
 	}
 
 	private static function collectSites(node: QueryNode, seams: TailSeams, out: Array<ChainSite>): Void {
@@ -309,6 +325,7 @@ typedef TailSeams = {
 	final localDeclContinuationKinds: Array<String>;
 	final localDeclExprKinds: Array<String>;
 	final fnDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
 	final metaKinds: Array<String>;
 	final support: ControlFlowSupport;
 	final terminator: Null<String>;

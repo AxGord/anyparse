@@ -87,7 +87,7 @@ final class ScopeFrames {
 	 * blocks (that excludes the body block; the return-type node's name is harmless — a local can
 	 * never share a type's name, so it never causes a false collision).
 	 */
-	public static function paramNames(fn: QueryNode, seams: FrameSeams): Array<String> {
+	public static function paramNames(fn: QueryNode, seams: { final blockKinds: Array<String>; }): Array<String> {
 		final names: Array<String> = [];
 		for (c in fn.children) {
 			final nm: Null<String> = c.name;

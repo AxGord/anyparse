@@ -408,6 +408,30 @@
 			"find": "ctx.seams.interfaceKinds.contains(decl.type.kind) ? null : ctx.types[decl.type.name]",
 			"replace": "ctx.types[decl.type.name]",
 			"note": "an interface receiver reads as its declaration's members, so `m -> iface.m(m)` is reduced to a method value that hxcpp lowers to a dynamic field read"
+		},
+		{
+			"name": "M-UNNECESSARY-BLOCK-LATER-READ-GATE-OFF",
+			"type": "anyparse.check.common.expressions.UnnecessaryBlock",
+			"method": "harvest",
+			"find": "&& !(forFix && TailScan.capturesLaterRead(block.children, container.children.slice(position + 1).concat(outer), seams.tail))",
+			"replace": "",
+			"note": "the fix unwraps a block whose local would capture a later bare read of the same name, so the read binds the lifted local instead of the field"
+		},
+		{
+			"name": "M-UNNECESSARY-BLOCK-LATER-READ-GATE-ALWAYS",
+			"type": "anyparse.check.common.expressions.UnnecessaryBlock",
+			"method": "harvest",
+			"find": "TailScan.capturesLaterRead(block.children, container.children.slice(position + 1).concat(outer), seams.tail)",
+			"replace": "true",
+			"note": "every block counts as capturing a later read, so a block no later statement reads is never unwrapped"
+		},
+		{
+			"name": "M-UNNECESSARY-BLOCK-LATER-READ-OUTER-DROPPED",
+			"type": "anyparse.check.common.expressions.UnnecessaryBlock",
+			"method": "harvest",
+			"find": "container.children.slice(position + 1).concat(outer)",
+			"replace": "container.children.slice(position + 1)",
+			"note": "the statements after a `#if` region wrapping the block are not looked at, so a read beyond the region is captured by the unwrapped local"
 		}
 	]
 }
