@@ -600,8 +600,8 @@ final class AstCommand implements CliCommand implements StdinDocument {
 			CliIo.stderr('apq ast: --at expects LINE:COL, got "$atExpr"\n');
 			return EXIT_USAGE;
 		}
-		final atLine: Null<Int> = Std.parseInt(atExpr.substring(0, colonIdx));
-		final atCol: Null<Int> = Std.parseInt(atExpr.substring(colonIdx + 1));
+		final atLine: Null<Int> = SourceText.parseStrictSignedInt(atExpr.substring(0, colonIdx));
+		final atCol: Null<Int> = SourceText.parseStrictSignedInt(atExpr.substring(colonIdx + 1));
 		if (atLine == null || atCol == null) {
 			CliIo.stderr('apq ast: --at expects integer LINE:COL, got "$atExpr"\n');
 			return EXIT_USAGE;

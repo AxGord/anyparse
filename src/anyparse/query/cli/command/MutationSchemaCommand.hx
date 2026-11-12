@@ -115,7 +115,7 @@ final class MutationSchemaCommand implements CliCommand {
 		return [
 			for (line in plan.split('\n')) if (line.trim() != '') {
 				final cells: Array<String> = line.split('\t');
-				final id: Int = Std.parseInt(cells[0]) ?? 0;
+				final id: Int = SourceText.parseStrictSignedInt(cells[0]) ?? 0;
 				if (cells.length != 4 || id <= 0)
 					throw new Exception('a plan row is <id>\\t<file>\\t<selector>\\t<mutated-file>, got "$line"');
 				{ id: id, file: cells[1], arm: { id: id, select: cells[2], mutated: CliIo.readFile(cells[3]) } };

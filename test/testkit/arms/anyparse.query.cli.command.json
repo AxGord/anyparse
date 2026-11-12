@@ -1339,6 +1339,30 @@
 			"find": "windows[entry.file] = changed ?? [];",
 			"replace": "if (changed != null) windows[entry.file] = changed;",
 			"note": "a file whose diff outgrows the line differ gets no window, so --changed-since fixes it whole again instead of leaving it untouched"
+		},
+		{
+			"name": "M-AST-AT-PREFIX-PARSE",
+			"type": "anyparse.query.cli.command.AstCommand",
+			"method": "runAstAt",
+			"find": "SourceText.parseStrictSignedInt(atExpr.substring(0, colonIdx))",
+			"replace": "Std.parseInt(atExpr.substring(0, colonIdx))",
+			"note": "ast --at reads the leading digits of its LINE, so 1x:2 resolves as 1:2 instead of being refused"
+		},
+		{
+			"name": "M-MOVE-RANGE-PREFIX-PARSE",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "parseRange",
+			"find": "SourceText.parseStrictSignedInt(parts[0])",
+			"replace": "Std.parseInt(parts[0])",
+			"note": "move-elements --range reads the leading digits of its first bound, so 1x..2 is accepted as 1..2"
+		},
+		{
+			"name": "M-MUTATION-PLAN-ID-PREFIX-PARSE",
+			"type": "anyparse.query.cli.command.MutationSchemaCommand",
+			"method": "parsePlan",
+			"find": "SourceText.parseStrictSignedInt(cells[0])",
+			"replace": "Std.parseInt(cells[0])",
+			"note": "a mutation-schema plan id reads its leading digits, so 1x is accepted as 1"
 		}
 	]
 }

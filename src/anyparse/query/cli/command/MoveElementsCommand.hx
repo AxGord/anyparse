@@ -191,10 +191,10 @@ final class MoveElementsCommand implements CliCommand {
 	/** `<first>..<last>` or `<n>` as `[first, last]`, or null when it is neither. */
 	private static function parseRange(text: String): Null<Array<Int>> {
 		final parts: Array<String> = text.split('..');
-		final first: Null<Int> = Std.parseInt(parts[0]);
+		final first: Null<Int> = SourceText.parseStrictSignedInt(parts[0]);
 		final last: Null<Int> = switch parts.length {
 			case 1: first;
-			case 2: Std.parseInt(parts[1]);
+			case 2: SourceText.parseStrictSignedInt(parts[1]);
 			case _: null;
 		};
 		return first == null || last == null ? null : [first, last];

@@ -43,7 +43,9 @@
 		"search/Lambda.hx": "class A {\n\tfunction f(xs: Array<Int>) {\n\t\tvar a = xs.map(group -> group);\n\t\tvar b = xs.map(group -> (group : Int));\n\t\tvar c = xs.map(g -> h);\n\t\tvar d = xs.map(p -> new p());\n\t}\n}\n",
 		"identitymap/apq.json": "{\"rules\":{\"identity-map\":{\"enabled\":true}}}\n",
 		"identitymap/Main.hx": "enum abstract E(String) {\n\tvar A = 'a';\n}\n\nclass Main {\n\tstatic function main():Void {\n\t\tfinal ints:Array<Int> = [1, 2, 3];\n\t\tfinal a:Array<Null<Int>> = ints.map(x -> x);\n\t\tfinal b:Array<Null<Int>> = [for (x in ints) x];\n\t\tfinal d:Array<Dynamic> = ints.map(x -> (x : Dynamic));\n\t\tfinal es:Array<E> = [A];\n\t\tfinal c:Array<Null<E>> = es.map(x -> (x : Null<E>));\n\t\ttrace(a, b, c, d);\n\t}\n}\n",
-		"canon/e.hx": "class T {\n\tfunction f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\talpha: 1000000,\n\t\t\t\tbeta: 2000000,\n\t\t\t\tgamma: 3000000,\n\t\t\t\tdelta: 4000000\n\t\t\t},\n\t\t\t{\n\t\t\t\talpha: 3000000,\n\t\t\t\tbeta: 4000000,\n\t\t\t\tgamma: 5000000,\n\t\t\t\tdelta: 6000000\n\t\t\t}\n\t\t];\n\t}\n}\n"
+		"canon/e.hx": "class T {\n\tfunction f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\talpha: 1000000,\n\t\t\t\tbeta: 2000000,\n\t\t\t\tgamma: 3000000,\n\t\t\t\tdelta: 4000000\n\t\t\t},\n\t\t\t{\n\t\t\t\talpha: 3000000,\n\t\t\t\tbeta: 4000000,\n\t\t\t\tgamma: 5000000,\n\t\t\t\tdelta: 6000000\n\t\t\t}\n\t\t];\n\t}\n}\n",
+		"specpieces/M.hx": "class M {\n\tstatic final X: Array<Int> = [1, 2, 3];\n\n\tstatic final Y: Array<Int> = [9];\n}\n",
+		"specpieces/plan.tsv": "1x\tspecpieces/M.hx\tVarDecl\tspecpieces/M.hx\n"
 	},
 	"invocations": [
 		{
@@ -4446,9 +4448,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 1,
-				"out": "e3b0c44298fc1c14",
-				"err": "e64c2d90d34481e7",
+				"exit": 2,
+				"out": "b71c01bb8bca4aef",
+				"err": "f00e210c87c5b509",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -4467,9 +4469,9 @@
 			],
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
-				"exit": 1,
-				"out": "e3b0c44298fc1c14",
-				"err": "e64c2d90d34481e7",
+				"exit": 2,
+				"out": "b71c01bb8bca4aef",
+				"err": "f00e210c87c5b509",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -9089,6 +9091,106 @@
 				"exit": 0,
 				"out": "443ae803dd69e1a3",
 				"err": "9846997134bcb3ee",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast pkg/Foo.hx --at 1x:2",
+			"argv": [
+				"apq",
+				"ast",
+				"pkg/Foo.hx",
+				"--at",
+				"1x:2"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "1a301ac355b5730b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq move-elements specpieces/M.hx 2 --range 1x..2 --append match:[9] --dry-run",
+			"argv": [
+				"apq",
+				"move-elements",
+				"specpieces/M.hx",
+				"2",
+				"--range",
+				"1x..2",
+				"--append",
+				"match:[9]",
+				"--dry-run"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "b71c01bb8bca4aef",
+				"err": "f00e210c87c5b509",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast pkg/Foo.hx --at 1x:2",
+			"argv": [
+				"hxq",
+				"ast",
+				"pkg/Foo.hx",
+				"--at",
+				"1x:2"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "1a301ac355b5730b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq move-elements specpieces/M.hx 2 --range 1x..2 --append match:[9] --dry-run",
+			"argv": [
+				"hxq",
+				"move-elements",
+				"specpieces/M.hx",
+				"2",
+				"--range",
+				"1x..2",
+				"--append",
+				"match:[9]",
+				"--dry-run"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "b71c01bb8bca4aef",
+				"err": "f00e210c87c5b509",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq mutation-schema specpieces/plan.tsv",
+			"argv": [
+				"apq",
+				"mutation-schema",
+				"specpieces/plan.tsv"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "5e0f759a14516498",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mutation-schema specpieces/plan.tsv",
+			"argv": [
+				"hxq",
+				"mutation-schema",
+				"specpieces/plan.tsv"
+			],
+			"expect": {
+				"exit": 2,
+				"out": "e3b0c44298fc1c14",
+				"err": "ab128e13656021cb",
 				"files": "e3b0c44298fc1c14"
 			}
 		}
