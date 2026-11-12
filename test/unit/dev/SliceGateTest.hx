@@ -66,22 +66,13 @@ final class SliceGateTest extends Test {
 	/** `FAKE_SELF` with its `corpus` row ending failed. */
 	private static final FAILING_CORPUS_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='corpus'?'failed':'passed'");
 
+	/** `FAKE_SELF` with its `arms` row ending failed. */
+	private static final FAILING_ARMS_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='arms'?'failed':'passed'");
+
 	/** A stand-in branch that starts its first row and then stops moving for good, as a wedged row does. */
 	private static final STALLED_SELF: String = "const fs=require('fs');const a=process.argv.slice(2);const at=n=>a[a.indexOf(n)+1];"
 		+ "const rows=at('--rows').split(','),logs=at('--logs');fs.mkdirSync(logs+'/rows',{recursive:true});"
 		+ "fs.writeFileSync(logs+'/rows/'+rows[0]+'.json.progress',rows[0]);setInterval(()=>{},1000);";
-
-	/**
-	 * `FAKE_SELF` for every branch but the arms one, which stops moving
-	 * as `STALLED_SELF` does: the arms phase follows a green fan-out only.
-	 */
-	private static final ARMS_STALLED_SELF: String = [
-		"const rows0=process.argv[process.argv.indexOf('--rows')+1];if(rows0!=='arms'){",
-		FAKE_SELF,
-		'}else{',
-		STALLED_SELF,
-		'}'
-	].join('');
 
 	private static final FAILING_LISTS_SELF: String = FAKE_SELF.replace("outcome:'passed'", "outcome:n==='lists'?'failed':'passed'");
 
@@ -162,7 +153,7 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * The arms row is a phase of its own after the other branches, and takes a lease of one thread up to `ARMS_THREADS`
+	 * The arms row is a phase of its own before the other branches, and takes a lease of one thread up to `ARMS_THREADS`
 	 * that goes back to the pool as it ends: a gate that held its whole lease for the arms starved every other build.
 	 * Under a held lease it takes what that lease has, up to the same bound; without a pool, nothing.
 	 */
@@ -233,18 +224,19 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
-	 * A row of the first fan-out that ended red leaves the arms row not run, naming that row, and starts no arms branch and asks
-	 * for no lease: the gate is red whatever the kill run says.
+	 * An arms row that ended red leaves every row of the fan-out not run, naming the arms, and starts none of their branches:
+	 * the gate is red whatever they say, and the cheap gates still run.
 	 */
 	@:pin('control')
-	@:killer('M-GATE-ARMS-RUN-ON-RED-ROW')
-	public function testARedRowOfTheFirstFanOutStartsNoArmsRun(): Void {
-		final ran: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, FAILING_CORPUS_SELF);
+	@:killer('M-GATE-RED-ARMS-STARTS-FAN-OUT')
+	public function testARedArmsRowStartsNoOtherRow(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, FAILING_ARMS_SELF);
 		Assert.equals(1, ran.status, ran.table);
-		Assert.isTrue(ran.branches.contains('suite'), 'the first fan-out still ran: ${ran.branches}');
-		Assert.isFalse(ran.branches.contains('arms'), 'branches: ${ran.branches}\n${ran.table}');
-		Assert.isFalse(ran.leases.contains(' arms -- '), 'leases: ${ran.leases}');
-		Assert.isTrue(~/(^|\n)arms +not run +[0-9.]+s +not run: corpus did not pass/.match(ran.table), ran.table);
+		Assert.equals('arms', ran.branches.trim(), 'only the arms branch ran: ${ran.branches}');
+		Assert.isTrue(~/(^|\n)arms +FAILED/.match(ran.table), ran.table);
+		for (row in ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'infra4', 'scrub'])
+			Assert.isTrue(new EReg('(^|\\n)$row +not run +[0-9.]+s +not run: arms red', '').match(ran.table), '$row\n${ran.table}');
+		Assert.isTrue(~/(^|\n)porcelain /.match(ran.table), 'the cheap gates still run: ${ran.table}');
 	}
 
 	/**
@@ -356,8 +348,8 @@ final class SliceGateTest extends Test {
 	 */
 	@:pin('guard')
 	public function testABranchThatStopsMovingIsCutAndNamesItsRow(): Void {
-		final armsOnly: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, ARMS_STALLED_SELF, 1000);
-		final all: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
+		final armsOnly: GateRan = gateRun(GROWN_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
+		final all: GateRan = gateRun(BASE_REGISTRY, [], GRAPH_HXQ, STALLED_SELF, 1000);
 		for (first in ['suite', 'lists', 'lint', 'jvm', 'infra4', 'kits', 'arms']) {
 			final log: String = (first == 'arms' ? armsOnly : all).rowLogs[first] ?? '';
 			Assert.stringContains('made no progress for 1 s', log, first);
@@ -575,6 +567,18 @@ final class SliceGateTest extends Test {
 			Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts(false), rows)) + 1,
 			Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts(true), rows))
 		);
+	}
+
+	/** An arms row that ended green is followed by every row of the fan-out, and it stands first in the table. */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-PHASE-ALWAYS-RED')
+	public function testAGreenArmsRowIsFollowedByEveryOtherRow(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY);
+		Assert.equals(0, ran.status, ran.table);
+		Assert.isTrue(ran.branches.contains('suite'), 'branches: ${ran.branches}');
+		Assert.isTrue(ran.branches.startsWith('arms'), 'the arms branch ran first: ${ran.branches}');
+		Assert.isTrue(ran.table.indexOf('\narms ') < ran.table.indexOf('\nsuite '), ran.table);
+		Assert.isFalse(ran.table.contains('not run: arms red'), ran.table);
 	}
 
 	/**

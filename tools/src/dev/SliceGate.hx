@@ -59,7 +59,7 @@ final class SliceGate {
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
 	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
-	 * that follows (`ARMS_BRANCHES`). A whole-suite gate whose base suite is not yet read adds the `base` branch beside them
+	 * that runs before them (`ARMS_BRANCHES`). A whole-suite gate whose base suite is not yet read adds the `base` branch beside them
 	 * (`BaseSuite.plan`): the suite row and the corpus row wait for it where they need the base; a gate whose `infra4` row will
 	 * compare with a base lint not yet kept adds the `base-lint` branch (`BaseLint.plan`), and that row waits for it.
 	 */
@@ -74,7 +74,7 @@ final class SliceGate {
 	];
 
 	/**
-	 * The phase after every other branch has ended: the arms row alone, on a lease of its own. The kill run is a compile
+	 * The phase before every other branch starts: the arms row alone, on a lease of its own. The kill run is a compile
 	 * server and a suite process per job, so it asks for a range from one thread up to `ARMS_THREADS`: it
 	 * takes what the pool has free when it starts, its `--jobs` follow the lease granted (never the top
 	 * of the range), and the threads go back the moment it ends, instead of keeping a gate's lease for it.
@@ -87,7 +87,7 @@ final class SliceGate {
 	/** The registries `bin/test.js` lists, each counted in the lists row. */
 	private static final LISTINGS: Array<String> = ['classes', 'pins', 'arms', 'claims', 'dead', 'bases'];
 
-	/** The rows of `GATE_BRANCHES` in table order; `arms`, `decisions`, `frozen` and `porcelain` follow, once every branch has ended. */
+	/** The rows of `GATE_BRANCHES` in table order; `arms` runs before them, `decisions`, `frozen` and `porcelain` follow. */
 	private static final GATE_ROWS: Array<String> = [
 		'suite',
 		'lists',
@@ -187,11 +187,20 @@ final class SliceGate {
 			return finish(title);
 		}
 		if (!build()) return finish(title);
-		final bases: Array<Array<String>> = [];
-		if (BaseSuite.plan(_gate, wholeSuite())) bases.push([BaseSuite.ROW]);
-		if (BaseLint.plan(_gate)) bases.push([BaseLint.ROW]);
-		fanOut(self, GATE_BRANCHES.concat(bases), GATE_ROWS);
-		armsPhase(self);
+		final plan: Null<ArmPlan> = armsPlan();
+		if (armsPhase(self, plan)) {
+			for (name in GATE_ROWS) gate(name, () -> NotRun('not run: arms red'));
+		} else {
+			final bases: Array<Array<String>> = [];
+			if (BaseSuite.plan(_gate, wholeSuite())) bases.push([BaseSuite.ROW]);
+			if (BaseLint.plan(_gate)) bases.push([BaseLint.ROW]);
+			fanOut(self, GATE_BRANCHES.concat(bases), GATE_ROWS);
+			switch plan {
+				case Settled(outcome):
+					gate(ARMS_ROW, () -> outcome);
+				case _:
+			}
+		}
 		gate('decisions', decisionsOutcome);
 		gate('frozen', frozenOutcome);
 		gate('porcelain', () -> {
@@ -277,32 +286,23 @@ final class SliceGate {
 	}
 
 	/**
-	 * The arms row, once every other branch has ended: a branch of its own that takes `armsThreads` of the caller's lease, or
-	 * under no lease a pool lease of its own for the phase alone (`armsCommand`). A row the plan settles without a run
-	 * (`--no-arms`, no arm selected) is read in this process and takes no lease. When a row of the
-	 * first fan-out is already red the row is not run: the gate is red whatever the kill run says.
+	 * The arms row, run right after the build and before the fan-out: a branch of its own that takes `armsThreads` of the
+	 * caller's lease, or under no lease a pool lease of its own for the phase alone (`armsCommand`). A plan the gate settles
+	 * without a run (`--no-arms`, no arm selected) takes no lease and leaves the row to `check`. Answers whether the row ended
+	 * red: then the gate is red whatever the other rows say, and `check` starts none of them.
 	 */
-	private function armsPhase(self: String): Void {
-		final plan: Null<ArmPlan> = armsPlan();
+	private function armsPhase(self: String, plan: Null<ArmPlan>): Bool {
 		final tracks: Int = switch plan {
-			case Settled(outcome):
-				gate(ARMS_ROW, () -> outcome);
-				return;
+			case Settled(_): return false;
 			case Runs(picked, _): picked.fast.length;
 			case null: ARMS_THREADS;
 		};
-		final red: Array<String> = _gate.summary.unfit();
-		if (red.length > 0) {
-			gate(
-				ARMS_ROW, () -> NotRun(GateTree.clip('not run: ${red.join(', ')} did not pass, so the gate is red whatever the arms say'))
-			);
-		} else {
-			final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
-			final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
-			final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label, tracks);
-			for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
-				_readings[name] = value;
-		}
+		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
+		final label: String = 'slice-gate ${Path.withoutDirectory(_gate.tree)} arms';
+		final leased: Array<String> -> Command = rows -> armsCommand(_mode, command(rows), label, tracks);
+		for (name => value in Branches.run(_gate.options.run, ARMS_BRANCHES, [ARMS_ROW], leased, branchReport, _gate.summary))
+			_readings[name] = value;
+		return _gate.summary.unfit().contains(ARMS_ROW);
 	}
 
 	/** The `--rows` process of a branch running `rows`, over the logs' copy `self` of this script, handed `threads`. */

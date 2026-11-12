@@ -552,24 +552,32 @@
 			"name": "M-GATE-CHECK-DROPS-ARMS-PHASE",
 			"type": "dev.SliceGate",
 			"method": "check",
-			"find": "armsPhase(self);",
-			"replace": "",
+			"find": "if (armsPhase(self, plan)) {",
+			"replace": "if (false) {",
 			"note": "a gate run that never starts the arms phase reports no arms row, so an arm that no longer kills its pin passes"
 		},
 		{
-			"name": "M-GATE-ARMS-RUN-ON-RED-ROW",
+			"name": "M-GATE-RED-ARMS-STARTS-FAN-OUT",
+			"type": "dev.SliceGate",
+			"method": "check",
+			"find": "if (armsPhase(self, plan)) {",
+			"replace": "if (armsPhase(self, plan) && false) {",
+			"note": "a gate whose arms row ended red still starts the whole fan-out, paying the suite and the lints for a verdict the gate has already given"
+		},
+		{
+			"name": "M-GATE-ARMS-PHASE-ALWAYS-RED",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",
-			"find": "if (red.length > 0) {",
-			"replace": "if (false) {",
-			"note": "a gate whose first fan-out already has a red row still starts the arms kill run, spending its minutes on a verdict the gate has already given"
+			"find": "return _gate.summary.unfit().contains(ARMS_ROW);",
+			"replace": "return true;",
+			"note": "a gate whose arms row passed still treats it as red and starts no other row, so every green gate reports its rows not run"
 		},
 		{
 			"name": "M-GATE-ARMS-LEASE-BEFORE-PLAN",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",
-			"find": "return;",
-			"replace": "ARMS_THREADS;",
+			"find": "case Settled(_): return false;",
+			"replace": "case Settled(_): ARMS_THREADS;",
 			"note": "an arms phase that does not ask the plan first leases and starts a branch for a selection that is empty"
 		},
 		{
@@ -583,7 +591,7 @@
 		{
 			"name": "M-GATE-SETTLED-ARMS-ROW-DROPPED",
 			"type": "dev.SliceGate",
-			"method": "armsPhase",
+			"method": "check",
 			"find": "gate(ARMS_ROW, () -> outcome);",
 			"replace": "",
 			"note": "a plan the gate settles in its own process never reaches the table, so a mistyped --arm passes the gate"
