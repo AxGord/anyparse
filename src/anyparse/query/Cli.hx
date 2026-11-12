@@ -325,7 +325,7 @@ final class Cli {
 		};
 		if (!verify) return run();
 		final journal: WriteJournal = new WriteJournal();
-		return WriteVerification.settle(cmd, journal, WriteJournal.during(journal, run), forced);
+		return WriteVerification.settle(cmd, journal, WriteJournal.during(journal, run), forced, ledger);
 	}
 
 	private static function printUsage(): Void {

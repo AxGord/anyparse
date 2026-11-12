@@ -9,6 +9,7 @@ import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.Cli;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 using Lambda;
@@ -120,7 +121,7 @@ class EffectiveRulesTest extends Test {
 		FileSystem.createDirectory('$root/other');
 		File.saveContent('$root/Top.hx', 'class Top {}\n');
 		File.saveContent('$root/other/Side.hx', 'class Side {}\n');
-		final groups: Array<RuleStateGroup> = EffectiveRules.resolve(
+		final groups: Array<RuleStateGroup> = TestConfigs.rules(
 			['$root/Top.hx', '$root/nested/Probe.hx', '$root/other/Side.hx'], Linter.builtins()
 		);
 		Assert.equals(2, groups.length, 'two chains, however many directories');
@@ -166,7 +167,7 @@ class EffectiveRulesTest extends Test {
 			null
 		);
 		File.saveContent('$root/Top.hx', 'class Top {}\n');
-		final groups: Array<RuleStateGroup> = EffectiveRules.resolve(['$root/Top.hx', '$root/nested/Probe.hx'], Linter.builtins());
+		final groups: Array<RuleStateGroup> = TestConfigs.rules(['$root/Top.hx', '$root/nested/Probe.hx'], Linter.builtins());
 		Assert.equals(2, groups.length, 'one chain, two rule states: two groups');
 		// An object of options enables its rule, so the config — not the default — decides it here.
 		assertState(groups[0], 'thread-safety', true, 'config');
@@ -263,7 +264,7 @@ class EffectiveRulesTest extends Test {
 
 	/** The one group a single file resolves to. */
 	private function only(file: String): RuleStateGroup {
-		final groups: Array<RuleStateGroup> = EffectiveRules.resolve([file], Linter.builtins());
+		final groups: Array<RuleStateGroup> = TestConfigs.rules([file], Linter.builtins());
 		Assert.equals(1, groups.length, 'one file resolves to one group');
 		return groups[0];
 	}

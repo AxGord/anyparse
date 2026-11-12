@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.OracleProvider;
@@ -41,13 +42,17 @@ final class LintOracleRun {
 	 * Under `--no-oracle` nothing is generated: the run compiles nothing, so it owes no hxml.
 	 *
 	 * The configurations carry this run's `OracleRunMemo`, so a compile of a tree the run already compiled is answered
-	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can.
+	 * from it; `persisted` says the run is a report, which answers its verdict from `OracleCache` when it can. The declared
+	 * list's config notes go through `ledger`.
 	 */
 	public static function oraclesOf(
-		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>, grammar: GrammarPlugin
+		config: Null<LintConfig>, noOracle: Bool, persisted: Bool, files: Array<{ file: String, source: String }>, grammar: GrammarPlugin,
+		ledger: RunLedger
 	): Array<OracleConfig> {
 		final compiler: OracleProvider = OracleProviders.of(grammar);
-		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles(compiler);
+		final notes: Array<ConfigNote> = [];
+		final declared: Array<OracleConfig> = config == null ? [] : config.compilerOracles(compiler, notes);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		if (noOracle) return declared;
 		final prepared: PreparedOracles = compiler.prepareBuilds(declared);
 		for (note in prepared.notes) CliIo.stderr('apq lint: compilerOracle $note\n');
@@ -256,11 +261,14 @@ final class LintOracleRun {
 	 * Whether the reach analysis may read the run's oracle builds as every build the project ships: EVERY linted path's
 	 * config declares `reachConfigurationsComplete` over the same `compilerOracle` list as the first path's — the list the
 	 * run probes. A path whose config says otherwise may ship a build that list does not name, so a run whose paths
-	 * disagree walks every branch, and says so once when any of them declared the flag.
+	 * disagree walks every branch, and says so once when any of them declared the flag. Config notes go through `ledger`.
 	 */
-	public static function reachComplete(compiler: OracleProvider, paths: Array<String>, resolveConfig: String -> LintConfig): Bool {
+	public static function reachComplete(
+		compiler: OracleProvider, paths: Array<String>, resolveConfig: String -> LintConfig, ledger: RunLedger
+	): Bool {
 		if (paths.length == 0) return false;
-		final list: LintConfig -> String = c -> c.compilerOracles(compiler).map(compiler.oracleKey).join('|');
+		final notes: Array<ConfigNote> = [];
+		final list: LintConfig -> String = c -> c.compilerOracles(compiler, notes).map(compiler.oracleKey).join('|');
 		final first: String = list(resolveConfig(paths[0]));
 		var declared: Bool = false;
 		var all: Bool = true;
@@ -269,6 +277,7 @@ final class LintOracleRun {
 			if (config.reachConfigurationsComplete()) declared = true;
 			if (!config.reachConfigurationsComplete() || list(config) != first) all = false;
 		}
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		if (declared && !all)
 			CliIo.stderr(
 				'apq lint: reachConfigurationsComplete ignored — the linted paths resolve to different compilerOracle lists or'

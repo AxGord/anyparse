@@ -123,7 +123,9 @@ final class ConfigDisagreement {
 	private static function oracleMessage(
 		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
 	): Null<String> {
-		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles(compiler, notes)));
+		return message(
+			resolve, paths, 'the compiler oracle', c -> oracleSignature(ConfigNotes.into(notes, n -> c.compilerOracles(compiler, n)))
+		);
 	}
 
 	/**
@@ -185,7 +187,7 @@ final class ConfigDisagreement {
 	 * about a setting stays quiet however many rules ask the question again.
 	 */
 	private static function warn(kind: String, label: String, line: Null<String>, notes: Null<Array<ConfigNote>>): Void {
-		if (line != null) ConfigNotes.note(notes, '$kind:$label', line);
+		if (line != null) ConfigNotes.into(notes, n -> ConfigNotes.note(n, '$kind:$label', line));
 	}
 
 	/**

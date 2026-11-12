@@ -11,6 +11,7 @@ import anyparse.check.common.docs.EnglishComments;
 import anyparse.check.common.docs.PreferDocComment;
 import anyparse.check.common.literals.MagicNumber;
 import anyparse.check.haxe.loops.PreferFind;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /**
@@ -91,7 +92,7 @@ class LintCategoryConfigTest extends Test {
 			{ name: 'nested/apq.json', source: '{"categories": {"literals": true}}' },
 			{ name: 'nested/Probe.hx', source: 'class Probe {}\n' }
 		]);
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.isTrue(Linter.enabledBy(config, new DocLength()), 'the ancestor category falls through');
 		Assert.isTrue(Linter.enabledBy(config, new MagicNumber()), 'the nearer category entry wins');
 		Assert.isFalse(Linter.enabledBy(config, new EmptyComment()), 'the ancestor rule entry still outranks the category');
@@ -131,16 +132,16 @@ class LintCategoryConfigTest extends Test {
 		];
 		for (c in cases) {
 			final root: String = nestedTree(c.root, c.nested);
-			Assert.equals(c.expected, Linter.enabledBy(LintConfig.discover('$root/nested/Probe.hx'), new PreferDocComment()), c.why);
+			Assert.equals(c.expected, Linter.enabledBy(TestConfigs.discover('$root/nested/Probe.hx'), new PreferDocComment()), c.why);
 			CliFixture.removeDir(root);
 		}
 		final restated: String = nestedTree(
 			'{"categories": {"docs": true}, "rules": {"doc-measurement-claim": false}}', '{"categories": {"docs": true}}'
 		);
-		final config: LintConfig = LintConfig.discover('$restated/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$restated/nested/Probe.hx');
 		Assert.isTrue(Linter.enabledBy(config, new DocMeasurementClaim()), 'an outer exception does not survive a restated category');
 		Assert.isFalse(
-			Linter.enabledBy(LintConfig.discover('$restated/Top.hx'), new DocMeasurementClaim()), 'it still holds where it was written'
+			Linter.enabledBy(TestConfigs.discover('$restated/Top.hx'), new DocMeasurementClaim()), 'it still holds where it was written'
 		);
 		CliFixture.removeDir(restated);
 		#else

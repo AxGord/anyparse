@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.cli.command.LintCommand;
@@ -17,8 +18,10 @@ final class ProjectResolution {
 	 * `CachingGrammarPlugin` carrying the project's resolution scope when the project (or the std) provides one.
 	 */
 	public static function hostFor(plugin: GrammarPlugin, file: String, source: String, ledger: RunLedger): GrammarPlugin {
-		final config: LintConfig = LintConfig.discover(file);
-		OracleProviders.reportDrops(config, plugin);
+		final notes: Array<ConfigNote> = [];
+		final config: LintConfig = LintConfig.discover(file, notes);
+		OracleProviders.reportDrops(config, plugin, notes);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(
 			plugin.langName(), [{ file: file, source: source }],
 			config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd(), ledger

@@ -4,7 +4,9 @@ import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.haxe.oracle.OracleDeclaration;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.command.LintOracleRun;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /**
@@ -245,16 +247,18 @@ class LintConfigTest extends Test {
 	 * is what makes a second arm of a `#if` typecheckable at all.
 	 */
 	public function testTheStringAndArrayFormsAgree(): Void {
-		final asString: Array<OracleConfig> = LintConfig.parse('{"compilerOracle":"build.hxml"}', '/proj')
-			.compilerOracles(new HaxeQueryPlugin());
-		final asArray: Array<OracleConfig> = LintConfig.parse('{"compilerOracle":[{"hxml":"build.hxml"}]}', '/proj')
-			.compilerOracles(new HaxeQueryPlugin());
+		final asString: Array<OracleConfig> = TestConfigs.oracles(
+			LintConfig.parse('{"compilerOracle":"build.hxml"}', '/proj'), new HaxeQueryPlugin()
+		);
+		final asArray: Array<OracleConfig> = TestConfigs.oracles(
+			LintConfig.parse('{"compilerOracle":[{"hxml":"build.hxml"}]}', '/proj'), new HaxeQueryPlugin()
+		);
 		Assert.same(asString, asArray, 'one string and a one-element array are the same list');
 		Assert.same([{ hxml: '/proj/build.hxml', dir: '/proj', defines: [] }], asString, 'and the string form declares no defines');
-		final withDefines: Array<OracleConfig> = LintConfig.parse(
-			'{"compilerOracle":[{"hxml":"build.hxml"},{"hxml":"build.hxml","defines":["GRID_MODE","android"]}]}', '/proj'
-		)
-			.compilerOracles(new HaxeQueryPlugin());
+		final withDefines: Array<OracleConfig> = TestConfigs.oracles(
+			LintConfig.parse('{"compilerOracle":[{"hxml":"build.hxml"},{"hxml":"build.hxml","defines":["GRID_MODE","android"]}]}', '/proj'),
+			new HaxeQueryPlugin()
+		);
 		Assert.same([
 			{ hxml: '/proj/build.hxml', dir: '/proj', defines: [] },
 			{ hxml: '/proj/build.hxml', dir: '/proj', defines: ['GRID_MODE', 'android'] }
@@ -313,7 +317,7 @@ class LintConfigTest extends Test {
 		);
 		Assert.same(
 			['/proj/a.hxml', '/proj/c.hxml', '/proj/d.hxml'],
-			config.compilerOracles(new HaxeQueryPlugin()).map(oracle -> oracle.hxml),
+			TestConfigs.oracles(config, new HaxeQueryPlugin()).map(oracle -> oracle.hxml),
 			'the readable elements survive; the unreadable ones are gone'
 		);
 		Assert.same([
@@ -325,7 +329,7 @@ class LintConfigTest extends Test {
 			'compilerOracle[5] declares unknown key "hxlm" — ignored'
 		], config.drops(), 'and each drop says which element and why');
 		final neither: LintConfig = LintConfig.parse('{"compilerOracle":7}', '/proj');
-		Assert.same([], neither.compilerOracles(new HaxeQueryPlugin()), 'a value that is neither form is no oracle');
+		Assert.same([], TestConfigs.oracles(neither, new HaxeQueryPlugin()), 'a value that is neither form is no oracle');
 		Assert.same(
 			['compilerOracle is neither an hxml path nor a list of configurations — ignored'],
 			neither.drops(), 'and it says so rather than degrading in silence'
@@ -339,7 +343,7 @@ class LintConfigTest extends Test {
 	 * `haxe.io.Path.directory('../build.hxml')` == `'..'`.
 	 */
 	public function testCompilerOracleWithoutBaseDirStaysVerbatim(): Void {
-		final oracle: OracleConfig = LintConfig.parse('{"compilerOracle":"../build.hxml"}').compilerOracles(new HaxeQueryPlugin())[0];
+		final oracle: OracleConfig = TestConfigs.oracles(LintConfig.parse('{"compilerOracle":"../build.hxml"}'), new HaxeQueryPlugin())[0];
 		Assert.equals('../build.hxml', oracle.hxml, 'no base dir leaves the declared path untouched');
 		Assert.isNull(oracle.dir, 'and claims no compile dir');
 	}
@@ -406,14 +410,14 @@ class LintConfigTest extends Test {
 		final undeclared: LintConfig = LintConfig.parse('{"compilerOracle": "a.hxml"}');
 		final configs: Map<String, LintConfig> = ['a' => complete, 'b' => otherList, 'c' => undeclared];
 		final resolve: String -> LintConfig = path -> configs[path] ?? undeclared;
-		Assert.isTrue(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'a'], resolve));
-		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'b'], resolve));
-		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'c'], resolve));
+		Assert.isTrue(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'a'], resolve, RunLedger.fallback()));
+		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'b'], resolve, RunLedger.fallback()));
+		Assert.isFalse(LintOracleRun.reachComplete(new HaxeQueryPlugin(), ['a', 'c'], resolve, RunLedger.fallback()));
 	}
 
 	/** The one configuration `content` declares under `baseDir` — every oracle fixture here wants exactly this. */
 	private static function only(content: String, baseDir: String): OracleConfig {
-		return LintConfig.parse(content, baseDir).compilerOracles(new HaxeQueryPlugin())[0];
+		return TestConfigs.oracles(LintConfig.parse(content, baseDir), new HaxeQueryPlugin())[0];
 	}
 
 }

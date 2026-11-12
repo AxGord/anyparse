@@ -20,6 +20,7 @@ import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.OracleProvider.PreparedOracles;
 import anyparse.query.cli.command.LintFixVerify;
 import haxe.io.Path;
+import testkit.TestConfigs;
 
 using Lambda;
 using StringTools;
@@ -311,11 +312,11 @@ final class OracleGenerationTest extends Test {
 	@:killer('M-GENERATE-MISSING-INPUT-SILENT')
 	public function testAnEmptyOrMissingInputIsNeverSilentlyConstant(): Void {
 		final empty: LintConfig = LintConfig.parse('{"compilerOracle":[{"hxml":"g.hxml","generate":"true","generateInputs":[]}]}', '/tmp');
-		Assert.isNull(empty.compilerOracles(new HaxeQueryPlugin())[0].generate?.inputs, 'an empty list is no list');
+		Assert.isNull(TestConfigs.oracles(empty, new HaxeQueryPlugin())[0].generate?.inputs, 'an empty list is no list');
 		final missing: LintConfig = LintConfig.parse(
 			'{"compilerOracle":[{"hxml":"g.hxml","generate":"true","generateInputs":["no-such-input.txt"]}]}', '/tmp'
 		);
-		Assert.equals(1, missing.compilerOracles(new HaxeQueryPlugin())[0].generate?.inputs?.length, 'the missing input is kept');
+		Assert.equals(1, TestConfigs.oracles(missing, new HaxeQueryPlugin())[0].generate?.inputs?.length, 'the missing input is kept');
 		Assert.isTrue(missing.drops().exists(d -> d.contains('no-such-input.txt')), 'and named: ${missing.drops()}');
 	}
 
@@ -1035,7 +1036,7 @@ final class OracleGenerationTest extends Test {
 			'/tmp'
 		);
 		Assert.equals(
-			'/tmp/h.hxml,/tmp/h.hxml', config.compilerOracles(new HaxeQueryPlugin()).map(o -> o.hxml).join(','),
+			'/tmp/h.hxml,/tmp/h.hxml', TestConfigs.oracles(config, new HaxeQueryPlugin()).map(o -> o.hxml).join(','),
 			'only the unambiguous hxml stays'
 		);
 		Assert.isTrue(
@@ -1144,7 +1145,7 @@ final class OracleGenerationTest extends Test {
 		final config: LintConfig = LintConfig.parse(
 			'{"compilerOracle":[{"hxml":"gen/a.hxml","generate":"one"},{"hxml":"link/a.hxml","generate":"two"}]}', dir
 		);
-		Assert.equals(0, config.compilerOracles(new HaxeQueryPlugin()).length, 'both spellings name one file: ${config.drops()}');
+		Assert.equals(0, TestConfigs.oracles(config, new HaxeQueryPlugin()).length, 'both spellings name one file: ${config.drops()}');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-node target');

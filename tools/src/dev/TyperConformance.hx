@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.haxe.facts.TypedFactsProbe;
@@ -441,13 +442,16 @@ final class TyperConformance {
 	 * gates on the reading can refuse one that read nothing (`probeRefusal`).
 	 */
 	private static function facts(configuration: Null<String>, report: Report): FactsRun {
-		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']));
+		final notes: Array<ConfigNote> = [];
+		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']), notes);
 		final project: Array<{ file: String, source: String }> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
 		final library: Array<{ file: String, source: String }> = EdgeDiff.libraryOf(config, project);
 		final asked: Array<OracleConfig> = [
-			for (o in config.compilerOracles(new HaxeQueryPlugin())) if (configuration == null || o.hxml.contains(configuration)) o
+			for (o in config.compilerOracles(new HaxeQueryPlugin(), notes)) if (configuration == null || o.hxml.contains(configuration)) o
 		];
+		// A dev main holds no ledger: its config notes go to stderr.
+		ConfigNotes.warn(notes);
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];
 		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {

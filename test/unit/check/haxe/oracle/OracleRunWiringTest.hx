@@ -7,6 +7,7 @@ import anyparse.query.Cli;
 import anyparse.query.CompilerFacts;
 import anyparse.query.OracleProvider.AheadBuilds;
 import anyparse.query.OracleProvider.StartedProbe;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.command.LintArgs;
 import anyparse.query.cli.command.LintOracleRun;
 import haxe.Exception;
@@ -118,7 +119,8 @@ final class OracleRunWiringTest extends Test {
 		function carried(args: Array<String>): Bool {
 			final ahead: AheadBuilds = { probe: null };
 			final scope: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
-				new HaxeQueryPlugin(), resolution, oracles, null, null, null, ahead, LintArgs.parseLintArgs(args.concat(['Main.hx']))
+				new HaxeQueryPlugin(), resolution, oracles, null, null, null, ahead,
+				LintArgs.parseLintArgs(args.concat(['Main.hx']), RunLedger.fallback())
 			);
 			return scope?.facts != null && ahead.facts != null;
 		}

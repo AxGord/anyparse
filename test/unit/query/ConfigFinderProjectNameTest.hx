@@ -6,6 +6,7 @@ import sys.io.File;
 #end
 import anyparse.check.LintConfig;
 import anyparse.query.ConfigFinder;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /**
@@ -22,7 +23,7 @@ class ConfigFinderProjectNameTest extends Test {
 			{ name: ConfigFinder.LEGACY_PROJECT_CONFIG, source: '{"resolutionLibs": ["old"]}' }
 		]);
 		File.saveContent('$root/Probe.hx', 'class Probe {}\n');
-		Assert.same(['old'], LintConfig.discover('$root/Probe.hx').resolutionLibs());
+		Assert.same(['old'], TestConfigs.discover('$root/Probe.hx').resolutionLibs());
 		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-sys target');
@@ -38,7 +39,7 @@ class ConfigFinderProjectNameTest extends Test {
 		FileSystem.createDirectory('$root/nested');
 		File.saveContent('$root/nested/${ConfigFinder.PROJECT_CONFIG}', '{"languageVersion": "4.3"}');
 		File.saveContent('$root/nested/Probe.hx', 'class Probe {}\n');
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.same(['old'], config.resolutionLibs());
 		Assert.equals('4.3', config.languageVersion());
 		CliFixture.removeDir(root);
@@ -57,7 +58,7 @@ class ConfigFinderProjectNameTest extends Test {
 		File.saveContent('$root/Probe.hx', 'class Probe {}\n');
 		var message: String = '';
 		try
-			LintConfig.discover('$root/Probe.hx')
+			TestConfigs.discover('$root/Probe.hx')
 		catch (exception: haxe.Exception)
 			message = exception.message;
 		Assert.stringContains('holds both', message);

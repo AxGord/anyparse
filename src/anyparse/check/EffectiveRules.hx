@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.VersionGated;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.LintConfig.DiscoveredConfig;
 import anyparse.check.LintConfig.RuleSwitch;
 import haxe.io.Path;
@@ -47,14 +48,14 @@ final class EffectiveRules {
 	 * One group per distinct (config chain, rule states) pair among `files`, in the order first met;
 	 * the files keep their given order within a group. A directory's chain is resolved once, and the
 	 * states are asked per file because a `FileGated` rule can answer differently for two files under
-	 * one chain.
+	 * one chain. A config diagnostic met on the way is collected into `notes`.
 	 */
-	public static function resolve(files: Array<String>, checks: Array<Check>): Array<RuleStateGroup> {
+	public static function resolve(files: Array<String>, checks: Array<Check>, notes: Array<ConfigNote>): Array<RuleStateGroup> {
 		final groups: Array<RuleStateGroup> = [];
 		final byDir: Map<String, DiscoveredConfig> = [];
 		for (file in files) {
 			final dir: String = Path.directory(file);
-			final found: DiscoveredConfig = byDir[dir] ?? LintConfig.discoverChain(file);
+			final found: DiscoveredConfig = byDir[dir] ?? LintConfig.discoverChain(file, notes);
 			byDir[dir] = found;
 			groupFor(found.chain, checks.map(c -> stateOf(c, file, found.config)), groups).files.push(file);
 		}

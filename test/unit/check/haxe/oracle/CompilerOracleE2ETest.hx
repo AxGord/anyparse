@@ -10,6 +10,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.haxe.oracle.CompilerServer;
 import anyparse.query.Cli;
 import anyparse.query.OracleProvider.OracleOutcome;
+import testkit.TestConfigs;
 
 /**
  * End-to-end coverage of the compiler-oracle (`apq.json` `compilerOracle`):
@@ -218,9 +219,9 @@ final class CompilerOracleE2ETest extends Test {
 	public function testLimeShapedConfigCompilesFromConfigDir(): Void {
 		#if (sys || nodejs)
 		final dir: String = writeLimeShapedProject();
-		final cfg: LintConfig = LintConfig.discover('$dir/src/Good.hx');
+		final cfg: LintConfig = TestConfigs.discover('$dir/src/Good.hx');
 		Assert.equals(
-			Path.normalize(dir), Path.normalize(cfg.compilerOracles(new HaxeQueryPlugin())[0].dir ?? ''),
+			Path.normalize(dir), Path.normalize(TestConfigs.oracles(cfg, new HaxeQueryPlugin())[0].dir ?? ''),
 			'a root-relative hxml compiles from the config dir'
 		);
 		if (oracleWorks()) Assert.equals(0, Cli.run(['lint', '$dir/src/Good.hx']), 'a lime-shaped project typechecks through its oracle');
@@ -244,8 +245,8 @@ final class CompilerOracleE2ETest extends Test {
 		}
 		final dir: String = writeNestedProject();
 		final path: String = '$dir/src/Good.hx';
-		final config: LintConfig = LintConfig.discover(path);
-		final oracles: Array<OracleConfig> = config.compilerOracles(new HaxeQueryPlugin());
+		final config: LintConfig = TestConfigs.discover(path);
+		final oracles: Array<OracleConfig> = TestConfigs.oracles(config, new HaxeQueryPlugin());
 		if (oracles.length == 0) {
 			Assert.fail('the nested apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
@@ -339,8 +340,8 @@ final class CompilerOracleE2ETest extends Test {
 		}
 		final dir: String = writeLintDir(VALID, true, true);
 		final path: String = '$dir/Good.hx';
-		final config: LintConfig = LintConfig.discover(path);
-		final oracles: Array<OracleConfig> = config.compilerOracles(new HaxeQueryPlugin());
+		final config: LintConfig = TestConfigs.discover(path);
+		final oracles: Array<OracleConfig> = TestConfigs.oracles(config, new HaxeQueryPlugin());
 		if (oracles.length == 0) {
 			Assert.fail('the fixture apq.json declares a compilerOracle');
 			CliFixture.removeDir(dir);
@@ -428,7 +429,7 @@ final class CompilerOracleE2ETest extends Test {
 
 	/** Reap the warm server a fixture started, keyed through the config exactly as the CLI keyed it. */
 	private function stopWarmServer(path: String): Void {
-		for (oracle in LintConfig.discover(path).compilerOracles(new HaxeQueryPlugin()))
+		for (oracle in TestConfigs.oracles(TestConfigs.discover(path), new HaxeQueryPlugin()))
 			CompilerServer.stopShared(oracle.hxml, oracle.dir, oracle.defines);
 	}
 

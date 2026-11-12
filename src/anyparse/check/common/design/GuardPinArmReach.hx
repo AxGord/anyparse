@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.RuleDeclaration.ArmTarget;
 import anyparse.query.MemberKinds;
 import anyparse.query.Meta;
@@ -81,7 +82,7 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 			final problems: Array<String> = [];
 			final arms: Null<Map<String, ArmTarget>> = options == null
 				? null
-				: registryFor(entry.file, options.registry, registries, problems);
+				: registryFor(entry.file, options.registry, registries, problems, _configNotes);
 			for (problem in problems) out.push(registryProblem(entry.file, problem));
 			if (options == null || arms == null || fold == null) return;
 			final declaredOptions: PinOptions = options;
@@ -197,13 +198,15 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 	/**
 	 * The arms of the registry `registry` names for `file` — the first existing path it resolves to against the
 	 * directories of `file`'s config chain — read once per run into `cache`, so its `problems` are added once; null when none exists.
+	 * Reading the chain notes its config diagnostics into `notes` (`ConfigNotes.into`).
 	 */
 	private static function registryFor(
-		file: String, registry: String, cache: Map<String, Map<String, ArmTarget>>, problems: Array<String>
+		file: String, registry: String, cache: Map<String, Map<String, ArmTarget>>, problems: Array<String>, notes: Null<Array<ConfigNote>>
 	): Null<Map<String, ArmTarget>> {
 		#if (sys || nodejs)
 		final candidates: Array<String> = Path.isAbsolute(registry) ? [registry] : [
-			for (document in LintConfig.discoverChain(file).chain) Path.join([Path.directory(document), registry])
+			for (document in ConfigNotes.into(notes, n -> LintConfig.discoverChain(file, n)).chain)
+				Path.join([Path.directory(document), registry])
 		];
 		for (path in candidates) {
 			final known: Null<Map<String, ArmTarget>> = cache[path];

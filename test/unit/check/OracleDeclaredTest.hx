@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /** A `compilerOracle` value stays raw through config parsing and is read by the run's own grammar. */
@@ -12,7 +13,7 @@ class OracleDeclaredTest extends Test {
 	public function testParsingAConfigReadsNoDeclaration(): Void {
 		final config: LintConfig = LintConfig.parse('{"compilerOracle":["b.hxml"]}', '/proj');
 		Assert.same([], config.drops(), 'parsing needs no grammar, so nothing has judged the entries yet');
-		Assert.same([], config.compilerOracles(new HaxeQueryPlugin()), 'the one entry is unusable');
+		Assert.same([], TestConfigs.oracles(config, new HaxeQueryPlugin()), 'the one entry is unusable');
 		Assert.same(['compilerOracle[0] is not an object — dropped'], config.drops(), 'the read reports them');
 	}
 
@@ -26,7 +27,7 @@ class OracleDeclaredTest extends Test {
 			return;
 		}
 		final config: LintConfig = LintDocuments.fromDocument(LintDocuments.mergeDocuments(near, far));
-		Assert.same(['/near/near.hxml'], config.compilerOracles(new HaxeQueryPlugin()).map(oracle -> oracle.hxml), 'the nearest wins');
+		Assert.same(['/near/near.hxml'], TestConfigs.oracles(config, new HaxeQueryPlugin()).map(oracle -> oracle.hxml), 'the nearest wins');
 		Assert.same(['compilerOracle[0] is not an object — dropped'], config.drops(), 'the shadowed mistake is still said');
 	}
 
@@ -34,7 +35,7 @@ class OracleDeclaredTest extends Test {
 	@:killer('M-ORACLE-OVERRIDE-LOSES-DECLARATION')
 	public function testARunOverridingAnOptionKeepsTheUnreadDeclaration(): Void {
 		final config: LintConfig = LintConfig.parse('{"compilerOracle":"a.hxml"}', '/proj').withIntOption('naming', 'max', 1);
-		Assert.same(['/proj/a.hxml'], config.compilerOracles(new HaxeQueryPlugin()).map(oracle -> oracle.hxml));
+		Assert.same(['/proj/a.hxml'], TestConfigs.oracles(config, new HaxeQueryPlugin()).map(oracle -> oracle.hxml));
 	}
 
 	@:pin('control')
@@ -45,8 +46,10 @@ class OracleDeclaredTest extends Test {
 			{ name: 'sub/apq.json', source: '{"compilerOracle":"near.hxml"}' }
 		]);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final config: LintConfig = LintConfig.discover('$root/sub/A.hx');
-			final warned: String = CliFixture.captureStderr(() -> Assert.equals(1, config.compilerOracles(new HaxeQueryPlugin()).length));
+			final config: LintConfig = TestConfigs.discover('$root/sub/A.hx');
+			final warned: String = CliFixture.captureStderr(() ->
+				Assert.equals(1, TestConfigs.oracles(config, new HaxeQueryPlugin()).length)
+			);
 			Assert.stringContains('apq: $root/apq.json: compilerOracle[0] is not an object — dropped', warned);
 		});
 	}

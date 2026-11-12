@@ -7,6 +7,7 @@ import sys.io.File;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import haxe.io.Path;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /**
@@ -42,7 +43,7 @@ class LintConfigInheritanceTest extends Test {
 			+ '"reflectiveMethodHolders": ["ui.Handler"], "ownedTypes": [{"types": ["a.T"], "owners": ["a.**"], "why": "w"}]}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
 		);
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.isTrue(config.compilerOracleServer(), 'compilerOracleServer falls through');
 		Assert.same(['utest'], config.resolutionLibs(), 'resolutionLibs falls through');
 		Assert.equals('4.3', config.languageVersion(), 'languageVersion falls through');
@@ -64,7 +65,7 @@ class LintConfigInheritanceTest extends Test {
 		final root: String = tree(
 			'{"compilerOracleServer": true, "resolutionStd": true}', '{"compilerOracleServer": false, "resolutionStd": false}'
 		);
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.isFalse(config.compilerOracleServer(), 'the nested false overrides the ancestor true');
 		Assert.isFalse(config.resolutionStd(), 'the nested false overrides the ancestor true');
 		CliFixture.removeDir(root);
@@ -90,7 +91,7 @@ class LintConfigInheritanceTest extends Test {
 		];
 		for (c in cases) {
 			final root: String = tree(complete, c.nested);
-			Assert.equals(c.expected, LintConfig.discover('$root/nested/Probe.hx').reachConfigurationsComplete(), c.nested);
+			Assert.equals(c.expected, TestConfigs.discover('$root/nested/Probe.hx').reachConfigurationsComplete(), c.nested);
 			CliFixture.removeDir(root);
 		}
 		#else
@@ -108,7 +109,7 @@ class LintConfigInheritanceTest extends Test {
 			'{"rules": {"explicit-local-type": {"enabled": true}, "magic-number": {"severity": "error"}}}',
 			'{"rules": {"magic-number": {"enabled": false}}}'
 		);
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.isTrue(config.enabledFor('explicit-local-type', false), 'a sibling rule the ancestor enabled survives');
 		Assert.isFalse(config.enabledFor('magic-number'), 'the nested disable applies');
 		CliFixture.removeDir(root);
@@ -124,13 +125,13 @@ class LintConfigInheritanceTest extends Test {
 		// `"enabled": false` keeps it off. Either way the option bags merge per key.
 		final ancestor: String = '{"rules": {"oversized-type": {"enabled": false, "maxMembers": 40, "severity": "error"}}}';
 		final root: String = tree(ancestor, '{"rules": {"oversized-type": {"maxMembers": 100}}}');
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.isTrue(config.enabledFor('oversized-type'), 'an options object enables the rule');
 		Assert.equals(100, config.intOption('oversized-type', 'maxMembers'), 'the nested option wins');
 		Assert.equals(Severity.Error, config.severityFor('oversized-type'), 'the ancestor severity survives');
 		CliFixture.removeDir(root);
 		final kept: String = tree(ancestor, '{"rules": {"oversized-type": {"enabled": false, "maxMembers": 100}}}');
-		Assert.isFalse(LintConfig.discover('$kept/nested/Probe.hx').enabledFor('oversized-type'), 'a stated false still wins');
+		Assert.isFalse(TestConfigs.discover('$kept/nested/Probe.hx').enabledFor('oversized-type'), 'a stated false still wins');
 		CliFixture.removeDir(kept);
 		#else
 		Assert.pass('non-sys target');
@@ -143,7 +144,7 @@ class LintConfigInheritanceTest extends Test {
 		// "src" must still mean the root's own `src` for a file two levels down. Resolving it
 		// against the nested document's directory instead is the failure this pins.
 		final root: String = tree('{"resolutionRoots": ["src"]}', '{"rules": {}}');
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.same([Path.normalize('$root/src')], config.resolutionRoots(), 'the ancestor root resolves against the ANCESTOR dir');
 		CliFixture.removeDir(root);
 		#else
@@ -157,7 +158,7 @@ class LintConfigInheritanceTest extends Test {
 		// unconditionally, so this stays green on a revert. It pins that the escape hatch
 		// still reaches the answer inheritance-by-default took away.
 		final root: String = tree('{"resolutionLibs": ["utest"], "languageVersion": "4.3"}', '{"inherit": false, "rules": {}}');
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.equals(0, config.resolutionLibs().length, 'a standalone document inherits no libs');
 		Assert.isNull(config.languageVersion(), 'a standalone document inherits no version floor');
 		CliFixture.removeDir(root);
@@ -179,10 +180,10 @@ class LintConfigInheritanceTest extends Test {
 		File.saveContent('$outer/root/nested/apq.json', '{"rules": {}}');
 		File.saveContent('$outer/root/nested/Probe.hx', 'class Probe {}\n');
 		// No marker yet: the stray IS inherited, which is what makes the next arm mean something.
-		Assert.same(['intruder'], LintConfig.discover('$outer/root/nested/Probe.hx').resolutionLibs(), 'unbounded, the stray reaches in');
+		Assert.same(['intruder'], TestConfigs.discover('$outer/root/nested/Probe.hx').resolutionLibs(), 'unbounded, the stray reaches in');
 		for (marker in ['.git', 'haxelib.json']) {
 			File.saveContent('$outer/root/$marker', '');
-			final config: LintConfig = LintConfig.discover('$outer/root/nested/Probe.hx');
+			final config: LintConfig = TestConfigs.discover('$outer/root/nested/Probe.hx');
 			Assert.equals(0, config.resolutionLibs().length, '"$marker" ends the chain before the stray');
 			Assert.equals('4.3', config.languageVersion(), 'and the marked directory\'s OWN document is still read');
 			FileSystem.deleteFile('$outer/root/$marker');
@@ -203,14 +204,14 @@ class LintConfigInheritanceTest extends Test {
 		// in-process assertion reaches it. Verified by hand instead:
 		//   apq: <path> could not be read — ignored, the rest of the chain still applies
 		final root: String = tree('{"resolutionLibs": ["utest"]}', '{"resolutionLibs": ["nested"]}');
-		Assert.same(['nested'], LintConfig.discover('$root/nested/Probe.hx').resolutionLibs(), 'readable, the nested answer wins');
+		Assert.same(['nested'], TestConfigs.discover('$root/nested/Probe.hx').resolutionLibs(), 'readable, the nested answer wins');
 		Sys.command('chmod', ['000', '$root/nested/apq.json']);
 		// Skipped rather than asserted when the chmod does not bite (a root-owned CI runner
 		// reads it anyway) — a probe that cannot create the condition must not claim it did.
 		if (readable('$root/nested/apq.json')) {
 			Assert.pass('chmod 000 did not make the file unreadable for this user');
 		} else {
-			final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+			final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 			Assert.same(['utest'], config.resolutionLibs(), 'unreadable, the ancestor applies');
 		}
 		Sys.command('chmod', ['644', '$root/nested/apq.json']);
@@ -225,7 +226,7 @@ class LintConfigInheritanceTest extends Test {
 		// The nearest config being broken must not also throw away the project's: the
 		// wholesale fallback used to collapse the resolution scope and every rule toggle.
 		final root: String = tree('{"resolutionLibs": ["utest"]}', '{"resolutionLibs": 17}');
-		final config: LintConfig = LintConfig.discover('$root/nested/Probe.hx');
+		final config: LintConfig = TestConfigs.discover('$root/nested/Probe.hx');
 		Assert.same(['utest'], config.resolutionLibs(), 'the ancestor still applies past a rejected nested document');
 		CliFixture.removeDir(root);
 		#else
@@ -243,14 +244,14 @@ class LintConfigInheritanceTest extends Test {
 		// Both halves matter — the relaxations must still apply, and the project settings must
 		// be the ROOT's, resolved against the ROOT's directory.
 		final repo: String = CliFixture.repoRoot();
-		final src: LintConfig = LintConfig.discover('$repo/src/anyparse/check/LintConfig.hx');
-		final test: LintConfig = LintConfig.discover('$repo/test/unit/LintConfigInheritanceTest.hx');
+		final src: LintConfig = TestConfigs.discover('$repo/src/anyparse/check/LintConfig.hx');
+		final test: LintConfig = TestConfigs.discover('$repo/test/unit/LintConfigInheritanceTest.hx');
 		Assert.same(
-			src.compilerOracles(new HaxeQueryPlugin()), test.compilerOracles(new HaxeQueryPlugin()),
+			TestConfigs.oracles(src, new HaxeQueryPlugin()), TestConfigs.oracles(test, new HaxeQueryPlugin()),
 			'the oracle configurations are inherited, not copied'
 		);
 		Assert.equals(
-			7, test.compilerOracles(new HaxeQueryPlugin()).length,
+			7, TestConfigs.oracles(test, new HaxeQueryPlugin()).length,
 			'and every build the root declares is inherited — an empty list would compare equal to nothing'
 		);
 		// NOT `Assert.equals(src…, test…)`: the ctor defaults an undeclared

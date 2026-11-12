@@ -145,10 +145,13 @@ final class LibraryBodies {
 		final picked: Null<{ config: LintConfig, options: ThreadSafetyOptions, entry: String }> = chosen;
 		if (picked == null) return null;
 		final written: String = Path.normalize(picked.entry);
-		final oracle: Null<LintConfig.OracleConfig> = picked.config.compilerOracles(OracleProviders.of(plugin)).find(o -> {
-			final hxml: String = Path.normalize(o.hxml);
-			hxml == written || hxml.endsWith('/$written');
-		});
+		final oracle: Null<LintConfig.OracleConfig> = ConfigNotes.into(
+			null, notes -> picked.config.compilerOracles(OracleProviders.of(plugin), notes)
+		)
+			.find(o -> {
+				final hxml: String = Path.normalize(o.hxml);
+				hxml == written || hxml.endsWith('/$written');
+			});
 		if (oracle == null) {
 			problems.push('$OPTION "${picked.entry}" names no compilerOracle entry\'s hxml — no library body is walked');
 			return null;

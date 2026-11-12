@@ -206,7 +206,7 @@ final class LintCommand implements CliCommand {
 	 * second copy of it that would drift.
 	 */
 	public static function runLint(args: Array<String>, ledger: RunLedger): Int {
-		final o: LintOpts = LintArgs.parseLintArgs(args);
+		final o: LintOpts = LintArgs.parseLintArgs(args, ledger);
 		if (o.errExit != null) return o.errExit;
 
 		if (o.inputSpecs.length == 0) {
@@ -300,7 +300,7 @@ final class LintCommand implements CliCommand {
 		warnScopeNotices(activeChecks, resolveConfig, paths, o.noOracle, OracleProviders.of(plugin), ledger);
 		final oracleConfig: Null<LintConfig> = resolveConfig(paths[0]);
 		final compiler: OracleProvider = OracleProviders.of(plugin);
-		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin);
+		final oracles: Array<OracleConfig> = LintOracleRun.oraclesOf(oracleConfig, o.noOracle, !o.fix, files, plugin, ledger);
 		final early: Null<StartedProbe<CompilerFacts>> = LintOracleRun.earlyFacts(compiler, unconfigured != null, oracles, o);
 		final ahead: AheadBuilds = { probe: null };
 		final reflective: Null<Array<String>> = LintOracleRun.declaredBound(
@@ -313,7 +313,7 @@ final class LintCommand implements CliCommand {
 		final resolution: Null<ResolutionScope> = LintOracleRun.withCompilerFacts(
 			compiler,
 			LintOracleRun.withReachConfigurations(
-				compiler, unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(compiler, paths, resolveConfig), ahead,
+				compiler, unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(compiler, paths, resolveConfig, ledger), ahead,
 				reflective, holders, paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
 			),
 			oracles, early, reflective, holders, ahead, o

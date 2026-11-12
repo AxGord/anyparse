@@ -767,6 +767,14 @@
 			"find": "if (named.failure != '' || named.status != 0) return null;",
 			"replace": "",
 			"note": "a revision range is no longer refused, so every file reads as absent at it and --changed-since fixes each one whole"
+		},
+		{
+			"name": "M-HOST-FOR-NOTES-UNSAID",
+			"type": "anyparse.query.cli.ProjectResolution",
+			"method": "hostFor",
+			"find": "ConfigNotes.say(ledger, notes, CliIo.stderr);",
+			"replace": "",
+			"note": "an edit op reading a broken apq.json collects the diagnostic and never says it: the op runs on the rest of the chain with no word"
 		}
 	]
 }

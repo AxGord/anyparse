@@ -141,8 +141,8 @@ final class NullSafetyGate {
 			}
 			return false;
 		}
-		return LintConfig.resolveWith(_resolveConfig, file)
-			.compilerOracles(_compiler)
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
+		return ConfigNotes.into(null, notes -> config.compilerOracles(_compiler, notes))
 			.exists(oracle -> mayEnable(oracle.hxml, oracle.dir ?? Path.directory(oracle.hxml), 0));
 	}
 

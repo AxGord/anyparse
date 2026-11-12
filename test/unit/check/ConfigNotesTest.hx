@@ -55,4 +55,16 @@ class ConfigNotesTest extends Test {
 		Assert.equals(1, said.length, 'the ledger it was given remembers, whichever run began since');
 	}
 
+	@:pin('control')
+	@:killer('M-CONFIG-NOTE-INTO-DROPS')
+	public function testAReaderWithNoCollectorSaysItsNoteOnTheFallback(): Void {
+		final ledger: RunLedger = RunLedger.begin();
+		final collected: Array<ConfigNote> = [];
+		ConfigNotes.into(collected, notes -> ConfigNotes.note(notes, 'confignotes-into-held', 'apq: held\n'));
+		Assert.equals(1, collected.length, 'a collecting caller keeps the note');
+		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-into-held'), 'a collected note is not said by the fallback');
+		ConfigNotes.into(null, notes -> ConfigNotes.note(notes, 'confignotes-into-own', 'apq: no collector\n'));
+		Assert.isTrue(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-into-own'), 'no collector: the fallback says it');
+	}
+
 }

@@ -1,11 +1,11 @@
 package unit.dev;
 
-import anyparse.check.LintConfig;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.util.Compare;
 import dev.Binaries;
 import haxe.io.Path;
 import sys.io.File;
+import testkit.TestConfigs;
 import utest.Assert;
 import utest.Test;
 
@@ -43,8 +43,7 @@ final class BuildFlagsTest extends Test {
 	}
 
 	public function testTheOracleIsDeclaredTheTypecheckLeavesOnly(): Void {
-		final declared: Array<String> = LintConfig.discover('apq.json')
-			.compilerOracles(new HaxeQueryPlugin())
+		final declared: Array<String> = TestConfigs.oracles(TestConfigs.discover('apq.json'), new HaxeQueryPlugin())
 			.map(oracle -> Path.normalize(oracle.hxml));
 		for (leaf in Binaries.HXMLS) {
 			Assert.isTrue(declared.exists(hxml -> hxml.endsWith('/${Binaries.checkOf(leaf)}')), 'declared: ${Binaries.checkOf(leaf)}');

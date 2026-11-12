@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.check.haxe.oracle.OracleGeneration;
@@ -39,11 +40,14 @@ final class EdgeDiff {
 			return 2;
 		}
 		final cwd: String = Sys.getCwd();
-		final config: LintConfig = LintConfig.discover(Path.join([cwd, 'EdgeDiff.hx']));
+		final notes: Array<ConfigNote> = [];
+		final config: LintConfig = LintConfig.discover(Path.join([cwd, 'EdgeDiff.hx']), notes);
 		final project: Array<SourceFile> = [];
 		for (root in config.resolutionRoots()) collect(root, project);
 		final library: Array<SourceFile> = libraryOf(config, project);
-		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles(new HaxeQueryPlugin())).oracles;
+		final oracles: Array<OracleConfig> = OracleGeneration.prepare(config.compilerOracles(new HaxeQueryPlugin(), notes)).oracles;
+		// A dev main holds no ledger: its config notes go to stderr.
+		ConfigNotes.warn(notes);
 		final started: Float = Sys.time();
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles); // noqa: owned-types
 		Sys.println('facts: ${Math.round(Sys.time() - started)}s, configurations ${facts?.configurations}, dropped ${facts?.dropped}');

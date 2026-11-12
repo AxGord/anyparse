@@ -69,7 +69,7 @@ final class ConfiguredTypes {
 	 * fallback — a config problem is a property of the document, and a run re-reads the document once per linted directory.
 	 */
 	public static function warn(notes: Null<Array<ConfigNote>>, rule: String, line: String): Void {
-		ConfigNotes.note(notes, '$rule:$line', 'apq lint: $rule: $line\n');
+		ConfigNotes.into(notes, n -> ConfigNotes.note(n, '$rule:$line', 'apq lint: $rule: $line\n'));
 	}
 
 	/** `memberOf`'s recursion; `seen` cycle-guards on the resolved identity. */

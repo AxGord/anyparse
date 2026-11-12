@@ -6,6 +6,7 @@ import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.cli.command.LintArgs;
 import haxe.io.Path;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 using Lambda;
@@ -231,7 +232,7 @@ class LintScopeGateTest extends Test {
 			'$root/src/anyparse/check/scan/ReflectionScan.hx',
 			'$root/test/unit/LintScopeGateTest.hx'
 		]) {
-			final roots: Array<String> = LintConfig.discover(probe).resolutionRoots();
+			final roots: Array<String> = TestConfigs.discover(probe).resolutionRoots();
 			for (dir in ['src', 'test'])
 				Assert.isTrue(roots.contains(Path.normalize('$root/$dir')), '$probe: its apq.json must declare "$dir" in resolutionRoots');
 		}

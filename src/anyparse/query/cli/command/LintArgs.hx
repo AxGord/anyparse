@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
+import anyparse.check.ConfigNotes;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
@@ -289,7 +290,7 @@ final class LintArgs {
 		CliIo.sysPrint('  -h, --help       Show this help\n');
 	}
 
-	public static function parseLintArgs(args: Array<String>): LintOpts {
+	public static function parseLintArgs(args: Array<String>, ledger: RunLedger): LintOpts {
 		var lang: String = 'haxe';
 		var flat: Bool = false;
 		var includeInfo: Bool = false;
@@ -425,7 +426,7 @@ final class LintArgs {
 			CliIo.stderr('apq lint: --explain-long has no checkstyle form — use --format text or json\n');
 			return lintParseExit(EXIT_USAGE);
 		}
-		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts)) : opts;
+		if (summary != true || format == FORMAT_TEXT) return listRules ? lintParseExit(runListRules(opts, ledger)) : opts;
 		CliIo.stderr('apq lint: --summary applies to the text report — --format $format always lists every finding\n');
 		return lintParseExit(EXIT_USAGE);
 	}
@@ -583,14 +584,14 @@ final class LintArgs {
 	 * as before a scope was accepted; with one, `printEffectiveRules`. A flag that only means something
 	 * to a lint run is a usage error rather than silently ignored — a listing is not narrowed by `--rule`.
 	 */
-	private static function runListRules(o: LintOpts): Int {
+	private static function runListRules(o: LintOpts, ledger: RunLedger): Int {
 		final ignored: Null<String> = lintOnlyFlag(o);
 		if (ignored != null) {
 			CliIo.stderr('apq lint: --list-rules takes only a scope, --category and --lang — $ignored applies to a lint run\n');
 			return EXIT_USAGE;
 		}
 		final checks: Array<Check> = resolveLintChecks([], o.categoryFilters) ?? [];
-		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs, checks);
+		if (o.inputSpecs.length > 0) return printEffectiveRules(o.lang, o.inputSpecs, checks, ledger);
 		if (o.format != FORMAT_TEXT) {
 			CliIo.sysPrint(o.format == FORMAT_MARKDOWN ? RuleIndex.markdown(checks) : RuleIndex.json(checks));
 			return EXIT_OK;
@@ -614,7 +615,7 @@ final class LintArgs {
 	 * it in, as `EffectiveRules.render` lays it out. The registry alone is an upper bound; configs are
 	 * resolved exactly as a lint run resolves them, and nothing is parsed or linted.
 	 */
-	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>, checks: Array<Check>): Int {
+	private static function printEffectiveRules(lang: String, inputSpecs: Array<String>, checks: Array<Check>, ledger: RunLedger): Int {
 		final io: ResolvedInputs = CliArgs.resolveInputPaths(lang, inputSpecs);
 		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
@@ -622,9 +623,12 @@ final class LintArgs {
 			return EXIT_RUNTIME;
 		}
 		// A rule the scope's grammar never runs is no state of this scope's lint: it is left out, as a run leaves it out.
-		for (path in paths) OracleProviders.reportDrops(LintConfig.discover(path), io.plugin);
+		final notes: Array<ConfigNote> = [];
+		for (path in paths) OracleProviders.reportDrops(LintConfig.discover(path, notes), io.plugin, notes);
 		final runs: Array<Check> = checks.filter(c -> Linter.runsOn(c, io.plugin.langName()));
-		CliIo.sysPrint(EffectiveRules.render(EffectiveRules.resolve(paths, runs)));
+		final groups: Array<RuleStateGroup> = EffectiveRules.resolve(paths, runs, notes);
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
+		CliIo.sysPrint(EffectiveRules.render(groups));
 		return EXIT_OK;
 	}
 

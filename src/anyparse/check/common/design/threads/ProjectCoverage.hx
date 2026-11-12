@@ -118,7 +118,7 @@ final class ProjectCoverage {
 	 */
 	private function declaringDocument(file: String): String {
 		var found: String = '';
-		for (path in LintConfig.discoverChain(file, _documents).chain) {
+		for (path in ConfigNotes.into(null, notes -> LintConfig.discoverChain(file, _documents, notes)).chain) {
 			final content: Null<String> = try File.getContent(path) catch (_: Exception) null;
 			if (content == null) return '';
 			final config: LintConfig = LintConfig.parse(content, Path.directory(path), _documents);

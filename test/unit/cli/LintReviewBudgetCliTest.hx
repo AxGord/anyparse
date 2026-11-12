@@ -5,6 +5,7 @@ import sys.io.File;
 #end
 import anyparse.query.Cli;
 import anyparse.query.ExitCode;
+import anyparse.query.RunLedger;
 import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.command.LintArgs;
 import anyparse.query.cli.command.LintFixLedger;
@@ -49,11 +50,17 @@ final class LintReviewBudgetCliTest extends Test {
 	@:killer('M-LINT-REVIEW-BUDGET-ZERO', 'M-STRICT-INT-ABOVE-INT32')
 	@:pin('control')
 	public function testABudgetBelowOneLineIsAUsageError(): Void {
-		Assert.equals(5000, LintArgs.parseLintArgs(['--fix', '--review-budget', '5000', 'C.hx']).reviewBudget);
+		Assert.equals(5000, LintArgs.parseLintArgs(['--fix', '--review-budget', '5000', 'C.hx'], RunLedger.fallback()).reviewBudget);
 		for (bad in ['0', '-3'])
-			Assert.equals(ExitCode.EXIT_USAGE, LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx']).errExit, 'budget "$bad"');
+			Assert.equals(
+				ExitCode.EXIT_USAGE, LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], RunLedger.fallback()).errExit,
+				'budget "$bad"'
+			);
 		for (bad in ['many', '', '2147483648', '4294967295', '99999999999'])
-			Assert.raises(() -> LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx']), UsageFailure, 'budget "$bad"');
+			Assert.raises(
+				() -> LintArgs.parseLintArgs(['--fix', '--review-budget', bad, 'C.hx'], RunLedger.fallback()), UsageFailure,
+				'budget "$bad"'
+			);
 	}
 
 	/** A report run reorders nothing, so the flag with no `--fix` is refused instead of pretending to have lifted something. */

@@ -1,5 +1,6 @@
 package anyparse.query.cli;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.ExitCode;
@@ -44,12 +45,13 @@ final class WriteVerification {
 	/**
 	 * Settle `journal`, the writes of the `op` run that answered `exit`: typechecked when the run created or deleted a file,
 	 * or when `forced`. Answers `exit`, or `EXIT_RUNTIME` with every file the run wrote put back when the write broke a build.
+	 * The config notes read on the way are said through `ledger`.
 	 */
-	public static function settle(op: String, journal: WriteJournal, exit: Int, forced: Bool): Int {
+	public static function settle(op: String, journal: WriteJournal, exit: Int, forced: Bool, ledger: RunLedger): Int {
 		final changed: Array<String> = journal.changed();
 		if (changed.length == 0 || (!forced && !journal.createdOrDeleted())) return exit;
 		final oracles: Array<OracleConfig> = try {
-			oraclesOf(changed);
+			oraclesOf(changed, ledger);
 		} catch (exception: ConfigConflict) {
 			journal.rollback();
 			CliIo.stderr('apq $op: the project config names two files — every file put back\n');
@@ -70,7 +72,7 @@ final class WriteVerification {
 	}
 
 	/** Every configured build the `apq.json` of each of `paths` names, each once. */
-	private static function oraclesOf(paths: Array<String>): Array<OracleConfig> {
+	private static function oraclesOf(paths: Array<String>, ledger: RunLedger): Array<OracleConfig> {
 		final dirs: Array<String> = [];
 		for (path in paths) {
 			final dir: String = Path.directory(path);
@@ -79,12 +81,14 @@ final class WriteVerification {
 		final compiler: OracleProvider = compilerOf(paths);
 		final out: Array<OracleConfig> = [];
 		final keys: Array<String> = [];
-		for (dir in dirs) for (oracle in LintConfig.discover(Path.join([dir, '_'])).compilerOracles(compiler)) {
+		final notes: Array<ConfigNote> = [];
+		for (dir in dirs) for (oracle in LintConfig.discover(Path.join([dir, '_']), notes).compilerOracles(compiler, notes)) {
 			final key: String = compiler.oracleKey(oracle);
 			if (keys.contains(key)) continue;
 			keys.push(key);
 			out.push(oracle);
 		}
+		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		return out;
 	}
 

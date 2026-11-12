@@ -8,6 +8,7 @@ import anyparse.query.Cli;
 import anyparse.query.OracleProvider;
 import anyparse.query.OracleProviders;
 import anyparse.query.cli.command.LintFixVerify;
+import testkit.TestConfigs;
 import unit.cli.CliFixture;
 
 /**
@@ -112,12 +113,13 @@ class OracleProvidersTest extends Test {
 			'{"compilerOracle":[{"hxml":"b.hxml","defines":["X"],"dir":"d"},{"hxml":"c.hxml"},{"dir":"e"}]}', '/proj'
 		);
 		final absent: OracleProvider = OracleProviders.of(new JsonQueryPlugin());
-		final oracles: Array<OracleConfig> = config.compilerOracles(absent);
+		final oracles: Array<OracleConfig> = TestConfigs.oracles(config, absent);
 		Assert.same(['/proj/b.hxml', '/proj/c.hxml'], oracles.map(oracle -> oracle.hxml));
 		Assert.same([['X'], []], oracles.map(oracle -> oracle.defines));
 		Assert.same(['/proj/d', null], oracles.map(oracle -> oracle.dir));
 		Assert.same(
-			['/proj/a.hxml'], LintConfig.parse('{"compilerOracle":"a.hxml"}', '/proj').compilerOracles(absent).map(oracle -> oracle.hxml)
+			['/proj/a.hxml'],
+			TestConfigs.oracles(LintConfig.parse('{"compilerOracle":"a.hxml"}', '/proj'), absent).map(oracle -> oracle.hxml)
 		);
 	}
 
@@ -140,7 +142,7 @@ class OracleProvidersTest extends Test {
 	@:killer('M-ORACLE-ABSENT-DROPS-LOST')
 	public function testAGrammarWithoutACompilerStillReportsAMalformedDeclaration(): Void {
 		final config: LintConfig = LintConfig.parse('{"compilerOracle":[{"dir":"e"},"x.hxml"]}', '/proj');
-		Assert.same([], config.compilerOracles(OracleProviders.of(new JsonQueryPlugin())));
+		Assert.same([], TestConfigs.oracles(config, OracleProviders.of(new JsonQueryPlugin())));
 		Assert.same([
 			'compilerOracle[0] declares no "hxml" — dropped',
 			'compilerOracle[1] is not an object — dropped'

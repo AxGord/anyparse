@@ -1,6 +1,7 @@
 package dev;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
@@ -101,7 +102,7 @@ final class JvmPortability {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
-			final discovered: LintConfig = LintConfig.discover(file);
+			final discovered: LintConfig = ConfigNotes.into(null, notes -> LintConfig.discover(file, notes));
 			configByDir[dir] = discovered;
 			return discovered;
 		}

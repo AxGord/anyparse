@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.check.haxe.oracle.OracleCoverage;
@@ -87,7 +88,9 @@ final class Binaries {
 	 */
 	private static function plainOracles(tree: String): Array<OracleConfig> {
 		return [
-			for (oracle in LintConfig.discover(Path.join([tree, 'apq.json'])).compilerOracles(new HaxeQueryPlugin()))
+			for (oracle in ConfigNotes.into(
+				null, notes -> LintConfig.discover(Path.join([tree, 'apq.json']), notes).compilerOracles(new HaxeQueryPlugin(), notes)
+			))
 				if (
 					oracle.unavailable == null
 					&& oracle.defines.length == 0

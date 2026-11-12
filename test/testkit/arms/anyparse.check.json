@@ -508,9 +508,9 @@
 			"name": "M-CONFIG-NOTE-STATIC",
 			"type": "anyparse.check.ConfigNotes",
 			"method": "note",
-			"find": "if (notes != null)",
-			"replace": "if (notes != null && false)",
-			"note": "a command that collects config notes gets none: every diagnostic goes back to the bare stderr fallback and the run ledger print never sees it"
+			"find": "notes.push({ key: key, message: message });",
+			"replace": "",
+			"note": "a command that collects config notes gets none: every diagnostic is dropped before the run ledger print sees it"
 		},
 		{
 			"name": "M-CONFIG-NOTE-REPEATS",
@@ -527,6 +527,14 @@
 			"find": "if (ledger.first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) ",
 			"replace": "if (RunLedger.fallback().first(note.topic ?? LintConfig.WARNED_TOPIC, note.key)) ",
 			"note": "a command says through whichever run began last instead of the ledger it was handed, so a ledger of its own forgets what it said"
+		},
+		{
+			"name": "M-CONFIG-NOTE-INTO-DROPS",
+			"type": "anyparse.check.ConfigNotes",
+			"method": "into",
+			"find": "warn(own);",
+			"replace": "",
+			"note": "a reader whose caller holds no ledger collects its config notes into an array nobody says: the diagnostic is dropped silently"
 		}
 	]
 }

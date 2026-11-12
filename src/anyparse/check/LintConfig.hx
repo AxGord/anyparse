@@ -261,7 +261,7 @@ final class LintConfig {
 	 * `dist/<target>/haxe/debug.hxml` — or null when the config was parsed without a base
 	 * directory, where there is nothing to resolve against.
 	 */
-	public function compilerOracles(compiler: OracleProvider, ?notes: Array<ConfigNote>): Array<OracleConfig> {
+	public function compilerOracles(compiler: OracleProvider, notes: Array<ConfigNote>): Array<OracleConfig> {
 		if (_oracles.read.length > 0 || _oracles.declared.length == 0) return _oracles.read;
 		// Every folded declaration is read, the shadowed ones only for their dropped entries: a mistake in
 		// a document the nearer one overrides is still reported.
@@ -594,7 +594,7 @@ final class LintConfig {
 	 * chain still applies: the nearest config being broken must not also throw away
 	 * the project's.
 	 */
-	public static inline function discover(path: String, ?notes: Array<ConfigNote>): LintConfig {
+	public static inline function discover(path: String, notes: Array<ConfigNote>): LintConfig {
 		return discoverChain(path, null, notes).config;
 	}
 
@@ -606,7 +606,7 @@ final class LintConfig {
 	 * declares is resolved against that document's own directory; that is what lets a report group
 	 * files by chain rather than by directory.
 	 */
-	public static function discoverChain(path: String, ?documents: DocumentMemo, ?notes: Array<ConfigNote>): DiscoveredConfig {
+	public static function discoverChain(path: String, ?documents: DocumentMemo, notes: Array<ConfigNote>): DiscoveredConfig {
 		final chain: ConfigChain = ConfigFinder.findUpProject(path, ConfigFinder.PROJECT_ROOT_MARKERS);
 		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
@@ -649,7 +649,8 @@ final class LintConfig {
 	 * the shared resolver in a CLI run but still resolves correctly when run directly.
 	 */
 	public static function resolveWith(resolve: Null<(String) -> LintConfig>, path: String): LintConfig {
-		return resolve != null ? resolve(path) : discover(path);
+		// No resolver means no ledger either: the fallback says its own notes rather than drop them.
+		return resolve != null ? resolve(path) : ConfigNotes.into(null, notes -> discover(path, notes));
 	}
 
 	/**
