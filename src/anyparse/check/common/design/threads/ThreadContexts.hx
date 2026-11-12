@@ -1,5 +1,6 @@
 package anyparse.check.common.design.threads;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
@@ -72,11 +73,12 @@ final class ThreadContexts {
 	 * `thread-safety` asks. The derived stores of `deriveStoredCalls` join `graph`.
 	 */
 	public static function ofGraph(
-		graph: CallGraph, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>
+		graph: CallGraph, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
+		notes: Null<Array<ConfigNote>>
 	): ThreadContexts {
 		final lists: Map<String, ChainLists> = ThreadSafety.listsByFile(
 			files, resolve, graph, [], new PositiveSinks(graph, plugin, new ProjectNatives(graph, plugin), null),
-			plugin.refShape().accessorMethodPrefixes ?? [], []
+			plugin.refShape().accessorMethodPrefixes ?? [], [], notes
 		);
 		return new ThreadContexts(graph, plugin, files, resolve, lists);
 	}

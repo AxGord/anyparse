@@ -54,7 +54,7 @@ final class DeadNullCoalescing extends RuleBase implements ConfigAware {
 		final coalKind: String = nullCoalesceKind;
 		final ident: String = identKind;
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
-		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin));
+		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin), _configNotes);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {

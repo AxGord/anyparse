@@ -809,6 +809,19 @@ final class Linter {
 	}
 
 	/**
+	 * Answers `body` with `checks` collecting their config diagnostics into one array the whole time, then says it through
+	 * `ledger` and detaches it (`sayConfigNotes`): for a phase that runs checks outside `run` — a fix verification, an
+	 * oracle-assisted pass — whose reads would otherwise find no notes and fall back to `ConfigNotes`' stderr line.
+	 */
+	public static function sayingConfigNotes<T>(checks: Array<Check>, ledger: RunLedger, write: (String) -> Void, body: () -> T): T {
+		final notes: Array<ConfigNote> = [];
+		for (check in checks) if (check is ConfigNoting) (cast check: ConfigNoting).setConfigNotes(notes);
+		final answer: T = body();
+		sayConfigNotes(checks, notes, ledger, write);
+		return answer;
+	}
+
+	/**
 	 * `found` without each finding a `Supersedes` check in `checks` replaces: one of a rule it names, starting in the same file at
 	 * the same offset as one of ITS surviving findings. A run holding no such check returns `found` itself.
 	 */

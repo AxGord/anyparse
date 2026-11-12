@@ -65,8 +65,8 @@ final class ConfiguredTypes {
 	}
 
 	/**
-	 * Says `line` about `rule`'s configuration once per run: into `notes` when the run collects them, else through `ConfigNotes`'
-	 * fallback — a config problem is a property of the document, and a run re-reads the document once per linted directory.
+	 * Says `line` about `rule`'s configuration: into `notes` when the run collects them, said once per run, else on stderr through
+	 * `ConfigNotes`' fallback — a config problem is a property of the document, and a run re-reads the document once per linted directory.
 	 */
 	public static function warn(notes: Null<Array<ConfigNote>>, rule: String, line: String): Void {
 		ConfigNotes.into(notes, n -> ConfigNotes.note(n, '$rule:$line', 'apq lint: $rule: $line\n'));

@@ -2128,6 +2128,39 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "N1",
+			"note": "an oracle declaration that reads to nothing is re-read on every ask: its config diagnostic is said once over the passes, the fixes and the residue lints",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"dead-safe-nav",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tnew a.C().f('ab');\n\t\tnew b.C().f(null);\n\t}\n}\n",
+				"a/C.hx": "package a;\n\nclass C {\n\tpublic function new() {}\n\n\tpublic function f(x:Null<String>):Void {\n\t\tfinal ok = x != null;\n\t\tif (ok) {\n\t\t\tSys.println(x?.length);\n\t\t}\n\t}\n}\n",
+				"b/C.hx": "package b;\n\nclass C {\n\tpublic function new() {}\n\n\tpublic function f(x:Null<String>):Void {\n\t\tfinal ok = x != null;\n\t\tif (ok) {\n\t\t\tSys.println(x?.length);\n\t\t}\n\t}\n}\n",
+				"apq.json": "{\"compilerOracle\":[{\"noSuchKnob\":1}]}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "37e5df139600cc41",
+				"files": "046260cbb7439f1a",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

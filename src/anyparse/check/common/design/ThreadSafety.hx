@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.threads.AllocationSets;
 import anyparse.check.common.design.threads.BoundedRepeats;
 import anyparse.check.common.design.threads.CallRepetition;
@@ -175,11 +176,11 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final library: Null<LibraryBodies> = LibraryBodies.forRun(
 			files, _resolveConfig,
 			{ graph: graph, sinks: new PositiveSinks(graph, plugin, natives, null) },
-			plugin, problems
+			plugin, problems, _configNotes
 		);
 		final byFile: Map<String, ChainLists> = listsByFile(
 			files, _resolveConfig, graph, sets, new PositiveSinks(graph, plugin, natives, library),
-			plugin.refShape().accessorMethodPrefixes ?? [], problems
+			plugin.refShape().accessorMethodPrefixes ?? [], problems, _configNotes
 		);
 		final sinkIds: Array<String> = [];
 		for (lists in sets) for (id in lists.sinkIds) if (!sinkIds.contains(id)) sinkIds.push(id);
@@ -340,13 +341,13 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	 */
 	public static function listsByFile(
 		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>, graph: CallGraph, sets: Array<ChainLists>,
-		positive: PositiveSinks, accessorPrefixes: Array<String>, problems: Array<String>
+		positive: PositiveSinks, accessorPrefixes: Array<String>, problems: Array<String>, notes: Null<Array<ConfigNote>>
 	): Map<String, ChainLists> {
 		final bySignature: Map<String, ChainLists> = [];
 		final byFile: Map<String, ChainLists> = [];
 		final read: ObjectMap<LintConfig, ThreadSafetyOptions> = new ObjectMap();
 		// the files the graph HOLDS: one of the run that failed to parse contributes no call and no write, so it covers nothing
-		final coverage: ProjectCoverage = new ProjectCoverage(graph.heldFiles().map(h -> h.file));
+		final coverage: ProjectCoverage = new ProjectCoverage(graph.heldFiles().map(h -> h.file), notes);
 		final factsAsked: Array<Bool> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(resolve, entry.file);

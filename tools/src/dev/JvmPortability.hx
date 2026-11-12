@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
+import anyparse.ds.Set;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LintDiff;
@@ -97,16 +98,22 @@ final class JvmPortability {
 		// compile before. What it does NOT buy is comparability with `hxq lint`: that run
 		// joins a `SymbolIndex` over the declared resolution roots, which the cross-file
 		// checks read and this probe has no business building.
+		// A dev main holds no ledger: its config notes go to stderr, each key once over the whole probe.
+		final said: Set<String> = new Set();
 		final configByDir: Map<String, LintConfig> = [];
 		function resolveConfig(file: String): LintConfig {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
-			final discovered: LintConfig = ConfigNotes.into(null, notes -> LintConfig.discover(file, notes));
+			final notes: Array<ConfigNote> = [];
+			final discovered: LintConfig = LintConfig.discover(file, notes);
+			ConfigNotes.warn(notes, said);
 			configByDir[dir] = discovered;
 			return discovered;
 		}
-		final violations: Array<Violation> = Linter.run(files, plugin, null, resolveConfig, true);
+		final ruleNotes: Array<ConfigNote> = [];
+		final violations: Array<Violation> = Linter.run(files, plugin, null, resolveConfig, true, null, ruleNotes);
+		ConfigNotes.warn(ruleNotes, said);
 		final lintedAt: Float = Sys.time();
 		// Two lines, because the numbers answer two different questions and one of them was
 		// being read as the other. `wrote == files` and `threw == 0` is the GATE — the

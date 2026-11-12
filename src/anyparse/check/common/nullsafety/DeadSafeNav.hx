@@ -52,7 +52,7 @@ final class DeadSafeNav extends RuleBase implements ConfigAware {
 		if (safeNavKind == null || identKind == null) return [];
 		final navKind: String = safeNavKind;
 		final ident: String = identKind;
-		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin));
+		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin), _configNotes);
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, RunScan.typeInfoOf(plugin), (entry, root, typed, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, typed, plugin.typeSyntax, index);

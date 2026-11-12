@@ -1,5 +1,6 @@
 package unit.check.common.nullsafety;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.Severity;
 import anyparse.check.common.nullsafety.DeadSafeNav;
 import unit.cli.CliFixture;
@@ -328,6 +329,35 @@ class DeadSafeNavTest extends Test {
 	@:killer('M-NULLFLOW-SHADOW-RESTORES-WRITTEN')
 	public function testWrittenNameIsNotRestored(): Void {
 		Assert.equals(0, violations(outer('if (x == null) return; for (x in { x = null; xs; }) g(x); var n = x?.bar;')).length);
+	}
+
+	/**
+	 * A run that collects its config notes gets the oracle declaration's diagnostic the build read produced, and stderr stays
+	 * silent: the gate's read says through the rule's run notes, once per run, not on stderr once per file.
+	 */
+	@:pin('control')
+	@:killer('M-NULLSAFETY-GATE-NOTES-DROPPED')
+	public function testTheBuildReadNotesIntoTheRunsNotes(): Void {
+		#if (sys || nodejs)
+		final src: String = 'package app; class C { function f(x:Null<Foo>) { final ok = x != null; if (ok) { var n = x?.bar; } } }';
+		final dir: String = CliFixture.writeDir('dsnnotes', [
+			{ name: 'apq.json', source: '{ "compilerOracle": [{ "hxml": "build.hxml", "noSuchKnob": 1 }] }' },
+			{ name: 'build.hxml', source: '-cp .\n' }
+		]);
+		final notes: Array<ConfigNote> = [];
+		var found: Array<Violation> = [];
+		final said: String = CliFixture.captureStderr(() ->
+			found = Linter.run([{ file: '$dir/C.hx', source: src }], new HaxeQueryPlugin(), [new DeadSafeNav()], null, false, null, notes)
+		);
+		CliFixture.removeDir(dir);
+		Assert.equals(1, found.length, 'the dead `?.` is reported, so the gate reads the build');
+		Assert.equals(
+			1, notes.filter(n -> n.message.indexOf('noSuchKnob') >= 0).length, 'the declaration\'s diagnostic is in the run\'s notes'
+		);
+		Assert.equals(-1, said.indexOf('noSuchKnob'), 'and nothing said it on stderr');
+		#else
+		Assert.pass('non-sys target');
+		#end
 	}
 
 	private function assertDeclined(src: String): Void {

@@ -3947,6 +3947,22 @@
 			"find": "if (site.reflective && site.reaches == null) return true;",
 			"replace": "",
 			"note": "a reflective write whose target the run cannot bound is taken to leave a field it may reach untouched"
+		},
+		{
+			"name": "M-PROJECT-COVERAGE-NOTES-DROPPED",
+			"type": "anyparse.check.common.design.threads.ProjectCoverage",
+			"method": "declaringDocument",
+			"find": "ConfigNotes.into(_configNotes,",
+			"replace": "ConfigNotes.into(null,",
+			"note": "the closedWorld chain walk bypasses the rule's run notes and says its config diagnostic on stderr"
+		},
+		{
+			"name": "M-THREAD-CONTEXTS-NOTES-DROPPED",
+			"type": "anyparse.check.common.design.threads.ThreadContexts",
+			"method": "ofGraph",
+			"find": "plugin.refShape().accessorMethodPrefixes ?? [], [], notes",
+			"replace": "plugin.refShape().accessorMethodPrefixes ?? [], [], null",
+			"note": "ThreadContexts.ofGraph drops the notes it is given: the chain walks of its lists say on stderr"
 		}
 	]
 }

@@ -1,5 +1,6 @@
 package anyparse.check.common.nullsafety;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.query.OracleProvider;
 import haxe.Exception;
 import haxe.io.Path;
@@ -91,9 +92,15 @@ final class NullSafetyGate {
 
 	private final _compiler: OracleProvider;
 
-	public function new(resolveConfig: Null<(String) -> LintConfig>, compiler: OracleProvider) {
+	/** Where the config diagnostics of the oracle read go: the rule's run notes; null says them on stderr (`ConfigNotes.into`). */
+	private final _configNotes: Null<Array<ConfigNote>>;
+
+	public function new(
+		resolveConfig: Null<(String) -> LintConfig>, compiler: OracleProvider, configNotes: Null<Array<ConfigNote>>
+	) {
 		_resolveConfig = resolveConfig;
 		_compiler = compiler;
+		_configNotes = configNotes;
 	}
 
 	/**
@@ -142,7 +149,7 @@ final class NullSafetyGate {
 			return false;
 		}
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
-		return ConfigNotes.into(null, notes -> config.compilerOracles(_compiler, notes))
+		return ConfigNotes.into(_configNotes, notes -> config.compilerOracles(_compiler, notes))
 			.exists(oracle -> mayEnable(oracle.hxml, oracle.dir ?? Path.directory(oracle.hxml), 0));
 	}
 

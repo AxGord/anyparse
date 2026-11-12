@@ -535,6 +535,22 @@
 			"find": "warn(own);",
 			"replace": "",
 			"note": "a reader whose caller holds no ledger collects its config notes into an array nobody says: the diagnostic is dropped silently"
+		},
+		{
+			"name": "M-CONFIG-NOTE-WARN-READS-STATIC",
+			"type": "anyparse.check.ConfigNotes",
+			"method": "warn",
+			"find": "seen.add(note.key);",
+			"replace": "seen.add(note.key); RunLedger.fallback().first(LintConfig.WARNED_TOPIC, note.key);",
+			"note": "the stderr path of a caller with no ledger writes the process-wide fallback ledger: what one run said leaks into the next"
+		},
+		{
+			"name": "M-CONFIG-NOTE-WARN-REPEATS",
+			"type": "anyparse.check.ConfigNotes",
+			"method": "warn",
+			"find": "if (!seen.has(note.key)) {",
+			"replace": "if (true) {",
+			"note": "the stderr path says a key again on every call that shares one said set"
 		}
 	]
 }

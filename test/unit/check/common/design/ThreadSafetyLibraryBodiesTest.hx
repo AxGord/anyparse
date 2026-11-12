@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.PositiveSinks;
 import unit.cli.CliFixture;
@@ -200,6 +201,31 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 			said.join('\n')
 		);
 		Assert.isTrue(said.exists(m -> m.indexOf('/nowhere"') >= 0 && m.indexOf('does not exist') >= 0), said.join('\n'));
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The build read's config diagnostic goes to the run's notes, and stderr stays silent. */
+	@:pin('control')
+	@:killer('M-TS-LIB-NOTES-DROPPED')
+	public function testTheBuildReadNotesIntoTheRunsNotes(): Void {
+		#if (sys || nodejs)
+		final config: String = '{"compilerOracle":[{"hxml":"lost.hxml","noSuchKnob":1}],'
+			+ '"rules":{"thread-safety":{"closedWorld":false,"libraryBodies":["lost.hxml"]}}}';
+		final project: String = 'class A { static function main():Void Sys.sleep(0); }';
+		final dir: String = CliFixture.writeTree('threadsafety_lib_notes', [
+			{ name: 'apq.json', source: config },
+			{ name: 'lost.hxml', source: '-cp .\n-cpp out\n' },
+			{ name: 'F0.hx', source: project }
+		]);
+		final notes: Array<ConfigNote> = [];
+		final said: String = CliFixture.captureStderr(() ->
+			Linter.run([{ file: '$dir/F0.hx', source: project }], new HaxeQueryPlugin(), [new ThreadSafety()], null, false, null, notes)
+		);
+		CliFixture.removeDir(dir);
+		Assert.equals(1, notes.filter(n -> n.message.indexOf('noSuchKnob') >= 0).length, 'the diagnostic is in the run\'s notes');
+		Assert.equals(-1, said.indexOf('noSuchKnob'), 'and nothing said it on stderr');
 		#else
 		Assert.pass('non-sys target');
 		#end

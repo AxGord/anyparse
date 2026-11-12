@@ -1,6 +1,7 @@
 package anyparse.check.common.design.threads;
 
 import anyparse.check.Check.FindingData;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.core.PhaseTimings;
 import anyparse.ds.Set;
@@ -120,7 +121,7 @@ final class LibraryBodies {
 	 */
 	public static function forRun(
 		files: Array<{ file: String, source: String }>, resolve: Null<(String) -> LintConfig>,
-		project: { graph: CallGraph, sinks: PositiveSinks }, plugin: GrammarPlugin, problems: Array<String>
+		project: { graph: CallGraph, sinks: PositiveSinks }, plugin: GrammarPlugin, problems: Array<String>, notes: Null<Array<ConfigNote>>
 	): Null<LibraryBodies> {
 		#if (sys || nodejs)
 		final configs: Array<LintConfig> = [];
@@ -146,7 +147,7 @@ final class LibraryBodies {
 		if (picked == null) return null;
 		final written: String = Path.normalize(picked.entry);
 		final oracle: Null<LintConfig.OracleConfig> = ConfigNotes.into(
-			null, notes -> picked.config.compilerOracles(OracleProviders.of(plugin), notes)
+			notes, n -> picked.config.compilerOracles(OracleProviders.of(plugin), n)
 		)
 			.find(o -> {
 				final hxml: String = Path.normalize(o.hxml);

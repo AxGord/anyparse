@@ -328,6 +328,22 @@
 			"find": "ReflectiveReach.declaredClasses(files, resolve)",
 			"replace": "null",
 			"note": "the classes the config declares reflective are not read, so a reflective write of a type parameter is taken to reach any field"
+		},
+		{
+			"name": "M-NULLSAFETY-GATE-NOTES-DROPPED",
+			"type": "anyparse.check.common.nullsafety.NullSafetyGate",
+			"method": "buildMayEnableNullSafety",
+			"find": "ConfigNotes.into(_configNotes,",
+			"replace": "ConfigNotes.into(null,",
+			"note": "the oracle read of a null-safety gate bypasses the rule's run notes and says its config diagnostic on stderr, once per file instead of once per run"
+		},
+		{
+			"name": "M-RNC-FACTS-NOTES-DROPPED",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "run",
+			"find": "new ThreadFacts(files, plugin, _resolveConfig, _configNotes)",
+			"replace": "new ThreadFacts(files, plugin, _resolveConfig, null)",
+			"note": "the thread facts of redundant-narrowing-copy walk the config chain without the rule's run notes: its diagnostics go to stderr"
 		}
 	]
 }

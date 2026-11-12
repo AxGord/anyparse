@@ -1,5 +1,6 @@
 package unit.check.common.nullsafety;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.nullsafety.RedundantNarrowingCopy;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
@@ -311,6 +312,21 @@ class RedundantNarrowingCopyTest extends Test {
 		Assert.same(['listener only copies onChange'], flagged(CONFIG, [
 			'function a():Void { final listener:Null<(C)->Void> = onChange; if (listener != null) listener(this); }'
 		]));
+	}
+	/** The thread facts walk each file's config chain into the rule's run notes: a run that collects them says them once. */
+	@:pin('control')
+	@:killer('M-RNC-FACTS-NOTES-DROPPED')
+	@:killer('M-THREAD-CONTEXTS-NOTES-DROPPED')
+	public function testTheThreadFactsNoteTheChainIntoTheRunsNotes(): Void {
+		final notes: Array<ConfigNote> = [];
+		var found: Int = 0;
+		inProject('{"rules":{"no-such-rule":5,"thread-safety":{"spawns":["Runner.create"],"closedWorld":true}}}', sourcesOf([
+			'function b():Void { final l:Null<Box> = box; if (l != null) l.y = h - l.height; }'
+		], '', []), (files, plugin) -> found = Linter.run(files, plugin, [new RedundantNarrowingCopy()], null, false, null, notes).length);
+		Assert.equals(1, found, 'the copy is flagged, so the thread facts read the chain');
+		Assert.isTrue(
+			notes.filter(n -> n.message.indexOf('no-such-rule') >= 0).length > 0, 'the chain\'s diagnostic is in the run\'s notes'
+		);
 	}
 
 	/** The copies the check flags in a class of `members`, each as its message up to the null check. */

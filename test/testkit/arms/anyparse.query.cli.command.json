@@ -1427,6 +1427,14 @@
 			"find": "RegistryFollowCommand.writeFollowed(cmd, changes.map(c -> { path: c.file, content: c.newSource }), plugin);",
 			"replace": "CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));",
 			"note": "a declaration-form move (move, move-member) no longer carries the registry fragments of the members whose references it repointed"
+		},
+		{
+			"name": "M-FIX-RESIDUE-NOTES-DROPPED",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "residueOnChangedLines",
+			"find": "Linter.run(set, cached, rules, resolveConfig, applyEnablement, null, notes)",
+			"replace": "Linter.run(set, cached, rules, resolveConfig, applyEnablement)",
+			"note": "the residue lints of a fix run hand their rules no notes: a config diagnostic the run already said is said again on stderr"
 		}
 	]
 }

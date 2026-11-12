@@ -3,6 +3,7 @@ package anyparse.check.common.nullsafety;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.threads.FieldWrites;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
 import anyparse.check.common.design.threads.ReflectiveReach;
@@ -88,7 +89,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 				local.push({ file: entry.file, found: m });
 		}
 		if (local.length == 0) return [];
-		final threads: ThreadFacts = new ThreadFacts(files, plugin, _resolveConfig);
+		final threads: ThreadFacts = new ThreadFacts(files, plugin, _resolveConfig, _configNotes);
 		return [
 			for (l in local) if (threads.steady(l.file, l.found.field, l.found.firstUse)) ({
 				file: l.file,
@@ -367,10 +368,11 @@ private final class ThreadFacts {
 	private final _known: Null<KnownThreads>;
 
 	public function new(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
+		notes: Null<Array<ConfigNote>>
 	) {
 		_known = files.foreach(f -> ThreadSafetyOptions.read(LintConfig.resolveWith(resolve, f.file)).flag('closedWorld'))
-			? known(files, plugin, resolve)
+			? known(files, plugin, resolve, notes)
 			: null;
 	}
 
@@ -384,10 +386,11 @@ private final class ThreadFacts {
 	}
 
 	private static function known(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
+		notes: Null<Array<ConfigNote>>
 	): KnownThreads {
 		final graph: CallGraph = ThreadGraph.build(files, plugin, false);
-		final contexts: ThreadContexts = ThreadContexts.ofGraph(graph, files, plugin, resolve);
+		final contexts: ThreadContexts = ThreadContexts.ofGraph(graph, files, plugin, resolve, notes);
 		final chains: Map<String, ChainLists> = contexts.byFile;
 		final complete: Bool = files.foreach(f -> chains[f.file]?.closedWorld == true);
 		final writes: FieldWrites = new FieldWrites(

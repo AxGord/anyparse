@@ -43,7 +43,7 @@ final class ConfigDisagreement {
 	 * memoised resolver lives, and where the
 	 * run knows whether any `FrameworkAware` rule is active to read the roster at all.
 	 */
-	public static function warnRoster(resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>): Void {
+	public static function warnRoster(resolve: Null<(String) -> LintConfig>, paths: Array<String>, notes: Array<ConfigNote>): Void {
 		warn('scope-disagreement', 'the framework roster', rosterMessage(resolve, paths), notes);
 	}
 
@@ -54,7 +54,7 @@ final class ConfigDisagreement {
 	 * has nothing a disagreement could corrupt.
 	 */
 	public static function warnOracle(
-		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
+		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, notes: Array<ConfigNote>
 	): Void {
 		warn('scope-disagreement', 'the compiler oracle', oracleMessage(compiler, resolve, paths, notes), notes);
 	}
@@ -80,7 +80,7 @@ final class ConfigDisagreement {
 	 * classpath) would silently widen what every such project resolves against.
 	 */
 	public static function warnMissingProjectRoots(
-		resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
+		resolve: Null<(String) -> LintConfig>, paths: Array<String>, notes: Array<ConfigNote>
 	): Void {
 		warn('scope-gap', 'the project source roots', missingProjectRootsMessage(resolve, paths), notes);
 	}
@@ -99,7 +99,7 @@ final class ConfigDisagreement {
 	 * DEMAND, so a run whose checks never build the index still pays nothing for the question. The
 	 * twin of the `could not resolve haxelib "…"` note that sits beside it.
 	 */
-	public static function warnUnreachableProjectRoots(roots: Array<String>, ?notes: Array<ConfigNote>): Void {
+	public static function warnUnreachableProjectRoots(roots: Array<String>, notes: Array<ConfigNote>): Void {
 		warn('scope-gap', 'unreachable project source roots', unreachableProjectRootsMessage(roots), notes);
 	}
 
@@ -121,11 +121,9 @@ final class ConfigDisagreement {
 	 * renders as `null`. That difference is what once reported the first mixed scope this ran over as a disagreement about nothing.
 	 */
 	private static function oracleMessage(
-		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, ?notes: Array<ConfigNote>
+		compiler: OracleProvider, resolve: Null<(String) -> LintConfig>, paths: Array<String>, notes: Array<ConfigNote>
 	): Null<String> {
-		return message(
-			resolve, paths, 'the compiler oracle', c -> oracleSignature(ConfigNotes.into(notes, n -> c.compilerOracles(compiler, n)))
-		);
+		return message(resolve, paths, 'the compiler oracle', c -> oracleSignature(c.compilerOracles(compiler, notes)));
 	}
 
 	/**
@@ -181,13 +179,11 @@ final class ConfigDisagreement {
 	}
 
 	/**
-	 * Emit `message`'s sentence, at most once per run per setting.
-	 *
-	 * Through `LintConfig`'s own ledger rather than a second one, so a run that has already warned
-	 * about a setting stays quiet however many rules ask the question again.
+	 * Collect `message`'s sentence into the caller's `notes`, keyed by the setting: the caller says them through its run's
+	 * ledger, so a run that has already warned about a setting stays quiet however often the question is asked again.
 	 */
-	private static function warn(kind: String, label: String, line: Null<String>, notes: Null<Array<ConfigNote>>): Void {
-		if (line != null) ConfigNotes.into(notes, n -> ConfigNotes.note(n, '$kind:$label', line));
+	private static function warn(kind: String, label: String, line: Null<String>, notes: Array<ConfigNote>): Void {
+		if (line != null) ConfigNotes.note(notes, '$kind:$label', line);
 	}
 
 	/**

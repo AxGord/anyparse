@@ -2,12 +2,13 @@ package unit.check;
 
 import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
+import anyparse.ds.Set;
 import anyparse.query.RunLedger;
 import unit.cli.CliFixture;
 
 /**
  * Config diagnostics ride on the discovery call as notes: a caller that collects them gets them and the
- * stderr fallback stays silent, and `ConfigNotes.say` prints each key once per run.
+ * stderr fallback stays silent, `ConfigNotes.say` prints each key once per run, and `ConfigNotes.warn` once per `said` set.
  */
 class ConfigNotesTest extends Test {
 
@@ -57,14 +58,47 @@ class ConfigNotesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-CONFIG-NOTE-INTO-DROPS')
-	public function testAReaderWithNoCollectorSaysItsNoteOnTheFallback(): Void {
-		final ledger: RunLedger = RunLedger.begin();
+	public function testAReaderWithNoCollectorSaysItsNoteOnStderr(): Void {
 		final collected: Array<ConfigNote> = [];
-		ConfigNotes.into(collected, notes -> ConfigNotes.note(notes, 'confignotes-into-held', 'apq: held\n'));
+		final heldOut: String = CliFixture.captureStderr(
+			() -> ConfigNotes.into(collected, notes -> ConfigNotes.note(notes, 'confignotes-into-held', 'apq: held\n'))
+		);
 		Assert.equals(1, collected.length, 'a collecting caller keeps the note');
-		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-into-held'), 'a collected note is not said by the fallback');
-		ConfigNotes.into(null, notes -> ConfigNotes.note(notes, 'confignotes-into-own', 'apq: no collector\n'));
-		Assert.isTrue(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-into-own'), 'no collector: the fallback says it');
+		Assert.equals('', heldOut, 'a collected note is not said by the fallback');
+		final said: String = CliFixture.captureStderr(
+			() -> ConfigNotes.into(null, notes -> ConfigNotes.note(notes, 'confignotes-into-own', 'apq: no collector\n'))
+		);
+		#if nodejs
+		Assert.equals('apq: no collector\n', said, 'no collector: the fallback says it on stderr');
+		#else
+		Assert.pass('stderr is captured on node only');
+		#end
+	}
+
+	/** The stderr path reaches for no run ledger: what a run has said is the run's, and a caller with none holds its own `said`. */
+	@:pin('control')
+	@:killer('M-CONFIG-NOTE-WARN-READS-STATIC')
+	public function testWarnSaysNothingThroughTheRunLedger(): Void {
+		final ledger: RunLedger = RunLedger.begin();
+		final said: Array<String> = [];
+		ConfigNotes.warn([{ key: 'confignotes-warn-own', message: 'one\n' }], null, said.push);
+		Assert.equals(1, said.length, 'the note is said');
+		Assert.isFalse(ledger.said(LintConfig.WARNED_TOPIC, 'confignotes-warn-own'), 'and no run ledger records it');
+	}
+
+	/** A caller that warns more than once with one `said` says each key once over all its calls. */
+	@:pin('control')
+	@:killer('M-CONFIG-NOTE-WARN-REPEATS')
+	public function testWarnSaysEachKeyOnceOverTheCallsSharingItsSaidSet(): Void {
+		final seen: Set<String> = new Set();
+		final said: Array<String> = [];
+		ConfigNotes.warn([
+			{ key: 'confignotes-warn-key', message: 'one\n' },
+			{ key: 'confignotes-warn-key', message: 'one\n' }
+		], seen, said.push);
+		ConfigNotes.warn([{ key: 'confignotes-warn-key', message: 'one\n' }], seen, said.push);
+		ConfigNotes.warn([{ key: 'confignotes-warn-other', message: 'two\n' }], seen, said.push);
+		Assert.same(['one\n', 'two\n'], said);
 	}
 
 }

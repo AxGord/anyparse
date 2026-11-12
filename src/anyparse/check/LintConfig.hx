@@ -7,7 +7,6 @@ import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.OracleProvider;
-import anyparse.query.RunLedger;
 import anyparse.query.format.LintFormat;
 import anyparse.util.Compare;
 import haxe.io.Path;
@@ -689,21 +688,6 @@ final class LintConfig {
 	public static function parse(content: String, ?baseDir: String, ?documents: DocumentMemo): LintConfig {
 		final doc: Null<LintDocument> = LintDocuments.parseDocumentIn(documents, content, baseDir);
 		return doc == null ? new LintConfig([]) : LintDocuments.fromDocument(doc);
-	}
-
-	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
-	private static function stderr(s: String): Void {
-		#if (sys || nodejs)
-		Sys.stderr().writeString(s);
-		#end
-	}
-
-	/**
-	 * Write `message` to stderr the first time `configPath` reports anything —
-	 * the once-per-file-per-run ledger `discover`'s two diagnostics share.
-	 */
-	private static function warnOnce(configPath: String, message: String): Void {
-		if (RunLedger.fallback().first(WARNED_TOPIC, configPath)) stderr(message);
 	}
 
 	/**

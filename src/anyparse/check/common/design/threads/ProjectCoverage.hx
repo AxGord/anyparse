@@ -1,5 +1,6 @@
 package anyparse.check.common.design.threads;
 
+import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.LintDocuments.DocumentMemo;
 import anyparse.ds.Set;
 import anyparse.query.FileIdentity;
@@ -45,7 +46,11 @@ final class ProjectCoverage {
 	 */
 	private final _documents: DocumentMemo = [];
 
-	public function new(files: Array<String>) {
+	/** Where the config diagnostics of the chain walks go: the rule's run notes; null says them on stderr (`ConfigNotes.into`). */
+	private final _configNotes: Null<Array<ConfigNote>>;
+
+	public function new(files: Array<String>, configNotes: Null<Array<ConfigNote>>) {
+		_configNotes = configNotes;
 		#if (sys || nodejs)
 		final cwd: String = Sys.getCwd();
 		for (f in files) _run.add(FileIdentity.canonical(cwd, f));
@@ -118,7 +123,7 @@ final class ProjectCoverage {
 	 */
 	private function declaringDocument(file: String): String {
 		var found: String = '';
-		for (path in ConfigNotes.into(null, notes -> LintConfig.discoverChain(file, _documents, notes)).chain) {
+		for (path in ConfigNotes.into(_configNotes, notes -> LintConfig.discoverChain(file, _documents, notes)).chain) {
 			final content: Null<String> = try File.getContent(path) catch (_: Exception) null;
 			if (content == null) return '';
 			final config: LintConfig = LintConfig.parse(content, Path.directory(path), _documents);

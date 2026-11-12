@@ -1,6 +1,7 @@
 package anyparse.query.cli.command;
 
 import anyparse.check.Check;
+import anyparse.check.ConfigNotes;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
@@ -204,8 +205,12 @@ final class LintFixDriver {
 		final risky: RiskyFixOutcome = PhaseTimings.measure(
 			'fix risky',
 			() ->
-				LintFixVerify.verifyRiskyFixes(
-					files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
+				Linter.sayingConfigNotes(
+					split.risky, said, CliIo.stderr,
+					() ->
+						LintFixVerify.verifyRiskyFixes(
+							files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
+						)
 				)
 		);
 		fixedCount += risky.appliedCount;
@@ -221,9 +226,13 @@ final class LintFixDriver {
 		final oa: AssistedOutcome = PhaseTimings.measure(
 			'fix oracle-assisted',
 			() ->
-				LintFixVerify.applyOracleAssistedFixes(
-					files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement, risky.coverage,
-					ledger
+				Linter.sayingConfigNotes(
+					oracleAssisted, said, CliIo.stderr,
+					() ->
+						LintFixVerify.applyOracleAssistedFixes(
+							files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement,
+							risky.coverage, ledger
+						)
 				)
 		);
 		fixedCount += oa.appliedCount;
@@ -283,7 +292,8 @@ final class LintFixDriver {
 		return safePass.reverted || followUp.reverted
 			? EXIT_RUNTIME
 			: PhaseTimings.measure(
-				'fix residue', () -> reportResidue(files, originalOf, checks, split.activeScope, cached, resolveConfig, applyEnablement)
+				'fix residue',
+				() -> reportResidue(files, originalOf, checks, split.activeScope, cached, resolveConfig, applyEnablement, said)
 			);
 	}
 
@@ -342,7 +352,8 @@ final class LintFixDriver {
 		final whole: Array<Violation> = PhaseTimings.measure(
 			'pass lint full-scope', () -> Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement, null, ruleNotes)
 		);
-		Linter.sayConfigNotes(activeScopeChecks.concat(fullScopeChecks), ruleNotes, said, CliIo.stderr);
+		// Said now, kept attached: the pass's `fix` calls below read config too, and say theirs at the end of the pass.
+		ConfigNotes.say(said, ruleNotes, CliIo.stderr);
 		for (v in LintReport.withinRange(whole, sourceOf, windowOf)) found.push(v);
 		// The two scopes lint in two runs, so the cross-rule supersession `Linter.collect` applies inside each
 		// one is asked again over their union: an underscore-prefixed local is `no-underscore-prefix`'s in
@@ -441,6 +452,7 @@ final class LintFixDriver {
 			}
 		}
 		writeAmbientSources(nextActive, cached, baselineBeforeCreate);
+		Linter.sayConfigNotes(activeScopeChecks.concat(fullScopeChecks), ruleNotes, said, CliIo.stderr);
 		return { nextActive: nextActive, fixedDelta: fixedDelta };
 	}
 
@@ -1468,7 +1480,7 @@ final class LintFixDriver {
 	 */
 	private static function residueOnChangedLines(
 		files: Array<{ file: String, source: String }>, originalOf: Map<String, String>, checks: Array<Check>, narrow: Array<Check>,
-		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool, said: RunLedger
 	): Array<{ file: String, source: String, found: Array<Violation> }> {
 		final changed: Map<String, Map<Int, Bool>> = [];
 		final originals: Array<{ file: String, source: String }> = [];
@@ -1488,9 +1500,13 @@ final class LintFixDriver {
 			final span: Null<Span> = v.span;
 			return lines != null && index != null && span != null && lines.exists(index.lineColAt(span.from).line);
 		};
-		final lint: (
-			Array<{ file: String, source: String }>, Array<Check>
-		) -> Array<Violation> = (set, rules) -> Linter.run(set, cached, rules, resolveConfig, applyEnablement);
+		final lint: (Array<{ file: String, source: String }>, Array<Check>) -> Array<Violation> = (set, rules) -> {
+			// The residue lints say their config notes through the run's ledger, as a pass does: a key the run said stays quiet.
+			final notes: Array<ConfigNote> = [];
+			final found: Array<Violation> = Linter.run(set, cached, rules, resolveConfig, applyEnablement, null, notes);
+			Linter.sayConfigNotes(rules, notes, said, CliIo.stderr);
+			found;
+		};
 		final wide: Array<Check> = checks.filter(c -> !narrow.contains(c));
 		final identities: LintMessageIdentities = Linter.messageIdentities();
 		final then: Array<Violation> = lintChangedFiles(lint, originals, narrow, wide, checks, changed);
@@ -1523,10 +1539,10 @@ final class LintFixDriver {
 	 */
 	private static function reportResidue(
 		files: Array<{ file: String, source: String }>, originalOf: Map<String, String>, checks: Array<Check>, narrow: Array<Check>,
-		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+		cached: CachingGrammarPlugin, resolveConfig: (String) -> LintConfig, applyEnablement: Bool, said: RunLedger
 	): Int {
 		final residue: Array<{ file: String, source: String, found: Array<Violation> }> = residueOnChangedLines(
-			files, originalOf, checks, narrow, cached, resolveConfig, applyEnablement
+			files, originalOf, checks, narrow, cached, resolveConfig, applyEnablement, said
 		);
 		final count: Int = residue.fold((r, n) -> n + r.found.length, 0);
 		if (count == 0) return EXIT_OK;

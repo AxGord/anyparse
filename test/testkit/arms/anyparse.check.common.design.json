@@ -446,8 +446,8 @@
 			"name": "M-TS-COVER-PARSED",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "listsByFile",
-			"find": "new ProjectCoverage(graph.heldFiles().map(h -> h.file))",
-			"replace": "new ProjectCoverage(files.map(f -> f.file))",
+			"find": "new ProjectCoverage(graph.heldFiles().map(h -> h.file), notes)",
+			"replace": "new ProjectCoverage(files.map(f -> f.file), notes)",
 			"note": "a run file that fails to parse counts as covering its part of the project"
 		},
 		{
@@ -1180,6 +1180,14 @@
 			"find": "ConfiguredTypes.warn(_configNotes, RULE_ID, p)",
 			"replace": "ConfiguredTypes.warn(null, RULE_ID, p)",
 			"note": "a declaration problem the run finds is printed from inside the rule through the stderr fallback again, and the command whose notes it should reach never says it"
+		},
+		{
+			"name": "M-TS-LIB-NOTES-DROPPED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "run",
+			"find": "plugin, problems, _configNotes",
+			"replace": "plugin, problems, null",
+			"note": "the libraryBodies oracle read bypasses the rule's run notes and says its config diagnostic on stderr"
 		}
 	]
 }

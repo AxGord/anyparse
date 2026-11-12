@@ -59,7 +59,7 @@ final class DeadNullGuard extends RuleBase implements RiskyFix implements Config
 		final shape: RefShape = plugin.refShape();
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
-		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin));
+		final gate: NullSafetyGate = new NullSafetyGate(_resolveConfig, OracleProviders.of(plugin), _configNotes);
 		return RunScan.collectWith(files, plugin, NullFlowScan.seamsOf(shape), (entry, root, s, violations) -> {
 			final types: DeclaredNullity = DeclaredNullity.of(entry.file, root, entry.source, shape, provider, plugin.typeSyntax, index);
 			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
