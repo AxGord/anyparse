@@ -3,13 +3,13 @@ package anyparse.check.common.members;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.CalleeResolver;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.NullFlow;
+import anyparse.check.scan.OperandBinder;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 
 /**
  * A parameter with no default that at least two call sites hand the SAME compile-time constant:
@@ -106,7 +106,12 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		final scope: Scope = collectDeclarations(parsed, resolved);
 		final census: Map<String, Map<String, Array<CallSite>>> = [];
 		final nullable: Map<String, Bool> = [];
-		for (entry in parsed) collectCalls(census, nullable, entry, scope, resolved);
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		for (entry in parsed)
+			collectCalls(
+				census, nullable, entry, OperandBinder.forFile(plugin, entry.file, entry.source, entry.tree, index)?.callees(), scope,
+				resolved
+			);
 		return report(census, nullable, scope, resolved);
 	}
 
@@ -195,7 +200,8 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 
 	/** Every (member, parameter index) a call handed a constant, and which constant, and where. */
 	private static function collectCalls(
-		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, entry: Parsed, scope: Scope, seams: Seams
+		census: Map<String, Map<String, Array<CallSite>>>, nullable: Map<String, Bool>, entry: Parsed, callees: Null<CalleeResolver>,
+		scope: Scope, seams: Seams
 	): Void {
 		walkCalls(entry.tree, null, (call, owner) -> {
 			// EVERY call of a name the scope declares, resolved or not: Haxe hands a parameter its default for an explicit
@@ -204,7 +210,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			if (called != null && scope.memberOwners.exists(called))
 				for (i in 1...call.children.length)
 					if (!provenNonNull(call.children[i], owner, entry, scope, seams)) nullable['$called#${i - 1}'] = true;
-			final member: Null<MemberInfo> = resolveCallee(call, owner, entry, scope, seams);
+			final member: Null<MemberInfo> = resolveCallee(call, callees, scope);
 			if (member == null) return;
 			final args: Array<QueryNode> = [for (i in 1...call.children.length) call.children[i]];
 			// Only the LAST argument is a candidate: Haxe binds arguments by position, so cutting any
@@ -311,30 +317,15 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 
 	// ---- resolution ------------------------------------------------------------------------
 
-	/** The declaration a call's callee names, or null when the rule cannot see one. */
-	private static function resolveCallee(
-		call: QueryNode, owner: Null<String>, entry: Parsed, scope: Scope, seams: Seams
-	): Null<MemberInfo> {
-		final callee: QueryNode = call.children[0];
-		final name: Null<String> = callee.name;
-		if (name == null) return null;
-		if (callee.kind == seams.identKind) return owner == null || entry.binders.exists(name) ? null : scope.members['$owner.$name'];
-		if (callee.kind != seams.fieldAccessKind || callee.children.length != 1) return null;
-		final receiver: QueryNode = callee.children[0];
-		final receiverName: Null<String> = receiver.name;
-		if (receiver.kind != seams.identKind || receiverName == null || receiverName == '') return null;
-		if (upperInitial(receiverName)) {
-			if (entry.binders.exists(receiverName) || scope.ambiguousTypes[receiverName] == true) return null;
-			final member: Null<MemberInfo> = scope.members['$receiverName.$name'];
-			return member != null && member.isStatic ? member : null;
-		}
-		final declaredTypes: Null<Map<Int, String>> = entry.declaredTypes;
-		final typeName: Null<String> = declaredTypes == null
-			? null
-			: TypeResolver.identTypeName(receiver, entry.tree, entry.shape, declaredTypes);
-		if (typeName == null || scope.ambiguousTypes[typeName] == true) return null;
-		final member: Null<MemberInfo> = scope.members['$typeName.$name'];
-		return member != null && !member.isStatic ? member : null;
+	/**
+	 * The scope's declaration of the member `call` names, as the file's callee resolver binds it. A static extension is
+	 * refused: its receiver is the declaration's first argument, so the written arguments do not line up with the parameters.
+	 */
+	private static function resolveCallee(call: QueryNode, callees: Null<CalleeResolver>, scope: Scope): Null<MemberInfo> {
+		final resolved: Null<ResolvedCallee> = callees?.resolve(call.children[0]);
+		if (resolved == null || resolved.extension || resolved.members.length == 0) return null;
+		final owner: String = resolved.host.type.name;
+		return scope.ambiguousTypes[owner] == true ? null : scope.members['$owner.${resolved.members[0].name}'];
 	}
 
 	// ---- declaration collection ------------------------------------------------------------
@@ -468,7 +459,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	}
 
 	private static function parseAll(plugin: GrammarPlugin, files: Array<{ file: String, source: String }>, seams: Seams): Array<Parsed> {
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+
 		final shape: RefShape = plugin.refShape();
 		final out: Array<Parsed> = [];
 		for (entry in CheckScan.parseAll(plugin, files)) {
@@ -479,8 +470,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 				source: entry.source,
 				tree: entry.tree,
 				shape: shape,
-				binders: binders,
-				declaredTypes: provider?.declaredTypes(entry.source)
+				binders: binders
 			});
 		}
 		return out;
@@ -584,7 +574,6 @@ private typedef Parsed = {
 	final tree: QueryNode;
 	final shape: RefShape;
 	final binders: Map<String, Bool>;
-	final declaredTypes: Null<Map<Int, String>>;
 };
 
 /** One function declaration the rule can see, and what its signature allows. */

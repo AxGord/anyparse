@@ -910,7 +910,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	private static function forwardsToMacro(fn: QueryNode, binder: () -> Null<OperandBinder>, shape: RefShape): Bool {
 		final root: Null<QueryNode> = bodyRootExpr(fn, shape);
 		if (root == null || root.kind != shape.callKind || root.children.length == 0) return false;
-		final members: Null<Array<MemberInfo>> = binder()?.calleeMembers(root.children[0]);
+		final members: Null<Array<MemberInfo>> = binder()?.callees().calleeMembers(root.children[0]);
 		return members != null && members.exists(m -> m.isMacro);
 	}
 

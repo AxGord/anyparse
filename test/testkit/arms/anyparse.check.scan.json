@@ -1682,6 +1682,21 @@
 			"find": "c.children.foreach(r -> isPure(r, ctx))",
 			"replace": "true",
 			"note": "the receiver of a transparent callee is no longer asked, so a typed field whose getter runs code is taken for pure and joined"
+		},
+		{
+			"name": "M-CALLEE-STATIC-IMPORT",
+			"type": "anyparse.check.scan.CalleeResolver",
+			"method": "bare",
+			"find": "return importedStatic(name, span.from);",
+			"replace": "return null;",
+			"note": "a bare callee a static import brings in resolves to nothing, so a thin forward to an imported macro is flagged again and an imported static's repeated argument goes uncounted"
+		},
+		{
+			"name": "M-CALLEE-USING",
+			"type": "anyparse.check.scan.CalleeResolver",
+			"method": "usingExtension",
+			"force": "null",
+			"note": "a `recv.m()` a `using` binds resolves to nothing, so a thin forward to an extension macro is flagged again"
 		}
 	]
 }

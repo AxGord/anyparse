@@ -11,7 +11,8 @@ class PreferInlineMacroCallTest extends Test {
 
 	private static final MACROS: String = 'package pkg;\n\nimport haxe.macro.Expr;\n\nclass Macros {\n'
 		+ '\tpublic static macro function table(): Expr return macro [1, 2, 3];\n'
-		+ '\tpublic static function plain(): Array<Int> return [1, 2, 3];\n}';
+		+ '\tpublic static function plain(): Array<Int> return [1, 2, 3];\n\tpublic static macro function ext(e: '
+		+ 'Expr): Expr return macro [1, 2, 3];\n\tpublic static function plainExt(s: String): Int return s.length;\n}';
 	private static final SAME_CLASS_MACRO: String =
 		'import haxe.macro.Expr;\n\nclass M {\n\tpublic static macro function table(): Expr return macro [1, 2, 3];\n';
 
@@ -92,6 +93,35 @@ class PreferInlineMacroCallTest extends Test {
 		])
 			.filter(v -> v.file == 'D.hx');
 		Assert.equals(0, vs.length, 'both `this.expand()` and `b.expand()` call the macro');
+	}
+
+	@:pin('control')
+	@:killer('M-CALLEE-STATIC-IMPORT')
+	public function testForwardToMacroThroughStaticImportIsNotFlagged(): Void {
+		final vs: Array<Violation> =
+			flaggedIn('import pkg.Macros.table;\n\nclass C {\n\tpublic static function t(): Array<Int> return table();\n}');
+		Assert.equals(0, vs.length, 'the static import binds the bare name to the macro');
+	}
+
+	public function testForwardToPlainStaticThroughStaticImportStaysFlagged(): Void {
+		final vs: Array<Violation> =
+			flaggedIn('import pkg.Macros.plain;\n\nclass C {\n\tpublic static function t(): Array<Int> return plain();\n}');
+		Assert.equals(1, vs.length);
+	}
+
+	@:pin('control')
+	@:killer('M-CALLEE-USING')
+	public function testForwardToMacroThroughUsingIsNotFlagged(): Void {
+		final vs: Array<Violation> = flaggedIn(
+			'using pkg.Macros;\n\nclass C {\n\tpublic static function t(s: String): Array<Int> return s.ext();\n}'
+		);
+		Assert.equals(0, vs.length, 'the `using` binds `s.ext()` to the extension macro');
+	}
+
+	public function testForwardToPlainExtensionThroughUsingStaysFlagged(): Void {
+		final vs: Array<Violation> =
+			flaggedIn('using pkg.Macros;\n\nclass C {\n\tpublic static function t(s: String): Int return s.plainExt();\n}');
+		Assert.equals(1, vs.length);
 	}
 
 	private function flaggedIn(consumer: String): Array<Violation> {

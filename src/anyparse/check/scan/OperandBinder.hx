@@ -7,7 +7,6 @@ import anyparse.query.ExpectedTypes;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.NominalTypes;
 import anyparse.query.Refs.RefHit;
-import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -177,33 +176,31 @@ final class OperandBinder {
 		};
 	}
 
+	/** The declaration of the type of this file holding `at`, or null outside every type. */
+	public function enclosingDeclaration(at: Span): Null<ResolvedType> {
+		final fi: Null<FileInfo> = _index.fileInfo(_file);
+		final found: Null<TypeDeclInfo> = fi?.types.find(t -> t.span.from <= at.from && at.to <= t.span.to);
+		return fi == null || found == null ? null : { type: found, file: fi };
+	}
+
 	/**
-	 * The members a call's CALLEE names, as the declarations of its owner declare them: `m` through an implicit `this`
-	 * (the enclosing type and its closure, unless this file binds the name), `recv.m` off the one type the receiver's
-	 * declarations resolve to (`declarationOf`, so an inherited member counts). Null where that is not proven — an
-	 * ambiguous or unresolved receiver, a name no declaration of the closure holds (a static import, a module-level
-	 * function, a library the index does not read).
+	 * Where `owner` declares `name`: its own members, else the nearest link of its closure that does — asked only of a
+	 * closure that resolves link by link and brings no extensions (`MemberLookup.declarationFreeOfExtensionTypes`), since a
+	 * covariant override on a link the index cannot read would be the declaration the compiler types the access by.
 	 */
-	public function calleeMembers(callee: QueryNode): Null<Array<MemberInfo>> {
-		final name: Null<String> = callee.name;
-		final span: Null<Span> = callee.span;
-		if (name == null || span == null) return null;
-		final owners: Null<Array<ResolvedType>> = if (_identKinds.contains(callee.kind)) {
-			// Only a local, parameter or local function shadows the bare name: a binding to a MEMBER of the enclosing type is
-			// exactly what the call names.
-			final hit: Null<RefHit> = TypeResolver.resolveBindingHit(name, span, _tree, _shape);
-			final bound: Null<QueryNode> = hit?.bindingNode;
-			final shadowed: Bool = bound == null
-				? bindsHere(hit)
-				: ShapeVocab.localOrParamKinds(_shape).contains(bound.kind) || (_shape.localFunctionKinds ?? []).contains(bound.kind);
-			final enclosing: Null<ResolvedType> = shadowed ? null : enclosingDeclaration(span);
-			enclosing == null ? null : [enclosing];
-		} else if (callee.kind == _shape.fieldAccessKind && callee.children.length == 1) {
-			ownersOfReceiver(callee.children[0]);
-		} else {
+	public function declarationOf(owner: ResolvedType, name: String): Null<HostedMembers> {
+		final own: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
+		return if (own.length > 0)
+			{ members: own, host: owner }
+		else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))
+			_index.typing.members.declaringMember(owner, name)
+		else
 			null;
-		}
-		return owners == null || owners.length != 1 ? null : declarationOf(owners[0], name)?.members;
+	}
+
+	/** The callee resolver of this file, over this binder's receiver typing. */
+	public function callees(): CalleeResolver {
+		return new CalleeResolver(this, _file, _tree, _shape, _index);
 	}
 
 	/**
@@ -242,13 +239,6 @@ final class OperandBinder {
 		if (!(_shape.underlyingThisTypeKinds ?? []).contains(t.kind)) return Bound([owner]);
 		final underlying: Null<String> = t.underlyingRaw;
 		return underlying == null || t.typeParamNames.contains(underlying) ? Unknown : writtenTier(underlying, t.span.from);
-	}
-
-	/** The declaration of the type of this file holding `at`, or null outside every type. */
-	private function enclosingDeclaration(at: Span): Null<ResolvedType> {
-		final fi: Null<FileInfo> = _index.fileInfo(_file);
-		final found: Null<TypeDeclInfo> = fi?.types.find(t -> t.span.from <= at.from && at.to <= t.span.to);
-		return fi == null || found == null ? null : { type: found, file: fi };
 	}
 
 	/** A construction `new T(…)`: the type it writes, bound here. */
@@ -435,21 +425,6 @@ final class OperandBinder {
 	}
 
 	/**
-	 * Where `owner` declares `name`: its own members, else the nearest link of its closure that does — asked only of a
-	 * closure that resolves link by link and brings no extensions (`MemberLookup.declarationFreeOfExtensionTypes`), since a
-	 * covariant override on a link the index cannot read would be the declaration the compiler types the access by.
-	 */
-	private function declarationOf(owner: ResolvedType, name: String): Null<HostedMembers> {
-		final own: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
-		return if (own.length > 0)
-			{ members: own, host: owner }
-		else if (_index.typing.members.declarationFreeOfExtensionTypes(owner))
-			_index.typing.members.declaringMember(owner, name)
-		else
-			null;
-	}
-
-	/**
 	 * An identifier no declaration of this file binds, read (or, with `call`, called): a member the enclosing type
 	 * INHERITS, through an implicit `this` — 4.3.7 resolves a bare name to a field of the class before an import or a
 	 * module-level value — bound where it is declared (`declarationOf`). `Unknown` for a name a `case` capture may bind,
@@ -514,26 +489,9 @@ final class OperandBinder {
 			: DeclaredNullity.headTierIn(written.text, host.file, written.at, _index, host.params, _wrappers, _builtins);
 	}
 
-	/**
-	 * The declarations `receiver` stands for: what `receiverDecls` proves, else — for a package-qualified type path
-	 * (`pkg.Type`) whose root no binding of this file claims — the type that path binds to.
-	 */
-	private function ownersOfReceiver(receiver: QueryNode): Null<Array<ResolvedType>> {
-		final named: Null<Array<ResolvedType>> = receiverDecls(receiver);
-		if (named != null) return named;
-		final fieldKind: Null<String> = _shape.fieldAccessKind;
-		final path: Null<Array<String>> = fieldKind == null ? null : NominalTypes.pathOf(receiver, _shape.identKind, fieldKind);
-		final fi: Null<FileInfo> = _index.fileInfo(_file);
-		var root: QueryNode = receiver;
-		while (root.kind != _shape.identKind && root.children.length == 1) root = root.children[0];
-		final rootSpan: Null<Span> = root.span;
-		final rootName: Null<String> = root.name;
-		if (path == null || path.length < 2 || fi == null || rootSpan == null || rootName == null) return null;
-		if (bindsHere(TypeResolver.resolveBindingHit(rootName, rootSpan, _tree, _shape))) return null;
-		return switch _index.refs.names.dottedTierOf(path.join('.'), fi, false, rootSpan.from) {
-			case Bound(decls): decls;
-			case _: null;
-		};
+	/** Whether the reference walk's `hit` binds its name to a declaration of this file — a hit may name nothing. */
+	public static inline function bindsHere(hit: Null<RefHit>): Bool {
+		return hit != null && (hit.bindingSpan != null || hit.bindingNode != null);
 	}
 
 	/**
@@ -560,11 +518,6 @@ final class OperandBinder {
 	/** Whether `a` and `b` are the one declaration: the same file, the same type at the same offset. */
 	private static inline function sameDeclaration(a: ResolvedType, b: ResolvedType): Bool {
 		return a.file.file == b.file.file && a.type.name == b.type.name && a.type.span.from == b.type.span.from;
-	}
-
-	/** Whether the reference walk's `hit` binds its name to a declaration of this file — a hit may name nothing. */
-	private static inline function bindsHere(hit: Null<RefHit>): Bool {
-		return hit != null && (hit.bindingSpan != null || hit.bindingNode != null);
 	}
 
 	/**

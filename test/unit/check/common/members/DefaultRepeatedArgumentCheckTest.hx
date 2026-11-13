@@ -297,6 +297,21 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-CALLEE-STATIC-IMPORT')
+	public function testStaticImportCalleeCounted(): Void {
+		Assert.equals(1, inScope('import pkg.S.d;\n\nclass U {\n\tfunction f():Void {\n\t\td(K.T);\n\t\td(K.T);\n\t}\n}').length);
+	}
+
+	@:pin('control')
+	@:killer('M-DRA-COUNTS-EXTENSION')
+	public function testStaticExtensionCalleeNotCounted(): Void {
+		Assert.equals(
+			0, inScope('using pkg.S;\n\nclass U {\n\tfunction f(n:Int):Void {\n\t\tn.e(K.T);\n\t\tn.e(K.T);\n\t}\n}').length,
+			'the receiver fills `ms`, so `K.T` reaches `extra`, not the parameter its index names'
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new DefaultRepeatedArgument(), src);
 	}
@@ -328,6 +343,17 @@ class DefaultRepeatedArgumentCheckTest extends Test {
 		var count: Int = 0;
 		for (group in groups) for (slice in group) count += slice.edits.length;
 		return count;
+	}
+
+	private function inScope(consumer: String): Array<Violation> {
+		final s: String = 'package pkg;\n\nclass S {\n\tpublic static function d(ms:Int):Bool return true;\n'
+			+ '\tpublic static function e(ms:Int, extra:Int = 0):Bool return true;\n}';
+		return CheckFixture.violationsIn(new DefaultRepeatedArgument(), [
+			{ file: 'K.hx', source: CONST },
+			{ file: 'pkg/S.hx', source: s },
+			{ file: 'U.hx', source: consumer }
+		])
+			.filter(v -> v.file == 'pkg/S.hx');
 	}
 
 }

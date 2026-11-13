@@ -801,7 +801,7 @@
 			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
 			"method": "collectCalls",
 			"find": "if (called != null && scope.memberOwners.exists(called))",
-			"replace": "if (called != null && resolveCallee(call, owner, entry, scope, seams) != null)",
+			"replace": "if (called != null && resolveCallee(call, callees, scope) != null)",
 			"note": "only resolved calls are read, so a null handed through a receiver the rule cannot type escapes"
 		},
 		{
@@ -1246,6 +1246,14 @@
 			"find": "IndexScope.resolution(files, plugin)",
 			"replace": "IndexScope.report(files, plugin)",
 			"note": "inline-constant asks the build-macro question over the linted files only, so a build-macro supertype outside the report no longer keeps a constant inline"
+		},
+		{
+			"name": "M-DRA-COUNTS-EXTENSION",
+			"type": "anyparse.check.common.members.DefaultRepeatedArgument",
+			"method": "resolveCallee",
+			"find": "resolved == null || resolved.extension ||",
+			"replace": "resolved == null ||",
+			"note": "a static-extension call joins the census with its arguments one parameter off, so the receiver's slot is defaulted"
 		}
 	]
 }
