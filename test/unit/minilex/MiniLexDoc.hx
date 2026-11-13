@@ -11,6 +11,7 @@ package unit.minilex;
 @:peg
 @:schema(unit.minilex.MiniLexFormat)
 @:ws
+@:condDirectives('%when', ['%or'], '%done')
 enum MiniLexDoc {
 	Word(s: MiniLexAtom);
 	Text(s: MiniLexStringLit);

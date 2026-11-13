@@ -41,6 +41,7 @@ package anyparse.grammar.haxe;
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
+@:condDirectives('#if', ['#else', '#elseif'], '#end')
 typedef HxModule = {
 	@:trivia
 	@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))

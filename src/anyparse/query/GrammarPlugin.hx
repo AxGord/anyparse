@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions.LexDirective;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
@@ -1883,6 +1884,13 @@ final class RefShape {
 	 * walker's `conditionBlankEnd`, named by the grammar's condition terminal. Set whenever `conditionEnd` is.
 	 */
 	public var conditionBlankEnd: Null<(input: Input, at: Int) -> Int>;
+
+	/**
+	 * Every occurrence of a directive keyword (`conditionalIfKeyword`, `conditionalElseKeywords`,
+	 * `conditionalEndKeyword`) in a source, in source order — the generated lexical pass's `directives`. Comments and
+	 * literals are not masked here; `CondDirectives` applies its caller's mask. Optional; unset means no directive.
+	 */
+	public var conditionalDirectives: Null<(source: String) -> Array<LexDirective>>;
 
 	/**
 	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute

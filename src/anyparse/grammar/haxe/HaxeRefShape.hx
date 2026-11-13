@@ -1110,11 +1110,12 @@ final class HaxeRefShape {
 		table.constructorName = 'new';
 		table.accessorMethodPrefixes = ['get_', 'set_'];
 		table.conditionalMemberKind = 'Conditional';
-		table.conditionalIfKeyword = '#if';
-		table.conditionalElseKeywords = ['#else', '#elseif'];
-		table.conditionalEndKeyword = '#end';
+		table.conditionalIfKeyword = HaxeLexicalRegions.directiveOpen;
+		table.conditionalElseKeywords = HaxeLexicalRegions.directiveBranches;
+		table.conditionalEndKeyword = HaxeLexicalRegions.directiveClose;
 		table.conditionEnd = HaxeQueryWalker.conditionEnd;
 		table.conditionBlankEnd = HaxeQueryWalker.conditionBlankEnd;
+		table.conditionalDirectives = HaxeLexicalRegions.directives;
 		table.condDeclPrefixKeywordKinds = ['EnumKw', 'AbstractKw', 'FinalKw'];
 		// DERIVED, not written. The macro walks each ctor's own production to the terminals it
 		// reaches and reports the ones that reach a `@:condRegionRaw` capture; `conditionalRegionKinds`

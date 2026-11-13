@@ -308,7 +308,9 @@ class Build {
 		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(resolved.rootType);
 
-		final fields: Array<Field> = LexicalCodegen.emit(LexicalLowering.generate(shape, formatInfo, resolved.schemaTypePath));
+		final fields: Array<Field> = LexicalCodegen.emit(
+			LexicalLowering.generate(shape, formatInfo, resolved.schemaTypePath), LexicalLowering.directives(shape)
+		);
 
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();

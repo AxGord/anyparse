@@ -2,6 +2,7 @@ package anyparse.macro;
 
 #if macro
 import anyparse.macro.LexicalLowering.LexBodyAtom;
+import anyparse.macro.LexicalLowering.LexDirectiveSpec;
 import anyparse.macro.LexicalLowering.LexRegionSpec;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -43,6 +44,9 @@ class LexicalCodegen {
 	/** The `\n` a line-terminated region ends at. */
 	private static inline final NEWLINE: Int = 10;
 
+	/** The name of the source argument every generated entry and walk takes. */
+	private static final SOURCE_ARG: String = 'source';
+
 	/** Name of the generated walk over CODE — the top level, and the inside of every hole. */
 	private static final CODE_FN: String = '_lexCode';
 
@@ -50,8 +54,14 @@ class LexicalCodegen {
 	 * The fields the marker class receives: the two public entries, the code walk, one walk
 	 * per declared region and one balancing walk per declared hole.
 	 */
-	public static function emit(specs: Array<LexRegionSpec>): Array<Field> {
-		final fields: Array<Field> = [scanField(specs), scanCommentsField(), codeField(specs)];
+	public static function emit(specs: Array<LexRegionSpec>, directives: LexDirectiveSpec): Array<Field> {
+		final fields: Array<Field> = [
+			scanField(specs),
+			scanCommentsField(),
+			codeField(specs),
+			directivesField(directives)
+		];
+		for (field in keywordFields(directives)) fields.push(field);
 		for (k in 0...specs.length) {
 			fields.push(regionField(specs, k));
 			final spec: LexRegionSpec = specs[k];
@@ -92,7 +102,7 @@ class LexicalCodegen {
 				+ ' each hole the regions written inside it.\n\n Generated from the declarations of: $origins.',
 			access: [APublic, AStatic],
 			kind: FFun({
-				args: [{ name: 'source', type: macro : String }],
+				args: [{ name: SOURCE_ARG, type: macro : String }],
 				ret: TPath({ pack: [], name: 'Array', params: [TPType(regionCT())] }),
 				expr: body
 			}),
@@ -233,7 +243,7 @@ class LexicalCodegen {
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'source', type: macro : String },
+					{ name: SOURCE_ARG, type: macro : String },
 					{ name: 'from', type: macro : Int },
 					{ name: 'depth', type: macro : Int },
 					{ name: 'emit', type: TFunction([macro : Int, macro : Int, kindCT(), macro : Int], macro : Void) },
@@ -326,6 +336,79 @@ class LexicalCodegen {
 
 	private static function kindValue(name: String): Expr {
 		return { expr: EField(macro $p{['anyparse', 'query', 'LexicalRegions', 'LexRegionKind']}, name), pos: Context.currentPos() };
+	}
+
+	/**
+	 * The `directives` entry: every occurrence of a declared directive keyword, in source order. It knows the keyword
+	 * vocabulary and the token boundary — a keyword continued by an identifier character is a longer word — and nothing
+	 * about comments or literals: which occurrence is CODE is the caller's mask, because one consumer deliberately
+	 * reads them unmasked (`CondRegionScan`).
+	 */
+	private static function directivesField(directives: LexDirectiveSpec): Field {
+		final keywords: Array<String> = [];
+		if (directives.open != null) keywords.push(directives.open);
+		for (keyword in directives.branches) if (!keywords.contains(keyword)) keywords.push(keyword);
+		if (directives.close != null && !keywords.contains(directives.close)) keywords.push(directives.close);
+		// Longest first, so a keyword another one prefixes is tried after it.
+		keywords.sort((a: String, b: String) -> b.length - a.length);
+		final arms: Array<Expr> = [];
+		for (keyword in keywords) {
+			final test: Expr = literalTest(keyword);
+			final len: Int = keyword.length;
+			arms.push(macro if (
+				$test && (i + $v{len} >= n || !anyparse.util.Strings.isIdentChar(StringTools.fastCodeAt(source, i + $v{len})))
+			) {
+				out.push({ from: i, keyword: $v{keyword} });
+				i += $v{len};
+				continue;
+			});
+		}
+		final body: Expr = macro {
+			final out: Array<anyparse.query.LexicalRegions.LexDirective> = [];
+			final n: Int = source.length;
+			var i: Int = 0;
+			while (i < n) {
+				final c: Int = StringTools.fastCodeAt(source, i);
+				$b{arms};
+				i++;
+			}
+			return out;
+		};
+		return {
+			name: 'directives',
+			doc: ' Every occurrence of a conditional-compilation directive keyword in `source`, in source order - one followed\n'
+				+ ' by an identifier character is a longer word. Comments and literals are NOT masked: that is the caller\'s mask.',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [{ name: SOURCE_ARG, type: macro : String }],
+				ret: macro : Array<anyparse.query.LexicalRegions.LexDirective>,
+				expr: body
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The declared directive keywords, published as `directiveOpen` / `directiveBranches` / `directiveClose` so a
+	 * plugin reads its directive roles from the same declaration the walk reports.
+	 */
+	private static function keywordFields(directives: LexDirectiveSpec): Array<Field> {
+		final stringCT: ComplexType = macro : Null<String>;
+		return [
+			constField('directiveOpen', stringCT, macro $v{directives.open}),
+			constField('directiveBranches', macro : Array<String>, macro $v{directives.branches}),
+			constField('directiveClose', stringCT, macro $v{directives.close})
+		];
+	}
+
+	private static function constField(name: String, type: ComplexType, value: Expr): Field {
+		return {
+			name: name,
+			doc: ' A conditional-compilation directive keyword the grammar declares with `@:condDirectives`.',
+			access: [APublic, AStatic, AFinal],
+			kind: FVar(type, value),
+			pos: Context.currentPos()
+		};
 	}
 
 }

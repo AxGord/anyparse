@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexDirective;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.BodySkip.SkipMark;
 import anyparse.runtime.BodySkip.SkipMarkRole;
@@ -30,9 +31,10 @@ using anyparse.util.Strings;
  * `IfFalseDeadCode` and `TailMerge`) is the follow-up that would make the first sentence true of the
  * whole engine rather than of this class's own consumers.
  *
- * The scan is lexical and shares the engine's single lexer through
- * `RefactorSupport.collectNonCodeRegions`, so a `#if` written inside a comment, a string literal or
- * a regex literal is not a directive. That masking bounds where a directive may START; the condition
+ * The scan is lexical: the keyword occurrences come from the grammar's generated lexical pass
+ * (`RefShape.conditionalDirectives`), and the caller's non-code mask — the engine's single lexer through
+ * `RefactorSupport.collectNonCodeRegions` — drops a `#if` written inside a comment, a string literal or
+ * a regex literal. That masking bounds where a directive may START; the condition
  * scan itself reads raw text, so a block comment written INSIDE a condition is not masked and its
  * closing delimiter is read as ordinary condition text. An unterminated string swallows the rest of
  * the file as non-code, which costs a directive after it — acceptable, since the alternative is
@@ -41,9 +43,8 @@ using anyparse.util.Strings;
  * Needing no parse is what lets a consumer run on a file the grammar cannot parse.
  *
  * Grammar-agnostic: the keyword vocabulary comes from `RefShape.conditionalIfKeyword`,
- * `conditionalElseKeywords` and `conditionalEndKeyword`; a grammar declaring no opener scans to
- * nothing. Every declared keyword contributes its own first character to the marker set, so no
- * keyword is missed for sharing or not sharing the opener's sigil.
+ * `conditionalElseKeywords` and `conditionalEndKeyword`, which the grammar declares once with
+ * `@:condDirectives`; a grammar declaring no opener, or publishing no directive walk, scans to nothing.
  */
 @:nullSafety(Strict)
 final class CondDirectives {
@@ -68,32 +69,22 @@ final class CondDirectives {
 	 */
 	public static function scan(source: String, shape: RefShape, regions: () -> Array<LexRegion>): Array<CondDirective> {
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
-		if (ifKeyword == null || ifKeyword == '' || source.indexOf(ifKeyword) == -1) return [];
+		final occurrences: Null<(source: String) -> Array<LexDirective>> = shape.conditionalDirectives;
+		if (ifKeyword == null || ifKeyword == '' || occurrences == null || source.indexOf(ifKeyword) == -1) return [];
 		final keywords: DirectiveKeywords = declaredKeywords(ifKeyword, shape);
-		final regions: Array<Span> = SourceComments.collectNonCodeRegions(regions());
+		final masked: Array<Span> = SourceComments.collectNonCodeRegions(regions());
 		final out: Array<CondDirective> = [];
-		final markers: Array<String> = [];
-		for (code in keywords.markers) if (!markers.contains(String.fromCharCode(code))) markers.push(String.fromCharCode(code));
 		var region: Int = 0;
-		var i: Int = 0;
-		while (i < source.length) {
-			// Only a marker byte can start a directive, so the scan jumps from one to the next.
-			final at: Int = nextMarker(source, i, markers);
-			if (at < 0) break;
-			i = at;
-			while (region < regions.length && regions[region].to <= i) region++;
-			if (region < regions.length && i >= regions[region].from) {
-				i = regions[region].to;
-				continue;
-			}
-			final keyword: Null<String> = keywordAt(source, i, keywords.all);
-			if (keyword == null) {
-				i++;
-				continue;
-			}
-			final directive: CondDirective = read(source, i, keyword, keywords);
+		var after: Int = 0;
+		for (occurrence in occurrences(source)) {
+			final at: Int = occurrence.from;
+			// A keyword the previous directive's condition already read is part of that condition.
+			if (at < after) continue;
+			while (region < masked.length && masked[region].to <= at) region++;
+			if (region < masked.length && at >= masked[region].from) continue;
+			final directive: CondDirective = read(source, at, occurrence.keyword, keywords);
 			out.push(directive);
-			i = directive.span.to;
+			after = directive.span.to;
 		}
 		return out;
 	}
@@ -261,38 +252,16 @@ final class CondDirectives {
 	}
 
 	/**
-	 * The grammar's directive keywords, longest first so `#elseif` is never read as `#else` followed by
-	 * an `if` flag, together with the set of characters that can open one. Duplicates and empty
-	 * spellings are dropped — a grammar is free to repeat the opener in its branch list.
+	 * The opener and closer a keyword's condition-bearing-ness is decided against, and the grammar's readers of where a
+	 * condition ends and of the blank around it.
 	 */
 	private static function declaredKeywords(ifKeyword: String, shape: RefShape): DirectiveKeywords {
-		final all: Array<String> = [ifKeyword];
-		for (keyword in shape.conditionalElseKeywords ?? []) if (keyword != '' && !all.contains(keyword)) all.push(keyword);
-		final closer: Null<String> = shape.conditionalEndKeyword;
-		if (closer != null && closer != '' && !all.contains(closer)) all.push(closer);
-		all.sort((a, b) -> b.length - a.length);
 		return {
-			all: all,
-			markers: [for (keyword in all) keyword.fastCodeAt(0)],
 			opener: ifKeyword,
-			closer: closer,
+			closer: shape.conditionalEndKeyword,
 			conditionEnd: shape.conditionEnd,
 			conditionBlankEnd: shape.conditionBlankEnd
 		};
-	}
-
-	/**
-	 * The declared keyword `source` carries at `at`, or null. The match is token-terminated: a
-	 * keyword directly followed by an identifier character is a longer word, not this directive
-	 * (`#ifdef` is not `#if`).
-	 */
-	private static function keywordAt(source: String, at: Int, keywords: Array<String>): Null<String> {
-		for (keyword in keywords) {
-			final end: Int = at + keyword.length;
-			if (end > source.length || source.substring(at, end) != keyword) continue;
-			if (end == source.length || !source.fastCodeAt(end).isIdentChar()) return keyword;
-		}
-		return null;
 	}
 
 	/**
@@ -307,16 +276,6 @@ final class CondDirectives {
 			? CondCondition.conditionAt(source, afterKeyword, reader, blank)
 			: null;
 		return { keyword: keyword, span: new Span(from, condition == null ? afterKeyword : condition.to), condition: condition };
-	}
-
-	/** The first offset at or after `from` holding one of `markers`, -1 when none follows. */
-	private static function nextMarker(source: String, from: Int, markers: Array<String>): Int {
-		var first: Int = -1;
-		for (marker in markers) {
-			final at: Int = source.indexOf(marker, from);
-			if (at >= 0 && (first < 0 || at < first)) first = at;
-		}
-		return first;
 	}
 
 }
@@ -361,15 +320,10 @@ typedef CondBlock = {
 typedef OwnRegion = { final directives: Array<CondDirective>; final nested: Bool; };
 
 /**
- * The directive keyword vocabulary `CondDirectives.scan` threads through one walk: every declared
- * keyword longest-first (so a longer keyword is never read as a shorter prefix of itself), the set
- * of first characters that can open one, the opener / closer singled out because a keyword's
- * condition-bearing-ness is decided against them, and the grammar's readers of where a condition ends and of the
- * blank around it.
+ * What `CondDirectives.scan` threads through one walk: the opener / closer a keyword's condition-bearing-ness is
+ * decided against, and the grammar's readers of where a condition ends and of the blank around it.
  */
 private typedef DirectiveKeywords = {
-	final all: Array<String>;
-	final markers: Array<Int>;
 	final opener: String;
 	final closer: Null<String>;
 	final conditionEnd: Null<(input: Input, at: Int) -> Int>;

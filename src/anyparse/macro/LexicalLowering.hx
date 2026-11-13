@@ -62,6 +62,22 @@ typedef LexRegionSpec = {
 	origin: String
 
 };
+/**
+ * The conditional-compilation directive keywords a grammar declares with `@:condDirectives(<open>, [<branch>, …],
+ * <close>)` on its root rule — the vocabulary the generated walk reports as directive events in CODE.
+ */
+typedef LexDirectiveSpec = {
+
+	/** The keyword that opens a conditional region; null when the grammar declares none. */
+	open: Null<String>,
+
+	/** The keywords that open a further branch of a region. */
+	branches: Array<String>,
+
+	/** The keyword that closes a region; null when the grammar declares none. */
+	close: Null<String>
+
+};
 
 /**
  * The lexical pass's LOWERING — the third of the five passes, run for the
@@ -150,6 +166,27 @@ class LexicalLowering {
 				impl == null ? [] : [for (f in impl.get().statics.get()) f.name];
 			case _: [];
 		};
+	}
+
+	/**
+	 * The directive keywords `@:condDirectives` declares on `shape`'s root rule; every field empty when the grammar
+	 * declares none, so a grammar without conditional compilation reports no directive.
+	 */
+	public static function directives(shape: ShapeBuilder.ShapeResult): LexDirectiveSpec {
+		final none: LexDirectiveSpec = { open: null, branches: [], close: null };
+		final root: Null<ShapeNode> = shape.rules[shape.root];
+		final meta: Null<Metadata> = root?.annotations[AnnotationKeys.BASE_META];
+		if (meta == null) return none;
+		for (entry in meta) if (entry.name == ':condDirectives') {
+			if (entry.params.length != 3)
+				Context.fatalError('@:condDirectives expects an opener, an array of branch keywords and a closer', entry.pos);
+			final branches: Array<String> = switch entry.params[1].expr {
+				case EArrayDecl(values): [for (v in values) keywordOf(v)];
+				case _: fail('@:condDirectives branch keywords must be an array of string literals', entry.params[1].pos);
+			};
+			return { open: keywordOf(entry.params[0]), branches: branches, close: keywordOf(entry.params[2]) };
+		}
+		return none;
 	}
 
 	/** The `@:re` pattern on `node`, or null. */
@@ -461,6 +498,14 @@ class LexicalLowering {
 			i++;
 		}
 		return i;
+	}
+
+	/** A `@:condDirectives` keyword argument: a non-empty string literal. */
+	private static function keywordOf(e: Expr): String {
+		return switch e.expr {
+			case EConst(CString(s, _)) if (s != ''): s;
+			case _: fail('@:condDirectives keywords must be non-empty string literals', e.pos);
+		};
 	}
 
 }

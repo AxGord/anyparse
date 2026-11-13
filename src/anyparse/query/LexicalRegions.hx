@@ -35,6 +35,12 @@ typedef LexRegion = {
  * `regions` are the comments and literals written inside it, nested the same way.
  */
 typedef LexHole = { final from: Int; final to: Int; final regions: Array<LexRegion>; };
+/**
+ * An occurrence of a conditional-compilation directive keyword: its offset and the keyword as the grammar declares
+ * it. One followed by an identifier character is a longer word and never reported; whether it sits in code is the
+ * consumer's non-code mask.
+ */
+typedef LexDirective = { final from: Int; final keyword: String; };
 
 /**
  * A grammar's lexical walk: `onRegion(from, to, kind, depth)` for every region at every nesting depth and

@@ -3207,6 +3207,21 @@
 			"find": "anyparse.core.LeafTag.LineComment : anyparse.core.LeafTag.BlockComment",
 			"replace": "anyparse.core.LeafTag.BlockComment : anyparse.core.LeafTag.BlockComment",
 			"note": "a captured trailing line comment leaf is tagged LineComment"
+		},
+		{
+			"name": "M-DIRECTIVES-UNDECLARED",
+			"type": "anyparse.macro.LexicalLowering",
+			"method": "directives",
+			"force": "{ open: null, branches: [], close: null }",
+			"note": "the generated directive walk reports no keyword and publishes none, so neither grammar declares a directive"
+		},
+		{
+			"name": "M-DIRECTIVES-NO-BOUNDARY",
+			"type": "anyparse.macro.LexicalCodegen",
+			"method": "directivesField",
+			"find": "|| !anyparse.util.Strings.isIdentChar(",
+			"replace": "|| anyparse.util.Strings.isIdentChar(",
+			"note": "the directive walk reads a keyword continued by an identifier character as the keyword and drops one at a token boundary"
 		}
 	]
 }
