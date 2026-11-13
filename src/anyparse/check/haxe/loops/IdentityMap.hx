@@ -7,6 +7,7 @@ import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
 import anyparse.check.scan.RunScan;
 import anyparse.query.NominalTypes;
+import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
 
@@ -26,7 +27,8 @@ import anyparse.query.TypeSyntax;
  * tell the value types, which Haxe unifies as `Array<Null<Int>>` while a static target lays the two arrays out
  * differently, so a map is left alone, finding and fix, when the iterable's element or the ascribed type is `Int` / `Float`
  * / `Bool` (`RefShape.nonNullableTypeNames`), bare or under `Null<…>`, or an abstract or alias over one (`overValueType`).
- * A type name the index does not hold counts as a reference type.
+ * A type name the index does not hold is unresolved, so it leaves the site alone, unless the std toplevel names it
+ * (`StdTypes.toplevelPath`).
  * Without an oracle the rule is report-only. `DefaultOff`: opted in with `"identity-map": { "enabled": true }`.
  */
 @:nullSafety(Strict)
@@ -218,19 +220,21 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 	}
 
 	/**
-	 * Whether the type `path`, read at `from`, is a value type or an abstract or alias over one. A name the index does not
-	 * hold is a built-in or a library type, which the value-type names already cover.
+	 * Whether the type `path`, read at `from`, is a value type or an abstract or alias over one. A name that resolves to no
+	 * declaration and is no std toplevel type (`StdTypes.toplevelPath`) is unresolved and counts as one: a site whose element
+	 * cannot be read stays unflagged.
 	 */
 	private static function overValueType(
 		path: String, file: Null<FileInfo>, from: Int, index: Null<SymbolIndex>, s: Seams, hops: Int
 	): Bool {
 		if (s.valueTypeNames.contains(path)) return true;
 		if (file == null || index == null || hops == 0) return true;
-		for (r in index.refs.resolveTypeRefAll(path, file, from)) {
+		final declarations: Array<ResolvedType> = index.refs.resolveTypeRefAll(path, file, from);
+		for (r in declarations) {
 			final next: Null<String> = r.type.underlyingRaw ?? r.type.aliasTargetNominal;
 			if (next != null && overValueType(next, r.file, r.type.span.from, index, s, hops - 1)) return true;
 		}
-		return false;
+		return declarations.length == 0 && StdTypes.toplevelPath(path) == null;
 	}
 
 	/**

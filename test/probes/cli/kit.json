@@ -45,7 +45,10 @@
 		"identitymap/Main.hx": "enum abstract E(String) {\n\tvar A = 'a';\n}\n\nclass Main {\n\tstatic function main():Void {\n\t\tfinal ints:Array<Int> = [1, 2, 3];\n\t\tfinal a:Array<Null<Int>> = ints.map(x -> x);\n\t\tfinal b:Array<Null<Int>> = [for (x in ints) x];\n\t\tfinal d:Array<Dynamic> = ints.map(x -> (x : Dynamic));\n\t\tfinal es:Array<E> = [A];\n\t\tfinal c:Array<Null<E>> = es.map(x -> (x : Null<E>));\n\t\ttrace(a, b, c, d);\n\t}\n}\n",
 		"canon/e.hx": "class T {\n\tfunction f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\talpha: 1000000,\n\t\t\t\tbeta: 2000000,\n\t\t\t\tgamma: 3000000,\n\t\t\t\tdelta: 4000000\n\t\t\t},\n\t\t\t{\n\t\t\t\talpha: 3000000,\n\t\t\t\tbeta: 4000000,\n\t\t\t\tgamma: 5000000,\n\t\t\t\tdelta: 6000000\n\t\t\t}\n\t\t];\n\t}\n}\n",
 		"specpieces/M.hx": "class M {\n\tstatic final X: Array<Int> = [1, 2, 3];\n\n\tstatic final Y: Array<Int> = [9];\n}\n",
-		"specpieces/plan.tsv": "1x\tspecpieces/M.hx\tVarDecl\tspecpieces/M.hx\n"
+		"specpieces/plan.tsv": "1x\tspecpieces/M.hx\tVarDecl\tspecpieces/M.hx\n",
+		"identmap/apq.json": "{\"rules\":{\"identity-map\":{\"enabled\":true}}}\n",
+		"identmap/src/Main.hx": "class Main {\n\tstatic function run(es: Array<EI>): Void {\n\t\tfinal a: Array<Null<EI>> = es.map(x -> (x : Null<EI>));\n\t\tfinal c = [for (e in es) e];\n\t\ttrace(a, c);\n\t}\n}\n",
+		"identmap/lib/Ab.hx": "enum abstract EI(Int) {\n\tvar A = 1;\n}\n"
 	},
 	"invocations": [
 		{
@@ -9236,6 +9239,24 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "d5f61d6ee1346653",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint identmap/src --rule identity-map --all --no-oracle",
+			"argv": [
+				"apq",
+				"lint",
+				"identmap/src",
+				"--rule",
+				"identity-map",
+				"--all",
+				"--no-oracle"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fbbbe43aac9861ec",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

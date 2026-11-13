@@ -249,6 +249,22 @@
 			"find": "if (next != null && overValueType(next, r.file, r.type.span.from, index, s, hops - 1)) return true;",
 			"replace": "if (false) return true;",
 			"note": "an abstract or alias over a value type is taken for a reference type"
+		},
+		{
+			"name": "M-IM-UNRESOLVED-ELEMENT",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "overValueType",
+			"find": "return declarations.length == 0 && StdTypes.toplevelPath(path) == null;",
+			"replace": "return false;",
+			"note": "a name that resolves to no declaration is taken for a reference type"
+		},
+		{
+			"name": "M-IM-BUILTIN-REFERENCE",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "overValueType",
+			"find": "return declarations.length == 0 && StdTypes.toplevelPath(path) == null;",
+			"replace": "return declarations.length == 0;",
+			"note": "a standard-library reference type with no declaration is taken for unresolved"
 		}
 	]
 }
