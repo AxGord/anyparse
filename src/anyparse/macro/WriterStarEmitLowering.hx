@@ -849,7 +849,10 @@ final class WriterStarEmitLowering {
 			metaPolicy: WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath),
 			metaNode: starNode,
 			rootTypePath: ctx.shape.root,
-			trivia: ctx.ctx.trivia
+			trivia: ctx.ctx.trivia,
+			blockEndedPrior: starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED] == true
+				? blockEndedPredCheck(ctx, starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE], macro _arr[_si])
+				: null
 		};
 		emitTryparsePadEmit(c, padFlags, parts);
 	}

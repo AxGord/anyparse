@@ -449,5 +449,30 @@ final class WriterLoweringSupport {
 			: macro (_si > 0 && _t.leadingComments.length == 0 && _arr[_si - 1].trailingComment == null && $test);
 	}
 
+	/**
+	 * The one answer to "which pad stands between a `#if` region marker and its body": `broken` puts the body on lines of
+	 * its own and `glued` keeps it on the marker's line, and `leads` says the body breaks by shape. A body carrying
+	 * `@:fmt(siblingPad(fn, knob))` hands the three to that hook, so the enclosing region decides its branches together;
+	 * both writers build their pads here, so a body breaks alike in each.
+	 */
+	private static function regionPadSlotExpr(siblingPad: Null<Array<String>>, leads: Expr, broken: Expr, glued: Expr): Expr {
+		return siblingPad == null
+			? macro ($leads ? $broken : $glued)
+			: macro ${hookFn(siblingPad[0])}(${optFieldAccess(siblingPad[1])}, $leads, $broken, $glued);
+	}
+
+	/**
+	 * The runtime test that a `#if` region body carrying `@:fmt(conditionalBodyIndent)` nests one level past its markers:
+	 * `opt.conditionalPolicy` is AlignedIncrease or AlignedDecrease. Both writers ask it, so a body indents alike in each.
+	 */
+	private static function condIncreaseGateExpr(condBodyIndent: Bool): Expr {
+		return condBodyIndent
+			? macro (
+				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
+				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease
+			)
+			: macro false;
+	}
+
 }
 #end

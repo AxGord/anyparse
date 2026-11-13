@@ -7,6 +7,8 @@ import anyparse.macro.WriterLowering.PlainStarCtx;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using anyparse.macro.MetaInspect;
+
 /**
  * Pass 3W — what one repetition-loop iteration body emits for a PLAIN
  * (non-`@:trivia`) Star, once its pad / separator / gate flags are known.
@@ -70,8 +72,6 @@ final class WriterStarPadLowering {
 		final padLeading: Bool = f.padLeading;
 		final padTrailing: Bool = f.padTrailing;
 		final lineLengthAwareSeps: Bool = f.lineLengthAwareSeps;
-		final sepBeforeOptActive: Bool = f.sepBeforeOptActive;
-		final softFill: Bool = f.softFill;
 		if (padLeading || padTrailing) {
 			if (lineLengthAwareSeps) {
 				final leadingPush: Expr = padLeading ? macro _docs.push(_dile(opt.lineWidth, _dhl(), _dt(' '))) : macro {};
@@ -95,7 +95,7 @@ final class WriterStarPadLowering {
 					}
 				});
 			} else {
-				emitTryparsePadSepEmit(c, padLeading, padTrailing, sepBeforeOptActive, softFill, parts);
+				emitTryparsePadSepEmit(c, f, parts);
 			}
 		} else {
 			emitTryparseRunEmit(c, f, parts);
@@ -147,26 +147,21 @@ final class WriterStarPadLowering {
 	}
 
 	/**
-	 * Plain-mode try-parse pad path (the `else` branch of
-	 * `emitTryparseOrPadStar`). Handles `@:fmt(padLeading)` / `padTrailing` /
-	 * `softFill` / `lineLengthAwareSeps` / `sepBeforeOpt` inter-element + edge
-	 * spacing. Extracted to keep the helper under the complexity gate.
-	 * Plain-mode try-parse pad emission (the `if (padLeading || padTrailing)`
-	 * block of `emitTryparsePadStar`). Emits the lineLengthAware / sepBeforeOpt /
-	 * softFill / plain inter-element + edge layouts per the resolved `PadFlags`.
-	 * Extracted to keep the helper under the complexity gate.
-	 * Plain-mode try-parse pad emission, non-lineLengthAware path (the inner
-	 * `else` of `emitTryparsePadEmit`). Resolves the leading / trailing pad pushes
-	 * (`sepBeforeOpt` aware) and emits the `softFill` or plain inter-element
-	 * layout. Extracted to keep the helper under the complexity gate.
+	 * The padded try-parse Star off the line-length-aware path: the leading and trailing pads (`sepBeforeOpt` aware)
+	 * and the elements joined by the separator plus a space, or packed by a `softFill` Fill. A `#if` region body
+	 * carrying `@:fmt(elementPerLine)` puts each element on a line of its own and, once it holds two or more, opens and
+	 * closes on lines of its own through `regionPadSlotExpr`, the pad the trivia writer takes too; under a block-ended
+	 * separator an element that ends its own statement takes no separator after it.
 	 */
-	private static function emitTryparsePadSepEmit(
-		c: PlainStarCtx, padLeading: Bool, padTrailing: Bool, sepBeforeOptActive: Bool, softFill: Bool, parts: Array<Expr>
-	): Void {
+	private static function emitTryparsePadSepEmit(c: PlainStarCtx, f: PadFlags, parts: Array<Expr>): Void {
 		final starNode: ShapeNode = c.starNode;
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemCall: Expr = c.elemCall;
-		final leadingPush: Expr = if (sepBeforeOptActive) {
+		final elementPerLine: Bool = starNode.fmtHasFlag('elementPerLine');
+		final siblingPad: Null<Array<String>> = starNode.fmtReadStringArgs('siblingPad');
+		final padGlued: Expr = macro _dt(' ');
+		final padDoc: Expr = WriterLoweringSupport.regionPadSlotExpr(siblingPad, macro _padHardline, macro _dhl(), padGlued);
+		final leadingPush: Expr = if (f.sepBeforeOptActive) {
 			final fieldName: String = starNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
 			final sepBeforeAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
@@ -175,68 +170,87 @@ final class WriterStarPadLowering {
 			final sepText: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
 			final sepLeadText: String = '${sepText ?? ','} ';
 			macro _docs.push($sepBeforeAccess ? _dt($v{sepLeadText}) : _dt(' '));
-		} else if (padLeading)
-			macro _docs.push(_dt(' '));
+		} else if (f.padLeading)
+			macro _docs.push($padDoc);
 		else
 			macro {};
-		final trailingPush: Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
-		// ω-condcomp-body-inter-sep: the default inter-element
-		// separator for this branch is `_dt(' ')` — designed for
-		// sep-less Stars where elements pack with one space (e.g.
-		// modifier runs). Sep-bearing Stars (e.g.
-		// `HxConditionalParam.body` / `HxConditionalObjectField.body`
-		// with `@:sep(',')`) emit their actual sep + space so multi-
-		// element bodies round-trip the source comma. Falls back to
-		// `' '` when sepText is absent.
+		final trailingDoc: Expr = f.padTrailing ? padDoc : macro _de();
+		// A sep-bearing Star (`HxConditionalParam.body` with `@:sep(',')`) writes its separator between elements; a
+		// sep-less one (a modifier run) packs them with one space.
 		final sepTextForInter: Null<String> = starNode.annotations[AnnotationKeys.LIT_SEP_TEXT];
-		final interSepText: String = sepTextForInter != null ? '$sepTextForInter ' : ' ';
-		if (softFill) {
-			// ω-condcomp-body-softfill: route inter-element sep
-			// through `Fill(items, Concat([Text(sep), Line(' ')]))`.
-			// Flat mode renders the sep identically to the
-			// pre-softFill `Text(interSepText)` path (`, ` for
-			// sep-bearing Stars, ` ` for sep-less). Break mode
-			// emits `sep` + newline+indent before each overflow
-			// item — Fill picks per-item flat/break against the
-			// current Renderer budget.
-			final interSepLit: String = sepTextForInter ?? '';
-			parts.push(macro {
-				final _arr = $fieldAccess;
-				if (_arr.length == 0) {
-					_de();
-				} else {
-					final _docs: Array<anyparse.core.Doc> = [];
-					$leadingPush;
-					final _items: Array<anyparse.core.Doc> = [];
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						_items.push($elemCall);
-						_si++;
-					}
-					_docs.push(_dfill(_items, _dc([_dt($v{interSepLit}), _dl()])));
-					$trailingPush;
-					_dc(_docs);
-				}
-			});
-		} else {
-			parts.push(macro {
-				final _arr = $fieldAccess;
-				if (_arr.length == 0) {
-					_de();
-				} else {
-					final _docs: Array<anyparse.core.Doc> = [];
-					$leadingPush;
-					var _si: Int = 0;
-					while (_si < _arr.length) {
-						_docs.push($elemCall);
-						if (_si < _arr.length - 1) _docs.push(_dt($v{interSepText}));
-						_si++;
-					}
-					$trailingPush;
-					_dc(_docs);
-				}
-			});
+		if (f.softFill) {
+			parts.push(softFillEmit(c, leadingPush, trailingDoc, sepTextForInter ?? ''));
+			return;
 		}
+		final blockEndedPrior: Null<Expr> = f.blockEndedPrior;
+		final sepDoc: Expr = macro _docs.push(_dt($v{sepTextForInter}));
+		final guardedSep: Expr = blockEndedPrior == null
+			? sepDoc
+			: macro {
+				if (!anyparse.core.DocMeasure.endsWithSemi(_elemDoc) && !$blockEndedPrior) $sepDoc;
+			};
+		final sepPush: Expr = sepTextForInter == null ? macro {} : guardedSep;
+		final joiner: Expr = elementPerLine ? macro _dhl() : macro _dt(' ');
+		// Only a body laid out one element per line nests; a glued body (call arguments, object fields) stays as written.
+		final condIncrease: Expr = elementPerLine
+			? WriterLoweringSupport.condIncreaseGateExpr(starNode.fmtHasFlag('conditionalBodyIndent'))
+			: macro false;
+		parts.push(macro {
+			final _arr = $fieldAccess;
+			if (_arr.length == 0) {
+				_de();
+			} else {
+				final _padHardline: Bool = $v{elementPerLine} && _arr.length > 1;
+				final _docs: Array<anyparse.core.Doc> = [];
+				$leadingPush;
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					final _elemDoc: anyparse.core.Doc = $elemCall;
+					_docs.push(_elemDoc);
+					if (_si < _arr.length - 1) {
+						$sepPush;
+						_docs.push($joiner);
+					}
+					_si++;
+				}
+				if ($condIncrease) {
+					// The body nests past its markers; the pad before the closing marker stays at their indent.
+					final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+					_dc([_dn(_cols, _dc(_docs)), $trailingDoc]);
+				} else {
+					_docs.push($trailingDoc);
+					_dc(_docs);
+				}
+			}
+		});
+	}
+
+	/**
+	 * A `softFill` Star: `Fill(items, Concat([Text(sep), Line(' ')]))`, which reads as the plain join flat and, broken,
+	 * puts the separator and a newline before each item that overflows the budget.
+	 */
+	private static function softFillEmit(c: PlainStarCtx, leadingPush: Expr, trailingDoc: Expr, interSepLit: String): Expr {
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemCall: Expr = c.elemCall;
+		return macro {
+			final _arr = $fieldAccess;
+			if (_arr.length == 0) {
+				_de();
+			} else {
+				final _padHardline: Bool = false;
+				final _docs: Array<anyparse.core.Doc> = [];
+				$leadingPush;
+				final _items: Array<anyparse.core.Doc> = [];
+				var _si: Int = 0;
+				while (_si < _arr.length) {
+					_items.push($elemCall);
+					_si++;
+				}
+				_docs.push(_dfill(_items, _dc([_dt($v{interSepLit}), _dl()])));
+				_docs.push($trailingDoc);
+				_dc(_docs);
+			}
+		};
 	}
 
 	/**

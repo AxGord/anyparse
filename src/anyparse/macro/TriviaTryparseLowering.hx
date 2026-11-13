@@ -252,7 +252,7 @@ final class TriviaTryparseLowering {
 		final trailPadSpaceDoc: Expr = condExprFitSeps ? macro (opt.conditionalExprFit ? _dl() : _dt(' ')) : macro _dt(' ');
 		final priorAfterTrailEmit: Expr = triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr);
 		final finalWrapDocs: Expr = triviaTryparseFinalWrapDocs(lineLengthAwareSeps);
-		final condIncreaseGateExpr: Expr = triviaTryparseCondIncreaseGateExpr(condBodyIndent);
+		final condIncreaseGateExpr: Expr = WriterLoweringSupport.condIncreaseGateExpr(condBodyIndent);
 		final condNestedIncreaseGateExpr: Expr = triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent);
 		final lastTrailTerminatorEmit: Expr = macro {};
 		// The run's line-end locals `_metaPolicy` / `_metaFit` (`WriterMetaLineEndLowering.fitDecls`); a Star
@@ -479,8 +479,9 @@ final class TriviaTryparseLowering {
 		final priorAfterTrailRaw: Expr = c.priorAfterTrailRaw;
 		final padLeadingSpaceDoc: Expr = c.padLeadingSpaceDoc;
 		// A first element led by a comment breaks before it on its own, so its pad has nothing to add on a broken verdict.
-		final leadPad: Expr = padSlotExpr(
-			c, macro _padHardline, macro (_arr[0].leadingComments.length > 0 && !_padHardline ? _de() : _dhl()), padLeadingSpaceDoc
+		final leadPad: Expr = regionPadSlotExpr(
+			c.siblingPad, macro _padHardline, macro (_arr[0].leadingComments.length > 0 && !_padHardline ? _de() : _dhl()),
+			padLeadingSpaceDoc
 		);
 		final whileExpr: Expr = triviaTryparseWhileExpr(c);
 		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
@@ -842,8 +843,12 @@ final class TriviaTryparseLowering {
 		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
 		final trailPadSpaceDoc: Expr = c.trailPadSpaceDoc;
 		// Only the body's shape votes: a line comment that ends the body breaks before the marker without moving its siblings.
-		final condTrailPad: Expr = padSlotExpr(c, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : _dt(' ')));
-		final trailPad: Expr = padSlotExpr(c, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : $trailPadSpaceDoc));
+		final condTrailPad: Expr = regionPadSlotExpr(
+			c.siblingPad, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : _dt(' '))
+		);
+		final trailPad: Expr = regionPadSlotExpr(
+			c.siblingPad, macro _padHardline, macro _dhl(), macro (_trailEndsLine ? _dhl() : $trailPadSpaceDoc)
+		);
 		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
 		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(c);
 		final metaAfterLast: Expr = WriterMetaLineEndLowering.fitAfterLastExpr();
@@ -1364,21 +1369,6 @@ final class TriviaTryparseLowering {
 	}
 
 	/**
-	 * Tryparse-Star `condIncreaseGateExpr` builder (ω-cond-indent-policy):
-	 * runtime gate true when `condBodyIndent` AND the active
-	 * `opt.conditionalPolicy` is AlignedIncrease / AlignedDecrease.
-	 *
-	 */
-	private static function triviaTryparseCondIncreaseGateExpr(condBodyIndent: Bool): Expr {
-		return condBodyIndent
-			? macro (
-				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
-				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease
-			)
-			: macro false;
-	}
-
-	/**
 	 * Tryparse-Star `condNestedIncreaseGateExpr` builder (ω-cond-indent-policy
 	 * AlignedNestedIncrease): per-element gate true when `condBodyIndent` AND
 	 * the active `opt.conditionalPolicy` is AlignedNestedIncrease.
@@ -1446,17 +1436,6 @@ final class TriviaTryparseLowering {
 			]),
 			pos: Context.currentPos()
 		};
-	}
-
-	/**
-	 * A region body's pad: `broken` when `leads` holds and `glued` otherwise, or, under `@:fmt(siblingPad(fn, knob))`, the
-	 * slot the enclosing region's `siblingShare` resolves with its sibling branches' pads.
-	 */
-	private static function padSlotExpr(c: WriterLowering.TryparseStarCtx, leads: Expr, broken: Expr, glued: Expr): Expr {
-		final pad: Null<Array<String>> = c.siblingPad;
-		return pad == null
-			? macro ($leads ? $broken : $glued)
-			: macro ${hookFn(pad[0])}(${optFieldAccess(pad[1])}, $leads, $broken, $glued);
 	}
 
 }

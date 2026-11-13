@@ -3006,6 +3006,7 @@ typedef StarFieldArgs = {
  * five-bool set.
  */
 typedef PadFlags = {
+
 	final padLeading: Bool;
 	final padTrailing: Bool;
 	final lineLengthAwareSeps: Bool;
@@ -3015,6 +3016,13 @@ typedef PadFlags = {
 	final metaNode: ShapeNode;
 	final rootTypePath: String;
 	final trivia: Bool;
+
+	/**
+	 * Under `@:sep(text, tailRelax, blockEnded(pred))`: the test that the element `_arr[_si]` ends its own statement
+	 * by AST shape, so no separator follows it. Null on a Star whose separator is not block-ended.
+	 */
+	final blockEndedPrior: Null<Expr>;
+
 };
 /**
  * The three classify-info results resolved by

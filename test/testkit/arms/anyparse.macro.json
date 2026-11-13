@@ -3095,6 +3095,54 @@
 			"find": "final args: Null<Array<String>> = opts.statementIfBodyArgs;",
 			"replace": "final args: Null<Array<String>> = null;",
 			"note": "a function body that is an if / else keeps the placement its body knob chose, so an anonymous function glues the ladder head to function()"
+		},
+		{
+			"name": "M-PLAIN-COND-BODY-JOIN",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "final joiner: Expr = elementPerLine ? macro _dhl() : macro _dt(' ');",
+			"replace": "final joiner: Expr = macro _dt(' ');",
+			"note": "the plain writer joins the elements of a #if region body with a space, so two statements, members, declarations, cases or enum constructors of one body share a line"
+		},
+		{
+			"name": "M-PLAIN-COND-BODY-PAD",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "final _padHardline: Bool = $v{elementPerLine} && _arr.length > 1;",
+			"replace": "final _padHardline: Bool = false;",
+			"note": "a plain-written #if region body of several elements keeps its first element on the marker line and its last before the closing marker"
+		},
+		{
+			"name": "M-PLAIN-COND-BODY-SEMI",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "final sepPush: Expr = sepTextForInter == null ? macro {} : guardedSep;",
+			"replace": "final sepPush: Expr = sepTextForInter == null ? macro {} : sepDoc;",
+			"note": "the plain writer writes the block-ended separator after a statement that already ends its own, so a #if statement body reads a();; b();"
+		},
+		{
+			"name": "M-PLAIN-COND-PAD-UNSHARED",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "WriterLoweringSupport.regionPadSlotExpr(siblingPad,",
+			"replace": "WriterLoweringSupport.regionPadSlotExpr(null,",
+			"note": "the plain writer decides each branch's pads alone, so a one-element branch beside a broken one keeps its marker line"
+		},
+		{
+			"name": "M-PLAIN-COND-BODY-INDENT",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "if ($condIncrease) {",
+			"replace": "if (false) {",
+			"note": "under an increasing conditional policy the plain writer leaves a #if region body at its markers' indent"
+		},
+		{
+			"name": "M-PLAIN-COND-INDENT-GLUED",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparsePadSepEmit",
+			"find": "final condIncrease: Expr = elementPerLine",
+			"replace": "final condIncrease: Expr = true",
+			"note": "under an increasing conditional policy the plain writer nests a glued #if body too (call arguments, object fields), so a function literal inside one moves a level deeper than the trivia writer puts it"
 		}
 	]
 }

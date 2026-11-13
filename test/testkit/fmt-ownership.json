@@ -334,6 +334,11 @@
 		"uniformStmtBlanks",
 		"wrapRules"
 	],
+	"WriterStarPadLowering": [
+		"conditionalBodyIndent",
+		"elementPerLine",
+		"siblingPad"
+	],
 	"WriterTriviaSlotLowering": [
 		"captureSourceNewlineAfter",
 		"nestBody"
