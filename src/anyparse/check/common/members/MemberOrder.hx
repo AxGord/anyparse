@@ -11,6 +11,7 @@ import anyparse.check.common.members.MemberSpacing.LayoutIssue;
 import anyparse.check.common.members.MemberSpacing.SpacingPolicy;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.ds.InOrder;
+import anyparse.query.CondDirectives;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -150,9 +151,10 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
+			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
 			walk(
-				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors,
-				plugin.lexicalRegions(entry.source),
+				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors, regions,
+				CondDirectives.scan(entry.source, shape, () -> regions),
 				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'), _configNotes),
 				EnumAbstractForms.valueStarts(plugin, tree)
 			);
@@ -198,10 +200,12 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				final budget: Int = violations.length > 0
 					? LintConfig.resolveWith(_resolveConfig, violations[0].file).intOption(id(), BUDGET_OPTION) ?? MAX_RELOCATED_LINES
 					: MAX_RELOCATED_LINES;
+				final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 				fixWalk(
 					edits, source, tree, shape, plugin.metaShape().metaKinds, flagged, accessors,
 					{ movableArglessNew: movableArglessNew, budget: budget, spacing: spacing },
-					index, file, plugin.lexicalRegions(source), EnumAbstractForms.valueStarts(plugin, tree)
+					index, file, regions, CondDirectives.scan(source, shape, () -> regions), EnumAbstractForms.valueStarts(plugin, tree),
+					plugin
 				);
 				return edits;
 			})
@@ -341,14 +345,15 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
-		accessors: Map<Int, Bool>, regions: Array<LexRegion>, spacing: SpacingPolicy, valueStarts: Array<Int>
+		accessors: Map<Int, Bool>, regions: Array<LexRegion>, directives: Array<CondDirective>, spacing: SpacingPolicy,
+		valueStarts: Array<Int>
 	): Void {
 		if (isOrderedContainer(node.kind, shape)) {
 			final members: Array<OrderedMember> = MemberSlots.collectMembers(
-				node, source, shape, metaKinds, accessors, regions, valueStarts
+				node, source, shape, metaKinds, accessors, regions, valueStarts, directives
 			);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(
-				members, source, computePlan(members, source, shape), MemberSpacing.forContainer(spacing, node.kind)
+				members, source, computePlan(members, source, directives, shape), MemberSpacing.forContainer(spacing, node.kind)
 			);
 			if (issue != null) out.push({
 				file: file,
@@ -358,7 +363,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape, metaKinds, accessors, regions, spacing, valueStarts);
+		for (c in node.children) walk(out, file, source, c, shape, metaKinds, accessors, regions, directives, spacing, valueStarts);
 	}
 
 	/**
@@ -368,12 +373,14 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, metaKinds: Array<String>,
 		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
-		regions: Array<LexRegion>, valueStarts: Array<Int>
+		regions: Array<LexRegion>, directives: Array<CondDirective>, valueStarts: Array<Int>, plugin: GrammarPlugin
 	): Void {
 		if (isOrderedContainer(node.kind, shape))
-			emitReorder(edits, source, node, shape, metaKinds, flagged, accessors, options, index, file, regions, valueStarts);
+			emitReorder(
+				edits, source, node, shape, metaKinds, flagged, accessors, options, index, file, regions, directives, valueStarts, plugin
+			);
 		for (c in node.children)
-			fixWalk(edits, source, c, shape, metaKinds, flagged, accessors, options, index, file, regions, valueStarts);
+			fixWalk(edits, source, c, shape, metaKinds, flagged, accessors, options, index, file, regions, directives, valueStarts, plugin);
 	}
 
 	/**
@@ -389,13 +396,13 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, metaKinds: Array<String>,
 		flagged: Map<Int, Violation>, accessors: Map<Int, Bool>, options: FixOptions, index: Null<SymbolIndex>, file: Null<String>,
-		regions: Array<LexRegion>, valueStarts: Array<Int>
+		regions: Array<LexRegion>, directives: Array<CondDirective>, valueStarts: Array<Int>, plugin: GrammarPlugin
 	): Void {
 		final members: Array<OrderedMember> = MemberSlots.collectMembers(
-			container, source, shape, metaKinds, accessors, regions, valueStarts
+			container, source, shape, metaKinds, accessors, regions, valueStarts, directives
 		);
 		if (members.length < 2) return;
-		final plan: SortPlan = computePlan(members, source, shape);
+		final plan: SortPlan = computePlan(members, source, directives, shape);
 		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan, spacing);
 		if (bad == null) return;
@@ -408,7 +415,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		// init phase then refuses that order whole, exactly as it did before constraints existed.
 		final constrained: Array<OrderedMember> = constraints.length == 0 ? canonical : constrainedSort(members, plan, constraints);
 		final sorted: Array<OrderedMember> = blocksContiguous(constrained) ? constrained : canonical;
-		final pinned: Null<String> = reorderRefusal(members, source, regions);
+		final pinned: Null<String> = reorderRefusal(members, source, regions, directives);
 		if (pinned != null) {
 			reported.declineReason = pinned;
 			MemberSpacing.emitSpacingOnly(edits, members, source, spacing);
@@ -447,7 +454,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			edits.push({ span: region, text: MemberSpacing.joinMembers(sorted, source, spacing) });
 			return;
 		}
-		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape, spacing);
+		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape, spacing, plugin);
 		if (rebuilt == null) {
 			// The only decline that emits NOTHING, spacing included: the rebuild owns the whole
 			// conditional region, so there is no sub-edit of it that is still safe to make.
@@ -469,11 +476,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * mentioning `#else` cannot trip it).
 	 */
 	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String, plan: SortPlan): Null<OrderedMember> {
-		final elseExempt: Bool = MemberSlots.hasUnmodelledElse(members, source);
+		final elseExempt: Bool = MemberSlots.hasUnmodelledElse(members);
 		var prev: Null<OrderedMember> = null;
-		var prevTo: Int = -1;
+
 		for (m in members) {
-			if (prevTo >= 0 && prevTo <= m.span.from && MemberSlots.hasBranchDirective(source, prevTo, m.span.from)) prev = null;
+			if (m.branchBefore) prev = null;
 			// The one pair whose canonical order the LANGUAGE forbids: `m` is ranked above `prev` and
 			// its initializer reads `prev`, so putting it first would read a field before it is
 			// initialized. Skipping only THIS pair — rather than consulting the fix path's whole-type
@@ -486,7 +493,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			)
 				return m;
 			prev = m;
-			prevTo = m.span.to;
+
 		}
 		return null;
 	}
@@ -508,12 +515,14 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * reader who is not told which gate closed has no way to tell that from a fixer that has not got
 	 * round to the case yet. The caller writes it onto the finding as `Violation.declineReason`.
 	 */
-	private static function reorderRefusal(members: Array<OrderedMember>, source: String, regions: Array<LexRegion>): Null<String> {
-		return if (MemberSlots.hasUnmodelledElse(members, source))
+	private static function reorderRefusal(
+		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>
+	): Null<String> {
+		return if (MemberSlots.hasUnmodelledElse(members))
 			'the order is pinned: this type holds an `#else` shape the branch model does not represent'
 		else if (hasOrphanComment(members, source, regions))
 			'the order is pinned: a comment between two members belongs to no member slot, so a reorder would strand it'
-		else if (!conditionalRegionsCovered(members, source))
+		else if (!conditionalRegionsCovered(members, source, directives))
 			'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them'
 		else if (splitsCoexistingRegion(members))
 			'the order is pinned: one conditional construct declares members of two sections, and reordering would split it'
@@ -643,11 +652,15 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * fallback instead. Note the first gate is SHARED with `computePlan`, at a different granularity -
 	 * tightening it for a block-local reason also widens this container-wide bail.
 	 */
-	private static function conditionalRegionsCovered(members: Array<OrderedMember>, source: String): Bool {
+	private static function conditionalRegionsCovered(
+		members: Array<OrderedMember>, source: String, directives: Array<CondDirective>
+	): Bool {
 		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
 		return conditional.length == 0 || (
-			regionContentCovered(conditional, members, source)
-			&& uncoveredIsDirectiveOnly(source, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members))
+			regionContentCovered(conditional, members, source, directives)
+			&& uncoveredIsDirectiveOnly(
+				source, directives, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members)
+			)
 		);
 	}
 
@@ -662,9 +675,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * if the self-check finds any member no longer under its recorded condition and branch.
 	 */
 	private static function buildConditionalRegion(
-		sorted: Array<OrderedMember>, source: String, shape: RefShape, spacing: SpacingPolicy
+		sorted: Array<OrderedMember>, source: String, shape: RefShape, spacing: SpacingPolicy, plugin: GrammarPlugin
 	): Null<String> {
-		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
+		final ifKw: Null<String> = shape.conditionalIfKeyword;
+		final endKw: Null<String> = shape.conditionalEndKeyword;
+		if (ifKw == null || endKw == null) return null;
 		final parts: Array<String> = [];
 		var prevCond: Null<String> = null;
 		var prevSignature: String = '';
@@ -678,7 +693,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			if (m.condition != prevCond || signature != prevSignature) {
 				hoisted = null;
 				if (prevCond != null) {
-					emit('#end', false);
+					emit(endKw, false);
 					blockJustClosed = true;
 				}
 				final cond: Null<String> = m.condition;
@@ -714,28 +729,33 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			blockJustClosed = false;
 			prevMember = m;
 		}
-		if (prevCond != null) emit('#end', false);
-		return verifyRegion(parts, sorted, ifKw) ? parts.join('\n') : null;
+		if (prevCond != null) emit(endKw, false);
+		return verifyRegion(parts, sorted, shape, plugin) ? parts.join('\n') : null;
 	}
 
 	/**
 	 * Re-derive each emitted member's surrounding condition and branch index
 	 * from the directive stream and confirm both equal the recorded ones.
 	 */
-	private static function verifyRegion(parts: Array<String>, sorted: Array<OrderedMember>, ifKw: String): Bool {
-		final ifPrefix: String = '$ifKw ';
+	private static function verifyRegion(parts: Array<String>, sorted: Array<OrderedMember>, shape: RefShape, plugin: GrammarPlugin): Bool {
+		final text: String = parts.join('\n');
+		final directives: Array<CondDirective> = CondDirectives.scan(text, shape, plugin.lexicalRegions.bind(text));
 		var current: Null<String> = null;
 		var branch: Int = 0;
 		var si: Int = 0;
+		var offset: Int = 0;
 		for (p in parts) {
 			final t: String = p.trim();
-			if (t == '#end') {
+			final directive: Null<CondDirective> = CondDirectives.startingAt(directives, offset + p.length - p.ltrim().length);
+			offset += p.length + 1;
+			if (directive != null && directive.keyword == shape.conditionalEndKeyword) {
 				current = null;
 				branch = 0;
-			} else if (t.startsWith(ifPrefix)) {
-				current = t.substring(ifPrefix.length).trim();
+			} else if (directive != null && directive.keyword == shape.conditionalIfKeyword) {
+				final condition: Null<Span> = directive.condition;
+				current = condition == null ? null : CondDirectives.normalizeCondition(text.substring(condition.from, condition.to));
 				branch = 0;
-			} else if (t.startsWith('#else')) {
+			} else if (directive != null && (shape.conditionalElseKeywords ?? []).contains(directive.keyword)) {
 				branch++;
 			} else if (isTriviaOnly(t)) {
 				continue;
@@ -798,7 +818,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		final prev: OrderedMember = members[bad.index - 1];
 		final section: Int = sectionOf(bad.rank);
 		final keys: OrderKeys = {
-			elseExempt: MemberSlots.hasUnmodelledElse(members, source),
+			elseExempt: MemberSlots.hasUnmodelledElse(members),
 			section: section,
 			otherSection: sectionOf(prev.rank),
 			ranked: rankedOrdinalOf(bad, plan),
@@ -829,7 +849,9 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * condition already splits into one block per section, and keying without the section would
 	 * merge those two blocks and pin both on the mixed rank.
 	 */
-	private static function computePlan(members: Array<OrderedMember>, source: String, shape: RefShape): SortPlan {
+	private static function computePlan(
+		members: Array<OrderedMember>, source: String, directives: Array<CondDirective>, shape: RefShape
+	): SortPlan {
 		final groupFirst: Map<String, Int> = [];
 		final buckets: Map<String, Array<OrderedMember>> = [];
 		final order: Array<String> = [];
@@ -852,7 +874,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			final bucket: Null<Array<OrderedMember>> = buckets[key];
 			final ordinal: Null<Int> = groupFirst[key];
 			if (bucket == null || ordinal == null || !uniformRank(bucket)) continue;
-			if (!regionContentCovered(bucket, members, source)) continue;
+			if (!regionContentCovered(bucket, members, source, directives)) continue;
 			if (!MemberInitDeps.blockInitInert(bucket, members, shape, source)) continue;
 			ranked[key] = ordinal;
 			if (uniformInline(bucket)) rankedInline.push(key);
@@ -905,14 +927,16 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * differently-conditioned member shares the outer construct's region and covers its own bytes
 	 * there.
 	 */
-	private static function regionContentCovered(block: Array<OrderedMember>, all: Array<OrderedMember>, source: String): Bool {
+	private static function regionContentCovered(
+		block: Array<OrderedMember>, all: Array<OrderedMember>, source: String, directives: Array<CondDirective>
+	): Bool {
 		final covered: Array<Span> = coveredSlotSpans(all);
 		final seen: Array<String> = [];
 		for (m in block) {
 			final key: String = '${m.regionFrom} ${m.regionTo}';
 			if (seen.contains(key)) continue;
 			seen.push(key);
-			if (!uncoveredIsDirectiveOnly(source, m.regionFrom, m.regionTo, covered)) return false;
+			if (!uncoveredIsDirectiveOnly(source, directives, m.regionFrom, m.regionTo, covered)) return false;
 			if (!tailOfLineBlank(source, m.regionTo)) return false;
 		}
 		return true;
@@ -922,16 +946,18 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * Whether every maximal chunk of `[from, to)` left uncovered by the
 	 * from-sorted `covered` spans holds only blank or directive lines.
 	 */
-	private static function uncoveredIsDirectiveOnly(source: String, from: Int, to: Int, covered: Array<Span>): Bool {
+	private static function uncoveredIsDirectiveOnly(
+		source: String, directives: Array<CondDirective>, from: Int, to: Int, covered: Array<Span>
+	): Bool {
 		var cursor: Int = from;
 		for (c in covered) {
 			if (c.from >= to) break;
 			if (c.to <= cursor) continue;
-			if (c.from > cursor && !isDirectiveOrBlank(source.substring(cursor, c.from))) return false;
+			if (c.from > cursor && !isDirectiveOrBlank(source, directives, cursor, c.from)) return false;
 			cursor = c.to;
 			if (cursor >= to) return true;
 		}
-		return isDirectiveOrBlank(source.substring(cursor, to));
+		return isDirectiveOrBlank(source, directives, cursor, to);
 	}
 
 	/**
@@ -942,12 +968,21 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * keeping the block pinned - without it the container reads as out of order and reports a finding
 	 * the fixer can never apply.
 	 */
-	private static function isDirectiveOrBlank(text: String): Bool {
-		for (line in text.split('\n')) {
+	private static function isDirectiveOrBlank(source: String, directives: Array<CondDirective>, from: Int, to: Int): Bool {
+		var lineFrom: Int = from;
+		while (lineFrom < to) {
+			final newline: Int = source.indexOf('\n', lineFrom);
+			final lineTo: Int = newline < 0 || newline >= to ? to : newline;
+			final line: String = source.substring(lineFrom, lineTo);
 			final trimmed: String = line.ltrim();
-			if (trimmed == '') continue;
-			if (!trimmed.startsWith('#')) return false;
-			if (SourceComments.textHasCommentMarker(trimmed)) return false;
+			if (
+				trimmed != '' && (
+					CondDirectives.startingAt(directives, lineFrom + line.length - trimmed.length) == null
+					|| SourceComments.textHasCommentMarker(trimmed)
+				)
+			)
+				return false;
+			lineFrom = lineTo + 1;
 		}
 		return true;
 	}

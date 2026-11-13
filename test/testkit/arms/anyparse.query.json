@@ -16823,6 +16823,22 @@
 			"method": "storageless",
 			"force": "true",
 			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
+		},
+		{
+			"name": "M-COND-BARE-BRANCH-TAKES-CONDITION",
+			"type": "anyparse.query.CondDirectives",
+			"method": "bareBranchKeyword",
+			"find": "!takesCondition(keyword, ifKeyword, closer)",
+			"replace": "takesCondition(keyword, ifKeyword, closer)",
+			"note": "the bare branch keyword is read as the one that carries a condition, so a grammar's conditionless else resolves to its elseif and a merged region is closed with the wrong word"
+		},
+		{
+			"name": "M-COND-LOWER-BOUND-SKIPS-EXACT",
+			"type": "anyparse.query.CondDirectives",
+			"method": "lowerBound",
+			"find": "directives[mid].span.from < at",
+			"replace": "directives[mid].span.from <= at",
+			"note": "the lookup lands after a directive starting exactly at the offset, so a gap boundary on a directive and the directive's own start are missed"
 		}
 	]
 }

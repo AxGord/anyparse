@@ -169,36 +169,39 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\t#if mobile\n\tvar a: Int = 1;\n\t#else\n\tvar a: Int = 2;\n\t#end\n}').length);
 	}
 
-	/** A `#`-carrying statement is refused outright — here a string that reads like a branch marker. */
-	public function testDirectiveInStringLiteralNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("#if mobile\n\t\ta = '#else';\n\t\t#else\n\t\ta = 'x';\n\t\t#end")).length);
+	/** A string that reads like a branch marker is no directive: the lexical scan masks it, so the region merges with it verbatim. */
+	@:pin('control')
+	@:killer('M-CAM-DIRECTIVES-UNMASKED')
+	public function testDirectiveInStringLiteralMerges(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap("#if mobile\n\t\ta = '#else';\n\t\t#else\n\t\ta = 'x';\n\t\t#end"));
+		Assert.equals(1, es.length);
+		Assert.equals("a = #if mobile '#else' #else 'x' #end;", es[0].text);
 	}
 
-	/**
-	 * A marker inside the CONDITION diverts the scan before it can register the real `#else`,
-	 * so the chain never ends in one and the region fails closed — verified to be the gate that
-	 * fires first for this shape, not a later net.
-	 */
-	public function testMarkerInConditionNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('#if (v == "#if")\n\t\tx = 1;\n\t\t#else\n\t\tx = 2;\n\t\t#end')).length);
+	/** A marker inside a string of the CONDITION is part of that condition, so the region still merges and the header stays verbatim. */
+	@:pin('guard')
+	public function testMarkerInConditionMerges(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('#if (v == "#if")\n\t\tx = 1;\n\t\t#else\n\t\tx = 2;\n\t\t#end'));
+		Assert.equals(1, es.length);
+		Assert.equals('x = #if (v == "#if") 1 #else 2 #end;', es[0].text);
 	}
 
-	/**
-	 * A `#if` in a COMMENT past the `#else` unbalances the scan, which then never reaches the
-	 * region's own `#end` at depth 0 — the scan-termination gate, and the first one to fire
-	 * here (no statement carries a `#`, and the comment gate would only have made it
-	 * report-only).
-	 */
-	public function testUnbalancedMarkerInCommentNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #if looks nested\n\t\tx = 2;\n\t\t#end')).length);
+	/** A `#if` in a COMMENT is no directive, so the region stays balanced; the comment makes the finding report-only. */
+	@:pin('control')
+	@:killer('M-CAM-DIRECTIVES-UNMASKED')
+	public function testOpenerInCommentIsNoDirective(): Void {
+		final src: String = wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #if looks nested\n\t\tx = 2;\n\t\t#end');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
 	}
 
-	/**
-	 * A `#end` in a COMMENT is the first one the scan meets at depth 0, and the region text past
-	 * it is more than that keyword — the terminator-identity gate, first to fire here.
-	 */
-	public function testEarlyEndMarkerInCommentNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #end looks final\n\t\tx = 2;\n\t\t#end')).length);
+	/** A `#end` in a COMMENT is no directive, so the region still closes at its own `#end`; the comment makes the finding report-only. */
+	@:pin('control')
+	@:killer('M-CAM-DIRECTIVES-UNMASKED')
+	public function testCloserInCommentIsNoDirective(): Void {
+		final src: String = wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #end looks final\n\t\tx = 2;\n\t\t#end');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
 	}
 
 	/**

@@ -19,17 +19,12 @@ using anyparse.util.Strings;
  * A directive is not a node. A `Conditional` region projects its BRANCH STATEMENTS as children and
  * the directive text itself survives only as trivia on the line, so every consumer that needs the
  * text has to read the source — and until this class there was no shared read, only per-caller
- * probes: `CondBranchProjection.gapHasBranchDirective` and `MemberSlots.hasBranchDirective` answer
- * "does a branch open in this gap", and `MemberSlots.extractConditionText` recovers ONE region's
- * condition from its node span. None of them enumerates directives, so the
- * consumers of this class — the `redundant-condcomp-parens` and `cond-region-merge` checks and
- * `apq lit --include-directives` — would otherwise have grown a lexer each. `MemberSlots` shares
- * this class's condition NORMALISATION (`normalizeCondition` here, `Strings.wrappedInParens` /
- * `Strings.stripOuterParens` for the parentheses) but still reads its own condition text off a node span; the older probes
- * have NOT been migrated onto this reader otherwise; folding them in
- * (and with them the hardcoded `#end` / `#else` spellings in `MemberOrder`, `MemberSlots`, `CondAssignMerge`,
- * `IfFalseDeadCode` and `TailMerge`) is the follow-up that would make the first sentence true of the
- * whole engine rather than of this class's own consumers.
+ * probes. The consumers of this class — the `redundant-condcomp-parens`, `cond-region-merge`,
+ * `cond-assign-merge` and `member-order` checks and `apq lit --include-directives` — would otherwise
+ * have grown a lexer each. `CondBranchProjection.gapHasBranchDirective` and `TailScan.hasConditionalCompilation`
+ * are older probes NOT yet migrated onto this reader; folding them in (and with them the hardcoded
+ * spellings in `IfFalseDeadCode`) is the follow-up that would make the first sentence true of the whole
+ * engine rather than of this class's own consumers.
  *
  * The scan is lexical: the keyword occurrences come from the grammar's generated lexical pass
  * (`RefShape.conditionalDirectives`), and the caller's non-code mask — the engine's single lexer through
@@ -252,6 +247,47 @@ final class CondDirectives {
 	}
 
 	/**
+	 * The grammar's condition-LESS branch keyword (Haxe `#else`), or null when it declares none. A branch
+	 * keyword carries a condition exactly when `takesCondition` says so, so the bare one is the declared
+	 * branch keyword it refuses.
+	 */
+	public static function bareBranchKeyword(shape: RefShape): Null<String> {
+		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		if (ifKeyword == null) return null;
+		final closer: Null<String> = shape.conditionalEndKeyword;
+		final bare: Array<String> = (
+			shape.conditionalElseKeywords ?? []
+		).filter(keyword -> keyword != '' && !takesCondition(keyword, ifKeyword, closer));
+		return bare.length == 0 ? null : bare[0];
+	}
+
+	/** The directives of `directives` that START inside `[from, to)`, in source order. */
+	public static function startingIn(directives: Array<CondDirective>, from: Int, to: Int): Array<CondDirective> {
+		var i: Int = lowerBound(directives, from);
+		return [while (i < directives.length && directives[i].span.from < to) directives[i++]];
+	}
+
+	/** The directive that starts exactly at `at`, or null. */
+	public static function startingAt(directives: Array<CondDirective>, at: Int): Null<CondDirective> {
+		final i: Int = lowerBound(directives, at);
+		return i < directives.length && directives[i].span.from == at ? directives[i] : null;
+	}
+
+	/** The first directive spelled `keyword` that starts at or after `from`, or null. */
+	public static function firstOf(directives: Array<CondDirective>, keyword: String, from: Int): Null<CondDirective> {
+		for (i in lowerBound(directives, from) ... directives.length) if (directives[i].keyword == keyword) return directives[i];
+		return null;
+	}
+
+	/** The condition of `directive`, whitespace-normalised for comparison, or null when it carries none. */
+	public static function normalizedCondition(source: String, directive: CondDirective): Null<String> {
+		final condition: Null<Span> = directive.condition;
+		if (condition == null) return null;
+		final raw: String = source.substring(condition.from, condition.to).trim();
+		return raw == '' ? null : normalizeCondition(raw);
+	}
+
+	/**
 	 * The opener and closer a keyword's condition-bearing-ness is decided against, and the grammar's readers of where a
 	 * condition ends and of the blank around it.
 	 */
@@ -276,6 +312,20 @@ final class CondDirectives {
 			? CondCondition.conditionAt(source, afterKeyword, reader, blank)
 			: null;
 		return { keyword: keyword, span: new Span(from, condition == null ? afterKeyword : condition.to), condition: condition };
+	}
+
+	/** The index of the first directive of the source-ordered `directives` that starts at or after `at`. */
+	private static function lowerBound(directives: Array<CondDirective>, at: Int): Int {
+		var low: Int = 0;
+		var high: Int = directives.length;
+		while (low < high) {
+			final mid: Int = (low + high) >> 1;
+			if (directives[mid].span.from < at)
+				low = mid + 1
+			else
+				high = mid;
+		}
+		return low;
 	}
 
 }

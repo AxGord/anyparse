@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
@@ -164,10 +165,6 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	/** ASCII-only note appended when the statement AFTER the region is merged in as the implicit else. */
 	private static final FOLLOWER_NOTE: String = ' (the statement after the region is the implicit else and is merged in)';
 
-	private static final END_KEYWORD: String = '#end';
-	private static final ELSEIF_KEYWORD: String = '#elseif';
-	private static final ELSE_KEYWORD: String = '#else';
-
 	public function new() {
 		super(
 			'cond-assign-merge',
@@ -226,17 +223,22 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		final endKeyword: Null<String> = shape.conditionalEndKeyword;
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		final assignKind: Null<String> = shape.assignKind;
 		final localDeclKinds: Null<Array<String>> = shape.localDeclKinds;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		return if (ifKeyword == null || exprStmtKind == null || assignKind == null || support == null)
+		return if (ifKeyword == null || endKeyword == null || exprStmtKind == null || assignKind == null || support == null)
 			null
 		else if (localDeclKinds == null || localDeclKinds.length == 0)
 			null
 		else
 			{
+				shape: shape,
 				ifKeyword: ifKeyword,
+				endKeyword: endKeyword,
+				bareElseKeyword: CondDirectives.bareBranchKeyword(shape),
+				elseKeywords: shape.conditionalElseKeywords ?? [],
 				exprStmtKind: exprStmtKind,
 				assignKind: assignKind,
 				localDeclKinds: localDeclKinds,
@@ -249,21 +251,23 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	/** Every mergeable region reachable under `root`, in document order — the candidate set `run` and `fix` share. */
 	private static function collectMatches(root: QueryNode, source: String, seams: Seams, regions: Array<LexRegion>): Array<Match> {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
+		final directives: Array<CondDirective> = CondDirectives.scan(source, seams.shape, () -> regions);
 		final out: Array<Match> = [];
-		walk(root, source, comments, seams, out);
+		walk(root, source, comments, directives, seams, out);
 		return out;
 	}
 
 	/** Walk `node`, matching each region that is a DIRECT child of a statement list. */
 	private static function walk(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams, out: Array<Match>
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, directives: Array<CondDirective>,
+		seams: Seams, out: Array<Match>
 	): Void {
 		if (seams.blockKinds.contains(node.kind)) for (i in 0...node.children.length) {
 			final next: Null<QueryNode> = i + 1 < node.children.length ? node.children[i + 1] : null;
-			final m: Null<Match> = matchRegion(node.children[i], next, source, comments, seams);
+			final m: Null<Match> = matchRegion(node.children[i], next, source, comments, directives, seams);
 			if (m != null) out.push(m);
 		}
-		for (child in node.children) walk(child, source, comments, seams, out);
+		for (child in node.children) walk(child, source, comments, directives, seams, out);
 	}
 
 	/**
@@ -272,11 +276,12 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	 * makes the merge lossy — the finding is still reported, report-only.
 	 */
 	private static function matchRegion(
-		node: QueryNode, next: Null<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, seams: Seams
+		node: QueryNode, next: Null<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
+		directives: Array<CondDirective>, seams: Seams
 	): Null<Match> {
 		final span: Null<Span> = node.span;
-		if (span == null || !sliceStartsWith(source, span.from, seams.ifKeyword)) return null;
-		final region: Null<Region> = splitArms(source, span, node.children, seams);
+		if (span == null || CondDirectives.startingAt(directives, span.from)?.keyword != seams.ifKeyword) return null;
+		final region: Null<Region> = splitArms(source, directives, span, node.children, seams);
 		if (region == null) return null;
 		// A region that never reaches `#else` merges only by consuming the statement AFTER it as
 		// the implicit else — and only when its branches EXIT, which is what makes that statement
@@ -284,20 +289,24 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 		final follower: Null<Arm> = region.hasElse ? null : followerArm(next, span);
 		if (!region.hasElse && follower == null) return null;
 		final all: Array<Arm> = follower == null ? region.arms : region.arms.concat([follower]);
-		final parts: Null<Array<Parts>> = agreedParts(source, all, seams);
+		final parts: Null<Array<Parts>> = agreedParts(source, directives, all, seams);
 		if (parts == null || (follower != null && !parts[0].exit)) return null;
 		// Every SHAPE gate, the headers included, runs BEFORE the comment gate: a region the
 		// headers refuse is not reportable at all, and reporting it would advise a hand-merge
 		// of something the rule itself cannot express.
 		final headers: Null<Array<String>> = branchHeaders(source, comments, region.arms);
 		if (headers == null) return null;
-		if (follower != null) headers.push(ELSE_KEYWORD);
+		if (follower != null) {
+			final bareElse: Null<String> = seams.bareElseKeyword;
+			if (bareElse == null) return null;
+			headers.push(bareElse);
+		}
 		final merged: Span = follower == null ? span : new Span(span.from, follower.stmtSpan.to);
 		return {
 			span: merged,
 			exit: parts[0].exit,
 			implicitElse: follower != null,
-			text: hasComment(comments, merged) ? null : assemble(headers, parts)
+			text: hasComment(comments, merged) ? null : assemble(headers, parts, seams.endKeyword)
 		};
 	}
 
@@ -323,49 +332,25 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	 * the ONE statement it holds — or null when the region is not a complete `#if … #else …
 	 * #end` with exactly one statement per branch.
 	 *
-	 * The branches are recovered from the DIRECTIVE LINES because the tree projects them flat:
-	 * `children[i]` must be the statement of branch `i`, which is what pins one statement per
-	 * branch (a branch with two, or with none, shifts a child out of its own range). The scan
-	 * is nesting-aware and must reach the region's own `#end` at depth 0 with nothing but that
-	 * keyword left, so an unbalanced marker inside a string literal fails the region closed.
+	 * The branches are recovered from the region's own DIRECTIVES (`CondDirectives.ownDirectives`) because the
+	 * tree projects them flat: `children[i]` must be the statement of branch `i`, which is what pins one statement
+	 * per branch (a branch with two, or with none, shifts a child out of its own range). The directives must form
+	 * exactly one closed region whose closer ends the node, so an unbalanced region fails closed.
 	 */
-	private static function splitArms(source: String, region: Span, children: Array<QueryNode>, seams: Seams): Null<Region> {
-		final markers: Array<Int> = [];
-		var chainEndsWithElse: Bool = false;
-		var depth: Int = 0;
-		var endAt: Int = -1;
-		var i: Int = region.from + seams.ifKeyword.length;
-		while (i < region.to) {
-			if (source.charCodeAt(i) != '#'.code) {
-				i++;
-			} else if (sliceStartsWith(source, i, seams.ifKeyword)) {
-				depth++;
-				i += seams.ifKeyword.length;
-			} else if (sliceStartsWith(source, i, END_KEYWORD)) {
-				if (depth == 0) {
-					endAt = i;
-					break;
-				}
-				depth--;
-				i += END_KEYWORD.length;
-			} else if (depth == 0 && sliceStartsWith(source, i, ELSEIF_KEYWORD)) {
-				markers.push(i);
-				chainEndsWithElse = false;
-				i += ELSEIF_KEYWORD.length;
-			} else if (depth == 0 && sliceStartsWith(source, i, ELSE_KEYWORD)) {
-				markers.push(i);
-				chainEndsWithElse = true;
-				i += ELSE_KEYWORD.length;
-			} else {
-				i++;
-			}
-		}
-		if (endAt == -1) return null;
-		if (source.substring(endAt, region.to).trim() != END_KEYWORD) return null;
-		if (children.length != markers.length + 1) return null;
+	private static function splitArms(
+		source: String, directives: Array<CondDirective>, region: Span, children: Array<QueryNode>, seams: Seams
+	): Null<Region> {
+		final own: Null<Array<CondDirective>> = CondDirectives.ownDirectives(
+			directives, region, seams.ifKeyword, seams.elseKeywords, seams.endKeyword
+		);
+		if (own == null || own[0].span.from != region.from) return null;
+		final closer: CondDirective = own[own.length - 1];
+		if (source.substring(closer.span.to, region.to).trim() != '') return null;
+		final branches: Array<CondDirective> = own.slice(1, own.length - 1);
+		if (children.length != branches.length + 1) return null;
 
-		final bounds: Array<Int> = [region.from].concat(markers);
-		bounds.push(endAt);
+		final bounds: Array<Int> = [region.from].concat(branches.map(b -> b.span.from));
+		bounds.push(closer.span.from);
 		final arms: Array<Arm> = [];
 		for (a => stmt in children) {
 			final stmtSpan: Null<Span> = stmt.span;
@@ -374,7 +359,8 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 			final armSpan: Span = stmtSpan;
 			arms.push({ headerFrom: bounds[a], stmt: stmt, stmtSpan: armSpan });
 		}
-		return { arms: arms, hasElse: chainEndsWithElse };
+		final last: Null<CondDirective> = branches.length == 0 ? null : branches[branches.length - 1];
+		return { arms: arms, hasElse: last != null && !CondDirectives.takesCondition(last.keyword, seams.ifKeyword, seams.endKeyword) };
 	}
 
 	/**
@@ -382,10 +368,12 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	 * assignment / initialized declaration, or the branches do not AGREE on their prefix —
 	 * the SHAPE gate, independent of how the text is later assembled.
 	 */
-	private static function agreedParts(source: String, arms: Array<Arm>, seams: Seams): Null<Array<Parts>> {
+	private static function agreedParts(
+		source: String, directives: Array<CondDirective>, arms: Array<Arm>, seams: Seams
+	): Null<Array<Parts>> {
 		final out: Array<Parts> = [];
 		for (arm in arms) {
-			final parts: Null<Parts> = armParts(source, arm, seams);
+			final parts: Null<Parts> = armParts(source, directives, arm, seams);
 			if (parts == null) return null;
 			if (out.length > 0 && (parts.prefix != out[0].prefix || parts.exit != out[0].exit)) return null;
 			out.push(parts);
@@ -437,11 +425,11 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	}
 
 	/** The merged statement: the shared prefix, then each branch's header and r-value, then `#end;`. */
-	private static function assemble(headers: Array<String>, parts: Array<Parts>): String {
+	private static function assemble(headers: Array<String>, parts: Array<Parts>, endKeyword: String): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add(parts[0].prefix);
 		for (a in 0...headers.length) buf.add(' ${headers[a]} ${parts[a].value}');
-		buf.add(' $END_KEYWORD;');
+		buf.add(' $endKeyword;');
 		return buf.toString();
 	}
 
@@ -450,13 +438,12 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	 * including the `=`) and the r-value it keeps per branch, or null when the statement is
 	 * neither a bare assignment nor an initialized single-declarator declaration.
 	 *
-	 * A statement holding a `#` is refused outright: it is either an r-value that already
-	 * carries directives (which the merge would nest) or text the branch scan could have
-	 * mistaken for a marker.
+	 * A statement holding a directive is refused outright: its r-value already carries directives,
+	 * which the merge would nest.
 	 */
-	private static function armParts(source: String, arm: Arm, seams: Seams): Null<Parts> {
+	private static function armParts(source: String, directives: Array<CondDirective>, arm: Arm, seams: Seams): Null<Parts> {
 		final stmt: QueryNode = arm.stmt;
-		return if (source.substring(arm.stmtSpan.from, arm.stmtSpan.to).indexOf('#') != -1)
+		return if (CondDirectives.startingIn(directives, arm.stmtSpan.from, arm.stmtSpan.to).length != 0)
 			null
 		else if (stmt.kind == seams.exprStmtKind)
 			assignParts(source, stmt, seams)
@@ -519,16 +506,18 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 		return comments.exists(token -> token.from < region.to && token.to > region.from);
 	}
 
-	private static function sliceStartsWith(s: String, at: Int, what: String): Bool {
-		return at + what.length <= s.length && s.substr(at, what.length) == what;
-	}
-
 }
 
 /** The kinds `CondAssignMerge` reads. */
 private typedef Seams = {
 
+	var shape: RefShape;
 	var ifKeyword: String;
+	var endKeyword: String;
+
+	/** The condition-less branch keyword (`#else`), or null when the grammar declares none. */
+	var bareElseKeyword: Null<String>;
+	var elseKeywords: Array<String>;
 	var exprStmtKind: String;
 	var assignKind: String;
 	var localDeclKinds: Array<String>;

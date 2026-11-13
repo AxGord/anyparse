@@ -6,6 +6,7 @@ import anyparse.check.common.members.MemberInitDeps;
 import anyparse.check.common.members.MemberSlots;
 import anyparse.check.scan.RunScan;
 import anyparse.ds.Set;
+import anyparse.query.CondDirectives;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex;
 
@@ -41,11 +42,12 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final reported: Set<Int> = new Set<Int>();
 			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
+			final directives: Array<CondDirective> = CondDirectives.scan(entry.source, shape, () -> regions);
 			function walk(node: QueryNode, typeName: Null<String>): Void {
 				final container: Bool = containers.contains(node.kind);
 				final owner: Null<String> = container ? node.name ?? typeName : typeName;
 				final members: Array<OrderedMember> = container
-					? MemberSlots.collectMembers(node, entry.source, shape, metaKinds, [], regions)
+					? MemberSlots.collectMembers(node, entry.source, shape, metaKinds, [], regions, null, directives)
 					: [];
 				for (m in members) {
 					final span: Null<Span> = m.initNode?.span;

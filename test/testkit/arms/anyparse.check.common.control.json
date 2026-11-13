@@ -1199,6 +1199,14 @@
 			"find": " || MemberKinds.subtreeContainsAnyKind(head, s.shape.spliceKinds ?? [])",
 			"replace": "",
 			"note": "a chain holding a spliced statement still folds into its declaration, though the splice may read the variable the initializer then moves past"
+		},
+		{
+			"name": "M-CAM-DIRECTIVES-UNMASKED",
+			"type": "anyparse.check.common.control.CondAssignMerge",
+			"method": "collectMatches",
+			"find": "CondDirectives.scan(source, seams.shape, () -> regions)",
+			"replace": "CondDirectives.scan(source, seams.shape, () -> [])",
+			"note": "the directives are scanned without the comment and string mask, so a keyword inside a comment or a string literal unbalances the region and it is no longer merged"
 		}
 	]
 }

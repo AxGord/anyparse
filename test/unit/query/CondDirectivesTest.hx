@@ -126,6 +126,29 @@ final class CondDirectivesTest extends Test {
 		Assert.isNull(owned('#else\n#if a\nx();\n#end'));
 	}
 
+	/** The branch keyword that takes no condition is the bare one (`#else`), never the `#elseif` that does. */
+	@:pin('control')
+	@:killer('M-COND-BARE-BRANCH-TAKES-CONDITION')
+	public function testTheBareBranchKeywordIsTheOneWithoutACondition(): Void {
+		Assert.equals('#else', CondDirectives.bareBranchKeyword(SHAPE));
+	}
+
+	/** The directives of a source-ordered list are looked up by where they start, the first of a keyword at or after an offset included. */
+	@:pin('control')
+	@:killer('M-COND-LOWER-BOUND-SKIPS-EXACT')
+	public function testDirectivesAreFoundByWhereTheyStart(): Void {
+		final source: String = '#if a\nx();\n#else\ny();\n#end';
+		final directives: Array<CondDirective> = CondDirectives.scan(source, SHAPE, new HaxeQueryPlugin().lexicalRegions.bind(source));
+		Assert.equals('#else', CondDirectives.startingAt(directives, 11)?.keyword);
+		Assert.isNull(CondDirectives.startingAt(directives, 12));
+		Assert.same(['#else', '#end'], CondDirectives.startingIn(directives, 6, source.length).map(d -> d.keyword));
+		Assert.same(['#else'], CondDirectives.startingIn(directives, 11, 16).map(d -> d.keyword));
+		Assert.equals(22, CondDirectives.firstOf(directives, '#end', 5)?.span.from);
+		Assert.isNull(CondDirectives.firstOf(directives, '#end', 23));
+		Assert.equals('a', CondDirectives.normalizedCondition(source, directives[0]));
+		Assert.isNull(CondDirectives.normalizedCondition(source, directives[1]));
+	}
+
 	/** The text of the directives the whole of `source` owns as one region, null when it is not one. */
 	private static function owned(source: String): Null<Array<String>> {
 		final directives: Array<CondDirective> = CondDirectives.scan(source, SHAPE, new HaxeQueryPlugin().lexicalRegions.bind(source));

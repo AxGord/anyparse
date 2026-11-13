@@ -197,7 +197,7 @@ final class MemberSpacing {
 	 * gap (same condition on both sides).
 	 */
 	public static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (MemberSlots.hasUnmodelledElse(members, source)) return null;
+		if (MemberSlots.hasUnmodelledElse(members)) return null;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			if (gap.ifEdit != null) return { member: members[i + 1], message: 'a member-level #if is not preceded by a blank line' };
@@ -343,7 +343,7 @@ final class MemberSpacing {
 	private static function emitDirectiveSpacing(
 		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
 	): Void {
-		if (MemberSlots.hasUnmodelledElse(members, source)) return;
+		if (MemberSlots.hasUnmodelledElse(members)) return;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			final ifEdit: Null<{ span: Span, text: String }> = gap.ifEdit;
@@ -366,15 +366,8 @@ final class MemberSpacing {
 		if (a.condition == b.condition) return { ifEdit: null, endEdit: null };
 		final gapFrom: Int = a.span.to;
 		final gapTo: Int = b.span.from;
-		var firstIfStart: Int = -1;
-		var lastEndTo: Int = -1;
-		var cursor: Int = gapFrom;
-		for (seg in source.substring(gapFrom, gapTo).split('\n')) {
-			final t: String = seg.trim();
-			if (firstIfStart < 0 && t.startsWith('#if')) firstIfStart = cursor;
-			if (t == '#end') lastEndTo = cursor + seg.length;
-			cursor += seg.length + 1;
-		}
+		final firstIfStart: Int = b.gapOpenFrom;
+		final lastEndTo: Int = b.gapCloseTo;
 		final ifEdit: Null<{ span: Span, text: String }> = firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1
 			? { span: new Span(gapFrom, firstIfStart), text: GROUP_SEPARATOR }
 			: null;

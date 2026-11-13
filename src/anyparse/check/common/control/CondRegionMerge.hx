@@ -204,7 +204,7 @@ final class CondRegionMerge extends RuleBase {
 		if (source.substring(closeLineFrom, closeFrom).trim() != '') return null;
 		if (source.substring(openLineFrom, open.span.from).trim() != '') return null;
 		if (!isTriviaOnly(source, closeLineTo, openLineFrom, comments)) return null;
-		final elseKeyword: String = branchKeyword(shape) ?? '';
+		final elseKeyword: String = CondDirectives.bareBranchKeyword(shape) ?? '';
 		if (merge.complements && elseKeyword == '') return null;
 		final tailsClean: Bool = source.substring(close.span.to, closeLineTo).trim() == ''
 			&& source.substring(openTo, openLineTo).trim() == ''
@@ -221,26 +221,6 @@ final class CondRegionMerge extends RuleBase {
 			replacement: tailsClean ? replacement : null,
 			message: messageOf(merge, elseKeyword, note)
 		};
-	}
-
-	/**
-	 * The grammar's condition-LESS branch keyword (Haxe `#else`), or null when it declares none. A
-	 * branch keyword carries a condition exactly when it ends with the opener's bare word, the same
-	 * discrimination `CondDirectives` makes when it delimits one.
-	 */
-	private static function branchKeyword(shape: RefShape): Null<String> {
-		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
-		if (ifKeyword == null) return null;
-		final bare: String = ifKeyword.substring(1);
-		return (shape.conditionalElseKeywords ?? []).find(keyword -> keyword != '' && !keyword.endsWith(bare));
-	}
-
-	/** The condition of `directive`, whitespace-normalised for comparison, or null when it carries none. */
-	private static function conditionText(source: String, directive: CondDirective): Null<String> {
-		final condition: Null<Span> = directive.condition;
-		if (condition == null) return null;
-		final raw: String = source.substring(condition.from, condition.to).trim();
-		return raw == '' ? null : CondDirectives.normalizeCondition(raw);
 	}
 
 	/** Whether one of `a` / `b` is the other's negation - `!X`, or `!(X)`, against `X`. */
@@ -323,8 +303,8 @@ final class CondRegionMerge extends RuleBase {
 		final secondElse: Bool = second.branches.length == 1;
 		if (firstElse && directives[first.branches[0]].condition != null) return null;
 		if (secondElse && directives[second.branches[0]].condition != null) return null;
-		final firstCondition: Null<String> = conditionText(source, directives[first.open]);
-		final secondCondition: Null<String> = conditionText(source, directives[second.open]);
+		final firstCondition: Null<String> = CondDirectives.normalizedCondition(source, directives[first.open]);
+		final secondCondition: Null<String> = CondDirectives.normalizedCondition(source, directives[second.open]);
 		if (firstCondition == null || secondCondition == null) return null;
 		final firstText: String = firstCondition;
 		final secondText: String = secondCondition;

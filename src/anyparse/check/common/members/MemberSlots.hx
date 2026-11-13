@@ -22,6 +22,7 @@ using anyparse.util.Strings;
  * order - the writer's leading comments of the member, which its doc-comment blank-line rule reads.
  */
 typedef OrderedMember = {
+
 	var node: QueryNode;
 	var rank: MemberRank;
 	var index: Int;
@@ -38,6 +39,16 @@ typedef OrderedMember = {
 	var leadTrivia: String;
 	var leadFrom: Int;
 	var leadComments: Array<String>;
+
+	/** Whether a branch directive (`#elseif` / `#else`) stands between the previous collected member and this one. */
+	var branchBefore: Bool;
+
+	/** Where the first line of an opener directive (`#if`) between the previous collected member and this one starts, or -1. */
+	var gapOpenFrom: Int;
+
+	/** Where the last line holding only a closer directive (`#end`) between the previous collected member and this one ends, or -1. */
+	var gapCloseTo: Int;
+
 }
 
 /**
@@ -94,24 +105,17 @@ final class MemberSlots {
 	 */
 	public static function collectMembers(
 		container: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>, accessors: Map<Int, Bool>,
-		regions: Array<LexRegion>, ?valueStarts: Array<Int>
+		regions: Array<LexRegion>, ?valueStarts: Array<Int>, ?scanned: Array<CondDirective>
 	): Array<OrderedMember> {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final out: Array<OrderedMember> = [];
-		collectInto(out, container, source, shape, metaKinds, comments, [], null, accessors);
+		final directives: Array<CondDirective> = scanned ?? CondDirectives.scan(source, shape, () -> regions);
+		collectInto(out, container, source, shape, metaKinds, comments, directives, [], null, accessors);
+		markGapDirectives(out, source, directives, shape);
 		final hosted: Bool = container.kind == shape.enumAbstractDeclKind;
 		final starts: Array<Int> = valueStarts ?? [];
 		for (m in out) if (isPlainValueRank(m) && (hosted || EnumAbstractForms.isValue(m.node.span, starts))) m.rank = EnumValue;
 		return out;
-	}
-
-	/** Whether a line in `source[from,to)` starts (after indentation) with `#else` or `#elseif`. */
-	public static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
-		for (line in source.substring(from, to).split('\n')) {
-			final t: String = line.ltrim();
-			if (t.startsWith('#else')) return true;
-		}
-		return false;
 	}
 
 	/**
@@ -123,19 +127,19 @@ final class MemberSlots {
 	 * boundary. A construct whose FIRST branch is empty lands here too: its directive then sits
 	 * between an outside member and an inside one, which no branch pair explains.
 	 */
-	public static function hasUnmodelledElse(members: Array<OrderedMember>, source: String): Bool {
+	public static function hasUnmodelledElse(members: Array<OrderedMember>): Bool {
 		for (m in members) {
 			final b: Null<BranchInfo> = m.branch;
 			if (b != null && b.index < 0) return true;
 		}
-		for (i in 0...members.length - 1) if (hasBranchDirective(source, members[i].span.to, members[i + 1].span.from)) {
+		for (i in 0...members.length - 1) if (members[i + 1].branchBefore) {
 			final before: Null<BranchInfo> = members[i].branch;
 			final after: Null<BranchInfo> = members[i + 1].branch;
 			// A construct whose FIRST branch is empty puts its own `#if` AND the
 			// openings it skips in this gap. The directives then belong to the
 			// construct `after` is in, not to a boundary between two walked members,
 			// so the gap is accounted for as long as the gap OPENS that construct.
-			if (after != null && after.index > 0 && opensConstruct(source, members[i].span.to, members[i + 1].span.from)) continue;
+			if (after != null && after.index > 0 && members[i + 1].gapOpenFrom >= 0) continue;
 			if (before == null || after == null) return true;
 			if (before.opens != after.opens || after.index <= before.index) return true;
 		}
@@ -216,7 +220,8 @@ final class MemberSlots {
 	 */
 	private static function collectInto(
 		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, directives: Array<CondDirective>, condStack: Array<String>,
+		outerCond: Null<Span>, accessors: Map<Int, Bool>
 	): Void {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
@@ -236,7 +241,8 @@ final class MemberSlots {
 		}
 		for (child in parent.children) {
 			if (condKind != null && child.kind == condKind) {
-				if (collectConditional(out, child, source, shape, metaKinds, comments, condStack, outerCond, accessors)) resetModifiers();
+				if (collectConditional(out, child, source, shape, metaKinds, comments, directives, condStack, outerCond, accessors))
+					resetModifiers();
 			} else if (members.contains(child.kind)) {
 				pushMember(
 					out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, hasMeta, accessors
@@ -264,17 +270,18 @@ final class MemberSlots {
 	 */
 	private static function collectConditional(
 		out: Array<OrderedMember>, child: QueryNode, source: String, shape: RefShape, metaKinds: Array<String>,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, directives: Array<CondDirective>, condStack: Array<String>,
+		outerCond: Null<Span>, accessors: Map<Int, Bool>
 	): Bool {
 		final span: Null<Span> = child.span;
-		final cond: Null<String> = extractConditionText(child, source, shape);
+		final cond: Null<String> = extractConditionText(child, source, directives, shape);
 		final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
 		final firstIdx: Int = out.length;
-		collectInto(out, child, source, shape, metaKinds, comments, nextStack, outerCond ?? span, accessors);
+		collectInto(out, child, source, shape, metaKinds, comments, directives, nextStack, outerCond ?? span, accessors);
 		if (out.length == firstIdx) return false;
 		if (span != null) {
 			absorbLeadDoc(out, firstIdx, source, comments, span.from);
-			assignBranches(out, firstIdx, span, source, shape);
+			assignBranches(out, firstIdx, span, source, directives, shape);
 		}
 		return true;
 	}
@@ -285,22 +292,14 @@ final class MemberSlots {
 	 * directive) or at the first member, whichever comes first — so a doc comment that
 	 * sits between the `#if` line and the first member is NOT captured into the condition.
 	 */
-	private static function extractConditionText(node: QueryNode, source: String, shape: RefShape): Null<String> {
+	private static function extractConditionText(
+		node: QueryNode, source: String, directives: Array<CondDirective>, shape: RefShape
+	): Null<String> {
 		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
-		final ifIdx: Int = source.indexOf(ifKw, span.from);
-		if (ifIdx < 0) return null;
-		final condStart: Int = ifIdx + ifKw.length;
-		final firstChild: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
-		final childSpan: Null<Span> = firstChild?.span;
-		final childFrom: Int = childSpan != null ? childSpan.from : span.to;
-		final nl: Int = source.indexOf('\n', condStart);
-		final lineEnd: Int = nl < 0 ? span.to : nl;
-		final condEnd: Int = childFrom < lineEnd ? childFrom : lineEnd;
-		if (condEnd <= condStart) return null;
-		final raw: String = source.substring(condStart, condEnd).trim();
-		return raw == '' ? null : CondDirectives.normalizeCondition(raw);
+		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		if (span == null || ifKeyword == null) return null;
+		final opener: Null<CondDirective> = CondDirectives.firstOf(directives, ifKeyword, span.from);
+		return opener == null ? null : CondDirectives.normalizedCondition(source, opener);
 	}
 
 	/**
@@ -368,6 +367,9 @@ final class MemberSlots {
 			regionTo: region.to,
 			leadTrivia: '',
 			leadFrom: full.from,
+			branchBefore: false,
+			gapOpenFrom: -1,
+			gapCloseTo: -1,
 			leadComments: [
 				for (c in comments) if (c.from >= full.from && c.to <= own.from) source.substring(c.from, c.to)
 			]
@@ -390,10 +392,10 @@ final class MemberSlots {
 	 * conditional compilation.
 	 */
 	private static function assignBranches(
-		out: Array<OrderedMember>, firstIdx: Int, constructSpan: Span, source: String, shape: RefShape
+		out: Array<OrderedMember>, firstIdx: Int, constructSpan: Span, source: String, directives: Array<CondDirective>, shape: RefShape
 	): Void {
 		final opens: Array<{ at: Int, text: String }> = [
-			for (o in branchOpenings(constructSpan, source, shape)) if (!insideAnyMember(out, firstIdx, o.at)) o
+			for (o in branchOpenings(constructSpan, source, directives, shape)) if (!insideAnyMember(out, firstIdx, o.at)) o
 		];
 		if (opens.length == 0) return;
 		final texts: Array<String> = opens.map(o -> o.text);
@@ -412,22 +414,14 @@ final class MemberSlots {
 	}
 
 	/** Every `#elseif` / `#else` directive line inside `constructSpan`, in source order - each opens the next branch. */
-	private static function branchOpenings(constructSpan: Span, source: String, shape: RefShape): Array<{ at: Int, text: String }> {
+	private static function branchOpenings(
+		constructSpan: Span, source: String, directives: Array<CondDirective>, shape: RefShape
+	): Array<{ at: Int, text: String }> {
 		final keywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		final out: Array<{ at: Int, text: String }> = [];
-		if (keywords.length == 0) return out;
-		var pos: Int = constructSpan.from;
-		while (pos < constructSpan.to) {
-			final nl: Int = source.indexOf('\n', pos);
-			final end: Int = nl < 0 || nl > constructSpan.to ? constructSpan.to : nl;
-			final line: String = source.substring(pos, end).trim();
-			for (k in keywords) if (line.startsWith(k)) {
-				out.push({ at: pos, text: line });
-				break;
-			}
-			pos = end + 1;
-		}
-		return out;
+		return [
+			for (d in CondDirectives.startingIn(directives, constructSpan.from, constructSpan.to))
+				if (keywords.contains(d.keyword)) { at: SourceText.lineStartOf(source, d.span.from), text: CondDirectives.text(source, d) }
+		];
 	}
 
 	/**
@@ -488,11 +482,29 @@ final class MemberSlots {
 	}
 
 	/**
-	 * Whether a line in `source[from,to)` starts (after indentation) with the
-	 * conditional-open keyword - the gap begins a new construct rather than continuing one.
+	 * Record on each member whether a branch or an opener directive stands in the gap between its predecessor and it.
+	 * The gap is the inter-member trivia only, never a member's own source, so a directive inside a member body is
+	 * not read as a boundary.
 	 */
-	private static function opensConstruct(source: String, from: Int, to: Int): Bool {
-		return source.substring(from, to).split('\n').exists(line -> StringTools.ltrim(line).startsWith('#if'));
+	private static function markGapDirectives(
+		members: Array<OrderedMember>, source: String, directives: Array<CondDirective>, shape: RefShape
+	): Void {
+		final branches: Array<String> = shape.conditionalElseKeywords ?? [];
+		for (i in 1...members.length) {
+			final from: Int = members[i - 1].span.to;
+			final to: Int = members[i].span.from;
+			if (from > to) continue;
+			final m: OrderedMember = members[i];
+			for (d in CondDirectives.startingIn(directives, from, to)) {
+				final lineFrom: Int = Std.int(Math.max(from, SourceText.lineStartOf(source, d.span.from)));
+				final alone: Bool = source.substring(lineFrom, d.span.from).trim() == '';
+				if (branches.contains(d.keyword)) m.branchBefore = true;
+				if (d.keyword == shape.conditionalIfKeyword && alone && m.gapOpenFrom < 0) m.gapOpenFrom = lineFrom;
+				if (d.keyword != shape.conditionalEndKeyword || !alone || !CondDirectives.endsItsLine(source, d.span.to)) continue;
+				final newline: Int = source.indexOf('\n', d.span.to);
+				m.gapCloseTo = newline < 0 || newline > to ? to : newline;
+			}
+		}
 	}
 
 }
