@@ -645,6 +645,8 @@ final class HaxeFormatConfigLoader {
 		if (section.expressionCase != null)
 			opt.expressionCase = HaxeFormatValues.bodyPolicyToRuntime(section.expressionCase, opt.expressionCase);
 		if (section.caseSiblings != null) opt.caseSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.caseSiblings);
+		if (section.conditionalSiblings != null)
+			opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);
 		if (section.functionBody != null) opt.functionBody = HaxeFormatValues.bodyPolicyToRuntime(section.functionBody, opt.functionBody);
 		// Slice ω-anonfnbody-keep: `sameLine.anonFunctionBody` drives the
 		// signature→body separator on `HxFnExpr.body`'s `ExprBody` branch

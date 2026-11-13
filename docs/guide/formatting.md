@@ -109,6 +109,17 @@ with its comment leads. A two-statement or outermost-`&&` branch leads whether o
 or `expressionCase` is `fitLine`; under `same`, `next` and `keep` the key moves nothing. A label too wide for one row leads, since
 its flat width does not fit; a label wrapped by a rule with a flat width that fits does not lead, and only its own body moves.
 
+## Branches of one `#if` region: `sameLine.conditionalSiblings`
+
+`anyBreak` by default, the values of `caseSiblings`. The branches of one `#if` / `#elseif` / `#else` region share the break
+decision: when any branch breaks, by its shape (two statements, two members) or because it does not fit the line, every
+branch opens and closes on lines of its own. `off` lets each branch decide alone: a one-element branch stays beside its
+`#if` even when it is too wide for the line, wrapping inside its member, while a longer one breaks.
+
+```json
+{ "sameLine": { "conditionalSiblings": "off" } }
+```
+
 ## Blank lines at the edges of a documented type: `emptyLines.<kind>.beginTypeIfDocComments`
 
 `beginTypeIfDocComments` / `endTypeIfDocComments` in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`:

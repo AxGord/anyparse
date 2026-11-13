@@ -67,7 +67,9 @@
 		"fn-body-same/N.hx": "class C {\n\tfunction h() if (c) a(); else b();\n}\n",
 		"fn-body-same/S.hx": "class R {\n\tfunction namedBraced() if (c) { a(); } else { b(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) { a(); } else { b(); };\n\t\tfor (x in xs) if (c) { a(); } else { b(); }\n\t}\n}\n",
 		"fn-body-same/hxformat.json": "{\"sameLine\": {\"functionBody\": \"same\", \"anonFunctionBody\": \"same\"}}",
-		"fn-body-same/W.hx": "class W {\n\tfunction sw() if (c) switch x { case 1: a(); } else switch y { case 2: b(); }\n\n\tfunction mixed() if (c) { a(); } else b();\n\n\tfunction elif() if (c) { a(); } else if (d) { b(); } else c();\n\n\tfunction elifAll() if (c) { a(); } else if (d) { b(); } else { e(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) switch x { case 1: a(); } else switch y { case 2: b(); };\n\t}\n}\n"
+		"fn-body-same/W.hx": "class W {\n\tfunction sw() if (c) switch x { case 1: a(); } else switch y { case 2: b(); }\n\n\tfunction mixed() if (c) { a(); } else b();\n\n\tfunction elif() if (c) { a(); } else if (d) { b(); } else c();\n\n\tfunction elifAll() if (c) { a(); } else if (d) { b(); } else { e(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) switch x { case 1: a(); } else switch y { case 2: b(); };\n\t}\n}\n",
+		"cond-siblings-off/C.hx": "class C {\n\t#if a var r:Int; #else var s:Int; var t:Int; #end\n}\n",
+		"cond-siblings-off/hxformat.json": "{\"sameLine\": {\"conditionalSiblings\": \"off\"}}"
 	},
 	"invocations": [
 		{
@@ -757,6 +759,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "bd8eb07290f7ac18",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "cond-siblings-off/C.hx",
+			"note": "sameLine.conditionalSiblings off: a one-element branch stays beside its #if and a two-member branch breaks alone; the key was ignored before and shared the region",
+			"fixpoint": "cond-siblings-off/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cond-siblings-off/C.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "c8dbae8e215e1bff",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

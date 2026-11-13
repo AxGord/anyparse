@@ -82,6 +82,8 @@ typedef HxFormatSameLineSection = {
 	@:optional
 	var caseSiblings: HxFormatSiblingPolicy;
 	@:optional
+	var conditionalSiblings: HxFormatSiblingPolicy;
+	@:optional
 	var functionBody: HxFormatBodyPolicy;
 	@:optional
 	var anonFunctionBody: HxFormatBodyPolicy;

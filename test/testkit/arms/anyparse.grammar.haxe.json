@@ -1795,6 +1795,14 @@
 			"find": "options.anonTypeWrap = wrapped.anonTypeWrap;",
 			"replace": "",
 			"note": "the typed counterpart leaves the anonymous-type wrap on its default fallback, so it no longer loads like the wrapped document"
+		},
+		{
+			"name": "M-COND-SIBLINGS-KEY-IGNORED",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applySameLineBodies",
+			"find": "opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);",
+			"replace": "opt.conditionalSiblings = opt.conditionalSiblings;",
+			"note": "sameLine.conditionalSiblings is read and dropped, so a config that asked for off still shares the branches of a region"
 		}
 	]
 }
