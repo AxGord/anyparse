@@ -561,6 +561,30 @@
 			"find": "Text(_, _, LineComment)",
 			"replace": "Text(_, _, _)",
 			"note": "a guarded leaf is a line comment by its tag, not by bytes that open with //"
+		},
+		{
+			"name": "M-DELIMEDGE-OPEN-READS-TAG",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "startsWithOpenDelim",
+			"find": "Text(_, _, Delimiter(Paren | Collection | EmptyCollection, _))",
+			"replace": "Text(_, _, _)",
+			"note": "any leaf opens a delimiter, the way a test of its first byte also called a string fragment opening with `(` one"
+		},
+		{
+			"name": "M-DELIMEDGE-COLLECTION-READS-TAG",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "startsWithCollectionDelim",
+			"find": "Text(_, _, Delimiter(Collection | EmptyCollection, _))",
+			"replace": "Text(_, _, _)",
+			"note": "any leaf, a paren or plain bytes, reads as a collection open"
+		},
+		{
+			"name": "M-DELIMEDGE-CLOSE-READS-TAG",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "endsWithCloseDelim",
+			"find": "Text(_, _, Delimiter(_, true))",
+			"replace": "Text(_, _, _)",
+			"note": "any leaf closes a delimiter, the way a test of its last byte also called a fragment ending with `)` one"
 		}
 	]
 }

@@ -412,7 +412,7 @@ final class TriviaSepLowering {
 	 */
 	private static function triviaSepEmptyOpenTrailExpr(openText: String, closeText: String): Expr {
 		return macro {
-			final _openDoc: anyparse.core.Doc = _dt(_trailOpen);
+			final _openDoc: anyparse.core.Doc = anyparse.core.LeafTag.DelimiterLeaf.leaf(_trailOpen);
 			if (_trailClose != null)
 				_dc([
 					_dt($v{openText}),

@@ -524,9 +524,9 @@ final class BinaryChainEmit {
 	 */
 	private static function leadingOperandOpensDelim(item0: Doc, parenOnly: Bool = false): Bool {
 		return switch item0 {
-			case Text(s):
-				s.length > 0
-					&& (s.fastCodeAt(0) == '('.code || (!parenOnly && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code)));
+			case Text(_, _, Delimiter(Paren, _)): true;
+			case Text(_, _, Delimiter(Collection | EmptyCollection, _)): !parenOnly;
+			case Text(_): false;
 			case Concat(arr):
 				var hit: Bool = false;
 				var done: Bool = false;

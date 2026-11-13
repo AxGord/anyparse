@@ -2,6 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.core.D;
 import anyparse.core.Doc;
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.wrap.BinaryChainEmit;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
@@ -95,7 +96,9 @@ final class HxTernaryCuddleProbeShapeTest extends Test {
 	private static function probes(location: WrappingLocation): Int {
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CFG_ON);
 		final rules: WrapRules = { rules: [], defaultMode: WrapMode.OnePerLineAfterFirst, defaultLocation: location };
-		return countProbes(BinaryChainEmit.emit([Text('flag'), brokenObject(), Text('{ beta: 2 }')], ['?', ':'], opts, rules));
+		return countProbes(
+			BinaryChainEmit.emit([Text('flag'), brokenObject(), DelimiterLeaf.leaf('{ beta: 2 }')], ['?', ':'], opts, rules)
+		);
 	}
 
 	/**
@@ -104,10 +107,10 @@ final class HxTernaryCuddleProbeShapeTest extends Test {
 	 */
 	private static function brokenObject(): Doc {
 		return Concat([
-			Text('{'),
+			DelimiterLeaf.leaf('{'),
 			Nest(1, Concat([Line('\n'), Text('alphaFieldName: 1')])),
 			Line('\n'),
-			Text('}')
+			DelimiterLeaf.leaf('}')
 		]);
 	}
 

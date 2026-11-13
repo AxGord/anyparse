@@ -1162,7 +1162,7 @@ final class TriviaBlockLowering {
 			// comment after the open lit (`{ /* nop */ }`) emits flat tight. Mirror
 			// of the equivalent fast path in `triviaSepStarExpr`.
 			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
-				final _openDoc: anyparse.core.Doc = _dt(_trailOpen);
+				final _openDoc: anyparse.core.Doc = anyparse.core.LeafTag.DelimiterLeaf.leaf(_trailOpen);
 				if (_trailClose != null)
 					_dc([
 						_dt($v{openText}),

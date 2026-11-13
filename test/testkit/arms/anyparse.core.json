@@ -731,6 +731,22 @@
 			"find": "tag ?? own",
 			"replace": "own",
 			"note": "D.verbatim with a tag sets it on every leaf of the content"
+		},
+		{
+			"name": "M-DELIMLEAF-EMPTY-PAIR",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "tagOf",
+			"find": "trimmed == '[]' || trimmed == '{}'",
+			"replace": "false",
+			"note": "an empty pair `[]` / `{}` is tagged a plain collection open, so a fill reads it as the start of a collection run"
+		},
+		{
+			"name": "M-DELIMLEAF-RUN-EMPTY-PAIR",
+			"type": "anyparse.core.CollectionRun",
+			"method": "startsCollection",
+			"find": "Delimiter(Collection, _)",
+			"replace": "Delimiter(Collection | EmptyCollection, _)",
+			"note": "an empty `{}` argument starts a collection run, so a fill pushes the next argument off the line to strand a two-character `{},`"
 		}
 	]
 }

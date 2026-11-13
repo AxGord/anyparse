@@ -1,6 +1,7 @@
 package unit.format;
 
 import anyparse.core.Doc;
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.wrap.BinaryChainEmit;
 import anyparse.format.wrap.WrapList;
 
@@ -59,16 +60,20 @@ final class DocProbeFamilyWalkerTest extends Test {
 	 * read, not the old `false`.
 	 */
 	public function testLeadingOperandOpensDelimReadsFlatSide(): Void {
-		Assert.isTrue(BinaryChainEmit.leadingOperandOpensDelim(IfArrowContinuationFits(1, 4, 140, Text('x'), Text('(a)'))));
-		Assert.isFalse(BinaryChainEmit.leadingOperandOpensDelim(IfArrowContinuationFits(1, 4, 140, Text('(a)'), Text('x'))));
-		Assert.isTrue(BinaryChainEmit.leadingOperandOpensDelim(IfIndentWidthExceeds(4, 140, bodyBreak(Text('x')), bodyGlue(Text('(a)')))));
-		Assert.isFalse(BinaryChainEmit.leadingOperandOpensDelim(IfIndentWidthExceeds(4, 140, bodyBreak(Text('(a)')), bodyGlue(Text('x')))));
-		Assert.isTrue(
-			BinaryChainEmit.leadingOperandOpensDelim(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text('x')), bodyGlue(Text('(a)'))))
-		);
-		Assert.isFalse(
-			BinaryChainEmit.leadingOperandOpensDelim(IfGluedFirstLineExceeds(140, 1, bodyBreak(Text('(a)')), bodyGlue(Text('x'))))
-		);
+		Assert.isTrue(BinaryChainEmit.leadingOperandOpensDelim(IfArrowContinuationFits(1, 4, 140, Text('x'), DelimiterLeaf.leaf('(a)'))));
+		Assert.isFalse(BinaryChainEmit.leadingOperandOpensDelim(IfArrowContinuationFits(1, 4, 140, DelimiterLeaf.leaf('(a)'), Text('x'))));
+		Assert.isTrue(BinaryChainEmit.leadingOperandOpensDelim(
+			IfIndentWidthExceeds(4, 140, bodyBreak(Text('x')), bodyGlue(DelimiterLeaf.leaf('(a)')))
+		));
+		Assert.isFalse(BinaryChainEmit.leadingOperandOpensDelim(
+			IfIndentWidthExceeds(4, 140, bodyBreak(DelimiterLeaf.leaf('(a)')), bodyGlue(Text('x')))
+		));
+		Assert.isTrue(BinaryChainEmit.leadingOperandOpensDelim(
+			IfGluedFirstLineExceeds(140, 1, bodyBreak(Text('x')), bodyGlue(DelimiterLeaf.leaf('(a)')))
+		));
+		Assert.isFalse(BinaryChainEmit.leadingOperandOpensDelim(
+			IfGluedFirstLineExceeds(140, 1, bodyBreak(DelimiterLeaf.leaf('(a)')), bodyGlue(Text('x')))
+		));
 	}
 
 	/**

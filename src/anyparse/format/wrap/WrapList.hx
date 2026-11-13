@@ -8,6 +8,7 @@ import anyparse.core.D.groupOrRestProbe;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.IndentChar;
 import anyparse.format.wrap.LineCommentPastSep.PastSepItems;
 import anyparse.runtime.CommentRun;
@@ -363,7 +364,13 @@ class WrapList {
 		final condW: Int = DocMeasure.flatTokenWidth(condDoc);
 		final hasHardline: Bool = flatLength(condDoc) < 0;
 
-		final flatShape: Doc = Concat([Text(open), openInside, condDoc, closeInside, Text(close)]);
+		final flatShape: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			condDoc,
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 		// `Nest(cols, [Line('\n'), condDoc])` puts BOTH the post-open
 		// hardline AND `condDoc` itself at the bumped indent base
 		// (outer+cols). Inner break engines that emit their own
@@ -376,7 +383,12 @@ class WrapList {
 		// land at outer+cols (operator-led illusion), not at
 		// outer+2cols. See `BinaryChainEmit.emit`'s `nestSuppress`
 		// argument and the macro-emitted call site in `WriterLowering`.
-		final brkShape: Doc = Concat([Text(open), Nest(cols, Concat([Line('\n'), condDoc])), Line('\n'), Text(close)]);
+		final brkShape: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			Nest(cols, Concat([Line('\n'), condDoc])),
+			Line('\n'),
+			DelimiterLeaf.leaf(close)
+		]);
 
 
 		inline function decideAt(exceeds: Bool): WrapMode {
@@ -874,8 +886,10 @@ class WrapList {
 			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 				OptHardlineSkipBeforeHardline:
 				return false;
-			case Text(s):
-				return s.length > 0 && (s.fastCodeAt(0) == '('.code || s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
+			case Text(_, _, Delimiter(Paren | Collection | EmptyCollection, _)):
+				return true;
+			case Text(_):
+				return false;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
@@ -922,10 +936,10 @@ class WrapList {
 			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 				OptHardlineSkipBeforeHardline:
 				return false;
-			case Text(s):
-				if (s.length == 0) return false;
-				final c: Int = s.fastCodeAt(s.length - 1);
-				return c == ')'.code || c == ']'.code || c == '}'.code;
+			case Text(_, _, Delimiter(_, true)):
+				return true;
+			case Text(_):
+				return false;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
@@ -1060,8 +1074,10 @@ class WrapList {
 			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 				OptHardlineSkipBeforeHardline:
 				return false;
-			case Text(s):
-				return s.length > 0 && (s.fastCodeAt(0) == '['.code || s.fastCodeAt(0) == '{'.code);
+			case Text(_, _, Delimiter(Collection | EmptyCollection, _)):
+				return true;
+			case Text(_):
+				return false;
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
@@ -2228,7 +2244,13 @@ class WrapList {
 		if (isArrowBodyMarker(item) || isMethodChainItem(item) || startsWithHardline(item)) return null;
 		if (isLineCommentText(firstVisibleText(item)) || lastItemEndsWithLineComment(items)) return null;
 		if (!endsWithCloseDelim(item)) return null;
-		final glueShape: Doc = Concat([Text(open), openInside, item, closeInside, Text(close)]);
+		final glueShape: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			item,
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 		return IfNaturalFirstLineFitsOpenDelim(lineWidth, openShape, glueShape);
 	}
 
@@ -2398,7 +2420,13 @@ class WrapList {
 		// closer below its opener too, and that shape is wanted — nine corpus
 		// fixtures pin it. A renderer-wide reading of the same invariant, tried
 		// first, broke every one of them.
-		final hugGlue: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+		final hugGlue: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			items[0],
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 		final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 		// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
 		// leading-breaks with the object kept FLAT on its own indented line iff
@@ -2467,7 +2495,13 @@ class WrapList {
 		// closes at nest 0, a bracket-led one does not close on a brace at all.
 		final argFlat: Int = flatLength(items[0]);
 		final glued: Doc = argFlat < 0 && DocMeasure.endsWithCloseBrace(items[0]) && DocMeasure.breakTailCloseNest(items[0]) > 0
-			? Concat([Text(open), openInside, items[0], Line('\n'), Text(close)])
+			? Concat([
+				DelimiterLeaf.leaf(open),
+				openInside,
+				items[0],
+				Line('\n'),
+				DelimiterLeaf.leaf(close)
+			])
 			: hugGlue;
 		final innerGlue: Doc = IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		return argFlat < 0
@@ -2697,8 +2731,21 @@ class WrapList {
 	 * `shapeNoWrap`'s arrow escalation so every break mode reuses one shape.
 	 */
 	private static function arrowBodyCloseParenShape(open: String, close: String, openInside: Doc, closeInside: Doc, arrowItem: Doc): Doc {
-		final flatShape: Doc = Concat([Text(open), openInside, arrowItem, closeInside, Text(close)]);
-		final brkShape: Doc = Concat([Text(open), openInside, arrowItem, Line('\n'), closeInside, Text(close)]);
+		final flatShape: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			arrowItem,
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
+		final brkShape: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			arrowItem,
+			Line('\n'),
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 		// ω-arrow-residual-linewrap: couple the close `)` to the SAME residual
 		// decision as the arrow body, driving BOTH from ONE `IfResidualLineExceeds`
 		// so the arrow body AND the close `)` break together (fork's `arrow ->`
@@ -2713,7 +2760,7 @@ class WrapList {
 		// stays glued (`})`) — the block owns its own multi-line layout.
 		if (arrowBodyIsBlock(arrowItem)) return Group(IfBreak(brkShape, flatShape));
 		final coupled: Null<Doc> = replaceArrowMarker(arrowItem, (n, brk, fl) -> coupledMarker(n, brk, fl, closeInside, close));
-		return coupled != null ? Concat([Text(open), openInside, coupled]) : Group(IfBreak(brkShape, flatShape));
+		return coupled != null ? Concat([DelimiterLeaf.leaf(open), openInside, coupled]) : Group(IfBreak(brkShape, flatShape));
 	}
 
 	/**
@@ -2744,9 +2791,9 @@ class WrapList {
 	 * force-flat reset.
 	 */
 	private static function coupledMarker(n: Int, brk: Doc, fl: Doc, closeInside: Doc, close: String): Doc {
-		return WrapBoundary(
-			IfResidualLineExceeds(n, Concat([brk, Line('\n'), closeInside, Text(close)]), Concat([fl, closeInside, Text(close)]))
-		);
+		return WrapBoundary(IfResidualLineExceeds(
+			n, Concat([brk, Line('\n'), closeInside, DelimiterLeaf.leaf(close)]), Concat([fl, closeInside, DelimiterLeaf.leaf(close)])
+		));
 	}
 
 	/**
@@ -2902,13 +2949,13 @@ class WrapList {
 		open: String, close: String, openInside: Doc, closeInside: Doc, head: Doc, body: Doc, cols: Int
 	): Doc {
 		return Concat([
-			Text(open),
+			DelimiterLeaf.leaf(open),
 			openInside,
 			head,
 			Nest(cols, Concat([Line('\n'), body])),
 			Line('\n'),
 			closeInside,
-			Text(close)
+			DelimiterLeaf.leaf(close)
 		]);
 	}
 
@@ -2935,7 +2982,13 @@ class WrapList {
 		// The glue keeps the arguments on the lines they share with the delimiters, never breaking at a separator, so only
 		// a separator the source wrote after the last one is written: an add-knob comma goes to a list broken over lines.
 		if (flatTrailingComma) inner.push(Text(sep));
-		return Concat([Text(open), openInside, Concat(inner), closeInside, Text(close)]);
+		return Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			Concat(inner),
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 	}
 
 	// ω-callparam-single-arg-glue: true iff `item`'s OWN outermost layout breaks
@@ -3106,11 +3159,11 @@ class WrapList {
 		// idea with two atom classes rather than two rules.
 		final body: Doc = Concat(inner);
 		return Concat([
-			Text(open),
+			DelimiterLeaf.leaf(open),
 			openInside,
 			DocMeasure.hasOptHardline(body) || flatLength(body) < 0 ? body : Flatten(body),
 			closeInside,
-			Text(close)
+			DelimiterLeaf.leaf(close)
 		]);
 	}
 
@@ -3135,7 +3188,12 @@ class WrapList {
 		// legacy close-on-own-line layout; `Empty` produced from
 		// `RightCurlyPlacement.Inline` glues close to the last body
 		// token. See `emit` docstring for the full rationale.
-		return Concat([Text(open), Nest(cols, Concat(inner)), trailBreak, Text(close)]);
+		return Concat([
+			DelimiterLeaf.leaf(open),
+			Nest(cols, Concat(inner)),
+			trailBreak,
+			DelimiterLeaf.leaf(close)
+		]);
 	}
 
 	/**
@@ -3184,13 +3242,18 @@ class WrapList {
 		// hardline" signal `HasMultilineItems` reads.
 		final anyMultiline: Bool = items.exists(item -> flatLength(item) < 0);
 		final body: Doc = anyMultiline ? Concat(broken) : Group(IfBreak(Concat(broken), Concat(flat)));
-		return Concat([Text(open), Nest(cols, Concat([Line('\n'), body])), Line('\n'), Text(close)]);
+		return Concat([
+			DelimiterLeaf.leaf(open),
+			Nest(cols, Concat([Line('\n'), body])),
+			Line('\n'),
+			DelimiterLeaf.leaf(close)
+		]);
 	}
 
 	private static function shapeOnePerLineAfterFirst(
 		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?sepBeforeFlags: Array<Bool>
 	): Doc {
-		if (items.length == 1) return Concat([Text(open), items[0], Text(close)]);
+		if (items.length == 1) return Concat([DelimiterLeaf.leaf(open), items[0], DelimiterLeaf.leaf(close)]);
 		final tail: Array<Doc> = [];
 		for (i in 1...items.length) {
 			// Drop the trailing-sep on the previous item when
@@ -3200,7 +3263,12 @@ class WrapList {
 			tail.push(items[i]);
 		}
 		if (appendTrailingComma) tail.push(Text(sep));
-		return Concat([Text(open), items[0], Nest(cols, Concat(tail)), Text(close)]);
+		return Concat([
+			DelimiterLeaf.leaf(open),
+			items[0],
+			Nest(cols, Concat(tail)),
+			DelimiterLeaf.leaf(close)
+		]);
 	}
 
 	/**
@@ -3413,9 +3481,24 @@ class WrapList {
 			// Nest])` (length=3) where the close stays glued. See
 			// `isChainOPLBreak` for the marker probe and ω-1arg-close-
 			// chain-opl-gate for the slice that introduced it.
-			final gluedShape: Doc = Concat([Text(open), openInside, items[0], tail0, closeInside, Text(close)]);
+			final gluedShape: Doc = Concat([
+				DelimiterLeaf.leaf(open),
+				openInside,
+				items[0],
+				tail0,
+				closeInside,
+				DelimiterLeaf.leaf(close)
+			]);
 			if (!isChainOPLBreak(items[0])) return groupOrRestProbe(gluedShape, groupRestProbe);
-			final brkShape: Doc = Concat([Text(open), openInside, items[0], tail0, closeInside, Line('\n'), Text(close)]);
+			final brkShape: Doc = Concat([
+				DelimiterLeaf.leaf(open),
+				openInside,
+				items[0],
+				tail0,
+				closeInside,
+				Line('\n'),
+				DelimiterLeaf.leaf(close)
+			]);
 			return groupOrRestProbe(IfBreak(brkShape, gluedShape), groupRestProbe);
 		}
 		// Chunk loop. Walk items[1..N]; at every leading-hardline-bearing
@@ -3503,7 +3586,13 @@ class WrapList {
 		}
 		final tail: Doc = trailSep;
 		final inner: Doc = Concat([Concat(bodyParts), tail]);
-		final outerInner: Doc = Concat([Text(open), openInside, Nest(cols, inner), closeInside, Text(close)]);
+		final outerInner: Doc = Concat([
+			DelimiterLeaf.leaf(open),
+			openInside,
+			Nest(cols, inner),
+			closeInside,
+			DelimiterLeaf.leaf(close)
+		]);
 		return groupOrRestProbe(outerInner, groupRestProbe);
 	}
 
@@ -3686,10 +3775,10 @@ class WrapList {
 		// Byte-inert for every Star without a delim-padding policy: there
 		// both Docs are `Empty`.
 		return Concat([
-			Text(open),
+			DelimiterLeaf.leaf(open),
 			Nest(cols, Concat([Line('\n'), inner, tail])),
 			Line('\n'),
-			Text(close)
+			DelimiterLeaf.leaf(close)
 		]);
 	}
 
@@ -4083,7 +4172,13 @@ class WrapList {
 			case _: true;
 		};
 		return padded && items.length == 1 && isBlockBodyComprehensionItem(items[0])
-			? Concat([Text(open), openInside, items[0], closeInside, Text(close)])
+			? Concat([
+				DelimiterLeaf.leaf(open),
+				openInside,
+				items[0],
+				closeInside,
+				DelimiterLeaf.leaf(close)
+			])
 			: null;
 	}
 
@@ -4168,12 +4263,12 @@ class WrapList {
 		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
 		if (item == null) return null;
 		final glueShape: Doc = Concat([
-			Text(open),
+			DelimiterLeaf.leaf(open),
 			openInside,
 			item,
 			appendTrailingComma ? Text(sep) : Empty,
 			trailBreak,
-			Text(close)
+			DelimiterLeaf.leaf(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
 		// A flat-capable item's head must fit flat after `[ `: its natural first line alone would let the
@@ -4456,7 +4551,7 @@ class WrapList {
 		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
 		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
 		final trailBreakDoc: Doc = axes.trailBreakDoc;
-		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
+		if (items.length == 0) return WrapBoundary(DelimiterLeaf.leaf(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
 		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
 		// not a `{}`-block) hides its inline then-branch behind a `BodyGroup`

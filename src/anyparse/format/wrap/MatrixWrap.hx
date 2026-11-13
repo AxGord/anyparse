@@ -3,6 +3,7 @@ package anyparse.format.wrap;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.ArrayMatrixWrap;
 
 /**
@@ -67,7 +68,12 @@ final class MatrixWrap {
 			// never at the row's trailing edge.
 			if (!isLast && c != lineRun - 1) body.push(Text(' '));
 		}
-		return Concat([Text(open), Nest(cols, Concat(body)), Line('\n'), Text(close)]);
+		return Concat([
+			DelimiterLeaf.leaf(open),
+			Nest(cols, Concat(body)),
+			Line('\n'),
+			DelimiterLeaf.leaf(close)
+		]);
 	}
 
 	/**

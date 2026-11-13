@@ -3222,6 +3222,14 @@
 			"find": "|| !anyparse.util.Strings.isIdentChar(",
 			"replace": "|| anyparse.util.Strings.isIdentChar(",
 			"note": "the directive walk reads a keyword continued by an identifier character as the keyword and drops one at a token boundary"
+		},
+		{
+			"name": "M-DELIMLEAF-MACRO-UNTAGGED",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "tagDelimiterLeaves",
+			"find": "tag == null ? e :",
+			"replace": "true ? e :",
+			"note": "the generated writer builds its delimiter literals untagged, so every delimiter-edge walker reads them as plain text"
 		}
 	]
 }

@@ -487,8 +487,16 @@ final class DocMeasure {
 	 * holding both delimiters) has to answer no.
 	 */
 	public static function firstVisibleText(d: Doc): Null<String> {
-		return switch d {
+		return switch firstVisibleLeaf(d) {
 			case Text(s): s;
+			case _: null;
+		};
+	}
+
+	/** The first visible `Text` leaf of `d` by `firstVisibleText`'s walk, or null — for a reader of the leaf's tag. */
+	public static function firstVisibleLeaf(d: Doc): Null<Doc> {
+		return switch d {
+			case Text(_): d;
 			// Whitespace-only leaves carry no visible text. As an item of the
 			// list arm below they are skipped; as the probed node itself they
 			// answer null. `isWhitespaceOnlyLeaf` is the one place that set
@@ -501,22 +509,22 @@ final class DocMeasure {
 			// emits it only from index 1 in both its flat and its break path),
 			// so the same first-visible-item scan applies.
 			case Concat(arr), Fill(arr, _, _), FillWithRestProbe(arr, _, _), FillBreakAfterWrap(arr, _, _):
-				var hit: Null<String> = null;
+				var hit: Null<Doc> = null;
 				for (it in arr) if (!isWhitespaceOnlyLeaf(it)) {
-					hit = firstVisibleText(it);
+					hit = firstVisibleLeaf(it);
 					break;
 				}
 				hit;
 			case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 				HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),
 				ConditionalMarkerZero(i), ConditionalMarkerDecrease(i), BreakMark(i, _):
-				firstVisibleText(i);
+				firstVisibleLeaf(i);
 			case IfBreak(_, flat), IfWidthExceeds(_, _, flat), IfFirstLineExceeds(_, _, flat), IfLineExceeds(_, _, flat),
 				IfResidualLineExceeds(_, _, flat), IfFullLineExceeds(_, _, flat), IfNaturalFirstLineExceeds(_, _, flat),
 				IfNaturalFirstLineExceedsWithRest(_, _, flat), IfNaturalFirstLineFitsOpenDelim(_, _, flat),
 				IfArrowContinuationFits(_, _, _, _, flat), IfArrowContinuationFitsWithRest(_, _, _, _, flat),
 				IfIndentWidthExceeds(_, _, _, flat), IfGluedFirstLineExceeds(_, _, _, flat), IfTrailingCommentOverflows(_, _, _, _, flat):
-				firstVisibleText(flat);
+				firstVisibleLeaf(flat);
 		};
 	}
 

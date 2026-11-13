@@ -252,7 +252,7 @@ class WriterCodegen {
 		return {
 			name: rule.fnName,
 			access: [APrivate, AStatic],
-			kind: FFun({ args: args, ret: macro : anyparse.core.Doc, expr: rule.body }),
+			kind: FFun({ args: args, ret: macro : anyparse.core.Doc, expr: tagDelimiterLeaves(rule.body) }),
 			pos: Context.currentPos()
 		};
 	}
@@ -274,6 +274,11 @@ class WriterCodegen {
 				{ name: 's', type: macro : String },
 				{ name: 'tag', type: macro : anyparse.core.LeafTag }
 			], macro anyparse.core.Doc.Text(s, true, tag)),
+			// `_dt` of a delimiter literal, carrying the edge `tagDelimiterLeaves` classified.
+			docHelper('_dtt', [
+				{ name: 's', type: macro : String },
+				{ name: 'tag', type: macro : anyparse.core.LeafTag }
+			], macro anyparse.core.Doc.Text(s, null, tag)),
 			docHelper('_dop', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{ name: 'items', type: macro : Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
@@ -434,7 +439,7 @@ class WriterCodegen {
 	/** Block layout: `open + nest(indent, [hardline+item]*) + hardline + close`. */
 	private static function blockBodyField(): Field {
 		final body: Expr = macro {
-			if (docs.length == 0) return _dt(open + close);
+			if (docs.length == 0) return anyparse.core.LeafTag.DelimiterLeaf.leaf(open + close);
 			final _items: Array<anyparse.core.Doc> = [];
 			var _i: Int = 0;
 			while (_i < docs.length) {
@@ -443,7 +448,12 @@ class WriterCodegen {
 				_i++;
 			}
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			return _dc([_dt(open), _dn(_cols, _dc(_items)), _dhl(), _dt(close)]);
+			return _dc([
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(open),
+				_dn(_cols, _dc(_items)),
+				_dhl(),
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(close)
+			]);
 		};
 		return {
 			name: 'blockBody',
@@ -489,7 +499,7 @@ class WriterCodegen {
 	 */
 	private static function sepListField(): Field {
 		final body: Expr = macro {
-			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
+			if (items.length == 0) return anyparse.core.LeafTag.DelimiterLeaf.leaf(open + (keepInnerWhenEmpty ? ' ' : '') + close);
 			final _inner: Array<anyparse.core.Doc> = [];
 			var _i: Int = 0;
 			while (_i < items.length) {
@@ -511,12 +521,12 @@ class WriterCodegen {
 			final _lead: anyparse.core.Doc = cuddleHead ? _de() : _dsl();
 			final _trail: anyparse.core.Doc = cuddleHead ? _de() : _dsl();
 			return _dg(_dc([
-				_dt(open),
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(open),
 				openInside,
 				_dn(_cols, _dc([_lead, _dc(_inner)])),
 				_trail,
 				closeInside,
-				_dt(close)
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(close)
 			]));
 		};
 		return {
@@ -558,7 +568,7 @@ class WriterCodegen {
 	 */
 	private static function fillListField(): Field {
 		final body: Expr = macro {
-			if (items.length == 0) return _dt(open + (keepInnerWhenEmpty ? ' ' : '') + close);
+			if (items.length == 0) return anyparse.core.LeafTag.DelimiterLeaf.leaf(open + (keepInnerWhenEmpty ? ' ' : '') + close);
 			final _sepDoc: anyparse.core.Doc = _dc([_dt(sep), _dl()]);
 			final _baseCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _cols: Int = doubleIndent ? _baseCols * 2 : _baseCols;
@@ -571,7 +581,13 @@ class WriterCodegen {
 			// the continuation indent — matches haxe-formatter's convention
 			// of indenting wrapped function parameters one level deeper than
 			// the body so they remain visually distinct.
-			return _dg(_dc([_dt(open), openInside, _dn(_cols, _dc([_fill, _trail])), closeInside, _dt(close)]));
+			return _dg(_dc([
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(open),
+				openInside,
+				_dn(_cols, _dc([_fill, _trail])),
+				closeInside,
+				anyparse.core.LeafTag.DelimiterLeaf.leaf(close)
+			]));
 		};
 		return {
 			name: 'fillList',
@@ -1305,6 +1321,30 @@ class WriterCodegen {
 	/** The generated expression naming the `LeafTag` of the captured comment `c`, by `CommentRun.isLine`'s two-way split. */
 	private static function commentTagOf(c: Expr): Expr {
 		return macro anyparse.runtime.CommentRun.isLine($c) ? anyparse.core.LeafTag.LineComment : anyparse.core.LeafTag.BlockComment;
+	}
+
+	/**
+	 * Every `_dt` of a constant literal that carries a delimiter edge becomes `_dtt` with that edge's tag, classified here
+	 * once from the grammar literal, so the Doc's readers ask the leaf's tag and never its bytes.
+	 */
+	private static function tagDelimiterLeaves(e: Expr): Expr {
+		return switch e.expr {
+			case ECall({ expr: EConst(CIdent('_dt')) }, [{ expr: EConst(CString(s, _)) }]):
+				final tag: Null<anyparse.core.LeafTag> = anyparse.core.LeafTag.DelimiterLeaf.tagOf(s);
+				tag == null ? e : macro @:pos(e.pos) _dtt($v{s}, ${leafTagExpr(tag)});
+			case _: haxe.macro.ExprTools.map(e, tagDelimiterLeaves);
+		};
+	}
+
+	/** The generated expression naming `tag`. */
+	private static function leafTagExpr(tag: anyparse.core.LeafTag): Expr {
+		return switch tag {
+			case Delimiter(opens, closes):
+				final open: String = Std.string(opens);
+				macro anyparse.core.LeafTag.Delimiter(anyparse.core.LeafTag.OpenEdge.$open, $v{closes});
+			case LineComment: macro anyparse.core.LeafTag.LineComment;
+			case BlockComment: macro anyparse.core.LeafTag.BlockComment;
+		};
 	}
 
 }

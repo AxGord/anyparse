@@ -1,7 +1,5 @@
 package anyparse.core;
 
-using StringTools;
-
 /**
 	The one answer to "which consecutive fill items form one run of collection
 	(literal) arguments": a fill lays such a run out as a single unit.
@@ -20,17 +18,12 @@ final class CollectionRun {
 	 * transparent here.
 	 */
 	public static function startsCollection(item: Doc): Bool {
-		final head: Null<String> = DocMeasure.firstVisibleText(item);
-		if (head == null || head.length == 0) return false;
-		final open: Int = head.fastCodeAt(0);
-		if (open != '['.code && open != '{'.code) return false;
-		// An EMPTY collection is not a boundary — `f({}, cb -> …)` has nothing
-		// for the reader to navigate around, and pushing `cb` off its line only
-		// strands a two-character `{},`. The writer emits an empty pair as ONE
-		// `Text` carrying both delimiters, so it is exactly the token this walk
-		// returns.
-		final trimmed: String = head.trim();
-		return trimmed != '[]' && trimmed != '{}';
+		// An EMPTY collection is not a boundary — `f({}, cb -> …)` has nothing for the reader to navigate around, and
+		// pushing `cb` off its line only strands a two-character `{},`; its one-leaf pair is tagged `EmptyCollection`.
+		return switch DocMeasure.firstVisibleLeaf(item) {
+			case Text(_, _, Delimiter(Collection, _)): true;
+			case _: false;
+		};
 	}
 
 	/**
