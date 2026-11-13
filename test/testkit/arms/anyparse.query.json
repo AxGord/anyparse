@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-LIT-TYPE-SLOT-UNWALKED",
+			"type": "anyparse.query.Lit",
+			"method": "walk",
+			"find": "if (declared != null) walk(target, declared, exact, filter, delimiters, qualifiedKinds, out);",
+			"replace": "",
+			"note": "the declared-type slot is no longer walked, so lit drops every field, parameter and local annotation while uses still lists them"
+		},
+		{
 			"name": "M-BLANK-AFTER-BRACE-KEPT",
 			"type": "anyparse.query.ElementSpan",
 			"method": "blankExtendedSpan",

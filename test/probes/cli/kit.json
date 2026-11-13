@@ -48,7 +48,9 @@
 		"specpieces/plan.tsv": "1x\tspecpieces/M.hx\tVarDecl\tspecpieces/M.hx\n",
 		"identmap/apq.json": "{\"rules\":{\"identity-map\":{\"enabled\":true}}}\n",
 		"identmap/src/Main.hx": "class Main {\n\tstatic function run(es: Array<EI>): Void {\n\t\tfinal a: Array<Null<EI>> = es.map(x -> (x : Null<EI>));\n\t\tfinal c = [for (e in es) e];\n\t\ttrace(a, c);\n\t}\n}\n",
-		"identmap/lib/Ab.hx": "enum abstract EI(Int) {\n\tvar A = 1;\n}\n"
+		"identmap/lib/Ab.hx": "enum abstract EI(Int) {\n\tvar A = 1;\n}\n",
+		"tlit/Decl.hx": "package tlit;\n\ntypedef Foo = {x: Int};\n",
+		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n"
 	},
 	"invocations": [
 		{
@@ -1459,7 +1461,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "31299e39343122a3",
+				"out": "0e95e18ac9bcb105",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -1478,7 +1480,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "31299e39343122a3",
+				"out": "0e95e18ac9bcb105",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -9368,6 +9370,36 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "9d753c798c721a94",
 				"files": "d0b6574a899a4117"
+			}
+		},
+		{
+			"name": "apq mentions Foo tlit",
+			"argv": [
+				"apq",
+				"mentions",
+				"Foo",
+				"tlit"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7b1d58249c0f74b1",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq mentions Foo tlit",
+			"argv": [
+				"hxq",
+				"mentions",
+				"Foo",
+				"tlit"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "7b1d58249c0f74b1",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
 			}
 		}
 	]

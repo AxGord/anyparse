@@ -193,6 +193,8 @@ final class Lit {
 				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
 			}
 		}
+		final declared: Null<QueryNode> = node.type;
+		if (declared != null) walk(target, declared, exact, filter, delimiters, qualifiedKinds, out);
 		for (c in node.children) walk(target, c, exact, filter, delimiters, qualifiedKinds, out);
 	}
 
