@@ -207,7 +207,7 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 		// different property access than core type". Core types DO declare private fields
 		// (`haxe.Timer.id`, `haxe.ds.List.h`), so this rule needs the gate exactly like its public
 		// sibling.
-		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
+		if (MemberWriteScan.sourceCoreApiPinsMemberShape(source, plugin)) return;
 		// Interface-mutability gate: a field an implemented interface declares (or ANY
 		// unresolvable implemented interface) is pinned to that interface's property
 		// access — `var → final` would break parity ("different property access than in

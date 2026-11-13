@@ -780,19 +780,16 @@ class PreferInlineCheckTest extends Test {
 
 	/**
 	 * The own-file build-macro refusal must cost NO resolution index. Both gates answer the same
-	 * boolean — the token scan here IS hop zero of the closure `TypeTraits` walks — so the finding
-	 * count cannot tell them apart; the scope THUNK can, and it is what the widest index is built
-	 * from. The token sits in a COMMENT on purpose: a real annotation would be refused one pass
-	 * earlier by `metaBlockedClasses` and this fixture would prove nothing.
+	 * boolean — the file's module-level metadata here IS hop zero of the closure `TypeTraits` walks —
+	 * so the finding count cannot tell them apart; the scope THUNK can, and it is what the widest
+	 * index is built from. The annotation sits on a SIBLING type on purpose: one on `C` itself would
+	 * be refused one pass earlier by `metaBlockedClasses` and this fixture would prove nothing.
 	 */
 	@:pin('control')
 	@:killer('M-INLINE-LOCAL-BUILD-MACRO')
 	public function testOwnFileBuildMacroTokenCostsNoResolutionIndex(): Void {
 		final report: Array<{ file: String, source: String }> = [
-			{
-				file: 'C.hx',
-				source: '// the builder is described here: @:build(b.B.build())\nclass C {\n\tpublic function tag():Int return 1;\n}'
-			}
+			{ file: 'C.hx', source: '@:build(b.B.build())\nclass Built {}\n\nclass C {\n\tpublic function tag():Int return 1;\n}' }
 		];
 		var demands: Int = 0;
 		function sources(): ResolutionSources {

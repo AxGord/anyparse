@@ -213,6 +213,16 @@ final class ModuleScan {
 		return decl.isMain ? file.module : '${file.module}.${decl.name}';
 	}
 
+	/**
+	 * Whether the module `tree` holds a module-level metadata node named one of `names` — one leading a
+	 * declaration, in any conditional branch (`RefShape.conditionalMemberKind`), never a member's or an
+	 * expression's: the same nodes `SymbolIndexBuilder` files on the declaration that follows. Names are
+	 * compared whole, so `@:build.gen` and `@:buildXml` are not `@:build`.
+	 */
+	public static function carriesMetaNamed(tree: QueryNode, plugin: GrammarPlugin, names: Array<String>): Bool {
+		return names.length > 0 && moduleMetaNamed(tree, plugin.metaShape().metaKinds, plugin.refShape().conditionalMemberKind, names);
+	}
+
 	/** Whether the file carries a `package` declaration whose span the grammar did not record. */
 	private static function hasSpanlessPackage(root: QueryNode): Bool {
 		return root.children.exists(c -> PACKAGE_DECL_KINDS.contains(c.kind) && c.span == null);
@@ -333,6 +343,20 @@ final class ModuleScan {
 			if (alias != null && target != null) out[alias] = target;
 		}
 		return out;
+	}
+
+	/**
+	 * `carriesMetaNamed`'s walk over `node`'s children, descending into a `condKind` region and into a
+	 * metadata node, which is how a branch holding annotations and no declaration projects its run.
+	 */
+	private static function moduleMetaNamed(node: QueryNode, metaKinds: Array<String>, condKind: Null<String>, names: Array<String>): Bool {
+		for (child in node.children) {
+			final name: Null<String> = child.name;
+			if (name != null && names.contains(name) && metaKinds.contains(child.kind)) return true;
+			if ((child.kind == condKind || metaKinds.contains(child.kind)) && moduleMetaNamed(child, metaKinds, condKind, names))
+				return true;
+		}
+		return false;
 	}
 
 }

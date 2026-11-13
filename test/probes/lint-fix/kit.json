@@ -1036,7 +1036,7 @@
 		},
 		{
 			"name": "PF1",
-			"note": "prefer-final and prefer-final-public-field on a plain class whose file only NAMES a generic-build tag in a comment: both still fire, the comment makes nothing macro-made",
+			"note": "prefer-final, prefer-final-public-field and prefer-inline on a plain class whose file only NAMES a generic-build tag in a comment: all three fire, the comment makes nothing macro-made",
 			"argv": [
 				"hxq",
 				"lint",
@@ -1049,8 +1049,8 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "74a5f202e5b65b9c",
-				"err": "22054bfbc60d02bc",
+				"out": "d8e86ebba78c5f83",
+				"err": "3eccc819a7289b27",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					false,
@@ -2322,6 +2322,67 @@
 				"sameRun": [
 					true,
 					true
+				]
+			}
+		},
+		{
+			"name": "BMN1",
+			"note": "inline-constant on a class implementing an interface whose @:autoBuild sits in an #if region nested in another: the index lifts the nested tag onto the interface, so the implementor is macro-built and declines",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg",
+				"--rule",
+				"inline-constant",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"pkg/Base.hx": "package pkg;\n#if a\n#if b\n@:autoBuild(pkg.B.build())\n#end\n#end\ninterface Base {}\n",
+				"pkg/Consts.hx": "package pkg;\n\nclass Consts implements Base {\n\tpublic static inline final X: String = \"x\";\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "8c152a8b79e26144",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "BMN2",
+			"note": "inline-constant on a class whose own @:build sits in an #if region nested in another: the index lifts the nested tag onto the class, so it declines",
+			"argv": [
+				"hxq",
+				"lint",
+				"pkg",
+				"--rule",
+				"inline-constant",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"pkg/Consts.hx": "package pkg;\n#if a\n#if b\n@:build(pkg.B.build())\n#end\n#end\nclass Consts {\n\tpublic static inline final X: String = \"x\";\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fbbbe43aac9861ec",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
 				]
 			}
 		}

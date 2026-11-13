@@ -839,7 +839,8 @@ final class SymbolIndexBuilder {
 		// (openfl `Vector`), and document-order preserves the meta-before-decl attachment.
 		if (isMetaNodeKind(node.kind)) {
 			// a region holding only metadata projects it under a nameless wrapper: lift each one it holds
-			final held: Array<QueryNode> = node.name == null ? [for (c in node.children) if (isMetaNodeKind(c.kind)) c] : [];
+			final held: Array<QueryNode> = [];
+			if (node.name == null) collectHeldMeta(node, held);
 			if (held.length == 0) out.push({ node: node, guarded: true });
 			for (m in held) out.push({ node: m, guarded: true });
 			return;
@@ -1225,6 +1226,21 @@ final class SymbolIndexBuilder {
 		}
 		out.sort((a, b) -> Reflect.compare(a.typeName, b.typeName));
 		return out;
+	}
+
+	/**
+	 * The named metadata a nameless region wrapper holds, in document order, through every `#if` region and
+	 * nameless wrapper nested in it: an annotation-only region inside another projects as
+	 * `(Meta (Conditional (Meta …)))`, and its tag still leads the declaration that follows. A named
+	 * node is a tag and is never entered, so its arguments stay out.
+	 */
+	private static function collectHeldMeta(wrapper: QueryNode, held: Array<QueryNode>): Void {
+		for (c in wrapper.children) {
+			if (c.name != null && isMetaNodeKind(c.kind))
+				held.push(c);
+			else
+				collectHeldMeta(c, held);
+		}
 	}
 
 }

@@ -1464,10 +1464,10 @@ final class RefShape {
 	 * (`AnnotatedDeclScan.typeStartsAny`) before deleting a private member: a generated member may
 	 * be that private's only reference.
 	 *
-	 * The SAME list `MemberWriteScan.carriesBuildMacro` matches as whole metadata tokens, published
-	 * here so a STRUCTURAL walk asks the grammar instead of spelling a Haxe tag inside a check —
-	 * two answers to one question is how `@:genericBuild` stayed missing from one of them.
-	 * `@:autoBuild` is in the list for the conservative reason the text scan keeps it: it builds
+	 * The SAME list `MemberWriteScan.carriesBuildMacro` reads off a module's metadata nodes, so every
+	 * consumer asks the grammar instead of spelling a Haxe tag inside a check — two answers to one
+	 * question is how `@:genericBuild` stayed missing from one of them.
+	 * `@:autoBuild` is in the list for the conservative reason the file-scoped answer keeps it: it builds
 	 * SUBTYPES rather than the declaration carrying it, so counting it here at worst keeps a dead
 	 * private. Optional; unset → no declaration reads as macro-built, which is the right default
 	 * for a grammar that has no build macros.
@@ -1507,6 +1507,15 @@ final class RefShape {
 	 * no declaration is foreign-facing, the right default for a grammar with no native-interop annotation.
 	 */
 	public var nativeInteropDeclMetaName: Null<String>;
+
+	/**
+	 * The metadata tag that makes a type a target's REPLACEMENT for a standard-library core type (Haxe
+	 * `@:coreApi`), whose member shape the compiler pins against a declaration in its own std path — one
+	 * no report or resolution scope holds. A rewrite changing a member's property access, visibility or
+	 * static-ness in such a module cannot be proved safe and is declined
+	 * (`MemberWriteScan.coreApiPinsMemberShape`). Optional; unset → no type is a core replacement.
+	 */
+	public var coreTypeReplacementMetaName: Null<String>;
 
 	/**
 	 * The metadata tags whose presence on a TYPE declaration means a macro generates the members of

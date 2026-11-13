@@ -210,7 +210,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			// and a `@:coreApi` type's members are pinned to the access of a core type in the
 			// compiler's std path: `(get, null)` -> `(default, null)` on `sys.ssl.Certificate.commonName`
 			// is "Field commonName has different property access than core type".
-			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(entry.source)) continue;
+			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(tree, plugin)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 			// Resolved ONCE per file, not per class: `refShape()` builds its struct — several

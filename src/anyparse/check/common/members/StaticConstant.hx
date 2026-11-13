@@ -147,7 +147,7 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 			// The core-API bail sits beside the build-macro one: promoting an instance field to
 			// `static` moves it out of the instance member set, and for a member a core type declares
 			// that is "Missing field <name> required by core type".
-			if (tree == null || MemberWriteScan.carriesBuildMacro(entry.source) || MemberWriteScan.coreApiPinsMemberShape(entry.source))
+			if (tree == null || MemberWriteScan.carriesBuildMacro(tree, plugin) || MemberWriteScan.coreApiPinsMemberShape(tree, plugin))
 				continue;
 			walk(tree, {
 				out: violations,

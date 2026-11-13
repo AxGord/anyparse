@@ -58,7 +58,7 @@ import anyparse.query.SymbolIndex;
  *   carry it, and what it binds is the whole type: a placeholder body the backend discards, or a
  *   member the host runtime calls BY NAME.
  * - EVERY method of a class under a build macro — its own, or one granted through a supertype /
- *   interface (`TypeTraits.transitivelyCarriesBuildMacro`) — whose OWN half is a token scan of the
+ *   interface (`TypeTraits.transitivelyCarriesBuildMacro`) — whose OWN half is read off the parsed
  *   report source, asked BEFORE any index is built (`MemberWriteScan.carriesBuildMacro`, hop zero of
  *   that closure), so only an INHERITED grant costs the index. The builder writes an `override` of the
  *   method into subclasses with no `override` keyword for the modifier gate to read and no declared
@@ -196,8 +196,8 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		// scope, orders of magnitude above the harness floor for a one-file run. The widest index only
 		// ever REFUTES a flag, so nothing needs it until a method has survived every LOCAL gate —
 		// `considerClass` returns before touching this thunk when the class offers no locally-eligible
-		// method, and again when the owner's own file carries a build-macro token, and then no index
-		// is built at all, not even the report one. The file-scoped token scan behind
+		// method, and again when the owner's own file carries a build-macro tag, and then no index
+		// is built at all, not even the report one. The file-scoped metadata read behind
 		// `transitivelyCarriesBuildMacro` answers the own-file half from the source this run already
 		// holds; only an INHERITED grant costs the index. The report index is likewise built inside
 		// the thunk, so a full run over a declared scope never indexes the report set and then the
@@ -556,13 +556,13 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			});
 		});
 		if (locals.length == 0) return;
-		// Hop ZERO of the build-macro closure below is a TEXT scan of the owner's OWN file:
-		// `SupertypeWalk.declarationsOf` starts the walk at the declaration in `file`, and its first act is
-		// `carriesBuildMacro` over THAT file's source — which this run already holds. Asking it here is
-		// the same predicate, not a second one (a yes here is a yes there), and it answers the commonest
-		// refusal without building the widest index at all. Only the INHERITED grant — a supertype or
-		// interface carrying `@:autoBuild` — needs the index, and that is what the call below still asks.
-		if (MemberWriteScan.carriesBuildMacro(source)) return;
+		// Hop ZERO of the build-macro closure below reads the owner's OWN file: `SupertypeWalk.declarationsOf`
+		// starts the walk at the declaration in `file`, and its first act reads that file's module-level
+		// build-macro metadata — the same nodes this source, which the run already holds, parses to (a yes
+		// here is a yes there). Asking it here answers the commonest refusal without building the widest
+		// index at all. Only the INHERITED grant — a supertype or interface carrying `@:autoBuild` — needs
+		// the index, and that is what the call below still asks.
+		if (MemberWriteScan.sourceCarriesBuildMacro(source, plugin)) return;
 		final index: SymbolIndex = widest();
 		// A build macro on the owner — or granted by a supertype / interface through `@:autoBuild` —
 		// writes members no scan of this source can see, an `override` of this very method in every

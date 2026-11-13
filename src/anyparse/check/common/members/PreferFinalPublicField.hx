@@ -251,7 +251,7 @@ final class PreferFinalPublicField extends RuleBase implements RiskyFix implemen
 		// Core-API gate: a `@:coreApi` type's members are pinned to the property access of a core
 		// type in the compiler's std path that no scope here holds, and `var` -> `final` is
 		// "Field <name> has different property access than core type".
-		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
+		if (MemberWriteScan.sourceCoreApiPinsMemberShape(source, plugin)) return;
 		// Every write question about THIS candidate carries its file, so the write index can drop
 		// what a third-party source recorded: a haxelib cannot name a project type. The subtype
 		// question below deliberately does not — there the subject may itself be third-party, and

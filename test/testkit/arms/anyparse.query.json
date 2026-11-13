@@ -4913,7 +4913,7 @@
 			"name": "M-INDEX-GUARDED-META-LIFT",
 			"type": "anyparse.query.SymbolIndexBuilder",
 			"method": "pushGuardedDecl",
-			"find": "final held: Array<QueryNode> = node.name == null ? [for (c in node.children) if (isMetaNodeKind(c.kind)) c] : [];",
+			"find": "final held: Array<QueryNode> = [];\n\t\t\tif (node.name == null) collectHeldMeta(node, held);",
 			"replace": "final held: Array<QueryNode> = [];",
 			"note": "metadata a conditional region holds alone is lifted nameless, so the declaration it annotates carries none of it"
 		},
@@ -16104,8 +16104,8 @@
 			"name": "M-MWS-SUBTYPE-FILE-IDENTITY",
 			"type": "anyparse.query.MemberWriteScan",
 			"method": "subtypeMayReference",
-			"find": "(file != apart && mayReference(src, name, span.from, span.to))",
-			"replace": "(src != index.sourceOf(apart ?? '') && mayReference(src, name, span.from, span.to))",
+			"find": "(file != apart && mayReference(src, name, span.from, span.to, plugin))",
+			"replace": "(src != index.sourceOf(apart ?? '') && mayReference(src, name, span.from, span.to, plugin))",
 			"note": "the declaring file is told from another by its text, so a copy of it at another path is not scanned and its reader goes unseen"
 		},
 		{
@@ -16757,6 +16757,65 @@
 			"find": "return literal.substring(1, literal.length - 1);",
 			"replace": "return literal;",
 			"note": "a quoted literal keeps its quotes, so no `version(\"…\")` names a version"
+		},
+		{
+			"name": "M-BUILD-META-FILE-FLAGS-TRUE",
+			"type": "anyparse.query.TypeTraits",
+			"method": "fileCarriesBuildMacro",
+			"force": "true",
+			"note": "every indexed file reads as carrying a build macro, so a supertype whose comment or string merely names the tag declines its implementors again"
+		},
+		{
+			"name": "M-BUILD-META-FILE-FLAGS-FALSE",
+			"type": "anyparse.query.TypeTraits",
+			"method": "fileCarriesBuildMacro",
+			"force": "false",
+			"note": "no indexed file reads as carrying a build macro, so a real @:build on the type or an inherited @:autoBuild no longer keeps a constant inline"
+		},
+		{
+			"name": "M-CORE-API-META-TRUE",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "coreApiPinsMemberShape",
+			"force": "true",
+			"note": "every module reads as a core-type replacement, so a comment naming the tag pins the member shape again"
+		},
+		{
+			"name": "M-CORE-API-META-FALSE",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "coreApiPinsMemberShape",
+			"force": "false",
+			"note": "no module reads as a core-type replacement, so a real @:coreApi type has its property access rewritten against the core type"
+		},
+		{
+			"name": "M-MWS-META-NAMED-TRUE",
+			"type": "anyparse.query.ModuleScan",
+			"method": "carriesMetaNamed",
+			"force": "true",
+			"note": "every module reads as carrying the asked tag, so a comment or a string naming it counts as the tag again"
+		},
+		{
+			"name": "M-MWS-META-COND-UNWALKED",
+			"type": "anyparse.query.ModuleScan",
+			"method": "moduleMetaNamed",
+			"find": "if ((child.kind == condKind || metaKinds.contains(child.kind)) && moduleMetaNamed(child, metaKinds, condKind, names))\n\t\t\t\treturn true;",
+			"replace": "",
+			"note": "a tag written inside a conditional branch is no longer read, so a type built only under #if reads as unbuilt"
+		},
+		{
+			"name": "M-MWS-META-UNPARSED-NO",
+			"type": "anyparse.query.MemberWriteScan",
+			"method": "sourceCarriesBuildMacro",
+			"find": "return tree == null || carriesBuildMacro(tree, plugin);",
+			"replace": "return tree != null && carriesBuildMacro(tree, plugin);",
+			"note": "a source that does not parse reads as unbuilt, so a write scan acts on a module whose metadata it never read"
+		},
+		{
+			"name": "M-SIB-META-NESTED-UNLIFTED",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "collectHeldMeta",
+			"find": "collectHeldMeta(c, held);",
+			"replace": "{}",
+			"note": "an annotation-only #if region nested in another is no longer lifted, so its @:build / @:autoBuild never reaches the declaration that follows"
 		}
 	]
 }

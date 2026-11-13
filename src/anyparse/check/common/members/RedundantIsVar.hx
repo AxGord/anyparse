@@ -98,7 +98,7 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 			fold: plugin.stringFoldSupport()
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
-			if (MemberWriteScan.coreApiPinsMemberShape(entry.source)) return;
+			if (MemberWriteScan.coreApiPinsMemberShape(tree, plugin)) return;
 			final scopeIndex: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			final info: Null<FileInfo> = scopeIndex.fileInfo(entry.file);
 			if (info == null) return;

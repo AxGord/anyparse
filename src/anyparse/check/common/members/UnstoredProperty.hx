@@ -78,7 +78,7 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 			enumerates: null
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
-			if (MemberWriteScan.coreApiPinsMemberShape(entry.source)) return;
+			if (MemberWriteScan.coreApiPinsMemberShape(tree, plugin)) return;
 			final scopeIndex: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
 			for (cls in CheckScan.classBodies(tree)) {
 				// an extern's storage lives on the native side, which no text here shows writing it

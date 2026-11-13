@@ -22,14 +22,14 @@ using StringTools;
  *
  * Two failure modes, two kinds of guard here.
  *
- * A seam that DRIFTS from its answer. `MemberWriteScan.carriesBuildMacro` matches `@:build` /
- * `@:autoBuild` / `@:genericBuild` as whole metadata tokens; `unused-private`'s leading-run walk
+ * A seam that DRIFTS from its answer. `MemberWriteScan.carriesBuildMacro` once matched `@:build` /
+ * `@:autoBuild` / `@:genericBuild` as text tokens; `unused-private`'s leading-run walk
  * asked for `'@:build'` and nothing else, so a `@:genericBuild` class — built WHOLE per
  * instantiation, its declared members discarded — had its privates deleted by the same `--fix` that
  * spares a `@:build` one. Nothing failed: the two lists simply disagreed, and no test compared them.
  * So the guards compare each seam against the OTHER answer, or against the consumer end-to-end, over
  * a probe alphabet the seam itself has to be covered by. `typeBuildMacroMetaNames` is compared to the
- * text scan; `descendantBuildMacroMetaNames` splits that union by DIRECTION (a tag that builds its
+ * shared predicate's answer; `descendantBuildMacroMetaNames` splits that union by DIRECTION (a tag that builds its
  * carrier vs one that builds its subtypes) and is checked against the two index flags it derives;
  * `retainedDeclMetaName`, `reflectedDeclMetaName`, `takesPrivateAccessMetaName`,
  * `forwardingDeclMetaName` and `implicitConstructorDeclMetaName` are each pinned end-to-end plus the
@@ -85,7 +85,7 @@ class BuildMacroMetaSeamTest extends Test {
 
 	/**
 	 * Every remaining target-language tag a grammar-agnostic file still spells, and why each is
-	 * there. Three reasons, and only the third is a queue item:
+	 * there. Two reasons, and only the second is a queue item:
 	 *
 	 *  - EMISSION. The file writes the tag INTO target source (`MoveMember` adds an access grant,
 	 *    `EncapsulateField` adds a backing-storage annotation, `NewFile` writes a module header,
@@ -94,11 +94,7 @@ class BuildMacroMetaSeamTest extends Test {
 	 *    name seam answers "which tag means X", not "what do I type to get one" — the distinction
 	 *    `RefShape.enumAbstractSyntax` and `parenDelimiters` already draw. Seaming these needs a
 	 *    SPELLING seam, a different design.
-	 *  - THE SECOND ANSWER. `MemberWriteScan` is the text scan the seam guards above compare
-	 *    `typeBuildMacroMetaNames` AGAINST. Folding it into the seam would make
-	 *    `testSeamAndTextScanAgreeOnEveryProbeTag` compare the seam with itself, so the drift guard
-	 *    that caught `@:genericBuild` would pass on any disagreement. Its `@:coreApi` is the same
-	 *    shape and has no second reader.
+
 	 *  - NOT SEAMED YET. `@:allow` (the privacy waiver that BREAKS a confinement proof — now ONE
 	 *    spelling, `AllowGrants.TAG`, read by `RefactorSupport.carriesAllowGrant` and by the per-member `AllowGrants.reaching`, whose
 	 *    consumers are called once per member
@@ -125,7 +121,7 @@ class BuildMacroMetaSeamTest extends Test {
 			'@:expose',
 			'@:overload'
 		],
-		'src/anyparse/query/MemberWriteScan.hx' => ['@:build', '@:autoBuild', '@:genericBuild', '@:coreApi'],
+
 		'src/anyparse/query/AllowGrants.hx' => ['@:allow'],
 		'src/anyparse/check/common/members/TrivialGetter.hx' => ['@:isVar'],
 		'src/anyparse/check/common/members/BackingFieldRefs.hx' => ['@:bypassAccessor'],
@@ -163,14 +159,23 @@ class BuildMacroMetaSeamTest extends Test {
 	];
 	#end
 
-	/** One question, one answer: the grammar's declared list and the text scan agree tag for tag. */
-	public function testSeamAndTextScanAgreeOnEveryProbeTag(): Void {
+	/** One question, one answer: the shared predicate answers yes for exactly the grammar's declared tags, compared whole. */
+	public function testThePredicateAnswersExactlyTheSeamOnEveryProbeTag(): Void {
 		final names: Array<String> = declaredBuildMacroNames();
 		for (tag in PROBE_TAGS)
 			Assert.equals(
-				MemberWriteScan.carriesBuildMacro('$tag\nclass C {}\n'), names.contains(tag),
-				'$tag: the grammar seam and the text scan answer one question differently'
+				names.contains(tag), MemberWriteScan.sourceCarriesBuildMacro('$tag\nclass C {}\n', new HaxeQueryPlugin()),
+				'$tag: the grammar seam and the shared predicate answer one question differently'
 			);
+	}
+
+	/** The core-replacement seam reaches the shared predicate, matched whole and never off a comment. */
+	public function testTheCoreReplacementTagIsHonouredAndIsNotAPrefixMatch(): Void {
+		final tag: String = declaredName(new HaxeQueryPlugin().refShape().coreTypeReplacementMetaName, 'coreTypeReplacementMetaName');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.isTrue(MemberWriteScan.sourceCoreApiPinsMemberShape('$tag class C {}', plugin), '$tag does not pin the member shape');
+		Assert.isFalse(MemberWriteScan.sourceCoreApiPinsMemberShape('${tag}X class C {}', plugin), '${tag}X is a different tag');
+		Assert.isFalse(MemberWriteScan.sourceCoreApiPinsMemberShape('/** not $tag */ class C {}', plugin), '$tag in a comment pins it');
 	}
 
 	/** ...and the alphabet the comparison runs over covers everything the grammar declares. */

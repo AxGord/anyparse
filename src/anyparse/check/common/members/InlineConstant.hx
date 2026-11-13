@@ -234,7 +234,7 @@ final class InlineConstant extends RuleBase {
 			// `@:coreApi` type's fields are pinned to the access of a core type in the compiler's std
 			// path: `static var X` -> `static inline var X` is already "Field X has different property
 			// access than core type".
-			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(entry.source))
+			if (tree != null && !MemberWriteScan.coreApiPinsMemberShape(tree, plugin))
 				walk(
 					violations, entry.file, entry.source, tree, seams, facts, false, false,
 					MemberBranchScan.seamsOf(plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)), index

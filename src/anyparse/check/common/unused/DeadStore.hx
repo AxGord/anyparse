@@ -217,7 +217,7 @@ final class DeadStore extends RuleBase {
 		final shape: RefShape = plugin.refShape();
 		final assignKind: Null<String> = shape.assignKind;
 		final mutableDeclKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		return (assignKind == null && mutableDeclKinds.length == 0) || MemberWriteScan.carriesBuildMacro(source)
+		return (assignKind == null && mutableDeclKinds.length == 0) || MemberWriteScan.sourceCarriesBuildMacro(source, plugin)
 			? []
 			: RunScan.edits(plugin, source, tree -> {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);

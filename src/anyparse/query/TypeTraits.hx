@@ -124,14 +124,12 @@ final class TypeTraits {
 	 * file-scoped text scan below, the widening above — stays conservative for all of them.
 	 *
 	 * `@:autoBuild` reaches subtypes and implementors, so the walk follows `supertypes`, which carries
-	 * `implements` targets as well as `extends`. The per-file test is textual
-	 * (`MemberWriteScan.carriesBuildMacro`), so an unrelated `@:build` elsewhere in the same file counts
-	 * too — the conservative direction, which only ever keeps a field as it is (a module whose SECOND
-	 * type carries the tag is the everyday case). An unretained source ends the same way, as in
-	 * `transitivelyCarriesRtti`.
+	 * `implements` targets as well as `extends`. Each hop reads its file's indexed metadata
+	 * (`fileCarriesBuildMacro`): another type of that file carrying the tag counts too, the conservative
+	 * direction, while a tag named in a comment or a string does not. An unretained source answers true.
 	 */
 	public function transitivelyCarriesBuildMacro(typeName: String, ?fromFile: String): Bool {
-		return buildClosureAny(typeName, fromFile, source -> source == null || MemberWriteScan.carriesBuildMacro(source));
+		return buildClosureAny(typeName, fromFile, (info, source) -> source == null || fileCarriesBuildMacro(info));
 	}
 
 	/**
@@ -146,7 +144,7 @@ final class TypeTraits {
 	 * in an unrelated macro still counts.
 	 */
 	public function builderReadsFinality(typeName: String, ?fromFile: String): Bool {
-		return buildClosureAny(typeName, fromFile, source -> source != null && builderModules(source).exists(readsFinality));
+		return buildClosureAny(typeName, fromFile, (_, source) -> source != null && builderModules(source).exists(readsFinality));
 	}
 
 	/**
@@ -157,21 +155,20 @@ final class TypeTraits {
 	public function buildClosureSpells(typeName: String, fromFile: Null<String>, name: String): Bool {
 		return buildClosureAny(
 			typeName, fromFile,
-			source ->
-				source == null
-				|| (MemberWriteScan.carriesBuildMacro(source) && OccurrenceScan.referencedInRange(source, name, 0, source.length, []))
+			(info, source) ->
+				source == null || (fileCarriesBuildMacro(info) && OccurrenceScan.referencedInRange(source, name, 0, source.length, []))
 		);
 	}
 
 	/**
-	 * Whether `hit` answers true for the source of some declaration on `typeName`'s build-macro closure —
-	 * the declaration itself, then its supertypes and interfaces (`SupertypeWalk.hops`) — handed null for
-	 * one the index retains no source of. The walk `transitivelyCarriesBuildMacro` and
+	 * Whether `hit` answers true for the file and source of some declaration on `typeName`'s build-macro
+	 * closure — the declaration itself, then its supertypes and interfaces (`SupertypeWalk.hops`) — handed
+	 * a null source for one the index retains no source of. The walk `transitivelyCarriesBuildMacro` and
 	 * `builderReadsFinality` share.
 	 */
-	private function buildClosureAny(typeName: String, fromFile: Null<String>, hit: (Null<String>) -> Bool): Bool {
+	private function buildClosureAny(typeName: String, fromFile: Null<String>, hit: (FileInfo, Null<String>) -> Bool): Bool {
 		final roots: Array<ResolvedType> = SupertypeWalk.declarationsOf(_refs, typeName, fromFile);
-		return SupertypeWalk.closureAny(_refs, roots, true, cur -> hit(_sources[cur.file.file]));
+		return SupertypeWalk.closureAny(_refs, roots, true, cur -> hit(cur.file, _sources[cur.file.file]));
 	}
 
 	/** Whether some indexed declaration named `module` lives in a source that spells a `FINALITY_READS` token. */
@@ -214,6 +211,16 @@ final class TypeTraits {
 				found = true;
 		}
 		return found && !unknown ? false : null;
+	}
+
+	/**
+	 * Whether some type of the indexed file `info` carries a build-macro tag — `MemberWriteScan.carriesBuildMacro`'s
+	 * file-scoped question answered off the index's per-type flags, which `SymbolIndexBuilder` reads from the same
+	 * `RefShape.typeBuildMacroMetaNames` seam on the parsed metadata nodes (`hasBuild` the own-ward half, `hasAutoBuild` the
+	 * descendant-ward one).
+	 */
+	private static function fileCarriesBuildMacro(info: FileInfo): Bool {
+		return info.types.exists(type -> type.hasBuild || type.hasAutoBuild);
 	}
 
 	/** The simple names of the builder modules the build metadata in `source` calls (`@:build(pkg.Mod.fn())` → `Mod`). */

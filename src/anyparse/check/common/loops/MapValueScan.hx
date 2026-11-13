@@ -156,7 +156,7 @@ final class MapValueScan {
 		seams: ValueSeams, ?claim: MapClaim
 	): Bool {
 		final asked: MapClaim = claim ?? NoNullValue;
-		if (MemberWriteScan.carriesBuildMacro(source)) return false;
+		if (MemberWriteScan.carriesBuildMacro(root, plugin)) return false;
 		final decl: Null<Decl> = locate(root, null, -1, null, bindingFrom, seams);
 		if (decl == null) return false;
 		if (!subtreeSafe(root, null, -1, null, -1, name, 0, source.length, seams, asked)) return false;
@@ -171,9 +171,11 @@ final class MapValueScan {
 		return !scope.text.hasAccessGrant(owner)
 			&& !scope.text.privilegeMayReference(owner, name)
 			&& !scope.subtypes.subtypeDeclMatches(owner, name, (subtype, src, span, redeclares, _) -> {
-				if (redeclares || MemberWriteScan.carriesBuildMacro(src)) return true;
+				if (redeclares) return true;
 				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, src);
-				return tree == null || !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams, asked);
+				return tree == null
+					|| MemberWriteScan.carriesBuildMacro(tree, plugin)
+					|| !subtreeSafe(tree, null, -1, null, -1, name, span.from, span.to, seams, asked);
 			});
 	}
 

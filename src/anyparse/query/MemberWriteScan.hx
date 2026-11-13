@@ -10,7 +10,8 @@ using anyparse.util.Strings;
  * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
  * "is this member NAME written here" (does a SUBTYPE write an inherited member, does an
  * `@:access` GRANTEE write it), and the weaker "is it MENTIONED here at all". Plus the two
- * whole-file METADATA questions no name scan can answer: a build macro generates members no text
+ * whole-file METADATA questions no name scan can answer, read off the parsed module's metadata
+ * nodes rather than its text: a build macro generates members no text
  * holds (`carriesBuildMacro`), and a `@:coreApi` type has its member shape pinned by a core type in
  * the compiler's own std path, which no report or resolution scope contains
  * (`coreApiPinsMemberShape`).
@@ -103,9 +104,9 @@ final class MemberWriteScan {
 				owner, name,
 				(subtype, src, span, redeclares, file) ->
 					redeclares
-					|| (file != apart && mayReference(src, name, span.from, span.to))
+					|| (file != apart && mayReference(src, name, span.from, span.to, plugin))
 					|| scopeOf(index, plugin)
-						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length), apart)
+						.text.accessGrantMatches(subtype, name, granted -> mayReference(granted, name, 0, granted.length, plugin), apart)
 			);
 	}
 
@@ -116,7 +117,7 @@ final class MemberWriteScan {
 	public static inline function accessGrantMayReference(
 		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
 	): Bool {
-		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayReference(src, name, 0, src.length), apart);
+		return scopeOf(index, plugin).text.accessGrantMatches(owner, name, src -> mayReference(src, name, 0, src.length, plugin), apart);
 	}
 
 	/**
@@ -145,32 +146,51 @@ final class MemberWriteScan {
 	}
 
 	/**
-	 * Whether `source` carries a member-generating build macro — `@:build`, `@:autoBuild` or
-	 * `@:genericBuild`. A macro can add a member the text scan cannot see, so a file with one
-	 * counts as a possible writer.
+	 * `referencesConfined` for a rewrite that edits the WHOLE declaring file `file` (text `source`): a subtype or
+	 * `@:access` grantee in that file is respelled by the same edits, so only a mention in ANOTHER file refuses
+	 * (`apart`, on the two scans above). Files are told apart by path, so a copy of the file with the same text still refuses.
+	 */
+	public static inline function referencesConfinedToFile(
+		owner: String, name: String, file: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
+	): Bool {
+		return RefactorSupport.privateMemberScanIsSound(source, index, name)
+			&& !subtypeMayReference(owner, name, index, plugin, file)
+			&& !accessGrantMayReference(owner, name, index, plugin, file);
+	}
+
+	/**
+	 * Whether the module `tree` carries a member-generating build macro: a metadata node named in
+	 * `RefShape.typeBuildMacroMetaNames` (Haxe `@:build`, `@:autoBuild`, `@:genericBuild`). A macro can
+	 * add a member no scan of the declaration sees, so a module with one counts as a possible writer.
 	 *
 	 * All three GENERATE the member set: the first two hand the declaration's fields to a macro
 	 * that returns the real ones, and `@:genericBuild` builds the WHOLE type per instantiation, so
 	 * the declaration read here describes none of them. `@:genericBuild` was missing until it was
 	 * measured, and its direction is the dangerous one — every consumer ACTED on such a type
-	 * instead of declining it. It has zero declarations in the Haxe 4.3.7 std (the three
-	 * occurrences there are doc-comment prose, which this scan over-counts anyway) and is live in
-	 * the libraries a real project resolves against: `lime.app.Event`, `lime.net.HTTPRequest`,
-	 * `json2object.JsonParser`, `tink.macro.DirectType`, `hxbitmini.Serializable`.
+	 * instead of declining it. It is live in the libraries a real project resolves against:
+	 * `lime.app.Event`, `lime.net.HTTPRequest`, `json2object.JsonParser`, `tink.macro.DirectType`.
 	 *
-	 * Matched as a whole metadata TOKEN, never as a substring: `@:buildXml` is an unrelated cpp
-	 * build-file tag (17 declarations in the Haxe std alone), and reading it as a build macro made
-	 * every consumer bail out on a type it had no reason to decline. A mention inside a comment or
-	 * string still over-counts, which only ever keeps the looser access. The one shape this cannot
-	 * see is metadata injected by the BUILD (`--macro addMetadata(...)` in an hxml); that is
-	 * outside any source scan, and the compiler oracle is the net for it.
+	 * Read off the module's metadata NODES (`ModuleScan.carriesMetaNamed`), in every conditional branch, so a tag
+	 * name is compared whole — `@:buildXml`, an unrelated cpp build-file tag, is not `@:build` — and a
+	 * mention in a comment or a string is prose, not a tag: a doc comment naming `@:autoBuild` made
+	 * every implementor of its interface look macro-built. FILE-scoped: a second type of the module
+	 * carrying the tag counts too, the direction that only ever declines. The one shape this cannot
+	 * see is metadata injected by the BUILD (`--macro addMetadata(...)` in an hxml); that is outside
+	 * any source, and the compiler oracle is the net for it.
 	 */
-	public static inline function carriesBuildMacro(source: String): Bool {
-		return carriesMetaToken(source, '@:build') || carriesMetaToken(source, '@:autoBuild') || carriesMetaToken(source, '@:genericBuild');
+	public static function carriesBuildMacro(tree: QueryNode, plugin: GrammarPlugin): Bool {
+		return ModuleScan.carriesMetaNamed(tree, plugin, plugin.refShape().typeBuildMacroMetaNames ?? []);
+	}
+
+	/** `carriesBuildMacro` over a module's `source`; a source that does not parse answers true, the side that declines. */
+	public static function sourceCarriesBuildMacro(source: String, plugin: GrammarPlugin): Bool {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		return tree == null || carriesBuildMacro(tree, plugin);
 	}
 
 	/**
-	 * Whether `source` declares a `@:coreApi` type — a target's replacement for a standard-library
+	 * Whether the module `tree` declares a `@:coreApi` type (`RefShape.coreTypeReplacementMetaName`) —
+	 * a target's replacement for a standard-library
 	 * core type, whose member shape the compiler pins against a declaration NO scan here will ever
 	 * see: the core type lives in the compiler's own std path, outside every report and resolution
 	 * scope. A rewrite that changes a member's property access, visibility or static-ness therefore
@@ -200,27 +220,21 @@ final class MemberWriteScan {
 	 * own commit recorded — and it declines these classes regardless, through its inline-neutral
 	 * metadata whitelist.
 	 *
-	 * FILE-scoped and textual, the same conservatism `carriesBuildMacro` documents: a sibling type
-	 * in a `@:coreApi` module declines too, and so does a `@:coreApi` written in a comment. That
-	 * costs nothing a project owns — a `@:coreApi` type is by definition a standard-library
+	 * FILE-scoped and read off the metadata nodes, as `carriesBuildMacro` is: a sibling type in a
+	 * `@:coreApi` module declines too, a `@:coreApi` written in a comment or a string does not. The
+	 * file scope costs nothing a project owns — a `@:coreApi` type is by definition a standard-library
 	 * replacement — whereas a per-member answer would have to model which members the invisible
 	 * core type declares, which nothing here can.
 	 */
-	public static inline function coreApiPinsMemberShape(source: String): Bool {
-		return carriesMetaToken(source, '@:coreApi');
+	public static function coreApiPinsMemberShape(tree: QueryNode, plugin: GrammarPlugin): Bool {
+		final tag: Null<String> = plugin.refShape().coreTypeReplacementMetaName;
+		return tag != null && ModuleScan.carriesMetaNamed(tree, plugin, [tag]);
 	}
 
-	/**
-	 * `referencesConfined` for a rewrite that edits the WHOLE declaring file `file` (text `source`): a subtype or
-	 * `@:access` grantee in that file is respelled by the same edits, so only a mention in ANOTHER file refuses
-	 * (`apart`, on the two scans above). Files are told apart by path, so a copy of the file with the same text still refuses.
-	 */
-	public static inline function referencesConfinedToFile(
-		owner: String, name: String, file: String, source: String, index: SymbolIndex, plugin: GrammarPlugin
-	): Bool {
-		return RefactorSupport.privateMemberScanIsSound(source, index, name)
-			&& !subtypeMayReference(owner, name, index, plugin, file)
-			&& !accessGrantMayReference(owner, name, index, plugin, file);
+	/** `coreApiPinsMemberShape` over a module's `source`; a source that does not parse answers true, the side that declines. */
+	public static function sourceCoreApiPinsMemberShape(source: String, plugin: GrammarPlugin): Bool {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		return tree == null || coreApiPinsMemberShape(tree, plugin);
 	}
 
 	/**
@@ -278,15 +292,15 @@ final class MemberWriteScan {
 	 * inject a member the text scan cannot see, or the scan finds a write outright.
 	 */
 	private static inline function mayWrite(src: String, name: String, from: Int, to: Int, plugin: GrammarPlugin): Bool {
-		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to, plugin);
+		return sourceCarriesBuildMacro(src, plugin) || writtenInRange(src, name, null, from, to, plugin);
 	}
 
 	/**
 	 * Whether the offsets `from ... to` of `src` may MENTION `name`: either a build macro can
 	 * inject a reference the text scan cannot see, or the name occurs as a word-boundary token.
 	 */
-	private static inline function mayReference(src: String, name: String, from: Int, to: Int): Bool {
-		return carriesBuildMacro(src) || OccurrenceScan.referencedInRange(src, name, from, to, []);
+	private static inline function mayReference(src: String, name: String, from: Int, to: Int, plugin: GrammarPlugin): Bool {
+		return sourceCarriesBuildMacro(src, plugin) || OccurrenceScan.referencedInRange(src, name, from, to, []);
 	}
 
 	/** Whether `c` is an operator character that can form an assignment token. */
@@ -297,24 +311,6 @@ final class MemberWriteScan {
 				true;
 			case _: false;
 		};
-	}
-
-	/**
-	 * Whether `source` mentions `meta` as a WHOLE metadata token — the character after it must
-	 * not continue the name. `@:build` is a PREFIX of `@:buildXml`, so a plain `indexOf` reads a
-	 * cpp build-file tag as a build macro; the dot is excluded as well, since a metadata
-	 * name may be a DOT PATH, and `@:build.gen` is a different tag from `@:build`.
-	 */
-	private static function carriesMetaToken(source: String, meta: String): Bool {
-		var at: Int = 0;
-		while (true) {
-			final idx: Int = source.indexOf(meta, at);
-			if (idx < 0) return false;
-			at = idx + meta.length;
-			if (at >= source.length) return true;
-			final next: Int = source.fastCodeAt(at);
-			if (!next.isIdentChar() && next != '.'.code) return true;
-		}
 	}
 
 	/**

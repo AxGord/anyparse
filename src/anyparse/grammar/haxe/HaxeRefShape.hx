@@ -958,12 +958,11 @@ final class HaxeRefShape {
 		table.overloadModifierKind = 'Overload';
 		table.genericFunctionMetaName = '@:generic';
 		table.dispatchedMemberMetaNames = ['@:from', '@:op', '@:arrayAccess', '@:resolve'];
-		// The same three tokens `MemberWriteScan.carriesBuildMacro` matches, published so the
-		// STRUCTURAL leading-run walk `unused-private` uses asks the grammar rather than spelling
-		// them itself. `BuildMacroMetaSeamTest` fails if the two lists ever disagree.
+		// The three tags `MemberWriteScan.carriesBuildMacro` reads off a module's metadata nodes and the
+		// leading-run walk `unused-private` reads off a type's; `BuildMacroMetaSeamTest` pins both.
 		table.typeBuildMacroMetaNames = ['@:build', '@:autoBuild', '@:genericBuild'];
 		// The one of those three that builds SUBTYPES rather than its carrier. `SymbolIndex` needs the
-		// split because it reads the flags while climbing a chain upward; the file-scoped text scan does
+		// split because it reads the flags while climbing a chain upward; the file-scoped answer does
 		// not and keeps the union.
 		table.descendantBuildMacroMetaNames = ['@:autoBuild'];
 		// The one that makes a whole TYPE per instantiation rather than rewriting the carrier's members.
@@ -989,6 +988,8 @@ final class HaxeRefShape {
 		// directly — the Unity MonoBehaviour idiom. It is the marker, not `extends MonoBehaviour`:
 		// Pony declares `@:nativeGen class Tooltip` with no superclass at all, and
 		// `class PercentSize extends MonoBehaviour` with no annotation.
+		// A target's replacement for a std core type: the compiler pins its member shape to a declaration no scope here holds.
+		table.coreTypeReplacementMetaName = '@:coreApi';
 		table.nativeInteropDeclMetaName = '@:nativeGen';
 		table.enumAbstractSyntax = { head: 'enum abstract {name}({under}) to {under}', bodyOpen: '{' };
 		table.compileTimeTypeDeclKinds = ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'];

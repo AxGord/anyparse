@@ -164,7 +164,7 @@ final class PreferReadOnlyField extends RuleBase {
 		// members are pinned to the access of a core type in the compiler's std path that no scope
 		// here holds — "Field <name> has different property access than core type" for every
 		// restriction, `(default, null)` and `(default, never)` alike.
-		if (MemberWriteScan.coreApiPinsMemberShape(source)) return;
+		if (MemberWriteScan.sourceCoreApiPinsMemberShape(source, plugin)) return;
 		// Every write question about THIS candidate carries its file, so the write index can drop
 		// what a third-party source recorded: a haxelib cannot name a project type. The subtype
 		// question below deliberately does not — there the subject may itself be third-party, and

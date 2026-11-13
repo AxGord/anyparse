@@ -146,7 +146,8 @@ final class MapKeysLookup extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		final cfg: Null<Cfg> = readCfg(plugin);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		if (cfg == null || tree == null || MemberWriteScan.carriesBuildMacro(source)) return [];
+		if (cfg == null || tree == null) return [];
+		if (MemberWriteScan.carriesBuildMacro(tree, plugin)) return [];
 		final c: Cfg = cfg;
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
