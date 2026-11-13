@@ -1939,7 +1939,7 @@ class WrapList {
 	 * each arg's leading spine in full, and runs only when the first found
 	 * nothing.
 	 */
-	private static function soleMultilineCollectionArg(items: Array<Doc>): Int {
+	private static function soleMultilineCollectionArg(items: Array<Doc>, braceLedIdx: Int): Int {
 		var collIdx: Int = -1;
 		for (i in 0...items.length) if (flatLength(items[i]) < 0) {
 			// A second multi-line arg, or a multi-line arg that is not a plain
@@ -1949,7 +1949,7 @@ class WrapList {
 			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !(startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it))) return -1;
 			collIdx = i;
 		}
-		return collIdx >= 0 ? collIdx : solePivotCollectionArg(items);
+		return collIdx >= 0 ? collIdx : solePivotCollectionArg(items, braceLedIdx);
 	}
 
 	/**
@@ -2011,9 +2011,9 @@ class WrapList {
 	 * the arg's head-flat / tail-flat argument is unproven for a break the
 	 * renderer has not taken yet.
 	 */
-	private static function solePivotCollectionArg(items: Array<Doc>): Int {
-		final strict: Int = pivotCollectionArgScan(items, false);
-		return strict >= 0 ? strict : pivotCollectionArgScan(items, true);
+	private static function solePivotCollectionArg(items: Array<Doc>, braceLedIdx: Int): Int {
+		final strict: Int = pivotCollectionArgScan(items, false, braceLedIdx);
+		return strict >= 0 ? strict : pivotCollectionArgScan(items, true, braceLedIdx);
 	}
 
 	/**
@@ -2034,9 +2034,11 @@ class WrapList {
 	 * identically except that a fit pivot may now qualify, so only the no-candidate
 	 * case can change its answer.
 	 */
-	private static function pivotCollectionArgScan(items: Array<Doc>, fitPivot: Bool): Int {
+	private static function pivotCollectionArgScan(items: Array<Doc>, fitPivot: Bool, braceLedIdx: Int): Int {
 		var collIdx: Int = -1;
-		for (i in 0...items.length) if (renderPivotBreakArm(items[i], fitPivot) != null && startsWithCollectionDelim(items[i])) {
+		for (i in 0...items.length) if (
+			renderPivotBreakArm(items[i], fitPivot) != null && (i == braceLedIdx || startsWithCollectionDelim(items[i]))
+		) {
 			if (collIdx >= 0) return -1;
 			if (isArrowBodyMarker(items[i]) || isMethodChainItem(items[i])) return -1;
 			collIdx = i;
@@ -2106,45 +2108,47 @@ class WrapList {
 			if (ifElseSplit != null && arrowBodyIsBrokenIfElse(ifElseSplit.body))
 				return bareArrowGlueShape(open, close, openInside, closeInside, ifElseSplit.head, ifElseSplit.body, cols);
 		}
-		// A sole arrow argument whose body is brace-led — a statement block or an object literal — keeps that body on
-		// the `->` line and is shaped as the plain argument it then is: the brace is its wrap point, so the call hugs it
-		// (`f(u -> {` … `})`) exactly as it hugs a sole `{`-led argument, or opens with the lambda flat on its own line
-		// when that is where it fits.
-		if (open == '(' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))
-			return shape(
-				mode, open, close, sep,
-				[replaceArrowMarker(items[0], (_, _, fl) -> WrapBoundary(fl)) ?? items[0]],
-				openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags, lineWidth,
-				flatTrailingComma, comprehensionCuddledOpen, soleItemCuddledBrackets, complexItemKinds
-			);
-		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, items, openInside, closeInside);
+		// An arrow whose body is brace-led — a statement block or an object literal — and that is the LAST item keeps that
+		// body on the `->` line: its marker takes the flat side and the collection hug reads the item as `{`-led
+		// (`braceLedIdx`), so the list hugs it (`f(0, u -> {` … `})`) or breaks before it (`[` / `u -> {` … `}` / `]`)
+		// exactly as for a `{`-led last item, or opens with the lambda flat on its own line when that is where it fits.
+		final last: Int = items.length - 1;
+		final flatLast: Null<Doc> = last < 0 || !arrowBodyIsBlock(items[last])
+			? null
+			: replaceArrowMarker(items[last], (_, _, fl) -> WrapBoundary(fl));
+		final braceLedIdx: Int = flatLast == null ? -1 : last;
+		final list: Array<Doc> = flatLast == null ? items : items.slice(0, last).concat([flatLast]);
+		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, list, openInside, closeInside);
 		if (comprBlockHug != null) return comprBlockHug;
 		final comprCuddledOpen: Null<Doc> = shapeComprehensionCuddledOpen(
-			comprehensionCuddledOpen, mode, open, close, sep, items, openInside, cols, appendTrailingComma, trailBreak, sepBeforeFlags,
+			comprehensionCuddledOpen, mode, open, close, sep, list, openInside, cols, appendTrailingComma, trailBreak, sepBeforeFlags,
 			lineWidth
 		);
 		if (comprCuddledOpen != null) return comprCuddledOpen;
-		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, items);
+		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, list);
 		if (soleArrowUniform != null) return soleArrowUniform;
 		final soleArrowContGlue: Null<Doc> = shapeSoleArrowContGlue(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, lineWidth
+			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, lineWidth
 		);
 		if (soleArrowContGlue != null) return soleArrowContGlue;
 		final singleArgGlue: Null<Doc> = shapeSingleArgGlue(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, lineWidth
+			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, lineWidth
 		);
 		if (singleArgGlue != null) return singleArgGlue;
+		// A body that carries its own hardline (a statement block) keeps its marker for the block-lambda glue, whose
+		// first-line probe stops at that hardline; a body that may stay flat is hugged as a `{`-led item below.
 		final multiArgBlockLambda: Null<Doc> = shapeMultiArgBlockLambda(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, sepBeforeFlags, lineWidth
+			mode, open, close, sep, flatLast != null && flatLength(flatLast) < 0 ? items : list, openInside, closeInside, cols,
+			appendTrailingComma, flatTrailingComma, sepBeforeFlags, lineWidth
 		);
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
-			sepBeforeFlags, lineWidth, complexItemKinds
+			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
+			sepBeforeFlags, lineWidth, braceLedIdx, complexItemKinds
 		);
 		if (multiArgCollection != null) return multiArgCollection;
 		final byMode: Doc = shapeByMode(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
+			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
 			flatTrailingComma, complexItemKinds
 		);
 		// ω-solitem-cuddled-brackets runs LAST on purpose: it is the only intercept
@@ -2153,7 +2157,7 @@ class WrapList {
 		// above declined — and the two multi-arg ones cannot have fired anyway,
 		// since both require `items.length > 1` while this one requires exactly 1.
 		final soleItemCuddled: Null<Doc> = shapeSoleItemCuddledBrackets(
-			soleItemCuddledBrackets, mode, open, close, items, openInside, closeInside, lineWidth, byMode
+			soleItemCuddledBrackets, mode, open, close, list, openInside, closeInside, lineWidth, byMode
 		);
 		return soleItemCuddled ?? byMode;
 	}
@@ -2540,10 +2544,11 @@ class WrapList {
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, flatTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
-		?complexItemKinds: Array<Int>
+		braceLedIdx: Int, ?complexItemKinds: Array<Int>
 	): Null<Doc> {
+		// `braceLedIdx`: the item `shape` reads as `{`-led though its first token is an arrow head, or -1.
 		if ((mode != FillLine && mode != FillLineWithLeadingBreak) || items.length <= 1) return null;
-		final collIdx: Int = soleMultilineCollectionArg(items);
+		final collIdx: Int = soleMultilineCollectionArg(items, braceLedIdx);
 		if (collIdx < 0) return null;
 		// ω-item-close-trail: the glue shape ends `… lastItem <sep?> close`, so a
 		// last item ending in `//` would put the close delimiter on the comment's

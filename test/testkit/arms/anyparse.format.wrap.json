@@ -550,9 +550,9 @@
 			"name": "M-ARROW-BRACE-BODY-NO-HUG",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shape",
-			"find": "if (open == '(' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))",
-			"replace": "if (open == '<' && items.length == 1 && isArrowBodyMarker(items[0]) && arrowBodyIsBlock(items[0]))",
-			"note": "a sole brace-bodied arrow argument goes back to the generic shapes: a cascade that falls to fillLineWithLeadingBreak opens the call paren and a noWrap one strands the close paren below the body"
+			"find": "final flatLast: Null<Doc> = last < 0 ||",
+			"replace": "final flatLast: Null<Doc> = last < items.length ||",
+			"note": "a brace-bodied arrow that is the last item goes back to the generic shapes: a sole argument opens the call paren or strands the close paren below the body, and an array element breaks after its arrow"
 		},
 		{
 			"name": "M-ARROW-BRACE-BODY-KEEPS-ARROW-BREAK",
@@ -561,6 +561,22 @@
 			"find": "(_, _, fl) -> WrapBoundary(fl)",
 			"replace": "(n, brk, fl) -> IfResidualLineExceeds(n, brk, fl)",
 			"note": "the brace-led body keeps its break-after-arrow decision, so an object literal too long for the head line moves below the arrow instead of breaking its own fields"
+		},
+		{
+			"name": "M-ARROW-BRACE-LAST-NOT-COLLECTION-LED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "pivotCollectionArgScan",
+			"find": "(i == braceLedIdx || startsWithCollectionDelim(items[i]))",
+			"replace": "startsWithCollectionDelim(items[i])",
+			"note": "a flat-fitting brace-bodied arrow that is the last of several call arguments is not read as a brace-led argument, so the call opens its paren instead of hugging the body"
+		},
+		{
+			"name": "M-ARROW-BRACE-HARDLINE-LOSES-BLOCK-GLUE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shape",
+			"find": "flatLast != null && flatLength(flatLast) < 0 ? items : list",
+			"replace": "list",
+			"note": "a last-argument statement-block arrow loses its marker before the multi-argument block-lambda glue, so a call whose other argument also breaks opens its paren"
 		}
 	]
 }

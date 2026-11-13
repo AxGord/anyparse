@@ -69,7 +69,9 @@
 		"fn-body-same/hxformat.json": "{\"sameLine\": {\"functionBody\": \"same\", \"anonFunctionBody\": \"same\"}}",
 		"fn-body-same/W.hx": "class W {\n\tfunction sw() if (c) switch x { case 1: a(); } else switch y { case 2: b(); }\n\n\tfunction mixed() if (c) { a(); } else b();\n\n\tfunction elif() if (c) { a(); } else if (d) { b(); } else c();\n\n\tfunction elifAll() if (c) { a(); } else if (d) { b(); } else { e(); }\n\n\tfunction m() {\n\t\tvar f = function() if (c) switch x { case 1: a(); } else switch y { case 2: b(); };\n\t}\n}\n",
 		"cond-siblings-off/C.hx": "class C {\n\t#if a var r:Int; #else var s:Int; var t:Int; #end\n}\n",
-		"cond-siblings-off/hxformat.json": "{\"sameLine\": {\"conditionalSiblings\": \"off\"}}"
+		"cond-siblings-off/hxformat.json": "{\"sameLine\": {\"conditionalSiblings\": \"off\"}}",
+		"arrow-brace-last/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tvar b = [aaaa, bbbb, u -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail }];\n\t\tvar c = { a: 1, bbbbbbbbbbbbbbbbbbbb: () -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaail: 1 } };\n\t\tvar i = foo(0, (u:Int) -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail });\n\t\tvar k = new Foo(0, u -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail });\n\t}\n}\n",
+		"arrow-brace-last/hxformat.json": "{\"indentation\":{\"character\":\"tab\",\"tabWidth\":4,\"trailingWhitespace\":false,\"alignInlineSwitchCaseBody\":true},\"comments\":{\"blockCommentBodyIndent\":\"verbatim\"},\"emptyLines\":{\"maxAnywhereInFile\":2,\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"beforeDocCommentEmptyLines\":\"one\",\"classEmptyLines\":{\"beginType\":1,\"endType\":1},\"abstractEmptyLines\":{\"beginType\":1,\"endType\":1},\"interfaceEmptyLines\":{\"beginType\":1,\"endType\":1},\"externClassEmptyLines\":{\"beginType\":1,\"endType\":1},\"macroClassEmptyLines\":{\"beginType\":0,\"endType\":0},\"enumEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"typedefEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"enumAbstractEmptyLines\":{\"betweenVars\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"}},\"wrapping\":{\"maxLineLength\":140,\"functionSignature\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":100},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1}],\"type\":\"noWrap\"}]},\"methodChain\":{\"defaultWrap\":\"noWrap\",\"itemsAfterCloseParenOnly\":true,\"rules\":[{\"conditions\":[{\"cond\":\"lineLength >= n\",\"value\":160}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":3},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":80},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"anyItemLength >= n\",\"value\":30},{\"cond\":\"itemCount >= n\",\"value\":4}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"itemCount >= n\",\"value\":7}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"onePerLine\"}]},\"ternaryMultilineBranch\":\"break\",\"opBoolChain\":{\"defaultWrap\":\"noWrap\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"onePerLineAfterFirst\",\"location\":\"beforeLast\"}]},\"callParameter\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1},{\"cond\":\"totalItemLength <= n\",\"value\":100}],\"type\":\"noWrap\"}]},\"expressionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]},\"conditionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]}},\"whitespace\":{\"addLineCommentSpace\":true,\"colonPolicy\":\"after\",\"typeHintColonPolicy\":\"after\",\"typeCheckColonPolicy\":\"after\",\"functionTypeHaxe3Policy\":\"around\",\"functionTypeHaxe4Policy\":\"around\",\"arrowFunctionsPolicy\":\"around\",\"ifPolicy\":\"around\",\"forPolicy\":\"around\",\"whilePolicy\":\"around\",\"switchPolicy\":\"around\",\"binopPolicy\":\"around\",\"intervalPolicy\":\"around\",\"bracesConfig\":{\"objectLiteralBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\",\"arrowBodyOpenPad\":true},\"anonTypeBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"singleStatementBraces\":\"symmetric\"},\"parenConfig\":{\"callParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"funcParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"conditionParens\":{\"openingPolicy\":\"before\",\"closingPolicy\":\"after\"},\"anonFuncParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"}}},\"lineEnds\":{\"emptyCurly\":\"noBreak\"},\"sameLine\":{\"ifBody\":\"fitLine\",\"forBody\":\"fitLine\",\"whileBody\":\"fitLine\",\"functionBody\":\"fitLine\",\"returnBody\":\"fitLine\",\"returnBodySingleLine\":\"fitLine\",\"expressionIf\":\"next\"}}"
 	},
 	"invocations": [
 		{
@@ -777,6 +779,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "c8dbae8e215e1bff",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "arrow-brace-last/Probe.hx",
+			"note": "a brace-bodied arrow as the last item keeps its body on the arrow line under the repo config: the last element of a multi-item array, an object-literal field value, the last argument of a multi-argument call with a paren-param arrow, and of a new-expr",
+			"fixpoint": "arrow-brace-last/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"arrow-brace-last/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bc0dbca3d44c4239",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
