@@ -12,9 +12,13 @@ package anyparse.grammar.haxe;
  * `@:rawString` routes the matched slice through `TerminalParseLowering.lowerTerminal` as the
  * stored value without the string-unescape loop — a preprocessor condition is not a Haxe
  * string literal, so `\n` etc. stay as literal backslash-n in the captured text.
+ *
+ * `@:condRegionBlank` names the reader of the blank between a directive keyword and its condition and after the
+ * condition (`HxPpCondBlankScan.endAt`, generated from `HxPpCondBlank`).
  */
 @:scan('anyparse.grammar.haxe.HxPpCondScan.endAt')
 @:rawString
 @:condRegionCondition
+@:condRegionBlank('anyparse.grammar.haxe.HxPpCondBlankScan.endAt')
 @:writeNormalize('condOperatorSpacing')
 abstract HxPpCondLit(String) from String to String {}

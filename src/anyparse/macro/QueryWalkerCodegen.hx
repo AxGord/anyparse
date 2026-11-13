@@ -60,7 +60,16 @@ class QueryWalkerCodegen {
 			+ '`opaqueCondRegionKinds`, derived by the same walk from the `@:condRegionCondition` terminal as well. Published through '
 			+ '`RefShape.conditionalRegionKinds` and read by `CondRegionScan.isConditionalKind`.'
 		));
-		fields.push(conditionEndField(result.conditionReader));
+		fields.push(readerField(
+			'conditionEnd', result.conditionReader?.condition,
+			'Where the conditional-compilation condition starting at `at` ends, `at` when none; derived from the grammar\'s '
+			+ '`@:condRegionCondition` terminal and published through `RefShape.conditionEnd`.'
+		));
+		fields.push(readerField(
+			'conditionBlankEnd', result.conditionReader?.blank,
+			'Where the blank before or after a conditional-compilation condition starting at `at` ends, `at` when none; named by '
+			+ 'the grammar\'s `@:condRegionBlank` and published through `RefShape.conditionBlankEnd`.'
+		));
 		fields.push(kindsField(
 			'projectedKinds', result.projectedKinds,
 			'Every node kind this walker can project - the grammar\'s whole `QueryNode.kind` vocabulary, derived from the same shape the '
@@ -111,17 +120,16 @@ class QueryWalkerCodegen {
 	}
 
 	/**
-	 * `conditionEnd(input, at)`: where the grammar's conditional-compilation condition starting at `at` ends, `at` when
-	 * none — the `@:scan` reader of its condition terminal, so a scan over raw source reads the condition the parser
-	 * reads. A grammar declaring no condition terminal answers `at` everywhere.
+	 * `<name>(input, at)`: where a construct of the grammar's conditional-compilation condition starting at `at` ends,
+	 * `at` when none — the qualified `reader` the condition terminal names, so a scan over raw source reads what the
+	 * parser reads. A grammar declaring no condition terminal answers `at` everywhere.
 	 */
-	private static function conditionEndField(reader: Null<String>): Field {
+	private static function readerField(name: String, reader: Null<String>, doc: String): Field {
 		final body: Expr = reader == null ? macro return at : macro return $p{reader.split('.')}(input, at);
 		return {
-			name: 'conditionEnd',
+			name: name,
 			access: [APublic, AStatic],
-			doc: 'Where the conditional-compilation condition starting at `at` ends, `at` when none; derived from the grammar\'s '
-				+ '`@:condRegionCondition` terminal and published through `RefShape.conditionEnd`.',
+			doc: doc,
 			kind: FFun({
 				args: [
 					{ name: 'input', type: macro : anyparse.runtime.Input },

@@ -1113,6 +1113,7 @@ final class HaxeRefShape {
 		table.conditionalElseKeywords = ['#else', '#elseif'];
 		table.conditionalEndKeyword = '#end';
 		table.conditionEnd = HaxeQueryWalker.conditionEnd;
+		table.conditionBlankEnd = HaxeQueryWalker.conditionBlankEnd;
 		table.condDeclPrefixKeywordKinds = ['EnumKw', 'AbstractKw', 'FinalKw'];
 		// DERIVED, not written. The macro walks each ctor's own production to the terminals it
 		// reaches and reports the ones that reach a `@:condRegionRaw` capture; `conditionalRegionKinds`

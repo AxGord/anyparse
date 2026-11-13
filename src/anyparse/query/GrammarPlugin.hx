@@ -7,6 +7,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.runtime.Input;
 import anyparse.runtime.Span;
 
 /**
@@ -1865,7 +1866,14 @@ final class RefShape {
 	 * the grammar's condition terminal, so a scan over source the parser never saw reads the parser's condition.
 	 * Optional; unset means a directive carries no condition.
 	 */
-	public var conditionEnd: Null<(input: anyparse.runtime.Input, at: Int) -> Int>;
+	public var conditionEnd: Null<(input: Input, at: Int) -> Int>;
+
+	/**
+	 * Where the blank before or after a conditional-compilation condition starting at `at` ends, `at` when none — the
+	 * reader `CondDirectives` steps over between a directive keyword and its condition. A plugin publishes its generated
+	 * walker's `conditionBlankEnd`, named by the grammar's condition terminal. Set whenever `conditionEnd` is.
+	 */
+	public var conditionBlankEnd: Null<(input: Input, at: Int) -> Int>;
 
 	/**
 	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute

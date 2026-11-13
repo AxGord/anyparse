@@ -690,13 +690,14 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function condSpliceTailElseLedField(): Field {
 		final verdict: Expr = condSpliceElseVerdictExpr();
-		final conditionReader: String = CondConditionReader.of(_shape) ?? Context.fatalError(
+		final conditionReader: CondReaders = CondConditionReader.of(_shape) ?? Context.fatalError(
 			'HxAstPredLowering: the grammar declares no condition reader for the splice-tail atom', Context.currentPos()
 		);
-		final reader: Expr = macro $p{conditionReader.split('.')};
+		final reader: Expr = macro $p{conditionReader.condition.split('.')};
+		final blank: Expr = macro $p{conditionReader.blank.split('.')};
 		final body: Expr = macro {
 			final n: Int = raw.length;
-			final i: Int = anyparse.runtime.CondCondition.skipConditionAtom(raw, 0, $reader);
+			final i: Int = anyparse.runtime.CondCondition.skipConditionAtom(raw, 0, $reader, $blank);
 			$verdict;
 		};
 		return predField(

@@ -78,7 +78,7 @@ final class IfFalseDeadCode extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final reader: Null<ConditionReader> = plugin.refShape().conditionEnd;
+		final reader: Null<ConditionReader> = readerOf(plugin);
 		return reader == null
 			? []
 			: RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, reader));
@@ -88,7 +88,7 @@ final class IfFalseDeadCode extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		final reader: Null<ConditionReader> = plugin.refShape().conditionEnd;
+		final reader: Null<ConditionReader> = readerOf(plugin);
 		if (reader == null) return edits;
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -115,6 +115,14 @@ final class IfFalseDeadCode extends RuleBase {
 	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
 	private static inline function isIfTrueAt(source: String, from: Int, reader: ConditionReader): Bool {
 		return isIfLiteralAt(source, from, 'true', reader);
+	}
+
+	/** The plugin's condition readers, or null when its grammar declares no condition. */
+	private static function readerOf(plugin: GrammarPlugin): Null<ConditionReader> {
+		final shape: RefShape = plugin.refShape();
+		final condition: Null<(input: Input, at: Int) -> Int> = shape.conditionEnd;
+		final blank: Null<(input: Input, at: Int) -> Int> = shape.conditionBlankEnd;
+		return condition == null || blank == null ? null : { condition: condition, blank: blank };
 	}
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, reader: ConditionReader): Void {
@@ -184,7 +192,7 @@ final class IfFalseDeadCode extends RuleBase {
 	 */
 	private static function isIfLiteralAt(source: String, from: Int, literal: String, reader: ConditionReader): Bool {
 		if (!sliceStartsWith(source, from, '#if')) return false;
-		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length, reader);
+		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length, reader.condition, reader.blank);
 		if (condition == null) return false;
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
 		return text.stripOuterParens() == literal;
@@ -195,7 +203,7 @@ final class IfFalseDeadCode extends RuleBase {
 	 * condition, where the THEN body begins — the same condition `isIfLiteralAt` read, restarted at `slice[0]`.
 	 */
 	private static function bodyStart(slice: String, reader: ConditionReader): Int {
-		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length, reader);
+		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length, reader.condition, reader.blank);
 		return condition == null ? '#if'.length : condition.to;
 	}
 
@@ -250,5 +258,5 @@ final class IfFalseDeadCode extends RuleBase {
 /** The resolved region `eliminatedRegion` reads in both `fix` and `deadRegionMessage`. */
 private typedef EliminatedRegion = { final then: String; final elsePos: Int; final otherwise: String; };
 
-/** The grammar's reader of where a `#if` condition ends (`RefShape.conditionEnd`). */
-private typedef ConditionReader = (input: Input, at: Int) -> Int;
+/** The grammar's readers of where a `#if` condition ends and of the blank around it (`RefShape.conditionEnd` / `conditionBlankEnd`). */
+private typedef ConditionReader = { final condition: (input: Input, at: Int) -> Int; final blank: (input: Input, at: Int) -> Int; };

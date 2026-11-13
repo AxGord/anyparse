@@ -148,7 +148,7 @@
 			"name": "M-COND-ATOM-ENDS-AT-WS",
 			"type": "anyparse.runtime.CondCondition",
 			"method": "skipConditionAtom",
-			"find": "final atom: Null<Span> = conditionIn(input, at, reader);",
+			"find": "final atom: Null<Span> = conditionIn(input, at, reader, blank);",
 			"replace": "final atom: Null<Span> = null;",
 			"note": "the atom no longer reads the condition operand, so the else keyword after a condition is never reached"
 		},
@@ -156,17 +156,33 @@
 			"name": "M-COND-ATOM-IS-CONDITION-OPERAND",
 			"type": "anyparse.runtime.CondCondition",
 			"method": "skipConditionAtom",
-			"find": "skipBlank(input, atom.to)",
-			"replace": "skipBlank(input, atom.to + 1)",
+			"find": "blank(input, atom.to)",
+			"replace": "blank(input, atom.to + 1)",
 			"note": "the atom swallows the byte glued after the condition operand, so the splice predicate and the query side read different conditions"
 		},
 		{
 			"name": "M-COND-KEYWORD-OPERAND-SAME-LINE",
 			"type": "anyparse.runtime.CondCondition",
 			"method": "conditionIn",
-			"find": "final start: Int = skipBlank(input, from);",
-			"replace": "final start: Int = from + skipBlank(new StringInput(input.substring(from, input.length).split('\\n')[0]), 0);",
+			"find": "final start: Int = blank(input, from);",
+			"replace": "final start: Int = from + blank(new StringInput(input.substring(from, input.length).split('\\n')[0]), 0);",
 			"note": "the condition must start on the keyword's own line, so `#if` / `false` on two lines reads no condition at all"
+		},
+		{
+			"name": "M-COND-KEYWORD-BLANK-UNREAD",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "conditionIn",
+			"find": "final start: Int = blank(input, from);",
+			"replace": "final start: Int = from;",
+			"note": "the blank between a directive keyword and its condition is not read, so `#if flag` reads no condition at all"
+		},
+		{
+			"name": "M-COND-ATOM-BLANK-UNREAD",
+			"type": "anyparse.runtime.CondCondition",
+			"method": "skipConditionAtom",
+			"find": "return atom == null ? source.length : blank(input, atom.to);",
+			"replace": "return atom == null ? source.length : atom.to;",
+			"note": "the blank after a spliced fragment's condition is not read, so the word after it is never reached"
 		}
 	]
 }

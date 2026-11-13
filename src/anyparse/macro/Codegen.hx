@@ -37,7 +37,7 @@ class Codegen {
 
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		trivia: Bool = false, ?rootFnName: Null<String>, ?conditionReader: Null<String>
+		trivia: Bool = false, ?rootFnName: Null<String>, ?conditionReader: Null<CondConditionReader.CondReaders>
 	): Array<Field> {
 		final fields: Array<Field> = formatInfo.isBinary ? [binaryEntry(rootTypePath, rootReturnCT, rootFnName)] : [
 			publicEntryWith(rootTypePath, rootReturnCT, rootFnName),
@@ -904,7 +904,7 @@ class Codegen {
 	 * the atom and the fragment are skipped so a leading `/` is unambiguously
 	 * a division operator.
 	 */
-	private static function spliceFragmentIsInfixField(conditionReader: Null<String>): Field {
+	private static function spliceFragmentIsInfixField(conditionReader: Null<CondConditionReader.CondReaders>): Field {
 		final skipGap: Expr = spliceGapSkipExpr();
 		final infixTest: Expr = infixOpByteTestExpr();
 		// A grammar declaring no condition has no splice tail to admit: an own-line word operator never continues.
@@ -940,10 +940,11 @@ class Codegen {
 	 * reads it, so the parser and the query side agree on where a condition
 	 * ends. No operand is read as "no infix fragment".
 	 */
-	private static function spliceCondAtomSkipExpr(conditionReader: String): Expr {
-		final reader: Expr = macro $p{conditionReader.split('.')};
+	private static function spliceCondAtomSkipExpr(conditionReader: CondConditionReader.CondReaders): Expr {
+		final reader: Expr = macro $p{conditionReader.condition.split('.')};
+		final blank: Expr = macro $p{conditionReader.blank.split('.')};
 		return macro {
-			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionIn(input, from, $reader);
+			final atom: Null<anyparse.runtime.Span> = anyparse.runtime.CondCondition.conditionIn(input, from, $reader, $blank);
 			if (atom == null) return false;
 			i = atom.to;
 		};

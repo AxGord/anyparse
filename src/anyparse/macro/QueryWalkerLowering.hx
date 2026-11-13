@@ -1038,10 +1038,10 @@ typedef QueryWalkerResult = {
 	final conditionalRegionKinds: Array<String>;
 
 	/**
-	 * The qualified reader of where the grammar's conditional-compilation condition ends (`CondConditionReader`), or
-	 * null when the grammar declares no condition terminal.
+	 * The qualified readers of where the grammar's conditional-compilation condition ends and of the blank around it
+	 * (`CondConditionReader`), or null when the grammar declares no condition terminal.
 	 */
-	final conditionReader: Null<String>;
+	final conditionReader: Null<CondConditionReader.CondReaders>;
 
 	/**
 	 * Every node kind the generated walker can project - the grammar's whole
