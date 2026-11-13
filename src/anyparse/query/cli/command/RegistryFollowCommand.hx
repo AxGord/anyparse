@@ -32,6 +32,11 @@ private typedef RegistriesFollowed = {
 @:nullSafety(Strict)
 final class RegistryFollowCommand implements CliCommand implements LanguageFree {
 
+	/** The flag that makes a write op leave the `move.registries` records alone; stripped by the dispatcher for the `PostWriteFix` ops. */
+	public static final OPT_OUT: String = '--no-registry-follow';
+
+	private static final OPT_OUT_TOPIC: String = 'registry-follow-option';
+
 	public function new() {}
 
 	public function name(): String {
@@ -98,6 +103,22 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 			'<base-ref>. A moved file is followed once git reports the rename ('
 			+ 'its new path staged). Exit 1 names each fragment it could not carry.\n'
 		);
+	}
+
+	/** True when the run `ledger` belongs to carried `OPT_OUT`, so its write must not follow the registries. */
+	public static inline function optedOut(ledger: RunLedger): Bool {
+		return ledger.said(OPT_OUT_TOPIC, OPT_OUT);
+	}
+
+	/**
+	 * `argv` without `OPT_OUT`, which is remembered on the run's `ledger` when `legal` (the command finishes through
+	 * `CliEdit.finishEdit`) and left in place for the flag check to refuse otherwise. The ledger is the run's own, so the choice
+	 * dies with the call and a later run in the same process follows again (docs/design-principles.md § 2).
+	 */
+	public static function withoutOptOut(argv: Array<String>, legal: Bool, ledger: RunLedger): Array<String> {
+		if (!legal || !argv.contains(OPT_OUT)) return argv;
+		ledger.note(OPT_OUT_TOPIC, OPT_OUT);
+		return argv.filter(a -> a != OPT_OUT);
 	}
 
 	/**

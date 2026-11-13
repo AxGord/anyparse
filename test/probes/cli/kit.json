@@ -4379,7 +4379,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 2,
-				"out": "d05239a451537264",
+				"out": "efda05cbe9b49c80",
 				"err": "b92429f9953d9de4",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -4395,7 +4395,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 2,
-				"out": "d05239a451537264",
+				"out": "efda05cbe9b49c80",
 				"err": "b92429f9953d9de4",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -5373,7 +5373,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e314a844044ecd41",
+				"out": "35910d23bd670c62",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -5391,7 +5391,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e314a844044ecd41",
+				"out": "35910d23bd670c62",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -7608,7 +7608,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 2,
-				"out": "d05239a451537264",
+				"out": "efda05cbe9b49c80",
 				"err": "b92429f9953d9de4",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -7623,7 +7623,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 2,
-				"out": "d05239a451537264",
+				"out": "efda05cbe9b49c80",
 				"err": "b92429f9953d9de4",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -9258,6 +9258,116 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "fbbbe43aac9861ec",
 				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq patch src/p/C.hx --select FnMember:f --from-file payload.txt --write --no-registry-follow",
+			"note": "the patch lands and the arm record that targets the patched code is left byte-identical; without the flag the find is re-spelled",
+			"argv": [
+				"apq",
+				"patch",
+				"src/p/C.hx",
+				"--select",
+				"FnMember:f",
+				"--from-file",
+				"payload.txt",
+				"--write",
+				"--no-registry-follow"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f(a:Bool, b:Bool, c:Bool):Int {\n\t\tvar BadName = 1;\n\t\treturn BadName + 2;\n\t}\n}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"BadName + 2\",\"replace\":\"BadName - 2\"}]}\n",
+				"payload.txt": "var BadName = 1;\n====\nvar BadName = 5;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ae977f569799f3ba",
+				"files": "7f688010b5a80e33"
+			}
+		},
+		{
+			"name": "hxq patch src/p/C.hx --select FnMember:f --from-file payload.txt --write --no-registry-follow",
+			"note": "the patch lands and the arm record that targets the patched code is left byte-identical; without the flag the find is re-spelled",
+			"argv": [
+				"hxq",
+				"patch",
+				"src/p/C.hx",
+				"--select",
+				"FnMember:f",
+				"--from-file",
+				"payload.txt",
+				"--write",
+				"--no-registry-follow"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f(a:Bool, b:Bool, c:Bool):Int {\n\t\tvar BadName = 1;\n\t\treturn BadName + 2;\n\t}\n}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"BadName + 2\",\"replace\":\"BadName - 2\"}]}\n",
+				"payload.txt": "var BadName = 1;\n====\nvar BadName = 5;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "ae977f569799f3ba",
+				"files": "7f688010b5a80e33"
+			}
+		},
+		{
+			"name": "apq patch src/p/C.hx --select FnMember:f --from-file payload.txt --write --fix --no-registry-follow",
+			"note": "the --fix lint pass of the write op honours the opt-out too: the rename it makes inside an arm find leaves arms/p.json byte-identical",
+			"argv": [
+				"apq",
+				"patch",
+				"src/p/C.hx",
+				"--select",
+				"FnMember:f",
+				"--from-file",
+				"payload.txt",
+				"--write",
+				"--fix",
+				"--no-registry-follow"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f(a:Bool, b:Bool, c:Bool):Int {\n\t\tvar BadName = 1;\n\t\treturn BadName + 2;\n\t}\n}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"BadName + 2\",\"replace\":\"BadName - 2\"}]}\n",
+				"payload.txt": "var BadName = 1;\n====\nvar BadName = 5;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "9d753c798c721a94",
+				"files": "d0b6574a899a4117"
+			}
+		},
+		{
+			"name": "hxq patch src/p/C.hx --select FnMember:f --from-file payload.txt --write --fix --no-registry-follow",
+			"note": "the --fix lint pass of the write op honours the opt-out too: the rename it makes inside an arm find leaves arms/p.json byte-identical",
+			"argv": [
+				"hxq",
+				"patch",
+				"src/p/C.hx",
+				"--select",
+				"FnMember:f",
+				"--from-file",
+				"payload.txt",
+				"--write",
+				"--fix",
+				"--no-registry-follow"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f(a:Bool, b:Bool, c:Bool):Int {\n\t\tvar BadName = 1;\n\t\treturn BadName + 2;\n\t}\n}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"BadName + 2\",\"replace\":\"BadName - 2\"}]}\n",
+				"payload.txt": "var BadName = 1;\n====\nvar BadName = 5;\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "9d753c798c721a94",
+				"files": "d0b6574a899a4117"
 			}
 		}
 	]

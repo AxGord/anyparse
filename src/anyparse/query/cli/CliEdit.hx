@@ -94,7 +94,8 @@ final class CliEdit {
 					CliIo.writeFile(filePath, text);
 					CliIo.stderr('apq $opName: wrote $filePath$tail\n');
 					// An unreadable old text reads as unchanged: there is nothing to follow from.
-					RegistryFollowCommand.followWrite(opName, [{ path: filePath, before: before ?? text, after: text }], plugin);
+					if (!RegistryFollowCommand.optedOut(ledger))
+						RegistryFollowCommand.followWrite(opName, [{ path: filePath, before: before ?? text, after: text }], plugin);
 					if (fix) postWriteFix(filePath, before, text, plugin, ledger);
 				} else {
 					previewEdit(opName, filePath, text, tail);

@@ -414,6 +414,80 @@ class RegistryFollowWriteCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-NO-REGISTRY-FOLLOW-IGNORED')
+	public function testPatchWithNoRegistryFollowLeavesTheArmRecordsByteIdentical(): Void {
+		#if nodejs
+		final root: String = project(
+			'apq_follow_optout', 'var x = 1;\n\t\treturn x + 2;', '"find":"x + 2","replace":"x - 2"',
+			[{ name: 'payload.txt', source: 'x + 2\n====\nx + 3\n' }]
+		);
+		final original: String = File.getContent('$root/arms/p.json');
+		final run: CliRun = CliFixture.runIn(root, [
+			'patch',
+			'src/p/C.hx',
+			'--select',
+			'FnMember:f',
+			'--from-file',
+			'payload.txt',
+			'--write',
+			'--no-registry-follow'
+		]);
+		final module: String = File.getContent('$root/src/p/C.hx');
+		final arms: String = File.getContent('$root/arms/p.json');
+		CliFixture.removeDir(root);
+		Assert.equals(0, run.code);
+		Assert.isTrue(module.indexOf('x + 3') >= 0, 'the patch itself still lands');
+		Assert.equals(original, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-NO-REGISTRY-FOLLOW-ANY-OP')
+	public function testAnOpOutsidePostWriteFixRefusesTheFlagAsAnUnknownOption(): Void {
+		#if nodejs
+		final root: String = project('apq_follow_optout_refused', 'return 1;', '"find":"return 1","replace":"return 2"', []);
+		final run: CliRun = CliFixture.runIn(root, ['fmt', 'src', '--write', '--no-registry-follow']);
+		CliFixture.removeDir(root);
+		Assert.equals(2, run.code);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-NO-REGISTRY-FOLLOW-FIX-PASS')
+	public function testPatchFixWithNoRegistryFollowLeavesTheArmRecordsByteIdentical(): Void {
+		#if nodejs
+		final root: String = project(
+			'apq_follow_optout_fix', 'var BadName = 1;\n\t\treturn BadName + 2;', '"find":"BadName + 2","replace":"BadName - 2"',
+			[{ name: 'payload.txt', source: 'var BadName = 1;\n====\nvar BadName = 5;\n' }]
+		);
+		final original: String = File.getContent('$root/arms/p.json');
+		final run: CliRun = CliFixture.runIn(root, [
+			'patch',
+			'src/p/C.hx',
+			'--select',
+			'FnMember:f',
+			'--from-file',
+			'payload.txt',
+			'--write',
+			'--fix',
+			'--no-registry-follow'
+		]);
+		final module: String = File.getContent('$root/src/p/C.hx');
+		final arms: String = File.getContent('$root/arms/p.json');
+		CliFixture.removeDir(root);
+		Assert.equals(0, run.code);
+		Assert.isTrue(module.indexOf('badName + 2') >= 0, 'the fix pass still renames: $module');
+		Assert.equals(original, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
 	#if nodejs
 	/** A project whose `p.C.f` holds `body` and whose arm `A` on it cuts `cut`; `oracle` names `build.hxml` as its compiler oracle. */
 	private static function project(
@@ -426,6 +500,7 @@ class RegistryFollowWriteCliTest extends Test {
 			{ name: 'arms/p.json', source: '{"arms":[{"name":"A","type":"p.C","method":"f",$cut}]}\n' }
 		].concat(more));
 	}
+
 	/** The arm document `arms/p.json` after `args` ran in a `project(name, body, cut, more)`, the run's exit asserted 0. */
 	private static function armsAfter(
 		name: String, body: String, cut: String, more: Array<{ name: String, source: String }>, args: Array<String>

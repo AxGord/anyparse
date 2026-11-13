@@ -1407,8 +1407,9 @@ final class LintFixDriver {
 			files, checks, plugin, resolveConfig, applyEnablement, windowOf, verbose, noOracle ? [] : oracles, probeCap, reviewBudget,
 			new ImportReach(OracleProviders.of(plugin), oracles), runLedger, resolution
 		);
-		// After every revert net has settled, so a fragment follows only the bytes the run kept.
-		RegistryFollowCommand.followWrite('lint', [
+		// After every revert net has settled, so a fragment follows only the bytes the run kept. The opt-out of a write op's own
+		// `--fix` reaches here through the shared run ledger.
+		if (!RegistryFollowCommand.optedOut(runLedger)) RegistryFollowCommand.followWrite('lint', [
 			for (e in files) if (before.exists(e.file)) { path: e.file, before: before[e.file] ?? e.source, after: e.source }
 		], plugin);
 		return exit;

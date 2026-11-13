@@ -1435,6 +1435,30 @@
 			"find": "Linter.run(set, cached, rules, resolveConfig, applyEnablement, null, notes)",
 			"replace": "Linter.run(set, cached, rules, resolveConfig, applyEnablement)",
 			"note": "the residue lints of a fix run hand their rules no notes: a config diagnostic the run already said is said again on stderr"
+		},
+		{
+			"name": "M-NO-REGISTRY-FOLLOW-IGNORED",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "optedOut",
+			"find": "return ledger.said(OPT_OUT_TOPIC, OPT_OUT);",
+			"replace": "return false;",
+			"note": "the run ledger no longer tells a write op that --no-registry-follow was given, so a probe edit still re-spells the arm records that target the code it cut"
+		},
+		{
+			"name": "M-NO-REGISTRY-FOLLOW-ANY-OP",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "withoutOptOut",
+			"find": "if (!legal || !argv.contains(OPT_OUT)) return argv;",
+			"replace": "if (!argv.contains(OPT_OUT)) return argv;",
+			"note": "the flag is stripped for every command, so an op outside PostWriteFix accepts it instead of refusing it as an unknown option"
+		},
+		{
+			"name": "M-NO-REGISTRY-FOLLOW-FIX-PASS",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "runLintFix",
+			"find": "if (!RegistryFollowCommand.optedOut(runLedger)) RegistryFollowCommand.followWrite(",
+			"replace": "RegistryFollowCommand.followWrite(",
+			"note": "the lint pass of a write op's --fix follows the registries whatever the run's opt-out said, so a probe edit with --fix still re-spells the arm records that target the code it cut"
 		}
 	]
 }

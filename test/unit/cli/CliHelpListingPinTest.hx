@@ -276,7 +276,10 @@ class CliHelpListingPinTest extends Test {
 		'--fix: after a --write, lint what was just written and apply the safe fixes,',
 		'scoped to the LINES this write changed. It skips the compiler oracle (which',
 		'is a project-wide build), so RiskyFix and OracleAssisted rules stay',
-		'report-only: only the safe half of the fixer can land behind your edit.'
+		'report-only: only the safe half of the fixer can land behind your edit.',
+		'',
+		'--no-registry-follow: leave the `move.registries` records as they are after the',
+		'write, for a TEMPORARY probe edit that must not re-spell an arm\'s find/replace.'
 	];
 
 	/** `apq safe-delete --help`, from the base binary. */

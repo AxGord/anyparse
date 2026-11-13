@@ -16,6 +16,7 @@ import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.WriteFailure;
 import anyparse.query.cli.WriteJournal;
 import anyparse.query.cli.WriteVerification;
+import anyparse.query.cli.command.RegistryFollowCommand;
 import anyparse.runtime.Span;
 
 #if (sys || nodejs)
@@ -301,7 +302,9 @@ final class Cli {
 		var verify: Bool = writes;
 		var forced: Bool = false;
 		final rest: Array<String> = [];
-		for (a in args.slice(1)) if (a == '--exit-on-empty' || a == '--require-match') {
+		for (a in RegistryFollowCommand.withoutOptOut(
+			args.slice(1), takesFix, ledger
+		)) if (a == '--exit-on-empty' || a == '--require-match') {
 			requireMatch = true;
 		} else if (takesFix && a == '--fix') {
 			postWriteFix = true;

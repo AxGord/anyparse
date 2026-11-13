@@ -41,6 +41,9 @@ final class CliUsage {
 		CliIo.sysPrint('scoped to the LINES this write changed. It skips the compiler oracle (which\n');
 		CliIo.sysPrint('is a project-wide build), so RiskyFix and OracleAssisted rules stay\n');
 		CliIo.sysPrint('report-only: only the safe half of the fixer can land behind your edit.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('--no-registry-follow: leave the `move.registries` records as they are after the\n');
+		CliIo.sysPrint('write, for a TEMPORARY probe edit that must not re-spell an arm\'s find/replace.\n');
 	}
 
 	public static function printEditOptionsTail(): Void {

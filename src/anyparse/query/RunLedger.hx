@@ -8,6 +8,8 @@ import anyparse.ds.Set;
  * each ledger's owner must remember; docs/design-principles.md § 2.
  *
  * A command reads its run's ledger off its `CliContext` and a rule gets it handed by its caller; nothing is shared between runs.
+ * A run option the dispatcher strips (`RegistryFollowCommand.OPT_OUT`) rides it too, because the ledger also reaches the nested
+ * lint run of a write op's `--fix`, which a `CliContext` field does not.
  */
 @:nullSafety(Strict)
 final class RunLedger {
@@ -33,6 +35,11 @@ final class RunLedger {
 	public function keysOf(topic: String): Array<String> {
 		final prefix: String = entryOf(topic, '');
 		return [for (entry in _said) if (entry.startsWith(prefix)) entry.substr(prefix.length)];
+	}
+
+	/** Record `key` under `topic` as said, for a run option read back with `said` and never asked with `first`. */
+	public function note(topic: String, key: String): Void {
+		_said.add(entryOf(topic, key));
 	}
 
 	/** A topic never holds a line break, so the first one separates topic from key unambiguously. */
