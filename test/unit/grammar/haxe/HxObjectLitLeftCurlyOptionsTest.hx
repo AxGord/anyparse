@@ -47,7 +47,7 @@ final class HxObjectLitLeftCurlyOptionsTest extends Test {
 	}
 
 	public function testMultilineSourceLiteralGoesAllmanUnderNext(): Void {
-		final src: String = 'class Foo {\n\tstatic var x = {\n\t\tone: 1,\n\t\ttwo: 2\n\t};\n}';
+		final src: String = 'class Foo {\n\tstatic var x = {\n\t\tone: 1, // one\n\t\ttwo: 2\n\t};\n}';
 		final out: String = writeWith(src, BracePlacement.Next);
 		// `{` lands at the same indent as `static var x =` (one tab inside
 		// `class Foo`); inner fields get +1. Continuation-indent of var-rhs

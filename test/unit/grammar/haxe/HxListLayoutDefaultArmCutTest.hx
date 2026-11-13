@@ -15,13 +15,13 @@ final class HxListLayoutDefaultArmCutTest extends Test {
 		super();
 	}
 
-	/** The object-literal default cut keeps a short source-broken literal open. */
+	/** The object-literal default cut keeps a short source-broken literal with a field's block comment open. */
 	@:pin('control')
 	@:killer('M-DEFAULT-OBJECT-IGNORE')
 	public function testTheObjectLiteralCutChangesWhatItsPinRenders(): Void {
 		assertCutChangesOutput(
 			'M-DEFAULT-OBJECT-IGNORE', 'defaultMode: WrapMode.OnePerLine', 'OnePerLine', 'objectLiteral',
-			'class C {\n\tstatic var o = {\n\t\ta: 1,\n\t\tb: 2\n\t};\n}'
+			'class C {\n\tstatic var o = {\n\t\ta: 1,\n\t\t/* c */ b: 2\n\t};\n}'
 		);
 	}
 
@@ -35,13 +35,13 @@ final class HxListLayoutDefaultArmCutTest extends Test {
 		);
 	}
 
-	/** The anonymous-type default cut keeps a short source-broken anon type open. */
+	/** The anonymous-type default cut keeps a short source-broken anon type with a field's block comment open. */
 	@:pin('control')
 	@:killer('M-DEFAULT-ANON-IGNORE')
 	public function testTheAnonTypeCutChangesWhatItsPinRenders(): Void {
 		assertCutChangesOutput(
 			'M-DEFAULT-ANON-IGNORE', 'defaultMode: WrapMode.OnePerLine', 'OnePerLine', 'anonType',
-			'class C {\n\tstatic var t:{\n\t\ta:Int,\n\t\tb:Int\n\t};\n}'
+			'class C {\n\tstatic var t:{\n\t\ta:Int,\n\t\t/* c */ b:Int\n\t};\n}'
 		);
 	}
 

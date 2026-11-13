@@ -90,12 +90,12 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	/** The literal fits glued on the ladder line with no column to spare: the line is exactly 140 wide. */
 	private static final AT_LIMIT: String = 'class M {\n\tfunction f() {\n\t\tfinal x = {\n\t\t\ttypes: [\n'
 		+ '\t\t\t\tfor (t in [[\'C\', \'F0.hx\'], [\'Other\', \'F1.hx\']]) {'
-		+ 'name: t[0], file: t[1], kind: \'${kinds(42)}\'}\n\t\t\t]\n\t\t};\n\t}\n}';
+		+ 'name: t[0], file: t[1], kind: \'${kinds(42)}\'}\n\t\t\t],\n\t\t\trest: \'${kinds(100)}\'\n\t\t};\n\t}\n}';
 
 	/** One column more: the literal breaks, so `{` goes Allman and the `for` head cuddles its `[`. */
 	private static final PAST_LIMIT: String = 'class M {\n\tfunction f() {\n\t\tfinal x = {\n\t\t\ttypes: [for (t in [[\'C\', \'F0.hx\'], ['
 		+ "'Other', 'F1.hx']])\n\t\t\t\t{\n\t\t\t\t\tname: t[0],\n\t\t\t\t\tfile: t[1],\n"
-		+ '\t\t\t\t\tkind: \'${kinds(43)}\'\n\t\t\t\t}\n\t\t\t]\n\t\t};\n\t}\n}';
+		+ '\t\t\t\t\tkind: \'${kinds(43)}\'\n\t\t\t\t}\n\t\t\t],\n\t\t\trest: \'${kinds(100)}\'\n\t\t};\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -158,6 +158,11 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-MULTI-ITEM-HOST-OFF')
 	public function testAMultiArgumentHostFollowsTheBreak(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\tvar y = foo(\n\t\t\taaaaaaaa,\n\t\t\tbar(bbbbbbbb, [for (x in xs)\n\t\t\t\t{\n'
+			+ '\t\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\t\tk: \'${kinds(90)}\'\n\t\t\t\t}\n\t\t\t])\n\t\t);\n\t}\n}',
+			HxWriteFixture.triviaWrite(nestedCallShape(90), HxWriteFixture.listsKeepSource(CFG_SAME))
+		);
 		for (config in CONFIGS) for (k in 20...101) assertOneWriteWithinLimit(nestedCallShape(k), config, k);
 	}
 
@@ -168,6 +173,11 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-OBJECT-LITERAL-HOST')
 	public function testALiteralHostKeepsItsAllmanDecision(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\tvar y = [\n\t\t\tfor (a in xs)\n\t\t\t\t{\n\t\t\t\t\titems: [for (b in a.children) {'
+			+ 'c: b.cccccccccccccccccccc, d: \'${kinds(20)}\'}],\n\t\t\t\t\tname: a.nnnnnnnnnnnnnnnnnnnnnnnnnnn\n\t\t\t\t}\n\t\t];\n\t}\n}',
+			HxWriteFixture.triviaWrite(literalHostShape(20), HxWriteFixture.listsKeepSource(CFG_PLAIN_SAME))
+		);
 		for (config in CONFIGS.concat([CFG_PLAIN_SAME])) for (k in 1...60) assertOneWriteWithinLimit(literalHostShape(k), config, k);
 	}
 
@@ -193,6 +203,11 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-COMMITTED-BARE')
 	public function testAChainFollowsTheBreak(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\treturn builder.withName(nameValue).withItems([for (x in xs)\n\t\t\t{\n'
+			+ '\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaa,\n\t\t\t\tk: \'${kinds(80)}\'\n\t\t\t}\n\t\t]).build();\n\t}\n}',
+			HxWriteFixture.triviaWrite(chainShape(80), HxWriteFixture.listsKeepSource(CFG_SAME))
+		);
 		for (config in CONFIGS) for (k in 20...101) assertOneWriteWithinLimit(chainShape(k), config, k);
 	}
 
@@ -200,6 +215,11 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-BREAK-COMMITTED-BARE')
 	public function testALambdaBodyFollowsTheBreak(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\tvar f = () -> [for (x in xs)\n\t\t\t{\n\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n'
+			+ '\t\t\t\tbeta: x.bbbbbbbbbbbbbbbbbbbbbb,\n\t\t\t\tk: \'${kinds(60)}\'\n\t\t\t},\n\t\t];\n\t}\n}',
+			HxWriteFixture.triviaWrite(lambdaShape(60), HxWriteFixture.listsKeepSource(CFG_TRAILING_COMMA))
+		);
 		for (config in [CFG_GROUP, CFG_TRAILING_COMMA, CFG_PLAIN_SAME]) for (k in 1...101)
 			assertOneWriteWithinLimit(lambdaShape(k), config, k);
 	}
@@ -211,6 +231,11 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-COLLAPSE-COUNTED')
 	public function testAStaticallyBrokenLambdaBodyStaysGlued(): Void {
+		Assert.equals(
+			'class M {\n\tfunction f() {\n\t\tvar f = () -> [for (x in xs)\n\t\t\t{\n\t\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n'
+			+ '\t\t\t\tbeta: x.bbbbbbbbbbbbbbbbbbbbbb,\n\t\t\t\tk: \'${kinds(90)}\'\n\t\t\t}\n\t\t];\n\t}\n}',
+			HxWriteFixture.triviaWrite(lambdaShape(90), HxWriteFixture.listsKeepSource(CFG_SAME))
+		);
 		for (config in [CFG_SAME, CFG_SAME_LADDER]) for (k in 1...101) assertOneWriteWithinLimit(lambdaShape(k), config, k);
 	}
 
@@ -239,9 +264,10 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 		Assert.isTrue(widest <= LIMIT + slack, 'k=$k config=$config: a $widest-column line\n$once');
 	}
 
+	/** A field value; the second field is too wide for the host literal to share one line, so the literal breaks by width. */
 	private static function fieldShape(k: Int): String {
 		return 'class M {\n\tfunction f() {\n\t\tfinal x = {\n\t\t\ttypes: [for (t in [[\'C\', \'F0.hx\'], [\'Other\', \'F1.hx\']]) {'
-			+ 'name: t[0], file: t[1], kind: \'${kinds(k)}\'}]\n\t\t};\n\t}\n}';
+			+ 'name: t[0], file: t[1], kind: \'${kinds(k)}\'}],\n\t\t\trest: \'${kinds(100)}\'\n\t\t};\n\t}\n}';
 	}
 
 	private static function nestedShape(k: Int): String {

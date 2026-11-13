@@ -5632,3 +5632,4 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - cut offerItemBreaks at WrapList.emit: 8 fail (HxCondExprBodyBreak x4, HxComprehensionAllman x2, pivot/flat-source); kept → CANON-6b-PROBE
 - cut WrapList.namedThresholdLiteral (all uses): 12 FixedPoint tests fail (HxFitLineLiteralBreak, HxFitPivotLiteral, WrapFlatSource); kept → CANON-6b-PROBE
 - cut all offerItemBreaks (BreakMark/BreakCommit offers whole): 17 tests in 6 FixedPoint classes fail; BreakCommitsResolve/Replaced still pass; kept. No byte-identical path exists → CANON-6b-PROBE
+- k=42 comprehensionIterableShape divergence under CFG_TRAILING_COMMA is an at-limit DocMeasure/Renderer defect -> no: pass 1 breaks the inner list and adds its trailing comma, pass 2 keeps it glued (+1 col) and flips; dropping that comma makes pass 2 = pass 1 → CANON-3e-3b-ONE-PER-LINE-FILL-NO-SOURCE-C

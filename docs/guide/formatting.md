@@ -149,9 +149,10 @@ Details: `docs/haxe-format-config.md`.
 `remove` by default: an array, map or object literal and a `new` or call argument list never end with a `,`, flat
 (`[1, 2,]` → `[1, 2]`) or broken over lines, whatever the source had and whatever a `trailingCommas.*Default: "yes"`
 asks for; a line comment that followed the dropped `,` stays beside the last element (`b, // c` → `b // c`). `keep`
-lets a source trailing `,` survive in every layout, a call inside a method chain or glued around a block argument
-included, and lets those keys add one to a list broken over lines, one item per line or packed to fill them; a list
-that stays on one line, or a sole argument sharing the open delimiter's line, gets none it did not have. A config that
+lets a source trailing `,` survive in a list broken over lines, one item per line or packed to fill them, a call inside
+a method chain included, and lets those keys add one there; a list that stays on one line, a call glued around a block
+or collection argument, or a sole argument sharing the open delimiter's line drops a source `,` and gets none added, so
+a list one pass broke and the next glues writes the same. A config that
 sets `arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says nothing about
 `wrapping.trailingComma` loads as `keep`, so the comma it asks for is added. A function parameter list's trailing `,`
 is always dropped and a mandatory comma (`{> Base,}`) always written, whatever the key says. Details: `docs/haxe-format-config.md`.
@@ -161,8 +162,10 @@ is always dropped and a mandatory comma (`{> Base,}`) always written, whatever t
 An object, array or map literal and an anonymous type lay out by `wrapping.objectLiteral` / `arrayWrap` / `mapWrap` /
 `anonType` alone (item count, item length, line width): a break the source put between items, grid rows included, does
 not keep a list open, and the built-in fallback of those four is `ignore`. A `"defaultWrap": "noWrap"` block on one of
-them lays that list out by its rules and otherwise flat, without reading source breaks, except that a grid-shaped array and, under `"rules": []`, a comprehension still follow the source; the other non-`ignore` values
-(`onePerLine` is the pinned one) still read them. A typedef's body keeps its source lines until its own decision.
+them lays that list out by its rules and otherwise flat, without reading source breaks, except that a grid-shaped array and, under `"rules": []`, a comprehension still follow the source. Under the other non-`ignore`
+values (`onePerLine`, `fillLine`, …) an object literal and an anonymous type also lay out by the cascade alone, so a
+source-broken short `{x: 1, y: 2, z: 3}` or `{x:Int, y:Int, z:Int}` glues onto one line; only an array or a map literal
+still keeps a break the source put between its items. A typedef's body keeps its source lines until its own decision.
 
 ## A literal argument: `callParameter.containerItemWrap`
 

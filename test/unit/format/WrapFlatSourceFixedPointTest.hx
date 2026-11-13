@@ -148,10 +148,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE copy,
-	 * because four tests read it and they must not drift apart: the tail pin, the
-	 * mechanism split and the two `canonicalize` tests, which read it under
-	 * `CASE_BODY_SIBLINGS` and are regression tests only while the tail pin holds that
-	 * case divergent. (`unit.query.NewFileSliceTest` needs its own copy — a
+	 * because two tests read it and they must not drift apart: the tail pin and the
+	 * mechanism split. (`unit.query.NewFileSliceTest` needs its own copy — a
 	 * different class — and carries a local precondition instead.)
 	 */
 	private static final CASE_BODY_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
@@ -280,6 +278,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * `tools/src/create/ides/VSCode.hx`'s `createElectron`, reduced: an object
 	 * literal whose second field is an array of two parenthesised type-checks.
 	 * The array is the mechanism-B link, the enclosing literal the mechanism-A one.
+	 * The two `canonicalize` tests read it under `STACKED_ARRAY_PIVOT`: they are
+	 * regression tests only while `testStackedMechanismsNeedTwoRewrites` holds it divergent.
 	 */
 	private static final STACKED_SRC: String = 'class A {\n\tpublic static function createElectron(output: String): Void {\n\t\tfinal data '
 		+ '= { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', request: \'launch\', name: mainConfName, protocol: \'inspect'
@@ -647,7 +647,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    once the writer's own output has broken it, is force-committed by the Star
 	 *    that does not reflow source newlines; the host measure answers differently
 	 *    and the enclosing shape flips. Committing the cascade makes these CONVERGE.
-	 *    Open: a `caseSiblings`-shared case body (`SiblingShare.share` votes on the flat body). CLOSED
+	 *    CLOSED for a `caseSiblings`-shared case body once no list reads its source breaks, and
 	 *    with the sibling policy off (`BodyFit.fitLineBelowLabel` through `offerLiteralBreaks`), and for
 	 *    the value-`if` branch, whose re-decided literal offers its nested literals' breaks (`WrapListOptions.redecided`).
 	 *  - MECHANISM B, no pivot anywhere: `DocMeasure.flatTokenWidth` DEFERS a
@@ -687,7 +687,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 				name: 'case body under caseSiblings: anyBreak (SiblingShare votes on the flat body)',
 				config: CASE_BODY_SIBLINGS,
 				src: CASE_BODY_SRC,
-				closed: false
+				closed: true
 			},
 			{
 				name: 'value-if branch (DIBuilder.hx)',
@@ -740,10 +740,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_SIBLINGS) {
+		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_PIVOT) {
 			case Ok(text):
 				Assert.equals(
-					text, plugin.writeRoundTrip(text, CASE_BODY_SIBLINGS),
+					text, plugin.writeRoundTrip(text, STACKED_ARRAY_PIVOT),
 					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
 				);
 			case Err(message):
@@ -764,7 +764,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeReportsTheRewriteCount(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_SIBLINGS) {
+		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_PIVOT) {
 			case Ok(_, rewrites):
 				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
 				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');

@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.format.TrailingCommaPolicy;
+import anyparse.format.wrap.WrapMode;
 import anyparse.grammar.haxe.HxListsKeepSource;
 import utest.Assert;
 import utest.Test;
@@ -80,6 +81,8 @@ final class HxMetaAllmanObjectLitSliceTest extends Test {
 			src, HxWriteOptionsKit.forkWith(edited -> {
 				HxListsKeepSource.keep(edited);
 				edited.trailingComma = TrailingCommaPolicy.Keep;
+				// Every object literal one field per line, so the literal breaks by config, never by its source lines.
+				edited.objectLiteralWrap = { rules: [], defaultMode: WrapMode.OnePerLine };
 			})
 		);
 	}

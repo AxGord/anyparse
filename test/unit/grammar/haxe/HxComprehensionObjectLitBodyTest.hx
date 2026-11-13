@@ -6,7 +6,9 @@ import utest.Test;
 /**
  * The placement of an object literal that is the body of a comprehension `for`. `sameLine.forBody: fitLine` keeps its
  * `{` on the `for` line, `sameLine.comprehensionFor: fitLine` lets its width alone decide its lines, and every other
- * config keeps the Allman placement `HxForExpr.body` falls back to.
+ * config keeps the Allman placement `HxForExpr.body` falls back to. A short literal here carries a block comment on a
+ * field: the `Ignore` mode the comprehension's reflow frame selects writes it inline, the `onePerLine` fallback outside
+ * the frame keeps the literal open around it, so the frame's reach shows though source lines are no signal.
  */
 @:nullSafety(Strict)
 final class HxComprehensionObjectLitBodyTest extends Test {
@@ -40,11 +42,11 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 
 	/** The Allman placement every config without a `fitLine` knob gives a source-multi-line literal. */
 	private static final ALLMAN: String = wrap(
-		'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}\n\t\t];'
+		'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t}\n\t\t];'
 	);
 
 	/** The glued placement `forBody: fitLine` gives one. */
-	private static final GLUED: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t}\n\t\t];');
+	private static final GLUED: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\ta: i,\n\t\t\t\t/* c */ b: i\n\t\t\t}\n\t\t];');
 
 	/** A literal too wide for the line, as the source wrote it flat. */
 	private static final WIDE_FLAT: String = wrap('var x = [for (i in xs) {$NAME_A: i, $NAME_B: i}];');
@@ -97,7 +99,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	/** With no `sameLine` key the comprehension body takes `fitLine`, so a literal that fits collapses onto the head line. */
 	@:pin('guard')
 	public function testDefaultConfigCollapsesALiteralThatFits(): Void {
-		Assert.equals(wrap('var x = [for (i in xs) {a: i, b: i}];'), write(cuddledSource(), CFG_DEFAULT));
+		Assert.equals(wrap('var x = [for (i in xs) {a: i, /* c */ b: i}];'), write(cuddledSource(), CFG_DEFAULT));
 	}
 
 	/**
@@ -114,7 +116,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-REFLOW-OFF')
 	public function testComprehensionFitLineCollapsesALiteralThatFits(): Void {
-		final expected: String = wrap('var x = [ for (i in xs) {a: i, b: i} ];');
+		final expected: String = wrap('var x = [ for (i in xs) {a: i, /* c */ b: i} ];');
 		Assert.equals(expected, write(cuddledSource(), CFG_COMPREHENSION));
 		Assert.equals(expected, write(allmanSource(), CFG_COMPREHENSION));
 		Assert.equals(expected, write(expected, CFG_COMPREHENSION));
@@ -133,7 +135,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-ANY-BODY')
 	public function testBothKnobs(): Void {
-		Assert.equals(wrap('var x = [ for (i in xs) {a: i, b: i} ];'), write(allmanSource(), CFG_BOTH));
+		Assert.equals(wrap('var x = [ for (i in xs) {a: i, /* c */ b: i} ];'), write(allmanSource(), CFG_BOTH));
 		final wide: String = wrap('var x = [\n\t\t\tfor (i in xs) {\n\t\t\t\t$NAME_A: i,\n\t\t\t\t$NAME_B: i\n\t\t\t}\n\t\t];');
 		assertLandsOn(wide, WIDE_FLAT, CFG_BOTH);
 	}
@@ -149,8 +151,10 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 
 	/** A literal the body only reaches through a call is the call's argument: its own source lines stand. */
 	public function testALiteralInsideACallBodyKeepsItsLines(): Void {
-		final source: String = wrap('var x = [for (i in xs) f({\n\t\t\ta: i,\n\t\t\tb: i\n\t\t})];');
-		final expected: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\tf({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t})\n\t\t];');
+		final source: String = wrap('var x = [for (i in xs) f({\n\t\t\ta: i,\n\t\t\t/* c */ b: i\n\t\t})];');
+		final expected: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\tf({\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t})\n\t\t];'
+		);
 		assertLandsOn(expected, source, CFG_COMPREHENSION);
 	}
 
@@ -201,7 +205,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-OFF')
 	public function testParenthesisedLiteralCollapses(): Void {
-		final expected: String = wrap('var x = [ for (i in xs) ({a: i, b: i}) ];');
+		final expected: String = wrap('var x = [ for (i in xs) ({a: i, /* c */ b: i}) ];');
 		assertLandsOn(expected, multiLine('({', '})'), CFG_COMPREHENSION);
 	}
 
@@ -217,7 +221,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-STOPS-AT-NESTED')
 	public function testDoubleParenthesisedLiteralCollapses(): Void {
-		final expected: String = wrap('var x = [ for (i in xs) (({a: i, b: i})) ];');
+		final expected: String = wrap('var x = [ for (i in xs) (({a: i, /* c */ b: i})) ];');
 		assertLandsOn(expected, multiLine('(({', '}))'), CFG_COMPREHENSION);
 	}
 
@@ -226,7 +230,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	 */
 	public function testALiteralInAParenthesisedCallKeepsItsLines(): Void {
 		final source: String = wrap(
-			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(foo(({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t})))\n\t\t];'
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(foo(({\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t})))\n\t\t];'
 		);
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
@@ -235,7 +239,9 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-ANY-INNER')
 	public function testAReceiverLiteralInAParenKeepsItsLines(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a)\n\t\t];');
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t}.a)\n\t\t];'
+		);
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
@@ -245,7 +251,9 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-REFLOW-ANY-CTOR')
 	public function testAReceiverLiteralBodyKeepsItsLines(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}.a\n\t\t];');
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t{\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t}.a\n\t\t];'
+		);
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
@@ -255,7 +263,9 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-ANY-STATE')
 	public function testAParenthesisedValueIfBranchKeepsItsLines(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) if (c) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t}) else 2\n\t\t];');
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs) if (c) ({\n\t\t\t\ta: i,\n\t\t\t\t/* c */ b: i\n\t\t\t}) else 2\n\t\t];'
+		);
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
@@ -263,7 +273,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-ANY-POLICY')
 	public function testSameKeepsAParenthesisedLiteralsLines(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) ({\n\t\t\t\ta: i,\n\t\t\t\tb: i\n\t\t\t})\n\t\t];');
+		final source: String = wrap('var x = [\n\t\t\tfor (i in xs) ({\n\t\t\t\ta: i,\n\t\t\t\t/* c */ b: i\n\t\t\t})\n\t\t];');
 		Assert.equals(source, write(source, CFG_SAME));
 	}
 
@@ -279,13 +289,15 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	@:pin('control')
 	@:killer('M-PAREN-FRAME-ANY-WRAPPED')
 	public function testAParenthesisedReceiverInAParenKeepsItsLines(): Void {
-		final source: String = wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(({\n\t\t\t\t\ta: i,\n\t\t\t\t\tb: i\n\t\t\t\t}).a)\n\t\t];');
+		final source: String = wrap(
+			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t(({\n\t\t\t\t\ta: i,\n\t\t\t\t\t/* c */ b: i\n\t\t\t\t}).a)\n\t\t];'
+		);
 		Assert.equals(source, write(source, CFG_COMPREHENSION));
 	}
 
 	/** A source newline inside the paren counts for nothing: the literal's width alone decides its lines. */
 	public function testASourceNewlineInsideTheParenCountsForNothing(): Void {
-		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, b: i}) ];'), multiLine('(\n\t\t\t{', '}\n\t\t)'), CFG_COMPREHENSION);
+		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, /* c */ b: i}) ];'), multiLine('(\n\t\t\t{', '}\n\t\t)'), CFG_COMPREHENSION);
 		final wide: String = wrap(
 			'var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({\n\t\t\t\t\t$NAME_A: i,\n\t\t\t\t\t$NAME_B: i\n\t\t\t\t})\n\t\t];'
 		);
@@ -297,15 +309,15 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 
 	/** A comment beside the literal inside the paren survives, the literal still collapses, and the result is a fixed point. */
 	public function testACommentBesideAParenthesisedLiteralSurvivesTheCollapse(): Void {
-		assertLandsOn(wrap('var x = [ for (i in xs) (/* o */ {a: i, b: i}) ];'), multiLine('(/* o */ {', '})'), CFG_COMPREHENSION);
-		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, b: i} /* c */) ];'), multiLine('({', '} /* c */)'), CFG_COMPREHENSION);
+		assertLandsOn(wrap('var x = [ for (i in xs) (/* o */ {a: i, /* c */ b: i}) ];'), multiLine('(/* o */ {', '})'), CFG_COMPREHENSION);
+		assertLandsOn(wrap('var x = [ for (i in xs) ({a: i, /* c */ b: i} /* c */) ];'), multiLine('({', '} /* c */)'), CFG_COMPREHENSION);
 		assertLandsOn(
-			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t( // note\n\t\t\t\t\t{a: i, b: i}\n\t\t\t\t)\n\t\t];'),
+			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t( // note\n\t\t\t\t\t{a: i, /* c */ b: i}\n\t\t\t\t)\n\t\t];'),
 			multiLine('( // note\n\t\t\t{', '})'), CFG_COMPREHENSION
 		);
 		assertLandsOn(
-			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({a: i, b: i} // note\n\t\t\t\t)\n\t\t];'), multiLine('({', '} // note\n\t\t)'),
-			CFG_COMPREHENSION
+			wrap('var x = [\n\t\t\tfor (i in xs)\n\t\t\t\t({a: i, /* c */ b: i} // note\n\t\t\t\t)\n\t\t];'),
+			multiLine('({', '} // note\n\t\t)'), CFG_COMPREHENSION
 		);
 	}
 
@@ -314,11 +326,11 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	private static function cuddledSource(): String {
-		return wrap('var x = [for (i in xs) {\n\t\t\ta: i,\n\t\t\tb: i\n\t\t}];');
+		return wrap('var x = [for (i in xs) {\n\t\t\ta: i,\n\t\t\t/* c */ b: i\n\t\t}];');
 	}
 
 	private static function allmanSource(): String {
-		return wrap('var x = [for (i in xs)\n\t\t{\n\t\t\ta: i,\n\t\t\tb: i\n\t\t}];');
+		return wrap('var x = [for (i in xs)\n\t\t{\n\t\t\ta: i,\n\t\t\t/* c */ b: i\n\t\t}];');
 	}
 
 	private static function wrap(statement: String): String {
@@ -352,7 +364,7 @@ final class HxComprehensionObjectLitBodyTest extends Test {
 	}
 
 	private static function multiLine(open: String, close: String): String {
-		return wrap('var x = [for (i in xs) $open\n\t\t\ta: i,\n\t\t\tb: i\n\t\t$close];');
+		return wrap('var x = [for (i in xs) $open\n\t\t\ta: i,\n\t\t\t/* c */ b: i\n\t\t$close];');
 	}
 
 }

@@ -220,7 +220,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	@:pin('guard')
 	public function testSourceTrailingCommaIsNoLayoutLever(): Void {
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta,];\n\t\tg(alpha, beta,);\n\t}\n}\n';
-		Assert.equals(source, write(source, KEEP_JSON));
+		Assert.equals('class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t\tg(alpha, beta);\n\t}\n}\n', write(source, KEEP_JSON));
 	}
 
 	// --- item (a) ---
@@ -285,7 +285,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 	}
 
 	public function testRemoveDropsMultilineObjectLiteralTrailingComma(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar o = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2\n\t\t};\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar o = {alpha: 1, beta: 2};\n\t}\n}\n';
 		Assert.equals(expected, remove(OBJ_TRAIL));
 	}
 
@@ -311,10 +311,14 @@ class HxListLiteralEmissionSliceTest extends Test {
 		Assert.equals('class C {\n\tfunction f() {\n\t\tg(alpha, beta);\n\t}\n}\n', base(CALL_FLAT_TRAIL));
 	}
 
-	/** `Keep` leaves every flat source trailing comma as written. */
-	public function testKeepLeavesFlatTrailingCommas(): Void {
-		Assert.equals(FLAT_TRAILS, write(FLAT_TRAILS, KEEP_JSON));
-		Assert.equals(CALL_FLAT_TRAIL, write(CALL_FLAT_TRAIL, KEEP_JSON));
+	/** `Keep` drops every source trailing comma of a list the cascade glues onto one line, as `Remove` does. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testKeepDropsFlatTrailingCommas(): Void {
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t\tvar o = {a: 1, b: 2};\n'
+			+ '\t\tvar n = new T(alpha, beta);\n\t\tvar m = [1 => 2, 3 => 4];\n\t}\n}\n';
+		Assert.equals(expected, write(FLAT_TRAILS, KEEP_JSON));
+		Assert.equals('class C {\n\tfunction f() {\n\t\tg(alpha, beta);\n\t}\n}\n', write(CALL_FLAT_TRAIL, KEEP_JSON));
 	}
 
 	public function testRemoveLeavesMandatoryAnonExtensionComma(): Void {

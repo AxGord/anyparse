@@ -8,7 +8,8 @@ import utest.Test;
 
 /**
  * A call inside a method chain honours `wrapping.trailingComma` like a regular call: under `keep` its source trailing
- * comma survives flat and broken, under the default `remove` it goes. A `trailingCommas.*Default: "yes"` adds a comma to
+ * comma survives a broken layout and goes from one glued onto a line, under the
+ * default `remove` it goes. A `trailingCommas.*Default: "yes"` adds a comma to
  * a list broken over lines only, never to one that stays on one line, and a function parameter list drops its trailing
  * comma whatever the key says.
  */
@@ -18,10 +19,10 @@ class HxChainCallTrailingCommaTest extends Test {
 	private static final ADD: String = '{"trailingCommas": {"callArgumentDefault": "yes"}}';
 
 	@:pin('control')
-	@:killer('M-CHAIN-CALL-FLAT-SOURCE-TRAIL-OFF')
-	public function testAFlatChainCallKeepsItsTrailingComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAFlatChainCallDropsItsTrailingComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tfoo.bar(1, 2,).baz();\n\t\tx = foo.bar(1,).baz(2,).qux();\n\t}\n}\n';
-		assertWritesOnce(KEEP, source, source);
+		assertWritesOnce(KEEP, source, 'class A {\n\tfunction c() {\n\t\tfoo.bar(1, 2).baz();\n\t\tx = foo.bar(1).baz(2).qux();\n\t}\n}\n');
 	}
 
 	@:pin('control')
@@ -61,10 +62,10 @@ class HxChainCallTrailingCommaTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-FILL-FLAT-SOURCE-TRAIL-OFF')
-	public function testAOneLineFilledCallKeepsItsSourceComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAOneLineFilledCallDropsItsSourceComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tv(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,);\n\t}\n}\n';
-		assertWritesOnce(KEEP, source, source);
+		assertWritesOnce(KEEP, source, 'class A {\n\tfunction c() {\n\t\tv(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);\n\t}\n}\n');
 	}
 
 	@:pin('guard')
@@ -74,12 +75,12 @@ class HxChainCallTrailingCommaTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-COLLECTION-ARG-FLAT-SOURCE-TRAIL-OFF')
-	public function testAOneLineCallWithACollectionArgKeepsItsSourceComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAOneLineCallWithACollectionArgDropsItsSourceComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tf(a, b, {x: 1, y: 2},);\n\t\tfoo.bar(a, {x: 1},).baz();\n\t}\n}\n';
 		assertWritesOnce(
 			'{"wrapping": {"trailingComma": "keep", "maxLineLength": 60, "callParameter": {"defaultWrap": "fillLine", "rules": []}}}',
-			source, source
+			source, 'class A {\n\tfunction c() {\n\t\tf(a, b, {x: 1, y: 2});\n\t\tfoo.bar(a, {x: 1}).baz();\n\t}\n}\n'
 		);
 	}
 

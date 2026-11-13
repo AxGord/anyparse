@@ -72,8 +72,8 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 
 `trailingComma` is an anyparse extension with two values: `"remove"` (the default when the key is
 absent) drops the trailing `,` of every array, object literal and argument list, flat or multiline, and
-`"keep"` lets a source trailing `,` survive and the `trailingCommas.*Default` keys add one to a list broken over lines, one item per line or
-packed to fill them (a list left on one line, or a sole argument sharing the open delimiter's line, gets none; a function parameter list's trailing `,` is dropped under both values). A config that
+`"keep"` lets a source trailing `,` survive, and the `trailingCommas.*Default` keys add one, in a list broken over lines, one item per line or
+packed to fill them (a list left on one line, or a sole argument sharing the open delimiter's line, drops a source `,` and gets none added, so a list one pass broke and the next glues writes the same; a function parameter list's trailing `,` is dropped under both values). A config that
 sets `trailingCommas.arrayLiteralDefault`, `callArgumentDefault` or `objectLiteralDefault` to `"yes"` and says
 nothing about `wrapping.trailingComma` loads as `"keep"`, so the comma it asks for is added; an explicit
 `"remove"` outranks every add-knob.
@@ -124,9 +124,11 @@ most common way a wrapping section reads as unwired.
 
 Every value also accepts its capitalised spelling (`OnePerLine`, `FillLine`, …).
 
-`ignore` is the one that answers "how do I get a canonical layout?": it is the **only**
-mode that COLLAPSES a list the source broke — every other mode either preserves the source
-form or only breaks a long one. With `objectLiteral` at `defaultWrap: "ignore"` plus an
+`ignore` is the one that answers "how do I get a canonical layout?": for an array or a map
+literal it is the **only** mode that COLLAPSES a list the source broke — every other mode
+either preserves the source form or only breaks a long one. An object literal and an
+anonymous type read no source breaks under any mode, so `onePerLine` or `fillLine` collapses
+a source-broken one the cascade leaves flat as well. With `objectLiteral` at `defaultWrap: "ignore"` plus an
 `itemCount >= n` rule, a source-broken `{x: 1, y: 2}` collapses to one line, and a
 source-flat three-item literal breaks one-per-line. It is the default of `objectLiteral`,
 `arrayWrap`, `mapWrap` and `anonType`; the fork's `WrappingType` has no `ignore`, so a list a

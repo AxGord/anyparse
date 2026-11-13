@@ -1036,14 +1036,6 @@
 			"note": "a call laid out one argument per line drops the trailing comma its source wrote"
 		},
 		{
-			"name": "M-CALL-FLAT-SOURCE-TRAIL-OFF",
-			"type": "anyparse.macro.WriterPrattLowering",
-			"method": "lowerPostfixCascadeCall",
-			"find": "final flatTcExpr: Expr = c.isTriviaStar",
-			"replace": "final flatTcExpr: Expr = false && c.isTriviaStar",
-			"note": "a call that stays on one line drops the trailing comma its source wrote"
-		},
-		{
 			"name": "M-TERNARY-MLB-OPTION-IGNORED",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "multilineBranchInlineExpr",
@@ -2013,7 +2005,7 @@
 			"name": "M-TRAILING-COMMA-FLAT-LIST-KEPT-UNDER-REMOVE",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepTrailExprs",
-			"find": "keepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable)",
+			"find": "flatKeepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable)",
 			"replace": "trailPresentAccess ?? macro false",
 			"note": "a flat array / object / new / map literal keeps its source trailing comma under wrapping.trailingComma=remove"
 		},
@@ -2021,7 +2013,7 @@
 			"name": "M-TRAILING-COMMA-FLAT-CALL-KEPT-UNDER-REMOVE",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerPostfixCascadeCall",
-			"find": "keepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))",
+			"find": "flatKeepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))",
 			"replace": "postfixSourceTrailExpr()",
 			"note": "a flat call keeps its source trailing argument comma under wrapping.trailingComma=remove"
 		},
@@ -2034,18 +2026,10 @@
 			"note": "a method-chain segment call laid out one argument per line drops the trailing comma its source wrote under keep"
 		},
 		{
-			"name": "M-CHAIN-CALL-FLAT-SOURCE-TRAIL-OFF",
-			"type": "anyparse.macro.WriterLowering",
-			"method": "wrapWithChainDispatch",
-			"find": "flatTrailingComma: $callFlatTcExpr }",
-			"replace": "flatTrailingComma: false }",
-			"note": "a method-chain segment call that stays on one line drops the trailing comma its source wrote under keep"
-		},
-		{
 			"name": "M-CHAIN-CALL-FLAT-TRAIL-UNDER-REMOVE",
 			"type": "anyparse.macro.WriterLowering",
 			"method": "wrapWithChainDispatch",
-			"find": ": keepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));",
+			"find": ": flatKeepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));",
 			"replace": ": callSourceTrail;",
 			"note": "a flat method-chain segment call keeps its source trailing comma under the default remove"
 		},
@@ -2460,10 +2444,18 @@
 		{
 			"name": "M-EXPLICIT-NOWRAP-READS-SOURCE",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepPredicateScanExpr",
-			"find": "&& (!_noWrapDefault || $v{reflowSourceMultiline} && _noWrapRules)",
+			"method": "triviaSepSourceNewlines",
+			"find": "&& (!_noWrapDefault || _noWrapRules)",
 			"replace": "",
 			"note": "a list on a noWrap fallback counts source line breaks again and stays broken where the name says flat"
+		},
+		{
+			"name": "M-SEP-STAR-READS-SOURCE-BREAK",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepSourceNewlines",
+			"find": "return reflowSourceMultiline",
+			"replace": "return true",
+			"note": "a list that is not a reflow array reads a source break as intent again, so a onePerLine fallback keeps a broken object literal broken"
 		},
 		{
 			"name": "M-EXPLICIT-NOWRAP-TYPEDEF-BODY",
@@ -3191,6 +3183,14 @@
 			"find": "if (rejectLit == null) return;",
 			"replace": "return;",
 			"note": "a literal branch ignores its @:rejectFollowLit, so an unclosed `${` in a single-quoted string degrades to a literal `$` and the parse gate lets it through"
+		},
+		{
+			"name": "M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE",
+			"type": "anyparse.macro.WriterPolicyLowering",
+			"method": "flatKeepsTrailingCommaExpr",
+			"find": "return trailingCommaRemovable ? macro false : sourceTrail;",
+			"replace": "return keepsTrailingCommaExpr(sourceTrail, trailingCommaRemovable);",
+			"note": "under keep a list the cascade glues writes its source trailing comma again, so a list a pass broke and a later pass glues is one column wider"
 		}
 	]
 }

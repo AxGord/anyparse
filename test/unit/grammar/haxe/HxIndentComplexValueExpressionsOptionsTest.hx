@@ -104,9 +104,12 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 		// the ObjectLit-wrap behaviour: a multi-line obj-lit RHS still uses
 		// only the ObjectLit gate (driven by `indentObjectLiteral` +
 		// `objectLiteralLeftCurly`).
-		final src: String = 'class C {\n\tstatic var x = {\n\t\ta: 1\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var x = {\n\t\ta: 1, // a\n\t\tb: 2\n\t};\n}';
 		final out: String = writeWith(src, true);
-		Assert.isTrue(out.indexOf('static var x = {\n\t\ta: 1\n\t};') != -1, 'expected obj-lit unchanged when IfExpr knob true in: <$out>');
+		Assert.isTrue(
+			out.indexOf('static var x = {\n\t\ta: 1, // a\n\t\tb: 2\n\t};') != -1,
+			'expected obj-lit unchanged when IfExpr knob true in: <$out>'
+		);
 	}
 
 	private inline function writeWith(src: String, indentComplexValueExpressions: Bool): String {

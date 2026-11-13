@@ -54,6 +54,7 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 * A committed cascade whose `noWrap` threshold is wide enough to leave an else branch of ~120 columns flat while the then branch
 	 * still breaks. That combination is what makes the closer-run band reachable at this config's 140-column limit at all: under the
 	 * narrow `OBJECT_COMMITTED` an else that wide breaks unconditionally, so both arms would agree and the fixture would prove nothing.
+	 * The then branches it measures hold four wide fields, past the threshold, so they break by the rules and not by their source lines.
 	 */
 	private static final OBJECT_COMMITTED_WIDE: String = '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions":'
 		+ ' [{"cond": "totalItemLength <= n", "value": 120}], "type": "noWrap"}]}, ';
@@ -259,44 +260,56 @@ final class HxTernaryCuddledBracesTest extends Test {
 	 * line is `})` — two columns, not one — and the else rides that whole run. This narrower fixture's glued line lands exactly on the
 	 * limit and must cuddle. Stated in the SEPARATED layout, so the single write this fixture measures is the one that glues it.
 	 */
-	private static final SRC_CLOSER_RUN_FITS_GLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? wrapIt('
-		+ '{\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThatI'
-		+ 'sQuiteLong: 3456789\n\t\t\t})\n\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaa'
-		+ 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 };\n\t}\n}';
+	private static final SRC_CLOSER_RUN_FITS_GLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n'
+		+ '\t\t\t? wrapIt({\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThatI'
+		+ 'sQuiteLong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: 4567890\n'
+		+ '\t\t\t})\n'
+		+ '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: '
+		+ '8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 };\n\t}\n}';
 
 	/** One character wider, so the glued line lands one past the limit and cuddling there explodes a one-line else into four. */
-	private static final SRC_CLOSER_RUN_ONLY_FITS_UNGLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? '
-		+ 'wrapIt({\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNa'
-		+ 'meThatIsQuiteLong: 3456789\n\t\t\t})\n\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaa'
-		+ 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 };\n\t}\n}';
+	private static final SRC_CLOSER_RUN_ONLY_FITS_UNGLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n'
+		+ '\t\t\t? wrapIt({\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNa'
+		+ 'meThatIsQuiteLong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: '
+		+ '4567890\n\t\t\t})\n\t\t\t: { alphaFieldNameThatIsQuiteLong: '
+		+ '9876543, betaFieldNameIsLong: 8765432, '
+		+ 'gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 };\n\t}\n}';
 
 	/** The closer-run edge cuddling: `}) : {` glued, the else still one line, that line exactly 140 columns. */
 	private static final CLOSER_RUN_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? wrapIt({\n\t\t'
 		+ '\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThatIsQuiteL'
-		+ 'ong: 3456789\n\t\t\t}) : { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-		+ 'aaaaaaaaaaaaaaa: 7 };\n\t}\n}';
+		+ 'ong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: 4567890\n\t\t\t}) : { alphaFieldNameThatIsQuiteLong: 9876543, '
+		+ 'betaFieldNameIsLong: 8765432, gaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 7 };\n\t}\n}';
 
 	/**
 	 * The padded-run edge. A `closingPolicy: "before"` call paren renders the then branch's closing line as `} )` — three columns,
 	 * one of which is a SPACE the closer characters alone do not count. This narrower fixture's glued line lands exactly on the limit
 	 * and must cuddle; stated in the SEPARATED layout, so the single write it measures is the one that glues it.
 	 */
-	private static final SRC_PADDED_RUN_FITS_GLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? wrapIt('
-		+ ' {\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThat'
-		+ 'IsQuiteLong: 3456789\n\t\t\t} )\n\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, gggggggggggggg'
-		+ 'gggggggggggggggggggggggggggggg: 7 };\n\t}\n}';
+	private static final SRC_PADDED_RUN_FITS_GLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n'
+		+ '\t\t\t? wrapIt( {\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThat'
+		+ 'IsQuiteLong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: 4567890\n'
+		+ '\t\t\t} )\n'
+		+ '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: '
+		+ '8765432, gggggggggggggggggggggggggggggggggggggggggggg: 7 };\n\t}\n}';
 
 	/** One character wider, so the glued line lands one past the limit — the width the space is what decides it. */
-	private static final SRC_PADDED_RUN_ONLY_FITS_UNGLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? '
-		+ 'wrapIt( {\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldN'
-		+ 'ameThatIsQuiteLong: 3456789\n\t\t\t} )\n\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, ggggggg'
-		+ 'gggggggggggggggggggggggggggggggggggggg: 7 };\n\t}\n}';
+	private static final SRC_PADDED_RUN_ONLY_FITS_UNGLUED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n'
+		+ '\t\t\t? wrapIt( {\n\t\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n'
+		+ '\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldN'
+		+ 'ameThatIsQuiteLong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: 4567890\n'
+		+ '\t\t\t} )\n'
+		+ '\t\t\t: { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: '
+		+ '8765432, ggggggggggggggggggggggggggggggggggggggggggggg: 7 };\n\t}\n}';
 
 	/** The padded-run edge cuddling: `} ) : {` glued, the else still one line. */
 	private static final PADDED_RUN_CUDDLED: String = 'class T {\n\tprivate function f():Void {\n\t\tvar cfg = flag\n\t\t\t? wrapIt( {\n\t'
 		+ '\t\t\talphaFieldNameThatIsQuiteLong: 1234567,\n\t\t\t\tbetaFieldNameThatIsQuiteLong: 2345678,\n\t\t\t\tgammaFieldNameThatIsQuit'
-		+ 'eLong: 3456789\n\t\t\t} ) : { alphaFieldNameThatIsQuiteLong: 9876543, betaFieldNameIsLong: 8765432, ggggggggggggggggggggggggggg'
-		+ 'ggggggggggggggggg: 7 };\n\t}\n}';
+		+ 'eLong: 3456789,\n\t\t\t\tdeltaFieldNameThatIsQuiteLong: 4567890\n\t\t\t} ) : { alphaFieldNameThatIsQuiteLong: 9876543, '
+		+ 'betaFieldNameIsLong: 8765432, gggggggggggggggggggggggggggggggggggggggggggg: 7 };\n\t}\n}';
 
 	/**
 	 * The `onePerLine` shaper leg — a cascade that breaks before the condition too still cuddles the `:` gap.

@@ -135,6 +135,42 @@ class HxTrailingCommaOptionsTest extends Test {
 		assertNoTrailingComma(out, 'b:Int', ')');
 	}
 
+	/** Under `keep` a glued array literal drops its source trailing comma; one laid out one per line keeps it. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testKeepDropsAGluedArrayComma(): Void {
+		assertKeepLayouts('var a = [1, 2,];', 'var a = [1, 2];', 'var a = [\n\t\t\t1,\n\t\t\t2,\n\t\t];');
+	}
+
+	/** Under `keep` a glued object literal drops its source trailing comma; one laid out one per line keeps it. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testKeepDropsAGluedObjectLiteralComma(): Void {
+		assertKeepLayouts('var o = {x: 1, y: 2,};', 'var o = {x: 1, y: 2};', 'var o = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t};');
+	}
+
+	/** Under `keep` a glued call drops its source trailing argument comma; one laid out one per line keeps it. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testKeepDropsAGluedCallComma(): Void {
+		assertKeepLayouts('v(1, 2,);', 'v(1, 2);', 'v(\n\t\t\t1,\n\t\t\t2,\n\t\t);');
+	}
+
+	/** `new` arguments follow the call: glued they drop the source comma, one per line they keep it. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testKeepDropsAGluedNewArgumentComma(): Void {
+		assertKeepLayouts('new T(1, 2,);', 'new T(1, 2);', 'new T(\n\t\t\t1,\n\t\t\t2,\n\t\t);');
+	}
+
+	/** An add-knob set to `yes` loads as `keep`, so a glued array drops the source comma there too. */
+	@:pin('control')
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAnAddKnobGluedArrayDropsTheSourceComma(): Void {
+		final config: String = '{"trailingCommas": {"arrayLiteralDefault": "yes"}}';
+		Assert.equals(inFunction('var a = [1, 2];'), HxWriteFixture.triviaWrite(inFunction('var a = [1, 2,];'), config));
+	}
+
 	private inline function writeWithBreak(src: String, arrays: Bool, args: Bool, params: Bool): String {
 		return writeWith(src, 10, arrays, args, params);
 	}
@@ -183,6 +219,29 @@ class HxTrailingCommaOptionsTest extends Test {
 		opts.trailingCommaArgs = args;
 		opts.trailingCommaParams = params;
 		return opts;
+	}
+
+	/** `statement` as the body of a function in a class, the shape every keep pin writes. */
+	private static function inFunction(statement: String): String {
+		return 'class A {\n\tfunction c() {\n\t\t$statement\n\t}\n}';
+	}
+
+	/**
+	 * Under `keep`, `source` writes as `glued` by default and as `broken` when every list kind wraps one item per line;
+	 * each output writes as itself.
+	 */
+	private static function assertKeepLayouts(source: String, glued: String, broken: String): Void {
+		final gluedConfig: String = '{"wrapping": {"trailingComma": "keep"}}';
+		final brokenConfig: String = '{"wrapping": {"trailingComma": "keep", "arrayWrap": {"defaultWrap": "onePerLine", "rules": []}, '
+			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": []}, "callParameter": {"defaultWrap": "onePerLine", "rules": []}}}';
+		for (layout in [
+			{ config: gluedConfig, expected: inFunction(glued) },
+			{ config: brokenConfig, expected: inFunction(broken) }
+		]) {
+			final once: String = HxWriteFixture.triviaWrite(inFunction(source), layout.config);
+			Assert.equals(layout.expected, once);
+			Assert.equals(once, HxWriteFixture.triviaWrite(once, layout.config));
+		}
 	}
 
 }

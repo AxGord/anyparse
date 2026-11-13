@@ -4,7 +4,7 @@ package anyparse.format;
  * Policy for a trailing separator after the LAST element of a list literal,
  * flat or multiline.
  *
- * `Keep`   — the source's trailing `,` round-trips, and the per-construct
+ * `Keep`   — the source's trailing `,` round-trips in a list laid out broken (a list the cascade glues drops it), and the per-construct
  * `trailingComma*` knobs may still ADD one in a list broken over lines, one item per line or packed
  * to fill them, but not after a sole item that shares the open delimiter's line. The Haxe writer
  * defaults to `Remove`; `Keep` is an explicit opt-in, and a config whose

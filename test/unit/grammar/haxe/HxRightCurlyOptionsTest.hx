@@ -220,12 +220,11 @@ class HxRightCurlyOptionsTest extends Test {
 	}
 
 	public function testSameKeepsAnonTypeCloseOnOwnLine(): Void {
-		// Multi-line anon-type (newlines between fields trigger trivia
-		// branch in `triviaSepStarExpr`). With `Same`, the close `}`
+		// An anon type over the item count goes one field per line by the wrap rules. With `Same`, the close `}`
 		// stays on its own line.
-		final src: String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
+		final src: String = 'typedef Point = {\n\tx:Int,\n\ty:Int,\n\tz:Int,\n\tw:Int,\n\tv:Int\n}';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Same));
-		Assert.isTrue(out.indexOf('y:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
+		Assert.isTrue(out.indexOf('v:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
 	}
 
 	public function testInlineGluesAnonTypeClose(): Void {
@@ -239,20 +238,20 @@ class HxRightCurlyOptionsTest extends Test {
 		// `anonTypeRightCurly=Same`, `blockRightCurly=Inline`. The anon-
 		// type close stays on its own line — the block knob does NOT
 		// propagate to `HxType.Anon` (different Star, different meta).
-		final src: String = 'typedef Point = {\n\tx:Int,\n\ty:Int\n}';
+		final src: String = 'typedef Point = {\n\tx:Int,\n\ty:Int,\n\tz:Int,\n\tw:Int,\n\tv:Int\n}';
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		opts.blockRightCurly = RightCurlyPlacement.Inline;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('y:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
+		Assert.isTrue(out.indexOf('v:Int\n}') != -1, 'expected anon-type close on own line in: <$out>');
 	}
 
 	public function testSameKeepsObjectLiteralCloseOnOwnLine(): Void {
-		// Multi-line object literal (newlines between fields trigger trivia
-		// branch in `triviaSepStarExpr`). With `Same`, the close `}` stays
-		// on its own line.
-		final src: String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
+		// An object literal over the item count goes one field per line by the wrap rules. With `Same`, the close `}`
+		// stays on its own line.
+		final src: String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2,\n\t\t\tc: 3,\n\t\t\td: 4,\n'
+			+ '\t\t\te: 5\n\t\t};\n\t}\n}';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), makeOpts(RightCurlyPlacement.Same));
-		Assert.isTrue(out.indexOf('b: 2\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
+		Assert.isTrue(out.indexOf('e: 5\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
 	}
 
 	public function testInlineGluesObjectLiteralClose(): Void {
@@ -267,11 +266,12 @@ class HxRightCurlyOptionsTest extends Test {
 		// object-literal close stays on its own line — the block knob does
 		// NOT propagate to `HxObjectLit.fields` (different Star, different
 		// meta).
-		final src: String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
+		final src: String = 'class Main {\n\tstatic function f() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2,\n\t\t\tc: 3,\n\t\t\td: 4,\n'
+			+ '\t\t\te: 5\n\t\t};\n\t}\n}';
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(HxListsKeepSource.keep);
 		opts.blockRightCurly = RightCurlyPlacement.Inline;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('b: 2\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
+		Assert.isTrue(out.indexOf('e: 5\n\t\t}') != -1, 'expected object-literal close on own line in: <$out>');
 	}
 
 	/**

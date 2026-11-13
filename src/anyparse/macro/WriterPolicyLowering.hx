@@ -37,7 +37,7 @@ final class WriterPolicyLowering {
 
 	/**
 	 * The separator a trivia postfix Star's source wrote after its last argument (`<args>[last].sepAfter`, `_args` unless
-	 * `args` names the list), which `keep` writes back in every layout; a plain Star records no separators.
+	 * `args` names the list), which `keep` writes back in a broken layout; a plain Star records no separators.
 	 */
 	public static function postfixSourceTrailExpr(?args: Expr): Expr {
 		final list: Expr = args ?? macro _args;
@@ -758,6 +758,15 @@ final class WriterPolicyLowering {
 	 */
 	private static function keepsTrailingCommaExpr(e: Expr, trailingCommaRemovable: Bool): Expr {
 		return trailingCommaRemovable ? macro ($e && opt.trailingComma != anyparse.format.TrailingCommaPolicy.Remove) : e;
+	}
+
+	/**
+	 * The one answer to "does a list laid out FLAT write the trailing separator its source wrote": only a mandatory one. An
+	 * opted-in (`trailingCommaRemovable`) list keeps a source `,` only when it is laid out broken, under every policy, so a
+	 * glued list measures and writes the same whether or not an earlier pass had broken it and added the comma.
+	 */
+	private static function flatKeepsTrailingCommaExpr(sourceTrail: Expr, trailingCommaRemovable: Bool): Expr {
+		return trailingCommaRemovable ? macro false : sourceTrail;
 	}
 
 	/**

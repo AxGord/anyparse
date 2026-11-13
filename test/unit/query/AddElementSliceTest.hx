@@ -139,9 +139,15 @@ class AddElementSliceTest extends Test {
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", true,
 			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\'];\n}\n'
 		);
+		// Under `keep` only a broken list carries its trailing comma, so the appended element takes it over.
 		assertAppend(
-			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\',];\n}\n', 2, 33, "'c'", false,
-			'class C {\n\tstatic final A:Array<String> = [\'a\', \'b\', \'c\',];\n}\n', '{"wrapping":{"trailingComma":"keep"}}'
+			'class C {\n\tstatic final A:Array<String> = [\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\',\n\t\t\'a\',\n\t];\n}\n',
+			2, 33, "'b'", false,
+			'class C {\n\tstatic final A:Array<String> = [\n'
+			+ '\t\t\'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\',\n\t\t\'a\',\n\t\t\'b\',\n'
+			+ '\t];\n}\n',
+			'{"wrapping":{"trailingComma":"keep"}}'
 		);
 	}
 

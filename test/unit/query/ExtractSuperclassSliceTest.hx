@@ -187,16 +187,20 @@ class ExtractSuperclassSliceTest extends Test {
 	 * one.
 	 */
 	public function testCreatedSuperclassSettlesTheWriterFixedPoint(): Void {
-		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
-			+ '"caseBody": "fitLine", "expressionCase": "fitLine", "caseSiblings": "anyBreak"}, "wrapping": {"maxLineLength": 140, '
-			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], '
-			+ '"type": "noWrap"}]}}}';
-		final src: String = 'package pkg;\n\nclass Unpack {\n\tpublic function new() {}\n\n\tpublic function readNode(xml: Fast): Void {\n'
-			+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch ('
-			+ '_: Any) \'\', file: xml.att.file, rm: xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n'
-			+ '\t\t\t\ttrace(xml);\n\t\t}\n\t}\n\n\tpublic function keep(): Void {}\n}\n';
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "objectLiteral": {'
+			+ '"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
+			+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
+		final src: String = 'package pkg;\n\nclass Unpack {\n\tpublic function new() {}\n\n\tpublic function createElectron(output: '
+			+ 'String): Void {\n\t\tfinal data = { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', '
+			+ 'request: \'launch\', name: mainConfName, protocol: \'inspector\', runtimeExecutable: electronExecutable, '
+			+ 'runtimeArgs: [output, \'--remote-debugging-port\'], windows: { runtimeExecutable: electronExecutable\n'
+			+ '\t\t\t\t+ \'.cmd\' }, preLaunchTask: PRELAUNCH_TASK, internalConsoleOptions: \'neverOpen\' }: Dynamic),\n'
+			+ '\t\t\t({ name: renderConfName, type: \'chrome\', request: \'attach\', port: port, webRoot: resultDir, '
+			+ 'timeout: 20000, internalConsoleOptions: \'openOnSessionStart\' }: Dynamic)\n'
+			+ '\t\t], compounds: [{ name: \'AllConfigurations\', configurations: [mainConfName, renderConfName] }] };\n'
+			+ '\t\tUtils.saveJson(\'.vscode/launch.json\', data);\n\t}\n\n\tpublic function keep(): Void {}\n}\n';
 		switch ExtractSuperclass.extract(
-			'pkg/Unpack.hx', 'Unpack', 'BaseUnpack', 'pkg/BaseUnpack.hx', ['readNode'], src, plugin(), config
+			'pkg/Unpack.hx', 'Unpack', 'BaseUnpack', 'pkg/BaseUnpack.hx', ['createElectron'], src, plugin(), config
 		) {
 			case Ok(changes, advisory):
 				final base: String = changeFor(changes, 'pkg/BaseUnpack.hx').newSource;

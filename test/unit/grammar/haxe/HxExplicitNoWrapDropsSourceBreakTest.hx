@@ -3,7 +3,10 @@ package unit.grammar.haxe;
 import utest.Assert;
 import utest.Test;
 
-/** An explicit `defaultWrap` of `noWrap` lays a list out without reading the source's line breaks. */
+/**
+ * A `defaultWrap` fallback lays an object literal or anonymous type out without reading
+ * the source line breaks; a map literal is a source-reflow array and still keeps them.
+ */
 final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 
 	private static final FLAT: String = 'class C {\n\tvar o = {a: 1, b: 2};\n\tvar m = [1 => 2, 3 => 4];\n\tvar x:{a:Int, b:Int};\n}';
@@ -21,14 +24,17 @@ final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-EXPLICIT-NOWRAP-READS-SOURCE')
+	@:killer('M-SEP-STAR-READS-SOURCE-BREAK')
 	public function testNoWrapWithAnEmptyCascadeIsFlat(): Void {
 		Assert.equals(FLAT, HxWriteFixture.triviaWrite(BROKEN, config('noWrap', ',"rules":[]')));
 	}
 
-	@:pin('guard')
-	public function testOnePerLineStillKeepsASourceBreak(): Void {
-		Assert.equals(BROKEN, HxWriteFixture.triviaWrite(BROKEN, config('onePerLine', '')));
+	@:pin('control')
+	@:killer('M-SEP-STAR-READS-SOURCE-BREAK')
+	public function testOnePerLineFallbackDropsASourceBreak(): Void {
+		final mapKept: String =
+			'class C {\n\tvar o = {a: 1, b: 2};\n\tvar m = [\n\t\t1 => 2,\n\t\t3 => 4\n\t];\n\tvar x:{a:Int, b:Int};\n}';
+		Assert.equals(mapKept, HxWriteFixture.triviaWrite(BROKEN, config('onePerLine', '')));
 	}
 
 	@:pin('control')

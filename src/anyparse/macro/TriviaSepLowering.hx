@@ -854,14 +854,8 @@ final class TriviaSepLowering {
 			trailPresentAccess != null && trailingCommaField != null ? macro $trailPresentAccess || $knobAccessOrFalse : knobAccessOrFalse,
 			trailingCommaRemovable
 		);
-		// ω-nowrap-source-trail-comma: the FLAT (`NoWrap`) trailing-comma signal
-		// is source-presence ONLY (`<field>TrailPresent`), NOT the knob-inclusive
-		// `appendTrailingComma`: a list whose source had none stays comma-free
-		// even with the knob on (the knob only forces the break-mode layout via
-		// `forceExceeds`). A source `,` survives flat only while
-		// `wrapping.trailingComma != Remove` — the policy answers for every
-		// layout of an opted-in list, flat included.
-		final flatTrailingCommaExpr: Expr = keepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable);
+		// The FLAT trailing-comma signal: a source `,` survives a flat layout only where the separator is mandatory.
+		final flatTrailingCommaExpr: Expr = flatKeepsTrailingCommaExpr(trailPresentAccess ?? macro false, trailingCommaRemovable);
 
 		// The `forceMode` option of `WrapList.emit`: a `Next` left curly lays every anon under a typedef's RHS
 		// (`opt._inTypedefBody`, set by `propagateTypedefContext` and cleared per field) out one field per line. Any
@@ -1133,6 +1127,7 @@ final class TriviaSepLowering {
 		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks, typedefBodyBlanks);
 		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments, typedefBodyBlanks);
 		final statedBlanksExpr: Expr = triviaSepTypedefStatedBlanksExpr(typedefBodyBlanks);
+		final sourceNewlineExpr: Expr = triviaSepSourceNewlines(reflowSourceMultiline).scan;
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {
@@ -1153,24 +1148,7 @@ final class TriviaSepLowering {
 					else
 						_requiresHardline = true;
 				}
-				// ω-array-reflow idempotence: the FIRST element's `newlineBefore` also fires for
-				// a newline BEFORE the open `[` (the array on a fresh line of an enclosing broken
-				// construct — e.g. a wrapped ternary branch), not only an internal one. Counting
-				// it marks a single-line `['a', 'b']` as source-multiline → forces it OnePerLine,
-				// which the writer's own broken-branch output then re-triggers every pass (non-
-				// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
-				// element's flag — EXCEPT for a comprehension (`for`/`while` sole element), whose element genuinely starts on
-				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
-				// newlines, so they are always counted. A `noWrap` fallback leaves layout to the cascade whatever the source
-				// did; only a pure-`noWrap` array still reads them, for its matrix and comprehension shapes.
-				if (
-					_t.newlineBefore
-					&& !_ignoreEmit
-					&& !_matrixOff
-					&& (!_noWrapDefault || $v{reflowSourceMultiline} && _noWrapRules)
-					&& !($v{reflowSourceMultiline} && _ti == 0 && !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t))
-				)
-					_hasSourceNewlines = true;
+				$sourceNewlineExpr;
 				// A non-enum payload (e.g. an object-literal field struct) answers
 				// `false` inside the shared classifier, so the non-array Star case
 				// needs no guard of its own.
@@ -1315,6 +1293,9 @@ final class TriviaSepLowering {
 		// (which reads it) and before the force-multi loop's blank guard.
 		// `macro {}` for every non-opted sep-Star.
 		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
+		final sourceNewlines: { decl: Expr, read: Expr, scan: Expr } = triviaSepSourceNewlines(c.reflowSourceMultiline);
+		final sourceNewlinesDecl: Expr = sourceNewlines.decl;
+		final sourceNewlinesRead: Expr = sourceNewlines.read;
 		return macro {
 			// ω-cascade-emits-comments: decompose `_hasTrivia` into three
 			// orthogonal predicates so the Ignore-mode cascade can ingest
@@ -1328,7 +1309,8 @@ final class TriviaSepLowering {
 			//    would land inside `// ...`). Anything in this bucket
 			//    MUST route through the force-multi branch.
 			//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
-			//    least one element. Independent axis. Under
+			//    least one element of a reflow array (no other Star
+			//    declares it). Independent axis. Under
 			//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
 			//    policy ignores source newlines and lets width drive
 			//    layout); legacy default still flips `_hasTrivia=true`.
@@ -1370,7 +1352,7 @@ final class TriviaSepLowering {
 			final _matrixOff: Bool = $v{c.matrixWrap} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
 			$uniformCollapseInitExpr;
 			var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
-			var _hasSourceNewlines: Bool = false;
+			$sourceNewlinesDecl;
 			var _hasInlineableTrivia: Bool = false;
 			// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
 			// element list. Two kinds of item make a list NON-flattenable,
@@ -1391,7 +1373,7 @@ final class TriviaSepLowering {
 			// false → no extra per-element render / reflection).
 			var _anyMultilineItem: Bool = false;
 			$predicateScanExpr;
-			final _hasTrivia: Bool = _requiresHardline || _hasSourceNewlines;
+			final _hasTrivia: Bool = _requiresHardline || $sourceNewlinesRead;
 			// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
 			// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
 			// `applyWrappingPlace`). Probe whether the source rows form a
@@ -1441,7 +1423,7 @@ final class TriviaSepLowering {
 			// actually flattens (`_noWrapFlatten`), so the flatten routes
 			// through the force-multi flat loop below instead of reflow.
 			final _smlKeep: Bool = $v{c.reflowSourceMultiline}
-				&& _hasSourceNewlines
+				&& $sourceNewlinesRead
 				&& !_requiresHardline
 				&& !_ignoreEmit
 				&& !_noWrapFlatten;
@@ -1760,6 +1742,25 @@ final class TriviaSepLowering {
 			&& ((opt.typedefBetweenFields > 0 && _arr.length > 1) || ($begin ?? 0) > 0 || ($end ?? 0) > 0)
 		)
 			_requiresHardline = true;
+	}
+
+	/**
+	 * The sep-Star source-break state: the `_hasSourceNewlines` declaration, the dispatch's read of it and the per-element
+	 * scan step. Only a `reflowSourceMultiline` array reads a source break; every other list follows the width cascade,
+	 * declares no flag and reads a constant `false`, so its broken output is a fixed point. The first
+	 * element's flag also fires for a break before the open `[`, so it counts only for a comprehension; a `noWrap`
+	 * fallback leaves layout to the cascade unless the array is pure `noWrap` (its matrix and comprehension shapes).
+	 */
+	private static function triviaSepSourceNewlines(reflowSourceMultiline: Bool): { decl: Expr, read: Expr, scan: Expr } {
+		return reflowSourceMultiline
+			? { decl: (macro var _hasSourceNewlines: Bool = false), read: macro _hasSourceNewlines, scan: macro if (
+				_t.newlineBefore
+				&& !_ignoreEmit
+				&& !_matrixOff
+				&& (!_noWrapDefault || _noWrapRules)
+				&& !(_ti == 0 && !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t))
+			) _hasSourceNewlines = true }
+			: { decl: macro {}, read: macro false, scan: macro {} };
 	}
 
 }

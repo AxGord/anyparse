@@ -48,13 +48,13 @@ class HxSepStarCloseTrailCommentTest extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	/** The source that reaches the force-multi arm with a LINE close-trailing. */
+	/** The source that reaches the force-multi arm (its field's line comment needs a hardline) with a LINE close-trailing. */
 	private static final FORCE_MULTI_LINE_COMMENT: String =
-		'class C {\n\tstatic function f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\ta: 1\n\t\t\t} // c\n\t\t\t,\n\t\t\t2\n\t\t];\n\t}\n}';
+		'class C {\n\tstatic function f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\ta: 1 // f\n\t\t\t} // c\n\t\t\t,\n\t\t\t2\n\t\t];\n\t}\n}';
 
 	/** The same shape with a BLOCK close-trailing — the seam was always sound. */
 	private static final FORCE_MULTI_BLOCK_COMMENT: String =
-		'class C {\n\tstatic function f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\ta: 1\n\t\t\t} /* c */,\n\t\t\t2\n\t\t];\n\t}\n}';
+		'class C {\n\tstatic function f() {\n\t\tvar xs = [\n\t\t\t{\n\t\t\t\ta: 1 // f\n\t\t\t} /* c */,\n\t\t\t2\n\t\t];\n\t}\n}';
 
 	// --- 1. the named defect: the wrap-cascade path dropped the slot -----
 

@@ -33,14 +33,14 @@ class HxVarTypeHintAnonIndentTest extends Test {
 	}
 
 	public function testMultiLineAnonGetsExtraIndentUnderNext(): Void {
-		// Multi-line source-anon body under leftCurly=both (= Next).
+		// An anon body over the item count, so the wrap rules break it, under leftCurly=both (= Next).
 		// Expected: `\tvar a:` then `\n\t\t{` (+1 step before `{`),
 		// then `\n\t\t\tx:Int,…` (+2 inside body), then `\n\t\t};` (+1
 		// before closing `}`).
-		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
+		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int,\n\t\tw:Int,\n\t\tv:Int\n\t};\n}';
 		final out: String = writeWithLeftCurlyBoth(src);
 		Assert.isTrue(
-			out.indexOf('\tvar a:\n\t\t{\n\t\t\tx:Int,\n\t\t\ty:Int,\n\t\t\tz:Int\n\t\t};') != -1,
+			out.indexOf('\tvar a:\n\t\t{\n\t\t\tx:Int,\n\t\t\ty:Int,\n\t\t\tz:Int,\n\t\t\tw:Int,\n\t\t\tv:Int\n\t\t};') != -1,
 			'expected `+1` indent step on multi-line var-type-hint anon in output:\n<$out>'
 		);
 	}
@@ -62,7 +62,7 @@ class HxVarTypeHintAnonIndentTest extends Test {
 		// (one tab `\tvar a:\n\t{`). Single space probe accepts both
 		// pre- and post-slice byte-shapes for the colon→`{` boundary
 		// since the gate only flips the surrounding Nest level.
-		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int\n\t};\n}';
+		final src: String = 'class A {\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int,\n\t\tw:Int,\n\t\tv:Int\n\t};\n}';
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> {
 			HxListsKeepSource.keep(edited);
 			edited.leftCurly = BracePlacement.Next;
@@ -74,7 +74,8 @@ class HxVarTypeHintAnonIndentTest extends Test {
 		opts.indentVarTypeHintAnon = false;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 		Assert.isTrue(
-			out.indexOf('\tvar a:\n\t{\n\t\tx:Int,\n\t\ty:Int\n\t};') != -1, 'expected pre-slice 1-tab indent with flag off in:\n<$out>'
+			out.indexOf('\tvar a:\n\t{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int,\n\t\tw:Int,\n\t\tv:Int\n\t};') != -1,
+			'expected pre-slice 1-tab indent with flag off in:\n<$out>'
 		);
 	}
 

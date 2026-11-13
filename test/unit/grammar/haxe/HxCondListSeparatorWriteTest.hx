@@ -139,8 +139,11 @@ final class HxCondListSeparatorWriteTest extends Test {
 	@:pin('control')
 	@:killer('M-TRAIL-AFTER-SEMI')
 	public function testTheTrailingCommaKnobAddsNoneAfterAClassNotationField(): Void {
-		// `var b:Int;,` is no structure at all: a field that ends on its own `;` takes no separator after it.
-		final source: String = 'class A {\n\tvar s:{var a:Int; var b:Int;};\n}\n\ntypedef T = {\n\tvar a:Int;\n\tvar d:Int;\n};\n';
+		// `var b:Int;,` is no structure at all: a field that ends on its own `;` takes no separator after it. The typedef's
+		// fields are too wide for one line, so its body breaks and the knob is asked.
+		final source: String = 'class A {\n\tvar s:{var a:Int; var b:Int;};\n}\n\ntypedef T = {\n'
+			+ '\tvar aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:Int;\n'
+			+ '\tvar dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd:Int;\n};\n';
 		assertWritesOnce(source, source);
 	}
 

@@ -897,7 +897,7 @@ final class WriterPrattLowering {
 				}
 				: macro null;
 			final flatTcExpr: Expr = c.isTriviaStar
-				? keepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))
+				? flatKeepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))
 				: macro false;
 			return macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, {

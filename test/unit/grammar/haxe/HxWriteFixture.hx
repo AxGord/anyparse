@@ -46,7 +46,8 @@ final class HxWriteFixture {
 
 	/**
 	 * `configJson` with every list that would otherwise reflow by width on a `onePerLine` fallback, which keeps a source
-	 * break (an explicit `noWrap` does not): for a fixture whose subject is not how a list wraps.
+	 * break in an array or map literal (an object literal or anon type follows the cascade, an explicit `noWrap` keeps none):
+	 * for a fixture whose subject is not how a list wraps.
 	 */
 	public static function listsKeepSource(configJson: String): String {
 		return HxListsKeepSource.of(configJson);

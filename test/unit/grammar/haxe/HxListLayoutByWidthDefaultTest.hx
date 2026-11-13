@@ -14,11 +14,17 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		super();
 	}
 
-	/** A source-broken object literal that fits collapses onto its line. */
+	/**
+	 * A source-broken object literal that fits collapses onto its line, a block comment on a field with it: the `Ignore`
+	 * default writes that comment inline, where another default would keep the literal open around it.
+	 */
 	@:pin('control')
 	@:killer('M-DEFAULT-OBJECT-IGNORE')
 	public function testASourceBrokenObjectLiteralCollapses(): Void {
-		Assert.equals('class C {\n\tstatic var o = {a: 1, b: 2};\n}', write('class C {\n\tstatic var o = {\n\t\ta: 1,\n\t\tb: 2\n\t};\n}'));
+		Assert.equals(
+			'class C {\n\tstatic var o = {a: 1, /* c */ b: 2};\n}',
+			write('class C {\n\tstatic var o = {\n\t\ta: 1,\n\t\t/* c */ b: 2\n\t};\n}')
+		);
 	}
 
 	/** A source-broken array literal that fits collapses onto its line. */
@@ -38,11 +44,17 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		);
 	}
 
-	/** A source-broken anonymous type outside a typedef collapses too; a typedef right-hand side is another decision. */
+	/**
+	 * A source-broken anonymous type outside a typedef collapses too, a block comment on a field with it; a typedef
+	 * right-hand side is another decision.
+	 */
 	@:pin('control')
 	@:killer('M-DEFAULT-ANON-IGNORE')
 	public function testASourceBrokenAnonTypeCollapses(): Void {
-		Assert.equals('class C {\n\tstatic var t:{a:Int, b:Int};\n}', write('class C {\n\tstatic var t:{\n\t\ta:Int,\n\t\tb:Int\n\t};\n}'));
+		Assert.equals(
+			'class C {\n\tstatic var t:{a:Int, /* c */ b:Int};\n}',
+			write('class C {\n\tstatic var t:{\n\t\ta:Int,\n\t\t/* c */ b:Int\n\t};\n}')
+		);
 	}
 
 	/** Grid rows are source breaks like any other: under the default the rules, not the rows, decide. */

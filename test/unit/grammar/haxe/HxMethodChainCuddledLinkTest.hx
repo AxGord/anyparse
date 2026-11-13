@@ -299,10 +299,12 @@ final class HxMethodChainCuddledLinkTest extends Test {
 
 	/**
 	 * The shared client-shaped config with `extraWrapping` (a JSON fragment, comma-terminated) spliced into its `wrapping` section. Static
-	 * because the fixture constants are initialised before any instance exists.
+	 * because the fixture constants are initialised before any instance exists. Every object literal goes one field per line, so
+	 * the literal a link cuddles onto breaks by config, never by its source lines.
 	 */
 	private static function config(extraWrapping: String): String {
 		return '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {$extraWrapping'
+			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": []}, '
 			+ '"trailingComma": "keep", "maxLineLength": 140}, "sameLine": {"ifBody": "fitLine", "functionBody": "fitLine"},'
 			+ ' "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
 	}

@@ -127,15 +127,18 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		Assert.equals(expected, triviaWriteReflow(src));
 	}
 
-	public function testArrowBodyMultilineSourceKeptWithoutReflowKnob(): Void {
+	/** Without the reflow knob a source-multiline arrow body follows the cascade too: its source lines are no signal. */
+	public function testArrowBodyMultilineSourceFollowsTheCascadeWithoutReflowKnob(): Void {
 		final src: String =
 			'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
-		Assert.equals(src, triviaWriteKeepPad(src));
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
+		Assert.equals(expected, triviaWriteKeepPad(src));
 	}
 
-	public function testNonArrowMultilineObjectLitKeptWithReflowKnob(): Void {
+	/** A source-multiline literal outside an arrow body follows the cascade whatever the knob says. */
+	public function testNonArrowMultilineObjectLitFollowsTheCascadeWithReflowKnob(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entry = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2\n\t\t};\n\t}\n}';
-		Assert.equals(src, triviaWriteReflow(src));
+		Assert.equals('class C {\n\tfunction test() {\n\t\tfinal entry = { alpha: 1, beta: 2 };\n\t}\n}', triviaWriteReflow(src));
 	}
 
 	private inline function triviaWrite(src: String): String {

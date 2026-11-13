@@ -455,14 +455,18 @@ class NewFileSliceTest extends Test {
 	 * still pins as divergent; that class pins the writer divergence itself.
 	 */
 	public function testCreateRawSettlesATwoRewriteSource(): Void {
-		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
-			+ '"caseBody": "fitLine", "expressionCase": "fitLine", "caseSiblings": "anyBreak"}, "wrapping": {"maxLineLength": 140, '
-			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], '
-			+ '"type": "noWrap"}]}}}';
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "objectLiteral": {'
+			+ '"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
+			+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final src: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n'
-			+ '\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, rm: '
-			+ 'xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}';
+		final src: String = 'class A {\n\tpublic static function createElectron(output: String): Void {\n'
+			+ '\t\tfinal data = { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', request: \'launch\', name: '
+			+ 'mainConfName, protocol: \'inspector\', runtimeExecutable: electronExecutable, runtimeArgs: ['
+			+ 'output, \'--remote-debugging-port\'], windows: { runtimeExecutable: electronExecutable\n'
+			+ '\t\t\t\t+ \'.cmd\' }, preLaunchTask: PRELAUNCH_TASK, internalConsoleOptions: \'neverOpen\' }: Dynamic),\n\t\t'
+			+ '\t({ name: renderConfName, type: \'chrome\', request: \'attach\', port: port, webRoot: resultDir, timeout: 20000, '
+			+ 'internalConsoleOptions: \'openOnSessionStart\' }: Dynamic)\n\t\t], compounds: [{ name: \'AllConfigurations\', '
+			+ 'configurations: [mainConfName, renderConfName] }] };\n\t\tUtils.saveJson(\'.vscode/launch.json\', data);\n\t}\n}';
 		// PRECONDITION, not decoration: this test discriminates only while `src`
 		// really is a shape the writer settles on its SECOND rewrite. The pin for
 		// that shape lives in another class, so without this assert an improved

@@ -964,7 +964,7 @@
 			"method": "defaultObjectLiteralWrap",
 			"find": "defaultMode: WrapMode.Ignore",
 			"replace": "defaultMode: WrapMode.OnePerLine",
-			"note": "the object-literal default stops being Ignore, so a source break keeps a short literal open"
+			"note": "the object-literal default stops being Ignore, so a short literal with a field block comment stays open around it"
 		},
 		{
 			"name": "M-DEFAULT-ARRAY-IGNORE",
@@ -980,7 +980,7 @@
 			"method": "defaultAnonTypeWrap",
 			"find": "defaultMode: WrapMode.Ignore",
 			"replace": "defaultMode: WrapMode.OnePerLine",
-			"note": "the anonymous-type default stops being Ignore, so a source break keeps a short anon type open"
+			"note": "the anonymous-type default stops being Ignore, so a short anon type with a field block comment stays open around it"
 		},
 		{
 			"name": "M-ANON-MULTILINE-ONE-PER-LINE",

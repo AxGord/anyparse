@@ -622,12 +622,12 @@ class WriterLowering {
 		final cbStar: ShapeNode = cb.children[1];
 		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
 		// A segment call keeps its source trailing separator under `keep` exactly like a regular call
-		// (`lowerPostfixCascadeCall`): broken through `appendTrailingComma`, flat through `flatTrailingComma`.
+		// (`lowerPostfixCascadeCall`): broken through `appendTrailingComma`; flat it drops it (`flatKeepsTrailingCommaExpr`).
 		final callSourceTrail: Null<Expr> = isCallTriviaStar ? postfixSourceTrailExpr() : null;
 		final callTcExpr: Expr = trailingCommaExpr(cb, callSourceTrail);
 		final callFlatTcExpr: Expr = callSourceTrail == null
 			? macro false
-			: keepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));
+			: flatKeepsTrailingCommaExpr(callSourceTrail, cb.fmtHasFlag('trailingCommaRemovable'));
 		// Args list shape: the Call ctor MUST carry `@:fmt(wrapRules(
 		// '<field>'))` for the chain-emit's per-segment rendering to use
 		// the same arg layout as a regular Call. Surfacing this as a

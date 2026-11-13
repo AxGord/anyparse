@@ -44,7 +44,7 @@ final class HxTernaryMultilineBranchTest extends Test {
 
 	/** An object-literal branch. */
 	private static final OBJECT_THEN: String =
-		'class T {\n\tfunction f() {\n\t\tvar o = cond ? {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t} : null;\n\t}\n}';
+		'class T {\n\tfunction f() {\n\t\tvar o = cond ? {\n\t\t\ta: 1, // a\n\t\t\tb: 2\n\t\t} : null;\n\t}\n}';
 
 	/** A branch that is itself a block. */
 	private static final BLOCK_ELSE: String =

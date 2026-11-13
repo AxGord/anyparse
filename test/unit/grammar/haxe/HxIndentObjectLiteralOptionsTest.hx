@@ -21,10 +21,8 @@ import utest.Test;
  *
  * Mirrors haxe-formatter's `indentation.indentObjectLiteral: @:default(true)`.
  *
- * Multi-line emission is driven by source newlines flowing through the
- * trivia parser/writer — the trivia mode preserves per-element
- * `newlineBefore` flags, so a multi-line input produces a multi-line
- * output regardless of the `WrapRules` count threshold.
+ * A multi-line literal here holds more fields than the `WrapRules` cascade
+ * lets share a line, so the rules break it; its source lines are no signal.
  */
 @:nullSafety(Strict)
 class HxIndentObjectLiteralOptionsTest extends Test {
@@ -59,7 +57,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// objectLiteralLeftCurly=Next puts `{` on its own line. With
 		// indentObjectLiteral=true the Nest wrap on HxVarDecl.init lifts
 		// the `{` line one indent step above the `static var` line.
-		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1,\n\t\tb: 2,\n\t\tc: 3,\n\t\td: 4,\n\t\te: 5\n\t};\n}';
 		final out: String = writeWith(src, true, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('static var x:T =\n\t\t{\n') != -1, 'expected `static var x:T =\\n\\t\\t{` in: <$out>');
 	}
@@ -67,7 +65,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 	public function testFalseLeavesBraceFlushUnderAllmanLeftCurly(): Void {
 		// Same input under indentObjectLiteral=false — `{` lands at the
 		// same indent as `static var`, mirroring the pre-slice layout.
-		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1,\n\t\tb: 2,\n\t\tc: 3,\n\t\td: 4,\n\t\te: 5\n\t};\n}';
 		final out: String = writeWith(src, false, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('static var x:T =\n\t{\n') != -1, 'expected `static var x:T =\\n\\t{` (no extra indent) in: <$out>');
 	}
@@ -79,7 +77,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// nest is enough (one extra indent step would over-indent
 		// relative to fork's behavior, which only fires the rule when
 		// `{` is on its own line).
-		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1,\n\t\tb: 2,\n\t\tc: 3,\n\t\td: 4,\n\t\te: 5\n\t};\n}';
 		final out: String = writeWith(src, true, BracePlacement.Same);
 		Assert.isTrue(
 			out.indexOf('static var x:T = {\n\t\ta:') != -1, 'expected inert wrap (`\\t\\ta:` baseline) under leftCurly=Same in: <$out>'
@@ -87,7 +85,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 	}
 
 	public function testFalseLeavesContentDefaultUnderCuddledLeftCurly(): Void {
-		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var x:T = {\n\t\ta: 1,\n\t\tb: 2,\n\t\tc: 3,\n\t\td: 4,\n\t\te: 5\n\t};\n}';
 		final out: String = writeWith(src, false, BracePlacement.Same);
 		Assert.isTrue(out.indexOf('static var x:T = {\n\t\ta:') != -1, 'expected baseline inner `\\t\\ta:` in: <$out>');
 	}
@@ -101,13 +99,15 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// content + inner-wrap). The fork issue_490 fixture sits at zero
 		// base (no class wrapper), where the same calculation produces
 		// the three-tab `\n\t\t\t{` shape recorded in fork's expected.
-		final src: String = 'class C {\n\tstatic var u:U = {\n\t\tAddress: {\n\t\t\tStreet: ""\n\t\t}\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var u:U = {\n\t\tAddress: {\n\t\t\tStreet: "",\n\t\t\tCity: "",\n\t\t\tZip: "",\n'
+			+ '\t\t\tState: "",\n\t\t\tCountry: ""\n\t\t},\n\t\tb: 1,\n\t\tc: 2,\n\t\td: 3,\n\t\te: 4\n\t};\n}';
 		final out: String = writeWith(src, true, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('Address:\n\t\t\t\t{\n') != -1, 'expected `Address:\\n\\t\\t\\t\\t{` in: <$out>');
 	}
 
 	public function testFalseLeavesNestedObjectFieldValueAtBaseUnderAllman(): Void {
-		final src: String = 'class C {\n\tstatic var u:U = {\n\t\tAddress: {\n\t\t\tStreet: ""\n\t\t}\n\t};\n}';
+		final src: String = 'class C {\n\tstatic var u:U = {\n\t\tAddress: {\n\t\t\tStreet: "",\n\t\t\tCity: "",\n\t\t\tZip: "",\n'
+			+ '\t\t\tState: "",\n\t\t\tCountry: ""\n\t\t},\n\t\tb: 1,\n\t\tc: 2,\n\t\td: 3,\n\t\te: 4\n\t};\n}';
 		final out: String = writeWith(src, false, BracePlacement.Next);
 		Assert.isTrue(out.indexOf('Address:\n\t\t{\n') != -1, 'expected `Address:\\n\\t\\t{` (no extra indent) in: <$out>');
 	}
@@ -203,7 +203,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// 4 tabs (+cols from the `for` body's Nest); fields at 5 tabs (+cols
 		// from the obj-lit's own Nest); closing `}` at 4 tabs.
 		final src: String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n'
-			+ '\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+			+ '\t\t\t\trange: usage,\n\t\t\t\tnewText: newName,\n\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, '{"sameLine":{"comprehensionFor":"same"}}');
 		Assert.isTrue(
 			out.indexOf('for (usage in markedUsages)\n\t\t\t\t{\n') != -1,
@@ -235,7 +235,7 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// not fire and the body emits via the policy-decided layout (`same`
 		// glues the `{` to the head).
 		final src: String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n'
-			+ '\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+			+ '\t\t\t\trange: usage,\n\t\t\t\tnewText: newName,\n\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, '{"indentation":{"indentObjectLiteral":false},"sameLine":{"comprehensionFor":"same"}}');
 		Assert.isTrue(
 			out.indexOf('for (usage in markedUsages) {\n') != -1, 'expected source-cuddled `{` under indentObjectLiteral=false in: <$out>'

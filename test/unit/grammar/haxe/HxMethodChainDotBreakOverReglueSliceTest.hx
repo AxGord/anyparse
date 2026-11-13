@@ -118,7 +118,10 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tservice.request({\n\t\t\talpha: alphaValue,\n\t\t\tbeta: betaValue\n'
 			+ '\t\t}).success(response -> {\n\t\t\thideMask();\n\t\t\tapply(response);\n\t\t}).error(response -> {\n\t\t\thideMask();\n'
 			+ '\t\t\treport(response);\n\t\t});\n\t}\n}';
-		Assert.equals(src, triviaWrite(src));
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tservice.request({alpha: alphaValue, beta: '
+			+ 'betaValue}).success(response -> {\n\t\t\thideMask();\n\t\t\tapply(response);\n'
+			+ '\t\t}).error(response -> {\n\t\t\thideMask();\n\t\t\treport(response);\n\t\t});\n\t}\n}';
+		Assert.equals(expected, triviaWrite(src));
 	}
 
 	/**

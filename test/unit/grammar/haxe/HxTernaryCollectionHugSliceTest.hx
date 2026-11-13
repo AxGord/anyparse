@@ -17,7 +17,8 @@ import utest.Test;
  * ELSE array, and a block-expression ELSE all hug. Negatives (held at the
  * leading-break-all shape): a head that overflows the line, BOTH branches
  * multi-line, and a branch that is an opAdd CHAIN built around a collection
- * (`{…} + tail`). Control: a short all-flat ternary stays inline.
+ * (`{…} + tail`). Control: a short all-flat ternary stays inline. A multi-line
+ * literal here holds more fields than the wrap rules let share a line, so it breaks by them.
  */
 @:nullSafety(Strict)
 final class HxTernaryCollectionHugSliceTest extends Test {
@@ -33,13 +34,13 @@ final class HxTernaryCollectionHugSliceTest extends Test {
 
 	public function testElseObjectHeadFitsHugs(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? {name: \'alpha\', ok: true} : {\n\t\t\tname: \'bravo\',\n'
-			+ '\t\t\tok: false\n\t\t};\n\t}\n}';
+			+ '\t\t\tok: false,\n\t\t\tc: 3,\n\t\t\td: 4,\n\t\t\te: 5\n\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testThenObjectHugs(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? {\n\t\t\tname: \'alpha\',\n\t\t\tok: true\n'
-			+ '\t\t} : {name: \'bravo\', ok: false};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag ? {\n\t\t\tname: \'alpha\',\n\t\t\tok: true,\n\t\t\tc: 3,\n'
+			+ '\t\t\td: 4,\n\t\t\te: 5\n\t\t} : {name: \'bravo\', ok: false};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -57,21 +58,22 @@ final class HxTernaryCollectionHugSliceTest extends Test {
 	}
 
 	public function testHeadExceedsLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n'
-			+ '\t\tresultVariableWithAnExtremelyLongDescriptiveName = someConditionFlagWithAnEquallyLongDescriptiveIdentifierNameHere\n'
-			+ '\t\t\t? scalarThenBranchValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresultVariableWithAnExtremelyLongDescriptiveName = '
+			+ 'someConditionFlagWithAnEquallyLongDescriptiveIdentifierNameHere\n\t\t\t? scalarThenBranchValue\n\t\t\t: {\n'
+			+ '\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false,\n\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testBothBranchesMultilineLeadingBreak(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? {\n\t\t\t\talpha: \'one\',\n\t\t\t\tbeta: \'two\'\n'
-			+ '\t\t\t}\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false\n\t\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? {\n\t\t\t\talpha: \'one\',\n\t\t\t\tbeta: \'two\',\n'
+			+ '\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t}\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n\t\t\t\tok: false,\n'
+			+ '\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testOpAddChainBranchLeadingBreaks(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tresult = flag\n\t\t\t? shortValue\n\t\t\t: {\n\t\t\t\tname: \'bravo\',\n'
-			+ '\t\t\t\tok: false\n\t\t\t}\n\t\t\t\t+ tail;\n\t}\n}';
+			+ '\t\t\t\tok: false,\n\t\t\t\tc: 3,\n\t\t\t\td: 4,\n\t\t\t\te: 5\n\t\t\t}\n\t\t\t\t+ tail;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

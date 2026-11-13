@@ -3068,14 +3068,8 @@ class WrapList {
 				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text('$sep '));
 			inner.push(items[i]);
 		}
-		// ω-nowrap-source-trail-comma: preserve a source trailing comma in the
-		// flat (single-line) layout. `flatTrailingComma` is the source-only
-		// `<field>TrailPresent` signal — true only when the source actually had
-		// a `,` after the last element (NOT the knob, which only forces break-
-		// mode). The fork is source-faithful here: a single-line `{a: 1,}` /
-		// `[1, 2,]` / `f(x,)` keeps its trailing comma flat. Lists without a
-		// source comma pass `false` and stay byte-identical. Empty lists
-		// short-circuit before reaching this shape.
+		// `flatTrailingComma` keeps a source trailing separator in the flat layout only where it is mandatory
+		// (`WriterPolicyLowering.flatKeepsTrailingCommaExpr`): a removable `,` survives a broken layout alone.
 		if (flatTrailingComma && items.length > 0) inner.push(Text(sep));
 		// ω-force-flat-engine slice D: wrap inner content in `Flatten` so any
 		// Group/IfBreak/Fill nested inside a NoWrap-cascade construct is forced
@@ -3332,8 +3326,8 @@ class WrapList {
 	/**
 	 * The separator after a filled list's last item. `appendTrailingComma` is the break-mode signal, so the list's own
 	 * Group decides it, and a list that packs onto one line keeps a comma only when `flatTrailingComma` says the source
-	 * wrote one. `canBreak` false is a sole item, which shares its line with the open delimiter however its own content
-	 * breaks: the list never breaks at a separator, so an add-knob comma has no place there and only a source one survives.
+	 * wrote a mandatory one. `canBreak` false is a sole item, which shares its line with the open delimiter however its own content
+	 * breaks: the list never breaks at a separator, so an add-knob comma has no place there and only a mandatory one survives.
 	 */
 	private static function fillTrailSep(sep: String, appendTrailingComma: Bool, flatTrailingComma: Bool, canBreak: Bool): Doc {
 		return if (!appendTrailingComma)

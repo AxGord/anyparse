@@ -7,17 +7,19 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * Under `wrapping.trailingComma: keep` (the Haxe writer defaults to `remove`) a call writes back the
- * comma its source put after the last argument in every layout, as every other list does. The
- * call-argument list read only the add-knob, so the comma was dropped.
+ * Under `wrapping.trailingComma: keep` (the Haxe writer defaults to `remove`) a call laid out broken writes
+ * back the comma its source put after the last argument, and a call glued onto one line drops it, as every
+ * other list does.
  */
 class HxCallArgsTrailingCommaKeepTest extends Test {
 
 	@:pin('control')
-	@:killer('M-CALL-FLAT-SOURCE-TRAIL-OFF')
-	public function testAFlatCallKeepsItsTrailingComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAFlatCallDropsItsTrailingComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tv(1, 2,);\n\t\tv(1, 2);\n\t}\n}\n';
-		assertWritesOnce('{"wrapping": {"trailingComma": "keep"}}', source, source);
+		assertWritesOnce(
+			'{"wrapping": {"trailingComma": "keep"}}', source, 'class A {\n\tfunction c() {\n\t\tv(1, 2);\n\t\tv(1, 2);\n\t}\n}\n'
+		);
 	}
 
 	@:pin('control')

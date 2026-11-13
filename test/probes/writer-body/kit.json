@@ -73,7 +73,11 @@
 		"arrow-brace-last/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tvar b = [aaaa, bbbb, u -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail }];\n\t\tvar c = { a: 1, bbbbbbbbbbbbbbbbbbbb: () -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaail: 1 } };\n\t\tvar i = foo(0, (u:Int) -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail });\n\t\tvar k = new Foo(0, u -> { Iddddddddddddddddddddd: u.iddddddddddddddddddd, Nameeeeeeeeeeeeeeeeee: u.nameeeeeeeeeeeeeeeeeeeee, Emaaaaaaaaail: u.emaaaaaaaail });\n\t}\n}\n",
 		"arrow-brace-last/hxformat.json": "{\"indentation\":{\"character\":\"tab\",\"tabWidth\":4,\"trailingWhitespace\":false,\"alignInlineSwitchCaseBody\":true},\"comments\":{\"blockCommentBodyIndent\":\"verbatim\"},\"emptyLines\":{\"maxAnywhereInFile\":2,\"afterLeftCurly\":\"keep\",\"beforeRightCurly\":\"keep\",\"beforeDocCommentEmptyLines\":\"one\",\"classEmptyLines\":{\"beginType\":1,\"endType\":1},\"abstractEmptyLines\":{\"beginType\":1,\"endType\":1},\"interfaceEmptyLines\":{\"beginType\":1,\"endType\":1},\"externClassEmptyLines\":{\"beginType\":1,\"endType\":1},\"macroClassEmptyLines\":{\"beginType\":0,\"endType\":0},\"enumEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"typedefEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"enumAbstractEmptyLines\":{\"betweenVars\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"}},\"wrapping\":{\"maxLineLength\":140,\"functionSignature\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":100},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1}],\"type\":\"noWrap\"}]},\"methodChain\":{\"defaultWrap\":\"noWrap\",\"itemsAfterCloseParenOnly\":true,\"rules\":[{\"conditions\":[{\"cond\":\"lineLength >= n\",\"value\":160}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":3},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":80},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"anyItemLength >= n\",\"value\":30},{\"cond\":\"itemCount >= n\",\"value\":4}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"itemCount >= n\",\"value\":7}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"onePerLine\"}]},\"ternaryMultilineBranch\":\"break\",\"opBoolChain\":{\"defaultWrap\":\"noWrap\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"onePerLineAfterFirst\",\"location\":\"beforeLast\"}]},\"callParameter\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1},{\"cond\":\"totalItemLength <= n\",\"value\":100}],\"type\":\"noWrap\"}]},\"expressionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]},\"conditionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]}},\"whitespace\":{\"addLineCommentSpace\":true,\"colonPolicy\":\"after\",\"typeHintColonPolicy\":\"after\",\"typeCheckColonPolicy\":\"after\",\"functionTypeHaxe3Policy\":\"around\",\"functionTypeHaxe4Policy\":\"around\",\"arrowFunctionsPolicy\":\"around\",\"ifPolicy\":\"around\",\"forPolicy\":\"around\",\"whilePolicy\":\"around\",\"switchPolicy\":\"around\",\"binopPolicy\":\"around\",\"intervalPolicy\":\"around\",\"bracesConfig\":{\"objectLiteralBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\",\"arrowBodyOpenPad\":true},\"anonTypeBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"singleStatementBraces\":\"symmetric\"},\"parenConfig\":{\"callParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"funcParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"conditionParens\":{\"openingPolicy\":\"before\",\"closingPolicy\":\"after\"},\"anonFuncParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"}}},\"lineEnds\":{\"emptyCurly\":\"noBreak\"},\"sameLine\":{\"ifBody\":\"fitLine\",\"forBody\":\"fitLine\",\"whileBody\":\"fitLine\",\"functionBody\":\"fitLine\",\"returnBody\":\"fitLine\",\"returnBodySingleLine\":\"fitLine\",\"expressionIf\":\"next\"}}",
 		"case-body-literal/A.hx": "class C {\n\tfunction readNode(xml: Fast): Void {\n\t\tswitch xml.name {\n\t\t\tcase 'zip':\n\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch (_: Any) '', file: xml.att.file, rm: xml.isTrue('rm'), log: !xml.isFalse('log') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}",
-		"case-body-literal/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4, \"alignInlineSwitchCaseBody\": true}, \"sameLine\": {\"caseBody\": \"fitLine\", \"expressionCase\": \"fitLine\"}, \"wrapping\": {\"maxLineLength\": 140, \"objectLiteral\": {\"defaultWrap\": \"onePerLine\", \"rules\": [{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 140}], \"type\": \"noWrap\"}]}}}"
+		"case-body-literal/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4, \"alignInlineSwitchCaseBody\": true}, \"sameLine\": {\"caseBody\": \"fitLine\", \"expressionCase\": \"fitLine\"}, \"wrapping\": {\"maxLineLength\": 140, \"objectLiteral\": {\"defaultWrap\": \"onePerLine\", \"rules\": [{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 140}], \"type\": \"noWrap\"}]}}}",
+		"keep-glued-comma/A.hx": "class A {\n\tfunction c() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t\tvar o = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t};\n\t\tg(\n\t\t\t1,\n\t\t\t2,\n\t\t);\n\t\tvar m = [\n\t\t\t1 => 2,\n\t\t\t3 => 4,\n\t\t];\n\t\th(aaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccc, dddddddddddddddddddd, eeeeeeeeeeeee,);\n\t\tvar b = [aaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccc, dddddddddddddddddddd, eeeeeeeeeeeee,];\n\t\tf({x: 1},);\n\t\tvar t:{x:Int, y:Int,} = null;\n\t\ta.b(1, 2,).c(3,);\n\t}\n}\n",
+		"keep-glued-comma/hxformat.json": "{\"wrapping\":{\"trailingComma\":\"keep\"}}",
+		"oneperline-source-break/A.hx": "class A {\n\tfunction c() {\n\t\tvar o = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t\tz: 3\n\t\t};\n\t\tg(\n\t\t\t1,\n\t\t\t2,\n\t\t\t3\n\t\t);\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t\t3\n\t\t];\n\t\tvar t:{\n\t\t\tx:Int,\n\t\t\ty:Int,\n\t\t\tz:Int\n\t\t} = null;\n\t\tvar o2 = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t\tz: 3,\n\t\t\tw: 4,\n\t\t\tv: 5\n\t\t};\n\t}\n}\n",
+		"oneperline-source-break/hxformat.json": "{\"wrapping\":{\"objectLiteral\":{\"defaultWrap\":\"onePerLine\"},\"arrayWrap\":{\"defaultWrap\":\"onePerLine\"},\"anonType\":{\"defaultWrap\":\"onePerLine\"},\"callParameter\":{\"defaultWrap\":\"onePerLine\"}}}"
 	},
 	"invocations": [
 		{
@@ -321,7 +325,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "535a23add1f6fea1",
+				"out": "b1d9aefd6ed5e605",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,
@@ -820,6 +824,42 @@
 				"out": "32e23b404dac5d48",
 				"err": "eef06c7385a6b7eb",
 				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "keep-glued-comma/A.hx",
+			"note": "under wrapping.trailingComma=keep: a source trailing comma on a list the cascade glues (array, object literal, call, map, a sole literal argument, method-chain segment calls) is dropped, so `[1, 2,]` writes `[1, 2]`; a base engine wrote each glued list with its comma",
+			"fixpoint": "keep-glued-comma/A.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"keep-glued-comma/A.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "aabc9c29335e69be",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "oneperline-source-break/A.hx",
+			"note": "under defaultWrap onePerLine on objectLiteral, arrayWrap, anonType and callParameter with the default rules: a source-broken short object literal and anonymous type glue onto one line by the cascade alone, the source-broken array stays broken; a base engine kept the object literal and anon type broken",
+			"fixpoint": "oneperline-source-break/A.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"oneperline-source-break/A.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "1ac4952e893bcf7b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
 			}
 		}
 	]

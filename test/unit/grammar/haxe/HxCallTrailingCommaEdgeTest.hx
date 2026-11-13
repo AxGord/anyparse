@@ -9,7 +9,8 @@ import utest.Test;
 /**
  * A call argument list's trailing comma at the edges of `wrapping.trailingComma`: under the default `remove` a last
  * argument's after-separator line comment follows the argument with no comma, as an array literal's does, plain and chained, where
- * `keep` holds the comma; under `keep` a call glued around a block or collection argument keeps the comma its source wrote; and a
+ * `keep` holds the comma; under `keep` a call glued around a block or collection argument drops the comma its source wrote, as
+ * every glued list does; and a
  * `trailingCommas.callArgumentDefault: "yes"` leaves a sole argument that shares the open delimiter's line without one.
  */
 class HxCallTrailingCommaEdgeTest extends Test {
@@ -24,29 +25,39 @@ class HxCallTrailingCommaEdgeTest extends Test {
 		assertWritesOnce('{}', source, expected);
 	}
 
+	/**
+	 * The dropped comma's line comment is re-homed onto the tail of the construct before it, a block lambda here whose
+	 * lines no source break decides, and the call is laid out from that tree, the one the next parse reads.
+	 */
 	@:pin('control')
 	@:killer('M-CALL-ARGS-NOT-REHOMED')
 	public function testADroppedCommaLaysTheArgumentOutAsTheNextParseReadsIt(): Void {
-		final source: String = 'class A {\n\tfunction c() {\n\t\tf(a, {\n\t\t\tx: 1\n\t\t}, // c\n\t\t);\n\t}\n}\n';
-		assertWritesOnce('{}', source, 'class A {\n\tfunction c() {\n\t\tf(a, {\n\t\t\tx: 1\n\t\t} // c\n\t\t);\n\t}\n}\n');
+		final source: String = 'class A {\n\tfunction c() {\n\t\tf(a, function() {\n\t\t\tx;\n\t\t}, // c\n\t\t);\n\t}\n}\n';
+		assertWritesOnce('{}', source, 'class A {\n\tfunction c() {\n\t\tf(a, function() {\n\t\t\tx;\n\t\t} // c\n\t\t);\n\t}\n}\n');
 	}
 
 	@:pin('control')
-	@:killer('M-GLUE-SOURCE-TRAIL-OFF')
-	public function testAGluedCollectionCallKeepsItsSourceComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAGluedCollectionCallDropsItsSourceComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c,);\n\t\tf(a, {\n\t\t\tx: 1,\n'
 			+ '\t\t\ty: 2\n\t\t}, c);\n\t}\n}\n';
-		assertWritesOnce('{"wrapping": {"trailingComma": "keep"}}', source, source);
+		final expected: String = 'class A {\n\tfunction c() {\n\t\tf(a, {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t}, c);\n\t\tf(a, {\n\t\t\tx: 1,\n'
+			+ '\t\t\ty: 2\n\t\t}, c);\n\t}\n}\n';
+		assertWritesOnce(
+			'{"wrapping": {"trailingComma": "keep", "objectLiteral": {"defaultWrap": "onePerLine", "rules": []}}}', source, expected
+		);
 	}
 
 	@:pin('control')
-	@:killer('M-BLOCK-LAMBDA-GLUE-SOURCE-TRAIL-OFF')
-	public function testAGluedBlockLambdaCallKeepsItsSourceComma(): Void {
+	@:killer('M-FLAT-TRAILING-COMMA-KEPT-ON-GLUE')
+	public function testAGluedBlockLambdaCallDropsItsSourceComma(): Void {
 		final source: String = 'class A {\n\tfunction c() {\n\t\tf(a, function() {\n\t\t\tx;\n\t\t}, c,);\n\t\tf(a, function() {\n'
+			+ '\t\t\tx;\n\t\t}, c);\n\t}\n}\n';
+		final expected: String = 'class A {\n\tfunction c() {\n\t\tf(a, function() {\n\t\t\tx;\n\t\t}, c);\n\t\tf(a, function() {\n'
 			+ '\t\t\tx;\n\t\t}, c);\n\t}\n}\n';
 		assertWritesOnce(
 			'{"wrapping": {"trailingComma": "keep", "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": []}}}', source,
-			source
+			expected
 		);
 	}
 

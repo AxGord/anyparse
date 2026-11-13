@@ -632,23 +632,14 @@ class HxTriviaWriteTest extends Test {
 		assertRoundtrip(source);
 	}
 
-	/**
-	 * ω-trivia-sep — `HxObjectLit.fields` multi-line layout: source
-	 * had `newlineBefore` on each element, so the writer breaks the
-	 * literal across lines and indents the body one level.
-	 *
-	 * Disables `indentObjectLiteral` (slice ω-indent-objectliteral
-	 * default-true) so this round-trip stays focused on the trivia-sep
-	 * preservation axis — the new default would otherwise add one extra
-	 * indent step to every internal hardline.
-	 */
-	public function testObjectLitMultiLineRoundTrip(): Void {
+	/** A source-broken object literal follows the cascade like any other list: short, it is glued. */
+	public function testObjectLitMultiLineSourceFollowsTheCascade(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(HxWriteFixture.listsKeepSource('{}'));
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
-		Assert.equals('${source}\n', out);
+		Assert.equals('class Main {\n\tstatic function main() {\n\t\tvar o = {a: 1, b: 2};\n\t}\n}\n', out);
 	}
 
 	/**

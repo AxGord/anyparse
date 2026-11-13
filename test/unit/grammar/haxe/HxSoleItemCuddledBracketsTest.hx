@@ -116,7 +116,7 @@ final class HxSoleItemCuddledBracketsTest extends Test {
 	/** A trailing LINE comment on the element is refused: a cuddled `]` would be swallowed by the comment. */
 	public function testTrailingLineCommentNotCuddled(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tmakeEntryRecord({\n\t\t\t\tcaptionValue: '
-			+ 'sourceValue.captionValue,\n\t\t\t\tdetailValue: sourceValue.detailValue\n\t\t\t}) // keep me\n\t\t];\n\t}\n}';
+			+ 'sourceValue.captionValue, // c\n\t\t\t\tdetailValue: sourceValue.detailValue\n\t\t\t}) // keep me\n\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, ON));
 	}
 
