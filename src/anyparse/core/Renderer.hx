@@ -1864,10 +1864,10 @@ class Renderer {
 		switch node.doc {
 			case Empty:
 				return { add: 0, aborted: false, delim: null };
-			case Text(s):
+			case Text(s, _, tag):
 				// A line comment trailing an open delimiter (`{ // note`) leaves the line ending at that delimiter.
 				if (s.length > 0)
-					return { add: s.length, aborted: false, delim: s.ltrim().startsWith('//') ? null : DocMeasure.lastCharIsOpenDelim(s) };
+					return { add: s.length, aborted: false, delim: tag == LeafTag.LineComment ? null : DocMeasure.lastCharIsOpenDelim(s) };
 				return { add: 0, aborted: false, delim: null };
 			case Line(flat):
 				if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { add: 0, aborted: true, delim: null };

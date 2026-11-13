@@ -254,18 +254,19 @@ class D {
 	 * renderer reproduces a marked `Text`'s bytes exactly — including a trailing
 	 * blank run a line break would otherwise strand and drop — and treats a marked
 	 * `Line` as a break the author wrote rather than one the writer chose, so the
-	 * blank-line cap can neither count it nor delete it.
+	 * blank-line cap can neither count it nor delete it. A non-null `tag` names
+	 * what every `Text` of the content is; null keeps each leaf's own tag.
 	 *
 	 * One call at the boundary where a subtree is known to be content rather
 	 * than emitted syntax beats marking each leaf: the comment path builds
 	 * some of its Docs here and delegates the rest to a macro-generated
 	 * writer, whose `_dt` calls no hand edit can reach.
 	 */
-	public static function verbatim(d: Doc): Doc {
+	public static function verbatim(d: Doc, ?tag: LeafTag): Doc {
 		return switch d {
-			case Text(s, _): Text(s, true);
+			case Text(s, _, own): Text(s, true, tag ?? own);
 			case Line(s, _): Line(s, true);
-			case _: mapChildren(d, verbatim);
+			case _: mapChildren(d, c -> verbatim(c, tag));
 		};
 	}
 

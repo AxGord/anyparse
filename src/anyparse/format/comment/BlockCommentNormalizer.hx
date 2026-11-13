@@ -2,6 +2,7 @@ package anyparse.format.comment;
 
 import anyparse.core.D;
 import anyparse.core.Doc;
+import anyparse.core.LeafTag;
 import anyparse.format.CommentStyle;
 import anyparse.format.IndentChar;
 import anyparse.runtime.CommonPrefix;
@@ -43,7 +44,7 @@ class BlockCommentNormalizer {
 	private static final DOC_OPEN: String = '/**';
 
 	public static function processCapturedBlockComment(content: String, opt: WriteOptions): Doc {
-		return D.verbatim(commentDoc(content, opt));
+		return D.verbatim(commentDoc(content, opt), LeafTag.BlockComment);
 	}
 
 	/**

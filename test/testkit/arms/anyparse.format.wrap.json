@@ -553,6 +553,14 @@
 			"find": "final redecided: Bool = options?.redecided == true;",
 			"replace": "final redecided: Bool = false;",
 			"note": "a value-if branch literal, whose width decision the next write takes again, measures a literal nested in its items as flat while it breaks, so it goes one-per-line and the next write glues it"
+		},
+		{
+			"name": "M-LEAFTAG-GUARD-READS-TAG",
+			"type": "anyparse.format.wrap.LineCommentPastSep",
+			"method": "isGuardedLineComment",
+			"find": "Text(_, _, LineComment)",
+			"replace": "Text(_, _, _)",
+			"note": "a guarded leaf is a line comment by its tag, not by bytes that open with //"
 		}
 	]
 }

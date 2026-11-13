@@ -57,18 +57,18 @@ enum Doc {
 	 * with a break behind them is exactly the case the flag exists for,
 	 * and grammars are plugins.
 	 *
-	 * The flag is deliberately NOT a separate ctor. Every other `Doc`
-	 * walker — the width walks, flattening, the exhaustive spine walkers —
-	 * treats a verbatim leaf identically to a syntax one, so a ctor
-	 * would buy one pass-through arm per walker and one chance each to get
-	 * it subtly wrong. A trailing optional parameter is invisible to
-	 * `case Text(s)` (Haxe matches a ctor's leading arguments) and to
-	 * `Text(s)` construction, so nothing else in the tree changes.
+	 * The flag is deliberately NOT a separate ctor: every other walker treats a
+	 * verbatim leaf as a syntax one, and a trailing optional parameter is
+	 * invisible to `case Text(s)` (Haxe matches a ctor's leading arguments)
+	 * and to `Text(s)` construction, so nothing else in the tree changes.
+	 *
+	 * `tag` says what the leaf IS (`LeafTag`), set where it is built, so a
+	 * reader reads the tag, never the bytes; it rides like `verbatim`.
 	 *
 	 * A `Doc → Doc` rewriter must not rebuild a matched leaf as `Text(s)` —
-	 * that silently demotes content to syntax. Today none does.
+	 * that silently demotes content to syntax and drops its tag. Today none does.
 	 */
-	Text(s: String, ?verbatim: Bool);
+	Text(s: String, ?verbatim: Bool, ?tag: LeafTag);
 
 	/**
 	 * A line break: a real `lineEnd` + indent in break mode, the `flat`

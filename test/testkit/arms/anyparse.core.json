@@ -593,7 +593,7 @@
 			"name": "M-GLUE-COMMENT-AFTER-DELIM",
 			"type": "anyparse.core.Renderer",
 			"method": "naturalGluableStep",
-			"find": "s.ltrim().startsWith('//') ? null : DocMeasure.lastCharIsOpenDelim(s)",
+			"find": "tag == LeafTag.LineComment ? null : DocMeasure.lastCharIsOpenDelim(s)",
 			"replace": "DocMeasure.lastCharIsOpenDelim(s)",
 			"note": "a line comment after an open delimiter ends the natural first line on the comment, so a chain stops hugging `xs.foreach(t -> { // why`"
 		},
@@ -707,6 +707,30 @@
 			"find": "return idx > s ? 0 : -1;",
 			"replace": "return idx > s ? 1 : -1;",
 			"note": "a literal run wider than a line is packed instead of one collection per line"
+		},
+		{
+			"name": "M-LEAFTAG-VERBATIM-KEEPS-OWN",
+			"type": "anyparse.core.D",
+			"method": "verbatim",
+			"find": "tag ?? own",
+			"replace": "tag",
+			"note": "D.verbatim with no tag keeps the tag each leaf already had"
+		},
+		{
+			"name": "M-LEAFTAG-FLATTEN-KEEPS",
+			"type": "anyparse.core.D",
+			"method": "flatten",
+			"find": "case Text(_): d;",
+			"replace": "case Text(s, v): Text(s, v);",
+			"note": "D.flatten keeps a leaf, tag included"
+		},
+		{
+			"name": "M-LEAFTAG-VERBATIM-SETS",
+			"type": "anyparse.core.D",
+			"method": "verbatim",
+			"find": "tag ?? own",
+			"replace": "own",
+			"note": "D.verbatim with a tag sets it on every leaf of the content"
 		}
 	]
 }

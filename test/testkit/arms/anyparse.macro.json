@@ -3191,6 +3191,22 @@
 			"find": "return trailingCommaRemovable ? macro false : sourceTrail;",
 			"replace": "return keepsTrailingCommaExpr(sourceTrail, trailingCommaRemovable);",
 			"note": "under keep a list the cascade glues writes its source trailing comma again, so a list a pass broke and a later pass glues is one column wider"
+		},
+		{
+			"name": "M-LEAFTAG-LEADING-LINE",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "leadingCommentDocRunField",
+			"find": "lineCommentStr(run, index, opt), anyparse.core.LeafTag.LineComment",
+			"replace": "lineCommentStr(run, index, opt), anyparse.core.LeafTag.BlockComment",
+			"note": "an own-line line comment leaf is tagged LineComment"
+		},
+		{
+			"name": "M-LEAFTAG-CAPTURED-LINE",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "commentTagOf",
+			"find": "anyparse.core.LeafTag.LineComment : anyparse.core.LeafTag.BlockComment",
+			"replace": "anyparse.core.LeafTag.BlockComment : anyparse.core.LeafTag.BlockComment",
+			"note": "a captured trailing line comment leaf is tagged LineComment"
 		}
 	]
 }

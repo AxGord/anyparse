@@ -268,9 +268,12 @@ class WriterCodegen {
 			docHelper('_dt', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.Text(s)),
 			// `_dt`'s VERBATIM sibling — the bytes are the author's, so the
 			// renderer may not trim a trailing blank off them. The comment
-			// helpers below emit through it; every other generated `_dt` is
-			// writer syntax by construction.
-			docHelper('_dtv', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.Text(s, true)),
+			// helpers below emit through it, each naming its comment's kind;
+			// every other generated `_dt` is writer syntax by construction.
+			docHelper('_dtv', [
+				{ name: 's', type: macro : String },
+				{ name: 'tag', type: macro : anyparse.core.LeafTag }
+			], macro anyparse.core.Doc.Text(s, true, tag)),
 			docHelper('_dop', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{ name: 'items', type: macro : Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
@@ -690,11 +693,11 @@ class WriterCodegen {
 	private static function leadingCommentDocRunField(): Field {
 		final body: Expr = macro {
 			final content: String = run[index];
-			if (StringTools.startsWith(content, '//')) return _dtv(lineCommentStr(run, index, opt));
-			if (!StringTools.startsWith(content, '/*')) return _dtv(content);
-			if (content.indexOf('\n') < 0) return _dtv(content);
+			if (StringTools.startsWith(content, '//')) return _dtv(lineCommentStr(run, index, opt), anyparse.core.LeafTag.LineComment);
+			if (!StringTools.startsWith(content, '/*')) return _dtv(content, anyparse.core.LeafTag.BlockComment);
+			if (content.indexOf('\n') < 0) return _dtv(content, anyparse.core.LeafTag.BlockComment);
 			final _block = opt.blockCommentAdapter;
-			return _block == null ? _dtv(content) : _block(content, opt);
+			return _block == null ? _dtv(content, anyparse.core.LeafTag.BlockComment) : _block(content, opt);
 		};
 		return {
 			name: 'leadingCommentDocRun',
@@ -725,7 +728,7 @@ class WriterCodegen {
 	 * rewrite the leading and verbatim variants apply.
 	 */
 	private static function trailingCommentDocField(): Field {
-		final body: Expr = macro return _dtv(' ' + lineCommentStr(['//' + content], 0, opt));
+		final body: Expr = macro return _dtv(' ' + lineCommentStr(['//' + content], 0, opt), anyparse.core.LeafTag.LineComment);
 		return {
 			name: 'trailingCommentDoc',
 			access: [APrivate, AStatic],
@@ -762,11 +765,13 @@ class WriterCodegen {
 		// A run that `CommentRun.join` put on several lines writes each at the current indent, never at column 0.
 		final body: Expr = macro {
 			final _runLines: Array<String> = anyparse.runtime.CommentRun.lines(content);
-			if (_runLines.length == 1) return _dtv(' ' + lineCommentStr([content], 0, opt));
-			final _runParts: Array<anyparse.core.Doc> = [_dtv(' ' + lineCommentStr([_runLines[0]], 0, opt))];
+			if (_runLines.length == 1) return _dtv(' ' + lineCommentStr([content], 0, opt), $e{commentTagOf(macro content)});
+			final _runParts: Array<anyparse.core.Doc> = [
+				_dtv(' ' + lineCommentStr([_runLines[0]], 0, opt), $e{commentTagOf(macro _runLines[0])})
+			];
 			for (_k in 1..._runLines.length) {
 				_runParts.push(_dhl());
-				_runParts.push(_dtv(lineCommentStr([_runLines[_k]], 0, opt)));
+				_runParts.push(_dtv(lineCommentStr([_runLines[_k]], 0, opt), $e{commentTagOf(macro _runLines[_k])}));
 			}
 			return _dc(_runParts);
 		};
@@ -1295,6 +1300,11 @@ class WriterCodegen {
 			}),
 			pos: Context.currentPos()
 		};
+	}
+
+	/** The generated expression naming the `LeafTag` of the captured comment `c`, by `CommentRun.isLine`'s two-way split. */
+	private static function commentTagOf(c: Expr): Expr {
+		return macro anyparse.runtime.CommentRun.isLine($c) ? anyparse.core.LeafTag.LineComment : anyparse.core.LeafTag.BlockComment;
 	}
 
 }

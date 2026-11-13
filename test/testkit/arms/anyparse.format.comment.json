@@ -17,6 +17,14 @@
 			"method": "isDirective",
 			"force": "false",
 			"note": "no comment reads as a directive, so the reflow and the trailing-comment move both treat `noqa` / `CHECKSTYLE` / `@formatter` markers as prose"
+		},
+		{
+			"name": "M-LEAFTAG-BLOCK-NORMALIZED",
+			"type": "anyparse.format.comment.BlockCommentNormalizer",
+			"method": "processCapturedBlockComment",
+			"find": ", LeafTag.BlockComment)",
+			"replace": ")",
+			"note": "every leaf of a normalized multi-line block comment is tagged BlockComment"
 		}
 	]
 }

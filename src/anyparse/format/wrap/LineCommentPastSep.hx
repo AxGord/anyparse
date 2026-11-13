@@ -1,6 +1,7 @@
 package anyparse.format.wrap;
 
 import anyparse.core.Doc;
+import anyparse.core.LeafTag;
 
 using StringTools;
 
@@ -66,7 +67,7 @@ class LineCommentPastSep {
 	/** A trailing line comment followed by the guard that keeps the next token off its line. */
 	public static function isGuardedLineComment(d: Doc): Bool {
 		return switch d {
-			case Concat([Text(s, _), OptHardlineSkipBeforeHardline]): s.trim().startsWith('//');
+			case Concat([Text(_, _, LineComment), OptHardlineSkipBeforeHardline]): true;
 			case _: false;
 		};
 	}
