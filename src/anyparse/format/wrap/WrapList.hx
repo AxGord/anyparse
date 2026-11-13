@@ -118,29 +118,6 @@ typedef WrapListOptions = {
 	var ?sourceMultilineKeep: Bool;
 
 	/**
-	 * This Star force-one-per-lines any SOURCE-multiline list, and this instance's source was
-	 * FLAT — so the only break shape it may emit is the one a second pass would force.
-	 *
-	 * The force-multi gate reads `Trivial<T>.newlineBefore`, i.e. the source line layout. When
-	 * the writer's own previous pass is what put those newlines there, the gate answers about
-	 * the writer's output rather than the author's file: pass 1 consults the cascade and emits
-	 * (say) `FillLine`, pass 2 sees the break it just wrote, force-one-per-lines, and the two
-	 * passes disagree forever. `writeRoundTrip(s) == s` — the canonical gate every writer-emit
-	 * mutation op is built on — then never holds after ONE pass.
-	 *
-	 * Setting this maps every break-introducing cascade answer to `OnePerLine`, which IS what
-	 * the force-multi path produces, so pass 2 reproduces pass 1 by construction. `NoWrap`
-	 * (and the `Ignore` engine fallback, which renders flat) are untouched — a list
-	 * that stays on one line grows no newline for the next pass to read.
-	 *
-	 * Off for a Star that carries `@:fmt(reflowSourceMultiline)` (its source-multiline lists go
-	 * through the cascade too, so both passes already agree) and for the
-	 * Ignore runtime mode (it drops the source layout, a fixed point already).
-	 * Default `false`.
-	 */
-	var ?breakAsOnePerLine: Bool;
-
-	/**
 	 * ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded to the flat
 	 * (`NoWrap`) shape. The writer passes `<field>TrailPresent` here (NOT the
 	 * `trailPresent || knob` value of `appendTrailingComma`), so a single-line list preserves
@@ -1340,25 +1317,6 @@ class WrapList {
 	}
 
 	/**
-	 * Collapse every break-introducing mode to `OnePerLine` when `on` — the writer's own
-	 * fixed point for a Star that force-one-per-lines a source-multiline list.
-	 *
-	 * `NoWrap` and the `Ignore` engine fallback render on one line and so leave
-	 * nothing for the next pass's source-newline scan to read; every other mode puts a
-	 * newline inside the list, and the next pass answers that newline with one-per-line
-	 * regardless of what the cascade said. Emitting one-per-line here is not a different
-	 * layout — it is the SAME bytes `fmt` already ends up writing, one pass earlier.
-	 */
-	private static inline function onePerLineWhenBreaking(mode: WrapMode, on: Bool, exceeds: Bool): WrapMode {
-		if (!on) return mode;
-		return switch mode {
-			case OnePerLineAfterFirst, FillLineWithLeadingBreak, PackedOrOnePerLine: OnePerLine;
-			case FillLine: exceeds ? OnePerLine : mode;
-			case _: mode;
-		};
-	}
-
-	/**
 	 * Returns `true` when `sepBeforeFlags[i]` is set, meaning
 	 * the engine should skip the separator between items `[i-1]` and `i`.
 	 * Null / out-of-bounds is treated as "do not skip".
@@ -1501,24 +1459,15 @@ class WrapList {
 		// shape conflicts with `applyArrowWrapping`'s break-after-
 		// `->` layout. `forceMode != null` already bypasses the
 		// cascade, so it is excluded too.
-		// The GATE reads the RAW `defaultMode`; only the SHAPE reads the decorated
-		// one. `defaultBreakMode` is that mode after `floorSourceMultiline` /
-		// `onePerLineWhenBreaking`, and both can widen it into this branch's
-		// membership test: flooring turns a `NoWrap` default into `OnePerLine`,
-		// and `onePerLineWhenBreaking` promotes `PackedOrOnePerLine` — which
-		// `dmBreak` deliberately does not list — into `OnePerLine` too. Deciding
+		// The GATE reads the RAW `defaultMode`; only the SHAPE reads the decorated one.
+		// `defaultBreakMode` is that mode after `floorSourceMultiline`, which can widen it into this
+		// branch's membership test: flooring turns a `NoWrap` default into `OnePerLine`. Deciding
 		// the gate off the decorated mode would let this branch claim cascades it
 		// never served. (`floorSourceMultiline` cannot actually fire here today:
 		// its gate is `sourceMultilineKeep`, which forces the cascade to
 		// `OnePerLine` and so never reaches a `modeFlat == NoWrap` agreement. It
 		// is applied for symmetry with `evalAt`, so the two decorate identically
 		// if that ever stops being true.)
-		//
-		// With the shape decorated, a config pairing `defaultWrap:
-		// fillLineWithLeadingBreak` with a `noWrap` rule no longer escapes the
-		// `breakAsOnePerLine` axis here — its break arm emits the one-per-line
-		// shape the NEXT writer pass would have forced anyway, so the file
-		// reaches its fixed point in one pass.
 		final dm: WrapMode = rules.defaultMode;
 		final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
 		final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
@@ -4504,7 +4453,6 @@ class WrapList {
 			groupRestProbe: axes.groupRestProbe ?? false,
 			sepBeforeFlags: axes.sepBeforeFlags,
 			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
-			breakAsOnePerLine: axes.breakAsOnePerLine ?? false,
 
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
@@ -4544,7 +4492,6 @@ class WrapList {
 		final groupRestProbe: Bool = axes.groupRestProbe;
 		final sepBeforeFlags: Null<Array<Bool>> = pastSep.sepBeforeFlags;
 		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
-		final breakAsOnePerLine: Bool = axes.breakAsOnePerLine;
 
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
@@ -4658,15 +4605,12 @@ class WrapList {
 		// on typedef-RHS anon types via the runtime gate
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			return forceMode ?? onePerLineWhenBreaking(
-				floorSourceMultiline(
-					decideWithLineLengthState(
-						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-						complexCount, minLen, equalLens, containerItems, multilineLambda
-					),
-					sourceMultilineKeep
+			return forceMode ?? floorSourceMultiline(
+				decideWithLineLengthState(
+					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+					complexCount, minLen, equalLens, containerItems, multilineLambda
 				),
-				breakAsOnePerLine, exceeds
+				sourceMultilineKeep
 			);
 		}
 
@@ -4696,9 +4640,7 @@ class WrapList {
 		// `groupRestProbe` consumers for the zero-threshold call — its bracket
 		// shares its line with the statement's `;` (or a call's `);`), and the
 		// plain-`Group` fit is blind to that tail. See the param doc above.
-		final defaultBreakMode: WrapMode = onePerLineWhenBreaking(
-			floorSourceMultiline(rules.defaultMode, sourceMultilineKeep), breakAsOnePerLine, true
-		);
+		final defaultBreakMode: WrapMode = floorSourceMultiline(rules.defaultMode, sourceMultilineKeep);
 		// A source trailing separator forces the break-mode cascade (`forceExceeds`), and a `noWrap` rule that shadows
 		// a break default answers it flat: that flat layout still has to fit its line, behind the probe the unforced
 		// path puts there (`emitZeroThresholdAgree`). The first write lays the list out unforced; the next one reads
@@ -4742,7 +4684,6 @@ private typedef ResolvedWrapListOptions = {
 	final groupRestProbe: Bool;
 	final sepBeforeFlags: Null<Array<Bool>>;
 	final sourceMultilineKeep: Bool;
-	final breakAsOnePerLine: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
 	final comprehensionBodyMeasure: Bool;

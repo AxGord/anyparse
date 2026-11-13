@@ -150,11 +150,8 @@ class HxWrapConditionVocabularyTest extends Test {
 	/**
 	 * `emitZeroThresholdAgree` reaches for `rules.defaultMode` when both
 	 * cascade states resolve to `NoWrap` and the default is a break mode.
-	 * Taking it RAW skipped the `breakAsOnePerLine` collapse, so the
-	 * emitted `fillLineWithLeadingBreak` put newlines in a list the next
-	 * pass then re-read as author intent and force-one-per-lined: the same
-	 * file needed two writer passes, and `writeRoundTrip(s) == s` — the
-	 * gate under every writer-emit mutation op — failed after one.
+	 * The emitted `fillLineWithLeadingBreak` puts newlines in the list; the next pass must not re-read them as author intent, or the
+	 * same file needs two writer passes and `writeRoundTrip(s) == s` — the gate under every writer-emit mutation op — fails after one.
 	 *
 	 * Asserting the SECOND round trip is what discriminates: the two passes
 	 * agree on the final bytes either way, so an output-only assertion

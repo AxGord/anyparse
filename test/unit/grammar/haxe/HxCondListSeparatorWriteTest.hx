@@ -144,7 +144,10 @@ final class HxCondListSeparatorWriteTest extends Test {
 		final source: String = 'class A {\n\tvar s:{var a:Int; var b:Int;};\n}\n\ntypedef T = {\n'
 			+ '\tvar aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:Int;\n'
 			+ '\tvar dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd:Int;\n};\n';
-		assertWritesOnce(source, source);
+		final expected: String = 'class A {\n\tvar s:{var a:Int; var b:Int;};\n}\n\n'
+			+ 'typedef T = {var aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:Int;\n'
+			+ '\tvar dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd:Int;};\n';
+		assertWritesOnce(source, expected);
 	}
 
 	@:pin('control')

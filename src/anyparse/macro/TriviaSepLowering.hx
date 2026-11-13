@@ -429,21 +429,13 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
 					: $rulesExpr;
 				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
-				// ω-flat-source-fixed-point: this branch is reached only when the source
-				// list carried NO newline of its own, and (for a Star without
-				// `@:fmt(reflowSourceMultiline)`) a source newline is exactly what the
-				// force-multi path answers with one-per-line. So a cascade answer that
-				// BREAKS here would be re-read as author intent by the very next pass and
-				// overridden — `fmt` would need two rewrites and `writeRoundTrip(s) == s`
-				// would fail after one. Collapse such an answer to one-per-line, which is
-				// the shape that second pass produces anyway: same final bytes, one pass
-				// earlier. Ignore drops the source layout and is a fixed point already; a
-				// reflow Star routes its multiline lists through the same cascade, so both
-				// passes agree there too.
-				final _breakAsOnePerLine: Bool = !$v{_plan.reflowSourceMultiline()} && !_ignoreEmit;
-				// Under Ignore no next pass commits a braced list, but a hardline-carrying answer is the
-				// same measure question for a host: counted, it would wrap a signature around a broken list.
-				final _deferIfHardline: Bool = _breakAsOnePerLine || $v{(_openText == '{' && !_plan.reflowInExprPosition())} && _ignoreEmit;
+				// A hardline-carrying answer breaks whatever its host does, so the host defers its measure instead
+				// of counting it full-width; a breaking list itself follows its cascade. A reflow Star stays counted; under Ignore only a
+				// braced list outside expression position defers, so a signature never wraps around a broken list.
+				final _deferIfHardline: Bool = !$v{_plan.reflowSourceMultiline()}
+					&& !_ignoreEmit
+					|| $v{(_openText == '{' && !_plan.reflowInExprPosition())}
+					&& _ignoreEmit;
 				$complexKindsDecl;
 				$containerKindsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
@@ -464,7 +456,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 						groupRestProbe: $v{_plan.groupRestProbe()} && !opt._suppressPatternRestProbe,
 						sepBeforeFlags: _sepBeforeFlags,
 						sourceMultilineKeep: _effSmlKeep,
-						breakAsOnePerLine: _breakAsOnePerLine,
+
 						flatTrailingComma: ${_trail.flatTrailingCommaExpr},
 						comprehensionFitMeasure: _comprehensionFit,
 						comprehensionBodyMeasure: _isComprehension,
@@ -491,12 +483,9 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
 				// behaviour untouched.
-				// A list the one-per-line collapse (`_breakAsOnePerLine`) committed at build time is
-				// the same question from the other side: the next pass reads its newlines and takes
-				// the force-multi path, whose Doc is a `BodyGroup`, so it is that `BodyGroup` on this
-				// pass already; a chain or an arrow around it measured it full-width once and deferred
-				// the next time. Only a result carrying a hardline (`flatLength < 0`): an answer the
-				// RENDERER still decides stays counted, as the next pass may read it back flat.
+				// A list whose answer carries a hardline (`flatLength < 0`) is deferred so a chain or an
+				// arrow around it does not count it full-width; an answer the RENDERER still decides stays
+				// counted, as the next pass may read it back flat.
 				// A construct-fit group counts a kept multi-line array too: it is what the group's own
 				// ladder wrote on the previous pass, and deferring it there would flip the verdict.
 				_matrixDoc != null

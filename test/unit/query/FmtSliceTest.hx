@@ -112,7 +112,7 @@ class FmtSliceTest extends Test {
 		Assert.equals(0, Cli.run(['fmt', dir, '--write']));
 		final written: String = File.getContent('$dir/A.hx');
 		Assert.equals(
-			'class A {\n\tpublic function f():Void {\n\t\tvar p = {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t};\n\t}\n}\n', written,
+			'class A {\n\tpublic function f():Void {\n\t\tvar p = {\n\t\t\tx: 1, y: 2\n\t\t};\n\t}\n}\n', written,
 			'one --write must reach the fixed point, not the rewrite-1 shape the next --list rejects'
 		);
 		Assert.equals(0, Cli.run(['fmt', dir, '--write']));

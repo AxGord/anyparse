@@ -2165,8 +2165,8 @@
 			"name": "M-IGNORE-HARDLINE-LIST-DEFERRED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "final _deferIfHardline: Bool = _breakAsOnePerLine || $v{(_openText == '{' && !_plan.reflowInExprPosition())} && _ignoreEmit;",
-			"replace": "final _deferIfHardline: Bool = _breakAsOnePerLine;",
+			"find": "final _deferIfHardline: Bool = !$v{_plan.reflowSourceMultiline()}\n\t\t\t\t\t&& !_ignoreEmit\n\t\t\t\t\t|| $v{(_openText == '{' && !_plan.reflowInExprPosition())}\n\t\t\t\t\t&& _ignoreEmit;",
+			"replace": "final _deferIfHardline: Bool = !$v{_plan.reflowSourceMultiline()}\n\t\t\t\t\t&& !_ignoreEmit;",
 			"note": "a hardline-carrying list under Ignore is counted again by its host, so a signature wraps around a rule-broken anon type"
 		},
 		{

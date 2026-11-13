@@ -27,12 +27,8 @@ import haxe.Exception;
  * `callParameter`, `arrayWrap`, `anonFunctionSignature` and `typeParameter`. No file needed more than two
  * rewrites, and none oscillated.
  *
- * ω-flat-source-fixed-point since closed that class at the wrap decision
- * itself: a cascade answer that BREAKS a source-flat list is emitted as
- * `OnePerLine` — the shape the force-multi path would force on the next pass
- * anyway — so pass 2 reproduces pass 1 by construction
- * (`WrapList.breakAsOnePerLine`). Over a whole real tree under its own `hxformat.json` the files that
- * took two rewrites now take one, `fmt --write` writes a BYTE-IDENTICAL tree, and no corpus fixture moved.
+ * That class is closed at the source: no non-array list reads its source newlines any more, so
+ * a breaking list lays out by its cascade alone and pass 2 reproduces pass 1 by construction.
  *
  * So `fmt` writes the fixed point instead of one round trip. Two properties
  * make that safe rather than clever:

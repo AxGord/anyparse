@@ -369,8 +369,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 			'class C {\n\tfunction f(): Void {\n\t\tfinal e: { pos: Int, expr: String } = null;\n\t}\n}', ANON_FILL_LINE
 		);
 		Assert.isTrue(
-			once.indexOf('final e:{\n\t\t\tpos:Int,\n\t\t\texpr:String\n\t\t} = null;') != -1,
-			'expected the one-per-line shape the next pass would force, got:\n<$once>'
+			once.indexOf('final e:{pos:Int,\n\t\t\texpr:String} = null;') != -1,
+			'expected the fill-line shape the anon-type cascade answers, got:\n<$once>'
 		);
 		Assert.equals(once, write(once, ANON_FILL_LINE), 'one round trip must land on the fixed point');
 	}
@@ -379,8 +379,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	public function testObjectLiteralLeadingBreakOnOverflow(): Void {
 		final once: String = write('class C {\n\tfunction f(): Void {\n\t\tvar p = { x: 1, y: 2 };\n\t}\n}', OBJECT_LEADING_BREAK);
 		Assert.isTrue(
-			once.indexOf('var p = {\n\t\t\tx: 1,\n\t\t\ty: 2\n\t\t};') != -1,
-			'expected the one-per-line shape the next pass would force, got:\n<$once>'
+			once.indexOf('var p = {\n\t\t\tx: 1, y: 2\n\t\t};') != -1,
+			'expected the leading-break fill shape the cascade answers, got:\n<$once>'
 		);
 		Assert.equals(once, write(once, OBJECT_LEADING_BREAK), 'one round trip must land on the fixed point');
 	}
