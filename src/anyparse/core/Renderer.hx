@@ -1,5 +1,6 @@
 package anyparse.core;
 
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.IndentChar;
 
 using StringTools;
@@ -570,23 +571,6 @@ class Renderer {
 	}
 
 	/**
-	 * True when `s` ends with an open delimiter (`(`/`[`/`{`) — drives the
-	 * `OpenDelim` `lastEmit` classification.
-	 */
-	private static inline function endsWithOpenDelim(s: String): Bool {
-		if (s.length == 0) return false;
-		final c: Int = s.fastCodeAt(s.length - 1);
-		return c == '('.code || c == '['.code || c == '{'.code;
-	}
-
-	/**
-	 * Classify the `lastEmit` state produced by emitting text `s`.
-	 */
-	private static inline function lastEmitFromText(s: String): LastEmit {
-		return endsWithOpenDelim(s) ? OpenDelim : Other;
-	}
-
-	/**
 	 * Width of the `OptSpace` still pending at the current pen — content that is
 	 * NOT yet in `ctx.col` but lands on the same physical line as whatever is
 	 * emitted next. Fed to the column-aware push helpers so their fit probes
@@ -762,6 +746,11 @@ class Renderer {
 	 */
 	private static inline function absorbedByPendingHardline(ctx: RenderCtx, s: String, verbatim: Bool): Bool {
 		return !verbatim && ctx.pendingHardline >= 0 && trailBlankStart(s) == 0;
+	}
+
+	/** What a leaf spelling `s` tagged `tag` leaves as the last byte written: an open the tag names, unless a blank follows it. */
+	private static inline function lastEmitOf(s: String, tag: Null<LeafTag>): LastEmit {
+		return DelimiterLeaf.leavesOpen(tag, false) && trailBlankStart(s) == s.length ? OpenDelim : Other;
 	}
 
 	/**
@@ -1867,17 +1856,17 @@ class Renderer {
 			case Text(s, _, tag):
 				// A line comment trailing an open delimiter (`{ // note`) leaves the line ending at that delimiter.
 				if (s.length > 0)
-					return { add: s.length, aborted: false, delim: tag == LeafTag.LineComment ? null : DocMeasure.lastCharIsOpenDelim(s) };
+					return { add: s.length, aborted: false, delim: tag == LeafTag.LineComment ? null : DocMeasure.leafLeavesOpen(s, tag) };
 				return { add: 0, aborted: false, delim: null };
 			case Line(flat):
 				if (D.isHardline(flat)) return { add: 0, aborted: true, delim: null };
 				if (node.mode == MBreak) return { add: 0, aborted: true, delim: null };
-				if (flat.length > 0) return { add: flat.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(flat) };
+				if (flat.length > 0) return { add: flat.length, aborted: false, delim: DocMeasure.leafLeavesOpen(flat, null) };
 				return { add: 0, aborted: false, delim: null };
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true, delim: null };
 			case OptSpace(s):
-				return { add: s.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(s) };
+				return { add: s.length, aborted: false, delim: DocMeasure.leafLeavesOpen(s, null) };
 			case OptSpaceSkipAfterHardline:
 				return { add: 1, aborted: false, delim: null };
 			case _:
@@ -3058,7 +3047,7 @@ class Renderer {
 	 * policies, flushing pending hardline / opt-space / indent, then the text.
 	 * Mutates `ctx` (invariant #1: render-local carrier, no static state).
 	 */
-	private static function emitText(ctx: RenderCtx, s: String, verbatim: Bool): Void {
+	private static function emitText(ctx: RenderCtx, s: String, verbatim: Bool, tag: Null<LeafTag>): Void {
 		if (s.length <= 0) return;
 		// ω-cond-indent-policy FixedZero: inside a
 		// `ConditionalMarkerZero` scope, a fresh-line token that
@@ -3109,7 +3098,8 @@ class Renderer {
 		}
 		if (bodyEnd < s.length) ctx.pendingTrailBlank = (ctx.pendingTrailBlank ?? '') + s.substring(bodyEnd);
 		ctx.col += s.length;
-		ctx.lastEmit = lastEmitFromText(s);
+		// The renderer's own last byte: an open the tag names, unless a blank was written after it.
+		ctx.lastEmit = lastEmitOf(s, tag);
 	}
 
 	/**
@@ -3147,7 +3137,8 @@ class Renderer {
 			if (verbatim) recordTextLineEnds(ctx, flat);
 			ctx.buf.add(flat);
 			ctx.col += flat.length;
-			if (flat.length > 0) ctx.lastEmit = lastEmitFromText(flat);
+			// A soft separator is an untagged leaf: it leaves no delimited run open.
+			if (flat.length > 0) ctx.lastEmit = Other;
 		} else {
 			// Break-mode hardline: drop pending OptSpace so the
 			// lead's optional trailing space disappears before
@@ -3331,8 +3322,8 @@ class Renderer {
 		switch (f.doc) {
 			case Empty:
 				// nothing
-			case Text(s, verbatim):
-				if (!absorbedByPendingHardline(ctx, s, verbatim == true)) emitText(ctx, s, verbatim == true);
+			case Text(s, verbatim, tag):
+				if (!absorbedByPendingHardline(ctx, s, verbatim == true)) emitText(ctx, s, verbatim == true, tag);
 			case Line(flat, verbatim):
 				emitLine(ctx, f, flat, verbatim == true);
 			case OptSpace(_), OptSpaceSkipAfterHardline, OptHardlineSkipBeforeHardline:

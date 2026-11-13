@@ -593,8 +593,8 @@
 			"name": "M-GLUE-COMMENT-AFTER-DELIM",
 			"type": "anyparse.core.Renderer",
 			"method": "naturalGluableStep",
-			"find": "tag == LeafTag.LineComment ? null : DocMeasure.lastCharIsOpenDelim(s)",
-			"replace": "DocMeasure.lastCharIsOpenDelim(s)",
+			"find": "tag == LeafTag.LineComment ? null : DocMeasure.leafLeavesOpen(s, tag)",
+			"replace": "DocMeasure.leafLeavesOpen(s, tag)",
 			"note": "a line comment after an open delimiter ends the natural first line on the comment, so a chain stops hugging `xs.foreach(t -> { // why`"
 		},
 		{
@@ -747,6 +747,38 @@
 			"find": "Delimiter(Collection, _)",
 			"replace": "Delimiter(Collection | EmptyCollection, _)",
 			"note": "an empty `{}` argument starts a collection run, so a fill pushes the next argument off the line to strand a two-character `{},`"
+		},
+		{
+			"name": "M-LEAFEND-OPENS-PLAIN",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "endEdgeOf",
+			"find": "return Opens;",
+			"replace": "return Plain;",
+			"note": "a leaf that ends on an open delimiter (`foo(`, `) {`) is tagged as ending on nothing, so every reader of its end edge misses the run it leaves open"
+		},
+		{
+			"name": "M-LEAFEND-EMIT-BYTES",
+			"type": "anyparse.core.Renderer",
+			"method": "lastEmitOf",
+			"find": "DelimiterLeaf.leavesOpen(tag, false) && trailBlankStart(s) == s.length",
+			"replace": "StringTools.endsWith(s, '(')",
+			"note": "the renderer reads a leaf's last byte again instead of its tag, so an untagged fragment ending with `(` skips the hardline only an open delimiter may"
+		},
+		{
+			"name": "M-LEAFEND-MEASURE-ARROW",
+			"type": "anyparse.core.DocMeasure",
+			"method": "leafLeavesOpen",
+			"find": "DelimiterLeaf.leavesOpen(tag, true)",
+			"replace": "DelimiterLeaf.leavesOpen(tag, false)",
+			"note": "an arrow `->` no longer ends a head at an open construct, so a lambda body stops gluing to its arrow line"
+		},
+		{
+			"name": "M-LEAFEND-MEASURE-BYTES",
+			"type": "anyparse.core.DocMeasure",
+			"method": "leafLeavesOpen",
+			"find": "return DelimiterLeaf.leavesOpen(tag, true);",
+			"replace": "return StringTools.endsWith(StringTools.rtrim(s), '(');",
+			"note": "the glue / head probes read a leaf's last byte again, so an untagged fragment ending with `(` reads as an open delimiter"
 		}
 	]
 }

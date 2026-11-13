@@ -3,6 +3,8 @@ package anyparse.core;
 using anyparse.util.Strings;
 using StringTools;
 
+import anyparse.core.LeafTag.DelimiterLeaf;
+
 /**
  * Static `Doc` measurement utilities that don't depend on render-time
  * stack/mode state. Live in `core` so both `core.Renderer` and the
@@ -108,9 +110,12 @@ final class DocMeasure {
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
-				case Text(s), OptSpace(s):
+				case Text(s, _, tag):
 					total += s.length;
-					lastOpen = lastCharIsOpenDelim(s) ?? lastOpen;
+					lastOpen = leafLeavesOpen(s, tag) ?? lastOpen;
+				case OptSpace(s):
+					total += s.length;
+					lastOpen = leafLeavesOpen(s, null) ?? lastOpen;
 				case OptSpaceSkipAfterHardline:
 					total++;
 				case Line(flat):
@@ -146,7 +151,7 @@ final class DocMeasure {
 	 * Reports that run's flat `width` and whether it ENDS AT an open
 	 * delimiter (`endsAtOpenDelim`, the same `(`/`[`/`{`/`->` verdict the
 	 * renderer's leading-break glue state reads through
-	 * `lastCharIsOpenDelim`).
+	 * `leafLeavesOpen`).
 	 *
 	 * PESSIMISTIC by construction: every conditional (`IfBreak` /
 	 * `If*Exceeds`) resolves to its BREAK side, every `Line` (soft or
@@ -194,27 +199,14 @@ final class DocMeasure {
 	}
 
 	/**
-	 * The "ends at an open delimiter" verdict for the last non-whitespace char
-	 * of `s`: `true` for `(` / `[` / `{` or an arrow `->`, `false` for any
-	 * other char, and `null` when `s` has no non-whitespace char (all-space or
-	 * empty) — in which case the caller must LEAVE its running glue state
-	 * unchanged (a whitespace-only run is not a verdict). Two consumers read
-	 * it in the SAME direction (`true` = keep the construct on this line /
-	 * arm the head probe), so it stays tightenable in one place:
-	 * `Renderer.naturalFirstLineGluable`'s leading-break glue state and
-	 * `breakableHead`'s `endsAtOpenDelim`.
+	 * The "ends at an open delimiter" verdict of a leaf spelling `s` tagged `tag`, read off its tag
+	 * (`DelimiterLeaf.leavesOpen`, an arrow counted): null for a blank leaf, which leaves the caller's running glue state
+	 * as it was. A soft separator (`Line`, `OptSpace`) is read as an untagged leaf. Two consumers read it in the SAME
+	 * direction (`true` = keep the construct on this line / arm the head probe): `Renderer.naturalFirstLineGluable`'s
+	 * leading-break glue state and `breakableHead`'s `endsAtOpenDelim`.
 	 */
-	public static function lastCharIsOpenDelim(s: String): Null<Bool> {
-		var i: Int = s.length - 1;
-		while (i >= 0) {
-			final c: Int = s.fastCodeAt(i);
-			if (c == ' '.code || c == '\t'.code) {
-				i--;
-				continue;
-			}
-			final arrow: Bool = c == '>'.code && i > 0 && s.fastCodeAt(i - 1) == '-'.code;
-			return c == '('.code || c == '['.code || c == '{'.code || arrow;
-		}
+	public static function leafLeavesOpen(s: String, tag: Null<LeafTag>): Null<Bool> {
+		for (i in 0...s.length) if (!s.fastCodeAt(i).isSpaceOrTab()) return DelimiterLeaf.leavesOpen(tag, true);
 		return null;
 	}
 
@@ -1061,8 +1053,10 @@ final class DocMeasure {
 		switch (node) {
 			case Empty:
 				return { add: 0, stop: false, delim: null };
-			case Text(s), OptSpace(s):
-				return { add: s.length, stop: false, delim: lastCharIsOpenDelim(s) };
+			case Text(s, _, tag):
+				return { add: s.length, stop: false, delim: leafLeavesOpen(s, tag) };
+			case OptSpace(s):
+				return { add: s.length, stop: false, delim: leafLeavesOpen(s, null) };
 			case OptSpaceSkipAfterHardline:
 				return { add: 1, stop: false, delim: null };
 			// Every break point ends the head. A soft `Line` counts even

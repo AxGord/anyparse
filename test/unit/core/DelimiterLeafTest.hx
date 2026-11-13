@@ -19,11 +19,11 @@ class DelimiterLeafTest extends Test {
 	@:pin('control')
 	@:killer('M-DELIMLEAF-EMPTY-PAIR')
 	public function testTagOfClassifiesTheEdges(): Void {
-		Assert.same(Delimiter(Paren, false), DelimiterLeaf.tagOf('('));
-		Assert.same(Delimiter(NoOpen, true), DelimiterLeaf.tagOf(')'));
-		Assert.same(Delimiter(Collection, false), DelimiterLeaf.tagOf('{'));
-		Assert.same(Delimiter(EmptyCollection, true), DelimiterLeaf.tagOf('[]'));
-		Assert.same(Delimiter(Paren, true), DelimiterLeaf.tagOf('()'));
+		Assert.same(Delimiter(Paren, Opens), DelimiterLeaf.tagOf('('));
+		Assert.same(Delimiter(NoOpen, Closes), DelimiterLeaf.tagOf(')'));
+		Assert.same(Delimiter(Collection, Opens), DelimiterLeaf.tagOf('{'));
+		Assert.same(Delimiter(EmptyCollection, Closes), DelimiterLeaf.tagOf('[]'));
+		Assert.same(Delimiter(Paren, Closes), DelimiterLeaf.tagOf('()'));
 		Assert.isNull(DelimiterLeaf.tagOf('a'));
 		Assert.isNull(DelimiterLeaf.tagOf(''));
 	}
@@ -45,8 +45,8 @@ class DelimiterLeafTest extends Test {
 			),
 			['(', ')', '[', ']', '{', '}', '()', '[]', '{}'], new DocIdentityMap(), tags
 		);
-		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(Paren, false))));
-		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(NoOpen, true))));
+		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(Paren, Opens))));
+		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(NoOpen, Closes))));
 		Assert.isFalse(tags.exists(t -> t == null));
 	}
 

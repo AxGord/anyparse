@@ -1339,9 +1339,10 @@ class WriterCodegen {
 	/** The generated expression naming `tag`. */
 	private static function leafTagExpr(tag: anyparse.core.LeafTag): Expr {
 		return switch tag {
-			case Delimiter(opens, closes):
+			case Delimiter(opens, ends):
 				final open: String = Std.string(opens);
-				macro anyparse.core.LeafTag.Delimiter(anyparse.core.LeafTag.OpenEdge.$open, $v{closes});
+				final end: String = Std.string(ends);
+				macro anyparse.core.LeafTag.Delimiter(anyparse.core.LeafTag.OpenEdge.$open, anyparse.core.LeafTag.EndEdge.$end);
 			case LineComment: macro anyparse.core.LeafTag.LineComment;
 			case BlockComment: macro anyparse.core.LeafTag.BlockComment;
 		};
