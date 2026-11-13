@@ -3183,6 +3183,14 @@
 			"find": "if (afterLead != null) optParts.push(afterLeadDoc(afterLead));",
 			"replace": "",
 			"note": "the optional-lead writer never emits the AfterLead run, so a parsed comment after an optional lead is dropped on write"
+		},
+		{
+			"name": "M-REJECT-FOLLOW-LIT-IGNORED",
+			"type": "anyparse.macro.KwBranchLowering",
+			"method": "appendRejectFollowLitStep",
+			"find": "if (rejectLit == null) return;",
+			"replace": "return;",
+			"note": "a literal branch ignores its @:rejectFollowLit, so an unclosed `${` in a single-quoted string degrades to a literal `$` and the parse gate lets it through"
 		}
 	]
 }

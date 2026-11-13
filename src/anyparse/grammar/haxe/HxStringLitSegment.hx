@@ -6,9 +6,12 @@ package anyparse.grammar.haxe;
  *
  * The regex matches one or more characters that are NOT `'` (which would
  * end the string), `\` (which starts an escape, handled by `\\.`), or
- * `$` (which starts interpolation). Escape sequences `\X` are included
- * in the same run so that `hello\nworld` is one `Literal` segment, not
- * three. `@:rawString` instructs the parser to store the matched slice
+ * `$` (which starts interpolation). Escape sequences are included in
+ * the same run so that `hello\nworld` is one `Literal` segment, not
+ * three. Only the escapes haxe takes match (`\n \r \t \" \' \\`, a
+ * `\NNN` octal up to `\177`, `\x00`..`\x7F`, `\uNNNN`, `\u{…}` of
+ * up to six significant digits after any leading zeros); any other `\X` ends the run and fails the parse, as it
+ * does in haxe. `@:rawString` instructs the parser to store the matched slice
  * VERBATIM — escape sequences NOT decoded — and the writer to emit it
  * unchanged. This preserves source form byte-perfect through round-trip:
  * a literal embedded newline (multiline `'...'`) stays a real newline,
@@ -17,11 +20,8 @@ package anyparse.grammar.haxe;
  * source-verbatim approach.
  *
  * Why not `@:unescape`: decode+re-encode is lossy at the source-form
- * boundary. A real newline and the escape `\n` decode to the same
- * runtime value, so a re-escaping writer cannot tell which form the
- * source carried — it collapses both to `\n` and corrupts genuine
- * multiline strings. `@:rawString` skips the decode pass entirely, so
- * whichever form the source used is preserved.
+ * boundary — a real newline and `\n` decode to the same value, so a
+ * re-escaping writer would collapse both and corrupt multiline strings.
  *
  * `@:raw` suppresses `skipWs` in the generated parse function — spaces
  * inside string content are significant, not whitespace to skip.
@@ -39,7 +39,7 @@ package anyparse.grammar.haxe;
  * the query tree, which is where consumers ask. The parse tree keeps
  * the author's spelling, as the writer needs.
  */
-@:re("(?:[^'\\\\$]|\\\\.)+")
+@:re("(?:[^'\\\\$]|\\\\(?:[nrt\"'\\\\]|[01][0-7][0-7]|x[0-7][0-9a-fA-F]|u(?:[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]|\\{(?:0+(?:[1-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F])?)?)?)?)?)?|[1-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F])?)?)?)?)?)\\})))+")
 @:rawString
 @:raw
 abstract HxStringLitSegment(String) from String to String {}

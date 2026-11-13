@@ -150,7 +150,7 @@ final class HaxeFormat implements TextFormat {
 	 * Asymmetry with `escapeChar` (which targets double-quoted strings):
 	 *  - `'` is the delimiter → escape as `\'`
 	 *  - `"` is a literal character inside single-quoted strings → bare
-	 *  - `$` triggers interpolation → escape as `\$` so a literal dollar
+	 *  - `$` triggers interpolation → escape as `$$` (haxe rejects `\$`) so a literal dollar
 	 *    in the parsed segment doesn't accidentally start interpolation
 	 *    on re-parse. (Currently the segment parser regex excludes `$`
 	 *    from `HxStringLitSegment`, but the writer guards defensively.)
@@ -166,7 +166,7 @@ final class HaxeFormat implements TextFormat {
 		return switch c {
 			case '\''.code: '\\\'';
 			case '\\'.code: '\\\\';
-			case '$'.code: '\\$';
+			case '$'.code: '$$';
 			case '\n'.code: '\\n';
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';

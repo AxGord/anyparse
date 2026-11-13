@@ -382,6 +382,10 @@ class LexicalLowering {
 	 * `pattern` read as a delimited literal — its opening and closing literals, the characters
 	 * its body excludes, the escape that suspends them and the trailing flag range.
 	 *
+	 * The escape alternative is `<esc>.`, or `<esc>(?:…)` where a grammar narrows which escapes
+	 * its PARSER takes: the scan stays tree-blind and treats every `<esc>X` as one escape, so an
+	 * invalid one still delimits the literal it sits in.
+	 *
 	 * Deliberately narrow: it accepts the ONE shape whose delimiters are recoverable, and
 	 * errors on everything else naming `origin`. The alternative — running the regex — cannot
 	 * answer where an UNTERMINATED literal ends, and that is a region the scan must still
@@ -403,8 +407,14 @@ class LexicalLowering {
 		if (pattern.charAt(i) != '\\' || i + 1 >= n) reject('the escape alternative must start with an escaped character');
 		final escape: Int = pattern.charCodeAt(i + 1) ?? -1;
 		i += 2;
-		if (pattern.substr(i, 2) != '.)') reject('the escape alternative must be `<esc>.`');
-		i += 2;
+		if (pattern.charAt(i) == '(') {
+			i = groupEnd(pattern, i);
+			if (pattern.charAt(i) != ')') reject('the escape alternative must be `<esc>.` or `<esc>(?:…)`');
+			i++;
+		} else {
+			if (pattern.substr(i, 2) != '.)') reject('the escape alternative must be `<esc>.` or `<esc>(?:…)`');
+			i += 2;
+		}
 		final repeat: String = pattern.charAt(i);
 		if (repeat != '*' && repeat != '+') reject('the body alternation must repeat');
 		i++;
@@ -427,6 +437,30 @@ class LexicalLowering {
 			flagLow: flagLow,
 			flagHigh: flagHigh
 		};
+	}
+
+	/**
+	 * The index just past the `)` that closes the `(` at `at`, skipping escaped characters and `[…]` classes.
+	 */
+	private static function groupEnd(pattern: String, at: Int): Int {
+		var depth: Int = 0;
+		var i: Int = at;
+		while (i < pattern.length) {
+			switch pattern.charAt(i) {
+				case '\\':
+					i++;
+				case '[':
+					i = excludedSet(pattern, i + 1).next;
+				case '(':
+					depth++;
+				case ')':
+					depth--;
+					if (depth == 0) return i + 1;
+				case _:
+			}
+			i++;
+		}
+		return i;
 	}
 
 }

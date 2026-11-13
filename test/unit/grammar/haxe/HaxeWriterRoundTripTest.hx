@@ -4,6 +4,7 @@ import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.runtime.ParseError;
 import utest.Assert;
 
 /**
@@ -311,14 +312,11 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <$out>');
 	}
 
-	private function testSingleStringEscapedDollarRoundTrip(): Void {
-		// `\$` inside `'...'` is a valid Haxe escape preventing interpolation;
-		// previously `unescapeChar` threw on the escape with no current
-		// fixture exercising it. Defensive completeness — paired with
-		// `escapeSingleQuoteChar`'s `'$' → '\\$'` emission.
+	private function testSingleStringEscapedDollarRefused(): Void {
+		// haxe rejects `\$` (the escape for a literal dollar is `$$`), so the
+		// grammar must refuse it instead of round-tripping it.
 		final src: String = "class F { var x:String = 'val=\\$name'; }";
-		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
-		Assert.isTrue(out.indexOf("'val=\\$name'") != -1, 'expected backslash-dollar-name preserved in: $out');
+		Assert.raises(() -> HaxeModuleParser.parse(src), ParseError);
 	}
 
 	private function testSingleStringWithDoubleQuotePreservedBare(): Void {

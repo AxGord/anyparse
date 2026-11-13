@@ -623,7 +623,7 @@ class Lowering {
 		return switch branchShape(branch) {
 			case Prefix(op): lowerPrefixBranch(branch, typePath, ctorRef, recurseFnName, op);
 			case KwZeroArg(kw): lowerKwZeroArgBranch(branch, ctorRef, kw);
-			case SingleLit(lit): lowerSingleLitBranch(ctorRef, lit);
+			case SingleLit(lit): lowerSingleLitBranch(branch, ctorRef, lit);
 			case MultiLit(lits): lowerMultiLitBranch(ctorRef, lits);
 			case StarList(lead, trail, sep, sepAlt): lowerStarBranch(branch, ctorRef, lead, trail, sep, sepAlt);
 			case KwRef(_, _): lowerKwRefBranch(branch, typePath, ctorRef);

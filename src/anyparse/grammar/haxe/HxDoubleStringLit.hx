@@ -33,9 +33,11 @@ package anyparse.grammar.haxe;
  * span out of the source (`HaxeStringFoldSupport`); a consumer listing SYMBOLS drops both kinds by
  * declaration, through `RefShape.stringLiteralKinds` and `RefShape.stringInterpTextKind`.
  *
+ * Only the escapes haxe takes match (the set `HxStringLitSegment` lists); any other `\X` fails the parse.
+ *
  * `from String to String` keeps test assertion literals compiling without explicit casts.
  */
-@:re('"(?:[^"\\\\]|\\\\.)*"')
+@:re('"(?:[^"\\\\]|\\\\(?:[nrt"\'\\\\]|[01][0-7][0-7]|x[0-7][0-9a-fA-F]|u(?:[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]|\\{(?:0+(?:[1-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F])?)?)?)?)?)?|[1-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F](?:[0-9a-fA-F])?)?)?)?)?)\\})))*"')
 @:rawString
 @:lexical(StringLit)
 abstract HxDoubleStringLit(String) from String to String {}

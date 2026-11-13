@@ -57,13 +57,24 @@ final class KwBranchLowering {
 	 * routes through the word-boundary-checking `expectKw`; a symbolic
 	 * literal through plain `expectLit`.
 	 */
-	private static function lowerSingleLitBranch(ctorRef: Expr, lit: String): Expr {
+	private static function lowerSingleLitBranch(branch: ShapeNode, ctorRef: Expr, lit: String): Expr {
 		final expectCall: Expr = endsWithWordChar(lit) ? macro expectKw(ctx, $v{lit}) : macro expectLit(ctx, $v{lit});
-		return macro {
-			skipWs(ctx);
-			$expectCall;
-			return $ctorRef;
-		};
+		final steps: Array<Expr> = [macro skipWs(ctx), expectCall];
+		appendRejectFollowLitStep(steps, branch);
+		steps.push(macro return $ctorRef);
+		return macro $b{steps};
+	}
+
+	/**
+	 * Branch-level `@:rejectFollowLit('<text>')` on a `@:lit` branch: once the literal matched, the
+	 * branch backtracks when `<text>` follows IMMEDIATELY (no whitespace skip, no consumption).
+	 * It lets a fallback literal refuse the opener of a construct an earlier branch tried and failed
+	 * to complete, instead of degrading to plain text.
+	 */
+	private static function appendRejectFollowLitStep(steps: Array<Expr>, branch: ShapeNode): Void {
+		final rejectLit: Null<String> = branch.readMetaString(':rejectFollowLit');
+		if (rejectLit == null) return;
+		steps.push(macro if (peekLit(ctx, $v{rejectLit})) throw anyparse.runtime.ParseError.backtrack);
 	}
 
 	/**

@@ -9401,6 +9401,52 @@
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
+		},
+		{
+			"name": "apq patch K.hx --select FnMember:main --from-file k-pay.txt",
+			"note": "a payload whose string literal carries an escape haxe rejects is refused by the parse gate, not previewed or written",
+			"argv": [
+				"apq",
+				"patch",
+				"K.hx",
+				"--select",
+				"FnMember:main",
+				"--from-file",
+				"k-pay.txt"
+			],
+			"files": {
+				"K.hx": "class R {\n\tstatic function main() {\n\t\tvar a = 0;\n\t}\n}\n",
+				"k-pay.txt": "var a = 0;\n====\nvar a = 'a\\qb';\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "6c153df5b73ddd31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq patch K.hx --select FnMember:main --from-file k-pay.txt",
+			"note": "a payload whose string literal carries an escape haxe rejects is refused by the parse gate, not previewed or written",
+			"argv": [
+				"hxq",
+				"patch",
+				"K.hx",
+				"--select",
+				"FnMember:main",
+				"--from-file",
+				"k-pay.txt"
+			],
+			"files": {
+				"K.hx": "class R {\n\tstatic function main() {\n\t\tvar a = 0;\n\t}\n}\n",
+				"k-pay.txt": "var a = 0;\n====\nvar a = 'a\\qb';\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "6c153df5b73ddd31",
+				"files": "e3b0c44298fc1c14"
+			}
 		}
 	]
 }

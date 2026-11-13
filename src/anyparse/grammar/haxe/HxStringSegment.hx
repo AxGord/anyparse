@@ -17,9 +17,9 @@ package anyparse.grammar.haxe;
  *     then `parseHxIdentLit` matches the identifier.
  *  5. `LoneDollar` — a literal `$` not followed by `$`, `{`, or an
  *     identifier-start char (e.g. `'$'`, `'$ '`, `'$5'`). Must appear
- *     LAST so `$$` binds to `Dollar`, `${` to `Block`, and `$name` to
- *     `Ident`; only a `$` satisfying none of those falls through here.
- *     Real Haxe treats such a `$` as a literal dollar.
+ *     LAST so `$$` binds to `Dollar` and `$name` to `Ident`; `@:rejectFollowLit('{')`
+ *     refuses `${`, so an unclosed `${` fails the parse as haxe does. Real
+ *     Haxe treats any other `$` as a literal dollar.
  *
  * `@:raw` suppresses `skipWs` in the generated parse function — every
  * character between the enclosing `'` quotes is significant.
@@ -49,5 +49,6 @@ enum HxStringSegment {
 	@:lead("$")
 	Ident(name: HxWordLit);
 	@:lit("$")
+	@:rejectFollowLit('{')
 	LoneDollar;
 }
