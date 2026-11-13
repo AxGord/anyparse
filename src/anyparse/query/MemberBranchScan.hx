@@ -98,7 +98,7 @@ final class MemberBranchScan {
 	 */
 	public static function eachMember(
 		seams: MemberBranchSeams, container: QueryNode, isMember: QueryNode -> Bool,
-		visit: (member:QueryNode, run:Array<QueryNode>, runIsCertain:Bool) -> Void
+		visit: (member: QueryNode, run: Array<QueryNode>, runIsCertain: Bool) -> Void
 	): Void {
 		fold(seams, container.children, freshRun(), (run, child) -> {
 			if (!isMember(child)) return { nodes: run.nodes.concat([child]), certain: run.certain };
@@ -120,7 +120,7 @@ final class MemberBranchScan {
 	 */
 	public static function eachTypeMember(
 		decl: TypeDeclMatch, shape: RefShape, source: String, isMember: QueryNode -> Bool,
-		visit: (member:QueryNode, run:Array<QueryNode>) -> Void, regions: () -> Array<LexRegion>
+		visit: (member: QueryNode, run: Array<QueryNode>) -> Void, regions: () -> Array<LexRegion>
 	): Void {
 		eachMember(seamsOf(shape, source, regions), decl.nameNode, isMember, (member, run, _) -> visit(member, run));
 	}

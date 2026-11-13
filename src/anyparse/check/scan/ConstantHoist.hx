@@ -429,7 +429,7 @@ typedef Hoist = {
  * BODY-SCOPED: the arm only ever hands the resolver a LOCAL's declaration (its category gate runs
  * first), and `Naming`'s closure assumes exactly that.
  */
-typedef OccurrenceResolver = (declFrom:Int, name:String) -> Null<Array<Span>>;
+typedef OccurrenceResolver = (declFrom: Int, name: String) -> Null<Array<Span>>;
 
 /**
  * What every gate of the arm reads, resolved once per `hoistsFor` call: the parsed file and its

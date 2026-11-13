@@ -20,8 +20,8 @@ package anyparse.grammar.haxe;
  * The deprecated Haxe 3 parenthesised multi-bound form `<T:(A, B)>` is a distinct construct
  * and stays a follow-up.
  *
- * The colon between name and constraint is emitted tight by default (`<T:Foo>`) — `:` is in
- * `HaxeFormat.tightLeads` — and is spaced by `@:fmt(space('typeParamConstraintColon', 'lead'))`.
+ * The colon between name and constraint is spaced by `@:fmt(space('typeParamConstraintColon', 'lead'))` — `:` is
+ * in `HaxeFormat.tightLeads`, so `None` emits `<T:Foo>`; an absent key makes the loader copy `typeHintColon` into it.
  * `=` spacing on the default is driven by `@:fmt(typeParamDefaultEquals)` (ω-typeparam-default-equals): the default
  * `WhitespacePolicy.Both` emits `<T = Int>`, matching haxe-formatter's `whitespace.binopPolicy`
  * default; `None` (or `whitespace.binopPolicy: "none"`) gives the tight `<T=Int>`.

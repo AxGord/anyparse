@@ -22,4 +22,4 @@ package anyparse.format.comment;
  * see `HaxeLexicalRegions.scanComments`, and `unit.LexicalRegionAgreementTest`,
  * which pins both.
  */
-typedef CommentScan = (source:String, onComment:(start:Int, end:Int) -> Void) -> Void;
+typedef CommentScan = (source: String, onComment: (start: Int, end: Int) -> Void) -> Void;

@@ -137,7 +137,7 @@ final class CliIo {
 	 * bytes a failed call had already placed are never sent twice; the wait has no limit. Every write that returns must advance: one that
 	 * answers nothing is thrown at once rather than offered again, and any other failure propagates.
 	 */
-	public static function writeFully(total: Int, write: (at:Int) -> Int, wait: () -> Void): Void {
+	public static function writeFully(total: Int, write: (at: Int) -> Int, wait: () -> Void): Void {
 		var at: Int = 0;
 		while (at < total) try {
 			final wrote: Int = write(at);

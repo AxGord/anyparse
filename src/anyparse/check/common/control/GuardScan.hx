@@ -106,7 +106,7 @@ final class GuardScan {
 	}
 
 	/** Index `g` under the key `CheckScan.collectSpanEdits` re-finds a reported `if` by. */
-	public static function index<C:GuardedIf>(byIf: Map<String, C>, g: C): Void {
+	public static function index<C: GuardedIf>(byIf: Map<String, C>, g: C): Void {
 		final span: Null<Span> = g.ifNode.span;
 		if (span != null) byIf['${span.from}:${span.to}'] = g;
 	}
@@ -116,9 +116,9 @@ final class GuardScan {
 	 * which is handed the type resolver the inversion reads (built from the first finding's file and `index`, none when
 	 * nothing was reported), the edits one contains dropped.
 	 */
-	public static function edits<C:GuardedIf>(
+	public static function edits<C: GuardedIf>(
 		plugin: GrammarPlugin, source: String, tree: QueryNode, violations: Array<Violation>, index: Null<SymbolIndex>,
-		byIf: Map<String, C>, edit: (candidate:C, types:Null<(QueryNode) -> Null<String>>) -> Null<FixEdit>
+		byIf: Map<String, C>, edit: (candidate: C, types: Null<(QueryNode) -> Null<String>>) -> Null<FixEdit>
 	): Array<FixEdit> {
 		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
 			? null

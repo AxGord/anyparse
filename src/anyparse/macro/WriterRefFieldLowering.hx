@@ -2046,10 +2046,10 @@ typedef RefFieldCtx = {
 	final fieldSep: WriterFieldSepLowering.FieldSepCtx;
 	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
 	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
-	final isTightLead: (leadText:Null<String>) -> Bool;
-	final isKeyValueLead: (leadText:Null<String>) -> Bool;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final writeFnFor: (refName:String) -> String;
+	final isTightLead: (leadText: Null<String>) -> Bool;
+	final isKeyValueLead: (leadText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
 }
 /**
  * The two head-gap comment slots a bare body field's separator reads, as runtime accesses: the comment cuddled to the

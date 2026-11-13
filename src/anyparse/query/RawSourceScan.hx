@@ -134,7 +134,7 @@ final class RawSourceScan {
 	 * output is access-checked where it lands, so a privileged caller reaches it without spelling it — through a helper,
 	 * a chain of macros or `@:build` / `@:autoBuild` alike. A name the macro computes (`$i{…}`) is out of reach.
 	 */
-	public function accessGrantMatches(typeName: String, member: String, matches: (source:String) -> Bool, ?apart: String): Bool {
+	public function accessGrantMatches(typeName: String, member: String, matches: (source: String) -> Bool, ?apart: String): Bool {
 		for (file in privilegedFiles(typeName, member)) if (file != apart) {
 			final src: Null<String> = _sources[file];
 			if (src == null || matches(src)) return true;

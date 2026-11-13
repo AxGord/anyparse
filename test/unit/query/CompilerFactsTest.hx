@@ -119,7 +119,7 @@ class CompilerFactsTest extends Test {
 				case _: null;
 			}
 		}, file -> file);
-		function natives(part: String, ?harmless: (callee:String) -> Bool): Array<String> {
+		function natives(part: String, ?harmless: (callee: String) -> Bool): Array<String> {
 			final from: Int = a.lastIndexOf(part);
 			final span: Span = new Span(from, from + part.length);
 			final found: Null<Array<NativeFact>> = facts.within('A.hx', span, n -> n.natives, n -> n.at, true, harmless);

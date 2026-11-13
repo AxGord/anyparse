@@ -76,7 +76,7 @@ final class OracleServerStaleTest extends Test {
 	 * writes whose written paths are `watched` (relative to the tree), null when no server answered.
 	 */
 	private static function compiledAfter(
-		files: Array<{ name: String, source: String }>, watched: Array<String>, change: (root:String) -> Void
+		files: Array<{ name: String, source: String }>, watched: Array<String>, change: (root: String) -> Void
 	): Null<ProcessRun> {
 		#if nodejs
 		final root: String = CliFixture.writeTree('apq_stale', files);

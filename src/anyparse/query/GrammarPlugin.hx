@@ -1865,7 +1865,7 @@ final class RefShape {
 	 * the grammar's condition terminal, so a scan over source the parser never saw reads the parser's condition.
 	 * Optional; unset means a directive carries no condition.
 	 */
-	public var conditionEnd: Null<(input:anyparse.runtime.Input, at:Int) -> Int>;
+	public var conditionEnd: Null<(input: anyparse.runtime.Input, at: Int) -> Int>;
 
 	/**
 	 * The DECLARATION-STARTING keyword kinds a conditional-compilation region may contribute
@@ -4277,9 +4277,9 @@ typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
 @:nullSafety(Strict)
 typedef MemberGapPolicy = {
 	final containerKinds: Array<String>;
-	final docBlanks: (prevLeading:Array<String>, nextLeading:Array<String>) -> Null<Int>;
-	final multilineBlanks: (prevLeading:Array<String>, nextLeading:Array<String>) -> Null<Int>;
-	final multiline: (slot:String) -> Null<Bool>;
+	final docBlanks: (prevLeading: Array<String>, nextLeading: Array<String>) -> Null<Int>;
+	final multilineBlanks: (prevLeading: Array<String>, nextLeading: Array<String>) -> Null<Int>;
+	final multiline: (slot: String) -> Null<Bool>;
 }
 
 /**

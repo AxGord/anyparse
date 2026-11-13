@@ -124,7 +124,7 @@ final class LandFormat {
  * alone after one pass.
  */
 typedef FormatTools = {
-	var rewrite: (tree:String, files:Array<String>) -> Outcome;
-	var changes: (tree:String, base:String, files:Array<String>) -> Null<String>;
-	var settled: (tree:String, files:Array<String>) -> Outcome;
+	var rewrite: (tree: String, files: Array<String>) -> Outcome;
+	var changes: (tree: String, base: String, files: Array<String>) -> Null<String>;
+	var settled: (tree: String, files: Array<String>) -> Outcome;
 }

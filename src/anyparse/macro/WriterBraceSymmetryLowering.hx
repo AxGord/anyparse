@@ -583,8 +583,8 @@ final class WriterBraceSymmetryLowering {
 typedef BraceSymmetryCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final ctx: LoweringCtx;
-	final findCtorPattern: (bodyTypePath:String, ctorName:String) -> Null<Expr>;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
+	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
 }
 #end

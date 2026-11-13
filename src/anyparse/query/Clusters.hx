@@ -164,7 +164,7 @@ final class Clusters {
 	 * component with its members and its hub traffic. `sourceOf` resolves
 	 * file contents for line:col display (same seam as `CallChains.render`).
 	 */
-	public static function render(graph: CallGraph, report: ClusterReport, sourceOf: (file:String) -> Null<String>): String {
+	public static function render(graph: CallGraph, report: ClusterReport, sourceOf: (file: String) -> Null<String>): String {
 		final out: StringBuf = new StringBuf();
 		final totalSites: Int = report.resolvedSites + report.unresolvedSites;
 		final coverage: String = totalSites == 0
@@ -261,7 +261,7 @@ final class Clusters {
 	 * of the remaining members, capped at AUTO_HUB_SHARE of all members.
 	 */
 	private static function pickHubs(
-		memberIds: Array<String>, adj: Map<String, Array<String>>, fanIn: (id:String) -> Int, hubCount: Null<Int>
+		memberIds: Array<String>, adj: Map<String, Array<String>>, fanIn: (id: String) -> Int, hubCount: Null<Int>
 	): Array<String> {
 		if (hubCount != null && hubCount <= 0) return [];
 		if (hubCount != null) {

@@ -53,7 +53,7 @@ final class Reach {
 	}
 
 	/** One path: a summary chain line, then one indented line per hop with its edge kind and call site. */
-	public static function render(graph: CallGraph, path: Array<CallEdge>, sourceOf: (file:String) -> Null<String>): String {
+	public static function render(graph: CallGraph, path: Array<CallEdge>, sourceOf: (file: String) -> Null<String>): String {
 		if (path.length == 0) return '';
 		final buf: StringBuf = new StringBuf();
 		final chain: Array<String> = [path[0].from];

@@ -84,7 +84,7 @@ private typedef HoistContext = {
 	 * Whether `using <path>` and `using <other>` may both offer one access the module `file` writes (`UsingSites.contested`)
 	 * — the only place moving one of them past the other can change what binds; true for a module the run holds no source of.
 	 */
-	final contested: (file:String, path:String, other:String) -> Bool;
+	final contested: (file: String, path: String, other: String) -> Bool;
 
 	/**
 	 * The builds parsing each file, as indices into the run's builds, by the file's canonical path — or null when the run

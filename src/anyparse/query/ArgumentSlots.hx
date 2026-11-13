@@ -37,7 +37,7 @@ final class ArgumentSlots {
 	 * each parameter: per run, the parameter each argument binds, in argument order. Empty when no run compiles; null past
 	 * `MAX_RUNS`.
 	 */
-	public static function runs(params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit): Null<Array<Array<Int>>> {
+	public static function runs(params: Array<SlotParam>, count: Int, fit: (arg: Int, param: Int) -> ArgumentFit): Null<Array<Array<Int>>> {
 		final walk: SlotWalk = {
 			params: params,
 			count: count,
@@ -59,7 +59,7 @@ final class ArgumentSlots {
 	 * `pf_can_skip_non_nullable_argument`); `MayFit` otherwise.
 	 */
 	public static function compiles(
-		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+		params: Array<SlotParam>, count: Int, fit: (arg: Int, param: Int) -> ArgumentFit, skipSafe: (param: Int) -> Bool
 	): ArgumentFit {
 		final all: Null<Array<Array<Int>>> = runs(params, count, fit);
 		return all != null && all.length == 0 ? Misfits : compilerPath(params, count, fit, skipSafe).verdict;
@@ -70,7 +70,7 @@ final class ArgumentSlots {
 	 * compiles; null otherwise.
 	 */
 	public static function compiledRun(
-		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+		params: Array<SlotParam>, count: Int, fit: (arg: Int, param: Int) -> ArgumentFit, skipSafe: (param: Int) -> Bool
 	): Null<Array<Int>> {
 		final path: CompilerPath = compilerPath(params, count, fit, skipSafe);
 		return path.verdict == Fits ? path.bound : null;
@@ -84,7 +84,7 @@ final class ArgumentSlots {
 	 * argument it followed binds.
 	 */
 	private static function compilerPath(
-		params: Array<SlotParam>, count: Int, fit: (arg:Int, param:Int) -> ArgumentFit, skipSafe: (param:Int) -> Bool
+		params: Array<SlotParam>, count: Int, fit: (arg: Int, param: Int) -> ArgumentFit, skipSafe: (param: Int) -> Bool
 	): CompilerPath {
 		final bound: Array<Int> = [];
 		var arg: Int = 0;
@@ -142,7 +142,7 @@ final class ArgumentSlots {
 private typedef SlotWalk = {
 	final params: Array<SlotParam>;
 	final count: Int;
-	final fit: (arg:Int, param:Int) -> ArgumentFit;
+	final fit: (arg: Int, param: Int) -> ArgumentFit;
 	final bound: Array<Int>;
 	final out: Array<Array<Int>>;
 	var overflow: Bool;

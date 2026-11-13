@@ -1239,6 +1239,6 @@ final class WriterCtorBlankLowering {
  */
 typedef CtorBlankCtx = {
 	final shape: ShapeBuilder.ShapeResult;
-	final branchSynthExtraArity: (bodyTypePath:String, branch:ShapeNode) -> Int;
+	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
 }
 #end

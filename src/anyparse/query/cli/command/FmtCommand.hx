@@ -570,7 +570,7 @@ final class FmtCommand implements CliCommand {
 		// a run — they disagreed ACROSS runs, because a writer whose output is not
 		// its own fixed point left `--write` one pass short of where the next
 		// `--list` looked. `FormatFixedPoint` documents the instance.
-		final roundTrip: (text:String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
+		final roundTrip: (text: String) -> Null<String> = text -> plugin.writeRoundTrip(text, optsJson);
 		final fixedPoint: FormatFixedPointResult = try {
 			FormatFixedPoint.run(roundTrip, source);
 		} catch (exception: Exception) {

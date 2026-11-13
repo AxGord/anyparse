@@ -10,10 +10,9 @@ package anyparse.grammar.haxe;
  * Case 3 single-Ref-with-`@:lead(':')` lowering used by sibling
  * name-and-type bodies (`HxAnonFieldBody`, `HxParamBody`).
  *
- * Unlike `HxAnonFieldBody`, the `:` lead does not follow `typeHintColon`: haxe-formatter has no separate
- * knob for the colon inside an arrow-type's named arg, and its corpus emits `name:Type` tight regardless of
- * the type-hint policy. The colon has a knob of its own, `arrowParamColon` (`whitespace.arrowParamColonPolicy`),
- * which stays tight by default.
+ * Unlike `HxAnonFieldBody`, the `:` lead reads a knob of its own, `arrowParamColon`
+ * (`whitespace.arrowParamColonPolicy`), so the colon can be set apart from the annotations; an absent key
+ * makes the loader copy `typeHintColon` into it.
  */
 @:peg
 typedef HxArrowParamBody = {

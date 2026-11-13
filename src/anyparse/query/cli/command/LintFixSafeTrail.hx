@@ -34,12 +34,12 @@ final class LintFixSafeTrail {
 	private final _banned: Array<{ file: String, rule: String }> = [];
 
 	/** The canonical text of `base` with the edits of `groups` alone applied, or null when the writer refuses them. */
-	private final _replayer: (file:String, base:String, groups:Array<RuleEdits>) -> Null<String>;
+	private final _replayer: (file: String, base: String, groups: Array<RuleEdits>) -> Null<String>;
 
 	/** The typechecks the net may still spend isolating culprits this run (`--fix-probes`). */
 	private var _probesLeft: Int;
 
-	public function new(replayer: (file:String, base:String, groups:Array<RuleEdits>) -> Null<String>, probeCap: Int) {
+	public function new(replayer: (file: String, base: String, groups: Array<RuleEdits>) -> Null<String>, probeCap: Int) {
 		_replayer = replayer;
 		_probesLeft = probeCap;
 	}

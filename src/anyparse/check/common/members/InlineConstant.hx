@@ -703,7 +703,7 @@ final class InlineConstant extends RuleBase {
  * seams, the plugin and the LAZY resolution index in `run`, so a run with no qualified reference
  * never pays for an index.
  */
-private typedef InitProof = (container:QueryNode, init:QueryNode) -> Bool;
+private typedef InitProof = (container: QueryNode, init: QueryNode) -> Bool;
 /** What `run` resolves once and every container scan reads. */
 private typedef RunFacts = {
 	final reflected: ReflectionSurface;

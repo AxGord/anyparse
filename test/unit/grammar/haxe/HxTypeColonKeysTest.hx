@@ -10,8 +10,8 @@ import utest.Test;
 /**
  * The colon of a named function-type parameter, `(call:QueryNode) -> Bool`, and the colon of a type-parameter
  * constraint, `<T:Dynamic>`, each follow a key of their own (`whitespace.arrowParamColonPolicy`,
- * `whitespace.typeParamConstraintColonPolicy`) and stay tight when the key is absent, whatever
- * `typeHintColonPolicy` says for the annotation colons around them.
+ * `whitespace.typeParamConstraintColonPolicy`); an absent key follows `typeHintColonPolicy`, the policy of the
+ * annotation colons around them.
  */
 @:nullSafety(Strict)
 final class HxTypeColonKeysTest extends Test {
@@ -62,7 +62,7 @@ final class HxTypeColonKeysTest extends Test {
 	}
 
 	@:pin('guard')
-	public function testBothColonsAreTightWithoutTheKeys(): Void {
+	public function testBothColonsAreTightWithoutAnyColonKey(): Void {
 		final opts: HxModuleWriteOptions = load('{}');
 		Assert.equals(WhitespacePolicy.None, opts.arrowParamColon);
 		Assert.equals(WhitespacePolicy.None, opts.typeParamConstraintColon);
@@ -70,11 +70,28 @@ final class HxTypeColonKeysTest extends Test {
 		Assert.stringContains('class C<T:Foo, S:Bar = Baz>', write(CONSTRAINT_SRC, '{}'));
 	}
 
+	@:pin('control')
+	@:killer('M-ARROW-COLON-ABSENT-TIGHT')
+	public function testAbsentArrowKeyFollowsTheTypeHintPolicy(): Void {
+		Assert.equals(WhitespacePolicy.Both, load(typeHint('around')).arrowParamColon);
+		Assert.stringContains('(call : Int, x : String) -> Bool', write(ARROW_SRC, typeHint('around')));
+		Assert.stringContains('(call: Int, x: String) -> Bool', write(ARROW_SRC, typeHint('after')));
+	}
+
+	@:pin('control')
+	@:killer('M-CONSTRAINT-COLON-ABSENT-TIGHT')
+	public function testAbsentConstraintKeyFollowsTheTypeHintPolicy(): Void {
+		Assert.equals(WhitespacePolicy.Both, load(typeHint('around')).typeParamConstraintColon);
+		Assert.stringContains('class C<T : Foo, S : Bar = Baz>', write(CONSTRAINT_SRC, typeHint('around')));
+		Assert.stringContains('class C<T: Foo, S: Bar = Baz>', write(CONSTRAINT_SRC, typeHint('after')));
+	}
+
 	@:pin('guard')
-	public function testTypeHintPolicyDoesNotMoveEitherColon(): Void {
-		final json: String = '{"whitespace": {"typeHintColonPolicy": "around"}}';
+	public function testASetKeyWinsOverTheTypeHintPolicy(): Void {
+		final json: String = '{"whitespace": {"typeHintColonPolicy": "around", "arrowParamColonPolicy": "none", '
+			+ '"typeParamConstraintColonPolicy": "before"}}';
 		Assert.stringContains('(call:Int, x:String) -> Bool', write(ARROW_SRC, json));
-		Assert.stringContains('class C<T:Foo, S:Bar = Baz>', write(CONSTRAINT_SRC, json));
+		Assert.stringContains('class C<T :Foo, S :Bar = Baz>', write(CONSTRAINT_SRC, json));
 	}
 
 	@:pin('guard')
@@ -138,6 +155,10 @@ final class HxTypeColonKeysTest extends Test {
 
 	private static function constraint(policy: String): String {
 		return '{"whitespace": {"typeParamConstraintColonPolicy": "$policy"}}';
+	}
+
+	private static function typeHint(policy: String): String {
+		return '{"whitespace": {"typeHintColonPolicy": "$policy"}}';
 	}
 
 	private static function load(json: String): HxModuleWriteOptions {

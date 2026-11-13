@@ -480,7 +480,7 @@ final class WriterFieldSepLowering {
 typedef FieldSepCtx = {
 	final ctx: LoweringCtx;
 	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final writeFnFor: (refName:String) -> String;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
 }
 #end

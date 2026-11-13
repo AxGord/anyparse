@@ -347,7 +347,7 @@ class LexicalRegionAgreementTest extends Test {
 	}
 
 	/** Visit every literal node of `node`'s subtree that no literal node encloses. */
-	private function collectOutermostLiterals(node: QueryNode, visit: (node:QueryNode, span:Span) -> Void): Void {
+	private function collectOutermostLiterals(node: QueryNode, visit: (node: QueryNode, span: Span) -> Void): Void {
 		final span: Null<Span> = node.span;
 		if (span != null && LITERAL_KINDS.contains(node.kind)) {
 			visit(node, span);

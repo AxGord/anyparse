@@ -246,4 +246,4 @@ final class ArmSweep {
 }
 
 /** Starts the arm sweep of a landed commit in `repo`. */
-typedef SweepStart = (repo:String, sha:String) -> Outcome;
+typedef SweepStart = (repo: String, sha: String) -> Outcome;

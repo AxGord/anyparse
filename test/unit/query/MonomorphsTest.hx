@@ -61,12 +61,12 @@ class MonomorphsTest extends Test {
 		final unread: Int = monos.fresh();
 		final read: Int = monos.fresh();
 		final opaque: Int = monos.fresh();
-		final none: (wanted:TypeTerm, given:TypeTerm) -> Null<TypeTerm> = (_, _) -> null;
+		final none: (wanted: TypeTerm, given: TypeTerm) -> Null<TypeTerm> = (_, _) -> null;
 		monos.unify(Of(Core('Box'), [Mono(element)], 'Box<A>'), Of(Core('Box'), [named('Int')], 'Box<Int>'), none);
 		Assert.equals('Int', textOf(monos.resolved(element)), 'one head: argument by argument');
 		monos.unify(Of(Core('Wrap'), [Mono(unread)], 'Wrap<B>'), Of(Core('Other'), [named('String')], 'Other<String>'), none);
 		Assert.isNull(monos.resolved(unread), 'another head read as none: the cell is poisoned');
-		final asWrap: (wanted:TypeTerm, given:TypeTerm) -> Null<TypeTerm> = (_, _) -> Of(Core('Wrap'), [named('Float')], 'Wrap<Float>');
+		final asWrap: (wanted: TypeTerm, given: TypeTerm) -> Null<TypeTerm> = (_, _) -> Of(Core('Wrap'), [named('Float')], 'Wrap<Float>');
 		monos.unify(Of(Core('Wrap'), [Mono(read)], 'Wrap<C>'), Of(Core('Other'), [named('String')], 'Other<String>'), asWrap);
 		Assert.equals('Float', textOf(monos.resolved(read)), 'another head read as the wanted one');
 		monos.unify(Opaque('D -> Void', [opaque]), named('Int'), none);

@@ -201,7 +201,7 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 	public static function claimer(
 		root: QueryNode, source: String, plugin: GrammarPlugin, typeSources: Null<Map<Int, String>>, index: () -> Null<SymbolIndex>,
 		file: String
-	): Null<(decl:QueryNode, forNode:QueryNode, scope:QueryNode) -> Bool> {
+	): Null<(decl: QueryNode, forNode: QueryNode, scope: QueryNode) -> Bool> {
 		final s: Null<Seams> = readSeams(plugin);
 		if (s == null) return null;
 		final seams: Seams = s;

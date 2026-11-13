@@ -104,7 +104,7 @@ final class FormatFixedPoint {
 	 * captured into `failure`: the caller must not write, but it also must not
 	 * blame the file.
 	 */
-	public static function run(roundTrip: (source:String) -> Null<String>, source: String): FormatFixedPointResult {
+	public static function run(roundTrip: (source: String) -> Null<String>, source: String): FormatFixedPointResult {
 		final first: Null<String> = roundTrip(source);
 		// `null` = no writer wired for this grammar; `first == source` = already
 		// at the fixed point. Both answer without a second round trip, which is

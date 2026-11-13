@@ -1617,11 +1617,11 @@ typedef StructSeqCtx = {
 		elem: String,
 		first: BranchFirstToken,
 	}>;
-	final buildBlockEndedPredicateCall: (predicateName:String, accumRef:Expr) -> Expr;
-	final isSpanBearing: (refName:String) -> Bool;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final parseFnName: (refName:String) -> String;
-	final ruleReturnCT: (refName:String) -> ComplexType;
+	final buildBlockEndedPredicateCall: (predicateName: String, accumRef: Expr) -> Expr;
+	final isSpanBearing: (refName: String) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final parseFnName: (refName: String) -> String;
+	final ruleReturnCT: (refName: String) -> ComplexType;
 	final stashNewlineClearExpr: () -> Expr;
 }
 #end

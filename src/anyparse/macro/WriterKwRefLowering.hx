@@ -1153,8 +1153,8 @@ typedef KwRefCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final ctx: LoweringCtx;
 	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
-	final isTightLead: (leadText:Null<String>) -> Bool;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final writeFnFor: (refName:String) -> String;
+	final isTightLead: (leadText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
 }
 #end

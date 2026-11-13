@@ -79,7 +79,7 @@ final class CliWalk {
 	 * replaces both the cross-file duplication `hxq lint` flags on that repeated shape and the risk
 	 * of a caller wiring the cap without also wiring the note.
 	 */
-	public static function capAndReport<T:{ file: String }>(
+	public static function capAndReport<T: { file: String }>(
 		cmd: String, allEntries: Array<T>, limit: Int, len: T -> Int, trim: (T, Int) -> T, totalFiles: Int
 	): Array<T> {
 		var totalHits: Int = 0;
@@ -405,7 +405,7 @@ final class CliWalk {
 	 * (the whole result already fit). `--limit 0` still names the cap as `0` — pass the SAME
 	 * `totalHits` used to compute `cappedLimit`, from BEFORE `limitEntries` trims `shown`.
 	 */
-	private static function reportCapHit<T:{ file: String }>(
+	private static function reportCapHit<T: { file: String }>(
 		cmd: String, cappedLimit: Int, totalHits: Int, shown: Array<T>, totalFiles: Int
 	): Void {
 		if (cappedLimit < 0 || totalHits <= cappedLimit) return;

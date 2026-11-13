@@ -192,7 +192,7 @@ class FmtSliceTest extends Test {
 	 * the shape of a writer that settles after N rewrites (or, with a cycle in
 	 * `steps`, of one that never does).
 	 */
-	private static function stepping(steps: Map<String, String>): (text:String) -> Null<String> {
+	private static function stepping(steps: Map<String, String>): (text: String) -> Null<String> {
 		return text -> steps.exists(text) ? steps[text] : text;
 	}
 

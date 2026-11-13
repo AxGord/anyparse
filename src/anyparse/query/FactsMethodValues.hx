@@ -198,7 +198,8 @@ final class FactsMethodValues {
 	 * other off an instance. `escaped` and `bound` are `mayHold`'s.
 	 */
 	public function obtainedUntyped(
-		name: String, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path:String) -> Null<Array<FactsType>>, statics: Bool
+		name: String, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path: String) -> Null<Array<FactsType>>,
+		statics: Bool
 	): Bool {
 		final reads: MethodValueReads = scan();
 		if (reads.unknown != null) return true;
@@ -237,7 +238,7 @@ final class FactsMethodValues {
 	 * hold none. Any other type — an abstract, one the facts do not type — may hold either.
 	 */
 	private function mayHold(
-		t: FactsType, exact: Bool, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path:String) -> Null<Array<FactsType>>,
+		t: FactsType, exact: Bool, hierarchy: Array<String>, escaped: Null<Array<String>>, bound: (path: String) -> Null<Array<FactsType>>,
 		statics: Bool, depth: Int
 	): Bool {
 		final left: Bool = escaped == null || escaped.exists(e -> hierarchy.contains(e));

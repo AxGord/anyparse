@@ -1351,9 +1351,9 @@ final class WriterPrattLowering {
 typedef PrattLoweringCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final ctx: LoweringCtx;
-	final ruleValueCT: (refName:String) -> ComplexType;
-	final writeFnFor: (refName:String) -> String;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
-	final branchExtraArgs: (branch:ShapeNode) -> Int;
+	final ruleValueCT: (refName: String) -> ComplexType;
+	final writeFnFor: (refName: String) -> String;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final branchExtraArgs: (branch: ShapeNode) -> Int;
 }
 #end

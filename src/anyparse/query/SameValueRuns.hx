@@ -16,7 +16,7 @@ using Lambda;
 final class SameValueRuns {
 
 	/** `sorted` cut before every occurrence some write in `writes` takes effect ahead of, since the previous one. */
-	public static function splitAtWrites<T:Located>(sorted: Array<T>, writes: Array<WriteSite>): Array<Array<T>> {
+	public static function splitAtWrites<T: Located>(sorted: Array<T>, writes: Array<WriteSite>): Array<Array<T>> {
 		final runs: Array<Array<T>> = [[sorted[0]]];
 		for (k in 1...sorted.length) {
 			final prev: Int = sorted[k - 1].span.from;
@@ -34,7 +34,7 @@ final class SameValueRuns {
 	 * the statement list a shared `final` would go into (`hoistBlock`) is not inside that loop — so no iteration
 	 * recomputes the value before the occurrence reads it again. Positive: with no such list, every such loop carries.
 	 */
-	public static function carriedRound<T:Located>(
+	public static function carriedRound<T: Located>(
 		run: Array<T>, writes: Array<WriteSite>, unit: QueryNode, blockKinds: Array<String>, loopKinds: Array<String>
 	): Bool {
 		final home: Null<QueryNode> = hoistBlock(run, unit, blockKinds);
@@ -48,7 +48,7 @@ final class SameValueRuns {
 	}
 
 	/** The innermost `blockKinds` node of `unit` holding every occurrence of `run` — the statement list a shared `final` goes into. */
-	public static function hoistBlock<T:Located>(run: Array<T>, unit: QueryNode, blockKinds: Array<String>): Null<QueryNode> {
+	public static function hoistBlock<T: Located>(run: Array<T>, unit: QueryNode, blockKinds: Array<String>): Null<QueryNode> {
 		var common: Array<QueryNode> = TreePath.ancestorsAt(unit, run[0].span.from);
 		for (c in run) {
 			final chain: Array<QueryNode> = TreePath.ancestorsAt(unit, c.span.from);

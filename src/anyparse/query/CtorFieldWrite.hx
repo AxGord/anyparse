@@ -81,7 +81,7 @@ final class CtorFieldWrite {
 	 */
 	public static function eachFieldMember(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
-		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
+		visit: (owner: String, field: QueryNode, source: String, file: String, exported: Bool) -> Void
 	): Void {
 		final shape: RefShape = plugin.refShape();
 		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
@@ -836,5 +836,5 @@ private typedef FieldMemberCtx = {
 	final visibility: Array<String>;
 	final defaultVis: String;
 	final branch: MemberBranchSeams;
-	final visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void;
+	final visit: (owner: String, field: QueryNode, source: String, file: String, exported: Bool) -> Void;
 };

@@ -251,4 +251,4 @@ final class IfFalseDeadCode extends RuleBase {
 private typedef EliminatedRegion = { final then: String; final elsePos: Int; final otherwise: String; };
 
 /** The grammar's reader of where a `#if` condition ends (`RefShape.conditionEnd`). */
-private typedef ConditionReader = (input:Input, at:Int) -> Int;
+private typedef ConditionReader = (input: Input, at: Int) -> Int;

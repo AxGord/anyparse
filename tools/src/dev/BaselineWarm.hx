@@ -199,4 +199,4 @@ typedef WarmRecipe = { var frozen: Array<String>; var infra: Array<String>; }
 typedef Warming = { var running: () -> Bool; var cancel: () -> Void; var ended: () -> Outcome; }
 
 /** Starts the warm run of a landed commit in `repo`. */
-typedef WarmStart = (repo:String, sha:String) -> Outcome;
+typedef WarmStart = (repo: String, sha: String) -> Outcome;

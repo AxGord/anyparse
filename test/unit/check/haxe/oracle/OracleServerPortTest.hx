@@ -385,7 +385,7 @@ final class OracleServerPortTest extends Test {
 	 * `body` run with a `haxe` first on PATH that logs each `--wait` port, exits at once on `lost` as a server does whose port
 	 * went to something else after the probe, and is the real one otherwise; `body` is given a reading of the logged ports.
 	 */
-	private static function withStubHaxe(lost: Int, body: (waits:() -> Array<String>) -> Void): Void {
+	private static function withStubHaxe(lost: Int, body: (waits: () -> Array<String>) -> Void): Void {
 		final dir: String = CliFixture.writeDir('apq_port_stub', []);
 		final log: String = '$dir/waits';
 		final path: String = Sys.getEnv('PATH') ?? '';
@@ -408,7 +408,7 @@ final class OracleServerPortTest extends Test {
 	 */
 	@:access(anyparse.check.haxe.oracle.OracleServerPool)
 	private static function drifting(
-		candidate: () -> Int, body: (pool:OracleServerPool, config:OracleConfig, drift:() -> Void, root:String) -> Void
+		candidate: () -> Int, body: (pool: OracleServerPool, config: OracleConfig, drift: () -> Void, root: String) -> Void
 	): Void {
 		final root: String = oneModule();
 		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$root/pad$k.hx'];

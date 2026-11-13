@@ -355,7 +355,7 @@ final class SubtypeGraph {
 	 * is exactly what I cannot rule out".
 	 */
 	public function subtypeDeclMatches(
-		owner: String, field: String, matches: (subtype:String, source:String, span:Span, redeclares:Bool, file:String) -> Bool
+		owner: String, field: String, matches: (subtype: String, source: String, span: Span, redeclares: Bool, file: String) -> Bool
 	): Bool {
 		final closure: Array<String> = [owner];
 		var i: Int = 0;

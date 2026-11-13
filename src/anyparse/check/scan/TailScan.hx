@@ -130,7 +130,7 @@ final class TailScan {
 	 * The edits of the candidates whose reported span is among `violations` and that carry an edit. A candidate nested
 	 * inside another being rewritten waits for the next pass: its edits address text the outer rewrite deletes or copies.
 	 */
-	public static function flaggedEdits<C:RewriteSite>(found: Array<C>, violations: Array<Violation>): Array<FixEdit> {
+	public static function flaggedEdits<C: RewriteSite>(found: Array<C>, violations: Array<Violation>): Array<FixEdit> {
 		final flagged: Array<String> = RunScan.spanKeys(violations);
 		final applied: Array<C> = [
 			for (c in found) if (c.edits.length != 0 && flagged.contains('${c.span.from}:${c.span.to}')) c

@@ -59,7 +59,7 @@ class Def<T = Int> {
 
 class Probe {
 
-	static function gnew<T:haxe.Constraints.Constructible<() -> Void>>(): Void {}
+	static function gnew<T: haxe.Constraints.Constructible<() -> Void>>(): Void {}
 
 	static function main() {
 		var a: Array<Int> = [1];

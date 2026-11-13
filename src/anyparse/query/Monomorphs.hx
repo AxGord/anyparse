@@ -89,7 +89,7 @@ final class Monomorphs {
 	 * nullable wrapper, a structural type —; where it reads none, every cell `wanted` mentions is poisoned, since the given
 	 * type may bind it some way not modelled.
 	 */
-	public function unify(wanted: TypeTerm, given: TypeTerm, reread: (wanted:TypeTerm, given:TypeTerm) -> Null<TypeTerm>): Void {
+	public function unify(wanted: TypeTerm, given: TypeTerm, reread: (wanted: TypeTerm, given: TypeTerm) -> Null<TypeTerm>): Void {
 		switch wanted {
 			case Mono(id):
 				bind(id, given);

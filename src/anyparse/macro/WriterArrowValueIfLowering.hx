@@ -514,9 +514,9 @@ final class WriterArrowValueIfLowering {
 typedef ArrowValueIfCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final ctx: LoweringCtx;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
-	final branchSynthExtraArity: (bodyTypePath:String, branch:ShapeNode) -> Int;
-	final writeFnFor: (refName:String) -> String;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
+	final writeFnFor: (refName: String) -> String;
 }
 #end

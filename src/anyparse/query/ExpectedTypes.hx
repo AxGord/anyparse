@@ -232,31 +232,31 @@ typedef Lineage = { final nodes: Array<QueryNode>; final indices: Array<Int>; }
 typedef ExpectationHost<W, C> = {
 
 	/** The type the declaration `holder` (a local or a field) is written with. */
-	final declared: (holder:QueryNode, ctx:C) -> Null<W>;
+	final declared: (holder: QueryNode, ctx: C) -> Null<W>;
 
 	/** The type of the assignment target `target`. */
-	final assigned: (target:QueryNode, ctx:C) -> Null<W>;
+	final assigned: (target: QueryNode, ctx: C) -> Null<W>;
 
 	/** The return type the function or lambda `fn` declares. */
-	final returned: (fn:QueryNode, ctx:C) -> Null<W>;
+	final returned: (fn: QueryNode, ctx: C) -> Null<W>;
 
 	/**
 	 * The type of the parameter the argument `at` of the call or construction `call`, passing `count` arguments, binds —
 	 * the callee's parameter type at an argument position; null where an argument before it may have been skipped, and
 	 * for a callee whose signature the typer cannot read as the one the call selects.
 	 */
-	final argument: (call:QueryNode, at:Int, count:Int, ctx:C) -> Null<W>;
+	final argument: (call: QueryNode, at: Int, count: Int, ctx: C) -> Null<W>;
 
 	/** The element an array literal of type `container` holds (a map literal's value). */
-	final element: (container:W, ctx:C) -> Null<W>;
+	final element: (container: W, ctx: C) -> Null<W>;
 
 	/** The type of the field `name` of an object literal of type `outer`. */
-	final field: (outer:W, name:String, ctx:C) -> Null<W>;
+	final field: (outer: W, name: String, ctx: C) -> Null<W>;
 
 	/** `written` as the grammar reads a type (`GrammarPlugin.typeSyntax`). */
-	final read: (written:W, ctx:C) -> Null<TypeSyntax>;
+	final read: (written: W, ctx: C) -> Null<TypeSyntax>;
 
 	/** The part `text` of the type `of` — a function type's parameter or result — in the same currency. */
-	final part: (of:W, text:String, ctx:C) -> W;
+	final part: (of: W, text: String, ctx: C) -> W;
 
 }

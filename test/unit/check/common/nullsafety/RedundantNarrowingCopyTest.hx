@@ -363,7 +363,7 @@ class RedundantNarrowingCopyTest extends Test {
 	}
 	/** `body` over `sources` as the files of a project whose `apq.json` is `config`. */
 	private static function inProject(
-		config: String, sources: Array<String>, body: (files:Array<{ file: String, source: String }>, plugin:HaxeQueryPlugin) -> Void
+		config: String, sources: Array<String>, body: (files: Array<{ file: String, source: String }>, plugin: HaxeQueryPlugin) -> Void
 	): Void {
 		final dir: String = CliFixture.writeDir('narrowingcopy', [{ name: 'apq.json', source: config }]);
 		final files: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(sources)

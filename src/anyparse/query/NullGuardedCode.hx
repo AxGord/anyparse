@@ -111,7 +111,7 @@ final class NullGuardedCode {
 	private final _escapedTypes: () -> Null<Array<String>>;
 
 	/** The types a value of a type parameter may have (`ValueEscapes.parameterBindings`), or null when not known. */
-	private final _bindings: (path:String) -> Null<Array<FactsType>>;
+	private final _bindings: (path: String) -> Null<Array<FactsType>>;
 
 	/** Which methods the program may obtain as values (`FactsMethodValues`). */
 	private final _methods: () -> FactsMethodValues;
@@ -123,7 +123,7 @@ final class NullGuardedCode {
 	private var _assumed: Null<String> = null;
 
 	public function new(
-		view: FactsView, scope: ReachProject, escapedTypes: () -> Null<Array<String>>, bindings: (path:String) -> Null<Array<FactsType>>,
+		view: FactsView, scope: ReachProject, escapedTypes: () -> Null<Array<String>>, bindings: (path: String) -> Null<Array<FactsType>>,
 		methods: () -> FactsMethodValues
 	) {
 		_view = view;

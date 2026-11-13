@@ -26,7 +26,7 @@ final class OracleDeclarationReader {
 	 * as report-only and never learn why.
 	 */
 	public static function read(
-		raw: JValue, baseDir: Null<String>, drops: Array<String>, probe: Null<(hxml:String, baseDir:String) -> String>
+		raw: JValue, baseDir: Null<String>, drops: Array<String>, probe: Null<(hxml: String, baseDir: String) -> String>
 	): Array<OracleConfig> {
 		return switch raw {
 			case JString(hxml): [
@@ -64,7 +64,7 @@ final class OracleDeclarationReader {
 	 * (`withoutRivalCommands`).
 	 */
 	private static function readList(
-		items: Array<JValue>, baseDir: Null<String>, drops: Array<String>, probe: Null<(hxml:String, baseDir:String) -> String>
+		items: Array<JValue>, baseDir: Null<String>, drops: Array<String>, probe: Null<(hxml: String, baseDir: String) -> String>
 	): Array<OracleConfig> {
 		final out: Array<IndexedOracle> = [];
 		for (i => item in items) switch item {
@@ -137,7 +137,7 @@ final class OracleDeclarationReader {
 	 */
 	private static function at(
 		hxml: String, declared: OracleFields, baseDir: Null<String>, drops: Array<String>, index: Int,
-		probe: Null<(hxml:String, baseDir:String) -> String>
+		probe: Null<(hxml: String, baseDir: String) -> String>
 	): OracleConfig {
 		final resolved: String = LintDocuments.resolveAgainstConfigDir(baseDir, hxml);
 		final dir: Null<String> = declared.dir;

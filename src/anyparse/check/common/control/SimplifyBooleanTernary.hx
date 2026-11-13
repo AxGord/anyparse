@@ -189,7 +189,7 @@ final class SimplifyBooleanTernary extends RuleBase {
 	 */
 	private static function eachChild(
 		node: QueryNode, source: String, shape: RefShape, retType: Null<String>,
-		visit: (kid:QueryNode, kidRetType:Null<String>, kidIsReturnValue:Bool) -> Void
+		visit: (kid: QueryNode, kidRetType: Null<String>, kidIsReturnValue: Bool) -> Void
 	): Void {
 		final kids: Array<QueryNode> = node.children;
 		final childRetType: Null<String> = TypeResolver.childReturnTypeSource(

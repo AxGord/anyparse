@@ -1084,7 +1084,7 @@ final class LandTest extends Test {
 	}
 
 	/** `build`, after `during` — what the user does to the tree while the binaries are being built — has run in `repo`. */
-	private static function interfere(during: Null<(repo:String) -> Void>, repo: String, build: () -> Outcome): Outcome {
+	private static function interfere(during: Null<(repo: String) -> Void>, repo: String, build: () -> Outcome): Outcome {
 		if (during != null) during(repo);
 		return build();
 	}
@@ -1155,7 +1155,7 @@ final class LandTest extends Test {
 	}
 
 	/** The scope seam of a setup that names a scope; the commit each question is asked against is pushed on `bases`. */
-	private static function scopeSeam(shape: Setup, bases: Array<String>): Null<(tree:String, base:String) -> SuiteScope> {
+	private static function scopeSeam(shape: Setup, bases: Array<String>): Null<(tree: String, base: String) -> SuiteScope> {
 		final named: Null<SuiteScope> = shape.impact;
 		if (named == null) return null;
 		final scope: SuiteScope = named;
@@ -1361,7 +1361,7 @@ private typedef Setup = {
 
 	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
 	@:optional
-	var during: (repo:String) -> Void;
+	var during: (repo: String) -> Void;
 	@:optional
 	var again: Bool;
 

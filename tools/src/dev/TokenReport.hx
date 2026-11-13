@@ -315,7 +315,7 @@ final class TokenReport {
 	}
 
 	/** `rows` ordered by their cost, the costliest first, each cost rounded for the report. */
-	private static function costliestFirst<T:{ var cost: Float; }>(rows: Array<T>): Array<T> {
+	private static function costliestFirst<T: { var cost: Float; }>(rows: Array<T>): Array<T> {
 		rows.sort((a, b) -> Reflect.compare(b.cost, a.cost));
 		for (row in rows) row.cost = round(row.cost);
 		return rows;

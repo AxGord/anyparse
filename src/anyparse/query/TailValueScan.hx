@@ -16,7 +16,7 @@ final class TailValueScan {
 
 	/** Call `visit` on every list of `listKinds` under `tree` with whether its last statement's value may be used. */
 	public static function walk(
-		tree: QueryNode, shape: RefShape, listKinds: Array<String>, visit: (list:QueryNode, tailUsed:Bool) -> Void
+		tree: QueryNode, shape: RefShape, listKinds: Array<String>, visit: (list: QueryNode, tailUsed: Bool) -> Void
 	): Void {
 		final passKinds: Array<String> = ShapeVocab.ifKinds(shape)
 			.concat(shape.switchKinds ?? [])

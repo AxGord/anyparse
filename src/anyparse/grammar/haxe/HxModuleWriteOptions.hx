@@ -580,11 +580,15 @@ final class HxModuleWriteOptions {
 
 	/**
 	 * The `:` of a named function-type parameter, `(call:QueryNode) -> Bool` (`HxArrowParamBody`). A knob of its own
-	 * rather than `typeHintColon`, so the arrow-type colon is set without moving every annotation; `None` keeps it tight.
+	 * rather than `typeHintColon`, so the arrow-type colon can differ from the annotations; the loader copies
+	 * `typeHintColon` into it when `whitespace.arrowParamColonPolicy` is absent.
 	 */
 	public var arrowParamColon: WhitespacePolicy = WhitespacePolicy.None;
 
-	/** The `:` joining a declare-site type parameter to its constraint, `<T:Dynamic>` (`HxTypeParamDecl.constraint`); `None` is tight. */
+	/**
+	 * The `:` joining a declare-site type parameter to its constraint, `<T:Dynamic>` (`HxTypeParamDecl.constraint`); the
+	 * loader copies `typeHintColon` into it when `whitespace.typeParamConstraintColonPolicy` is absent.
+	 */
 	public var typeParamConstraintColon: WhitespacePolicy = WhitespacePolicy.None;
 
 	public var typeParamOpen: WhitespacePolicy = WhitespacePolicy.None;

@@ -163,8 +163,8 @@ final class BreakCommits {
 	 * only its own break, the one offered last wins and the other stays a live decision inside it.
 	 */
 	public static function offerItemBreaks(
-		items: Array<Doc>, plain: Doc, laidOut: (items:Array<Doc>, committed:Int) -> Doc, ?wanted: (item:Doc, i:Int, broken:Doc) -> Bool,
-		throughBodies: Bool = false
+		items: Array<Doc>, plain: Doc, laidOut: (items: Array<Doc>, committed: Int) -> Doc,
+		?wanted: (item: Doc, i: Int, broken: Doc) -> Bool, throughBodies: Bool = false
 	): Doc {
 		final holds: DocIdentityMap<Bool> = new DocIdentityMap();
 		final offers: Array<ItemBreak> = [];
@@ -179,7 +179,7 @@ final class BreakCommits {
 			case _:
 		}
 		final combined: Bool = offers.length <= COMBINED_OFFERS;
-		final keep: (item:Doc, i:Int, broken:Doc) -> Bool = wanted ?? (_, _, _) -> true;
+		final keep: (item: Doc, i: Int, broken: Doc) -> Bool = wanted ?? (_, _, _) -> true;
 		// The alternative for offer `k` holds the offers before it, laid out on top of its own committed break: the
 		// measure resolves the outermost taken token first, so every taken subset reaches the layout committing it whole.
 		function offered(with: Array<Doc>, host: Doc, upTo: Int): Doc {
@@ -250,7 +250,7 @@ final class BreakCommits {
 	 * literal's own wrap rule emits — replaced by `f(brk, rebuild)`, where `rebuild(b)` is that decision with `b` for its
 	 * break side; `null` when `body` is anything else.
 	 */
-	public static function decisionMapped(body: Doc, f: (brk:Doc, rebuild:Doc -> Doc) -> Doc): Null<Doc> {
+	public static function decisionMapped(body: Doc, f: (brk: Doc, rebuild: Doc -> Doc) -> Doc): Null<Doc> {
 		return switch body {
 			case IfFirstLineExceeds(n, brk, flat): f(brk, b -> IfFirstLineExceeds(n, b, flat));
 			case Group(IfWidthExceeds(n, brk, flat)): f(brk, b -> Group(IfWidthExceeds(n, b, flat)));

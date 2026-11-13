@@ -44,7 +44,7 @@ final class PortHolder {
 	 * the holder then dies on EADDRINUSE and every later probe reads free. A tethered job: ended after `body`, and gone with this
 	 * process should that be killed first.
 	 */
-	public static function watching(port: Int, body: (connections:() -> Int) -> Void): Void {
+	public static function watching(port: Int, body: (connections: () -> Int) -> Void): Void {
 		final dir: String = CliFixture.writeDir('apq_port_holder', []);
 		final said: String = '$dir/said';
 		final seen: String = '$said.seen';

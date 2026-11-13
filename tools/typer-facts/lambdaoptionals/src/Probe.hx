@@ -10,9 +10,9 @@ class Item {
 
 class Probe {
 
-	static function optArg(f: (?a:Int) -> Void): Void {}
+	static function optArg(f: (?a: Int) -> Void): Void {}
 
-	static function gen<A>(x: A, f: (?a:A) -> Void): Void {}
+	static function gen<A>(x: A, f: (?a: A) -> Void): Void {}
 
 	static function main() {
 		final xs: Array<Item> = [];

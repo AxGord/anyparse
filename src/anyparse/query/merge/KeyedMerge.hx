@@ -38,7 +38,7 @@ enum abstract SideChange(String) to String {
 }
 
 /** A line merge of one place's base, ours and theirs texts: the merged text when it is clean, else null. */
-typedef LineMerge = (base:String, ours:String, theirs:String) -> Null<String>;
+typedef LineMerge = (base: String, ours: String, theirs: String) -> Null<String>;
 
 /** What `KeyedMerge.merge` makes of three versions. */
 typedef MergeOutcome = {

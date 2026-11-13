@@ -59,25 +59,25 @@ typedef SafeBisectSeat = {
 	 * Typecheck the tree with `keep` at the bytes the round left, `partial` at the given texts
 	 * and every other written file at its pre-round bytes.
 	 */
-	final probe: (keep:Array<String>, partial:Map<String, String>) -> OracleOutcome;
+	final probe: (keep: Array<String>, partial: Map<String, String>) -> OracleOutcome;
 
 	/** The rules whose first-pass edits in `file` can be replayed one subset at a time, or none. */
-	final splitRules: (file:String) -> Array<String>;
+	final splitRules: (file: String) -> Array<String>;
 
 	/** `file`'s first pass replayed with the edits of `rules` alone, or null when the writer refuses them or they change nothing. */
-	final replay: (file:String, rules:Array<String>) -> Null<String>;
+	final replay: (file: String, rules: Array<String>) -> Null<String>;
 
 	/**
 	 * The rules that edited `file` AFTER its first per-file pass — in a later pass or through a cross-file fix. Keeping
 	 * the first pass alone discards their edits, a rule of the first pass included.
 	 */
-	final laterRules: (file:String) -> Array<String>;
+	final laterRules: (file: String) -> Array<String>;
 
 	/** Every rule that edited `file` this round — what a whole-file revert takes back. */
-	final rulesOf: (file:String) -> Array<String>;
+	final rulesOf: (file: String) -> Array<String>;
 
 	/** `file`'s text as the round left it, or null when the round deleted it. */
-	final fixed: (file:String) -> Null<String>;
+	final fixed: (file: String) -> Null<String>;
 
 };
 

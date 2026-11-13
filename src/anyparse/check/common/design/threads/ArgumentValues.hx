@@ -249,7 +249,7 @@ final class ArgumentValues {
 		final verdicts: Array<ArgumentFit> = [own];
 		for (s in m.signatures.slice(1)) {
 			final slots: Array<SlotParam> = CallSelection.slotsOf(s);
-			final fit: (arg:Int, param:Int) -> ArgumentFit = (a, p) -> {
+			final fit: (arg: Int, param: Int) -> ArgumentFit = (a, p) -> {
 				final wanted: Null<String> = s.params[p].type;
 				wanted == null || CallGraphNames.mentionsTypeName(wanted, s.typeParamNames, _typeSyntax)
 					? MayFit

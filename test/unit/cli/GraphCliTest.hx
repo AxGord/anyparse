@@ -270,7 +270,7 @@ class GraphCliTest extends Test {
 
 	#if (sys || nodejs)
 	/** Run `body` over the graph fixture written to a fresh directory, removed afterwards. */
-	private static function withFixture(body: (root:String) -> Void): Void {
+	private static function withFixture(body: (root: String) -> Void): Void {
 		final root: String = CliFixture.writeTree('graphcli', GraphFixture.FILES.map(f -> { name: f.file, source: f.source }));
 		CliFixture.always(CliFixture.removeDir.bind(root), body.bind(root));
 	}

@@ -430,7 +430,7 @@ final class OccurrenceScan {
 	}
 
 	/** `region` to an `InertScan` reader in source order: its text spans, then each hole's own regions between them. */
-	private static function reportInert(region: LexRegion, onRegion: (start:Int, end:Int, literal:Bool) -> Void): Void {
+	private static function reportInert(region: LexRegion, onRegion: (start: Int, end: Int, literal: Bool) -> Void): Void {
 		final literal: Bool = switch region.kind {
 			case LineComment, BlockComment: false;
 			case StringLit, RegexLit: true;

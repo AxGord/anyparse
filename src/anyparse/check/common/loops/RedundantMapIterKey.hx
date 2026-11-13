@@ -83,7 +83,7 @@ final class RedundantMapIterKey extends RuleBase {
 		return RunScan.editsWith(plugin, source, readSeams(plugin.refShape()), (tree, s) -> {
 			final nodeByKey: Map<String, QueryNode> = [];
 			indexFor(tree, s.forStmtKind, nodeByKey);
-			final kindOf: (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration = proofOf(
+			final kindOf: (loop: QueryNode, valueBinderKinds: Array<String>) -> ValueIteration = proofOf(
 				tree, source, file, plugin,
 				IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, IndexScope.resolutionIndexOf(plugin) ?? index)
 			);
@@ -140,7 +140,7 @@ final class RedundantMapIterKey extends RuleBase {
 	 */
 	private static function proofOf(
 		tree: QueryNode, source: String, file: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
-	): (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration {
+	): (loop: QueryNode, valueBinderKinds: Array<String>) -> ValueIteration {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final facts: Array<{ types: Map<Int, String>, imports: Map<String, String> }> = [];
 		return (loop, valueBinderKinds) -> {
@@ -160,7 +160,7 @@ final class RedundantMapIterKey extends RuleBase {
 
 	private static function walk(
 		out: Array<Violation>, file: String, source: String, node: QueryNode, s: Seams,
-		kindOf: (loop:QueryNode, valueBinderKinds:Array<String>) -> ValueIteration
+		kindOf: (loop: QueryNode, valueBinderKinds: Array<String>) -> ValueIteration
 	): Void {
 		if (node.kind == s.forStmtKind && node.name == '_' && keyPrefixSpan(node, source, s.valueBinderKinds) != null) {
 			final span: Null<Span> = node.span;

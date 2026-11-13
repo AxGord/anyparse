@@ -876,9 +876,9 @@ final class PrattPostfixLowering {
  */
 typedef PrattPostfixCtx = {
 	final ctx: LoweringCtx;
-	final parseFnName: (refName:String) -> String;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
-	final ruleReturnCT: (refName:String) -> ComplexType;
+	final parseFnName: (refName: String) -> String;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final ruleReturnCT: (refName: String) -> ComplexType;
 	final stashNewlineClearExpr: () -> Expr;
 }
 #end

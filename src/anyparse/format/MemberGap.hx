@@ -88,7 +88,7 @@ final class MemberGap {
 	 * `ifDoc`, the kind's `…TypeIfDocComments` count, replaces it when the body holds a doc comment (`bodyHasDoc`);
 	 * `null` there leaves `stated`, and the body is then not scanned.
 	 */
-	public static function docEdge<T:LeadingCommented>(
+	public static function docEdge<T: LeadingCommented>(
 		stated: Null<Int>, ifDoc: Null<Int>, members: Array<T>, trailing: Array<String>
 	): Null<Int> {
 		return ifDoc != null && bodyHasDoc(members, trailing) ? ifDoc : stated;
@@ -99,7 +99,7 @@ final class MemberGap {
 	 * `trailing` comments before its `}`. A body with no member holds comments only and has no member a doc documents,
 	 * so it answers false; a doc inside a member's own body or a conditional branch is not the body's.
 	 */
-	public static function bodyHasDoc<T:LeadingCommented>(members: Array<T>, trailing: Array<String>): Bool {
+	public static function bodyHasDoc<T: LeadingCommented>(members: Array<T>, trailing: Array<String>): Bool {
 		return members.length > 0 && (docLed(trailing) || members.exists(m -> docLed(m.leadingComments)));
 	}
 

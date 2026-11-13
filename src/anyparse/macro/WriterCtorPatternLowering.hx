@@ -408,7 +408,7 @@ final class WriterCtorPatternLowering {
  */
 typedef CtorPatternCtx = {
 	final shape: ShapeBuilder.ShapeResult;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
 }
 #end

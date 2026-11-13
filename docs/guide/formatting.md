@@ -60,7 +60,7 @@ whole-file parse knows, so a seam makes an `else` acceptable, never proven valid
 
 ## The colon of a function-type parameter and of a type-parameter constraint: `whitespace.arrowParamColonPolicy`, `whitespace.typeParamConstraintColonPolicy`
 
-Two keys of their own, not part of haxe-formatter's schema. `arrowParamColonPolicy` spaces the `:` of a named function-type parameter (`(call:QueryNode) -> Bool`); `typeParamConstraintColonPolicy` spaces the `:` of a type-parameter constraint (`<T:Dynamic>`, in a class, typedef or function header). Each takes the usual policy values (`none`, `before`, `after`, `around`) and is set on its own. Left out, the colon stays tight (`(call:Int)`, `<T:Foo>`) whatever `typeHintColonPolicy` says for the annotation colons (`var x: Int`, `f(a: Int)`).
+Two keys of their own, not part of haxe-formatter's schema. `arrowParamColonPolicy` spaces the `:` of a named function-type parameter (`(call:QueryNode) -> Bool`); `typeParamConstraintColonPolicy` spaces the `:` of a type-parameter constraint (`<T:Dynamic>`, in a class, typedef or function header). Each takes the usual policy values (`none`, `before`, `after`, `around`) and is set on its own. Left out, the colon follows `typeHintColonPolicy`, the policy of the annotation colons (`var x: Int`, `f(a: Int)`): under `after` it is `(call: Int)`, `<T: Foo>`; with neither key set it is tight (`(call:Int)`, `<T:Foo>`). A key that is set wins over `typeHintColonPolicy`.
 
 ```haxe
 // "arrowParamColonPolicy": "after", "typeParamConstraintColonPolicy": "around"

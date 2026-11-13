@@ -168,7 +168,7 @@ final class Unification {
 	 * the branches' agreed answer. A branch that is not transitive allows no clause where `allowCast` is off.
 	 */
 	private function throughClauses(
-		e: TypeEnd, allowCast: Bool, side: CastBranch -> Array<TypeEnd>, through: (b:CastBranch, t:TypeEnd) -> ArgumentFit
+		e: TypeEnd, allowCast: Bool, side: CastBranch -> Array<TypeEnd>, through: (b: CastBranch, t: TypeEnd) -> ArgumentFit
 	): ArgumentFit {
 		final graph: Null<CastGraph> = graphOf(e);
 		return graph == null
@@ -239,7 +239,7 @@ final class Unification {
 	 * `Misfits` when none does and no build macro may add one. Each is asked in the abstract's own context
 	 * (`get_abstract_context`): a further abstract cast only for a transitive abstract.
 	 */
-	private function membersFit(graph: CastGraph, fields: Array<CastField>, fit: (f:CastField, allow:Bool) -> ArgumentFit): ArgumentFit {
+	private function membersFit(graph: CastGraph, fields: Array<CastField>, fit: (f: CastField, allow: Bool) -> ArgumentFit): ArgumentFit {
 		var open: Bool = !graph.fieldsComplete;
 		for (f in fields) switch agreed(graph.branches.map(b -> fit(f, b.transitive))) {
 			case Fits if (f.certain):

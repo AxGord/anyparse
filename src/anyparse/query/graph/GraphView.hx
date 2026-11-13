@@ -176,7 +176,7 @@ final class GraphView {
 	 * an edge counts on the nodes its ends fold into, weights summed per kind, and one whose ends fold into one node is
 	 * dropped unless that node is its own end.
 	 */
-	private static function foldInto(graph: CodeGraph, into: (n:GraphNode) -> Null<GraphNode>): CodeGraph {
+	private static function foldInto(graph: CodeGraph, into: (n: GraphNode) -> Null<GraphNode>): CodeGraph {
 		final lifted: CodeGraph = new CodeGraph();
 		// node id -> the id it folds into, null when it folds into none
 		final folded: Map<String, Null<String>> = [];

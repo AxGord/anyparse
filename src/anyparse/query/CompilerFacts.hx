@@ -735,12 +735,12 @@ final class CompilerFacts {
 	 * body (`inline-site-unknown`, `macro-expansion`) not wholly inside `span`, or facts lost to a stale file. With
 	 * `spliced`, a body an inlined function was spliced into answers as `within` says, `harmless` too.
 	 */
-	public function callsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee:String) -> Bool): Null<Array<CallFact>> {
+	public function callsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee: String) -> Bool): Null<Array<CallFact>> {
 		return within(file, span, n -> n.calls, c -> c.at, spliced, harmless);
 	}
 
 	/** Every value flow within `span` in `file`; null — Unknown — as `callsIn` says. */
-	public function flowsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee:String) -> Bool): Null<Array<FlowFact>> {
+	public function flowsIn(file: String, span: Span, spliced: Bool = false, ?harmless: (callee: String) -> Bool): Null<Array<FlowFact>> {
 		return within(file, span, n -> n.flows, f -> f.at, spliced, harmless);
 	}
 
@@ -895,10 +895,10 @@ final class CompilerFacts {
 	 */
 	public function within<F>(
 		file: String, span: Span, pick: (FactNode) -> Array<F>, at: (F) -> FactPos, spliced: Bool = false,
-		?harmless: (callee:String) -> Bool
+		?harmless: (callee: String) -> Bool
 	): Null<Array<F>> {
 		final key: String = _key(file);
-		final dropped: (callee:String) -> Bool = harmless ?? callee -> false;
+		final dropped: (callee: String) -> Bool = harmless ?? callee -> false;
 		final out: Array<F> = [];
 		for (n in nodesAround(file, span, true)) {
 			if (lostWhere(n)) return null;
@@ -1234,7 +1234,7 @@ final class CompilerFacts {
 	 * Whether the fact `n` holds at `where`, outside its own range, may run in `span` (`within`): a splice's when a site of
 	 * it meets `span` and its method is not `dropped`, an expansion's when a site it runs at does, any other's always.
 	 */
-	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee:String) -> Bool): Bool {
+	private static function runsIn(n: FactNode, where: FactPos, span: Span, dropped: (callee: String) -> Bool): Bool {
 		final splice: Null<SpliceFact> = FactSites.spliceOf(n, where);
 		if (splice != null) return !dropped(splice.callee) && meets(splice.sites, span);
 		final expansion: Null<ExpansionFact> = FactSites.expansionOf(n, where);

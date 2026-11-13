@@ -1165,10 +1165,10 @@ final class WriterBodyPolicyLowering {
 typedef BodyPolicyCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final ctx: LoweringCtx;
-	final branchCtorPattern: (bodyTypePath:String, branch:ShapeNode) -> Expr;
-	final buildBracketBodyGlueTest: (args:Null<Array<String>>, bodyTypePath:Null<String>, bodyValueExpr:Expr) -> Null<Expr>;
-	final findCtorPattern: (bodyTypePath:String, ctorName:String) -> Null<Expr>;
-	final foldSsbTrailingComment: (base:Expr, ssbTrailCommentExpr:Null<Expr>) -> Expr;
+	final branchCtorPattern: (bodyTypePath: String, branch: ShapeNode) -> Expr;
+	final buildBracketBodyGlueTest: (args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr) -> Null<Expr>;
+	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
+	final foldSsbTrailingComment: (base: Expr, ssbTrailCommentExpr: Null<Expr>) -> Expr;
 }
 /** One `@:fmt(elseSwitch)` test per `KeywordPlacement` value, each `null` on a field without the meta. */
 typedef ElseSwitchTests = { final same: Null<Expr>; final next: Null<Expr>; };

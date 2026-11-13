@@ -20,7 +20,7 @@ final class TypeInfoMemo {
 	}
 
 	private static function table(
-		provider: Null<TypeInfoProvider>, source: String, read: (provider:TypeInfoProvider, source:String) -> Map<Int, String>
+		provider: Null<TypeInfoProvider>, source: String, read: (provider: TypeInfoProvider, source: String) -> Map<Int, String>
 	): () -> Map<Int, String> {
 		var cache: Null<Map<Int, String>> = null;
 		return function(): Map<Int, String> {

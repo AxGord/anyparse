@@ -172,8 +172,8 @@ final class CallReturns {
 	 */
 	private static function agreedOver<T>(
 		node: QueryNode, starts: Array<ResolvedType>, method: String, onType: Null<Bool>, c: IndexTyping,
-		answer: (calls:CallSelection, start:ResolvedType, candidates:CallCandidates, args:Array<CallArgument>) -> Null<T>,
-		merged: (a:T, b:T) -> Null<T>
+		answer: (calls: CallSelection, start: ResolvedType, candidates: CallCandidates, args: Array<CallArgument>) -> Null<T>,
+		merged: (a: T, b: T) -> Null<T>
 	): Null<T> {
 		final index: Null<SymbolIndex> = c.index;
 		final fi: Null<FileInfo> = index?.fileInfo(c.file);
@@ -392,6 +392,6 @@ typedef ArgumentRun = {
 	final receiverArgs: Array<String>;
 
 	/** The type of the argument at an index, typed with no expected type; null for one not typed. */
-	final given: (at:Int) -> Null<String>;
+	final given: (at: Int) -> Null<String>;
 
 }

@@ -196,7 +196,7 @@ final class CheckScan {
 	 */
 	public static function applyBySpan(
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>, indexKinds: Array<String>,
-		produce: (node:QueryNode, span:Span) -> Null<{ span: Span, text: String }>
+		produce: (node: QueryNode, span: Span) -> Null<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
 		return collectSpanEdits(violations, nodesByKind(plugin, source, indexKinds), produce);
 	}
@@ -210,7 +210,7 @@ final class CheckScan {
 	 */
 	public static function applyTextMatches(
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>,
-		collect: (tree:QueryNode, source:String) -> Array<{ span: Span, text: String }>
+		collect: (tree: QueryNode, source: String) -> Array<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -671,7 +671,7 @@ final class CheckScan {
 	 * check's own match record.
 	 */
 	public static function collectSpanEdits<T>(
-		violations: Array<Violation>, byKey: Map<String, T>, produce: (node:T, span:Span) -> Null<{ span: Span, text: String }>
+		violations: Array<Violation>, byKey: Map<String, T>, produce: (node: T, span: Span) -> Null<{ span: Span, text: String }>
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {

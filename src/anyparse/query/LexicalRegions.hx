@@ -43,7 +43,7 @@ typedef LexHole = { final from: Int; final to: Int; final regions: Array<LexRegi
  * reported with `to == -1`, and everything reported inside it is void.
  */
 typedef LexWalk = (
-	onRegion:(from:Int, to:Int, kind:LexRegionKind, depth:Int) -> Void, onHole:(from:Int, to:Int, depth:Int) -> Void
+	onRegion: (from: Int, to: Int, kind: LexRegionKind, depth: Int) -> Void, onHole: (from: Int, to: Int, depth: Int) -> Void
 ) -> Void;
 
 /**
@@ -238,7 +238,7 @@ final class LexicalRegions {
 	 * included: the flat reading of the assembled tree, where an abandoned hole's comments are already void, so each comment
 	 * is reported once by its own byte range.
 	 */
-	public static function eachComment(regions: Array<LexRegion>, onComment: (from:Int, to:Int) -> Void): Void {
+	public static function eachComment(regions: Array<LexRegion>, onComment: (from: Int, to: Int) -> Void): Void {
 		for (region in regions) switch region.kind {
 			case LineComment, BlockComment:
 				onComment(region.from, region.to);

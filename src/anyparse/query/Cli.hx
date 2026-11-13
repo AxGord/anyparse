@@ -188,7 +188,7 @@ final class Cli {
 		// streams covers every long-output command (`fmt --list`, `lit`, `search`,
 		// `show`, …), not just `fmt`.
 		final proc: js.node.Process = js.Node.process;
-		final epipeQuiet: (err:js.lib.Error) -> Void = (err: js.lib.Error) -> {
+		final epipeQuiet: (err: js.lib.Error) -> Void = (err: js.lib.Error) -> {
 			if (Reflect.field(err, 'code') == 'EPIPE')
 				proc.exit(0)
 			else

@@ -1457,17 +1457,33 @@
 			"name": "M-ARROW-COLON-KEY-UNMAPPED",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyWhitespaceOperatorPolicies",
-			"find": "opt.arrowParamColon = HaxeFormatValues.whitespaceToRuntime(section.arrowParamColonPolicy);",
-			"replace": "opt.arrowParamColon = WhitespacePolicy.None;",
+			"find": "HaxeFormatValues.whitespaceToRuntime(section.arrowParamColonPolicy)",
+			"replace": "WhitespacePolicy.None",
 			"note": "whitespace.arrowParamColonPolicy is read and dropped, so the colon of a named function-type parameter stays tight under every value of the key"
 		},
 		{
 			"name": "M-CONSTRAINT-COLON-KEY-UNMAPPED",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyWhitespaceOperatorPolicies",
-			"find": "opt.typeParamConstraintColon = HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy);",
-			"replace": "opt.typeParamConstraintColon = WhitespacePolicy.None;",
+			"find": "HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy)",
+			"replace": "WhitespacePolicy.None",
 			"note": "whitespace.typeParamConstraintColonPolicy is read and dropped, so the colon of a type-parameter constraint stays tight under every value of the key"
+		},
+		{
+			"name": "M-ARROW-COLON-ABSENT-TIGHT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "(section.arrowParamColonPolicy)\n\t\t\t: opt.typeHintColon",
+			"replace": "(section.arrowParamColonPolicy)\n\t\t\t: WhitespacePolicy.None",
+			"note": "an absent whitespace.arrowParamColonPolicy keeps the function-type parameter colon tight instead of following typeHintColonPolicy"
+		},
+		{
+			"name": "M-CONSTRAINT-COLON-ABSENT-TIGHT",
+			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "(section.typeParamConstraintColonPolicy)\n\t\t\t: opt.typeHintColon",
+			"replace": "(section.typeParamConstraintColonPolicy)\n\t\t\t: WhitespacePolicy.None",
+			"note": "an absent whitespace.typeParamConstraintColonPolicy keeps the type-parameter constraint colon tight instead of following typeHintColonPolicy"
 		},
 		{
 			"name": "M-META-FIT-ARGS-IGNORED",

@@ -231,7 +231,7 @@ final class PostLand {
 	 * What `body` answers over a checkout of `sha` in a worktree and a scratch directory of this run's own (`work`, `tree`),
 	 * both removed after it; a body that throws, or a commit that cannot be checked out, answers `Failed` naming `who`.
 	 */
-	public static function inWorktree(repo: String, sha: String, who: String, body: (work:String, tree:String) -> Outcome): Outcome {
+	public static function inWorktree(repo: String, sha: String, who: String, body: (work: String, tree: String) -> Outcome): Outcome {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
 		final work: String = dirs.claimAfterSweep(WORK_PREFIX, repo);
 		final tree: String = Path.join([work, 'tree']);
@@ -465,4 +465,4 @@ final class PostLand {
  * The start of the run for a landed commit: the tree, the commit, the snapshot cache and whether the whole suite runs.
  * A land whose battery ran every class starts the hxcpp build alone.
  */
-typedef PostLandStart = (tree:String, sha:String, cache:String, suite:Bool) -> Outcome;
+typedef PostLandStart = (tree: String, sha: String, cache: String, suite: Bool) -> Outcome;

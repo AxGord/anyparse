@@ -153,7 +153,7 @@ private typedef Stripped = { final text: String; final lines: Array<Int>; };
  * A literal holding code reports only its text around that code, and the comments and literals inside the code.
  * Source the grammar cannot scan reports nothing, so all of it is code.
  */
-typedef InertScan = (source:String, onRegion:(start:Int, end:Int, literal:Bool) -> Void) -> Void;
+typedef InertScan = (source: String, onRegion: (start: Int, end: Int, literal: Bool) -> Void) -> Void;
 
 /** What one source byte is to the invariant. */
 private enum abstract Zone(Int) {

@@ -248,7 +248,7 @@ class ParseDiskCacheTest extends Test {
 	}
 
 	/** Runs `body` with `TMPDIR` pointing at a fresh private directory, then puts `TMPDIR` back and removes the directory. */
-	private static function withPrivateTemp(body: (root:String) -> Void): Void {
+	private static function withPrivateTemp(body: (root: String) -> Void): Void {
 		#if (sys || nodejs)
 		final before: Null<String> = Sys.getEnv('TMPDIR');
 		final root: String = CliFixture.writeDir('diskcacheprivate', []);

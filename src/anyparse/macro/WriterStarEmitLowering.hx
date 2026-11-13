@@ -1598,11 +1598,11 @@ typedef StarEmitCtx = {
 	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
 	final ctorBlank: WriterCtorBlankLowering.CtorBlankCtx;
 	final triviaStar: WriterTriviaStarDispatch.TriviaStarDispatchCtx;
-	final buildKeepBlankAfterCtorGate: (child:ShapeNode, node:ShapeNode, typePath:String) -> Null<Expr>;
-	final isSpacedLead: (openText:Null<String>) -> Bool;
-	final isTriviaBearing: (refName:String) -> Bool;
-	final mapWrapFor: (field:Null<String>) -> Null<SepStarMapWrap>;
-	final ruleCtorPath: (typePath:String, ctor:String) -> Array<String>;
-	final writeFnFor: (refName:String) -> String;
+	final buildKeepBlankAfterCtorGate: (child: ShapeNode, node: ShapeNode, typePath: String) -> Null<Expr>;
+	final isSpacedLead: (openText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final mapWrapFor: (field: Null<String>) -> Null<SepStarMapWrap>;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final writeFnFor: (refName: String) -> String;
 }
 #end

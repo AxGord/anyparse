@@ -21,8 +21,8 @@ final class CallChains {
 	 * `sourceOf` supplies file sources for `line:col` rendering.
 	 */
 	public static function render(
-		graph: CallGraph, rootId: String, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>, sourceOf: (file:String) -> Null<String>,
-		maxLines: Int
+		graph: CallGraph, rootId: String, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>,
+		sourceOf: (file: String) -> Null<String>, maxLines: Int
 	): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add('${nodeLabel(graph, rootId, sourceOf)}\n');
@@ -60,7 +60,7 @@ final class CallChains {
 	}
 
 	/** `id (file:line:col)` for an in-scope node, `id [external]` for a call target outside the scanned scope. */
-	public static function nodeLabel(graph: CallGraph, id: String, sourceOf: (file:String) -> Null<String>): String {
+	public static function nodeLabel(graph: CallGraph, id: String, sourceOf: (file: String) -> Null<String>): String {
 		final n: Null<FnNode> = graph.node(id);
 		if (n == null) return id;
 		if (n.isExternal) return '$id [external]';
@@ -72,7 +72,7 @@ final class CallChains {
 	}
 
 	/** ` @ file:line:col` of the call / reference site, or empty when unavailable. */
-	public static function siteOf(edge: CallEdge, sourceOf: (file:String) -> Null<String>): String {
+	public static function siteOf(edge: CallEdge, sourceOf: (file: String) -> Null<String>): String {
 		final span: Null<Span> = edge.span;
 		final source: Null<String> = sourceOf(edge.file);
 		if (span == null || source == null) return '';

@@ -214,7 +214,7 @@ final class ProcessSpawnAnswerTest extends Test {
 	}
 
 	/** Runs `body` with `ANSWER_ENV` naming a fresh module; its log file is `log` (not yet there), its directory `dir`. */
-	private static function withModule(body: (log:String, dir:String) -> Void): Void {
+	private static function withModule(body: (log: String, dir: String) -> Void): Void {
 		final dir: String = CliFixture.writeDir('hs_answer', []);
 		final log: String = '$dir/asked.log';
 		File.saveContent('$dir/answer.js', module(log));

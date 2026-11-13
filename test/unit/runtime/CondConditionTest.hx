@@ -12,7 +12,7 @@ import anyparse.runtime.Input;
 final class CondConditionTest extends Test {
 
 	/** The Haxe grammar's condition reader: the pins below read Haxe conditions through the generic span helper. */
-	private static final READER: (input:Input, at:Int) -> Int = HxPpCondScan.endAt;
+	private static final READER: (input: Input, at: Int) -> Int = HxPpCondScan.endAt;
 
 	@:pin('control')
 	@:killer('M-COND-ATOM-ENDS-AT-WS')

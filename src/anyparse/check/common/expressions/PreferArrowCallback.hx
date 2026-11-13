@@ -189,7 +189,7 @@ final class PreferArrowCallback extends RuleBase {
 	 * Subtrees opaque to reference analysis (`RefShape.opaqueKinds` — macro
 	 * reification, whose code splices into a different context) are skipped whole.
 	 */
-	private static function walkArgHosts(ctx: Ctx, node: QueryNode, handle: (call:QueryNode, arg:QueryNode, span:Span) -> Bool): Void {
+	private static function walkArgHosts(ctx: Ctx, node: QueryNode, handle: (call: QueryNode, arg: QueryNode, span: Span) -> Bool): Void {
 		if ((ctx.shape.opaqueKinds ?? []).contains(node.kind)) return;
 		final consumed: Array<QueryNode> = [];
 		if (isArgHost(ctx, node)) for (arg in argsOf(ctx, node)) if (arg.kind == ctx.fnKind) {

@@ -254,7 +254,7 @@ final class TypingService {
 		if ((kind == shape.identKind || kind == shape.stringInterpIdentKind) && name != null)
 			return name == shape.selfReferenceText ? host.self(node, ctx) : identifierType(node, shape, host, ctx);
 		if (host.isAccess(kind, ctx) && name != null && node.children.length > 0) return host.access(node, ctx);
-		final element: Null<(node:QueryNode, container:T, ctx:C) -> Null<T>> = host.element;
+		final element: Null<(node: QueryNode, container: T, ctx: C) -> Null<T>> = host.element;
 		if (kind != shape.indexAccessKind || element == null || node.children.length <= 0)
 			return kind == shape.callKind && node.children.length > 0 ? host.call(node, ctx) : composedType(node, shape, host, ctx);
 		final container: Null<T> = typeWalk(node.children[0], shape, host, ctx);
@@ -365,9 +365,9 @@ final class TypingService {
 	 */
 	private static function composedType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
 		final kind: String = node.kind;
-		final construction: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.construction;
+		final construction: Null<(node: QueryNode, ctx: C) -> Null<T>> = host.construction;
 		if (kind == shape.newExprKind && node.name != null && construction != null) return construction(node, ctx);
-		final contextual: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.contextual;
+		final contextual: Null<(node: QueryNode, ctx: C) -> Null<T>> = host.contextual;
 		final dependent: Bool = kind == shape.arrayLiteralKind
 			|| kind == shape.objectLiteralKind
 			|| kind == shape.ternaryKind
@@ -389,7 +389,7 @@ final class TypingService {
 		if (written != null || reading.contains(from)) return written;
 		reading.push(from);
 		final init: Null<QueryNode> = host.initializer(from, ident, ctx);
-		final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>> = host.parameter;
+		final parameter: Null<(from: Int, use: QueryNode, ctx: C) -> Null<T>> = host.parameter;
 		final held: Null<T> = init != null
 			? typeWalk(init, shape, host, ctx)
 			: host.loopElement(from, ctx) ?? (parameter == null ? null : parameter(from, ident, ctx));
@@ -404,8 +404,8 @@ final class TypingService {
 	 * typing that one none.
 	 */
 	private static function carriedType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
-		final literal: Null<(typeName:String, ctx:C) -> Null<T>> = host.literal;
-		final ascribed: Null<(node:QueryNode, ctx:C) -> Null<T>> = host.ascribed;
+		final literal: Null<(typeName: String, ctx: C) -> Null<T>> = host.literal;
+		final ascribed: Null<(node: QueryNode, ctx: C) -> Null<T>> = host.ascribed;
 		final literalType: Null<String> = shape.literalTypeNames?.get(node.kind) ?? (
 			node.kind == shape.stringInterpTextKind ? interpolatingStringType(shape) : null
 		);
@@ -469,7 +469,7 @@ final class TypingService {
 	 * but a binary `RefShape.arithmeticKinds` operator or the negation, for a host typing none, and when an operand is untyped.
 	 */
 	private static function arithmeticType<T, C>(node: QueryNode, shape: RefShape, host: TypingHost<T, C>, ctx: C): Null<T> {
-		final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>> = host.arithmetic;
+		final arithmetic: Null<(node: QueryNode, operands: Array<T>, ctx: C) -> Null<T>> = host.arithmetic;
 		if (arithmetic == null || !isArithmetic(node, shape)) return null;
 		final operands: Array<T> = [];
 		for (c in node.children) {
@@ -583,70 +583,70 @@ enum HeadReading {
 typedef TypingHost<T, C> = {
 
 	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
-	final peel: (node:QueryNode, ctx:C) -> QueryNode;
+	final peel: (node: QueryNode, ctx: C) -> QueryNode;
 
 	/** Whether `kind` is a field access the host types (`a.b`; a member-lookup host adds `a?.b`, `a!.b`). */
-	final isAccess: (kind:String, ctx:C) -> Bool;
+	final isAccess: (kind: String, ctx: C) -> Bool;
 
 	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
-	final literal: Null<(typeName:String, ctx:C) -> Null<T>>;
+	final literal: Null<(typeName: String, ctx: C) -> Null<T>>;
 
 	/**
 	 * The type the ascription `node` (`RefShape.checkTypeKind`, `(e : T)`) gives the value it holds: the type it writes,
 	 * which the value is checked against; null for a host typing none.
 	 */
-	final ascribed: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+	final ascribed: Null<(node: QueryNode, ctx: C) -> Null<T>>;
 
 	/** What the self reference `node` denotes. */
-	final self: (node:QueryNode, ctx:C) -> Null<T>;
+	final self: (node: QueryNode, ctx: C) -> Null<T>;
 
 	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
-	final binding: (ident:QueryNode, ctx:C) -> Null<Int>;
+	final binding: (ident: QueryNode, ctx: C) -> Null<Int>;
 
 	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
-	final bound: (from:Int, ctx:C) -> Null<T>;
+	final bound: (from: Int, ctx: C) -> Null<T>;
 
 	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
-	final initializer: (from:Int, use:QueryNode, ctx:C) -> Null<QueryNode>;
+	final initializer: (from: Int, use: QueryNode, ctx: C) -> Null<QueryNode>;
 
 	/** The element the loop binder at `from` binds, read off what the loop iterates. */
-	final loopElement: (from:Int, ctx:C) -> Null<T>;
+	final loopElement: (from: Int, ctx: C) -> Null<T>;
 
 	/**
 	 * The type the lambda parameter at `from`, written with no type and read at `use`, takes from the function type the
 	 * lambda is expected to be (`ExpectedTypes.lambdaParamTypes`); null for a host typing none.
 	 */
-	final parameter: Null<(from:Int, use:QueryNode, ctx:C) -> Null<T>>;
+	final parameter: Null<(from: Int, use: QueryNode, ctx: C) -> Null<T>>;
 
 	/** What the identifier `ident`, which binds no value, names. */
-	final unbound: (ident:QueryNode, ctx:C) -> Null<T>;
+	final unbound: (ident: QueryNode, ctx: C) -> Null<T>;
 
 	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
-	final access: (node:QueryNode, ctx:C) -> Null<T>;
+	final access: (node: QueryNode, ctx: C) -> Null<T>;
 
 	/** The element the index access `node` into a value of type `container` reads; null for a host typing none. */
-	final element: Null<(node:QueryNode, container:T, ctx:C) -> Null<T>>;
+	final element: Null<(node: QueryNode, container: T, ctx: C) -> Null<T>>;
 
 	/** What the call `node` returns. */
-	final call: (node:QueryNode, ctx:C) -> Null<T>;
+	final call: (node: QueryNode, ctx: C) -> Null<T>;
 
 	/** What the construction `node` makes; null for a host typing none. */
-	final construction: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+	final construction: Null<(node: QueryNode, ctx: C) -> Null<T>>;
 
 	/**
 	 * What the value `node` whose type depends on what its position expects makes — an array or object literal
 	 * (`RefShape.arrayLiteralKind`, `objectLiteralKind`), a conditional (`ternaryKind`, `ifExpressionKinds`); null for a host
 	 * typing none.
 	 */
-	final contextual: Null<(node:QueryNode, ctx:C) -> Null<T>>;
+	final contextual: Null<(node: QueryNode, ctx: C) -> Null<T>>;
 
 	/**
 	 * What the operator `node` — of `RefShape.arithmeticKinds` or `booleanOperatorKinds`, a compound assignment, the negation
 	 * or the logical not — yields over operands of the types `operands`, each typed by the walk; null for a host typing none.
 	 */
-	final arithmetic: Null<(node:QueryNode, operands:Array<T>, ctx:C) -> Null<T>>;
+	final arithmetic: Null<(node: QueryNode, operands: Array<T>, ctx: C) -> Null<T>>;
 
 	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
-	final reading: (ctx:C) -> Array<Int>;
+	final reading: (ctx: C) -> Array<Int>;
 
 }

@@ -879,7 +879,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * AMBIGUOUS the spelling is. That is what a `RefShape` kind set cannot express: it names a
 	 * spelling, never the rule that owns it.
 	 */
-	private function eachProjectedKind(visit: (declaring:ShapeNode, kind:Null<String>) -> Void): Void {
+	private function eachProjectedKind(visit: (declaring: ShapeNode, kind: Null<String>) -> Void): Void {
 		for (rule in sortedRuleNames()) {
 			final node: Null<ShapeNode> = _shape.rules.get(rule);
 			if (node == null) continue;

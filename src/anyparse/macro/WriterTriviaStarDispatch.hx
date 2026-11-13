@@ -822,7 +822,7 @@ final class WriterTriviaStarDispatch {
 typedef TriviaStarDispatchCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final formatInfo: FormatReader.FormatInfo;
-	final isSpacedLead: (openText:Null<String>) -> Bool;
-	final mapWrapFor: (field:Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
+	final isSpacedLead: (openText: Null<String>) -> Bool;
+	final mapWrapFor: (field: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
 }
 #end

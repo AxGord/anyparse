@@ -300,7 +300,7 @@ final class CondDirectives {
 	 */
 	private static function read(source: String, from: Int, keyword: String, keywords: DirectiveKeywords): CondDirective {
 		final afterKeyword: Int = from + keyword.length;
-		final reader: Null<(input:Input, at:Int) -> Int> = keywords.conditionEnd;
+		final reader: Null<(input: Input, at: Int) -> Int> = keywords.conditionEnd;
 		final condition: Null<Span> = reader != null && takesCondition(keyword, keywords.opener, keywords.closer)
 			? CondCondition.conditionAt(source, afterKeyword, reader)
 			: null;
@@ -369,5 +369,5 @@ private typedef DirectiveKeywords = {
 	final markers: Array<Int>;
 	final opener: String;
 	final closer: Null<String>;
-	final conditionEnd: Null<(input:Input, at:Int) -> Int>;
+	final conditionEnd: Null<(input: Input, at: Int) -> Int>;
 };

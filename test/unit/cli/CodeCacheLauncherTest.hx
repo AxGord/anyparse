@@ -259,7 +259,7 @@ final class CodeCacheLauncherTest extends Test {
 	 * `body` over the built launcher and a scratch directory, or a pass without a word where none is built — a test build
 	 * alone writes no launcher, and a mutation track never has one.
 	 */
-	private static function withLauncher(body: (launcher:String, dir:TempDir) -> Void): Void {
+	private static function withLauncher(body: (launcher: String, dir: TempDir) -> Void): Void {
 		if (!FileSystem.exists(LAUNCHER) || !FileSystem.exists(ENGINE)) {
 			Assert.pass('$LAUNCHER is not built — the process half needs `haxe bin/apq-js.hxml`');
 			return;

@@ -607,7 +607,7 @@ final class Land {
  * The build of the three binaries `Land` runs in the candidate tree after the pick: the tree and the log the transcripts go
  * to.
  */
-typedef Compile = (tree:String, log:String) -> Outcome;
+typedef Compile = (tree: String, log: String) -> Outcome;
 
 /** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
 typedef BatteryRequest = {
@@ -627,12 +627,12 @@ typedef BatteryRequest = {
 }
 
 /** The paths a merge brought into the tree, or null when they cannot be read. */
-typedef MergedPaths = (tree:String) -> Null<Array<String>>;
+typedef MergedPaths = (tree: String) -> Null<Array<String>>;
 /** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
-typedef BatteryExec = (flags:Array<String>, tree:String, log:String) -> Outcome;
+typedef BatteryExec = (flags: Array<String>, tree: String, log: String) -> Outcome;
 
 /** The scope of the suite a merge needs: the tree and the commit it is compared with. */
-typedef ImpactScope = (tree:String, base:String) -> SuiteScope;
+typedef ImpactScope = (tree: String, base: String) -> SuiteScope;
 
 /** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
 typedef LandOptions = {

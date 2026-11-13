@@ -272,7 +272,7 @@ class GraphDiffCliTest extends Test {
 	 * Run `body` over a scratch repository of two commits: `A` beside `B`, then `A` moved to another directory, its
 	 * package kept, with its member `idle` now calling `B`.
 	 */
-	private static function withMovedModule(body: (root:String) -> Void): Void {
+	private static function withMovedModule(body: (root: String) -> Void): Void {
 		#if nodejs
 		final root: String = CliFixture.writeTree('apq_graphdiff', [
 			{ name: 'src/p/A.hx', source: 'package p;\n\nclass A {\n\tpublic function idle(): Int {\n\t\treturn 0;\n\t}\n}\n' },

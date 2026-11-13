@@ -1229,7 +1229,7 @@ private typedef Candidates = { var byStmt: Map<Int, Candidate>; var embedded: Ar
  * `super(...)` — `FieldInitAtDeclaration.crossingAdmitted`'s narrowings, else `crossingProven`'s proof, both bound to the
  * run's files and plugin and to the candidate's file, source and parsed tree.
  */
-private typedef EarlyInitProof = (member:QueryNode, container:QueryNode, ctor:QueryNode, rhs:QueryNode, at:Int) -> Bool;
+private typedef EarlyInitProof = (member: QueryNode, container: QueryNode, ctor: QueryNode, rhs: QueryNode, at: Int) -> Bool;
 
 /**
  * The invariants of one early-read scan over one scope file: the field (`name`, declared at

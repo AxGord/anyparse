@@ -33,10 +33,10 @@ typedef OrderContext = {
 typedef CallEffects = {
 
 	/** Whether the call or construction `call` changes no storage the program can read. */
-	final effectFree: (call:QueryNode) -> Bool;
+	final effectFree: (call: QueryNode) -> Bool;
 
 	/** Whether the value `receiver` reads cannot change in place, so a member read off it changes only with the receiver. */
-	final immutable: (receiver:QueryNode) -> Bool;
+	final immutable: (receiver: QueryNode) -> Bool;
 
 };
 

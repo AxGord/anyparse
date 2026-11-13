@@ -161,7 +161,7 @@ final class FunctionValueTypes {
 	private final _methods: () -> FactsMethodValues;
 
 	/** The types a value of a type parameter may have (`ValueEscapes.parameterBindings`), or null when not known. */
-	private final _bindings: (path:String) -> Null<Array<FactsType>>;
+	private final _bindings: (path: String) -> Null<Array<FactsType>>;
 
 	/** The flows of the facts by the type of the value (`flowGraph`), built on first need. */
 	private var _flows: Null<Map<String, Array<String>>> = null;
@@ -177,7 +177,7 @@ final class FunctionValueTypes {
 
 	public function new(
 		view: FactsView, scope: ReachProject, escapedFunctions: () -> Null<Array<FactsType>>, escapedTypes: () -> Null<Array<String>>,
-		bindings: (path:String) -> Null<Array<FactsType>>, methods: () -> FactsMethodValues
+		bindings: (path: String) -> Null<Array<FactsType>>, methods: () -> FactsMethodValues
 	) {
 		_bindings = bindings;
 		_view = view;

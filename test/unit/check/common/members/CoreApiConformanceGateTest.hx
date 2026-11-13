@@ -138,7 +138,7 @@ class CoreApiConformanceGateTest extends Test {
 	 * `@:coreApi`. Both halves matter: a rule that stopped firing outright would satisfy the
 	 * gated half alone.
 	 */
-	private function assertGated(body: String, run: (files:Array<{ file: String, source: String }>) -> Array<Violation>): Void {
+	private function assertGated(body: String, run: (files: Array<{ file: String, source: String }>) -> Array<Violation>): Void {
 		Assert.equals(1, run([{ file: FIXTURE_FILE, source: body }]).length, 'the ungated arm still fires');
 		Assert.equals(0, run([{ file: FIXTURE_FILE, source: CORE_API + body }]).length, 'the @:coreApi arm declines');
 	}

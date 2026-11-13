@@ -141,7 +141,7 @@ final class FactsView {
 	 * (`LibraryCalls.runsNoUserCode`): what an inlined call of such a method spliced in is none of the body's own code
 	 * (`harmlessSplice`). None does until the analysis says so.
 	 */
-	public var runsNoUserCode: (g:CallGraph, type:String, name:String) -> Bool = (g, type, name) -> false;
+	public var runsNoUserCode: (g: CallGraph, type: String, name: String) -> Bool = (g, type, name) -> false;
 
 	/** File -> its conditional directives and regions, scanned once. */
 	private final _conditional: Map<String, ConditionalText> = [];
@@ -400,7 +400,7 @@ final class FactsView {
 	 */
 	public function sitesIn(g: CallGraph, file: String, span: Span, ?node: String): Null<Array<ImplicitSite>> {
 		if (!faceted(g, file, span, node)) return null;
-		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final harmless: (callee: String) -> Bool = harmlessSplice.bind(g);
 		final strings: Null<Array<StringFact>> = _table.within(file, span, n -> n.strings, s -> s.at, truth, harmless);
 		final iterations: Null<Array<IterationFact>> = _table.within(file, span, n -> n.iterations, i -> i.at, truth, harmless);
 		final calls: Null<Array<CallFact>> = _table.callsIn(file, span, truth, harmless);
@@ -459,7 +459,7 @@ final class FactsView {
 	 */
 	public function truthSites(g: CallGraph, file: String, span: Span, ?node: String): Null<TruthSites> {
 		if (!truth || !faceted(g, file, span, node)) return null;
-		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final harmless: (callee: String) -> Bool = harmlessSplice.bind(g);
 		final natives: Null<Array<NativeFact>> = _table.within(file, span, n -> n.natives, f -> f.at, true, harmless);
 		final reflection: Null<Array<ReflectionFact>> = _table.within(file, span, n -> n.reflection, r -> r.at, true, harmless);
 		return natives == null || reflection == null ? null : { natives: natives, reflection: reflection };
@@ -514,7 +514,7 @@ final class FactsView {
 	 */
 	public function rawRegionRead(g: CallGraph, file: String, span: Span, node: String, names: Array<String>): Bool {
 		if (!truth || !faceted(g, file, span, node)) return false;
-		final harmless: (callee:String) -> Bool = harmlessSplice.bind(g);
+		final harmless: (callee: String) -> Bool = harmlessSplice.bind(g);
 		final fields: Null<Array<FieldFact>> = _table.within(file, span, n -> n.fields, f -> f.at, true, harmless);
 		final calls: Null<Array<CallFact>> = _table.callsIn(file, span, true, harmless);
 		if (fields == null || calls == null) return false;
@@ -1161,7 +1161,7 @@ final class FactsView {
 	 * field of a catch-all — which the object's own field converts as its assignment would, of any type a value that left
 	 * the type system may be (a catch-all operand). Null when a fact there has no place (`CompilerFacts.within`).
 	 */
-	private function conversionSitesIn(file: String, span: Span, harmless: (callee:String) -> Bool): Null<Array<ImplicitSite>> {
+	private function conversionSitesIn(file: String, span: Span, harmless: (callee: String) -> Bool): Null<Array<ImplicitSite>> {
 		// noqa: complexity
 		if (truth && !unchecked().convertsSomewhere()) return [];
 		final flows: Null<Array<FlowFact>> = _table.within(file, span, n -> n.flows, f -> f.at, truth, harmless);
@@ -1820,7 +1820,7 @@ final class FactsView {
  * How a reach analysis reads the run's compiler facts once it has built its scope: the view over that scope under that list
  * of builds (`FactsView.over`).
  */
-typedef FactsSource = (scope:ReachProject, configurations:Null<Array<ReachConfiguration>>) -> Null<FactsView>;
+typedef FactsSource = (scope: ReachProject, configurations: Null<Array<ReachConfiguration>>) -> Null<FactsView>;
 
 /** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
 typedef TruthSites = { final natives: Array<NativeFact>; final reflection: Array<ReflectionFact>; }

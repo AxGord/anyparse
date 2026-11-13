@@ -19,7 +19,7 @@ final class ReachAdmission {
 	 * code the graph cannot follow may then call (`FunctionValueTypes.obtainedUntyped`). No method is, until the analysis
 	 * owning the admission says so.
 	 */
-	public var obtainedUntyped: (g:CallGraph, node:FnNode) -> Bool = (g, node) -> false;
+	public var obtainedUntyped: (g: CallGraph, node: FnNode) -> Bool = (g, node) -> false;
 
 	private final _scope: ReachProject;
 	private final _g: ReachGraph;

@@ -24,10 +24,10 @@ final class RunScan {
 	 */
 	public static function collect(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
-		body: (entry:{ file: String, source: String }, tree:QueryNode, out:Array<Violation>) -> Void,
-		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
+		body: (entry: { file: String, source: String }, tree: QueryNode, out: Array<Violation>) -> Void,
+		?parse: (plugin: GrammarPlugin, source: String) -> Null<QueryNode>
 	): Array<Violation> {
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
+		final parseOrNull: (plugin: GrammarPlugin, source: String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
@@ -44,11 +44,11 @@ final class RunScan {
 	 */
 	public static function collectWith<S>(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, seams: Null<S>,
-		body: (entry:{ file: String, source: String }, tree:QueryNode, seams:S, out:Array<Violation>) -> Void,
-		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
+		body: (entry: { file: String, source: String }, tree: QueryNode, seams: S, out: Array<Violation>) -> Void,
+		?parse: (plugin: GrammarPlugin, source: String) -> Null<QueryNode>
 	): Array<Violation> {
 		if (seams == null) return [];
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
+		final parseOrNull: (plugin: GrammarPlugin, source: String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = parseOrNull(plugin, entry.source);
@@ -65,7 +65,7 @@ final class RunScan {
 	public static function collectTyped(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
 		body: (
-			entry:{ file: String, source: String }, tree:QueryNode, typed:TypeInfoProvider, index:SymbolIndex, out:Array<Violation>
+			entry: { file: String, source: String }, tree: QueryNode, typed: TypeInfoProvider, index: SymbolIndex, out: Array<Violation>
 		) -> Void
 	): Array<Violation> {
 		final typed: Null<TypeInfoProvider> = typeInfoOf(plugin);
@@ -84,10 +84,10 @@ final class RunScan {
 	 * yields none. `parse` overrides the projection as in `collect`.
 	 */
 	public static function edits(
-		plugin: GrammarPlugin, source: String, body: (tree:QueryNode) -> Array<FixEdit>,
-		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
+		plugin: GrammarPlugin, source: String, body: (tree: QueryNode) -> Array<FixEdit>,
+		?parse: (plugin: GrammarPlugin, source: String) -> Null<QueryNode>
 	): Array<FixEdit> {
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
+		final parseOrNull: (plugin: GrammarPlugin, source: String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		return tree == null ? [] : body(tree);
 	}
@@ -98,11 +98,11 @@ final class RunScan {
 	 * reason `collectWith` gives.
 	 */
 	public static function editsWith<S>(
-		plugin: GrammarPlugin, source: String, seams: Null<S>, body: (tree:QueryNode, seams:S) -> Array<FixEdit>,
-		?parse: (plugin:GrammarPlugin, source:String) -> Null<QueryNode>
+		plugin: GrammarPlugin, source: String, seams: Null<S>, body: (tree: QueryNode, seams: S) -> Array<FixEdit>,
+		?parse: (plugin: GrammarPlugin, source: String) -> Null<QueryNode>
 	): Array<FixEdit> {
 		if (seams == null) return [];
-		final parseOrNull: (plugin:GrammarPlugin, source:String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
+		final parseOrNull: (plugin: GrammarPlugin, source: String) -> Null<QueryNode> = parse ?? ParseGate.parseOrNull;
 		final tree: Null<QueryNode> = parseOrNull(plugin, source);
 		return tree == null ? [] : body(tree, seams);
 	}
@@ -112,7 +112,7 @@ final class RunScan {
 	 * regions straight off the source; `body` sees the entry and the one output array.
 	 */
 	public static function gather(
-		files: Array<{ file: String, source: String }>, body: (entry:{ file: String, source: String }, out:Array<Violation>) -> Void
+		files: Array<{ file: String, source: String }>, body: (entry: { file: String, source: String }, out: Array<Violation>) -> Void
 	): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (entry in files) body(entry, out);
@@ -167,7 +167,7 @@ final class RunScan {
 	 * match loop of a fix that answers more than one edit per finding; `CheckScan.collectSpanEdits` is the
 	 * one-edit form.
 	 */
-	public static function eachMatched<T>(violations: Array<Violation>, byKey: Map<String, T>, body: (match:T, span:Span) -> Void): Void {
+	public static function eachMatched<T>(violations: Array<Violation>, byKey: Map<String, T>, body: (match: T, span: Span) -> Void): Void {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
@@ -181,7 +181,7 @@ final class RunScan {
 	 * shape of a fix whose every edit is derived from the finding's own span.
 	 */
 	public static function spanEdits(
-		violations: Array<Violation>, edit: (violation:Violation, span:Span) -> Null<FixEdit>
+		violations: Array<Violation>, edit: (violation: Violation, span: Span) -> Null<FixEdit>
 	): Array<FixEdit> {
 		final edits: Array<FixEdit> = [];
 		for (v in violations) {
@@ -218,7 +218,7 @@ final class RunScan {
 	 */
 	public static function walkedEdits<S>(
 		plugin: GrammarPlugin, source: String, seams: Null<S>, violations: Array<Violation>,
-		walk: (tree:QueryNode, types:Null<Map<Int, String>>, seams:S, wanted:Array<String>, out:Array<FixEdit>) -> Void
+		walk: (tree: QueryNode, types: Null<Map<Int, String>>, seams: S, wanted: Array<String>, out: Array<FixEdit>) -> Void
 	): Array<FixEdit> {
 		return editsWith(plugin, source, seams, (tree, s) -> {
 			final types: Null<Map<Int, String>> = typeInfoOf(plugin)?.declaredTypeSources(source);

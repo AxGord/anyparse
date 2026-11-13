@@ -34,7 +34,7 @@ final class RegexScanPlanTest extends Test {
 	public function testEveryShippedScanMatchesItsRegex(): Void {
 		var scanned: Int = 0;
 		for (matcher in shipped()) {
-			final scan: Null<(input:anyparse.runtime.Input, start:Int) -> Int> = matcher.scan;
+			final scan: Null<(input: anyparse.runtime.Input, start: Int) -> Int> = matcher.scan;
 			if (scan == null) continue;
 			scanned++;
 			final re: EReg = new EReg('^(?:${matcher.pattern})', '');
@@ -121,7 +121,7 @@ final class RegexScanPlanTest extends Test {
 			rest = word.matchedRight();
 		}
 		var seed: Float = pattern.length + 1;
-		final next: (bound:Int) -> Int = bound -> {
+		final next: (bound: Int) -> Int = bound -> {
 			seed = (seed * LCG_MULTIPLIER) % LCG_MODULUS;
 			return Std.int(seed) % bound;
 		};
@@ -148,7 +148,7 @@ final class RegexScanPlanTest extends Test {
 	}
 
 	/** Appends a string `node` consumes, its lookaheads unchecked, each character a printable one when its set has one. */
-	private static function sample(node: ScanNode, next: (bound:Int) -> Int, buf: StringBuf): Void {
+	private static function sample(node: ScanNode, next: (bound: Int) -> Int, buf: StringBuf): Void {
 		switch node {
 			case Chars(set):
 				final printable: Array<Int> = [];

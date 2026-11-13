@@ -227,7 +227,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	/** Whether `dead-binder-counter-loop` claims the loop at `scope.children[at]`, paired with the statement before it. */
 	private static function counterClaimed(ctx: FileCtx, scope: QueryNode, at: Int): Bool {
 		if (at == 0) return false;
-		final claims: Null<(decl:QueryNode, forNode:QueryNode, scope:QueryNode) -> Bool> = ctx.claimer();
+		final claims: Null<(decl: QueryNode, forNode: QueryNode, scope: QueryNode) -> Bool> = ctx.claimer();
 		return claims != null && claims(scope.children[at - 1], scope.children[at], scope);
 	}
 
@@ -290,7 +290,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 		final kind: ValueIteration = CheckScan.hasCommentMarker(ctx.source, drop.from, drop.to)
 			? Unprovable
 			: ValueIterationProof.kindOf(iterable, ctx.root, ctx.s.shape, ctx.types(), ctx.index(), ctx.file, ctx.importMap());
-		final dropped: (message:String, keyed:Null<KeyedLoop>) -> Candidate = (message, keyed) -> {
+		final dropped: (message: String, keyed: Null<KeyedLoop>) -> Candidate = (message, keyed) -> {
 			span: keyToken,
 			message: message,
 			edit: { span: drop, text: '' },
@@ -442,7 +442,7 @@ private typedef FileCtx = {
 	var index: () -> Null<SymbolIndex>;
 	var types: () -> Map<Int, String>;
 	var importMap: () -> Map<String, String>;
-	var claimer: () -> Null<(decl:QueryNode, forNode:QueryNode, scope:QueryNode) -> Bool>;
+	var claimer: () -> Null<(decl: QueryNode, forNode: QueryNode, scope: QueryNode) -> Bool>;
 
 };
 
