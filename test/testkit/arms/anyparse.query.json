@@ -16679,6 +16679,20 @@
 			"find": ": shape.stringLiteralMethodReturns?.get(callNode.children[0].name ?? '') == STRING_TYPE",
 			"replace": ": false",
 			"note": "only a tabled static answers a String, so a String method on a type-rooted field (`K.name.toUpperCase().length`) has no known result type and stays unjoined"
+		},
+		{
+			"name": "M-RLW-CTOR-CALLED-METHOD-BLIND",
+			"type": "anyparse.query.ConstructorReach",
+			"method": "unassignedAt",
+			"force": "false",
+			"note": "a method the constructor calls before it assigns the receiver field reads as assigned, so x -> h.m(x) there reduces to h.m, which reads h while it is null"
+		},
+		{
+			"name": "M-RLW-CTOR-CALLED-METHOD-ALWAYS",
+			"type": "anyparse.query.ConstructorReach",
+			"method": "unassignedAt",
+			"force": "true",
+			"note": "every field receiver reads as unassigned, so a method called after the assignment, or by no constructor, keeps its lambda"
 		}
 	]
 }

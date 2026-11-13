@@ -6,6 +6,7 @@ import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
+import anyparse.query.ConstructorReach;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.RefactorSupport;
@@ -190,7 +191,8 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 					() -> index, entry.file
 				),
 				constraints: constraintsOf(spanInfo, entry.source),
-				construction: collectConstruction(entry.tree, seams, [])
+				construction: collectConstruction(entry.tree, seams, []),
+				ctorReach: new ConstructorReach(entry.tree, seams.typeHostKinds, shape)
 			};
 			walk(violations, entry.file, entry.tree, null, ctx);
 		}
@@ -453,7 +455,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		if (callee.kind != ctx.seams.fieldAccessKind || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		final self: Bool = receiver.kind == ctx.seams.identKind && receiver.name == ctx.shape.selfReferenceText;
-		if (!self && beforeConstruction(callee, ctx)) return null;
+		if (!self && (beforeConstruction(callee, ctx) || ctx.ctorReach.unassignedAt(callee, receiver))) return null;
 		final members: Null<Map<String, Signature>> = self ? enclosing : hostMembers(receiver, ctx);
 		final member: Null<Signature> = members == null ? null : members[name];
 		return member != null && !member.isStatic ? member : null;
@@ -953,6 +955,9 @@ private typedef Ctx = {
 
 	/** Constructors and field initializers, where a field receiver may not be assigned yet. */
 	final construction: Array<Span>;
+
+	/** The methods a constructor reaches, where a field it assigns later may still be unassigned. */
+	final ctorReach: ConstructorReach;
 
 	/** Type parameter bounds by declaration offset (`SpanTypeInfo.typeParamConstraints`). */
 	final constraints: () -> Map<Int, Map<String, Array<String>>>;
