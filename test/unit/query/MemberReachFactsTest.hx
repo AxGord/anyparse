@@ -5776,7 +5776,8 @@ class MemberReachFactsTest extends Test {
 		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std ?? '', 'Reflect.hx']));
 		final assigned: String = guardedFixture(null, null, '#if other config = new Main(); #end\n\t\t' + guardedBy('config != null'));
 		final result: ReachResult = ask(
-			['Main.hx' => assigned], [[], ['other']], true, null, false, INTERP_BUILD, [path => sys.io.File.getContent(path)], null, true
+			['Main.hx' => assigned], [[], ['other']],
+			true, null, false, INTERP_BUILD, [path => sys.io.File.getContent(path)], null, true
 		);
 		assertMatch(result, r -> r.match(Unknown(DynamicName(_, _))));
 	}

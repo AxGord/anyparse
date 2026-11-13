@@ -253,8 +253,8 @@ final class CompilerOracleE2ETest extends Test {
 			return;
 		}
 		final result: FixVerifyResult = FixVerifier.verify(
-			[{ file: path, source: NESTED_MAIN }],
-			[new TestRiskyLiteralRewrite('2')], new HaxeQueryPlugin(), oracles, (p, c) -> File.saveContent(p, c)
+			[{ file: path, source: NESTED_MAIN }], [new TestRiskyLiteralRewrite('2')],
+			new HaxeQueryPlugin(), oracles, (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the nested-config baseline typechecks');
 		Assert.equals(1, result.applied.length, 'the risky fix survives the typecheck and is applied');

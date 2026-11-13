@@ -203,12 +203,14 @@ final class CondRegionLivenessTest extends Test {
 	/** The motivating pair: the taken branch is live, the `#else` beside it is provably dead. */
 	public function testTakenBranchIsLiveAndItsElseIsNot(): Void {
 		Assert.isNull(CondRegionLiveness.unproven(
-			BRANCHED, SHAPE, [at(BRANCHED, 'var live')], ['nodejs'], new HaxeQueryPlugin().lexicalRegions(BRANCHED)
+			BRANCHED, SHAPE, [at(BRANCHED, 'var live')], ['nodejs'],
+			new HaxeQueryPlugin().lexicalRegions(BRANCHED)
 		));
 		Assert.equals(
 			'`#else` of `#if nodejs`',
 			CondRegionLiveness.unproven(
-				BRANCHED, SHAPE, [at(BRANCHED, 'var dead')], ['nodejs'], new HaxeQueryPlugin().lexicalRegions(BRANCHED)
+				BRANCHED, SHAPE, [at(BRANCHED, 'var dead')], ['nodejs'],
+				new HaxeQueryPlugin().lexicalRegions(BRANCHED)
 			)
 		);
 	}
@@ -227,8 +229,8 @@ final class CondRegionLivenessTest extends Test {
 	/** ONE span in a dead branch condemns the whole set — the caller writes them as one candidate. */
 	public function testOneDeadOffsetCondemnsTheSet(): Void {
 		Assert.notNull(CondRegionLiveness.unproven(
-			BRANCHED, SHAPE, [at(BRANCHED, 'var live'), at(BRANCHED, 'var dead')],
-			['nodejs'], new HaxeQueryPlugin().lexicalRegions(BRANCHED)
+			BRANCHED, SHAPE, [at(BRANCHED, 'var live'), at(BRANCHED, 'var dead')], ['nodejs'],
+			new HaxeQueryPlugin().lexicalRegions(BRANCHED)
 		));
 	}
 
@@ -245,7 +247,8 @@ final class CondRegionLivenessTest extends Test {
 		final tail: Int = BRANCHED.indexOf('}\n', BRANCHED.indexOf('#end'));
 		Assert.isNull(
 			CondRegionLiveness.unproven(
-				BRANCHED, SHAPE, [new Span(head, head), new Span(tail, tail)], ['nodejs'], new HaxeQueryPlugin().lexicalRegions(BRANCHED)
+				BRANCHED, SHAPE, [new Span(head, head), new Span(tail, tail)], ['nodejs'],
+				new HaxeQueryPlugin().lexicalRegions(BRANCHED)
 			),
 			'both ENDS of the straddle are in live code, which is what makes the interior invisible to a two-point check'
 		);
@@ -260,18 +263,21 @@ final class CondRegionLivenessTest extends Test {
 		final source: String =
 			'class C {\n\n\t#if js\n\tvar a:Int = 1;\n\t#elseif nodejs\n\tvar b:Int = 2;\n\t#else\n\tvar c:Int = 3;\n\t#end\n\n}\n';
 		Assert.isNull(CondRegionLiveness.unproven(
-			source, SHAPE, [at(source, 'var a')], ['js', 'nodejs'], new HaxeQueryPlugin().lexicalRegions(source)
+			source, SHAPE, [at(source, 'var a')], ['js', 'nodejs'],
+			new HaxeQueryPlugin().lexicalRegions(source)
 		));
 		Assert.equals(
 			'`#elseif nodejs` of `#if js`',
 			CondRegionLiveness.unproven(
-				source, SHAPE, [at(source, 'var b')], ['js', 'nodejs'], new HaxeQueryPlugin().lexicalRegions(source)
+				source, SHAPE, [at(source, 'var b')], ['js', 'nodejs'],
+				new HaxeQueryPlugin().lexicalRegions(source)
 			)
 		);
 		Assert.equals(
 			'`#else` of `#if js`',
 			CondRegionLiveness.unproven(
-				source, SHAPE, [at(source, 'var c')], ['js', 'nodejs'], new HaxeQueryPlugin().lexicalRegions(source)
+				source, SHAPE, [at(source, 'var c')], ['js', 'nodejs'],
+				new HaxeQueryPlugin().lexicalRegions(source)
 			)
 		);
 	}
@@ -289,7 +295,8 @@ final class CondRegionLivenessTest extends Test {
 		final undelimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys\n\tvar b:Int = 2;\n\t#end\n\n}\n';
 		Assert.notNull(
 			CondRegionLiveness.unproven(
-				undelimitable, SHAPE, [at(undelimitable, 'var b')], ['nodejs', 'js'], new HaxeQueryPlugin().lexicalRegions(undelimitable)
+				undelimitable, SHAPE, [at(undelimitable, 'var b')], ['nodejs', 'js'],
+				new HaxeQueryPlugin().lexicalRegions(undelimitable)
 			),
 			'the opener is provably false, so an `#else` reading would call this branch live'
 		);
@@ -298,7 +305,8 @@ final class CondRegionLivenessTest extends Test {
 		final delimitable: String = 'class C {\n\n\t#if !nodejs\n\tvar a:Int = 1;\n\t#elseif (js || sys)\n\tvar b:Int = 2;\n\t#end\n\n}\n';
 		Assert.isNull(
 			CondRegionLiveness.unproven(
-				delimitable, SHAPE, [at(delimitable, 'var b')], ['nodejs', 'js'], new HaxeQueryPlugin().lexicalRegions(delimitable)
+				delimitable, SHAPE, [at(delimitable, 'var b')], ['nodejs', 'js'],
+				new HaxeQueryPlugin().lexicalRegions(delimitable)
 			),
 			'a delimitable `#elseif` after a refuted opener IS live'
 		);

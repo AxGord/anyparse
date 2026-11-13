@@ -94,8 +94,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		]);
 		final path: String = '$dir/Good.hx';
 		final result: FixVerifyResult = FixVerifier.verify(
-			[{ file: path, source: APPLIES }],
-			[new PreferCaseGuard()],
+			[{ file: path, source: APPLIES }], [new PreferCaseGuard()],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(1, result.applied.length, 'a guard the build accepts is applied');
@@ -122,8 +121,7 @@ final class PreferCaseGuardOracleE2ETest extends Test {
 		final path: String = '$dir/Bad.hx';
 		// Ek.hx is on the classpath but NOT in this list, so the check cannot resolve the head.
 		final result: FixVerifyResult = FixVerifier.verify(
-			[{ file: path, source: REVERTS }],
-			[new PreferCaseGuard()],
+			[{ file: path, source: REVERTS }], [new PreferCaseGuard()],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.equals(0, result.applied.length, 'a guard that breaks exhaustiveness is not applied');

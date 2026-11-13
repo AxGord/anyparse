@@ -104,8 +104,7 @@ final class BranchesTest extends Test {
 				}
 			], ['n' => 1]);
 			final readings: Map<String, Int> = Branches.run(
-				'r1', [['a'], ['b']],
-				['b', 'a'],
+				'r1', [['a'], ['b']], ['b', 'a'],
 				names ->
 					names[0] == 'a'
 						? Command.of([
@@ -147,8 +146,8 @@ final class BranchesTest extends Test {
 			final progress: String = dir.file('lint.json.progress');
 			final summary: Summary = new Summary();
 			final readings: Map<String, Int> = Branches.run(
-				'r1', [['lint']],
-				['lint'], names -> Command.of([wrapper, progress]).watched(1000, progress, true), names -> dir.file('lint.json'), summary
+				'r1', [['lint']], ['lint'],
+				names -> Command.of([wrapper, progress]).watched(1000, progress, true), names -> dir.file('lint.json'), summary
 			);
 			Assert.isFalse(readings.keys().hasNext(), 'a cut branch read nothing');
 			final outcome: Outcome = summary.steps()[0].outcome;
@@ -180,7 +179,8 @@ final class BranchesTest extends Test {
 				final script: String = 'require("fs").writeFileSync(process.argv[1], process.argv[2])';
 				final summary: Summary = new Summary();
 				final readings: Map<String, Int> = Branches.run(
-					'r1', [['a']], ['a'], names -> Command.of(['node', '-e', script, report, left]), names -> report, summary
+					'r1', [['a']], ['a'],
+					names -> Command.of(['node', '-e', script, report, left]), names -> report, summary
 				);
 				Assert.isFalse(readings.keys().hasNext());
 				summary;
@@ -211,8 +211,7 @@ final class BranchesTest extends Test {
 			], [], now + 2400);
 			final summary: Summary = new Summary();
 			final readings: Map<String, Int> = Branches.run(
-				'r1', [['a'], ['b']],
-				['a', 'b'],
+				'r1', [['a'], ['b']], ['a', 'b'],
 				names -> Command.of(['node', '-e', script, report(names[0]), left(names[0])]), names -> report(names[0]), summary
 			);
 			Assert.isFalse(readings.keys().hasNext());
@@ -262,8 +261,7 @@ final class BranchesTest extends Test {
 				+ 'fs.writeFileSync(process.argv[3], "b"); setInterval(() => {}, 1000)';
 			final summary: Summary = new Summary();
 			final readings: Map<String, Int> = Branches.run(
-				'r1', [['a', 'b']],
-				['a', 'b'],
+				'r1', [['a', 'b']], ['a', 'b'],
 				names -> Command.of(['node', '-e', script, report, left, progress]).watched(1000, progress, true), names -> report, summary
 			);
 			Assert.isFalse(readings.keys().hasNext());

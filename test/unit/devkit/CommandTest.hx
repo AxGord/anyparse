@@ -352,8 +352,8 @@ final class CommandTest extends Test {
 				final direct: Result = cmd('git $args').at(dir.path).run();
 				final driven: Result = cmd('git $args').at(dir.path).watched(60000, progress).run();
 				Assert.same(
-					[driven.status, driven.out, driven.err, driven.failure],
-					[direct.status, direct.out, direct.err, direct.failure], '$args'
+					[driven.status, driven.out, driven.err, driven.failure], [direct.status, direct.out, direct.err, direct.failure],
+					'$args'
 				);
 			}
 			Assert.equals(128, cmd('git rev-parse --verify no-such-ref').at(dir.path).run().status);

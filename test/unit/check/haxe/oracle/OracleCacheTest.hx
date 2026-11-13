@@ -205,8 +205,7 @@ final class OracleCacheTest extends Test {
 		OracleCache.store('check.hxml', dir, print, Rejected('poisoned'));
 		final path: String = '$dir/Good.hx';
 		final result: FixVerifyResult = FixVerifier.verify(
-			[{ file: path, source: VALID }],
-			[new TestRiskyLiteralRewrite('2')],
+			[{ file: path, source: VALID }], [new TestRiskyLiteralRewrite('2')],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		Assert.isTrue(result.baseline.match(Confirmed), 'the fix path asked the compiler itself, not the cache');

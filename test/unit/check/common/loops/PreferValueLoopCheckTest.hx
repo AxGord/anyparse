@@ -246,8 +246,8 @@ class PreferValueLoopCheckTest extends Test {
 	@:killer('M-VALUE-LOOP-READS-UNSPLICED')
 	public function testFixRewritesBlockBody(): Void {
 		assertFixCanonical(
-			owned('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.log(items[i]);\n\t\t}'), ['for (item in items)'],
-			['items[i]', '0...items.length']
+			owned('for (i in 0...items.length) {\n\t\t\tsink.use(items[i]);\n\t\t\tsink.log(items[i]);\n\t\t}'),
+			['for (item in items)'], ['items[i]', '0...items.length']
 		);
 	}
 

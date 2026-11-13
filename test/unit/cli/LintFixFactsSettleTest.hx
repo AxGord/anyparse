@@ -43,8 +43,7 @@ class LintFixFactsSettleTest extends Test {
 		};
 		CliFixture.captureStderr(() ->
 			LintFixDriver.runLintFix(
-				[{ file: file, source: before }],
-				[new ExplicitLocalType()],
+				[{ file: file, source: before }], [new ExplicitLocalType()],
 				new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, resolution, [{ hxml: 'check.hxml', dir: dir, defines: [] }],
 				false, null, false, new RunLedger()
 			)

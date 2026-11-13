@@ -432,8 +432,8 @@ final class ModuleMove {
 		final edits: Map<String, Array<TextEdit>> = [];
 		for (d in ModuleMoveBindings.qualifiedDrifts(
 			pre, postIndex(files, library, texts, travelled, plugin), scanned, [for (p in planned) p.rename.oldPath => p.rename.newPath],
-			relocated, plugin, [for (e in files) e.file => e.source],
-			[for (e in files) travelled[e.file] ?? e.file => texts[e.file] ?? e.source]
+			relocated, plugin,
+			[for (e in files) e.file => e.source], [for (e in files) travelled[e.file] ?? e.file => texts[e.file] ?? e.source]
 		)) {
 			final full: String = d.qualified ?? '';
 			if (full == '') {

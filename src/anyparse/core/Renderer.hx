@@ -3425,15 +3425,20 @@ class Renderer {
 		// ω-fill-after-collection: the whole tail is measured against the
 		// LAST item's reserve — the post-Fill content lands after it, not
 		// after the item being probed now.
+		final runFit: Int = f.fillLineStart >= 0 ? literalRunFit(f, fillRest, ctx.col, width, flatTokenWidthOfRestStack(stack) + 1) : -1;
 		final afterCollection: Bool = f.fillLineStart >= 0
-			&& startsCollection(fillRest[idx - 1])
-			&& !fitsFlat(width - ctx.col - flatTokenWidthOfRestStack(stack) - 1, f.indent, remainingFlat(fillRest, fillSep, idx));
+			&& CollectionRun.startsCollection(fillRest[idx - 1])
+			&& !fitsFlat(
+				width - ctx.col - flatTokenWidthOfRestStack(stack) - 1, f.indent, CollectionRun.remainingFlat(fillRest, fillSep, idx)
+			);
 		final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
-		final fits: Bool = !prevWrapped && !afterCollection && (
-			embW >= 0
-				? embW <= width - ctx.col
-				: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
-		);
+		final fits: Bool = runFit >= 0
+			? !prevWrapped && runFit == 1
+			: !prevWrapped && !afterCollection && (
+				embW >= 0
+					? embW <= width - ctx.col
+					: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
+			);
 		if (idx + 1 < fillRest.length) {
 			// Snapshot the line where `fillRest[idx]` STARTS: when the
 			// separator breaks (`!fits`) the item begins on the next
@@ -3958,43 +3963,6 @@ class Renderer {
 	}
 
 	/**
-	 * ω-fill-after-collection: does this fill item open with a collection
-	 * delimiter (`[` array / comprehension, `{` object literal / anon type)?
-	 *
-	 * Structural, not width-based: the brackets are the boundary a reader
-	 * navigates by, so the followers belong on one side of them or the other —
-	 * never split across. `DocMeasure.firstVisibleTextStartsWith` walks to the
-	 * first emitted byte, so a leading `Group` / `Nest` / wrap marker is
-	 * transparent here.
-	 */
-	private static function startsCollection(item: Doc): Bool {
-		final head: Null<String> = DocMeasure.firstVisibleText(item);
-		if (head == null || head.length == 0) return false;
-		final open: Int = head.fastCodeAt(0);
-		if (open != '['.code && open != '{'.code) return false;
-		// An EMPTY collection is not a boundary — `f({}, cb -> …)` has nothing
-		// for the reader to navigate around, and pushing `cb` off its line only
-		// strands a two-character `{},`. The writer emits an empty pair as ONE
-		// `Text` carrying both delimiters, so it is exactly the token this walk
-		// returns.
-		final trimmed: String = head.trim();
-		return trimmed != '[]' && trimmed != '{}';
-	}
-
-	/**
-	 * ω-fill-after-collection: `fillRest[idx…]` joined by `sep`, for the
-	 * "does the WHOLE tail still fit on this line" probe.
-	 */
-	private static function remainingFlat(fillRest: Array<Doc>, sep: Doc, idx: Int): Doc {
-		final parts: Array<Doc> = [];
-		for (i in idx ... fillRest.length) {
-			parts.push(sep);
-			parts.push(fillRest[i]);
-		}
-		return Concat(parts);
-	}
-
-	/**
 	 * One step of the rest walk an `IfFullLineExceeds` probe runs for itself
 	 * (`sibling`): the line the asker shares when it keeps its content glued ends
 	 * where a LATER construct on it breaks by itself, so each render-time decision
@@ -4386,6 +4354,32 @@ class Renderer {
 		final suspended: Array<Int> = routes.suspendedAbove;
 		while (suspended.length > 0 && height < suspended[suspended.length - 1]) suspended.pop();
 		return routes.onPath && suspended.length == 0;
+	}
+
+	/**
+	 * omega-fill-literal-run: a run of consecutive collection items is ONE unit of
+	 * a leading-break fill. A run that fits one line joins the items before it when
+	 * it fits there, else starts its own line, and ends its line either way; a run
+	 * wider than a line keeps one collection per line. `1` joins, `0` breaks, `-1`
+	 * leaves the item to the ordinary probe (no run, or a too-wide run's head).
+	 */
+	private static function literalRunFit(f: Frame, items: Array<Doc>, col: Int, width: Int, lastReserve: Int): Int {
+		final idx: Int = f.fillIdx;
+		final sep: Doc = f.fillSep;
+		if (CollectionRun.startsCollection(items[idx])) {
+			final s: Int = CollectionRun.collectionRunStart(items, idx);
+			final e: Int = CollectionRun.collectionRunEnd(items, idx);
+			if (e == s) return -1;
+			final reserve: Int = e == items.length - 1 ? lastReserve : f.fillTailReserve;
+			final run: Doc = CollectionRun.collectionRunDoc(items, sep, s, e);
+			if (!fitsFlat(width - f.indent - reserve, f.indent, run)) return idx > s ? 0 : -1;
+			return idx > s || fitsFlat(width - col - reserve, f.indent, Concat([sep, run])) ? 1 : 0;
+		}
+		final s: Int = CollectionRun.collectionRunStart(items, idx - 1);
+		final endsRun: Bool = CollectionRun.startsCollection(items[idx - 1]) && s < idx - 1;
+		return endsRun && fitsFlat(width - f.indent - f.fillTailReserve, f.indent, CollectionRun.collectionRunDoc(items, sep, s, idx - 1))
+			? 0
+			: -1;
 	}
 
 }

@@ -120,7 +120,8 @@ final class InheritanceMove {
 
 		if (dir == Up) {
 			final stranded: Array<String> = TypeExtraction.referencedMembers(
-				srcDeclNN, [memberName], [m.node], src.source, shape, plugin.lexicalRegions.bind(src.source)
+				srcDeclNN, [memberName], [m.node],
+				src.source, shape, plugin.lexicalRegions.bind(src.source)
 			);
 			if (stranded.length > 0)
 				return Err(

@@ -675,6 +675,38 @@
 			"method": "brokenCloseRun",
 			"force": "0",
 			"note": "a rest-probe group predicts a later sibling's break from before its own broken closer, so an early short literal breaks for a sibling that overflows anyway"
+		},
+		{
+			"name": "M-RUN-MEMBERS-SPLIT",
+			"type": "anyparse.core.Renderer",
+			"method": "literalRunFit",
+			"find": "return idx > s || ",
+			"replace": "return idx > s ? 0 : ",
+			"note": "a fitting literal run breaks before each member after its first"
+		},
+		{
+			"name": "M-RUN-HEAD-GREEDY",
+			"type": "anyparse.core.Renderer",
+			"method": "literalRunFit",
+			"find": "Concat([sep, run])) ? 1 : 0;",
+			"replace": "Concat([sep, run])) ? 1 : -1;",
+			"note": "a literal run that does not fit after the arguments before it packs its first member onto their line"
+		},
+		{
+			"name": "M-RUN-NO-LINE-END",
+			"type": "anyparse.core.Renderer",
+			"method": "literalRunFit",
+			"find": "&& s < idx - 1;",
+			"replace": "&& false;",
+			"note": "a literal run no longer ends its line when the rest fits after it"
+		},
+		{
+			"name": "M-RUN-NO-PER-LINE",
+			"type": "anyparse.core.Renderer",
+			"method": "literalRunFit",
+			"find": "return idx > s ? 0 : -1;",
+			"replace": "return idx > s ? 1 : -1;",
+			"note": "a literal run wider than a line is packed instead of one collection per line"
 		}
 	]
 }

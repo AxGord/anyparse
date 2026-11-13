@@ -482,7 +482,7 @@ final class DocMeasure {
 	 * terms of it.
 	 *
 	 * A caller that needs the whole token rather than its first byte reads
-	 * this: `Renderer.startsCollection` asks whether a fill item opens a
+	 * this: `CollectionRun.startsCollection` asks whether a fill item opens a
 	 * collection, and an EMPTY one (`[]` / `{}`, emitted as a single `Text`
 	 * holding both delimiters) has to answer no.
 	 */

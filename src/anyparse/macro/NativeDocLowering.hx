@@ -262,7 +262,8 @@ final class NativeDocLowering {
 			if (_direct) {
 				final inner: String = compactToName(path);
 				out.push(field(
-					compactName(path), [APublic, AStatic], [valueArg], macro : String, macro {
+					compactName(path), [APublic, AStatic], [valueArg],
+					macro : String, macro {
 						final out: StringBuf = new StringBuf();
 						$i{inner}(value, out);
 						return out.toString();
@@ -274,7 +275,8 @@ final class NativeDocLowering {
 			} else {
 				final inner: String = outName(path);
 				out.push(field(
-					compactName(path), [APublic, AStatic], [valueArg], macro : String, macro {
+					compactName(path), [APublic, AStatic], [valueArg],
+					macro : String, macro {
 						return $p{doorPath}.stringify($i{inner}(value));
 					}
 				));
@@ -454,7 +456,8 @@ final class NativeDocLowering {
 		final doorPath: Array<String> = self._door;
 		final check: String = checkName(shape.root);
 		fields.push(field(
-			'parseNative', [APublic, AStatic], [{ name: 'source', type: macro : String }], macro : Null<$rootCT>, macro {
+			'parseNative', [APublic, AStatic], [{ name: 'source', type: macro : String }],
+			macro : Null<$rootCT>, macro {
 				final raw: Any = try $p{doorPath}.parse(source) catch (exception: haxe.Exception) return null;
 				return $i{check}(raw) ? cast raw : null;
 			}

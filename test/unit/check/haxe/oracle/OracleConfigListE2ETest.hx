@@ -582,8 +582,8 @@ final class OracleConfigListE2ETest extends Test {
 	): FixVerifyResult {
 		File.saveContent('$dir/$name', source);
 		return FixVerifier.verify(
-			[{ file: '$dir/$name', source: source }],
-			[new TestRiskyLiteralRewrite(replacement)], new HaxeQueryPlugin(), oracles, File.saveContent, null, seed
+			[{ file: '$dir/$name', source: source }], [new TestRiskyLiteralRewrite(replacement)],
+			new HaxeQueryPlugin(), oracles, File.saveContent, null, seed
 		);
 	}
 	#end

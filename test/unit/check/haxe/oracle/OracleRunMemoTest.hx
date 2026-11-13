@@ -70,9 +70,8 @@ final class OracleRunMemoTest extends Test {
 		final pre: OracleBaseline = CompilerOracle.judging(oracles);
 		sys.io.File.saveContent(main, OTHER);
 		final net: SafePassOutcome = LintFixDriver.reconcileSafePass(
-			[{ file: main, source: OTHER }],
-			[main],
-			[main => GOOD], [], pre, new HaxeQueryPlugin(), oracles, [], new LintFixSafeTrail((_, _, _) -> null, LintFixSafePass.PROBE_CAP)
+			[{ file: main, source: OTHER }], [main], [main => GOOD],
+			[], pre, new HaxeQueryPlugin(), oracles, [], new LintFixSafeTrail((_, _, _) -> null, LintFixSafePass.PROBE_CAP)
 		);
 		Assert.isFalse(net.reverted, 'a green write is kept');
 		Assert.isTrue(OracleCoverage.probeAll(oracles)[0].covers(main), 'the probe names what the compile read');

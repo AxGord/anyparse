@@ -70,7 +70,8 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 
 	public function flags(): CliFlags {
 		return new CliFlags(
-			['--any-kind', '--exact', '--flat', '--include-comments', '--include-directives'], ['--kind', '--limit'], Splits
+			['--any-kind', '--exact', '--flat', '--include-comments', '--include-directives'], ['--kind', '--limit'],
+			Splits
 		);
 	}
 

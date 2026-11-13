@@ -363,8 +363,8 @@ class RegistryFollowWriteCliTest extends Test {
 	public function testMoveMemberCarriesAFragmentThroughTheReceiverItRepointed(): Void {
 		#if nodejs
 		final arms: String = armsAfter(
-			'apq_follow_move_member', 'return D.h() + 2;', '"find":"return D.h() + 2","replace":"return D.h() - 2"', [D_WITH_E],
-			['move-member', 'src/p/D.hx', 'h', '--to', 'E', '--scope', 'src', '--write']
+			'apq_follow_move_member', 'return D.h() + 2;', '"find":"return D.h() + 2","replace":"return D.h() - 2"',
+			[D_WITH_E], ['move-member', 'src/p/D.hx', 'h', '--to', 'E', '--scope', 'src', '--write']
 		);
 		Assert.isTrue(arms.indexOf('"find":"return E.h() + 2","replace":"return E.h() - 2"') >= 0, arms);
 		#else

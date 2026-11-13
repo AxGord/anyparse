@@ -84,8 +84,8 @@ final class IdentityMapOracleTest extends Test {
 			return null;
 		}
 		final verified: FixVerifyResult = FixVerifier.verify(
-			[{ file: path, source: main }],
-			[new IdentityMap()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
+			[{ file: path, source: main }], [new IdentityMap()],
+			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], (p, c) -> File.saveContent(p, c)
 		);
 		final onDisk: String = File.getContent(path);
 		CliFixture.removeDir(dir);

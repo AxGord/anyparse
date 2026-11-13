@@ -67,7 +67,8 @@ class ModuleMoveTest extends Test {
 		final out: ModuleMoveOutcome = moved(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
 			[file('src/pkg/A.hx', a)],
-			[file('arms.json', arms), file('tools/run.sh', script)], [{ file: 'arms.json', keys: ['arms.type'] }]
+			[file('arms.json', arms), file('tools/run.sh', script)],
+			[{ file: 'arms.json', keys: ['arms.type'] }]
 		);
 		Assert.equals(arms.replace('"pkg.A"', '"pkg.sub.A"'), textOf(out, 'arms.json'));
 		Assert.equals('probe src/pkg/sub/A.hx and pkg.sub.A.run(\n', textOf(out, 'tools/run.sh'));
@@ -144,7 +145,9 @@ class ModuleMoveTest extends Test {
 		final config: String = '{"ownedTypes": [{"types": ["pkg.B"], "owners": ["pkg.A*"]}]}';
 		final reasons: Array<String> = refused(
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')],
-			[file('src/pkg/A.hx', a)], [file('apq.json', config)], [{ file: 'apq.json', keys: ['ownedTypes.owners'] }]
+			[file('src/pkg/A.hx', a)],
+			[file('apq.json', config)],
+			[{ file: 'apq.json', keys: ['ownedTypes.owners'] }]
 		);
 		Assert.equals(1, reasons.length);
 		Assert.isTrue(reasons[0].contains('holds the pattern "pkg.A*", which matches pkg.A but not pkg.sub.A'), reasons[0]);

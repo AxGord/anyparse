@@ -866,8 +866,8 @@ final class SymbolIndex {
 		final sources: Map<String, String> = [for (file => source in _sources) if (!files.contains(file)) file => source];
 		final thirdParty: Map<String, Bool> = [for (file in _thirdParty.keys()) if (!files.contains(file)) file => true];
 		return new SymbolIndex(
-			[for (fi in _files) if (!files.contains(fi.file)) fi],
-			[for (file in _skipped) if (!files.contains(file)) file], sources, _plugin, thirdParty
+			[for (fi in _files) if (!files.contains(fi.file)) fi], [for (file in _skipped) if (!files.contains(file)) file],
+			sources, _plugin, thirdParty
 		);
 	}
 

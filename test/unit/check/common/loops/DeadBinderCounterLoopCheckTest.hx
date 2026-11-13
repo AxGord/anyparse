@@ -150,8 +150,8 @@ class DeadBinderCounterLoopCheckTest extends Test {
 
 	public function testFixRewritesArrayLoop(): Void {
 		assertFixCanonical(
-			wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'), ['for (i in 0...items.length)'],
-			['var i = 0', 'i++']
+			wrapArray('var i = 0;\n\t\tfor (x in items) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'),
+			['for (i in 0...items.length)'], ['var i = 0', 'i++']
 		);
 	}
 
