@@ -53,11 +53,13 @@
 		"captureSourceNewlineAfter",
 		"captureTrailComment",
 		"ctorKwTrivia",
+		"inlineSep",
 		"keepBlankAfterStarCtor",
 		"nestBody",
 		"sepBeforeOpt"
 	],
 	"TriviaSlotNames": [
+		"inlineSep",
 		"keepBlankAfterStarCtor"
 	],
 	"WriterArrowValueIfLowering": [

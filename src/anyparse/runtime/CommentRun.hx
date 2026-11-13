@@ -9,13 +9,18 @@ using StringTools;
 @:nullSafety(Strict)
 final class CommentRun {
 
+	/** Whether the comment `c` is a line comment, which runs to the end of its line, rather than a block comment. */
+	public static inline function isLine(c: String): Bool {
+		return c.startsWith('//');
+	}
+
 	/** `comments` joined into one slot value, in source order. */
 	public static function join(comments: Array<String>): String {
 		var out: Null<String> = null;
 		var prevLine: Bool = false;
 		for (c in comments) {
 			out = out == null ? c : out + (prevLine ? '\n' : ' ') + c;
-			prevLine = c.startsWith('//');
+			prevLine = isLine(c);
 		}
 		return out ?? '';
 	}

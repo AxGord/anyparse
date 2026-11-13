@@ -677,6 +677,9 @@ class Codegen {
 			var _blankBefore2: Int = 0;
 			var _blankAfterLeadingComments: Bool = false;
 			var _newlineBefore: Bool = false;
+			// Whether the source broke the line before the FIRST captured comment, so a writer can
+			// tell an own-line comment from one that continues the line before the gap.
+			var _newlineBeforeFirstComment: Bool = false;
 			final _leading: Array<String> = [];
 			// Drain any trivia that a previous rule captured between an
 			// @:optional @:kw commit and its sub-rule call (ω₆b).
@@ -685,6 +688,7 @@ class Codegen {
 				_blankBefore = _pt.blankBefore;
 				_blankAfterLeadingComments = _pt.blankAfterLeadingComments;
 				_newlineBefore = _pt.newlineBefore;
+				_newlineBeforeFirstComment = _pt.newlineBefore;
 				for (_c in _pt.leadingComments) _leading.push(_c);
 				ctx.pendingTrivia = null;
 			}
@@ -714,6 +718,7 @@ class Codegen {
 					ctx.pos++;
 					continue;
 				}
+				if (_leading.length == 0) _newlineBeforeFirstComment = _newlineBefore;
 				$b{commentStmts};
 				break;
 			}
@@ -732,6 +737,7 @@ class Codegen {
 				blankAfterLeadingComments: _blankAfterLeadingComments,
 				newlineBefore: _newlineBefore,
 				newlineAfterLeadingComments: _leading.length > 0 && _newlineAfterLeadingComments,
+				newlineBeforeLeadingComments: _leading.length > 0 && _newlineBeforeFirstComment,
 				leadingComments: _leading
 			};
 		};
@@ -746,6 +752,7 @@ class Codegen {
 					blankAfterLeadingComments: Bool,
 					newlineBefore: Bool,
 					newlineAfterLeadingComments: Bool,
+					newlineBeforeLeadingComments: Bool,
 					leadingComments: Array<String>
 				},
 				expr: body

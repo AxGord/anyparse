@@ -325,6 +325,8 @@ final class TriviaPairConverters {
 			// (byte-inert emit). Same host gate as the synth.
 			if (TriviaPairSlots.isBeforeBlankRef(child, origNode))
 				entries.push({ field: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX, expr: macro false });
+			if (TriviaPairSlots.isBeforeLeadingNewlineRef(child, origNode))
+				entries.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEADING_NEWLINE_SUFFIX, expr: macro false });
 			if (TriviaPairSlots.isTrailRef(child))
 				entries.push({ field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro (null: Null<String>) });
 			if (TriviaPairSlots.isBeforeTrailRef(child))

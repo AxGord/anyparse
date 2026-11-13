@@ -53,6 +53,21 @@ final class TriviaPairSlots {
 		return buildNullStringSlot(child, pos, TriviaTypeSynth.BEFORE_LEAD_SUFFIX);
 	}
 
+	/**
+	 * ω-region-prefix-blank — `<field>BeforeBlank:Bool` companion to
+	 * `buildBeforeNewlineSlot`. Records whether the `collectTrivia` scan that
+	 * filled `BeforeNewline` saw a BLANK line, which `newlineBefore` alone
+	 * cannot distinguish from a single break.
+	 */
+	public static inline function buildBeforeBlankSlot(child: ShapeNode, pos: Position): Field {
+		return boolSlot(child, TriviaTypeSynth.BEFORE_BLANK_SUFFIX, pos);
+	}
+
+	/** `<field>BeforeLeadingNewline:Bool` companion to `buildBeforeLeadingSlot`. */
+	public static inline function buildBeforeLeadingNewlineSlot(child: ShapeNode, pos: Position): Field {
+		return boolSlot(child, TriviaTypeSynth.BEFORE_LEADING_NEWLINE_SUFFIX, pos);
+	}
+
 	/** The `<field>AfterLead:Array<String>` slot — see `TriviaTypeSynth.AFTER_LEAD_SUFFIX`. */
 	public static function buildAfterLeadSlot(child: ShapeNode, pos: Position): Field {
 		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
@@ -209,20 +224,12 @@ final class TriviaPairSlots {
 	}
 
 	/**
-	 * ω-region-prefix-blank — `<field>BeforeBlank:Bool` companion to
-	 * `buildBeforeNewlineSlot`. Records whether the `collectTrivia` scan that
-	 * filled `BeforeNewline` saw a BLANK line, which `newlineBefore` alone
-	 * cannot distinguish from a single break.
+	 * Hosts of `<field>BeforeLeadingNewline`: a bare non-first Ref whose writer seat keeps the gap on
+	 * one line (`@:fmt(inlineSep)`), the one seat that reads it. Spelled to agree with
+	 * `TriviaSlotNames.hasBeforeLeadingNewlineSlotFor`, the parser's capture gate.
 	 */
-	public static function buildBeforeBlankSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-		return {
-			name: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX,
-			kind: FVar(boolCT),
-			pos: pos,
-			access: []
-		};
+	public static function isBeforeLeadingNewlineRef(child: ShapeNode, parent: ShapeNode): Bool {
+		return isBareNonFirstRef(child, parent) && child.fmtHasFlag('inlineSep');
 	}
 
 	/**
@@ -504,6 +511,16 @@ final class TriviaPairSlots {
 			access: []
 		});
 		return fields;
+	}
+
+	private static function boolSlot(child: ShapeNode, suffix: String, pos: Position): Field {
+		final fieldName: String = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
+		return {
+			name: fieldName + suffix,
+			kind: FVar(TPath({ pack: [], name: 'Bool', params: [] })),
+			pos: pos,
+			access: []
+		};
 	}
 
 	/** A `<field><suffix>:Null<String>` sidecar slot on the paired-T struct. */

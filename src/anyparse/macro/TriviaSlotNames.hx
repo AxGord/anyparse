@@ -90,6 +90,17 @@ final class TriviaSlotNames {
 
 	public static inline function beforeBlankLocalName(fieldName: String): String return '_beforeBlank_$fieldName';
 
+	/**
+	 * Hosts of `<field>BeforeLeadingNewline`: a bare non-first Ref (one that grew `BeforeLeading`)
+	 * whose writer seat keeps the gap on one line (`@:fmt(inlineSep)`). Spelled to agree with
+	 * `TriviaPairSlots.isBeforeLeadingNewlineRef`, the synthesise gate of the same slot.
+	 */
+	public static inline function hasBeforeLeadingNewlineSlotFor(child: ShapeNode, hasBeforeLeadingSlot: Bool): Bool {
+		return hasBeforeLeadingSlot && child.fmtHasFlag('inlineSep');
+	}
+
+	public static inline function beforeLeadingNewlineLocalName(fieldName: String): String return '_beforeLeadNl_$fieldName';
+
 	/** ω-before-lead — the `Null<String>` local carrying an optional lead-led Ref's `<field>BeforeLead` slot value. */
 	public static inline function beforeLeadLocalName(fieldName: String): String return '_beforeLead_$fieldName';
 

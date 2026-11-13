@@ -176,13 +176,16 @@ final class StructSeqLowering {
 			// ω-region-prefix-blank: opt-in third slot of the pre-field gap.
 			final hasBeforeBlankSlot: Bool = hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot);
 			final beforeBlankLocal: String = beforeBlankLocalName(fieldName);
+			final hasBeforeLeadingNewlineSlot: Bool = hasBeforeLeadingNewlineSlotFor(child, hasBeforeLeadingSlot);
+			final beforeLeadingNewlineLocal: String = beforeLeadingNewlineLocalName(fieldName);
 			final afterLeadLocal: Null<String> = afterLeadLocalFor(sc, child, typePath, fieldName);
 			// A first field after its ctor's keyword scans the kw→body gap itself, into the kw-trivia slots below.
 			final ctorKwBody: Bool = isCtorKwBodyField(sc, child, node, typePath);
 			if (!ctorKwBody)
 				emitPreFieldWs(
 					parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot,
-					hasBeforeNewlineSlot, beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null, afterLeadLocal
+					hasBeforeNewlineSlot, beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null,
+					hasBeforeLeadingNewlineSlot ? beforeLeadingNewlineLocal : null, afterLeadLocal
 				);
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
@@ -259,6 +262,12 @@ final class StructSeqLowering {
 					{
 						has: hasBeforeBlankSlot,
 						local: beforeBlankLocal,
+						value: macro false,
+						type: macro : Bool
+					},
+					{
+						has: hasBeforeLeadingNewlineSlot,
+						local: beforeLeadingNewlineLocal,
 						value: macro false,
 						type: macro : Bool
 					}
@@ -787,7 +796,7 @@ final class StructSeqLowering {
 			// directly — no fourth flag threaded down the chain.
 			emitAbsentOnRefField(
 				sc, fieldName, localName, parseSteps, absentOnLits ?? [], absentOnEof, subCall, fieldCT, hasBeforeSlots,
-				hasBeforeBlankSlotFor(child, hasBeforeSlots)
+				hasBeforeBlankSlotFor(child, hasBeforeSlots), hasBeforeLeadingNewlineSlotFor(child, hasBeforeSlots)
 			);
 		} else {
 			emitOptionalRefLeadCommit(
@@ -816,7 +825,7 @@ final class StructSeqLowering {
 	 */
 	private static function emitAbsentOnRefField(
 		sc: StructSeqCtx, fieldName: String, localName: String, parseSteps: Array<Expr>, absentOnLits: Array<String>, absentOnEof: Bool,
-		subCall: Expr, fieldCT: ComplexType, hasBeforeSlots: Bool, hasBeforeBlankSlot: Bool
+		subCall: Expr, fieldCT: ComplexType, hasBeforeSlots: Bool, hasBeforeBlankSlot: Bool, hasBeforeLeadingNewlineSlot: Bool
 	): Void {
 		// ω-orphan-prefix-decl: EOF is a disjunct of the same chain, not a
 		// second mechanism — `@:absentOnEof` contributes `ctx.pos >=
@@ -833,7 +842,7 @@ final class StructSeqLowering {
 			acc;
 		};
 		final captureBeforeSlots: Bool = hasBeforeSlots && sc.ctx.trivia;
-		if (captureBeforeSlots) emitAbsentOnBeforeSlots(fieldName, parseSteps, hasBeforeBlankSlot);
+		if (captureBeforeSlots) emitAbsentOnBeforeSlots(fieldName, parseSteps, hasBeforeBlankSlot, hasBeforeLeadingNewlineSlot);
 		final wsAction: Expr = sc.ctx.trivia
 			? macro {
 				final _t = collectTrivia(ctx);
@@ -1026,6 +1035,11 @@ final class StructSeqLowering {
 		// the capture — both call `hasBeforeBlankSlotFor`.
 		if (hasBeforeBlankSlotFor(child, hasBeforeLeadingSlot))
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX, expr: macro $i{beforeBlankLocalName(fieldName)} });
+		if (hasBeforeLeadingNewlineSlotFor(child, hasBeforeLeadingSlot))
+			structFields.push({
+				field: fieldName + TriviaTypeSynth.BEFORE_LEADING_NEWLINE_SUFFIX,
+				expr: macro $i{beforeLeadingNewlineLocalName(fieldName)}
+			});
 		if (hasNewlineAfterSlot)
 			structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
 

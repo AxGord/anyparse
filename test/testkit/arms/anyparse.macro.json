@@ -14,7 +14,7 @@
 			"name": "M-GAP-BLOCK-COMMENT-BREAKS",
 			"type": "anyparse.macro.WriterTriviaSlotLowering",
 			"method": "buildBeforeLeadingSep",
-			"find": "$v{onLine} && !StringTools.startsWith(_leadCm598[_ci598], '//') ? _dt(' ') : _dhl()",
+			"find": "$v{onLine} && !anyparse.runtime.CommentRun.isLine(_leadCm598[_ci598]) ? _dt(' ') : _dhl()",
 			"replace": "_dhl()",
 			"note": "a block comment in the gap before an inlineSep field is followed by a break again, so the first write leaves it on the metadata's line and a second write moves it"
 		},
@@ -3143,6 +3143,22 @@
 			"find": "final condIncrease: Expr = elementPerLine",
 			"replace": "final condIncrease: Expr = true",
 			"note": "under an increasing conditional policy the plain writer nests a glued #if body too (call arguments, object fields), so a function literal inside one moves a level deeper than the trivia writer puts it"
+		},
+		{
+			"name": "M-GAP-LINE-COMMENT-JOINS",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "buildBeforeLeadingSep",
+			"find": "$firstOwnLine && anyparse.runtime.CommentRun.isLine(_leadCm598[0]) ? _dhl() : _sep598",
+			"replace": "_sep598",
+			"note": "a line comment in the gap before an inlineSep field takes the gap's space again, so an own-line one joins the metadata's line"
+		},
+		{
+			"name": "M-GAP-LINE-COMMENT-ALWAYS-BREAKS",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "buildBeforeLeadingSep",
+			"find": "onLine ? beforeLeadingNewlineAccess(fieldName) : macro false",
+			"replace": "onLine ? macro true : macro false",
+			"note": "a line comment first in the gap before an inlineSep field breaks the line whatever the source did, so one that continued the line before the gap moves to its own"
 		}
 	]
 }

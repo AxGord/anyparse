@@ -256,7 +256,7 @@ final class StructFieldTrailLowering {
 	private static function emitPreFieldWs(
 		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
 		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
-		beforeBlankLocal: Null<String>, afterLeadLocal: Null<String>
+		beforeBlankLocal: Null<String>, beforeLeadingNewlineLocal: Null<String>, afterLeadLocal: Null<String>
 	): Void {
 		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 			if (hasBeforeLeadingSlot) {
@@ -309,6 +309,8 @@ final class StructFieldTrailLowering {
 					]),
 					pos: Context.currentPos()
 				});
+				if (beforeLeadingNewlineLocal != null)
+					parseSteps.push(boolLocal(beforeLeadingNewlineLocal, macro _beforeTrivia.newlineBeforeLeadingComments));
 			} else if (hasBeforeNewlineSlot) {
 				// Route through `collectTrivia` — drains any
 				// `pendingTrivia` stash from a preceding empty
@@ -419,7 +421,9 @@ final class StructFieldTrailLowering {
 	 * the `<field>BeforeNewline` / `<field>BeforeLeading` synth slots. Same split as
 	 * `emitPreFieldWs`'s mandatory bare-Ref arm, which this field bypasses.
 	 */
-	private static function emitAbsentOnBeforeSlots(fieldName: String, parseSteps: Array<Expr>, hasBeforeBlankSlot: Bool): Void {
+	private static function emitAbsentOnBeforeSlots(
+		fieldName: String, parseSteps: Array<Expr>, hasBeforeBlankSlot: Bool, hasBeforeLeadingNewlineSlot: Bool
+	): Void {
 		final arrayStrCT: ComplexType = TPath(
 			{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
 		);
@@ -466,6 +470,23 @@ final class StructFieldTrailLowering {
 			]),
 			pos: Context.currentPos()
 		});
+		if (hasBeforeLeadingNewlineSlot)
+			parseSteps.push(boolLocal(beforeLeadingNewlineLocalName(fieldName), macro _absentTrivia.newlineBeforeLeadingComments));
+	}
+
+	/** A `final <name>: Bool = <value>;` parse step, the shape every pre-field gap split declares. */
+	private static function boolLocal(name: String, value: Expr): Expr {
+		return {
+			expr: EVars([
+				{
+					name: name,
+					type: macro : Bool,
+					expr: value,
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		};
 	}
 
 }

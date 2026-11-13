@@ -217,6 +217,14 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_BLANK_SUFFIX: String = 'BeforeBlank';
 
 	/**
+	 * Fourth source-shape slot of the pre-field gap, synthesised only for a bare non-first Ref
+	 * with `@:fmt(inlineSep)`: whether the source broke the line before the first `BeforeLeading`
+	 * comment. That writer seat keeps the gap on one line, so only this tells an own-line line
+	 * comment, which stays own-line, from one that continues the line before the gap.
+	 */
+	public static inline final BEFORE_LEADING_NEWLINE_SUFFIX: String = 'BeforeLeadingNewline';
+
+	/**
 	 * ω-cond-comp-expr-multiline — source-shape slot synthesised on
 	 * paired Seq types alongside bare-Ref fields that carry
 	 * `@:fmt(captureSourceNewlineAfter)`. Records whether the source
@@ -550,6 +558,8 @@ class TriviaTypeSynth {
 					// foobar()` → `@Test\n\tfunction foobar()`), and only a `#if … #end`
 					// region in that position keeps it.
 					if (TriviaPairSlots.isBeforeBlankRef(child, origNode)) fields.push(TriviaPairSlots.buildBeforeBlankSlot(child, pos));
+					if (TriviaPairSlots.isBeforeLeadingNewlineRef(child, origNode))
+						fields.push(TriviaPairSlots.buildBeforeLeadingNewlineSlot(child, pos));
 					// ω-trivia-after-trail: any mandatory Ref field with
 					// `@:trail` grows a `<field>AfterTrail:Null<String>` slot
 					// holding a same-line `// comment` captured right after

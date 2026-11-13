@@ -9,6 +9,7 @@ import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 import anyparse.format.wrap.LineCommentPastSep.PastSepItems;
+import anyparse.runtime.CommentRun;
 
 using StringTools;
 using Lambda;
@@ -1248,7 +1249,7 @@ class WrapList {
 	 * a line with a delimiter, so it is not excluded here.
 	 */
 	public static function isLineCommentText(s: Null<String>): Bool {
-		return s != null && s.trim().startsWith('//');
+		return s != null && CommentRun.isLine(s.trim());
 	}
 
 	/**

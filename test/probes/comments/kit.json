@@ -135,7 +135,10 @@
 		"kwv-trypolicy/b.hx": "class A {\n\tfunction f() {\n\t\ttry {\n\t\t\tfoo();\n\t\t} catch (e:Dynamic) {}\n\t\ttry foo() catch (e:Dynamic) {}\n\t\tvar a = try {\n\t\t\tfoo();\n\t\t} catch (e:Dynamic) 1;\n\t\tvar b = try foo() catch (e:Dynamic) 1;\n\t}\n}\n",
 		"kwv-trypolicy/hxformat.json": "{\"whitespace\":{\"tryPolicy\":\"none\"}}\n",
 		"kwv-objlit/o.hx": "class A {\n\tfunction f() {\n\t\treturn // c\n\t\t{a: 1, b: 2};\n\t}\n\tfunction g() {\n\t\treturn {a: 1, b: 2};\n\t}\n}\n",
-		"kwv-objlit/hxformat.json": "{\"indentation\":{\"indentObjectLiteral\":true},\"lineEnds\":{\"leftCurly\":\"before\"}}\n"
+		"kwv-objlit/hxformat.json": "{\"indentation\":{\"indentObjectLiteral\":true},\"lineEnds\":{\"leftCurly\":\"before\"}}\n",
+		"vmg/c1.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t// c3\n\t\t// c4\n\t\tz = 1;\n\t}\n}\n",
+		"vmg/c3.hx": "class A {\n\tfunction f() {\n\t\tvar @:e /* b */ // l2\n\t\tt = 1;\n\t}\n}\n",
+		"vmg/c4.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t/* b */ // l3\n\t\ts = 1;\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -2314,6 +2317,60 @@
 			"expect": {
 				"exit": 0,
 				"out": "2e40865edfe13922",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "vmg/c1.hx",
+			"fixpoint": "vmg/c1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"vmg/c1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bc8b97a509fd5923",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "vmg/c3.hx",
+			"fixpoint": "vmg/c3.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"vmg/c3.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "4abb476cec567bc4",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "vmg/c4.hx",
+			"fixpoint": "vmg/c4.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"vmg/c4.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "601da727d7a207be",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

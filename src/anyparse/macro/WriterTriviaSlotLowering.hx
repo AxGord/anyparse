@@ -207,19 +207,24 @@ final class WriterTriviaSlotLowering {
 		// Gated on `child.kind == Ref` to match `TriviaTypeSynth.isBareNonFirstRef`,
 		// the only host that grows the `BeforeLeading` slot. On an `onLine` field (`inlineSep`) only a line
 		// comment is followed by a break: a block comment keeps the gap on one line, so a rewrite reads
-		// it as the same-line comment it is.
+		// it as the same-line comment it is. The first comment opens a line of its own only when it is a
+		// line comment the source already put on one (`BeforeLeadingNewline`); one that continued the
+		// line before the gap stays there.
 		return child.kind == Ref ? {
 			final leadAccess: Expr = beforeLeadingAccess(fieldName);
+			final firstOwnLine: Expr = onLine ? beforeLeadingNewlineAccess(fieldName) : macro false;
 			macro {
 				final _sep598: anyparse.core.Doc = $triviaSepExpr;
 				final _leadCm598: Array<String> = $leadAccess;
 				if (_leadCm598.length == 0) {
 					_sep598;
 				} else {
-					final _p598: Array<anyparse.core.Doc> = [_sep598];
+					final _p598: Array<anyparse.core.Doc> = [
+						$firstOwnLine && anyparse.runtime.CommentRun.isLine(_leadCm598[0]) ? _dhl() : _sep598
+					];
 					for (_ci598 in 0..._leadCm598.length) {
 						_p598.push(leadingCommentDocRun(_leadCm598, _ci598, opt));
-						_p598.push($v{onLine} && !StringTools.startsWith(_leadCm598[_ci598], '//') ? _dt(' ') : _dhl());
+						_p598.push($v{onLine} && !anyparse.runtime.CommentRun.isLine(_leadCm598[_ci598]) ? _dt(' ') : _dhl());
 					}
 					_dc(_p598);
 				}

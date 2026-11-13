@@ -87,6 +87,11 @@ final class WriterLoweringSupport {
 		return { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_BLANK_SUFFIX), pos: Context.currentPos() };
 	}
 
+	/** `value.<field>BeforeLeadingNewline`, read only where `@:fmt(inlineSep)` grew the slot. */
+	private static inline function beforeLeadingNewlineAccess(fieldName: String): Expr {
+		return { expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_LEADING_NEWLINE_SUFFIX), pos: Context.currentPos() };
+	}
+
 	/**
 	 * ω-598-member-leading-comment — build `value.<fieldName>BeforeLeading`,
 	 * the `Array<String>` of verbatim comments the parser captured in the gap
