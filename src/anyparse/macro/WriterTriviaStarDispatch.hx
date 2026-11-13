@@ -77,12 +77,7 @@ final class WriterTriviaStarDispatch {
 		final openText: Null<String> = c.openText;
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
-		final trailBBAccess: Null<Expr> = c.trailBBAccess;
 
-		final trailLCAccess: Null<Expr> = c.trailLCAccess;
-		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
-		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
-		final trailPresentAccess: Null<Expr> = c.trailPresentAccess;
 		// First-field Star with knob-form `@:fmt(leftCurly('<knob>'))`
 		// (e.g. `HxObjectLit.fields`) fires the leftCurly switch
 		// even at first-field position — its outer caller already
@@ -112,10 +107,8 @@ final class WriterTriviaStarDispatch {
 		// the following `leftCurlySeparator` default (`_dossh`, drops after
 		// a hardline) into the Allman `{` placement the comment forces.
 		if (c.prevTrailFieldName != null) {
-			final afterTrailAccess: Expr = {
-				expr: EField(macro value, c.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-				pos: Context.currentPos()
-			};
+			final afterTrailSlot: String = c.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX;
+			final afterTrailAccess: Expr = macro value.$afterTrailSlot;
 			parts.push(macro {
 				final _atSeam: Null<String> = $afterTrailAccess;
 				_atSeam != null ? trailingCommentDocGuarded(_atSeam, opt) : _de();
@@ -159,115 +152,18 @@ final class WriterTriviaStarDispatch {
 				final triviaParamSpace: Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
 				if (triviaParamSpace != null) parts.push(triviaParamSpace);
 			}
-			// ω-objectlit-source-trail-comma: when the Star also
-			// carries `@:fmt(trailingComma('<knob>'))`, thread the
-			// knob's field name into `triviaSepStarExpr` so its
-			// no-trivia branch can `forceExceeds` on the wrap engine
-			// when the source had a trailing separator AND the knob
-			// is on. Null knob → behaves identically to pre-slice
-			// (cascade evaluates exceeds=false / =true symmetrically).
-			final trailingCommaField: Null<String> = starNode.fmtReadString('trailingComma');
-			// ω-objectlit-right-curly: struct-Star path now threads
-			// `@:fmt(rightCurly('<knob>'))` (e.g.
-			// `rightCurly('objectLiteralRightCurly')` on
-			// `HxObjectLit.fields`) into `triviaSepStarExpr`'s 12th
-			// param. Null (no opt-in) preserves pre-slice
-			// unconditional `_dhl()` before close.
-			final knobRightCurly: Null<String> = starNode.fmtReadString('rightCurly');
-			// ω-typedef-anon-force-multi: when the sep-Star carries
-			// `@:fmt(forceMultiInTypedef)` (currently only
-			// `HxType.Anon.fields`), thread the flag into
-			// `triviaSepStarExpr` so its no-trivia branch emits a
-			// runtime `opt._inTypedefBody ? WrapMode.OnePerLine :
-			// null` as `WrapList.emit`'s `forceMode` option.
-			// Bypasses the cascade only when the typedef-RHS
-			// context is active — non-typedef anon consumers
-			// (var-type-hint, fn-return-type) stay cascade-driven.
-			final forceMultiTypedef: Bool = starNode.fmtHasFlag('forceMultiInTypedef');
-			final bodyAware: Expr = bodyEmptySuppressExpr(starNode, tc.shape.root, true);
-			// ω-group-rest-probe slice 2: struct-Star path reader for
-			// `@:fmt(groupRestProbe)`. Mirrors the lowerStruct plain-
-			// path read (added at the lowerStruct dispatch site).
-			// Trivia-path dual-dispatch closure per
-			// [[feedback-wraprules-dispatch-dual-path]].
-			final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
-			// ω-cascade-emits-comments: struct-Star path reader for
-			// `@:fmt(ignoreSourceNewlinesForWrap)`. Intrinsic
-			// per-construct opt-in to fork's `Ignore` semantic —
-			// drops `Trivial<T>.newlineBefore` signal, routes
-			// per-element block-trailing + leading comments
-			// through the cascade no-trivia branch. Currently
-			// `HxFnDecl.params`.
-			final ignoreSourceNewlines: Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
-			// ω-array-reflow: struct-Star path reader for
-			// `@:fmt(reflowSourceMultiline)`. Sister to the enum-Alt
-			// read; threads into `triviaSepStarExpr`'s `_smlKeep`
-			// gate. No struct-Star consumer opts in yet (first
-			// consumer `HxExpr.ArrayExpr` is enum-Alt) — present for
-			// dual-dispatch symmetry.
-			final reflowSourceMultilineStar: Bool = starNode.fmtHasFlag('reflowSourceMultiline');
-			// ω-arraymatrix-wrap: struct-Star path reader for
-			// `@:fmt(arrayMatrixWrap)`. Sister to the enum-Alt read;
-			// no struct-Star consumer opts in yet (first consumer
-			// `HxExpr.ArrayExpr` is enum-Alt) — present for dual-
-			// dispatch symmetry. `bracketKindPad` is not read on this
-			// path (passed false) so matrix slots in after it.
-			final matrixWrapStar: Bool = starNode.fmtHasFlag('arrayMatrixWrap');
-			// ω-expressionif-collapse (mechanism A): the struct-Star
-			// trivia path must not pass literal `null, null` for
-			// the inside-of-delimiter spacing slots — else a Star carrying
-			// `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)`
-			// (HxObjectLit.fields) gets no `{ x }` padding. Read
-			// the policy Doc the same way the plain `@:sep` path
-			// (~5560) and the enum-Alt path (~2363) do —
-			// `delimInsidePolicySpace` returns null when no delim
-			// policy flag is present, so every other struct-Star stays
-			// byte-identical.
-			final openInsideStar: Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false);
-			final closeInsideStar: Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true);
-			// ω-expressionif-collapse (mechanism B read-site):
-			// `@:fmt(reflowInExprPosition)` (HxObjectLit.fields) opts
-			// the Star into source-newline ignore — but only at runtime
-			// when `opt._literalReflow` is set (the immediate value of
-			// a value-if branch). Default false → byte-inert.
-			final reflowInExprBranchStar: Bool = starNode.fmtHasFlag('reflowInExprPosition');
-			// ω-multiline-trailing-comma-remove / ω-uniform-element-blanks:
-			// struct-Star path readers. `trailingCommaRemovable` is live here
-			// (`HxObjectLit.fields`, `HxNewExpr.args`); `uniformStmtBlanks` has
-			// no struct-Star consumer yet (first consumer `HxExpr.ArrayExpr` is
-			// enum-Alt) — read for dual-dispatch symmetry.
-			final trailingCommaRemovableStar: Bool = starNode.fmtHasFlag('trailingCommaRemovable');
-			final uniformStmtBlanksStar: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
-			// ω-complex-item-count: struct-Star path reader for
-			// `@:fmt(complexItems)` — the per-element AST classification behind
-			// the `complexItemCount >= n` cascade condition and the fill-mode
-			// chunk policy. Live here for `HxNewExpr.args`; the array literal
-			// opts in through the enum-Alt reader.
-			final complexItemsStar: Bool = starNode.fmtHasFlag('complexItems');
-			// ω-mapwrap: struct-Star reader, dual-dispatch twin of the enum-Alt
-			// one in `triviaSepStarBuild`. This is the OTHER trivia sep-Star
-			// entry point, and it is the only other one: the two plain-path
-			// `wrapRules` sites build their own `WrapList.emit` call and never
-			// reach `triviaSepStarExpr`, so a Star naming a map cascade there
-			// would be ignored — but no Star can, since `@:trivia` is what routes
-			// a sep-Star here and `HxExpr.ArrayExpr` carries it.
-			//
-			// No struct-Star names a map cascade today, so this reads null and the
-			// emitted call is byte-identical. It is wired rather than hardcoded
-			// null because the read alone is what the next Star to carry the meta
-			// on this path will need. Such a Star would also have to hold `HxExpr`
-			// elements — `mapWrapFor` hands `_arr[0].node` to a predicate whose
-			// parameter is `Null<HxExpr>`, so a Star of anything else is a
-			// macro-time type error rather than a silent misclassification.
-			final mapWrapStar: Null<WriterLowering.SepStarMapWrap> = tc.mapWrapFor(starNode.fmtReadString('mapWrapRules'));
-			parts.push(TriviaSepLowering.triviaSepStarExpr(
-				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
-				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
-				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-				reflowSourceMultilineStar, matrixWrapStar, false, false, reflowInExprBranchStar, trailingCommaRemovableStar,
-				uniformStmtBlanksStar, complexItemsStar, mapWrapStar, TriviaTailRehome.fnRefFor(starNode.children[0]),
-				starNode.fmtHasFlag('relocateTrailingComments'), afterDocPolicy(starNode)
-			));
+			// Both paths read the sep-Star's flags through its plan; what a struct field spells differently from an enum
+			// ctor arrives built: the inside-of-delimiter pads (`delimInsidePolicySpace` answers null without a delim
+			// policy flag), the body-aware indent and the map wrap rules.
+			final plan: SepStarPlan = new SepStarPlan(StarPlan.metaOf(starNode));
+			parts.push(new TriviaSepLowering(
+				plan, fieldAccess, c, c.trailPresentAccess, elemFn, openText ?? '', closeText, sepText,
+				leftCurlyOwnedBySep ? knobLeftCurly : null,
+				delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false),
+				delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true),
+				bodyEmptySuppressExpr(starNode, tc.shape.root, true), tc.mapWrapFor(plan.mapWrapRules()),
+				TriviaTailRehome.fnRefFor(starNode.children[0]), afterDocPolicy(starNode)
+			).triviaSepStarExpr());
 			return;
 		}
 		emitTriviaBlockStarDispatch(tc, c, parts);
@@ -275,114 +171,25 @@ final class WriterTriviaStarDispatch {
 
 	/**
 	 * Trivia block-mode (`@:trail`, no flat sep) Star dispatch — the fall-through
-	 * tail of `emitTriviaCloseStar` after the sep dispatch returns. Reads the
-	 * block-layout `@:fmt` flags and pushes the `triviaBlockStarExpr` emit onto
-	 * `parts`. Extracted to keep the helper under the complexity gate.
+	 * tail of `emitTriviaCloseStar` after the sep dispatch returns: pushes the block emit, which reads the Star's plan
+	 * and its struct-field inputs itself, onto `parts`.
 	 */
 	@:access(anyparse.macro.TriviaBlockLowering)
 	private static function emitTriviaBlockStarDispatch(
 		tc: TriviaStarDispatchCtx, c: WriterLowering.TriviaStarCtx, parts: Array<Expr>
 	): Void {
-		final starNode: ShapeNode = c.starNode;
-		final fieldAccess: Expr = c.fieldAccess;
-		final elemFn: String = c.elemFn;
-		final elemRefName: String = c.elemRefName;
-		final openText: Null<String> = c.openText;
-		final closeText: Null<String> = c.closeText;
-		final sepText: Null<String> = c.sepText;
-		final trailBBAccess: Null<Expr> = c.trailBBAccess;
-		final trailLCAccess: Null<Expr> = c.trailLCAccess;
-		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
-		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
-		final blockEndedFlag: Bool = starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED] == true;
-		// `openText ?? ''` (was `?? '{'` through ω₅) — when a
-		// close-peek Star has no `@:lead`, the surrounding Seq
-		// emits the open delimiter before this field, so the Star
-		// itself contributes nothing at the open position. Empty
-		// string → `_dt('')` is a no-op, and `emptyText = '' +
-		// closeText` stays format-neutral (invariant #5).
-		final afterDocComments: Null<Expr> = afterDocPolicy(starNode);
-		final existingKnob: Null<Expr> = starKnobReads(starNode, 'existingBetweenFields', 1)?.pop();
-		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
-		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
-		final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
-		// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
-		// names a per-construct EmptyCurly opt field. The bare form
-		// returns null and falls back to `_inAnonFnBody` dispatch
-		// inside `triviaBlockStarExpr`.
-		final emptyCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'emptyCurlyBreak');
-		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-		final beginEndKnobs: Array<Expr> = docEdgeReads(starNode, starKnobReads(starNode, 'beginEndType') ?? []);
-		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
-		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
-		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
-		final lineCommentTrailBlank: Expr = lineCommentTrailGate(starNode);
-		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
-		// ω-* classify-info builders resolved in buildTriviaBlockInfos.
-		final infos: WriterLowering.TriviaBlockInfos = buildTriviaBlockInfos(tc, starNode, elemRefName, beforeDocComments);
-		final interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo> = infos.interMemberInfo;
-		final staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo> = infos.staticVarSubdivInfo;
-		final condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo> = infos.condLeadingDocInfo;
-		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
-		// ω-blank-around-multiline-members: `@:fmt(blankAroundMultilineMembers('<optField>'))`
-		// names the `WriteOptions` Int knob holding the blank count. Absent → the
-		// three splice points are `macro {}` and the loop generates byte-identical.
-		final gapRule: Null<Array<String>> = starNode.fmtReadStringArgs('gapRule');
-		final uniformBetweenOptField: Null<String> = fmtSingleStringArg(starNode, 'uniformBetween');
-		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
-		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
-		// on a Seq-struct Star names a per-construct
-		// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
-		// — when null, dispatch falls back to unconditional
-		// `_dhl()` before close inside `triviaBlockStarExpr`.
-		final rightCurlyKnob: Null<String> = fmtFirstStringArg(starNode, 'rightCurly');
-		// ω-anonfunction-right-curly: call-form
-		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
-		// Star names a RightCurlyPlacement opt field read only when
-		// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
-		// anon-fn body closes through `opt.anonFunctionRightCurly`
-		// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
-		// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
-		// pre-slice `_dhl()` path.
-		final rightCurlyAnonFnKnob: Null<String> = fmtFirstStringArg(starNode, 'rightCurlyAnonFnOverride');
-		// ω-anon-fn-body-stmt-position: HxFnExpr / HxFnDecl / HxUntypedFnBody
-		// bodies share HxFnBlock.stmts; when it carries
-		// @:fmt(clearExprPositionNonTail) (mirroring HxExpr.BlockExpr) the block
-		// clears the leaked expression-position frame for its statements, so a
-		// statement `if` in an anon-fn body inlines via `ifBody` instead of
-		// `expressionIf`. Struct-block Stars without the flag stay byte-identical.
-		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
-		// ω-uniform-statement-blanks: opt-in on statement-block Stars
-		// (`HxExpr.BlockExpr.stmts`, `HxFnBlock.stmts`). Drives the
-		// `_uniformCollapse` pre-pass + per-element blank suppression.
-		final uniformStmtBlanks: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
-		// omega-condswitchopen-cases-nest: `HxCondSpliceSwitchOpen.cases` (the shared
-		// switch case list of a `#if for { switch { #else ... #end` region) sits
-		// TWO block levels below the enclosing statement - the region's outer
-		// block AND the switch - but a block Star's body Doc carries only one
-		// `_dn` level. This flag wraps the whole field emit in one extra
-		// `_dn(_cols, ...)` so the case labels land at statement+2 and the
-		// switch-closing `}` at statement+1, matching a physically-nested
-		// `for (..) { switch (..) { case .. } }`. Byte-inert for every other
-		// block Star (the flag is unique to that one field).
-		final condSwitchOpenCasesNest: Bool = starNode.fmtHasFlag('condSwitchOpenCasesNest');
-		final emptyBlockBreak: Bool = starNode.fmtHasFlag('emptyBlockBreak');
-
-		final blockStar: Expr = TriviaBlockLowering.triviaBlockStarExpr(
-			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText,
-			afterDocComments, existingKnob, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
-			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
-			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
-			blockEndedFlag, blockEndedFlag ? (starNode.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
-			blockEndedFlag ? tc.formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeAccess,
-			endTypeAccess, uniformStmtBlanks, emptyBlockBreak, gapRule, starNode.fmtHasFlag('relocateTrailingComments'),
-			starNode.fmtReadStringArgs('glueToPrevious')
-		);
+		final plan: BlockStarPlan = new BlockStarPlan(StarPlan.metaOf(c.starNode));
+		final blockStar: Expr = new TriviaBlockLowering(
+			plan, c.fieldAccess, c, c.elemFn, c.openText ?? '', c.closeText, plan.blockEnded() ? c.sepText : null,
+			tc.formatInfo.schemaTypePath, { tc: tc, starNode: c.starNode, elemRefName: c.elemRefName }
+		).triviaBlockStarExpr();
+		// `@:fmt(condSwitchOpenCasesNest)`: the shared case list of a `#if for { switch { #else … #end` region sits two
+		// block levels below its statement, one more than a block Star's body nests, so the whole emit takes another `_dn`.
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			_dn(_cols, $blockStar);
 		};
-		parts.push(condSwitchOpenCasesNest ? blockStarNested : blockStar);
+		parts.push(plan.condSwitchOpenCasesNest() ? blockStarNested : blockStar);
 	}
 
 	/**
@@ -743,9 +550,9 @@ final class WriterTriviaStarDispatch {
 		];
 	}
 
-	/** `knobReads` over the names a Star's `@:fmt(<meta>(...))` gives; null when the Star does not carry the flag. */
-	private static function starKnobReads(star: ShapeNode, meta: String, width: Int = BEGIN_END_KNOBS): Null<Array<Expr>> {
-		return star.fmtHasFlag(meta) ? knobReads(meta, star.fmtReadStringArgs(meta), width) : null;
+	/** `knobReads` over the knob names a Star plan read for `@:fmt(<meta>(...))`; null when the Star does not carry the flag. */
+	private static function starKnobReads(meta: String, knobs: Null<Array<String>>, width: Int = BEGIN_END_KNOBS): Null<Array<Expr>> {
+		return knobs != null ? knobReads(meta, knobs, width) : null;
 	}
 
 	/** One knob of `knobReads`: `opt.<name>`, or `null` for an empty name. */
@@ -787,13 +594,14 @@ final class WriterTriviaStarDispatch {
 	 * The `beginEndType` knob reads `edges` of a type body, each passed through `MemberGap.docEdge` when the Star also
 	 * carries `@:fmt(beginEndTypeIfDoc(...))`, which names the counts a body holding a doc comment takes instead.
 	 */
-	private static function docEdgeReads(star: ShapeNode, edges: Array<Expr>): Array<Expr> {
-		final ifDoc: Null<Array<Expr>> = starKnobReads(star, 'beginEndTypeIfDoc');
+	private static function docEdgeReads(ifDocKnobs: Null<Array<String>>, edges: Array<Expr>): Array<Expr> {
+		final ifDocFlag: String = BlockStarPlan.BEGIN_END_TYPE_IF_DOC;
+		final ifDoc: Null<Array<Expr>> = starKnobReads(ifDocFlag, ifDocKnobs);
 		if (ifDoc == null) return edges;
-		if (edges.length != BEGIN_END_KNOBS)
-			Context.fatalError(
-				'@:fmt(beginEndTypeIfDoc) replaces the counts of @:fmt(beginEndType), which this Star lacks', Context.currentPos()
-			);
+		if (edges.length != BEGIN_END_KNOBS) {
+			final edgeFlag: String = BlockStarPlan.BEGIN_END_TYPE;
+			Context.fatalError('@:fmt($ifDocFlag) replaces the counts of @:fmt($edgeFlag), which this Star lacks', Context.currentPos());
+		}
 		return [
 			for (i in 0...BEGIN_END_KNOBS) {
 				final stated: Expr = edges[i];

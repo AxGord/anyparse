@@ -1,6 +1,7 @@
 package anyparse.macro;
 
 #if macro
+import anyparse.core.ShapeTree.ShapeNode;
 import anyparse.macro.WriterBlankLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -38,8 +39,8 @@ using anyparse.macro.MetaInspect;
  * the extraction moved the functions, not the typedefs, so the whole
  * sub-module typedef block still lives in `WriterLowering`'s module. The
  * classify / subdivision infos are also read by the struct-lowering members
- * that stayed behind; `BlockStarCtx` and `BlockLeafExprs` are now read only
- * from here.
+ * that stayed behind; `BlockLeafExprs` is now read only from here. One instance is one Star's emit
+ * (`TriviaStarEmit`): the constructor reads its plan and builds its inputs, the instance builders splice them.
  *
  * The GENERATED-code surface is the real contract, and no type carries it:
  * every helper splices identifiers declared elsewhere in the Star body —
@@ -53,7 +54,245 @@ using anyparse.macro.MetaInspect;
  * nothing in this module's types to catch it.
  */
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport)
-final class TriviaBlockLowering {
+final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
+
+	private final _beginEnd: { final beginTypeExpr: Expr; final endTypeExpr: Expr; };
+	private final _between: { final leadingSplitGateExpr: Expr; final blockLeadingBetweenExpr: Expr; final blockTrailBetweenExpr: Expr; };
+	private final _sep: { final blockSepBeforeHardlineExpr: Expr; final blockTrailSepEmitExpr: Expr; final elemSepGlueExpr: Expr; };
+	private final _blankAround: { final markExpr: Expr; final seenExpr: Expr; final applyExpr: Expr; };
+	private final _elemCall: Expr;
+	private final _emptyDocExpr: Expr;
+	private final _beforeCloseHardlineExpr: Expr;
+	private final _blankBeforeExpr: Expr;
+	private final _leaf: WriterLowering.BlockLeafExprs;
+	private final _elemPushExpr: Expr;
+	private final _glueToPreviousExpr: Expr;
+
+	/**
+	 * Reads a block-mode trivia Star's (`@:lead(open) @:trail(close) @:trivia`) plan and builds every input its emit splices.
+	 * A struct field's block Star (`source` non-null) also reads its member-gap, doc-edge and line-comment inputs off its node
+	 * through the dispatch's readers; an enum ctor's block Star has none of them. `blockSep` is the separator of a blockEnded
+	 * Star, null for every other. `elemFn` is the `*T`-variant write function: the emit does not consult `isTriviaBearing`.
+	 */
+	@:access(anyparse.macro.WriterTriviaStarDispatch)
+	private function new(
+		plan: BlockStarPlan, fieldAccess: Expr, slots: TriviaStarEmit.TrailSlots, elemFn: String, openText: String, closeText: String,
+		blockSep: Null<String>, schemaTypePath: Null<String>,
+		source: Null<{ final tc: WriterTriviaStarDispatch.TriviaStarDispatchCtx; final starNode: ShapeNode; final elemRefName: String; }>
+	) {
+		// noqa: complexity
+		super(plan, fieldAccess, slots, openText, closeText);
+		final afterFieldsWithDocComments: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.afterDocPolicy(source.starNode);
+		final existingBetweenFields: Null<Expr> = source == null
+			? null
+			: WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1)?.pop();
+		final beginEndKnobs: Array<Expr> = source == null
+			? []
+			: WriterTriviaStarDispatch.docEdgeReads(
+				plan.beginEndTypeIfDoc(),
+				WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.BEGIN_END_TYPE, plan.beginEndTypeKnobs()) ?? []
+			);
+		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
+		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
+		final lineCommentTrailBlank: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.lineCommentTrailGate(source.starNode);
+		final infos: Null<WriterLowering.TriviaBlockInfos> = source == null
+			? null
+			: WriterTriviaStarDispatch.buildTriviaBlockInfos(
+				source.tc, source.starNode, source.elemRefName, plan.beforeDocCommentEmptyLines()
+			);
+		final uniformBetweenOptField: Null<String> = source == null
+			? null
+			: WriterLoweringSupport.fmtSingleStringArg(BlockStarPlan.UNIFORM_BETWEEN, plan.uniformBetween());
+		_elemCall = triviaBlockElemCallExpr(elemFn, plan.leftCurlyAnonFnOverride(), plan.clearExprPositionNonTail());
+		_emptyDocExpr = triviaBlockEmptyDocExpr(
+			openText, closeText, openText + closeText, plan.emptyCurlyBreak(), plan.emptyCurlyBreakKnob(), plan.emptyBlockBreak()
+		);
+		_beforeCloseHardlineExpr = triviaBlockBeforeCloseHardlineExpr(plan.rightCurlyKnob(), plan.rightCurlyAnonFnOverrideKnob());
+		final interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo> = infos?.interMemberInfo;
+		final staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo> = infos?.staticVarSubdivInfo;
+		final interMember: Bool = interMemberInfo != null;
+		final uniformBetween: Bool = uniformBetweenOptField != null;
+		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null
+			|| existingBetweenFields != null
+			|| plan.beforeDocCommentEmptyLines()
+			|| interMember
+			|| uniformBetween;
+		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
+			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
+			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
+			plan.uniformStmtBlanks()
+		);
+		_beginEnd = triviaBlockBeginEndExpr(
+			plan.beginEndType(), plan.keepCurlyBlanks(), beginTypeAccess ?? macro null, endTypeAccess ?? macro null
+		);
+		_between = triviaBlockBetweenExprs(plan.blankBeforeFinalDocCommentInLeading(), plan.betweenMultilineCommentsBlanks());
+		_sep = triviaBlockSepExprs(
+			blockSep, blockSep != null, blockSep != null ? plan.blockEndedPredicate() : null, blockSep != null ? schemaTypePath : null
+		);
+		_leaf = triviaBlockLeafExprs(
+			afterFieldsWithDocComments, plan.beforeDocCommentEmptyLines(), interMember, plan.indentCaseLabels(), lineCommentTrailBlank
+		);
+		_blankAround = blankAroundMultilineExprs(plan.gapRule());
+		_elemPushExpr = triviaBlockElemPushExpr(plan.relocateTrailingComments());
+		_glueToPreviousExpr = WriterLoweringSupport.triviaGlueToPreviousExpr(plan.glueToPrevious());
+	}
+
+	/**
+	 * Block-Star per-element while-loop emit. Builds the `while (_si < _arr.length)`
+	 * loop: blockEnded sep, per-iter hardline, begin-type (first elem), blank-
+	 * before, leading-comment emit (with split-gate + between-blank), element emit
+	 * with trailing-comment fold, and prev-kind track. References the runtime
+	 * `_arr`/`_inner`/`_si`/`_priorElemDoc`/`opt` locals declared in the emitted
+	 * scope.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function triviaBlockWhileExpr(): Expr {
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(_plan.uniformStmtBlanks());
+		return macro {
+			while (_si < _arr.length) {
+				final _t = _arr[_si];
+				// A glued element skips its own line, blank-line policy and kind tracking, so the
+				// element after it is spaced as if it followed the previous element directly.
+				if ($_glueToPreviousExpr) {
+					final _elem: anyparse.core.Doc = $_elemCall;
+					final _tc: Null<String> = _t.trailingComment;
+					final _elemSep: anyparse.core.Doc = _elem;
+					$_elemPushExpr;
+					_si++;
+					continue;
+				}
+				${_leaf.initCurrKindExpr};
+				${_sep.blockSepBeforeHardlineExpr};
+				_inner.push(_dhl());
+				if (_si == 0) ${_beginEnd.beginTypeExpr};
+				${_blankAround.markExpr};
+				$_blankBeforeExpr;
+				${_blankAround.seenExpr};
+				var _ci: Int = 0;
+				while (_ci < _t.leadingComments.length) {
+					${_between.leadingSplitGateExpr};
+					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
+					_inner.push(_dhl());
+					${_between.blockLeadingBetweenExpr};
+					_ci++;
+				}
+				$balcEmitExpr;
+				${_leaf.trackDocCommentExpr};
+				final _elem: anyparse.core.Doc = $_elemCall;
+				${_blankAround.applyExpr};
+				final _tc: Null<String> = _t.trailingComment;
+				final _elemSep: anyparse.core.Doc = ${_sep.elemSepGlueExpr};
+				$_elemPushExpr;
+				_priorElemDoc = _elem;
+				${_leaf.trackPrevKindExpr};
+				_si++;
+			}
+		};
+	}
+
+	/**
+	 * Block-Star non-empty branch body. Builds the `_inner` accumulation, the
+	 * per-element while loop (via `triviaBlockWhileExpr`), the trailing-sep emit,
+	 * the orphan-trail-comment chain (or end-type tail), and the open/close-
+	 * trailing-comment `_parts` assembly wrapped in `_dwb(_dbg(...))`.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function triviaBlockElseBody(): Expr {
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(_plan.uniformStmtBlanks());
+		final whileExpr: Expr = triviaBlockWhileExpr();
+		return macro {
+			final _inner: Array<anyparse.core.Doc> = [];
+			${_leaf.initDocCommentExpr};
+			${_leaf.initCurrDocCommentExpr};
+
+			${_leaf.initPrevKindExpr};
+			$uniformCollapseInitExpr;
+			// ω-blockended-trivia (Session 3): tracks the prior iteration's rendered
+			// element Doc so the between-element sep emission can query
+			// `DocMeasure.endsWithStmtTerminator`. Null on the first iteration.
+			var _priorElemDoc: Null<anyparse.core.Doc> = null;
+			var _sepGlued: Bool = false;
+			var _si: Int = 0;
+			$whileExpr;
+			// ω-blockended-trivia-trail-sep (Session 3): after the last element, if
+			// source had `;` AND prior doesn't already terminate, emit `;` so
+			// source-fidelity is preserved.
+			${_sep.blockTrailSepEmitExpr};
+			if (_trailLC.length > 0) {
+				_inner.push(_dhl());
+				if (${_leaf.extraInnerTrailBlankExpr}) _inner.push(_dhl());
+				var _ti: Int = 0;
+				while (_ti < _trailLC.length) {
+					_inner.push(leadingCommentDocRun(_trailLC, _ti, opt));
+					if (_ti < _trailLC.length - 1) _inner.push(_dhl());
+					${_between.blockTrailBetweenExpr};
+					_ti++;
+				}
+			}
+			// A body of comments only has no edge blanks: the type's edges are read against members.
+			if (_trailLC.length == 0 || _arr.length > 0) ${_beginEnd.endTypeExpr};
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _innerWrap: anyparse.core.Doc = ${_leaf.innerWrapExpr};
+			final _parts: Array<anyparse.core.Doc> = [_dt($v{_openText})];
+			if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
+			_parts.push(_innerWrap);
+			_parts.push($_beforeCloseHardlineExpr);
+			_parts.push(_dt($v{_closeText}));
+			if (_trailClose != null) {
+				// Group-closer seam: a block that is itself an element of an
+				// inline group - `g(function() {\n\th();\n} // c\n)` - puts the
+				// call's `)` right after the comment on the same Doc line, where a
+				// LINE comment swallows it. The guarded emitter carries its own
+				// forward-looking hardline for LINE style; a block comment keeps
+				// its legal glue.
+				_parts.push(trailingCommentDocGuarded(_trailClose, opt));
+			}
+			// ω-break-group / ω-force-flat-engine sister-coverage: wrap the block
+			// body in BodyGroup so a surrounding Group does not see the body's
+			// hardlines through its fitsFlat measurement; `_dwb` is a no-op outside
+			// a Flatten frame, an opt-out boundary inside one.
+			_dwb(_dbg(_dc(_parts)));
+		};
+	}
+
+	/**
+	 * Block-Star top-level Doc build (the orchestrator's emitted body). Dispatches
+	 * the empty-Star fast paths (open-trailing-comment flat emit / empty-curly
+	 * dispatch) and the non-empty branch (via `triviaBlockElseBody`). References
+	 * the runtime `opt` local and the spliced Exprs the constructor built.
+	 *
+	 */
+	private function triviaBlockStarExpr(): Expr {
+		final emptyText: String = _openText + _closeText;
+		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
+		final elseBody: Expr = triviaBlockElseBody();
+		return macro {
+			final _arr = $_fieldAccess;
+
+			${trailSlotDecls()};
+			// ω-open-trailing-alt: empty Star with a same-line block-style trail
+			// comment after the open lit (`{ /* nop */ }`) emits flat tight. Mirror
+			// of the equivalent fast path in `triviaSepStarExpr`.
+			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
+				final _openDoc: anyparse.core.Doc = anyparse.core.LeafTag.DelimiterLeaf.leaf(_trailOpen);
+				if (_trailClose != null)
+					_dc([
+						_dt($v{_openText}),
+						_openDoc,
+						_dt($v{_closeText}),
+						trailingCommentDocGuarded(_trailClose, opt)
+					]);
+				else
+					_dc([_dt($v{_openText}), _openDoc, _dt($v{_closeText})]);
+			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
+				if (_trailClose != null)
+					$emptyTrailExpr
+				else
+					$_emptyDocExpr;
+			} else
+				$elseBody;
+		};
+	}
 
 	/**
 	 * Block-Star current-element doc-comment compute (ω-cond-leading-doc-
@@ -347,263 +586,6 @@ final class TriviaBlockLowering {
 				$blankExtras;
 			}
 		};
-	}
-
-	/**
-	 * Build the Doc expression for a block-mode trivia Star field
-	 * (`@:lead(open) @:trail(close) @:trivia`). Per-element layout:
-	 * hardline baseline, optional extra hardline for `blankBefore`
-	 * (skipped on the first element — the leading `{` already gives the
-	 * break), leading comments each followed by a hardline, the element
-	 * write call, optional trailing line comment. Wrapped in
-	 * `_dc([_dt(open), _dn(cols, _dc(inner)), _dhl(), _dt(close)])` to
-	 * match the Doc shape of the plain-mode `blockBody` helper.
-	 *
-	 * `elemFn` is the `*T`-variant write function (e.g. `writeHxMemberDeclT`)
-	 * — the helper does not itself consult `isTriviaBearing`.
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaBlockStarExpr(
-		fieldAccess: Expr,
-		trailBBAccess: Null<Expr>,
-		trailLCAccess: Null<Expr>,
-		trailCloseAccess: Null<Expr>,
-		trailOpenAccess: Null<Expr>,
-		elemFn: String,
-		openText: String,
-		closeText: String,
-		?afterFieldsWithDocComments: Expr,
-		?existingBetweenFields: Expr,
-		beforeDocCommentEmptyLines: Bool = false,
-		?interMemberInfo: WriterLowering.InterMemberClassifyInfo,
-		indentCaseLabelsGate: Bool = false,
-		emptyCurlyBreak: Bool = false,
-		beginEndType: Bool = false,
-		keepCurlyBlanks: Bool = false,
-		?lineCommentTrailBlank: Expr,
-		blankBeforeFinalDocInLeading: Bool = false,
-		?staticVarSubdivInfo: WriterLowering.StaticVarSubdivisionInfo,
-		betweenMultilineCommentsBlanks: Bool = false,
-		?uniformBetweenOptField: String,
-		clearAnonFnBodyOnElems: Bool = false,
-		?emptyCurlyKnob: String,
-		?rightCurlyKnob: String,
-		?rightCurlyAnonFnKnob: String,
-		// ω-blockended-trivia (Session 3): when the Star carries
-		// `@:sep('text', tailRelax, blockEnded)`, the block-mode emit
-		// gains between-element sep emission, gated on
-		// `!DocMeasure.endsWithCloseBrace(priorElemDoc)`. Null sepText →
-		// pre-slice byte-identical (no inter-stmt sep emit — per-stmt
-		// `;` lives inside each element's own Doc via @:trailOpt).
-		?sepText: String,
-		blockEnded: Bool = false,
-		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate name
-		// (`lit.sepBlockEndedPredicate`, e.g. `stmtNoSemi`) consulted on the
-		// PRIOR / LAST element's AST when deciding between-element / trailing
-		// sep elision. Mirror of the plain-mode block-Star path (L4400): a
-		// `#if … #end` stmt ends with `d` so the `endsWithStmtTerminator` byte
-		// check misses, but `stmtNoSemi` accepts the `Conditional` AST shape.
-		// `blockEndedSchemaPath` is the dotted format-instance path (e.g.
-		// `anyparse.grammar.haxe.HaxeFormat`) used to build the
-		// `<schema>.instance.<predicate>(elem)` call. Both null → byte-
-		// identical to the pre-fix path (no predicate consult).
-		?blockEndedPredicate: String,
-		?blockEndedSchemaPath: String,
-		// ω-cond-leading-doc-lookthrough: when set (only alongside
-		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
-		// through a `#if … #end` member to its first inner member's leading
-		// doc-comment. Null → byte-identical to the pre-fix path.
-		?condLeadingDocInfo: WriterLowering.CondLeadingDocLookThroughInfo,
-		// ω-value-yielded-if-tail-barrier (SI-2): when the parent Star carries
-		// `@:fmt(clearExprPositionNonTail)` (BlockExpr / BlockStmt), every
-		// NON-tail block statement's element-opt is wrapped in
-		// `_clearExprPosition` so the expression-position frame inherited from
-		// an enclosing arrow-body / return is dropped for statements whose value
-		// is discarded. The block's LAST statement (its yielded value) keeps the
-		// frame. False → byte-identical to the pre-slice element call.
-		clearExprPositionNonTail: Bool = false,
-		// The `Null<Int>` knob reads for the begin/end blank counts of a
-		// `beginEndType` Star (`WriterTriviaStarDispatch.beginEndKnobAccess`); null on
-		// every Star without the flag, whose count reads no knob.
-		?beginTypeAccess: Expr,
-		?endTypeAccess: Expr,
-		uniformStmtBlanks: Bool = false,
-		// omega-condswitchopen-for-close: force an empty body to break its close
-		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
-		// region). See `triviaBlockEmptyDocExpr`.
-		forceEmptyBreak: Bool = false,
-
-		// ω-blank-around-multiline-members: the `WriteOptions` Int knob naming
-		// the blank count, or null when the Star does not carry the flag — the
-		// three splice points then lower to `macro {}` and the generated loop is
-		// byte-identical to the pre-slice one.
-		?gapRule: Array<String>,
-		// FU12: `@:fmt(relocateTrailingComments)` — the element push becomes the
-		// `IfTrailingCommentOverflows` choice under `opt.trailingCommentAbove`.
-		// False keeps the pre-slice push byte for byte.
-		relocateTrailingComments: Bool = false,
-		// `@:fmt(glueToPrevious([<field>, ]<Ctor>))`: the element (or its field) ctor written glued to the
-		// previous element - see `WriterLoweringSupport.glueElemTestExpr`. Null → every element starts its own line.
-		?glueToPrevious: Array<String>
-	): Expr {
-		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
-		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
-		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail);
-		final emptyText: String = openText + closeText;
-		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
-		// empty-body Doc dispatch moved to `triviaBlockEmptyDocExpr`.
-		final emptyDocExpr: Expr = triviaBlockEmptyDocExpr(
-			openText, closeText, emptyText, emptyCurlyBreak, emptyCurlyKnob, forceEmptyBreak
-		);
-		// ω-blockright-curly / ω-anonfunction-right-curly: before-`}` hardline
-		// dispatch moved to `triviaBlockBeforeCloseHardlineExpr`.
-		final beforeCloseHardlineExpr: Expr = triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob, rightCurlyAnonFnKnob);
-		// ω-orphan-trivia: Alt-branch Star call sites (BlockStmt) have no
-		// synth trailing slots — the null branch drops trailing trivia,
-		// matching pre-slice behaviour. Seq-struct call sites forward the
-		// real accessors and round-trip orphan comments.
-		final trailBB: Expr = trailBBAccess ?? macro false;
-		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
-		// ω-close-trailing: same-line trailing comment captured right
-		// after the close literal (e.g. `} // comment` before the next
-		// sibling). Present only for close-peek Seq Stars (Seq-struct
-		// + ω-close-trailing-alt's BlockStmt); EOF and try-parse sites
-		// forward null and degrade to the pre-slice close emission.
-		// ω-trailing-block-style: the captured string includes its
-		// delimiters (producer uses `collectTrailingFull`), so the
-		// emission routes through `trailingCommentDocVerbatim` to
-		// preserve block-vs-line style on round-trip.
-		final trailClose: Expr = trailCloseAccess ?? macro (null: Null<String>);
-		// ω-open-trailing: same-line trailing comment captured right after
-		// the open literal (e.g. `{ // foo` before the first member).
-		// Synthesised only for Stars with `@:lead`; Alt-branch and EOF
-		// sites forward null. Verbatim emission preserves block-vs-line
-		// style.
-		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
-		// ω-close-trailing-block-glue: the close-trailing comment is emitted by
-		// `trailingCommentDocGuarded` on every site, empty block included. A LINE
-		// comment carries its own forward hardline (`_dohsbh()`, dropped before a
-		// following break), so whatever the parent emits next — the space before a
-		// same-line `else` / `while` / `catch` — cannot land on the comment's line.
-		// A BLOCK comment carries none: it ends where it closes, so `} /* c */ else`
-		// stays glued under a same-line policy and the policy alone decides the seam.
-		// The Alt-branch sites used to append `_dohsbh()` regardless of style, which
-		// forced `} /* c */` onto its own line ahead of every continuation keyword.
-		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
-		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields /
-		// ω-C-empty-lines-before-doc: when the grammar field carries any
-		// of the empty-line flags
-		// (`@:fmt(afterFieldsWithDocComments)`,
-		// `@:fmt(existingBetweenFields)`,
-		// `@:fmt(beforeDocCommentEmptyLines)`), the per-element loop
-		// gates its blank-line emission on the corresponding runtime
-		// policies —
-		// `afterFieldsWithDocComments.One` forces a blank line after any
-		// element whose leading trivia carried a `/**`-prefixed entry,
-		// `afterFieldsWithDocComments.None` strips source blanks adjacent
-		// to such an element, `existingBetweenFields.Remove` strips every
-		// source blank between siblings regardless of doc-comment status,
-		// `beforeDocCommentEmptyLines.One` forces a blank line before any
-		// element whose own leading trivia starts with a `/**`-prefixed
-		// entry, `beforeDocCommentEmptyLines.None` strips source blanks
-		// adjacent to such an element's leading side. The policies
-		// compose: a blank line survives only when no active strip-policy
-		// fires AND (the source had one OR any add-policy fires). The
-		// compile-time gate keeps JSON / AS3 writers byte-identical —
-		// their Star fields carry none of the flags and skip the policy
-		// computation entirely.
-		final interMember: Bool = interMemberInfo != null;
-		final uniformBetween: Bool = uniformBetweenOptField != null;
-		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null
-			|| existingBetweenFields != null
-			|| beforeDocCommentEmptyLines
-			|| interMember
-			|| uniformBetween;
-		// ω-cond-leading-doc-lookthrough /
-		// ω-class-static-var-cascade / ω-abstract-static-fn-cascade: the per-element
-		// doc-comment / kind computes + the strip / add gates moved
-		// to `triviaBlockBlankBeforeExpr` and its cascade
-		// sub-helpers.
-		final staticVarSubdiv: Bool = staticVarSubdivInfo != null;
-		// ω-enum-empty-lines: opt-in via `@:fmt(uniformBetween('<optField>'))`.
-		// When present, the named non-negative-Int knob on the runtime
-		// `opt` is consulted at the inter-element slot — `> 0` contributes
-		// to `_addBlank` (single-blank semantics, same shape as the other
-		// add arms). Generic mech: any Star whose elements are an Alt
-		// without a var/fn split (e.g. `HxEnumDecl.ctors` →
-		// `opt.betweenEnumCtors`) can opt in by pointing at its own knob.
-		final blankBeforeExpr: Expr = triviaBlockBlankBeforeExpr(
-			afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, condLeadingDocInfo, interMember,
-			interMemberInfo, staticVarSubdiv, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
-			uniformStmtBlanks
-		);
-		// Remaining per-flag leaf builders moved to grouped helpers:
-		// ω-indent-case-labels / ω-block-orphan-trail-blank + init/track exprs ->
-		// triviaBlockLeafExprs; ω-class-begin-end-type / ω-bropen-keep ->
-		// triviaBlockBeginEndExpr; ω-block-final-doc-leading-blank /
-		// ω-fileheader-multiline-comments -> triviaBlockBetweenExprs; ω-blockended-
-		// trivia / ω-phase-g / ω-condcomp-stray-semi -> triviaBlockSepExprs (predicate
-		// build in triviaBlockPredCallExpr). The orchestrator now bundles every
-		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
-		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeAccess ?? macro null, endTypeAccess ?? macro null);
-		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
-		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
-		final leaf = triviaBlockLeafExprs(
-			afterFieldsWithDocComments, beforeDocCommentEmptyLines, interMember, indentCaseLabelsGate, lineCommentTrailBlank
-		);
-		final blankAround = blankAroundMultilineExprs(gapRule);
-		final ctx: WriterLowering.BlockStarCtx = {
-			fieldAccess: fieldAccess,
-			openText: openText,
-			closeText: closeText,
-			emptyText: emptyText,
-			triviaElemCall: triviaElemCall,
-			emptyDocExpr: emptyDocExpr,
-			beforeCloseHardlineExpr: beforeCloseHardlineExpr,
-			trailBB: trailBB,
-			trailLC: trailLC,
-			trailClose: trailClose,
-			trailOpen: trailOpen,
-			emptyTrailExpr: emptyTrailExpr,
-			blankBeforeExpr: blankBeforeExpr,
-			trackDocCommentExpr: leaf.trackDocCommentExpr,
-			initDocCommentExpr: leaf.initDocCommentExpr,
-			initCurrDocCommentExpr: leaf.initCurrDocCommentExpr,
-
-			initPrevKindExpr: leaf.initPrevKindExpr,
-			initCurrKindExpr: leaf.initCurrKindExpr,
-			trackPrevKindExpr: leaf.trackPrevKindExpr,
-			innerWrapExpr: leaf.innerWrapExpr,
-			beginTypeExpr: beginEnd.beginTypeExpr,
-			endTypeExpr: beginEnd.endTypeExpr,
-			leadingSplitGateExpr: between.leadingSplitGateExpr,
-			extraInnerTrailBlankExpr: leaf.extraInnerTrailBlankExpr,
-			blockLeadingBetweenExpr: between.blockLeadingBetweenExpr,
-			blockTrailBetweenExpr: between.blockTrailBetweenExpr,
-			blockSepBeforeHardlineExpr: sep.blockSepBeforeHardlineExpr,
-			blockTrailSepEmitExpr: sep.blockTrailSepEmitExpr,
-			elemSepGlueExpr: sep.elemSepGlueExpr,
-			afterFieldsWithDocComments: afterFieldsWithDocComments,
-			existingBetweenFields: existingBetweenFields,
-			beforeDocCommentEmptyLines: beforeDocCommentEmptyLines,
-			condLeadingDocInfo: condLeadingDocInfo,
-			interMember: interMember,
-			interMemberInfo: interMemberInfo,
-			staticVarSubdiv: staticVarSubdiv,
-			staticVarSubdivInfo: staticVarSubdivInfo,
-			uniformBetween: uniformBetween,
-			uniformBetweenOptField: uniformBetweenOptField,
-			anyEmptyLinesFlag: anyEmptyLinesFlag,
-			uniformStmtBlanks: uniformStmtBlanks,
-			elemPushExpr: triviaBlockElemPushExpr(relocateTrailingComments),
-
-
-			blankAroundMarkExpr: blankAround.markExpr,
-			blankAroundSeenExpr: blankAround.seenExpr,
-			blankAroundApplyExpr: blankAround.applyExpr,
-			glueToPreviousExpr: WriterLoweringSupport.triviaGlueToPreviousExpr(glueToPrevious)
-		};
-		return triviaBlockMainExpr(ctx);
 	}
 
 	/**
@@ -985,201 +967,6 @@ final class TriviaBlockLowering {
 			}
 		else
 			macro _inner.push(_tc != null ? $besideExpr : _elem);
-	}
-
-	/**
-	 * Block-Star per-element while-loop emit. Builds the `while (_si < _arr.length)`
-	 * loop: blockEnded sep, per-iter hardline, begin-type (first elem), blank-
-	 * before, leading-comment emit (with split-gate + between-blank), element emit
-	 * with trailing-comment fold, and prev-kind track. References the runtime
-	 * `_arr`/`_inner`/`_si`/`_priorElemDoc`/`opt` locals declared in the emitted
-	 * scope.
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaBlockWhileExpr(c: WriterLowering.BlockStarCtx): Expr {
-		final initCurrKindExpr: Expr = c.initCurrKindExpr;
-		final blockSepBeforeHardlineExpr: Expr = c.blockSepBeforeHardlineExpr;
-		final beginTypeExpr: Expr = c.beginTypeExpr;
-		final blankBeforeExpr: Expr = c.blankBeforeExpr;
-		final leadingSplitGateExpr: Expr = c.leadingSplitGateExpr;
-		final blockLeadingBetweenExpr: Expr = c.blockLeadingBetweenExpr;
-		final trackDocCommentExpr: Expr = c.trackDocCommentExpr;
-		final triviaElemCall: Expr = c.triviaElemCall;
-		final elemSepGlueExpr: Expr = c.elemSepGlueExpr;
-		final trackPrevKindExpr: Expr = c.trackPrevKindExpr;
-		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
-		final blankAroundMarkExpr: Expr = c.blankAroundMarkExpr;
-		final blankAroundSeenExpr: Expr = c.blankAroundSeenExpr;
-		final blankAroundApplyExpr: Expr = c.blankAroundApplyExpr;
-		final elemPushExpr: Expr = c.elemPushExpr;
-		final glueExpr: Expr = c.glueToPreviousExpr;
-		return macro {
-			while (_si < _arr.length) {
-				final _t = _arr[_si];
-				// A glued element skips its own line, blank-line policy and kind tracking, so the
-				// element after it is spaced as if it followed the previous element directly.
-				if ($glueExpr) {
-					final _elem: anyparse.core.Doc = $triviaElemCall;
-					final _tc: Null<String> = _t.trailingComment;
-					final _elemSep: anyparse.core.Doc = _elem;
-					$elemPushExpr;
-					_si++;
-					continue;
-				}
-				$initCurrKindExpr;
-				$blockSepBeforeHardlineExpr;
-				_inner.push(_dhl());
-				if (_si == 0) $beginTypeExpr;
-				$blankAroundMarkExpr;
-				$blankBeforeExpr;
-				$blankAroundSeenExpr;
-				var _ci: Int = 0;
-				while (_ci < _t.leadingComments.length) {
-					$leadingSplitGateExpr;
-					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
-					_inner.push(_dhl());
-					$blockLeadingBetweenExpr;
-					_ci++;
-				}
-				$balcEmitExpr;
-				$trackDocCommentExpr;
-				final _elem: anyparse.core.Doc = $triviaElemCall;
-				$blankAroundApplyExpr;
-				final _tc: Null<String> = _t.trailingComment;
-				final _elemSep: anyparse.core.Doc = $elemSepGlueExpr;
-				$elemPushExpr;
-				_priorElemDoc = _elem;
-				$trackPrevKindExpr;
-				_si++;
-			}
-		};
-	}
-
-	/**
-	 * Block-Star non-empty branch body. Builds the `_inner` accumulation, the
-	 * per-element while loop (via `triviaBlockWhileExpr`), the trailing-sep emit,
-	 * the orphan-trail-comment chain (or end-type tail), and the open/close-
-	 * trailing-comment `_parts` assembly wrapped in `_dwb(_dbg(...))`.
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaBlockElseBody(c: WriterLowering.BlockStarCtx): Expr {
-		final initDocCommentExpr: Expr = c.initDocCommentExpr;
-		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
-
-		final initPrevKindExpr: Expr = c.initPrevKindExpr;
-		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
-		final whileExpr: Expr = triviaBlockWhileExpr(c);
-		final blockTrailSepEmitExpr: Expr = c.blockTrailSepEmitExpr;
-		final extraInnerTrailBlankExpr: Expr = c.extraInnerTrailBlankExpr;
-		final blockTrailBetweenExpr: Expr = c.blockTrailBetweenExpr;
-		final endTypeExpr: Expr = c.endTypeExpr;
-		final innerWrapExpr: Expr = c.innerWrapExpr;
-		final beforeCloseHardlineExpr: Expr = c.beforeCloseHardlineExpr;
-		final openText: String = c.openText;
-		final closeText: String = c.closeText;
-		return macro {
-			final _inner: Array<anyparse.core.Doc> = [];
-			$initDocCommentExpr;
-			$initCurrDocCommentExpr;
-
-			$initPrevKindExpr;
-			$uniformCollapseInitExpr;
-			// ω-blockended-trivia (Session 3): tracks the prior iteration's rendered
-			// element Doc so the between-element sep emission can query
-			// `DocMeasure.endsWithStmtTerminator`. Null on the first iteration.
-			var _priorElemDoc: Null<anyparse.core.Doc> = null;
-			var _sepGlued: Bool = false;
-			var _si: Int = 0;
-			$whileExpr;
-			// ω-blockended-trivia-trail-sep (Session 3): after the last element, if
-			// source had `;` AND prior doesn't already terminate, emit `;` so
-			// source-fidelity is preserved.
-			$blockTrailSepEmitExpr;
-			if (_trailLC.length > 0) {
-				_inner.push(_dhl());
-				if ($extraInnerTrailBlankExpr) _inner.push(_dhl());
-				var _ti: Int = 0;
-				while (_ti < _trailLC.length) {
-					_inner.push(leadingCommentDocRun(_trailLC, _ti, opt));
-					if (_ti < _trailLC.length - 1) _inner.push(_dhl());
-					$blockTrailBetweenExpr;
-					_ti++;
-				}
-			}
-			// A body of comments only has no edge blanks: the type's edges are read against members.
-			if (_trailLC.length == 0 || _arr.length > 0) $endTypeExpr;
-			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-			final _innerWrap: anyparse.core.Doc = $innerWrapExpr;
-			final _parts: Array<anyparse.core.Doc> = [_dt($v{openText})];
-			if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
-			_parts.push(_innerWrap);
-			_parts.push($beforeCloseHardlineExpr);
-			_parts.push(_dt($v{closeText}));
-			if (_trailClose != null) {
-				// Group-closer seam: a block that is itself an element of an
-				// inline group - `g(function() {\n\th();\n} // c\n)` - puts the
-				// call's `)` right after the comment on the same Doc line, where a
-				// LINE comment swallows it. The guarded emitter carries its own
-				// forward-looking hardline for LINE style; a block comment keeps
-				// its legal glue.
-				_parts.push(trailingCommentDocGuarded(_trailClose, opt));
-			}
-			// ω-break-group / ω-force-flat-engine sister-coverage: wrap the block
-			// body in BodyGroup so a surrounding Group does not see the body's
-			// hardlines through its fitsFlat measurement; `_dwb` is a no-op outside
-			// a Flatten frame, an opt-out boundary inside one.
-			_dwb(_dbg(_dc(_parts)));
-		};
-	}
-
-	/**
-	 * Block-Star top-level Doc build (the orchestrator's emitted body). Dispatches
-	 * the empty-Star fast paths (open-trailing-comment flat emit / empty-curly
-	 * dispatch) and the non-empty branch (via `triviaBlockElseBody`). References
-	 * the runtime `opt` local and the `BlockStarCtx`-bundled spliced Exprs.
-	 *
-	 */
-	private static function triviaBlockMainExpr(c: WriterLowering.BlockStarCtx): Expr {
-		final fieldAccess: Expr = c.fieldAccess;
-		final trailLC: Expr = c.trailLC;
-		final trailBB: Expr = c.trailBB;
-		final trailClose: Expr = c.trailClose;
-		final trailOpen: Expr = c.trailOpen;
-		final openText: String = c.openText;
-		final closeText: String = c.closeText;
-		final emptyTrailExpr: Expr = c.emptyTrailExpr;
-		final emptyDocExpr: Expr = c.emptyDocExpr;
-
-		final elseBody: Expr = triviaBlockElseBody(c);
-		return macro {
-			final _arr = $fieldAccess;
-
-			final _trailLC: Array<String> = $trailLC;
-			final _trailBB: Bool = $trailBB;
-			final _trailClose: Null<String> = $trailClose;
-			final _trailOpen: Null<String> = $trailOpen;
-			// ω-open-trailing-alt: empty Star with a same-line block-style trail
-			// comment after the open lit (`{ /* nop */ }`) emits flat tight. Mirror
-			// of the equivalent fast path in `triviaSepStarExpr`.
-			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
-				final _openDoc: anyparse.core.Doc = anyparse.core.LeafTag.DelimiterLeaf.leaf(_trailOpen);
-				if (_trailClose != null)
-					_dc([
-						_dt($v{openText}),
-						_openDoc,
-						_dt($v{closeText}),
-						trailingCommentDocGuarded(_trailClose, opt)
-					]);
-				else
-					_dc([_dt($v{openText}), _openDoc, _dt($v{closeText})]);
-			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
-				if (_trailClose != null)
-					$emptyTrailExpr
-				else
-					$emptyDocExpr;
-			} else
-				$elseBody;
-		};
 	}
 
 	/**

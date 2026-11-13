@@ -54,8 +54,8 @@
 			"name": "M-ENDTYPE-TYPEDEF-TRAIL",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepForceMultiExpr",
-			"find": "$typedefEndExpr;",
-			"replace": "if (_trailLC.length == 0) $typedefEndExpr;",
+			"find": "${_blanks.typedefEndExpr};",
+			"replace": "if (_trailLC.length == 0) ${_blanks.typedefEndExpr};",
 			"note": "a typedef body ending in orphan comments takes no end-edge blanks after them"
 		},
 		{
@@ -147,7 +147,7 @@
 		{
 			"name": "M-FNTYPE-NEST-RESET-OFF",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
+			"method": "new",
 			"find": "macro _clearNestedType(_clearTypedefBody(opt), opt);",
 			"replace": "macro _clearTypedefBody(opt);",
 			"note": "an anon field written inside a type argument still counts as nested, so its function type keeps the additional unit although the field starts a line of its own"
@@ -356,8 +356,8 @@
 			"name": "M-TRIVIASEP-RESTPROBE-UNGATED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "groupRestProbe: $v{c.groupRestProbe} && !opt._suppressPatternRestProbe,",
-			"replace": "groupRestProbe: $v{c.groupRestProbe},",
+			"find": "groupRestProbe: $v{_plan.groupRestProbe()} && !opt._suppressPatternRestProbe,",
+			"replace": "groupRestProbe: $v{_plan.groupRestProbe()},",
 			"note": "the trivia dispatch stops reading the pattern flag, so a @:trivia Star below a case pattern rest-probes while the plain writer does not"
 		},
 		{
@@ -566,9 +566,9 @@
 		{
 			"name": "M-OPEN-TRAIL-EMPTY-UNGUARDED",
 			"type": "anyparse.macro.TriviaBlockLowering",
-			"method": "triviaBlockMainExpr",
-			"find": "trailingCommentDocGuarded(_trailClose, opt)",
-			"replace": "trailingCommentDocVerbatim(_trailClose, opt)",
+			"method": "triviaBlockStarExpr",
+			"find": "_dt($v{_closeText}),\n\ttrailingCommentDocGuarded(_trailClose, opt)",
+			"replace": "_dt($v{_closeText}),\n\ttrailingCommentDocVerbatim(_trailClose, opt)",
 			"note": "`{ /* n */ } // c` emits its line comment with no forward break, so the keyword after it is swallowed into the comment"
 		},
 		{
@@ -1214,7 +1214,7 @@
 		{
 			"name": "M-TYPEDEF-BODY-TAKES-ANON-INDENT",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
+			"method": "new",
 			"find": "|| opt._inTypedefBody",
 			"replace": "",
 			"note": "a typedef body charges the anon-type cascade indent, which the fork never applies to a typedef RHS"
@@ -2165,16 +2165,16 @@
 			"name": "M-IGNORE-HARDLINE-LIST-DEFERRED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "final _deferIfHardline: Bool = _breakAsOnePerLine || $v{c.deferUnderIgnore} && _ignoreEmit;",
+			"find": "final _deferIfHardline: Bool = _breakAsOnePerLine || $v{(_openText == '{' && !_plan.reflowInExprPosition())} && _ignoreEmit;",
 			"replace": "final _deferIfHardline: Bool = _breakAsOnePerLine;",
 			"note": "a hardline-carrying list under Ignore is counted again by its host, so a signature wraps around a rule-broken anon type"
 		},
 		{
 			"name": "M-IGNORE-DEFER-BRACED-ONLY",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
-			"find": "deferUnderIgnore: openText == '{' && !reflowInExprPosition",
-			"replace": "deferUnderIgnore: openText == '{'",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "(_openText == '{' && !_plan.reflowInExprPosition())",
+			"replace": "(_openText == '{')",
 			"note": "an object literal in expression position is deferred from its host's width like an anon type, so a parameter default holding one no longer wraps its signature"
 		},
 		{
@@ -2268,7 +2268,7 @@
 		{
 			"name": "M-PAREN-CHAIN-MARK-OBJECT-CLEAR-OFF",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
+			"method": "new",
 			"find": "case 'objectLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), false, opt);",
 			"replace": "case 'objectLiteralWrap': macro _setSuppressCallRestProbe($elemOptBase, false, opt);",
 			"note": "a noWrap object nested in an array element keeps the mark: its chain paren leaves the object's Flatten and the writer needs two passes"
@@ -2284,7 +2284,7 @@
 		{
 			"name": "M-PAREN-CHAIN-MARK-NEW-CLEAR-OFF",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
+			"method": "new",
 			"find": "case 'callParameterWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, true, opt), false, opt);",
 			"replace": "case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true, opt);",
 			"note": "a noWrap new-expression argument nested in an array element keeps the mark and opens its chain paren"
@@ -2292,7 +2292,7 @@
 		{
 			"name": "M-PAREN-CHAIN-MARK-OTHER-CLEAR-OFF",
 			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepStarExpr",
+			"method": "new",
 			"find": "case _: macro _setParenChainInElement($elemOptBase, false, opt);",
 			"replace": "case _: elemOptBase;",
 			"note": "a noWrap metadata-call argument nested in an array element keeps the mark and opens its chain paren"
@@ -2569,7 +2569,7 @@
 			"name": "M-COND-BODY-SOURCE-SEP",
 			"type": "anyparse.macro.TriviaTryparseLowering",
 			"method": "triviaTryparseSepCascadeExpr",
-			"find": "(_t.newlineBefore || $v{elementPerLine})",
+			"find": "(_t.newlineBefore || $v{_plan.elementPerLine()})",
 			"replace": "_t.newlineBefore",
 			"note": "two elements of a #if region body that the source wrote on one line stay on one line, unlike the same elements outside the region"
 		},
@@ -2577,7 +2577,7 @@
 			"name": "M-COND-BODY-PAD-SOURCE",
 			"type": "anyparse.macro.TriviaTryparseLowering",
 			"method": "triviaTryparseMainExpr",
-			"find": "_arr[0].newlineBefore || $v{c.elementPerLine} && _arr.length > 1",
+			"find": "_arr[0].newlineBefore || $v{_plan.elementPerLine()} && _arr.length > 1",
 			"replace": "_arr[0].newlineBefore",
 			"note": "a #if region body of several elements whose first one shares the #if line keeps it there, so the region opens and closes on the element lines"
 		},
@@ -2760,8 +2760,8 @@
 			"name": "M-MATRIX-TRIVIA-NOWRAP-FLATTENS",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepDispatchExpr",
-			"find": "$matrixSucceedsExpr || _gridPads != null",
-			"replace": "$matrixSucceedsExpr",
+			"find": "$_matrixSucc || _gridPads != null",
+			"replace": "$_matrixSucc",
 			"note": "under a pure noWrap cascade a grid holding a blank line or a comment flattens instead of keeping its rows"
 		},
 		{
@@ -2860,8 +2860,8 @@
 		},
 		{
 			"name": "M-META-FIT-COMMENT-IGNORED",
-			"type": "anyparse.macro.WriterTriviaStarEmitLowering",
-			"method": "emitTriviaTryparseStar",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "new",
 			"find": "|| Lambda.exists(_arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);",
 			"replace": "|| false;",
 			"note": "a comment inside a metadata run no longer breaks it, so fit lays a commented run out by width"
@@ -3246,6 +3246,30 @@
 			"find": "if (_ac.ids.length >= 2)",
 			"replace": "if (_ac.ids.length >= 1)",
 			"note": "a one-slot clause gets a clause fact whose write slot is missing"
+		},
+		{
+			"name": "M-STAR-PLAN-FLAG-NAME",
+			"type": "anyparse.macro.TryparseStarPlan",
+			"method": "nestBody",
+			"find": "_meta.flag('nestBody')",
+			"replace": "_meta.flag('padLeading')",
+			"note": "a plan method reads another flag than its own name, so a Star carrying nestBody is planned without it"
+		},
+		{
+			"name": "M-STAR-PLAN-BLOCK-ENDED-TRUTHY",
+			"type": "anyparse.macro.StarPlan",
+			"method": "blockEnded",
+			"find": "_meta.annotation(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true",
+			"replace": "_meta.annotation(AnnotationKeys.LIT_SEP_BLOCK_ENDED) != null",
+			"note": "any value under the blockEnded key turns the separator into a block-ended one"
+		},
+		{
+			"name": "M-STAR-PLAN-BARE-KNOB-LIST",
+			"type": "anyparse.macro.StarPlan",
+			"method": "flagArgs",
+			"find": "_meta.args(name) ?? []",
+			"replace": "_meta.args(name)",
+			"note": "a bare knob-list flag reads as absent, so the emitter skips it instead of refusing it"
 		}
 	]
 }

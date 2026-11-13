@@ -54,12 +54,98 @@ import haxe.macro.MacroStringTools;
  * `_uniformCollapse` half crosses the module boundary.
  */
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering)
-final class TriviaSepLowering {
+final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
+
+	private final _sepText: String;
+	private final _mapWrap: Null<WriterLowering.SepStarMapWrap>;
+	private final _tailRehomeFn: Null<Expr>;
+	private final _openInsideDoc: Expr;
+	private final _closeInsideDoc: Expr;
+	private final _blanks: WriterLowering.SepStarBlanks;
+	private final _elemCall: Expr;
+
+	/**
+	 * `@:fmt(bodyAwareCompactIndent(...))`: a function signature with an empty body drops the cascade's additional indent
+	 * (`WriterLoweringSupport.bodyEmptySuppressExpr`); a forceMultiInTypedef Star drops it inside a typedef body.
+	 */
+	private final _suppressExpr: Expr;
+
+	private final _checks: WriterLowering.SepStarChecks;
+	private final _trail: WriterLowering.SepStarTrailExprs;
+	private final _noTriviaBranch: Expr;
+	private final _forceMultiColsExpr: Expr;
+	private final _predicateScan: Expr;
+	private final _matrixSucc: Expr;
+	private final _triviaGrid: Expr;
+	private final _forceMulti: Expr;
+
+	/**
+	 * Reads the Star's plan and builds every input its emit splices, in the order the emit has always built them. The
+	 * inputs a struct field and an enum ctor spell differently (the left-curly knob, the inside pads, the body-aware indent)
+	 * arrive built.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function new(
+		plan: SepStarPlan, fieldAccess: Expr, slots: TriviaStarEmit.TrailSlots, trailPresentAccess: Null<Expr>, elemFn: String,
+		openText: String, closeText: String, sepText: String, leftCurlyKnob: Null<String>, openInsideExpr: Null<Expr>,
+		closeInsideExpr: Null<Expr>, suppressAdditionalIndent: Null<Expr>, mapWrap: Null<WriterLowering.SepStarMapWrap>,
+		tailRehomeFn: Null<Expr>, afterDocPolicy: Null<Expr>
+	) {
+		// noqa: complexity
+		super(plan, fieldAccess, slots, openText, closeText);
+		_sepText = sepText;
+		_mapWrap = mapWrap;
+		_tailRehomeFn = tailRehomeFn;
+		// ω-trivia-sep-anontype-braces: the inside-delimiter pads the caller read (or the `@:fmt(bracketKindPad)` runtime
+		// dispatch it built); absent, the wrap-rules branch pads nothing.
+		_openInsideDoc = openInsideExpr ?? macro _de();
+		_closeInsideDoc = closeInsideExpr ?? macro _de();
+		_blanks = triviaSepTypedefBlanksExprs(
+			plan.beforeDocCommentEmptyLines(), plan.typedefBodyBlanks(), plan.uniformStmtBlanks(), afterDocPolicy
+		);
+		// ω-typedef-anon-force-multi: an element write ends the typedef-body context, so a nested anon reverts to its own
+		// fit-driven wrap; the same write ends a nested-type context (`_inNestedType`).
+		final elemOptBase: Expr = if (plan.forceMultiInTypedef())
+			macro _clearNestedType(_clearTypedefBody(opt), opt);
+		else if (plan.propagateExprPosition())
+			macro _setExprPosition(opt);
+		else
+			macro opt;
+		// A call-argument list writes each element with the call rest-probe suppressed, so a nested call stays flat while
+		// the outer call opens its paren; an object-literal or array list clears it, so a nested call wraps on its own line.
+		final elemOptArg: Expr = switch plan.wrapRules() {
+			case 'callParameterWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, true, opt), false, opt);
+			case 'objectLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), false, opt);
+			case 'arrayLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), true, opt);
+			case null: elemOptBase;
+			case _: macro _setParenChainInElement($elemOptBase, false, opt);
+		}
+		_elemCall = macro $i{elemFn}(_t.node, $elemOptArg);
+		// The Star that opted into `@:fmt(forceMultiInTypedef)` takes no cascade indent inside a typedef body
+		// (`opt._inTypedefBody`, cleared per element, so a nested anon still does).
+		_suppressExpr = plan.forceMultiInTypedef()
+			? macro ${suppressAdditionalIndent ?? macro false} || opt._inTypedefBody
+			: suppressAdditionalIndent ?? macro false;
+		_checks = triviaSepCheckExprs(
+			plan.wrapRules(), plan.ignoreSourceNewlinesForWrap(), plan.reflowInExprPosition(), leftCurlyKnob, plan.rightCurly(), mapWrap
+		);
+		_trail = triviaSepTrailExprs(plan.trailingComma(), trailPresentAccess, plan.forceMultiInTypedef(), plan.trailingCommaRemovable());
+		_noTriviaBranch = triviaSepNoTriviaBranch();
+		_forceMultiColsExpr = forceMultiColsFor(plan.wrapRules(), mapWrap, sepText, _suppressExpr);
+		_predicateScan = triviaSepPredicateScanExpr(
+			plan.reflowSourceMultiline(), plan.uniformStmtBlanks(), _elemCall, plan.relocateTrailingComments(), plan.typedefBodyBlanks()
+		);
+		_matrixSucc = triviaSepMatrixSucceedsExpr(
+			plan.arrayMatrixWrap(), openText, closeText, sepText, _trail.appendTrailingCommaExpr, _elemCall
+		);
+		_triviaGrid = triviaSepTriviaGridExpr(plan.arrayMatrixWrap(), _elemCall);
+		_forceMulti = triviaSepForceMultiExpr();
+	}
 
 	/**
 	 * ω-trivia-sep: build the Doc expression for a close-peek `@:trivia`
 	 * Star field with `@:sep` (e.g. `HxObjectLit.fields` and
-	 * `HxExpr.ArrayExpr`). Mirrors `triviaBlockStarExpr` but adds the
+	 * `HxExpr.ArrayExpr`). Mirrors the block-Star emit but adds the
 	 * separator between elements AND drives multi-line vs flat layout
 	 * from source-fidelity signals on the `Trivial<T>` wrapper.
 	 *
@@ -74,309 +160,513 @@ final class TriviaSepLowering {
 	 * because the user wrote them multi-line, not because they
 	 * exceeded line width. Width-driven wrap stays a future slice.
 	 */
-	private static function triviaSepStarExpr(
-		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
-		elemFn: String, openText: String, closeText: String, sepText: String, ?wrapRulesField: String, ?leftCurlyKnob: String,
-		?rightCurlyKnob: String, ?trailPresentAccess: Expr, ?trailingCommaField: String, ?openInsideExpr: Expr, ?closeInsideExpr: Expr,
-		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, ?suppressAdditionalIndent: Expr,
-		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
-		matrixWrap: Bool = false,
-		// ω-typedef-between-fields: opt-in for typedef-RHS anon-body blank
-		// inserts (currently `HxType.Anon` via `@:fmt(typedefBodyBlanks)`).
-		// When true, the force-multi branch reads `opt.typedefBeginType` /
-		// `opt.typedefBetweenFields` gated on `opt._inTypedefBody` to push
-		// blank `_dhl()` after `{` and between adjacent fields. Default
-		// false → every other sep-Star caller is byte-identical.
-		typedefBodyBlanks: Bool = false,
-		// ω-value-yielded-if-tail-barrier (array-element expr-position): when
-		// the sep-Star ctor carries `@:fmt(propagateExprPosition)` (HxExpr.
-		// ArrayExpr), wrap each element's opt arg in `_setExprPosition` so an
-		// array element that is a value-if (`[if (c) a else b, …]`) reads the
-		// expression-position `expressionIfBody` policy and stays glued.
-		// Default false → every other sep-Star caller is byte-identical.
-		propagateExprPosition: Bool = false,
-		// ω-expressionif-collapse (mechanism B): when the sep-Star ctor
-		// carries `@:fmt(reflowInExprPosition)` (HxObjectLit.fields), the
-		// Ignore-mode runtime check (`ignoreCheckExpr`) additionally fires
-		// when `opt._literalReflow` is set, so a source-multiline object
-		// literal that is the direct value of a value-if branch drops its
-		// element `newlineBefore` signals and the wrap cascade collapses it
-		// to single-line. Default false → every other sep-Star caller is
-		// byte-identical.
-		reflowInExprPosition: Bool = false,
-		// ω-multiline-trailing-comma-remove: when the sep-Star ctor carries
-		// `@:fmt(trailingCommaRemovable)` (array literal / object literal /
-		// `new` argument list), the runtime `opt.trailingComma == Remove`
-		// policy drops the BREAK-mode trailing separator — source-present or
-		// knob-added. Default false → the policy cannot reach a construct
-		// whose trailing separator is mandatory (`{ > Base, }`), and every
-		// other sep-Star caller stays byte-identical.
-		trailingCommaRemovable: Bool = false,
-		// ω-uniform-element-blanks: when the sep-Star ctor carries
-		// `@:fmt(uniformStmtBlanks)` (`HxExpr.ArrayExpr`), the
-		// `emptyLines.uniformStatementBlanks` policy also governs the gaps
-		// between adjacent list ELEMENTS — a fully blank interior gap set
-		// collapses, a selective mix or a leading comment keeps the literal
-		// byte-exact. Default false → every other sep-Star caller is
-		// byte-identical.
-		uniformStmtBlanks: Bool = false,
-		// ω-complex-item-count: when the sep-Star ctor carries
-		// `@:fmt(complexItems)` (`HxExpr.ArrayExpr`), classify every element at
-		// the AST layer — call / `new`, call-bearing container literal, or
-		// neither — and thread the per-element codes into `WrapList.emit` as
-		// `complexItemKinds`. Feeds the `complexItemCount >= n` cascade
-		// condition and the fill-mode chunk policy. Default false → no
-		// classification runs and every other sep-Star caller is
-		// byte-identical.
-		complexItems: Bool = false,
-		// ω-mapwrap: when the sep-Star ctor carries
-		// `@:fmt(mapWrapRules('<field>'))` (`HxExpr.ArrayExpr`), a MAP literal
-		// reads THAT cascade instead of the one `wrapRules` names — the fork's
-		// `arrayWrapping` split between `arrayLiteralWrapping` and
-		// `mapLiteralWrapping` on `getBkOpenType == MapLiteral`. The caller
-		// supplies both the field name and the runtime test that decides,
-		// because only it can reach the grammar's own bracket-kind predicate.
-		// Null → every list keeps reading the `wrapRules` cascade, which is
-		// what the writer did before.
-		?mapWrap: WriterLowering.SepStarMapWrap,
-		// `TailComments.rehome_<Elem>` (`TriviaTailRehome.fnRef`) when the element rule carries trivia: a last element
-		// whose source separator the writer drops is laid out as the next parse reads it, with the comment that
-		// followed the separator moved into the element's tail (`DroppedSepComment.last`). Null → the list is written
-		// from the source tree as it was.
-		?tailRehomeFn: Expr,
-		// `@:fmt(relocateTrailingComments)`: under `comments.trailingCommentOverflow: "above"` an element's
-		// overflowing `//` comment may move above it (`triviaSepForceMultiLineExpr`). False → byte-identical.
-		relocateTrailingComments: Bool = false,
-		// The policy after a doc-commented element (`WriterTriviaStarDispatch.afterDocPolicy`); null → no after-doc rule.
-		?afterDocPolicy: Expr
-	): Expr {
-		// noqa: complexity
-		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
-		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
-		// via `delimInsidePolicySpace` and threads the resulting Doc
-		// expression here, the wrap-rules branch wires it into
-		// `WrapList.emit` (parity with the non-trivia path's
-		// `delimInsidePolicySpace` plumbing). Null fall-through keeps
-		// `_de()` — backward-compatible for callers that don't have the
-		// knobs. The ω-bracket-config `@:fmt(bracketKindPad)` runtime
-		// dispatch (`HxExpr.ArrayExpr`) arrives pre-built through the
-		// same two parameters — see `triviaSepStarBuild`.
-		final openInsideDoc: Expr = openInsideExpr ?? macro _de();
-		final closeInsideDoc: Expr = closeInsideExpr ?? macro _de();
-		// ω-bropen-keep-sep / ω-typedef-between-fields / ω-trivia-sep-doc-comment-cascade:
-		// the typedef-blank + doc-comment-cascade Expr builders that the force-multi loop
-		// and `sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the
-		// orchestrator stays under the complexity gate; behaviour byte-identical.
-		final blanks: WriterLowering.SepStarBlanks = triviaSepTypedefBlanksExprs(
-			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks, afterDocPolicy
-		);
-		final keepCurlyBeginExpr: Expr = blanks.keepCurlyBeginExpr;
-		final keepCurlyEndExpr: Expr = blanks.keepCurlyEndExpr;
-		final typedefBeginExpr: Expr = blanks.typedefBeginExpr;
-		final typedefEndExpr: Expr = blanks.typedefEndExpr;
-		final typedefBetweenExpr: Expr = blanks.typedefBetweenExpr;
-		final blankBeforeExpr: Expr = blanks.blankBeforeExpr;
-		final initCurrDocCommentExpr: Expr = blanks.initCurrDocCommentExpr;
-		// ω-typedef-anon-force-multi: when the Star carries
-		// `@:fmt(forceMultiInTypedef)`, the outermost typedef-RHS anon
-		// has flipped `opt._inTypedefBody=true` via the parent Ref's
-		// `propagateTypedefContext`. Per-element writer calls must
-		// CLEAR the flag before recursing so a nested anon
-		// (`typedef T = {a:{b:Int}}` — inner `{b:Int}`) reverts to
-		// default fit-driven wrap. Sister to `_clearAnonFnBody` on the
-		// block-Star path.
-		final elemOptBase: Expr = if (forceMultiInTypedef)
-			// The same write ends a nested-type context (`_inNestedType`): an anon element starts a line of its own.
-			macro _clearNestedType(_clearTypedefBody(opt), opt);
-		else if (propagateExprPosition)
-			macro _setExprPosition(opt);
-		else
-			macro opt;
-		// omega-call-grouprestprobe-subposition (nested call argument, struct-Star
-		// path): a `callParameterWrap` sep-Star is `HxNewExpr.args` (`HxExpr.Call`
-		// goes through `lowerPostfixStar`), so write each element with
-		// `_suppressCallRestProbe` set -- a nested `Call` argument does NOT rest-probe
-		// the outer `new` call's sibling args + trailing `;`; the outer call opens its
-		// paren first and the inner call stays flat. Mirror of the postfix-Star gate.
-		// An object-literal / array sep-Star instead CLEARS the flag: its field-values
-		// / elements each get their own wrapped line, so a nested `Call` there
-		// rest-probes only its own element tail and must stay free to wrap -- otherwise
-		// suppress inherited from an enclosing call-arg (`f({date: g(...)})`) would
-		// leave an over-long field value glued past `maxLineLength`.
-		final elemOptArg: Expr = switch wrapRulesField {
-			case 'callParameterWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, true, opt), false, opt);
-			case 'objectLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), false, opt);
-			case 'arrayLiteralWrap': macro _setParenChainInElement(_setSuppressCallRestProbe($elemOptBase, false, opt), true, opt);
-			case null: elemOptBase;
-			case _: macro _setParenChainInElement($elemOptBase, false, opt);
-		}
-		final triviaElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]), pos: Context.currentPos() };
-		final emptyText: String = openText + closeText;
-		final trailBB: Expr = trailBBAccess ?? macro false;
-
-		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
-		final trailClose: Expr = trailCloseAccess ?? macro (null: Null<String>);
-		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
-		// Head -> body seam: an EMPTY sep-Star renders as `()` with the
-		// close-trailing comment cuddled to it, and the struct's remaining
-		// fields (`HxFnDecl.returnType` / `body`) still follow on the same
-		// Doc line. A line comment there swallows the body's `{`, so route
-		// through the guarded emitter.
+	private function triviaSepStarExpr(): Expr {
+		final emptyText: String = _openText + _closeText;
+		// Head -> body seam: an EMPTY sep-Star renders as `()` with the close-trailing comment cuddled to it, and the
+		// struct's remaining fields still follow on the same Doc line; a line comment there would swallow the body's `{`.
 		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
-		// The fork lays a typedef's RHS out by its own typedef rule, not the anon-type cascade, so the
-		// Star that opted into `@:fmt(forceMultiInTypedef)` takes no cascade indent inside a typedef body
-		// (`opt._inTypedefBody`, cleared per element, so a nested anon still does).
-		final suppressExpr: Expr = forceMultiInTypedef
-			? macro ${suppressAdditionalIndent ?? macro false} || opt._inTypedefBody
-			: suppressAdditionalIndent ?? macro false;
-		// ω-keep-objectlit / ω-cascade-emits-comments / ω-nowrap-flat /
-		// ω-objectlit-leftCurly-cascade / ω-anontype-right-curly: the keep/ignore/
-		// noWrap runtime checks + leftCurly/rightCurly placement Docs the sep-Star
-		// tail consumes. Extracted to `triviaSepCheckExprs` so the orchestrator
-		// stays under the complexity gate; behaviour byte-identical.
-		final checks: WriterLowering.SepStarChecks = triviaSepCheckExprs(
-			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob, mapWrap
-		);
-
-		final ignoreCheckExpr: Expr = checks.ignoreCheckExpr;
-		final noWrapFlatCheckExpr: Expr = checks.noWrapFlatCheckExpr;
-		final noWrapDefaultCheckExpr: Expr = checks.noWrapDefaultCheckExpr;
-		final triviaLeadDoc: Expr = checks.triviaLeadDoc;
-		final wrapLeadFlatDoc: Expr = checks.wrapLeadFlatDoc;
-		final wrapLeadBreakDoc: Expr = checks.wrapLeadBreakDoc;
-		final wrapTrailBreakDoc: Expr = checks.wrapTrailBreakDoc;
-		final triviaTrailDoc: Expr = checks.triviaTrailDoc;
-		// ω-wraprules-objlit: when the Star carries
-		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
-		// layout decision to the runtime `WrapList.emit` engine. The
-		// engine reads `opt.<field>:WrapRules`, measures item count +
-		// flat widths, and emits one of `NoWrap` / `OnePerLine` /
-		// `OnePerLineAfterFirst` / `FillLine` shapes — wrapping the
-		// result in `Group(IfBreak(brkDoc, flatDoc))` when the cascade's
-		// `exceeds=false` and `exceeds=true` runs disagree, so the
-		// renderer's flat/break decision picks the right mode at layout
-		// time. When `wrapRulesField` is null, the no-trivia branch
-		// keeps its pre-slice flat-only emission.
-		//
-		// ω-objectlit-source-trail-comma: when both `trailPresentAccess`
-		// and `trailingCommaField` are wired, the engine receives a
-		// `forceExceeds` flag = `<value>.<field>TrailPresent &&
-		// opt.<trailingCommaField>`. When true, the cascade collapses to
-		// its `exceeds=true` branch — typically `OnePerLine` — so the
-		// source's "I want this multi-line" intent (a trailing separator)
-		// round-trips instead of being silently flattened. The same
-		// `opt.<trailingCommaField>` value is forwarded as
-		// `appendTrailingComma` so the multi-line shape's last element
-		// gets its `,`. When the knob is off the conjunction stays false
-		// and `appendTrailingComma` is false — behaviour is byte-
-		// identical to the pre-slice path.
-		final trail: WriterLowering.SepStarTrailExprs = triviaSepTrailExprs(
-			trailingCommaField, trailPresentAccess, forceMultiInTypedef, trailingCommaRemovable
-		);
-		final forceExceedsExpr: Expr = trail.forceExceedsExpr;
-		final appendTrailingCommaExpr: Expr = trail.appendTrailingCommaExpr;
-		final flatTrailingCommaExpr: Expr = trail.flatTrailingCommaExpr;
-
-		final forceModeExpr: Expr = trail.forceModeExpr;
-		final noTriviaBranch: Expr = triviaSepNoTriviaBranch({
-			openText: openText,
-			closeText: closeText,
-			sepText: sepText,
-			wrapRulesField: wrapRulesField,
-			mapWrap: mapWrap,
-			suppressAdditionalIndent: suppressExpr,
-			matrixWrap: matrixWrap,
-			groupRestProbe: groupRestProbe,
-			triviaElemCall: triviaElemCall,
-			openInsideDoc: openInsideDoc,
-			closeInsideDoc: closeInsideDoc,
-			appendTrailingCommaExpr: appendTrailingCommaExpr,
-			wrapLeadFlatDoc: wrapLeadFlatDoc,
-			wrapLeadBreakDoc: wrapLeadBreakDoc,
-			forceExceedsExpr: forceExceedsExpr,
-			wrapTrailBreakDoc: wrapTrailBreakDoc,
-			forceModeExpr: forceModeExpr,
-			flatTrailingCommaExpr: flatTrailingCommaExpr,
-			reflowSourceMultiline: reflowSourceMultiline,
-			complexItems: complexItems,
-			deferUnderIgnore: openText == '{' && !reflowInExprPosition
-		});
-		final sepCtx: WriterLowering.SepStarCtx = {
-			openText: openText,
-			closeText: closeText,
-			sepText: sepText,
-			triviaElemCall: triviaElemCall,
-			initCurrDocCommentExpr: initCurrDocCommentExpr,
-			keepCurlyBeginExpr: keepCurlyBeginExpr,
-			keepCurlyEndExpr: keepCurlyEndExpr,
-			typedefBeginExpr: typedefBeginExpr,
-			typedefEndExpr: typedefEndExpr,
-			typedefBetweenExpr: typedefBetweenExpr,
-			blankBeforeExpr: blankBeforeExpr,
-			appendTrailingCommaExpr: appendTrailingCommaExpr,
-			flatTrailingCommaExpr: flatTrailingCommaExpr,
-			triviaLeadDoc: triviaLeadDoc,
-			triviaTrailDoc: triviaTrailDoc,
-			noTriviaBranch: noTriviaBranch,
-			reflowSourceMultiline: reflowSourceMultiline,
-			matrixWrap: matrixWrap,
-			uniformStmtBlanks: uniformStmtBlanks,
-			relocateTrailingComments: relocateTrailingComments,
-			forceMultiColsExpr: forceMultiColsFor(wrapRulesField, mapWrap, sepText, suppressExpr)
-		}
-		final predicateScan: Expr = triviaSepPredicateScanExpr(
-			reflowSourceMultiline, uniformStmtBlanks, triviaElemCall, relocateTrailingComments, typedefBodyBlanks
-		);
-		final matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
-			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
-		);
-		final dispatchCtx: WriterLowering.SepStarDispatchCtx = {
-			reflowSourceMultiline: reflowSourceMultiline,
-			bracedList: openText == '{',
-			matrixWrap: matrixWrap,
-			uniformStmtBlanks: uniformStmtBlanks,
-			ignoreCheckExpr: ignoreCheckExpr,
-			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
-			noWrapDefaultCheckExpr: noWrapDefaultCheckExpr,
-			predicateScanExpr: predicateScan,
-			matrixSucceedsExpr: matrixSucc,
-			triviaGridExpr: triviaSepTriviaGridExpr(matrixWrap, triviaElemCall),
-			forceMultiExpr: triviaSepForceMultiExpr(sepCtx),
-			noTriviaBranch: noTriviaBranch
-		}
 		final body: Expr = macro {
-			final _trailLC: Array<String> = $trailLC;
-			final _trailBB: Bool = $trailBB;
-
-			final _trailClose: Null<String> = $trailClose;
-			final _trailOpen: Null<String> = $trailOpen;
-			// ω-open-trailing-alt: empty Star with only a same-line block-
-			// style trail comment after the open lit (`[ /* foo */ ]`,
-			// `{ /* nop */ }`) emits flat tight `[<comment>]`. Line-style
-			// `_trailOpen` ALWAYS arrives with a source newline before the
-			// close (`// …` would otherwise consume `]` as comment body),
-			// so it falls through to the multi-line path. The block-style
-			// gate also rules out the `[ /* foo */\n]` case — the source
-			// newline lands in the loop's terminal `_lead`, but that path
-			// has no element to attach to and currently degrades; if/when
-			// we synth a "newlineBeforeClose" slot, this gate tightens.
+			${trailSlotDecls()};
+			// ω-open-trailing-alt: an empty Star whose only trivia is a block-style comment after the open literal emits
+			// flat and tight (`[/* foo */]`); a line-style one always arrives with a newline before the close.
 			if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen != null && StringTools.startsWith(_trailOpen, '/*')) {
-				${triviaSepEmptyOpenTrailExpr(openText, closeText)};
+				${triviaSepEmptyOpenTrailExpr(_openText, _closeText)};
 			} else if (_arr.length == 0 && _trailLC.length == 0 && _trailOpen == null) {
 				if (_trailClose != null)
 					$emptyTrailExpr
 				else
 					_dt($v{emptyText});
 			} else {
-				${triviaSepDispatchExpr(dispatchCtx)};
+				${triviaSepDispatchExpr()};
 			}
 		};
 		// The rehomed list keeps reading the source `trailPresent`: a separator is only dropped under the `Remove` veto, and
 		// every layout that reads source presence is vetoed with it.
 		return switch body.expr {
-			case EBlock(stmts):
-				{ expr: EBlock(triviaSepArrDecls(fieldAccess, tailRehomeFn, appendTrailingCommaExpr).concat(stmts)), pos: body.pos };
+			case EBlock(stmts): macro $b{triviaSepArrDecls(_fieldAccess, _tailRehomeFn, _trail.appendTrailingCommaExpr).concat(stmts)};
 			case _: throw 'triviaSepStarExpr: the emitted body is not a block';
+		};
+	}
+
+	/**
+	 * Sep-Star force-multi emit (the `_forceMulti` dispatch arm): per-element
+	 * leading break + blank + leading comments + element + separator/trailing
+	 * assembly, the orphan-trail-comment tail, and the open/inner/close parts
+	 * wrap. Splices the per-element leaf builders + the ctx Expr fragments.
+	 * References the runtime locals declared in `triviaSepStarExpr`'s emitted
+	 * scope. Extracted so the orchestrator stays under the complexity gate.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function triviaSepForceMultiExpr(): Expr {
+		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr(_plan.arrayMatrixWrap());
+		// A kept grid's cell takes its column pad right before its text, after any comment that leads it.
+		final gridPadExpr: Expr = _plan.arrayMatrixWrap() ? macro if (_gridPads != null && _gridPads[_si] > 0)
+			_inner.push(_dt(StringTools.lpad('', ' ', _gridPads[_si]))) : macro {};
+		final lineExpr: Expr = triviaSepForceMultiLineExpr(
+			_trail.appendTrailingCommaExpr, _trail.flatTrailingCommaExpr, _sepText, _plan.relocateTrailingComments()
+		);
+		final balcEmitExpr: Expr = triviaBalcEmitExpr(_plan.uniformStmtBlanks());
+		return macro {
+			final _inner: Array<anyparse.core.Doc> = [];
+			final _fmDocs: Array<anyparse.core.Doc> = [];
+			${_blanks.initCurrDocCommentExpr};
+			${_blanks.keepCurlyBeginExpr};
+			${_blanks.typedefBeginExpr};
+			var _si: Int = 0;
+			while (_si < _arr.length) {
+				final _t = _arr[_si];
+				$leadBreakExpr;
+				${_blanks.blankBeforeExpr};
+				${_blanks.typedefBetweenExpr};
+				var _ci: Int = 0;
+				while (_ci < _t.leadingComments.length) {
+					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
+					// ω-643-leading-block-glue: the LAST leading comment
+					// keeps the element on its line (single space, no
+					// break) when the source glued a block-style comment
+					// to it (`/* c */ field` — `leadingCommentsGlued`).
+					// Line-style `//` always ends its line → never glued.
+					// Intermediate comments and the non-glued case keep
+					// the legacy hardline. Default-false (every non-trivia
+					// -sep-Star producer) preserves the pre-slice break.
+					final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
+					final _glueLead: Bool = _isLastLead
+						&& _t.leadingCommentsGlued == true
+						&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
+					_inner.push(_glueLead ? _dt(' ') : _dhl());
+					_ci++;
+				}
+				$balcEmitExpr;
+				$gridPadExpr;
+				final _elem: anyparse.core.Doc = $_elemCall;
+				_fmDocs.push(_elem);
+				$lineExpr;
+				_si++;
+			}
+			${_blanks.keepCurlyEndExpr};
+			if (_trailLC.length > 0) {
+				_inner.push(_dhl());
+				if (_trailBB && _arr.length > 0) _inner.push(_dhl());
+				var _tii: Int = 0;
+				while (_tii < _trailLC.length) {
+					_inner.push(leadingCommentDocRun(_trailLC, _tii, opt));
+					if (_tii < _trailLC.length - 1) _inner.push(_dhl());
+					_tii++;
+				}
+			}
+			${_blanks.typedefEndExpr};
+			final _cols: Int = $_forceMultiColsExpr;
+			final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
+			final _parts: Array<anyparse.core.Doc> = [];
+			_parts.push(${_checks.triviaLeadDoc});
+			_parts.push(_dt($v{_openText}));
+			if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
+			_parts.push(_innerWrap);
+			// ω-nowrap-flat: glue the close delimiter to the last
+			// element (`0]`) — the fork's `noWrap()` calls
+			// `noLineEndBefore(close)`. Only when the list actually
+			// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
+			// own-line close (`triviaTrailDoc`).
+			_parts.push(_noWrapFlatten ? _de() : ${_checks.triviaTrailDoc});
+			_parts.push(_dt($v{_closeText}));
+			// ω-sep-star-close-trail: guarded, not verbatim — a `//` close-trailing
+			// ends its source line, and the enclosing list glues its separator
+			// after this Doc (`} // c` + `,` became the comment text `} // c,`).
+			// The guard is forward-looking and drops when the next emit is
+			// already a hardline, so a close-trailing with nothing after it on
+			// the line stays byte-identical.
+			if (_trailClose != null) _parts.push(trailingCommentDocGuarded(_trailClose, opt));
+			// ω-force-flat-engine slice D follow-up: trivia branch builds
+			// hardlined Doc by hand instead of going through one of the 4
+			// cascade-emit functions Slice C wraps. Without `_dwb` here a
+			// trivia-bearing inner construct nested inside a NoWrap-cascade
+			// `Flatten` region loses its source-preserved indent (the
+			// hardlines fire but `Nest`'s columns are dropped by force-flat).
+			// WrapBoundary is no-op when the parent frame is not in force-flat
+			// mode, so this wrap is safe on the non-nested common path.
+			_dwb(_dbg(_dc(_parts)));
+		};
+	}
+
+	/**
+	 * Sep-Star no-trivia (wrap-cascade) branch builder: the `wrapRulesField !=
+	 * null` arm wraps each per-element Doc with its leading/trailing comments,
+	 * attempts a matrix grid, and defers layout to `WrapList.emit`; the null
+	 * arm falls back to the space-joined flat layout.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function triviaSepNoTriviaBranch(): Expr {
+		// noqa: complexity
+		final gluedLeadExpr: Expr = triviaSepGluedLeadExpr();
+		// ω-complex-item-count: the per-element AST classification, computed
+		// once over the captured element array. `null` when the Star does not
+		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
+		// policy stays off, so the emit call is byte-identical.
+		final complexKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _arr]);
+		final containerKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.CONTAINER_ITEM_KINDS_PRED, [macro cast _arr]);
+		final complexKindsDecl: Expr = _plan.complexItems()
+			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall
+			: macro final _complexKinds: Null<Array<Int>> = null;
+		final containerKindsDecl: Expr = _plan.complexItems()
+			? macro final _containerKinds: Null<Array<Null<Array<Int>>>> = _complexKinds == null ? null : $containerKindsCall
+			: macro final _containerKinds: Null<Array<Null<Array<Int>>>> = null;
+		return if (_plan.wrapRules() != null) {
+			final rulesExpr: Expr = wrapRulesAccess(_plan.wrapRules(), _mapWrap);
+			// ω-arraymatrix-wrap: when the Star opted into
+			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the
+			// runtime policy preserves the source grid, attempt a one-pass
+			// grid layout BEFORE the wrap cascade. The matrix detector reads
+			// per-element `newlineBefore` (row boundaries) and the rendered
+			// cell widths; on a uniform matrix (>=2 columns, equal rows, no
+			// multi-line cell) it returns the aligned/unaligned grid Doc,
+			// which is wrapped in BodyGroup (sister to the `_smlKeep` path)
+			// so an enclosing Group's `fitsFlat` defers the grid's hardlines
+			// and the call/assign context stays inline. `tryLayout` returns
+			// null for non-matrix shapes → fall through to the cascade.
+			// Gated on the same source-multiline-without-blocking-trivia
+			// condition as `_smlKeep`; only fires when `matrixWrap` is set,
+			// so every other sep-Star consumer is byte-identical (`macro {}`).
+			final matrixComputeExpr: Expr = _plan.arrayMatrixWrap()
+				? macro {
+					// The grid is the one layout built from the source rows, so `Ignore`, whose output is a function
+					// of the AST and the cascade, never reads them. `MatrixWrap.tryLayout` returns null unless the
+					// rows form a uniform grid of at least two columns, so no other guard is needed.
+					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline && !_ignoreEmit) {
+						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
+						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+						_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(
+							_docs, _rowStart, opt.arrayMatrixWrap, $v{_openText}, $v{_closeText}, $v{_sepText},
+							${_trail.appendTrailingCommaExpr}, _mcols
+						);
+					}
+				}
+				: macro {};
+			// ω-cascade-emits-comments: wrap each per-element Doc with its
+			// leading comments (a glued single-line block comment followed by a space, any other by a hardline) and an inline
+			// block-style trailing comment (line-style trailings are not
+			// cascade-emittable — the engine inserts the separator AFTER
+			// the item, which would land INSIDE a `// ...` line comment;
+			// those route to the force-multi branch via `_requiresHardline`
+			// in the predicate split below). When the element has no
+			// trivia, `_parts.length==1`
+			// collapses to the bare
+			// `_elemBase` Doc.
+			final keptListCountsInFit: Expr = _plan.reflowSourceMultiline() ? macro opt._keptListCountsInFit : macro false;
+			macro {
+				final _docs: Array<anyparse.core.Doc> = [];
+				// ω-sep-faithful: per-pair `sepBefore` flags so `WrapList.emit`
+				// can suppress the engine's inter-element comma when the
+				// source elided it (canonical: `HxParam.Conditional` body
+				// leading-sep elides the outer `,` ahead of the `#if`).
+				// `_sepBeforeFlags[i] = !_arr[i-1].sepAfter` for i >= 1;
+				// slot 0 is unused. Trailing-comma stays on the existing
+				// `appendTrailingComma` axis.
+				final _sepBeforeFlags: Array<Bool> = [];
+				// A block trailing comment captured AFTER the separator
+				// (trailingBeforeSep == false) is deferred here and emitted as
+				// an inline leading prefix of the NEXT item, so WrapList.emit
+				// places it after the comma, matching the force-multi path's
+				// after-sep emission (see triviaSepForceMultiLineExpr).
+				var _pendingAfterSep: Null<String> = null;
+				var _si2: Int = 0;
+				while (_si2 < _arr.length) {
+					final _t = _arr[_si2];
+					_sepBeforeFlags.push(_si2 != 0 && !_arr[_si2 - 1].sepAfter);
+					final _elemBase: anyparse.core.Doc = $_elemCall;
+					final _parts: Array<anyparse.core.Doc> = [];
+					if (_pendingAfterSep != null) {
+						_parts.push(leadingCommentDoc(_pendingAfterSep, opt));
+						_parts.push(_dt(' '));
+						_pendingAfterSep = null;
+					}
+					// Single-line block comments the source glued to the element stay on its
+					// line (`triviaSepGluedLeadExpr`); every other leading comment ends its line.
+					final _glueLeads: Bool = $gluedLeadExpr;
+					var _ci2: Int = 0;
+					while (_ci2 < _t.leadingComments.length) {
+						_parts.push(leadingCommentDocRun(_t.leadingComments, _ci2, opt));
+						_parts.push(_glueLeads ? _dt(' ') : _dhl());
+						_ci2++;
+					}
+					_parts.push(_elemBase);
+					final _tc2: Null<String> = _t.trailingComment;
+					if (_tc2 != null && StringTools.startsWith(_tc2, '/*')) {
+						if (_t.trailingBeforeSep || _si2 == _arr.length - 1)
+							_parts.push(trailingCommentDocVerbatim(_tc2, opt));
+						else
+							_pendingAfterSep = _tc2;
+					}
+					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
+					_si2++;
+				}
+				// ω-arraymatrix-wrap: grid layout attempt before the cascade.
+				// `_matrixDoc` stays null for non-matrix shapes (or when the
+				// flag is off — `matrixComputeExpr` is then `macro {}`), so the
+				// trailing expression falls through to the wrap cascade.
+				var _matrixDoc: Null<anyparse.core.Doc> = null;
+				$matrixComputeExpr;
+				// ω-comprehension-fitline: a for/while comprehension under
+				// comprehensionFor:fitLine (padded brackets) is fit-driven. Use the fit
+				// cascade instead of the generic arrayWrap fixed thresholds (which break the
+				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
+				// source-multiline-keep so an already-wrapped but fitting comprehension
+				// reflows flat (fork parity) rather than staying pinned open.
+				// ω-comprehension-fit-measure: `_comprehensionFit` also rides into
+				// `WrapList.emit` as `comprehensionFitMeasure`, which charges the fit
+				// decision the same-line tail after `]`.
+				// ω-comprehension-body-measure: `_isComprehension` rides in SEPARATELY as
+				// `comprehensionBodyMeasure`, which re-tags each item's hardline-free
+				// `BodyGroup`s as `Group` so a width-only cascade sees the generator body it
+				// would otherwise defer to 0. That under-measure belongs to every cascade, not
+				// to the fit one — `wrapping.arrayWrap`'s `totalItemLength <= n` is just as
+				// width-blind — so it rides on the WIDER flag. `_comprehensionFit` implies
+				// `_isComprehension` by the line below, so that is a strict widening.
+				final _isComprehension: Bool = $v{_plan.reflowSourceMultiline()}
+					&& _arr.length > 0
+					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
+				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
+				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
+					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
+					: $rulesExpr;
+				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
+				// ω-flat-source-fixed-point: this branch is reached only when the source
+				// list carried NO newline of its own, and (for a Star without
+				// `@:fmt(reflowSourceMultiline)`) a source newline is exactly what the
+				// force-multi path answers with one-per-line. So a cascade answer that
+				// BREAKS here would be re-read as author intent by the very next pass and
+				// overridden — `fmt` would need two rewrites and `writeRoundTrip(s) == s`
+				// would fail after one. Collapse such an answer to one-per-line, which is
+				// the shape that second pass produces anyway: same final bytes, one pass
+				// earlier. Ignore drops the source layout and is a fixed point already; a
+				// reflow Star routes its multiline lists through the same cascade, so both
+				// passes agree there too.
+				final _breakAsOnePerLine: Bool = !$v{_plan.reflowSourceMultiline()} && !_ignoreEmit;
+				// Under Ignore no next pass commits a braced list, but a hardline-carrying answer is the
+				// same measure question for a host: counted, it would wrap a signature around a broken list.
+				final _deferIfHardline: Bool = _breakAsOnePerLine || $v{(_openText == '{' && !_plan.reflowInExprPosition())} && _ignoreEmit;
+				$complexKindsDecl;
+				$containerKindsDecl;
+				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
+					$v{_openText}, $v{_closeText}, $v{_sepText}, _docs, opt, $_openInsideDoc, $_closeInsideDoc, false, _effRules, {
+						appendTrailingComma: ${_trail.appendTrailingCommaExpr},
+						leadFlat: ${_checks.wrapLeadFlatDoc},
+						leadBreak: ${_checks.wrapLeadBreakDoc},
+						forceExceeds: ${_trail.forceExceedsExpr},
+						trailBreak: ${_checks.wrapTrailBreakDoc},
+						forceMode: ${_trail.forceModeExpr},
+						suppressAdditionalIndent: $_suppressExpr,
+						// ω-pattern-rest-probe: gated at RUNTIME, unlike its macro-time
+						// sibling at `WriterLowering`'s postfix-Star `Call` site, because
+						// the flag is a property of the descent and not of the Star. A
+						// case-PATTERN subtree declines the rest-of-line fit bias entirely,
+						// so an object-literal pattern is not charged the trailing
+						// `if (guard)` and the guard breaks instead.
+						groupRestProbe: $v{_plan.groupRestProbe()} && !opt._suppressPatternRestProbe,
+						sepBeforeFlags: _sepBeforeFlags,
+						sourceMultilineKeep: _effSmlKeep,
+						breakAsOnePerLine: _breakAsOnePerLine,
+						flatTrailingComma: ${_trail.flatTrailingCommaExpr},
+						comprehensionFitMeasure: _comprehensionFit,
+						comprehensionBodyMeasure: _isComprehension,
+						complexItemKinds: _complexKinds,
+						containerItemKinds: _containerKinds,
+						redecided: $v{_openText == '{'} && _ignoreEmit
+					}
+				);
+				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
+				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
+				// idempotency: a COMPACT source comprehension lowers to a bare counted `Group`
+				// (full flat width in a parent's `flatTokenWidth`), while a pre-EXPLODED one
+				// takes the `_smlKeep` path → `BodyGroup`, which `flatTokenWidth` defers to
+				// width 0. So the SAME comprehension AST measures wide on one pass and ~0 on
+				// the next → a wrap decision in an enclosing method-chain / `+` operator flips
+				// between passes. Force a comprehension to ALWAYS count (bare `Group`, real
+				// width) so the parent measure is trivia-independent and its wrap decision is
+				// stable. (Deferring to width 0 instead — the sister pre-exploded path — was
+				// tried and REGRESSED: an enclosing call then under-measures, commits to flat,
+				// and overflows into a mangled break — see
+				// `testChainOwnedArrayPastSoftBreakLeadingBreaks`.) Detect by AST structure
+				// (first element a `HxComprehension.GENERATOR_CTORS` ctor), gated on the compile-time
+				// `reflowSourceMultiline` array-Star flag so the `Type.enumConstructor` probe
+				// never runs on a non-array Star (whose element node is a non-enum struct →
+				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
+				// behaviour untouched.
+				// A list the one-per-line collapse (`_breakAsOnePerLine`) committed at build time is
+				// the same question from the other side: the next pass reads its newlines and takes
+				// the force-multi path, whose Doc is a `BodyGroup`, so it is that `BodyGroup` on this
+				// pass already; a chain or an arrow around it measured it full-width once and deferred
+				// the next time. Only a result carrying a hardline (`flatLength < 0`): an answer the
+				// RENDERER still decides stays counted, as the next pass may read it back flat.
+				// A construct-fit group counts a kept multi-line array too: it is what the group's own
+				// ladder wrote on the previous pass, and deferring it there would flip the verdict.
+				_matrixDoc != null
+					? _dbg(_matrixDoc)
+					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)
+						&& !_isComprehension
+						&& !$keptListCountsInFit
+						? _dbg(_wlResult)
+						: _wlResult;
+			};
+		} else {
+			triviaSepFlatBranch(_openText, _closeText, _sepText, _elemCall);
+		};
+	}
+
+	/**
+	 * Sep-Star non-empty-list dispatch block: derives the keep/ignore/noWrap/
+	 * forceMulti predicates (via the predicate-split machinery) and routes the
+	 * list to the keep-matrix grid, the force-multi loop, or the no-trivia
+	 * cascade. References the runtime `_arr`/`_trailLC`/`_trailOpen` locals.
+	 *
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private function triviaSepDispatchExpr(): Expr {
+
+		// ω-uniform-element-blanks: the `_uniformCollapse` pre-pass, shared with
+		// the block-Star statement policy. Declared BEFORE the predicate scan
+		// (which reads it) and before the force-multi loop's blank guard.
+		// `macro {}` for every non-opted sep-Star.
+		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(_plan.uniformStmtBlanks());
+		final sourceNewlines: { decl: Expr, read: Expr, scan: Expr } = triviaSepSourceNewlines(_plan.reflowSourceMultiline());
+		final sourceNewlinesDecl: Expr = sourceNewlines.decl;
+		final sourceNewlinesRead: Expr = sourceNewlines.read;
+		return macro {
+			// ω-cascade-emits-comments: decompose `_hasTrivia` into three
+			// orthogonal predicates so the Ignore-mode cascade can ingest
+			// per-element block comments.
+			//
+			//  - `_requiresHardline` — physical hardline requirement:
+			//    `_trailLC`/`_trailOpen` on the open/close boundary, any
+			//    blank line before an element, leading comments (when
+			//    NOT in ignore mode), and trailing LINE comments (any
+			//    mode — engine inserts the sep AFTER the item, which
+			//    would land inside `// ...`). Anything in this bucket
+			//    MUST route through the force-multi branch.
+			//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
+			//    least one element of a reflow array (no other Star
+			//    declares it). Independent axis. Under
+			//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
+			//    policy ignores source newlines and lets width drive
+			//    layout); legacy default still flips `_hasTrivia=true`.
+			//  - `_hasInlineableTrivia` — at least one element carries a
+			//    leading comment OR a block-style trailing comment, AND
+			//    `_ignoreEmit` is live. These are cascade-emittable: the
+			//    no-trivia branch wraps each item Doc with its leading
+			//    comments + inline block trailing before passing to
+			//    `WrapList.emit`. Routes the item to cascade (not
+			//    force-multi) when no `_requiresHardline` blocker fires.
+			//
+			// Byte-identity for `_ignoreEmit=false`: comments still set
+			// `_requiresHardline=true` (legacy bucket); cascade rewrite
+			// at the no-trivia branch collapses to `_docs.push(_elem)`
+			// because `_parts.length==1` on no-comment elements.
+			final _ignoreEmit: Bool = ${_checks.ignoreCheckExpr};
+			// The cascade writes a first element's inline leading comment right after the open delimiter, where the next
+			// parse takes it as the open trail; reading it back as that lead keeps the layout a fixed point.
+			final _openGlued: Bool = _ignoreEmit && anyparse.runtime.OpenGluedComment.leads(_arr, _trailOpen);
+			final _arr = _openGlued ? anyparse.runtime.OpenGluedComment.first(_arr, _trailOpen ?? '') : _arr;
+			final _trailOpen: Null<String> = _openGlued ? null : _trailOpen;
+			// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
+			// to Ignore (a single `defaultMode`, so this only ever flips for
+			// an actual NoWrap config). Scoped to the
+			// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
+			// flag (the only Star carrying it). Other lists under a `noWrap`
+			// fallback go flat through the scan, which counts no source
+			// break for them. Drives the fork's `noWrap()`
+			// flat-with-comment-break layout below.
+			final _noWrapRules: Bool = ${_checks.noWrapFlatCheckExpr};
+			final _noWrapDefault: Bool = ${_checks.noWrapDefaultCheckExpr};
+			final _noWrapFlat: Bool = $v{_plan.reflowSourceMultiline()} && _noWrapRules && !_ignoreEmit;
+			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
+			// entirely — like the `Ignore` policy it DROPS source newlines
+			// so the cascade (not the force-multi path) drives layout: a
+			// short matrix-shaped array collapses flat, a wide one width-
+			// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
+			// compile-time flag); every other consumer leaves it false.
+			final _matrixOff: Bool = $v{_plan.arrayMatrixWrap()} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
+			$uniformCollapseInitExpr;
+			var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
+			$sourceNewlinesDecl;
+			var _hasInlineableTrivia: Bool = false;
+			// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
+			// element list. Two kinds of item make a list NON-flattenable,
+			// mirroring the fork (`MarkWrapping.arrayLiteralWrapping`):
+			//  - a `for`/`while` ARRAY-COMPREHENSION item: the fork returns
+			//    early from `arrayLiteralWrapping` when the first item is
+			//    `Kwd(KwdFor)`/`Kwd(KwdWhile)` under `comprehensionFor: keep`,
+			//    leaving the comprehension's layout to the sameLine/forBody
+			//    policy — so the noWrap arrayWrap rule never touches it.
+			//  - an item that renders with its own forced hardline (block
+			//    body, etc.): cannot be cuddled flat (the inner construct
+			//    keeps its mandatory breaks). Probed via
+			//    `WrapList.flatLength(item) < 0`, the same "has forced
+			//    hardline" signal the cascade's `HasMultilineItems` uses.
+			// Both flow into `_anyMultilineItem`, which gates the flatten
+			// off → such lists keep the legacy `_smlKeep`/force-multi shape.
+			// Only computed under `_noWrapFlat` (every other path leaves it
+			// false → no extra per-element render / reflection).
+			var _anyMultilineItem: Bool = false;
+			$_predicateScan;
+			final _hasTrivia: Bool = _requiresHardline || $sourceNewlinesRead;
+			// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
+			// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
+			// `applyWrappingPlace`). Probe whether the source rows form a
+			// uniform grid; if so, leave `_noWrapFlatten` off so the array
+			// flows to the existing `_smlKeep` / no-trivia matrix path
+			// (column-aligned grid). Only computed for a matrix-eligible
+			// Star (`matrixWrap`) under noWrap with no comment/blank
+			// hardline; every other path leaves it false.
+			// A grid whose blank lines or comments need hardlines keeps its rows in the force-multi loop: `_gridPads`
+			// holds each cell's leading pad and `_gridRun` the column count, null and 0 for every other list.
+			var _gridRun: Int = 0;
+			final _gridPads: Null<Array<Int>> = $_triviaGrid;
+			final _matrixSucceeds: Bool = $_matrixSucc || _gridPads != null;
+			// ω-array-reflow: when the Star opted into
+			// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
+			// signal is bare source newlines (no hardline-requiring
+			// trivia, no Ignore policy), divert away from the
+			// force-multi (one-`_dhl()`-per-element) path and let the
+			// wrap cascade re-flow the list. `_smlKeep` gates that
+			// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
+			// then guarantees the cascade never collapses such a list
+			// fully flat (NoWrap → OnePerLine), so the source's
+			// "stay multi-line" intent is honoured while width-driven
+			// packing (FillLine / FillLineWithLeadingBreak) applies.
+			// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
+			// already forced false above, so `_smlKeep` collapses here and
+			// the cascade drives layout — no extra gate needed.
+			// ω-nowrap-flat: under an explicit pure-`noWrap` array config a
+			// source-multiline list whose items carry NO intrinsic hardline
+			// (`_anyMultilineItem`: a `for`/`while` comprehension or a
+			// hardline-bearing item) AND that is not a uniform matrix grid
+			// (`_matrixSucceeds`) must collapse to the fork's `noWrap()` flat
+			// shape — every element cuddled, the close glued, and the only
+			// break the one a `//` line-comment forces. Both the comment
+			// case (`_requiresHardline` via a line-comment) and the plain
+			// case route through the FORCE-MULTI per-element loop below: its
+			// `_noWrapFlatten` branch
+			// lays the list out flat AND preserves the source trailing comma
+			// (`appendTrailingCommaExpr`) — which the no-trivia cascade's
+			// `shapeNoWrap` would have dropped. A comprehension / multi-line
+			// item or a matrix-grid array keeps the legacy `_smlKeep` reflow
+			// (its layout is owned by another path).
+			final _noWrapFlatten: Bool = _noWrapFlat && !_anyMultilineItem && !_matrixSucceeds;
+			// ω-nowrap-flat: `_smlKeep` reflow stays ON for a comprehension /
+			// multi-line-item / matrix noWrap array — those keep their HEAD
+			// source-multiline shape. It is disabled ONLY when the array
+			// actually flattens (`_noWrapFlatten`), so the flatten routes
+			// through the force-multi flat loop below instead of reflow.
+			final _smlKeep: Bool = $v{_plan.reflowSourceMultiline()}
+				&& $sourceNewlinesRead
+				&& !_requiresHardline
+				&& !_ignoreEmit
+				&& !_noWrapFlatten;
+			final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
+			if (_forceMulti) {
+				$_forceMulti;
+			} else {
+				${redecidedWhenIgnored(_openText == '{', triviaSepCloseTrailAppendExpr(_noTriviaBranch))};
+			}
 		};
 	}
 
@@ -510,117 +800,6 @@ final class TriviaSepLowering {
 			if (_emitSep) _line = _dc([_line, _dt($v{sepText})]);
 			if (_tc != null && !_t.trailingBeforeSep) _line = _dc([_line, trailingCommentDocVerbatim(_tc, opt)]);
 			$pushExpr;
-		};
-	}
-
-	/**
-	 * Sep-Star force-multi emit (the `_forceMulti` dispatch arm): per-element
-	 * leading break + blank + leading comments + element + separator/trailing
-	 * assembly, the orphan-trail-comment tail, and the open/inner/close parts
-	 * wrap. Splices the per-element leaf builders + the ctx Expr fragments.
-	 * References the runtime locals declared in `triviaSepStarExpr`'s emitted
-	 * scope. Extracted so the orchestrator stays under the complexity gate.
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaSepForceMultiExpr(c: WriterLowering.SepStarCtx): Expr {
-		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
-		final keepCurlyBeginExpr: Expr = c.keepCurlyBeginExpr;
-		final typedefBeginExpr: Expr = c.typedefBeginExpr;
-		final blankBeforeExpr: Expr = c.blankBeforeExpr;
-		final typedefBetweenExpr: Expr = c.typedefBetweenExpr;
-		final keepCurlyEndExpr: Expr = c.keepCurlyEndExpr;
-		final typedefEndExpr: Expr = c.typedefEndExpr;
-		final triviaLeadDoc: Expr = c.triviaLeadDoc;
-		final triviaTrailDoc: Expr = c.triviaTrailDoc;
-		final triviaElemCall: Expr = c.triviaElemCall;
-		final leadBreakExpr: Expr = triviaSepForceMultiLeadExpr(c.matrixWrap);
-		// A kept grid's cell takes its column pad right before its text, after any comment that leads it.
-		final gridPadExpr: Expr = c.matrixWrap ? macro if (_gridPads != null && _gridPads[_si] > 0)
-			_inner.push(_dt(StringTools.lpad('', ' ', _gridPads[_si]))) : macro {};
-		final lineExpr: Expr = triviaSepForceMultiLineExpr(
-			c.appendTrailingCommaExpr, c.flatTrailingCommaExpr, c.sepText, c.relocateTrailingComments
-		);
-		final balcEmitExpr: Expr = triviaBalcEmitExpr(c.uniformStmtBlanks);
-		final forceMultiColsExpr: Expr = c.forceMultiColsExpr;
-		return macro {
-			final _inner: Array<anyparse.core.Doc> = [];
-			final _fmDocs: Array<anyparse.core.Doc> = [];
-			$initCurrDocCommentExpr;
-			$keepCurlyBeginExpr;
-			$typedefBeginExpr;
-			var _si: Int = 0;
-			while (_si < _arr.length) {
-				final _t = _arr[_si];
-				$leadBreakExpr;
-				$blankBeforeExpr;
-				$typedefBetweenExpr;
-				var _ci: Int = 0;
-				while (_ci < _t.leadingComments.length) {
-					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
-					// ω-643-leading-block-glue: the LAST leading comment
-					// keeps the element on its line (single space, no
-					// break) when the source glued a block-style comment
-					// to it (`/* c */ field` — `leadingCommentsGlued`).
-					// Line-style `//` always ends its line → never glued.
-					// Intermediate comments and the non-glued case keep
-					// the legacy hardline. Default-false (every non-trivia
-					// -sep-Star producer) preserves the pre-slice break.
-					final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
-					final _glueLead: Bool = _isLastLead
-						&& _t.leadingCommentsGlued == true
-						&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
-					_inner.push(_glueLead ? _dt(' ') : _dhl());
-					_ci++;
-				}
-				$balcEmitExpr;
-				$gridPadExpr;
-				final _elem: anyparse.core.Doc = $triviaElemCall;
-				_fmDocs.push(_elem);
-				$lineExpr;
-				_si++;
-			}
-			$keepCurlyEndExpr;
-			if (_trailLC.length > 0) {
-				_inner.push(_dhl());
-				if (_trailBB && _arr.length > 0) _inner.push(_dhl());
-				var _tii: Int = 0;
-				while (_tii < _trailLC.length) {
-					_inner.push(leadingCommentDocRun(_trailLC, _tii, opt));
-					if (_tii < _trailLC.length - 1) _inner.push(_dhl());
-					_tii++;
-				}
-			}
-			$typedefEndExpr;
-			final _cols: Int = $forceMultiColsExpr;
-			final _innerWrap: anyparse.core.Doc = _dn(_cols, _dc(_inner));
-			final _parts: Array<anyparse.core.Doc> = [];
-			_parts.push($triviaLeadDoc);
-			_parts.push(_dt($v{c.openText}));
-			if (_trailOpen != null) _parts.push(trailingCommentDocVerbatim(_trailOpen, opt));
-			_parts.push(_innerWrap);
-			// ω-nowrap-flat: glue the close delimiter to the last
-			// element (`0]`) — the fork's `noWrap()` calls
-			// `noLineEndBefore(close)`. Only when the list actually
-			// cuddled flat (`_noWrapFlatten`); otherwise keep the legacy
-			// own-line close (`triviaTrailDoc`).
-			_parts.push(_noWrapFlatten ? _de() : $triviaTrailDoc);
-			_parts.push(_dt($v{c.closeText}));
-			// ω-sep-star-close-trail: guarded, not verbatim — a `//` close-trailing
-			// ends its source line, and the enclosing list glues its separator
-			// after this Doc (`} // c` + `,` became the comment text `} // c,`).
-			// The guard is forward-looking and drops when the next emit is
-			// already a hardline, so a close-trailing with nothing after it on
-			// the line stays byte-identical.
-			if (_trailClose != null) _parts.push(trailingCommentDocGuarded(_trailClose, opt));
-			// ω-force-flat-engine slice D follow-up: trivia branch builds
-			// hardlined Doc by hand instead of going through one of the 4
-			// cascade-emit functions Slice C wraps. Without `_dwb` here a
-			// trivia-bearing inner construct nested inside a NoWrap-cascade
-			// `Flatten` region loses its source-preserved indent (the
-			// hardlines fire but `Nest`'s columns are dropped by force-flat).
-			// WrapBoundary is no-op when the parent frame is not in force-flat
-			// mode, so this wrap is safe on the non-nested common path.
-			_dwb(_dbg(_dc(_parts)));
 		};
 	}
 
@@ -876,246 +1055,6 @@ final class TriviaSepLowering {
 	}
 
 	/**
-	 * Sep-Star no-trivia (wrap-cascade) branch builder: the `wrapRulesField !=
-	 * null` arm wraps each per-element Doc with its leading/trailing comments,
-	 * attempts a matrix grid, and defers layout to `WrapList.emit`; the null
-	 * arm falls back to the space-joined flat layout.
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaSepNoTriviaBranch(c: WriterLowering.SepStarNoTriviaCtx): Expr {
-		// noqa: complexity
-		final triviaElemCall: Expr = c.triviaElemCall;
-		final openInsideDoc: Expr = c.openInsideDoc;
-		final closeInsideDoc: Expr = c.closeInsideDoc;
-		final appendTrailingCommaExpr: Expr = c.appendTrailingCommaExpr;
-		final wrapLeadFlatDoc: Expr = c.wrapLeadFlatDoc;
-		final wrapLeadBreakDoc: Expr = c.wrapLeadBreakDoc;
-		final forceExceedsExpr: Expr = c.forceExceedsExpr;
-		final wrapTrailBreakDoc: Expr = c.wrapTrailBreakDoc;
-		final forceModeExpr: Expr = c.forceModeExpr;
-		final flatTrailingCommaExpr: Expr = c.flatTrailingCommaExpr;
-		final openText: String = c.openText;
-		final closeText: String = c.closeText;
-		final sepText: String = c.sepText;
-		final gluedLeadExpr: Expr = triviaSepGluedLeadExpr();
-		// ω-complex-item-count: the per-element AST classification, computed
-		// once over the captured element array. `null` when the Star does not
-		// carry `@:fmt(complexItems)` — the engine then counts 0 and the chunk
-		// policy stays off, so the emit call is byte-identical.
-		final complexKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _arr]);
-		final containerKindsCall: Expr = WriterLowering.astPredCallT(WriterLowering.CONTAINER_ITEM_KINDS_PRED, [macro cast _arr]);
-		final complexKindsDecl: Expr = c.complexItems
-			? macro final _complexKinds: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall
-			: macro final _complexKinds: Null<Array<Int>> = null;
-		final containerKindsDecl: Expr = c.complexItems
-			? macro final _containerKinds: Null<Array<Null<Array<Int>>>> = _complexKinds == null ? null : $containerKindsCall
-			: macro final _containerKinds: Null<Array<Null<Array<Int>>>> = null;
-		return if (c.wrapRulesField != null) {
-			final rulesExpr: Expr = wrapRulesAccess(c.wrapRulesField, c.mapWrap);
-			// `@:fmt(bodyAwareCompactIndent(...))`: a function signature with an empty body
-			// drops the cascade's additional indent (`WriterLoweringSupport.bodyEmptySuppressExpr`).
-			final suppressAdditionalExpr: Expr = c.suppressAdditionalIndent;
-			// ω-arraymatrix-wrap: when the Star opted into
-			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the
-			// runtime policy preserves the source grid, attempt a one-pass
-			// grid layout BEFORE the wrap cascade. The matrix detector reads
-			// per-element `newlineBefore` (row boundaries) and the rendered
-			// cell widths; on a uniform matrix (>=2 columns, equal rows, no
-			// multi-line cell) it returns the aligned/unaligned grid Doc,
-			// which is wrapped in BodyGroup (sister to the `_smlKeep` path)
-			// so an enclosing Group's `fitsFlat` defers the grid's hardlines
-			// and the call/assign context stays inline. `tryLayout` returns
-			// null for non-matrix shapes → fall through to the cascade.
-			// Gated on the same source-multiline-without-blocking-trivia
-			// condition as `_smlKeep`; only fires when `matrixWrap` is set,
-			// so every other sep-Star consumer is byte-identical (`macro {}`).
-			final matrixComputeExpr: Expr = c.matrixWrap
-				? macro {
-					// The grid is the one layout built from the source rows, so `Ignore`, whose output is a function
-					// of the AST and the cascade, never reads them. `MatrixWrap.tryLayout` returns null unless the
-					// rows form a uniform grid of at least two columns, so no other guard is needed.
-					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline && !_ignoreEmit) {
-						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
-						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-						_matrixDoc = anyparse.format.wrap.MatrixWrap.tryLayout(
-							_docs, _rowStart, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr,
-							_mcols
-						);
-					}
-				}
-				: macro {};
-			// ω-cascade-emits-comments: wrap each per-element Doc with its
-			// leading comments (a glued single-line block comment followed by a space, any other by a hardline) and an inline
-			// block-style trailing comment (line-style trailings are not
-			// cascade-emittable — the engine inserts the separator AFTER
-			// the item, which would land INSIDE a `// ...` line comment;
-			// those route to the force-multi branch via `_requiresHardline`
-			// in the predicate split below). When the element has no
-			// trivia, `_parts.length==1`
-			// collapses to the bare
-			// `_elemBase` Doc.
-			final keptListCountsInFit: Expr = c.reflowSourceMultiline ? macro opt._keptListCountsInFit : macro false;
-			macro {
-				final _docs: Array<anyparse.core.Doc> = [];
-				// ω-sep-faithful: per-pair `sepBefore` flags so `WrapList.emit`
-				// can suppress the engine's inter-element comma when the
-				// source elided it (canonical: `HxParam.Conditional` body
-				// leading-sep elides the outer `,` ahead of the `#if`).
-				// `_sepBeforeFlags[i] = !_arr[i-1].sepAfter` for i >= 1;
-				// slot 0 is unused. Trailing-comma stays on the existing
-				// `appendTrailingComma` axis.
-				final _sepBeforeFlags: Array<Bool> = [];
-				// A block trailing comment captured AFTER the separator
-				// (trailingBeforeSep == false) is deferred here and emitted as
-				// an inline leading prefix of the NEXT item, so WrapList.emit
-				// places it after the comma, matching the force-multi path's
-				// after-sep emission (see triviaSepForceMultiLineExpr).
-				var _pendingAfterSep: Null<String> = null;
-				var _si2: Int = 0;
-				while (_si2 < _arr.length) {
-					final _t = _arr[_si2];
-					_sepBeforeFlags.push(_si2 != 0 && !_arr[_si2 - 1].sepAfter);
-					final _elemBase: anyparse.core.Doc = $triviaElemCall;
-					final _parts: Array<anyparse.core.Doc> = [];
-					if (_pendingAfterSep != null) {
-						_parts.push(leadingCommentDoc(_pendingAfterSep, opt));
-						_parts.push(_dt(' '));
-						_pendingAfterSep = null;
-					}
-					// Single-line block comments the source glued to the element stay on its
-					// line (`triviaSepGluedLeadExpr`); every other leading comment ends its line.
-					final _glueLeads: Bool = $gluedLeadExpr;
-					var _ci2: Int = 0;
-					while (_ci2 < _t.leadingComments.length) {
-						_parts.push(leadingCommentDocRun(_t.leadingComments, _ci2, opt));
-						_parts.push(_glueLeads ? _dt(' ') : _dhl());
-						_ci2++;
-					}
-					_parts.push(_elemBase);
-					final _tc2: Null<String> = _t.trailingComment;
-					if (_tc2 != null && StringTools.startsWith(_tc2, '/*')) {
-						if (_t.trailingBeforeSep || _si2 == _arr.length - 1)
-							_parts.push(trailingCommentDocVerbatim(_tc2, opt));
-						else
-							_pendingAfterSep = _tc2;
-					}
-					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
-					_si2++;
-				}
-				// ω-arraymatrix-wrap: grid layout attempt before the cascade.
-				// `_matrixDoc` stays null for non-matrix shapes (or when the
-				// flag is off — `matrixComputeExpr` is then `macro {}`), so the
-				// trailing expression falls through to the wrap cascade.
-				var _matrixDoc: Null<anyparse.core.Doc> = null;
-				$matrixComputeExpr;
-				// ω-comprehension-fitline: a for/while comprehension under
-				// comprehensionFor:fitLine (padded brackets) is fit-driven. Use the fit
-				// cascade instead of the generic arrayWrap fixed thresholds (which break the
-				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
-				// source-multiline-keep so an already-wrapped but fitting comprehension
-				// reflows flat (fork parity) rather than staying pinned open.
-				// ω-comprehension-fit-measure: `_comprehensionFit` also rides into
-				// `WrapList.emit` as `comprehensionFitMeasure`, which charges the fit
-				// decision the same-line tail after `]`.
-				// ω-comprehension-body-measure: `_isComprehension` rides in SEPARATELY as
-				// `comprehensionBodyMeasure`, which re-tags each item's hardline-free
-				// `BodyGroup`s as `Group` so a width-only cascade sees the generator body it
-				// would otherwise defer to 0. That under-measure belongs to every cascade, not
-				// to the fit one — `wrapping.arrayWrap`'s `totalItemLength <= n` is just as
-				// width-blind — so it rides on the WIDER flag. `_comprehensionFit` implies
-				// `_isComprehension` by the line below, so that is a strict widening.
-				final _isComprehension: Bool = $v{c.reflowSourceMultiline}
-					&& _arr.length > 0
-					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
-				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
-				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
-					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
-					: $rulesExpr;
-				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
-				// ω-flat-source-fixed-point: this branch is reached only when the source
-				// list carried NO newline of its own, and (for a Star without
-				// `@:fmt(reflowSourceMultiline)`) a source newline is exactly what the
-				// force-multi path answers with one-per-line. So a cascade answer that
-				// BREAKS here would be re-read as author intent by the very next pass and
-				// overridden — `fmt` would need two rewrites and `writeRoundTrip(s) == s`
-				// would fail after one. Collapse such an answer to one-per-line, which is
-				// the shape that second pass produces anyway: same final bytes, one pass
-				// earlier. Ignore drops the source layout and is a fixed point already; a
-				// reflow Star routes its multiline lists through the same cascade, so both
-				// passes agree there too.
-				final _breakAsOnePerLine: Bool = !$v{c.reflowSourceMultiline} && !_ignoreEmit;
-				// Under Ignore no next pass commits a braced list, but a hardline-carrying answer is the
-				// same measure question for a host: counted, it would wrap a signature around a broken list.
-				final _deferIfHardline: Bool = _breakAsOnePerLine || $v{c.deferUnderIgnore} && _ignoreEmit;
-				$complexKindsDecl;
-				$containerKindsDecl;
-				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
-					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules, {
-						appendTrailingComma: $appendTrailingCommaExpr,
-						leadFlat: $wrapLeadFlatDoc,
-						leadBreak: $wrapLeadBreakDoc,
-						forceExceeds: $forceExceedsExpr,
-						trailBreak: $wrapTrailBreakDoc,
-						forceMode: $forceModeExpr,
-						suppressAdditionalIndent: $suppressAdditionalExpr,
-						// ω-pattern-rest-probe: gated at RUNTIME, unlike its macro-time
-						// sibling at `WriterLowering`'s postfix-Star `Call` site, because
-						// the flag is a property of the descent and not of the Star. A
-						// case-PATTERN subtree declines the rest-of-line fit bias entirely,
-						// so an object-literal pattern is not charged the trailing
-						// `if (guard)` and the guard breaks instead.
-						groupRestProbe: $v{c.groupRestProbe} && !opt._suppressPatternRestProbe,
-						sepBeforeFlags: _sepBeforeFlags,
-						sourceMultilineKeep: _effSmlKeep,
-						breakAsOnePerLine: _breakAsOnePerLine,
-						flatTrailingComma: $flatTrailingCommaExpr,
-						comprehensionFitMeasure: _comprehensionFit,
-						comprehensionBodyMeasure: _isComprehension,
-						complexItemKinds: _complexKinds,
-						containerItemKinds: _containerKinds,
-						redecided: $v{openText == '{'} && _ignoreEmit
-					}
-				);
-				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
-				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
-				// idempotency: a COMPACT source comprehension lowers to a bare counted `Group`
-				// (full flat width in a parent's `flatTokenWidth`), while a pre-EXPLODED one
-				// takes the `_smlKeep` path → `BodyGroup`, which `flatTokenWidth` defers to
-				// width 0. So the SAME comprehension AST measures wide on one pass and ~0 on
-				// the next → a wrap decision in an enclosing method-chain / `+` operator flips
-				// between passes. Force a comprehension to ALWAYS count (bare `Group`, real
-				// width) so the parent measure is trivia-independent and its wrap decision is
-				// stable. (Deferring to width 0 instead — the sister pre-exploded path — was
-				// tried and REGRESSED: an enclosing call then under-measures, commits to flat,
-				// and overflows into a mangled break — see
-				// `testChainOwnedArrayPastSoftBreakLeadingBreaks`.) Detect by AST structure
-				// (first element a `HxComprehension.GENERATOR_CTORS` ctor), gated on the compile-time
-				// `reflowSourceMultiline` array-Star flag so the `Type.enumConstructor` probe
-				// never runs on a non-array Star (whose element node is a non-enum struct →
-				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
-				// behaviour untouched.
-				// A list the one-per-line collapse (`_breakAsOnePerLine`) committed at build time is
-				// the same question from the other side: the next pass reads its newlines and takes
-				// the force-multi path, whose Doc is a `BodyGroup`, so it is that `BodyGroup` on this
-				// pass already; a chain or an arrow around it measured it full-width once and deferred
-				// the next time. Only a result carrying a hardline (`flatLength < 0`): an answer the
-				// RENDERER still decides stays counted, as the next pass may read it back flat.
-				// A construct-fit group counts a kept multi-line array too: it is what the group's own
-				// ladder wrote on the previous pass, and deferring it there would flip the verdict.
-				_matrixDoc != null
-					? _dbg(_matrixDoc)
-					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)
-						&& !_isComprehension
-						&& !$keptListCountsInFit
-						? _dbg(_wlResult)
-						: _wlResult;
-			};
-		} else {
-			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);
-		};
-	}
-
-	/**
 	 * Sep-Star predicate-scan loop: one pass over `_arr` populating the
 	 * `_requiresHardline` / `_hasSourceNewlines` / `_hasInlineableTrivia` /
 	 * `_anyMultilineItem` accumulators (declared in the emitted scope) from each
@@ -1266,173 +1205,6 @@ final class TriviaSepLowering {
 			}
 		} else {
 			null;
-		};
-	}
-
-	/**
-	 * Sep-Star non-empty-list dispatch block: derives the keep/ignore/noWrap/
-	 * forceMulti predicates (via the predicate-split machinery) and routes the
-	 * list to the keep-matrix grid, the force-multi loop, or the no-trivia
-	 * cascade. References the runtime `_arr`/`_trailLC`/`_trailOpen` locals.
-	 *
-	 */
-	@:access(anyparse.macro.WriterLowering)
-	private static function triviaSepDispatchExpr(c: WriterLowering.SepStarDispatchCtx): Expr {
-
-		final ignoreCheckExpr: Expr = c.ignoreCheckExpr;
-		final noWrapFlatCheckExpr: Expr = c.noWrapFlatCheckExpr;
-		final noWrapDefaultCheckExpr: Expr = c.noWrapDefaultCheckExpr;
-		final predicateScanExpr: Expr = c.predicateScanExpr;
-		final matrixSucceedsExpr: Expr = c.matrixSucceedsExpr;
-		final triviaGridExpr: Expr = c.triviaGridExpr;
-
-		final forceMultiExpr: Expr = c.forceMultiExpr;
-		final noTriviaBranch: Expr = c.noTriviaBranch;
-		// ω-uniform-element-blanks: the `_uniformCollapse` pre-pass, shared with
-		// the block-Star statement policy. Declared BEFORE the predicate scan
-		// (which reads it) and before the force-multi loop's blank guard.
-		// `macro {}` for every non-opted sep-Star.
-		final uniformCollapseInitExpr: Expr = triviaUniformCollapseInitExpr(c.uniformStmtBlanks);
-		final sourceNewlines: { decl: Expr, read: Expr, scan: Expr } = triviaSepSourceNewlines(c.reflowSourceMultiline);
-		final sourceNewlinesDecl: Expr = sourceNewlines.decl;
-		final sourceNewlinesRead: Expr = sourceNewlines.read;
-		return macro {
-			// ω-cascade-emits-comments: decompose `_hasTrivia` into three
-			// orthogonal predicates so the Ignore-mode cascade can ingest
-			// per-element block comments.
-			//
-			//  - `_requiresHardline` — physical hardline requirement:
-			//    `_trailLC`/`_trailOpen` on the open/close boundary, any
-			//    blank line before an element, leading comments (when
-			//    NOT in ignore mode), and trailing LINE comments (any
-			//    mode — engine inserts the sep AFTER the item, which
-			//    would land inside `// ...`). Anything in this bucket
-			//    MUST route through the force-multi branch.
-			//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
-			//    least one element of a reflow array (no other Star
-			//    declares it). Independent axis. Under
-			//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
-			//    policy ignores source newlines and lets width drive
-			//    layout); legacy default still flips `_hasTrivia=true`.
-			//  - `_hasInlineableTrivia` — at least one element carries a
-			//    leading comment OR a block-style trailing comment, AND
-			//    `_ignoreEmit` is live. These are cascade-emittable: the
-			//    no-trivia branch wraps each item Doc with its leading
-			//    comments + inline block trailing before passing to
-			//    `WrapList.emit`. Routes the item to cascade (not
-			//    force-multi) when no `_requiresHardline` blocker fires.
-			//
-			// Byte-identity for `_ignoreEmit=false`: comments still set
-			// `_requiresHardline=true` (legacy bucket); cascade rewrite
-			// at the no-trivia branch collapses to `_docs.push(_elem)`
-			// because `_parts.length==1` on no-comment elements.
-			final _ignoreEmit: Bool = $ignoreCheckExpr;
-			// The cascade writes a first element's inline leading comment right after the open delimiter, where the next
-			// parse takes it as the open trail; reading it back as that lead keeps the layout a fixed point.
-			final _openGlued: Bool = _ignoreEmit && anyparse.runtime.OpenGluedComment.leads(_arr, _trailOpen);
-			final _arr = _openGlued ? anyparse.runtime.OpenGluedComment.first(_arr, _trailOpen ?? '') : _arr;
-			final _trailOpen: Null<String> = _openGlued ? null : _trailOpen;
-			// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
-			// to Ignore (a single `defaultMode`, so this only ever flips for
-			// an actual NoWrap config). Scoped to the
-			// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
-			// flag (the only Star carrying it). Other lists under a `noWrap`
-			// fallback go flat through the scan, which counts no source
-			// break for them. Drives the fork's `noWrap()`
-			// flat-with-comment-break layout below.
-			final _noWrapRules: Bool = $noWrapFlatCheckExpr;
-			final _noWrapDefault: Bool = $noWrapDefaultCheckExpr;
-			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && _noWrapRules && !_ignoreEmit;
-			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
-			// entirely — like the `Ignore` policy it DROPS source newlines
-			// so the cascade (not the force-multi path) drives layout: a
-			// short matrix-shaped array collapses flat, a wide one width-
-			// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
-			// compile-time flag); every other consumer leaves it false.
-			final _matrixOff: Bool = $v{c.matrixWrap} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
-			$uniformCollapseInitExpr;
-			var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
-			$sourceNewlinesDecl;
-			var _hasInlineableTrivia: Bool = false;
-			// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
-			// element list. Two kinds of item make a list NON-flattenable,
-			// mirroring the fork (`MarkWrapping.arrayLiteralWrapping`):
-			//  - a `for`/`while` ARRAY-COMPREHENSION item: the fork returns
-			//    early from `arrayLiteralWrapping` when the first item is
-			//    `Kwd(KwdFor)`/`Kwd(KwdWhile)` under `comprehensionFor: keep`,
-			//    leaving the comprehension's layout to the sameLine/forBody
-			//    policy — so the noWrap arrayWrap rule never touches it.
-			//  - an item that renders with its own forced hardline (block
-			//    body, etc.): cannot be cuddled flat (the inner construct
-			//    keeps its mandatory breaks). Probed via
-			//    `WrapList.flatLength(item) < 0`, the same "has forced
-			//    hardline" signal the cascade's `HasMultilineItems` uses.
-			// Both flow into `_anyMultilineItem`, which gates the flatten
-			// off → such lists keep the legacy `_smlKeep`/force-multi shape.
-			// Only computed under `_noWrapFlat` (every other path leaves it
-			// false → no extra per-element render / reflection).
-			var _anyMultilineItem: Bool = false;
-			$predicateScanExpr;
-			final _hasTrivia: Bool = _requiresHardline || $sourceNewlinesRead;
-			// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
-			// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
-			// `applyWrappingPlace`). Probe whether the source rows form a
-			// uniform grid; if so, leave `_noWrapFlatten` off so the array
-			// flows to the existing `_smlKeep` / no-trivia matrix path
-			// (column-aligned grid). Only computed for a matrix-eligible
-			// Star (`matrixWrap`) under noWrap with no comment/blank
-			// hardline; every other path leaves it false.
-			// A grid whose blank lines or comments need hardlines keeps its rows in the force-multi loop: `_gridPads`
-			// holds each cell's leading pad and `_gridRun` the column count, null and 0 for every other list.
-			var _gridRun: Int = 0;
-			final _gridPads: Null<Array<Int>> = $triviaGridExpr;
-			final _matrixSucceeds: Bool = $matrixSucceedsExpr || _gridPads != null;
-			// ω-array-reflow: when the Star opted into
-			// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
-			// signal is bare source newlines (no hardline-requiring
-			// trivia, no Ignore policy), divert away from the
-			// force-multi (one-`_dhl()`-per-element) path and let the
-			// wrap cascade re-flow the list. `_smlKeep` gates that
-			// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
-			// then guarantees the cascade never collapses such a list
-			// fully flat (NoWrap → OnePerLine), so the source's
-			// "stay multi-line" intent is honoured while width-driven
-			// packing (FillLine / FillLineWithLeadingBreak) applies.
-			// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
-			// already forced false above, so `_smlKeep` collapses here and
-			// the cascade drives layout — no extra gate needed.
-			// ω-nowrap-flat: under an explicit pure-`noWrap` array config a
-			// source-multiline list whose items carry NO intrinsic hardline
-			// (`_anyMultilineItem`: a `for`/`while` comprehension or a
-			// hardline-bearing item) AND that is not a uniform matrix grid
-			// (`_matrixSucceeds`) must collapse to the fork's `noWrap()` flat
-			// shape — every element cuddled, the close glued, and the only
-			// break the one a `//` line-comment forces. Both the comment
-			// case (`_requiresHardline` via a line-comment) and the plain
-			// case route through the FORCE-MULTI per-element loop below: its
-			// `_noWrapFlatten` branch
-			// lays the list out flat AND preserves the source trailing comma
-			// (`appendTrailingCommaExpr`) — which the no-trivia cascade's
-			// `shapeNoWrap` would have dropped. A comprehension / multi-line
-			// item or a matrix-grid array keeps the legacy `_smlKeep` reflow
-			// (its layout is owned by another path).
-			final _noWrapFlatten: Bool = _noWrapFlat && !_anyMultilineItem && !_matrixSucceeds;
-			// ω-nowrap-flat: `_smlKeep` reflow stays ON for a comprehension /
-			// multi-line-item / matrix noWrap array — those keep their HEAD
-			// source-multiline shape. It is disabled ONLY when the array
-			// actually flattens (`_noWrapFlatten`), so the flatten routes
-			// through the force-multi flat loop below instead of reflow.
-			final _smlKeep: Bool = $v{c.reflowSourceMultiline}
-				&& $sourceNewlinesRead
-				&& !_requiresHardline
-				&& !_ignoreEmit
-				&& !_noWrapFlatten;
-			final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
-			if (_forceMulti) {
-				$forceMultiExpr;
-			} else {
-				${redecidedWhenIgnored(c.bracedList, triviaSepCloseTrailAppendExpr(noTriviaBranch))};
-			}
 		};
 	}
 

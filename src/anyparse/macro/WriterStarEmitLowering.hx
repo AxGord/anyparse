@@ -1109,196 +1109,30 @@ final class WriterStarEmitLowering {
 	@:access(anyparse.macro.TriviaSepLowering)
 	private static function triviaSepStarBuild(ctx: StarEmitCtx, c: EnumStarCtx, slots: TriviaAltSlots): Expr {
 		final branch: ShapeNode = c.branch;
-		final wrapRulesField: Null<String> = branch.fmtReadString('wrapRules');
-		// ω-mapwrap: enum-Alt branch reader for `@:fmt(mapWrapRules('<field>'))`
-		// (`HxExpr.ArrayExpr`) — a MAP literal goes to `wrapping.mapWrap`, every
-		// other bracket list to `wrapping.arrayWrap`, mirroring the fork's
-		// `arrayWrapping` split on `getBkOpenType == MapLiteral`. Null on every
-		// other Star.
-		final mapWrap: Null<SepStarMapWrap> = ctx.mapWrapFor(branch.fmtReadString('mapWrapRules'));
-		// ω-arraylit-trailing-comma-dispatch: enum-Alt branches
-		// (e.g. `HxExpr.ArrayExpr`) carry `@:fmt(trailingComma(
-		// '<knob>'))` but the trivia-mode emit at this site
-		// must thread the knob into `triviaSepStarExpr`'s
-		// 13th/14th params (hardcoded `null, null` ignores it). Sister
-		// dispatch-dual-path gap —
-		// the struct-Star path at `lowerStruct`
-		// already threads `trailingCommaField`. Companion sibling
-		// `ω-arraylit-source-trail-comma` adds the 13th param's
-		// counterpart via a synth-side positional `trailPresent:
-		// Bool` slot (no `<field>TrailPresent` named struct field —
-		// Alt ctors are positional, so synth pushes the slot under
-		// the `isAltCloseTrailingBranch + @:lead + !@:tryparse +
-		// @:sep` gate; writer binds it via `argNames[5]` as
-		// `sepTrailPresentAccess` below). With both, the trivia-
-		// sep helper's `appendTrailingCommaExpr` engages identically
-		// to the struct-Star path: `trailPresent || knob`.
-		final trailingCommaField: Null<String> = branch.fmtReadString('trailingComma');
-		// ω-trivia-sep-anontype-braces (Phase B1): forward the
-		// `anonTypeBracesOpen/Close` policy via
-		// `delimInsidePolicySpace` so the trivia-mode emit honours
-		// inside-brace whitespace exactly like the non-trivia
-		// branch (line ~1257). Branches without the flag get null
-		// → helper falls back to `_de()` (no spaces inside).
-		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`)
-		// supersedes the static `anonTypeBraces*` path — the inside-space
-		// depends on the first element's bracket kind, decided at runtime
-		// by the generated typed classifier. Both override Docs reference
-		// `_arr[0].node` — an identifier BOUND by the block that
-		// `triviaSepStarExpr` emits (unhygienic cross-function coupling,
-		// same as every other `_arr`/`_docs` splice fed to it) — which is
-		// safe everywhere they are spliced: the empty-`[]` form
-		// short-circuits before any emit that uses them
-		// (`_arr.length == 0` guard near the `triviaSepStarExpr` tail and
-		// `WrapList.emit`'s own `items.length == 0` guard).
-		final bracketKindPadAlt: Bool = branch.fmtHasFlag('bracketKindPad');
-		final openInsideExpr: Null<Expr> = bracketKindPadAlt
+		final plan: SepStarPlan = new SepStarPlan(StarPlan.metaOf(branch));
+		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`) pads inside the brackets by the bracket kind its
+		// first element is, a runtime dispatch; any other enum ctor reads its anon-type brace pads.
+		final openInsideExpr: Null<Expr> = plan.bracketKindPad()
 			? arrayBracketInsidePolicySpace(ctx, macro _arr[0].node, false)
 			: delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false);
-		final closeInsideExpr: Null<Expr> = bracketKindPadAlt
+		final closeInsideExpr: Null<Expr> = plan.bracketKindPad()
 			? arrayBracketInsidePolicySpace(ctx, macro _arr[0].node, true)
 			: delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true);
-		// ω-trivia-sep-doc-comment-cascade (Phase B2): forward the
-		// `beforeDocCommentEmptyLines` flag so sep-Stars opt into
-		// the cascade (currently only `HxType.Anon.fields`).
-		final beforeDocComments: Bool = branch.fmtHasFlag('beforeDocCommentEmptyLines');
-		// ω-anontype-left-curly: forward `@:fmt(leftCurly('<knob>'))`
-		// from the enum-Alt branch so `HxType.Anon` honours per-
-		// construct `anonTypeLeftCurly`. When `Next`, the helper's
-		// trivia branch prepends `_doh()` (OptHardline) before the
-		// `{`, and the no-trivia branch feeds the same Doc into
-		// `WrapList.emit`'s `(leadFlat=_de(), leadBreak=_doh())`
-		// pair so the wrap engine's flat/break decision picks
-		// cuddled vs Allman per the anon-type's measured shape.
-		// Mirrors the struct-Star `lowerStruct` path at
-		// `HxObjectLit.fields`.
-		final knobLeftCurly: Null<String> = branch.fmtReadString('leftCurly');
-		// ω-anontype-right-curly: call-form `@:fmt(rightCurly('<knob>'))`
-		// names a per-construct `RightCurlyPlacement` opt field that
-		// the trivia branch of `triviaSepStarExpr` reads. Currently
-		// consumed by `HxType.Anon` for `anonTypeRightCurly`. Null
-		// (no opt-in or bare flag) falls back to unconditional
-		// `_dhl()` before close.
-		final knobRightCurly: Null<String> = branch.fmtReadString('rightCurly');
-		// ω-typedef-anon-force-multi: enum-Alt branch reader for
-		// `@:fmt(forceMultiInTypedef)` on `HxType.Anon`. Threads the
-		// flag into `triviaSepStarExpr` so the no-trivia branch
-		// emits a runtime `opt._inTypedefBody ? WrapMode.OnePerLine
-		// : null` as `WrapList.emit`'s `forceMode` option. Closes
-		// the `issue_301` typedef-anon source-flat → fork-multi
-		// shape gap by forcing OnePerLine when the parent
-		// `HxTypedefDecl.type` Ref has flipped `_inTypedefBody=true`
-		// via `propagateTypedefContext`. Non-typedef anon callers
-		// (var-type-hint, fn-return-type) stay cascade-driven.
-		final forceMultiTypedef: Bool = branch.fmtHasFlag('forceMultiInTypedef');
 		// An enum branch has no sibling body field, so only the bare flag's `true` applies here.
-		final bodyAware: Expr = macro $v{branch.fmtHasFlag('bodyAwareCompactIndent')};
-		// ω-group-rest-probe slice 2: enum-Alt branch reader for
-		// `@:fmt(groupRestProbe)`. Trivia-path mirror of the plain-
-		// path read at lowerStruct's Star dispatch. Dual-dispatch
-		// per [[feedback-wraprules-dispatch-dual-path]].
-		final groupRestProbe: Bool = branch.fmtHasFlag('groupRestProbe');
-		// ω-cascade-emits-comments: enum-Alt branch reader for
-		// `@:fmt(ignoreSourceNewlinesForWrap)` — intrinsic
-		// per-construct opt-in to fork's `Ignore` policy
-		// (drop source newline signal, inline cascade-emittable
-		// trivia). Currently no enum-Alt consumer opts in;
-		// reader present for symmetry with the struct-path
-		// dual-dispatch.
-		final ignoreSourceNewlines: Bool = branch.fmtHasFlag('ignoreSourceNewlinesForWrap');
-		// ω-typedef-between-fields: enum-Alt branch reader for
-		// `@:fmt(typedefBodyBlanks)` (currently `HxType.Anon`).
-		// When set AND the descendant anon sees
-		// `opt._inTypedefBody == true`, the force-multi branch in
-		// `triviaSepStarExpr` injects `opt.typedefBeginType` blanks
-		// after `{` and `opt.typedefBetweenFields` blanks between
-		// adjacent fields. Inline anon-type uses never carry the
-		// flag, staying byte-identical to pre-slice.
-		final typedefBodyBlanksAlt: Bool = branch.fmtHasFlag('typedefBodyBlanks');
-		// ω-array-reflow: enum-Alt branch reader for
-		// `@:fmt(reflowSourceMultiline)` — opt-in for source-
-		// multiline lists (currently `HxExpr.ArrayExpr`) re-flowed
-		// by the wrap cascade instead of forced one-per-line.
-		// Threads into `triviaSepStarExpr`'s `_smlKeep` gate.
-		final reflowSourceMultilineAlt: Bool = branch.fmtHasFlag('reflowSourceMultiline');
-		// ω-arraymatrix-wrap: enum-Alt branch reader for
-		// `@:fmt(arrayMatrixWrap)` (`HxExpr.ArrayExpr`). Marks the
-		// Star as matrix-eligible so `triviaSepStarExpr` attempts a
-		// source-grid layout before the wrap cascade.
-		final matrixWrapAlt: Bool = branch.fmtHasFlag('arrayMatrixWrap');
-		// ω-value-yielded-if-tail-barrier (array-element expr-position):
-		// `@:fmt(propagateExprPosition)` on the ArrayExpr ctor flags each
-		// element as expression-position so a value-if array element stays
-		// glued (`expressionIfBody`). False on every other enum-Alt sep-Star.
-		final propagateExprPositionAlt: Bool = branch.fmtHasFlag('propagateExprPosition');
-		// ω-multiline-trailing-comma-remove / ω-uniform-element-blanks: enum-Alt
-		// branch readers for the two `HxExpr.ArrayExpr` opt-ins — the first lets
-		// `wrapping.trailingComma = remove` drop the break-mode trailing `,`, the
-		// second extends `emptyLines.uniformStatementBlanks` to element gaps.
-		final trailingCommaRemovableAlt: Bool = branch.fmtHasFlag('trailingCommaRemovable');
-		final uniformStmtBlanksAlt: Bool = branch.fmtHasFlag('uniformStmtBlanks');
-		// ω-complex-item-count: enum-Alt branch reader for `@:fmt(complexItems)`
-		// (`HxExpr.ArrayExpr`) — classify each element (call / `new`,
-		// call-bearing container literal, neither) so the cascade can send an
-		// array of constructor calls one-per-line on a SEMANTIC counter rather
-		// than a width proxy (which would also mangle `case [A, _]` patterns).
-		final complexItemsAlt: Bool = branch.fmtHasFlag('complexItems');
-		return TriviaSepLowering.triviaSepStarExpr(
-			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
-			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
-			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-			reflowSourceMultilineAlt, matrixWrapAlt, typedefBodyBlanksAlt, propagateExprPositionAlt, false, trailingCommaRemovableAlt,
-			uniformStmtBlanksAlt, complexItemsAlt, mapWrap, TriviaTailRehome.fnRefFor(c.starNode.children[0]),
-			branch.fmtHasFlag('relocateTrailingComments'), WriterTriviaStarDispatch.afterDocPolicy(branch)
-		);
+		final bodyAware: Expr = macro $v{plan.bodyAwareCompactIndent()};
+		return new TriviaSepLowering(
+			plan, c.argsAccess, slots, slots.sepTrailPresentAccess, c.elemFn, c.leadText, c.trailText, c.sepText, plan.leftCurly(),
+			openInsideExpr, closeInsideExpr, bodyAware, ctx.mapWrapFor(plan.mapWrapRules()),
+			TriviaTailRehome.fnRefFor(c.starNode.children[0]), WriterTriviaStarDispatch.afterDocPolicy(branch)
+		).triviaSepStarExpr();
 	}
 
 	@:access(anyparse.macro.TriviaBlockLowering)
 	private static function triviaBlockStarBuild(ctx: StarEmitCtx, c: EnumStarCtx, slots: TriviaAltSlots, altBlockEndedFlag: Bool): Expr {
-		final branch: ShapeNode = c.branch;
-		final sepText: Null<String> = c.sepText;
-		// ω-bropen-keep: forward `@:fmt(keepCurlyBlanks)` from the
-		// enum-Case branch so non-type block bodies (BlockStmt,
-		// BlockExpr) honour `opt.afterLeftCurly` /
-		// `opt.beforeRightCurly` Keep policy. Sister to the
-		// struct-Star path's read at the `lowerStruct` call site.
-		final keepCurlyBlanks: Bool = branch.fmtHasFlag('keepCurlyBlanks');
-		// ω-arrow-lambda-body-context: forward the override-meta
-		// presence so the helper clears `_inAnonFnBody` for the
-		// per-element write — see helper docstring for rationale.
-		final anonFnClear: Bool = branch.fmtHasFlag('leftCurlyAnonFnOverride');
-		// ω-blockempty: enum-Case branch may opt into empty-curly
-		// break dispatch via `@:fmt(emptyCurlyBreak)` (bare or with
-		// knob-name arg). Used by `HxStatement.BlockStmt` and
-		// `HxExpr.BlockExpr` to route empty bodies through
-		// `opt.blockEmptyCurly`.
-		final emptyCurlyBreak: Bool = branch.fmtHasFlag('emptyCurlyBreak');
-		final emptyCurlyKnobArgs: Null<Array<String>> = branch.fmtReadStringArgs('emptyCurlyBreak');
-		final emptyCurlyKnob: Null<String> = emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1 ? emptyCurlyKnobArgs[0] : null;
-		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
-		// names a per-construct RightCurlyPlacement opt field. The
-		// bare form returns null and falls back to unconditional
-		// `_dhl()` before close inside `triviaBlockStarExpr`.
-		final rightCurlyKnobArgs: Null<Array<String>> = branch.fmtReadStringArgs('rightCurly');
-		final rightCurlyKnob: Null<String> = rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1 ? rightCurlyKnobArgs[0] : null;
-		// ω-anonfunction-right-curly: call-form
-		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` names a
-		// RightCurlyPlacement opt field that the dispatch reads
-		// only when `_inAnonFnBody=true`. Sister to
-		// `leftCurlyAnonFnOverride`. Pre-slice (no opt-in) falls
-		// through to `_dhl()` for non-anon-fn contexts.
-		final rightCurlyAnonFnArgs: Null<Array<String>> = branch.fmtReadStringArgs('rightCurlyAnonFnOverride');
-		final rightCurlyAnonFnKnob: Null<String> = rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1
-			? rightCurlyAnonFnArgs[0]
-			: null;
-		return TriviaBlockLowering.triviaBlockStarExpr(
-			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
-			c.trailText, null, null, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, null, false, null, false, null,
-			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
-			altBlockEndedFlag ? (branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE]: Null<String>) : null,
-			altBlockEndedFlag ? ctx.formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail'), null, null,
-			branch.fmtHasFlag('uniformStmtBlanks'), false, null, branch.fmtHasFlag('relocateTrailingComments')
-		);
+		return new TriviaBlockLowering(
+			new BlockStarPlan(StarPlan.metaOf(c.branch)), c.argsAccess, slots, c.elemFn, c.leadText, c.trailText,
+			altBlockEndedFlag ? c.sepText : null, ctx.formatInfo.schemaTypePath, null
+		).triviaBlockStarExpr();
 	}
 
 	private static function lowerEnumStarPlain(ctx: StarEmitCtx, c: EnumStarCtx): Expr {

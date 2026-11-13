@@ -87,7 +87,8 @@ After that, the median flag's name appears in the added lines of 10 commits (p90
   is a branch INSIDE one of those emitters, not a unit of its own".
 - **Two sides.** 51 flags (23 %) are named on both sides of the plain/trivia module split.
 - **Plumbing.** `triviaTryparseStarExpr` takes 40 positional parameters, `triviaBlockStarExpr` takes 38, and context records
-  carry the same values again. Each new input crosses all of them.
+  carry the same values again. Each new input crosses all of them. (Read on 2026-11-03; the three trivia Star families lost
+  theirs to a plan and one skeleton in step 9, § Star emission plan, measured.)
 - **Options.** 208 option fields, 25 of them `_`-prefixed context channels. A user knob touches 5 places.
 - **Width probes.** `Doc` has 13 `If…Exceeds/Fits` constructors, mentioned 851 times in code across core, format and macro (and
   244 more in comments), about 65 each in code. A new probe is about 60 switch arms: `IfIndentWidthExceeds` has 56. They live in `Renderer` (4,399 lines), `DocMeasure` (1,146), `WrapList` (4,877).
@@ -418,8 +419,9 @@ Costs in queue-line difficulty (`lib/difficulty.md`) and lines; H8, a comparable
 | 6 | `placement` to runtime, after CANON | re-measure first | up to about 2k | high |
 | 7 | Gap cascade as a table | prototype first | up to about 2k | high; not tried |
 | 8 | Lint: new mechanical rules as `pattern → rewrite` | language work, 2–3 slices, 7 | 0 at first | medium |
+| 9 | Star emission plan: plan, one skeleton, instance builders for the three trivia Star families | one slice, 8 | measured: −503 code lines, a new input 5 places → 2; 0 output change; § Star emission plan, measured | low; landed, continue with the Ref writer |
 
-Steps 5–8 show estimates, not measurements, apart from the mentions and line counts they start from. Step 4 is measured below.
+Steps 5–8 show estimates, not measurements, apart from the mentions and line counts they start from. Steps 4 and 9 are measured below.
 
 ### Step 4, measured
 
@@ -455,6 +457,53 @@ The other 41, re-estimated by reading their sites:
 So 24 can move for about 20 code lines, and 17 cannot: 51 flags become 18 at best, not 3.
 
 **Verdict: stop.** Step 4 is not a size step: the ten cheapest flags added 18 code lines against an estimate of about −1k, and what remains would remove about 20, because the lines § 2 counted belong to emit functions every form still needs. What the move did buy is real and small: ten of Haxe's option names left the macro, which is invariant 4, at no run time. It holds only where the flag is read, which is three positions: a mandatory Ref lead, a tight optional Ref lead and a non-word ctor lead. Everywhere else it is ignored without a complaint, even misspelt: on an optional non-tight lead, `@:optional @:lead('=') @:fmt(space('gap', 'lead'))` writes `a = b` under `gap` at `None` and at `Both`. So a new spaced lead at those three positions adds no macro line, and elsewhere `space` does nothing until a reader is added there. That is a reason to take `space` for a new lead at those positions, and to move the 11 keyword-side and trail-side flags named above when one of their lists is next edited. It is no reason for a slice of its own, and the rest of the family stays as it is.
+
+### Star emission plan, measured
+
+MACRO-STAR-PLAN-PROTO went at the emit functions Step 4 named, on the three trivia Star families (tryparse, block, sep), in
+the three steps the line set. (1) A plan: `StarPlan` holds what several families read, `TryparseStarPlan`,
+`BlockStarPlan` and `SepStarPlan` add what one family alone reads. Each method is one `@:fmt` flag, argument list or
+`lit.*` annotation, named after it, read lazily through `StarMeta`; no `Expr` in it, and `StarPlanTest` asks it on plain
+maps without a macro context. (2) One skeleton, `TriviaStarEmit<P>`: one instance is one Star's emit, holding the plan,
+the element array, the four trailing slots and the delimiters; each family class extends it. (3) The family builders
+became instance methods that read the plan and the fields. Raw `{expr: …, pos: …}` in the touched code became
+reification. Counted the way Step 4 counted, as code lines without comments or blanks:
+
+| Piece | Base | Tip |
+|---|---:|---:|
+| tryparse emit: `triviaTryparseStarExpr` / its constructor, entry, two methods, fields | 132 | 112 |
+| tryparse caller `emitTriviaTryparseStar` | 107 | 8 |
+| block emit: `triviaBlockStarExpr` / its constructor, fields | 122 | 71 |
+| block callers, struct and enum ctor | 83 | 22 |
+| sep emit: `triviaSepStarExpr` / its constructor, entry, fields | 159 | 85 |
+| sep callers, struct and enum ctor | 99 | 59 |
+| context records `TryparseStarCtx`, `BlockStarCtx`, `SepStarCtx`, `SepStarDispatchCtx`, `SepStarNoTriviaCtx` | 154 | 0 |
+| new types: the four plans (99) and the skeleton (36) | 0 | 135 |
+
+Over the seven touched macro files and the five new ones the code lines go from 5,246 to 4,743: **−503 with the new
+types counted**, the rest of the fall being the locals each builder unpacked from its context record. Positional
+parameters: 44, 38 and 33 before, 2, 9 and 15 after; the 15 of sep are the inputs a struct field and an enum ctor spell
+differently (the inside pads, the body-aware indent, the left-curly knob). One new input, tried on scratch copies with
+a throwaway flag on the tryparse Star: **5 places in 3 files on base, 2 places in 2 files on tip** (the plan method and
+its reader), both copies typechecking. The generated engine holds the same multiset of 355,115 lines in 13,242,236
+bytes; the one line that differs is the engine's own source hash, so no call, allocation or dispatch appeared, and the
+test engine differs only by the new plan classes, their test and the registries. The macro typecheck, interleaved, 5
+runs each: user CPU medians 15.59 s base and 15.36 s tip (spread 14.27–16.25), inside the spread. The enum-ctor block
+and sep paths now read every flag of their family's plan off the ctor, where base passed a constant for half of them;
+the engine staying the same shows no enum ctor carries one today, and nothing pins the new reach yet. The block and sep
+bodies share their trailing-slot locals through the skeleton; their empty-list branches stay twins, since they nest
+their blocks differently and sharing them would change the generated code.
+
+**Verdict: continue, one shape per slice, in the same three steps.** The fall passed the line's 300-line bar on the
+first two families, and a new input dropped to the two places it cannot go below while it has a typed name, so the lines
+Step 4 found in the emit functions were mostly the positional plumbing between the readers and the builders, and the
+plan and skeleton take it out without touching the generated code. The next candidate by measured size is the Ref
+writer, `WriterRefFieldLowering` at 1,009 code lines, whose emitters take 23, 21, 19, 19 and 17 positional parameters
+(`emitMandatoryRefField`, `emitOptionalRefField`, `finalizeNonStarField`, `emitBareRefNonBodyPolicy`,
+`emitBodyPolicyBareRef`); then the parser side, `StructSeqLowering` at 952 with 25, 24 and 22 (`emitFieldValueByKind`,
+`pushStructFieldEntries`, `emitOptionalRefField`). Pratt is not a candidate: no function in `WriterPrattLowering` or
+`PrattPostfixLowering` takes more than 8. The EOF trivia Star (`triviaEofStarExpr`, 15, and `EofStarCtx`) is the smallest step and reuses this
+skeleton as it stands.
 
 ### What is not worth doing
 

@@ -2224,7 +2224,7 @@ typedef BetweenSameCtorIfNotInfo = { classifierFieldName: String, classifyCases:
  * Shared parser-context locals bundled for the `lowerEnumBranch`
  * per-shape emission helpers (ternary / infix / prefix / postfix /
  * kw-Ref). Replaces a >5-scalar helper signature with one context
- * struct, mirroring `TryparseStarCtx`.
+ * struct.
  */
 typedef LowerBranchCtx = {
 	final branch: ShapeNode;
@@ -2272,10 +2272,7 @@ typedef CascadeInfos = {
  * helpers (`triviaEofWhileExpr` / `triviaEofElseBody` + the per-flag
  * leaf Expr builders). Replaces a >5-scalar helper signature with one
  * context struct.
- * Shared setup locals + derived flags bundled for the `triviaBlockStarExpr`
- * emission helpers (the blank-before / begin-end / between / blockEnded-sep
- * builders + the main orchestrator). Replaces a >5-param helper signature
- * with one context struct (mirrors EofStarCtx / SepStarCtx).
+
  * The per-flag init / track / wrap leaf Exprs bundled for the orchestrator,
  * built once by `triviaBlockLeafExprs`. Replaces a multi-value return with one
  * struct.
@@ -2289,69 +2286,6 @@ typedef BlockLeafExprs = {
 	final trackDocCommentExpr: Expr;
 	final innerWrapExpr: Expr;
 	final extraInnerTrailBlankExpr: Expr;
-};
-typedef BlockStarCtx = {
-
-	final fieldAccess: Expr;
-	final openText: String;
-	final closeText: String;
-	final emptyText: String;
-	final triviaElemCall: Expr;
-	final emptyDocExpr: Expr;
-	final beforeCloseHardlineExpr: Expr;
-	final trailBB: Expr;
-	final trailLC: Expr;
-	final trailClose: Expr;
-	final trailOpen: Expr;
-	final emptyTrailExpr: Expr;
-	final blankBeforeExpr: Expr;
-	final trackDocCommentExpr: Expr;
-	final initDocCommentExpr: Expr;
-	final initCurrDocCommentExpr: Expr;
-	final initPrevKindExpr: Expr;
-	final initCurrKindExpr: Expr;
-	final trackPrevKindExpr: Expr;
-	final innerWrapExpr: Expr;
-	final beginTypeExpr: Expr;
-	final endTypeExpr: Expr;
-	final leadingSplitGateExpr: Expr;
-	final extraInnerTrailBlankExpr: Expr;
-	final blockLeadingBetweenExpr: Expr;
-	final blockTrailBetweenExpr: Expr;
-	final blockSepBeforeHardlineExpr: Expr;
-	final blockTrailSepEmitExpr: Expr;
-	final elemSepGlueExpr: Expr;
-	final afterFieldsWithDocComments: Null<Expr>;
-	final existingBetweenFields: Null<Expr>;
-	final beforeDocCommentEmptyLines: Bool;
-	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
-	final interMember: Bool;
-	final interMemberInfo: Null<InterMemberClassifyInfo>;
-	final staticVarSubdiv: Bool;
-	final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>;
-	final uniformBetween: Bool;
-	final uniformBetweenOptField: Null<String>;
-	final anyEmptyLinesFlag: Bool;
-	final uniformStmtBlanks: Bool;
-
-	/**
-	 * The per-element push of the element Doc, its trailing comment folded in (`triviaBlockElemPushExpr`):
-	 * the FU12 `IfTrailingCommentOverflows` choice when the Star carries `@:fmt(relocateTrailingComments)`.
-	 */
-	final elemPushExpr: Expr;
-
-	/** ω-blank-around-multiline-members: records where this gap's blank would go; `macro {}` without the flag. */
-	final blankAroundMarkExpr: Expr;
-
-	/** ω-blank-around-multiline-members: notes whether the source-driven rules already filled the gap. */
-	final blankAroundSeenExpr: Expr;
-
-	/** ω-blank-around-multiline-members: inserts the blank once both neighbours' Docs are known; `macro {}` without the flag. */
-	final blankAroundApplyExpr: Expr;
-
-	/** `@:fmt(glueToPrevious)`: whether element `_t` is written glued to the previous one; `macro false` without the flag. */
-	final glueToPreviousExpr: Expr;
-
 };
 typedef EofStarCtx = {
 
@@ -2377,35 +2311,6 @@ typedef EofStarCtx = {
 	final afterFileHeaderCommentBlanks: Bool;
 	final betweenMultilineCommentsBlanks: Bool;
 
-};
-/**
- * Shared spliced-Expr fragments + compile-time text/flags bundled for the
- * `triviaSepStarExpr` tail emission helpers (force-multi loop, predicate
- * scan, branch dispatch). Replaces a >5-param helper signature with one
- * context struct (mirrors EofStarCtx).
- */
-typedef SepStarCtx = {
-	final openText: String;
-	final closeText: String;
-	final sepText: String;
-	final triviaElemCall: Expr;
-	final initCurrDocCommentExpr: Expr;
-	final keepCurlyBeginExpr: Expr;
-	final keepCurlyEndExpr: Expr;
-	final typedefBeginExpr: Expr;
-	final typedefEndExpr: Expr;
-	final typedefBetweenExpr: Expr;
-	final blankBeforeExpr: Expr;
-	final appendTrailingCommaExpr: Expr;
-	final flatTrailingCommaExpr: Expr;
-	final triviaLeadDoc: Expr;
-	final triviaTrailDoc: Expr;
-	final noTriviaBranch: Expr;
-	final reflowSourceMultiline: Bool;
-	final matrixWrap: Bool;
-	final uniformStmtBlanks: Bool;
-	final relocateTrailingComments: Bool;
-	final forceMultiColsExpr: Expr;
 };
 /**
  * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
@@ -2441,68 +2346,6 @@ typedef SepStarKeepCurlyOC = { final keepCurlyBeginExpr: Expr; final keepCurlyEn
  * blank-insert Expr fragments (begin/end/between).
  */
 typedef SepStarTypedefInserts = { final typedefBeginExpr: Expr; final typedefEndExpr: Expr; final typedefBetweenExpr: Expr; };
-/**
- * Input bundle for `triviaSepDispatchExpr` — the spliced Expr fragments +
- * compile-time flags the non-empty-list dispatch block needs to derive the
- * keep/ignore/noWrap/forceMulti predicates and pick the emit branch.
- */
-typedef SepStarDispatchCtx = {
-	final reflowSourceMultiline: Bool;
-	final bracedList: Bool;
-	final matrixWrap: Bool;
-	final uniformStmtBlanks: Bool;
-	final ignoreCheckExpr: Expr;
-	final noWrapFlatCheckExpr: Expr;
-	final noWrapDefaultCheckExpr: Expr;
-	final predicateScanExpr: Expr;
-	final matrixSucceedsExpr: Expr;
-	final triviaGridExpr: Expr;
-	final forceMultiExpr: Expr;
-	final noTriviaBranch: Expr;
-};
-/**
- * Input bundle for `triviaSepNoTriviaBranch` — the spliced Expr fragments +
- * compile-time text/flags the no-trivia (wrap-cascade) branch builder needs.
- */
-typedef SepStarNoTriviaCtx = {
-
-	final openText: String;
-	final closeText: String;
-	final sepText: String;
-	final wrapRulesField: Null<String>;
-	final mapWrap: Null<SepStarMapWrap>;
-	final suppressAdditionalIndent: Expr;
-	final matrixWrap: Bool;
-	final groupRestProbe: Bool;
-	final triviaElemCall: Expr;
-	final openInsideDoc: Expr;
-	final closeInsideDoc: Expr;
-	final appendTrailingCommaExpr: Expr;
-	final wrapLeadFlatDoc: Expr;
-	final wrapLeadBreakDoc: Expr;
-	final forceExceedsExpr: Expr;
-	final wrapTrailBreakDoc: Expr;
-	final forceModeExpr: Expr;
-	final flatTrailingCommaExpr: Expr;
-	final reflowSourceMultiline: Bool;
-
-	/**
-	 * ω-complex-item-count: the Star carries `@:fmt(complexItems)`, so the
-	 * no-trivia branch classifies each element at the AST layer and threads the
-	 * per-element codes into `WrapList.emit` as `complexItemKinds`. False on
-	 * every other Star → no classification runs and the emit call is
-	 * byte-identical.
-	 */
-	final complexItems: Bool;
-
-	/**
-	 * A braced list that is not an expression-position literal: under Ignore its
-	 * hardline-carrying result is deferred from a host's width as a committed
-	 * one-per-line list is. An expression-position literal keeps its count.
-	 */
-	final deferUnderIgnore: Bool;
-
-};
 
 /**
  * The second wrap cascade a sep-Star can name, and the runtime test that
@@ -2543,82 +2386,6 @@ typedef SepStarChecks = {
 	final wrapLeadBreakDoc: Expr;
 	final wrapTrailBreakDoc: Expr;
 	final triviaTrailDoc: Expr;
-};
-/**
- * Shared setup locals bundled for the `triviaTryparseStarExpr` emission
- * helpers (`triviaTryparseHeritageExpr` / `triviaTryparseMainExpr` + the
- * per-element while-loop / assembly sub-builders). Replaces a >5-scalar
- * helper signature with one context struct, mirroring `EofStarCtx`.
- */
-typedef TryparseStarCtx = {
-
-	final fieldAccess: Expr;
-	final trailBB: Expr;
-	final trailLC: Expr;
-	final trailBA: Expr;
-	final sepBeforeFirstExpr: Expr;
-	final nestBodyExpr: Expr;
-	final shapeRefusalExpr: Expr;
-	final glueRefusalExpr: Expr;
-	final flatGateExpr: Expr;
-	final fitGateExpr: Expr;
-	final writerOptExpr: Expr;
-	final padLeadingExpr: Expr;
-	final padTrailingExpr: Expr;
-	final metaPolicyExpr: Expr;
-	final condIncreaseGateExpr: Expr;
-	final condNestedIncreaseGateExpr: Expr;
-	final cascadeInitPrev: Expr;
-	final cascadeInitCurr: Expr;
-	final cascadeCurrCompute: Expr;
-	final cascadeTrackPrev: Expr;
-	final cascadeHeadEmit: Expr;
-	final cascadeBlanksCount: Expr;
-	final priorAfterTrailEmit: Expr;
-	final priorAfterTrailRaw: Expr;
-	final padLeadingSpaceDoc: Expr;
-	final subsequentSepDoc: Expr;
-	final firstSepExpr: Expr;
-	final triviaElemCall: Expr;
-	final triviaElemCallMaybeBreak: Expr;
-	final elemOptInit: Expr;
-	final tryparseBlockEndedSepEmit: Expr;
-	final tryparseBlockEndedTrailEmit: Expr;
-	final lastTrailTerminatorEmit: Expr;
-	final finalWrapDocs: Expr;
-
-	/**
-	 * The Star's seams are a `conditionalExprFit` region's (`@:fmt(condExprFitBreak)`): its default terminal skips the
-	 * force-flat boundary while the knob is on, so the seams follow the one region group's mode.
-	 */
-	final regionSeams: Bool;
-	final siblingSlot: Null<Array<String>>;
-	final belowWrappedLabel: Bool;
-
-	/** The host list puts each element on a line of its own, so the body does too (`@:fmt(elementPerLine)`). */
-	final elementPerLine: Bool;
-
-	/** `@:fmt(siblingPad(fn, knob))`: the body's pads are slots its region's sibling branches decide together, or null. */
-	final siblingPad: Null<Array<String>>;
-	final forceInlineSep: Bool;
-	final elemSelfTrailsNewline: Bool;
-
-	/**
-	 * omega-cond-expr-fit: the trailing-pad SPACE Doc - `_dt(' ')` for every
-	 * ordinary Star, the knob-gated soft `Line(' ')` for a Star carrying
-	 * `@:fmt(condExprFitBreak)` (the expression-scope cond-comp `elseifs`).
-	 */
-	final trailPadSpaceDoc: Expr;
-
-	/**
-	 * Typed nested-conditional element probe fn-ref (`AstPredsT.elementIsConditional_<ElemRule>`),
-	 * or null when the format has no generated predicates.
-	 */
-	final elemCondFn: Null<Expr>;
-
-	/** `@:fmt(glueToPrevious)`: element `_t` is written right after the previous one with no separator — `macro false` without it. */
-	final glueToPreviousExpr: Expr;
-
 };
 typedef CascadeEmit = {
 	initPrev: Expr,

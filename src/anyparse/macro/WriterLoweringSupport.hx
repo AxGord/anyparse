@@ -275,12 +275,11 @@ final class WriterLoweringSupport {
 	}
 
 	/**
-	 * The single string argument of a call-form `@:fmt(<flag>('<optField>'))` on
-	 * `starNode`, or null when the flag is absent. A present flag carrying any
-	 * other arity is a grammar-author error and aborts the build.
+	 * The single string argument of a call-form `@:fmt(<flag>('<optField>'))`
+	 * given its read argument list, or null when the flag is absent. A present
+	 * flag carrying any other arity is a grammar-author error and aborts the build.
 	 */
-	private static function fmtSingleStringArg(starNode: ShapeNode, flag: String): Null<String> {
-		final args: Null<Array<String>> = starNode.fmtReadStringArgs(flag);
+	private static function fmtSingleStringArg(flag: String, args: Null<Array<String>>): Null<String> {
 		if (args != null && args.length != 1)
 			Context.fatalError(
 				'WriterLowering: @:fmt($flag) expects exactly 1 string arg (optField), got ${args.length}', Context.currentPos()
