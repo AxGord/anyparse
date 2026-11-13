@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-BLANK-AFTER-BRACE-KEPT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "blankExtendedSpan",
+			"find": " && source.fastCodeAt(above) != '{'.code",
+			"replace": "",
+			"note": "a line ending in a brace no longer counts as the top of a body, so deleting the first member leaves the blank that separated it from the next one right under the brace"
+		},
+		{
 			"name": "M-ADDRESS-BARE-LINE-WIDENS",
 			"type": "anyparse.query.Address",
 			"method": "resolveAt",

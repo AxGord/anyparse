@@ -284,7 +284,8 @@ final class ElementSpan {
 		// before it; it is blank when only horizontal space separates that newline from the
 		// previous one (or from the start of the file).
 		final above: Int = spaceStartBefore(source, span.from - 1) - 1;
-		if (above >= 0 && source.fastCodeAt(above) != '\n'.code) return span;
+		// A line ending in `{` is the top of a body: the first member owns the separator below it.
+		if (above >= 0 && source.fastCodeAt(above) != '\n'.code && source.fastCodeAt(above) != '{'.code) return span;
 
 		final below: Int = spaceEndFrom(source, span.to);
 		// End of file is not a blank line — there is no separator left to give back.
