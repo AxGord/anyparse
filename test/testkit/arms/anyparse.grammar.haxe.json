@@ -1803,6 +1803,15 @@
 			"find": "opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);",
 			"replace": "opt.conditionalSiblings = opt.conditionalSiblings;",
 			"note": "sameLine.conditionalSiblings is read and dropped, so a config that asked for off still shares the branches of a region"
+		},
+		{
+			"name": "M-UNTYPED-KW-COMMENT-DROPPED",
+			"type": "anyparse.grammar.haxe.HxExpr",
+			"method": "UntypedExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(ctorKwTrivia)",
+			"replace": "",
+			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
 		}
 	]
 }

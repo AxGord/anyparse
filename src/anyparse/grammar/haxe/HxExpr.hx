@@ -123,6 +123,7 @@ enum HxExpr {
 	@:fmt(forwardNewlineForBody)
 	TryExpr(stmt: HxTryCatchExpr);
 	@:kw('untyped')
+	@:fmt(ctorKwTrivia)
 	UntypedExpr(operand: HxExpr);
 	@:kw('untyped')
 	UntypedAtom;

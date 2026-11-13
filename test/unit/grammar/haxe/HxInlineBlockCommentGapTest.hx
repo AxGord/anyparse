@@ -95,9 +95,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		['case_pat', 'switch (v) {\n\t\t\tcase /* c */ 1:\n\t\t\t\trun();\n\t\t}'],
 		// A comment on an expression paren's open line fills the paren's `wrapOpenTrailing` slot.
 		['paren_lead', 'var v = (/* c */ x);'],
-		// The gap after `return` / `throw` fills the ctor's kw-trivia args (`@:fmt(ctorKwTrivia)`).
+		// The gap after `return` / `throw` / `untyped` fills the ctor's kw-trivia args (`@:fmt(ctorKwTrivia)`).
 		['return_lead', 'return /* r */ x;'],
-		['throw_lead', 'throw /* t */ e;']
+		['throw_lead', 'throw /* t */ e;'],
+		['untyped_lead', 'var v = untyped /* u */ x;']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -127,7 +128,6 @@ class HxInlineBlockCommentGapTest extends Test {
 		['obj_field', 'var o = { a: /* o */ 1 };'],
 		['cast_lead', 'var v = cast(/* c */ x, Int);'],
 		['arrow_body', 'var f = () -> /* b */ 1;'],
-		['untyped_lead', 'var v = untyped /* u */ x;'],
 		['macro_lead', 'var v = macro /* m */ x;']
 	];
 
