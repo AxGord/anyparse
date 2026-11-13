@@ -96,7 +96,7 @@ final class RewriteCommand implements CliCommand {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq rewrite: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);

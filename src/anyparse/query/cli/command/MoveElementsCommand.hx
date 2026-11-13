@@ -89,7 +89,7 @@ final class MoveElementsCommand implements CliCommand {
 				} else if (o.write) {
 					final writes: Array<{ path: String, content: String }> = [{ path: sourceFile, content: newSource }];
 					if (destFile != null && newDest != null) writes.push({ path: destFile, content: newDest });
-					CliIo.writeFiles(writes);
+					RegistryFollowCommand.writeFollowed(OP, writes, plugin);
 					CliIo.stderr('apq $OP: wrote ${writes.length} file(s); moved ${entries.length} element(s) to $where, digest $digest\n');
 				} else {
 					CliEdit.previewEdit(OP, sourceFile, newSource);

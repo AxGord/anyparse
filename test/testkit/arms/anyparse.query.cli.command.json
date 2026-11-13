@@ -1507,6 +1507,46 @@
 			"find": "written == null ? f.source : written.newSource",
 			"replace": "written == null ? \"\" : written.newSource",
 			"note": "a scope file the rename left untouched is not read, so a comment-only mention in it goes unsaid"
+		},
+		{
+			"name": "M-REWRITE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.RewriteCommand",
+			"method": "runRewrite",
+			"find": "RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);",
+			"replace": "CliIo.writeFiles([{ path: filePath, content: text }]);",
+			"note": "rewrite no longer carries the registry fragments of the members whose matches it replaced"
+		},
+		{
+			"name": "M-INLINE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.InlineCommand",
+			"method": "runInline",
+			"find": "RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);",
+			"replace": "CliIo.writeFiles([{ path: filePath, content: text }]);",
+			"note": "inline no longer carries the registry fragments of the member whose binding it folded"
+		},
+		{
+			"name": "M-COMMENT-REWRITE-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.CommentRewriteCommand",
+			"method": "rewriteCommentFiles",
+			"find": "RegistryFollowCommand.followWrite(op, written, plugin);",
+			"replace": "written.resize(0);",
+			"note": "comment-rewrite no longer carries the registry fragments over the comments it reworded"
+		},
+		{
+			"name": "M-MOVE-ELEMENTS-FOLLOWS-REGISTRY",
+			"type": "anyparse.query.cli.command.MoveElementsCommand",
+			"method": "runMoveElements",
+			"find": "RegistryFollowCommand.writeFollowed(OP, writes, plugin);",
+			"replace": "CliIo.writeFiles(writes);",
+			"note": "move-elements no longer carries the registry fragments of the arrays it moved elements between"
+		},
+		{
+			"name": "M-COMMENT-REWRITE-FOLLOWS-ONCE",
+			"type": "anyparse.query.cli.command.CommentRewriteCommand",
+			"method": "rewriteCommentFiles",
+			"find": "RegistryFollowCommand.writeRecorded(written, path, source, text);",
+			"replace": "RegistryFollowCommand.writeFollowed(op, [{ path: path, content: text }], plugin);",
+			"note": "comment-rewrite follows the registries once per file instead of once per run, so every file re-reads every registry document"
 		}
 	]
 }

@@ -119,7 +119,7 @@ final class MoveToHelperCommand implements CliCommand {
 				}
 				if (armsFile != null && !printArmHints(armsFile, changes, srcTypeName, helper, plugin)) return EXIT_RUNTIME;
 				if (write) {
-					CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));
+					RegistryFollowCommand.writeFollowed('move-to-helper', changes.map(c -> { path: c.file, content: c.newSource }), plugin);
 					CliIo.stderr('apq move-to-helper: wrote ${changes.length} file(s)\n');
 				} else {
 					CliIo.sysPrint('total: ${changes.length} file(s)\n');

@@ -100,7 +100,7 @@ final class SafeDeleteCommand implements CliCommand {
 		switch result {
 			case Ok(text):
 				if (write) {
-					CliIo.writeFile(srcFileNN, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: srcFileNN, content: text }], plugin);
 					CliIo.stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
 				} else {
 					CliEdit.previewEdit(op, srcFileNN, text);

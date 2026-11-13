@@ -92,7 +92,7 @@ final class EncapsulateFieldCommand implements CliCommand {
 			case Ok(text, rewrites):
 				CliEdit.warnRewrites(op, filePath, rewrites);
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);

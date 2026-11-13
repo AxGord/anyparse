@@ -126,7 +126,7 @@ final class ChangeSigCommand implements CliCommand {
 		switch result {
 			case Ok(text, advisory):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq change-sig: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);

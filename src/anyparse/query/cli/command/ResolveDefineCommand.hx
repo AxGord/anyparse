@@ -3,6 +3,7 @@ package anyparse.query.cli.command;
 import anyparse.query.CondResolve;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.query.cli.command.RegistryFollowCommand.WrittenSource;
 import anyparse.runtime.Span.Position;
 
 /**
@@ -225,6 +226,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 		var changed: Int = 0;
 		var failed: Int = 0;
 		var regions: Int = 0;
+		final written: Array<WrittenSource> = [];
 		for (path in paths) {
 			final source: String = try {
 				CliIo.readFile(path);
@@ -256,7 +258,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 					// its own file byte-identical.
 					if (o.write) {
 						if (isChanged) try {
-							CliIo.writeFile(path, text);
+							RegistryFollowCommand.writeRecorded(written, path, source, text);
 							changed++;
 						} catch (exception: WriteFailure) {
 							CliIo.stderr('apq resolve-define: ${exception.message}\n');
@@ -276,6 +278,7 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 					failed++;
 			}
 		}
+		RegistryFollowCommand.followWrite(op, written, plugin);
 		return {
 			changed: changed,
 			failed: failed,

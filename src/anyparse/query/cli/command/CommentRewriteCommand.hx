@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.query.cli.command.RegistryFollowCommand.WrittenSource;
 import anyparse.query.format.Text;
 
 /**
@@ -259,6 +260,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 		final op: String = 'comment-rewrite';
 		var changed: Int = 0;
 		var failed: Int = 0;
+		final written: Array<WrittenSource> = [];
 		for (path in paths) {
 			final source: String = try {
 				CliIo.readFile(path);
@@ -278,7 +280,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 					// unreadable one, not a reason to abandon the rest.
 					if (write) {
 						if (isChanged) try {
-							CliIo.writeFile(path, text);
+							RegistryFollowCommand.writeRecorded(written, path, source, text);
 							changed++;
 						} catch (exception: WriteFailure) {
 							CliIo.stderr('apq comment-rewrite: ${exception.message}\n');
@@ -303,6 +305,7 @@ final class CommentRewriteCommand implements CliCommand implements LeadingQueryC
 					failed++;
 			}
 		}
+		RegistryFollowCommand.followWrite(op, written, plugin);
 		return { changed: changed, failed: failed };
 	}
 

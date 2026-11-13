@@ -415,6 +415,104 @@ class RegistryFollowWriteCliTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-REWRITE-FOLLOWS-REGISTRY')
+	public function testRewriteCarriesAFragmentOverTheMatchesItReplaced(): Void {
+		#if nodejs
+		final arms: String = armsAfter(
+			'apq_follow_rewrite', 'var x = 1;\n\t\treturn x + 2;', '"find":"x + 2","replace":"x - 2"', [],
+			['rewrite', 'src/p/C.hx', 'x + 2', 'x + 9', '--write']
+		);
+		Assert.isTrue(arms.indexOf('"find":"x + 9","replace":"x - 9"') >= 0, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-INLINE-FOLLOWS-REGISTRY')
+	public function testInlineCarriesAFragmentOverTheBindingItFolded(): Void {
+		#if nodejs
+		final arms: String = armsAfter(
+			'apq_follow_inline', 'var x = 1;\n\t\treturn x + 2;', '"find":"x + 2","replace":"x - 2"', [],
+			['inline', 'src/p/C.hx', '--select', 'FnMember:f >> VarStmt:x', '--write']
+		);
+		Assert.isTrue(arms.indexOf('"find":"1 + 2","replace":"1 - 2"') >= 0, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-COMMENT-REWRITE-FOLLOWS-REGISTRY')
+	public function testCommentRewriteCarriesAFragmentOverTheCommentItReworded(): Void {
+		#if nodejs
+		final arms: String = armsAfter(
+			'apq_follow_comment', '// say hello\n\t\treturn 1;', '"find":"say hello\\n\\t\\treturn 1","replace":"x"', [],
+			['comment-rewrite', 'hello', 'world', 'src', '--write']
+		);
+		Assert.isTrue(arms.indexOf('"find":"say world\\n\\t\\treturn 1"') >= 0, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-COMMENT-REWRITE-FOLLOWS-ONCE')
+	public function testCommentRewriteOverTwoFilesFollowsTheRegistriesOncePerRun(): Void {
+		#if nodejs
+		final root: String = project(
+			'apq_follow_comment_once', '// say hello\n\t\treturn 1;', '"find":"say hello\\n\\t\\treturn 1","replace":"x"',
+			[
+				{ name: 'src/q/D.hx', source: 'package q;\n\nclass D {\n\tfunction g():Int {\n\t\t// say hello\n\t\treturn 2;\n\t}\n}\n' },
+				{
+					name: 'arms/q.json',
+					source: '{"arms":[{"name":"B","type":"q.D","method":"g","find":"say hello\\n\\t\\treturn 2","replace":"y"}]}\n'
+				}
+			]
+		);
+		var run: Null<CliRun> = null;
+		final err: String = CliFixture.captureStderr(() ->
+			run = CliFixture.runIn(root, ['comment-rewrite', 'hello', 'world', 'src', '--write'])
+		);
+		final armsP: String = File.getContent('$root/arms/p.json');
+		final armsQ: String = File.getContent('$root/arms/q.json');
+		CliFixture.removeDir(root);
+		Assert.equals(0, run?.code, err);
+		Assert.isTrue(armsP.indexOf('"find":"say world\\n\\t\\treturn 1"') >= 0, armsP);
+		Assert.isTrue(armsQ.indexOf('"find":"say world\\n\\t\\treturn 2"') >= 0, armsQ);
+		Assert.equals(1, err.split('registry-follow:').length - 1, err);
+		Assert.isTrue(err.indexOf('registry-follow: 2 fragment(s) in 2 file(s)') >= 0, err);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-MOVE-ELEMENTS-FOLLOWS-REGISTRY')
+	public function testMoveElementsCarriesAFragmentOverTheArrayItGrew(): Void {
+		#if nodejs
+		final arms: String = armsAfter(
+			'apq_follow_elements', 'final a = [1, 2, 3];\n\t\tfinal b = [4];\n\t\treturn a.length + b.length;',
+			'"find":"final b = [4]","replace":"final b = [4, 5]"', [],
+			[
+				'move-elements',
+				'src/p/C.hx',
+				'--select',
+				'FnMember:f >> FinalStmt:a',
+				'--range',
+				'3..3',
+				'--append',
+				'FnMember:f >> FinalStmt:b',
+				'--write'
+			]
+		);
+		Assert.isTrue(arms.indexOf('"find":"final b = [4, 3]"') >= 0, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
 	@:killer('M-NO-REGISTRY-FOLLOW-IGNORED')
 	public function testPatchWithNoRegistryFollowLeavesTheArmRecordsByteIdentical(): Void {
 		#if nodejs

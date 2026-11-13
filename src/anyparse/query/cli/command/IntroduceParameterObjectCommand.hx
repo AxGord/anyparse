@@ -111,7 +111,7 @@ final class IntroduceParameterObjectCommand implements CliCommand {
 		switch result {
 			case Ok(text):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr(
 						'apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n'
 					);

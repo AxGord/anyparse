@@ -113,7 +113,7 @@ final class AddParamCommand implements CliCommand {
 		switch result {
 			case Ok(text):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq add-param: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);

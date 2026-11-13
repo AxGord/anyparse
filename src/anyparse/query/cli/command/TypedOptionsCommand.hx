@@ -5,6 +5,7 @@ import anyparse.query.ExitCode.EXIT_OK;
 import anyparse.query.ExitCode.EXIT_RUNTIME;
 import anyparse.query.ExitCode.EXIT_USAGE;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
+import anyparse.query.cli.command.RegistryFollowCommand.WrittenSource;
 
 /**
  * Parsed options for `apq typed-options` — `lang`, `kit`, `write` / `reformat` and the `inputSpecs`. `errExit` non-null means arg
@@ -68,6 +69,7 @@ final class TypedOptionsCommand implements CliCommand {
 		var changed: Int = 0;
 		var sites: Int = 0;
 		var failed: Int = 0;
+		final written: Array<WrittenSource> = [];
 		for (path in io.paths) {
 			final source: String = try {
 				CliIo.readFile(path);
@@ -88,7 +90,7 @@ final class TypedOptionsCommand implements CliCommand {
 					CliEdit.warnRewrites(OP, path, rewrites);
 					if (o.write) {
 						try {
-							CliIo.writeFile(path, text);
+							RegistryFollowCommand.writeRecorded(written, path, source, text);
 							changed++;
 						} catch (exception: WriteFailure) {
 							CliIo.stderr('apq typed-options: ${exception.message}\n');
@@ -111,6 +113,7 @@ final class TypedOptionsCommand implements CliCommand {
 			+ (failed > 0 ? ', $failed failed' : '')
 			+ '\n'
 		);
+		RegistryFollowCommand.followWrite(OP, written, io.plugin);
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 

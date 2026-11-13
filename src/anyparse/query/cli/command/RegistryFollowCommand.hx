@@ -188,6 +188,12 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 		followWrite(op, written, plugin);
 	}
 
+	/** Writes one source file and records it in `written` for a single `followWrite` after a file-set loop. */
+	public static function writeRecorded(written: Array<WrittenSource>, path: String, before: String, after: String): Void {
+		CliIo.writeFiles([{ path: path, content: after }]);
+		written.push({ path: path, before: before, after: after });
+	}
+
 	private static inline function isRewritten(entry: ChangedPath, lang: String): Bool {
 		return (entry.status == 'M' || entry.status == 'R') && entry.path.endsWith(CliArgs.sourceExtensionOf(lang));
 	}

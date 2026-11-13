@@ -130,7 +130,7 @@ final class RemoveParamCommand implements CliCommand {
 		switch result {
 			case Ok(text, advisory):
 				if (write) {
-					CliIo.writeFile(filePath, text);
+					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq remove-param: wrote $filePath\n');
 				} else {
 					CliEdit.previewEdit(op, filePath, text);
