@@ -669,6 +669,14 @@
 			"method": "hasBareBranch",
 			"force": "true",
 			"note": "every if / else function body counts as having a brace-less branch, so an all-braced chain leaves its functionBody / anonFunctionBody placement for the next line"
+		},
+		{
+			"name": "M-CASE-BODY-LITERAL-OFFER-OFF",
+			"type": "anyparse.format.BodyFit",
+			"method": "fitLineBelowLabel",
+			"find": "offerLiteralBreaks(body, b -> fitLineLayout(cols, b, nestGluedBody, lineWidth, refuseGlue))",
+			"replace": "fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue)",
+			"note": "a case body is laid out for its flat literal only: the next write reads the broken literal as a glued body and a threshold-literal case body takes two rewrites"
 		}
 	]
 }

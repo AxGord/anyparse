@@ -148,12 +148,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE copy,
-	 * because FOUR tests read it and they must not drift apart: the tail pin
-	 * asserts it still takes two writer rewrites, the mechanism split re-reads it
-	 * under a committed cascade, and `testCanonicalizeWritesTheWriterFixedPoint` is
-	 * only a regression test for as long as the first of those holds.
-	 * (`unit.query.NewFileSliceTest` needs its own copy — a different class — and carries
-	 * a local precondition instead.)
+	 * because two tests read it and they must not drift apart: the tail pin asserts
+	 * one writer rewrite settles it, and the mechanism split re-reads it under a
+	 * committed cascade. (`unit.query.NewFileSliceTest` needs its own copy — a
+	 * different class — and carries a local precondition instead.)
 	 */
 	private static final CASE_BODY_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
 		+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try '
@@ -164,11 +162,21 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * Pony's own `objectLiteral` cascade under a `sameLine.caseBody: fitLine`
 	 * switch — the host is `BodyFit.fitLineLayout`, which asks
 	 * `WrapList.flatLength` whether the body can render on one line at all.
+	 * Pony also sets `caseSiblings: anyBreak`; that variant is `CASE_BODY_SIBLINGS`.
 	 */
 	private static final CASE_BODY_OBJECT: String = '{"indentation": {"character": "tab", "tabWidth": 4, '
 		+ '"alignInlineSwitchCaseBody": true}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, '
 		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
 		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
+
+	/**
+	 * `CASE_BODY_OBJECT` with Pony's `sameLine.caseSiblings: anyBreak`: the switch's branches
+	 * share one placement, and `SiblingShare.share` votes on each body's flat width.
+	 */
+	private static final CASE_BODY_SIBLINGS: String = '{"indentation": {"character": "tab", "tabWidth": 4, '
+		+ '"alignInlineSwitchCaseBody": true}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine", '
+		+ '"caseSiblings": "anyBreak"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", '
+		+ '"rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
 
 	/**
 	 * The same literal cascade with an `arrayWrap` one beside it, under a
@@ -290,8 +298,9 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The value-`if` branch behind `src/pony/magic/builder/DIBuilder.hx`, reduced.
-	 * ONE copy for the same reason `CASE_BODY_SRC` gives: two tests read it — the
-	 * tail pin and the mechanism split — and they must not drift apart.
+	 * ONE copy for the same reason `CASE_BODY_SRC` gives: four tests read it — the
+	 * tail pin, the mechanism split and the two `canonicalize` tests, which are
+	 * regression tests only for as long as the tail pin holds it divergent.
 	 */
 	private static final VALUE_IF_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: E'
 		+ 'Vars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] }), expr: macro null, i'
@@ -638,8 +647,9 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    once the writer's own output has broken it, is force-committed by the Star
 	 *    that does not reflow source newlines; the host measure answers differently
 	 *    and the enclosing shape flips. Committing the cascade makes these CONVERGE.
-	 *    Hosts: `BodyFit.fitLineLayout` on a `caseBody: fitLine` or `ifBody: fitLine`
-	 *    host, and the value-`if` branch — the `ifBody: fitLine` host has no fixture yet.
+	 *    Open: the value-`if` branch and a `caseSiblings`-shared case body (`SiblingShare.share`
+	 *    votes on the flat body). CLOSED with the sibling policy off: `BodyFit.fitLineBelowLabel`
+	 *    lays the body out once per literal break (`offerLiteralBreaks`), as the `FitLine` arms do.
 	 *  - MECHANISM B, no pivot anywhere: `DocMeasure.flatTokenWidth` DEFERS a
 	 *    `BodyGroup` to 0, so the width a CASCADE reads for an item ALREADY committed
 	 *    to breaking collapses between the two passes — the class
@@ -671,6 +681,12 @@ class WrapFlatSourceFixedPointTest extends Test {
 				name: 'case body (Unpack.hx, Builder.hx)',
 				config: CASE_BODY_OBJECT,
 				src: CASE_BODY_SRC,
+				closed: true
+			},
+			{
+				name: 'case body under caseSiblings: anyBreak (SiblingShare votes on the flat body)',
+				config: CASE_BODY_SIBLINGS,
+				src: CASE_BODY_SRC,
 				closed: false
 			},
 			{
@@ -696,9 +712,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 			final once: String = write(c.src, c.config);
 			final twice: String = write(once, c.config);
 			if (c.closed) {
-				Assert.equals(
-					once, twice, '${c.name}: this divergence was closed (mechanism B) — one round trip must land on the fixed point'
-				);
+				Assert.equals(once, twice, '${c.name}: this divergence was closed — one round trip must land on the fixed point');
 			} else {
 				Assert.notEquals(
 					once, twice, '${c.name}: this writer divergence is CLOSED — flip this case to Assert.equals and re-run the Pony census'
@@ -726,10 +740,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+		switch CanonicalEdit.canonicalize(VALUE_IF_SRC, [], true, plugin, VALUE_IF_NESTED) {
 			case Ok(text):
 				Assert.equals(
-					text, plugin.writeRoundTrip(text, CASE_BODY_OBJECT),
+					text, plugin.writeRoundTrip(text, VALUE_IF_NESTED),
 					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
 				);
 			case Err(message):
@@ -750,7 +764,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeReportsTheRewriteCount(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_OBJECT) {
+		switch CanonicalEdit.canonicalize(VALUE_IF_SRC, [], true, plugin, VALUE_IF_NESTED) {
 			case Ok(_, rewrites):
 				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
 				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');
@@ -858,13 +872,12 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * DIVERGENT under cascades that carry a fit-dependent `noWrap` shadow. Run
 	 * them again with only that shadow removed — a rules-free cascade answers
 	 * ONE mode in both fit states, so no `IfFirstLineExceeds` pivot can exist —
-	 * and the two mechanism-A cases CONVERGE. The third, mechanism B, needed two
-	 * rewrites under either cascade until B was closed; it now converges under both.
+	 * and the mechanism-A cases CONVERGE. The case body, mechanism A, and the
+	 * ternary, mechanism B, are closed and now converge under either cascade.
 	 *
 	 * That split is the whole content of the mechanism claim above, and the two
 	 * tests together are its mutation proof: the only variable between them is
-	 * the cascade's `rules` array, and flipping it flips exactly the first two
-	 * cases.
+	 * the cascade's `rules` array, and flipping it flips the value-if case.
 	 *
 	 * Each case pins the settled SHAPE beside the rewrite count, so a writer
 	 * that reformatted nothing at all would fail here rather than pass.

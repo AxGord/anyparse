@@ -25,9 +25,9 @@ package anyparse.grammar.haxe;
  * body to `anyparse.format.BodyFit.fitLineLayout`, the emitter that also serves bare-Ref bodies: a body that
  * can render on one line at all becomes `BodyGroup(Nest(cols, [Line, body]))` — inline when it fits the live
  * line, else the WHOLE body drops one indent deeper; a body that cannot GLUES to the label. Asking the
- * flat-length question first narrows the dependence on the source line shape but does not remove it: a
- * collection whose cascade answers a non-breaking mode and which the renderer then breaks on width still takes
- * two passes (`unit.WrapFlatSourceFixedPointTest`). Fan-out flags: `@:fmt(flatChildOpt('A=B', ...))` writes
+ * flat-length question first narrows the dependence on the source line shape; an object literal the renderer breaks on
+ * width is laid out once per such break (`BodyFit.offerLiteralBreaks`) and settles in one pass with the sibling policy off;
+ * a sibling-shared switch still votes on the flat body (`SiblingShare.share`). Fan-out flags: `@:fmt(flatChildOpt('A=B', ...))` writes
  * the body's element, when the flat gate fires, with a `Reflect.copy(opt)` whose `ifBody`/`elseBody`/`forBody`
  * are overridden by `expressionCase` itself, so nested control flow inherits the case body's shape choice
  * without touching the `expressionIfBody` knobs `HxIfExpr` reads. `@:fmt(propagateExprPosition)` sets

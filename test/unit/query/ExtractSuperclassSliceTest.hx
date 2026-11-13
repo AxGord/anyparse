@@ -176,7 +176,7 @@ class ExtractSuperclassSliceTest extends Test {
 	 * there wrote a file its own `fmt --list` called drifted; the fixed-point loop
 	 * is what closes it, and the advisory says the writer needed the second pass.
 	 *
-	 * The config and the body are the case-body shape
+	 * The config and the body are the value-`if` shape
 	 * `unit.format.WrapFlatSourceFixedPointTest` pins as STILL divergent, and this test
 	 * goes LOUD the day that pin does — deliberately, the same way the pin itself
 	 * does. The fixed-point assertion below stays true either way, but the
@@ -187,13 +187,16 @@ class ExtractSuperclassSliceTest extends Test {
 	 * one.
 	 */
 	public function testCreatedSuperclassSettlesTheWriterFixedPoint(): Void {
-		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
-			+ '"caseBody": "fitLine", "expressionCase": "fitLine"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": '
-			+ '"onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
-		final src: String = 'package pkg;\n\nclass Unpack {\n\tpublic function new() {}\n\n\tpublic function readNode(xml: Fast): Void {\n'
-			+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch ('
-			+ '_: Any) \'\', file: xml.att.file, rm: xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n'
-			+ '\t\t\t\ttrace(xml);\n\t\t}\n\t}\n\n\tpublic function keep(): Void {}\n}\n';
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"ifBody": "fitLine", "expressionIf": '
+			+ '"next"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": ['
+			+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, "arrayWrap": {'
+			+ '"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "hasMultilineItems", "value": 1}], "type": '
+			+ '"onePerLine"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 80}], "type": "noWrap"}, {'
+			+ '"conditions": [{"cond": "anyItemLength >= n", "value": 30}], "type": "onePerLine"}]}}}';
+		final src: String = 'package pkg;\n\nclass Unpack {\n\tpublic function new() {}\n\n\tpublic function readNode(): Void {\n'
+			+ '\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: EVars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], '
+			+ 'name: \'Null\', params: [TPType(t)] }), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n'
+			+ '\t\telse\n\t\t\tcheckExpr(x);\n\t}\n\n\tpublic function keep(): Void {}\n}\n';
 		switch ExtractSuperclass.extract(
 			'pkg/Unpack.hx', 'Unpack', 'BaseUnpack', 'pkg/BaseUnpack.hx', ['readNode'], src, plugin(), config
 		) {

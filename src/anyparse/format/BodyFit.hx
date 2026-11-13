@@ -72,11 +72,13 @@ final class BodyFit {
 	/**
 	 * `fitLineLayout` under a head. `belowWrappedLabel` says the head began a `LineSpan`: `fitLine` asks whether the whole
 	 * construct stands on one line, so a head that took more than one has already answered, whatever room its last row leaves.
+	 * The layout is offered once per object-literal break in `body` (`offerLiteralBreaks`), as the body-policy `FitLine` arms
+	 * are: the next write reads a literal this one broke as a body that cannot render flat.
 	 */
 	public static inline function fitLineBelowLabel(
 		cols: Int, body: Doc, nestGluedBody: Bool, lineWidth: Int, refuseGlue: Bool, belowWrappedLabel: Bool
 	): Doc {
-		final fit: Doc = fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue);
+		final fit: Doc = offerLiteralBreaks(body, b -> fitLineLayout(cols, b, nestGluedBody, lineWidth, refuseGlue));
 		return belowWrappedLabel ? LineSpan.ifLeft(breakLayout(cols, body), fit) : fit;
 	}
 

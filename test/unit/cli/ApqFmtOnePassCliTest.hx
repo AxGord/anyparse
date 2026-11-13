@@ -23,8 +23,8 @@ import anyparse.query.Cli;
 class ApqFmtOnePassCliTest extends Test {
 
 	/**
-	 * Pony's own `objectLiteral` cascade under a `sameLine.caseBody: fitLine`
-	 * switch — one of the three shapes `unit.format.WrapFlatSourceFixedPointTest` pins
+	 * Pony's own `objectLiteral` cascade beside an `arrayWrap` one under a value-`if`
+	 * host — a shape `unit.format.WrapFlatSourceFixedPointTest` pins
 	 * as STILL divergent. Copied rather than shared because that class states
 	 * the writer property and this one states the CLI's reaction to it; the
 	 * copy carries its own precondition instead, and it is the test below: if
@@ -32,15 +32,17 @@ class ApqFmtOnePassCliTest extends Test {
 	 * and the test fails, telling you to re-pick the fixture rather than
 	 * silently measuring nothing.
 	 */
-	private static final TWO_REWRITE_CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4, '
-		+ '"alignInlineSwitchCaseBody": true}, "sameLine": {"caseBody": "fitLine", "expressionCase": "fitLine"}, '
-		+ '"wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": '
-		+ '[{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}}}';
+	private static final TWO_REWRITE_CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, '
+		+ '"sameLine": {"ifBody": "fitLine", "expressionIf": "next"}, "wrapping": {"maxLineLength": 140, '
+		+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", '
+		+ '"value": 140}], "type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "noWrap", "rules": [{"conditions": '
+		+ '[{"cond": "hasMultilineItems", "value": 1}], "type": "onePerLine"}, {"conditions": [{"cond": '
+		+ '"totalItemLength <= n", "value": 80}], "type": "noWrap"}, {"conditions": [{"cond": "anyItemLength >= n", '
+		+ '"value": 30}], "type": "onePerLine"}]}}}';
 
-	private static final TWO_REWRITE_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
-		+ '\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n\t\t\t\tcfg.zips.push({ path: try '
-		+ 'StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, rm: xml.isTrue(\'rm\'), '
-		+ 'log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}\n';
+	private static final TWO_REWRITE_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: E'
+		+ 'Vars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] }), expr: macro null, i'
+		+ 'sFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}\n';
 
 	/** A canonical tree answers the flag exactly as it answers `--list`. */
 	public function testCanonicalFilePassesOnePass(): Void {
