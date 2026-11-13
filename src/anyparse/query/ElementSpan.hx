@@ -622,7 +622,7 @@ final class ElementSpan {
 		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
 		final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(subject);
 		final kind: String = decl == null ? subject.kind : decl.kind;
-		final name: Null<String> = decl == null ? subject.name : decl.name;
+		final name: Null<String> = cutName(node, parent);
 		final what: String = name == null ? kind : '$kind $name';
 		var lines: Int = 1;
 		var i: Int = cut.span.from;
@@ -693,6 +693,16 @@ final class ElementSpan {
 			&& nodeSpan.to < parentSpan.to
 			? parent
 			: null;
+	}
+
+	/**
+	 * The declared name of the element a cut removes, read from its node
+	 * (a type wrapper reads as the type it names); null for an unnamed one.
+	 */
+	public static function cutName(node: QueryNode, parent: Null<QueryNode>): Null<String> {
+		final subject: QueryNode = cutSubject(node, parent);
+		final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(subject);
+		return decl == null ? subject.name : decl.name;
 	}
 
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */

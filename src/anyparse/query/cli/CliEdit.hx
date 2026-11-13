@@ -2,8 +2,10 @@ package anyparse.query.cli;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.CommentMentions;
 import anyparse.query.ElementSpan;
 import anyparse.query.ExitCode.*;
+import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.LineDiff;
@@ -86,7 +88,7 @@ final class CliEdit {
 				warnRewrites(opName, filePath, rewrites);
 				// `detail` reaches the PREVIEW too: a preview leaves no file to inspect, so it is
 				// the mode where "did all of them land?" has no other answer.
-				final tail: String = detail == null ? '' : ' ($detail)';
+				final tail: String = detailTail(detail);
 				if (write) {
 					// Read BEFORE the write, because both the registry follow and the window `--fix` narrows to
 					// are the difference between these two texts and there is no second chance to see the old one.
@@ -318,6 +320,32 @@ final class CliEdit {
 				windows.push({ from: line + 1, to: line + 1 });
 		}
 		return windows;
+	}
+
+	/**
+	 * The note a name-bearing edit owes on the comments it left alone — `CommentMentions.leftBehind` over the text
+	 * the edit produced — or null when it failed, has no name to look for, or no comment names it.
+	 */
+	public static function commentNote(file: String, result: EditResult, plugin: GrammarPlugin, name: Null<String>): Null<String> {
+		return switch result {
+			case Ok(text, _): CommentMentions.leftBehindIn(file, text, plugin, name);
+			case Err(_): null;
+		};
+	}
+
+	/** Two report details as one: either may be absent, both read in order. */
+	public static function joinDetail(first: Null<String>, second: Null<String>): Null<String> {
+		return if (first == null)
+			second
+		else if (second == null)
+			first
+		else
+			'$first; $second';
+	}
+
+	/** A report detail as the parenthesised tail the write and preview lines carry; empty when there is none. */
+	public static function detailTail(detail: Null<String>): String {
+		return detail == null ? '' : ' ($detail)';
 	}
 
 	/**

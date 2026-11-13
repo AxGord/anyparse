@@ -1,5 +1,6 @@
 package anyparse.query.cli.command;
 
+import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
 import anyparse.query.ReplaceNode.ReplaceTarget;
 import anyparse.runtime.Span;
@@ -133,12 +134,15 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 			final target: Null<ReplaceTarget> = CliEdit.resolveEditTarget(
 				OP, source, filePath, plugin, selectExpr, matchExpr, posSpec, nth, liftKind
 			);
-			return target == null
-				? EXIT_RUNTIME
-				: CliEdit.finishEdit(
-					OP, filePath, write, RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson), ledger, plugin,
-					fix, RemoveElement.describeTarget(source, target, plugin, withDoc)
-				);
+			if (target == null) return EXIT_RUNTIME;
+			final result: EditResult = RemoveElement.removeTarget(source, target, reformat, plugin, withDoc, optsJson);
+			final left: Null<String> = CliEdit.commentNote(
+				filePath, result, plugin, RemoveElement.removedNameOfTarget(source, target, plugin)
+			);
+			return CliEdit.finishEdit(
+				OP, filePath, write, result, ledger, plugin, fix,
+				CliEdit.joinDetail(RemoveElement.describeTarget(source, target, plugin, withDoc), left)
+			);
 		}
 		final pos: Null<Position> = CliEdit.resolveAddressPos(OP, source, plugin, posSpec, selectExpr, matchExpr, nth);
 		if (pos == null) return EXIT_RUNTIME;
@@ -148,10 +152,11 @@ final class RemoveElementCommand implements CliCommand implements PostWriteFix {
 		// that was meant: a twenty-line test with a doc and two annotations left the file and
 		// nothing in the transcript said so. Naming the cut costs no behaviour and no ceremony.
 		final removed: Null<String> = RemoveElement.describeRemoval(source, pos.line, pos.col, plugin, withDoc);
-		return CliEdit.finishEdit(
-			OP, filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson), ledger,
-			plugin, fix, removed
+		final result: EditResult = RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson);
+		final left: Null<String> = CliEdit.commentNote(
+			filePath, result, plugin, RemoveElement.removedNameAt(source, pos.line, pos.col, plugin)
 		);
+		return CliEdit.finishEdit(OP, filePath, write, result, ledger, plugin, fix, CliEdit.joinDetail(removed, left));
 	}
 
 	private static function printRemoveElementUsage(): Void {

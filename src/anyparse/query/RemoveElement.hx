@@ -118,13 +118,33 @@ final class RemoveElement {
 		);
 	}
 
+	/**
+	 * The declared name of the element the cut at `line:col` takes — what `describeRemoval` names — or null when
+	 * the element is unnamed or the address resolves to none.
+	 */
+	public static function removedNameAt(source: String, line: Int, col: Int, plugin: GrammarPlugin): Null<String> {
+		final hit: Null<ElementHit> = hitIn(
+			source, plugin, tree -> ElementSpan.liftedElementAt(tree, source, Span.offsetOf(source, line, col))
+		);
+		return hit == null ? null : ElementSpan.cutName(hit.node, hit.parent);
+	}
+
+	/** `removedNameAt` for the node `target` resolves to — what `removeTarget` cuts. */
+	public static function removedNameOfTarget(source: String, target: ReplaceTarget, plugin: GrammarPlugin): Null<String> {
+		final hit: Null<ElementHit> = hitIn(
+			source, plugin, tree -> switch ReplaceNode.resolveTarget(source, tree, target, plugin) {
+				case Resolved(n): ElementSpan.liftedElement(tree, n);
+				case Failed(_): null;
+			}
+		);
+		return hit == null ? null : ElementSpan.cutName(hit.node, hit.parent);
+	}
+
 	/** The cut description for the element `find` picks out of the parsed source, or null. */
 	private static function describeHit(
 		source: String, plugin: GrammarPlugin, withDoc: Bool, find: QueryNode -> Null<ElementHit>
 	): Null<String> {
-		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		if (tree == null) return null;
-		final hit: Null<ElementHit> = find(tree);
+		final hit: Null<ElementHit> = hitIn(source, plugin, find);
 		if (hit == null) return null;
 		final nodeSpan: Null<Span> = hit.node.span;
 		return nodeSpan == null ? null : ElementSpan.describeCut(source, hit.node, hit.parent, nodeSpan, withDoc, plugin);
@@ -145,6 +165,12 @@ final class RemoveElement {
 		final where: String = container == null ? 'the file' : container.kind;
 		return 'the literal is not a whole element of a list: it sits inside $where, so there is no element to remove — '
 			+ 'address the enclosing node (`--select`/`--match` it with `--kind`) or edit it with `replace-node` / `patch`';
+	}
+
+	/** The element `find` picks out of the parsed source, or null when the source does not parse or `find` picks none. */
+	private static function hitIn(source: String, plugin: GrammarPlugin, find: QueryNode -> Null<ElementHit>): Null<ElementHit> {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		return tree == null ? null : find(tree);
 	}
 
 }

@@ -848,6 +848,15 @@ final class RefactorSupport {
 		return out;
 	}
 
+	/**
+	 * The name a rename addressed at `cursor` is about to replace: the type declaration the cursor lands on, else the
+	 * named node it resolves to; null when it lands on no name.
+	 */
+	public static function renamedNameAt(tree: QueryNode, cursor: Int, source: String): Null<String> {
+		final decl: Null<TypeDeclMatch> = resolveTypeDeclAtCursor(tree, cursor, source);
+		return decl == null ? resolveCursorNode(tree, cursor, source)?.name : decl.name;
+	}
+
 	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */
 	private static function typeHeaderFrom(source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>): Int {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;

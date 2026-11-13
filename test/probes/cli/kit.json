@@ -50,7 +50,8 @@
 		"identmap/src/Main.hx": "class Main {\n\tstatic function run(es: Array<EI>): Void {\n\t\tfinal a: Array<Null<EI>> = es.map(x -> (x : Null<EI>));\n\t\tfinal c = [for (e in es) e];\n\t\ttrace(a, c);\n\t}\n}\n",
 		"identmap/lib/Ab.hx": "enum abstract EI(Int) {\n\tvar A = 1;\n}\n",
 		"tlit/Decl.hx": "package tlit;\n\ntypedef Foo = {x: Int};\n",
-		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n"
+		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n",
+		"zq/Zq.hx": "package a;\n\nclass C {\n\n\t/** The helper. */\n\tpublic function zq():Void {}\n\n\t// calls zq once\n\tpublic function g():Void {}\n\n}\n"
 	},
 	"invocations": [
 		{
@@ -9445,6 +9446,38 @@
 				"exit": 1,
 				"out": "e3b0c44298fc1c14",
 				"err": "6c153df5b73ddd31",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq remove-element zq/Zq.hx --select FnMember:zq",
+			"argv": [
+				"apq",
+				"remove-element",
+				"zq/Zq.hx",
+				"--select",
+				"FnMember:zq"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ed7dbd2a683ca1b0",
+				"err": "c8f7f59b15def2c7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq remove-element zq/Zq.hx --select FnMember:zq",
+			"argv": [
+				"hxq",
+				"remove-element",
+				"zq/Zq.hx",
+				"--select",
+				"FnMember:zq"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ed7dbd2a683ca1b0",
+				"err": "c8f7f59b15def2c7",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

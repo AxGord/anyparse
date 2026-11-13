@@ -1192,7 +1192,7 @@
 			"name": "M-REMOVE-MEMBER-COMMENT-NOTE-DROPPED",
 			"type": "anyparse.query.cli.command.RemoveMemberCommand",
 			"method": "runRemoveMember",
-			"find": "CommentMentions.leftBehind(filePath, text, plugin.lexicalRegions(text), target.member)",
+			"find": "CliEdit.commentNote(filePath, result, plugin, target.member)",
 			"replace": "null",
 			"note": "a removal says nothing of the comments that still name the removed member, so it reads as a clean scrub while prose dangles"
 		},
@@ -1459,6 +1459,54 @@
 			"find": "if (!RegistryFollowCommand.optedOut(runLedger)) RegistryFollowCommand.followWrite(",
 			"replace": "RegistryFollowCommand.followWrite(",
 			"note": "the lint pass of a write op's --fix follows the registries whatever the run's opt-out said, so a probe edit with --fix still re-spells the arm records that target the code it cut"
+		},
+		{
+			"name": "M-REMOVE-ELEMENT-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveElementCommand",
+			"method": "runRemoveElement",
+			"find": "RemoveElement.removedNameAt(source, pos.line, pos.col, plugin)",
+			"replace": "null",
+			"note": "an element removal at a position says nothing of the comments that still name what it removed"
+		},
+		{
+			"name": "M-REMOVE-ELEMENT-KIND-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RemoveElementCommand",
+			"method": "runRemoveElement",
+			"find": "RemoveElement.removedNameOfTarget(source, target, plugin)",
+			"replace": "null",
+			"note": "the --kind form of the removal says nothing of the comments that still name what it removed"
+		},
+		{
+			"name": "M-RENAME-VALUE-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "runRename",
+			"find": "CommentMentions.leftBehindIn(filePath, text, plugin, oldName)",
+			"replace": "null",
+			"note": "a value rename says nothing of the comments that still name the old name"
+		},
+		{
+			"name": "M-RENAME-IN-FILE-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "emitInFileRename",
+			"find": "CommentMentions.leftBehindIn(change.file, change.newSource, plugin, oldName)",
+			"replace": "null",
+			"note": "an in-file type or member rename says nothing of the comments that still name the old name"
+		},
+		{
+			"name": "M-RENAME-SCOPE-COMMENT-NOTE-DROPPED",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "commentNote",
+			"find": "CommentMentions.leftBehindAcross(texts, plugin, oldName, scopes.join(' '))",
+			"replace": "null",
+			"note": "a cross-file rename says nothing of the comments that still name the old name"
+		},
+		{
+			"name": "M-RENAME-SCOPE-UNCHANGED-FILE-DROPPED",
+			"type": "anyparse.query.cli.command.RenameCommand",
+			"method": "commentNote",
+			"find": "written == null ? f.source : written.newSource",
+			"replace": "written == null ? \"\" : written.newSource",
+			"note": "a scope file the rename left untouched is not read, so a comment-only mention in it goes unsaid"
 		}
 	]
 }

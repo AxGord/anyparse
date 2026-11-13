@@ -12,6 +12,9 @@ import haxe.ds.Either;
 import anyparse.query.ExitCode.*;
 import anyparse.query.MemberRegistryRename.MemberRename;
 import anyparse.query.MemberRegistryRename.RegistryFollow;
+import anyparse.query.CommentMentions;
+import anyparse.query.RefactorSupport;
+import anyparse.query.ParseGate;
 
 using Lambda;
 
@@ -132,26 +135,29 @@ final class RenameCommand implements CliCommand {
 		final pos: Null<Position> = CliEdit.resolveAddressPos(op, source, plugin, posSpec, selectExpr, matchExpr, nth, true);
 		if (pos == null) return EXIT_RUNTIME;
 
-		if (scopes.length > 0) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scopes, write, plugin);
+		// The name the cursor lands on, read before any edit: the comments that still write it are what the report owes.
+		final oldName: Null<String> = oldNameAt(source, pos.line, pos.col, plugin);
+		if (scopes.length > 0) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, oldName, scopes, write, plugin);
 		// A TYPE name lives in the type namespace, which `Rename` (value bindings) does not
 		// index - route it through the op `--scope` uses, with the cursor file as the scope.
 		if (cursorOnTypeDecl(source, pos.line, pos.col, plugin))
-			return runRenameTypeInFile(filePath, source, pos.line, pos.col, newNameStr, write, plugin);
+			return runRenameTypeInFile(filePath, source, pos.line, pos.col, newNameStr, oldName, write, plugin);
 		// Same for a MEMBER: value-binding resolution binds a name lexically, never through a
 		// receiver's type, so `Rename` rewrote the declaration and left every `obj.member` access
 		// on the old name - a rewrite that does not compile.
 		if (cursorOnMemberDecl(source, pos.line, pos.col, plugin))
-			return runRenameMemberInFile(filePath, source, pos.line, pos.col, newNameStr, write, plugin);
+			return runRenameMemberInFile(filePath, source, pos.line, pos.col, newNameStr, oldName, write, plugin);
 
 		final shape: RefShape = plugin.refShape();
 		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed, filePath);
 		switch result {
 			case Ok(text):
+				final tail: String = CliEdit.detailTail(CommentMentions.leftBehindIn(filePath, text, plugin, oldName));
 				if (write) {
 					RegistryFollowCommand.writeFollowed(OP, [{ path: filePath, content: text }], plugin);
-					CliIo.stderr('apq rename: wrote $filePath\n');
+					CliIo.stderr('apq rename: wrote $filePath$tail\n');
 				} else {
-					CliEdit.previewEdit(op, filePath, text);
+					CliEdit.previewEdit(op, filePath, text, tail);
 				}
 				return EXIT_OK;
 			case Err(message):
@@ -172,7 +178,8 @@ final class RenameCommand implements CliCommand {
 	 * write either touches all changed files or none.
 	 */
 	private static function runRenameScope(
-		filePath: String, source: String, line: Int, col: Int, newName: String, scopes: Array<String>, write: Bool, plugin: GrammarPlugin
+		filePath: String, source: String, line: Int, col: Int, newName: String, oldName: Null<String>, scopes: Array<String>, write: Bool,
+		plugin: GrammarPlugin
 	): Int {
 		// A scope that matches nothing would narrow the rename silently to the rest, so it refuses instead.
 		final unmatched: Array<String> = CliArgs.expandFor(plugin.langName(), scopes).unmatched;
@@ -218,6 +225,8 @@ final class RenameCommand implements CliCommand {
 					CliIo.stderr('apq rename: NOTHING written — this is a preview; re-run with --write to apply\n');
 				}
 				for (note in registries.notes) CliIo.stderr('apq rename: $note\n');
+				final left: Null<String> = commentNote(oldName, scopeFiles, opChanges, scopes, plugin);
+				if (left != null) CliIo.stderr('apq rename: $left\n');
 				if (advisory != null) CliIo.stderr('apq rename: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
@@ -313,14 +322,14 @@ final class RenameCommand implements CliCommand {
 	 * advisory says so, pointing at `--scope`.
 	 */
 	private static function runRenameTypeInFile(
-		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
+		filePath: String, source: String, line: Int, col: Int, newName: String, oldName: Null<String>, write: Bool, plugin: GrammarPlugin
 	): Int {
 		return emitInFileRename(
 			CrossRename.crossRenameType(
 				filePath, source, line, col, newName, [{ file: filePath, source: source }],
 				plugin, plugin.typeRefShape(), plugin.refShape()
 			),
-			write, { changes: [], notes: [] }, plugin
+			oldName, write, { changes: [], notes: [] }, plugin
 		);
 	}
 
@@ -330,7 +339,7 @@ final class RenameCommand implements CliCommand {
 	 * the value-binding rename cannot do.
 	 */
 	private static function runRenameMemberInFile(
-		filePath: String, source: String, line: Int, col: Int, newName: String, write: Bool, plugin: GrammarPlugin
+		filePath: String, source: String, line: Int, col: Int, newName: String, oldName: Null<String>, write: Bool, plugin: GrammarPlugin
 	): Int {
 		final sources: Array<{ file: String, source: String }> = [{ file: filePath, source: source }];
 		final result: CrossRenameResult = CrossRenameMember.crossRenameMember(
@@ -340,7 +349,7 @@ final class RenameCommand implements CliCommand {
 			case Left(message):
 				CliIo.stderr('apq rename: $message — nothing written\n');
 				EXIT_RUNTIME;
-			case Right(registries): emitInFileRename(result, write, registries, plugin);
+			case Right(registries): emitInFileRename(result, oldName, write, registries, plugin);
 		};
 	}
 
@@ -349,25 +358,28 @@ final class RenameCommand implements CliCommand {
 	 * it, then the file-scope advisory and whatever the op itself reported.
 	 */
 	private static function emitInFileRename(
-		result: CrossRenameResult, write: Bool, registries: RegistryChanges, plugin: GrammarPlugin
+		result: CrossRenameResult, oldName: Null<String>, write: Bool, registries: RegistryChanges, plugin: GrammarPlugin
 	): Int {
 		switch result {
 			case Ok(changes, advisory):
 				// The scope is one file and an empty change set is `Err`, so there is exactly one.
 				if (changes.length != 1) throw new Exception('in-file rename produced ${changes.length} file change(s)');
 				final change: FileChange = changes[0];
+				final tail: String = CliEdit.detailTail(CommentMentions.leftBehindIn(change.file, change.newSource, plugin, oldName));
 				if (write) {
 					RegistryFollowCommand.writeFollowed(
 						OP, [change].concat(registries.changes).map(c -> { path: c.file, content: c.newSource }), plugin
 					);
-					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)\n');
+					CliIo.stderr('apq rename: wrote ${change.file}, ${change.count} occurrence(s)$tail\n');
 					for (r in registries.changes) CliIo.stderr('apq rename: wrote ${r.file}, registry record(s) followed\n');
 				} else {
 					// The one preview tail that spells the notice itself: this op's name already
 					// occurs twice as a bare literal, and a third would read as an extractable
 					// constant rather than as the CLI vocabulary it is.
 					CliIo.sysPrint(change.newSource);
-					CliIo.stderr('apq rename: ${change.file} NOT written — this is a preview on stdout; re-run with --write to apply\n');
+					CliIo.stderr(
+						'apq rename: ${change.file} NOT written — this is a preview on stdout$tail; re-run with --write to apply\n'
+					);
 					for (r in registries.changes) CliIo.stderr('apq rename: ${r.file} would follow the rename\n');
 				}
 				for (note in registries.notes) CliIo.stderr('apq rename: $note\n');
@@ -486,6 +498,24 @@ final class RenameCommand implements CliCommand {
 		CliIo.sysPrint('apq.json (move.registries[].members): a record value moves only where\n');
 		CliIo.sysPrint('the edits above proved it. A record that cannot be mapped stays and is\n');
 		CliIo.sysPrint('named on stderr; a registry that cannot be read refuses the rename.\n');
+	}
+
+	/** What each scope file still says in comments about the name the rename replaced, read from the text it ends with. */
+	private static function commentNote(
+		oldName: Null<String>, scopeFiles: Array<{ file: String, source: String }>, changes: Array<FileChange>, scopes: Array<String>,
+		plugin: GrammarPlugin
+	): Null<String> {
+		final texts: Array<{ file: String, text: String }> = scopeFiles.map(f -> {
+			final written: Null<FileChange> = changes.find(c -> c.file == f.file);
+			return { file: f.file, text: written == null ? f.source : written.newSource };
+		});
+		return CommentMentions.leftBehindAcross(texts, plugin, oldName, scopes.join(' '));
+	}
+
+	/** The name the rename's cursor lands on in `source`; null when the source does not parse or the cursor is on no name. */
+	private static function oldNameAt(source: String, line: Int, col: Int, plugin: GrammarPlugin): Null<String> {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		return tree == null ? null : RefactorSupport.renamedNameAt(tree, Span.offsetOf(source, line, col), source);
 	}
 
 }

@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 using Lambda;
 
@@ -69,6 +70,48 @@ final class CommentMentions {
 		if (hits.length == 0) return null;
 		final docs: Int = hits.count(hit -> hit.doc);
 		return '${hits.length} comment mention(s) of `$name` remain ($docs doc, ${hits.length - docs} plain): apq mentions $name $file';
+	}
+
+	/**
+	 * `leftBehind` for a written `text` the plugin's lexer has not yet read: null when `name` is null (the op's
+	 * target was unnamed) or when the text does not lex, so a note never turns a finished write into a failure.
+	 */
+	public static function leftBehindIn(file: String, text: String, plugin: GrammarPlugin, name: Null<String>): Null<String> {
+		if (name == null) return null;
+		return try {
+			leftBehind(file, text, plugin.lexicalRegions(text), name);
+		} catch (exception: Exception) {
+			null;
+		};
+	}
+
+	/**
+	 * `leftBehindIn` over several files as ONE note — the total, the file count and the `mentions` call that lists them
+	 * under `where`: a scoped edit reads every file it was given, and a line per file buries the op's own report.
+	 */
+	public static function leftBehindAcross(
+		files: Array<{ file: String, text: String }>, plugin: GrammarPlugin, name: Null<String>, where: String
+	): Null<String> {
+		if (name == null) return null;
+		final nameNN: String = name;
+		var total: Int = 0;
+		var docs: Int = 0;
+		var holders: Int = 0;
+		for (f in files) {
+			final hits: Array<CommentMention> = try {
+				find(f.text, plugin.lexicalRegions(f.text), nameNN);
+			} catch (exception: Exception) {
+				[];
+			};
+			if (hits.length == 0) continue;
+			holders++;
+			total += hits.length;
+			docs += hits.count(hit -> hit.doc);
+		}
+		if (total == 0) return null;
+		final plain: Int = total - docs;
+		final head: String = '$total comment mention(s) of `$name` remain in $holders file(s) ($docs doc, $plain plain)';
+		return '$head: apq mentions $name $where';
 	}
 
 }
