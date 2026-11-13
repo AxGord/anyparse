@@ -108,7 +108,8 @@ class HxWrapAdditionalIndentTest extends Test {
 	@:pin('control')
 	@:killer('M-FORCEMULTI-COLS-ONE-UNIT')
 	public function testABraceListReachesItsIndentInOnePass(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tvar o = {a: 1, b: 2, c: 3};\n\t\tvar t:{a:Int, b:Int};\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f() {\n\t\tvar o = {a: 1, // one\n\t\t\tb: 2};\n\t\tvar t:{a:Int, // two\n\t\t\tb:Int};\n\t}\n}';
 		final cascade: String = '{"defaultWrap": "onePerLine", "defaultAdditionalIndent": 1, "rules": []}';
 		final cfg: String = '$PREFIX"objectLiteral": $cascade, "anonType": $cascade}}';
 		final out: String = HxWriteFixture.triviaWrite(src, cfg);

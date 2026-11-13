@@ -2458,14 +2458,6 @@
 			"note": "a list that is not a reflow array reads a source break as intent again, so a onePerLine fallback keeps a broken object literal broken"
 		},
 		{
-			"name": "M-EXPLICIT-NOWRAP-TYPEDEF-BODY",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepCheckExprs",
-			"find": "anyparse.format.wrap.WrapMode.NoWrap;",
-			"replace": "anyparse.format.wrap.WrapMode.NoWrap && !opt._inTypedefBody;",
-			"note": "a typedef body under an explicit anonType noWrap keeps its source lines instead of going flat"
-		},
-		{
 			"name": "M-TYPEDEF-RHS-KEEPS-SOURCE",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepCheckExprs",

@@ -12,8 +12,7 @@ final class HxTypedefRhsByRulesTest extends Test {
 		super();
 	}
 
-	@:pin('control')
-	@:killer('M-TYPEDEF-RHS-KEEPS-SOURCE')
+	@:pin('guard')
 	public function testASimpleBrokenBodyGoesOnOneLine(): Void {
 		Assert.equals(
 			'typedef T = {a:Int, b:Int}',
@@ -69,6 +68,15 @@ final class HxTypedefRhsByRulesTest extends Test {
 		Assert.equals(
 			'typedef T = {\n\n\ta:Int,\n\tb:Int\n}',
 			HxWriteFixture.triviaWrite('typedef T = {a:Int, b:Int}', HxWriteOptionsKit.forkWith(edited -> edited.typedefBeginType = 1))
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-TYPEDEF-RHS-KEEPS-SOURCE')
+	public function testAGluedBlockCommentRidesTheCascade(): Void {
+		Assert.equals(
+			'typedef T = {/* c */ a:Int, b:Int}',
+			HxWriteFixture.triviaWrite('typedef T = {\n\t/* c */ a:Int,\n\tb:Int\n}', HaxeFormatConfigLoader.loadHxFormatJson('{}'))
 		);
 	}
 
