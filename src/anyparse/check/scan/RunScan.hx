@@ -1,6 +1,7 @@
 package anyparse.check.scan;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.query.AccessorClause;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
@@ -155,6 +156,15 @@ final class RunScan {
 	/** The plugin as a `TypeInfoProvider`, or null when the grammar offers no type information. */
 	public static function typeInfoOf(plugin: GrammarPlugin): Null<TypeInfoProvider> {
 		return plugin is TypeInfoProvider ? cast plugin : null;
+	}
+
+	/**
+	 * The accessor clauses of `source` keyed by the declaring member's span `from` (`TypeInfoProvider.accessorClauses`,
+	 * through the plugin's own memo), or none for a grammar with no type info.
+	 */
+	public static function accessorClausesOf(plugin: GrammarPlugin, source: String): Map<Int, AccessorClause> {
+		final provider: Null<TypeInfoProvider> = typeInfoOf(plugin);
+		return provider == null ? [] : provider.accessorClauses(source);
 	}
 
 	/** Each declaration's type-parameter names in `source` (`TypeInfoProvider.typeParamNames`), none for a grammar without type info. */

@@ -3230,6 +3230,22 @@
 			"find": "tag == null ? e :",
 			"replace": "true ? e :",
 			"note": "the generated writer builds its delimiter literals untagged, so every delimiter-edge walker reads them as plain text"
+		},
+		{
+			"name": "M-SPANINFO-CLAUSE-SLOTS-SWAPPED",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1])",
+			"replace": "new anyparse.query.AccessorClause(cast _ac.ids[1], cast _ac.ids[0])",
+			"note": "the clause fact reads the write accessor as the read one, so `(get, never)` says it writes through a getter"
+		},
+		{
+			"name": "M-SPANINFO-CLAUSE-ONE-SLOT",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "if (_ac.ids.length >= 2)",
+			"replace": "if (_ac.ids.length >= 1)",
+			"note": "a one-slot clause gets a clause fact whose write slot is missing"
 		}
 	]
 }

@@ -8,6 +8,7 @@ import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -132,8 +133,9 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		if (declared == null || declared.hasKeep || declared.isExtern) return;
 		final candidates: Array<Candidate> = [];
 		final metaKinds: Array<String> = ctx.plugin.metaShape().metaKinds;
+		final clauses: Map<Int, AccessorClause> = RunScan.accessorClausesOf(ctx.plugin, source);
 		MemberBranchScan.eachMember(branch, cls, MemberKinds.isMemberDeclNode, (child, run, certain) -> {
-			final candidate: Null<Candidate> = certain ? candidateOf(child, run, source, ctx.shape, metaKinds) : null;
+			final candidate: Null<Candidate> = certain ? candidateOf(child, run, clauses, ctx.shape, metaKinds) : null;
 			if (candidate != null) candidates.push(candidate);
 		});
 		if (candidates.length == 0) return;
@@ -157,10 +159,10 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 
 	/**
 	 * The property `member` declares when it is a shape this rule judges — an `@:isVar` in its modifier
-	 * run `run`, both accessor slots storageless, no initializer — or null.
+	 * run `run`, both accessor slots storageless (its clause in the file's `clauses`), no initializer — or null.
 	 */
 	private static function candidateOf(
-		member: QueryNode, run: Array<QueryNode>, source: String, shape: RefShape, metaKinds: Array<String>
+		member: QueryNode, run: Array<QueryNode>, clauses: Map<Int, AccessorClause>, shape: RefShape, metaKinds: Array<String>
 	): Null<Candidate> {
 		final name: Null<String> = member.name;
 		final span: Null<Span> = member.span;
@@ -170,11 +172,8 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		if (retained != null && run.exists(n -> metaKinds.contains(n.kind) && n.name == retained)) return null;
 		// An argument-less `@:isVar()` is the same metadata; one carrying arguments is not a spelling `fix` removes.
 		final metaSpan: Null<Span> = run.find(n -> metaKinds.contains(n.kind) && n.name == IS_VAR_META && n.children.length == 0)?.span;
-		final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
-		return metaSpan != null
-			&& access != null
-			&& AccessorClauseText.storageless(access)
-			&& CtorFieldFold.declInitializer(member, shape) == null
+		final access: Null<AccessorClause> = clauses[span.from];
+		return metaSpan != null && access != null && access.storageless() && CtorFieldFold.declInitializer(member, shape) == null
 			? { name: name, meta: metaSpan }
 			: null;
 	}

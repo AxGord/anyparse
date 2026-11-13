@@ -6,6 +6,7 @@ import anyparse.check.Check.CrossFileFix;
 import anyparse.check.LintConfig;
 import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.FieldRefScan;
@@ -325,7 +326,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
 			final owner: String = className;
-			final t: MemberTables = memberTables(cls, source, branch, shape);
+			final t: MemberTables = memberTables(cls, RunScan.accessorClausesOf(plugin, source), branch, shape);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
 				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
@@ -415,7 +416,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final owner: String = className;
-		final t: MemberTables = memberTables(cls, source, branch, shape);
+		final t: MemberTables = memberTables(cls, RunScan.accessorClausesOf(plugin, source), branch, shape);
 		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
 			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
 			if (c == null) continue;
@@ -501,7 +502,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
-		final t: MemberTables = memberTables(cls, source, branch, shape);
+		final t: MemberTables = memberTables(cls, RunScan.accessorClausesOf(plugin, source), branch, shape);
 		for (prop in t.properties) if (
 			wanted.contains('${prop.span.from}:${prop.span.to}') && !subtypeBlocks(index, className, prop.name)
 		) {
@@ -645,7 +646,9 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * properties — `(get, never)`, `(get, null)` and `(get, set)`. The shape decision and
 	 * soundness gates for each live in `classifyProperty`.
 	 */
-	private static function memberTables(cls: QueryNode, source: String, branch: MemberBranchSeams, shape: RefShape): MemberTables {
+	private static function memberTables(
+		cls: QueryNode, clauses: Map<Int, AccessorClause>, branch: MemberBranchSeams, shape: RefShape
+	): MemberTables {
 		final privateFieldNodes: Map<String, QueryNode> = [];
 		final getters: Map<String, {
 			node: QueryNode,
@@ -685,7 +688,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 					final isPublic: Bool = has(mods, shape.publicModifierKind);
 					if (!isPublic) privateFieldNodes[name] = child;
 					if ((shape.mutableFieldDeclKinds ?? []).contains(child.kind)) {
-						final access: Null<{ read: String, write: String }> = AccessorClauseText.accessorClause(source, span);
+						final access: Null<AccessorClause> = clauses[span.from];
 						if (
 							access != null
 							&& access.read == 'get'

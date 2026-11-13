@@ -22,6 +22,7 @@ import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
+import anyparse.query.AccessorClause;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.CompilerFacts;
@@ -594,6 +595,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	public function propertyWriteAccessors(source: String): Map<Int, Bool> {
 		return spanTypeInfo(source).propertyWriteAccessors;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each property-bearing member's binding-span `from` to its `(read, write)` accessor
+	 * identifiers, read off `HxVarDecl.access` `ids[0]` / `ids[1]` by the same walk as `propertyAccessors`.
+	 */
+	public function accessorClauses(source: String): Map<Int, AccessorClause> {
+		return spanTypeInfo(source).accessorClauses;
 	}
 
 	/**

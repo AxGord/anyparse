@@ -818,13 +818,6 @@
 			"note": "a walk given the written types is answered from the recording made without them, so a non-null predicate call no longer narrows"
 		},
 		{
-			"name": "M-ACCESSOR-STORAGELESS-TRUE",
-			"type": "anyparse.check.scan.AccessorClauseText",
-			"method": "storageless",
-			"force": "true",
-			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
-		},
-		{
 			"name": "M-CARRY-USING-DOOR-OFFSET",
 			"type": "anyparse.check.scan.UsingSites",
 			"method": "calledThrough",

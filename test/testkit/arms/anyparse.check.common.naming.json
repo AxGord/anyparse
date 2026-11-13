@@ -476,8 +476,8 @@
 		{
 			"name": "M-NAMING-READONLY-IGNORES-WRITE",
 			"type": "anyparse.check.common.naming.Naming",
-			"method": "propertyClauseAt",
-			"find": "storageless && AccessorClauseText.writesNever(clause)",
+			"method": "propertyClauseOf",
+			"find": "storageless && clause.writesNever()",
 			"replace": "storageless",
 			"note": "a `(get, set)` property reads as read-only, so a public static one takes the constant format"
 		},

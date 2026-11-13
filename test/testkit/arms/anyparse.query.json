@@ -16816,6 +16816,13 @@
 			"find": "collectHeldMeta(c, held);",
 			"replace": "{}",
 			"note": "an annotation-only #if region nested in another is no longer lifted, so its @:build / @:autoBuild never reaches the declaration that follows"
+		},
+		{
+			"name": "M-ACCESSOR-STORAGELESS-TRUE",
+			"type": "anyparse.query.AccessorClause",
+			"method": "storageless",
+			"force": "true",
+			"note": "every accessor clause counts as storage-less, so a `null` / `default` slot leaves the field rules too"
 		}
 	]
 }

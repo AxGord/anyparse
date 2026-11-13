@@ -2,19 +2,19 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.check.scan.LoopScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
+import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.check.scan.AccessorClauseText;
-import anyparse.check.scan.LoopScan;
 import anyparse.util.Strings;
-import anyparse.query.NodeShape;
 
 using StringTools;
 
@@ -106,6 +106,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 			seams: seams,
 			constants: constants,
 			types: typed?.declaredTypeSources(p.source),
+			clauses: RunScan.accessorClausesOf(plugin, p.source),
 			typeSyntax: plugin.typeSyntax,
 			lazyIndex: lazyIndex,
 			plugin: plugin,
@@ -173,7 +174,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		if (!s.fieldKinds.contains(field.kind) || name == null || span == null) return null;
 		final mods: Array<QueryNode> = MemberKinds.precedingModifiers(field, container, s.modifierKinds);
 		if (mods.exists(m -> s.visibility.contains(m.kind) && textOf(m, ctx.source) != s.defaultVis)) return null;
-		if (AccessorClauseText.accessorClause(ctx.source, span) != null) return null;
+		if (ctx.clauses.exists(span.from)) return null;
 		final init: Null<QueryNode> = field.children.length == 1 ? field.children[0] : null;
 		final source: Null<LengthSource> = if (init != null && !isEmptyArray(init, s))
 			fixedSource(name, field, init, ctx);
@@ -771,16 +772,21 @@ private typedef Seams = {
 
 /** The per-file facts every scan reads. */
 private typedef FileCtx = {
+
 	var file: String;
 	var source: String;
 	var tree: QueryNode;
 	var seams: Seams;
 	var constants: Map<String, Constant>;
 	var types: Null<Map<Int, String>>;
+
+	/** The file's property accessor clauses (`TypeInfoProvider.accessorClauses`), which make a field a property. */
+	var clauses: Map<Int, AccessorClause>;
 	var typeSyntax: TypeSyntaxReader;
 	var lazyIndex: () -> Null<SymbolIndex>;
 	var plugin: GrammarPlugin;
 	var out: Array<Violation>;
+
 }
 
 /**

@@ -800,6 +800,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	/** `TypeInfoProvider`: forward + memoize the property write-accessor map. */
 	public function propertyWriteAccessors(source: String): Map<Int, Bool> return spanTypeInfo(source).propertyWriteAccessors;
 
+	/** `TypeInfoProvider`: forward + memoize the property accessor-clause map. */
+	public function accessorClauses(source: String): Map<Int, AccessorClause> return spanTypeInfo(source).accessorClauses;
+
 	/** `TypeInfoProvider`: forward + memoize the declaration type-source map per source. */
 	public function declaredTypeSources(source: String): Map<Int, String> return spanTypeInfo(source).declaredTypeSources;
 
@@ -951,6 +954,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			returnTypes: inner != null ? inner.returnTypes(source) : [],
 			propertyAccessors: inner != null ? inner.propertyAccessors(source) : [],
 			propertyWriteAccessors: inner != null ? inner.propertyWriteAccessors(source) : [],
+			accessorClauses: inner != null ? inner.accessorClauses(source) : [],
 			declaredTypeSources: inner != null ? inner.declaredTypeSources(source) : [],
 			castTargetSources: inner != null ? inner.castTargetSources(source) : [],
 			typeParamNames: inner != null ? inner.typeParamNames(source) : [],

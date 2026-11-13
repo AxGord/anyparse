@@ -1176,6 +1176,7 @@ final class SymbolIndexBuilder {
 			returnTypes: provider != null ? provider.returnTypes(source) : [],
 			propertyAccessors: provider != null ? provider.propertyAccessors(source) : [],
 			propertyWriteAccessors: provider != null ? provider.propertyWriteAccessors(source) : [],
+			accessorClauses: provider != null ? provider.accessorClauses(source) : [],
 			declaredTypeSources: provider != null ? provider.declaredTypeSources(source) : [],
 			castTargetSources: provider != null ? provider.castTargetSources(source) : [],
 			typeParamNames: provider != null ? provider.typeParamNames(source) : [],

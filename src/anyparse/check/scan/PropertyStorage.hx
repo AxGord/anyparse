@@ -1,7 +1,7 @@
 package anyparse.check.scan;
 
-import anyparse.check.scan.AccessorClauseText.AccessorClause;
 import anyparse.check.scan.ReflectionScan.ScopeFile;
+import anyparse.query.AccessorClause;
 import anyparse.query.CondRegionScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
@@ -27,13 +27,15 @@ final class PropertyStorage {
 
 	/**
 	 * The property of `container` whose set accessor `method` is, when the property's clause gives plain reads
-	 * the physical field and routes writes through the setter (`AccessorClauseText.readsFieldWritesThroughSetter`)
+	 * the physical field and routes writes through the setter (`AccessorClause.readsFieldWritesThroughSetter`)
 	 * and `method` has a body that never names the property — a setter that stores nothing — else null. `propertyKinds` are the
 	 * grammar's mutable field declaration kinds; a mention anywhere in the method, parameter list included, counts.
 	 * `noBodyKind` is the grammar's bodiless-method kind: a declaration alone shows nothing of what it stores.
+	 * `clauses` are the file's accessor clauses (`TypeInfoProvider.accessorClauses`).
 	 */
 	public static function unstoredBy(
-		method: QueryNode, container: QueryNode, source: String, propertyKinds: Array<String>, noBodyKind: Null<String>
+		method: QueryNode, container: QueryNode, source: String, clauses: Map<Int, AccessorClause>, propertyKinds: Array<String>,
+		noBodyKind: Null<String>
 	): Null<QueryNode> {
 		final methodName: Null<String> = method.name;
 		final methodSpan: Null<Span> = method.span;
@@ -50,10 +52,8 @@ final class PropertyStorage {
 		final property: Null<QueryNode> = container.children.find(m -> m.name == name && propertyKinds.contains(m.kind));
 		final propertySpan: Null<Span> = property?.span;
 		if (property == null || propertySpan == null) return null;
-		final clause: Null<AccessorClause> = AccessorClauseText.accessorClause(source, propertySpan);
-		return clause != null
-			&& AccessorClauseText.readsFieldWritesThroughSetter(clause)
-			&& !SourceText.mentionsIdent(source, methodSpan, name)
+		final clause: Null<AccessorClause> = clauses[propertySpan.from];
+		return clause != null && clause.readsFieldWritesThroughSetter() && !SourceText.mentionsIdent(source, methodSpan, name)
 			? property
 			: null;
 	}

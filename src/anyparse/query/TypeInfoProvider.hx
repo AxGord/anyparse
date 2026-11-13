@@ -57,6 +57,13 @@ interface TypeInfoProvider {
 	public function propertyWriteAccessors(source: String): Map<Int, Bool>;
 
 	/**
+	 * Maps a property-bearing member's binding-span `from` — the keys of `propertyAccessors` — to the two identifiers of
+	 * its `(read, write)` accessor clause, as the grammar parsed them. A plain field, and a clause that does not name both
+	 * slots, is ABSENT. The ids the two accessor maps reduce to booleans, for a consumer that asks what the clause says.
+	 */
+	public function accessorClauses(source: String): Map<Int, AccessorClause>;
+
+	/**
 	 * Maps each declaration's binding-span `from` to the VERBATIM source text of its
 	 * `:Type` annotation — `var x: Array<Int>` → the substring `Array<Int>`. Lets a
 	 * consumer compare two annotations by their written form (sound within one file:

@@ -34,6 +34,9 @@ typedef SpanTypeInfo = {
 	final returnTypes: Map<Int, String>;
 	final propertyAccessors: Map<Int, Bool>;
 	final propertyWriteAccessors: Map<Int, Bool>;
+
+	/** The accessor-clause identifiers, keyed like `propertyAccessors` — the `TypeInfoProvider.accessorClauses` map. */
+	final accessorClauses: Map<Int, AccessorClause>;
 	final declaredTypeSources: Map<Int, String>;
 	final castTargetSources: Map<Int, String>;
 	final typeParamNames: Map<Int, Array<String>>;

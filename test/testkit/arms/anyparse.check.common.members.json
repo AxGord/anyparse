@@ -293,7 +293,7 @@
 			"name": "M-ISVAR-SLOTS-ANY",
 			"type": "anyparse.check.common.members.RedundantIsVar",
 			"method": "candidateOf",
-			"find": "AccessorClauseText.storageless(access)",
+			"find": "access.storageless()",
 			"replace": "true",
 			"note": "every accessor slot counts as storageless, so an @:isVar over a `default` / `null` slot that has storage anyway is reported"
 		},

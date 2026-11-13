@@ -6,6 +6,7 @@ import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.FieldWriteIndex;
 import anyparse.query.MemberKinds;
@@ -92,12 +93,13 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 	/** Turn the read accessor of each fixable finding's property into `never`. */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final edits: Array<FixEdit> = [];
+		final clauses: Map<Int, AccessorClause> = RunScan.accessorClausesOf(plugin, source);
 		for (v in violations) {
 			final at: Null<Span> = v.span;
 			if (at == null || v.declineReason != null || v.severity != Severity.Info) continue;
 			final span: Span = at;
-			final clause: Null<AccessorClause> = AccessorClauseText.accessorClause(source, span);
-			if (clause == null || !AccessorClauseText.readsFieldWritesThroughSetter(clause)) continue;
+			final clause: Null<AccessorClause> = clauses[span.from];
+			if (clause == null || !clause.readsFieldWritesThroughSetter()) continue;
 			final edit: Null<FixEdit> = AccessorClauseText.neverReadEdit(source, span);
 			if (edit != null) edits.push(edit);
 		}
@@ -132,7 +134,9 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 	): Void {
 		final shape: RefShape = r.storage.shape;
 		final reflection: ReflectionSurface = r.reflection;
-		final found: Null<QueryNode> = PropertyStorage.unstoredBy(method, cls, source, r.propertyKinds, shape.noBodyKind);
+		final found: Null<QueryNode> = PropertyStorage.unstoredBy(
+			method, cls, source, RunScan.accessorClausesOf(r.storage.plugin, source), r.propertyKinds, shape.noBodyKind
+		);
 		final named: Null<String> = found?.name;
 		final at: Null<Span> = found?.span;
 		if (found == null || named == null || at == null) return;

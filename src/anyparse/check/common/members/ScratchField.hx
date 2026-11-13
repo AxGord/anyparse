@@ -2,10 +2,10 @@ package anyparse.check.common.members;
 
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.BinderScan;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.MemberKinds;
@@ -100,7 +100,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		for (entry in files) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (c in candidatesIn(tree, entry.source, seams)) {
+			for (c in candidatesIn(tree, entry.source, RunScan.accessorClausesOf(plugin, entry.source), seams)) {
 				final index: Null<SymbolIndex> = lazyIndex();
 				if (index == null || !MemberWriteScan.referencesConfined(c.owner, c.name, entry.source, index, plugin)) continue;
 				if (index.traits.transitivelyCarriesRtti(c.owner)) continue;
@@ -143,7 +143,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final types: Null<Map<Int, String>> = typed?.declaredTypeSources(source);
 		final byFrom: Map<Int, Candidate> = [];
-		for (c in candidatesIn(tree, source, seams)) {
+		for (c in candidatesIn(tree, source, RunScan.accessorClausesOf(plugin, source), seams)) {
 			final from: Null<Int> = c.field.span?.from;
 			if (from != null) byFrom[from] = c;
 		}
@@ -231,13 +231,13 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	 * Every field of every class-like type in `tree` that passes the in-file gates, with its plan when
 	 * the method's own walk proves the fix (dominance, a declaration slot) and the reason when it does not.
 	 */
-	private static function candidatesIn(tree: QueryNode, source: String, s: Seams): Array<Candidate> {
+	private static function candidatesIn(tree: QueryNode, source: String, clauses: Map<Int, AccessorClause>, s: Seams): Array<Candidate> {
 		final out: Array<Candidate> = [];
 		function visit(node: QueryNode): Void {
 			if (s.opaqueKinds.contains(node.kind)) return;
 			final owner: Null<String> = node.name;
 			if (s.containers.contains(node.kind) && owner != null) for (field in node.children) {
-				final c: Null<Candidate> = candidateOf(field, node, owner, source, s);
+				final c: Null<Candidate> = candidateOf(field, node, owner, source, clauses, s);
 				if (c != null) out.push(c);
 			}
 			for (child in node.children) visit(child);
@@ -252,9 +252,11 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	 * of its name and no other receiver's member spelled with it anywhere in the type, and that method
 	 * reads it — else null. The candidate carries its plan when the method's own walk proves the fix.
 	 */
-	private static function candidateOf(field: QueryNode, container: QueryNode, owner: String, source: String, s: Seams): Null<Candidate> {
+	private static function candidateOf(
+		field: QueryNode, container: QueryNode, owner: String, source: String, clauses: Map<Int, AccessorClause>, s: Seams
+	): Null<Candidate> {
 		final named: Null<String> = field.name;
-		if (named == null || !isPlainPrivateVar(field, container, source, s)) return null;
+		if (named == null || !isPlainPrivateVar(field, container, source, clauses, s)) return null;
 		final name: String = named;
 		final found: Null<Occurrences> = occurrencesOf(name, field, container, s);
 		if (found == null) return null;
@@ -277,7 +279,8 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		};
 		if (!walk.dominated) return candidate;
 		// the method holds the field's occurrences, so it has a body: no bodiless kind to tell apart
-		final unstored: Null<String> = PropertyStorage.unstoredBy(found.method, container, source, s.mutableFieldKinds, null)?.name;
+		final unstored: Null<String> =
+			PropertyStorage.unstoredBy(found.method, container, source, clauses, s.mutableFieldKinds, null)?.name;
 		if (unstored != null) {
 			candidate.decline = declineUnstored(found.methodName, unstored);
 			return candidate;
@@ -287,13 +290,17 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		return candidate;
 	}
 
-	/** Whether `field` is a mutable field with no modifier but the default visibility, no metadata, and no accessor clause. */
-	private static function isPlainPrivateVar(field: QueryNode, container: QueryNode, source: String, s: Seams): Bool {
+	/**
+	 * Whether `field` is a mutable field with no modifier but the default visibility, no metadata, and no accessor clause
+	 * among the file's `clauses`.
+	 */
+	private static function isPlainPrivateVar(
+		field: QueryNode, container: QueryNode, source: String, clauses: Map<Int, AccessorClause>, s: Seams
+	): Bool {
 		final span: Null<Span> = field.span;
 		if (!s.mutableFieldKinds.contains(field.kind) || span == null || field.children.length > 1) return false;
 		final mods: Array<QueryNode> = MemberKinds.precedingModifiers(field, container, s.modifierRunKinds);
-		return !mods.exists(m -> !s.visibility.contains(m.kind) || textOf(m, source) != s.defaultVis)
-			&& AccessorClauseText.accessorClause(source, span) == null;
+		return !mods.exists(m -> !s.visibility.contains(m.kind) || textOf(m, source) != s.defaultVis) && !clauses.exists(span.from);
 	}
 
 	/**
@@ -532,7 +539,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		if (init.children.exists(c -> !typeArgKinds.contains(c.kind) && !MemberKinds.isSideEffectFree(c, shape))) return false;
 		final found: Null<{ cls: QueryNode, source: String }> = soleClass(typeName, file, plugin, index);
 		if (found == null || CtorFieldWrite.hasSupertypeClause(found.cls, shape)) return false;
-		final fields: Null<Array<String>> = plainInstanceFields(found.cls, found.source, shape);
+		final fields: Null<Array<String>> = plainInstanceFields(found.cls, RunScan.accessorClausesOf(plugin, found.source), shape);
 		final ctor: Null<QueryNode> = CtorFieldWrite.soleConstructor(found.cls, shape);
 		final params: Null<Array<String>> = ctor == null ? null : inertParams(ctor, shape);
 		return fields != null && ctor != null && params != null && ctorOnlyAssigns(ctor, fields, params, shape);
@@ -576,7 +583,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	 * initializer is not side-effect-free. Every branch of a member-position `#if` counts: each declares
 	 * members of the class in some build.
 	 */
-	private static function plainInstanceFields(cls: QueryNode, source: String, shape: RefShape): Null<Array<String>> {
+	private static function plainInstanceFields(cls: QueryNode, clauses: Map<Int, AccessorClause>, shape: RefShape): Null<Array<String>> {
 		final fieldKinds: Array<String> = present(shape.fieldDeclKinds);
 		final statics: Array<Int> = MemberKinds.staticMemberFroms(cls, shape);
 		final fields: Array<String> = [];
@@ -589,7 +596,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 				final at: Span = span;
 				if (statics.contains(at.from)) continue;
 				if (member.children.exists(c -> !MemberKinds.isSideEffectFree(c, shape))) inert = false;
-				if (AccessorClauseText.accessorClause(source, at) == null) fields.push(name);
+				if (!clauses.exists(at.from)) fields.push(name);
 			}
 		);
 		return inert ? fields : null;
