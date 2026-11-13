@@ -3159,6 +3159,30 @@
 			"find": "onLine ? beforeLeadingNewlineAccess(fieldName) : macro false",
 			"replace": "onLine ? macro true : macro false",
 			"note": "a line comment first in the gap before an inlineSep field breaks the line whatever the source did, so one that continued the line before the gap moves to its own"
+		},
+		{
+			"name": "M-AFTER-LEAD-MANDATORY-ONLY",
+			"type": "anyparse.macro.TriviaPairSlots",
+			"method": "isAfterLeadRef",
+			"find": "return child.kind == Ref\n\t\t&& child.readMetaString(':kw') == null",
+			"replace": "return child.kind == Ref\n\t\t&& child.annotations[AnnotationKeys.BASE_OPTIONAL] != true\n\t\t&& child.readMetaString(':kw') == null",
+			"note": "an optional Ref hosts no AfterLead slot again, so a comment after an optional lead (`<T: /*k*/ Foo>`) is dropped"
+		},
+		{
+			"name": "M-OPTIONAL-AFTER-LEAD-UNPARSED",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "emitOptionalRefLeadCommit",
+			"find": "? macro $i{afterLeadLocal} = collectTrivia(ctx).leadingComments",
+			"replace": "? macro skipWs(ctx)",
+			"note": "the optional lead commit skips the lead-to-value gap, so the AfterLead slot stays empty and the comment is lost"
+		},
+		{
+			"name": "M-OPTIONAL-AFTER-LEAD-UNWRITTEN",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefLead",
+			"find": "if (afterLead != null) optParts.push(afterLeadDoc(afterLead));",
+			"replace": "",
+			"note": "the optional-lead writer never emits the AfterLead run, so a parsed comment after an optional lead is dropped on write"
 		}
 	]
 }

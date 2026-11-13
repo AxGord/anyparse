@@ -80,13 +80,13 @@ final class TriviaPairSlots {
 	}
 
 	/**
-	 * Hosts of `<field>AfterLead`: a mandatory Ref carrying a `@:lead` literal and no `@:kw`, opted in with
-	 * `@:fmt(captureAfterLead)`. One predicate for the synth, the parse capture
-	 * (`StructFieldTrailLowering.emitPreFieldWs`) and the writer seat (`WriterRefFieldLowering.emitFieldLeadIn`).
+	 * Hosts of `<field>AfterLead`: a Ref, mandatory or optional, carrying a `@:lead` literal and no `@:kw`, opted in
+	 * with `@:fmt(captureAfterLead)`. One predicate for the synth, the parse capture (`StructFieldTrailLowering.emitPreFieldWs`,
+	 * `StructSeqLowering.emitOptionalRefLeadCommit`) and the writer seat (`WriterRefFieldLowering.emitFieldLeadIn`,
+	 * `emitOptionalRefLead`).
 	 */
 	public static function isAfterLeadRef(child: ShapeNode): Bool {
 		return child.kind == Ref
-			&& child.annotations[AnnotationKeys.BASE_OPTIONAL] != true
 			&& child.readMetaString(':kw') == null
 			&& child.readMetaString(':lead') != null
 			&& child.fmtHasFlag('captureAfterLead');

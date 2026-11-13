@@ -276,7 +276,8 @@ final class StructSeqLowering {
 			emitFieldValueByKind(
 				sc, child, node, fieldName, localName, parseSteps, isOptional, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 				hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot, beforeLeadLocal
+				bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, lenPrefix, hasBeforeNewlineSlot, beforeLeadLocal,
+				afterLeadLocal
 			);
 			if (triviaEofStar) emitTriviaStarBeforeNewline(parseSteps, hasBeforeNewlineSlot, beforeNlLocal, localName);
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
@@ -726,7 +727,7 @@ final class StructSeqLowering {
 		leadText: Null<String>, trailText: Null<String>, absentOnLits: Null<Array<String>>, absentOnEof: Bool,
 		hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String, hasBeforeSlots: Bool, beforeLeadLocal: Null<String>
+		beforeKwTrailingLocal: String, hasBeforeSlots: Bool, beforeLeadLocal: Null<String>, afterLeadLocal: Null<String>
 	): Void {
 		if (kwLead == null && leadText == null && absentOnLits == null && !absentOnEof)
 			Context.fatalError(
@@ -789,6 +790,8 @@ final class StructSeqLowering {
 		final fieldCT: ComplexType = sc.isSpanBearing(refName) || sc.isTriviaBearing(refName)
 			? TPath({ pack: [], name: 'Null', params: [TPType(sc.ruleReturnCT(refName))] })
 			: child.annotations[AnnotationKeys.BASE_FIELD_TYPE];
+		// Declared ahead of the commit so a lead miss leaves the `<field>AfterLead` slot empty.
+		if (afterLeadLocal != null) parseSteps.push(macro var $afterLeadLocal: Array<String> = []);
 		if (absentOnLits != null || absentOnEof) {
 			// ω-region-prefix-blank: `hasBeforeSlots` IS this field's
 			// BeforeNewline/BeforeLeading gate (`computeBeforeSlots` returns the same
@@ -801,7 +804,7 @@ final class StructSeqLowering {
 		} else {
 			emitOptionalRefLeadCommit(
 				sc, parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
-				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, beforeLeadLocal
+				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, beforeLeadLocal, afterLeadLocal
 			);
 		}
 	}
@@ -1162,14 +1165,14 @@ final class StructSeqLowering {
 		absentOnEof: Bool, hasOptionalRefAfterTrailSlot: Bool, captureTrailPresentExpr: Expr, hasKwTriviaSlots: Bool, afterKwLocal: String,
 		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
 		beforeKwTrailingLocal: String, lenPrefix: Null<{ width: Int, encoding: String }>, hasBeforeSlots: Bool,
-		beforeLeadLocal: Null<String>
+		beforeLeadLocal: Null<String>, afterLeadLocal: Null<String>
 	): Void {
 		switch child.kind {
 			case Ref if (isOptional):
 				emitOptionalRefField(
 					sc, child, fieldName, localName, parseSteps, kwLead, leadText, trailText, absentOnLits, absentOnEof,
 					hasOptionalRefAfterTrailSlot, captureTrailPresentExpr, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
-					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots, beforeLeadLocal
+					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, hasBeforeSlots, beforeLeadLocal, afterLeadLocal
 				);
 			case Ref:
 				final refName: String = child.annotations[AnnotationKeys.BASE_REF];
@@ -1375,7 +1378,8 @@ final class StructSeqLowering {
 	private static function emitOptionalRefLeadCommit(
 		sc: StructSeqCtx, parseSteps: Array<Expr>, localName: String, fieldCT: ComplexType, subCall: Expr, kwLead: Null<String>,
 		leadText: Null<String>, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String,
-		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, beforeLeadLocal: Null<String>
+		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, beforeLeadLocal: Null<String>,
+		afterLeadLocal: Null<String>
 	): Void {
 		// The commit point peeks the lead literal or keyword —
 		// on hit, consume and parse the sub-rule; on miss,
@@ -1400,7 +1404,11 @@ final class StructSeqLowering {
 		//    run flows into `pendingTrivia` for the sub-rule's
 		//    first @:trivia Star to drain.
 		//  - Plain mode: plain ws skip.
-		final innerCommitAction: Expr = commitTriviaAction(sc, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
+		// A `TriviaPairSlots.isAfterLeadRef` host keeps the lead→value gap's comments in its own slot, as the mandatory
+		// path does, instead of stashing them for a sub-rule that may have no Star to drain them.
+		final innerCommitAction: Expr = afterLeadLocal != null
+			? macro $i{afterLeadLocal} = collectTrivia(ctx).leadingComments
+			: commitTriviaAction(sc, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
 		final preCommitCapture: Expr = if (hasKwTriviaSlots)
 			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
 		else

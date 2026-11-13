@@ -164,8 +164,8 @@ class TriviaTypeSynth {
 	public static inline final BEFORE_LEAD_SUFFIX: String = 'BeforeLead';
 
 	/**
-	 * Every comment in the gap between a mandatory Ref field's own `@:lead(LIT)` literal and the field's first
-	 * token — the `/* c *\/` in `typedef T = /* c *\/ {…}` and `A & /* c *\/ B`. The field's pre-value `skipWs`
+	 * Every comment in the gap between a Ref field's own `@:lead(LIT)` literal and the field's first token — the
+	 * `/* c *\/` in `typedef T = /* c *\/ {…}`, `A & /* c *\/ B` and `<T: /* c *\/ Foo>`. The field's pre-value `skipWs`
 	 * swallowed that gap, so the writer round trip refused the file. Hosts: `TriviaPairSlots.isAfterLeadRef`,
 	 * an opt-in (`@:fmt(captureAfterLead)`); the writer re-emits the run right after the lead literal.
 	 */

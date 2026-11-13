@@ -7,7 +7,10 @@ package anyparse.grammar.haxe;
  * `typeParams` roots (`HxClassDecl`, `HxInterfaceDecl`, `HxAbstractDecl`, `HxEnumDecl`,
  * `HxTypedefDecl`, `HxFnDecl`).
  *
- * Shape: `name (':' constraint ('&' more)*)? ('=' defaultValue)?`, mirroring `HxParamBody`:
+ * Shape: `meta* name (':' constraint ('&' more)*)? ('=' defaultValue)?`, mirroring `HxParamBody`. A leading metadata
+ * run (`<@:const N>`) is the same `@:trivia @:tryparse` Star `HxVarDecl.meta` is, kept inline before the name; a comment
+ * after the constraint's `:` or the default's `=` lands in that field's `AfterLead` slot (`@:fmt(captureAfterLead)`).
+ * Fields:
  * `name:HxIdentLit`, an optional `@:lead(':')` `Ref` to `HxType` for the first constraint, a
  * bare `@:trivia @:tryparse` Star of `HxIntersectionClause` for the `& Type` tail
  * (structurally identical to `HxTypedefDecl.intersections` — `&` is scoped to this clause
@@ -28,9 +31,14 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxTypeParamDecl = {
+	@:trivia
+	@:tryparse
+	@:fmt(metaLineEndInline)
+	var meta: Array<HxMetadata>;
+	@:fmt(inlineSep)
 	var name: HxIdentLit;
 	@:optional
-	@:fmt(space('typeParamConstraintColon', 'lead'))
+	@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)
 	@:lead(':')
 	var constraint: Null<HxType>;
 	@:trivia
@@ -38,7 +46,7 @@ typedef HxTypeParamDecl = {
 	@:fmt(padLeading)
 	var constraintMore: Array<HxIntersectionClause>;
 	@:optional
-	@:fmt(typeParamDefaultEquals)
+	@:fmt(typeParamDefaultEquals, captureAfterLead)
 	@:lead('=')
 	var defaultValue: Null<HxType>;
 }

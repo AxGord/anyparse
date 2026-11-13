@@ -1812,6 +1812,33 @@
 			"find": "@:fmt(ctorKwTrivia)",
 			"replace": "",
 			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
+		},
+		{
+			"name": "M-TYPEPARAM-META-UNDECLARED",
+			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
+			"method": "HxTypeParamDecl",
+			"kind": "TypedefDecl",
+			"find": "@:trivia\n\t@:tryparse\n\t@:fmt(metaLineEndInline)\n\tvar meta: Array<HxMetadata>;\n\t",
+			"replace": "",
+			"note": "a type parameter declares no metadata run, so `<@:const N>` and `<T:Foo = Bar, @:const N>` stop parsing"
+		},
+		{
+			"name": "M-TYPEPARAM-CONSTRAINT-AFTER-LEAD-OFF",
+			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
+			"method": "HxTypeParamDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)",
+			"replace": "@:fmt(space('typeParamConstraintColon', 'lead'))",
+			"note": "the constraint has no AfterLead slot, so a comment after its colon is dropped and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-TYPEPARAM-DEFAULT-AFTER-LEAD-OFF",
+			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
+			"method": "HxTypeParamDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(typeParamDefaultEquals, captureAfterLead)",
+			"replace": "@:fmt(typeParamDefaultEquals)",
+			"note": "the default has no AfterLead slot, so a comment after its `=` is dropped and the writer round trip refuses the file"
 		}
 	]
 }

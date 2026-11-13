@@ -175,7 +175,7 @@ final class WriterRefFieldLowering {
 			if (beforeLead != null) optParts.push(beforeLeadDoc(beforeLead));
 			emitOptionalRefLead(
 				ctx, child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
-				hasStructFieldTrailOptSlot, structTrailOptAccess
+				hasStructFieldTrailOptSlot, structTrailOptAccess, afterLeadSlotAccess(ctx, child, fieldAccess, typePath)
 			);
 		} else if (bodyPolicyFlag != null) {
 			emitOptionalBodyPolicyOnly(
@@ -241,7 +241,7 @@ final class WriterRefFieldLowering {
 	private static function emitOptionalRefLead(
 		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, leadText: String, writeCall: Expr, prevBodyField: Null<PrevBodyInfo>,
 		typePath: String, prevPadTrailing: Null<Expr>, trailText: Null<String>, trailOptText: Null<String>,
-		hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
+		hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, afterLead: Null<Expr>
 	): Void {
 		// ω-N-break-after-eq: when the meta-gated helper bundles the
 		// lead + RHS together (via the natural-first-line probe), the
@@ -307,7 +307,16 @@ final class WriterRefFieldLowering {
 				optParts.push(macro _dop(' '));
 			}
 		}
-		if (!breakAfterEqEmitted) optParts.push(writeCall);
+		if (breakAfterEqEmitted && afterLead != null)
+			Context.fatalError(
+				'captureAfterLead cannot share a field with breakAfterLeadOnOverflow: the bundled lead has no comment seat',
+				Context.currentPos()
+			);
+		if (!breakAfterEqEmitted) {
+			// The `<field>AfterLead` run sits between the lead (with its own spacing) and the value, where the source wrote it.
+			if (afterLead != null) optParts.push(afterLeadDoc(afterLead));
+			optParts.push(writeCall);
+		}
 		// ω-optional-ref-trail: bracket-pair close for an
 		// `@:optional @:lead(<open>) @:trail(<close>)` Ref.
 		// Pushed INSIDE optParts so the trail rides the
