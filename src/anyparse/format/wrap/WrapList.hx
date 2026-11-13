@@ -224,6 +224,13 @@ typedef WrapListOptions = {
 	 */
 	var ?containerItemKinds: Array<Null<Array<Int>>>;
 
+	/**
+	 * The next rewrite takes this list's width decision again rather than reading it from the source (`WrapMode.Ignore`,
+	 * `BreakCommits.redecided`), so it reads an object literal nested in an item that broke as a broken body: the list is
+	 * laid out once more per such literal break (`BodyFit.namedThresholdLiterals`), even a field list. Default `false`.
+	 */
+	var ?redecided: Bool;
+
 }
 
 /**
@@ -302,7 +309,13 @@ class WrapList {
 		open: String, close: String, sep: String, items: Array<Doc>, opt: WriteOptions, openInside: Doc, closeInside: Doc,
 		keepInnerWhenEmpty: Bool, rules: WrapRules, ?options: WrapListOptions
 	): Doc {
-		final items: Array<Doc> = open == '(' && items.length > 1 ? items.map(item -> namedThresholdLiteral(item)) : items;
+		final redecided: Bool = options?.redecided == true;
+		final items: Array<Doc> = if (redecided)
+			items.map(BodyFit.namedThresholdLiterals);
+		else if (open == '(' && items.length > 1)
+			items.map(item -> namedThresholdLiteral(item));
+		else
+			items;
 		final plain: Doc = emitList(open, close, sep, items, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return emitList(open, close, sep, with, opt, openInside, closeInside, keepInnerWhenEmpty, rules, options);
@@ -310,9 +323,11 @@ class WrapList {
 		final flatSingle: Bool = items.length == 1 && flatLength(items[0]) >= 0;
 		final tail: Null<{ brk: Doc, token: BreakToken }> = flatSingle ? BodyAllman.tailBreak(items[0]) : null;
 		final out: Doc = tail == null ? plain : BreakCommit(laidOut([tail.brk], 0), plain, tail.token);
-		// An object literal's field list is never wrapped: the literal is itself a body `BodyAllman` may still move,
-		// and its Doc has to stay the bare width decision `gluedLayout` and `tailBreak` read.
-		final offered: Bool = items.length == 1 ? flatSingle : open != '{';
+		// An object literal's field list is not wrapped unless `redecided`: the literal is itself a body `BodyAllman` may
+		// still move, and its Doc has to stay the bare width decision `gluedLayout` and `tailBreak` read. A `redecided` list
+		// already hides that decision from hosts (`BreakCommits.redecided`) and the next rewrite takes it again, so it is
+		// offered once per threshold-literal break nested in its items.
+		final offered: Bool = redecided || (items.length == 1 ? flatSingle : open != '{');
 		return offered ? BreakCommits.offerItemBreaks(items, out, laidOut) : out;
 	}
 

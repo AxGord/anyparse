@@ -1078,7 +1078,8 @@ final class TriviaSepLowering {
 						comprehensionFitMeasure: _comprehensionFit,
 						comprehensionBodyMeasure: _isComprehension,
 						complexItemKinds: _complexKinds,
-						containerItemKinds: _containerKinds
+						containerItemKinds: _containerKinds,
+						redecided: $v{openText == '{'} && _ignoreEmit
 					}
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension

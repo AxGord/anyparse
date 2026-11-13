@@ -371,7 +371,7 @@ final class BodyFit {
 	 * (`WrapList.namedThresholdLiteral`), or `d` itself when it holds none. One literal is one node however many layouts of
 	 * its host hold it, so it gets one token; a decision a host has already named keeps the token it has.
 	 */
-	private static function namedThresholdLiterals(d: Doc): Doc {
+	public static function namedThresholdLiterals(d: Doc): Doc {
 		final memo: DocIdentityMap<Doc> = new DocIdentityMap();
 		function walk(n: Doc): Doc {
 			final hit: Null<Doc> = memo.get(n);

@@ -450,21 +450,19 @@ class NewFileSliceTest extends Test {
 	 * file its own `fmt --list` immediately called drifted, after which the next
 	 * `add-member` on it refused with `file is not in canonical form`.
 	 *
-	 * That file's case-body shape now settles in one rewrite, so the source below is
-	 * the value-`if` branch `unit.format.WrapFlatSourceFixedPointTest` still pins as
-	 * divergent; that class pins the writer divergence itself.
+	 * The shape below is that file's, reduced, under a switch whose branches share one
+	 * placement (`caseSiblings: anyBreak`), which `unit.format.WrapFlatSourceFixedPointTest`
+	 * still pins as divergent; that class pins the writer divergence itself.
 	 */
 	public function testCreateRawSettlesATwoRewriteSource(): Void {
-		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"ifBody": "fitLine", "expressionIf": '
-			+ '"next"}, "wrapping": {"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": ['
-			+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": "noWrap"}]}, "arrayWrap": {'
-			+ '"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "hasMultilineItems", "value": 1}], "type": '
-			+ '"onePerLine"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 80}], "type": "noWrap"}, {'
-			+ '"conditions": [{"cond": "anyItemLength >= n", "value": 30}], "type": "onePerLine"}]}}}';
+		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4, "alignInlineSwitchCaseBody": true}, "sameLine": {'
+			+ '"caseBody": "fitLine", "expressionCase": "fitLine", "caseSiblings": "anyBreak"}, "wrapping": {"maxLineLength": 140, '
+			+ '"objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], '
+			+ '"type": "noWrap"}]}}}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final src: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: EVars([\n'
-			+ '\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] '
-			+ '}), expr: macro null, isFinal: false }\n\t\t\t]), pos: Context.currentPos() }\n\t\telse\n\t\t\tcheckExpr(x);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n\t\tswitch xml.name {\n\t\t\tcase \'zip\':\n'
+			+ '\t\t\t\tcfg.zips.push({ path: try StringTools.trim(xml.innerData) catch (_: Any) \'\', file: xml.att.file, rm: '
+			+ 'xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\') });\n\t\t\tcase _:\n\t\t\t\tsuper.readNode(xml);\n\t\t}\n\t}\n}';
 		// PRECONDITION, not decoration: this test discriminates only while `src`
 		// really is a shape the writer settles on its SECOND rewrite. The pin for
 		// that shape lives in another class, so without this assert an improved

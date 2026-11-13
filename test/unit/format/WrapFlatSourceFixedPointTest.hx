@@ -148,9 +148,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The case-body source behind `tools/src/module/Unpack.hx`, reduced. ONE copy,
-	 * because two tests read it and they must not drift apart: the tail pin asserts
-	 * one writer rewrite settles it, and the mechanism split re-reads it under a
-	 * committed cascade. (`unit.query.NewFileSliceTest` needs its own copy — a
+	 * because four tests read it and they must not drift apart: the tail pin, the
+	 * mechanism split and the two `canonicalize` tests, which read it under
+	 * `CASE_BODY_SIBLINGS` and are regression tests only while the tail pin holds that
+	 * case divergent. (`unit.query.NewFileSliceTest` needs its own copy — a
 	 * different class — and carries a local precondition instead.)
 	 */
 	private static final CASE_BODY_SRC: String = 'class C {\n\tfunction readNode(xml: Fast): Void {\n'
@@ -298,9 +299,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The value-`if` branch behind `src/pony/magic/builder/DIBuilder.hx`, reduced.
-	 * ONE copy for the same reason `CASE_BODY_SRC` gives: four tests read it — the
-	 * tail pin, the mechanism split and the two `canonicalize` tests, which are
-	 * regression tests only for as long as the tail pin holds it divergent.
+	 * ONE copy for the same reason `CASE_BODY_SRC` gives: the tail pin and the
+	 * mechanism split read it.
 	 */
 	private static final VALUE_IF_SRC: String = 'class C {\n\tfunction f(): Void {\n\t\tfinal v = if (staticDIVar != null)\n\t\t\t{ expr: E'
 		+ 'Vars([\n\t\t\t\t{ name: staticDIVar.varName, type: TPath({ pack: [], name: \'Null\', params: [TPType(t)] }), expr: macro null, i'
@@ -647,9 +647,9 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    once the writer's own output has broken it, is force-committed by the Star
 	 *    that does not reflow source newlines; the host measure answers differently
 	 *    and the enclosing shape flips. Committing the cascade makes these CONVERGE.
-	 *    Open: the value-`if` branch and a `caseSiblings`-shared case body (`SiblingShare.share`
-	 *    votes on the flat body). CLOSED with the sibling policy off: `BodyFit.fitLineBelowLabel`
-	 *    lays the body out once per literal break (`offerLiteralBreaks`), as the `FitLine` arms do.
+	 *    Open: a `caseSiblings`-shared case body (`SiblingShare.share` votes on the flat body). CLOSED
+	 *    with the sibling policy off (`BodyFit.fitLineBelowLabel` through `offerLiteralBreaks`), and for
+	 *    the value-`if` branch, whose re-decided literal offers its nested literals' breaks (`WrapListOptions.redecided`).
 	 *  - MECHANISM B, no pivot anywhere: `DocMeasure.flatTokenWidth` DEFERS a
 	 *    `BodyGroup` to 0, so the width a CASCADE reads for an item ALREADY committed
 	 *    to breaking collapses between the two passes — the class
@@ -693,7 +693,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 				name: 'value-if branch (DIBuilder.hx)',
 				config: VALUE_IF_NESTED,
 				src: VALUE_IF_SRC,
-				closed: false
+				closed: true
 			},
 			{
 				name: 'statement-if body call with a literal argument (ifBody: fitLine)',
@@ -740,10 +740,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(VALUE_IF_SRC, [], true, plugin, VALUE_IF_NESTED) {
+		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_SIBLINGS) {
 			case Ok(text):
 				Assert.equals(
-					text, plugin.writeRoundTrip(text, VALUE_IF_NESTED),
+					text, plugin.writeRoundTrip(text, CASE_BODY_SIBLINGS),
 					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
 				);
 			case Err(message):
@@ -764,7 +764,7 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeReportsTheRewriteCount(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(VALUE_IF_SRC, [], true, plugin, VALUE_IF_NESTED) {
+		switch CanonicalEdit.canonicalize(CASE_BODY_SRC, [], true, plugin, CASE_BODY_SIBLINGS) {
 			case Ok(_, rewrites):
 				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
 				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');

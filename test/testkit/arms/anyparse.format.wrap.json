@@ -61,16 +61,16 @@
 			"name": "M-BREAK-MULTI-ITEM-HOST-OFF",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "emit",
-			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
-			"replace": "final offered: Bool = items.length == 1 ? flatSingle : false;",
+			"find": "final offered: Bool = redecided || (items.length == 1 ? flatSingle : open != '{');",
+			"replace": "final offered: Bool = redecided || (items.length == 1 ? flatSingle : false);",
 			"note": "a list of several items stops following a break nested in one of them, so a call around `bar(b, [for …])` stays glued while the literal breaks under it and the next write opens it one argument per line"
 		},
 		{
 			"name": "M-BREAK-OBJECT-LITERAL-HOST",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "emit",
-			"find": "final offered: Bool = items.length == 1 ? flatSingle : open != '{';",
-			"replace": "final offered: Bool = items.length == 1 ? flatSingle : true;",
+			"find": "final offered: Bool = redecided || (items.length == 1 ? flatSingle : open != '{');",
+			"replace": "final offered: Bool = redecided || (items.length == 1 ? flatSingle : true);",
 			"note": "an object literal's field list is wrapped in alternatives too, which hides the literal's width decision from its Allman placement: a comprehension body carrying a comprehension in a field breaks glued and goes Allman one write late"
 		},
 		{
@@ -577,6 +577,14 @@
 			"find": "flatLast != null && flatLength(flatLast) < 0 ? items : list",
 			"replace": "list",
 			"note": "a last-argument statement-block arrow loses its marker before the multi-argument block-lambda glue, so a call whose other argument also breaks opens its paren"
+		},
+		{
+			"name": "M-REDECIDED-LITERAL-OFFER-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emit",
+			"find": "final redecided: Bool = options?.redecided == true;",
+			"replace": "final redecided: Bool = false;",
+			"note": "a value-if branch literal, whose width decision the next write takes again, measures a literal nested in its items as flat while it breaks, so it goes one-per-line and the next write glues it"
 		}
 	]
 }
