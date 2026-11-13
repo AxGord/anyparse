@@ -318,6 +318,88 @@ class IfFalseDeadCodeCheckTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-IFFALSE-DIRECTIVE-MASK')
+	public function testABranchKeywordInAStringIsNotABoundary(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\t#if true\n\t\tlive(\'#else\');\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('#if') == -1 && out.indexOf('live(\'#else\');') != -1, 'region unwrapped, got: <$out>');
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-UNCOVERED-BYTES')
+	public function testACommentOnlyBranchIsNotTrivial(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\t// kept for later\n\t\t#end\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
+		Assert.equals(src, applyFix(src));
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-BLOCK-COMMENT')
+	public function testABlockHoldingOnlyACommentIsNotTrivial(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\t{ /* kept for later */ }\n\t\t#end\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
+		Assert.equals(src, applyFix(src));
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-ELSEIF-IS-ELSE')
+	public function testAnElseifBranchIsNotAnElseBody(): Void {
+		// `#if false ; #elseif mobile y(); #end`: read as an `#else`, the dead `;` would be dropped for `y();` under a condition.
+		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\t;\n\t\t#elseif mobile\n\t\ty();\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-SPAN-PAST-CLOSER')
+	public function testANodeRunningPastItsCloserIsNotTheRegion(): Void {
+		// The conditional is the left operand of the `+`: the node starts at the opener but ends after `"b"`, so the fix must
+		// rewrite the conditional alone and keep the operand that follows it.
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar s = #if true "a" #end + "b";\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('#if') == -1 && out.indexOf('"a"') != -1 && out.indexOf('+ "b"') != -1, 'operand kept, got: <$out>');
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-SPAN-PAST-CLOSER')
+	public function testAMisreadMemberRegionIsNeitherReportedNorFixed(): Void {
+		// The member grammar reads `#if false {} #end` together with the member after it as ONE node; that span is not one region.
+		final src: String = 'class C {\n\t#if false {} #end\n\tfunction b() {}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testSeveralEmptyStatementsAreTrivial(): Void {
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t;\n\t\t#end\n\t\tb();\n\t}\n}');
+		Assert.isTrue(out.indexOf('#if') == -1 && out.indexOf('a();') != -1 && out.indexOf('b();') != -1, 'region deleted, got: <$out>');
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-OBJECT-LITERAL-KIND')
+	public function testAnEmptyObjectLiteralBranchIsTrivial(): Void {
+		// In expression position the dead `{}` is an empty object literal, not a block: still filler, so the fix keeps the live branch.
+		final out: String = applyFix('class C {\n\tvar x = #if false {} #else 1 #end;\n}');
+		Assert.isTrue(out.indexOf('#if') == -1 && out.indexOf('x = 1') != -1, 'dead branch dropped, got: <$out>');
+	}
+
+	@:pin('control')
+	@:killer('M-IFFALSE-SHARED-BLOCK-KINDS')
+	public function testTheRuleLeavesTheGrammarsBlockKindsAlone(): Void {
+		// The grammar hands out one block-kind array to every rule: widening it for this rule's own filler test
+		// would make every other rule read an object literal as a block.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final before: Int = (plugin.controlFlowSupport()?.blockKinds() ?? []).length;
+		Assert.equals(1, violations('class C {\n\tvar x = #if false {} #else 1 #end;\n}').length);
+		Assert.equals(before, (plugin.controlFlowSupport()?.blockKinds() ?? []).length);
+	}
+
 	private inline function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		return CanonicalEdit.applyEdits(src, edits);
 	}

@@ -16839,6 +16839,14 @@
 			"find": "directives[mid].span.from < at",
 			"replace": "directives[mid].span.from <= at",
 			"note": "the lookup lands after a directive starting exactly at the offset, so a gap boundary on a directive and the directive's own start are missed"
+		},
+		{
+			"name": "M-IFFALSE-BLOCK-COMMENT",
+			"type": "anyparse.query.NodeShape",
+			"method": "isEmptyFiller",
+			"find": " && SourceText.isBlankSpan(span, source)",
+			"replace": "",
+			"note": "an empty container is a filler whatever sits between its delimiters, so a block holding only a comment reads as trivial and a fix deletes the comment"
 		}
 	]
 }

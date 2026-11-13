@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.runtime.Span;
+
 /** The pieces a `receiver.method(…)` call spells: the field-access callee, its one receiver child and the method name. */
 typedef MethodCall = { final callee: QueryNode; final receiver: QueryNode; final method: String; };
 
@@ -175,6 +177,17 @@ final class NodeShape {
 	/** The initializer of a single-variable local declaration — its one child — or null when `decl` has none. */
 	public static function initOf(decl: QueryNode): Null<QueryNode> {
 		return decl.children.length == INIT_CHILD_COUNT ? decl.children[0] : null;
+	}
+
+	/**
+	 * Whether `node` carries no code: a node of one of `fillerKinds` (an empty statement, an empty member), or a CHILDLESS node
+	 * of `containerKinds` (a block, an object literal) with nothing but blanks between its delimiters. A comment between the
+	 * delimiters is source a fix must not silently discard, so it makes the container non-empty.
+	 */
+	public static function isEmptyFiller(node: QueryNode, source: String, fillerKinds: Array<String>, containerKinds: Array<String>): Bool {
+		if (fillerKinds.contains(node.kind)) return true;
+		final span: Null<Span> = node.span;
+		return span != null && containerKinds.contains(node.kind) && node.children.length == 0 && SourceText.isBlankSpan(span, source);
 	}
 
 }

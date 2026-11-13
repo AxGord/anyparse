@@ -3,7 +3,7 @@ package anyparse.check.common.control;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
-import anyparse.query.SourceText;
+import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -191,11 +191,7 @@ final class ConstantCondition extends RuleBase {
 	private static function isTrivialEliminated(
 		eliminated: Null<QueryNode>, source: String, blockKinds: Array<String>, emptyStmtKind: Null<String>
 	): Bool {
-		if (eliminated == null) return true;
-		if (emptyStmtKind != null && eliminated.kind == emptyStmtKind) return true;
-		if (!blockKinds.contains(eliminated.kind) || eliminated.children.length != 0) return false;
-		final espan: Null<Span> = eliminated.span;
-		return espan != null && SourceText.isBlankSpan(espan, source);
+		return eliminated == null || NodeShape.isEmptyFiller(eliminated, source, emptyStmtKind == null ? [] : [emptyStmtKind], blockKinds);
 	}
 
 	/**

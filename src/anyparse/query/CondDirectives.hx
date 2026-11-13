@@ -22,9 +22,8 @@ using anyparse.util.Strings;
  * probes. The consumers of this class — the `redundant-condcomp-parens`, `cond-region-merge`,
  * `cond-assign-merge` and `member-order` checks and `apq lit --include-directives` — would otherwise
  * have grown a lexer each. `CondBranchProjection.gapHasBranchDirective` and `TailScan.hasConditionalCompilation`
- * are older probes NOT yet migrated onto this reader; folding them in (and with them the hardcoded
- * spellings in `IfFalseDeadCode`) is the follow-up that would make the first sentence true of the whole
- * engine rather than of this class's own consumers.
+ * are older probes NOT yet migrated onto this reader; folding them in is the follow-up that would
+ * make the first sentence true of the whole engine rather than of this class's own consumers.
  *
  * The scan is lexical: the keyword occurrences come from the grammar's generated lexical pass
  * (`RefShape.conditionalDirectives`), and the caller's non-code mask — the engine's single lexer through

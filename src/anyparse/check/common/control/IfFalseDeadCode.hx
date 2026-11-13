@@ -1,62 +1,37 @@
 package anyparse.check.common.control;
 
 import anyparse.query.CondDirectives;
+import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.CondCondition;
-import anyparse.runtime.Input;
 
 using anyparse.util.Strings;
 using StringTools;
 
 /**
- * Flags every `#if false … #end` conditional-compilation region — dead
- * code the compiler never sees on any target, kept only as a poor
- * man's block comment — long-lived codebases accumulate dozens of them.
- * Also flags every `#if true … #end` region — the mirror smell: the
- * guard buys nothing since the body compiles on every target regardless,
- * so the directive is pure noise around live code.
+ * Flags every `#if false … #end` conditional-compilation region — dead code the compiler never sees on any target — and every
+ * `#if true … #end` region, the mirror smell: the guard buys nothing since the body compiles on every target regardless.
  *
- * Detection is SOURCE-based, not shape-based: conditional nodes across
- * every scope (member `Conditional`, statement `Conditional`,
- * case-group `Conditional`, `ConditionalExpr`, `ConditionalArgs`,
- * `CondSpliceExpr`/`CondSpliceTail` raws) do not project their
- * condition as a child, but ALL of them span source that starts with
- * the `#if` keyword — so any node whose span text opens with
- * `#if false` (or `#if (false)`) or `#if true` (or `#if (true)`) is a
- * hit, uniformly and future-proof for new conditional productions.
+ * Detection is DIRECTIVE-based: conditional nodes of every scope do not project their condition as a child, but all span a region
+ * opened by the grammar's `#if`. The shared reader (`CondDirectives`) supplies the region's own directives: a node is a hit when its
+ * span is exactly one cleanly closed region whose opener's condition is the literal `false` / `true` (parentheses peeled), and the
+ * branch bodies are the gaps between those directives — so a keyword written inside a string or comment of a dead branch is never a
+ * branch boundary.
  *
  * `fix`:
- *  - `#if false X #end` → delete the whole region (plus the line's
- *    leading indent when the region owns its lines) — ONLY when `X` is
- *    trivial (empty, or a bare `;`); see "Non-trivial dead body" below.
- *  - `#if false X #else Y #end` → replace the region with Y (the
- *    branch the compiler actually keeps) — again only when the
- *    eliminated `X` is trivial.
- *  - `#if true X #end` → unwrap to `X` — UNCONDITIONALLY, regardless of
- *    `X`'s content: nothing is erased, so there is no triviality gate.
- *  - `#if true X #else Y #end` → unwrap to `X`, dropping `Y` — same
- *    triviality gate as the false arm, but on `Y`: only auto-applied
- *    when `Y` is trivial (empty, or a bare `;`).
- *  - `#elseif` chains are report-only for BOTH polarities — rewriting
- *    `#if false X #elseif C Y #end` (or the `true` mirror) is a semantic
- *    transform left to a human.
+ * - `#if false X #end` → delete the region, only when `X` is trivial.
+ * - `#if false X #else Y #end` → replace the region with `Y`, only when `X` is trivial.
+ * - `#if true X #end` → unwrap to `X` unconditionally: nothing is erased.
+ * - `#if true X #else Y #end` → unwrap to `X`, only when `Y` is trivial.
+ * - `#elseif` chains are report-only for both polarities: that rewrite is a semantic transform left to a human.
  *
  * ## Non-trivial dead body: report-only
  *
- * The branch a fix would ERASE (`X` for the false arm, `Y` for the true
- * arm's `#else`) can be more than filler: a whole alternate
- * implementation left behind a guard is a common way to preserve
- * unfinished or reverted work. (`ConstantCondition`, this check's
- * `if (true)` / `if (false)` sibling, documents a real case: a
- * `final hasSelection:Bool = true;` stub whose dead `else` branch was the
- * only trace of a dropped feature.) So `fix` withholds the edit whenever
- * the eliminated branch contains anything beyond an empty block or bare
- * `;` — the violation still reports (same severity), with a human-review
- * note appended to the message. Trivial (empty) bodies keep the
- * automatic delete/replace/unwrap unchanged. Detection here stays
- * SOURCE-text based (comments are not stripped before the check), so a
- * body holding only a comment is conservatively treated as non-trivial
- * too.
+ * The branch a fix would ERASE can be more than filler: an alternate implementation left behind a guard preserves unfinished or
+ * reverted work (`ConstantCondition`, the `if (false)` sibling, documents a real case). So `fix` withholds the edit unless the
+ * eliminated branch holds only empty statements, empty members or empty blocks; the violation still reports, with a human-review
+ * note. Triviality is read off the region's child nodes: every child inside the branch is such a filler and no byte of it is left
+ * uncovered, so a comment-only body, or code the grammar did not project as a node, is non-trivial.
  */
 @:nullSafety(Strict)
 final class IfFalseDeadCode extends RuleBase {
@@ -78,185 +53,214 @@ final class IfFalseDeadCode extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final reader: Null<ConditionReader> = readerOf(plugin);
-		return reader == null
-			? []
-			: RunScan.collect(files, plugin, (entry, tree, violations) -> walk(violations, entry.file, entry.source, tree, reader));
+		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
+			for (region in regionsOf(tree, scanOf(entry.source, seams, plugin))) violations.push({
+				file: entry.file,
+				span: region.span,
+				rule: 'if-false',
+				severity: Severity.Warning,
+				message: messageOf(region)
+			});
+		});
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		final reader: Null<ConditionReader> = readerOf(plugin);
-		if (reader == null) return edits;
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final isTrueBranch: Bool = isIfTrueAt(source, span.from, reader);
-			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to), reader);
-			if (region == null) continue;
-			if (isTrueBranch) {
-				if (region.elsePos != -1 && !isTrivialBody(region.otherwise)) continue;
-				edits.push({ span: span, text: region.then.trim() });
-			} else {
-				if (!isTrivialBody(region.then)) continue;
-				edits.push({ span: span, text: region.otherwise });
+		final flagged: Array<String> = RunScan.spanKeys(violations);
+		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+			final edits: Array<{ span: Span, text: String }> = [];
+			for (region in regionsOf(tree, scanOf(source, seams, plugin))) {
+				final edit: Null<{ span: Span, text: String }> = flagged.contains('${region.span.from}:${region.span.to}')
+					? editOf(source, region)
+					: null;
+				if (edit != null) edits.push(edit);
 			}
-		}
-		return edits;
+			return edits;
+		});
 	}
 
-	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
-	private static inline function isIfFalseAt(source: String, from: Int, reader: ConditionReader): Bool {
-		return isIfLiteralAt(source, from, 'false', reader);
-	}
-
-	/** `true` iff the source at `from` opens with `#if true` / `#if (true)` (word-bounded). */
-	private static inline function isIfTrueAt(source: String, from: Int, reader: ConditionReader): Bool {
-		return isIfLiteralAt(source, from, 'true', reader);
-	}
-
-	/** The plugin's condition readers, or null when its grammar declares no condition. */
-	private static function readerOf(plugin: GrammarPlugin): Null<ConditionReader> {
+	/** The seams this rule reads, or null when the grammar declares no conditional-compilation opener or closer. */
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final condition: Null<(input: Input, at: Int) -> Int> = shape.conditionEnd;
-		final blank: Null<(input: Input, at: Int) -> Int> = shape.conditionBlankEnd;
-		return condition == null || blank == null ? null : { condition: condition, blank: blank };
-	}
-
-	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, reader: ConditionReader): Void {
-		final span: Null<Span> = node.span;
-		final isFalse: Bool = span != null && isIfFalseAt(source, span.from, reader);
-		final isTrueBranch: Bool = span != null && !isFalse && isIfTrueAt(source, span.from, reader);
-		if (span != null && (isFalse || isTrueBranch))
-			out.push({
-				file: file,
-				span: span,
-				rule: 'if-false',
-				severity: Severity.Warning,
-				message: deadRegionMessage(source.substring(span.from, span.to), isTrueBranch, reader)
-			});
-		else
-			for (c in node.children) walk(out, file, source, c, reader);
-	}
-
-	/**
-	 * The violation message for a flagged region's `slice`: the base message
-	 * for its polarity (`isTrueBranch`), extended with an ASCII human-review
-	 * note when the branch a fix would eliminate is non-trivial (see the
-	 * class doc) — the false arm's `#if false` body, or the true arm's
-	 * `#else` body when one exists (an elseless `#if true` region eliminates
-	 * nothing, so it never gets the note). An `#elseif` chain (or a
-	 * malformed region `eliminatedRegion` cannot resolve) keeps the base
-	 * message — report-only for an unrelated reason (the rewrite is a
-	 * semantic transform, not a triviality question).
-	 */
-	private static function deadRegionMessage(slice: String, isTrueBranch: Bool, reader: ConditionReader): String {
-		final base: String = isTrueBranch ? TRUE_MESSAGE : FALSE_MESSAGE;
-		final region: Null<EliminatedRegion> = eliminatedRegion(slice, reader);
-		if (region == null) return base;
-		final eliminated: Null<String> = isTrueBranch ? (region.elsePos == -1 ? null : region.otherwise) : region.then;
-		return eliminated == null || isTrivialBody(eliminated) ? base : base + DEAD_BRANCH_NOTE;
-	}
-
-	/**
-	 * Resolve a flagged region's `slice` into its `then` branch (the `#if`
-	 * body, regardless of polarity) plus the raw marker offsets `fix` needs
-	 * to build its edit — the SINGLE source of truth `fix` and
-	 * `deadRegionMessage` both read, so the two can never disagree about the
-	 * same violation. `otherwise` is the `#else` branch's source (trimmed),
-	 * or `''` when there is none. Which one a caller treats as ELIMINATED
-	 * depends on polarity: the false arm always erases `then`; the true arm
-	 * erases `otherwise` (and only when an `#else` exists at all — an
-	 * elseless `#if true` region erases nothing). Null for an `#elseif`
-	 * chain (`fix` stays report-only; `deadRegionMessage` keeps the base
-	 * message) or a malformed region (`#else` with no matching `#end`).
-	 */
-	private static function eliminatedRegion(slice: String, reader: ConditionReader): Null<EliminatedRegion> {
-		if (findTopLevelMarker(slice, '#elseif') != -1) return null;
-		final elsePos: Int = findTopLevelMarker(slice, '#else');
-		final endPos: Int = slice.lastIndexOf('#end');
-		if (elsePos != -1 && endPos <= elsePos) return null;
-		final bodyEnd: Int = elsePos == -1 ? endPos : elsePos;
+		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
+		final endKeyword: Null<String> = shape.conditionalEndKeyword;
+		if (ifKeyword == null || endKeyword == null) return null;
+		final flow: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final emptyStmt: Null<String> = shape.emptyStmtKind;
+		final emptyMember: Null<String> = shape.emptyMemberKind;
+		final containers: Array<String> = flow == null ? [] : flow.blockKinds().copy();
+		final objectLiteral: Null<String> = shape.objectLiteralKind;
+		if (objectLiteral != null) containers.push(objectLiteral);
+		final fillers: Array<String> = [];
+		if (emptyStmt != null) fillers.push(emptyStmt);
+		if (emptyMember != null) fillers.push(emptyMember);
 		return {
-			then: slice.substring(bodyStart(slice, reader), bodyEnd),
-			elsePos: elsePos,
-			otherwise: elsePos == -1 ? '' : slice.substring(elsePos + '#else'.length, endPos).trim()
+			shape: shape,
+			ifKeyword: ifKeyword,
+			endKeyword: endKeyword,
+			elseKeywords: shape.conditionalElseKeywords ?? [],
+			emptyKinds: fillers,
+			emptyContainerKinds: containers
 		};
 	}
 
+	/** One file's directives and the offsets its `#if` openers start at. */
+	private static function scanOf(source: String, seams: Seams, plugin: GrammarPlugin): Scan {
+		final directives: Array<CondDirective> = CondDirectives.scan(source, seams.shape, plugin.lexicalRegions.bind(source));
+		final openers: Map<Int, Bool> = [];
+		for (directive in directives) if (directive.keyword == seams.ifKeyword) openers[directive.span.from] = true;
+		return {
+			source: source,
+			seams: seams,
+			directives: directives,
+			openers: openers
+		};
+	}
+
+	/** Every dead or redundant region under `tree`, in document order; a flagged region's own children are not searched. */
+	private static function regionsOf(tree: QueryNode, scan: Scan): Array<Region> {
+		final out: Array<Region> = [];
+		if (scan.directives.length > 0) collect(tree, scan, out);
+		return out;
+	}
+
+	private static function collect(node: QueryNode, scan: Scan, out: Array<Region>): Void {
+		final region: Null<Region> = regionAt(node, scan);
+		if (region != null)
+			out.push(region);
+		else
+			for (child in node.children) collect(child, scan, out);
+	}
+
+	/** The region `node` is, or null when it is not exactly one cleanly closed `#if <literal>` region. */
+	private static function regionAt(node: QueryNode, scan: Scan): Null<Region> {
+		final span: Null<Span> = node.span;
+		if (span == null || !scan.openers.exists(span.from)) return null;
+		final seams: Seams = scan.seams;
+		final own: Null<Array<CondDirective>> = CondDirectives.ownDirectives(
+			scan.directives, span, seams.ifKeyword, seams.elseKeywords, seams.endKeyword
+		);
+		if (own == null) return null;
+		// A node that runs past its closer (`#if t "a" #end + "b"`) is not the region: replacing it would drop what follows.
+		final condition: Null<Span> = own[0].condition;
+		if (condition == null || own[own.length - 1].span.to != span.to) return null;
+		final isTrue: Bool = isLiteral(scan.source, condition, 'true');
+		return !isTrue && !isLiteral(scan.source, condition, 'false')
+			? null
+			: { span: span, isTrue: isTrue, eliminated: branchesOf(node, own, scan) };
+	}
+
 	/**
-	 * `true` iff the source at `from` opens with `#if <literal>` / `#if (<literal>)` and the condition is NOTHING
-	 * ELSE: `#if false && x` is a conditional on `x`, not a dead region.
+	 * Whether `condition` is NOTHING but `literal`, under any layer of parentheses:
+	 * `#if false && x` is a conditional on `x`, not a dead region.
 	 */
-	private static function isIfLiteralAt(source: String, from: Int, literal: String, reader: ConditionReader): Bool {
-		if (!sliceStartsWith(source, from, '#if')) return false;
-		final condition: Null<Span> = CondCondition.conditionAt(source, from + '#if'.length, reader.condition, reader.blank);
-		if (condition == null) return false;
+	private static function isLiteral(source: String, condition: Span, literal: String): Bool {
 		final text: String = CondDirectives.normalizeCondition(source.substring(condition.from, condition.to));
 		return text.stripOuterParens() == literal;
 	}
 
 	/**
-	 * Index in `slice` (which itself opens with the region's own `#if <literal>` / `#if (<literal>)`) right after the
-	 * condition, where the THEN body begins — the same condition `isIfLiteralAt` read, restarted at `slice[0]`.
+	 * The `#if` body and the `#else` body of a region, or null for an `#elseif` chain (or a repeated
+	 * `#else`) — `fix` stays report-only there and the message keeps its base text. The `#if` body starts
+	 * right after the opener's condition, the `#else` body right after its keyword.
 	 */
-	private static function bodyStart(slice: String, reader: ConditionReader): Int {
-		final condition: Null<Span> = CondCondition.conditionAt(slice, '#if'.length, reader.condition, reader.blank);
-		return condition == null ? '#if'.length : condition.to;
+	private static function branchesOf(node: QueryNode, own: Array<CondDirective>, scan: Scan): Null<Branches> {
+		final seams: Seams = scan.seams;
+		final hasElse: Bool = own.length == 3;
+		if (own.length > 3 || (hasElse && CondDirectives.takesCondition(own[1].keyword, seams.ifKeyword, seams.endKeyword))) return null;
+		final then: Span = new Span(own[0].span.to, own[1].span.from);
+		final otherwise: Null<Span> = hasElse ? new Span(own[1].span.to, own[2].span.from) : null;
+		return {
+			then: then,
+			otherwise: otherwise,
+			thenTrivial: isTrivial(node, then, scan),
+			otherwiseTrivial: otherwise == null || isTrivial(node, otherwise, scan)
+		};
 	}
 
 	/**
-	 * Whether `body` — the source text of a would-be-eliminated branch — is
-	 * TRIVIAL: empty, a bare `;`, or an empty block `{}` (any amount of inner
-	 * whitespace). Anything else (a real statement, a declaration, a non-empty
-	 * block) is non-trivial; see the class doc for why that withholds the fix.
+	 * Whether the `branch` of `region` holds nothing a fix must not discard: every child node inside it is a
+	 * filler (an empty statement, an empty member, an empty block with nothing between its braces) and the
+	 * bytes between the fillers are blank.
 	 */
-	private static function isTrivialBody(body: String): Bool {
-		final trimmed: String = body.trim();
-		return trimmed == '' || trimmed == ';' || (
-			trimmed.length >= 2
-			&& trimmed.charAt(0) == '{'
-			&& trimmed.charAt(trimmed.length - 1) == '}'
-			&& trimmed.substring(1, trimmed.length - 1).trim() == ''
-		);
-	}
-
-	/**
-	 * Offset of `marker` at `#if`-nesting depth 0 inside `slice` (which
-	 * itself starts with the region's own `#if` — counted from depth 0
-	 * AFTER that opener), or -1. String/comment content is not scanned
-	 * around — dead regions with a literal `"#else"` inside a string are
-	 * rare enough that the resulting skip (marker found → conservative
-	 * report-only or a larger keep) stays safe: the fix output always
-	 * re-parses through the canonicalize gate before being written.
-	 */
-	private static function findTopLevelMarker(slice: String, marker: String): Int {
-		var depth: Int = 0;
-		var i: Int = 3;
-		while (i < slice.length) {
-			if (slice.charCodeAt(i) == '#'.code) {
-				if (sliceStartsWith(slice, i, '#if'))
-					depth++;
-				else if (sliceStartsWith(slice, i, '#end'))
-					depth--;
-				else if (depth == 0 && sliceStartsWith(slice, i, marker))
-					return i;
-			}
-			i++;
+	private static function isTrivial(region: QueryNode, branch: Span, scan: Scan): Bool {
+		var at: Int = branch.from;
+		for (child in region.children) {
+			final span: Null<Span> = child.span;
+			if (span == null || span.to <= branch.from || span.from >= branch.to) continue;
+			if (
+				span.from < at
+				|| span.to > branch.to
+				|| !NodeShape.isEmptyFiller(child, scan.source, scan.seams.emptyKinds, scan.seams.emptyContainerKinds)
+				|| !scan.source.substring(at, span.from).isBlank()
+			)
+				return false;
+			at = span.to;
 		}
-		return -1;
+		return scan.source.substring(at, branch.to).isBlank();
 	}
 
-	private static function sliceStartsWith(s: String, at: Int, what: String): Bool {
-		return at + what.length <= s.length && s.substr(at, what.length) == what;
+	/**
+	 * The violation message of `region`: the base message for its polarity, extended with an ASCII
+	 * human-review note when the branch a fix would eliminate is non-trivial — the false arm's `#if`
+	 * body, or the true arm's `#else` body when one exists (an elseless `#if true` region eliminates
+	 * nothing, so it never gets the note). An `#elseif` chain keeps the base message — report-only for
+	 * an unrelated reason (the rewrite is a semantic transform, not a triviality question).
+	 */
+	private static function messageOf(region: Region): String {
+		final base: String = region.isTrue ? TRUE_MESSAGE : FALSE_MESSAGE;
+		final branches: Null<Branches> = region.eliminated;
+		if (branches == null) return base;
+		final trivial: Bool = region.isTrue ? branches.otherwiseTrivial : branches.thenTrivial;
+		return trivial ? base : base + DEAD_BRANCH_NOTE;
+	}
+
+	/**
+	 * The edit that rewrites `region`, or null when it stays report-only. The false arm erases its `#if`
+	 * body and keeps the `#else` body (or nothing); the true arm keeps its `#if` body and erases the `#else`
+	 * body — an elseless `#if true` region erases nothing, so it unwraps unconditionally.
+	 */
+	private static function editOf(source: String, region: Region): Null<{ span: Span, text: String }> {
+		final branches: Null<Branches> = region.eliminated;
+		if (branches == null) return null;
+		final otherwise: Null<Span> = branches.otherwise;
+		if (region.isTrue)
+			return otherwise != null && !branches.otherwiseTrivial
+				? null
+				: { span: region.span, text: source.substring(branches.then.from, branches.then.to).trim() };
+		return branches.thenTrivial
+			? { span: region.span, text: otherwise == null ? '' : source.substring(otherwise.from, otherwise.to).trim() }
+			: null;
 	}
 
 }
 
-/** The resolved region `eliminatedRegion` reads in both `fix` and `deadRegionMessage`. */
-private typedef EliminatedRegion = { final then: String; final elsePos: Int; final otherwise: String; };
+/** What a run reads of the grammar: the directive vocabulary, and the node kinds that carry no code. */
+private typedef Seams = {
+	final shape: RefShape;
+	final ifKeyword: String;
+	final endKeyword: String;
+	final elseKeywords: Array<String>;
+	final emptyKinds: Array<String>;
+	final emptyContainerKinds: Array<String>;
+};
 
-/** The grammar's readers of where a `#if` condition ends and of the blank around it (`RefShape.conditionEnd` / `conditionBlankEnd`). */
-private typedef ConditionReader = { final condition: (input: Input, at: Int) -> Int; final blank: (input: Input, at: Int) -> Int; };
+/** One file's source, its conditional directives, and the offsets its openers start at. */
+private typedef Scan = {
+	final source: String;
+	final seams: Seams;
+	final directives: Array<CondDirective>;
+	final openers: Map<Int, Bool>;
+};
+
+/** A flagged region: its node span, its polarity, and its branches (null for an `#elseif` chain). */
+private typedef Region = { final span: Span; final isTrue: Bool; final eliminated: Null<Branches>; };
+
+/** The `#if` body and the `#else` body (null when there is none) of a region, each with its triviality. */
+private typedef Branches = {
+	final then: Span;
+	final otherwise: Null<Span>;
+	final thenTrivial: Bool;
+	final otherwiseTrivial: Bool;
+};

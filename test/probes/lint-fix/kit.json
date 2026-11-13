@@ -2385,6 +2385,68 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "IF1",
+			"note": "if-false over a #if true region that is the left operand of a binary: the fix must keep the operand after the #end",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"if-false",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tvar s = #if true \"a\" #end + \"b\";\n\t\ttrace(s);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "d840b6d1eb9c323f",
+				"files": "b7e2a3ab887c845b",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "IF2",
+			"note": "if-false over a member region the grammar reads together with the next member: nothing is reported, no member is deleted",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"if-false",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function a() {}\n\t#if false {} #end\n\tstatic function b() { trace(\"b\"); }\n\tstatic function main() { b(); }\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
