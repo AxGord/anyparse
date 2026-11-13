@@ -32,6 +32,11 @@ final class ElemChainEmitTest extends Test {
 	private static final DEFAULT_INDENT: String =
 		'{"wrapping": {"maxLineLength": 40, "casePattern": {"defaultWrap": "fillLine", "defaultAdditionalIndent": 1}}}';
 	private static final CURLY_LABEL: String = '{aaaa: 1} | {bbbbbbbbbbbbbbbbbbbbbbb: 2} | {ccccccccccccccccc: 3}';
+
+	/** The operand opening its own line stays at the case's indent and the operators stay beside it: the list layout, not the fill. */
+	private static final CURLY_OWN_LINE: String =
+		'case {aaaa: 1} |\n\t\t\t{\n\t\t\t\tbbbbbbbbbbbbbbbbbbbbbbb: 2\n\t\t\t} | {ccccccccccccccccc: 3}:';
+
 	private static final INDENT_LABEL: String = '"aaaaaaaaaaaaaaaa" | "bbbbbbbbbbbbbbbbbb", "cccccccccccccccccc" | "dddddddddddddd"';
 	private static final WIDE_A: String = '"aaaaaaaaaaaaaaaaaaaaaaaaaaa"';
 	private static final WIDE_B: String = '"bbbbbbbbbbbbbbbbbbbbbbbbbbbbb"';
@@ -149,12 +154,14 @@ final class ElemChainEmitTest extends Test {
 	@:killer('M-ELEM-CHAIN-HARDLINE-OPERAND')
 	public function testOperandOpeningItsOwnLineLeavesTheListLayout(): Void {
 		assertNoStrandedSpace(CURLY_LABEL, CURLY_BEFORE);
+		assertLabel(CURLY_LABEL, CURLY_BEFORE, CURLY_OWN_LINE);
 	}
 
 	@:pin('control')
 	@:killer('M-ELEM-CHAIN-HARDLINE-OPERAND')
 	public function testOperandOpeningItsOwnLineLeavesTheListLayoutUnderBeforeLast(): Void {
 		assertNoStrandedSpace(CURLY_LABEL, CURLY_BEFORE_LEADING);
+		assertLabel(CURLY_LABEL, CURLY_BEFORE_LEADING, CURLY_OWN_LINE);
 	}
 
 	@:pin('control')

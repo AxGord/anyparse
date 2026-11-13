@@ -1697,6 +1697,14 @@
 			"method": "usingExtension",
 			"force": "null",
 			"note": "a `recv.m()` a `using` binds resolves to nothing, so a thin forward to an extension macro is flagged again"
+		},
+		{
+			"name": "M-PURITY-FIELD-INTERCEPTOR-IGNORED",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "accessRunsCode",
+			"find": "typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field, true) != false",
+			"replace": "typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field, true) == true",
+			"note": "a field read of a name the type does not declare reads as plain, so a read an @:op(a.b) or @:resolve interceptor answers looks pure"
 		}
 	]
 }

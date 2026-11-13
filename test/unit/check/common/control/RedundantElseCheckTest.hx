@@ -3,6 +3,8 @@ package unit.check.common.control;
 import anyparse.check.Severity;
 import anyparse.check.common.control.RedundantElse;
 
+using StringTools;
+
 /**
  * The `redundant-else-after-return` check: an `else` whose `if` then-branch
  * always exits (`return` / `throw` / `break` / `continue`) is flagged `Info`,
@@ -311,14 +313,18 @@ class RedundantElseCheckTest extends Test {
 		Assert.equals(1, edits(src).length);
 	}
 
-	/** A spliced statement beside the `if` may declare the name an else-body local would then redeclare: the else stays. */
+	/**
+	 * A spliced statement before the `if` may declare the name an else-body local would then redeclare: the else stays. The
+	 * splice stands before the `if`, where only the frame's unknown binding refuses; one after it is refused as a later read.
+	 */
 	@:pin('control')
 	@:killer('M-FRAME-SPLICE-UNKNOWN')
 	public function testASplicedSiblingKeepsTheElse(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n'
-			+ '\t\t\t$$rest;\n\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\t$$rest;\n'
+			+ '\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n\t\t};\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+		Assert.equals(1, edits(src.replace('$$rest;', 'rest();')).length, 'the same sibling written plainly lets the else go');
 	}
 
 	/** A spliced statement inside the else body may declare any name: de-nesting it into the enclosing list is refused. */
@@ -331,14 +337,20 @@ class RedundantElseCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
-	/** `@:mergeBlock $b{d};` declares into the enclosing block whatever it names: the metadata wrapper does not hide the splice. */
+	/**
+	 * `@:mergeBlock $b{d};` before the `if` declares into the enclosing block whatever it names: the metadata wrapper does not
+	 * hide the splice.
+	 */
 	@:pin('control')
 	@:killer('M-SPLICE-UNDER-META')
 	public function testAMetadataWrappedSplicedSiblingKeepsTheElse(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n'
-			+ '\t\t\t@:mergeBlock $$b{d};\n\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal e = macro {\n\t\t\t@:mergeBlock $$b{d};\n'
+			+ '\t\t\tif (c) return 1; else { var t = 2; foo(t); }\n\t\t};\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+		Assert.equals(
+			1, edits(src.replace('@:mergeBlock $$b{d};', '@:mergeBlock d();')).length, 'the same sibling written plainly lets the else go'
+		);
 	}
 
 	/** A metadata-wrapped splice in the else body may declare any name: de-nesting it into the enclosing list is refused. */

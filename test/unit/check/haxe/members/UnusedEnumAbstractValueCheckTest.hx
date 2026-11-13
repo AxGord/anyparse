@@ -67,7 +67,10 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 		if (outcome != null) assertNames(['Layout.GRID'], outcome);
 	}
 
-	/** A bare `case` pattern reads its value: in a switch of several arms and in a single arm the compiler lowers to `==`. */
+	/**
+	 * A bare `case` pattern reads its value: in a switch of several arms and in a single arm the compiler lowers to `==`. The
+	 * same-named values of a type no pattern reads are reported only while the patterns are placed as the subject's values.
+	 */
 	@:pin('control')
 	@:killer('M-EAV-FACTS-CASE')
 	@:killer('M-EAV-FACTS-COMPARE')
@@ -78,6 +81,13 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 			'\tfinal GRID;',
 			'\tfinal TILE;',
 			'\tfinal LOST;',
+			'}',
+			'',
+			'enum abstract Other(Int) {',
+			'\tfinal LIST;',
+			'\tfinal GRID;',
+			'\tfinal TILE;',
+			'\tfinal KEEP;',
 			'}',
 			'',
 			'class Main {',
@@ -91,12 +101,13 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 			'\t\t\tcase GRID: trace(3);',
 			'\t\t\tcase _:',
 			'\t\t}',
+			'\t\ttrace(Other.KEEP);',
 			'\t}',
 			'}',
 			''
 		].join('\n');
 		final outcome: Null<Outcome> = lint(['Main.hx' => source], [[]]);
-		if (outcome != null) assertNames(['View.LOST'], outcome);
+		if (outcome != null) assertNames(['Other.GRID', 'Other.LIST', 'Other.TILE', 'View.LOST'], outcome);
 	}
 
 	/** A read only in a `#if` branch keeps its value, whether another configuration compiles the branch or none does. */

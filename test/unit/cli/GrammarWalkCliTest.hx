@@ -63,6 +63,13 @@ class GrammarWalkCliTest extends Test {
 			);
 			Assert.equals(1, code);
 			Assert.isTrue(err.contains('matched no .json files'), err);
+			final held: String = CliFixture.writeTree('grammarwalkjson', [{ name: 'b.json', source: '{}\n' }]);
+			CliFixture.always(CliFixture.removeDir.bind(held), () -> {
+				final partial: String = CliFixture.captureStderr(() ->
+					CliFixture.captureStdout(() -> Cli.run(['lint', '--lang', 'json', held, dir]))
+				);
+				Assert.isTrue(partial.contains('1 of 2 scope argument(s) matched no .json files'), partial);
+			});
 		});
 		#else
 		Assert.pass('non-nodejs target');
