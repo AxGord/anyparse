@@ -1,12 +1,14 @@
 package anyparse.query;
 
+import anyparse.grammar.haxe.HxCondValue;
+import anyparse.grammar.haxe.HxCondValueParser;
 import anyparse.query.CondDirectives;
 import anyparse.query.CondValue;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
-using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -44,8 +46,6 @@ private typedef Frame = {
 	var live: Null<Bool>;
 	var elseGuard: Null<Bool>;
 }
-
-private typedef Cursor = { var pos: Int; var ok: Bool; }
 
 /**
  * Whether a byte offset in a source file sits in code the compiler PROVABLY compiled,
@@ -87,21 +87,17 @@ private typedef Cursor = { var pos: Int; var ok: Bool; }
  * stays positive-only: a thin wrapper passing an EMPTY `undefined` list, so every coverage
  * answer derived from it is unchanged.
  *
- * ## Grammar-agnostic
+ * ## Grammar-agnostic, except one reader
  *
  * The directive vocabulary comes from `RefShape.conditionalIfKeyword` /
  * `conditionalElseKeywords` / `conditionalEndKeyword` through `CondDirectives`, the
  * shared reader — so a grammar declaring no opener scans to nothing and every offset is
- * live by construction. Pure: no filesystem, no process, no parse.
+ * live by construction. The one exception is the condition VALUE: it is read by the Haxe
+ * grammar's generated `HxCondValueParser` until a `RefShape` field carries the reader.
+ * Pure: no filesystem, no process.
  */
 @:nullSafety(Strict)
 final class CondRegionLiveness {
-
-	/** The one call a condition may write: `version("…")`, a semantic version. */
-	private static final VERSION_CALL: String = 'version';
-
-	/** The comparison operators a condition may carry between two operands, longest first so `>` never shadows `>=`. */
-	private static final COMPARISONS: Array<String> = ['==', '!=', '>=', '<=', '>', '<'];
 
 	/**
 	 * The innermost-enclosing region description of the first byte of `spans` that is NOT
@@ -191,8 +187,8 @@ final class CondRegionLiveness {
 	 * provably does not, and null for everything else — an unlisted flag, a comparison, a
 	 * condition this does not parse, or trailing text after one it does.
 	 *
-	 * The grammar is the one `CondDirectives` delimits: `||` over `&&` over a comparison
-	 * over unary `!` over a primary (a parenthesised condition, a possibly-dotted flag, a
+	 * The grammar is `HxCondValue`, whose generated reader parses the whole text: `||` over `&&` over a comparison
+	 * over unary `!` over a primary (a parenthesised condition, `version("…")`, a possibly-dotted flag, a
 	 * number, or a quoted string). A flag in `defines` is TRUE and a flag outside it is
 	 * UNKNOWN, so no amount of nesting can turn absence into a proof — which is the one
 	 * property that makes a permission derived from this sound.
@@ -212,10 +208,8 @@ final class CondRegionLiveness {
 	 * compiler's output — and only then may `!X` come out true.
 	 */
 	public static function evaluateFacts(condition: String, facts: DefineFacts): Null<Bool> {
-		final cursor: Cursor = { pos: 0, ok: true };
-		final value: Null<CondValue> = parseOr(condition, cursor, facts);
-		skipSpace(condition, cursor);
-		return cursor.ok && cursor.pos >= condition.length ? CondValues.truth(value) : null;
+		final tree: Null<HxCondValue> = try HxCondValueParser.parse(condition) catch (_: Exception) null;
+		return tree == null || chainsComparisons(tree) ? null : CondValues.truth(valueOf(tree, facts));
 	}
 
 	/**
@@ -362,85 +356,6 @@ final class CondRegionLiveness {
 		frame.elseGuard = step.guard;
 	}
 
-	/** `&&` over `||`: the disjunction level, lowest precedence. */
-	private static function parseOr(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
-		var value: Null<CondValue> = parseAnd(text, cursor, facts);
-		while (cursor.ok && matchOperator(text, cursor, '||'))
-			value = truthOf(orOf(CondValues.truth(value), CondValues.truth(parseAnd(text, cursor, facts))));
-		return value;
-	}
-
-	/** The conjunction level. */
-	private static function parseAnd(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
-		var value: Null<CondValue> = parseCompare(text, cursor, facts);
-		while (cursor.ok && matchOperator(text, cursor, '&&'))
-			value = truthOf(andOf(CondValues.truth(value), CondValues.truth(parseCompare(text, cursor, facts))));
-		return value;
-	}
-
-	/**
-	 * The comparison level: one comparison of two unary operands, decided as the compiler decides it
-	 * (`CondValues.compare`) — unknown wherever an operand's value is, so a define the set names but gives no value
-	 * leaves `haxe_ver >= 4.0` unknown as before.
-	 */
-	private static function parseCompare(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
-		final left: Null<CondValue> = parseUnary(text, cursor, facts);
-		if (!cursor.ok) return null;
-		skipSpace(text, cursor);
-		final comparison: Null<String> = comparisonAt(text, cursor.pos);
-		if (comparison == null) return left;
-		cursor.pos += comparison.length;
-		return CondValues.compare(comparison, left, parseUnary(text, cursor, facts));
-	}
-
-	/** The unary level: any run of `!` prefixes, then a primary. */
-	private static function parseUnary(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
-		skipSpace(text, cursor);
-		if (cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != '!'.code) return parsePrimary(text, cursor, facts);
-		cursor.pos++;
-		return truthOf(notOf(CondValues.truth(parseUnary(text, cursor, facts))));
-	}
-
-	/** A parenthesised condition, a `version("…")`, a possibly-dotted flag, a number, or a quoted string. */
-	private static function parsePrimary(text: String, cursor: Cursor, facts: DefineFacts): Null<CondValue> {
-		skipSpace(text, cursor);
-		if (cursor.pos >= text.length) {
-			cursor.ok = false;
-			return null;
-		}
-		final code: Int = text.fastCodeAt(cursor.pos);
-		if (code == '('.code) {
-			cursor.pos++;
-			final inner: Null<CondValue> = parseOr(text, cursor, facts);
-			if (closeParen(text, cursor)) return inner;
-			cursor.ok = false;
-			return null;
-		}
-		if (code.isIdentStart()) {
-			final from: Int = cursor.pos;
-			cursor.pos = flagEnd(text, cursor.pos);
-			final flag: String = text.substring(from, cursor.pos);
-			return flag == VERSION_CALL && openParen(text, cursor) ? parseVersion(text, cursor) : flagValue(flag, facts);
-		}
-		if (code == '"'.code || code == '\''.code) {
-			final from: Int = cursor.pos;
-			final end: Int = text.quotedEnd(from);
-			if (end > from) {
-				cursor.pos = end;
-				return CondValues.text(text.substring(from + 1, end - 1));
-			}
-			cursor.ok = false;
-			return null;
-		}
-		if (code >= '0'.code && code <= '9'.code) {
-			final from: Int = cursor.pos;
-			cursor.pos = numberEnd(text, cursor.pos);
-			return CondValues.number(text.substring(from, cursor.pos));
-		}
-		cursor.ok = false;
-		return null;
-	}
-
 	/**
 	 * The value of the define `flag` under `facts`. The one asymmetry `evaluate` rests on: a listed flag is PROVED set, an
 	 * unlisted one is unknown — reading absence as undefined would let `#if !nothing_special` claim a region the compiler
@@ -459,90 +374,69 @@ final class CondRegionLiveness {
 			null;
 	}
 
-	/**
-	 * The rest of a `version("…")` past its `(`: one string literal and `)`, the version it names (`CondValues.version`).
-	 * Anything else is no condition the compiler evaluates.
-	 */
-	private static function parseVersion(text: String, cursor: Cursor): Null<CondValue> {
-		skipSpace(text, cursor);
-		final quote: Int = cursor.pos < text.length ? text.fastCodeAt(cursor.pos) : 0;
-		final from: Int = cursor.pos;
-		final end: Int = quote == '"'.code || quote == '\''.code ? text.quotedEnd(from) : from;
-		if (end <= from) {
-			cursor.ok = false;
-			return null;
-		}
-		cursor.pos = end;
-		final raw: String = text.substring(from + 1, end - 1);
-		if (closeParen(text, cursor)) return raw.indexOf('\\') >= 0 ? null : CondValues.version(raw);
-		cursor.ok = false;
-		return null;
-	}
-
-	/** Consume a `(` at the cursor (after spaces), reporting whether one was there; the cursor stays put when not. */
-	private static function openParen(text: String, cursor: Cursor): Bool {
-		var at: Int = cursor.pos;
-		while (at < text.length && (text.fastCodeAt(at) == ' '.code || text.fastCodeAt(at) == '\t'.code)) at++;
-		if (at >= text.length || text.fastCodeAt(at) != '('.code) return false;
-		cursor.pos = at + 1;
-		return true;
-	}
-
-	/** Consume a `)` at the cursor (after spaces), reporting whether one was there. */
-	private static function closeParen(text: String, cursor: Cursor): Bool {
-		skipSpace(text, cursor);
-		if (!cursor.ok || cursor.pos >= text.length || text.fastCodeAt(cursor.pos) != ')'.code) return false;
-		cursor.pos++;
-		return true;
-	}
-
 	/** A three-valued truth as a value: a boolean, or unknown. */
 	private static function truthOf(value: Null<Bool>): Null<CondValue> {
 		return value == null ? null : Truth(value);
 	}
 
-	/** Consume `wanted` when it sits at the cursor (after spaces), reporting whether it did. */
-	private static function matchOperator(text: String, cursor: Cursor, wanted: String): Bool {
-		skipSpace(text, cursor);
-		if (text.substr(cursor.pos, wanted.length) != wanted) return false;
-		cursor.pos += wanted.length;
-		return true;
+	/**
+	 * The value of a parsed condition, decided as the compiler decides it (`CondValues`): an operand a define set cannot
+	 * decide is unknown, and so is whatever depends on it. `&&` and `||` are three-valued, so one refuted or proved
+	 * operand still decides them.
+	 */
+	private static function valueOf(tree: HxCondValue, facts: DefineFacts): Null<CondValue> {
+		final value: HxCondValue -> Null<CondValue> = operand -> valueOf(operand, facts);
+		final truth: HxCondValue -> Null<Bool> = operand -> CondValues.truth(valueOf(operand, facts));
+		return switch tree {
+			case VersionCall(literal): versionOf(literal);
+			case Group(inner): value(inner);
+			case Quoted(text): CondValues.text(unquoted(text));
+			case Flag(name): flagValue(name, facts);
+			case Number(text): CondValues.number(text);
+			case Not(operand): truthOf(notOf(truth(operand)));
+			case Eq(left, right): CondValues.compare('==', value(left), value(right));
+			case NotEq(left, right): CondValues.compare('!=', value(left), value(right));
+			case GtEq(left, right): CondValues.compare('>=', value(left), value(right));
+			case LtEq(left, right): CondValues.compare('<=', value(left), value(right));
+			case Gt(left, right): CondValues.compare('>', value(left), value(right));
+			case Lt(left, right): CondValues.compare('<', value(left), value(right));
+			case And(left, right): truthOf(andOf(truth(left), truth(right)));
+			case Or(left, right): truthOf(orOf(truth(left), truth(right)));
+		};
 	}
 
-	/** The comparison operator at `at`, longest first so `>` never shadows `>=`, or null. */
-	private static function comparisonAt(text: String, at: Int): Null<String> {
-		return COMPARISONS.find(candidate -> text.substr(at, candidate.length) == candidate);
+	/**
+	 * Whether a comparison somewhere in `tree` takes a comparison as its left operand (`a == b == c`). The compiler's
+	 * condition grammar takes one comparison of two operands, so such a condition is no condition it evaluates; a
+	 * parenthesised one (`(a == b) == c`) is a group and stays a value.
+	 */
+	private static function chainsComparisons(tree: HxCondValue): Bool {
+		return switch tree {
+			case Eq(left, right), NotEq(left, right), GtEq(left, right), LtEq(left, right), Gt(left, right), Lt(left, right):
+				isComparison(left) || chainsComparisons(left) || chainsComparisons(right);
+			case And(left, right), Or(left, right):
+				chainsComparisons(left) || chainsComparisons(right);
+			case Not(operand): chainsComparisons(operand);
+			case Group(inner): chainsComparisons(inner);
+			case VersionCall(_), Quoted(_), Flag(_), Number(_): false;
+		};
 	}
 
-	/** The end of the possibly-dotted flag whose first character sits at `at`; a dot not followed by an identifier start ends it. */
-	private static function flagEnd(text: String, at: Int): Int {
-		var i: Int = at;
-		while (true) {
-			while (i < text.length && text.fastCodeAt(i).isIdentChar()) i++;
-			if (i + 1 >= text.length || text.fastCodeAt(i) != '.'.code) return i;
-			if (!text.fastCodeAt(i + 1).isIdentStart()) return i;
-			i += 2;
-		}
+	private static function isComparison(tree: HxCondValue): Bool {
+		return switch tree {
+			case Eq(_, _), NotEq(_, _), GtEq(_, _), LtEq(_, _), Gt(_, _), Lt(_, _): true;
+			case _: false;
+		};
 	}
 
-	/** The end of the digit-and-dot run starting at `at`. */
-	private static function numberEnd(text: String, at: Int): Int {
-		var i: Int = at;
-		while (i < text.length) {
-			final code: Int = text.fastCodeAt(i);
-			if ((code < '0'.code || code > '9'.code) && code != '.'.code) return i;
-			i++;
-		}
-		return i;
+	/** The text between the quotes of a quoted literal. */
+	private static function unquoted(literal: String): String {
+		return literal.substring(1, literal.length - 1);
 	}
 
-	/** Advance past spaces and tabs. */
-	private static function skipSpace(text: String, cursor: Cursor): Void {
-		while (cursor.pos < text.length) {
-			final code: Int = text.fastCodeAt(cursor.pos);
-			if (code != ' '.code && code != '\t'.code) return;
-			cursor.pos++;
-		}
+	/** The version a `version("…")` literal names; an escape inside it is no version the compiler reads raw. */
+	private static function versionOf(literal: String): Null<CondValue> {
+		return literal.indexOf('\\') >= 0 ? null : CondValues.version(unquoted(literal));
 	}
 
 }

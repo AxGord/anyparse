@@ -16701,6 +16701,62 @@
 			"method": "unassignedAt",
 			"force": "true",
 			"note": "every field receiver reads as unassigned, so a method called after the assignment, or by no constructor, keeps its lambda"
+		},
+		{
+			"name": "M-COND-VALUE-CHAIN",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "chainsComparisons",
+			"find": "isComparison(left) || chainsComparisons(left) || chainsComparisons(right);",
+			"replace": "chainsComparisons(left) || chainsComparisons(right);",
+			"note": "a comparison of a comparison is evaluated, so `a == b == c` is decided where the compiler has no such condition"
+		},
+		{
+			"name": "M-COND-VALUE-NOT",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "valueOf",
+			"find": "case Not(operand): truthOf(notOf(truth(operand)));",
+			"replace": "case Not(operand): truthOf(truth(operand));",
+			"note": "`!` leaves its operand as it is, so a negated flag reads as the flag"
+		},
+		{
+			"name": "M-COND-VALUE-AND",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "valueOf",
+			"find": "case And(left, right): truthOf(andOf(truth(left), truth(right)));",
+			"replace": "case And(left, right): truthOf(orOf(truth(left), truth(right)));",
+			"note": "`&&` is decided as `||`"
+		},
+		{
+			"name": "M-COND-VALUE-OR",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "valueOf",
+			"find": "case Or(left, right): truthOf(orOf(truth(left), truth(right)));",
+			"replace": "case Or(left, right): truthOf(andOf(truth(left), truth(right)));",
+			"note": "`||` is decided as `&&`"
+		},
+		{
+			"name": "M-COND-VALUE-GROUP",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "valueOf",
+			"find": "case Group(inner): value(inner);",
+			"replace": "case Group(inner): null;",
+			"note": "a parenthesised condition is never decided"
+		},
+		{
+			"name": "M-COND-VALUE-NUMBER",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "valueOf",
+			"find": "case Number(text): CondValues.number(text);",
+			"replace": "case Number(text): null;",
+			"note": "a numeric operand is never decided"
+		},
+		{
+			"name": "M-COND-VALUE-VERSION",
+			"type": "anyparse.query.CondRegionLiveness",
+			"method": "unquoted",
+			"find": "return literal.substring(1, literal.length - 1);",
+			"replace": "return literal;",
+			"note": "a quoted literal keeps its quotes, so no `version(\"…\")` names a version"
 		}
 	]
 }

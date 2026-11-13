@@ -1839,6 +1839,105 @@
 			"find": "@:fmt(typeParamDefaultEquals, captureAfterLead)",
 			"replace": "@:fmt(typeParamDefaultEquals)",
 			"note": "the default has no AfterLead slot, so a comment after its `=` is dropped and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-COND-QUOTED-ESCAPE-OFF",
+			"type": "anyparse.grammar.haxe.HxPpCondQuoted",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"",
+			"replace": "\"(?:[^\"\\\\r\\\\n])*\"",
+			"note": "a backslash no longer hides the character after it, so an escaped quote ends a condition literal early"
+		},
+		{
+			"name": "M-COND-QUOTED-UNTERMINATED",
+			"type": "anyparse.grammar.haxe.HxPpCondQuoted",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"|",
+			"replace": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"?|",
+			"note": "a literal with no closing quote is read as closed, so the rest of an unterminated condition is read as a value"
+		},
+		{
+			"name": "M-COND-FLAG-DOTTED",
+			"type": "anyparse.grammar.haxe.HxPpCondFlag",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?:\\\\.[A-Za-z_][A-Za-z0-9_]*)*",
+			"replace": "",
+			"note": "a flag stops at its first dot, so `a.b` reads `a` and leaves `.b` as trailing text"
+		},
+		{
+			"name": "M-CONDVALUE-AND-LOOSE",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "And",
+			"kind": "ParamCtor",
+			"find": "@:infix('&&', 2)",
+			"replace": "@:infix('&&', 1)",
+			"note": "`&&` binds like `||`, so `a || b && c` groups left to right"
+		},
+		{
+			"name": "M-CONDVALUE-CMP-LOOSE",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "Eq",
+			"kind": "ParamCtor",
+			"find": "@:infix('==', 3)",
+			"replace": "@:infix('==', 0)",
+			"note": "`==` binds looser than `||`, so `a == b || c` compares `a` with the whole disjunction"
+		},
+		{
+			"name": "M-CONDVALUE-CMP-RIGHT",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "Eq",
+			"kind": "ParamCtor",
+			"find": "@:infix('==', 3)",
+			"replace": "@:infix('==', 3, 'Right')",
+			"note": "`==` groups to the right, so a chain of comparisons nests the other way"
+		},
+		{
+			"name": "M-CONDVALUE-NOT-GONE",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "Not",
+			"kind": "ParamCtor",
+			"find": "@:prefix('!')",
+			"replace": "@:prefix('~')",
+			"note": "`!` is no prefix operator of a condition"
+		},
+		{
+			"name": "M-CONDVALUE-GTEQ-SHADOWED",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "GtEq",
+			"kind": "ParamCtor",
+			"find": "@:infix('>=', 3)",
+			"replace": "@:infix('>=>', 3)",
+			"note": "`>=` is never matched, so `a >= b` reads `a > ` and fails on the `=`"
+		},
+		{
+			"name": "M-CONDVALUE-VERSION-FLAG",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "VersionCall",
+			"kind": "ParamCtor",
+			"find": "@:kw('version')",
+			"replace": "@:kw('versionx')",
+			"note": "`version(` is not a call of its own, so it reads as the flag `version` followed by trailing text"
+		},
+		{
+			"name": "M-CONDVALUE-GROUP-BRACKET",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "Group",
+			"kind": "ParamCtor",
+			"find": "@:wrap('(', ')')",
+			"replace": "@:wrap('[', ']')",
+			"note": "a group is written in brackets, so a parenthesised condition is no operand"
+		},
+		{
+			"name": "M-COND-VALUE-SCHEMA-LINE-COMMENT",
+			"type": "anyparse.grammar.haxe.HxCondValue",
+			"method": "@:schema",
+			"kind": "MetaCall",
+			"find": "HxPpCondFormat",
+			"replace": "HaxeFormat",
+			"note": "a condition is read with the Haxe whitespace, so a `//` comment is a blank where the compiler refuses it"
 		}
 	]
 }

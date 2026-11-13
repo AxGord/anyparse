@@ -127,6 +127,10 @@ class LexicalRegionsSeamTest extends Test {
 	 *    hand `JsonFormat.instance`, `anyparse.grammar.sexpr.SValue` / `SValueWriter` and a Mermaid AST to the
 	 *    generated writers. Same relation as the two config readers, in the other direction.
 	 *
+	 *  - `query/CondRegionLiveness.hx` — DEBT, not a seam: `evaluate` / `evaluateFacts` read a condition's value
+	 *    with the Haxe grammar's generated `HxCondValueParser` because they take no `RefShape`; the entry leaves
+	 *    this list when the reader moves behind a `RefShape` field beside `conditionEnd`.
+	 *
 	 * Everything else must reach a grammar through `GrammarPlugin`. The last exception was
 	 * `LexicalRegions.scan` / `skipStringLiteral`, a deprecated forwarder that hardcoded the Haxe
 	 * lexer for every `collectCommentTokens` call site — the path that gates every DELETE in the
@@ -170,6 +174,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/haxe/oracle/ReachDefinesProbe.hx',
 			'src/anyparse/proc/ProcessSpawn.hx',
 			'src/anyparse/proc/SpawnJob.hx',
+			'src/anyparse/query/CondRegionLiveness.hx',
 			'src/anyparse/query/FactNodeRecords.hx',
 			'src/anyparse/query/FactText.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',

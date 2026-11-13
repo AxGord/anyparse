@@ -378,15 +378,14 @@ final class CondRegionLivenessTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-UTIL-QUOTED-ESCAPE-OFF')
+	@:killer('M-COND-QUOTED-ESCAPE-OFF')
 	public function testAnEscapedQuoteDoesNotEndAConditionLiteral(): Void {
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "\\"" || flag == "1")', VALUED));
 		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == \'\\\'\' || flag == "1")', VALUED));
 	}
 
 	@:pin('control')
-	@:killer('M-UTIL-QUOTED-UNTERMINATED-LENGTH')
-	@:killer('M-UTIL-QUOTED-BREAK-IGNORED')
+	@:killer('M-COND-QUOTED-UNTERMINATED')
 	public function testAnUnterminatedConditionLiteralStaysUnknown(): Void {
 		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1', VALUED));
 		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\n"', VALUED));
