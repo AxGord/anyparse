@@ -3,6 +3,7 @@ package anyparse.format.wrap;
 import anyparse.core.BreakCommits;
 import anyparse.core.BreakToken;
 import anyparse.core.CollapsePass;
+import anyparse.core.D;
 import anyparse.core.D.groupOrRestProbe;
 import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
@@ -762,7 +763,7 @@ class WrapList {
 			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
 				return false;
 			case Line(flat):
-				return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
+				return D.isHardline(flat);
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 				// All three opt-hardline variants count as a leading
 				// hardline for the wrap-engine `(...)` shape decision.
@@ -1877,7 +1878,7 @@ class WrapList {
 	private static function flatLeafLen(node: Doc): Int {
 		return switch (node) {
 			case Text(s): s.length;
-			case Line(flat): flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? -1 : flat.length;
+			case Line(flat): D.isHardline(flat) ? -1 : flat.length;
 			case OptSpace(s): s.length;
 			case OptSpaceSkipAfterHardline: 1;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: -1;
@@ -2875,7 +2876,7 @@ class WrapList {
 				case Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
 					return items.length > 0;
 				case Line(s):
-					if (s.length > 0 && s.fastCodeAt(0) == '\n'.code) return true;
+					if (D.isHardline(s)) return true;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return true;
 				case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline:
@@ -2982,10 +2983,7 @@ class WrapList {
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
 					case Line(flat) if (
-						flat.length > 0
-						&& flat.fastCodeAt(0) == '\n'.code
-						&& k + 1 < arr.length
-						&& DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)
+						D.isHardline(flat) && k + 1 < arr.length && DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)
 					):
 						hit = true;
 					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
@@ -3773,8 +3771,7 @@ class WrapList {
 		return switch d {
 			case Empty: false;
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: true;
-			case Line(flat):
-				flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
+			case Line(flat): D.isHardline(flat);
 			case Text(_), OptSpace(_), OptSpaceSkipAfterHardline, IfBreak(_, _), IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _),
 				IfLineExceeds(_, _, _), IfResidualLineExceeds(_, _, _), IfFullLineExceeds(_, _, _), IfNaturalFirstLineExceeds(_, _, _),
 				IfNaturalFirstLineExceedsWithRest(_, _, _), IfNaturalFirstLineFitsOpenDelim(_, _, _),

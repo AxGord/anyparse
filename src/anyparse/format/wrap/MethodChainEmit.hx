@@ -1,6 +1,7 @@
 package anyparse.format.wrap;
 
 import anyparse.core.BreakCommits;
+import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
@@ -734,8 +735,7 @@ class MethodChainEmit {
 	 */
 	private static function startsWithHardline(d: Doc): Bool {
 		return switch d {
-			case Line(s):
-				s.length > 0 && s.fastCodeAt(0) == '\n'.code;
+			case Line(s): D.isHardline(s);
 			case Nest(_, inner): startsWithHardline(inner);
 			case Concat(items):
 				var i: Int = 0;

@@ -84,7 +84,7 @@
 			"name": "M-EICR-SOFTLINE-ANCHOR",
 			"type": "anyparse.format.ElseIfCommentReflow",
 			"method": "scan",
-			"find": "afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
+			"find": "afterCond && D.isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
 			"replace": "afterCond ? Anchored(Doc.Concat([trailing, doc])) : Refused;",
 			"note": "a width-only break anchors the comment as readily as an unconditional one, so a body that merely COULD break takes the trailing comment the reflow was written to refuse"
 		},

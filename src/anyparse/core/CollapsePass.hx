@@ -1292,8 +1292,7 @@ final class CollapsePass {
 				// a hardline packed inside a nested item would leave the
 				// argument width unmeasured by the same-level sum below.
 				final leadIsBareHardline: Bool = i < innerItems.length && switch innerItems[i] {
-					case Line(s):
-						s.length > 0 && s.fastCodeAt(0) == '\n'.code;
+					case Line(s): D.isHardline(s);
 					case _: false;
 				};
 				if (!leadIsBareHardline) return false;
@@ -1338,8 +1337,7 @@ final class CollapsePass {
 	 */
 	private static function argsStartsWithHardline(d: Doc): Bool {
 		return switch d {
-			case Line(s):
-				s.length > 0 && s.fastCodeAt(0) == '\n'.code;
+			case Line(s): D.isHardline(s);
 			case Nest(_, inner): argsStartsWithHardline(inner);
 			case Concat(items):
 				var i: Int = 0;

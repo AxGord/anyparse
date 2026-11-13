@@ -1,8 +1,7 @@
 package anyparse.format;
 
+import anyparse.core.D;
 import anyparse.core.Doc;
-
-using StringTools;
 
 /**
  * `sameLine.elseIfCommentReflow` runtime: move the ONE line comment a source wrote
@@ -64,10 +63,6 @@ final class ElseIfCommentReflow {
 		};
 	}
 
-	private static inline function isHardline(flat: String): Bool {
-		return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
-	}
-
 	/**
 	 * Whether `s` may sit on the head line ahead of the relocated comment.
 	 *
@@ -100,7 +95,7 @@ final class ElseIfCommentReflow {
 			// the head line - after the block's `{` when the body is braced, right
 			// after the condition's `)` when the policy breaks a bare body. Both
 			// promised placements are this one position.
-			case Line(flat): afterCond && isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;
+			case Line(flat): afterCond && D.isHardline(flat) ? Anchored(Doc.Concat([trailing, doc])) : Refused;
 			// Every `WrapList.emitCondition` return is a `WrapBoundary`, so the
 			// FIRST one closes the condition. Skipped whole: its interior is head
 			// by construction, whatever shape the wrap cascade gave it (probes,

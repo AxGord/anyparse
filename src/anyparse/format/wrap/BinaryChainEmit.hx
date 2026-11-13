@@ -1452,7 +1452,7 @@ final class BinaryChainEmit {
 					var r: Null<Bool> = null;
 					for (it in arr) if (r == null) r = walk(it);
 					r;
-				case Line(flat): flat.startsWith('\n') ? WrapList.isLineCommentText(lastText) : null;
+				case Line(flat): D.isHardline(flat) ? WrapList.isLineCommentText(lastText) : null;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: WrapList.isLineCommentText(lastText);
 				case Group(i), BodyGroup(i), GroupWithRestProbe(i), Nest(_, i), BreakCommit(_, i), LeadingBreak(_, i), Flatten(i),
 					HardFlatten(i), CollapseProbe(i), CollapseAddProbe(i), CollapseBoolProbe(i), CollapseChainProbe(i), WrapBoundary(i),

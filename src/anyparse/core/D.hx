@@ -1,5 +1,7 @@
 package anyparse.core;
 
+using StringTools;
+
 /**
  * Builder helpers for `Doc`.
  *
@@ -24,6 +26,12 @@ class D {
 
 	/** A mandatory break. Always forces a newline, even in flat mode. */
 	public static inline function hardline(): Doc return Line('\n');
+
+	/**
+	 * Whether the flat text of a `Line` is `hardline`'s: the one answer to "is this Line a mandatory break". Every reader of a
+	 * `Line(flat)` asks it here rather than testing the encoding itself.
+	 */
+	public static inline function isHardline(flat: String): Bool return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code;
 
 	/** Adds `n` columns of indentation to breaks inside `inner`. */
 	public static inline function nest(n: Int, inner: Doc): Doc return Nest(n, inner);

@@ -114,7 +114,7 @@ final class DocMeasure {
 				case OptSpaceSkipAfterHardline:
 					total++;
 				case Line(flat):
-					if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code) return { width: total, opensAtBreak: lastOpen };
+					if (D.isHardline(flat)) return { width: total, opensAtBreak: lastOpen };
 					total += flat.length;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
 					return { width: total, opensAtBreak: lastOpen };
@@ -233,7 +233,7 @@ final class DocMeasure {
 		while (stack.length > 0) {
 			final node: Doc = (cast stack.pop(): Doc);
 			switch (node) {
-				case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
+				case Line(flat) if (D.isHardline(flat)):
 					return true;
 				case Empty, Text(_), Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 					OptHardlineSkipBeforeHardline:
@@ -324,7 +324,7 @@ final class DocMeasure {
 				case Text(s):
 					buf.add(s);
 				case Line(flat):
-					if (!(flat.length > 0 && flat.fastCodeAt(0) == '\n'.code)) buf.add(flat);
+					if (!(D.isHardline(flat))) buf.add(flat);
 				case OptSpace(s):
 					buf.add(s);
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
@@ -922,7 +922,7 @@ final class DocMeasure {
 			// tail position, and reading it as a break would claim a closing
 			// line that the atom has already terminated.
 			case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline: TailCloses;
-			case Line(flat) if (flat.length > 0 && flat.fastCodeAt(0) == '\n'.code):
+			case Line(flat) if (D.isHardline(flat)):
 				if (out != null) out.nest = nest;
 				TailBreak;
 			case Text(s), OptSpace(s), Line(s):
@@ -1012,7 +1012,7 @@ final class DocMeasure {
 			case Line(flat):
 				// A forced hardline (`'\n'`) contributes 0; an `OptSpace`-style
 				// flat string contributes its own length.
-				return flat.length > 0 && flat.fastCodeAt(0) == '\n'.code ? 0 : flat.length;
+				return D.isHardline(flat) ? 0 : flat.length;
 			case Concat(items):
 				var i: Int = items.length;
 				while (--i >= 0) stack.push(items[i]);
