@@ -832,9 +832,25 @@
 			"name": "M-CALLOPEN-HEAD-NAME",
 			"type": "anyparse.core.DocMeasure",
 			"method": "operandIsCall",
-			"find": "if (c != -1 && !isIdentStart(c)) return true;",
-			"replace": "if (c == -2) return true;",
+			"find": "if (!DelimiterLeaf.startsWordTag(tag)) return true;",
+			"replace": "",
 			"note": "an operand led by a prefix operator counts as a call because a call follows its head"
+		},
+		{
+			"name": "M-CALLOPEN-HEAD-READS-BYTES",
+			"type": "anyparse.core.DocMeasure",
+			"method": "operandIsCall",
+			"find": "if (!DelimiterLeaf.startsWordTag(tag)) return true;",
+			"replace": "if (firstVisibleChar(s) == '!'.code) return true;",
+			"note": "the head is a name by its first byte again, so an untagged leaf spelling a name leads a call"
+		},
+		{
+			"name": "M-CALLOPEN-HEAD-NOT-A-NAME",
+			"type": "anyparse.core.DocMeasure",
+			"method": "operandIsCall",
+			"find": "if (!DelimiterLeaf.startsWordTag(tag)) return true;",
+			"replace": "return true;",
+			"note": "no head leaf is a name, so no operand is a call whatever follows its head"
 		},
 		{
 			"name": "M-CALLARGS-EVERY-LAYOUT",

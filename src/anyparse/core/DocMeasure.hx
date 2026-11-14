@@ -381,7 +381,7 @@ final class DocMeasure {
 
 	/**
 	 * True iff operand `d` is a TOP-LEVEL function call — `<ident-chain>(…)`, `obj.method(…)` / `Type.fn(…)` included: its
-	 * first visible byte starts an identifier (letter / `_` / `$`) and, in flat order, a leaf tagged as opening a call's
+	 * first visible leaf is tagged as starting a word (`OpenEdge.WordStart`) and, in flat order, a leaf tagged as opening a call's
 	 * arguments (`OpenEdge.CallArgs`) follows. A leading paren-expression, array, object or prefix-op operand is NOT a
 	 * simple call: its inner call is ENCLOSED by the operand, which fork `hasSimpleCallParamBreaksBetween` does not treat as
 	 * a wrapping callParameter. Shared by `BinaryChainEmit` (the ω-opbool-reeval marker gate) and `CollapsePass` (the flip
@@ -397,10 +397,9 @@ final class DocMeasure {
 						isCall = headSeen;
 						return true;
 					}
-					if (!headSeen) {
-						final c: Int = firstVisibleChar(s);
-						if (c != -1 && !isIdentStart(c)) return true;
-						headSeen = c != -1;
+					if (!headSeen && firstVisibleChar(s) != -1) {
+						if (!DelimiterLeaf.startsWordTag(tag)) return true;
+						headSeen = true;
 					}
 				case _:
 			}
@@ -802,11 +801,6 @@ final class DocMeasure {
 				parts.length == 5 && parts[1].match(Text(' ? ')) && parts[3].match(Text(' : '));
 			case _: false;
 		};
-	}
-
-	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
-	private static inline function isIdentStart(c: Int): Bool {
-		return c == '$'.code || c.isIdentStart();
 	}
 
 	/**
