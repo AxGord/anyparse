@@ -10,8 +10,7 @@ import anyparse.query.FormatFixedPoint;
 @:access(unit.format.WrapFlatSourceFixedPointTest)
 class StackedArrayPivotOneWriteTest extends Test {
 
-	@:pin('control')
-	@:killer('M-SOURCE-FLOOR-ALWAYS')
+	@:pin('guard')
 	public function testOneWriteReachesFixedPoint(): Void {
 		final result: FormatFixedPointResult = FormatFixedPoint.run(
 			s -> WrapFlatSourceFixedPointTest.write(s, WrapFlatSourceFixedPointTest.STACKED_ARRAY_PIVOT),

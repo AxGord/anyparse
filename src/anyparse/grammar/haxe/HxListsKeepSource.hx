@@ -10,9 +10,9 @@ using Lambda;
 
 /**
  * The one answer to "which hxformat.json document is a document under `listsKeepSource`, and what is it as typed options":
- * `of(document)` is the document with every list that would otherwise reflow by width on a `onePerLine` fallback, which keeps
- * a source break in an array or map literal (an object literal or anonymous type follows the cascade, an explicit `noWrap` keeps
- * none), and `keep(options)` is the same addition on typed options. A test fixture
+ * `of(document)` is the document with a `onePerLine` fallback on every list section that names none (no list reads a source
+ * break, so the fallback only answers where no rule of the cascade does), and `keep(options)` is the same addition on typed
+ * options. A test fixture
  * applies `of` to the document it loads, and the typed-options rewrite reads a constant document through it and emits `keep`.
  */
 @:nullSafety(Strict)

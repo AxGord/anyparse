@@ -959,16 +959,16 @@
 			"name": "M-COLLAPSE-COUNTED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "|| _deferIfHardline",
-			"replace": "|| false && _deferIfHardline",
+			"find": ": _deferIfHardline",
+			"replace": ": false && _deferIfHardline",
 			"note": "a source-flat list its cascade commits to one-per-line reaches its host counted while the next write reads it back deferred, so a chain or an arrow around it breaks once and glues on the next write"
 		},
 		{
 			"name": "M-COLLAPSE-ANY-RESULT",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "&& anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
-			"replace": "&& true",
+			"find": "_deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0 ?",
+			"replace": "_deferIfHardline ?",
 			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
 		},
 		{
@@ -2157,9 +2157,9 @@
 			"name": "M-MATRIX-UNDER-IGNORE",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "&& !_requiresHardline && !_ignoreEmit) {",
-			"replace": "&& !_requiresHardline) {",
-			"note": "the matrix grid is read from the source rows under Ignore again, so grid rows keep a list open"
+			"find": "&& !_requiresHardline) {",
+			"replace": "&& !_requiresHardline && !_ignoreEmit) {",
+			"note": "the grid is not read under Ignore again, so a grid of many cells loses its source rows under the default"
 		},
 		{
 			"name": "M-IGNORE-HARDLINE-LIST-DEFERRED",
@@ -2330,14 +2330,6 @@
 			"note": "the body-on-head layout loses the indent of its catch lines"
 		},
 		{
-			"name": "M-TRY-KEPT-LIST-DEFERS",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepNoTriviaBranch",
-			"find": " && !$keptListCountsInFit",
-			"replace": "",
-			"note": "a kept multi-line array defers in the try group again, so the ladder the writer produced flips back to the hug on the next pass"
-		},
-		{
 			"name": "M-TRY-LIST-BODY",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "bodyBreakWrap",
@@ -2376,14 +2368,6 @@
 			"find": " && $seamKeepsSame ? _dn(_cols, _tail)",
 			"replace": " ? _dn(_cols, _tail)",
 			"note": "expressionTryOverflow same moves the catch lines right under expressionTry next, a combination the key does not name"
-		},
-		{
-			"name": "M-TRY-KEPT-LIST-STATEMENT-BARRIER",
-			"type": "anyparse.macro.WriterOptFanout",
-			"method": "statementListElemOpt",
-			"find": "_clearKeptListCountsInFit(_clearCallArgChainNest($optExpr))",
-			"replace": "_clearCallArgChainNest($optExpr)",
-			"note": "the kept-list flag crosses the statement list below a value try, so an if statement in its braced body or a closure breaks its fit-line body where outside a try it stays glued"
 		},
 		{
 			"name": "M-META-CHAIN-NO-PEEL",
@@ -2440,22 +2424,6 @@
 			"find": "_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0",
 			"replace": "false",
 			"note": "the plain writer emits no break after the last metadata while the following separator is still dropped, so metadata glues to the declaration"
-		},
-		{
-			"name": "M-EXPLICIT-NOWRAP-READS-SOURCE",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepSourceNewlines",
-			"find": "&& (!_noWrapDefault || _noWrapRules)",
-			"replace": "",
-			"note": "a list on a noWrap fallback counts source line breaks again and stays broken where the name says flat"
-		},
-		{
-			"name": "M-SEP-STAR-READS-SOURCE-BREAK",
-			"type": "anyparse.macro.TriviaSepLowering",
-			"method": "triviaSepSourceNewlines",
-			"find": "return reflowSourceMultiline",
-			"replace": "return true",
-			"note": "a list that is not a reflow array reads a source break as intent again, so a onePerLine fallback keeps a broken object literal broken"
 		},
 		{
 			"name": "M-TYPEDEF-RHS-KEEPS-SOURCE",
@@ -3334,6 +3302,14 @@
 			"find": "if (encoder != null) {",
 			"replace": "if (false) {",
 			"note": "a format declaring a stringEncoder is spelled one code unit at a time again, so a lone surrogate comes out bare"
+		},
+		{
+			"name": "M-TRIVIA-GRID-UNDER-IGNORE",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTriviaGridExpr",
+			"find": "if (_requiresHardline && opt.arrayMatrixWrap",
+			"replace": "if (_requiresHardline && !_ignoreEmit && opt.arrayMatrixWrap",
+			"note": "a grid holding a blank line or a comment is not read under Ignore again, so it goes one element per line"
 		}
 	]
 }

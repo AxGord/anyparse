@@ -1160,12 +1160,9 @@ class WriterLowering {
 					// A body group DEFERS in an enclosing fit question, so a construct in expression
 					// position (`@:fmt(constructFitExpr)`) groups with the rest of its line instead: the
 					// outer call or ternary keeps measuring it, and a trailing `;` or `)` counts.
-					parts.push(node.fmtHasFlag('constructFitExpr')
-						? macro {
-							final opt = _setKeptListCountsInFit(opt);
-							anyparse.format.ConstructFit.group($grpDoc);
-						}
-						: macro _dbg($grpDoc));
+					parts.push(
+						node.fmtHasFlag('constructFitExpr') ? macro anyparse.format.ConstructFit.group($grpDoc) : macro _dbg($grpDoc)
+					);
 					constructFitStartIdx = -1;
 				}
 				continue;
@@ -2400,7 +2397,6 @@ typedef SepStarTrailExprs = {
 typedef SepStarChecks = {
 	final ignoreCheckExpr: Expr;
 	final noWrapFlatCheckExpr: Expr;
-	final noWrapDefaultCheckExpr: Expr;
 	final triviaLeadDoc: Expr;
 	final wrapLeadFlatDoc: Expr;
 	final wrapLeadBreakDoc: Expr;

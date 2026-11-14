@@ -39,6 +39,7 @@
 		"ignoreSourceNewlinesForWrap",
 		"leftCurly",
 		"mapWrapRules",
+		"matrixCollapseRules",
 		"reflowInExprPosition",
 		"reflowSourceMultiline",
 		"rightCurly",

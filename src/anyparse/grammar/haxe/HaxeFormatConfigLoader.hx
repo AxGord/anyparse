@@ -546,6 +546,8 @@ final class HaxeFormatConfigLoader {
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
 		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+		if (section.arrayMatrixCollapse != null)
+			opt.arrayMatrixCollapse = wrapRulesFromConfig(section.arrayMatrixCollapse, opt.arrayMatrixCollapse);
 		if (section.mapWrap != null) opt.mapLiteralWrap = wrapRulesFromConfig(section.mapWrap, opt.mapLiteralWrap);
 		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
 		if (section.casePattern != null)

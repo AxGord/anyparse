@@ -27,11 +27,16 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		);
 	}
 
-	/** A source-broken array literal that fits collapses onto its line. */
+	/** A source-broken array literal that fits collapses onto its line, also where no rule of the cascade answers. */
 	@:pin('control')
 	@:killer('M-DEFAULT-ARRAY-IGNORE')
 	public function testASourceBrokenArrayLiteralCollapses(): Void {
 		Assert.equals('class C {\n\tstatic var a = [1, 2];\n}', write('class C {\n\tstatic var a = [\n\t\t1,\n\t\t2\n\t];\n}'));
+		final cells: Array<String> = [for (i in 1...4) 'aaaaaaaaaaaaaaaaaaaaaaaaa$i'];
+		Assert.equals(
+			'class C {\n\tstatic var a = [${cells.join(', ')}];\n}',
+			write('class C {\n\tstatic var a = [\n\t\t${cells.join(',\n\t\t')}\n\t];\n}')
+		);
 	}
 
 	/** A map literal reads its own cascade; the same default collapses it. */
@@ -41,6 +46,11 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		Assert.equals(
 			"class C {\n\tstatic var m = ['a' => 1, 'b' => 2];\n}",
 			write("class C {\n\tstatic var m = [\n\t\t'a' => 1,\n\t\t'b' => 2\n\t];\n}")
+		);
+		final pairs: Array<String> = [for (i in 1...4) '\'aaaaaaaaaaaaaaaaaaa$i\' => $i'];
+		Assert.equals(
+			'class C {\n\tstatic var m = [${pairs.join(', ')}];\n}',
+			write('class C {\n\tstatic var m = [\n\t\t${pairs.join(',\n\t\t')}\n\t];\n}')
 		);
 	}
 
@@ -57,11 +67,27 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 		);
 	}
 
-	/** Grid rows are source breaks like any other: under the default the rules, not the rows, decide. */
+	/** A grid of a few short cells that fits goes on one line: the collapse cascade answers `noWrap`. */
+	@:pin('control')
+	@:killer('M-GRID-NEVER-COLLAPSES')
+	public function testAGridOfFewCellsCollapses(): Void {
+		Assert.equals('class C {\n\tstatic var g = [1, 2, 3, 4];\n}', write('class C {\n\tstatic var g = [\n\t\t1, 2,\n\t\t3, 4\n\t];\n}'));
+	}
+
+	/** A grid of many cells keeps its source rows under the default, though one line would fit. */
 	@:pin('control')
 	@:killer('M-MATRIX-UNDER-IGNORE')
-	public function testAGridOfRowsCollapsesLikeAnyOtherList(): Void {
-		Assert.equals('class C {\n\tstatic var g = [1, 2, 3, 4];\n}', write('class C {\n\tstatic var g = [\n\t\t1, 2,\n\t\t3, 4\n\t];\n}'));
+	public function testAGridOfManyCellsKeepsItsRows(): Void {
+		final grid: String = 'class C {\n\tstatic var g = [\n\t\t1, 2, 3,\n\t\t4, 5, 6,\n\t\t7, 8, 9\n\t];\n}';
+		Assert.equals(grid, write(grid));
+	}
+
+	/** A comprehension reads no source break after its `[`: a fitting one goes on one line. */
+	@:pin('guard')
+	public function testABrokenComprehensionCollapses(): Void {
+		Assert.equals(
+			'class C {\n\tstatic var c = [for (x in xs) f(x)];\n}', write('class C {\n\tstatic var c = [\n\t\tfor (x in xs) f(x)\n\t];\n}')
+		);
 	}
 
 	/** The rules still break a list: an object over the item count goes one per line whatever its source shape. */

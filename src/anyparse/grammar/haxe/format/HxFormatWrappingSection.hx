@@ -58,6 +58,8 @@ typedef HxFormatWrappingSection = {
 	@:optional
 	var arrayWrap: HxFormatWrapRules;
 	@:optional
+	var arrayMatrixCollapse: HxFormatWrapRules;
+	@:optional
 	var mapWrap: HxFormatWrapRules;
 	@:optional
 	var multiVar: HxFormatWrapRules;

@@ -33,6 +33,9 @@ final class SepStarPlan extends StarPlan {
 	/** `@:fmt(leftCurly('<knob>'))`: the `LeftCurlyPlacement` option placing the list's open brace, or null. */
 	public inline function leftCurly(): Null<String> return _meta.string('leftCurly');
 
+	/** `@:fmt(matrixCollapseRules('<knob>'))`: the `WrapRules` option deciding whether a source grid may go on one line, or null. */
+	public inline function matrixCollapseRules(): Null<String> return _meta.string('matrixCollapseRules');
+
 	/** `@:fmt(mapWrapRules('<knob>'))`: the option of a map literal's wrap rules, or null. */
 	public inline function mapWrapRules(): Null<String> return _meta.string('mapWrapRules');
 

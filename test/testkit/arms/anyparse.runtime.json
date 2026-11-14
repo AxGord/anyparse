@@ -93,9 +93,9 @@
 			"name": "M-DROPPED-SEP-BLOCK-REHOMED",
 			"type": "anyparse.runtime.DroppedSepComment",
 			"method": "last",
-			"find": "if (comment == null || !comment.startsWith('//')) return arr;",
-			"replace": "if (comment == null) return arr;",
-			"note": "a block comment after a dropped separator moves into the element, changing a layout the first write already settles"
+			"find": "if (comment == null) return arr;",
+			"replace": "if (comment == null || !StringTools.startsWith(comment, '//')) return arr;",
+			"note": "a block comment after a dropped separator stays outside the element, so the first write breaks a list the next parse reads flat"
 		},
 		{
 			"name": "M-BOM-NOT-CARRIED",

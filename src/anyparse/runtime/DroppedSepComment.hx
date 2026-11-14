@@ -1,7 +1,5 @@
 package anyparse.runtime;
 
-using StringTools;
-
 /**
  * The list a sep-Star writer lays out when it drops the trailing separator a comment followed.
  *
@@ -10,27 +8,27 @@ using StringTools;
  * (`TailComments.rehome_<T>` answers which, mirroring the parser). Laying the list out from the source tree would then
  * put the comment outside an element the next write reads it inside of, so the two writes disagree. `last` hands the
  * writer the tree the next parse builds instead: the last element with the comment moved into its tail, no separator
- * after it. Every other list — a kept separator, no comment, a comment the source wrote before the separator, a block
- * comment, a tail that captures nothing — comes back as the same array.
+ * after it. Every other list — a kept separator, no comment, a comment the source wrote before the separator, a tail
+ * that captures nothing — comes back as the same array.
  */
 @:nullSafety(Strict)
 final class DroppedSepComment {
 
 	/**
 	 * `arr` with its last element read as the next parse reads it once the writer drops its separator; `arr` itself
-	 * unless `sepEmitted` is false, the element carries a line comment and `rehome` places it inside the element.
+	 * unless `sepEmitted` is false, the element carries a comment and `rehome` places it inside the element.
 	 *
 	 * Whether the source wrote the comment before or after its separator does not matter: with no separator written,
 	 * the next parse meets the element and the comment either way. A parsed tree never even holds a before-separator
-	 * comment on a tail that captures — that tail took it when the source was parsed. A block comment stays where it
-	 * is: one after a dropped separator already reads back the way the first write lays it out,
-	 * so an `afterSepComment` becomes the trailing comment the next parse finds after the tail.
+	 * comment on a tail that captures — that tail took it when the source was parsed. A block comment moves like a
+	 * line comment: the next parse reads it inside the element, so a layout decided with it outside would not settle.
+	 * An `afterSepComment` becomes the trailing comment the next parse finds after the tail.
 	 */
 	public static function last<T>(arr: Array<Trivial<T>>, sepEmitted: Bool, rehome: (T, String) -> Null<T>): Array<Trivial<T>> {
 		if (sepEmitted || arr.length == 0) return arr;
 		final t: Trivial<T> = arr[arr.length - 1];
 		final comment: Null<String> = t.trailingComment;
-		if (comment == null || !comment.startsWith('//')) return arr;
+		if (comment == null) return arr;
 		final rehomed: Null<T> = rehome(t.node, comment);
 		if (rehomed == null) return arr;
 		final node: T = rehomed;

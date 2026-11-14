@@ -108,7 +108,10 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	// --- item (b): multiline trailing comma ---
 
-	private static final ARR_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta,\n\t\t];\n\t}\n}\n';
+	/** Five elements past the total-length rule, so the item-count rule breaks the list whatever its source shape. */
+	private static final ARR_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n'
+		+ '\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDelta,\n\t\t\tepsilon,\n\t\t];\n\t}\n}\n';
+
 	private static final OBJ_TRAIL: String =
 		'class C {\n\tfunction f() {\n\t\tvar o = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2,\n\t\t};\n\t}\n}\n';
 	private static final NEW_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar n = new T(\n\t\t\talphaAlphaAlphaAlphaAlpha,\n'
@@ -131,7 +134,7 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	/** No source trailing comma anywhere — the ADD-knob path. */
 	private static final ARR_NO_TRAIL: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n'
-		+ '\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+		+ '\t\t\tbetaBetaBetaBetaBeta,\n\t\t\tdeltaDeltaDeltaDelta,\n\t\t\tepsilonEpsilonEpsil,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
 
 	/**
 	 * --- item (c): matrix rows ---
@@ -226,12 +229,12 @@ class HxListLiteralEmissionSliceTest extends Test {
 	// --- item (a) ---
 
 	public function testArrayTwoElementUniformGapCollapses(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t}\n}\n';
 		Assert.equals(expected, collapse(ARR_TWO));
 	}
 
 	public function testArrayAllGapsBlankCollapse(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta,\n\t\t\tgamma\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta, gamma];\n\t}\n}\n';
 		Assert.equals(expected, collapse(ARR_UNIFORM));
 	}
 
@@ -246,12 +249,12 @@ class HxListLiteralEmissionSliceTest extends Test {
 	}
 
 	public function testArrayEdgeBlankAfterOpenBracketIsNotAGap(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t}\n}\n';
 		Assert.equals(expected, collapse(ARR_EDGE_OPEN));
 	}
 
 	public function testArrayEdgeBlankBeforeCloseBracketIsNotAGap(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [alpha, beta];\n\t}\n}\n';
 		Assert.equals(expected, collapse(ARR_EDGE_CLOSE));
 	}
 
@@ -269,18 +272,19 @@ class HxListLiteralEmissionSliceTest extends Test {
 
 	@:pin('guard')
 	public function testDefaultRemovesMultilineArrayTrailingComma(): Void {
-		Assert.isTrue(base(ARR_TRAIL).indexOf('beta\n\t\t]') >= 0, base(ARR_TRAIL));
-		Assert.isTrue(base(ARR_TRAIL).indexOf('beta,') < 0, base(ARR_TRAIL));
+		Assert.isTrue(base(ARR_TRAIL).indexOf('epsilon\n\t\t]') >= 0, base(ARR_TRAIL));
+		Assert.isTrue(base(ARR_TRAIL).indexOf('epsilon,') < 0, base(ARR_TRAIL));
 	}
 
 	@:pin('control')
 	@:killer('M-TRAILING-COMMA-KEEP-MAPS-TO-REMOVE')
 	public function testExplicitKeepKeepsMultilineArrayTrailingComma(): Void {
-		Assert.isTrue(write(ARR_TRAIL, KEEP_JSON).indexOf('beta,\n\t\t]') >= 0, write(ARR_TRAIL, KEEP_JSON));
+		Assert.isTrue(write(ARR_TRAIL, KEEP_JSON).indexOf('epsilon,\n\t\t]') >= 0, write(ARR_TRAIL, KEEP_JSON));
 	}
 
 	public function testRemoveDropsMultilineArrayTrailingComma(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talpha,\n\t\t\tbeta\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f() {\n\t\tvar a = [\n\t\t\talphaAlphaAlphaAlpha,\n\t\t\tbetaBetaBetaBetaBeta,\n'
+			+ '\t\t\tgammaGammaGammaGamma,\n\t\t\tdeltaDeltaDeltaDelta,\n\t\t\tepsilon\n\t\t];\n\t}\n}\n';
 		Assert.equals(expected, remove(ARR_TRAIL));
 	}
 

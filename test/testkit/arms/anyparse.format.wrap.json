@@ -603,20 +603,20 @@
 			"note": "an operand ending on a closed `#end` region is not seen as one"
 		},
 		{
-			"name": "M-SOURCE-FLOOR-ALWAYS",
-			"type": "anyparse.format.wrap.WrapList",
-			"method": "sourceFloorCanFire",
-			"find": "return rules.defaultMode == NoWrap ||",
-			"replace": "return true;",
-			"note": "a source-multiline list under a cascade that never answers noWrap is deferred from its host again, so the host measures it narrow on the first write and full on the next"
-		},
-		{
 			"name": "M-VALUELEAF-DIGIT-READ",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "endsWithDecimalDigit",
 			"find": "DelimiterLeaf.endsWithDigit(tag)",
 			"replace": "false",
 			"note": "the interval writer never sees a digit-ending left operand"
+		},
+		{
+			"name": "M-GRID-NEVER-COLLAPSES",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "collapsesGrid",
+			"find": "if (rules == null) return false;",
+			"replace": "return false;",
+			"note": "a source grid never goes on one line, so a few short cells that fit keep their rows"
 		}
 	]
 }

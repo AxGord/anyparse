@@ -821,44 +821,6 @@ final class WriterOptFanout {
 		};
 	}
 
-	/** Opt-fanout setter for `_keptListCountsInFit`: marks a `@:fmt(constructFitExpr)` group's body and catches. */
-	private static function setKeptListCountsInFitField(optionsCT: ComplexType): Field {
-		return {
-			name: '_setKeptListCountsInFit',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (o._keptListCountsInFit) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._keptListCountsInFit = true;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/** Clears `_keptListCountsInFit` at a statement-list element: a statement below the group's body is outside its fit verdict. */
-	private static function clearKeptListCountsInFitField(optionsCT: ComplexType): Field {
-		return {
-			name: '_clearKeptListCountsInFit',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (!o._keptListCountsInFit) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._keptListCountsInFit = false;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
 	/**
 	 * omega-stmt-list-callarg-barrier: the opt a STATEMENT-LIST element is
 	 * written with — every block statement (`BlockExpr` / `BlockStmt` /
@@ -871,8 +833,7 @@ final class WriterOptFanout {
 	 * `final v = a + b`, `x = a + b`), which then dropped its own continuation
 	 * Nest and wrapped `&&` at the statement's indent instead of one level
 	 * deeper (fork: +1, as in a plain function body). A statement is not on
-	 * the expression spine of a `@:fmt(constructFitExpr)` group either, so
-	 * `_keptListCountsInFit` stops here too. Both statement-list
+	 * Both statement-list
 	 * Stars call this one helper, so a further statement-irrelevant
 	 * expression flag joins the barrier here. Emitted only inside the
 	 * `clearExprPositionNonTail` branch, which only the Haxe statement
@@ -880,7 +841,7 @@ final class WriterOptFanout {
 	 * `_callArgChainNest`.
 	 */
 	private static function statementListElemOpt(optExpr: Expr): Expr {
-		return macro _clearKeptListCountsInFit(_clearCallArgChainNest($optExpr));
+		return macro _clearCallArgChainNest($optExpr);
 	}
 
 	/**
@@ -1403,11 +1364,7 @@ final class WriterOptFanout {
 		// ω-pattern-rest-probe: same one-field-per-block gate for
 		// `_setSuppressPatternRestProbe`.
 		if (optionsHasField(optionsTypePath, '_suppressPatternRestProbe')) fields.push(setSuppressPatternRestProbeField(optionsCT));
-		// One-field-per-block gate for the `@:fmt(constructFitExpr)` kept-list flag.
-		if (optionsHasField(optionsTypePath, '_keptListCountsInFit')) {
-			fields.push(setKeptListCountsInFitField(optionsCT));
-			fields.push(clearKeptListCountsInFitField(optionsCT));
-		}
+
 		// Opt-fanout helper pair for the enclosing-`ParenExpr` signal. `_setKeepChainInParen`
 		// marks the inner opt; `_clearKeepChainInParen` resets it at the chain emit so nested
 		// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.

@@ -121,7 +121,7 @@ gapRule(…), groupRestProbe, ifElseLadder, ifPolicy, ignoreSourceNewlinesForWra
 inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
 leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), listLayout(…), loopBodyIfElseNext(…), mapWrapRules(…),
-measuredMultilineDecls, metaBlockGlue(…), metaLineEndInline, metaLineEndPolicy(…), methodChain(…), multilineCtor,
+matrixCollapseRules(…), measuredMultilineDecls, metaBlockGlue(…), metaLineEndInline, metaLineEndPolicy(…), methodChain(…), multilineCtor,
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
 nestBodyOnSourceNewline, noSiblingFallback(…), objectLiteralBracesClose,

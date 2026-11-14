@@ -39,9 +39,8 @@ import utest.Test;
  * `testBracelessAnonFnBodyComprehensionStaysFlat` and `testNewlineBeforeOpenBracketStaysFlat`;
  * dropping it from `emitTriviaStarFieldSteps` kills `testBracelessAnonFnBodyObjectLiteralStaysFlat`;
  * widening the clear to `leadingComments` kills `testLeadingCommentSurvivesTheBarrier`. Two are
- * green at base BY CONSTRUCTION: `testInBracketNewlineStillBreaksOpen` is the over-reach guard
- * (its newline really IS inside the bracket, and deleting the classifier's carve-out instead
- * fails it), while `testBlockStatementComprehensionStaysFlat` produces no stash at all — a
+ * green at base BY CONSTRUCTION: `testInBracketNewlineIsNotRead` guards that a comprehension reads
+ * no source break even inside its bracket, while `testBlockStatementComprehensionStaysFlat` produces no stash at all — a
  * control that pins only that nothing changed there.
  */
 @:nullSafety(Strict)
@@ -86,10 +85,9 @@ class HxOpenDelimStashBarrierTest extends Test {
 		Assert.isTrue(out.indexOf(FLAT) != -1, 'expected a flat comprehension bracket in: <$out>');
 	}
 
-	public function testInBracketNewlineStillBreaksOpen(): Void {
+	public function testInBracketNewlineIsNotRead(): Void {
 		final out: String = write(IN_BRACKET_NEWLINE);
-		Assert.isTrue(out.indexOf(FLAT) == -1, 'a genuine in-bracket newline must still break the bracket open: <$out>');
-		Assert.isTrue(out.indexOf('[\n') != -1, 'expected a break right after the open bracket in: <$out>');
+		Assert.isTrue(out.indexOf(FLAT) != -1, 'a comprehension lays out by its rules, not by a source break after `[`: <$out>');
 	}
 
 	public function testBracelessAnonFnBodyObjectLiteralStaysFlat(): Void {

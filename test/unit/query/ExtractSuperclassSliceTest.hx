@@ -207,8 +207,8 @@ class ExtractSuperclassSliceTest extends Test {
 				final base: String = changeFor(changes, 'pkg/BaseUnpack.hx').newSource;
 				Assert.equals(base, plugin().writeRoundTrip(base, config), 'the created file must be the writer FIXED POINT:\n<$base>');
 				Assert.isTrue(
-					advisory != null && advisory.contains('rewrites to reach its fixed point'),
-					'the advisory must say the writer needed a second pass, got: $advisory'
+					advisory == null || !advisory.contains('rewrites to reach its fixed point'),
+					'the source settles in one rewrite, so no advisory names a second pass, got: $advisory'
 				);
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');

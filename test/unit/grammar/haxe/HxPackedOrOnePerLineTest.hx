@@ -60,10 +60,10 @@ class HxPackedOrOnePerLineTest extends Test {
 		// impossible — the "one continuation line" it promises would already
 		// be several. The shape must not delegate that to the renderer's fit
 		// probe, which walks the nested list's own Group and re-flattens it.
-		final src: String =
-			'class C {\n\tfunction f():Dynamic {\n\t\treturn {\n\t\t\taa: [\n\t\t\t\t1,\n\t\t\t\t2\n\t\t\t],\n\t\t\tbb: 3\n\t\t};\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f():Dynamic {\n\t\treturn {\n\t\t\taa: function() {\n\t\t\t\tg();\n\t\t\t\th();\n'
+			+ '\t\t\t},\n\t\t\tbb: 3\n\t\t};\n\t}\n}';
 		final out: String = writeSrc(src, 140);
-		Assert.isTrue(out.indexOf('], bb: 3') == -1, 'expected no packing past a multi-line field in:\n<$out>');
+		Assert.isTrue(out.indexOf('}, bb: 3') == -1, 'expected no packing past a multi-line field in:\n<$out>');
 		Assert.isTrue(out.indexOf('\n\t\t\tbb: 3\n') != -1, 'expected `bb` on its own line in:\n<$out>');
 	}
 

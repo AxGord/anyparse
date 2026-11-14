@@ -736,12 +736,11 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals(once, twice);
 	}
 
-	public function testGenuineMultilineArrayBranchStaysExpanded(): Void {
-		// Guard against over-collapse: an array with a GENUINE internal newline
-		// (between elements, inside `[...]`) must still expand one-element-per-line.
+	public function testSourceBrokenArrayFollowsItsRules(): Void {
+		// An array reads no source break between its elements: a short one fits and goes on one line.
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar x = [\'A\',\n\t\t\t\'B\'];\n\t\treturn x;\n\t}\n}';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), HxWriteFixture.listsKeepSourceOptions());
-		Assert.equals('class C {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t\'A\',\n\t\t\t\'B\'\n\t\t];\n\t\treturn x;\n\t}\n}\n', out);
+		Assert.equals('class C {\n\tfunction f() {\n\t\tvar x = [\'A\', \'B\'];\n\t\treturn x;\n\t}\n}\n', out);
 	}
 
 	/**

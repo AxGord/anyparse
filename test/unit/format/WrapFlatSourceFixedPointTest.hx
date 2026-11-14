@@ -268,17 +268,6 @@ class WrapFlatSourceFixedPointTest extends Test {
 		+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
 
 	/**
-	 * `STACKED_ARRAY_PIVOT` with an array rule that answers `noWrap` but never fires on a non-empty list: the source-multiline
-	 * floor can then hold the array open, so its host still defers it on the first write and the source takes two rewrites.
-	 * The fixture the fixed-point finalisers are tested on while that holds.
-	 */
-	private static final STACKED_ARRAY_FLOORED: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {'
-		+ '"maxLineLength": 140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": ['
-		+ '{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
-		+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": [{"conditions": ['
-		+ '{"cond": "itemCount <= n", "value": 0}], "type": "noWrap"}]}}}';
-
-	/**
 	 * The same pair with the literal cascade committed: one link of the chain is
 	 * gone and the source settles one pass earlier.
 	 */
@@ -289,7 +278,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 * `tools/src/create/ides/VSCode.hx`'s `createElectron`, reduced: an object
 	 * literal whose second field is an array of two parenthesised type-checks.
 	 * The array is the mechanism-B link, the enclosing literal the mechanism-A one.
-	 * The two `canonicalize` tests read it under `STACKED_ARRAY_FLOORED`, which still holds it divergent.
+	 * The two `canonicalize` tests read it under `STACKED_ARRAY_PIVOT`: they are
+	 * regression tests only while `testStackedMechanismsNeedTwoRewrites` holds it divergent.
 	 */
 	private static final STACKED_SRC: String = 'class A {\n\tpublic static function createElectron(output: String): Void {\n\t\tfinal data '
 		+ '= { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', request: \'launch\', name: mainConfName, protocol: \'inspect'
@@ -670,9 +660,8 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 *    the one-per-line collapse is the `BodyGroup` the next pass reads back, so its case
 	 *    below converges (`testCommittedLiteralUnderAChainOrArrowSettlesInOneWrite`).
 	 *
-	 * The two mechanisms STACKED were a THREE-rewrite file; with both closed it needs one
-	 * (`testStackedMechanismsSettleInOneWrite`; its `rules: []` is load-bearing, since the
-	 * shipped `arrayWrap` rules shadow `defaultWrap` and the file then converges).
+	 * The two mechanisms STACKED were a THREE-rewrite file; with both closed it settles in one
+	 * (`testStackedMechanismsSettleInOneRewrite`).
 	 * `testMultiArgFillPacksACommittedBodyOnPassOne` is mechanism B in a third host.
 	 *
 	 * Of the candidate fixes for A only `Renderer.flatFirstLineStep` adopting `restNodeWidth`'s
@@ -750,10 +739,10 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeWritesTheWriterFixedPoint(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_FLOORED) {
+		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_PIVOT) {
 			case Ok(text):
 				Assert.equals(
-					text, plugin.writeRoundTrip(text, STACKED_ARRAY_FLOORED),
+					text, plugin.writeRoundTrip(text, STACKED_ARRAY_PIVOT),
 					'the op must write a file the next op\'s one-pass canonical gate accepts, got:\n<$text>'
 				);
 			case Err(message):
@@ -774,13 +763,14 @@ class WrapFlatSourceFixedPointTest extends Test {
 	 */
 	public function testCanonicalizeReportsTheRewriteCount(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_FLOORED) {
+		switch CanonicalEdit.canonicalize(STACKED_SRC, [], true, plugin, STACKED_ARRAY_PIVOT) {
 			case Ok(_, rewrites):
-				Assert.equals(2, rewrites, 'the divergent shape costs two rewrites and the count must reach the caller');
-				Assert.notNull(FormatFixedPoint.rewritesNote(rewrites), 'a count above 1 has a note to print');
+				Assert.equals(1, rewrites, 'the stacked shape settles in one rewrite and the count must reach the caller');
+				Assert.isNull(FormatFixedPoint.rewritesNote(rewrites), 'a count of 1 has no note to print');
 			case Err(message):
 				Assert.fail('canonicalize refused: $message');
 		}
+		Assert.notNull(FormatFixedPoint.rewritesNote(2), 'a count above 1 has a note to print');
 	}
 
 	/**
@@ -935,20 +925,25 @@ class WrapFlatSourceFixedPointTest extends Test {
 
 	/**
 	 * The two mechanisms STACKED, which is what a THREE-rewrite file was
-	 * (ω-canonical-fixed-point): `tools/src/create/ides/VSCode.hx` under Pony's committed
-	 * `hxformat.json` plus `arrayWrap: {"defaultWrap": "fillLine", "rules": []}`.
-	 * Pass 1 now packs the array (mechanism B) and, since a source-multiline array whose
-	 * cascade never answers `noWrap` is measured by its host as a source-flat one is,
-	 * also explodes the enclosing literal's pivot one-per-line (mechanism A).
+	 * (ω-canonical-fixed-point); with mechanism B closed only the A link remains.
 	 *
-	 * Committing the literal cascade must keep the file a one-rewrite fixed point too.
+	 * `tools/src/create/ides/VSCode.hx` under Pony's committed `hxformat.json`
+	 * plus `arrayWrap: {"defaultWrap": "fillLine", "rules": []}` needs three
+	 * writer rewrites — one deeper than any shape recorded before this. The
+	 * links settled one per pass and they were one of each mechanism: pass 1 to 2
+	 * packed the committed array (`} : Dynamic), ({`, mechanism B), and only the
+	 * shape that leaves lets the next pass read the enclosing literal's pivot and
+	 * explode it one-per-line (mechanism A). Pass 1 now packs the array itself.
+	 *
+	 * Once no array reads its source breaks the A link is closed too: the file settles in one rewrite under either
+	 * literal cascade.
 	 */
-	public function testStackedMechanismsSettleInOneWrite(): Void {
+	public function testStackedMechanismsSettleInOneRewrite(): Void {
 		final chained: FormatFixedPointResult = FormatFixedPoint.run(s -> write(s, STACKED_ARRAY_PIVOT), STACKED_SRC);
 		// `converged` first: a chain that grew a link would fail the count assertion
 		// and say nothing about the condition that actually broke.
 		Assert.isTrue(chained.converged, 'the chain must still reach a fixed point at all: ${chained.failure}');
-		Assert.equals(1, chained.rewrites, 'with both mechanisms closed one write settles the chain');
+		Assert.equals(1, chained.rewrites, 'with both mechanisms closed the chain takes one writer rewrite');
 		final settled: Null<String> = chained.text;
 		Assert.isTrue(
 			settled != null && settled.indexOf('} : Dynamic), ({\n') != -1,

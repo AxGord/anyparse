@@ -426,7 +426,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "ef1f9a335483d1b5",
+				"out": "ccb8b6b355cb2ef3",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -859,7 +859,7 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "1ac4952e893bcf7b",
+				"out": "58ed553b538ea25d",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

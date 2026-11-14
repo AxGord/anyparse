@@ -130,10 +130,11 @@ class MatrixGridTriviaTest extends Test {
 		Assert.equals(commented, write(commented, NO_WRAP_JSON));
 	}
 
-	/** The `Ignore` fallback reads no source rows, so a grid with a blank line goes one element per line. */
-	@:pin('guard')
-	public function testIgnoreFallbackDoesNotReadTheGrid(): Void {
-		Assert.equals(SMALL_BLANK_ONE_PER_LINE, write(SMALL_BLANK, IGNORE_JSON));
+	/** A grid keeps its source rows under every list policy, the `Ignore` fallback too: a grid with a blank line keeps both. */
+	@:pin('control')
+	@:killer('M-TRIVIA-GRID-UNDER-IGNORE')
+	public function testIgnoreFallbackKeepsAGridWithABlank(): Void {
+		Assert.equals(SMALL_BLANK, write(SMALL_BLANK, IGNORE_JSON));
 	}
 
 	/** `noMatrixWrap` reads no grid, so a grid with a blank line goes one element per line. */

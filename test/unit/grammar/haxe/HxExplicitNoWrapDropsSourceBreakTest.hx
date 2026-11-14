@@ -4,8 +4,8 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * A `defaultWrap` fallback lays an object literal or anonymous type out without reading
- * the source line breaks; a map literal is a source-reflow array and still keeps them.
+ * A `defaultWrap` fallback lays an object literal, an anonymous type or a map literal out without reading the source
+ * line breaks. No list reads them any more, so no cut restores the read: these pins guard the fixtures.
  */
 final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 
@@ -17,24 +17,19 @@ final class HxExplicitNoWrapDropsSourceBreakTest extends Test {
 		super();
 	}
 
-	@:pin('control')
-	@:killer('M-EXPLICIT-NOWRAP-READS-SOURCE')
+	@:pin('guard')
 	public function testNoWrapOverDefaultRulesIsFlat(): Void {
 		Assert.equals(FLAT, HxWriteFixture.triviaWrite(BROKEN, config('noWrap', '')));
 	}
 
-	@:pin('control')
-	@:killer('M-SEP-STAR-READS-SOURCE-BREAK')
+	@:pin('guard')
 	public function testNoWrapWithAnEmptyCascadeIsFlat(): Void {
 		Assert.equals(FLAT, HxWriteFixture.triviaWrite(BROKEN, config('noWrap', ',"rules":[]')));
 	}
 
-	@:pin('control')
-	@:killer('M-SEP-STAR-READS-SOURCE-BREAK')
+	@:pin('guard')
 	public function testOnePerLineFallbackDropsASourceBreak(): Void {
-		final mapKept: String =
-			'class C {\n\tvar o = {a: 1, b: 2};\n\tvar m = [\n\t\t1 => 2,\n\t\t3 => 4\n\t];\n\tvar x:{a:Int, b:Int};\n}';
-		Assert.equals(mapKept, HxWriteFixture.triviaWrite(BROKEN, config('onePerLine', '')));
+		Assert.equals(FLAT, HxWriteFixture.triviaWrite(BROKEN, config('onePerLine', '')));
 	}
 
 	@:pin('guard')

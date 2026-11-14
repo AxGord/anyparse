@@ -70,6 +70,11 @@ Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
 `soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
 
+`arrayMatrixCollapse` (a rule set shaped like `arrayWrap`) decides a GRID array literal — rows of two or more
+cells in the source, as `arrayMatrixWrap` aligns them. No other list reads its source line breaks; a grid keeps its
+rows under every list policy unless this cascade answers `noWrap` and the one line fits. The default answers
+`noWrap` for at most six cells of at most sixteen columns each, none broken over lines or holding a nested literal.
+
 `trailingComma` is an anyparse extension with two values: `"remove"` (the default when the key is
 absent) drops the trailing `,` of every array, object literal and argument list, flat or multiline, and
 `"keep"` lets a source trailing `,` survive, and the `trailingCommas.*Default` keys add one, in a list broken over lines, one item per line or

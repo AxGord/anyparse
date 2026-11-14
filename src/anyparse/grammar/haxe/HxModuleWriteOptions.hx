@@ -22,6 +22,7 @@ import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.format.WhitespacePolicy;
 import anyparse.format.WriteOptions;
+import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
@@ -708,6 +709,21 @@ final class HxModuleWriteOptions {
 	public var objectLiteralWrap: WrapRules = HaxeFormat.defaultObjectLiteralWrap();
 	public var callParameterWrap: WrapRules = HaxeFormat.defaultCallParameterWrap();
 	public var arrayLiteralWrap: WrapRules = HaxeFormat.defaultArrayLiteralWrap();
+	// A grid array literal (rows in the source) goes on one line only when this cascade answers `noWrap` and the line fits.
+	public var arrayMatrixCollapse: WrapRules = {
+		rules: [
+			{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }] },
+			{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.HasContainerItems, value: 1 }] },
+			{
+				mode: WrapMode.NoWrap,
+				conditions: [
+					{ cond: WrapConditionType.ItemCountLessThan, value: 6 },
+					{ cond: WrapConditionType.AllItemLengthsLessThan, value: 16 }
+				]
+			}
+		],
+		defaultMode: WrapMode.OnePerLine
+	};
 	// A MAP literal (`[k => v, …]`) reads its own cascade, the way the fork
 	// splits `mapLiteralWrapping` off `arrayLiteralWrapping`. The fork's
 	// `wrapping.mapWrap` DEFAULT is character-for-character its `arrayWrap`
@@ -1067,9 +1083,6 @@ final class HxModuleWriteOptions {
 	// the calls inside it inherit it. Default false → every value-position
 	// construct keeps its rest probe.
 	public var _suppressPatternRestProbe: Bool = false; // noqa: naming
-	// Set while the writer emits the body and the catches of a `@:fmt(constructFitExpr)` group,
-	// so a kept multi-line array counts in the group's fit verdict instead of deferring like a block body.
-	public var _keptListCountsInFit: Bool = false; // noqa: naming
 
 	/**
 	 * Set on descent into a class-member `var` / `final` initializer (NOT a local statement) via

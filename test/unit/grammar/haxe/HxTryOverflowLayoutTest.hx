@@ -4,6 +4,8 @@ import anyparse.format.SameLinePolicy;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+
 /**
  * A brace-less value `try` that does not fit breaks at its seams — body on its own indented line,
  * `catch` at the statement's indent, the same shape a value `if` takes under
@@ -45,10 +47,10 @@ final class HxTryOverflowLayoutTest extends Test {
 		);
 	}
 
-	@:pin('control')
-	@:killer('M-TRY-KEPT-LIST-STATEMENT-BARRIER')
+	@:pin('guard')
 	public function testAStatementBelowATryLaysOutAsOutsideATry(): Void {
-		final stmt: String = 'if (foo([\n1,\n2\n])) x();';
+		final cells: Array<String> = [for (c in ['a', 'b', 'c', 'd', 'e']) c.lpad('x', 16)];
+		final stmt: String = 'if (foo([${cells.join(', ')}])) x();';
 		final src: String = inClass([
 			'final a: Int = try run(function() { $stmt }) catch (e: Any) null;',
 			'final b: Int = try { $stmt 1; } catch (e: Any) { $stmt 2; };',
@@ -56,7 +58,7 @@ final class HxTryOverflowLayoutTest extends Test {
 			'final outside: Int = run(function() { $stmt });'
 		].join('\n'));
 		final out: String = HxWriteFixture.triviaWrite(src, CONFIG_IF_FIT);
-		Assert.equals(5, out.split('\t\t\t\t1,\n\t\t\t\t2\n\t\t\t])) x();').length - 1, out);
+		Assert.equals(5, out.split('\t\t\t\t${cells.join(',\n\t\t\t\t')}\n\t\t\t]))\n\t\t\t\tx();').length - 1, out);
 	}
 
 	@:pin('control')
@@ -139,8 +141,7 @@ final class HxTryOverflowLayoutTest extends Test {
 		Assert.equals(out, HxWriteFixture.plainWrite(out, CONFIG));
 	}
 
-	@:pin('control')
-	@:killer('M-TRY-KEPT-LIST-DEFERS')
+	@:pin('guard')
 	public function testAWideArrayIsAFixedPointInOnePass(): Void {
 		final wide: String = '[' + [for (i in 0...9) 'xxxxxxxxxxxxxx$i'].join(', ') + ']';
 		for (stmt in [

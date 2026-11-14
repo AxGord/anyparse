@@ -25,13 +25,13 @@ final class HxListLayoutDefaultArmCutTest extends Test {
 		);
 	}
 
-	/** The array default cut keeps a short source-broken array open. */
+	/** The array default cut breaks a fitting array no rule of the cascade answers. */
 	@:pin('control')
 	@:killer('M-DEFAULT-ARRAY-IGNORE')
 	public function testTheArrayLiteralCutChangesWhatItsPinRenders(): Void {
 		assertCutChangesOutput(
 			'M-DEFAULT-ARRAY-IGNORE', 'defaultMode: WrapMode.OnePerLine', 'OnePerLine', 'arrayWrap',
-			'class C {\n\tstatic var a = [\n\t\t1,\n\t\t2\n\t];\n}'
+			'class C {\n\tstatic var a = [aaaaaaaaaaaaaaaaaaaaaaaaa1, aaaaaaaaaaaaaaaaaaaaaaaaa2, aaaaaaaaaaaaaaaaaaaaaaaaa3];\n}'
 		);
 	}
 

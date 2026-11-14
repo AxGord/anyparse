@@ -13,24 +13,16 @@ import anyparse.query.Cli;
  * closes the gap by turning the stderr note `fmt` already prints into a
  * non-zero exit.
  *
- * The pair of assertions in `testTwoRewriteFileFailsOnlyUnderOnePass` is the
- * whole point: the SAME source, the SAME mode, exit 0 without the flag and
- * non-zero with it. Either assertion alone would also hold for a flag that
- * failed on any drifted file, which is what `testDriftingOneRewriteFilePasses`
- * refutes.
+ * A flag that failed on any drifted file is what `testDriftingOneRewriteFilePasses` refutes.
  */
 @:nullSafety(Strict)
 class ApqFmtOnePassCliTest extends Test {
 
 	/**
 	 * Pony's own `objectLiteral` cascade over an object literal whose array field holds two parenthesised
-	 * type-checks under a rules-free `fillLine` array (the stacked mechanisms) — a shape
-	 * `unit.format.WrapFlatSourceFixedPointTest` pins as STILL divergent. Copied rather than shared because that class states
-	 * the writer property and this one states the CLI's reaction to it; the
-	 * copy carries its own precondition instead, and it is the test below: if
-	 * this shape ever converges in one rewrite the `--one-pass` arm goes green
-	 * and the test fails, telling you to re-pick the fixture rather than
-	 * silently measuring nothing.
+	 * type-checks under a rules-free `fillLine` array (the stacked mechanisms) — the last shape that needed a second
+	 * rewrite. Once no array read its source breaks it settles in one, as `unit.format.WrapFlatSourceFixedPointTest` pins,
+	 * and no known source needs two: the failing verdict of `--one-pass` has no fixture until one turns up.
 	 */
 	private static final TWO_REWRITE_CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": '
 		+ '140, "objectLiteral": {"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
@@ -73,33 +65,29 @@ class ApqFmtOnePassCliTest extends Test {
 		#end
 	}
 
-	/** The discriminating pair: one source, one mode, two verdicts. */
-	public function testTwoRewriteFileFailsOnlyUnderOnePass(): Void {
+	/** The formerly divergent shape settles in one rewrite, so the flag answers it like `--list`. */
+	public function testFormerlyTwoRewriteFilePassesOnePass(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('apq_fmt_onepass_two', [
 			{ name: 'A.hx', source: TWO_REWRITE_SRC },
 			{ name: 'hxformat.json', source: TWO_REWRITE_CONFIG }
 		]);
 		Assert.equals(0, Cli.run(['fmt', dir, '--list']), 'without the flag a two-rewrite file is ordinary drift');
-		Assert.notEquals(0, Cli.run(['fmt', dir, '--list', '--one-pass']), 'with the flag it is a failure');
+		Assert.equals(0, Cli.run(['fmt', dir, '--list', '--one-pass']), 'with the flag it settles in one rewrite too');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
 	}
 
-	/**
-	 * `--one-pass` is a MODIFIER, not a mode: `--write` still writes, and to the
-	 * fixed point. Folding the finding into the ordinary failure count would have
-	 * made `--write` report a file it had just rewritten as one it left alone.
-	 */
-	public function testWriteStillWritesTheFixedPointAndStillFails(): Void {
+	/** `--one-pass` is a MODIFIER, not a mode: `--write` still writes, and to the fixed point. */
+	public function testWriteStillWritesTheFixedPoint(): Void {
 		#if (sys || nodejs)
 		final dir: String = CliFixture.writeDir('apq_fmt_onepass_write', [
 			{ name: 'A.hx', source: TWO_REWRITE_SRC },
 			{ name: 'hxformat.json', source: TWO_REWRITE_CONFIG }
 		]);
-		Assert.notEquals(0, Cli.run(['fmt', dir, '--write', '--one-pass']), 'the run reports the writer defect');
+		Assert.equals(0, Cli.run(['fmt', dir, '--write', '--one-pass']), 'a one-rewrite file is no finding');
 		Assert.notEquals(TWO_REWRITE_SRC, sys.io.File.getContent('$dir/A.hx'), '--write must still have rewritten the file');
 		// The written bytes ARE the fixed point, so the same gate is green on them —
 		// which is exactly why the flag has to be asked on the pre-canonical source

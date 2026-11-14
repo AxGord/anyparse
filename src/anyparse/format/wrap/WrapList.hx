@@ -114,9 +114,6 @@ typedef WrapListOptions = {
 	 */
 	var ?sepBeforeFlags: Array<Bool>;
 
-	/** The source had this list broken across lines and the cascade must floor to a break mode. Default `false`. */
-	var ?sourceMultilineKeep: Bool;
-
 	/**
 	 * ω-nowrap-source-trail-comma: source-only trailing-comma signal forwarded to the flat
 	 * (`NoWrap`) shape. The writer passes `<field>TrailPresent` here (NOT the
@@ -1272,11 +1269,17 @@ class WrapList {
 	}
 
 	/**
-	 * Whether the source-multiline floor can change this cascade's answer: only a `NoWrap` answer is floored, so a cascade that
-	 * never answers `NoWrap` lays a source-multiline list out exactly as a source-flat one, and a host must measure both alike.
+	 * The one answer to "does a source grid go on one line when it fits": the collapse cascade, measured over the grid's
+	 * cells as a list, answers `noWrap`. Any other answer, or no cascade, keeps the source rows; the width half of the
+	 * question is the renderer's, since the grid's column is unknown here.
 	 */
-	public static function sourceFloorCanFire(rules: WrapRules): Bool {
-		return rules.defaultMode == NoWrap || rules.rules.exists(rule -> rule.mode == NoWrap);
+	public static function collapsesGrid(rules: Null<WrapRules>, items: Array<Doc>, complexItemKinds: Null<Array<Int>>): Bool {
+		if (rules == null) return false;
+		final measure: WrapItemMeasure = measureItems(items, 2);
+		return decideWithLineLengthState(
+			rules, items.length, measure.maxLen, measure.total, false, measure.anyHardline, _ -> false,
+			countComplexItems(complexItemKinds), measure.minLen, measure.equalLens, anyContainerItem(complexItemKinds), false
+		) == NoWrap;
 	}
 
 	/**
@@ -1304,19 +1307,6 @@ class WrapList {
 			case NoWrap: true;
 			case _: false;
 		};
-	}
-
-	/**
-	 * ω-array-reflow: when `on` is set (the caller threaded
-	 * `@:fmt(reflowSourceMultiline)`'s runtime `_smlKeep` gate), a cascade
-	 * resolution of `NoWrap` is floored to `OnePerLine`. The source list
-	 * already spans multiple lines, so collapsing it fully flat would
-	 * discard the author's "stay multi-line" intent; flooring keeps the
-	 * list broken while still letting width-driven modes (`FillLine`,
-	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false — gate-less consumers stay byte-identical.
-	 */
-	private static inline function floorSourceMultiline(mode: WrapMode, on: Bool): WrapMode {
-		return on && mode == NoWrap ? OnePerLine : mode;
 	}
 
 	/**
@@ -1462,15 +1452,6 @@ class WrapList {
 		// shape conflicts with `applyArrowWrapping`'s break-after-
 		// `->` layout. `forceMode != null` already bypasses the
 		// cascade, so it is excluded too.
-		// The GATE reads the RAW `defaultMode`; only the SHAPE reads the decorated one.
-		// `defaultBreakMode` is that mode after `floorSourceMultiline`, which can widen it into this
-		// branch's membership test: flooring turns a `NoWrap` default into `OnePerLine`. Deciding
-		// the gate off the decorated mode would let this branch claim cascades it
-		// never served. (`floorSourceMultiline` cannot actually fire here today:
-		// its gate is `sourceMultilineKeep`, which forces the cascade to
-		// `OnePerLine` and so never reaches a `modeFlat == NoWrap` agreement. It
-		// is applied for symmetry with `evalAt`, so the two decorate identically
-		// if that ever stops being true.)
 		final dm: WrapMode = rules.defaultMode;
 		final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
 		final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
@@ -4453,7 +4434,6 @@ class WrapList {
 			suppressAdditionalIndent: axes.suppressAdditionalIndent ?? false,
 			groupRestProbe: axes.groupRestProbe ?? false,
 			sepBeforeFlags: axes.sepBeforeFlags,
-			sourceMultilineKeep: axes.sourceMultilineKeep ?? false,
 
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
@@ -4492,7 +4472,6 @@ class WrapList {
 		final suppressAdditionalIndent: Bool = axes.suppressAdditionalIndent;
 		final groupRestProbe: Bool = axes.groupRestProbe;
 		final sepBeforeFlags: Null<Array<Bool>> = pastSep.sepBeforeFlags;
-		final sourceMultilineKeep: Bool = axes.sourceMultilineKeep;
 
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
@@ -4606,12 +4585,9 @@ class WrapList {
 		// on typedef-RHS anon types via the runtime gate
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			return forceMode ?? floorSourceMultiline(
-				decideWithLineLengthState(
-					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-					complexCount, minLen, equalLens, containerItems, multilineLambda
-				),
-				sourceMultilineKeep
+			return forceMode ?? decideWithLineLengthState(
+				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
+				complexCount, minLen, equalLens, containerItems, multilineLambda
 			);
 		}
 
@@ -4641,7 +4617,7 @@ class WrapList {
 		// `groupRestProbe` consumers for the zero-threshold call — its bracket
 		// shares its line with the statement's `;` (or a call's `);`), and the
 		// plain-`Group` fit is blind to that tail. See the param doc above.
-		final defaultBreakMode: WrapMode = floorSourceMultiline(rules.defaultMode, sourceMultilineKeep);
+		final defaultBreakMode: WrapMode = rules.defaultMode;
 		// A source trailing separator forces the break-mode cascade (`forceExceeds`), and a `noWrap` rule that shadows
 		// a break default answers it flat: that flat layout still has to fit its line, behind the probe the unforced
 		// path puts there (`emitZeroThresholdAgree`). The first write lays the list out unforced; the next one reads
@@ -4684,7 +4660,6 @@ private typedef ResolvedWrapListOptions = {
 	final suppressAdditionalIndent: Bool;
 	final groupRestProbe: Bool;
 	final sepBeforeFlags: Null<Array<Bool>>;
-	final sourceMultilineKeep: Bool;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
 	final comprehensionBodyMeasure: Bool;

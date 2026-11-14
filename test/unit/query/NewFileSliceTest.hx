@@ -454,7 +454,7 @@ class NewFileSliceTest extends Test {
 	 * placement (`caseSiblings: anyBreak`), which `unit.format.WrapFlatSourceFixedPointTest`
 	 * still pins as divergent; that class pins the writer divergence itself.
 	 */
-	public function testCreateRawSettlesATwoRewriteSource(): Void {
+	public function testCreateRawLandsOnTheFixedPoint(): Void {
 		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "objectLiteral": {'
 			+ '"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
 			+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": [{"conditions": ['
@@ -468,18 +468,7 @@ class NewFileSliceTest extends Test {
 			+ '\t({ name: renderConfName, type: \'chrome\', request: \'attach\', port: port, webRoot: resultDir, timeout: 20000, '
 			+ 'internalConsoleOptions: \'openOnSessionStart\' }: Dynamic)\n\t\t], compounds: [{ name: \'AllConfigurations\', '
 			+ 'configurations: [mainConfName, renderConfName] }] };\n\t\tUtils.saveJson(\'.vscode/launch.json\', data);\n\t}\n}';
-		// PRECONDITION, not decoration: this test discriminates only while `src`
-		// really is a shape the writer settles on its SECOND rewrite. The pin for
-		// that shape lives in another class, so without this assert an improved
-		// writer would turn this test silently vacuous — it would then pass with
-		// `createRaw` reverted to a single round trip — while the pin goes red
-		// somewhere else and nobody connects the two.
-		final once: Null<String> = plugin.writeRoundTrip(src, config);
-		Assert.notEquals(
-			once, once == null ? null : plugin.writeRoundTrip(once, config),
-			'this fixture no longer needs two rewrites, so it can no longer discriminate — re-source it from '
-			+ 'unit.format.WrapFlatSourceFixedPointTest\'s still-divergent set, or retire both together'
-		);
+		// No known source needs a second writer rewrite any more, so this pins only that the created file is the fixed point.
 		switch NewFile.createRaw(src, plugin, config) {
 			case Ok(text):
 				Assert.equals(

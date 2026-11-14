@@ -70,7 +70,8 @@ enum HxExpr {
 	@:trail(']')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaArrays'), trailingCommaRemovable, wrapRules('arrayLiteralWrap'), mapWrapRules('mapLiteralWrap'),
-		reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition, uniformStmtBlanks, groupRestProbe, complexItems)
+		matrixCollapseRules('arrayMatrixCollapse'), reflowSourceMultiline, bracketKindPad, arrayMatrixWrap, propagateExprPosition,
+		uniformStmtBlanks, groupRestProbe, complexItems)
 	ArrayExpr(elems: Array<HxExpr>);
 	ObjectLit(lit: HxObjectLit);
 	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'),

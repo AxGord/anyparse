@@ -106,12 +106,12 @@ final class HxDroppedSepCommentTest extends Test {
 		}
 	}
 
-	/** A block comment after a dropped separator stays on the element, where the first write already settles it. */
+	/** A block comment after a dropped separator moves into the element like a line comment, so one write settles the list. */
 	@:pin('control')
 	@:killer('M-DROPPED-SEP-BLOCK-REHOMED')
-	public function testABlockCommentStaysOnTheElement(): Void {
+	public function testABlockCommentMovesIntoTheElement(): Void {
 		Assert.equals(
-			statement('var v = [\n\t\t\taaaa,\n\t\t\tt ? {a: 1} : {b: 2} /* note */\n\t\t];'),
+			statement('var v = [aaaa, t ? {a: 1} : {b: 2} /* note */];'),
 			assertOneWriteIsAFixedPoint(source('t ? {a: 1} : {b: 2}', 1, true, '/* note */'), CFG_REMOVE, 'block')
 		);
 	}
