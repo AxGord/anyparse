@@ -39,10 +39,12 @@ class JsonQuoteTest extends Test {
 		Assert.equals('"$high$low"', JsonFormat.instance.quote(high + low));
 	}
 
-	/** Where a generated writer parts from `quote`: its per-character escape never sees the other half of a pair. */
-	public function testAGeneratedWriterWritesALoneSurrogateBare(): Void {
+	/**
+	 * A generated writer spells a string through the format's stringEncoder, so a lone surrogate keeps the escape `quote` gives it.
+	 */
+	public function testAGeneratedWriterWritesALoneSurrogateAsQuoteDoes(): Void {
 		final high: String = String.fromCharCode(0xD83D);
-		Assert.equals('"$high"', JValueWriter.write(JString(high)));
+		Assert.equals(JsonFormat.instance.quote(high), JValueWriter.write(JString(high)));
 	}
 
 	public function testAQuotedStringReadsBack(): Void {

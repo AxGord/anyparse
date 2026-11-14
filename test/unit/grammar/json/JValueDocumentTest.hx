@@ -41,11 +41,11 @@ final class JValueDocumentTest extends Test {
 		Assert.equals('"a\\nb\\u0001\\\\"', JValueWriter.write(JString('a\nb\x01\\'), JsonFormat.instance.expandedWriteOptions));
 	}
 
-	public function testALoneSurrogateIsTheOneByteTheDocWriterSpellsApartFromQuote(): Void {
+	public function testTheDocWriterSpellsALoneSurrogateAsQuoteDoes(): Void {
 		final lone: String = String.fromCharCode(0xD83D);
 		Assert.equals('"\\ud83d"', JsonFormat.instance.quote(lone));
-		Assert.equals('"$lone"', JValueWriter.write(JString(lone), JsonFormat.instance.expandedWriteOptions));
-		Assert.equals('"$lone"', JValueWriter.write(JValueParser.parse('"\\ud83d"'), JsonFormat.instance.expandedWriteOptions));
+		Assert.equals(JsonFormat.instance.quote(lone), JValueWriter.write(JString(lone), JsonFormat.instance.expandedWriteOptions));
+		Assert.equals('"\\ud83d"', JValueWriter.write(JValueParser.parse('"\\ud83d"'), JsonFormat.instance.expandedWriteOptions));
 	}
 
 	public function testAScalarReadsAsTextAndAnythingElseDoesNot(): Void {

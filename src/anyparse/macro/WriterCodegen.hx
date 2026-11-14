@@ -1185,10 +1185,14 @@ class WriterCodegen {
 		};
 	}
 
-	/** Escape a string for double-quoted output using the format's escapeChar. */
+	/**
+	 * Spell a string for double-quoted output: through the format's `stringEncoder` when it declares one, else one code
+	 * unit at a time through its `escapeChar`.
+	 */
 	private static function escapeStringField(formatInfo: FormatReader.FormatInfo): Field {
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-		final body: Expr = macro {
+		final encoder: Null<String> = formatInfo.stringEncoder;
+		final perUnit: Expr = macro {
 			final _buf: StringBuf = new StringBuf();
 			_buf.add('"');
 			var _i: Int = 0;
@@ -1200,6 +1204,11 @@ class WriterCodegen {
 			_buf.add('"');
 			return _buf.toString();
 		};
+		var body: Expr = perUnit;
+		if (encoder != null) {
+			final encodeCall: Expr = { expr: ECall(macro $p{encoder.split('.')}, [macro value]), pos: Context.currentPos() };
+			body = macro return $encodeCall;
+		}
 		return {
 			name: 'escapeString',
 			access: [APrivate, AStatic],

@@ -136,7 +136,14 @@ typedef FormatInfo = {
 	nativeTargets: Array<String>,
 
 	/** The compile defines under which a compact writer goes through `nativeDoor`'s writer instead of a buffer. */
-	nativeWriteTargets: Array<String>
+	nativeWriteTargets: Array<String>,
+
+	/**
+	 * The static `String -> String` the format declares as the whole spelling of one string, quotes included
+	 * (`pkg.Class.method`); null when a string is spelled one code unit at a time through `escapeChar`. A per-unit
+	 * escape cannot see a surrogate pair's other half, so a format whose escape depends on it names it here.
+	 */
+	stringEncoder: Null<String>
 
 };
 
@@ -432,7 +439,8 @@ class FormatReader {
 			commentPatterns: [],
 			nativeDoor: null,
 			nativeTargets: [],
-			nativeWriteTargets: []
+			nativeWriteTargets: [],
+			stringEncoder: null
 		};
 	}
 
@@ -463,7 +471,8 @@ class FormatReader {
 			commentPatterns: readCommentPatterns(cl),
 			nativeDoor: readStringFieldOpt(cl, 'nativeDoor'),
 			nativeTargets: readStringArrayField(cl, 'nativeTargets'),
-			nativeWriteTargets: readStringArrayField(cl, 'nativeWriteTargets')
+			nativeWriteTargets: readStringArrayField(cl, 'nativeWriteTargets'),
+			stringEncoder: readStringFieldOpt(cl, 'stringEncoder')
 		};
 	}
 

@@ -3326,6 +3326,14 @@
 			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.wordLeaf(s)",
 			"replace": "macro anyparse.core.Doc.Text(s)",
 			"note": "a generated _dt of a runtime string builds an untagged leaf"
+		},
+		{
+			"name": "M-STRING-ENCODER-UNUSED",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "escapeStringField",
+			"find": "if (encoder != null) {",
+			"replace": "if (false) {",
+			"note": "a format declaring a stringEncoder is spelled one code unit at a time again, so a lone surrogate comes out bare"
 		}
 	]
 }
