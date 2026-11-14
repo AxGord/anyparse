@@ -9,6 +9,7 @@ import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using anyparse.util.Strings;
 using Lambda;
 
 /** One module a mechanical rewrite changed: its source and tree before and after. */
@@ -208,7 +209,9 @@ final class RegistryFragmentFollow {
 	}
 
 	/**
-	 * A replace with what it shares with its find in the new spelling, each boundary choice; the replace as written last.
+	 * A replace with what it shares with its find in the new spelling, each boundary
+	 * choice; the replace as written last, unless a choice was refused, so a fragment that
+	 * cannot be re-spelled is named instead of rewritten.
 	 * A shared part ends and starts as a cut does, so a separator the rewrite replaced at its edge (a space become a line
 	 * break) comes with it and the two parts never join.
 	 */
@@ -230,11 +233,37 @@ final class RegistryFragmentFollow {
 				rewrite.maps, from + startOf(fit, find.length - suffix, writtenLength), now.length, true
 			).filter(p -> p >= newFrom && p <= newTo);
 		tails.reverse();
-		final out: Array<String> = [
-			for (end in ends) for (tail in tails) if (tail >= end) now.substring(newFrom, end) + middle + now.substring(tail, newTo)
-		];
-		out.push(replace);
+		final out: Array<String> = [];
+		var refused: Bool = false;
+		for (end in ends) for (tail in tails) if (tail >= end) {
+			final head: String = now.substring(newFrom, end);
+			final rest: String = now.substring(tail, newTo);
+			final built: String = head + middle + rest;
+			final headKept: Bool = head.length == 0 || sameJoint(replace, prefix, now, end, built, head.length);
+			final restKept: Bool = rest.length == 0
+				|| sameJoint(replace, replace.length - suffix, now, tail, built, head.length + middle.length);
+			if (headKept && restKept)
+				out.push(built);
+			else
+				refused = true;
+		}
+		if (!refused) out.push(replace);
 		return out;
+	}
+
+	/**
+	 * Whether a join of a rebuilt replace is inside an identifier exactly where the written `replace` and the new text have one: a
+	 * piece cut through a token of the new text, or two pieces glued into a name the replace never spelled,
+	 * still parses as another name.
+	 */
+	private static function sameJoint(replace: String, at: Int, now: String, nowAt: Int, built: String, builtAt: Int): Bool {
+		final inside: Bool = insideToken(replace, at);
+		return insideToken(now, nowAt) == inside && insideToken(built, builtAt) == inside;
+	}
+
+	/** Whether the character before `at` and the one at `at` both belong to one identifier. */
+	private static function insideToken(text: String, at: Int): Bool {
+		return at > 0 && at < text.length && text.fastCodeAt(at - 1).isIdentChar() && text.fastCodeAt(at).isIdentChar();
 	}
 
 	/** Whether the cut still leaves the module parseable: a fragment cut through a new paren group needs it in `replace`. */

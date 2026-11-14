@@ -16120,9 +16120,25 @@
 			"name": "M-REGISTRY-FOLLOW-REPLACE-SHARES-FIND",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "replacesOf",
-			"find": "now.substring(newFrom, end) + middle + now.substring(tail, newTo)",
-			"replace": "replace",
+			"find": "out.push(built)",
+			"replace": "out.push(replace)",
 			"note": "a replace no longer takes the new spelling of what it shares with its find, so a paren the rewrite put inside the fragment is lost"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REPLACE-HEAD-GLUES",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "sameJoint(replace, prefix, now, end, built, head.length)",
+			"replace": "true",
+			"note": "the kept head of a re-spelled replace may glue to its middle into a name the replace never spelled, or end inside a token of the new text"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REPLACE-REST-GLUES",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacesOf",
+			"find": "sameJoint(replace, replace.length - suffix, now, tail, built, head.length + middle.length)",
+			"replace": "true",
+			"note": "the kept rest of a re-spelled replace may glue to its middle into a name the replace never spelled, or start inside a token of the new text"
 		},
 		{
 			"name": "M-REGISTRY-FOLLOW-SPLICE-CHECKED",
@@ -16152,7 +16168,7 @@
 			"name": "M-REGISTRY-FOLLOW-KEEPS-UNCHANGED-REPLACE",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "replacesOf",
-			"find": "out.push(replace);",
+			"find": "if (!refused) out.push(replace);",
 			"replace": "",
 			"note": "a replace that dropped the group the rewrite added is no longer tried as written"
 		},
@@ -16540,9 +16556,9 @@
 			"name": "M-REGISTRY-FOLLOW-SHARED-EDGE-REPLACED",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "replacesOf",
-			"find": "startOf(fit, prefix, writtenLength), now.length, false",
-			"replace": "startOf(fit, prefix, writtenLength), now.length, true",
-			"note": "a shared prefix whose last separator the rewrite replaced ends before the replacement, so the replace joins two tokens"
+			"find": "from + startOf(fit, prefix, writtenLength)",
+			"replace": "from",
+			"note": "the shared prefix of a replace is not located by its alignment across the rewrite, so the replace is re-spelled without it"
 		},
 		{
 			"name": "M-REGISTRY-FOLLOW-ALIGNS-WITH-METADATA",
