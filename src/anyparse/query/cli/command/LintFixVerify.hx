@@ -99,13 +99,13 @@ final class LintFixVerify {
 	public static function verifyRiskyFixes(
 		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracles: Array<OracleConfig>,
 		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, ledger: Map<String, RuleFixOutcome>,
-		resolveConfig: (String) -> LintConfig, applyEnablement: Bool
+		resolveConfig: (String) -> LintConfig, applyEnablement: Bool, ?narrow: (Array<Violation>) -> Array<Violation>
 	): RiskyFixOutcome {
 		if (riskyChecks.length == 0) return quietRisky('');
 		if (oracles.length == 0)
 			return quietRisky(', ${riskyChecks.length} risky-fix rule(s) left report-only (no compiler oracle for this run)');
 		final verified: FixVerifyResult = FixVerifier.verify(
-			files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile, null, resolveConfig, applyEnablement
+			files, riskyChecks, cached, oracles, CliIo.writeFile, optsByFile, null, resolveConfig, applyEnablement, narrow
 		);
 		switch verified.baseline {
 			case Confirmed:
@@ -532,7 +532,7 @@ final class LintFixVerify {
 	public static function applyOracleAssistedFixes(
 		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig, applyEnablement: Bool,
-		coverage: Array<ConfigCoverage>, ledger: Map<String, RuleFixOutcome>
+		coverage: Array<ConfigCoverage>, ledger: Map<String, RuleFixOutcome>, ?narrow: (Array<Violation>) -> Array<Violation>
 	): AssistedOutcome {
 		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0, excluded: [] };
 		if (oracles.length == 0)
@@ -571,7 +571,11 @@ final class LintFixVerify {
 		// one so the two cannot drift apart unnoticed.
 		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = oracleChecks.map(check -> {
 			check: check,
-			all: Linter.collect(files, plugin, [check], resolveConfig, applyEnablement).filter(v -> v.rule == check.id())
+			all: {
+				final found: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
+					.filter(v -> v.rule == check.id());
+				narrow == null ? found : narrow(found);
+			}
 		});
 		// Nothing to annotate costs nothing: no probe, no display server.
 		if (!findingsByCheck.exists(byCheck -> byCheck.all.length > 0))

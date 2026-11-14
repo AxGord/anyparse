@@ -365,13 +365,13 @@ final class FixVerifier {
 	public static function verify(
 		files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, ?optsByFile: Map<String, Null<String>>, ?coverage: Array<ConfigCoverage>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true, ?narrow: (Array<Violation>) -> Array<Violation>
 	): FixVerifyResult {
 		final names: NameProof = OracleProviders.of(plugin).nameProof();
 		final aware: Array<NameOracleAware> = [for (check in riskyChecks) if (check is NameOracleAware) cast check];
 		for (check in aware) check.setNameOracle(names);
 		final result: FixVerifyResult = verifyWith(
-			names, files, riskyChecks, plugin, oracles, write, optsByFile, coverage, resolveConfig, applyEnablement
+			names, files, riskyChecks, plugin, oracles, write, optsByFile, coverage, resolveConfig, applyEnablement, narrow
 		);
 		for (check in aware) check.setNameOracle(null);
 		return result;
@@ -380,7 +380,7 @@ final class FixVerifier {
 	private static function verifyWith(
 		names: NameProof, files: Array<FileText>, riskyChecks: Array<Check>, plugin: GrammarPlugin, oracles: Array<OracleConfig>,
 		write: (String, String) -> Void, optsByFile: Null<Map<String, Null<String>>>, coverage: Null<Array<ConfigCoverage>>,
-		resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool
+		resolveConfig: Null<(String) -> LintConfig>, applyEnablement: Bool, narrow: Null<(Array<Violation>) -> Array<Violation>>
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<FixVerifyRevert> = [];
@@ -454,8 +454,10 @@ final class FixVerifier {
 			// reification and inline-suppression gates here. The oracle below cannot stand in for
 			// either — a risky rewrite inside a `macro …` quotation still typechecks, and so does one
 			// on a line whose `// noqa` says the rule is wrong there.
-			final collected: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
+			final found: Array<Violation> = Linter.collect(files, plugin, [check], resolveConfig, applyEnablement)
 				.filter(v -> v.rule == check.id());
+			// `narrow` is the caller's window (`--range` / `--changed-since`): a finding outside it is no fix's business.
+			final collected: Array<Violation> = narrow == null ? found : narrow(found);
 			// A `RiskyArm` check is verified for its risky arm's findings ONLY: the rest belong to its safe
 			// arm, which the safe loop has already run, and tallying them here would report them as risky
 			// declines.

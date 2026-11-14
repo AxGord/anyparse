@@ -197,6 +197,9 @@ final class LintFixDriver {
 		// not answer that: a file already in `changedFiles` is not pushed twice, and a reverted
 		// candidate leaves the file byte-identical to this snapshot.
 		final settledOf: Map<String, String> = sourceSnapshot(files);
+		// The two verified phases take the safe pass's own window, measured on the bytes the safe loop settled.
+		final narrow: (Array<Violation>) -> Array<Violation> = found ->
+			LintReport.withinRange(found, f -> fileSourceOf(files, f), windowOf);
 
 		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
 		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
@@ -209,7 +212,7 @@ final class LintFixDriver {
 					split.risky, said, CliIo.stderr,
 					() ->
 						LintFixVerify.verifyRiskyFixes(
-							files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement
+							files, split.risky, cached, oracles, optsByFile, changedFiles, ledger, resolveConfig, applyEnablement, narrow
 						)
 				)
 		);
@@ -231,7 +234,7 @@ final class LintFixDriver {
 					() ->
 						LintFixVerify.applyOracleAssistedFixes(
 							files, oracleAssisted, cached, oracles, optsByFile, changedFiles, resolveConfig, applyEnablement,
-							risky.coverage, ledger
+							risky.coverage, ledger, narrow
 						)
 				)
 		);

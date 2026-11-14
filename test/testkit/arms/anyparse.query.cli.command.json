@@ -1547,6 +1547,14 @@
 			"find": "RegistryFollowCommand.writeRecorded(written, path, source, text);",
 			"replace": "RegistryFollowCommand.writeFollowed(op, [{ path: path, content: text }], plugin);",
 			"note": "comment-rewrite follows the registries once per file instead of once per run, so every file re-reads every registry document"
+		},
+		{
+			"name": "M-ASSISTED-PHASE-WINDOW-DROPPED",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "applyOracleAssistedFixes",
+			"find": "narrow == null ? found : narrow(found)",
+			"replace": "found",
+			"note": "the oracle-assisted phase ignores the run's window, so a --changed-since fix annotates a standing local on an untouched line"
 		}
 	]
 }
