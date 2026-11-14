@@ -16073,8 +16073,8 @@
 			"type": "anyparse.query.ArmTypePath",
 			"method": "subTypeOf",
 			"find": "segments.length - packageLength == 2",
-			"replace": "false",
-			"note": "no type path names a sub-module type, so an arm on one is looked up as a file of its own and the member it cuts is never found"
+			"replace": "packageLength > 0 && segments.length - packageLength == 2",
+			"note": "a module outside any package names no sub-module type, so an arm on one is looked up as a file of its own and the member it cuts is never found; packaged modules stay recognised because the registry holds arms on packaged sub-module types and refuses a build that cannot resolve them"
 		},
 		{
 			"name": "M-ARM-TYPE-SUB-ALWAYS",
