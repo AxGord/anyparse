@@ -33,4 +33,12 @@ class DelimiterEdgeReadTest extends Test {
 		Assert.isFalse(WrapList.endsWithCloseDelim(Concat([Text('a'), Text(')')])));
 	}
 
+	/** A brace close is a close too: the delimiter-close verdict holds for a tagged `}`, and not for the same byte untagged. */
+	@:pin('control')
+	@:killer('M-DELIMEDGE-CLOSE-BRACE-DROPPED')
+	public function testBraceCloseIsAClose(): Void {
+		Assert.isTrue(WrapList.endsWithCloseDelim(Concat([Text('a'), DelimiterLeaf.leaf('}')])));
+		Assert.isFalse(WrapList.endsWithCloseDelim(Concat([Text('a'), Text('}')])));
+	}
+
 }

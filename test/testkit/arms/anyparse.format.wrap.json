@@ -582,9 +582,17 @@
 			"name": "M-DELIMEDGE-CLOSE-READS-TAG",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "endsWithCloseDelim",
-			"find": "Text(_, _, Delimiter(_, Closes))",
+			"find": "Text(_, _, Delimiter(_, Closes | ClosesBrace))",
 			"replace": "Text(_, _, _)",
 			"note": "any leaf closes a delimiter, the way a test of its last byte also called a fragment ending with `)` one"
+		},
+		{
+			"name": "M-DELIMEDGE-CLOSE-BRACE-DROPPED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "endsWithCloseDelim",
+			"find": "Closes | ClosesBrace",
+			"replace": "Closes",
+			"note": "a `}` leaf no longer closes a delimiter, so a binary operator after a block close stops riding its line"
 		}
 	]
 }

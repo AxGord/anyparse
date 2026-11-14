@@ -25,6 +25,7 @@ class LeafEndEdgeReadTest extends Test {
 		Assert.same(Delimiter(Paren, Opens), DelimiterLeaf.tagOf('( '));
 		Assert.same(Delimiter(NoOpen, Arrow), DelimiterLeaf.tagOf(' -> '));
 		Assert.same(Delimiter(NoOpen, Closes), DelimiterLeaf.tagOf(')'));
+		Assert.same(Delimiter(NoOpen, ClosesBrace), DelimiterLeaf.tagOf('}'));
 		Assert.isNull(DelimiterLeaf.tagOf(') '));
 		Assert.isNull(DelimiterLeaf.tagOf('->a'));
 	}
@@ -71,6 +72,25 @@ class LeafEndEdgeReadTest extends Test {
 		final openEnds: Array<{ s: String, tag: Null<LeafTag> }> = leaves.filter(l -> endsOpenByBytes(l.s));
 		Assert.isTrue(openEnds.length > 3);
 		for (l in openEnds) Assert.isTrue(DelimiterLeaf.leavesOpen(l.tag, true), 'untagged open end: "${l.s}"');
+	}
+
+	/** A brace close is told from the other closes by its tag; the same bytes untagged, or a blank after it, change nothing. */
+	@:pin('control')
+	@:killer('M-LEAFEND-BRACE-CLOSE-PLAIN')
+	public function testBraceCloseIsATagFact(): Void {
+		Assert.isTrue(DocMeasure.endsWithCloseBrace(DelimiterLeaf.leaf('}')));
+		Assert.isFalse(DocMeasure.endsWithCloseBrace(DelimiterLeaf.leaf(')')));
+		Assert.isFalse(DocMeasure.endsWithCloseBrace(DelimiterLeaf.leaf(']')));
+		Assert.isTrue(DocMeasure.endsWithCloseBrace(Concat([Text('x'), DelimiterLeaf.leaf('}'), Text(' '), Line(' ')])));
+		Assert.isFalse(DocMeasure.endsWithCloseBrace(Concat([DelimiterLeaf.leaf('}'), Text('x')])));
+	}
+
+	/** The brace verdict reads the leaf's tag, not its bytes: an untagged leaf spelling `}` is not a closed brace. */
+	@:pin('control')
+	@:killer('M-LEAFEND-BRACE-CLOSE-BYTES')
+	public function testBraceVerdictReadsTheTag(): Void {
+		Assert.isFalse(DocMeasure.endsWithCloseBrace(Concat([DelimiterLeaf.leaf('{'), Text('}')])));
+		Assert.isFalse(DocMeasure.endsWithCloseBrace(Line('}')));
 	}
 
 	/** The test's own byte reading of an open end, the reference the writer's tags are checked against. */

@@ -779,6 +779,22 @@
 			"find": "return DelimiterLeaf.leavesOpen(tag, true);",
 			"replace": "return StringTools.endsWith(StringTools.rtrim(s), '(');",
 			"note": "the glue / head probes read a leaf's last byte again, so an untagged fragment ending with `(` reads as an open delimiter"
+		},
+		{
+			"name": "M-LEAFEND-BRACE-CLOSE-BYTES",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithCloseBrace",
+			"find": "return DelimiterLeaf.closesBrace(tag);",
+			"replace": "return StringTools.endsWith(StringTools.rtrim(s), '}');",
+			"note": "the brace verdict reads a leaf's last byte again, so an untagged fragment ending with `}` counts as a closed brace"
+		},
+		{
+			"name": "M-LEAFEND-BRACE-CLOSE-PLAIN",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "endEdgeOf",
+			"find": "if (last == '}'.code) return ClosesBrace;",
+			"replace": "if (last == '}'.code) return Closes;",
+			"note": "a `}` leaf is tagged like any other close, so the brace question cannot tell it from `)`"
 		}
 	]
 }

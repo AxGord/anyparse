@@ -367,19 +367,12 @@ final class DocMeasure {
 	}
 
 	/**
-	 * Right-spine walk: does this `Doc` render with its last visible
-	 * non-whitespace character equal to `}`? Used by the BlockBody Star
-	 * primitive (`@:sep(';', tailRelax, blockEnded)`) to decide whether
-	 * the separator can be omitted between two elements — when the prior
-	 * element ends with `}` (block, object literal, anon struct, etc.) the
-	 * Haxe-style grammar permits the next element to follow directly.
-	 *
-	 * Whitespace-only fragments (`Line(' ')`, `OptHardline`, blank
-	 * `Text`) are transparently skipped. `IfBreak` / `IfWidthExceeds` /
-	 * `IfLineExceeds` / `IfFullLineExceeds` / `IfFirstLineExceeds` use
-	 * the flat-side representative — mirrors `flatTokenWidth`. `Fill`
-	 * scans its items right-to-left, ignoring the inter-item separator
-	 * (its text would not appear after the last item).
+	 * Right-spine walk: does this `Doc`'s last visible leaf close a brace, a `Text` tagged `ClosesBrace`? The leaf's tag
+	 * answers, never its bytes, so a soft separator (`Line`, `OptSpace`) or an untagged `Text` never does. Whitespace-only
+	 * fragments (`Line(' ')`, `OptHardline`, blank `Text`) are transparently skipped. `IfBreak` / `IfWidthExceeds` /
+	 * `IfLineExceeds` / `IfFullLineExceeds` / `IfFirstLineExceeds` use the flat-side representative, mirroring
+	 * `flatTokenWidth`. `Fill` scans its items right-to-left, ignoring the inter-item separator (its text would not
+	 * appear after the last item).
 	 */
 	public static function endsWithCloseBrace(d: Doc): Bool {
 		final stack: Array<Doc> = [d];
@@ -387,9 +380,10 @@ final class DocMeasure {
 			final node: Doc = stack.pop();
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				case Text(s), OptSpace(s), Line(s):
-					final t: String = s.rtrim();
-					if (t.length > 0) return t.fastCodeAt(t.length - 1) == '}'.code;
+				case Text(s, _, tag):
+					if (s.rtrim().length > 0) return DelimiterLeaf.closesBrace(tag);
+				case OptSpace(s), Line(s):
+					if (s.rtrim().length > 0) return false;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
 					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
 					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
@@ -620,8 +614,8 @@ final class DocMeasure {
 	 * other words, does `d` end on a dedented closing line that some following
 	 * token could legally ride?
 	 *
-	 * Sister of `endsWithCloseBrace`, which asks only about the LAST visible
-	 * character and cannot tell a one-line `{ a: 1 }` from a broken-open block.
+	 * Sister of `endsWithCloseBrace`, which asks only about the LAST visible leaf's tag and
+	 * cannot tell a one-line `{ a: 1 }` from a broken-open block.
 	 * The extra fact here is that the close was reached across a break, so the
 	 * answer is a property of the SHAPE, not of the final byte.
 	 *

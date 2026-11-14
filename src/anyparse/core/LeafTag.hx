@@ -50,8 +50,11 @@ enum EndEdge {
 	/** The end neither closes a run nor leaves one open (`(a`). */
 	Plain;
 
-	/** The last byte closes a delimited run: `)`, `]` or `}`. */
+	/** The last byte closes a delimited run other than a brace one: `)` or `]`. */
 	Closes;
+
+	/** The last byte closes a brace run: `}`. */
+	ClosesBrace;
 
 	/** The last non-blank byte opens a delimited run: `(`, `[` or `{`, as in `foo(` or `) {`. */
 	Opens;
@@ -95,10 +98,19 @@ class DelimiterLeaf {
 		};
 	}
 
+	/** Whether a leaf tagged `tag` ends on a closing brace. */
+	public static function closesBrace(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(_, ClosesBrace): true;
+			case _: false;
+		};
+	}
+
 	/** The end edge of a non-empty `s`, read once from its last byte and its last non-blank bytes. */
 	private static function endEdgeOf(s: String): EndEdge {
 		final last: Int = s.fastCodeAt(s.length - 1);
-		if (last == ')'.code || last == ']'.code || last == '}'.code) return Closes;
+		if (last == '}'.code) return ClosesBrace;
+		if (last == ')'.code || last == ']'.code) return Closes;
 		var i: Int = s.length - 1;
 		while (i >= 0 && s.fastCodeAt(i).isSpaceOrTab()) i--;
 		if (i < 0) return Plain;

@@ -22,7 +22,9 @@ class DelimiterLeafTest extends Test {
 		Assert.same(Delimiter(Paren, Opens), DelimiterLeaf.tagOf('('));
 		Assert.same(Delimiter(NoOpen, Closes), DelimiterLeaf.tagOf(')'));
 		Assert.same(Delimiter(Collection, Opens), DelimiterLeaf.tagOf('{'));
+		Assert.same(Delimiter(NoOpen, ClosesBrace), DelimiterLeaf.tagOf('}'));
 		Assert.same(Delimiter(EmptyCollection, Closes), DelimiterLeaf.tagOf('[]'));
+		Assert.same(Delimiter(EmptyCollection, ClosesBrace), DelimiterLeaf.tagOf('{}'));
 		Assert.same(Delimiter(Paren, Closes), DelimiterLeaf.tagOf('()'));
 		Assert.isNull(DelimiterLeaf.tagOf('a'));
 		Assert.isNull(DelimiterLeaf.tagOf(''));
@@ -47,6 +49,7 @@ class DelimiterLeafTest extends Test {
 		);
 		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(Paren, Opens))));
 		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(NoOpen, Closes))));
+		Assert.isTrue(tags.exists(t -> Type.enumEq(t, Delimiter(NoOpen, ClosesBrace))));
 		Assert.isFalse(tags.exists(t -> t == null));
 	}
 
