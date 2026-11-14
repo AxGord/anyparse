@@ -16847,6 +16847,14 @@
 			"find": " && SourceText.isBlankSpan(span, source)",
 			"replace": "",
 			"note": "an empty container is a filler whatever sits between its delimiters, so a block holding only a comment reads as trivial and a fix deletes the comment"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-NOOP-ARM-REFUSED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "cutsNothing",
+			"find": "find != replace && carried.find == (carried.replace ?? replace)",
+			"replace": "false",
+			"note": "a follow that leaves an arm's find equal to its replace is written, so the arm cuts nothing and the build breaks"
 		}
 	]
 }

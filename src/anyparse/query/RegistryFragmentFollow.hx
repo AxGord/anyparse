@@ -105,8 +105,13 @@ final class RegistryFragmentFollow {
 				notes.push('arm ${record.name}: no re-spelling of its cut applies to the rewritten source — re-aim it');
 				continue;
 			}
-			if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
 			final newReplace: Null<String> = carried.replace;
+			// An arm whose find equals its replace cuts nothing and breaks the build; naming it beats writing it.
+			if (cutsNothing(find.value, replace?.value, carried)) {
+				notes.push('arm ${record.name}: following the rewrite would leave its find equal to its replace — re-aim it by hand');
+				continue;
+			}
+			if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
 			if (replace != null && newReplace != null && newReplace != replace.value)
 				edits.push(TypePathRegistries.respell(replace, newReplace));
 		}
@@ -155,6 +160,11 @@ final class RegistryFragmentFollow {
 	/** The replace paired with `record`'s `i`-th find; none when the record's finds and replaces do not pair up. */
 	private static function replaceOf(record: MemberRecord, i: Int): Null<StringSlot> {
 		return record.replaces.length == record.finds.length ? record.replaces[i] : null;
+	}
+
+	/** Whether the carried spelling would turn an arm that cut something into one whose find equals its replace. */
+	private static function cutsNothing(find: String, replace: Null<String>, carried: Carried): Bool {
+		return replace != null && find != replace && carried.find == (carried.replace ?? replace);
 	}
 
 	/** Where a cut starting at `at` now starts: text the rewrite put at the boundary stays outside the cut. */
