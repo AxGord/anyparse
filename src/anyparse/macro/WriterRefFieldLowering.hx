@@ -105,11 +105,7 @@ final class WriterRefFieldLowering {
 	 * runtime expr (or null).
 	 */
 	private static function emitOptionalRefField(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
-		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, trailOptText: Null<String>, bodyPolicyFlag: Null<String>,
-		bodyPolicyExprFlag: Null<String>, hasElseIf: Bool, elseFieldName: Null<String>, prevBodyField: Null<PrevBodyInfo>,
-		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, prevTrailFieldName: Null<String>,
-		bareSep: Null<Expr>
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, node: ShapeNode, site: RefFieldSite, bareSep: Null<Expr>
 	): Null<Expr> {
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final writeFn: String = ctx.writeFnFor(refName);
@@ -120,15 +116,15 @@ final class WriterRefFieldLowering {
 		// `macro false` off-path (plain mode / non-dropSingleStmtBraces field).
 		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(ctx.braceSym, node, child);
 		final dropElseBraces: Bool = ctx.ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
-		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(ctx.braceSym, node, typePath) : macro false;
+		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(ctx.braceSym, node, site.typePath) : macro false;
 		// Gate 6: the else-body's own `;` slot is re-emitted (`pushStmtBodyTrailOpt`), so a set slot keeps the braces.
-		final elseTrailSemiExpr: Expr = structTrailOptAccess == null ? macro false : macro $structTrailOptAccess == true;
+		final elseTrailSemiExpr: Expr = site.structTrailOptAccess == null ? macro false : macro ${site.structTrailOptAccess} == true;
 		// ω-single-stmt-braces trailing-comment hoist for the else-body: same gate args as
 		// its `unwrapStmt` splice below (elseFollows=false, the slot's hasTrailingSemi, isThenBody=false)
 		// so the hoisted comment fires exactly when the de-brace does.
 		final elseTrailCommentExpr: Null<Expr> = dropElseBraces
 			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
-				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, $elseTrailSemiExpr,
+				${site.fieldAccess}, opt.dropSingleStmtBraces, opt._ssbSuppress, false, $elseTrailSemiExpr,
 				$thenSiblingKeepsExpr || $elseChainSuppressExpr, false
 			)
 			: null;
@@ -143,7 +139,7 @@ final class WriterRefFieldLowering {
 		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(
 			ctx, boolFlagArgs,
 			{ expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]), pos: Context.currentPos() },
-			typePath, child.fmtHasFlag('propagateExprPosition')
+			site.typePath, child.fmtHasFlag('propagateExprPosition')
 		);
 		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
 		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
@@ -151,7 +147,9 @@ final class WriterRefFieldLowering {
 		// `bodyPolicyWrap.indentObjArgs` channel instead.
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
 		final writeCall: Expr = foldSsbTrailingComment(
-			bodyPolicyFlag != null && indentObjArgs != null ? rawWriteCall : maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child),
+			site.bodyPolicyFlag != null && indentObjArgs != null
+				? rawWriteCall
+				: maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child),
 			elseTrailCommentExpr
 		);
 		// Leading separator is runtime-conditional when @:fmt(sameLine(...)) is
@@ -161,39 +159,32 @@ final class WriterRefFieldLowering {
 		// emitOptionalKwBody.
 		final optParts: Array<Expr> = [];
 		// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
-		if (kwLead != null) {
-			emitOptionalKwBody(
-				ctx, child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
-				prevBodyField, typePath, prevPadTrailing, indentObjArgs
-			);
-			if (dropElseBraces) pushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);
-		} else if (leadText != null) {
+		if (site.kwLead != null) {
+			emitOptionalKwBody(ctx, child, optParts, site.kwLead, writeCall, refName, indentObjArgs, site);
+			if (dropElseBraces) pushStmtBodyTrailOpt(optParts, site.trailOptText, site.structTrailOptAccess);
+		} else if (site.leadText != null) {
 			// ω-before-lead: the block comment the source wrote just before the
 			// lead literal (`var x /* c */ = 1`), re-emitted ahead of the lead's own
 			// separator so it stays where the author put it.
-			final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, child == node.children[0], fieldAccess, typePath);
+			final beforeLead: Null<Expr> = beforeLeadSlotAccess(ctx, child, child == node.children[0], site.fieldAccess, site.typePath);
 			if (beforeLead != null) optParts.push(beforeLeadDoc(beforeLead));
 			emitOptionalRefLead(
-				ctx, child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
-				hasStructFieldTrailOptSlot, structTrailOptAccess, afterLeadSlotAccess(ctx, child, fieldAccess, typePath)
+				ctx, child, optParts, site.leadText, writeCall, afterLeadSlotAccess(ctx, child, site.fieldAccess, site.typePath), site
 			);
-		} else if (bodyPolicyFlag != null) {
-			emitOptionalBodyPolicyOnly(
-				ctx, child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
-				prevTrailFieldName, typePath, fieldName
-			);
+		} else if (site.bodyPolicyFlag != null) {
+			emitOptionalBodyPolicyOnly(ctx, child, optParts, site.bodyPolicyFlag, writeCall, refName, indentObjArgs, site);
 			// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.
-			pushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);
+			pushStmtBodyTrailOpt(optParts, site.trailOptText, site.structTrailOptAccess);
 		} else {
 			emitOptionalAbsentOnBody(ctx, child, optParts, refName, writeCall, bareSep);
 		}
 		// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)` pushes a trailing
 		// space INSIDE optParts so the pad is emitted only when `_optVal != null`;
-		// the tracker expr `$fieldAccess != null` matches that runtime presence
+		// the tracker expr `${site.fieldAccess} != null` matches that runtime presence
 		// guard one-to-one. First consumer: `HxConditionalExpr.elseExpr`.
 		final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing') ? {
-			optParts.push(padTrailingDoc(ctx.fieldSep, node, child, typePath));
-			macro $fieldAccess != null;
+			optParts.push(padTrailingDoc(ctx.fieldSep, node, child, site.typePath));
+			macro ${site.fieldAccess} != null;
 		} : null;
 		final optBody: Expr = optParts.length == 1 ? optParts[0] : dcCall(optParts);
 		// ω-single-stmt-braces: an optional body field carrying
@@ -208,10 +199,10 @@ final class WriterRefFieldLowering {
 		// splice: `else { x; };` keeps its braces rather than become `else x;;`.
 		// ω-single-stmt-braces symmetry (gate 7): an else-body must keep its braces whenever
 		// the sibling then-body keeps its own (see buildThenSiblingKeepsProbe).
-		final adoptKwLeading: Expr = adoptKwHeadGapComments(fieldAccess, fieldName, kwLead);
+		final adoptKwLeading: Expr = adoptKwHeadGapComments(site.fieldAccess, site.fieldName, site.kwLead);
 		final optValInit: Expr = dropElseBraces
 			? macro {
-				var _sv = $fieldAccess;
+				var _sv = ${site.fieldAccess};
 				if (_sv != null)
 					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
 						_sv, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, false, $elseTrailSemiExpr,
@@ -220,7 +211,7 @@ final class WriterRefFieldLowering {
 				$adoptKwLeading;
 				_sv;
 			}
-			: valueWrapAdopting(ctx.braceSym, child, fieldAccess, adoptKwLeading);
+			: valueWrapAdopting(ctx.braceSym, child, site.fieldAccess, adoptKwLeading);
 		parts.push(macro {
 			final _optVal = $optValInit;
 			if (_optVal != null)
@@ -239,9 +230,8 @@ final class WriterRefFieldLowering {
 	 *
 	 */
 	private static function emitOptionalRefLead(
-		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, leadText: String, writeCall: Expr, prevBodyField: Null<PrevBodyInfo>,
-		typePath: String, prevPadTrailing: Null<Expr>, trailText: Null<String>, trailOptText: Null<String>,
-		hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, afterLead: Null<Expr>
+		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, leadText: String, writeCall: Expr, afterLead: Null<Expr>,
+		site: RefFieldSite
 	): Void {
 		// ω-N-break-after-eq: when the meta-gated helper bundles the
 		// lead + RHS together (via the natural-first-line probe), the
@@ -281,7 +271,7 @@ final class WriterRefFieldLowering {
 			// no `@:fmt(sameLine(...))` companion.
 			optParts.push(whitespacePolicyLead(child, leadText, 'typeParamDefaultEquals'));
 		} else {
-			optParts.push(sameLineSeparator(ctx.fieldSep, child, prevBodyField, typePath, prevPadTrailing));
+			optParts.push(sameLineSeparator(ctx.fieldSep, child, site.prevBodyField, site.typePath, site.prevPadTrailing));
 			// ω-N-break-after-eq: `@:fmt(breakAfterLeadOnOverflow('type'))`
 			// (today: `HxVarDecl.init`) bundles the lead + RHS through
 			// the natural-first-line probe so the `=`-break only fires
@@ -327,8 +317,8 @@ final class WriterRefFieldLowering {
 		// below). First consumer: `HxAbstractDecl.
 		// underlyingType` (`(T)` group) for the bare-abstract
 		// shape.
-		if (trailText != null)
-			optParts.push(macro _dt($v{trailText}));
+		if (site.trailText != null)
+			optParts.push(macro _dt($v{site.trailText}));
 		// ω-struct-trailopt-source-track:
 		// optional Ref + kw/lead + `@:trailOpt(LIT)` lands here
 		// as a parallel push (`trailText` covers `@:trail`,
@@ -343,8 +333,8 @@ final class WriterRefFieldLowering {
 		// paired upcasts from `Converters.rawToPaired_*`; the
 		// `==false` test degrades safely there — null falls
 		// through to canonical emit.
-		else if (hasStructFieldTrailOptSlot && trailOptText != null)
-			optParts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+		else if (site.hasStructFieldTrailOptSlot && site.trailOptText != null)
+			optParts.push(macro ${site.structTrailOptAccess} == false ? _de() : _dt($v{site.trailOptText}));
 	}
 
 	/**
@@ -414,9 +404,8 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function emitOptionalKwBody(
-		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, kwLead: String, fieldName: String, bodyPolicyFlag: Null<String>,
-		bodyPolicyExprFlag: Null<String>, writeCall: Expr, refName: String, hasElseIf: Bool, elseFieldName: Null<String>,
-		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, indentObjArgs: Null<Array<String>>
+		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, kwLead: String, writeCall: Expr, refName: String,
+		indentObjArgs: Null<Array<String>>, site: RefFieldSite
 	): Void {
 		// ω-issue-316: in Trivia mode, `@:optional @:kw(...)` Ref
 		// children grow per-parent sibling slots `<field>AfterKw`
@@ -428,25 +417,25 @@ final class WriterRefFieldLowering {
 		// A body the brace-symmetry wrap braced holds both comment slots inside its braces instead.
 		final afterKwExpr: Null<Expr> = useTriviaGap
 			? headGapCommentsOutside(
-				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), macro _optVal,
-				valueFieldAccess(fieldName), true
+				ctx.braceSym, child, valueFieldAccess(site.fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), macro _optVal,
+				valueFieldAccess(site.fieldName), true
 			)
 			: null;
 		final kwLeadingExpr: Null<Expr> = useTriviaGap
 			? headGapCommentsOutside(
-				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), macro _optVal,
-				valueFieldAccess(fieldName), false
+				ctx.braceSym, child, valueFieldAccess(site.fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), macro _optVal,
+				valueFieldAccess(site.fieldName), false
 			)
 			: null;
 		// `<field>BodyOnSameLine:Bool`: read by the `nestBodyOnSourceNewline` branch below.
 		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap
-			? { expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX), pos: Context.currentPos() }
+			? { expr: EField(macro value, site.fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX), pos: Context.currentPos() }
 			: null;
 		final sepWithBeforeKwTrailingExpr: Expr = beforeKwSeparator(
-			ctx.fieldSep, useTriviaGap, fieldName, child, prevBodyField, typePath, prevPadTrailing
+			ctx.fieldSep, useTriviaGap, site.fieldName, child, site.prevBodyField, site.typePath, site.prevPadTrailing
 		);
 		optParts.push(sepWithBeforeKwTrailingExpr);
-		if (bodyPolicyFlag != null) {
+		if (site.bodyPolicyFlag != null) {
 			optParts.push(macro _dt($v{kwLead}));
 			// ω-expression-if-with-blocks: sister read of
 			// `@:fmt(inlineBlockBodyIfFlag(...))` on optional-kw
@@ -457,13 +446,13 @@ final class WriterRefFieldLowering {
 			// time before policy dispatch.
 			final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 			optParts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
-				flagName: bodyPolicyFlag,
-				exprFlagName: bodyPolicyExprFlag,
+				flagName: site.bodyPolicyFlag,
+				exprFlagName: site.bodyPolicyExprFlag,
 				writeCall: writeCall,
 				bodyValueExpr: macro _optVal,
 				bodyTypePath: refName,
-				hasElseIf: hasElseIf,
-				elseFieldName: elseFieldName,
+				hasElseIf: site.hasElseIf,
+				elseFieldName: site.elseFieldName,
 				afterKwExpr: afterKwExpr,
 				kwLeadingExpr: kwLeadingExpr,
 				indentObjArgs: indentObjArgs,
@@ -474,7 +463,7 @@ final class WriterRefFieldLowering {
 				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
 				ifElseLadder: child.fmtHasFlag('ifElseLadder'),
 				exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
-				ladderElseFieldName: fieldName,
+				ladderElseFieldName: site.fieldName,
 				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
@@ -505,9 +494,8 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function emitOptionalBodyPolicyOnly(
-		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>,
-		writeCall: Expr, refName: String, hasElseIf: Bool, elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>,
-		prevTrailFieldName: Null<String>, typePath: String, fieldName: String
+		ctx: RefFieldCtx, child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, writeCall: Expr, refName: String,
+		indentObjArgs: Null<Array<String>>, site: RefFieldSite
 	): Void {
 		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
 		// Head -> body seam, mirror of the mandatory-Ref path in
@@ -517,22 +505,24 @@ final class WriterRefFieldLowering {
 		// the `@:optional` twin of `HxIfStmt.thenBody`, so without this the
 		// comment in `} catch (e:T) // c` + newline `{` was captured and
 		// then silently dropped.
-		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
+		final afterTrailExpr: Null<Expr> = site.prevTrailFieldName == null
 			? null
-			: { expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos() };
+			: { expr: EField(macro value, site.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), pos: Context.currentPos() };
 		// The own-line run between the head and a present body: the `<field>BeforeLeading` slot a
 		// `@:fmt(bareRefSepWhenPresent)` field grows (`TriviaPairSlots.isBareNonFirstRef`).
-		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && child.fmtHasFlag('bareRefSepWhenPresent') && ctx.isTriviaBearing(typePath)
-			? beforeLeadingAccess(fieldName)
+		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia
+			&& child.fmtHasFlag('bareRefSepWhenPresent')
+			&& ctx.isTriviaBearing(site.typePath)
+			? beforeLeadingAccess(site.fieldName)
 			: null;
 		optParts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
 			flagName: bodyPolicyFlag,
-			exprFlagName: bodyPolicyExprFlag,
+			exprFlagName: site.bodyPolicyExprFlag,
 			writeCall: writeCall,
 			bodyValueExpr: macro _optVal,
 			bodyTypePath: refName,
-			hasElseIf: hasElseIf,
-			elseFieldName: elseFieldName,
+			hasElseIf: site.hasElseIf,
+			elseFieldName: site.elseFieldName,
 			afterTrailExpr: afterTrailExpr,
 			beforeLeadingExpr: beforeLeadingExpr,
 			indentObjArgs: indentObjArgs,
@@ -612,10 +602,8 @@ final class WriterRefFieldLowering {
 	 * early-continue before this block).
 	 */
 	private static function finalizeNonStarField(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
-		isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool, hasCondWrapEnd: Bool,
-		hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, thisPadTrailing: Null<Expr>, prevPadTrailing: Null<Expr>,
-		justWrappedBody: Null<PrevBodyInfo>, spanInfo: Null<{
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, node: ShapeNode, site: RefFieldSite, thisPadTrailing: Null<Expr>,
+		prevPadTrailing: Null<Expr>, justWrappedBody: Null<PrevBodyInfo>, spanInfo: Null<{
 			startIdx: Int,
 			endIdx: Int,
 			leadText: String,
@@ -624,32 +612,31 @@ final class WriterRefFieldLowering {
 		}>,
 		spanStartPartsIdx: Int
 	): { prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, prevTrailFieldName: Null<String> } {
-		emitMandatoryRefTrail(
-			ctx, child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
-			structTrailOptAccess, fieldAccess, typePath
-		);
+		emitMandatoryRefTrail(ctx, child, parts, site);
 		// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory Ref
 		// always fires, so push a trailing space unconditionally and set the
 		// tracker to a constant `true`. (Optional-Ref padTrailing was pushed
 		// inside the optParts wrap; Star fields early-continue.)
-		final thisPad: Null<Expr> = if (!isOptional && child.fmtHasFlag('padTrailing')) {
-			parts.push(padTrailingDoc(ctx.fieldSep, node, child, typePath));
+		final thisPad: Null<Expr> = if (!site.isOptional && child.fmtHasFlag('padTrailing')) {
+			parts.push(padTrailingDoc(ctx.fieldSep, node, child, site.typePath));
 			macro true;
 		} else {
 			thisPadTrailing;
 		};
 		// `thisTransparent` is null for mandatory bare Ref (always emits visible
-		// content), `$fieldAccess == null` for optional Ref (transparent when
+		// content), `${site.fieldAccess} == null` for optional Ref (transparent when
 		// absent — lets a prev pad signal propagate across an absent middle field).
-		final thisTransparent: Null<Expr> = isOptional ? (macro $fieldAccess == null) : null;
+		final thisTransparent: Null<Expr> = site.isOptional ? (macro ${site.fieldAccess} == null) : null;
 		// ω-trivia-after-trail: a mandatory Ref with `@:trail` in trivia-bearing
 		// mode publishes its name so the NEXT field's `bodyPolicyWrap` can read
 		// `value.<name>AfterTrail`. Optional Refs with `@:lead + @:trail`
 		// also publish (mirror of the parser-side `hasAfterTrailSlot` extension).
-		final newPrevTrailFieldName: Null<String> = trailText != null && ctx.ctx.trivia && ctx.isTriviaBearing(typePath) ? fieldName : null;
+		final newPrevTrailFieldName: Null<String> = site.trailText != null && ctx.ctx.trivia && ctx.isTriviaBearing(site.typePath)
+			? site.fieldName
+			: null;
 		// ω-condwrap-forstmt: end of span-mode iteration — splice the accumulated
 		// cond-span Doc parts into a single `WrapList.emitCondition`.
-		if (hasCondWrapEnd && spanInfo != null)
+		if (site.hasCondWrapEnd && spanInfo != null)
 			spliceCondWrapEnd(parts, spanStartPartsIdx, spanInfo.knob, spanInfo.leadText, spanInfo.trailText);
 		return {
 			prevBodyField: justWrappedBody,
@@ -666,11 +653,7 @@ final class WriterRefFieldLowering {
 	 * -> `_de()`, else emit). Both are skipped inside a condWrap span. Pushes into
 	 * `parts`.
 	 */
-	private static function emitMandatoryRefTrail(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>,
-		hasCondWrap: Bool, hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, fieldAccess: Expr,
-		typePath: String
-	): Void {
+	private static function emitMandatoryRefTrail(ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, site: RefFieldSite): Void {
 		// ω-before-trail: a BLOCK comment the source wrote between this field's
 		// last token and the trail literal (`switch (subject /* c *\/)`). Emitted
 		// BEFORE the trail dispatch below so it also survives the
@@ -679,9 +662,9 @@ final class WriterRefFieldLowering {
 		// field does not emit its trail here at all — `emitCondWrapSingleRef`
 		// owns both parens, so it appends the comment to the condition Doc
 		// itself; emitting here too would print it twice.
-		final beforeTrailAccess: Null<Expr> = hasCondWrap || hasCondWrapEnd
+		final beforeTrailAccess: Null<Expr> = site.hasCondWrap || site.hasCondWrapEnd
 			? null
-			: beforeTrailSlotAccess(ctx, child, fieldAccess, isOptional, trailText, typePath);
+			: beforeTrailSlotAccess(ctx, child, site.fieldAccess, site.isOptional, site.trailText, site.typePath);
 		if (beforeTrailAccess != null) parts.push(macro {
 			final _bt: Null<String> = $beforeTrailAccess;
 			_bt == null ? _de() : trailingCommentDocVerbatim(_bt, opt);
@@ -690,8 +673,8 @@ final class WriterRefFieldLowering {
 		// a mandatory-Ref `@:trail(')')` field routes the close literal
 		// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
 		// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
-		if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd) {
-			final trailDoc: Expr = whitespacePolicyTrail(child, trailText, [
+		if (!site.isOptional && site.trailText != null && !site.hasCondWrap && !site.hasCondWrapEnd) {
+			final trailDoc: Expr = whitespacePolicyTrail(child, site.trailText, [
 				'catchParensInsideClose',
 				'switchCondParensInsideClose',
 				'whileCondParensInsideClose'
@@ -700,7 +683,7 @@ final class WriterRefFieldLowering {
 			// same condition as the open `(` (see switchParensStripCond); nothing
 			// replaces it — the cases block `{` follows directly.
 			if (child.fmtHasFlag('switchSubjectParensStrip')) {
-				final cond: Expr = switchParensStripCond(fieldAccess);
+				final cond: Expr = switchParensStripCond(site.fieldAccess);
 				parts.push(macro $cond ? _de() : $trailDoc);
 			} else {
 				parts.push(trailDoc);
@@ -718,14 +701,15 @@ final class WriterRefFieldLowering {
 		// falls through to canonical emit via the `==false` test.
 		// A field whose braces may be dropped (`@:fmt(dropSingleStmtBraces)`) keeps the
 		// source's `;` glued to its body - see `pushStmtBodyTrailOpt`.
-		if (!hasStructFieldTrailOptSlot || isOptional || hasCondWrap || hasCondWrapEnd || trailOptText == null) return;
+		if (!site.hasStructFieldTrailOptSlot || site.isOptional || site.hasCondWrap || site.hasCondWrapEnd || site.trailOptText == null)
+			return;
 		if (child.fmtHasFlag('dropSingleStmtBraces')) {
-			pushStmtBodyTrailOpt(parts, trailOptText, structTrailOptAccess);
+			pushStmtBodyTrailOpt(parts, site.trailOptText, site.structTrailOptAccess);
 			return;
 		}
-		final sourcePresent: Expr = macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText});
-		final emit: Expr = semicolonBeforeSiblingWrap(ctx, child, trailOptText, fieldAccess, sourcePresent) ?? sourcePresent;
-		parts.push(valueBraceSymmetryTrailDrop(ctx.braceSym, child, fieldAccess, emit));
+		final sourcePresent: Expr = macro ${site.structTrailOptAccess} == false ? _de() : _dt($v{site.trailOptText});
+		final emit: Expr = semicolonBeforeSiblingWrap(ctx, child, site.trailOptText, site.fieldAccess, sourcePresent) ?? sourcePresent;
+		parts.push(valueBraceSymmetryTrailDrop(ctx.braceSym, child, site.fieldAccess, emit));
 	}
 
 	/**
@@ -819,11 +803,7 @@ final class WriterRefFieldLowering {
 	 * the `prevBareRefBody` tracker.
 	 */
 	private static function emitMandatoryRefField(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, typePath: String, fieldAccess: Expr, fieldName: String,
-		bodyPolicyFlag: Null<String>, bodyPolicyExprFlag: Null<String>, kwLead: Null<String>, leadText: Null<String>, isRaw: Bool,
-		isFirstField: Bool, hasElseIf: Bool, elseFieldName: Null<String>, fallbackFlag: Null<String>, hasCondWrap: Bool,
-		condWrapArgs: Null<Array<String>>, spanInfoPresent: Bool, trailText: Null<String>, prevTrailFieldName: Null<String>,
-		prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>, condFitGroup: Bool
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, site: RefFieldSite
 	): { justWrappedBody: Null<PrevBodyInfo>, prevBareRefBody: PrevBodyInfo } {
 		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final writeFn: String = ctx.writeFnFor(refName);
@@ -831,42 +811,41 @@ final class WriterRefFieldLowering {
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
 		// Only an if-then body (statement or value) is ever wrapped, and only a non-first bare Ref grows the
 		// head-gap slots: the prior field's after-trail comment and this field's own-line run.
-		final wrapsWithHeadGap: Bool = ctx.ctx.trivia && (elseFieldName != null || valueMirrors(child)) && !isFirstField;
-		final deBraced = deBraceBodyAccess(ctx.braceSym, child, fieldAccess, elseFieldName, typePath, {
-			sameLine: wrapsWithHeadGap && prevTrailFieldName != null
-				? valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX)
+		final wrapsWithHeadGap: Bool = ctx.ctx.trivia && (site.elseFieldName != null || valueMirrors(child)) && !site.isFirstField;
+		final deBraced = deBraceBodyAccess(ctx.braceSym, child, site.fieldAccess, site.elseFieldName, site.typePath, {
+			sameLine: wrapsWithHeadGap && site.prevTrailFieldName != null
+				? valueFieldAccess(site.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX)
 				: null,
-			ownLines: wrapsWithHeadGap ? beforeLeadingAccess(fieldName) : null
+			ownLines: wrapsWithHeadGap ? beforeLeadingAccess(site.fieldName) : null
 		});
 		final effAccess: Expr = deBraced.effAccess;
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
 		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;
 		final writeCall: Expr = buildMandatoryRefWriteCall(
-			ctx, child, effAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs, followsToken(isFirstField, kwLead, leadText),
-			ssbSuppressCond
+			ctx, child, effAccess, site.typePath, writeFn, site.bodyPolicyFlag, indentObjArgs,
+			followsToken(site.isFirstField, site.kwLead, site.leadText), ssbSuppressCond
 		);
 		// bodyPolicy on a first field: the parent enum-branch Case 3 strips its
 		// kwLead trailing space so the separator here is the sole transition
 		// token. Non-first-field case (HxIfStmt.thenBody after cond's `)` trail):
 		// the trail emits the token literally and bodyPolicyWrap replaces the
 		// default ` ` separator.
-		final justWrappedBody: Null<PrevBodyInfo> = if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
+		final justWrappedBody: Null<PrevBodyInfo> = if (
+			site.bodyPolicyFlag != null && site.kwLead == null && site.leadText == null && !site.isRaw
+		) {
 			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 			emitBodyPolicyBareRef(
-				ctx, child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, effAccess,
-				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup, ssbTrailCommentExpr
+				ctx, child, parts, site.bodyPolicyFlag, writeCall, effAccess, refName, indentObjArgs, ssbTrailCommentExpr, site
 			);
 		} else {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
 			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
 			// dispatch lives in emitBareRefNonBodyPolicy.
 			final headGap: Null<HeadGapSlots> = bareBodyHeadGap(
-				ctx, child, typePath, fieldName, isFirstField, kwLead == null && leadText == null && !isRaw, prevTrailFieldName
+				ctx, child, site.typePath, site.fieldName, site.isFirstField, site.kwLead == null && site.leadText == null && !site.isRaw,
+				site.prevTrailFieldName
 			);
-			emitBareRefNonBodyPolicy(
-				ctx, child, parts, refName, fieldName, typePath, effAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
-				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing, headGap
-			);
+			emitBareRefNonBodyPolicy(ctx, child, parts, refName, effAccess, writeCall, headGap, site);
 			null;
 		};
 		// ω-close-trailing-alt / ω-block-shape-aware: track ANY bare-Ref body so
@@ -885,10 +864,8 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function emitBodyPolicyBareRef(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, prevTrailFieldName: Null<String>, isFirstField: Bool, fieldName: String,
-		bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr, fieldAccess: Expr, refName: String, hasElseIf: Bool,
-		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>, condFitGroup: Bool,
-		ssbTrailCommentExpr: Null<Expr>
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, bodyPolicyFlag: String, writeCall: Expr, fieldAccess: Expr,
+		refName: String, indentObjArgs: Null<Array<String>>, ssbTrailCommentExpr: Null<Expr>, site: RefFieldSite
 	): PrevBodyInfo {
 		final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
 		// ω-trivia-after-trail: when the IMMEDIATELY preceding
@@ -902,11 +879,11 @@ final class WriterRefFieldLowering {
 		// fired by `HxIfStmt.thenBody` after `cond`'s `)`
 		// trail. Plain mode and non-bearing rules see a null
 		// `prevTrailFieldName` and skip the threading.
-		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
+		final afterTrailExpr: Null<Expr> = site.prevTrailFieldName == null
 			? null
 			: headGapCommentsOutside(
-				ctx.braceSym, child, valueFieldAccess(prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), fieldAccess,
-				valueFieldAccess(fieldName), true
+				ctx.braceSym, child, valueFieldAccess(site.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX), fieldAccess,
+				valueFieldAccess(site.fieldName), true
 			);
 		// ω-556-then-body-leading-comment: the bare non-first Ref
 		// body grows a `<field>BeforeLeading:Array<String>` slot
@@ -922,11 +899,13 @@ final class WriterRefFieldLowering {
 		// byte-inert. `@:fmt(beforeNewlineSlotFirst)` extends the
 		// slot to a first-field body (`HxTryCatchStmt.body`), pairing
 		// with the parent Alt-branch `@:fmt(forwardNewlineForBody)`.
-		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
+		final firstFieldNlOptIn: Bool = site.isFirstField && child.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
 		// ω-556-then-body-leading-comment: own-line leading-comment
 		// slot (the BeforeNewline sibling shares the `isBareNonFirstRef` host).
-		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && (!isFirstField || firstFieldNlOptIn)
-			? headGapCommentsOutside(ctx.braceSym, child, beforeLeadingAccess(fieldName), fieldAccess, valueFieldAccess(fieldName), false)
+		final beforeLeadingExpr: Null<Expr> = ctx.ctx.trivia && (!site.isFirstField || firstFieldNlOptIn)
+			? headGapCommentsOutside(
+				ctx.braceSym, child, beforeLeadingAccess(site.fieldName), fieldAccess, valueFieldAccess(site.fieldName), false
+			)
 			: null;
 		// ω-untyped-body-stmt-override: forward all
 		// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
@@ -940,17 +919,17 @@ final class WriterRefFieldLowering {
 		final policyOverrides: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
 		// A first field after its ctor's keyword (`do`) carries the kw-trivia slots an `else` body does, and
 		// hands them to the wrap the same way (`emitOptionalKwBody`).
-		final ctorKwGap: Bool = ctx.ctx.trivia && TriviaPairSlots.isCtorKwBodyRef(child, isFirstField);
+		final ctorKwGap: Bool = ctx.ctx.trivia && TriviaPairSlots.isCtorKwBodyRef(child, site.isFirstField);
 		final afterKwExpr: Null<Expr> = ctorKwGap
 			? headGapCommentsOutside(
-				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), fieldAccess,
-				valueFieldAccess(fieldName), true
+				ctx.braceSym, child, valueFieldAccess(site.fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX), fieldAccess,
+				valueFieldAccess(site.fieldName), true
 			)
 			: null;
 		final kwLeadingExpr: Null<Expr> = ctorKwGap
 			? headGapCommentsOutside(
-				ctx.braceSym, child, valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), fieldAccess,
-				valueFieldAccess(fieldName), false
+				ctx.braceSym, child, valueFieldAccess(site.fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX), fieldAccess,
+				valueFieldAccess(site.fieldName), false
 			)
 			: null;
 		// ω-issue-168: `@:fmt(bodyAllmanIndentForCtor('<ctor>',
@@ -993,12 +972,12 @@ final class WriterRefFieldLowering {
 		final elseSwitchArgs: Null<Array<String>> = child.fmtReadStringArgs('elseSwitch');
 		parts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
 			flagName: bodyPolicyFlag,
-			exprFlagName: bodyPolicyExprFlag,
+			exprFlagName: site.bodyPolicyExprFlag,
 			writeCall: writeCall,
 			bodyValueExpr: fieldAccess,
 			bodyTypePath: refName,
-			hasElseIf: hasElseIf,
-			elseFieldName: elseFieldName,
+			hasElseIf: site.hasElseIf,
+			elseFieldName: site.elseFieldName,
 			kwPolicyFlagName: kwPolicyFlag,
 			afterTrailExpr: afterTrailExpr,
 			beforeLeadingExpr: beforeLeadingExpr,
@@ -1007,11 +986,11 @@ final class WriterRefFieldLowering {
 			indentObjArgs: indentObjArgs,
 			policyOverrides: policyOverrides,
 			bodyAllmanIndentArgs: bodyAllmanIndentArgs,
-			fallbackFlagName: fallbackFlag,
+			fallbackFlagName: site.fallbackFlag,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 			strictFitLineArgs: child.fmtReadStringArgs(WriterLowering.STRICT_FIT_LINE_BODY),
 			bracketBodyGlueArgs: child.fmtReadStringArgs(WriterLowering.BRACKET_BODY_GLUE),
-			condFitGroup: condFitGroup,
+			condFitGroup: site.condFitGroup,
 			constructFitBody: child.fmtHasFlag('constructFitBody'),
 			ssbTrailCommentExpr: ssbTrailCommentExpr,
 			arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
@@ -1019,7 +998,7 @@ final class WriterRefFieldLowering {
 			elseSwitchArgs: elseSwitchArgs,
 			ifElseLadder: child.fmtHasFlag('ifElseLadder'),
 			exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
-			ladderElseFieldName: elseFieldName
+			ladderElseFieldName: site.elseFieldName
 		}));
 		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
 		// from HERE, where the field's own meta and its own comment slots are in
@@ -1050,10 +1029,8 @@ final class WriterRefFieldLowering {
 	 * default bare writeCall. Pushes into `parts`.
 	 */
 	private static function emitBareRefNonBodyPolicy(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr,
-		writeCall: Expr, isFirstField: Bool, isRaw: Bool, kwLead: Null<String>, leadText: Null<String>, hasCondWrap: Bool,
-		condWrapArgs: Null<Array<String>>, spanInfoPresent: Bool, trailText: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
-		prevPadTrailing: Null<Expr>, headGap: Null<HeadGapSlots>
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, refName: String, fieldAccess: Expr, writeCall: Expr,
+		headGap: Null<HeadGapSlots>, site: RefFieldSite
 	): Void {
 		// `@:fmt(leftCurly)` on a bare Ref field (e.g.
 		// `HxFnDecl.body:HxFnBody`) routes the inter-field
@@ -1072,7 +1049,7 @@ final class WriterRefFieldLowering {
 		final lcCtor: Null<String> = lcCtors.length == 0 ? null : lcCtors[0];
 		final bodyBreakFlag: Null<String> = child.fmtReadString('bodyBreak');
 		final bareBodyBreaksFlag: Bool = child.fmtHasFlag('bareBodyBreaks');
-		final noLeadNoRaw: Bool = kwLead == null && leadText == null && !isRaw;
+		final noLeadNoRaw: Bool = site.kwLead == null && site.leadText == null && !site.isRaw;
 		if (lcSep != null && lcCtor != null) {
 			// Sibling no-lead branches (e.g. `HxFnBody.ExprBody`) need a
 			// ` ` separator between the parent kw and the sub-rule's
@@ -1091,7 +1068,8 @@ final class WriterRefFieldLowering {
 			// per-sibling separator decision lives at the parent here
 			// because only the parent knows the runtime ctor.
 			emitLeftCurlyBody(
-				ctx, child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, kwLead, leadText, lcSep, lcCtors
+				ctx, child, parts, refName, site.fieldName, site.typePath, fieldAccess, writeCall, site.isFirstField, site.kwLead,
+				site.leadText, lcSep, lcCtors
 			);
 			// (bodyPolicyForCtor ternary chain + metaBlockGlue descent live in emitLeftCurlyBody)
 		} else if (bodyBreakFlag != null && noLeadNoRaw) {
@@ -1122,11 +1100,13 @@ final class WriterRefFieldLowering {
 			parts.push(bareBodyBreakWrap(
 				ctx, writeCall, fieldAccess, refName, child.fmtReadString('bareBodyBreaks'), child.fmtHasFlag('constructFitBody'), headGap
 			));
-		} else if (noLeadNoRaw && !isFirstField) {
+		} else if (noLeadNoRaw && !site.isFirstField) {
 			// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
 			// ω-issue-48-v2 sep cascade — see emitBareRefNonFirstBody.
-			emitBareRefNonFirstBody(ctx, child, parts, fieldName, typePath, fieldAccess, writeCall, prevAnyStarNonEmpty, prevPadTrailing);
-		} else if (hasCondWrap && spanInfoPresent) {
+			emitBareRefNonFirstBody(
+				ctx, child, parts, site.fieldName, site.typePath, fieldAccess, writeCall, site.prevAnyStarNonEmpty, site.prevPadTrailing
+			);
+		} else if (site.hasCondWrap && site.spanInfoPresent) {
 			// ω-condwrap-forstmt: span mode — defer the
 			// `emitCondition` wrap to the end-field
 			// iteration. Push writeCall directly so
@@ -1138,10 +1118,12 @@ final class WriterRefFieldLowering {
 			// splice block) so the inner writeCalls see
 			// the overridden cascade.
 			parts.push(writeCall);
-		} else if (hasCondWrap) {
+		} else if (site.hasCondWrap) {
 			// ω-condition-wrap-wiring / ω-chain-fillline-in-condwrap: single-Ref condWrap
 			// emit — see emitCondWrapSingleRef.
-			emitCondWrapSingleRef(ctx, child, parts, condWrapArgs, typePath, fieldName, leadText, trailText, writeCall);
+			emitCondWrapSingleRef(
+				ctx, child, parts, site.condWrapArgs, site.typePath, site.fieldName, site.leadText, site.trailText, writeCall
+			);
 			// (condParensInside / ω-condition-wrap-keep detail lives in emitCondWrapSingleRef)
 		} else if (child.fmtHasFlag('arrowBodyLineWrap')) {
 			// ω-arrow-body-line-wrap: when the line containing
@@ -2065,4 +2047,37 @@ typedef RefFieldCtx = {
  * prior field's closer (`Null<String>`, `null` when none) and the own-line run before the body (`Array<String>`).
  */
 typedef HeadGapSlots = { final afterTrail: Expr; final beforeLeading: Expr; }
+/**
+ * The one answer to "what does `lowerStruct` know about the Ref field it hands to the Ref writer": the field's
+ * name, access and literals, its `@:fmt` reads and the trackers of the fields before it, built once per field and
+ * read by every Ref emitter, so a new per-field input is one field here, its value in `lowerStruct` and its reader.
+ */
+typedef RefFieldSite = {
+	final typePath: String;
+	final fieldName: String;
+	final fieldAccess: Expr;
+	final isOptional: Bool;
+	final isRaw: Bool;
+	final isFirstField: Bool;
+	final kwLead: Null<String>;
+	final leadText: Null<String>;
+	final trailText: Null<String>;
+	final trailOptText: Null<String>;
+	final bodyPolicyFlag: Null<String>;
+	final bodyPolicyExprFlag: Null<String>;
+	final hasElseIf: Bool;
+	final elseFieldName: Null<String>;
+	final fallbackFlag: Null<String>;
+	final hasCondWrap: Bool;
+	final hasCondWrapEnd: Bool;
+	final condWrapArgs: Null<Array<String>>;
+	final spanInfoPresent: Bool;
+	final condFitGroup: Bool;
+	final hasStructFieldTrailOptSlot: Bool;
+	final structTrailOptAccess: Null<Expr>;
+	final prevBodyField: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
+	final prevAnyStarNonEmpty: Null<Expr>;
+	final prevPadTrailing: Null<Expr>;
+}
 #end

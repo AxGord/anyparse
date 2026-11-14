@@ -1216,6 +1216,34 @@ class WriterLowering {
 			// Star. Only the `condFitGroup` half of the consumer's treatment is shared.
 			final inConstructFitGroup: Bool = constructFitArgs != null && fieldName == constructFitArgs[0];
 			var justWrappedBody: Null<PrevBodyInfo> = null;
+			final site: WriterRefFieldLowering.RefFieldSite = {
+				typePath: typePath,
+				fieldName: fieldName,
+				fieldAccess: fieldAccess,
+				isOptional: isOptional,
+				isRaw: isRaw,
+				isFirstField: isFirstField,
+				kwLead: kwLead,
+				leadText: leadText,
+				trailText: trailText,
+				trailOptText: trailOptText,
+				bodyPolicyFlag: bodyPolicyFlag,
+				bodyPolicyExprFlag: bodyPolicyExprFlag,
+				hasElseIf: hasElseIf,
+				elseFieldName: elseFieldName,
+				fallbackFlag: fallbackFlag,
+				hasCondWrap: hasCondWrap,
+				hasCondWrapEnd: hasCondWrapEnd,
+				condWrapArgs: condWrapArgs,
+				spanInfoPresent: spanInfo != null,
+				condFitGroup: condFitGroupConsumer || inConstructFitGroup,
+				hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
+				structTrailOptAccess: structTrailOptAccess,
+				prevBodyField: prevBodyField,
+				prevTrailFieldName: prevTrailFieldName,
+				prevAnyStarNonEmpty: prevAnyStarNonEmpty,
+				prevPadTrailing: prevPadTrailing
+			};
 			switch child.kind {
 				case Ref if (isOptional):
 					// ω-orphan-prefix-member: an `@:optional @:absentOn` bare Ref that opts
@@ -1242,18 +1270,10 @@ class WriterLowering {
 							buildKeepBlankAfterCtorGate(child, node, typePath)
 						)
 						: null;
-					thisPadTrailing = emitOptionalRefField(
-						_refField, child, parts, node, typePath, fieldName, fieldAccess, kwLead, leadText, trailText, trailOptText,
-						bodyPolicyFlag, bodyPolicyExprFlag, hasElseIf, elseFieldName, prevBodyField, prevPadTrailing,
-						hasStructFieldTrailOptSlot, structTrailOptAccess, prevTrailFieldName, optBareSep
-					);
+					thisPadTrailing = emitOptionalRefField(_refField, child, parts, node, site, optBareSep);
 
 				case Ref:
-					final mandResult = emitMandatoryRefField(
-						_refField, child, parts, typePath, fieldAccess, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, kwLead, leadText,
-						isRaw, isFirstField, hasElseIf, elseFieldName, fallbackFlag, hasCondWrap, condWrapArgs, spanInfo != null,
-						trailText, prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing, condFitGroupConsumer || inConstructFitGroup
-					);
+					final mandResult = emitMandatoryRefField(_refField, child, parts, site);
 					justWrappedBody = mandResult.justWrappedBody;
 					prevBareRefBody = mandResult.prevBareRefBody;
 
@@ -1263,9 +1283,7 @@ class WriterLowering {
 
 			// Trail + per-field finalize (accumulator fold) — see finalizeNonStarField.
 			final finalizeResult = finalizeNonStarField(
-				_refField, child, parts, node, typePath, fieldName, fieldAccess, isOptional, trailText, trailOptText, hasCondWrap,
-				hasCondWrapEnd, hasStructFieldTrailOptSlot, structTrailOptAccess, thisPadTrailing, prevPadTrailing, justWrappedBody,
-				spanInfo, spanStartPartsIdx
+				_refField, child, parts, node, site, thisPadTrailing, prevPadTrailing, justWrappedBody, spanInfo, spanStartPartsIdx
 			);
 			// ω-condwrap-fitline-construct-group: the consumer body field (incl.
 			// its trail finalize) closes the construct group — splice

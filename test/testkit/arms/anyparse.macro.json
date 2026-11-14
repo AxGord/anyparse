@@ -125,7 +125,7 @@
 			"name": "M-CATCH-TRAILOPT-OFF",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitOptionalRefField",
-			"find": "// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.\npushStmtBodyTrailOpt(optParts, trailOptText, structTrailOptAccess);",
+			"find": "\t\t\t// A statement body's `;` (`catch (e) { … };`) is a source token like the mandatory path's.\n\t\t\tpushStmtBodyTrailOpt(optParts, site.trailOptText, site.structTrailOptAccess);",
 			"replace": "",
 			"note": "an optional statement body without a keyword (the last `catch` body) stops writing back its `@:trailOpt(';')` slot, so `try … catch (e) { … };` loses its `;` to the formatter"
 		},
@@ -1303,7 +1303,7 @@
 			"name": "M-CATCH-BEFORE-LEADING-UNREAD",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitOptionalBodyPolicyOnly",
-			"find": "? beforeLeadingAccess(fieldName)",
+			"find": "? beforeLeadingAccess(site.fieldName)",
 			"replace": "? null",
 			"note": "the own-line comment captured before a statement catch body is never written, so fmt refuses the file as dropping it"
 		},

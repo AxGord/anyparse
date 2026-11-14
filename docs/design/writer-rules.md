@@ -420,6 +420,7 @@ Costs in queue-line difficulty (`lib/difficulty.md`) and lines; H8, a comparable
 | 7 | Gap cascade as a table | prototype first | up to about 2k | high; not tried |
 | 8 | Lint: new mechanical rules as `pattern → rewrite` | language work, 2–3 slices, 7 | 0 at first | medium |
 | 9 | Star emission plan: plan, one skeleton, instance builders for the three trivia Star families | one slice, 8 | measured: −503 code lines, a new input 5 places → 2; 0 output change; § Star emission plan, measured | low; landed, continue with the Ref writer |
+| 10 | Ref writer: one per-field site record for the Ref emitters | one slice, 8 | measured: +27 code lines, a new input 5 places → 3; 0 output change; § Ref writer site record, measured | low; landed, StructSeqLowering only after its own census |
 
 Steps 5–8 show estimates, not measurements, apart from the mentions and line counts they start from. Steps 4 and 9 are measured below.
 
@@ -504,6 +505,28 @@ writer, `WriterRefFieldLowering` at 1,009 code lines, whose emitters take 23, 21
 `pushStructFieldEntries`, `emitOptionalRefField`). Pratt is not a candidate: no function in `WriterPrattLowering` or
 `PrattPostfixLowering` takes more than 8. The EOF trivia Star (`triviaEofStarExpr`, 15, and `EofStarCtx`) is the smallest step and reuses this
 skeleton as it stands.
+
+### Ref writer site record, measured
+
+MACRO-REF-WRITER-PLAN took the next candidate, `WriterRefFieldLowering`. Its emitters read their `@:fmt` flags off the
+child themselves; what they took positionally was the per-field state `lowerStruct` computes (the field's name, access
+and literals, the body-policy pair, the condWrap and span facts, the trackers of the fields before it). That state is
+now one record, `RefFieldSite`, built once per field in `lowerStruct` and read by the three entries and the six inner
+emitters they call (`introduce-parameter-object` and `change-sig` did the rewrite). A plan type like `StarPlan` was not
+added: no flag read was threaded positionally, so there was nothing for it to hold. Positional parameters, base → tip:
+`emitOptionalRefField` 21 → 6, `emitMandatoryRefField` 23 → 4, `finalizeNonStarField` 19 → 10,
+`emitBodyPolicyBareRef` 17 → 10, `emitBareRefNonBodyPolicy` 19 → 8, `emitOptionalKwBody` 15 → 8,
+`emitOptionalRefLead` 13 → 7, `emitOptionalBodyPolicyOnly` 13 → 8, `emitMandatoryRefTrail` 12 → 4. A new per-field
+input that reaches an inner emitter went from 5 places (entry call argument, entry parameter, inner call argument,
+inner parameter, reader) to 3 (record field, its value in `lowerStruct`, reader), counted on the code, not compiled.
+Code lines without comments or blanks: `WriterRefFieldLowering` 955 → 964, `WriterLowering` 1,254 → 1,272, **+27**:
+the record and its literal outweigh the signatures they replaced, and `site.` widens the bodies. The generated engine
+holds the same sorted line multiset apart from its own source hash.
+
+**Verdict: the Ref writer's size is not plumbing.** The Star families shrank because each builder unpacked a context
+record into locals and the callers spelled the same inputs twice; the Ref emitters had neither, so the record buys the
+places-per-input fall and no lines. `StructSeqLowering` is the parser side and should be measured for the same
+question (do its emitters re-read or re-spell their inputs) before a slice is cut for it.
 
 ### What is not worth doing
 
