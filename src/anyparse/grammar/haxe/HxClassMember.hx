@@ -1,5 +1,12 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxCondClosedMemberRaw;
+import anyparse.grammar.haxe.cond.HxCondNameFnDecl;
+import anyparse.grammar.haxe.cond.HxCondSharedBodyMember;
+import anyparse.grammar.haxe.cond.HxCondSigFnDecl;
+import anyparse.grammar.haxe.cond.HxConditionalBlock;
+import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
+
 /**
  * A class member: `VarMember` — `var name:Type;`; `FinalMember` — `final name:Type = init;`, the same
  * `HxVarDecl` body with `@:kw('final')` instead of `@:kw('var')` (mirrors `HxStatement.FinalStmt`); `FnMember`

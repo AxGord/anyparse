@@ -1,12 +1,12 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxConditionalType;
-import anyparse.grammar.haxe.HxConditionalTypeElse;
-import anyparse.grammar.haxe.HxElseifType;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.cond.HxConditionalType;
+import anyparse.grammar.haxe.cond.HxConditionalTypeElse;
+import anyparse.grammar.haxe.cond.HxElseifType;
 import utest.Assert;
 
 /**

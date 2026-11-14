@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxVarInitRegion;
 import anyparse.grammar.haxe.lit.HxVarNameLit;
 import anyparse.grammar.haxe.meta.HxMetadata;
 import anyparse.grammar.haxe.types.HxType;

@@ -359,6 +359,18 @@ class ShapeBuilder {
 		return node;
 	}
 
+	/**
+	 * The qualified path of the generic typedef `generic` applied to the qualified type paths `args`,
+	 * under the name `concreteInstance` defines it with: the one answer to "what is a generic typedef's
+	 * instance called", for a reader that names an instance's rule by text.
+	 */
+	public static function instancePath(generic: String, args: Array<String>): String {
+		final dot: Int = generic.lastIndexOf('.');
+		final own: String = dot == -1 ? '' : generic.substr(0, dot);
+		final name: String = instanceNameOf(own, generic.substr(dot + 1), args);
+		return own == '' ? name : '$own.$name';
+	}
+
 	private static inline function isMapPath(path: String): Bool {
 		return path == 'Map' || path == 'haxe.ds.Map';
 	}
@@ -536,15 +548,7 @@ class ShapeBuilder {
 	 * argument that is itself an instance contributes its own instance name.
 	 */
 	private static function instanceName(d: DefType, params: Array<Type>): String {
-		final own: String = d.pack.join('.');
-		final args: Array<String> = [
-			for (p in params) {
-				final arg: String = qualifiedName(concreteInstance(p));
-				final dot: Int = arg.lastIndexOf('.');
-				dot != -1 && arg.substr(0, dot) == own ? arg.substr(dot + 1) : arg.split('.').join('_');
-			}
-		];
-		return [d.name].concat(args).join('_');
+		return instanceNameOf(d.pack.join('.'), d.name, params.map(p -> qualifiedName(concreteInstance(p))));
 	}
 
 	/**
@@ -561,6 +565,17 @@ class ShapeBuilder {
 					&& typeToString(Context.follow(found, true)) == typeToString(Context.follow(applied, true));
 			case _: false;
 		};
+	}
+
+	/** `instanceName` over paths: the generic's package `own`, its simple `name` and its qualified argument paths. */
+	private static function instanceNameOf(own: String, name: String, args: Array<String>): String {
+		final segments: Array<String> = [
+			for (arg in args) {
+				final dot: Int = arg.lastIndexOf('.');
+				dot != -1 && arg.substr(0, dot) == own ? arg.substr(dot + 1) : arg.split('.').join('_');
+			}
+		];
+		return [name].concat(segments).join('_');
 	}
 
 }

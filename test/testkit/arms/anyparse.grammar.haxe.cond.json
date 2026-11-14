@@ -1,0 +1,247 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.cond. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-COND-BLOCK-TAIL-NEVER",
+			"type": "anyparse.grammar.haxe.cond.HxCondBlockTailRaw",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "@:re('",
+			"replace": "@:re('(?!)",
+			"note": "the block-tail terminal never matches, so a `#if` region that closes its enclosing block and opens one of its own falls back to CondSpliceStmt and the whole region is raw bytes again"
+		},
+		{
+			"name": "M-COND-PARAM-ELSE-PLAIN",
+			"type": "anyparse.grammar.haxe.cond.HxConditionalParam",
+			"method": "HxConditionalParam",
+			"kind": "TypedefDecl",
+			"find": "@:optional\n\t@:kw('#else')\n\t@:trivia\n\t@:sep(',', sepFaithful)",
+			"replace": "@:optional\n\t@:kw('#else')\n\t@:sep(',', sepFaithful)",
+			"note": "the `#else` arm of a parameter region captures no per-element separator, so the comma it writes before `#end` is lost and that arm compiles two parameters with nothing between them"
+		},
+		{
+			"name": "M-COND-PARAM-ELSEIF-PLAIN",
+			"type": "anyparse.grammar.haxe.cond.HxElseifParam",
+			"method": "HxElseifParam",
+			"kind": "TypedefDecl",
+			"find": "@:trivia\n\t@:sep(',', sepFaithful)",
+			"replace": "@:sep(',')",
+			"note": "an `#elseif` arm of a parameter region captures no per-element separator, so the comma it writes before the next directive is lost"
+		},
+		{
+			"name": "M-SEMI-ELSEIF-PER-LINE",
+			"type": "anyparse.grammar.haxe.cond.HxCondSemiElseif",
+			"method": "HxCondSemiElseif",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(padLeading, padTrailing, conditionalBodyIndent)",
+			"replace": "@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine)",
+			"note": "a value region's #elseif body takes one element per line, so it breaks between inline #if and #else branches"
+		},
+		{
+			"name": "M-COND-OPERAND-PAREN-GROUP",
+			"type": "anyparse.grammar.haxe.cond.HxPpCond",
+			"method": "Group",
+			"kind": "ParamCtor",
+			"find": "Group(group: HxPpCondGroup)",
+			"replace": "@:lead('#') Group(group: HxPpCondGroup)",
+			"note": "a parenthesised condition is no operand, so the generated splice predicate stops before the infix operator after the group and the region skip-parses"
+		},
+		{
+			"name": "M-COND-GROUP-STOPS-AT-LINE",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[^()\\'\"/]",
+			"replace": "[^()\\'\"/\\\\r\\\\n]",
+			"note": "a parenthesised group runs only to the end of its line, so `#if (` / `sys` / `)` on three lines is no condition"
+		},
+		{
+			"name": "M-COND-OPERATOR-OPERAND-SAME-LINE",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondFlag",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[A-Za-z0-9_]*)*'",
+			"replace": "[A-Za-z0-9_]*)*(?: &&[ \\\\t\\\\r\\\\n]*[A-Za-z_][A-Za-z0-9_]*)?'",
+			"note": "a `&&` after a flag and the flag after it, on this line or the next, join the condition, so `lime && x` reads as one condition instead of `lime` with the operator opening the body"
+		},
+		{
+			"name": "M-COND-NEGATION-OPERAND-SAME-LINE",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondBlank",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[ \\\\t\\\\r\\\\n]*",
+			"replace": "[ \\\\t]*",
+			"note": "the operand of a `!` must sit on its line, so `!` / `sys` on two lines is no condition"
+		},
+		{
+			"name": "M-COND-GROUP-DEPTH-CAP",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondGroupItem",
+			"method": "Inner",
+			"kind": "ParamCtor",
+			"find": "Inner(group: HxPpCondGroup)",
+			"replace": "@:lead('#') Inner(group: HxPpCondGroup)",
+			"note": "a group nested inside a group is no piece of it, so the condition terminal rejects a nested `#if` group the way a depth-capped regex did"
+		},
+		{
+			"name": "M-COND-GROUP-QUOTE-BLIND",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[^()\\'\"/]",
+			"replace": "[^()/]",
+			"note": "a group's text runs over a quote, so a quoted `)` inside a group closes it, the condition terminal stops inside the string and the region no longer parses"
+		},
+		{
+			"name": "M-COND-GROUP-COMMENT-BLIND",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondText",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "|/(?!\\\\*)",
+			"replace": "|/",
+			"note": "a block comment inside a group is read as condition text, so its quote opens a string or its paren closes the group and the region no longer parses"
+		},
+		{
+			"name": "M-COND-NUMBER-DOTTED",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondNumber",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "[0-9][0-9.]*",
+			"replace": "[0-9]+",
+			"note": "a numeric operand stops at its dot, so `#if 4.2` reads `4` and leaves `.2` to the region body"
+		},
+		{
+			"name": "M-COND-QUOTED-OPERAND",
+			"type": "anyparse.grammar.haxe.cond.HxPpCond",
+			"method": "Quoted",
+			"kind": "ParamCtor",
+			"find": "Quoted(text: HxPpCondQuoted)",
+			"replace": "@:lead('#') Quoted(text: HxPpCondQuoted)",
+			"note": "a quoted string is no condition operand, so a quoted `#if` condition carries no condition at all"
+		},
+		{
+			"name": "M-COND-QUOTED-ESCAPE-OFF",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondQuoted",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"",
+			"replace": "\"(?:[^\"\\\\r\\\\n])*\"",
+			"note": "a backslash no longer hides the character after it, so an escaped quote ends a condition literal early"
+		},
+		{
+			"name": "M-COND-QUOTED-UNTERMINATED",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondQuoted",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"|",
+			"replace": "\"(?:[^\"\\\\\\\\\\\\r\\\\n]|\\\\\\\\[^\\\\r\\\\n])*\"?|",
+			"note": "a literal with no closing quote is read as closed, so the rest of an unterminated condition is read as a value"
+		},
+		{
+			"name": "M-COND-FLAG-DOTTED",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondFlag",
+			"method": "@:re",
+			"kind": "MetaCall",
+			"find": "(?:\\\\.[A-Za-z_][A-Za-z0-9_]*)*",
+			"replace": "",
+			"note": "a flag stops at its first dot, so `a.b` reads `a` and leaves `.b` as trailing text"
+		},
+		{
+			"name": "M-CONDVALUE-AND-LOOSE",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "And",
+			"kind": "ParamCtor",
+			"find": "@:infix('&&', 2)",
+			"replace": "@:infix('&&', 1)",
+			"note": "`&&` binds like `||`, so `a || b && c` groups left to right"
+		},
+		{
+			"name": "M-CONDVALUE-CMP-LOOSE",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "Eq",
+			"kind": "ParamCtor",
+			"find": "@:infix('==', 3)",
+			"replace": "@:infix('==', 0)",
+			"note": "`==` binds looser than `||`, so `a == b || c` compares `a` with the whole disjunction"
+		},
+		{
+			"name": "M-CONDVALUE-CMP-RIGHT",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "Eq",
+			"kind": "ParamCtor",
+			"find": "@:infix('==', 3)",
+			"replace": "@:infix('==', 3, 'Right')",
+			"note": "`==` groups to the right, so a chain of comparisons nests the other way"
+		},
+		{
+			"name": "M-CONDVALUE-NOT-GONE",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "Not",
+			"kind": "ParamCtor",
+			"find": "@:prefix('!')",
+			"replace": "@:prefix('~')",
+			"note": "`!` is no prefix operator of a condition"
+		},
+		{
+			"name": "M-CONDVALUE-GTEQ-SHADOWED",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "GtEq",
+			"kind": "ParamCtor",
+			"find": "@:infix('>=', 3)",
+			"replace": "@:infix('>=>', 3)",
+			"note": "`>=` is never matched, so `a >= b` reads `a > ` and fails on the `=`"
+		},
+		{
+			"name": "M-CONDVALUE-VERSION-FLAG",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "VersionCall",
+			"kind": "ParamCtor",
+			"find": "@:kw('version')",
+			"replace": "@:kw('versionx')",
+			"note": "`version(` is not a call of its own, so it reads as the flag `version` followed by trailing text"
+		},
+		{
+			"name": "M-CONDVALUE-GROUP-BRACKET",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "Group",
+			"kind": "ParamCtor",
+			"find": "@:wrap('(', ')')",
+			"replace": "@:wrap('[', ']')",
+			"note": "a group is written in brackets, so a parenthesised condition is no operand"
+		},
+		{
+			"name": "M-COND-VALUE-SCHEMA-LINE-COMMENT",
+			"type": "anyparse.grammar.haxe.cond.HxCondValue",
+			"method": "@:schema",
+			"kind": "MetaCall",
+			"find": "cond.HxPpCondFormat",
+			"replace": "HaxeFormat",
+			"note": "a condition is read with the Haxe whitespace, so a `//` comment is a blank where the compiler refuses it"
+		},
+		{
+			"name": "M-COND-VALUE-CHAIN",
+			"type": "anyparse.grammar.haxe.cond.HxCondExprReader",
+			"method": "chainsComparisons",
+			"find": "isComparison(left) || chainsComparisons(left) || chainsComparisons(right);",
+			"replace": "chainsComparisons(left) || chainsComparisons(right);",
+			"note": "a comparison of a comparison is evaluated, so `a == b == c` is decided where the compiler has no such condition"
+		},
+		{
+			"name": "M-COND-VALUE-GROUP",
+			"type": "anyparse.grammar.haxe.cond.HxCondExprReader",
+			"method": "exprOf",
+			"find": "case Group(inner): exprOf(inner);",
+			"replace": "case Group(inner): CondExpr.Flag('');",
+			"note": "a parenthesised condition reads as a flag no define set names, so it is never decided"
+		},
+		{
+			"name": "M-COND-VALUE-VERSION",
+			"type": "anyparse.grammar.haxe.cond.HxCondExprReader",
+			"method": "unquoted",
+			"find": "return literal.substring(1, literal.length - 1);",
+			"replace": "return literal;",
+			"note": "a quoted literal keeps its quotes, so no `version(\"…\")` names a version"
+		}
+	]
+}

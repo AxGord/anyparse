@@ -3,11 +3,11 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxCondSpliceOpExpr;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxVarSemiCondInitDecl;
+import anyparse.grammar.haxe.cond.HxCondSpliceOpExpr;
+import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
 import utest.Assert;
 
 /**
@@ -76,7 +76,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 			case Conditional(inner):
 				Assert.equals('!mobile', (inner.cond: String));
 				assertBoolLit(inner.expr, true, 'then-branch');
-				final elseClause: Null<anyparse.grammar.haxe.HxConditionalSemiExprElse> = inner.elseClause;
+				final elseClause: Null<anyparse.grammar.haxe.cond.HxConditionalSemiExprElse> = inner.elseClause;
 				if (elseClause == null)
 					Assert.fail('expected an #else clause');
 				else

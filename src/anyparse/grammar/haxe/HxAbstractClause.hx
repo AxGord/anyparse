@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxConditionalInline;
 import anyparse.grammar.haxe.types.HxType;
 
 /**

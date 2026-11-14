@@ -16884,7 +16884,7 @@
 			"type": "anyparse.query.CondRegionLiveness",
 			"method": "evaluateFacts",
 			"find": "final read: Null<(condition: String) -> Null<CondExpr>> = shape.conditionExpr;",
-			"replace": "final read: Null<(condition: String) -> Null<CondExpr>> = anyparse.grammar.haxe.HxCondExprReader.read;",
+			"replace": "final read: Null<(condition: String) -> Null<CondExpr>> = anyparse.grammar.haxe.cond.HxCondExprReader.read;",
 			"note": "a condition is read by the Haxe grammar whatever shape the caller hands in"
 		},
 		{

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxConditionalBlock;
+
 /**
  * Grammar type for a single enum constructor inside an enum body.
  *

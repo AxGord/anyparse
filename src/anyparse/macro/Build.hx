@@ -325,7 +325,7 @@ class Build {
 	 * generated from a declared `@:peg` type instead of a hand scanner. Applied to a marker class with the shape's root:
 	 *
 	 * ```haxe
-	 * @:build(anyparse.macro.Build.buildExtentScan(anyparse.grammar.haxe.HxPpCond))
+	 * @:build(anyparse.macro.Build.buildExtentScan(anyparse.grammar.haxe.cond.HxPpCond))
 	 * final class HxPpCondScan {}
 	 * ```
 	 *

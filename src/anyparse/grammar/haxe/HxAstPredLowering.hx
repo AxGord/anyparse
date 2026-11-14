@@ -7,6 +7,7 @@ import anyparse.macro.AstPredLowering;
 import anyparse.macro.CondConditionReader;
 import anyparse.macro.MacroNames.*;
 import anyparse.macro.MetaInspect;
+import anyparse.macro.ShapeBuilder;
 import anyparse.macro.TriviaTypeSynth;
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -36,8 +37,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.HxAbstractDecl';
 	private static final MEMBER_BEYOND_VALUE: String = 'memberBeyondValue';
 	private static final CONDITIONAL_CTOR: String = 'Conditional';
-	private static final HX_CONDITIONAL_MEMBER: String = 'anyparse.grammar.haxe.HxConditionalBlock_HxMemberDecl';
-	private static final HX_ELSEIF_MEMBER: String = 'anyparse.grammar.haxe.HxElseifBlock_HxMemberDecl';
+	private static final HX_CONDITIONAL_MEMBER: String = ShapeBuilder.instancePath(
+		'anyparse.grammar.haxe.cond.HxConditionalBlock', [HX_MEMBER_DECL]
+	);
+	private static final HX_ELSEIF_MEMBER: String = ShapeBuilder.instancePath('anyparse.grammar.haxe.cond.HxElseifBlock', [HX_MEMBER_DECL]);
 
 	/** The `HxClassMember` ctors that declare a method, whatever form its name or signature takes. */
 	private static final FN_MEMBER_CTORS: Array<String> = ['FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'];
@@ -55,13 +58,13 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
 	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
-	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
+	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.cond.HxConditionalDecl';
 
 	/** The rule of `HxConditionalCommaList<HxExpr>`, under the instance name `ShapeBuilder` gives it. */
-	private static final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalCommaList_HxExpr';
+	private static final HX_COND_ARGS: String = ShapeBuilder.instancePath('anyparse.grammar.haxe.cond.HxConditionalCommaList', [HX_EXPR]);
 
-	private static final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
-	private static final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
+	private static final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.cond.HxElseifDecl';
+	private static final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.cond.HxCondSpliceTailBody';
 	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
 	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
 	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';

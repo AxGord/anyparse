@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxConditionalParam;
+
 /**
  * Single function parameter in a Haxe function declaration or enum constructor.
  *

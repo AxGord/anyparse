@@ -1,7 +1,7 @@
 package unit.query;
 
 import anyparse.check.scan.CheckScan;
-import anyparse.grammar.haxe.HxCondModPrefix;
+import anyparse.grammar.haxe.cond.HxCondModPrefix;
 import anyparse.grammar.haxe.meta.HxMemberModifier;
 import anyparse.grammar.haxe.meta.HxModifier;
 import anyparse.query.CanonicalEdit.EditResult;

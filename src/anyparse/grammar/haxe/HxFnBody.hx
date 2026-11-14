@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxConditionalFnBody;
+
 /**
  * Function-body shape on `HxFnDecl.body`. Five forms, in DISPATCH order:
  *

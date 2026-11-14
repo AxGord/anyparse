@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.cond.HxCondModPrefix;
+import anyparse.grammar.haxe.cond.HxConditionalInline;
+
 /**
  * Access and storage modifiers - top-level form, used by `HxTopLevelDecl.modifiers` for
  * `private`/`extern`/... in front of a `class`/`typedef`/`enum`/`interface`/`abstract`

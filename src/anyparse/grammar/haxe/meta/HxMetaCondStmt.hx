@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.cond.HxCondSpliceClosedRegion;
+
 /**
  * A metadata-prefixed statement whose whole body is a SELF-TERMINATING
  * `#if … ; #end` region: `@SuppressWarnings('…') #if (haxe_ver > 4.2)

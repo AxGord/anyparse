@@ -6,7 +6,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxVarDecl;
-import anyparse.grammar.haxe.HxVarInitRegion;
+import anyparse.grammar.haxe.cond.HxVarInitRegion;
 import utest.Assert;
 
 /**

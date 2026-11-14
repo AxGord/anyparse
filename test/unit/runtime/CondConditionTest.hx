@@ -1,7 +1,7 @@
 package unit.runtime;
 
-import anyparse.grammar.haxe.HxPpCondBlankScan;
-import anyparse.grammar.haxe.HxPpCondScan;
+import anyparse.grammar.haxe.cond.HxPpCondBlankScan;
+import anyparse.grammar.haxe.cond.HxPpCondScan;
 import anyparse.runtime.CondCondition;
 import anyparse.runtime.Input;
 import anyparse.runtime.Span;

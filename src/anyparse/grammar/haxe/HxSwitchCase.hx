@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxCondSpliceCase;
+import anyparse.grammar.haxe.cond.HxConditionalBlock;
+
 /**
  * Grammar for a single case inside a switch body.
  *

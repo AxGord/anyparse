@@ -1,9 +1,9 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmt;
+import anyparse.grammar.haxe.cond.HxConditionalStmt;
 import utest.Assert;
 
 /**

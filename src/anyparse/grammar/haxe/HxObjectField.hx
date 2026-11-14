@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.cond.HxConditionalCommaList;
+
 /**
  * One entry inside an anonymous object literal: either a bare `name: value` field or a
  * `#if … #end`-guarded preprocessor block wrapping a run of further field entries.

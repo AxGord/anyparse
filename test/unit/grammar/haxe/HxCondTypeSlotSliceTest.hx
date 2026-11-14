@@ -7,15 +7,15 @@ import anyparse.grammar.haxe.HxAbstractClause;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxConditionalDecl;
-import anyparse.grammar.haxe.HxConditionalInline;
-import anyparse.grammar.haxe.HxConditionalType;
-import anyparse.grammar.haxe.HxConditionalTypeElse;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxParamBody;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.cond.HxConditionalDecl;
+import anyparse.grammar.haxe.cond.HxConditionalInline;
+import anyparse.grammar.haxe.cond.HxConditionalType;
+import anyparse.grammar.haxe.cond.HxConditionalTypeElse;
 import utest.Assert;
 
 /**

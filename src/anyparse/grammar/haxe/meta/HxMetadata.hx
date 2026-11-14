@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.cond.HxCondDeclPrefix;
+import anyparse.grammar.haxe.cond.HxConditionalInline;
+
 /**
  * Leading metadata tag on a class member, top-level decl, or inside
  * `HxMetaExpr` — `@name` (user metadata) or `@:name` (compiler

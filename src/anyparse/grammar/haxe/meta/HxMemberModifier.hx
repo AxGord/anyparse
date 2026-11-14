@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.cond.HxCondModPrefix;
+import anyparse.grammar.haxe.cond.HxConditionalInline;
+
 /**
  * Access and storage modifiers for class / interface / abstract members. Mirror of
  * `HxModifier` minus `Final` — at the member position `final` introduces a
