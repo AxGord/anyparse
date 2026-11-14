@@ -54,6 +54,9 @@ import anyparse.query.SymbolIndex;
  * silent survivor still needs the two same-named types to be assignment-compatible, which the
  * report leaves for a human.
  *
+ * A plain `import <module>;` beside an unguarded `using <module>;` of the same module is flagged too (`usingTwinBinds`): the
+ * `using` brings the same types, so the import goes unless it binds a value or another statement binds one of its names.
+ *
  * `fix` deletes the flagged statement; the caller batches the deletions into one whole-file
  * canonicalize, which drops the blank line.
  */
@@ -93,7 +96,7 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 			final source: Null<String> = sourceOf[info.file];
 			final sites: Null<UsingSites> = source == null ? null : new UsingSites(source, plugin, info.file, index);
 			for (imp in info.imports) {
-				final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings);
+				final module: Null<String> = redundantModuleOf(info, imp, resolveIndex, bindings, publicTypes);
 				final contests: (ImportInfo) -> Bool = contestsOf(sites, imp, methodsOf);
 				final ambient: Null<String> = module != null
 					? null
@@ -297,8 +300,11 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 	 * provably redundant sub-module type import. See the class doc for the gate set; each one fails
 	 * closed.
 	 */
-	private static function redundantModuleOf(info: FileInfo, imp: ImportInfo, index: SymbolIndex, bindings: ImportBindings): Null<String> {
+	private static function redundantModuleOf(
+		info: FileInfo, imp: ImportInfo, index: SymbolIndex, bindings: ImportBindings, publicTypes: Map<String, Array<String>>
+	): Null<String> {
 		if (imp.guarded || imp.kind != ImportKind.Import) return null;
+		if (usingTwinBinds(info, imp, bindings, publicTypes)) return 'using ${imp.raw}';
 		final dot: Int = imp.raw.lastIndexOf('.');
 		if (dot <= 0) return null;
 		final simple: String = imp.raw.substring(dot + 1);
@@ -401,6 +407,27 @@ final class RedundantImport extends RuleBase implements RiskyFix {
 				final at: Int = o.span.from;
 				return at > above && at < limit;
 			});
+	}
+
+	/**
+	 * Whether `imp`, a plain `import <module>;`, sits beside an unguarded `using <module>;` of the very same module: the
+	 * `using` brings every type the import does, so the import is a no-op. Refused where the module binds a value, and where
+	 * any OTHER statement binds one of its names — the last binder of a name wins, so the import's position could be what
+	 * decides it.
+	 */
+	private static function usingTwinBinds(
+		info: FileInfo, imp: ImportInfo, bindings: ImportBindings, publicTypes: Map<String, Array<String>>
+	): Bool {
+		if (!info.imports.exists(o -> !o.guarded && o.kind == ImportKind.Using && o.raw == imp.raw)) return false;
+		if (!ImportBindings.bindsNoValue(bindings.ofImport(imp.raw))) return false;
+		final names: Null<Array<String>> = SymbolIndex.namesBoundBy(imp, publicTypes);
+		if (names == null || names.length == 0) return false;
+		return !info.imports.exists(
+			o ->
+				(o.span.from != imp.span.from || o.span.to != imp.span.to)
+				&& !(o.kind == ImportKind.Using && o.raw == imp.raw)
+				&& SymbolIndex.bindsAnyOf(o, names, publicTypes)
+		);
 	}
 
 }

@@ -4,6 +4,29 @@
 	],
 	"arms": [
 		{
+			"name": "M-IMPORT-TWIN-VALUES-BLIND",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "usingTwinBinds",
+			"find": "if (!ImportBindings.bindsNoValue(bindings.ofImport(imp.raw))) return false;",
+			"replace": "if (false) return false;",
+			"note": "an import carrying a module-level field is reported beside the using, though a using brings no module-level field and the deletion leaves the name unknown"
+		},
+		{
+			"name": "M-IMPORT-TWIN-THIRD-BINDER-BLIND",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "usingTwinBinds",
+			"find": "return !info.imports.exists(",
+			"replace": "return true || info.imports.exists(",
+			"note": "a third statement binding the same simple name no longer vetoes, so the import is deleted where its position decides which module the name means"
+		},
+		{
+			"name": "M-IMPORT-BESIDE-USING-TWIN-OFF",
+			"type": "anyparse.check.common.imports.RedundantImport",
+			"method": "usingTwinBinds",
+			"force": "false",
+			"note": "a plain import beside a `using` of the same module is never reported, so the statement the using already makes redundant stays"
+		},
+		{
 			"name": "M-SHORTEN-IMPORT-THRESHOLD-ONE",
 			"type": "anyparse.check.common.imports.ShortenTypeRef",
 			"method": "DEFAULT_IMPORT_MIN_USES",

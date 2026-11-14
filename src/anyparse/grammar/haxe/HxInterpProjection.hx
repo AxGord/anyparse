@@ -3,7 +3,6 @@ package anyparse.grammar.haxe;
 import anyparse.grammar.haxe.HxStringEscape.HxDecodedChar;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 using anyparse.util.Strings;
 using Lambda;

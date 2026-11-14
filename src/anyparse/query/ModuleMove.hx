@@ -20,7 +20,6 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 import haxe.Exception;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;

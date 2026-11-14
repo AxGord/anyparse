@@ -148,9 +148,9 @@ class RedundantImportVisibleTest extends Test {
 	}
 
 	/** A `using` of the same module is a second own statement binding the name, so the import is not this arm's to judge. */
-	public function testImportBesideAUsingOfTheSameModuleIsKept(): Void {
+	public function testImportBesideAUsingOfTheSameModuleIsReportedByTheTwinArm(): Void {
 		Assert.equals(
-			0,
+			1,
 			violations([
 				{ file: 'app/C.hx', source: 'package app;\n\nimport app.Tools;\n\nusing app.Tools;\n\nclass C {\n\n\tvar t:Tools;\n\n}\n' },
 				{

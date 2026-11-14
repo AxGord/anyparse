@@ -1,7 +1,5 @@
 package unit.util;
 
-import anyparse.util.Strings;
-
 using anyparse.util.Strings;
 using StringTools;
 

@@ -5,7 +5,6 @@ import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
-import anyparse.util.Strings;
 
 using anyparse.util.Strings;
 using StringTools;

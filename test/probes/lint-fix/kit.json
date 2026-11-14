@@ -2447,6 +2447,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "RT1",
+			"note": "a plain import beside a using of the same module is reported; nothing is written",
+			"argv": [
+				"hxq",
+				"lint",
+				"app/Main.hx",
+				"q/Ut.hx",
+				"--no-oracle",
+				"--rule",
+				"redundant-import"
+			],
+			"files": {
+				"app/Main.hx": "package app;\n\nimport q.Ut;\nusing q.Ut;\n\nclass Main {\n\tstatic function main() {\n\t\tvar u:Ut = null;\n\t\ttrace(\"x\".up());\n\t}\n}\n",
+				"q/Ut.hx": "package q;\n\nclass Ut {\n\tpublic static function up(s:String):String return s;\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "3bae6e0496ce4403",
+				"err": "e2187a5174aa662a",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
 		}
 	]
 }
