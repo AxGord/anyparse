@@ -1277,6 +1277,14 @@ class WrapList {
 	}
 
 	/**
+	 * Whether the source-multiline floor can change this cascade's answer: only a `NoWrap` answer is floored, so a cascade that
+	 * never answers `NoWrap` lays a source-multiline list out exactly as a source-flat one, and a host must measure both alike.
+	 */
+	public static function sourceFloorCanFire(rules: WrapRules): Bool {
+		return rules.defaultMode == NoWrap || rules.rules.exists(rule -> rule.mode == NoWrap);
+	}
+
+	/**
 	 * Wrap `body` with `lead` unless `lead` is `Empty` — avoids a
 	 * pointless single-element `Concat` for the common no-lead path.
 	 */

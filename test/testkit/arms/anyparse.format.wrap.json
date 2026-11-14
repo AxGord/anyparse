@@ -601,6 +601,14 @@
 			"find": "return DelimiterLeaf.closesRegion(tag);",
 			"replace": "return false;",
 			"note": "an operand ending on a closed `#end` region is not seen as one"
+		},
+		{
+			"name": "M-SOURCE-FLOOR-ALWAYS",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "sourceFloorCanFire",
+			"find": "return rules.defaultMode == NoWrap ||",
+			"replace": "return true;",
+			"note": "a source-multiline list under a cascade that never answers noWrap is deferred from its host again, so the host measures it narrow on the first write and full on the next"
 		}
 	]
 }

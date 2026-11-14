@@ -486,13 +486,18 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 				// A list whose answer carries a hardline (`flatLength < 0`) is deferred so a chain or an
 				// arrow around it does not count it full-width; an answer the RENDERER still decides stays
 				// counted, as the next pass may read it back flat.
+				// A source-multiline list is deferred only where the floor can hold it open: under any other cascade it lays out as a
+				// flat source does, and the next pass measures it as one.
 				// A construct-fit group counts a kept multi-line array too: it is what the group's own
 				// ladder wrote on the previous pass, and deferring it there would flip the verdict.
 				_matrixDoc != null
 					? _dbg(_matrixDoc)
-					: (_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)
-						&& !_isComprehension
-						&& !$keptListCountsInFit
+					: (
+						_smlKeep
+						&& anyparse.format.wrap.WrapList.sourceFloorCanFire(_effRules)
+						|| _deferIfHardline
+						&& anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0
+					) && !_isComprehension && !$keptListCountsInFit
 						? _dbg(_wlResult)
 						: _wlResult;
 			};

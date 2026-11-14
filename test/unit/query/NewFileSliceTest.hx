@@ -457,7 +457,8 @@ class NewFileSliceTest extends Test {
 	public function testCreateRawSettlesATwoRewriteSource(): Void {
 		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "objectLiteral": {'
 			+ '"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "'
-			+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": []}}}';
+			+ 'type": "noWrap"}]}, "arrayWrap": {"defaultWrap": "fillLine", "rules": [{"conditions": ['
+			+ '{"cond": "itemCount <= n", "value": 0}], "type": "noWrap"}]}}}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final src: String = 'class A {\n\tpublic static function createElectron(output: String): Void {\n'
 			+ '\t\tfinal data = { version: \'0.2.0\', configurations: [\n\t\t\t({ type: \'node\', request: \'launch\', name: '

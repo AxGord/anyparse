@@ -959,16 +959,16 @@
 			"name": "M-COLLAPSE-COUNTED",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "(_smlKeep || _deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0)",
-			"replace": "(_smlKeep)",
+			"find": "|| _deferIfHardline",
+			"replace": "|| false && _deferIfHardline",
 			"note": "a source-flat list its cascade commits to one-per-line reaches its host counted while the next write reads it back deferred, so a chain or an arrow around it breaks once and glues on the next write"
 		},
 		{
 			"name": "M-COLLAPSE-ANY-RESULT",
 			"type": "anyparse.macro.TriviaSepLowering",
 			"method": "triviaSepNoTriviaBranch",
-			"find": "_deferIfHardline && anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
-			"replace": "_deferIfHardline",
+			"find": "&& anyparse.format.wrap.WrapList.flatLength(_wlResult) < 0",
+			"replace": "&& true",
 			"note": "every source-flat list is deferred, a flat one included, so a host under-measures a literal that still stands flat and glues past the limit"
 		},
 		{
