@@ -168,7 +168,10 @@ final class AddElement {
 		// fix took — moved exactly those two onto the insertion, which is the same
 		// defect in the other direction.
 		final before: Int = ElementSpan.docExtendedSpan(source, span, plugin.lexicalRegions(source), true).from;
-		final after: Int = ElementSpan.docExtendedSpan(source, new Span(span.to, span.to), plugin.lexicalRegions(source), true).from;
+		// A comment closing the target's own line is the target's note (`var a:T; // why`): `After` lands
+		// past it, so it stays on the target. A comma list keeps its offset — its separator sits there.
+		final anchorEnd: Int = isComma ? span.to : ElementSpan.lineClosingCommentSpan(source, span, plugin.lexicalRegions.bind(source)).to;
+		final after: Int = ElementSpan.docExtendedSpan(source, new Span(anchorEnd, anchorEnd), plugin.lexicalRegions(source), true).from;
 		// The new element must end its own line whichever side of a line break the `After` offset lands
 		// on. Right after the target's last token (a member's tight span) the break goes first; at the
 		// START of a line — the next declaration's doc, or its first token where a module-level span is

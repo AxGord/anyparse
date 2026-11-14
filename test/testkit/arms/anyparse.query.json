@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-ADD-AFTER-ANCHOR-COMMENT",
+			"type": "anyparse.query.AddElement",
+			"method": "addElement",
+			"find": "final anchorEnd: Int = isComma ? span.to : ElementSpan.lineClosingCommentSpan(source, span, plugin.lexicalRegions.bind(source)).to;",
+			"replace": "final anchorEnd: Int = span.to;",
+			"note": "--after lands at the anchor's last token again, so a comment closing the anchor's line moves onto the new element"
+		},
+		{
 			"name": "M-LIT-TYPE-SLOT-UNWALKED",
 			"type": "anyparse.query.Lit",
 			"method": "walk",
