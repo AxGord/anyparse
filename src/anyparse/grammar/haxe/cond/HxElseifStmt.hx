@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * One `#elseif <cond> <stmts>` clause inside a `HxConditionalStmt`'s
  * `elseifs` Star. Mirror of `HxElseifDecl` at the statement scope:

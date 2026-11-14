@@ -2,13 +2,13 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxAnonMember;
-import anyparse.grammar.haxe.HxEnumDecl;
-import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxTopLevelDecl;
 import anyparse.grammar.haxe.cond.HxCondDeclPrefix;
 import anyparse.grammar.haxe.cond.HxConditionalInline;
+import anyparse.grammar.haxe.decl.HxAnonMember;
+import anyparse.grammar.haxe.decl.HxEnumDecl;
+import anyparse.grammar.haxe.decl.HxEnumMember;
+import anyparse.grammar.haxe.decl.HxTopLevelDecl;
 import anyparse.grammar.haxe.meta.HxMetadata;
 import anyparse.runtime.ParseError;
 import utest.Assert;

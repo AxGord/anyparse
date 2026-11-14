@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 #if macro
 import anyparse.core.ShapeTree.ShapeNode;
+import anyparse.grammar.haxe.expr.HxComprehension;
 import anyparse.macro.AnnotationKeys;
 import anyparse.macro.AstPredLowering;
 import anyparse.macro.CondConditionReader;
@@ -24,17 +25,17 @@ import haxe.macro.Expr;
  */
 final class HxAstPredLowering extends AstPredLowering {
 
-	public static inline final HX_EXPR: String = 'anyparse.grammar.haxe.HxExpr';
-	public static inline final HX_STATEMENT: String = 'anyparse.grammar.haxe.HxStatement';
-	public static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.HxSwitchCase';
+	public static inline final HX_EXPR: String = 'anyparse.grammar.haxe.expr.HxExpr';
+	public static inline final HX_STATEMENT: String = 'anyparse.grammar.haxe.stmt.HxStatement';
+	public static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.stmt.HxSwitchCase';
 
-	private static final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.HxTopLevelDecl';
-	private static final HX_DECL: String = 'anyparse.grammar.haxe.HxDecl';
-	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
-	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
-	private static final HX_CLASS_MEMBER: String = 'anyparse.grammar.haxe.HxClassMember';
+	private static final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.decl.HxTopLevelDecl';
+	private static final HX_DECL: String = 'anyparse.grammar.haxe.decl.HxDecl';
+	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.expr.HxObjectField';
+	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.decl.HxMemberDecl';
+	private static final HX_CLASS_MEMBER: String = 'anyparse.grammar.haxe.decl.HxClassMember';
 	private static final HX_MEMBER_MODIFIER: String = 'anyparse.grammar.haxe.meta.HxMemberModifier';
-	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.HxAbstractDecl';
+	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.decl.HxAbstractDecl';
 	private static final MEMBER_BEYOND_VALUE: String = 'memberBeyondValue';
 	private static final CONDITIONAL_CTOR: String = 'Conditional';
 	private static final HX_CONDITIONAL_MEMBER: String = ShapeBuilder.instancePath(
@@ -48,16 +49,16 @@ final class HxAstPredLowering extends AstPredLowering {
 	/** The `HxClassMember` ctors that declare a field: a value unless it has accessors or is `static`. */
 	private static final FIELD_MEMBER_CTORS: Array<String> = ['VarMember', 'FinalMember'];
 
-	private static final HX_ENUM_MEMBER: String = 'anyparse.grammar.haxe.HxEnumMember';
-	private static final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
-	private static final HX_FN_BODY: String = 'anyparse.grammar.haxe.HxFnBody';
-	private static final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.HxFnBlock';
+	private static final HX_ENUM_MEMBER: String = 'anyparse.grammar.haxe.decl.HxEnumMember';
+	private static final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.expr.HxFnExprBody';
+	private static final HX_FN_BODY: String = 'anyparse.grammar.haxe.decl.HxFnBody';
+	private static final HX_FN_BLOCK: String = 'anyparse.grammar.haxe.decl.HxFnBlock';
 
 	/** `HxFnBlock`'s statement Star, the field its trivia slots are named after. */
 	private static final FN_BLOCK_STMTS: String = 'stmts';
 
-	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
-	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
+	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.expr.HxTryCatchExpr';
+	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.decl.HxVarDecl';
 	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.cond.HxConditionalDecl';
 
 	/** The rule of `HxConditionalCommaList<HxExpr>`, under the instance name `ShapeBuilder` gives it. */
@@ -65,9 +66,9 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.cond.HxElseifDecl';
 	private static final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.cond.HxCondSpliceTailBody';
-	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
-	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
-	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
+	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.decl.HxAnonMember';
+	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.decl.HxAnonField';
+	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.decl.HxAnonVarBody';
 	private static final HX_TYPE: String = 'anyparse.grammar.haxe.types.HxType';
 	private static final HX_METADATA: String = 'anyparse.grammar.haxe.meta.HxMetadata';
 	private static final HX_META_CALL_ARGS: String = 'anyparse.grammar.haxe.meta.HxMetaCallArgs';

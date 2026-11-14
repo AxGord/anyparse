@@ -339,6 +339,14 @@ class Build {
 	}
 
 	/**
+	 * The one answer to "which format class does a grammar root type name": the `@:schema` argument of
+	 * `rootTypePath`, as written.
+	 */
+	public static function schemaTypePathOf(rootTypePath: String): String {
+		return readSchemaMeta(rootMetaOf(Context.getType(rootTypePath), rootTypePath, 'schemaTypePathOf'), rootTypePath);
+	}
+
+	/**
 	 * What every `@:build` entry needs before it can lower anything: the grammar root's type,
 	 * the schema it names and the format that schema resolves to. `entry` names the calling
 	 * build for the error a non-grammar target produces.

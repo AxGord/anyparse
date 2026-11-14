@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxFnBody;
+
 /**
  * Member-scope token-splice conditional: `#if <cond> <signature> [#else <signature>] #end
  * <shared-body>` — a `#if` region holding two PARALLEL member signatures with the function

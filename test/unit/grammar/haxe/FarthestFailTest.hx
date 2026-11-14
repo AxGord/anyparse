@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassDecl;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 import utest.Test;

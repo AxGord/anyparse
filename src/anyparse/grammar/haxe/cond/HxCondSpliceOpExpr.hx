@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Operand-position token-splice conditional whose fragment is a run of complete operands
  * each followed by an operator — `#if <cond> (<operand> <op>)* #end <tail>`, the

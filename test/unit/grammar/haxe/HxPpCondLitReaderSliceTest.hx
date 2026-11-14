@@ -3,7 +3,7 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassDecl;
 import utest.Assert;
 
 /**

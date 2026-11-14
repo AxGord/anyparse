@@ -4,15 +4,15 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxFnBody;
-import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.cond.HxCondNameFnDecl;
 import anyparse.grammar.haxe.cond.HxConditionalFnBody;
 import anyparse.grammar.haxe.cond.HxConditionalFnName;
 import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassMember;
+import anyparse.grammar.haxe.decl.HxFnBody;
+import anyparse.grammar.haxe.decl.HxFnDecl;
 import utest.Assert;
 
 /**

@@ -1,0 +1,187 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.decl. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ENUM-CTOR-PARAMS-PLAIN",
+			"type": "anyparse.grammar.haxe.decl.HxEnumCtorDecl",
+			"method": "HxEnumCtorDecl",
+			"kind": "TypedefDecl",
+			"find": "@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"replace": "@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
+			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
+		},
+		{
+			"name": "M-FNTYPE-NEST-ABSTRACT-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxAbstractDecl",
+			"method": "HxAbstractDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(tightLead, propagateNestedType)",
+			"replace": "@:fmt(tightLead)",
+			"note": "an abstract's underlying type is no longer marked nested, so a function type there continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-FNTYPE-NEST-ABSTRACT-HEAD-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxAbstractDeclHead",
+			"method": "HxAbstractDeclHead",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(tightLead, propagateNestedType)",
+			"replace": "@:fmt(tightLead)",
+			"note": "an abstract head inside an #if arm no longer marks its underlying type nested, so a function type there continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-META-TYPE-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndPolicy('metadataTypeLineEnd'),",
+			"replace": "",
+			"note": "a type declaration names no knob, so metadataType changes nothing"
+		},
+		{
+			"name": "M-META-ENUM-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxEnumMember",
+			"method": "HxEnumMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
+			"replace": "var meta",
+			"note": "an enum constructor names no knob, so metadataOther does not reach it"
+		},
+		{
+			"name": "M-META-VARDECL-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxVarDecl",
+			"method": "HxVarDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndInline)\n\tvar meta",
+			"replace": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
+			"note": "metadata after a var keyword answers the metadataOther knob again, so After breaks the declaration between the keyword and its name"
+		},
+		{
+			"name": "M-META-VARNAME-INLINE-SEP",
+			"type": "anyparse.grammar.haxe.decl.HxVarDecl",
+			"method": "HxVarDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(inlineSep)\n\tvar name",
+			"replace": "var name",
+			"note": "the binding name follows the source newline after the metadata run again"
+		},
+		{
+			"name": "M-META-MEMBER-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),",
+			"replace": "",
+			"note": "a var member has no arm of its own, so metadataVar stops reaching members and they take metadataOther"
+		},
+		{
+			"name": "M-META-MEMBER-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember')",
+			"replace": "",
+			"note": "a function member has no arm of its own, so metadataFunction stops reaching it"
+		},
+		{
+			"name": "M-META-ANON-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('field', 'metadataVarLineEnd', 'VarField', 'FinalField'),",
+			"replace": "",
+			"note": "an anon var field takes metadataOther instead of metadataVar"
+		},
+		{
+			"name": "M-META-ANON-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'FnField')",
+			"replace": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'Conditional')",
+			"note": "an anon function field takes metadataOther instead of metadataFunction"
+		},
+		{
+			"name": "M-META-ANON-OTHER-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndPolicy('metadataOtherLineEnd'), ",
+			"replace": "",
+			"note": "an anon field without a keyword reaches no knob, so metadataOther does not move it"
+		},
+		{
+			"name": "M-META-TOP-VAR-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "'metadataVarLineEnd', 'VarDecl'",
+			"replace": "'metadataTypeLineEnd', 'VarDecl'",
+			"note": "a module-level var answers to metadataType again, so metadataVar stops reaching it"
+		},
+		{
+			"name": "M-META-TOP-FN-ARM-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "'metadataFunctionLineEnd', 'FnDecl'",
+			"replace": "'metadataTypeLineEnd', 'FnDecl'",
+			"note": "a module-level function answers to metadataType again, so metadataFunction stops reaching it"
+		},
+		{
+			"name": "M-ENUM-CTOR-REGION-KW",
+			"type": "anyparse.grammar.haxe.decl.HxEnumCtor",
+			"method": "Conditional",
+			"kind": "ParamCtor",
+			"find": "@:kw('#if')",
+			"replace": "@:kw('#iff')",
+			"note": "the enum body no longer recognises a `#if` region between its constructors, so a region of whole constructors stops parsing"
+		},
+		{
+			"name": "M-META-FIT-TYPE-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "module-level metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-MEMBER-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-ENUM-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxEnumMember",
+			"method": "HxEnumMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "enum constructor metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-META-FIT-ANON-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"replace": "",
+			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
+		},
+		{
+			"name": "M-COND-CLOSED-MEMBER-OFF",
+			"type": "anyparse.grammar.haxe.decl.HxClassMember",
+			"method": "CondClosedMember",
+			"kind": "ParamCtor",
+			"find": "@:kw('#if')",
+			"replace": "@:kw('#if-closed')",
+			"note": "a member region complete at its own `#end` is no longer taken as a closed member, so the shared-body ctor swallows the next member as its tail"
+		}
+	]
+}

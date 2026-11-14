@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * One `<operand> <operator>` pair of a token-splice conditional's
  * fragment — the unit `HxCondSpliceOpExpr` repeats.

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.types;
 
+import anyparse.grammar.haxe.expr.HxArrowParam;
+
 /**
  * New-form (Haxe 4) arrow function type: `(args) -> ret` — a `(`-`,`-`)` parenthesised list
  * of `HxArrowParam` (positional `Type` or named `name:Type`), the `->` separator, then the

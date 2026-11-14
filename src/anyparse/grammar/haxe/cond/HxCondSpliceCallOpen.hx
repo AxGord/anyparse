@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Operand-position token-splice conditional whose every branch opens a call or a parenthesis
  * that the shared tail closes: `#if haxe4 TNamed(a.name, #else ( #end toComplexType(a.t))`.

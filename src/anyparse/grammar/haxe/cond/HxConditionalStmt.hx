@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Body of a `#if <cond> <stmts> [#elseif <cond> <stmts>]* [#else <stmts>] #end`
  * preprocessor-guarded function-body region. Mirror of `HxConditionalDecl` at the statement

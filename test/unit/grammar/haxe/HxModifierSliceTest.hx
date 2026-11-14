@@ -2,10 +2,10 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassMember;
+import anyparse.grammar.haxe.decl.HxMemberDecl;
 import anyparse.grammar.haxe.meta.HxMemberModifier;
 import anyparse.runtime.ParseError;
 import utest.Assert;

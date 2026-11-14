@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassMember;
 import anyparse.grammar.haxe.types.HxType;
 import anyparse.grammar.haxe.types.HxTypeRef;
 import anyparse.runtime.ParseError;

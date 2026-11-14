@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxParam;
+
 /**
  * Body of a `#if <cond> <params> [#elseif …] [#else <params>] #end` preprocessor-guarded
  * region wrapping whole function-parameter entries — the fn-param-scope twin of

@@ -2,7 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;

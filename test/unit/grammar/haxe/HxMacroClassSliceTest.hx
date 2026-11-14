@@ -1,11 +1,11 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxMacroClass;
-import anyparse.grammar.haxe.HxMacroClassHead;
-import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxMacroClass;
+import anyparse.grammar.haxe.decl.HxMacroClassHead;
+import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 
 /**

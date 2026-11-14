@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Statement-position BLOCK-TAIL conditional: `#if <cond> <fragment closing the enclosing
  * block> <block> #end` — a region that closes the block it sits in and then opens AND closes

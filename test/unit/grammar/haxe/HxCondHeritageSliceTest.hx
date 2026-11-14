@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.decl.HxHeritageClause;
 import utest.Assert;
 
 /**

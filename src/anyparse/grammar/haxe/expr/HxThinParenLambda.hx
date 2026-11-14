@@ -1,0 +1,43 @@
+package anyparse.grammar.haxe.expr;
+
+/**
+ * Parenthesised arrow-lambda expression with `->` body separator:
+ * `(params) -> body`. The canonical Haxe lambda syntax.
+ *
+ * Structurally identical to `HxParenLambda` (the `=>` form retained
+ * for map-entry-style lambdas in pre-existing test data) — same
+ * `(params) lead/trail/sep` Star pattern over `HxLambdaParam`, same
+ * trailing-comma policy, same `@:lead('->')` body commit point.
+ *
+ * Placed FIRST among the paren atoms in `HxExpr` order so `tryBranch`
+ * tries the canonical `->` form first. A non-`->` input then falls
+ * through to `ECheckTypeExpr` / `ParenExpr` (+ prec-0 infix `=>` for a
+ * map key), and only reaches the legacy `HxParenLambda` (`=>`) form
+ * last, for the zero/multi/optional-param shapes that cannot parse as
+ * an expression.
+ *
+ * `@:fmt(space('arrowFunctions', 'lead'))` on `body` gates the spacing around the `->`
+ * separator on `opt.arrowFunctions:WhitespacePolicy`. Default `Both`
+ * matches haxe-formatter's `whitespace.arrowFunctionsPolicy:
+ * @:default(Around)` — emits `(params) -> body`. Setting the runtime
+ * policy to `None` produces the tight `(params)->body` shape. Sibling
+ * to `@:fmt(space('functionTypeHaxe4', 'lead'))` on `HxArrowFnType.ret` (the type-
+ * position `(args) -> ret`); the two knobs are independent so a config
+ * can space the type form while keeping the expression form tight, or
+ * vice versa, mirroring upstream's separate JSON keys. The single-
+ * ident infix form `arg -> body` (`HxExpr.ThinArrow`) is on the Pratt
+ * infix path which already emits ` -> ` with surrounding spaces by
+ * default and is unaffected by this knob.
+ */
+@:peg
+typedef HxThinParenLambda = {
+	@:lead('(')
+	@:trail(')')
+	@:sep(',')
+	@:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap'))
+	var params: Array<HxLambdaParam>;
+	@:fmt(space('arrowFunctions', 'lead'), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap,
+		statementBodyForCtor('BlockExpr'))
+	@:lead('->')
+	var body: HxExpr;
+}

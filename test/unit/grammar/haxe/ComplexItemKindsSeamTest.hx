@@ -3,7 +3,7 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.AstPreds;
 import anyparse.grammar.haxe.AstPredsT;
 import anyparse.grammar.haxe.HxComplexItems;
-import anyparse.grammar.haxe.HxExpr;
+import anyparse.grammar.haxe.expr.HxExpr;
 import utest.Assert;
 import utest.Test;
 

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * `target = #if c v; [#elseif d w;] #else u; #end` at statement level (`HxStatement.CondSemiAssignStmt`). `target` is
  * an ATOM-level operand — the postfix chain included (`this.a[i].b`), no operator — so the statement parser never

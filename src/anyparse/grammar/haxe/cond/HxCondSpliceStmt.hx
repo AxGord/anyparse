@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Statement-position token-splice conditional: `#if <cond> <fragment>
  * #end <tail-statement>` where the fragment is an unbalanced

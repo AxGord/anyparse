@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.types.HxType;
 
 /**

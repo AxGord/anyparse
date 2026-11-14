@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxLambdaParam;
-import anyparse.grammar.haxe.HxLambdaParamBody;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.decl.HxVarDecl;
+import anyparse.grammar.haxe.expr.HxLambdaParam;
+import anyparse.grammar.haxe.expr.HxLambdaParamBody;
 import utest.Assert;
 
 /**

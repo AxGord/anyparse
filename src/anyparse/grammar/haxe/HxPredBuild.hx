@@ -3,7 +3,6 @@ package anyparse.grammar.haxe;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
-import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.macro.AstPredLowering.AstPredMode;
 import anyparse.macro.FormatReader;
@@ -14,6 +13,7 @@ import anyparse.macro.SpanTypeSynth;
 import anyparse.macro.TriviaAnalysis;
 import anyparse.macro.TriviaTypeSynth;
 import anyparse.macro.CppLiteralGuard;
+import anyparse.macro.Build;
 
 using Lambda;
 
@@ -41,24 +41,7 @@ class HxPredBuild {
 		final trivia: Bool = readFlag(options, 'trivia');
 		final spans: Bool = readFlag(options, 'spans');
 		final rootType: Type = Context.getType(ROOT);
-		final rootMeta: Metadata = switch rootType {
-			case TEnum(ref, _): ref.get().meta.get();
-			case TType(ref, _): ref.get().meta.get();
-			case TAbstract(ref, _): ref.get().meta.get();
-			case TInst(ref, _): ref.get().meta.get();
-			case _:
-				Context.fatalError('HxPredBuild: unsupported root type $ROOT', Context.currentPos());
-				throw 'unreachable';
-		};
-		// First-match + explicit arity error, same semantics as
-		// `Build.readSchemaMeta` (private there, so re-stated here).
-		final schemaEntry: Null<MetadataEntry> = rootMeta.find(e -> e.name == ':schema');
-		if (schemaEntry == null) {
-			Context.fatalError('HxPredBuild: $ROOT is missing @:schema(Format)', Context.currentPos());
-			throw 'unreachable';
-		}
-		if (schemaEntry.params.length != 1) Context.fatalError('@:schema expects exactly one argument', schemaEntry.pos);
-		final formatInfo: FormatInfo = FormatReader.resolve(ExprTools.toString(schemaEntry.params[0]));
+		final formatInfo: FormatInfo = FormatReader.resolve(Build.schemaTypePathOf(ROOT));
 		final shape: ShapeResult = new ShapeBuilder(formatInfo).build(rootType);
 		TriviaAnalysis.run(shape);
 		if (trivia) TriviaTypeSynth.arm(shape);

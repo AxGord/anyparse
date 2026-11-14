@@ -9,7 +9,7 @@ All invocations below use the `hxq` alias (= `apq --lang haxe`). Same behaviour 
 ## Q1 — extract one subtree from a known file
 
 ```
-hxq ast src/anyparse/grammar/haxe/HxFnDecl.hx --select 'class > field:params'
+hxq ast src/anyparse/grammar/haxe/decl/HxFnDecl.hx --select 'class > field:params'
 ```
 
 Returns the AST of the `params` field declaration inside the top-level class declaration of the file, with no surrounding context.
@@ -33,7 +33,7 @@ Returns the **smallest enclosing AST node** at line 3295, column 0. Output print
 ## Q3 — file table-of-contents at JSON depth 2
 
 ```
-hxq ast src/anyparse/grammar/haxe/HxFnDecl.hx --depth 2 --json
+hxq ast src/anyparse/grammar/haxe/decl/HxFnDecl.hx --depth 2 --json
 ```
 
 Returns the file's top-level declaration plus its direct children, in JSON, truncated beyond depth 2.
@@ -117,7 +117,7 @@ Returns every declaration carrying a `@:fmt(...)` annotation whose argument list
 ## Q10 — full annotation inventory per file
 
 ```
-hxq meta --on field src/anyparse/grammar/haxe/HxFnDecl.hx --json
+hxq meta --on field src/anyparse/grammar/haxe/decl/HxFnDecl.hx --json
 ```
 
 Returns every annotation attached to any field declaration in the file, in JSON, with field name, annotation, args, and span.

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * POST-operand token-splice conditional whose fragment is a LEADING infix
  * operator plus its right operand - `<operand> #if <cond> <op> <expr> #end`,

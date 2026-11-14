@@ -964,7 +964,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return isOptional(tagged) ? macro ($access == null ? 0 : $access.length) : macro $access.length;
 	}
 
-	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
+	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.expr.HxExpr` to `_walkHxExprS`). */
 	public static inline function walkFnName(typePath: String): String {
 		return '_walk${simpleName(typePath)}S';
 	}

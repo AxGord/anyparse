@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * POST-operand token-splice conditional whose fragment is ONE guarded
  * element of a comma-separated list - `<element> #if <cond> , <expr> #end`

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * One `#elseif <cond> <stmts>` clause of a `HxCondSemiRegion`. Its body is `HxElseifStmt`'s minus the per-element
  * break and the shared branch pad: a value region's branches finish an expression, so a branch keeps its source line

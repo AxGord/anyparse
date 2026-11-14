@@ -5,9 +5,9 @@ import anyparse.grammar.haxe.AstPreds;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxComprehension;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.expr.HxComprehension;
+import anyparse.grammar.haxe.expr.HxExpr;
 import utest.Assert;
 import utest.Test;
 

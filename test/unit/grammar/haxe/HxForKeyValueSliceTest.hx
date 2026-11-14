@@ -1,11 +1,11 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxForExpr;
-import anyparse.grammar.haxe.HxForStmt;
-import anyparse.grammar.haxe.HxKeyValueBinder;
-import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.expr.HxForExpr;
+import anyparse.grammar.haxe.expr.HxKeyValueBinder;
+import anyparse.grammar.haxe.stmt.HxForStmt;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;

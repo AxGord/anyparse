@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxAccessClause;
 import anyparse.grammar.haxe.lit.HxVarNameLit;
 import anyparse.grammar.haxe.types.HxType;
 

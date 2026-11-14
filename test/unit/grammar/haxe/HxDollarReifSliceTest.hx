@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.decl.HxVarDecl;
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.types.HxType;
 import anyparse.runtime.ParseError;
 import utest.Assert;

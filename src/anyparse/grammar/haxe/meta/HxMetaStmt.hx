@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Metadata-prefixed STATEMENT — `@:nullSafety(Off) if (c != null)
  * x = c;` (live dogfood shape). The common

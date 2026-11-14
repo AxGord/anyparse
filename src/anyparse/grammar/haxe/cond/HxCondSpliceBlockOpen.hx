@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Statement-position token-splice conditional whose every branch OPENS a block: `#if <cond>
  * <fragment ending on '{'> [#elseif ...] [#else ...] #end <shared statements> }`:

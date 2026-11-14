@@ -1,13 +1,13 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxAccessClause;
-import anyparse.grammar.haxe.HxAnonField;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxTypedefDecl;
-import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.decl.HxAccessClause;
+import anyparse.grammar.haxe.decl.HxAnonField;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassMember;
+import anyparse.grammar.haxe.decl.HxTypedefDecl;
+import anyparse.grammar.haxe.decl.HxVarDecl;
 import utest.Assert;
 
 /**

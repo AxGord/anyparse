@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.decl.HxTopLevelDecl;
+
 /**
  * Root grammar type for a multi-declaration Haxe module — zero or more top-level declarations. `@:peg`
  * marks the entry point; `@:schema(HaxeFormat)` binds the grammar to `HaxeFormat` so the macro

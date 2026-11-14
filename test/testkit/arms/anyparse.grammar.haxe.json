@@ -107,15 +107,6 @@
 			"note": "the fallback-ctor family is enumerated by hand again, exactly as it stood on 2026-08-18 instead of being derived from the grammar's `@:condRegionRaw` terminals - the three raw-capture ctors the grammar gained two days later (both `return` splices and the metadata-prefixed `MetaCondStmt`) fall out of the gate and every name-driven op rewrites around such a region in silence"
 		},
 		{
-			"name": "M-PATTERN-RESTPROBE-UNSET",
-			"type": "anyparse.grammar.haxe.HxCasePattern",
-			"method": "@:fmt",
-			"kind": "MetaCall",
-			"find": "@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)",
-			"replace": "@:fmt(suppressCallRestProbe, suppressComplexItems)",
-			"note": "the pattern subtree never declines the rest-of-line fit bias, so a ctor below a collection pattern is charged the trailing guard and breaks its own args"
-		},
-		{
 			"name": "M-DECL-HOST-KIND-STALE",
 			"type": "anyparse.grammar.haxe.HaxeRefShape",
 			"method": "DECL_HOST_KINDS",
@@ -123,15 +114,6 @@
 			"find": "\t\t'Rest',\n",
 			"replace": "\t\t'Rest',\n\t\t'LambdaParam',\n",
 			"note": "a retired ctor name is put back into a kind set the hand-written side declares - the exact shape of this slice's real catch, where `LambdaParam` outlived the grammar rule that projected it by three months. A dead name in a kind set changes no behaviour, so no other test can see it and only the subset assertion goes red"
-		},
-		{
-			"name": "M-ELLIPSIS-STMT-TOKEN-STALE",
-			"type": "anyparse.grammar.haxe.HxStatement",
-			"method": "EllipsisStmt",
-			"kind": "SimpleCtor",
-			"find": "@:lit('....')",
-			"replace": "@:lit('.....')",
-			"note": "the statement-scope `....` placeholder is respelled as a five-dot token. The ctor stays declared and stays projected, and no source under PARSE_ROOTS spells the token at all, so nothing in the tree changes except that one row of the kind-source table stops emitting the kind it claims - the fail-open shape the coverage census exists to see"
 		},
 		{
 			"name": "M-AND-OPERATOR-TEXT-STALE",
@@ -496,15 +478,6 @@
 			"note": "the grammar names no commutativity annotation, so no overload is tried swapped and a misfit leaves the walk undecided"
 		},
 		{
-			"name": "M-ENUM-CTOR-PARAMS-PLAIN",
-			"type": "anyparse.grammar.haxe.HxEnumCtorDecl",
-			"method": "HxEnumCtorDecl",
-			"kind": "TypedefDecl",
-			"find": "@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
-			"replace": "@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\t@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'),",
-			"note": "an enum constructor's parameters capture no per-element separator, so every gap gets a comma and a region already ending on its own is followed by `#end, c:Int`"
-		},
-		{
 			"name": "M-TERNARY-MLB-NO-DESCENT",
 			"type": "anyparse.grammar.haxe.HxTernaryBranchBlocks",
 			"method": "holdsBlock",
@@ -639,51 +612,6 @@
 			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
 			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
 			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
-		},
-		{
-			"name": "M-MACRO-PAREN-GLUED",
-			"type": "anyparse.grammar.haxe.HxExpr",
-			"method": "MacroExpr",
-			"kind": "ParamCtor",
-			"find": "@:fmt(clearExprPosition)",
-			"replace": "@:fmt(clearExprPosition, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
-			"note": "`macro` is written like the call-shaped `cast`, so `macro (x + 1)` loses the space the user keeps: it reads as a construct whose operand can be anything"
-		},
-		{
-			"name": "M-CAST-PAREN-SPACED",
-			"type": "anyparse.grammar.haxe.HxExpr",
-			"method": "CastExpr",
-			"kind": "ParamCtor",
-			"find": "@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
-			"replace": "@:fmt(atomOperandWhen('ECheckTypeExpr'))",
-			"note": "`cast` is written like the construct `macro`, so `cast(x)` gains a space and stops reading as a call"
-		},
-		{
-			"name": "M-FNTYPE-NEST-NEW-OFF",
-			"type": "anyparse.grammar.haxe.HxNewExpr",
-			"method": "HxNewExpr",
-			"kind": "TypedefDecl",
-			"find": "groupRestProbe, propagateNestedType)\n\tvar params",
-			"replace": "groupRestProbe)\n\tvar params",
-			"note": "the type arguments of a `new` expression are no longer marked nested, so a function type among them continues one unit past its line instead of two"
-		},
-		{
-			"name": "M-FNTYPE-NEST-ABSTRACT-OFF",
-			"type": "anyparse.grammar.haxe.HxAbstractDecl",
-			"method": "HxAbstractDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(tightLead, propagateNestedType)",
-			"replace": "@:fmt(tightLead)",
-			"note": "an abstract's underlying type is no longer marked nested, so a function type there continues one unit past its line instead of two"
-		},
-		{
-			"name": "M-FNTYPE-NEST-ABSTRACT-HEAD-OFF",
-			"type": "anyparse.grammar.haxe.HxAbstractDeclHead",
-			"method": "HxAbstractDeclHead",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(tightLead, propagateNestedType)",
-			"replace": "@:fmt(tightLead)",
-			"note": "an abstract head inside an #if arm no longer marks its underlying type nested, so a function type there continues one unit past its line instead of two"
 		},
 		{
 			"name": "M-EXTERN-CLASS-BETWEEN-DROPPED",
@@ -938,87 +866,6 @@
 			"note": "the names-first listing opens every module it names, so a module that cannot be read drops out of an answer a caller meant to get without any module text"
 		},
 		{
-			"name": "M-META-TYPE-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
-			"method": "HxTopLevelDecl",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndPolicy('metadataTypeLineEnd'),",
-			"replace": "",
-			"note": "a type declaration names no knob, so metadataType changes nothing"
-		},
-		{
-			"name": "M-META-ENUM-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxEnumMember",
-			"method": "HxEnumMember",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
-			"replace": "var meta",
-			"note": "an enum constructor names no knob, so metadataOther does not reach it"
-		},
-		{
-			"name": "M-META-VARDECL-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxVarDecl",
-			"method": "HxVarDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndInline)\n\tvar meta",
-			"replace": "@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))\n\tvar meta",
-			"note": "metadata after a var keyword answers the metadataOther knob again, so After breaks the declaration between the keyword and its name"
-		},
-		{
-			"name": "M-META-VARNAME-INLINE-SEP",
-			"type": "anyparse.grammar.haxe.HxVarDecl",
-			"method": "HxVarDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(inlineSep)\n\tvar name",
-			"replace": "var name",
-			"note": "the binding name follows the source newline after the metadata run again"
-		},
-		{
-			"name": "M-META-MEMBER-VAR-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxMemberDecl",
-			"method": "HxMemberDecl",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),",
-			"replace": "",
-			"note": "a var member has no arm of its own, so metadataVar stops reaching members and they take metadataOther"
-		},
-		{
-			"name": "M-META-MEMBER-FN-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxMemberDecl",
-			"method": "HxMemberDecl",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember')",
-			"replace": "",
-			"note": "a function member has no arm of its own, so metadataFunction stops reaching it"
-		},
-		{
-			"name": "M-META-ANON-VAR-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxAnonMember",
-			"method": "HxAnonMember",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndIfCtor('field', 'metadataVarLineEnd', 'VarField', 'FinalField'),",
-			"replace": "",
-			"note": "an anon var field takes metadataOther instead of metadataVar"
-		},
-		{
-			"name": "M-META-ANON-FN-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxAnonMember",
-			"method": "HxAnonMember",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'FnField')",
-			"replace": "metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'Conditional')",
-			"note": "an anon function field takes metadataOther instead of metadataFunction"
-		},
-		{
-			"name": "M-META-ANON-OTHER-OFF",
-			"type": "anyparse.grammar.haxe.HxAnonMember",
-			"method": "HxAnonMember",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndPolicy('metadataOtherLineEnd'), ",
-			"replace": "",
-			"note": "an anon field without a keyword reaches no knob, so metadataOther does not move it"
-		},
-		{
 			"name": "M-META-CONFIG-TYPE",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyLineEnds",
@@ -1052,24 +899,6 @@
 			"note": "a type's metadata defaults to None again, so it joins its declaration on one line"
 		},
 		{
-			"name": "M-META-TOP-VAR-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
-			"method": "HxTopLevelDecl",
-			"kind": "TypedefDecl",
-			"find": "'metadataVarLineEnd', 'VarDecl'",
-			"replace": "'metadataTypeLineEnd', 'VarDecl'",
-			"note": "a module-level var answers to metadataType again, so metadataVar stops reaching it"
-		},
-		{
-			"name": "M-META-TOP-FN-ARM-OFF",
-			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
-			"method": "HxTopLevelDecl",
-			"kind": "TypedefDecl",
-			"find": "'metadataFunctionLineEnd', 'FnDecl'",
-			"replace": "'metadataTypeLineEnd', 'FnDecl'",
-			"note": "a module-level function answers to metadataType again, so metadataFunction stops reaching it"
-		},
-		{
 			"name": "M-ORACLE-HAXE-IS-SOURCE-ALWAYS",
 			"type": "anyparse.grammar.haxe.HaxeQueryPlugin",
 			"method": "isSource",
@@ -1089,33 +918,6 @@
 			"method": "containerItemWrapFromConfig",
 			"force": "base",
 			"note": "a configured containerItemWrap block is dropped and the built-in nested cascade stays, so a project cannot send simple literal arguments to their own line"
-		},
-		{
-			"name": "M-ENUM-CTOR-REGION-KW",
-			"type": "anyparse.grammar.haxe.HxEnumCtor",
-			"method": "Conditional",
-			"kind": "ParamCtor",
-			"find": "@:kw('#if')",
-			"replace": "@:kw('#iff')",
-			"note": "the enum body no longer recognises a `#if` region between its constructors, so a region of whole constructors stops parsing"
-		},
-		{
-			"name": "M-WHILE-COMPREHENSION-NOT-STRICT",
-			"type": "anyparse.grammar.haxe.HxWhileExpr",
-			"method": "HxWhileExpr",
-			"kind": "TypedefDecl",
-			"find": "'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))",
-			"replace": "'ParenExpr'))",
-			"note": "a while comprehension body is a plain fitLine body again, so a body that does not fit beside the head wraps the head's condition call instead of moving to the next line"
-		},
-		{
-			"name": "M-WHILE-COMPREHENSION-NO-BODY-POLICY",
-			"type": "anyparse.grammar.haxe.HxWhileExpr",
-			"method": "HxWhileExpr",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),\n\t\treflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))\n\tvar body",
-			"replace": "var body",
-			"note": "a while comprehension body carries no body policy again, so comprehensionFor does not reach it: it glues to the head under next and stays at the head's indent when the source broke it"
 		},
 		{
 			"name": "M-ENUM-ABSTRACT-RULES-KEY-UNREAD",
@@ -1316,42 +1118,6 @@
 			"find": "case HxFormatMetadataLineEndPolicy.Fit: MetadataLineEndPolicy.Fit;",
 			"replace": "",
 			"note": "lineEnds value fit falls to none"
-		},
-		{
-			"name": "M-META-FIT-TYPE-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxTopLevelDecl",
-			"method": "HxTopLevelDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
-			"replace": "",
-			"note": "module-level metadata names no simplicity predicate, so fit breaks it one per line"
-		},
-		{
-			"name": "M-META-FIT-MEMBER-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxMemberDecl",
-			"method": "HxMemberDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
-			"replace": "",
-			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
-		},
-		{
-			"name": "M-META-FIT-ENUM-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxEnumMember",
-			"method": "HxEnumMember",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
-			"replace": "",
-			"note": "enum constructor metadata names no simplicity predicate, so fit breaks it one per line"
-		},
-		{
-			"name": "M-META-FIT-ANON-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxAnonMember",
-			"method": "HxAnonMember",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
-			"replace": "",
-			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
 		},
 		{
 			"name": "M-TYPED-OPTIONS-BASELINE",
@@ -1578,24 +1344,6 @@
 			"find": "opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);",
 			"replace": "opt.conditionalSiblings = opt.conditionalSiblings;",
 			"note": "sameLine.conditionalSiblings is read and dropped, so a config that asked for off still shares the branches of a region"
-		},
-		{
-			"name": "M-UNTYPED-KW-COMMENT-DROPPED",
-			"type": "anyparse.grammar.haxe.HxExpr",
-			"method": "UntypedExpr",
-			"kind": "ParamCtor",
-			"find": "@:fmt(ctorKwTrivia)",
-			"replace": "",
-			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
-		},
-		{
-			"name": "M-COND-CLOSED-MEMBER-OFF",
-			"type": "anyparse.grammar.haxe.HxClassMember",
-			"method": "CondClosedMember",
-			"kind": "ParamCtor",
-			"find": "@:kw('#if')",
-			"replace": "@:kw('#if-closed')",
-			"note": "a member region complete at its own `#end` is no longer taken as a closed member, so the shared-body ctor swallows the next member as its tail"
 		}
 	]
 }

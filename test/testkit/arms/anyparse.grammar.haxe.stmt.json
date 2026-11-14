@@ -1,0 +1,25 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.stmt. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-PATTERN-RESTPROBE-UNSET",
+			"type": "anyparse.grammar.haxe.stmt.HxCasePattern",
+			"method": "@:fmt",
+			"kind": "MetaCall",
+			"find": "@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)",
+			"replace": "@:fmt(suppressCallRestProbe, suppressComplexItems)",
+			"note": "the pattern subtree never declines the rest-of-line fit bias, so a ctor below a collection pattern is charged the trailing guard and breaks its own args"
+		},
+		{
+			"name": "M-ELLIPSIS-STMT-TOKEN-STALE",
+			"type": "anyparse.grammar.haxe.stmt.HxStatement",
+			"method": "EllipsisStmt",
+			"kind": "SimpleCtor",
+			"find": "@:lit('....')",
+			"replace": "@:lit('.....')",
+			"note": "the statement-scope `....` placeholder is respelled as a five-dot token. The ctor stays declared and stays projected, and no source under PARSE_ROOTS spells the token at all, so nothing in the tree changes except that one row of the kind-source table stops emitting the kind it claims - the fail-open shape the coverage census exists to see"
+		}
+	]
+}

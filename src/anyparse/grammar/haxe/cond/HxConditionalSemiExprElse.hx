@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * `#else <expr>;` clause of a `HxConditionalSemiExpr` region.
  *

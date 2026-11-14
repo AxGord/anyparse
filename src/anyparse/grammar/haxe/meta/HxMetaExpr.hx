@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Expression-level metadata wrapper — `@:meta expr` or `@:meta(args) expr`.
  *

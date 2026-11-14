@@ -47,17 +47,14 @@ enum AstPredMode {
  * stable across modes by construction, and the generated pattern (not
  * an `Array<Dynamic>` read) is what enforces it.
  *
- * Naming convention: the marker classes live in the grammar root's
- * package as `<pack>.AstPreds` / `AstPredsT` / `AstPredsS`, so
+ * Naming convention: the marker classes live in the package of the
+ * root's format (`markerPack`) as `<pack>.AstPreds` / `AstPredsT` / `AstPredsS`, so
  * macro-neutral emission sites can address them without referencing
- * any grammar type by name. Synth-module pack derivation deliberately
- * MIRRORS the writer's existing per-mode conventions rather than the
- * synth passes' own definition sites: the spans arm uses
- * `packOf(root)` (as `PairedShapeLowering` does), the trivia arm uses
- * `packOf(rule)` (as `WriterLowering.ruleValueCT` / `ruleCtorPath`
- * do) — equivalent while every rule shares the root's package, and
- * kept in lockstep with the writer so the two generators cannot
- * diverge on the same value.
+ * any grammar type by name. Both paired arms address the synth module
+ * (`spans.Pairs` / `trivia.Pairs`) by the ROOT's package
+ * (`synthPackOf(root, …)`), as `WriterLowering.ruleValueCT` /
+ * `ruleCtorPath` do, so a rule in a subpackage still resolves it and
+ * the two generators cannot diverge on the same value.
  */
 class AstPredLowering {
 
@@ -287,7 +284,16 @@ class AstPredLowering {
 			'T'
 		else
 			'';
-		return packOf(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
+		return markerPack(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
+	}
+
+	/**
+	 * The one answer to "which package holds a grammar's predicate marker classes": the package of the
+	 * format its root names, not the root's own — a root type (`HxClassDecl`) may live in a subpackage
+	 * while the markers stay with the format that declares `astPreds`.
+	 */
+	public static function markerPack(rootTypePath: String): Array<String> {
+		return packOf(Build.schemaTypePathOf(rootTypePath));
 	}
 
 	/**

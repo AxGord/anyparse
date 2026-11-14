@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxFnBody;
 import anyparse.grammar.haxe.lit.HxFnNameLit;
 
 /**

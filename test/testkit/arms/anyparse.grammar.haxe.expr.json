@@ -1,0 +1,61 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.expr. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-MACRO-PAREN-GLUED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "MacroExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(clearExprPosition)",
+			"replace": "@:fmt(clearExprPosition, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
+			"note": "`macro` is written like the call-shaped `cast`, so `macro (x + 1)` loses the space the user keeps: it reads as a construct whose operand can be anything"
+		},
+		{
+			"name": "M-CAST-PAREN-SPACED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "CastExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
+			"replace": "@:fmt(atomOperandWhen('ECheckTypeExpr'))",
+			"note": "`cast` is written like the construct `macro`, so `cast(x)` gains a space and stops reading as a call"
+		},
+		{
+			"name": "M-FNTYPE-NEST-NEW-OFF",
+			"type": "anyparse.grammar.haxe.expr.HxNewExpr",
+			"method": "HxNewExpr",
+			"kind": "TypedefDecl",
+			"find": "groupRestProbe, propagateNestedType)\n\tvar params",
+			"replace": "groupRestProbe)\n\tvar params",
+			"note": "the type arguments of a `new` expression are no longer marked nested, so a function type among them continues one unit past its line instead of two"
+		},
+		{
+			"name": "M-WHILE-COMPREHENSION-NOT-STRICT",
+			"type": "anyparse.grammar.haxe.expr.HxWhileExpr",
+			"method": "HxWhileExpr",
+			"kind": "TypedefDecl",
+			"find": "'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))",
+			"replace": "'ParenExpr'))",
+			"note": "a while comprehension body is a plain fitLine body again, so a body that does not fit beside the head wraps the head's condition call instead of moving to the next line"
+		},
+		{
+			"name": "M-WHILE-COMPREHENSION-NO-BODY-POLICY",
+			"type": "anyparse.grammar.haxe.expr.HxWhileExpr",
+			"method": "HxWhileExpr",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),\n\t\treflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),\n\t\tstrictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))\n\tvar body",
+			"replace": "var body",
+			"note": "a while comprehension body carries no body policy again, so comprehensionFor does not reach it: it glues to the head under next and stays at the head's indent when the source broke it"
+		},
+		{
+			"name": "M-UNTYPED-KW-COMMENT-DROPPED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "UntypedExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(ctorKwTrivia)",
+			"replace": "",
+			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
+		}
+	]
+}

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.meta;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Paren-bearing metadata payload — `@:name(args)`. Two-field Seq
  * because Haxe enum-constructor argument positions don't accept

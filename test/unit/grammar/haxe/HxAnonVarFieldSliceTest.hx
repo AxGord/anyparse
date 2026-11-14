@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxAnonField;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.decl.HxAnonField;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxFnDecl;
+import anyparse.grammar.haxe.decl.HxVarDecl;
 import anyparse.grammar.haxe.types.HxTypeArg;
 import anyparse.grammar.haxe.types.HxTypeRef;
 import haxe.Exception;

@@ -13,6 +13,6 @@ package anyparse.grammar.haxe;
  * class body is empty on purpose — editing it would just be clobbered
  * on the next compile.
  */
-@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.HxClassDecl))
+@:build(anyparse.macro.Build.buildParser(anyparse.grammar.haxe.decl.HxClassDecl))
 @:nullSafety(Strict)
 class HaxeParser {}

@@ -2,13 +2,13 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.cond.HxConditionalBlock;
 import anyparse.grammar.haxe.cond.HxConditionalDecl;
 import anyparse.grammar.haxe.cond.HxConditionalStmt;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxMemberDecl;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 
 /**

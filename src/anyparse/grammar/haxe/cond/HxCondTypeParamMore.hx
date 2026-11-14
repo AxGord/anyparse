@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxParam;
+
 /**
  * One further function parameter carried INSIDE a type-position
  * conditional region whose `#if` opened in an earlier parameter's TYPE

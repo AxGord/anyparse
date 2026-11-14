@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxFnBody;
+
 /**
  * Body of a `#if <cond> <fn-body> [#elseif ...] [#else <fn-body>] #end` region that occupies
  * a function's ENTIRE body slot. The enclosing `HxFnBody.CondBody` ctor consumes the `#if`

@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.decl.HxClassDecl;
 import utest.Assert;
 
 /**

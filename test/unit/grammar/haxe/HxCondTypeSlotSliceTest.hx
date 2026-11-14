@@ -3,19 +3,19 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxAbstractClause;
-import anyparse.grammar.haxe.HxAbstractDecl;
-import anyparse.grammar.haxe.HxAnonMember;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxParamBody;
-import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.grammar.haxe.cond.HxConditionalDecl;
 import anyparse.grammar.haxe.cond.HxConditionalInline;
 import anyparse.grammar.haxe.cond.HxConditionalType;
 import anyparse.grammar.haxe.cond.HxConditionalTypeElse;
+import anyparse.grammar.haxe.decl.HxAbstractClause;
+import anyparse.grammar.haxe.decl.HxAbstractDecl;
+import anyparse.grammar.haxe.decl.HxAnonMember;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxFnDecl;
+import anyparse.grammar.haxe.decl.HxHeritageClause;
+import anyparse.grammar.haxe.decl.HxParamBody;
+import anyparse.grammar.haxe.decl.HxVarDecl;
 import utest.Assert;
 
 /**

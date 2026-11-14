@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+
 /**
  * Case-scope token-splice conditional: `#if <cond> <case labels> #end <shared body>` — a
  * `#if` region that wraps ENTIRE `case` labels (pattern list AND the terminating `:`) whose

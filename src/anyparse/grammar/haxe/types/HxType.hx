@@ -1,6 +1,8 @@
 package anyparse.grammar.haxe.types;
 
 import anyparse.grammar.haxe.cond.HxConditionalType;
+import anyparse.grammar.haxe.decl.HxAnonMember;
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.lit.HxDoubleStringLit;
 import anyparse.grammar.haxe.lit.HxWordLit;
 

@@ -290,7 +290,7 @@ class TransformLowering {
 	/**
 	 * Generated `_transform` function name for a rule type path — the
 	 * simple type name prefixed with `_transform` (e.g.
-	 * `anyparse.grammar.haxe.HxExpr` to `_transformHxExpr`).
+	 * `anyparse.grammar.haxe.expr.HxExpr` to `_transformHxExpr`).
 	 */
 	public static function transformFnName(typePath: String): String {
 		return '_transform${simpleName(typePath)}';

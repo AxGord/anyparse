@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HxCaseBranch;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxSwitchCase;
-import anyparse.grammar.haxe.HxSwitchStmt;
+import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.stmt.HxCaseBranch;
+import anyparse.grammar.haxe.stmt.HxStatement;
+import anyparse.grammar.haxe.stmt.HxSwitchCase;
+import anyparse.grammar.haxe.stmt.HxSwitchStmt;
 import utest.Assert;
 
 /**

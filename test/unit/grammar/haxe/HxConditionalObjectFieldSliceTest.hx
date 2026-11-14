@@ -1,9 +1,9 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HxObjectField;
-import anyparse.grammar.haxe.HxObjectLit;
-import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.grammar.haxe.cond.HxConditionalCommaList;
+import anyparse.grammar.haxe.decl.HxVarDecl;
+import anyparse.grammar.haxe.expr.HxObjectField;
+import anyparse.grammar.haxe.expr.HxObjectLit;
 import utest.Assert;
 
 /**

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.lit;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * One segment of a single-quoted Haxe string with interpolation.
  *

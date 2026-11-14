@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.stmt.HxStatement;
+import anyparse.grammar.haxe.stmt.HxSwitchCase;
+
 /**
  * Statement-position token-splice conditional whose every branch opens an OUTER block and,
  * inside it, a `switch (...) {` header, with the case list, the switch's closing `}` and the

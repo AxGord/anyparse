@@ -3,12 +3,12 @@ package unit.grammar.haxe;
 import anyparse.format.BodyPolicy;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxNamedFnExpr;
-import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.decl.HxFnDecl;
+import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.expr.HxNamedFnExpr;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 
 /**

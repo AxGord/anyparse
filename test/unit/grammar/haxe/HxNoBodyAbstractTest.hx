@@ -1,14 +1,14 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxAbstractDecl;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxFnBody;
-import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.decl.HxAbstractDecl;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxClassMember;
+import anyparse.grammar.haxe.decl.HxFnBody;
+import anyparse.grammar.haxe.decl.HxFnDecl;
+import anyparse.grammar.haxe.decl.HxInterfaceDecl;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * One `#elseif <cond> <expr>` clause inside a `HxConditionalExpr`'s `elseifs` Star. Mirror of
  * `HxElseifDecl` / `HxElseifStmt` at expression scope, with the body shape diverging the same

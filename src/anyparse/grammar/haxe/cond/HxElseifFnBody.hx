@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxFnBody;
+
 /**
  * One `#elseif <cond> <body>` clause inside a `HxConditionalFnBody`'s
  * `elseifs` Star - the function-BODY-slot twin of `HxElseifExpr` /

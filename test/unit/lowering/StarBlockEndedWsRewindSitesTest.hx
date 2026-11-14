@@ -1,10 +1,10 @@
 package unit.lowering;
 
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxFnBody;
-import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxStatement;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxFnBody;
+import anyparse.grammar.haxe.decl.HxFnDecl;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import haxe.Exception;
 
 /**

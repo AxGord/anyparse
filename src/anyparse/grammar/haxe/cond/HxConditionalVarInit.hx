@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Body of a `#if <cond> = <expr> #end` region occupying the initializer
  * slot of a variable declaration — the `=` sits INSIDE the guard while

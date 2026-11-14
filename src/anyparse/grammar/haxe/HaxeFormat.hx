@@ -11,6 +11,7 @@ import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
+import anyparse.grammar.haxe.expr.HxComprehension;
 import haxe.Exception;
 
 using StringTools;

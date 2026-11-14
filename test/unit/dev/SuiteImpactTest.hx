@@ -64,7 +64,7 @@ final class SuiteImpactTest extends Test {
 		for (path in [
 			'src/anyparse/macro/Codegen.hx',
 			'src/anyparse/runtime/Parser.hx',
-			'src/anyparse/grammar/haxe/HxExpr.hx',
+			'src/anyparse/grammar/haxe/expr/HxExpr.hx',
 			'test/testkit/TestDiscovery.hx',
 			'test-js.hxml',
 			'apq.json',

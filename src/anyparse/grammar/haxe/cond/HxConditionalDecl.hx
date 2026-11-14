@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxTopLevelDecl;
 import anyparse.grammar.haxe.meta.HxMetadata;
 
 /**

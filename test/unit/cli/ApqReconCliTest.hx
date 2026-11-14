@@ -800,7 +800,7 @@ class ApqReconCliTest extends Test {
 		);
 		Assert.equals(-1, err.indexOf('no mandatory-ref-lead-trail candidates'), err);
 		Assert.isTrue(out.indexOf('=== permissive-construct: ') >= 0, out);
-		Assert.isTrue(out.indexOf('src/anyparse/grammar/haxe/Hx') >= 0, 'a candidate is named by its definition file: $out');
+		Assert.isTrue(out.indexOf('src/anyparse/grammar/haxe/') >= 0, 'a candidate is named by its definition file: $out');
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

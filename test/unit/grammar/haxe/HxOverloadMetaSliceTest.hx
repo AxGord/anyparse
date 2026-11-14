@@ -2,11 +2,11 @@ package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.decl.HxMemberDecl;
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.meta.HxMetadata;
 import utest.Assert;
 

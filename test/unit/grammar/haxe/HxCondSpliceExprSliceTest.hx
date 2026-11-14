@@ -2,12 +2,12 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeParser;
-import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxFnBody;
-import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.cond.HxCondSpliceOpExpr;
 import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
+import anyparse.grammar.haxe.decl.HxClassDecl;
+import anyparse.grammar.haxe.decl.HxFnBody;
+import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 
 /**
@@ -325,7 +325,7 @@ class HxCondSpliceExprSliceTest extends HxTestHelpers {
 	}
 
 	private function accessorIds(decl: HxVarSemiCondInitDecl): String {
-		final access: Null<anyparse.grammar.haxe.HxAccessClause> = decl.access;
+		final access: Null<anyparse.grammar.haxe.decl.HxAccessClause> = decl.access;
 		return access == null ? '<none>' : access.ids.map(id -> (id: String)).join(',');
 	}
 

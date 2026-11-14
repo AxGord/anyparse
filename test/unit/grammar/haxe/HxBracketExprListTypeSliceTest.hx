@@ -1,9 +1,9 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxTypedefDecl;
+import anyparse.grammar.haxe.decl.HxTypedefDecl;
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.types.HxType;
 import anyparse.grammar.haxe.types.HxTypeRef;
 import utest.Assert;

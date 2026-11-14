@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * Operand-position token-splice conditional: `#if <cond> <fragment> #end <tail-operand>`
  * where the fragment is NOT a balanced expression (see `HxCondSpliceRaw`). The enclosing

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.decl.HxParam;
+
 /**
  * One `#elseif <cond> <params>` clause inside a `HxConditionalParam`'s
  * `elseifs` Star. The fn-param-scope twin of `HxElseifCommaList<HxObjectField>` /

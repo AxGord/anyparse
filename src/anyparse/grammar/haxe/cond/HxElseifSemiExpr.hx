@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe.cond;
 
+import anyparse.grammar.haxe.expr.HxExpr;
+
 /**
  * One `#elseif <cond> <expr>;` clause inside a `HxConditionalSemiExpr`
  * chain - the semicolon-terminated twin of `HxElseifExpr`, mirroring
