@@ -148,7 +148,16 @@ final class Matcher {
 		pType: Null<QueryNode>, iType: Null<QueryNode>, eq: Null<KindEquivalence>, identKind: Null<String>,
 		bindings: Map<String, QueryNode>, unwritten: Array<Unwritten>
 	): Bool {
-		if (pType != null) return iType != null && unify(pType, iType, eq, identKind, bindings, unwritten);
+		if (pType != null) {
+			if (iType == null) return false;
+			final bare: Null<String> = anyTypeMetavar(pType, iType, eq);
+			if (bare == null) return unify(pType, iType, eq, identKind, bindings, unwritten);
+			if (bare == Metavar.WILDCARD_NAME) return true;
+			final prior: Null<QueryNode> = bindings[bare];
+			if (prior != null) return sameBinding(prior, iType, identKind);
+			bindings[bare] = iType;
+			return true;
+		}
 		final at: Null<Span> = iType?.span;
 		if (at != null) unwritten.push(TypeAnnotation(at));
 		return true;
@@ -169,7 +178,7 @@ final class Matcher {
 		final pTypes: Int = pattern.typeArgCount;
 		final iTypes: Int = input.typeArgCount;
 		final pc: Array<QueryNode> = pattern.children;
-		final ic: Array<QueryNode> = input.children;
+		final ic: Array<QueryNode> = withoutTypeEcho(pattern, input, eq);
 		if (pTypes == 0 && iTypes > 0) {
 			final at: Null<Span> = input.span;
 			if (at != null) unwritten.push(TypeArguments(at));
@@ -208,6 +217,35 @@ final class Matcher {
 		for (k in 0...prefix) if (!unify(p[pFrom + k], i[iFrom + k], eq, identKind, bindings, unwritten)) return false;
 		for (k in 0...suffix) if (!unify(p[pTo - 1 - k], i[iTo - 1 - k], eq, identKind, bindings, unwritten)) return false;
 		return true;
+	}
+
+	/**
+	 * The bare name of a type-slot metavariable standing for a type of ANOTHER kind than itself: a plain `$t` is parsed as a
+	 * named type, so against a function type, an anonymous structure or any form the kind relation does not unify, it must
+	 * bind the whole subtree rather than fail on kind. `null` when the pattern node is no such metavariable.
+	 */
+	private static function anyTypeMetavar(pType: QueryNode, iType: QueryNode, eq: Null<KindEquivalence>): Null<String> {
+		final pname: Null<String> = pType.name;
+		if (pname == null || !pname.startsWith('$') || pType.children.length > 0 || pType.typeArgCount > 0) return null;
+		final sameKind: Bool = eq == null ? pType.kind == iType.kind : eq.equivalent(pType.kind, iType.kind);
+		return sameKind && iType.children.length == 0 ? null : pname.substring(1);
+	}
+
+	/**
+	 * The input's children, less the one a declared type echoes into them (an anonymous structure stays a child so its fields
+	 * remain declarations): a pattern whose type slot is a bare metavariable writes no such child, and the echo would shift every
+	 * child run by one.
+	 */
+	private static function withoutTypeEcho(pattern: QueryNode, input: QueryNode, eq: Null<KindEquivalence>): Array<QueryNode> {
+		final iType: Null<QueryNode> = input.type;
+		final pType: Null<QueryNode> = pattern.type;
+		if (iType == null) return input.children;
+		if (pType == null) return input.children;
+		if (anyTypeMetavar(pType, iType, eq) == null) return input.children;
+		final at: Null<Span> = iType.span;
+		return input.children.filter(
+			c -> !(c.kind == iType.kind && c.span != null && at != null && c.span.from == at.from && c.span.to == at.to)
+		);
 	}
 
 	/** Position of the single `...` in `children[from, to)`, or `-1` when there is none. */

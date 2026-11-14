@@ -16958,6 +16958,14 @@
 			"find": "if (!leaving.contains(fi.file)) fi.module",
 			"replace": "fi.module",
 			"note": "a relocated module's old path stays among the modules the project holds after the move"
+		},
+		{
+			"name": "M-MATCH-TYPE-METAVAR-KIND-BOUND",
+			"type": "anyparse.query.Matcher",
+			"method": "anyTypeMetavar",
+			"find": "return sameKind && iType.children.length == 0 ? null : pname.substring(1);",
+			"replace": "return null;",
+			"note": "a type metavariable binds only a plain named type again, so a function type, an anonymous structure or a parameterized type in the slot no longer matches"
 		}
 	]
 }
