@@ -355,42 +355,6 @@
 			"note": "a `while` comprehension or lambda body is no decision point: complexity counts nothing for it and a binding under it is hoisted"
 		},
 		{
-			"name": "M-RESERVED-IDENT-NAME",
-			"type": "anyparse.grammar.haxe.HxIdentLit",
-			"method": "@:re",
-			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
-			"replace": "",
-			"note": "a declaration name (parameter, binder, type, enum constructor, structure field) takes a reserved word Haxe refuses"
-		},
-		{
-			"name": "M-RESERVED-VAR-NAME",
-			"type": "anyparse.grammar.haxe.HxVarNameLit",
-			"method": "@:re",
-			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|new|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
-			"replace": "(?!(?:var|final)\\\\b)",
-			"note": "a `var` / `final` name takes every reserved word but `var` and `final` again"
-		},
-		{
-			"name": "M-RESERVED-FN-NAME",
-			"type": "anyparse.grammar.haxe.HxFnNameLit",
-			"method": "@:re",
-			"kind": "MetaCall",
-			"find": "(?!(?:abstract|break|case|cast|catch|class|continue|default|do|dynamic|else|enum|extends|extern|false|final|for|function|if|implements|import|in|inline|interface|macro|null|override|package|private|public|return|static|switch|this|throw|true|try|typedef|untyped|using|var|while)\\\\b)",
-			"replace": "",
-			"note": "a function name takes a reserved word Haxe refuses"
-		},
-		{
-			"name": "M-RESERVED-VERSIONED-REFUSED",
-			"type": "anyparse.grammar.haxe.HxVarNameLit",
-			"method": "@:re",
-			"kind": "MetaCall",
-			"find": "|null|override|",
-			"replace": "|null|operator|overload|override|",
-			"note": "a `var` name refuses `operator` / `overload` too, and a module declaring one under a `#if` for an older Haxe skip-parses"
-		},
-		{
 			"name": "M-NARROWING-OR-FLAT",
 			"type": "anyparse.grammar.haxe.HaxeBooleanLogicSupport",
 			"method": "narrowingOr",
@@ -720,33 +684,6 @@
 			"find": "@:fmt(atomOperandWhen('ECheckTypeExpr'), tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
 			"replace": "@:fmt(atomOperandWhen('ECheckTypeExpr'))",
 			"note": "`cast` is written like the construct `macro`, so `cast(x)` gains a space and stops reading as a call"
-		},
-		{
-			"name": "M-FNTYPE-NEST-TYPE-ARG-OFF",
-			"type": "anyparse.grammar.haxe.HxTypeArg",
-			"method": "HxTypeArg",
-			"kind": "TypedefDecl",
-			"find": "@:queryType\n\t@:fmt(propagateNestedType)\n\tvar type",
-			"replace": "@:queryType\n\tvar type",
-			"note": "a type argument is no longer marked nested, so a function type inside `Array<…>` or `Null<…>` loses the additional unit and continues one unit past its line"
-		},
-		{
-			"name": "M-FNTYPE-NEST-PARENS-OFF",
-			"type": "anyparse.grammar.haxe.HxType",
-			"method": "Parens",
-			"kind": "ParamCtor",
-			"find": "@:wrap('(', ')')\n\t@:fmt(propagateNestedType)",
-			"replace": "@:wrap('(', ')')",
-			"note": "a parenthesised function type is no longer marked nested, so it continues one unit past its line instead of two"
-		},
-		{
-			"name": "M-FNTYPE-NEST-COND-OFF",
-			"type": "anyparse.grammar.haxe.HxType",
-			"method": "ConditionalType",
-			"kind": "ParamCtor",
-			"find": "@:fmt(spaceBeforeTrail, propagateNestedType)",
-			"replace": "@:fmt(spaceBeforeTrail)",
-			"note": "a function type inside a `#if` type arm is no longer marked nested, so it continues one unit past its line instead of two"
 		},
 		{
 			"name": "M-FNTYPE-NEST-NEW-OFF",
@@ -1109,15 +1046,6 @@
 			"note": "an anon field without a keyword reaches no knob, so metadataOther does not move it"
 		},
 		{
-			"name": "M-META-CHAIN-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxMetaExpr",
-			"method": "HxMetaExpr",
-			"kind": "TypedefDecl",
-			"find": "metaLineEndChain('MetaExpr', 'expr'),",
-			"replace": "",
-			"note": "a local var annotation is not a metadata site, so metadataVar does not reach it"
-		},
-		{
 			"name": "M-META-CONFIG-TYPE",
 			"type": "anyparse.grammar.haxe.HaxeFormatConfigLoader",
 			"method": "applyLineEnds",
@@ -1188,33 +1116,6 @@
 			"method": "containerItemWrapFromConfig",
 			"force": "base",
 			"note": "a configured containerItemWrap block is dropped and the built-in nested cascade stays, so a project cannot send simple literal arguments to their own line"
-		},
-		{
-			"name": "M-INTERSECTION-OPERAND-NOT-TYPEDEF-BODY",
-			"type": "anyparse.grammar.haxe.HxIntersectionClause",
-			"method": "HxIntersectionClause",
-			"kind": "TypedefDecl",
-			"find": ", captureAfterLead, propagateTypedefContext)",
-			"replace": ", captureAfterLead)",
-			"note": "an intersection operand of a typedef body is an ordinary anon type, so a Next left curly no longer lays it out one field per line"
-		},
-		{
-			"name": "M-ARROW-TYPE-IN-TYPEDEF-BODY",
-			"type": "anyparse.grammar.haxe.HxType",
-			"method": "HxType",
-			"kind": "EnumDecl",
-			"find": "@:fmt(functionTypeHaxe3, clearTypedefContext)",
-			"replace": "@:fmt(functionTypeHaxe3)",
-			"note": "an anon parameter or return of an old-style function type under a typedef counts as the typedef body, so a Next left curly lays it out one field per line"
-		},
-		{
-			"name": "M-ARROW-FN-TYPE-IN-TYPEDEF-BODY",
-			"type": "anyparse.grammar.haxe.HxType",
-			"method": "HxType",
-			"kind": "EnumDecl",
-			"find": "@:fmt(clearTypedefContext)",
-			"replace": "",
-			"note": "an anon parameter of a `(args) -> ret` function type under a typedef counts as the typedef body, so a Next left curly lays it out one field per line"
 		},
 		{
 			"name": "M-SEMI-ELSEIF-PER-LINE",
@@ -1570,15 +1471,6 @@
 			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
 		},
 		{
-			"name": "M-META-FIT-CHAIN-UNWIRED",
-			"type": "anyparse.grammar.haxe.HxMetaExpr",
-			"method": "HxMetaExpr",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))\n\t",
-			"replace": "",
-			"note": "a local var's metadata names no simplicity predicate, so fit breaks it"
-		},
-		{
 			"name": "M-TYPED-OPTIONS-BASELINE",
 			"type": "anyparse.grammar.haxe.HxTypedOptionsRewrite",
 			"method": "typedEdit",
@@ -1812,33 +1704,6 @@
 			"find": "@:fmt(ctorKwTrivia)",
 			"replace": "",
 			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
-		},
-		{
-			"name": "M-TYPEPARAM-META-UNDECLARED",
-			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
-			"method": "HxTypeParamDecl",
-			"kind": "TypedefDecl",
-			"find": "@:trivia\n\t@:tryparse\n\t@:fmt(metaLineEndInline)\n\tvar meta: Array<HxMetadata>;\n\t",
-			"replace": "",
-			"note": "a type parameter declares no metadata run, so `<@:const N>` and `<T:Foo = Bar, @:const N>` stop parsing"
-		},
-		{
-			"name": "M-TYPEPARAM-CONSTRAINT-AFTER-LEAD-OFF",
-			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
-			"method": "HxTypeParamDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)",
-			"replace": "@:fmt(space('typeParamConstraintColon', 'lead'))",
-			"note": "the constraint has no AfterLead slot, so a comment after its colon is dropped and the writer round trip refuses the file"
-		},
-		{
-			"name": "M-TYPEPARAM-DEFAULT-AFTER-LEAD-OFF",
-			"type": "anyparse.grammar.haxe.HxTypeParamDecl",
-			"method": "HxTypeParamDecl",
-			"kind": "TypedefDecl",
-			"find": "@:fmt(typeParamDefaultEquals, captureAfterLead)",
-			"replace": "@:fmt(typeParamDefaultEquals)",
-			"note": "the default has no AfterLead slot, so a comment after its `=` is dropped and the writer round trip refuses the file"
 		},
 		{
 			"name": "M-COND-QUOTED-ESCAPE-OFF",

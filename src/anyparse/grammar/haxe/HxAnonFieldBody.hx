@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Body shape for a single anonymous-structure-type field — the
  * `name : Type` slot shared by both the required and optional

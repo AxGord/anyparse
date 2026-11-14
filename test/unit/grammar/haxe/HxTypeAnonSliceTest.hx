@@ -5,9 +5,9 @@ import anyparse.grammar.haxe.HxAnonField;
 import anyparse.grammar.haxe.HxAnonFieldBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeRef;
 import utest.Assert;
 
 /**

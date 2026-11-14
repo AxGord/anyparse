@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxTypeName;
+
 /**
  * Payload of `HxDecl.ImportAliasDecl` — single-symbol `import` with an
  * `as Name` alias clause (slice ω-import-as-alias).

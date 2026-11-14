@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Grammar type for a parameterless enum constructor: `Name;`, or with a GADT
  * result type `Name:Type;`. The optional `returnType` keeps the plain form

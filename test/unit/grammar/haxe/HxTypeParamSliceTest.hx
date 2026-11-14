@@ -9,14 +9,14 @@ import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
-import anyparse.grammar.haxe.HxIntersectionClause;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxTypeArg;
-import anyparse.grammar.haxe.HxTypeParamDecl;
-import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.types.HxIntersectionClause;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeArg;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+import anyparse.grammar.haxe.types.HxTypeRef;
 import utest.Assert;
 
 /**

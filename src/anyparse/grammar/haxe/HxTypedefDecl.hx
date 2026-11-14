@@ -1,5 +1,10 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxIntersectionClause;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Grammar type for a Haxe typedef declaration: `typedef Name<TypeParams> = Type [& Type]*`.
  * The `typedef` keyword lives on the `name` field via `@:kw('typedef')` so the generated

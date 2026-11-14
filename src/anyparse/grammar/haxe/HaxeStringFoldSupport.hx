@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxStringEscape;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.ConcatSegment;
 import anyparse.query.StringFold.StringFoldSupport;

@@ -2,8 +2,8 @@ package unit.query;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.grammar.haxe.HxCondModPrefix;
-import anyparse.grammar.haxe.HxMemberModifier;
-import anyparse.grammar.haxe.HxModifier;
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.meta.HxModifier;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ElementSpan;
 import anyparse.query.GrammarPlugin;

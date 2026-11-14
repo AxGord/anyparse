@@ -1,5 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Grammar type for a Haxe abstract declaration: `abstract Name<TypeParams>(UnderlyingType)
  * [from Type]* [to Type]* { members }`. The `abstract` keyword lives on the `name` field via

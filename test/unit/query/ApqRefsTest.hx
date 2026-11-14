@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.types.HxType;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;

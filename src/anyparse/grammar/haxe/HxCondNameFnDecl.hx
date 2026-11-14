@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * A class-member `function` whose NAME is a `#if ... #end` region:
  *

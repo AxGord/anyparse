@@ -1,12 +1,12 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxExprIdentLit;
-import anyparse.grammar.haxe.HxIdentLit;
-import anyparse.grammar.haxe.HxIntLit;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleAst;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.lit.HxExprIdentLit;
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.lit.HxIntLit;
 import utest.Assert;
 import utest.Test;
 

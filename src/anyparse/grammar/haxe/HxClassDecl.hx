@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Grammar type for a single Haxe class declaration — a stand-alone root (driven by
  * `HaxeParser`) alongside `HxModule` (driven by `HaxeModuleParser`), which wraps zero or more

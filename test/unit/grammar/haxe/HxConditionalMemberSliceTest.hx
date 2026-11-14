@@ -10,8 +10,8 @@ import anyparse.grammar.haxe.HxConditionalBlock;
 import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
-import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.meta.HxMetadata;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

@@ -22,6 +22,7 @@ import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.format.comment.FormatterOff;
+import anyparse.grammar.haxe.lit.HxInterpProjection;
 import anyparse.query.AccessorClause;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;

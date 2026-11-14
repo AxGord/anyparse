@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * Body of a `#if <cond> <decls> [#elseif <cond> <decls>]* [#else <decls>] #end` preprocessor-guarded
  * module-level region: the enclosing `HxDecl.Conditional` ctor consumes the `#if` keyword and the trailing

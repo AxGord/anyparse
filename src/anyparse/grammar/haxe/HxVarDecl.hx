@@ -1,5 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxVarNameLit;
+import anyparse.grammar.haxe.meta.HxMetadata;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Variable declaration body shared by class members, anon-struct fields and local `var` / `final` statements:
  * `[@:meta] name [(access)] [:Type] [#if c = e #end | = init] [, more]*`. The keyword and the trailing `;`

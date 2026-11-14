@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Body of a `#if <cond> <type>; [#elseif <cond> <type>;]* [#else <type>;] #end`
  * preprocessor-guarded type-position region. Type-scope mirror of `HxConditionalExpr`: the

@@ -1,5 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxFnNameLit;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Function declaration body for a class member `function`: `name <typeParams> ( params ) :
  * ReturnType <body>`, where `<body>` is one of the `HxFnBody` variants — `{ stmts }`

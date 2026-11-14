@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Grammar type for `extends`/`implements` heritage clauses on a Haxe
  * class or interface declaration.

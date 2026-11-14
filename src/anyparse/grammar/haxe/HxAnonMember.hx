@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * A single anonymous-structure-type field with optional leading
  * metadata.

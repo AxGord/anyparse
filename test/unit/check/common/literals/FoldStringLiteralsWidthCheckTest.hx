@@ -1,6 +1,6 @@
 package unit.check.common.literals;
 
-import anyparse.grammar.haxe.HxStringEscape;
+import anyparse.grammar.haxe.lit.HxStringEscape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatConfigDiscovery;
 

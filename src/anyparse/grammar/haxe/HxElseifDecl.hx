@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * One `#elseif <cond> <decls>` clause inside a `HxConditionalDecl`'s
  * `elseifs` Star. Carries the `#elseif` keyword on its first field's

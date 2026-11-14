@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxTypeRef;
+
 /**
  * Single field entry in an anonymous structure type — the field-KIND dispatch only. Leading
  * metadata (`@:optional x:Int`) is carried by the `HxAnonMember` wrapper typedef, which

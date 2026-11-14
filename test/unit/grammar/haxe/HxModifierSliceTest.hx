@@ -5,8 +5,8 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
 import anyparse.grammar.haxe.HxMemberDecl;
-import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.meta.HxMemberModifier;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

@@ -1,5 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Grammar type for an enum constructor with parameters.
  *

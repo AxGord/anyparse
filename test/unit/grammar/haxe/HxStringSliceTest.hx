@@ -7,8 +7,8 @@ import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
-import anyparse.grammar.haxe.HxStringSegment;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.lit.HxStringSegment;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

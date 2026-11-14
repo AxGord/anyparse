@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxWordLit;
+
 /**
  * Body of a named macro-reification escape: `$name{ expr }`
  * (`$i{}` / `$e{}` / `$a{}` / `$b{}` / `$v{}` / `$p{}`).

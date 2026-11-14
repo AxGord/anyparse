@@ -1,6 +1,6 @@
 package unit.macro;
 
-import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.lit.HxIdentLit;
 
 /** A generic `@:peg` typedef: a name, then its `T` after a `:` lead that every instance carries. */
 @:peg

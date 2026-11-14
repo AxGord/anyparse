@@ -7,9 +7,9 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondModPrefix;
 import anyparse.grammar.haxe.HxConditionalInline;
-import anyparse.grammar.haxe.HxMemberModifier;
-import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.meta.HxModifier;
 import utest.Assert;
 
 /**

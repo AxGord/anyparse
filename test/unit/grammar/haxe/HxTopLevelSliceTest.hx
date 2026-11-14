@@ -5,10 +5,10 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
-import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.meta.HxModifier;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Type-check expression payload — `(expr : Type)`.
  *

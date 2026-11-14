@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+
 /**
  * The VALUE binder of a key-value iteration — the `v` in
  * `for (k => v in m)` — shared by `HxForStmt.valueName` and

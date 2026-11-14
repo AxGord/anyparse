@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.types.HxTypeRef;
 import utest.Assert;
 
 /**

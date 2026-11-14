@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxMetadata;
-import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.meta.HxMetadata;
+import anyparse.grammar.haxe.meta.HxMetadataUtil;
 import utest.Assert;
 
 /**

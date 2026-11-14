@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+
 /**
  * One `#elseif <cond> <name>` clause inside a `HxConditionalFnName`
  * chain - the name-slot twin of `HxElseifType` / `HxElseifExpr`.

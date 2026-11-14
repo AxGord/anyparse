@@ -3,17 +3,17 @@ package unit.grammar.haxe;
 import anyparse.format.WhitespacePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxArrowFnType;
 import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxTypeArg;
-import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.types.HxArrowFnType;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeArg;
+import anyparse.grammar.haxe.types.HxTypeRef;
 import utest.Assert;
 
 /**

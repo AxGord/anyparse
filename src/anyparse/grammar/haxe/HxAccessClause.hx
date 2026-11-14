@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxWordLit;
+
 /**
  * Property accessor clause on a Haxe `var`/`final` member —
  * the parenthesised `(read, write)` pair, e.g. `(get, set)`,

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * `#else <type>;` clause of a type-position conditional-compilation region. Reached via
  * `HxConditionalType.elseClause`'s `@:optional @:kw('#else')` Ref.

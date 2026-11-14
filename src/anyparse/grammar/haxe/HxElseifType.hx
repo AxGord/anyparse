@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * One `#elseif <cond> <type>;` clause inside a `HxConditionalType`
  * chain. Type-scope twin of `HxElseifParam` / `HxElseifInline<HxCondDeclPrefix>` /

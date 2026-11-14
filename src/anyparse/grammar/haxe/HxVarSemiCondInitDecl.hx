@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxVarNameLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * A `var` class member whose initializer AND terminator both live inside a `#if` region:
  *

@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * Anonymous function expression payload: `function<T>(params):Ret body?`. The `function`
  * keyword is consumed at the enclosing `HxExpr.FnExpr` ctor via `@:kw('function')` — this

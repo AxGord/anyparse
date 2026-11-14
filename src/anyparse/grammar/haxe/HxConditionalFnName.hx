@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+
 /**
  * Body of a `#if <cond> <name> [#elseif <cond> <name>]* [#else <name>]
  * #end` region occupying a function's NAME slot. Reached via

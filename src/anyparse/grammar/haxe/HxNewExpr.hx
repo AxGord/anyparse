@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxNewTypeName;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Grammar for `new T(args)` constructor call expressions: `new ClassName<params>(arg1, arg2,
  * ...)`. The `new` keyword is consumed at the enum-branch level (`@:kw('new')` on the

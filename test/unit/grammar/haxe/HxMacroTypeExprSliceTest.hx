@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.types.HxType;
 import utest.Assert;
 
 /**

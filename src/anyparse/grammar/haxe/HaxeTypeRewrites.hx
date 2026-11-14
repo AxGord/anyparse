@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.format.WriteOptions;
+import anyparse.grammar.haxe.types.HxType;
 
 /**
  * ω-fmt-prewrite-hook (Haxe plugin) — shape-conditional `HxType`

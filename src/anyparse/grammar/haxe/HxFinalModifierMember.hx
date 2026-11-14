@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+
 /**
  * Body of a member declaration whose `final` keyword is a non-overridable METHOD MODIFIER
  * rather than the introducer of an immutable field — dispatched after the enclosing

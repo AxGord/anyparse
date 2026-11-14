@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+
 /**
  * For-loop statement grammar: `for (varName in iterable) body`.
  *

@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * A class member declaration with optional leading metadata and modifiers: wraps
  * `HxClassMember` (the `var`/`final`/`function` dispatch enum) with two preceding Star fields

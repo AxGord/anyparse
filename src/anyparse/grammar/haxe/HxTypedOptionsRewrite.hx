@@ -2,6 +2,7 @@ package anyparse.grammar.haxe;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.format.OptionsSource;
+import anyparse.grammar.haxe.lit.HxStringEscape;
 import anyparse.macro.OptionKnobs;
 import anyparse.query.AddImport;
 import anyparse.query.CanonicalEdit;

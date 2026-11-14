@@ -1,5 +1,9 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxFnNameLit;
+import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamDecl;
+
 /**
  * The inside of a NAMED function expression — `function name<T>(params):Ret body` in expression
  * position (`HxExpr.NamedFnExpr`). The signature is `HxFnDecl`'s field for field, formatting knobs

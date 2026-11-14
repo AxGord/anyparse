@@ -32,7 +32,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.HxObjectField';
 	private static final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
 	private static final HX_CLASS_MEMBER: String = 'anyparse.grammar.haxe.HxClassMember';
-	private static final HX_MEMBER_MODIFIER: String = 'anyparse.grammar.haxe.HxMemberModifier';
+	private static final HX_MEMBER_MODIFIER: String = 'anyparse.grammar.haxe.meta.HxMemberModifier';
 	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.HxAbstractDecl';
 	private static final MEMBER_BEYOND_VALUE: String = 'memberBeyondValue';
 	private static final CONDITIONAL_CTOR: String = 'Conditional';
@@ -65,11 +65,11 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
 	private static final HX_ANON_FIELD: String = 'anyparse.grammar.haxe.HxAnonField';
 	private static final HX_ANON_VAR_BODY: String = 'anyparse.grammar.haxe.HxAnonVarBody';
-	private static final HX_TYPE: String = 'anyparse.grammar.haxe.HxType';
-	private static final HX_METADATA: String = 'anyparse.grammar.haxe.HxMetadata';
-	private static final HX_META_CALL_ARGS: String = 'anyparse.grammar.haxe.HxMetaCallArgs';
-	private static final HX_INTERP_STRING: String = 'anyparse.grammar.haxe.HxInterpString';
-	private static final HX_STRING_SEGMENT: String = 'anyparse.grammar.haxe.HxStringSegment';
+	private static final HX_TYPE: String = 'anyparse.grammar.haxe.types.HxType';
+	private static final HX_METADATA: String = 'anyparse.grammar.haxe.meta.HxMetadata';
+	private static final HX_META_CALL_ARGS: String = 'anyparse.grammar.haxe.meta.HxMetaCallArgs';
+	private static final HX_INTERP_STRING: String = 'anyparse.grammar.haxe.lit.HxInterpString';
+	private static final HX_STRING_SEGMENT: String = 'anyparse.grammar.haxe.lit.HxStringSegment';
 
 	/** Generated helpers of `metadataIsSimple`: a metadata argument's verdict, a dotted path, a plain single-quoted string. */
 	private static final META_ARG_IS_SIMPLE: String = '_metaArgIsSimple';

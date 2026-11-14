@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+import anyparse.grammar.haxe.meta.HxModifier;
+
 /**
  * Declaration-scope token-splice conditional whose branches are PARALLEL type-declaration
  * headers, each opening the body, with the members and the closing `}` living AFTER `#end`

@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+
 /**
  * Expression-position `for` loop — the head of a Haxe array comprehension (`[for (x in xs)
  * bodyExpr]`) or any value-position for-loop where the body produces a value.

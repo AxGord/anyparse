@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxTypeName;
+
 /**
  * A top-level declaration in a Haxe module. Forms recognised, in source order (which is
  * dispatch order):

@@ -1,0 +1,25 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.meta. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-META-CHAIN-UNWIRED",
+			"type": "anyparse.grammar.haxe.meta.HxMetaExpr",
+			"method": "HxMetaExpr",
+			"kind": "TypedefDecl",
+			"find": "metaLineEndChain('MetaExpr', 'expr'),",
+			"replace": "",
+			"note": "a local var annotation is not a metadata site, so metadataVar does not reach it"
+		},
+		{
+			"name": "M-META-FIT-CHAIN-UNWIRED",
+			"type": "anyparse.grammar.haxe.meta.HxMetaExpr",
+			"method": "HxMetaExpr",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))\n\t",
+			"replace": "",
+			"note": "a local var's metadata names no simplicity predicate, so fit breaks it"
+		}
+	]
+}

@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Body shape for the named-form arrow function parameter — the
  * `name : Type` slot inside a new-form arrow type

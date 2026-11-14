@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Single parameter inside a new-form arrow function type (`(args) -> ret`).
  *

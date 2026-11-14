@@ -7,9 +7,9 @@ import anyparse.grammar.haxe.HxCondDeclPrefix;
 import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
-import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTopLevelDecl;
+import anyparse.grammar.haxe.meta.HxMetadata;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

@@ -5,7 +5,7 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxHeritageClause;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.types.HxType;
 import anyparse.runtime.ParseError;
 import utest.Assert;
 

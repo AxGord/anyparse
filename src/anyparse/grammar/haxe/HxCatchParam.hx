@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Body shape for the `(name [: Type])` slot of a catch clause —
  * the name + optional type-annotation pair shared by all three

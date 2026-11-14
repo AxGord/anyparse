@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxObjectKeyLit;
+
 /**
  * Bare object-literal field shape — `name: value`. Was the original
  * `HxObjectField` typedef before Slice 18 promoted `HxObjectField` to a

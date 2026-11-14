@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Body shape for a single lambda/anon-fn parameter slot — the `name [: Type] [= default]`
  * portion shared by both the required and optional branches of `HxLambdaParam`. The

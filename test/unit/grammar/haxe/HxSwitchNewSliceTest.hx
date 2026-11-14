@@ -7,7 +7,7 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmt;
-import anyparse.grammar.haxe.HxType;
+import anyparse.grammar.haxe.types.HxType;
 import utest.Assert;
 
 /**

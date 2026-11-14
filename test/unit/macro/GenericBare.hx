@@ -1,6 +1,6 @@
 package unit.macro;
 
-import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.lit.HxIdentLit;
 
 /** A bare word, the first argument of `GenericSlot` in `GenericPair`. */
 @:peg

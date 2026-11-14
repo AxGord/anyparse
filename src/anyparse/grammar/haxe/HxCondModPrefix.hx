@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * Element type of the bodies inside a `#if` region that sits in modifier-prefix position —
  * the Stars of `HxConditionalInline<HxCondModPrefix>` and `HxElseifInline<HxCondModPrefix>`. Widens the plain modifier keyword set

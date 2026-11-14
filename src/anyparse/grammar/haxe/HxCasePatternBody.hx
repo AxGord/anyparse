@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxVarNameLit;
+
 /**
  * Pattern-body Alt-enum for a `case` pattern element. Distinguishes the
  * Haxe pattern-only `case var <ident>:` capture from a regular pattern

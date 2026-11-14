@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxFnNameLit;
+
 /**
  * A class-member `function` whose parameter list closes inside a `#if` region, each branch carrying its own
  * `)` and return type:

@@ -1,6 +1,6 @@
 package unit.macro;
 
-import anyparse.grammar.haxe.HxIdentLit;
+import anyparse.grammar.haxe.lit.HxIdentLit;
 
 /**
  * A word after `@`: the Haxe structure of `GenericBare` under another grammar, so an instance shaped

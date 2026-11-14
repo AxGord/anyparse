@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.types.HxType;
+
 /**
  * Grammar type for `from`/`to` clauses in a Haxe abstract declaration.
  *

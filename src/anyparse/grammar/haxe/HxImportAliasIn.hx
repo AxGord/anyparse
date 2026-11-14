@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.lit.HxIdentLit;
+import anyparse.grammar.haxe.types.HxTypeName;
+
 /**
  * Payload of `HxDecl.ImportAliasInDecl` — single-symbol `import` with the legacy pre-Haxe-4
  * `in Name` alias clause (ω-import-in-alias); spelling twin of `HxImportAlias` (the modern

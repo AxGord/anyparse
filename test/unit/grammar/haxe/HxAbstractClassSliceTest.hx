@@ -4,10 +4,10 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxDecl;
-import anyparse.grammar.haxe.HxMemberModifier;
-import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.meta.HxModifier;
 import utest.Assert;
 
 /**

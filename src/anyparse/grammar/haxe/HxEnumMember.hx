@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+
 /**
  * A single enum constructor with optional leading metadata.
  *

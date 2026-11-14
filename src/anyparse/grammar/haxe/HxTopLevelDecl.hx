@@ -1,5 +1,8 @@
 package anyparse.grammar.haxe;
 
+import anyparse.grammar.haxe.meta.HxMetadata;
+import anyparse.grammar.haxe.meta.HxModifier;
+
 /**
  * A top-level declaration with optional leading metadata and modifiers: wraps `HxDecl` (the
  * `class`/`typedef`/`enum`/`interface`/`abstract` dispatch enum) with two preceding Star
