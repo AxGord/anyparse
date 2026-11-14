@@ -683,15 +683,15 @@ class Lowering {
 		final simple: String = simpleName(refName);
 		return if (isSpanBearing(refName))
 			TPath({
-				pack: packOf(refName).concat(['spans']),
-				name: 'Pairs',
+				pack: synthPackOf(_shape.root, SPANS_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${simple}S',
 				params: []
 			})
 		else if (isTriviaBearing(refName))
 			TPath({
-				pack: packOf(refName).concat(['trivia']),
-				name: 'Pairs',
+				pack: synthPackOf(_shape.root, TRIVIA_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${simple}T',
 				params: []
 			})
@@ -703,9 +703,9 @@ class Lowering {
 	private function ruleCtorPath(typePath: String, ctor: String): Array<String> {
 		final simple: String = simpleName(typePath);
 		return if (isSpanBearing(typePath))
-			packOf(typePath).concat(['spans', 'Pairs', '${simple}S', ctor])
+			synthPackOf(_shape.root, SPANS_SUBPACK).concat([SYNTH_MODULE_LEAF, '${simple}S', ctor])
 		else if (isTriviaBearing(typePath))
-			packOf(typePath).concat(['trivia', 'Pairs', '${simple}T', ctor])
+			synthPackOf(_shape.root, TRIVIA_SUBPACK).concat([SYNTH_MODULE_LEAF, '${simple}T', ctor])
 		else
 			packOf(typePath).concat([simple, ctor]);
 	}

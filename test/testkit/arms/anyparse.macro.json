@@ -3310,6 +3310,22 @@
 			"find": "if (_requiresHardline && opt.arrayMatrixWrap",
 			"replace": "if (_requiresHardline && !_ignoreEmit && opt.arrayMatrixWrap",
 			"note": "a grid holding a blank line or a comment is not read under Ignore again, so it goes one element per line"
+		},
+		{
+			"name": "M-SYNTH-PACK-ROOT-CONSUMER",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "ruleValueCT",
+			"find": "pack: synthPackOf(_shape.root, TRIVIA_SUBPACK),",
+			"replace": "pack: packOf(refName).concat([TRIVIA_SUBPACK]),",
+			"note": "the writer names a trivia pair by its rule's package again, so a rule below its root's package fails to find the module the synth side placed at the root"
+		},
+		{
+			"name": "M-SYNTH-PACK-ROOT-SPANS-CONSUMER",
+			"type": "anyparse.macro.Lowering",
+			"method": "ruleReturnCT",
+			"find": "pack: synthPackOf(_shape.root, SPANS_SUBPACK),",
+			"replace": "pack: packOf(refName).concat([SPANS_SUBPACK]),",
+			"note": "the parser names a span pair by its rule's package again, so a rule below its root's package fails to find the module the synth side placed at the root"
 		}
 	]
 }

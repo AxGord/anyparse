@@ -454,15 +454,12 @@ class TriviaTypeSynth {
 	public static inline final KW_LEADING_ARG_NAME: String = 'kwLeading';
 
 	private static final PAIRED_SUFFIX: String = 'T';
-	private static final SYNTH_SUBPACK: String = 'trivia';
-	private static final SYNTH_MODULE_LEAF: String = 'Pairs';
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Map<String, Bool> = [];
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
-		final rootPack: Array<String> = packOf(shape.root);
-		final synthPack: Array<String> = rootPack.concat([SYNTH_SUBPACK]);
+		final synthPack: Array<String> = synthPackOf(shape.root, TRIVIA_SUBPACK);
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];
 		final convertedNames: Array<String> = [];

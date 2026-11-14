@@ -18,6 +18,15 @@ package anyparse.macro;
  */
 final class MacroNames {
 
+	/** Sub-package of the root's package that holds the macro-synthesised trivia `Pairs` module. */
+	public static inline final TRIVIA_SUBPACK: String = 'trivia';
+
+	/** Sub-package of the root's package that holds the macro-synthesised span `Pairs` module. */
+	public static inline final SPANS_SUBPACK: String = 'spans';
+
+	/** Leaf name of a macro-synthesised paired module. */
+	public static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
+
 	/**
 	 * The last segment of a dotted type path — `pkg.Sub.Type` becomes
 	 * `Type`. A path with no dot is returned unchanged.
@@ -35,6 +44,15 @@ final class MacroNames {
 	public static function packOf(typePath: String): Array<String> {
 		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	}
+
+	/**
+	 * The one answer to "which package holds the macro-synthesised paired module of a grammar": the package of the
+	 * grammar's ROOT plus `subpack`, whichever rule asks. A rule's own package says where the user's raw type lives and
+	 * may sit below the root's; the synthesised module has one home per grammar.
+	 */
+	public static function synthPackOf(root: String, subpack: String): Array<String> {
+		return packOf(root).concat([subpack]);
 	}
 
 }

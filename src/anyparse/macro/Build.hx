@@ -80,15 +80,15 @@ class Build {
 		final rootReturnCT: ComplexType = TPath(
 			if (rootSpansBearing)
 				{
-					pack: packOf(shape.root).concat(['spans']),
-					name: 'Pairs',
+					pack: synthPackOf(shape.root, SPANS_SUBPACK),
+					name: SYNTH_MODULE_LEAF,
 					sub: '${rootSimple}S',
 					params: []
 				}
 			else if (rootTriviaBearing)
 				{
-					pack: packOf(shape.root).concat(['trivia']),
-					name: 'Pairs',
+					pack: synthPackOf(shape.root, TRIVIA_SUBPACK),
+					name: SYNTH_MODULE_LEAF,
 					sub: '${rootSimple}T',
 					params: []
 				}
@@ -201,8 +201,8 @@ class Build {
 		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations[AnnotationKeys.TRIVIA_BEARING] == true;
 		final rootReturnCT: ComplexType = rootBearing
 			? TPath({
-				pack: packOf(shape.root).concat(['trivia']),
-				name: 'Pairs',
+				pack: synthPackOf(shape.root, TRIVIA_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${rootSimple}T',
 				params: []
 			})

@@ -382,7 +382,7 @@ final class TriviaPairConverters {
 
 	private static function buildRawToPairedAltBody(origName: String, origNode: ShapeNode, synthPack: Array<String>, pos: Position): Expr {
 		final pairedSimple: String = simpleName(origName) + TriviaTypeSynth.PAIRED_SUFFIX;
-		final pairedPath: Array<String> = synthPack.concat([TriviaTypeSynth.SYNTH_MODULE_LEAF, pairedSimple]);
+		final pairedPath: Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
 		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
 			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);

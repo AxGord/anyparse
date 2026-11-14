@@ -308,8 +308,8 @@ final class WriterChainLowering {
 	 * and the element rule can take a comment into its tail — as the next parse reads it once the writer drops the
 	 * separator after the last argument (`DroppedSepComment.last`, the sep-Star's own answer to the same question).
 	 */
-	private static function postfixArgsInit(elem: ShapeNode, src: Expr, sepEmitted: Expr): Expr {
-		final rehome: Null<Expr> = TriviaTailRehome.fnRefFor(elem);
+	private static function postfixArgsInit(elem: ShapeNode, root: String, src: Expr, sepEmitted: Expr): Expr {
+		final rehome: Null<Expr> = TriviaTailRehome.fnRefFor(elem, root);
 		return rehome == null ? src : macro anyparse.runtime.DroppedSepComment.last($src, $sepEmitted, $rehome);
 	}
 

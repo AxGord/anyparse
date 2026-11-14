@@ -162,7 +162,7 @@ final class WriterTriviaStarDispatch {
 				delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false),
 				delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true),
 				bodyEmptySuppressExpr(starNode, tc.shape.root, true), tc.mapWrapFor(plan.mapWrapRules()),
-				TriviaTailRehome.fnRefFor(starNode.children[0]), afterDocPolicy(starNode)
+				TriviaTailRehome.fnRefFor(starNode.children[0], tc.shape.root), afterDocPolicy(starNode)
 			).triviaSepStarExpr());
 			return;
 		}

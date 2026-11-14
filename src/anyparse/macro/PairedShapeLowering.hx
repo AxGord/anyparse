@@ -31,12 +31,6 @@ class PairedShapeLowering {
 	/** Suffix `SpanTypeSynth` appends to a paired type's simple name. */
 	public static inline final PAIRED_SUFFIX: String = 'S';
 
-	/** Sub-package `SpanTypeSynth` defines the paired module in. */
-	public static inline final SYNTH_SUBPACK: String = 'spans';
-
-	/** Module leaf `SpanTypeSynth` defines the paired types in. */
-	public static inline final SYNTH_MODULE: String = 'Pairs';
-
 	/** Struct field whose presence makes a `Seq` a transparent envelope - the walk descends it and ignores the rest. */
 	public static inline final ENVELOPE_FIELD: String = 'node';
 
@@ -139,8 +133,8 @@ class PairedShapeLowering {
 		return isTerminalRule(rule)
 			? TPath({ pack: packOf(rule), name: simpleName(rule), params: [] })
 			: TPath({
-				pack: packOf(_shape.root).concat([SYNTH_SUBPACK]),
-				name: SYNTH_MODULE,
+				pack: synthPackOf(_shape.root, SPANS_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: simpleName(rule) + PAIRED_SUFFIX,
 				params: []
 			});
@@ -190,7 +184,9 @@ class PairedShapeLowering {
 	 * happens to have imported.
 	 */
 	private function ctorPattern(rule: String, ctor: String, argNames: Array<String>): Expr {
-		final path: Array<String> = packOf(_shape.root).concat([SYNTH_SUBPACK, SYNTH_MODULE, simpleName(rule) + PAIRED_SUFFIX, ctor]);
+		final path: Array<String> = synthPackOf(
+			_shape.root, SPANS_SUBPACK
+		).concat([SYNTH_MODULE_LEAF, simpleName(rule) + PAIRED_SUFFIX, ctor]);
 		final args: Array<Expr> = [for (n in argNames) ident(n)];
 		args.push(ident(SPAN_FIELD));
 		return { expr: ECall(haxe.macro.MacroStringTools.toFieldExpr(path), args), pos: Context.currentPos() };

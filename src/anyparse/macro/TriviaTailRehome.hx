@@ -58,18 +58,11 @@ final class TriviaTailRehome {
 	 * The writer-side reference to the function of a Star's element, `<pack>.trivia.Pairs.TailComments.rehome_<Simple>`;
 	 * null when the element is not a Ref to a rule that carries trivia (the synth pass generated no function for it).
 	 */
-	public static function fnRefFor(elem: ShapeNode): Null<Expr> {
+	public static function fnRefFor(elem: ShapeNode, root: String): Null<Expr> {
 		if (elem.kind != Ref) return null;
 		final rule: String = elem.annotations[AnnotationKeys.BASE_REF];
 		return TriviaTypeSynth.refIsBearing(rule)
-			? MacroStringTools.toFieldExpr(
-				packOf(rule).concat([
-					TriviaTypeSynth.SYNTH_SUBPACK,
-					TriviaTypeSynth.SYNTH_MODULE_LEAF,
-					CLASS_NAME,
-					fnName(rule)
-				])
-			)
+			? MacroStringTools.toFieldExpr(synthPackOf(root, TRIVIA_SUBPACK).concat([SYNTH_MODULE_LEAF, CLASS_NAME, fnName(rule)]))
 			: null;
 	}
 
@@ -232,7 +225,7 @@ final class TriviaTailRehome {
 		final binders: Array<String> = [for (i in 0...argNames.length) '_v$i'];
 		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final ctorPath: Array<String> = synthPack.concat([
-			TriviaTypeSynth.SYNTH_MODULE_LEAF,
+			SYNTH_MODULE_LEAF,
 			simpleName(origName) + TriviaTypeSynth.PAIRED_SUFFIX,
 			ctorName
 		]);

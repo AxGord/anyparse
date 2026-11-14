@@ -1018,7 +1018,7 @@ final class WriterPrattLowering {
 
 		final argsAccess: Expr = macro $i{argNames[1]};
 		final argsInit: Expr = isTriviaStar
-			? postfixArgsInit(inner, argsAccess, trailingCommaExpr(branch, postfixSourceTrailExpr(argsAccess)))
+			? postfixArgsInit(inner, pc.shape.root, argsAccess, trailingCommaExpr(branch, postfixSourceTrailExpr(argsAccess)))
 			: argsAccess;
 		final tcExpr: Expr = trailingCommaExpr(branch, isTriviaStar ? postfixSourceTrailExpr() : null);
 		// ω-call-parens: a `@:postfix('(', ')')` ctor with

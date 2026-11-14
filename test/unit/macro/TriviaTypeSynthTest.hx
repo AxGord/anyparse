@@ -52,7 +52,32 @@ class TriviaTypeSynthTest extends Test {
 	@:killer('M-TRIVIA-SYNTH-ONCE-PER-COMPILATION')
 	public function testTwoTriviaGrammarsBuildAndRoundTripInOneCompilation(): Void {
 		#if nodejs
-		Assert.equals('$SOURCE|$SOURCE', roundTrips(['ga', 'gb']));
+		Assert.equals('$SOURCE|$SOURCE', roundTrips(['ga', 'gb'], '', false));
+		#else
+		Assert.pass('node only: spawns the compiler');
+		#end
+	}
+
+	/**
+	 * A non-terminal rule that lives in a subpackage of its root: the synthesised trivia module is named the same by the
+	 * synth side and by every consumer, so the grammar builds and round-trips its comments.
+	 */
+	@:pin('control')
+	@:killer('M-SYNTH-PACK-ROOT-CONSUMER')
+	public function testRuleInSubpackageOfItsRootBuildsAndRoundTrips(): Void {
+		#if nodejs
+		Assert.equals(SOURCE, roundTrips(['gc'], 'node', false));
+		#else
+		Assert.pass('node only: spawns the compiler');
+		#end
+	}
+
+	/** The span-paired module has the same single home: a parser over a grammar with a rule in a subpackage of its root builds. */
+	@:pin('control')
+	@:killer('M-SYNTH-PACK-ROOT-SPANS-CONSUMER')
+	public function testSpanParserRuleInSubpackageOfItsRootBuilds(): Void {
+		#if nodejs
+		Assert.equals('true', roundTrips(['gd'], 'node', true));
 		#else
 		Assert.pass('node only: spawns the compiler');
 		#end
@@ -62,14 +87,15 @@ class TriviaTypeSynthTest extends Test {
 	/**
 	 * The output of a program built from one trivia grammar per package in `packs`, or the compiler error.
 	 */
-	private static function roundTrips(packs: Array<String>): String {
-		final calls: Array<String> = packs.map(pack -> '$pack.W.write($pack.P.parse(src))');
+	private static function roundTrips(packs: Array<String>, itemSub: String, spans: Bool): String {
+		final calls: Array<String> = packs.map(pack -> spans ? '"" + ($pack.P.parse(src) != null)' : '$pack.W.write($pack.P.parse(src))');
 		final main: String = 'class Main { static function main() { final src = ${JsonText.quote(SOURCE)}; '
 			+ 'js.Syntax.code("process.stdout.write({0})", [${calls.join(', ')}].join("|")); } }\n';
 		final dir: String = CliFixture.writeDir('trivia2', [{ name: 'Main.hx', source: main }]);
 		for (pack in packs) {
 			FileSystem.createDirectory('$dir/$pack');
-			for (file in grammarFiles(pack)) File.saveContent('$dir/$pack/${file.name}', file.source);
+			if (itemSub != '') FileSystem.createDirectory('$dir/$pack/$itemSub');
+			for (file in grammarFiles(pack, itemSub, spans)) File.saveContent('$dir/$pack/${file.name}', file.source);
 		}
 		final build: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync('haxe', [
 			'-cp',
@@ -89,18 +115,24 @@ class TriviaTypeSynthTest extends Test {
 	}
 
 	/** One trivia grammar in package `pack`: `;`-terminated words and bracketed comma lists of them, `#` comments. */
-	private static function grammarFiles(pack: String): Array<{ name: String, source: String }> {
+	private static function grammarFiles(pack: String, itemSub: String, spans: Bool): Array<{ name: String, source: String }> {
 		final head: String = 'package $pack;\n';
+		final itemPack: String = itemSub == '' ? pack : '$pack.$itemSub';
+		final itemHead: String = 'package $itemPack;\n' + (itemSub == '' ? '' : 'import $pack.Atom;\n');
+		final docHead: String = head + (itemSub == '' ? '' : 'import $itemPack.Item;\n');
 		return [
 			{ name: 'Atom.hx', source: '$head@:re(\'[a-z]+\') @:rawString abstract Atom(String) from String to String {}\n' },
 			{
-				name: 'Item.hx',
-				source: head
+				name: itemSub == '' ? 'Item.hx' : '$itemSub/Item.hx',
+				source: itemHead
 					+ "enum Item { @:trail(';') Word(s: Atom); @:trivia @:lead('[') @:trail(']') @:sep(',') List(items: Array<Item>); }\n"
 			},
-			{ name: 'Doc.hx', source: '$head@:peg @:schema($pack.Format) @:ws typedef Doc = { @:trivia var items: Array<Item>; }\n' },
+			{ name: 'Doc.hx', source: '$docHead@:peg @:schema($pack.Format) @:ws typedef Doc = { @:trivia var items: Array<Item>; }\n' },
 			{ name: 'Opts.hx', source: '${head}typedef Opts = anyparse.format.WriteOptions & {};\n' },
-			{ name: 'P.hx', source: '$head@:build(anyparse.macro.Build.buildParser($pack.Doc, { trivia: true })) class P {}\n' },
+			{
+				name: 'P.hx',
+				source: '$head@:build(anyparse.macro.Build.buildParser($pack.Doc, { ${spans ? 'spans' : 'trivia'}: true })) class P {}\n'
+			},
 			{
 				name: 'W.hx',
 				source: '$head@:build(anyparse.macro.Build.buildWriter($pack.Doc, $pack.Opts, { trivia: true })) class W {}\n'

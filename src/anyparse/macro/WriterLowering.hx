@@ -539,7 +539,7 @@ class WriterLowering {
 		final pos: Position = Context.currentPos();
 		if (isTriviaBearing(typePath)) {
 			final simple: String = simpleName(typePath);
-			final convPath: Array<String> = packOf(typePath).concat(['trivia', 'Pairs', 'Converters']);
+			final convPath: Array<String> = synthPackOf(_shape.root, TRIVIA_SUBPACK).concat([SYNTH_MODULE_LEAF, 'Converters']);
 			final pairedToRawFn: Expr = MacroStringTools.toFieldExpr(convPath.concat(['pairedToRaw_$simple']));
 			final rawToPairedFn: Expr = MacroStringTools.toFieldExpr(convPath.concat(['rawToPaired_$simple']));
 			final userCall: Expr = { expr: ECall(fnExpr, [macro _raw, macro opt]), pos: pos };
@@ -692,7 +692,7 @@ class WriterLowering {
 		};
 		// The trivia walk binds a segment's arguments as `_argsSrc` (`wrapChainTriviaBody`).
 		final segArgsInit: Expr = WriterChainLowering.postfixArgsInit(
-			cbStar.children[0], macro _argsSrc, trailingCommaExpr(cb, postfixSourceTrailExpr(macro _argsSrc))
+			cbStar.children[0], _shape.root, macro _argsSrc, trailingCommaExpr(cb, postfixSourceTrailExpr(macro _argsSrc))
 		);
 		final argsListExpr: Expr = isCallTriviaStar
 			? macro {
@@ -1578,8 +1578,8 @@ class WriterLowering {
 		final simple: String = simpleName(refName);
 		return isTriviaBearing(refName)
 			? TPath({
-				pack: packOf(refName).concat(['trivia']),
-				name: 'Pairs',
+				pack: synthPackOf(_shape.root, TRIVIA_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${simple}T',
 				params: []
 			})
@@ -1590,7 +1590,7 @@ class WriterLowering {
 	private function ruleCtorPath(typePath: String, ctor: String): Array<String> {
 		final simple: String = simpleName(typePath);
 		return isTriviaBearing(typePath)
-			? packOf(typePath).concat(['trivia', 'Pairs', '${simple}T', ctor])
+			? synthPackOf(_shape.root, TRIVIA_SUBPACK).concat([SYNTH_MODULE_LEAF, '${simple}T', ctor])
 			: packOf(typePath).concat([simple, ctor]);
 	}
 

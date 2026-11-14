@@ -88,14 +88,14 @@ class AstPredLowering {
 		final simple: String = simpleName(rule);
 		return switch _mode {
 			case PredSpans if (!isTerminalRule(rule)): TPath({
-				pack: packOf(_shape.root).concat(['spans']),
-				name: 'Pairs',
+				pack: synthPackOf(_shape.root, SPANS_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${simple}S',
 				params: []
 			});
 			case PredTrivia if (isTriviaBearing(rule)): TPath({
-				pack: packOf(rule).concat(['trivia']),
-				name: 'Pairs',
+				pack: synthPackOf(_shape.root, TRIVIA_SUBPACK),
+				name: SYNTH_MODULE_LEAF,
 				sub: '${simple}T',
 				params: []
 			});
@@ -147,8 +147,9 @@ class AstPredLowering {
 	private function ctorPathParts(rule: String, ctor: String): Array<String> {
 		final simple: String = simpleName(rule);
 		return switch _mode {
-			case PredSpans: packOf(_shape.root).concat(['spans', 'Pairs', '${simple}S', ctor]);
-			case PredTrivia if (isTriviaBearing(rule)): packOf(rule).concat(['trivia', 'Pairs', '${simple}T', ctor]);
+			case PredSpans: synthPackOf(_shape.root, SPANS_SUBPACK).concat([SYNTH_MODULE_LEAF, '${simple}S', ctor]);
+			case PredTrivia if (isTriviaBearing(rule)):
+				synthPackOf(_shape.root, TRIVIA_SUBPACK).concat([SYNTH_MODULE_LEAF, '${simple}T', ctor]);
 			case _: packOf(rule).concat([simple, ctor]);
 		};
 	}

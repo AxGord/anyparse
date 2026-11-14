@@ -59,8 +59,6 @@ using anyparse.macro.MetaInspect;
 class SpanTypeSynth {
 
 	private static final PAIRED_SUFFIX: String = 'S';
-	private static final SYNTH_SUBPACK: String = 'spans';
-	private static final SYNTH_MODULE_LEAF: String = 'Pairs';
 	private static final SPAN_FIELD_NAME: String = '_span';
 	private static final KIND_FIELD_NAME: String = '_kind';
 	private static final SPANNED_META: String = ':spanned';
@@ -69,8 +67,7 @@ class SpanTypeSynth {
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
 		if (shapes.indexOf(shape) == -1) shapes.push(shape);
-		final rootPack: Array<String> = packOf(shape.root);
-		final synthPack: Array<String> = rootPack.concat([SYNTH_SUBPACK]);
+		final synthPack: Array<String> = synthPackOf(shape.root, SPANS_SUBPACK);
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];
 		for (origName => node in shape.rules) if (node.kind != Terminal) {
