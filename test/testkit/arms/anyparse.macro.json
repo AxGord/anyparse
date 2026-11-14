@@ -2926,7 +2926,7 @@
 			"method": "wrapBodyAllman",
 			"find": " || $optFlag != anyparse.format.BodyPolicy.FitLine",
 			"replace": "",
-			"note": "a flat literal moves below the head under comprehensionFor same too, where the body stays beside the head"
+			"note": "a flat literal moves below the head under a next body policy, where the glue knob keeps the body beside the head"
 		},
 		{
 			"name": "M-IF-ELSE-LADDER-OFF",

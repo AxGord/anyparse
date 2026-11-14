@@ -1,5 +1,7 @@
 package unit.grammar.haxe;
 
+import anyparse.format.BodyPolicy;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 import utest.Assert;
 import utest.Test;
 
@@ -53,9 +55,22 @@ final class HxComprehensionObjectLitBodyMoveTest extends Test {
 		Assert.equals(broken, HxWriteFixture.triviaWrite(flat, CFG));
 	}
 
-	/** Under `comprehensionFor: same` a literal written below the head reaches its fixed point in one write. */
+	/**
+	 * The glue knob takes a literal beside the head under every body policy but `fitLine`: a `next` policy, reachable only
+	 * through typed options, would otherwise move a literal that fits below the head there, as the policy's own placement.
+	 */
 	@:pin('control')
 	@:killer('M-ALLMAN-GLUE-MOVES-UNDER-ANY-POLICY')
+	public function testANextBodyPolicyStillGluesALiteralBesideTheHead(): Void {
+		final options: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(CFG);
+		options.expressionForBody = BodyPolicy.Next;
+		final head: String = 'for (c in Next(tree, source, seamsssssssssssssssssssssss))';
+		final glued: String = wrapped('for (c in Next(\n\t\t\t\ttree, source, seamsssssssssssssssssssssss\n\t\t\t)) $LITERAL');
+		Assert.equals(glued, HxWriteFixture.triviaWrite(oneLine('$head $LITERAL'), options));
+	}
+
+	/** Under `comprehensionFor: same` a literal written below the head reaches its fixed point in one write. */
+	@:pin('guard')
 	public function testComprehensionForSameSettlesALiteralBelowTheHeadInOneWrite(): Void {
 		final config: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "objectLiteral": {'
 			+ '"defaultWrap": "onePerLine", "rules": [{"conditions": [{"cond": "totalItemLength <= n", "value": 140}], "type": '
