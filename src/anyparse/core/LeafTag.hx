@@ -18,18 +18,24 @@ enum LeafTag {
 	BlockComment;
 
 	/**
-	 * Writer syntax whose first byte opens a delimited run (`opens`) and/or whose end closes one or leaves one open
-	 * (`ends`): the leaf a grammar's open / close / lead / trail / empty literal builds, `foo(` and `) {` included.
+	 * Writer syntax classified by its first visible byte (`opens`: a run it opens, or a word start) and by its end
+	 * (`ends`: a run it closes or leaves open): the leaf a grammar's open / close / lead / trail / empty literal or a
+	 * keyword / name builds, `foo(` and `) {` included.
 	 */
 	Delimiter(opens: OpenEdge, ends: EndEdge);
 
 }
 
-/** Which delimited run a `LeafTag.Delimiter` leaf opens at its first byte. */
+/**
+ * What a `LeafTag.Delimiter` leaf's first visible byte is: the delimited run it opens, or a word start that opens none.
+ */
 enum OpenEdge {
 
 	/** The leaf opens nothing (a pure closer such as `)` or `]`). */
 	NoOpen;
+
+	/** The leaf opens no run, but its first visible byte starts an identifier (a letter, `_` or `$`): a keyword, a name, `foo(`. */
+	WordStart;
 
 	/** A parenthesised run: `(`. */
 	Paren;
@@ -77,7 +83,9 @@ enum EndEdge {
 /** The one answer to "which delimiter edge does this writer-syntax literal carry", asked once where the leaf is built. */
 class DelimiterLeaf {
 
-	/** The tag of a leaf spelling `s`, or null when `s` neither opens a delimited run at its first byte nor carries an end edge. */
+	/**
+	 * The tag of a leaf spelling `s`, or null when `s` opens no run, starts no word and carries no end edge.
+	 */
 	public static function tagOf(s: String): Null<LeafTag> {
 		if (s.length == 0) return null;
 		final first: Int = s.fastCodeAt(0);
@@ -85,13 +93,35 @@ class DelimiterLeaf {
 		final opens: OpenEdge = if (first == '('.code)
 			Paren
 		else if (first != '['.code && first != '{'.code)
-			NoOpen
+			startsWord(s) ? WordStart : NoOpen
 		else if (trimmed == '[]' || trimmed == '{}')
 			EmptyCollection
 		else
 			Collection;
 		final ends: EndEdge = endEdgeOf(s);
 		return opens == NoOpen && ends == Plain ? null : Delimiter(opens, ends);
+	}
+
+	/** Whether the first visible byte (past blanks) of `s` is a letter, `_` or `$`. */
+	public static function startsWord(s: String): Bool {
+		for (i in 0...s.length) {
+			final c: Int = s.fastCodeAt(i);
+			if (c != ' '.code && c != '\t'.code) return c == '$'.code || c.isIdentStart();
+		}
+		return false;
+	}
+
+	/** A `Text` of a runtime string `s`: tagged only by the word-start fact, which its bytes alone decide. */
+	public static function wordLeaf(s: String): Doc {
+		return Text(s, null, startsWord(s) ? Delimiter(WordStart, Plain) : null);
+	}
+
+	/** Whether a leaf tagged `tag` starts with an identifier byte. */
+	public static function startsWordTag(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(WordStart, _): true;
+			case _: false;
+		};
 	}
 
 	/** A `Text` of a delimiter string `s` (a list's open or close), tagged with the edge it carries. */
@@ -141,11 +171,13 @@ class DelimiterLeaf {
 	}
 
 	/**
-	 * A `Text` of a region terminal's verbatim `s`, tagged as closing its region when `s` ends on the `#end` the
-	 * terminal's grammar swallows; asked once where the terminal's leaf is built.
+	 * A `Text` of a region terminal's verbatim `s`, tagged as closing its region when `s` ends on the `#end` the terminal's
+	 * grammar swallows, and as a word start when it begins with a name; asked once where the terminal's leaf is built.
 	 */
 	public static function regionLeaf(s: String): Doc {
-		return Text(s, null, s.endsWith('#end') ? Delimiter(NoOpen, ClosesRegion) : null);
+		final opens: OpenEdge = startsWord(s) ? WordStart : NoOpen;
+		final closes: Bool = s.endsWith('#end');
+		return Text(s, null, closes || opens != NoOpen ? Delimiter(opens, closes ? ClosesRegion : Plain) : null);
 	}
 
 	/** Whether a leaf tagged `tag` opens a call's argument run. */

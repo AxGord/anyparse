@@ -800,8 +800,8 @@
 			"name": "M-OPENDELIM-FIRST-BYTE",
 			"type": "anyparse.core.DocMeasure",
 			"method": "flatPrefixToOpenDelim",
-			"find": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\tprefix = width + 1;",
-			"replace": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\tprefix = width;",
+			"find": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):\n\t\t\t\t\tprefix = width + 1;",
+			"replace": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):\n\t\t\t\t\tprefix = width;",
 			"note": "the prefix to a leaf opening at its first byte leaves the opener out"
 		},
 		{
@@ -896,9 +896,9 @@
 			"name": "M-TERMLEAF-REGION-PLAIN",
 			"type": "anyparse.core.LeafTag.DelimiterLeaf",
 			"method": "regionLeaf",
-			"find": "Delimiter(NoOpen, ClosesRegion)",
-			"replace": "null",
-			"note": "a region terminal ending on its `#end` is untagged, so a list item ending on a closed region is not seen as one"
+			"find": "closes ? ClosesRegion : Plain",
+			"replace": "Plain",
+			"note": "a region terminal ending on its `#end` is tagged as ending on nothing, so a list item ending on a closed region is not seen as one"
 		},
 		{
 			"name": "M-TERMLEAF-SEMI-BYTES",
@@ -923,6 +923,38 @@
 			"find": " || DelimiterLeaf.endsStatement(tag)",
 			"replace": "",
 			"note": "a statement ending on `;` is not seen as terminated"
+		},
+		{
+			"name": "M-WORDSTART-TAGOF",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "tagOf",
+			"find": "startsWord(s) ? WordStart : NoOpen",
+			"replace": "NoOpen",
+			"note": "a constant word-start literal carries no word-start fact"
+		},
+		{
+			"name": "M-WORDSTART-WORDLEAF",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "wordLeaf",
+			"find": "startsWord(s) ? Delimiter(WordStart, Plain) : null",
+			"replace": "null",
+			"note": "a runtime string is never classified as a word start"
+		},
+		{
+			"name": "M-WORDSTART-NOT-AN-OPENER",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatPrefixToOpenDelim",
+			"find": " && opens != WordStart",
+			"replace": "",
+			"note": "a word-start leaf reads as a run opener"
+		},
+		{
+			"name": "M-WORDSTART-REGIONLEAF",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "regionLeaf",
+			"find": "final opens: OpenEdge = startsWord(s) ? WordStart : NoOpen;",
+			"replace": "final opens: OpenEdge = NoOpen;",
+			"note": "a verbatim region terminal that begins with a name is no word start"
 		}
 	]
 }

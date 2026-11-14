@@ -3318,6 +3318,14 @@
 			"find": "parts.push(macro anyparse.core.LeafTag.DelimiterLeaf.callArgs(_dc([$a{run}])));",
 			"replace": "parts.push(macro _dc([$a{run}]));",
 			"note": "a `new T(args)` argument run keeps an untagged open, so a constructor call operand no longer reads as a call"
+		},
+		{
+			"name": "M-WORDSTART-RUNTIME-DT",
+			"type": "anyparse.macro.WriterCodegen",
+			"method": "docHelperFields",
+			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.wordLeaf(s)",
+			"replace": "macro anyparse.core.Doc.Text(s)",
+			"note": "a generated _dt of a runtime string builds an untagged leaf"
 		}
 	]
 }

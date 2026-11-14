@@ -364,7 +364,7 @@ final class DocMeasure {
 		var prefix: Null<Int> = null;
 		walkFlatLeaves(d, leaf -> {
 			switch leaf {
-				case Text(_, _, Delimiter(opens, _)) if (opens != NoOpen):
+				case Text(_, _, Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):
 					prefix = width + 1;
 					return true;
 				case Text(s, _, Delimiter(_, Opens)):

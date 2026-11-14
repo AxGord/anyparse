@@ -20,7 +20,7 @@ class LeafEndEdgeReadTest extends Test {
 	@:pin('control')
 	@:killer('M-LEAFEND-OPENS-PLAIN')
 	public function testTagOfReadsTheEndEdge(): Void {
-		Assert.same(Delimiter(NoOpen, Opens), DelimiterLeaf.tagOf('foo('));
+		Assert.same(Delimiter(WordStart, Opens), DelimiterLeaf.tagOf('foo('));
 		Assert.same(Delimiter(NoOpen, Opens), DelimiterLeaf.tagOf(') {'));
 		Assert.same(Delimiter(Paren, Opens), DelimiterLeaf.tagOf('( '));
 		Assert.same(Delimiter(NoOpen, Arrow), DelimiterLeaf.tagOf(' -> '));

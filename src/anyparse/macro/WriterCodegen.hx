@@ -279,6 +279,8 @@ class WriterCodegen {
 				{ name: 's', type: macro : String },
 				{ name: 'tag', type: macro : anyparse.core.LeafTag }
 			], macro anyparse.core.Doc.Text(s, null, tag)),
+			// `_dt` of a runtime string: only its word-start fact is known, read from its bytes where the leaf is built.
+			docHelper('_dtr', [{ name: 's', type: macro : String }], macro anyparse.core.LeafTag.DelimiterLeaf.wordLeaf(s)),
 			docHelper('_dop', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{ name: 'items', type: macro : Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
@@ -1324,14 +1326,18 @@ class WriterCodegen {
 	}
 
 	/**
-	 * Every `_dt` of a constant literal that carries a delimiter edge becomes `_dtt` with that edge's tag, classified here
-	 * once from the grammar literal, so the Doc's readers ask the leaf's tag and never its bytes.
+	 * Every `_dt` of a constant string (as the compiler's interpolation
+	 * reader sees it) that carries a delimiter edge or starts a word becomes
+	 * `_dtt` with that tag, classified once from the grammar literal; every `_dt` of a runtime or interpolated string becomes `_dtr`, which
+	 * reads the word-start fact off its bytes where the leaf is built. The Doc's readers ask the leaf's tag and never its bytes.
 	 */
 	private static function tagDelimiterLeaves(e: Expr): Expr {
 		return switch e.expr {
-			case ECall({ expr: EConst(CIdent('_dt')) }, [{ expr: EConst(CString(s, _)) }]):
-				final tag: Null<anyparse.core.LeafTag> = anyparse.core.LeafTag.DelimiterLeaf.tagOf(s);
-				tag == null ? e : macro @:pos(e.pos) _dtt($v{s}, ${leafTagExpr(tag)});
+			case ECall({ expr: EConst(CIdent('_dt')) }, [arg]):
+				final value: Null<String> = constantString(arg);
+				if (value == null) return macro @:pos(e.pos) _dtr(${tagDelimiterLeaves(arg)});
+				final tag: Null<anyparse.core.LeafTag> = anyparse.core.LeafTag.DelimiterLeaf.tagOf(value);
+				tag == null ? e : macro @:pos(e.pos) _dtt($v{value}, ${leafTagExpr(tag)});
 			case _: haxe.macro.ExprTools.map(e, tagDelimiterLeaves);
 		};
 	}
@@ -1345,6 +1351,30 @@ class WriterCodegen {
 				macro anyparse.core.LeafTag.Delimiter(anyparse.core.LeafTag.OpenEdge.$open, anyparse.core.LeafTag.EndEdge.$end);
 			case LineComment: macro anyparse.core.LeafTag.LineComment;
 			case BlockComment: macro anyparse.core.LeafTag.BlockComment;
+		};
+	}
+
+	/**
+	 * The value of the string literal `e`, or null when it is not a constant: a single-quoted literal is read through the
+	 * compiler's own interpolation reader, so a doubled dollar before a paren is the constant `$(` and a named hole is not.
+	 */
+	private static function constantString(e: Expr): Null<String> {
+		return switch e.expr {
+			case EConst(CString(s, SingleQuotes)): foldedString(haxe.macro.MacroStringTools.formatString(s, e.pos));
+			case EConst(CString(s, _)): s;
+			case _: null;
+		};
+	}
+
+	/** The text of `e` when it is a string constant or a `+` of them, which is how the compiler's reader spells an escaped dollar. */
+	private static function foldedString(e: Expr): Null<String> {
+		return switch e.expr {
+			case EConst(CString(s, _)): s;
+			case EBinop(OpAdd, a, b):
+				final left: Null<String> = foldedString(a);
+				final right: Null<String> = left == null ? null : foldedString(b);
+				right == null ? null : left + right;
+			case _: null;
 		};
 	}
 

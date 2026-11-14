@@ -15,7 +15,7 @@ using Lambda;
 @:nullSafety(Strict)
 class DelimiterLeafTest extends Test {
 
-	/** A delimiter literal is classified by its edges; an empty pair is its own open edge, plain text carries none. */
+	/** A literal is classified by its edges; an empty pair is its own open edge, a name is a word start, other plain text is untagged. */
 	@:pin('control')
 	@:killer('M-DELIMLEAF-EMPTY-PAIR')
 	public function testTagOfClassifiesTheEdges(): Void {
@@ -26,7 +26,8 @@ class DelimiterLeafTest extends Test {
 		Assert.same(Delimiter(EmptyCollection, Closes), DelimiterLeaf.tagOf('[]'));
 		Assert.same(Delimiter(EmptyCollection, ClosesBrace), DelimiterLeaf.tagOf('{}'));
 		Assert.same(Delimiter(Paren, Closes), DelimiterLeaf.tagOf('()'));
-		Assert.isNull(DelimiterLeaf.tagOf('a'));
+		Assert.same(Delimiter(WordStart, Plain), DelimiterLeaf.tagOf('a'));
+		Assert.isNull(DelimiterLeaf.tagOf('1'));
 		Assert.isNull(DelimiterLeaf.tagOf(''));
 	}
 
